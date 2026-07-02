@@ -330,6 +330,25 @@ ONEUI_API void oneui_icon_badge_set_symbol(OneUiWidget* icon_badge, int symbol);
 ONEUI_API void oneui_icon_badge_set_accent(OneUiWidget* icon_badge, unsigned char r, unsigned char g, unsigned char b, unsigned char a);
 ONEUI_API void oneui_icon_badge_set_stroke_width(OneUiWidget* icon_badge, float width);
 
+ONEUI_API OneUiWidget* oneui_menu_create(void);
+ONEUI_API void oneui_menu_add_header(OneUiWidget* menu, const wchar_t* title, const wchar_t* subtitle);
+/* icon_symbol: IconSymbol ordinal, negative = no icon; returns item index */
+ONEUI_API int oneui_menu_add_item(OneUiWidget* menu, const wchar_t* text, int icon_symbol, int danger);
+ONEUI_API void oneui_menu_add_separator(OneUiWidget* menu);
+ONEUI_API void oneui_menu_set_item_disabled(OneUiWidget* menu, int index, int disabled);
+ONEUI_API float oneui_menu_preferred_height(OneUiWidget* menu);
+ONEUI_API void oneui_menu_set_on_activated(OneUiWidget* menu, OneUiIntCallback callback, void* user_data);
+
+ONEUI_API OneUiWidget* oneui_dialog_create(const wchar_t* title, const wchar_t* subtitle);
+ONEUI_API void oneui_dialog_set_title(OneUiWidget* dialog, const wchar_t* title);
+ONEUI_API void oneui_dialog_set_subtitle(OneUiWidget* dialog, const wchar_t* subtitle);
+/* symbol: IconSymbol ordinal; negative clears the header icon */
+ONEUI_API void oneui_dialog_set_icon(OneUiWidget* dialog, int symbol);
+ONEUI_API void oneui_dialog_set_close_visible(OneUiWidget* dialog, int visible);
+ONEUI_API void oneui_dialog_set_on_close(OneUiWidget* dialog, OneUiVoidCallback callback, void* user_data);
+ONEUI_API void oneui_dialog_set_content(OneUiWidget* dialog, OneUiWidget* child);
+ONEUI_API void oneui_dialog_set_actions(OneUiWidget* dialog, OneUiWidget* child);
+
 ONEUI_API OneUiWidget* oneui_segmented_control_create(void);
 ONEUI_API void oneui_segmented_control_set_items(OneUiWidget* segmented_control, const wchar_t* items);
 ONEUI_API void oneui_segmented_control_set_selected_index(OneUiWidget* segmented_control, int index);

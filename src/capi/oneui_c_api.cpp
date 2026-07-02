@@ -3,7 +3,9 @@
 #include "oneui/controls/badge.h"
 #include "oneui/controls/button.h"
 #include "oneui/controls/card.h"
+#include "oneui/controls/dialog.h"
 #include "oneui/controls/icon_badge.h"
+#include "oneui/controls/menu.h"
 #include "oneui/controls/icon_button.h"
 #include "oneui/controls/icon_view.h"
 #include "oneui/controls/label.h"
@@ -373,6 +375,10 @@ oneui::StyleNode styleNodeFor(const OneUiWidget* widget) {
             tag = "icon";
         } else if (dynamic_cast<oneui::IconBadge*>(widget->widget.get())) {
             tag = "icon-badge";
+        } else if (dynamic_cast<oneui::Menu*>(widget->widget.get())) {
+            tag = "menu";
+        } else if (dynamic_cast<oneui::Dialog*>(widget->widget.get())) {
+            tag = "dialog";
         } else if (dynamic_cast<oneui::IconButton*>(widget->widget.get())) {
             tag = "button";
         } else if (dynamic_cast<oneui::Switch*>(widget->widget.get())) {
@@ -451,6 +457,14 @@ void applyStyleSheet(OneUiWidget* wrapper, std::shared_ptr<oneui::StyleSheet> sh
     }
     if (auto* iconBadge = dynamic_cast<oneui::IconBadge*>(wrapper->widget.get())) {
         iconBadge->setStyleBox(wrapper->styleSheet->resolve(node));
+        return;
+    }
+    if (auto* menu = dynamic_cast<oneui::Menu*>(wrapper->widget.get())) {
+        menu->setStyleSheet(wrapper->styleSheet, node);
+        return;
+    }
+    if (auto* dialog = dynamic_cast<oneui::Dialog*>(wrapper->widget.get())) {
+        dialog->setStyleSheet(wrapper->styleSheet, node);
         return;
     }
     if (auto* tile = dynamic_cast<oneui::Tile*>(wrapper->widget.get())) {
@@ -1757,6 +1771,136 @@ void oneui_icon_badge_set_stroke_width(OneUiWidget* icon_badge, float width) {
         return;
     }
     nativeIconBadge->setStrokeWidth(width);
+}
+
+OneUiWidget* oneui_menu_create(void) {
+    return wrap(std::make_shared<oneui::Menu>());
+}
+
+void oneui_menu_add_header(OneUiWidget* menu, const wchar_t* title, const wchar_t* subtitle) {
+    auto* nativeMenu = asWidget<oneui::Menu>(menu);
+    if (!nativeMenu) {
+        return;
+    }
+    nativeMenu->addHeader(wideOrEmpty(title), wideOrEmpty(subtitle));
+}
+
+int oneui_menu_add_item(OneUiWidget* menu, const wchar_t* text, int icon_symbol, int danger) {
+    auto* nativeMenu = asWidget<oneui::Menu>(menu);
+    if (!nativeMenu) {
+        return -1;
+    }
+    std::optional<oneui::IconSymbol> icon;
+    if (icon_symbol >= 0) {
+        const auto clamped = std::clamp(icon_symbol, 0, static_cast<int>(oneui::IconSymbol::Play));
+        icon = static_cast<oneui::IconSymbol>(clamped);
+    }
+    return nativeMenu->addItem(wideOrEmpty(text), icon, danger != 0);
+}
+
+void oneui_menu_add_separator(OneUiWidget* menu) {
+    auto* nativeMenu = asWidget<oneui::Menu>(menu);
+    if (!nativeMenu) {
+        return;
+    }
+    nativeMenu->addSeparator();
+}
+
+void oneui_menu_set_item_disabled(OneUiWidget* menu, int index, int disabled) {
+    auto* nativeMenu = asWidget<oneui::Menu>(menu);
+    if (!nativeMenu) {
+        return;
+    }
+    nativeMenu->setItemDisabled(index, disabled != 0);
+}
+
+float oneui_menu_preferred_height(OneUiWidget* menu) {
+    auto* nativeMenu = asWidget<oneui::Menu>(menu);
+    if (!nativeMenu) {
+        return 0.0f;
+    }
+    return nativeMenu->preferredHeight();
+}
+
+void oneui_menu_set_on_activated(OneUiWidget* menu, OneUiIntCallback callback, void* user_data) {
+    auto* nativeMenu = asWidget<oneui::Menu>(menu);
+    if (!nativeMenu) {
+        return;
+    }
+    if (!callback) {
+        nativeMenu->setOnItemActivated(nullptr);
+        return;
+    }
+    nativeMenu->setOnItemActivated([callback, user_data](int value) {
+        callback(value, user_data);
+    });
+}
+
+OneUiWidget* oneui_dialog_create(const wchar_t* title, const wchar_t* subtitle) {
+    return wrap(std::make_shared<oneui::Dialog>(wideOrEmpty(title), wideOrEmpty(subtitle)));
+}
+
+void oneui_dialog_set_title(OneUiWidget* dialog, const wchar_t* title) {
+    auto* nativeDialog = asWidget<oneui::Dialog>(dialog);
+    if (!nativeDialog) {
+        return;
+    }
+    nativeDialog->setTitle(wideOrEmpty(title));
+}
+
+void oneui_dialog_set_subtitle(OneUiWidget* dialog, const wchar_t* subtitle) {
+    auto* nativeDialog = asWidget<oneui::Dialog>(dialog);
+    if (!nativeDialog) {
+        return;
+    }
+    nativeDialog->setSubtitle(wideOrEmpty(subtitle));
+}
+
+void oneui_dialog_set_icon(OneUiWidget* dialog, int symbol) {
+    auto* nativeDialog = asWidget<oneui::Dialog>(dialog);
+    if (!nativeDialog) {
+        return;
+    }
+    if (symbol < 0) {
+        nativeDialog->clearIconSymbol();
+        return;
+    }
+    const auto clamped = std::clamp(symbol, 0, static_cast<int>(oneui::IconSymbol::Play));
+    nativeDialog->setIconSymbol(static_cast<oneui::IconSymbol>(clamped));
+}
+
+void oneui_dialog_set_close_visible(OneUiWidget* dialog, int visible) {
+    auto* nativeDialog = asWidget<oneui::Dialog>(dialog);
+    if (!nativeDialog) {
+        return;
+    }
+    nativeDialog->setCloseVisible(visible != 0);
+}
+
+void oneui_dialog_set_on_close(OneUiWidget* dialog, OneUiVoidCallback callback, void* user_data) {
+    auto* nativeDialog = asWidget<oneui::Dialog>(dialog);
+    if (!nativeDialog) {
+        return;
+    }
+    nativeDialog->setOnClose(callback ? std::function<void()>([callback, user_data] {
+        callback(user_data);
+    }) : nullptr);
+}
+
+void oneui_dialog_set_content(OneUiWidget* dialog, OneUiWidget* child) {
+    auto* nativeDialog = asWidget<oneui::Dialog>(dialog);
+    if (!nativeDialog) {
+        return;
+    }
+    nativeDialog->setContent(child ? child->widget : nullptr);
+}
+
+void oneui_dialog_set_actions(OneUiWidget* dialog, OneUiWidget* child) {
+    auto* nativeDialog = asWidget<oneui::Dialog>(dialog);
+    if (!nativeDialog) {
+        return;
+    }
+    nativeDialog->setActions(child ? child->widget : nullptr);
 }
 
 OneUiWidget* oneui_segmented_control_create() {

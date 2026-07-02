@@ -29,6 +29,7 @@ add_library(oneui_core OBJECT
     src/core/button_bridge.cpp
     src/core/card.cpp
     src/core/checkbox.cpp
+    src/core/dialog.cpp
     src/core/clipboard.cpp
     src/core/dock_view.cpp
     src/core/form_field.cpp
@@ -39,6 +40,7 @@ add_library(oneui_core OBJECT
     src/core/icon_view.cpp
     src/core/label.cpp
     src/core/material3_tokens.cpp
+    src/core/menu.cpp
     src/core/nav_item.cpp
     src/core/progress_bar.cpp
     src/core/product_shell.cpp
