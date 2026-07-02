@@ -1,0 +1,21 @@
+{
+  "name": "oneui-docs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nuxt dev --host 127.0.0.1",
+    "build": "nuxt build",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview --host 127.0.0.1"
+  },
+  "dependencies": {
+    "@nuxt/ui": "latest",
+    "nuxt": "latest",
+    "vue": "latest",
+    "vue-router": "latest"
+  },
+  "devDependencies": {
+    "@iconify-json/lucide": "^1.2.109",
+    "typescript": "latest"
+  }
+}

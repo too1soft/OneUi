@@ -1,0 +1,38 @@
+# 构建输出
+build/
+out/
+dist/
+
+# 第三方源码 checkout（skia/depot_tools 为独立 git checkout，由脚本重新拉取）
+# 仅保留源码政策文档 README.md
+third_party/*
+!third_party/README.md
+
+# IDE / 编辑器
+.vs/
+.vscode/
+*.user
+*.suo
+
+# 编译产物
+*.obj
+*.o
+*.exe
+*.dll
+*.lib
+*.a
+*.pdb
+
+# website (Nuxt)
+node_modules/
+website/.nuxt/
+website/.output/
+website/.data/
+website/.screenshots/
+
+# 构建/运行日志
+ninja.out
+ninja.err
+uout.txt
+uerr.txt
+*.log

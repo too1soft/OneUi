@@ -1,0 +1,62 @@
+@import "tailwindcss";
+@import "@nuxt/ui";
+
+:root {
+  --ui-radius: 0.5rem;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: "Segoe UI", "Microsoft YaHei", Arial, sans-serif;
+  letter-spacing: 0;
+}
+
+.doc-prose :where(h1, h2, h3, h4) {
+  scroll-margin-top: 88px;
+}
+
+.doc-prose pre {
+  white-space: pre-wrap;
+}
+
+.doc-shell {
+  background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 48%, #f7f4ef 100%);
+}
+
+.doc-hero-grid {
+  background-image:
+    linear-gradient(rgba(15, 23, 42, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15, 23, 42, 0.055) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+.doc-prose code {
+  border-radius: 0.25rem;
+  background: #f1f5f9;
+  padding: 0.05rem 0.3rem;
+  color: #0f172a;
+}
+
+.doc-prose pre code {
+  background: transparent;
+  padding: 0;
+  color: inherit;
+}
+
+.doc-prose table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.doc-prose th,
+.doc-prose td {
+  overflow-wrap: anywhere;
+  vertical-align: top;
+}
+
+.component-card {
+  overflow: hidden;
+}

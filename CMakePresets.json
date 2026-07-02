@@ -1,0 +1,66 @@
+{
+  "version": 6,
+  "configurePresets": [
+    {
+      "name": "mingw64",
+      "displayName": "MSYS2 MINGW64",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/mingw64",
+      "cacheVariables": {
+        "CMAKE_MAKE_PROGRAM": "C:/msys64/mingw64/bin/ninja.exe",
+        "CMAKE_CXX_COMPILER": "C:/msys64/mingw64/bin/g++.exe",
+        "ONEUI_SKIA_MODE": "msys2-dynamic",
+        "SKIA_ROOT": "C:/msys64/mingw64"
+      },
+      "environment": {
+        "PATH": "C:/msys64/mingw64/bin;$penv{PATH}"
+      }
+    },
+    {
+      "name": "mingw64-bundled-static",
+      "displayName": "MSYS2 MINGW64 + Bundled Static Skia",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/mingw64-bundled-static",
+      "cacheVariables": {
+        "CMAKE_MAKE_PROGRAM": "C:/msys64/mingw64/bin/ninja.exe",
+        "CMAKE_CXX_COMPILER": "C:/msys64/mingw64/bin/g++.exe",
+        "ONEUI_SKIA_MODE": "bundled-static",
+        "ONEUI_BUNDLED_SKIA_ROOT": "${sourceDir}/third_party/skia",
+        "ONEUI_BUNDLED_SKIA_OUT": "${sourceDir}/third_party/skia/out/oneui-win-x64-release",
+        "ONEUI_BUNDLED_SKIA_LIB": "${sourceDir}/third_party/skia/out/oneui-win-x64-release/libskia.a"
+      },
+      "environment": {
+        "PATH": "C:/msys64/mingw64/bin;$penv{PATH}"
+      }
+    },
+    {
+      "name": "ucrt64",
+      "displayName": "MSYS2 UCRT64",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/ucrt64",
+      "cacheVariables": {
+        "CMAKE_MAKE_PROGRAM": "C:/msys64/ucrt64/bin/ninja.exe",
+        "CMAKE_CXX_COMPILER": "C:/msys64/ucrt64/bin/g++.exe",
+        "ONEUI_SKIA_MODE": "msys2-dynamic",
+        "SKIA_ROOT": "C:/msys64/ucrt64"
+      },
+      "environment": {
+        "PATH": "C:/msys64/ucrt64/bin;$penv{PATH}"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "mingw64",
+      "configurePreset": "mingw64"
+    },
+    {
+      "name": "mingw64-bundled-static",
+      "configurePreset": "mingw64-bundled-static"
+    },
+    {
+      "name": "ucrt64",
+      "configurePreset": "ucrt64"
+    }
+  ]
+}

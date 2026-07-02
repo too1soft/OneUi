@@ -1,0 +1,22 @@
+#pragma once
+
+#include "oneui/export.h"
+#include "oneui/layout/product_shell.h"
+#include "oneui/style.h"
+#include "oneui/style_sheet.h"
+
+namespace oneui {
+
+ONEUI_API ButtonStateStyleOverride buttonStateStyleOverrideFromStyleBox(const StyleBox& box);
+ONEUI_API TextFieldStateStyleOverride textFieldStateStyleOverrideFromStyleBox(const StyleBox& box);
+ONEUI_API SwitchStateStyleOverride switchStateStyleOverrideFromStyleBox(const StyleBox& box);
+
+ONEUI_API StyleBox buttonStyleBoxFromStyleSheet(const StyleSheet& sheet, StyleNode node, StylePseudoMask state);
+ONEUI_API StyleBox textFieldStyleBoxFromStyleSheet(const StyleSheet& sheet, StyleNode node, StylePseudoMask state);
+ONEUI_API ButtonStyleOverride buttonStyleOverrideFromStyleSheet(const StyleSheet& sheet, StyleNode node);
+ONEUI_API TextFieldStyleOverride textFieldStyleOverrideFromStyleSheet(const StyleSheet& sheet, StyleNode node);
+ONEUI_API SwitchStyleOverride switchStyleOverrideFromStyleSheet(const StyleSheet& sheet, StyleNode node);
+ONEUI_API StyleBox cardStyleBoxFromStyleSheet(const StyleSheet& sheet, StyleNode node);
+ONEUI_API ProductShellStyle productShellStyleFromStyleSheet(const StyleSheet& sheet);
+
+} // namespace oneui

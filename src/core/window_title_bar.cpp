@@ -1,0 +1,305 @@
+#include "oneui/controls/window_title_bar.h"
+
+#include "oneui/icon.h"
+
+#include <algorithm>
+#include <chrono>
+#include <utility>
+
+namespace oneui {
+namespace {
+
+StyleSheet defaultTitleBarSheet() {
+    StyleSheet sheet;
+    std::string error;
+    // 默认标题栏采用 OneUI 设计语言里的浅色中性 token（见 docs/03-style.md）：
+    // surface/panel 白、text #202124、border #d8dbe0、primary #2563eb。
+    // 之前默认写死深色 #111114，与框架自身的浅色 token 不一致，会和浅色应用割裂。
+    sheet.addRulesFromCss(R"css(
+        .titlebar { background: #ffffff; border-color: #d8dbe0; border-width: 1px; color: #202124; }
+        .titlebar-icon { background: #2563eb; border-radius: 6px; color: #ffffff; border-width: 1.6px; }
+        .window-button { background: #ffffff; border-color: #ffffff; border-width: 1px; border-radius: 6px; color: #666a70; transition: all 120ms ease-out; }
+        .window-button:hover { background: #eef0f3; border-color: #eef0f3; color: #202124; }
+        .window-button:active { background: #e2e5ea; border-color: #e2e5ea; }
+        .window-button.close:hover { background: #dc2626; border-color: #dc2626; color: #ffffff; }
+    )css", &error);
+    return sheet;
+}
+
+const StyleSheet& fallbackSheet() {
+    static const StyleSheet sheet = defaultTitleBarSheet();
+    return sheet;
+}
+
+Rect offset(Rect rect, Point point) {
+    rect.x += point.x;
+    rect.y += point.y;
+    return rect;
+}
+
+ProductWindowChromeLayout offsetChrome(ProductWindowChromeLayout layout, Point point) {
+    layout.frame = offset(layout.frame, point);
+    layout.titleBar = offset(layout.titleBar, point);
+    layout.caption = offset(layout.caption, point);
+    layout.minimizeButton = offset(layout.minimizeButton, point);
+    layout.maximizeButton = offset(layout.maximizeButton, point);
+    layout.closeButton = offset(layout.closeButton, point);
+    layout.content = offset(layout.content, point);
+    return layout;
+}
+
+std::size_t buttonIndex(TitleBarButtonId id) {
+    switch (id) {
+    case TitleBarButtonId::Minimize:
+        return 0;
+    case TitleBarButtonId::Maximize:
+        return 1;
+    case TitleBarButtonId::Close:
+    case TitleBarButtonId::None:
+        return 2;
+    }
+    return 2;
+}
+
+Color styleColorOr(std::optional<Color> color, Color fallback) {
+    return color.value_or(fallback);
+}
+
+double currentTimeMs() {
+    const auto now = std::chrono::steady_clock::now().time_since_epoch();
+    return std::chrono::duration<double, std::milli>(now).count();
+}
+
+TransitionSpec transitionSpecFrom(const StyleBox& box) {
+    TransitionSpec spec;
+    if (box.transitionDurationMs) {
+        spec.durationMs = *box.transitionDurationMs;
+    }
+    if (box.transitionEasing) {
+        spec.easing = *box.transitionEasing;
+    }
+    return spec;
+}
+
+} // namespace
+
+WindowTitleBar::WindowTitleBar(std::wstring title)
+    : title_(std::move(title)) {
+    setPreferredSize(Size{0.0f, 34.0f});
+    setAccessibleRole(AccessibilityRole::Window);
+}
+
+void WindowTitleBar::setTitle(std::wstring title) {
+    title_ = std::move(title);
+    invalidate();
+}
+
+void WindowTitleBar::setIconSymbol(IconSymbol symbol) {
+    if (iconSymbol_ == symbol) {
+        return;
+    }
+    iconSymbol_ = symbol;
+    invalidate();
+}
+
+void WindowTitleBar::setMaximized(bool maximized) {
+    if (maximized_ == maximized) {
+        return;
+    }
+    const auto previous = titleBarLayout();
+    maximized_ = maximized;
+    beginButtonTransitions(previous, titleBarLayout());
+    invalidate();
+}
+
+void WindowTitleBar::setStyleSheet(std::shared_ptr<StyleSheet> sheet) {
+    const auto previous = titleBarLayout();
+    styleSheet_ = std::move(sheet);
+    beginButtonTransitions(previous, titleBarLayout());
+    invalidate();
+}
+
+void WindowTitleBar::setOnMinimize(std::function<void()> callback) {
+    onMinimize_ = std::move(callback);
+}
+
+void WindowTitleBar::setOnMaximize(std::function<void()> callback) {
+    onMaximize_ = std::move(callback);
+}
+
+void WindowTitleBar::setOnClose(std::function<void()> callback) {
+    onClose_ = std::move(callback);
+}
+
+ProductWindowChromeLayout WindowTitleBar::chromeLayout() const {
+    const Rect bounds = frame();
+    return offsetChrome(computeProductWindowChromeLayout(Size{bounds.width, bounds.height}), Point{bounds.x, bounds.y});
+}
+
+TitleBarBridgeLayout WindowTitleBar::titleBarLayout() const {
+    const StyleSheet& sheet = styleSheet_ ? *styleSheet_ : fallbackSheet();
+    TitleBarBridgeConfig config;
+    config.chrome = chromeLayout();
+    config.maximized = maximized_;
+    config.hoveredButton = hoveredButton_;
+    config.pressedButton = pressedButton_;
+    config.titleBarNode = StyleNode{"titlebar", {"titlebar"}, StyleStateNone};
+    config.logoNode = StyleNode{"icon", {"titlebar-icon"}, StyleStateNone};
+    config.buttonNode = StyleNode{"button", {"window-button"}, StyleStateNone};
+    config.closeButtonNode = StyleNode{"button", {"window-button", "close"}, StyleStateNone};
+    return computeTitleBarBridgeLayout(sheet, config);
+}
+
+void WindowTitleBar::paint(Canvas& canvas) {
+    const auto layout = titleBarLayout();
+    paintStyleBox(canvas, frame(), layout.titleBarStyle);
+    paintStyleBox(canvas, layout.logo, layout.logoStyle);
+
+    const Color logoColor = layout.logoStyle.foreground.value_or(Color{17, 17, 20});
+    const Color logoAccent = layout.logoStyle.background.color.value_or(Color{123, 212, 198});
+    paintIcon(canvas, iconSymbol_, layout.logoIcon, logoColor, logoAccent, layout.logoStyle.borderWidth.value_or(1.5f));
+    const Color titleColor = layout.titleBarStyle.foreground.value_or(Color{32, 33, 36});
+    canvas.drawText(title_, layout.title, titleColor, 12.0f, TextAlign::Left);
+
+    for (const auto& button : layout.buttons) {
+        const StyleBox style = visualButtonStyle(button.id, button.style);
+        paintStyleBox(canvas, button.visual, style);
+        const Color iconColor = style.foreground.value_or(button.iconColor);
+        paintIcon(canvas, button.symbol, button.icon, iconColor, Color{0, 0, 0, 0}, 1.5f);
+    }
+}
+
+bool WindowTitleBar::onMouseMove(const MouseEvent& event) {
+    const auto next = hitTestTitleBarButton(titleBarLayout(), event.position);
+    if (next == hoveredButton_) {
+        return false;
+    }
+    const auto previous = titleBarLayout();
+    hoveredButton_ = next;
+    beginButtonTransitions(previous, titleBarLayout());
+    invalidate();
+    return true;
+}
+
+bool WindowTitleBar::onMouseDown(const MouseEvent& event) {
+    const auto button = hitTestTitleBarButton(titleBarLayout(), event.position);
+    if (button == TitleBarButtonId::None) {
+        return false;
+    }
+    const auto previous = titleBarLayout();
+    pressedButton_ = button;
+    beginButtonTransitions(previous, titleBarLayout());
+    invalidate();
+    return true;
+}
+
+bool WindowTitleBar::onMouseUp(const MouseEvent& event) {
+    if (pressedButton_ == TitleBarButtonId::None) {
+        return false;
+    }
+    const auto previousLayout = titleBarLayout();
+    const auto pressed = pressedButton_;
+    const auto released = hitTestTitleBarButton(titleBarLayout(), event.position);
+    pressedButton_ = TitleBarButtonId::None;
+    beginButtonTransitions(previousLayout, titleBarLayout());
+    invalidate();
+    if (pressed != released) {
+        return true;
+    }
+    if (pressed == TitleBarButtonId::Minimize && onMinimize_) {
+        onMinimize_();
+    } else if (pressed == TitleBarButtonId::Maximize && onMaximize_) {
+        onMaximize_();
+    } else if (pressed == TitleBarButtonId::Close && onClose_) {
+        onClose_();
+    }
+    return true;
+}
+
+bool WindowTitleBar::tickAnimations(double nowMs) {
+    bool running = false;
+    for (std::size_t index = 0; index < buttonBackgroundTransitions_.size(); ++index) {
+        running = buttonBackgroundTransitions_[index].tick(nowMs) || running;
+        running = buttonForegroundTransitions_[index].tick(nowMs) || running;
+        running = buttonBorderTransitions_[index].tick(nowMs) || running;
+    }
+    if (running) {
+        invalidate();
+    }
+    return running;
+}
+
+StyleBox WindowTitleBar::visualButtonStyle(TitleBarButtonId id, StyleBox target) const {
+    const std::size_t index = buttonIndex(id);
+    if (!buttonVisualInitialized_[index]) {
+        return target;
+    }
+
+    target.background.color = buttonBackgroundTransitions_[index].value();
+    target.background.gradientStart.reset();
+    target.background.gradientEnd.reset();
+    target.foreground = buttonForegroundTransitions_[index].value();
+    target.borderColor = buttonBorderTransitions_[index].value();
+    return target;
+}
+
+void WindowTitleBar::beginButtonTransitions(const TitleBarBridgeLayout& from, const TitleBarBridgeLayout& target) {
+    if (!hasAnimationScheduler()) {
+        buttonVisualInitialized_ = {false, false, false};
+        return;
+    }
+
+    bool anyRunning = false;
+    for (const auto& targetButton : target.buttons) {
+        const std::size_t index = buttonIndex(targetButton.id);
+        const auto found = std::find_if(from.buttons.begin(), from.buttons.end(), [&](const TitleBarBridgeButton& button) {
+            return button.id == targetButton.id;
+        });
+        const StyleBox& fromStyle = found == from.buttons.end() ? targetButton.style : found->style;
+        const Color fromBackground = styleColorOr(fromStyle.background.color, Color{0, 0, 0, 0});
+        const Color fromForeground = styleColorOr(fromStyle.foreground, targetButton.iconColor);
+        const Color fromBorder = styleColorOr(fromStyle.borderColor, Color{0, 0, 0, 0});
+        const Color targetBackground = styleColorOr(targetButton.style.background.color, Color{0, 0, 0, 0});
+        const Color targetForeground = styleColorOr(targetButton.style.foreground, targetButton.iconColor);
+        const Color targetBorder = styleColorOr(targetButton.style.borderColor, Color{0, 0, 0, 0});
+
+        if (!buttonVisualInitialized_[index]) {
+            buttonBackgroundTransitions_[index].reset(fromBackground);
+            buttonForegroundTransitions_[index].reset(fromForeground);
+            buttonBorderTransitions_[index].reset(fromBorder);
+            buttonVisualInitialized_[index] = true;
+        }
+
+        const TransitionSpec spec = transitionSpecFrom(targetButton.style);
+        const double nowMs = currentTimeMs();
+        buttonBackgroundTransitions_[index].animateTo(targetBackground, nowMs, spec);
+        buttonForegroundTransitions_[index].animateTo(targetForeground, nowMs, spec);
+        buttonBorderTransitions_[index].animateTo(targetBorder, nowMs, spec);
+        anyRunning = buttonBackgroundTransitions_[index].running()
+            || buttonForegroundTransitions_[index].running()
+            || buttonBorderTransitions_[index].running()
+            || anyRunning;
+    }
+    if (anyRunning) {
+        requestAnimationFrame();
+    }
+}
+
+bool WindowTitleBar::hasInteractionState() const {
+    return hoveredButton_ != TitleBarButtonId::None || pressedButton_ != TitleBarButtonId::None;
+}
+
+void WindowTitleBar::resetInteractionState() {
+    hoveredButton_ = TitleBarButtonId::None;
+    pressedButton_ = TitleBarButtonId::None;
+    const auto target = titleBarLayout();
+    for (const auto& button : target.buttons) {
+        const std::size_t index = buttonIndex(button.id);
+        buttonBackgroundTransitions_[index].reset(styleColorOr(button.style.background.color, Color{0, 0, 0, 0}));
+        buttonForegroundTransitions_[index].reset(styleColorOr(button.style.foreground, button.iconColor));
+        buttonBorderTransitions_[index].reset(styleColorOr(button.style.borderColor, Color{0, 0, 0, 0}));
+        buttonVisualInitialized_[index] = true;
+    }
+}
+
+} // namespace oneui
