@@ -613,6 +613,10 @@ bool TextField::onFocusChanged(bool focused) {
     return true;
 }
 
+CursorKind TextField::cursor(Point point) const {
+    return interactive() && !readOnly() && contains(point) ? CursorKind::Text : CursorKind::Default;
+}
+
 bool TextField::isFocusable() const {
     return interactive();
 }

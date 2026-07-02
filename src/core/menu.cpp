@@ -273,6 +273,10 @@ bool Menu::onMouseUp(const MouseEvent& event) {
     return true;
 }
 
+CursorKind Menu::cursor(Point point) const {
+    return interactive() && entryAt(point) >= 0 ? CursorKind::Pointer : CursorKind::Default;
+}
+
 bool Menu::isFocusable() const {
     return !disabled();
 }

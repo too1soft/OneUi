@@ -187,6 +187,10 @@ bool NavItem::onFocusChanged(bool focused) {
     return true;
 }
 
+CursorKind NavItem::cursor(Point point) const {
+    return interactive() && contains(point) ? CursorKind::Pointer : CursorKind::Default;
+}
+
 bool NavItem::isFocusable() const {
     return !disabled();
 }

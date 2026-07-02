@@ -62,6 +62,7 @@ public:
     bool onKeyDown(const KeyEvent& event) override;
     bool onTextInput(wchar_t character) override;
     bool onFocusChanged(bool focused) override;
+    CursorKind cursor(Point point) const override;
     bool isFocusable() const override;
     void setFocusVisible(bool visible) override;
     bool tickAnimations(double nowMs) override;

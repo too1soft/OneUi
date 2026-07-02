@@ -131,9 +131,20 @@ void WindowTitleBar::setOnClose(std::function<void()> callback) {
     onClose_ = std::move(callback);
 }
 
+CursorKind WindowTitleBar::cursor(Point point) const {
+    if (!disabled() && hitTestTitleBarButton(titleBarLayout(), point) != TitleBarButtonId::None) {
+        return CursorKind::Pointer;
+    }
+    return Widget::cursor(point);
+}
+
 ProductWindowChromeLayout WindowTitleBar::chromeLayout() const {
     const Rect bounds = frame();
-    return offsetChrome(computeProductWindowChromeLayout(Size{bounds.width, bounds.height}), Point{bounds.x, bounds.y});
+    // 标题栏高度以控件实际 frame 为准：默认 metrics 是 34，若外部把标题栏设成
+    // 44 等高度，仍按 34 排版会让 logo/标题/窗口按钮整体偏上、不居中。
+    ProductShellMetrics metrics;
+    metrics.windowTitleBarHeight = bounds.height;
+    return offsetChrome(computeProductWindowChromeLayout(Size{bounds.width, bounds.height}, metrics), Point{bounds.x, bounds.y});
 }
 
 TitleBarBridgeLayout WindowTitleBar::titleBarLayout() const {

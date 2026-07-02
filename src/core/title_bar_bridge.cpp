@@ -51,8 +51,14 @@ TitleBarBridgeButton buildButton(
     TitleBarBridgeButton button;
     button.id = id;
     button.frame = frame;
-    button.visual = inset(frame, 6.0f, 5.0f);
-    button.icon = inset(frame, 15.0f, 10.0f);
+    button.visual = inset(frame, 6.0f, std::max(5.0f, (frame.height - 30.0f) / 2.0f));
+    // 图标固定 14px 正方形居中：跟随 frame 内缩会在高标题栏下被拉大变形。
+    const float iconSide = 14.0f;
+    button.icon = Rect{
+        frame.x + (frame.width - iconSide) / 2.0f,
+        frame.y + (frame.height - iconSide) / 2.0f,
+        iconSide,
+        iconSide};
     button.style = buttonStyleBoxFromStyleSheet(sheet, buttonNodeFor(id, config), state);
     button.symbol = buttonSymbolFor(id, config.maximized);
     button.iconColor = iconColorFor(id, state);

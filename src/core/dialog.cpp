@@ -11,7 +11,8 @@ namespace {
 
 constexpr float kIconBadgeSize = 38.0f;
 constexpr float kHeaderGap = 10.0f;
-constexpr float kCloseSize = 30.0f;
+constexpr float kCloseSize = 28.0f;
+constexpr float kCloseInset = 12.0f;
 constexpr float kSlotGap = 12.0f;
 
 // 未接 StyleSheet 时的默认外观：浅色中性（docs/03-style.md）。
@@ -134,13 +135,14 @@ Dialog::HeaderLayout Dialog::headerLayout() const {
         layout.icon = Rect{content.x, content.y + (layout.height - kIconBadgeSize) / 2.0f, kIconBadgeSize, kIconBadgeSize};
         textLeft += kIconBadgeSize + kHeaderGap;
     }
-    const float closeWidth = closeVisible_ ? kCloseSize : 0.0f;
-    layout.close = Rect{
-        content.x + content.width - closeWidth,
-        content.y + (layout.height - kCloseSize) / 2.0f,
-        closeWidth,
-        kCloseSize};
-    const float textRight = content.x + content.width - closeWidth - (closeVisible_ ? 8.0f : 0.0f);
+    // 关闭键贴弹窗右上角（不随头部行垂直居中），符合桌面弹窗惯例。
+    const Rect bounds = frame();
+    layout.close = closeVisible_
+        ? Rect{bounds.x + bounds.width - kCloseInset - kCloseSize, bounds.y + kCloseInset, kCloseSize, kCloseSize}
+        : Rect{};
+    const float textRight = closeVisible_
+        ? std::min(content.x + content.width, layout.close.x - 8.0f)
+        : content.x + content.width;
     const float textWidth = std::max(0.0f, textRight - textLeft);
     if (subtitle_.empty()) {
         layout.title = Rect{textLeft, content.y, textWidth, layout.height};
@@ -219,7 +221,7 @@ void Dialog::paint(Canvas& canvas) {
         }
         const StyleBox close = sheet.resolve(StyleNode{"button", {"dialog-close"}, state});
         paintStyleBox(canvas, header.close, close);
-        const Rect closeIcon = header.close.inset(Insets{8.0f});
+        const Rect closeIcon = header.close.inset(Insets{7.0f});
         paintIcon(canvas, IconSymbol::Close, closeIcon, close.foreground.value_or(Color{152, 162, 179}), Color{0, 0, 0, 0}, 1.5f);
     }
 
@@ -259,6 +261,13 @@ bool Dialog::onMouseUp(const MouseEvent& event) {
         return true;
     }
     return View::onMouseUp(event);
+}
+
+CursorKind Dialog::cursor(Point point) const {
+    if (interactive() && closeVisible_ && headerLayout().close.contains(point)) {
+        return CursorKind::Pointer;
+    }
+    return View::cursor(point);
 }
 
 bool Dialog::hasInteractionState() const {

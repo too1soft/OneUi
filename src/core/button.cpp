@@ -303,6 +303,10 @@ bool Button::onKeyDown(const KeyEvent& event) {
     return true;
 }
 
+CursorKind Button::cursor(Point point) const {
+    return interactive() && contains(point) ? CursorKind::Pointer : CursorKind::Default;
+}
+
 bool Button::isFocusable() const {
     return interactive();
 }

@@ -208,6 +208,10 @@ bool IconButton::onFocusChanged(bool focused) {
     return true;
 }
 
+CursorKind IconButton::cursor(Point point) const {
+    return interactive() && contains(point) ? CursorKind::Pointer : CursorKind::Default;
+}
+
 bool IconButton::isFocusable() const {
     return !disabled();
 }

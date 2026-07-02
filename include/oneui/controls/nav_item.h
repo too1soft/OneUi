@@ -29,6 +29,7 @@ public:
     bool onMouseDown(const MouseEvent& event) override;
     bool onMouseUp(const MouseEvent& event) override;
     bool onFocusChanged(bool focused) override;
+    CursorKind cursor(Point point) const override;
     bool isFocusable() const override;
     bool tickAnimations(double nowMs) override;
     void setDisabled(bool disabled) override;

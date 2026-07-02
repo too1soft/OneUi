@@ -184,6 +184,10 @@ bool Switch::onKeyDown(const KeyEvent& event) {
     return true;
 }
 
+CursorKind Switch::cursor(Point point) const {
+    return interactive() && contains(point) ? CursorKind::Pointer : CursorKind::Default;
+}
+
 bool Switch::isFocusable() const {
     return interactive();
 }

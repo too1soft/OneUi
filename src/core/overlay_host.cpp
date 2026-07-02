@@ -181,16 +181,19 @@ bool OverlayHost::onMouseMove(const MouseEvent& event) {
             continue;
         }
 
+        // 命中的最上层可交互 overlay 独占指针：无论其内部状态是否变化，事件都
+        // 不再下落。否则指针静置在 overlay 内时，第二次 move 会落到下面的
+        // “清空全部 overlay 交互态”，把刚设置的 hover 清掉，造成 hover 逐帧闪烁。
         bool changed = child->onMouseMove(event);
-        if (changed) {
-            for (const auto& entry : overlays_) {
-                if (entry.child.get() != child.get() && entry.child->visible()) {
-                    changed = entry.child->clearInteractionState() || changed;
-                }
+        for (const auto& other : overlays_) {
+            if (other.child.get() != child.get() && other.child->visible()) {
+                changed = other.child->clearInteractionState() || changed;
             }
-            return true;
         }
-        continue;
+        if (content_ && content_->visible()) {
+            changed = content_->clearInteractionState() || changed;
+        }
+        return changed;
     }
 
     bool changed = false;
@@ -227,13 +230,14 @@ bool OverlayHost::onMouseDown(const MouseEvent& event) {
             continue;
         }
 
+        // 同 onMouseMove：命中 overlay 即消费按下事件，绝不下落到视觉上被
+        // 遮住的 content（否则点击会穿透遮罩打到弹窗下面的控件）。
         pressedOverlay_ = child.get();
         const bool handled = child->onMouseDown(event);
         if (handled || child->isFocusable()) {
             focusOverlay(child.get(), false);
-            return true;
         }
-        continue;
+        return true;
     }
 
     pressedOverlay_ = nullptr;
