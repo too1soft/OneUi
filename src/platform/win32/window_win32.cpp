@@ -4,6 +4,7 @@
 
 #include <windows.h>
 #include <windowsx.h>
+#include <dwmapi.h>
 
 #include <GL/gl.h>
 #include "include/gpu/ganesh/GrDirectContext.h"
@@ -944,6 +945,7 @@ public:
         if (!options_.fullscreen) {
             applyWindowState();
         }
+        applyBorderlessShadow();
     }
 
     void setTitleBarDragMetrics(float titleBarHeight, float reservedButtonWidth) override {
@@ -970,6 +972,16 @@ public:
     }
 
 private:
+    // 无边框(WS_POPUP)窗口默认没有 DWM 投影，会像一张贴在桌面上的平面图。
+    // 向客户区扩 1px glass 边即可启用系统标准窗口阴影（内容不透出、不影响命中）。
+    void applyBorderlessShadow() {
+        if (!hwnd_ || !options_.borderless || options_.fullscreen) {
+            return;
+        }
+        const MARGINS margins{0, 0, 0, 1};
+        DwmExtendFrameIntoClientArea(hwnd_, &margins);
+    }
+
     float normalizedDpiScale() const {
         return dpiScale_ > 0.0f ? dpiScale_ : 1.0f;
     }
@@ -1027,6 +1039,7 @@ private:
 
         if (hwnd_) {
             dpiScale_ = dpiScaleForWindowHandle(hwnd_);
+            applyBorderlessShadow();
             initGPU();
         }
 

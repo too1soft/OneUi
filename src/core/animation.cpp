@@ -124,6 +124,15 @@ void ColorTransition::animateTo(Color target, double nowMs, TransitionSpec spec)
         return;
     }
     from_ = value_;
+    // 全透明色只有 alpha 有意义：从透明淡入时采用目标的 RGB（若按字面
+    // rgba(0,0,0,0) 从黑插值，亮色 hover 底会先闪过半透明深灰）；淡出到
+    // 透明同理保留起点 RGB，只动 alpha。
+    if (from_.a == 0 && target.a != 0) {
+        from_ = Color{target.r, target.g, target.b, 0};
+        value_ = from_;
+    } else if (target.a == 0 && from_.a != 0) {
+        target = Color{from_.r, from_.g, from_.b, 0};
+    }
     target_ = target;
     startMs_ = nowMs;
     spec_ = spec;

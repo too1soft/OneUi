@@ -147,8 +147,8 @@ Dialog::HeaderLayout Dialog::headerLayout() const {
     if (subtitle_.empty()) {
         layout.title = Rect{textLeft, content.y, textWidth, layout.height};
     } else {
-        layout.title = Rect{textLeft, content.y + 2.0f, textWidth, 25.0f};
-        layout.subtitle = Rect{textLeft, content.y + 27.0f, textWidth, 19.0f};
+        layout.title = Rect{textLeft, content.y + 1.0f, textWidth, 25.0f};
+        layout.subtitle = Rect{textLeft, content.y + 27.0f, textWidth, 20.0f};
     }
     return layout;
 }
@@ -209,7 +209,7 @@ void Dialog::paint(Canvas& canvas) {
         TextAlign::Left,
         surface.fontWeight.value_or(600));
     if (!subtitle_.empty()) {
-        canvas.drawText(subtitle_, header.subtitle, Color{90, 100, 114}, 12.0f, TextAlign::Left);
+        canvas.drawText(subtitle_, header.subtitle, Color{90, 100, 114}, 13.0f, TextAlign::Left);
     }
 
     if (closeVisible_) {
