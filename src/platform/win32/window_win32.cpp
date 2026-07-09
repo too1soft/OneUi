@@ -992,6 +992,15 @@ public:
 private:
     // 无边框(WS_POPUP)窗口默认没有 DWM 投影，会像一张贴在桌面上的平面图。
     // 向客户区扩 1px glass 边即可启用系统标准窗口阴影（内容不透出、不影响命中）。
+    // GetSystemMetricsForDpi 在 Win10 运行时存在，但 mingw-w64 头文件未声明，动态解析；
+    // 解析不到(理论上不会)退回 GetSystemMetrics(仅系统 DPI 值)。
+    static int frameMetricForDpi(int index, UINT dpi) {
+        using Fn = int(WINAPI*)(int, UINT);
+        static Fn fn = reinterpret_cast<Fn>(reinterpret_cast<void*>(
+            GetProcAddress(GetModuleHandleW(L"user32.dll"), "GetSystemMetricsForDpi")));
+        return fn ? fn(index, dpi) : GetSystemMetrics(index);
+    }
+
     void applyBorderlessShadow() {
         if (!hwnd_ || !options_.borderless || options_.fullscreen) {
             return;
@@ -1039,7 +1048,11 @@ private:
         DWORD style = windowStyle();
         DWORD exStyle = windowExStyle();
         RECT rect{0, 0, logicalToPhysicalCeil(static_cast<float>(options_.width)), logicalToPhysicalCeil(static_cast<float>(options_.height))};
-        AdjustWindowRectEx(&rect, style, FALSE, exStyle);
+        // 无边框窗口的 WM_NCCALCSIZE 会把客户区铺满整个窗口，所以窗口尺寸就等于期望的
+        // 客户区尺寸，不能再用 AdjustWindowRectEx 按 WS_THICKFRAME 外扩(否则会大出一圈边框)。
+        if (!options_.borderless) {
+            AdjustWindowRectEx(&rect, style, FALSE, exStyle);
+        }
 
         hwnd_ = CreateWindowExW(
             exStyle,
@@ -1189,6 +1202,27 @@ private:
         case kOneUiDpiChanged:
             handleDpiChanged(wParam, lParam);
             return 0;
+        case WM_NCCALCSIZE:
+            // 无边框窗口带着 WS_THICKFRAME(为拿 DWM 投影)，这里把非客户区尺寸清零，
+            // 使客户区铺满整个窗口——投影保留、可见边框消失。常规最大化走自定义逻辑
+            // (applyBorderlessMaximize，摆到工作区，IsZoomed 恒 false)，此时直接铺满。
+            if (wParam == TRUE && options_.borderless && !options_.fullscreen) {
+                if (IsZoomed(hwnd_)) {
+                    // 兜底：若经由 Aero Snap 贴顶等路径进入真·系统最大化，系统会把窗口
+                    // 摆成工作区外溢一圈边框。此时必须按边框厚度内缩，否则内容被屏幕边缘
+                    // 裁掉、标题栏按钮跑到屏幕外。
+                    auto* p = reinterpret_cast<NCCALCSIZE_PARAMS*>(lParam);
+                    const UINT dpi = static_cast<UINT>(std::lround(normalizedDpiScale() * kDefaultDpi));
+                    const int fx = frameMetricForDpi(SM_CXSIZEFRAME, dpi) + frameMetricForDpi(SM_CXPADDEDBORDER, dpi);
+                    const int fy = frameMetricForDpi(SM_CYSIZEFRAME, dpi) + frameMetricForDpi(SM_CXPADDEDBORDER, dpi);
+                    p->rgrc[0].left += fx;
+                    p->rgrc[0].right -= fx;
+                    p->rgrc[0].top += fy;
+                    p->rgrc[0].bottom -= fy;
+                }
+                return 0;
+            }
+            return DefWindowProcW(hwnd_, message, wParam, lParam);
         case WM_NCHITTEST:
             if (const auto hit = hitTestBorderlessWindow(lParam); hit != HTNOWHERE) {
                 return hit;
@@ -1228,8 +1262,15 @@ private:
     }
 
     DWORD windowStyle() const {
-        if (options_.fullscreen || options_.borderless) {
+        if (options_.fullscreen) {
             return WS_POPUP;
+        }
+        if (options_.borderless) {
+            // 纯 WS_POPUP 没有 DWM 投影，浅色桌面上窗口边缘看不清。加 WS_THICKFRAME
+            // 让系统按标准窗口绘制投影；可见的非客户区边框随后由 WM_NCCALCSIZE 抹掉，
+            // 视觉仍是无边框。最大化走自定义逻辑(applyBorderlessMaximize)，故不加
+            // WS_MAXIMIZEBOX，避免系统 SW_MAXIMIZE 与自定义状态冲突。
+            return WS_POPUP | WS_THICKFRAME | WS_MINIMIZEBOX;
         }
 
         DWORD style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
