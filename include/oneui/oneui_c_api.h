@@ -175,6 +175,8 @@ ONEUI_API void oneui_window_request_animation_frame(OneUiWindow* window, OneUiFr
 ONEUI_API void oneui_window_set_title(OneUiWindow* window, const wchar_t* title);
 ONEUI_API void* oneui_window_native_handle(OneUiWindow* window);
 ONEUI_API int oneui_window_confirm(OneUiWindow* window, const wchar_t* title, const wchar_t* message);
+// 打开系统“选择文件夹”对话框；选中写入 out(最多 outLen 个 wchar)并返回 1，取消返回 0。
+ONEUI_API int oneui_window_pick_folder(OneUiWindow* window, const wchar_t* title, wchar_t* out, int outLen);
 ONEUI_API int oneui_window_client_width(OneUiWindow* window);
 ONEUI_API int oneui_window_client_height(OneUiWindow* window);
 ONEUI_API int oneui_window_client_pixel_width(OneUiWindow* window);

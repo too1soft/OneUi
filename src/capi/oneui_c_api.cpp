@@ -47,6 +47,7 @@
 
 #ifdef _WIN32
 #include <windows.h>
+#include <shobjidl.h>
 #include <shellapi.h>
 #endif
 
@@ -823,6 +824,54 @@ void oneui_window_set_style_sheet(OneUiWindow* window, OneUiStyleSheet* style_sh
     }
     window->styleSheet = style_sheet->sheet;
     gDefaultStyleSheet = style_sheet->sheet;
+}
+
+int oneui_window_pick_folder(OneUiWindow* window, const wchar_t* title, wchar_t* out, int outLen) {
+#ifdef _WIN32
+    if (!out || outLen <= 0) {
+        return 0;
+    }
+    out[0] = L'\0';
+    HWND owner = nullptr;
+    if (window && window->window) {
+        owner = reinterpret_cast<HWND>(window->window->nativeHandle());
+    }
+
+    const bool comInited = SUCCEEDED(CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE));
+    int picked = 0;
+    IFileOpenDialog* dialog = nullptr;
+    if (SUCCEEDED(CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&dialog)))) {
+        DWORD options = 0;
+        dialog->GetOptions(&options);
+        dialog->SetOptions(options | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST);
+        if (title && title[0] != L'\0') {
+            dialog->SetTitle(title);
+        }
+        if (SUCCEEDED(dialog->Show(owner))) {
+            IShellItem* item = nullptr;
+            if (SUCCEEDED(dialog->GetResult(&item)) && item) {
+                PWSTR path = nullptr;
+                if (SUCCEEDED(item->GetDisplayName(SIGDN_FILESYSPATH, &path)) && path) {
+                    lstrcpynW(out, path, outLen);
+                    picked = 1;
+                    CoTaskMemFree(path);
+                }
+                item->Release();
+            }
+        }
+        dialog->Release();
+    }
+    if (comInited) {
+        CoUninitialize();
+    }
+    return picked;
+#else
+    (void)window;
+    (void)title;
+    (void)out;
+    (void)outLen;
+    return 0;
+#endif
 }
 
 int oneui_window_confirm(OneUiWindow* window, const wchar_t* title, const wchar_t* message) {
