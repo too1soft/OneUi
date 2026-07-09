@@ -311,6 +311,7 @@ ONEUI_API OneUiWidget* oneui_title_bar_create(const wchar_t* title);
 ONEUI_API void oneui_title_bar_set_title(OneUiWidget* title_bar, const wchar_t* title);
 ONEUI_API void oneui_title_bar_set_icon_symbol(OneUiWidget* title_bar, int symbol);
 ONEUI_API void oneui_title_bar_set_maximized(OneUiWidget* title_bar, int maximized);
+ONEUI_API void oneui_title_bar_set_variant(OneUiWidget* title_bar, const char* variant);
 ONEUI_API void oneui_title_bar_set_on_minimize(OneUiWidget* title_bar, OneUiVoidCallback callback, void* user_data);
 ONEUI_API void oneui_title_bar_set_on_maximize(OneUiWidget* title_bar, OneUiVoidCallback callback, void* user_data);
 ONEUI_API void oneui_title_bar_set_on_close(OneUiWidget* title_bar, OneUiVoidCallback callback, void* user_data);
@@ -370,6 +371,7 @@ ONEUI_API void oneui_card_set_content(OneUiWidget* card, OneUiWidget* child);
 
 ONEUI_API OneUiWidget* oneui_realtime_frame_view_create(void);
 ONEUI_API void oneui_realtime_frame_view_set_scale_mode(OneUiWidget* frame_view, OneUiVideoScaleMode scale_mode);
+ONEUI_API void oneui_realtime_frame_view_set_background(OneUiWidget* frame_view, unsigned char r, unsigned char g, unsigned char b, unsigned char a);
 ONEUI_API void oneui_realtime_frame_view_submit_frame(
     OneUiWidget* frame_view,
     const void* pixels,

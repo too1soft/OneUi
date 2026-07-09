@@ -40,6 +40,10 @@ struct StyleBackground {
     std::optional<Color> gradientStart;
     std::optional<Color> gradientEnd;
     std::optional<float> gradientAngleDegrees;
+    // radial-gradient：圆心（相对 rect 的 0-1 归一化坐标）与半径（相对 max(宽,高) 的比例）。
+    // radialCenter 有值时 gradientStart/End 按径向渐变绘制，否则走线性。
+    std::optional<Point> radialCenter;
+    std::optional<float> radialRadius;
 };
 
 struct StyleContentBox {

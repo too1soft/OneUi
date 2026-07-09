@@ -1497,7 +1497,7 @@ void oneui_label_set_align(OneUiWidget* label, int align) {
 }
 
 OneUiWidget* oneui_icon_create(int symbol) {
-    const auto clamped = std::clamp(symbol, 0, static_cast<int>(oneui::IconSymbol::Play));
+    const auto clamped = std::clamp(symbol, 0, static_cast<int>(oneui::IconSymbol::CheckCircle));
     return wrap(std::make_shared<oneui::IconView>(static_cast<oneui::IconSymbol>(clamped)));
 }
 
@@ -1506,7 +1506,7 @@ void oneui_icon_set_symbol(OneUiWidget* icon, int symbol) {
     if (!nativeIcon) {
         return;
     }
-    const auto clamped = std::clamp(symbol, 0, static_cast<int>(oneui::IconSymbol::Play));
+    const auto clamped = std::clamp(symbol, 0, static_cast<int>(oneui::IconSymbol::CheckCircle));
     nativeIcon->setSymbol(static_cast<oneui::IconSymbol>(clamped));
 }
 
@@ -1535,7 +1535,7 @@ void oneui_icon_set_stroke_width(OneUiWidget* icon, float width) {
 }
 
 OneUiWidget* oneui_icon_button_create(int symbol) {
-    const auto clamped = std::clamp(symbol, 0, static_cast<int>(oneui::IconSymbol::Play));
+    const auto clamped = std::clamp(symbol, 0, static_cast<int>(oneui::IconSymbol::CheckCircle));
     return wrap(std::make_shared<oneui::IconButton>(static_cast<oneui::IconSymbol>(clamped)));
 }
 
@@ -1544,7 +1544,7 @@ void oneui_icon_button_set_symbol(OneUiWidget* icon_button, int symbol) {
     if (!nativeIconButton) {
         return;
     }
-    const auto clamped = std::clamp(symbol, 0, static_cast<int>(oneui::IconSymbol::Play));
+    const auto clamped = std::clamp(symbol, 0, static_cast<int>(oneui::IconSymbol::CheckCircle));
     nativeIconButton->setSymbol(static_cast<oneui::IconSymbol>(clamped));
 }
 
@@ -1621,7 +1621,7 @@ void oneui_title_bar_set_icon_symbol(OneUiWidget* title_bar, int symbol) {
     if (!nativeTitleBar) {
         return;
     }
-    const auto clamped = std::clamp(symbol, 0, static_cast<int>(oneui::IconSymbol::Play));
+    const auto clamped = std::clamp(symbol, 0, static_cast<int>(oneui::IconSymbol::CheckCircle));
     nativeTitleBar->setIconSymbol(static_cast<oneui::IconSymbol>(clamped));
 }
 
@@ -1631,6 +1631,14 @@ void oneui_title_bar_set_maximized(OneUiWidget* title_bar, int maximized) {
         return;
     }
     nativeTitleBar->setMaximized(maximized != 0);
+}
+
+void oneui_title_bar_set_variant(OneUiWidget* title_bar, const char* variant) {
+    auto* nativeTitleBar = asWidget<oneui::WindowTitleBar>(title_bar);
+    if (!nativeTitleBar) {
+        return;
+    }
+    nativeTitleBar->setVariant(variant ? std::string(variant) : std::string());
 }
 
 void oneui_title_bar_set_on_minimize(OneUiWidget* title_bar, OneUiVoidCallback callback, void* user_data) {
@@ -1744,7 +1752,7 @@ void oneui_badge_set_variant(OneUiWidget* badge, int variant) {
 }
 
 OneUiWidget* oneui_icon_badge_create(int symbol) {
-    const auto clamped = std::clamp(symbol, 0, static_cast<int>(oneui::IconSymbol::Play));
+    const auto clamped = std::clamp(symbol, 0, static_cast<int>(oneui::IconSymbol::CheckCircle));
     return wrap(std::make_shared<oneui::IconBadge>(static_cast<oneui::IconSymbol>(clamped)));
 }
 
@@ -1753,7 +1761,7 @@ void oneui_icon_badge_set_symbol(OneUiWidget* icon_badge, int symbol) {
     if (!nativeIconBadge) {
         return;
     }
-    const auto clamped = std::clamp(symbol, 0, static_cast<int>(oneui::IconSymbol::Play));
+    const auto clamped = std::clamp(symbol, 0, static_cast<int>(oneui::IconSymbol::CheckCircle));
     nativeIconBadge->setSymbol(static_cast<oneui::IconSymbol>(clamped));
 }
 
@@ -1792,7 +1800,7 @@ int oneui_menu_add_item(OneUiWidget* menu, const wchar_t* text, int icon_symbol,
     }
     std::optional<oneui::IconSymbol> icon;
     if (icon_symbol >= 0) {
-        const auto clamped = std::clamp(icon_symbol, 0, static_cast<int>(oneui::IconSymbol::Play));
+        const auto clamped = std::clamp(icon_symbol, 0, static_cast<int>(oneui::IconSymbol::CheckCircle));
         icon = static_cast<oneui::IconSymbol>(clamped);
     }
     return nativeMenu->addItem(wideOrEmpty(text), icon, danger != 0);
@@ -1865,7 +1873,7 @@ void oneui_dialog_set_icon(OneUiWidget* dialog, int symbol) {
         nativeDialog->clearIconSymbol();
         return;
     }
-    const auto clamped = std::clamp(symbol, 0, static_cast<int>(oneui::IconSymbol::Play));
+    const auto clamped = std::clamp(symbol, 0, static_cast<int>(oneui::IconSymbol::CheckCircle));
     nativeDialog->setIconSymbol(static_cast<oneui::IconSymbol>(clamped));
 }
 
@@ -2030,6 +2038,14 @@ void oneui_realtime_frame_view_set_scale_mode(OneUiWidget* frame_view, OneUiVide
     nativeFrameView->setScaleMode(toScaleMode(scale_mode));
 }
 
+void oneui_realtime_frame_view_set_background(OneUiWidget* frame_view, unsigned char r, unsigned char g, unsigned char b, unsigned char a) {
+    auto* nativeFrameView = asWidget<oneui::RealtimeFrameView>(frame_view);
+    if (!nativeFrameView) {
+        return;
+    }
+    nativeFrameView->setBackgroundColor(oneui::Color{r, g, b, a});
+}
+
 void oneui_realtime_frame_view_submit_frame(
     OneUiWidget* frame_view,
     const void* pixels,
@@ -2152,7 +2168,7 @@ void oneui_tile_set_subtitle(OneUiWidget* tile, const wchar_t* subtitle) {
 
 void oneui_tile_set_leading_symbol(OneUiWidget* tile, int symbol) {
     if (auto* nativeTile = asWidget<oneui::Tile>(tile)) {
-        const auto clamped = std::clamp(symbol, 0, static_cast<int>(oneui::IconSymbol::Play));
+        const auto clamped = std::clamp(symbol, 0, static_cast<int>(oneui::IconSymbol::CheckCircle));
         nativeTile->setLeadingSymbol(static_cast<oneui::IconSymbol>(clamped));
     }
 }
@@ -2165,7 +2181,7 @@ void oneui_tile_clear_leading_symbol(OneUiWidget* tile) {
 
 void oneui_tile_set_trailing_symbol(OneUiWidget* tile, int symbol) {
     if (auto* nativeTile = asWidget<oneui::Tile>(tile)) {
-        const auto clamped = std::clamp(symbol, 0, static_cast<int>(oneui::IconSymbol::Play));
+        const auto clamped = std::clamp(symbol, 0, static_cast<int>(oneui::IconSymbol::CheckCircle));
         nativeTile->setTrailingSymbol(static_cast<oneui::IconSymbol>(clamped));
     }
 }
@@ -2268,7 +2284,7 @@ void oneui_toast_set_secondary_action(OneUiWidget* toast, const wchar_t* text) {
 
 void oneui_toast_set_icon_symbol(OneUiWidget* toast, int symbol) {
     if (auto* nativeToast = asWidget<oneui::Toast>(toast)) {
-        const int maxSymbol = static_cast<int>(oneui::IconSymbol::Play);
+        const int maxSymbol = static_cast<int>(oneui::IconSymbol::CheckCircle);
         const int clamped = std::clamp(symbol, 0, maxSymbol);
         nativeToast->setIconSymbol(static_cast<oneui::IconSymbol>(clamped));
     }
@@ -2393,7 +2409,7 @@ void oneui_text_field_set_prefix_icon(OneUiWidget* text_field, int symbol) {
     if (!nativeTextField) {
         return;
     }
-    const auto clamped = std::clamp(symbol, 0, static_cast<int>(oneui::IconSymbol::Play));
+    const auto clamped = std::clamp(symbol, 0, static_cast<int>(oneui::IconSymbol::CheckCircle));
     nativeTextField->setPrefixIcon(static_cast<oneui::IconSymbol>(clamped));
 }
 
@@ -2410,7 +2426,7 @@ void oneui_text_field_set_suffix_icon(OneUiWidget* text_field, int symbol) {
     if (!nativeTextField) {
         return;
     }
-    const auto clamped = std::clamp(symbol, 0, static_cast<int>(oneui::IconSymbol::Play));
+    const auto clamped = std::clamp(symbol, 0, static_cast<int>(oneui::IconSymbol::CheckCircle));
     nativeTextField->setSuffixIcon(static_cast<oneui::IconSymbol>(clamped));
 }
 
@@ -2480,7 +2496,7 @@ void oneui_button_set_icon(OneUiWidget* button, int symbol) {
         nativeButton->clearIcon();
         return;
     }
-    const auto clamped = std::clamp(symbol, 0, static_cast<int>(oneui::IconSymbol::Play));
+    const auto clamped = std::clamp(symbol, 0, static_cast<int>(oneui::IconSymbol::CheckCircle));
     nativeButton->setIcon(static_cast<oneui::IconSymbol>(clamped));
 }
 

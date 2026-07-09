@@ -428,6 +428,22 @@ public:
         g_primitivePaintTrace.gradientMs += currentTimeMs() - traceStartMs;
     }
 
+    void fillRadialGradient(Rect rect, Color center, Color edge, Point centerNorm, float radiusNorm, float radius) override {
+        if (rect.width <= 0.0f || rect.height <= 0.0f) {
+            return;
+        }
+        const float shaderRadius = std::max(rect.width, rect.height) * std::max(0.01f, radiusNorm);
+        const SkPoint shaderCenter = SkPoint::Make(
+            rect.x + rect.width * centerNorm.x,
+            rect.y + rect.height * centerNorm.y);
+        const SkColor colors[2] = {toSkColor(center), toSkColor(edge)};
+        SkPaint paint;
+        paint.setAntiAlias(true);
+        paint.setShader(SkGradientShader::MakeRadial(shaderCenter, shaderRadius, colors, nullptr, 2, SkTileMode::kClamp));
+        canvas_.drawRRect(SkRRect::MakeRectXY(toSkRect(rect), radius, radius), paint);
+        ++g_primitivePaintTrace.gradientCalls;
+    }
+
     void strokeRect(Rect rect, Color color, float radius, float width) override {
         SkPaint paint;
         paint.setAntiAlias(true);
@@ -569,8 +585,10 @@ public:
         }
 
         SkPaint paint;
-        paint.setAntiAlias(false);
-        canvas_.drawImageRect(image, toSkRect(rect), SkSamplingOptions(SkFilterMode::kNearest), &paint);
+        paint.setAntiAlias(true);
+        // 高质量采样：缩放（尤其缩小，如把大 logo 缩到小尺寸）时用三次 Mitchell 滤波，
+        // 避免最近邻的糊边与锯齿。视频按 1:1/放大提交时同样清晰。
+        canvas_.drawImageRect(image, toSkRect(rect), SkSamplingOptions(SkCubicResampler::Mitchell()), &paint);
     }
 
 private:

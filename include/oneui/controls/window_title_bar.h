@@ -20,6 +20,10 @@ public:
     void setTitle(std::wstring title);
     void setIconSymbol(IconSymbol symbol);
     void setMaximized(bool maximized);
+    // setVariant 给标题栏挂一个皮肤变体（如 "dark"）：非空时在各样式节点上追加
+    // "titlebar--<variant>" / "titlebar-icon--<variant>" / "window-button--<variant>" 类，
+    // 供样式表按类换肤（如登录页深色标题栏）；空则保持默认皮肤。
+    void setVariant(std::string variant);
     void setStyleSheet(std::shared_ptr<StyleSheet> sheet);
     void setOnMinimize(std::function<void()> callback);
     void setOnMaximize(std::function<void()> callback);
@@ -41,6 +45,7 @@ private:
     void resetInteractionState() override;
 
     std::wstring title_;
+    std::string variant_;
     IconSymbol iconSymbol_ = IconSymbol::BrandBloom;
     std::shared_ptr<StyleSheet> styleSheet_;
     bool maximized_ = false;

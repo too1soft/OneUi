@@ -207,7 +207,10 @@ void Button::paint(Canvas& canvas) {
         }
     }
     canvas.fillRect(rect, style.background, style.radius);
-    canvas.strokeRect(rect, style.border, style.radius, style.borderWidth);
+    // border-width: 0 语义为“无边框”：宽度 0 传给 Skia 会画 1px 发丝线，必须显式跳过。
+    if (style.borderWidth > 0.0f && style.border.a > 0) {
+        canvas.strokeRect(rect, style.border, style.radius, style.borderWidth);
+    }
     for (const auto& shadow : style.shadows) {
         if (shadow.inset) {
             canvas.strokeRect(rect, shadow.color, style.radius, std::max(1.0f, shadow.blurRadius));

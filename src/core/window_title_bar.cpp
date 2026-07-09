@@ -22,6 +22,13 @@ StyleSheet defaultTitleBarSheet() {
         .window-button:hover { background: #eef0f3; border-color: #eef0f3; color: #202124; }
         .window-button:active { background: #e2e5ea; border-color: #e2e5ea; }
         .window-button.close:hover { background: #dc2626; border-color: #dc2626; color: #ffffff; }
+
+        .titlebar.chrome-dark { background: rgba(0,0,0,0); border-width: 0px; color: #e6ecf7; }
+        .titlebar-icon.chrome-dark { background: rgba(0,0,0,0); color: #4a9bff; border-width: 2px; }
+        .window-button.chrome-dark { background: rgba(0,0,0,0); border-color: rgba(0,0,0,0); border-width: 1px; border-radius: 6px; color: #9aa7c2; transition: all 120ms ease-out; }
+        .window-button.chrome-dark:hover { background: #1b2740; border-color: #1b2740; color: #ffffff; }
+        .window-button.chrome-dark:active { background: #16203a; border-color: #16203a; }
+        .window-button.chrome-dark.close:hover { background: #dc2626; border-color: #dc2626; color: #ffffff; }
     )css", &error);
     return sheet;
 }
@@ -112,6 +119,16 @@ void WindowTitleBar::setMaximized(bool maximized) {
     invalidate();
 }
 
+void WindowTitleBar::setVariant(std::string variant) {
+    if (variant_ == variant) {
+        return;
+    }
+    const auto previous = titleBarLayout();
+    variant_ = std::move(variant);
+    beginButtonTransitions(previous, titleBarLayout());
+    invalidate();
+}
+
 void WindowTitleBar::setStyleSheet(std::shared_ptr<StyleSheet> sheet) {
     const auto previous = titleBarLayout();
     styleSheet_ = std::move(sheet);
@@ -154,10 +171,23 @@ TitleBarBridgeLayout WindowTitleBar::titleBarLayout() const {
     config.maximized = maximized_;
     config.hoveredButton = hoveredButton_;
     config.pressedButton = pressedButton_;
-    config.titleBarNode = StyleNode{"titlebar", {"titlebar"}, StyleStateNone};
-    config.logoNode = StyleNode{"icon", {"titlebar-icon"}, StyleStateNone};
-    config.buttonNode = StyleNode{"button", {"window-button"}, StyleStateNone};
-    config.closeButtonNode = StyleNode{"button", {"window-button", "close"}, StyleStateNone};
+    std::vector<std::string> titleBarClasses{"titlebar"};
+    std::vector<std::string> logoClasses{"titlebar-icon"};
+    std::vector<std::string> buttonClasses{"window-button"};
+    std::vector<std::string> closeClasses{"window-button", "close"};
+    if (!variant_.empty()) {
+        // 追加统一变体标记类（如 chrome-dark），各子节点共用，供样式表按 .<node>.chrome-<variant> 换肤。
+        // 用单连字符、单独标记类，避免 `--` 触发 CSS 解析器的自定义属性语义、以及等特异性平局。
+        const std::string mark = "chrome-" + variant_;
+        titleBarClasses.push_back(mark);
+        logoClasses.push_back(mark);
+        buttonClasses.push_back(mark);
+        closeClasses.push_back(mark);
+    }
+    config.titleBarNode = StyleNode{"titlebar", titleBarClasses, StyleStateNone};
+    config.logoNode = StyleNode{"icon", logoClasses, StyleStateNone};
+    config.buttonNode = StyleNode{"button", buttonClasses, StyleStateNone};
+    config.closeButtonNode = StyleNode{"button", closeClasses, StyleStateNone};
     return computeTitleBarBridgeLayout(sheet, config);
 }
 

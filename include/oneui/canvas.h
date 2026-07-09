@@ -45,6 +45,14 @@ public:
         (void)angleDegrees;
         fillRect(rect, start, radius);
     }
+    // 径向渐变：centerNorm 为相对 rect 的归一化圆心（0-1），radiusNorm 为相对 max(宽,高) 的半径比例。
+    // 默认降级为中心色纯色填充（与线性渐变的降级策略一致）。
+    virtual void fillRadialGradient(Rect rect, Color center, Color edge, Point centerNorm, float radiusNorm, float radius = 0.0f) {
+        (void)edge;
+        (void)centerNorm;
+        (void)radiusNorm;
+        fillRect(rect, center, radius);
+    }
     virtual void strokeRect(Rect rect, Color color, float radius = 0.0f, float width = 1.0f) = 0;
     virtual void fillEllipse(Rect rect, Color color) = 0;
     virtual void strokeEllipse(Rect rect, Color color, float width = 1.0f) = 0;

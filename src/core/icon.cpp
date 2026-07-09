@@ -190,6 +190,19 @@ std::vector<IconPrimitive> buildIconPrimitives(
     case IconSymbol::Play:
         primitives.push_back(poly(rect, {Point{0.36f, 0.24f}, Point{0.78f, 0.50f}, Point{0.36f, 0.76f}}, color, sw, true));
         break;
+    case IconSymbol::Check:
+        // 对勾：三点折线，收尾略粗，用于卖点清单等。
+        primitives.push_back(poly(rect, {Point{0.22f, 0.52f}, Point{0.42f, 0.72f}, Point{0.78f, 0.30f}}, color, sw));
+        break;
+    case IconSymbol::BrandMark:
+        // 品牌 W 标记：五点折线（双 V），配深色底/渐变方块作 logo。
+        primitives.push_back(poly(rect, {Point{0.12f, 0.22f}, Point{0.32f, 0.80f}, Point{0.50f, 0.40f}, Point{0.68f, 0.80f}, Point{0.88f, 0.22f}}, color, sw));
+        break;
+    case IconSymbol::CheckCircle:
+        // 圆圈对勾：外圈 + 内部折线，用于卖点/成功态清单。
+        primitives.push_back(shape(IconPrimitiveKind::Circle, r(rect, 0.10f, 0.10f, 0.80f, 0.80f), color, sw));
+        primitives.push_back(poly(rect, {Point{0.32f, 0.52f}, Point{0.46f, 0.66f}, Point{0.70f, 0.36f}}, color, sw));
+        break;
     }
 
     return primitives;

@@ -97,6 +97,14 @@ ScaleMode RealtimeFrameView::scaleMode() const {
     return scaleMode_;
 }
 
+void RealtimeFrameView::setBackgroundColor(Color color) {
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        backgroundColor_ = color;
+    }
+    invalidate();
+}
+
 Rect RealtimeFrameView::contentRect() const {
     const Rect bounds = frame();
 
@@ -134,7 +142,9 @@ std::optional<VideoFrameSnapshot> RealtimeFrameView::latestFrame() const {
 }
 
 void RealtimeFrameView::paint(Canvas& canvas) {
-    canvas.fillRect(frame(), Color{0, 0, 0}, 0.0f);
+    if (backgroundColor_.a > 0) {
+        canvas.fillRect(frame(), backgroundColor_, 0.0f);
+    }
     const Rect content = contentRect();
 
     std::optional<VideoFrameSnapshot> snapshot;
@@ -149,7 +159,9 @@ void RealtimeFrameView::paint(Canvas& canvas) {
         return;
     }
 
-    canvas.fillRect(content, Color{15, 23, 42}, 0.0f);
+    if (backgroundColor_.a > 0) {
+        canvas.fillRect(content, Color{15, 23, 42}, 0.0f);
+    }
 }
 
 AccessibilityInfo RealtimeFrameView::accessibilityInfo() const {

@@ -37,7 +37,10 @@ enum class IconSymbol {
     Plus,
     User,
     Globe,
-    Play
+    Play,
+    Check,
+    BrandMark,
+    CheckCircle
 };
 
 enum class IconPrimitiveKind {

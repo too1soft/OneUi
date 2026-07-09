@@ -331,6 +331,87 @@ bool applyDeclaration(
 
     if (name == "background" || name == "background-color") {
         const std::string lowered_value = lower(value);
+        if (startsWith(lowered_value, "radial-gradient")) {
+            // 语法子集：radial-gradient([R% ][at X% Y%,] #start, #end)。
+            // R% 为半径（相对 max(宽,高)），at X% Y% 为圆心（相对 rect），缺省 50% 50%、半径 75%。
+            // 颜色沿用 # 十六进制扫描（支持 #RRGGBBAA，光晕靠 alpha 淡出）。
+            float centerX = 0.5f;
+            float centerY = 0.5f;
+            float radiusRatio = 0.75f;
+            const std::size_t open = value.find('(');
+            const std::size_t close = value.rfind(')');
+            if (open != std::string::npos && close != std::string::npos && close > open) {
+                const auto gradient_parts = split(value.substr(open + 1, close - open - 1), ',');
+                if (!gradient_parts.empty()) {
+                    const std::string descriptor = lower(trim(gradient_parts.front()));
+                    if (descriptor.find('#') == std::string::npos) {
+                        auto parsePercent = [](const std::string& token) -> std::optional<float> {
+                            if (token.empty() || token.back() != '%') {
+                                return std::nullopt;
+                            }
+                            char* end = nullptr;
+                            const float parsed = std::strtof(token.c_str(), &end);
+                            if (!end || *end != '%') {
+                                return std::nullopt;
+                            }
+                            return parsed / 100.0f;
+                        };
+                        std::vector<std::string> tokens;
+                        std::string token;
+                        for (char ch : descriptor) {
+                            if (std::isspace(static_cast<unsigned char>(ch))) {
+                                if (!token.empty()) {
+                                    tokens.push_back(token);
+                                    token.clear();
+                                }
+                            } else {
+                                token.push_back(ch);
+                            }
+                        }
+                        if (!token.empty()) {
+                            tokens.push_back(token);
+                        }
+                        for (std::size_t i = 0; i < tokens.size(); ++i) {
+                            if (tokens[i] == "at") {
+                                if (i + 1 < tokens.size()) {
+                                    if (auto x = parsePercent(tokens[i + 1])) {
+                                        centerX = *x;
+                                    }
+                                }
+                                if (i + 2 < tokens.size()) {
+                                    if (auto y = parsePercent(tokens[i + 2])) {
+                                        centerY = *y;
+                                    }
+                                }
+                                break;
+                            }
+                            if (auto r = parsePercent(tokens[i])) {
+                                radiusRatio = *r;
+                            }
+                        }
+                    }
+                }
+            }
+            std::vector<Color> colors;
+            std::size_t pos = 0;
+            while ((pos = value.find('#', pos)) != std::string::npos) {
+                std::size_t end = pos + 1;
+                while (end < value.size() && std::isxdigit(static_cast<unsigned char>(value[end]))) {
+                    ++end;
+                }
+                if (auto color = parseStyleColor(value.substr(pos, end - pos))) {
+                    colors.push_back(*color);
+                }
+                pos = end;
+            }
+            if (colors.size() >= 2) {
+                rule.box.background.gradientStart = colors[0];
+                rule.box.background.gradientEnd = colors[1];
+                rule.box.background.radialCenter = Point{centerX, centerY};
+                rule.box.background.radialRadius = radiusRatio;
+                return true;
+            }
+        }
         if (startsWith(lowered_value, "linear-gradient")) {
             std::vector<Color> colors;
             const std::size_t open = value.find('(');
@@ -873,6 +954,12 @@ StyleBox mergeStyleBox(StyleBox base, const StyleBox& overlay) {
     if (overlay.background.gradientAngleDegrees) {
         base.background.gradientAngleDegrees = overlay.background.gradientAngleDegrees;
     }
+    if (overlay.background.radialCenter) {
+        base.background.radialCenter = overlay.background.radialCenter;
+    }
+    if (overlay.background.radialRadius) {
+        base.background.radialRadius = overlay.background.radialRadius;
+    }
     if (overlay.content.backgroundColor) {
         base.content.backgroundColor = overlay.content.backgroundColor;
     }
@@ -969,19 +1056,30 @@ void paintStyleBox(Canvas& canvas, Rect rect, const StyleBox& box) {
     if (box.background.color) {
         canvas.fillRect(rect, applyOpacity(*box.background.color, box.opacity), radius);
     } else if (box.background.gradientStart && box.background.gradientEnd) {
-        canvas.fillLinearGradient(
-            rect,
-            applyOpacity(*box.background.gradientStart, box.opacity),
-            applyOpacity(*box.background.gradientEnd, box.opacity),
-            box.background.gradientAngleDegrees.value_or(180.0f),
-            radius);
+        if (box.background.radialCenter) {
+            canvas.fillRadialGradient(
+                rect,
+                applyOpacity(*box.background.gradientStart, box.opacity),
+                applyOpacity(*box.background.gradientEnd, box.opacity),
+                *box.background.radialCenter,
+                box.background.radialRadius.value_or(0.75f),
+                radius);
+        } else {
+            canvas.fillLinearGradient(
+                rect,
+                applyOpacity(*box.background.gradientStart, box.opacity),
+                applyOpacity(*box.background.gradientEnd, box.opacity),
+                box.background.gradientAngleDegrees.value_or(180.0f),
+                radius);
+        }
     } else if (box.background.gradientStart) {
         canvas.fillRect(rect, applyOpacity(*box.background.gradientStart, box.opacity), radius);
     }
     if (box.content.backgroundColor) {
         canvas.fillRect(styleContentRect(rect, box), applyOpacity(*box.content.backgroundColor, box.opacity), box.content.radius.value_or(radius));
     }
-    if (box.borderColor) {
+    // border-width: 0 语义为“无边框”：宽度 0 传给 Skia 会画 1px 发丝线（hairline），必须显式跳过。
+    if (box.borderColor && box.borderWidth.value_or(1.0f) > 0.0f) {
         canvas.strokeRect(rect, applyOpacity(*box.borderColor, box.opacity), radius, box.borderWidth.value_or(1.0f));
     }
     for (const auto& shadow : box.shadows) {
