@@ -25,6 +25,7 @@
 #include "oneui/layout/app_shell.h"
 #include "oneui/layout/overlay_host.h"
 #include "oneui/layout/panel.h"
+#include "oneui/layout/scroll_view.h"
 #include "oneui/layout/stack.h"
 #include "oneui/layout/top_bar.h"
 #include "oneui/platform/window.h"
@@ -1381,6 +1382,34 @@ int oneui_overlay_host_update_anchored_overlay(
                vertical_alignment)
                ? 1
                : 0;
+}
+
+OneUiWidget* oneui_scroll_view_create(void) {
+    return wrap(std::make_shared<oneui::ScrollView>());
+}
+
+void oneui_scroll_view_set_content(OneUiWidget* view, OneUiWidget* child) {
+    auto* nativeView = asWidget<oneui::ScrollView>(view);
+    if (!nativeView || !child || !child->widget) {
+        return;
+    }
+    nativeView->setContent(child->widget);
+}
+
+void oneui_scroll_view_set_content_height(OneUiWidget* view, float height) {
+    auto* nativeView = asWidget<oneui::ScrollView>(view);
+    if (!nativeView) {
+        return;
+    }
+    nativeView->setContentHeight(height);
+}
+
+void oneui_scroll_view_set_wheel_step(OneUiWidget* view, float step) {
+    auto* nativeView = asWidget<oneui::ScrollView>(view);
+    if (!nativeView) {
+        return;
+    }
+    nativeView->setWheelStep(step);
 }
 
 OneUiWidget* oneui_panel_create(void) {
