@@ -1821,9 +1821,10 @@ private:
             }
             gpuAvailable_ = false;
         }
-        if (!paintSurface_) {
-            paintSurface_ = SkSurfaces::Raster(imageInfo);
-        }
+        // 走到这里说明无表面或容量不足，必须重建光栅表面。
+        // 旧逻辑仅在表面为空时新建：容量不足时沿用小表面、记账尺寸却改成大的，
+        // 后续 blit 按大尺寸读小缓冲越界崩溃（窗口最大化时交互重绘先于延迟全绘触发，必现）。
+        paintSurface_ = SkSurfaces::Raster(imageInfo);
         paintSurfaceWidth_ = paintSurface_ ? surfaceWidth : 0;
         paintSurfaceHeight_ = paintSurface_ ? surfaceHeight : 0;
         return true;
