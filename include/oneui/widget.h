@@ -143,6 +143,13 @@ public:
     virtual bool onTextInput(wchar_t character);
     virtual bool onFocusChanged(bool focused);
     virtual bool isFocusable() const;
+    // tabStop：是否参与 Tab 焦点遍历。窗口按钮、纯装饰性可点区域设 false，排除出 Tab 序。
+    // 默认 true；焦点收集（focusableChildren/focusableOverlays）会同时要求 isFocusable && tabStop。
+    bool tabStop() const;
+    void setTabStop(bool value);
+    // focusFirstLeaf/focusLastLeaf：把焦点落到本控件子树内的首/末个可聚焦叶子（用于 Tab 回绕与进入容器）。
+    virtual bool focusFirstLeaf();
+    virtual bool focusLastLeaf();
     virtual bool hitTest(Point point) const;
     virtual CursorKind cursor(Point point) const;
     virtual bool paintsAboveSiblings() const;
@@ -184,6 +191,7 @@ private:
     bool focusVisible_ = false;
     bool disabled_ = false;
     bool visible_ = true;
+    bool tabStop_ = true;
     AccessibilityRole accessibilityRole_ = AccessibilityRole::None;
     std::wstring accessibleName_;
     std::wstring accessibleDescription_;

@@ -216,6 +216,12 @@ bool View::onKeyDown(const KeyEvent& event) {
     }
 
     if (event.key == Key::Tab) {
+        // 深度优先：先让当前聚焦子树在更深层推进（表单里逐个字段切换）；
+        // 到本层边界（focusNext 返回 false，不回绕）再冒泡给上层——回绕由焦点作用域
+        // （模态 overlay 或窗口内容，见 OverlayHost::onKeyDown）统一负责。
+        if (focusedChild_ && isChildInteractive(focusedChild_) && focusedChild_->onKeyDown(event)) {
+            return true;
+        }
         return focusNext(event.shift);
     }
 
@@ -369,16 +375,41 @@ bool View::focusNext(bool reverse, bool focusVisible) {
     }
 
     auto it = std::find(focusable.begin(), focusable.end(), focusedChild_);
-    int index = it == focusable.end() ? -1 : static_cast<int>(it - focusable.begin());
+    int index = it == focusable.end() ? (reverse ? static_cast<int>(focusable.size()) : -1)
+                                      : static_cast<int>(it - focusable.begin());
     index += reverse ? -1 : 1;
 
-    if (index < 0) {
-        index = static_cast<int>(focusable.size()) - 1;
-    } else if (index >= static_cast<int>(focusable.size())) {
-        index = 0;
+    // 不回绕：越界即到本层边界，返回 false 交给上层继续冒泡（回绕由焦点作用域负责）。
+    if (index < 0 || index >= static_cast<int>(focusable.size())) {
+        return false;
     }
 
-    focusChild(focusable[static_cast<std::size_t>(index)], focusVisible);
+    Widget* target = focusable[static_cast<std::size_t>(index)];
+    focusChild(target, focusVisible);
+    // 进入容器：正向落到其首个叶子（focusChild→onFocusChanged 已处理），反向落到末叶子。
+    if (reverse) {
+        target->focusLastLeaf();
+    }
+    return true;
+}
+
+bool View::focusFirstLeaf() {
+    const auto focusable = focusableChildren();
+    if (focusable.empty()) {
+        return false;
+    }
+    focusChild(focusable.front(), true); // 进入首个可聚焦子；容器会递归聚焦其首叶
+    return true;
+}
+
+bool View::focusLastLeaf() {
+    const auto focusable = focusableChildren();
+    if (focusable.empty()) {
+        return false;
+    }
+    Widget* last = focusable.back();
+    focusChild(last, true);
+    last->focusLastLeaf(); // 若是容器，递归到末叶
     return true;
 }
 
@@ -419,7 +450,7 @@ bool View::clearHoveredChildExcept(Widget* child) {
 std::vector<Widget*> View::focusableChildren() const {
     std::vector<Widget*> result;
     for (const auto& child : children_) {
-        if (child->visible() && !child->disabled() && child->isFocusable()) {
+        if (child->visible() && !child->disabled() && child->tabStop() && child->isFocusable()) {
             result.push_back(child.get());
         }
     }

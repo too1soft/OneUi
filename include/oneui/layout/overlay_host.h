@@ -68,6 +68,8 @@ public:
     bool onTextInput(wchar_t character) override;
     bool onFocusChanged(bool focused) override;
     bool isFocusable() const override;
+    bool focusFirstLeaf() override;
+    bool focusLastLeaf() override;
     CursorKind cursor(Point point) const override;
     void setFocusVisible(bool visible) override;
     bool tickAnimations(double nowMs) override;

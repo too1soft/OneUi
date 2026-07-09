@@ -149,6 +149,22 @@ bool Widget::isFocusable() const {
     return false;
 }
 
+bool Widget::tabStop() const {
+    return tabStop_;
+}
+
+void Widget::setTabStop(bool value) {
+    tabStop_ = value;
+}
+
+bool Widget::focusFirstLeaf() {
+    return false; // 叶子控件（Button/TextField）与容器（View）各自覆写
+}
+
+bool Widget::focusLastLeaf() {
+    return false;
+}
+
 bool Widget::hitTest(Point point) const {
     return visible() && frame_.contains(point);
 }

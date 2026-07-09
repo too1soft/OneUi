@@ -193,6 +193,7 @@ ONEUI_API int oneui_tray_show_notification(OneUiTray* tray, const wchar_t* title
 ONEUI_API void oneui_widget_destroy(OneUiWidget* widget);
 ONEUI_API void oneui_widget_set_preferred_size(OneUiWidget* widget, float width, float height);
 ONEUI_API void oneui_widget_set_disabled(OneUiWidget* widget, int disabled);
+ONEUI_API void oneui_widget_set_tab_stop(OneUiWidget* widget, int tab_stop);
 ONEUI_API void oneui_widget_set_visible(OneUiWidget* widget, int visible);
 ONEUI_API void oneui_widget_set_classes(OneUiWidget* widget, const char* classes);
 ONEUI_API void oneui_widget_set_style_node(OneUiWidget* widget, const char* tag, const char* classes);

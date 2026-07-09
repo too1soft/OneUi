@@ -332,8 +332,33 @@ bool OverlayHost::onKeyDown(const KeyEvent& event) {
         return false;
     }
 
-    if (event.key == Key::Tab && (focusNextOverlay(event.shift) || hasActiveFocusTrap())) {
-        return true;
+    if (event.key == Key::Tab) {
+        // Tab 焦点作用域：聚焦的 overlay（模态弹窗）内部遍历并在其内回绕；
+        // 否则内容层内部遍历并在内容内回绕。窗口按钮/账号按钮等以 tabStop=false
+        // 排除出焦点序，故不会“跳到标题栏按钮”。
+        if (focusedOverlay_ && isInteractive(focusedOverlay_)) {
+            if (focusedOverlay_->onKeyDown(event)) {
+                return true;
+            }
+            if (event.shift) {
+                focusedOverlay_->focusLastLeaf();
+            } else {
+                focusedOverlay_->focusFirstLeaf();
+            }
+            return true;
+        }
+        if (content_ && content_->visible() && !content_->disabled()) {
+            if (content_->onKeyDown(event)) {
+                return true;
+            }
+            if (event.shift) {
+                content_->focusLastLeaf();
+            } else {
+                content_->focusFirstLeaf();
+            }
+            return true;
+        }
+        return focusNextOverlay(event.shift);
     }
 
     if (focusedOverlay_ && !isInteractive(focusedOverlay_)) {
@@ -346,6 +371,34 @@ bool OverlayHost::onKeyDown(const KeyEvent& event) {
         return true;
     }
     return View::onKeyDown(event);
+}
+
+bool OverlayHost::focusFirstLeaf() {
+    if (content_ && content_->visible() && !content_->disabled() && content_->focusFirstLeaf()) {
+        focusOverlay(nullptr);
+        return true;
+    }
+    const auto overlays = focusableOverlays();
+    if (!overlays.empty()) {
+        focusOverlay(overlays.front(), true);
+        overlays.front()->focusFirstLeaf();
+        return true;
+    }
+    return false;
+}
+
+bool OverlayHost::focusLastLeaf() {
+    const auto overlays = focusableOverlays();
+    if (!overlays.empty()) {
+        focusOverlay(overlays.back(), true);
+        overlays.back()->focusLastLeaf();
+        return true;
+    }
+    if (content_ && content_->visible() && !content_->disabled() && content_->focusLastLeaf()) {
+        focusOverlay(nullptr);
+        return true;
+    }
+    return false;
 }
 
 bool OverlayHost::onKeyUp(const KeyEvent& event) {
@@ -628,7 +681,7 @@ std::vector<Widget*> OverlayHost::focusableOverlays() const {
     std::vector<Widget*> result;
     for (const std::size_t index : hitOrder()) {
         Widget* child = overlays_[index].child.get();
-        if (isInteractive(child) && child->isFocusable() && isFocusAllowed(child)) {
+        if (isInteractive(child) && child->tabStop() && child->isFocusable() && isFocusAllowed(child)) {
             result.push_back(child);
         }
     }

@@ -981,6 +981,13 @@ void oneui_widget_set_disabled(OneUiWidget* widget, int disabled) {
     widget->widget->setDisabled(disabled != 0);
 }
 
+void oneui_widget_set_tab_stop(OneUiWidget* widget, int tab_stop) {
+    if (!widget || !widget->widget) {
+        return;
+    }
+    widget->widget->setTabStop(tab_stop != 0);
+}
+
 void oneui_widget_set_visible(OneUiWidget* widget, int visible) {
     if (!widget || !widget->widget) {
         return;
