@@ -29,6 +29,12 @@ StyleSheet defaultTitleBarSheet() {
         .window-button.chrome-dark:hover { background: #1b2740; border-color: #1b2740; color: #ffffff; }
         .window-button.chrome-dark:active { background: #16203a; border-color: #16203a; }
         .window-button.chrome-dark.close:hover { background: #dc2626; border-color: #dc2626; color: #ffffff; }
+
+        .titlebar.chrome-flat { background: rgba(0,0,0,0); border-width: 0px; color: #202124; }
+        .window-button.chrome-flat { background: rgba(0,0,0,0); border-color: rgba(0,0,0,0); border-width: 1px; border-radius: 6px; color: #666a70; transition: all 120ms ease-out; }
+        .window-button.chrome-flat:hover { background: #e9ebef; border-color: #e9ebef; color: #202124; }
+        .window-button.chrome-flat:active { background: #dfe2e7; border-color: #dfe2e7; }
+        .window-button.chrome-flat.close:hover { background: #dc2626; border-color: #dc2626; color: #ffffff; }
     )css", &error);
     return sheet;
 }
