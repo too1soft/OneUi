@@ -39,6 +39,7 @@ add_library(oneui_core OBJECT
     src/core/icon_button.cpp
     src/core/icon_view.cpp
     src/core/label.cpp
+    src/core/log_view.cpp
     src/core/material3_tokens.cpp
     src/core/menu.cpp
     src/core/nav_item.cpp

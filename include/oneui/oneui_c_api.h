@@ -267,10 +267,18 @@ ONEUI_API int oneui_overlay_host_update_anchored_overlay(
     int horizontal_alignment,
     int vertical_alignment);
 
+ONEUI_API OneUiWidget* oneui_log_view_create(void);
+ONEUI_API void oneui_log_view_append_line(OneUiWidget* view, const wchar_t* text, unsigned char r, unsigned char g, unsigned char b, unsigned char a);
+ONEUI_API void oneui_log_view_clear(OneUiWidget* view);
+ONEUI_API float oneui_log_view_content_height(OneUiWidget* view);
+ONEUI_API void oneui_log_view_set_font_size(OneUiWidget* view, float size);
+ONEUI_API void oneui_log_view_set_line_height(OneUiWidget* view, float height);
+
 ONEUI_API OneUiWidget* oneui_scroll_view_create(void);
 ONEUI_API void oneui_scroll_view_set_content(OneUiWidget* view, OneUiWidget* child);
 ONEUI_API void oneui_scroll_view_set_content_height(OneUiWidget* view, float height);
 ONEUI_API void oneui_scroll_view_set_wheel_step(OneUiWidget* view, float step);
+ONEUI_API void oneui_scroll_view_scroll_to_bottom(OneUiWidget* view);
 
 ONEUI_API OneUiWidget* oneui_panel_create(void);
 ONEUI_API void oneui_panel_set_content(OneUiWidget* panel, OneUiWidget* child);

@@ -34,6 +34,7 @@
 #include "oneui/layout/title_bar_bridge.h"
 #include "oneui/layout/wrap.h"
 #include "oneui/controls/label.h"
+#include "oneui/controls/log_view.h"
 #include "oneui/animation.h"
 #include "oneui/icon.h"
 #include "oneui/material3_tokens.h"
@@ -5297,6 +5298,50 @@ void testPopupMouseFocusHandoffDelegatesKeyboardAndRestoresChildFocus() {
     expectEqual("Popup closing keeps anchor focus because anchor remains visible", anchor->focused() ? 1 : 0, 1);
 }
 
+void testLogViewSelectionAndCopy() {
+    oneui::LogView view;
+    view.setFrame(oneui::Rect{0.0f, 0.0f, 400.0f, 200.0f});
+    view.appendLine(L"alpha", oneui::Color{26, 29, 34, 255});
+    view.appendLine(L"beta", oneui::Color{229, 72, 77, 255});
+    view.appendLine(L"gamma", oneui::Color{36, 203, 141, 255});
+    auto clipboard = std::make_shared<oneui::MemoryClipboard>();
+    view.setClipboard(clipboard);
+
+    expectEqual("LogView line count", static_cast<int>(view.lineCount()), 3);
+    // 默认 padding(6,10)/lineHeight 20：内容高 = 6+6+3x20 = 72。
+    expectEqual("LogView content height", static_cast<int>(view.contentHeight()), 72);
+
+    // 从第 0 行行首拖到第 2 行行尾：跨行选区，复制内容按行拼接（\r\n）。
+    view.onMouseDown(oneui::MouseEvent{oneui::Point{10.0f, 10.0f}});
+    view.onMouseMove(oneui::MouseEvent{oneui::Point{300.0f, 56.0f}});
+    view.onMouseUp(oneui::MouseEvent{oneui::Point{300.0f, 56.0f}});
+    expectEqual("LogView drag creates selection", view.hasSelection() ? 1 : 0, 1);
+    expectWideEqual("LogView cross-line selected text", view.selectedText(), L"alpha\r\nbeta\r\ngamma");
+
+    expectEqual("LogView Ctrl+C handled", view.onKeyDown(oneui::KeyEvent{oneui::Key::C, false, true}) ? 1 : 0, 1);
+    expectWideEqual("LogView Ctrl+C copies selection", clipboard->text(), L"alpha\r\nbeta\r\ngamma");
+
+    // 第 1 行内部分选：近似字宽 12*0.6=7.2，x=18→列1、x=32→列3，选中 "et"。
+    view.onMouseDown(oneui::MouseEvent{oneui::Point{18.0f, 36.0f}});
+    view.onMouseMove(oneui::MouseEvent{oneui::Point{32.0f, 36.0f}});
+    view.onMouseUp(oneui::MouseEvent{oneui::Point{32.0f, 36.0f}});
+    expectWideEqual("LogView partial line selection", view.selectedText(), L"et");
+
+    expectEqual("LogView Ctrl+A handled", view.onKeyDown(oneui::KeyEvent{oneui::Key::A, false, true}) ? 1 : 0, 1);
+    expectWideEqual("LogView Ctrl+A selects all", view.selectedText(), L"alpha\r\nbeta\r\ngamma");
+
+    expectEqual("LogView Escape clears selection", view.onKeyDown(oneui::KeyEvent{oneui::Key::Escape, false, false}) ? 1 : 0, 1);
+    expectEqual("LogView selection cleared", view.hasSelection() ? 1 : 0, 0);
+
+    // 点击不拖动不产生选区；clear 后组件回到空状态。
+    view.onMouseDown(oneui::MouseEvent{oneui::Point{10.0f, 10.0f}});
+    view.onMouseUp(oneui::MouseEvent{oneui::Point{10.0f, 10.0f}});
+    expectEqual("LogView click without drag keeps no selection", view.hasSelection() ? 1 : 0, 0);
+    view.clearLines();
+    expectEqual("LogView clear empties lines", static_cast<int>(view.lineCount()), 0);
+    expectEqual("LogView empty not focusable", view.isFocusable() ? 1 : 0, 0);
+}
+
 } // namespace
 
 int main() {
@@ -5472,6 +5517,7 @@ int main() {
     testPopupInteractionModesMapToPointerPolicyAndOverlayOptions();
     testPopupEscapeCloseFollowsClosePolicy();
     testPopupMouseFocusHandoffDelegatesKeyboardAndRestoresChildFocus();
+    testLogViewSelectionAndCopy();
 
     if (failures != 0) {
         std::cerr << failures << " control behavior test(s) failed.\n";

@@ -200,6 +200,11 @@ void ScrollView::layoutChildren() {
         return;
     }
 
+    // 视口或内容尺寸变化后，既有偏移可能越界（例如初次布局前预设了“滚动到底”，
+    // 或窗口变大后底部露白），布局时统一回夹到合法区间。
+    scrollOffset_ = clampOffset(scrollOffset_);
+    horizontalScrollOffset_ = clampHorizontalOffset(horizontalScrollOffset_);
+
     const Rect viewport = viewportRect();
     const float scrollbarReserve = hasVerticalOverflow() ? 14.0f : 0.0f;
     const float fallbackWidth = std::max(0.0f, viewport.width - scrollbarReserve);

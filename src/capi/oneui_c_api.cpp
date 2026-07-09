@@ -24,6 +24,7 @@
 #include "oneui/controls/window_title_bar.h"
 #include "oneui/layout/app_shell.h"
 #include "oneui/layout/overlay_host.h"
+#include "oneui/controls/log_view.h"
 #include "oneui/layout/panel.h"
 #include "oneui/layout/scroll_view.h"
 #include "oneui/layout/stack.h"
@@ -1384,6 +1385,49 @@ int oneui_overlay_host_update_anchored_overlay(
                : 0;
 }
 
+OneUiWidget* oneui_log_view_create(void) {
+    auto view = std::make_shared<oneui::LogView>();
+    // 日志查看器默认接系统剪贴板，Ctrl+C 复制选中内容开箱即用。
+    view->setClipboard(std::make_shared<oneui::SystemClipboard>());
+    return wrap(view);
+}
+
+void oneui_log_view_append_line(OneUiWidget* view, const wchar_t* text, unsigned char r, unsigned char g, unsigned char b, unsigned char a) {
+    auto* nativeView = asWidget<oneui::LogView>(view);
+    if (!nativeView) {
+        return;
+    }
+    nativeView->appendLine(text ? text : L"", oneui::Color{r, g, b, a});
+}
+
+void oneui_log_view_clear(OneUiWidget* view) {
+    auto* nativeView = asWidget<oneui::LogView>(view);
+    if (!nativeView) {
+        return;
+    }
+    nativeView->clearLines();
+}
+
+float oneui_log_view_content_height(OneUiWidget* view) {
+    auto* nativeView = asWidget<oneui::LogView>(view);
+    if (!nativeView) {
+        return 0.0f;
+    }
+    return nativeView->contentHeight();
+}
+
+void oneui_log_view_set_font_size(OneUiWidget* view, float size) {
+    if (auto* nativeView = asWidget<oneui::LogView>(view)) {
+        nativeView->setFontSize(size);
+    }
+}
+
+void oneui_log_view_set_line_height(OneUiWidget* view, float height) {
+    if (auto* nativeView = asWidget<oneui::LogView>(view)) {
+        nativeView->setLineHeight(height);
+    }
+}
+
 OneUiWidget* oneui_scroll_view_create(void) {
     return wrap(std::make_shared<oneui::ScrollView>());
 }
@@ -1410,6 +1454,16 @@ void oneui_scroll_view_set_wheel_step(OneUiWidget* view, float step) {
         return;
     }
     nativeView->setWheelStep(step);
+}
+
+void oneui_scroll_view_scroll_to_bottom(OneUiWidget* view) {
+    auto* nativeView = asWidget<oneui::ScrollView>(view);
+    if (!nativeView) {
+        return;
+    }
+    // 初次布局前 viewport 高度为 0，此处偏移会暂设为内容全高；
+    // layoutChildren 会在布局时回夹到真正的“底部”位置。
+    nativeView->setScrollOffset(nativeView->maxScrollOffset());
 }
 
 OneUiWidget* oneui_panel_create(void) {
