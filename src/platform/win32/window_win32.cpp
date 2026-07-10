@@ -1122,6 +1122,9 @@ private:
         windowClass.lpszClassName = className;
         windowClass.hCursor = LoadCursor(nullptr, IDC_ARROW);
         windowClass.hbrBackground = nullptr;
+        // CS_DROPSHADOW：SetWindowRgn 裁圆角后 DWM 标准投影会消失，这个类级投影能与
+        // 自定义窗口区域共存，为圆角窗口补回一层投影（浅色桌面下看清边缘）。
+        windowClass.style = CS_DROPSHADOW;
         RegisterClassW(&windowClass);
 
         DWORD style = windowStyle();
