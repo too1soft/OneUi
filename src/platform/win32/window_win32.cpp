@@ -1065,13 +1065,17 @@ private:
 
         const bool square = cornerRadiusLogical_ <= 0.0f || borderlessMaximized_ || options_.fullscreen;
         if (dwmRounded) {
-            // Win11 由 DWM 负责圆角，清掉可能残留的区域，避免双重裁剪。
+            // Win11 由 DWM 负责圆角（抗锯齿 + 自带柔和投影），清掉可能残留的区域与伴随投影。
             SetWindowRgn(hwnd_, nullptr, TRUE);
+            shadowActive_ = false;
+            updateShadowWindow();
             return;
         }
         // Win10 回退：用圆角矩形区域裁剪窗口。
         if (square) {
             SetWindowRgn(hwnd_, nullptr, TRUE);
+            shadowActive_ = false;
+            updateShadowWindow();
             return;
         }
         RECT rc{};
@@ -1086,6 +1090,162 @@ private:
         const int d = logicalToPhysicalCeil(cornerRadiusLogical_ * 2.0f);
         HRGN rgn = CreateRoundRectRgn(0, 0, w + 1, h + 1, d, d);
         SetWindowRgn(hwnd_, rgn, TRUE); // 系统接管 rgn 生命周期，不需手动 DeleteObject
+        // 区域裁剪丢掉了 DWM 投影，启用伴随分层窗口补一层柔光投影。
+        shadowActive_ = true;
+        updateShadowWindow();
+    }
+
+    // ——— Win10 圆角柔光投影（分层伴随窗口）———
+    // GL SwapBuffers present 是不透明的，主窗本身无法做逐像素透明；因此用一个独立的
+    // WS_EX_LAYERED 窗口叠在主窗正下方，用有向距离场画出主窗圆角轮廓外的抗锯齿柔光。
+    static constexpr float kShadowMarginLogical = 18.0f; // 投影外扩/羽化半径（逻辑像素）
+    static constexpr int kShadowMaxAlpha = 66;           // 贴边最深处透明度（0-255，克制些更高级）
+    static constexpr float kShadowDropLogical = 3.0f;    // 轮廓下移量，模拟顶部来光的下坠投影
+
+    void ensureShadowWindow() {
+        if (shadowHwnd_ || !hwnd_) {
+            return;
+        }
+        static const wchar_t* kShadowClass = L"OneUIShadowWindow";
+        static bool registered = false;
+        HINSTANCE instance = GetModuleHandleW(nullptr);
+        if (!registered) {
+            WNDCLASSW wc{};
+            wc.lpfnWndProc = DefWindowProcW;
+            wc.hInstance = instance;
+            wc.lpszClassName = kShadowClass;
+            wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
+            RegisterClassW(&wc);
+            registered = true;
+        }
+        // 不设 owner：被 owner 的窗口恒在 owner 之上，会盖住内容；改为独立弹窗 + TOOLWINDOW
+        // （不进任务栏/Alt-Tab），z 序由我们手动压到主窗正下方，并随主窗一起显隐/销毁。
+        shadowHwnd_ = CreateWindowExW(
+            WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW,
+            kShadowClass, L"", WS_POPUP,
+            0, 0, 0, 0, nullptr, nullptr, instance, nullptr);
+        shadowBuiltW_ = shadowBuiltH_ = 0;
+    }
+
+    void destroyShadowWindow() {
+        if (shadowHwnd_) {
+            DestroyWindow(shadowHwnd_);
+            shadowHwnd_ = nullptr;
+        }
+        shadowActive_ = false;
+        shadowBuiltW_ = shadowBuiltH_ = 0;
+    }
+
+    // 根据主窗当前状态刷新伴随投影：Win10 圆角且正常显示时展示，最大化/最小化/隐藏/
+    // 非圆角时隐藏。尺寸未变的纯移动只重定位，避免拖动时反复重绘位图。
+    void updateShadowWindow() {
+        if (!shadowActive_) {
+            if (shadowHwnd_ && IsWindowVisible(shadowHwnd_)) {
+                ShowWindow(shadowHwnd_, SW_HIDE);
+            }
+            return;
+        }
+        if (!hwnd_ || !IsWindowVisible(hwnd_) || IsIconic(hwnd_) ||
+            borderlessMaximized_ || options_.fullscreen || cornerRadiusLogical_ <= 0.0f) {
+            if (shadowHwnd_) {
+                ShowWindow(shadowHwnd_, SW_HIDE);
+            }
+            return;
+        }
+        ensureShadowWindow();
+        if (!shadowHwnd_) {
+            return;
+        }
+        RECT rc{};
+        if (!GetWindowRect(hwnd_, &rc)) {
+            return;
+        }
+        const int mw = rc.right - rc.left;
+        const int mh = rc.bottom - rc.top;
+        if (mw <= 0 || mh <= 0) {
+            ShowWindow(shadowHwnd_, SW_HIDE);
+            return;
+        }
+        const int margin = logicalToPhysicalCeil(kShadowMarginLogical);
+        const int W = mw + margin * 2;
+        const int H = mh + margin * 2;
+        const POINT ptDst{rc.left - margin, rc.top - margin};
+
+        if (mw == shadowBuiltW_ && mh == shadowBuiltH_) {
+            // 尺寸没变，只需把投影窗挪到新位置并保持在主窗正下方。
+            SetWindowPos(shadowHwnd_, hwnd_, ptDst.x, ptDst.y, W, H,
+                         SWP_NOACTIVATE | SWP_NOREDRAW | SWP_SHOWWINDOW);
+            return;
+        }
+
+        // 构建逐像素预乘 BGRA 位图：主窗圆角轮廓外用有向距离场做柔光衰减。
+        const float radius = static_cast<float>(logicalToPhysicalCeil(cornerRadiusLogical_));
+        const float cx = W * 0.5f;
+        const float cy = H * 0.5f + kShadowDropLogical * normalizedDpiScale();
+        const float halfW = mw * 0.5f;
+        const float halfH = mh * 0.5f;
+        const float rInner = std::max(0.0f, std::min(radius, std::min(halfW, halfH)));
+        const float spread = static_cast<float>(margin);
+
+        BITMAPINFO bmi{};
+        bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+        bmi.bmiHeader.biWidth = W;
+        bmi.bmiHeader.biHeight = -H; // 自上而下
+        bmi.bmiHeader.biPlanes = 1;
+        bmi.bmiHeader.biBitCount = 32;
+        bmi.bmiHeader.biCompression = BI_RGB;
+
+        HDC screenDC = GetDC(nullptr);
+        void* bits = nullptr;
+        HBITMAP dib = CreateDIBSection(screenDC, &bmi, DIB_RGB_COLORS, &bits, nullptr, 0);
+        if (!dib || !bits) {
+            if (dib) DeleteObject(dib);
+            ReleaseDC(nullptr, screenDC);
+            return;
+        }
+        auto* px = static_cast<uint32_t*>(bits);
+        for (int y = 0; y < H; ++y) {
+            const float fy = static_cast<float>(y) + 0.5f;
+            const float qy0 = std::fabs(fy - cy) - (halfH - rInner);
+            for (int x = 0; x < W; ++x) {
+                const float fx = static_cast<float>(x) + 0.5f;
+                const float qx0 = std::fabs(fx - cx) - (halfW - rInner);
+                const float ax = std::max(qx0, 0.0f);
+                const float ay = std::max(qy0, 0.0f);
+                const float d = std::sqrt(ax * ax + ay * ay) + std::min(std::max(qx0, qy0), 0.0f) - rInner;
+                int a;
+                if (d <= 0.0f) {
+                    a = kShadowMaxAlpha; // 轮廓内部（被主窗覆盖，仅作基底）
+                } else if (d >= spread) {
+                    a = 0;
+                } else {
+                    float t = d / spread;   // 0..1
+                    float f = 1.0f - t;
+                    f = f * f;              // 二次衰减，边缘更柔
+                    a = static_cast<int>(kShadowMaxAlpha * f + 0.5f);
+                }
+                // 预乘黑色：RGB=0，仅 alpha 生效。
+                px[static_cast<size_t>(y) * W + x] = static_cast<uint32_t>(a) << 24;
+            }
+        }
+
+        HDC memDC = CreateCompatibleDC(screenDC);
+        HGDIOBJ oldBmp = SelectObject(memDC, dib);
+        SIZE sz{W, H};
+        POINT ptSrc{0, 0};
+        BLENDFUNCTION blend{AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
+        POINT dst = ptDst;
+        UpdateLayeredWindow(shadowHwnd_, screenDC, &dst, &sz, memDC, &ptSrc, 0, &blend, ULW_ALPHA);
+        SelectObject(memDC, oldBmp);
+        DeleteDC(memDC);
+        DeleteObject(dib);
+        ReleaseDC(nullptr, screenDC);
+
+        shadowBuiltW_ = mw;
+        shadowBuiltH_ = mh;
+        // 压到主窗正下方并显示。
+        SetWindowPos(shadowHwnd_, hwnd_, 0, 0, 0, 0,
+                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
     }
 
     float normalizedDpiScale() const {
@@ -1122,9 +1282,6 @@ private:
         windowClass.lpszClassName = className;
         windowClass.hCursor = LoadCursor(nullptr, IDC_ARROW);
         windowClass.hbrBackground = nullptr;
-        // CS_DROPSHADOW：SetWindowRgn 裁圆角后 DWM 标准投影会消失，这个类级投影能与
-        // 自定义窗口区域共存，为圆角窗口补回一层投影（浅色桌面下看清边缘）。
-        windowClass.style = CS_DROPSHADOW;
         RegisterClassW(&windowClass);
 
         DWORD style = windowStyle();
@@ -1294,8 +1451,17 @@ private:
         case WM_MBUTTONUP:
             dispatchMouseUp(lParam, MouseButton::Middle);
             return 0;
+        case WM_MOVE:
+            updateShadowWindow(); // 窗口移动后把伴随投影重定位到主窗正下方（尺寸不变不重绘）
+            return 0;
+        case WM_SHOWWINDOW:
+            updateShadowWindow(); // 显隐（含托盘还原/隐藏）时同步投影窗显隐
+            return DefWindowProcW(hwnd_, message, wParam, lParam);
         case WM_SIZE:
             recordResizeMessage(wParam);
+            if (wParam == SIZE_MINIMIZED && shadowHwnd_) {
+                ShowWindow(shadowHwnd_, SW_HIDE); // 最小化立刻收起投影
+            }
             if (wParam != SIZE_MINIMIZED) {
                 applyRoundedCorners(); // 尺寸变化后重算圆角区域，避免拉伸/露白
             }
@@ -1361,6 +1527,7 @@ private:
         case WM_NCDESTROY:
         {
             shutdownGPU();
+            destroyShadowWindow(); // 主窗销毁时一并销毁独立的伴随投影窗
             HWND destroyedHwnd = hwnd_;
             SetWindowLongPtrW(hwnd_, GWLP_USERDATA, 0);
             hwnd_ = nullptr;
@@ -2431,6 +2598,12 @@ private:
     bool borderlessMaximized_ = false;
     float cornerRadiusLogical_ = 0.0f;
     bool closeToTray_ = false;
+    // Win10 圆角回退（SetWindowRgn）会丢掉 DWM 柔和投影，用一个分层伴随窗口在主窗
+    // 圆角轮廓外画一圈抗锯齿柔光投影补回来。Win11 走 DWM 圆角自带投影，不用它。
+    HWND shadowHwnd_ = nullptr;
+    bool shadowActive_ = false; // 当前是否处于“需要伴随投影”的状态（Win10 圆角且未最大化）
+    int shadowBuiltW_ = 0;      // 已构建投影位图对应的主窗尺寸，尺寸不变则移动时只重定位不重绘
+    int shadowBuiltH_ = 0;
     bool mouseLeaveTracking_ = false;
     bool animationTimerActive_ = false;
     bool contentAnimationFramePending_ = false;
