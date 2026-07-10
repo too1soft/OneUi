@@ -748,6 +748,13 @@ void oneui_window_set_corner_radius(OneUiWindow* window, float radius) {
     window->window->setCornerRadius(radius);
 }
 
+void oneui_window_set_close_to_tray(OneUiWindow* window, int close_to_tray) {
+    if (!window || !window->window) {
+        return;
+    }
+    window->window->setCloseToTray(close_to_tray != 0);
+}
+
 void oneui_window_post(OneUiWindow* window, OneUiVoidCallback callback, void* user_data) {
     if (!window || !window->window || !callback) {
         return;
@@ -943,8 +950,13 @@ int oneui_tray_show(OneUiTray* tray) {
     }
 
     auto data = trayData(tray);
-    data.uFlags = NIF_ICON | NIF_TIP;
-    data.hIcon = LoadIconW(nullptr, IDI_APPLICATION);
+    // NIF_MESSAGE：让托盘点击/右键事件投递到窗口过程（Win32Window 里处理还原/菜单）。
+    data.uFlags = NIF_ICON | NIF_TIP | NIF_MESSAGE;
+    data.uCallbackMessage = oneui::kTrayCallbackMessage;
+    // 优先用可执行文件里嵌入的品牌图标（资源 ID 1）；取不到再退回系统默认图标。
+    HICON appIcon = static_cast<HICON>(LoadImageW(GetModuleHandleW(nullptr), MAKEINTRESOURCEW(1), IMAGE_ICON,
+                                                  GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), LR_DEFAULTCOLOR));
+    data.hIcon = appIcon ? appIcon : LoadIconW(nullptr, IDI_APPLICATION);
     copyWideField(data.szTip, tray->tooltip.c_str());
     if (!Shell_NotifyIconW(NIM_ADD, &data)) {
         return 0;

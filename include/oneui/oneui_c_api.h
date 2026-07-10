@@ -171,6 +171,7 @@ ONEUI_API void oneui_window_toggle_maximize(OneUiWindow* window);
 ONEUI_API void oneui_window_set_borderless(OneUiWindow* window, int borderless);
 ONEUI_API void oneui_window_set_title_bar_drag_metrics(OneUiWindow* window, float title_bar_height, float reserved_button_width);
 ONEUI_API void oneui_window_set_corner_radius(OneUiWindow* window, float radius);
+ONEUI_API void oneui_window_set_close_to_tray(OneUiWindow* window, int close_to_tray);
 ONEUI_API void oneui_window_post(OneUiWindow* window, OneUiVoidCallback callback, void* user_data);
 ONEUI_API void oneui_window_request_animation_frame(OneUiWindow* window, OneUiFrameCallback callback, void* user_data);
 ONEUI_API void oneui_window_set_title(OneUiWindow* window, const wchar_t* title);

@@ -58,7 +58,16 @@ public:
     }
     // 设置窗口整体圆角半径（逻辑像素，0 = 直角）。默认空实现，Win32 覆盖。
     virtual void setCornerRadius(float radiusLogical) { (void)radiusLogical; }
+    // 开启后，点击关闭改为隐藏到托盘（而非退出）。默认空实现，Win32 覆盖。
+    virtual void setCloseToTray(bool closeToTray) { (void)closeToTray; }
 };
+
+// 托盘图标回调消息（Shell_NotifyIcon 的 uCallbackMessage）：托盘在窗口 HWND 上注册，
+// 事件会投递到窗口过程，故 capi 与 Win32Window 需共用同一常量。WM_APP = 0x8000。
+inline constexpr unsigned int kTrayCallbackMessage = 0x8000u + 0x21u;
+// 托盘右键菜单命令 ID。
+inline constexpr unsigned int kTrayCommandShow = 0xE001u;
+inline constexpr unsigned int kTrayCommandExit = 0xE002u;
 
 class ONEUI_API SystemClipboard final : public Clipboard {
 public:

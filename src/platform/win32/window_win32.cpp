@@ -852,9 +852,47 @@ public:
     }
 
     void close() override {
-        if (hwnd_) {
-            DestroyWindow(hwnd_);
+        if (!hwnd_) {
+            return;
         }
+        // 开启“关闭到托盘”时，点击关闭仅隐藏窗口，程序继续在托盘后台运行。
+        if (closeToTray_) {
+            ShowWindow(hwnd_, SW_HIDE);
+            return;
+        }
+        DestroyWindow(hwnd_);
+    }
+
+    void setCloseToTray(bool closeToTray) override {
+        closeToTray_ = closeToTray;
+    }
+
+    void restoreFromTray() {
+        if (!hwnd_) {
+            return;
+        }
+        ShowWindow(hwnd_, IsIconic(hwnd_) ? SW_RESTORE : SW_SHOW);
+        SetForegroundWindow(hwnd_);
+    }
+
+    void showTrayMenu() {
+        if (!hwnd_) {
+            return;
+        }
+        HMENU menu = CreatePopupMenu();
+        if (!menu) {
+            return;
+        }
+        AppendMenuW(menu, MF_STRING, oneui::kTrayCommandShow, L"显示主界面");
+        AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+        AppendMenuW(menu, MF_STRING, oneui::kTrayCommandExit, L"退出");
+        POINT pt{};
+        GetCursorPos(&pt);
+        // 经典托盘菜单收尾：置前台并在弹出后补一条空消息，避免菜单不消失。
+        SetForegroundWindow(hwnd_);
+        TrackPopupMenu(menu, TPM_RIGHTBUTTON, pt.x, pt.y, 0, hwnd_, nullptr);
+        PostMessageW(hwnd_, WM_NULL, 0, 0);
+        DestroyMenu(menu);
     }
 
     void minimize() override {
@@ -1146,6 +1184,33 @@ private:
         case WM_PAINT:
             paint();
             return 0;
+        case oneui::kTrayCallbackMessage:
+            switch (LOWORD(lParam)) {
+            case WM_LBUTTONUP:
+            case WM_LBUTTONDBLCLK:
+                restoreFromTray();
+                break;
+            case WM_RBUTTONUP:
+            case WM_CONTEXTMENU:
+                showTrayMenu();
+                break;
+            }
+            return 0;
+        case WM_COMMAND:
+            if (HIWORD(wParam) == 0) { // 菜单命令
+                switch (LOWORD(wParam)) {
+                case oneui::kTrayCommandShow:
+                    restoreFromTray();
+                    return 0;
+                case oneui::kTrayCommandExit:
+                    closeToTray_ = false; // 强制真正退出，绕过“关闭到托盘”
+                    if (hwnd_) {
+                        DestroyWindow(hwnd_);
+                    }
+                    return 0;
+                }
+            }
+            return DefWindowProcW(hwnd_, message, wParam, lParam);
         case kOneUiRunPostedCallbacks:
             runPostedCallbacks();
             return 0;
@@ -2362,6 +2427,7 @@ private:
     bool fullscreenApplied_ = false;
     bool borderlessMaximized_ = false;
     float cornerRadiusLogical_ = 0.0f;
+    bool closeToTray_ = false;
     bool mouseLeaveTracking_ = false;
     bool animationTimerActive_ = false;
     bool contentAnimationFramePending_ = false;
