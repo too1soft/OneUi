@@ -1009,6 +1009,47 @@ private:
         DwmExtendFrameIntoClientArea(hwnd_, &margins);
     }
 
+    // 整体圆角：Win11 优先用 DWM 圆角首选项（抗锯齿 + 保留投影）；Win10 无该属性，
+    // 退回 SetWindowRgn 裁一个圆角矩形区域。最大化/全屏时取消圆角（方正铺满）。
+    void setCornerRadius(float radiusLogical) override {
+        cornerRadiusLogical_ = radiusLogical > 0.0f ? radiusLogical : 0.0f;
+        applyRoundedCorners();
+    }
+
+    void applyRoundedCorners() {
+        if (!hwnd_) {
+            return;
+        }
+        // Win11：DWMWA_WINDOW_CORNER_PREFERENCE = 33，DWMWCP_ROUND = 2 / DWMWCP_DONOTROUND = 1。
+        const DWORD attr = 33;
+        DWORD pref = (cornerRadiusLogical_ > 0.0f) ? 2 : 1;
+        const bool dwmRounded = SUCCEEDED(DwmSetWindowAttribute(hwnd_, attr, &pref, sizeof(pref)));
+
+        const bool square = cornerRadiusLogical_ <= 0.0f || borderlessMaximized_ || options_.fullscreen;
+        if (dwmRounded) {
+            // Win11 由 DWM 负责圆角，清掉可能残留的区域，避免双重裁剪。
+            SetWindowRgn(hwnd_, nullptr, TRUE);
+            return;
+        }
+        // Win10 回退：用圆角矩形区域裁剪窗口。
+        if (square) {
+            SetWindowRgn(hwnd_, nullptr, TRUE);
+            return;
+        }
+        RECT rc{};
+        if (!GetWindowRect(hwnd_, &rc)) {
+            return;
+        }
+        const int w = rc.right - rc.left;
+        const int h = rc.bottom - rc.top;
+        if (w <= 0 || h <= 0) {
+            return;
+        }
+        const int d = logicalToPhysicalCeil(cornerRadiusLogical_ * 2.0f);
+        HRGN rgn = CreateRoundRectRgn(0, 0, w + 1, h + 1, d, d);
+        SetWindowRgn(hwnd_, rgn, TRUE); // 系统接管 rgn 生命周期，不需手动 DeleteObject
+    }
+
     float normalizedDpiScale() const {
         return dpiScale_ > 0.0f ? dpiScale_ : 1.0f;
     }
@@ -1071,6 +1112,7 @@ private:
         if (hwnd_) {
             dpiScale_ = dpiScaleForWindowHandle(hwnd_);
             applyBorderlessShadow();
+            applyRoundedCorners();
             initGPU();
         }
 
@@ -1186,6 +1228,9 @@ private:
             return 0;
         case WM_SIZE:
             recordResizeMessage(wParam);
+            if (wParam != SIZE_MINIMIZED) {
+                applyRoundedCorners(); // 尺寸变化后重算圆角区域，避免拉伸/露白
+            }
             if (applyingWindowState_) {
                 windowStatePaintPending_ = true;
                 return 0;
@@ -2316,6 +2361,7 @@ private:
     DWORD savedExStyle_ = 0;
     bool fullscreenApplied_ = false;
     bool borderlessMaximized_ = false;
+    float cornerRadiusLogical_ = 0.0f;
     bool mouseLeaveTracking_ = false;
     bool animationTimerActive_ = false;
     bool contentAnimationFramePending_ = false;

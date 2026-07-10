@@ -56,6 +56,8 @@ public:
         (void)titleBarHeight;
         (void)reservedButtonWidth;
     }
+    // 设置窗口整体圆角半径（逻辑像素，0 = 直角）。默认空实现，Win32 覆盖。
+    virtual void setCornerRadius(float radiusLogical) { (void)radiusLogical; }
 };
 
 class ONEUI_API SystemClipboard final : public Clipboard {

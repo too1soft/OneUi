@@ -741,6 +741,13 @@ void oneui_window_set_title_bar_drag_metrics(OneUiWindow* window, float title_ba
     window->window->setTitleBarDragMetrics(title_bar_height, reserved_button_width);
 }
 
+void oneui_window_set_corner_radius(OneUiWindow* window, float radius) {
+    if (!window || !window->window) {
+        return;
+    }
+    window->window->setCornerRadius(radius);
+}
+
 void oneui_window_post(OneUiWindow* window, OneUiVoidCallback callback, void* user_data) {
     if (!window || !window->window || !callback) {
         return;
