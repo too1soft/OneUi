@@ -1215,7 +1215,8 @@ private:
                 const float d = std::sqrt(ax * ax + ay * ay) + std::min(std::max(qx0, qy0), 0.0f) - rInner;
                 int a;
                 if (d <= 0.0f) {
-                    a = kShadowMaxAlpha; // 轮廓内部（被主窗覆盖，仅作基底）
+                    // 轮廓内部由主窗覆盖：画全透明而非黑，避免主窗某帧未及时覆盖时露出黑块。
+                    a = 0;
                 } else if (d >= spread) {
                     a = 0;
                 } else {
@@ -1451,9 +1452,15 @@ private:
         case WM_MBUTTONUP:
             dispatchMouseUp(lParam, MouseButton::Middle);
             return 0;
-        case WM_MOVE:
-            updateShadowWindow(); // 窗口移动后把伴随投影重定位到主窗正下方（尺寸不变不重绘）
-            return 0;
+        case WM_WINDOWPOSCHANGED:
+        {
+            // 位置/尺寸/Z 序变化（含失焦→再激活）后，重定位伴随投影并把它重新压到主窗正
+            // 下方——修复“失焦后投影消失、要移动一下才回来”。必须先走默认处理，好派生出
+            // WM_MOVE/WM_SIZE（区域圆角重算依赖 WM_SIZE）。
+            const LRESULT r = DefWindowProcW(hwnd_, message, wParam, lParam);
+            updateShadowWindow();
+            return r;
+        }
         case WM_SHOWWINDOW:
             updateShadowWindow(); // 显隐（含托盘还原/隐藏）时同步投影窗显隐
             return DefWindowProcW(hwnd_, message, wParam, lParam);
