@@ -428,6 +428,45 @@ void testRemoteInputRegionAbiCreatesAndAcceptsCallbacks() {
     oneui_widget_destroy(region);
 }
 
+void onTerminalTextInput(const char*, size_t, void*) {}
+
+void onTerminalRawKey(const OneUiRawKeyEvent*, void*) {}
+
+void testTerminalViewAbiUsesStructuredCells() {
+    OneUiWidget* view = oneui_terminal_view_create();
+    expectTrue("terminal view create", view != nullptr);
+    if (!view) {
+        return;
+    }
+
+    const OneUiTerminalCellUtf8 cells[] = {
+        {
+            {"A", 1},
+            {220, 226, 240, 255},
+            {20, 24, 36, 255},
+            OneUiTerminalCellBold,
+        },
+        {
+            {"\xE4\xB8\xAD", 3},
+            {240, 200, 80, 255},
+            {20, 24, 36, 255},
+            OneUiTerminalCellWide,
+        },
+    };
+    oneui_terminal_view_set_font_size(view, 14.0f);
+    oneui_terminal_view_set_palette(
+        view,
+        OneUiColor{20, 24, 36, 255},
+        OneUiColor{220, 226, 240, 255},
+        OneUiColor{196, 181, 253, 255});
+    oneui_terminal_view_set_grid_utf8(view, 2, 3, cells, 2);
+    oneui_terminal_view_set_cursor(view, 1, 2, 1);
+    oneui_terminal_view_set_on_text_input_utf8(view, onTerminalTextInput, nullptr);
+    oneui_terminal_view_set_on_raw_key(view, onTerminalRawKey, nullptr);
+
+    oneui_widget_destroy(view);
+}
+
 void testClipboardAbiRoundTripIfAvailable() {
     const int setOk = oneui_clipboard_set_text(L"OneUI C ABI clipboard smoke");
     if (!setOk) {
@@ -458,6 +497,7 @@ int main() {
     testOverlayToastAbiSupportsAnchoredNotice();
     testRealtimeFrameViewAbiAcceptsBgraFrames();
     testRemoteInputRegionAbiCreatesAndAcceptsCallbacks();
+    testTerminalViewAbiUsesStructuredCells();
     testClipboardAbiRoundTripIfAvailable();
 
     if (failures != 0) {

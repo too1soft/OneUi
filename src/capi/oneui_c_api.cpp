@@ -19,6 +19,7 @@
 #include "oneui/controls/table.h"
 #include "oneui/controls/tabs.h"
 #include "oneui/controls/text_field.h"
+#include "oneui/controls/terminal_view.h"
 #include "oneui/controls/tile.h"
 #include "oneui/controls/toast.h"
 #include "oneui/controls/window_title_bar.h"
@@ -578,6 +579,8 @@ oneui::StyleNode styleNodeFor(const OneUiWidget* widget) {
             tag = "realtime-frame-view";
         } else if (dynamic_cast<oneui::RemoteInputRegion*>(widget->widget.get())) {
             tag = "remote-input-region";
+        } else if (dynamic_cast<oneui::TerminalView*>(widget->widget.get())) {
+            tag = "terminal-view";
         } else {
             tag = "section";
         }
@@ -2589,6 +2592,115 @@ void oneui_remote_input_region_set_on_raw_key(
 void oneui_remote_input_region_release_all_inputs(OneUiWidget* region) {
     if (auto* nativeRegion = asWidget<oneui::RemoteInputRegion>(region)) {
         nativeRegion->releaseAllInputs();
+    }
+}
+
+OneUiWidget* oneui_terminal_view_create(void) {
+    auto* wrapper = wrap(std::make_shared<oneui::TerminalView>());
+    if (wrapper) {
+        wrapper->tag = "terminal-view";
+        applyCurrentStyleSheet(wrapper);
+    }
+    return wrapper;
+}
+
+void oneui_terminal_view_set_font_size(OneUiWidget* view, float size) {
+    if (auto* nativeView = asWidget<oneui::TerminalView>(view)) {
+        nativeView->setFontSize(size);
+    }
+}
+
+void oneui_terminal_view_set_palette(
+    OneUiWidget* view,
+    OneUiColor background,
+    OneUiColor foreground,
+    OneUiColor cursor) {
+    if (auto* nativeView = asWidget<oneui::TerminalView>(view)) {
+        nativeView->setPalette(toNativeColor(background), toNativeColor(foreground), toNativeColor(cursor));
+    }
+}
+
+void oneui_terminal_view_set_grid_utf8(
+    OneUiWidget* view,
+    unsigned short rows,
+    unsigned short columns,
+    const OneUiTerminalCellUtf8* cells,
+    size_t cell_count) {
+    auto* nativeView = asWidget<oneui::TerminalView>(view);
+    if (!nativeView) {
+        return;
+    }
+
+    constexpr std::size_t kMaximumCells = 2'000'000;
+    const std::size_t requested = static_cast<std::size_t>(rows) * static_cast<std::size_t>(columns);
+    if (requested > kMaximumCells) {
+        nativeView->setGrid(0, 0, {});
+        return;
+    }
+
+    const std::size_t copied = cells ? std::min(cell_count, requested) : 0;
+    std::vector<oneui::TerminalCell> nativeCells;
+    nativeCells.reserve(copied);
+    for (std::size_t index = 0; index < copied; ++index) {
+        const OneUiTerminalCellUtf8& cell = cells[index];
+        nativeCells.push_back(oneui::TerminalCell{
+            utf8OrEmpty(cell.text),
+            toNativeColor(cell.foreground),
+            toNativeColor(cell.background),
+            cell.style,
+        });
+    }
+    nativeView->setGrid(rows, columns, std::move(nativeCells));
+}
+
+void oneui_terminal_view_set_cursor(
+    OneUiWidget* view,
+    unsigned short row,
+    unsigned short column,
+    int visible) {
+    if (auto* nativeView = asWidget<oneui::TerminalView>(view)) {
+        nativeView->setCursor(oneui::TerminalCursor{row, column, visible != 0});
+    }
+}
+
+void oneui_terminal_view_set_on_text_input_utf8(
+    OneUiWidget* view,
+    OneUiUtf8TextCallback callback,
+    void* user_data) {
+    if (auto* nativeView = asWidget<oneui::TerminalView>(view)) {
+        if (!callback) {
+            nativeView->setOnTextInput(nullptr);
+            return;
+        }
+        nativeView->setOnTextInput([callback, user_data](const std::wstring& text) {
+            const std::string utf8 = utf8FromWide(text);
+            callback(utf8.data(), utf8.size(), user_data);
+        });
+    }
+}
+
+void oneui_terminal_view_set_on_raw_key(
+    OneUiWidget* view,
+    OneUiRawKeyCallback callback,
+    void* user_data) {
+    if (auto* nativeView = asWidget<oneui::TerminalView>(view)) {
+        if (!callback) {
+            nativeView->setOnRawKey(nullptr);
+            return;
+        }
+        nativeView->setOnRawKey([callback, user_data](const oneui::KeyEvent& event) {
+            OneUiRawKeyEvent cEvent{};
+            cEvent.virtual_key = event.virtualKey;
+            cEvent.scan_code = event.scanCode;
+            cEvent.pressed = event.pressed ? 1 : 0;
+            cEvent.repeat = event.repeat ? 1 : 0;
+            cEvent.extended = event.extended ? 1 : 0;
+            cEvent.alt = event.alt ? 1 : 0;
+            cEvent.ctrl = event.control ? 1 : 0;
+            cEvent.shift = event.shift ? 1 : 0;
+            cEvent.win = event.win ? 1 : 0;
+            callback(&cEvent, user_data);
+        });
     }
 }
 

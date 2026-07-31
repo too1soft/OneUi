@@ -3,7 +3,7 @@
 //! All UTF-8 strings are borrowed for the duration of the FFI call. Callback
 //! bytes are also borrowed and must be copied before the callback returns.
 
-use std::ffi::{c_char, c_int, c_uint, c_void};
+use std::ffi::{c_char, c_int, c_uint, c_ushort, c_void};
 
 pub const UTF8_ABI_VERSION: c_uint = 1;
 
@@ -29,6 +29,24 @@ pub struct OneUiUtf8String {
 pub struct OneUiListItemUtf8 {
     pub title: OneUiUtf8String,
     pub detail: OneUiUtf8String,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct OneUiColor {
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+    pub a: u8,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct OneUiTerminalCellUtf8 {
+    pub text: OneUiUtf8String,
+    pub foreground: OneUiColor,
+    pub background: OneUiColor,
+    pub style: c_uint,
 }
 
 impl OneUiUtf8String {
@@ -65,6 +83,23 @@ pub struct OneUiInsets {
 pub type OneUiUtf8TextCallback =
     Option<unsafe extern "C" fn(text: *const c_char, length: usize, user_data: *mut c_void)>;
 pub type OneUiVoidCallback = Option<unsafe extern "C" fn(user_data: *mut c_void)>;
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct OneUiRawKeyEvent {
+    pub virtual_key: c_uint,
+    pub scan_code: c_uint,
+    pub pressed: c_int,
+    pub repeat: c_int,
+    pub extended: c_int,
+    pub alt: c_int,
+    pub ctrl: c_int,
+    pub shift: c_int,
+    pub win: c_int,
+}
+
+pub type OneUiRawKeyCallback =
+    Option<unsafe extern "C" fn(event: *const OneUiRawKeyEvent, user_data: *mut c_void)>;
 
 extern "C" {
     pub fn oneui_utf8_abi_version() -> c_uint;
@@ -108,6 +143,37 @@ extern "C" {
     pub fn oneui_text_field_set_on_changed_utf8(
         text_field: *mut OneUiWidget,
         callback: OneUiUtf8TextCallback,
+        user_data: *mut c_void,
+    );
+    pub fn oneui_terminal_view_create() -> *mut OneUiWidget;
+    pub fn oneui_terminal_view_set_font_size(view: *mut OneUiWidget, size: f32);
+    pub fn oneui_terminal_view_set_palette(
+        view: *mut OneUiWidget,
+        background: OneUiColor,
+        foreground: OneUiColor,
+        cursor: OneUiColor,
+    );
+    pub fn oneui_terminal_view_set_grid_utf8(
+        view: *mut OneUiWidget,
+        rows: c_ushort,
+        columns: c_ushort,
+        cells: *const OneUiTerminalCellUtf8,
+        cell_count: usize,
+    );
+    pub fn oneui_terminal_view_set_cursor(
+        view: *mut OneUiWidget,
+        row: c_ushort,
+        column: c_ushort,
+        visible: c_int,
+    );
+    pub fn oneui_terminal_view_set_on_text_input_utf8(
+        view: *mut OneUiWidget,
+        callback: OneUiUtf8TextCallback,
+        user_data: *mut c_void,
+    );
+    pub fn oneui_terminal_view_set_on_raw_key(
+        view: *mut OneUiWidget,
+        callback: OneUiRawKeyCallback,
         user_data: *mut c_void,
     );
     pub fn oneui_search_box_create_utf8(placeholder: OneUiUtf8String) -> *mut OneUiWidget;

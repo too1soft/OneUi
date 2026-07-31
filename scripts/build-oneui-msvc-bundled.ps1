@@ -10,8 +10,8 @@ $ErrorActionPreference = "Stop"
 
 $root = Split-Path -Parent $PSScriptRoot
 $vcvars = Join-Path $VsInstall "VC\Auxiliary\Build\vcvarsall.bat"
-$cmake = "C:\msys64\mingw64\bin\cmake.exe"
-$ninja = "C:\msys64\mingw64\bin\ninja.exe"
+$cmake = Join-Path $VsInstall "Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
+$ninja = Join-Path $VsInstall "Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja\ninja.exe"
 
 if ($BuildDir -eq "") {
     $BuildDir = if ($Arch -eq "x86") { "build/msvc-bundled-static-x86" } else { "build/msvc-bundled-static" }

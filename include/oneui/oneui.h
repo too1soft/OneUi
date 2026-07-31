@@ -24,6 +24,7 @@
 #include "oneui/controls/table.h"
 #include "oneui/controls/text_field.h"
 #include "oneui/controls/text_input_bridge.h"
+#include "oneui/controls/terminal_view.h"
 #include "oneui/controls/validation_message.h"
 #include "oneui/geometry.h"
 #include "oneui/icon.h"

@@ -327,6 +327,292 @@ impl TextField {
     }
 }
 
+/// RGBA color used by the native terminal grid.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TerminalColor {
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+    pub a: u8,
+}
+
+impl TerminalColor {
+    pub const fn rgb(r: u8, g: u8, b: u8) -> Self {
+        Self { r, g, b, a: 255 }
+    }
+}
+
+impl Default for TerminalColor {
+    fn default() -> Self {
+        Self::rgb(220, 226, 240)
+    }
+}
+
+impl From<TerminalColor> for sys::OneUiColor {
+    fn from(value: TerminalColor) -> Self {
+        Self {
+            r: value.r,
+            g: value.g,
+            b: value.b,
+            a: value.a,
+        }
+    }
+}
+
+/// Terminal cell style flags mirrored by OneUI's stable C ABI.
+pub mod terminal_style {
+    pub const BOLD: u32 = 1 << 0;
+    pub const DIM: u32 = 1 << 1;
+    pub const ITALIC: u32 = 1 << 2;
+    pub const UNDERLINE: u32 = 1 << 3;
+    pub const INVERSE: u32 = 1 << 4;
+    pub const WIDE: u32 = 1 << 5;
+    pub const WIDE_CONTINUATION: u32 = 1 << 6;
+}
+
+/// One terminal cell. It deliberately holds text and colors separately so a
+/// caller never has to encode values into a string boundary.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TerminalCell {
+    pub text: String,
+    pub foreground: TerminalColor,
+    pub background: TerminalColor,
+    pub style: u32,
+}
+
+impl Default for TerminalCell {
+    fn default() -> Self {
+        Self {
+            text: String::new(),
+            foreground: TerminalColor::default(),
+            background: TerminalColor::rgb(20, 24, 36),
+            style: 0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TerminalCursor {
+    pub row: u16,
+    pub column: u16,
+    pub visible: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RawKeyEvent {
+    pub virtual_key: u32,
+    pub scan_code: u32,
+    pub pressed: bool,
+    pub repeat: bool,
+    pub extended: bool,
+    pub alt: bool,
+    pub ctrl: bool,
+    pub shift: bool,
+    pub win: bool,
+}
+
+impl From<sys::OneUiRawKeyEvent> for RawKeyEvent {
+    fn from(value: sys::OneUiRawKeyEvent) -> Self {
+        Self {
+            virtual_key: value.virtual_key,
+            scan_code: value.scan_code,
+            pressed: value.pressed != 0,
+            repeat: value.repeat != 0,
+            extended: value.extended != 0,
+            alt: value.alt != 0,
+            ctrl: value.ctrl != 0,
+            shift: value.shift != 0,
+            win: value.win != 0,
+        }
+    }
+}
+
+struct TerminalTextInputCallback {
+    handler: Box<dyn FnMut(String) + 'static>,
+}
+
+struct TerminalRawKeyCallback {
+    handler: Box<dyn FnMut(RawKeyEvent) + 'static>,
+}
+
+unsafe extern "C" fn run_terminal_text_input_callback(
+    text: *const std::ffi::c_char,
+    length: usize,
+    user_data: *mut std::ffi::c_void,
+) {
+    if text.is_null() || user_data.is_null() {
+        return;
+    }
+    let bytes = unsafe { std::slice::from_raw_parts(text.cast::<u8>(), length) };
+    let value = String::from_utf8_lossy(bytes).into_owned();
+    let callback = unsafe { &mut *user_data.cast::<TerminalTextInputCallback>() };
+    let _ = catch_unwind(AssertUnwindSafe(|| (callback.handler)(value)));
+}
+
+unsafe extern "C" fn run_terminal_raw_key_callback(
+    event: *const sys::OneUiRawKeyEvent,
+    user_data: *mut std::ffi::c_void,
+) {
+    if event.is_null() || user_data.is_null() {
+        return;
+    }
+    let event = RawKeyEvent::from(unsafe { *event });
+    let callback = unsafe { &mut *user_data.cast::<TerminalRawKeyCallback>() };
+    let _ = catch_unwind(AssertUnwindSafe(|| (callback.handler)(event)));
+}
+
+/// Native terminal grid with explicit frame and input boundaries.
+///
+/// The `TerminalView` itself stays on the UI thread. Its callbacks are owned
+/// by the view and are cleared in `Drop` before OneUI destroys the widget.
+pub struct TerminalView {
+    widget: Widget,
+    text_input_callback: Option<Box<TerminalTextInputCallback>>,
+    raw_key_callback: Option<Box<TerminalRawKeyCallback>>,
+}
+
+impl TerminalView {
+    pub fn new() -> Result<Self, Error> {
+        let widget = Widget::from_raw(unsafe { sys::oneui_terminal_view_create() })?;
+        Ok(Self {
+            widget,
+            text_input_callback: None,
+            raw_key_callback: None,
+        })
+    }
+
+    pub fn set_font_size(&self, size: f32) {
+        unsafe { sys::oneui_terminal_view_set_font_size(self.widget.as_raw(), size) };
+    }
+
+    pub fn set_palette(
+        &self,
+        background: TerminalColor,
+        foreground: TerminalColor,
+        cursor: TerminalColor,
+    ) {
+        unsafe {
+            sys::oneui_terminal_view_set_palette(
+                self.widget.as_raw(),
+                background.into(),
+                foreground.into(),
+                cursor.into(),
+            )
+        };
+    }
+
+    pub fn set_grid(&self, rows: u16, columns: u16, cells: &[TerminalCell]) {
+        let native_cells: Vec<sys::OneUiTerminalCellUtf8> = cells
+            .iter()
+            .map(|cell| sys::OneUiTerminalCellUtf8 {
+                text: sys::OneUiUtf8String::from_str(&cell.text),
+                foreground: cell.foreground.into(),
+                background: cell.background.into(),
+                style: cell.style,
+            })
+            .collect();
+        unsafe {
+            sys::oneui_terminal_view_set_grid_utf8(
+                self.widget.as_raw(),
+                rows,
+                columns,
+                native_cells.as_ptr(),
+                native_cells.len(),
+            )
+        };
+    }
+
+    pub fn set_cursor(&self, cursor: TerminalCursor) {
+        unsafe {
+            sys::oneui_terminal_view_set_cursor(
+                self.widget.as_raw(),
+                cursor.row,
+                cursor.column,
+                i32::from(cursor.visible),
+            )
+        };
+    }
+
+    pub fn set_on_text_input<F>(&mut self, callback: F)
+    where
+        F: FnMut(String) + 'static,
+    {
+        self.clear_text_input_callback();
+        self.text_input_callback = Some(Box::new(TerminalTextInputCallback {
+            handler: Box::new(callback),
+        }));
+        let user_data = (self
+            .text_input_callback
+            .as_deref_mut()
+            .expect("terminal text callback was just installed")
+            as *mut TerminalTextInputCallback)
+            .cast();
+        unsafe {
+            sys::oneui_terminal_view_set_on_text_input_utf8(
+                self.widget.as_raw(),
+                Some(run_terminal_text_input_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn set_on_raw_key<F>(&mut self, callback: F)
+    where
+        F: FnMut(RawKeyEvent) + 'static,
+    {
+        self.clear_raw_key_callback();
+        self.raw_key_callback = Some(Box::new(TerminalRawKeyCallback {
+            handler: Box::new(callback),
+        }));
+        let user_data = (self
+            .raw_key_callback
+            .as_deref_mut()
+            .expect("terminal raw key callback was just installed")
+            as *mut TerminalRawKeyCallback)
+            .cast();
+        unsafe {
+            sys::oneui_terminal_view_set_on_raw_key(
+                self.widget.as_raw(),
+                Some(run_terminal_raw_key_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn clear_text_input_callback(&mut self) {
+        unsafe {
+            sys::oneui_terminal_view_set_on_text_input_utf8(
+                self.widget.as_raw(),
+                None,
+                std::ptr::null_mut(),
+            )
+        };
+        self.text_input_callback = None;
+    }
+
+    pub fn clear_raw_key_callback(&mut self) {
+        unsafe {
+            sys::oneui_terminal_view_set_on_raw_key(
+                self.widget.as_raw(),
+                None,
+                std::ptr::null_mut(),
+            )
+        };
+        self.raw_key_callback = None;
+    }
+
+    pub fn as_widget(&self) -> &Widget {
+        &self.widget
+    }
+}
+
+impl Drop for TerminalView {
+    fn drop(&mut self) {
+        self.clear_text_input_callback();
+        self.clear_raw_key_callback();
+    }
+}
+
 /// Structured list data. Every field is UTF-8 and may contain punctuation,
 /// tabs, or newlines without relying on a delimiter encoding.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -468,8 +754,9 @@ impl Drop for Window {
 #[cfg(test)]
 mod tests {
     use super::{
-        Button, Error, Insets, Label, List, ListItem, ScrollView, Stack, StackDirection,
-        TextField, Window, WindowOptions,
+        terminal_style, Button, Error, Insets, Label, List, ListItem, ScrollView, Stack,
+        StackDirection, TerminalCell, TerminalColor, TerminalCursor, TerminalView, TextField,
+        Window, WindowOptions,
     };
     use std::sync::{
         atomic::{AtomicBool, Ordering},
@@ -539,6 +826,47 @@ mod tests {
         content.add(refresh.as_widget());
         content.add(scroll.as_widget());
         window.set_content(content.as_widget());
+    }
+
+    #[test]
+    fn mounts_terminal_grid_with_wide_cells_and_cursor() {
+        let _guard = window_test_lock().lock().expect("window test lock");
+        let window = Window::new(&WindowOptions::default()).expect("window should be created");
+        let terminal = TerminalView::new().expect("terminal should be created");
+        terminal.set_font_size(13.0);
+        terminal.set_palette(
+            TerminalColor::rgb(20, 24, 36),
+            TerminalColor::rgb(220, 226, 240),
+            TerminalColor::rgb(170, 190, 255),
+        );
+        terminal.set_grid(
+            2,
+            3,
+            &[
+                TerminalCell {
+                    text: "A".to_owned(),
+                    ..TerminalCell::default()
+                },
+                TerminalCell {
+                    text: "宽".to_owned(),
+                    style: terminal_style::WIDE,
+                    ..TerminalCell::default()
+                },
+                TerminalCell {
+                    style: terminal_style::WIDE_CONTINUATION,
+                    ..TerminalCell::default()
+                },
+                TerminalCell::default(),
+                TerminalCell::default(),
+                TerminalCell::default(),
+            ],
+        );
+        terminal.set_cursor(TerminalCursor {
+            row: 0,
+            column: 2,
+            visible: true,
+        });
+        window.set_content(terminal.as_widget());
     }
 
     #[test]

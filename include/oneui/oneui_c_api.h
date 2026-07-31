@@ -76,6 +76,17 @@ typedef struct OneUiColor {
     unsigned char a;
 } OneUiColor;
 
+/*
+ * Terminal cells are structured so text, colors, and styles never depend on
+ * delimiter encodings. OneUI copies every cell before this call returns.
+ */
+typedef struct OneUiTerminalCellUtf8 {
+    OneUiUtf8String text;
+    OneUiColor foreground;
+    OneUiColor background;
+    unsigned int style;
+} OneUiTerminalCellUtf8;
+
 typedef struct OneUiFocusRingStyle {
     OneUiColor color;
     float width;
@@ -190,6 +201,16 @@ typedef struct OneUiRawKeyEvent {
 
 typedef void (*OneUiRemotePointerCallback)(const OneUiRemotePointerEvent* event, void* user_data);
 typedef void (*OneUiRawKeyCallback)(const OneUiRawKeyEvent* event, void* user_data);
+
+enum {
+    OneUiTerminalCellBold = 1u << 0,
+    OneUiTerminalCellDim = 1u << 1,
+    OneUiTerminalCellItalic = 1u << 2,
+    OneUiTerminalCellUnderline = 1u << 3,
+    OneUiTerminalCellInverse = 1u << 4,
+    OneUiTerminalCellWide = 1u << 5,
+    OneUiTerminalCellWideContinuation = 1u << 6
+};
 
 #define ONEUI_UTF8_ABI_VERSION 1u
 
@@ -467,6 +488,33 @@ ONEUI_API void oneui_remote_input_region_set_on_raw_key(
     OneUiRawKeyCallback callback,
     void* user_data);
 ONEUI_API void oneui_remote_input_region_release_all_inputs(OneUiWidget* region);
+
+ONEUI_API OneUiWidget* oneui_terminal_view_create(void);
+ONEUI_API void oneui_terminal_view_set_font_size(OneUiWidget* view, float size);
+ONEUI_API void oneui_terminal_view_set_palette(
+    OneUiWidget* view,
+    OneUiColor background,
+    OneUiColor foreground,
+    OneUiColor cursor);
+ONEUI_API void oneui_terminal_view_set_grid_utf8(
+    OneUiWidget* view,
+    unsigned short rows,
+    unsigned short columns,
+    const OneUiTerminalCellUtf8* cells,
+    size_t cell_count);
+ONEUI_API void oneui_terminal_view_set_cursor(
+    OneUiWidget* view,
+    unsigned short row,
+    unsigned short column,
+    int visible);
+ONEUI_API void oneui_terminal_view_set_on_text_input_utf8(
+    OneUiWidget* view,
+    OneUiUtf8TextCallback callback,
+    void* user_data);
+ONEUI_API void oneui_terminal_view_set_on_raw_key(
+    OneUiWidget* view,
+    OneUiRawKeyCallback callback,
+    void* user_data);
 
 ONEUI_API OneUiWidget* oneui_tile_create(const wchar_t* title, const wchar_t* subtitle);
 ONEUI_API void oneui_tile_set_title(OneUiWidget* tile, const wchar_t* title);
