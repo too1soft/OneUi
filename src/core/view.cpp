@@ -219,6 +219,11 @@ bool View::onKeyDown(const KeyEvent& event) {
         // 深度优先：先让当前聚焦子树在更深层推进（表单里逐个字段切换）；
         // 到本层边界（focusNext 返回 false，不回绕）再冒泡给上层——回绕由焦点作用域
         // （模态 overlay 或窗口内容，见 OverlayHost::onKeyDown）统一负责。
+        // 键盘导航即使已经抵达当前作用域的边界，也必须让当前焦点显示焦点环。
+        // 这样首次通过 Tab 进入窗口时不会保留鼠标焦点样式。
+        if (focusedChild_ && isChildInteractive(focusedChild_)) {
+            focusedChild_->setFocusVisible(true);
+        }
         if (focusedChild_ && isChildInteractive(focusedChild_) && focusedChild_->onKeyDown(event)) {
             return true;
         }

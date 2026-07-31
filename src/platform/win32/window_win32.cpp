@@ -33,7 +33,7 @@
 #include "include/core/SkSurface.h"
 #include "include/core/SkTextBlob.h"
 #include "include/core/SkTypeface.h"
-#include "include/effects/SkGradientShader.h"
+#include "include/effects/SkGradient.h"
 #include "include/effects/SkImageFilters.h"
 #include "include/ports/SkTypeface_win.h"
 
@@ -436,10 +436,14 @@ public:
         const SkPoint shaderCenter = SkPoint::Make(
             rect.x + rect.width * centerNorm.x,
             rect.y + rect.height * centerNorm.y);
-        const SkColor colors[2] = {toSkColor(center), toSkColor(edge)};
+        const SkColor4f colors[2] = {
+            SkColor4f::FromColor(toSkColor(center)),
+            SkColor4f::FromColor(toSkColor(edge)),
+        };
+        const SkGradient gradient(SkGradient::Colors(colors, SkTileMode::kClamp), {});
         SkPaint paint;
         paint.setAntiAlias(true);
-        paint.setShader(SkGradientShader::MakeRadial(shaderCenter, shaderRadius, colors, nullptr, 2, SkTileMode::kClamp));
+        paint.setShader(SkShaders::RadialGradient(shaderCenter, shaderRadius, gradient));
         canvas_.drawRRect(SkRRect::MakeRectXY(toSkRect(rect), radius, radius), paint);
         ++g_primitivePaintTrace.gradientCalls;
     }
@@ -747,11 +751,12 @@ private:
             SkPoint::Make(rect.x + rect.width * 0.5f - dx * half, rect.y + rect.height * 0.5f - dy * half),
             SkPoint::Make(rect.x + rect.width * 0.5f + dx * half, rect.y + rect.height * 0.5f + dy * half),
         };
-        const SkColor colors[2] = {
-            toSkColor(start),
-            toSkColor(end),
+        const SkColor4f colors[2] = {
+            SkColor4f::FromColor(toSkColor(start)),
+            SkColor4f::FromColor(toSkColor(end)),
         };
-        auto shader = SkGradientShader::MakeLinear(points, colors, nullptr, 2, SkTileMode::kClamp);
+        const SkGradient gradient(SkGradient::Colors(colors, SkTileMode::kClamp), {});
+        auto shader = SkShaders::LinearGradient(points, gradient);
         cache[key] = shader;
         return shader;
     }

@@ -4,6 +4,7 @@
 #include <cstring>
 #include <cwchar>
 #include <iostream>
+#include <string>
 
 namespace {
 
@@ -14,6 +15,72 @@ void expectTrue(const char* name, bool value) {
         std::cerr << name << " failed\n";
         ++failures;
     }
+}
+
+OneUiUtf8String utf8View(const std::string& value) {
+    return OneUiUtf8String{value.data(), value.size()};
+}
+
+struct Utf8CallbackState {
+    std::string text;
+    int calls = 0;
+};
+
+void onUtf8TextChanged(const char* text, size_t length, void* userData) {
+    auto* state = static_cast<Utf8CallbackState*>(userData);
+    if (!state) {
+        return;
+    }
+    state->text.assign(text ? text : "", length);
+    ++state->calls;
+}
+
+void testUtf8AbiRoundTripsUnicodeText() {
+    const std::string title = "iShellPro \xE9\xBA\x92\xE9\xBA\x9F \xF0\x9F\x9A\x80";
+    const std::string text = "\xE5\x85\xB4\xE4\xB8\x9A\xE9\x93\xB6\xE8\xA1\x8C SSH \xF0\x9F\x94\x90";
+
+    expectTrue("utf8 abi version", oneui_utf8_abi_version() == ONEUI_UTF8_ABI_VERSION);
+
+    OneUiWindowOptionsUtf8 options{};
+    options.title = utf8View(title);
+    options.width = 480;
+    options.height = 320;
+    options.borderless = 1;
+    options.resizable = 1;
+    OneUiWindow* window = oneui_window_create_utf8(&options);
+    expectTrue("utf8 window create", window != nullptr);
+    if (window) {
+        oneui_window_set_title_utf8(window, utf8View(text));
+    }
+
+    OneUiWidget* label = oneui_label_create_utf8(utf8View(title));
+    OneUiWidget* button = oneui_button_create_utf8(utf8View(text));
+    OneUiWidget* field = oneui_text_field_create_utf8(utf8View(title));
+    OneUiWidget* search = oneui_search_box_create_utf8(utf8View(text));
+    expectTrue("utf8 label create", label != nullptr);
+    expectTrue("utf8 button create", button != nullptr);
+    expectTrue("utf8 text field create", field != nullptr);
+    expectTrue("utf8 search box create", search != nullptr);
+
+    Utf8CallbackState callbackState;
+    oneui_text_field_set_on_changed_utf8(field, onUtf8TextChanged, &callbackState);
+    oneui_text_field_set_text_utf8(field, utf8View(text));
+    oneui_label_set_text_utf8(label, utf8View(text));
+    oneui_button_set_text_utf8(button, utf8View(title));
+    expectTrue("utf8 text callback invoked", callbackState.calls == 1);
+    expectTrue("utf8 text callback round trip", callbackState.text == text);
+
+    const std::string malformed = "bad \xF0\x28\x8C\x28";
+    const std::string replacement = "bad \xEF\xBF\xBD(\xEF\xBF\xBD(";
+    oneui_text_field_set_text_utf8(field, utf8View(malformed));
+    expectTrue("utf8 malformed text callback invoked", callbackState.calls == 2);
+    expectTrue("utf8 malformed text replaces invalid sequences", callbackState.text == replacement);
+
+    oneui_widget_destroy(search);
+    oneui_widget_destroy(field);
+    oneui_widget_destroy(button);
+    oneui_widget_destroy(label);
+    oneui_window_destroy(window);
 }
 
 void testWindowDpiMetricsAbiUsesLogicalAndPhysicalSizes() {
@@ -308,6 +375,7 @@ void testClipboardAbiRoundTripIfAvailable() {
 
 int main() {
     expectTrue("version exported", std::strcmp(oneui_version(), "0.1.0") == 0);
+    testUtf8AbiRoundTripsUnicodeText();
     testWindowDpiMetricsAbiUsesLogicalAndPhysicalSizes();
     testAppShellAbiCreatesReusableSlots();
     testProductShellAbiIsPublicProductFrame();

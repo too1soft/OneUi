@@ -25,6 +25,7 @@
 #include "oneui/controls/window_title_bar.h"
 #include "oneui/layout/app_shell.h"
 #include "oneui/layout/dock_view.h"
+#include "oneui/layout/overlay_host.h"
 #include "oneui/layout/panel.h"
 #include "oneui/layout/product_shell.h"
 #include "oneui/layout/scroll_view.h"
@@ -2771,8 +2772,11 @@ void testFieldMouseFocusIsNotFocusVisible() {
 }
 
 void testFieldKeyboardFocusVisible() {
-    oneui::View view;
-    view.setFrame(oneui::Rect{0.0f, 0.0f, 260.0f, 120.0f});
+    oneui::OverlayHost host;
+    host.setFrame(oneui::Rect{0.0f, 0.0f, 260.0f, 120.0f});
+
+    auto view = std::make_shared<oneui::View>();
+    view->setFrame(oneui::Rect{0.0f, 0.0f, 260.0f, 120.0f});
 
     auto textField = std::make_shared<oneui::TextField>(L"Name");
     textField->setFrame(oneui::Rect{10.0f, 10.0f, 120.0f, 30.0f});
@@ -2781,15 +2785,17 @@ void testFieldKeyboardFocusVisible() {
     select->setFrame(oneui::Rect{10.0f, 50.0f, 120.0f, 30.0f});
     select->setItems({L"One", L"Two"});
 
-    view.add(textField);
-    view.add(select);
-    view.onFocusChanged(true);
+    view->add(textField);
+    view->add(select);
+    host.setContent(view);
+    host.onFocusChanged(true);
+    host.setFocusVisible(true);
 
-    view.onKeyDown(oneui::KeyEvent{oneui::Key::Tab});
+    host.onKeyDown(oneui::KeyEvent{oneui::Key::Tab});
     expectEqual("Select keyboard focus focused", select->focused() ? 1 : 0, 1);
     expectEqual("Select keyboard focus is focus-visible", select->focusVisible() ? 1 : 0, 1);
 
-    view.onKeyDown(oneui::KeyEvent{oneui::Key::Tab});
+    host.onKeyDown(oneui::KeyEvent{oneui::Key::Tab});
     expectEqual("TextField keyboard focus focused", textField->focused() ? 1 : 0, 1);
     expectEqual("TextField keyboard focus is focus-visible", textField->focusVisible() ? 1 : 0, 1);
 }

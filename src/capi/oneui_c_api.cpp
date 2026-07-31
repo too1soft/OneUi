@@ -35,6 +35,8 @@
 
 #include <algorithm>
 #include <atomic>
+#include <climits>
+#include <cstdint>
 #include <cwchar>
 #include <cstdio>
 #include <fstream>
@@ -104,6 +106,140 @@ NOTIFYICONDATAW trayData(const OneUiTray* tray) {
 
 std::wstring wideOrEmpty(const wchar_t* text) {
     return text ? std::wstring(text) : std::wstring();
+}
+
+constexpr std::uint32_t kReplacementCodePoint = 0xFFFD;
+
+bool isUnicodeScalar(std::uint32_t codePoint) {
+    return codePoint <= 0x10FFFF && !(codePoint >= 0xD800 && codePoint <= 0xDFFF);
+}
+
+void appendWideCodePoint(std::wstring& target, std::uint32_t codePoint) {
+    if (!isUnicodeScalar(codePoint)) {
+        codePoint = kReplacementCodePoint;
+    }
+#if WCHAR_MAX <= 0xFFFF
+    if (codePoint <= 0xFFFF) {
+        target.push_back(static_cast<wchar_t>(codePoint));
+        return;
+    }
+    codePoint -= 0x10000;
+    target.push_back(static_cast<wchar_t>(0xD800 + (codePoint >> 10)));
+    target.push_back(static_cast<wchar_t>(0xDC00 + (codePoint & 0x3FF)));
+#else
+    target.push_back(static_cast<wchar_t>(codePoint));
+#endif
+}
+
+void appendUtf8CodePoint(std::string& target, std::uint32_t codePoint) {
+    if (!isUnicodeScalar(codePoint)) {
+        codePoint = kReplacementCodePoint;
+    }
+    if (codePoint <= 0x7F) {
+        target.push_back(static_cast<char>(codePoint));
+    } else if (codePoint <= 0x7FF) {
+        target.push_back(static_cast<char>(0xC0 | (codePoint >> 6)));
+        target.push_back(static_cast<char>(0x80 | (codePoint & 0x3F)));
+    } else if (codePoint <= 0xFFFF) {
+        target.push_back(static_cast<char>(0xE0 | (codePoint >> 12)));
+        target.push_back(static_cast<char>(0x80 | ((codePoint >> 6) & 0x3F)));
+        target.push_back(static_cast<char>(0x80 | (codePoint & 0x3F)));
+    } else {
+        target.push_back(static_cast<char>(0xF0 | (codePoint >> 18)));
+        target.push_back(static_cast<char>(0x80 | ((codePoint >> 12) & 0x3F)));
+        target.push_back(static_cast<char>(0x80 | ((codePoint >> 6) & 0x3F)));
+        target.push_back(static_cast<char>(0x80 | (codePoint & 0x3F)));
+    }
+}
+
+std::wstring utf8OrEmpty(OneUiUtf8String text) {
+    if (!text.data || text.length == 0) {
+        return {};
+    }
+
+    std::wstring result;
+    result.reserve(text.length);
+    const auto* bytes = reinterpret_cast<const unsigned char*>(text.data);
+    for (std::size_t index = 0; index < text.length;) {
+        const unsigned char first = bytes[index];
+        std::uint32_t codePoint = 0;
+        std::size_t sequenceLength = 1;
+        std::uint32_t minimumCodePoint = 0;
+        if (first <= 0x7F) {
+            codePoint = first;
+        } else if ((first & 0xE0) == 0xC0) {
+            codePoint = first & 0x1F;
+            sequenceLength = 2;
+            minimumCodePoint = 0x80;
+        } else if ((first & 0xF0) == 0xE0) {
+            codePoint = first & 0x0F;
+            sequenceLength = 3;
+            minimumCodePoint = 0x800;
+        } else if ((first & 0xF8) == 0xF0) {
+            codePoint = first & 0x07;
+            sequenceLength = 4;
+            minimumCodePoint = 0x10000;
+        } else {
+            appendWideCodePoint(result, kReplacementCodePoint);
+            ++index;
+            continue;
+        }
+
+        bool valid = index + sequenceLength <= text.length;
+        for (std::size_t offset = 1; valid && offset < sequenceLength; ++offset) {
+            const unsigned char next = bytes[index + offset];
+            if ((next & 0xC0) != 0x80) {
+                valid = false;
+                break;
+            }
+            codePoint = (codePoint << 6) | (next & 0x3F);
+        }
+        if (!valid || codePoint < minimumCodePoint || !isUnicodeScalar(codePoint)) {
+            appendWideCodePoint(result, kReplacementCodePoint);
+            ++index;
+            continue;
+        }
+
+        appendWideCodePoint(result, codePoint);
+        index += sequenceLength;
+    }
+    return result;
+}
+
+std::string utf8FromWide(const std::wstring& text) {
+    std::string result;
+    result.reserve(text.size());
+    for (std::size_t index = 0; index < text.size(); ++index) {
+        std::uint32_t codePoint = static_cast<std::uint32_t>(text[index]);
+#if WCHAR_MAX <= 0xFFFF
+        if (codePoint >= 0xD800 && codePoint <= 0xDBFF) {
+            if (index + 1 < text.size()) {
+                const std::uint32_t low = static_cast<std::uint32_t>(text[index + 1]);
+                if (low >= 0xDC00 && low <= 0xDFFF) {
+                    codePoint = 0x10000 + ((codePoint - 0xD800) << 10) + (low - 0xDC00);
+                    ++index;
+                } else {
+                    codePoint = kReplacementCodePoint;
+                }
+            } else {
+                codePoint = kReplacementCodePoint;
+            }
+        } else if (codePoint >= 0xDC00 && codePoint <= 0xDFFF) {
+            codePoint = kReplacementCodePoint;
+        }
+#endif
+        appendUtf8CodePoint(result, codePoint);
+    }
+    return result;
+}
+
+void copyUtf8Field(const std::string& value, char* buffer, std::size_t bufferLength) {
+    if (!buffer || bufferLength == 0) {
+        return;
+    }
+    const std::size_t count = std::min(bufferLength - 1, value.size());
+    std::copy_n(value.data(), count, buffer);
+    buffer[count] = '\0';
 }
 
 oneui::Insets toNativeInsets(OneUiInsets insets) {
@@ -650,10 +786,37 @@ const char* oneui_version(void) {
     return "0.1.0";
 }
 
+unsigned int oneui_utf8_abi_version(void) {
+    return ONEUI_UTF8_ABI_VERSION;
+}
+
 OneUiWindow* oneui_window_create(const OneUiWindowOptions* options) {
     try {
         oneui::WindowOptions nativeOptions;
         nativeOptions.title = options && options->title ? wideOrEmpty(options->title) : L"OneUI";
+        nativeOptions.width = options && options->width > 0 ? options->width : 1280;
+        nativeOptions.height = options && options->height > 0 ? options->height : 800;
+        nativeOptions.visible = options ? options->visible != 0 : false;
+        nativeOptions.borderless = options ? options->borderless != 0 : false;
+        nativeOptions.fullscreen = options ? options->fullscreen != 0 : false;
+        nativeOptions.topmost = options ? options->topmost != 0 : false;
+        nativeOptions.resizable = options ? options->resizable != 0 : true;
+
+        auto wrapper = std::make_unique<OneUiWindow>();
+        wrapper->window = oneui::Window::create(std::move(nativeOptions));
+        if (!wrapper->window) {
+            return nullptr;
+        }
+        return wrapper.release();
+    } catch (...) {
+        return nullptr;
+    }
+}
+
+OneUiWindow* oneui_window_create_utf8(const OneUiWindowOptionsUtf8* options) {
+    try {
+        oneui::WindowOptions nativeOptions;
+        nativeOptions.title = options ? utf8OrEmpty(options->title) : L"OneUI";
         nativeOptions.width = options && options->width > 0 ? options->width : 1280;
         nativeOptions.height = options && options->height > 0 ? options->height : 800;
         nativeOptions.visible = options ? options->visible != 0 : false;
@@ -778,6 +941,13 @@ void oneui_window_set_title(OneUiWindow* window, const wchar_t* title) {
         return;
     }
     window->window->setTitle(title ? std::wstring(title) : std::wstring());
+}
+
+void oneui_window_set_title_utf8(OneUiWindow* window, OneUiUtf8String title) {
+    if (!window || !window->window) {
+        return;
+    }
+    window->window->setTitle(utf8OrEmpty(title));
 }
 
 void* oneui_window_native_handle(OneUiWindow* window) {
@@ -1162,6 +1332,30 @@ int oneui_clipboard_get_text(wchar_t* buffer, int buffer_len) {
     } catch (...) {
         if (buffer && buffer_len > 0) {
             buffer[0] = L'\0';
+        }
+        return 0;
+    }
+}
+
+int oneui_clipboard_set_text_utf8(OneUiUtf8String text) {
+    try {
+        oneui::SystemClipboard clipboard;
+        clipboard.setText(utf8OrEmpty(text));
+        return 1;
+    } catch (...) {
+        return 0;
+    }
+}
+
+std::size_t oneui_clipboard_get_text_utf8(char* buffer, std::size_t buffer_len) {
+    try {
+        oneui::SystemClipboard clipboard;
+        const std::string value = utf8FromWide(clipboard.text());
+        copyUtf8Field(value, buffer, buffer_len);
+        return value.size() + 1;
+    } catch (...) {
+        if (buffer && buffer_len > 0) {
+            buffer[0] = '\0';
         }
         return 0;
     }
@@ -1604,12 +1798,24 @@ OneUiWidget* oneui_label_create(const wchar_t* text) {
     return wrap(std::make_shared<oneui::Label>(wideOrEmpty(text)));
 }
 
+OneUiWidget* oneui_label_create_utf8(OneUiUtf8String text) {
+    return wrap(std::make_shared<oneui::Label>(utf8OrEmpty(text)));
+}
+
 void oneui_label_set_text(OneUiWidget* label, const wchar_t* text) {
     auto* nativeLabel = asWidget<oneui::Label>(label);
     if (!nativeLabel) {
         return;
     }
     nativeLabel->setText(wideOrEmpty(text));
+}
+
+void oneui_label_set_text_utf8(OneUiWidget* label, OneUiUtf8String text) {
+    auto* nativeLabel = asWidget<oneui::Label>(label);
+    if (!nativeLabel) {
+        return;
+    }
+    nativeLabel->setText(utf8OrEmpty(text));
 }
 
 void oneui_label_set_color(OneUiWidget* label, unsigned char r, unsigned char g, unsigned char b, unsigned char a) {
@@ -2546,12 +2752,24 @@ OneUiWidget* oneui_text_field_create(const wchar_t* placeholder) {
     return wrap(std::make_shared<oneui::TextField>(wideOrEmpty(placeholder)));
 }
 
+OneUiWidget* oneui_text_field_create_utf8(OneUiUtf8String placeholder) {
+    return wrap(std::make_shared<oneui::TextField>(utf8OrEmpty(placeholder)));
+}
+
 void oneui_text_field_set_text(OneUiWidget* text_field, const wchar_t* text) {
     auto* nativeTextField = asWidget<oneui::TextField>(text_field);
     if (!nativeTextField) {
         return;
     }
     nativeTextField->setText(wideOrEmpty(text));
+}
+
+void oneui_text_field_set_text_utf8(OneUiWidget* text_field, OneUiUtf8String text) {
+    auto* nativeTextField = asWidget<oneui::TextField>(text_field);
+    if (!nativeTextField) {
+        return;
+    }
+    nativeTextField->setText(utf8OrEmpty(text));
 }
 
 void oneui_text_field_set_read_only(OneUiWidget* text_field, int read_only) {
@@ -2610,6 +2828,21 @@ void oneui_text_field_set_on_changed(OneUiWidget* text_field, OneUiTextCallback 
     });
 }
 
+void oneui_text_field_set_on_changed_utf8(OneUiWidget* text_field, OneUiUtf8TextCallback callback, void* user_data) {
+    auto* nativeTextField = asWidget<oneui::TextField>(text_field);
+    if (!nativeTextField) {
+        return;
+    }
+    if (!callback) {
+        nativeTextField->setOnChanged(nullptr);
+        return;
+    }
+    nativeTextField->setOnChanged([callback, user_data](const std::wstring& text) {
+        const std::string utf8 = utf8FromWide(text);
+        callback(utf8.data(), utf8.size(), user_data);
+    });
+}
+
 void oneui_text_field_set_style(OneUiWidget* text_field, const OneUiTextFieldStyle* style) {
     auto* nativeTextField = asWidget<oneui::TextField>(text_field);
     if (!nativeTextField || !style) {
@@ -2633,8 +2866,19 @@ OneUiWidget* oneui_search_box_create(const wchar_t* placeholder) {
     return wrap(std::move(field));
 }
 
+OneUiWidget* oneui_search_box_create_utf8(OneUiUtf8String placeholder) {
+    auto field = std::make_shared<oneui::TextField>(utf8OrEmpty(placeholder));
+    field->setPrefixIcon(oneui::IconSymbol::Search);
+    field->setSuffixIcon(oneui::IconSymbol::ChevronDown);
+    return wrap(std::move(field));
+}
+
 OneUiWidget* oneui_button_create(const wchar_t* text) {
     return wrap(std::make_shared<oneui::Button>(wideOrEmpty(text)));
+}
+
+OneUiWidget* oneui_button_create_utf8(OneUiUtf8String text) {
+    return wrap(std::make_shared<oneui::Button>(utf8OrEmpty(text)));
 }
 
 void oneui_button_set_text(OneUiWidget* button, const wchar_t* text) {
@@ -2643,6 +2887,14 @@ void oneui_button_set_text(OneUiWidget* button, const wchar_t* text) {
         return;
     }
     nativeButton->setText(wideOrEmpty(text));
+}
+
+void oneui_button_set_text_utf8(OneUiWidget* button, OneUiUtf8String text) {
+    auto* nativeButton = asWidget<oneui::Button>(button);
+    if (!nativeButton) {
+        return;
+    }
+    nativeButton->setText(utf8OrEmpty(text));
 }
 
 void oneui_button_set_icon(OneUiWidget* button, int symbol) {

@@ -333,10 +333,10 @@ bool OverlayHost::onKeyDown(const KeyEvent& event) {
     }
 
     if (event.key == Key::Tab) {
-        // Tab 焦点作用域：聚焦的 overlay（模态弹窗）内部遍历并在其内回绕；
-        // 否则内容层内部遍历并在内容内回绕。窗口按钮/账号按钮等以 tabStop=false
+        // 模态 overlay 在自身内部回绕；非模态 overlay 按层级参与 Tab 序。
+        // 若没有可聚焦 overlay，则内容层内部回绕。窗口 chrome 以 tabStop=false
         // 排除出焦点序，故不会“跳到标题栏按钮”。
-        if (focusedOverlay_ && isInteractive(focusedOverlay_)) {
+        if (focusedOverlay_ && isInteractive(focusedOverlay_) && hasActiveFocusTrap()) {
             if (focusedOverlay_->onKeyDown(event)) {
                 return true;
             }
@@ -345,6 +345,9 @@ bool OverlayHost::onKeyDown(const KeyEvent& event) {
             } else {
                 focusedOverlay_->focusFirstLeaf();
             }
+            return true;
+        }
+        if (focusNextOverlay(event.shift, true)) {
             return true;
         }
         if (content_ && content_->visible() && !content_->disabled()) {
@@ -358,7 +361,7 @@ bool OverlayHost::onKeyDown(const KeyEvent& event) {
             }
             return true;
         }
-        return focusNextOverlay(event.shift);
+        return false;
     }
 
     if (focusedOverlay_ && !isInteractive(focusedOverlay_)) {

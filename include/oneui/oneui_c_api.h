@@ -2,6 +2,7 @@
 
 #include "oneui/export.h"
 
+#include <stddef.h>
 #include <wchar.h>
 
 #ifdef __cplusplus
@@ -16,8 +17,29 @@ typedef struct OneUiTray OneUiTray;
 typedef void (*OneUiVoidCallback)(void* user_data);
 typedef void (*OneUiFrameCallback)(double now_ms, void* user_data);
 typedef void (*OneUiTextCallback)(const wchar_t* text, void* user_data);
+typedef void (*OneUiUtf8TextCallback)(const char* text, size_t length, void* user_data);
 typedef void (*OneUiBoolCallback)(int checked, void* user_data);
 typedef void (*OneUiIntCallback)(int value, void* user_data);
+
+/*
+ * Cross-platform string ABI. The caller owns data and it is only read during
+ * the function call. Invalid UTF-8 is converted to U+FFFD by OneUI.
+ */
+typedef struct OneUiUtf8String {
+    const char* data;
+    size_t length;
+} OneUiUtf8String;
+
+typedef struct OneUiWindowOptionsUtf8 {
+    OneUiUtf8String title;
+    int width;
+    int height;
+    int visible;
+    int borderless;
+    int fullscreen;
+    int topmost;
+    int resizable;
+} OneUiWindowOptionsUtf8;
 
 typedef struct OneUiWindowOptions {
     const wchar_t* title;
@@ -159,8 +181,12 @@ typedef struct OneUiRawKeyEvent {
 typedef void (*OneUiRemotePointerCallback)(const OneUiRemotePointerEvent* event, void* user_data);
 typedef void (*OneUiRawKeyCallback)(const OneUiRawKeyEvent* event, void* user_data);
 
+#define ONEUI_UTF8_ABI_VERSION 1u
+
 ONEUI_API const char* oneui_version(void);
+ONEUI_API unsigned int oneui_utf8_abi_version(void);
 ONEUI_API OneUiWindow* oneui_window_create(const OneUiWindowOptions* options);
+ONEUI_API OneUiWindow* oneui_window_create_utf8(const OneUiWindowOptionsUtf8* options);
 ONEUI_API void oneui_window_destroy(OneUiWindow* window);
 ONEUI_API void oneui_window_show(OneUiWindow* window);
 ONEUI_API int oneui_window_run(OneUiWindow* window);
@@ -175,6 +201,7 @@ ONEUI_API void oneui_window_set_close_to_tray(OneUiWindow* window, int close_to_
 ONEUI_API void oneui_window_post(OneUiWindow* window, OneUiVoidCallback callback, void* user_data);
 ONEUI_API void oneui_window_request_animation_frame(OneUiWindow* window, OneUiFrameCallback callback, void* user_data);
 ONEUI_API void oneui_window_set_title(OneUiWindow* window, const wchar_t* title);
+ONEUI_API void oneui_window_set_title_utf8(OneUiWindow* window, OneUiUtf8String title);
 ONEUI_API void* oneui_window_native_handle(OneUiWindow* window);
 ONEUI_API int oneui_window_confirm(OneUiWindow* window, const wchar_t* title, const wchar_t* message);
 // 打开系统“选择文件夹”对话框；选中写入 out(最多 outLen 个 wchar)并返回 1，取消返回 0。
@@ -211,6 +238,9 @@ ONEUI_API int oneui_style_sheet_load_file(OneUiStyleSheet* style_sheet, const wc
 
 ONEUI_API int oneui_clipboard_set_text(const wchar_t* text);
 ONEUI_API int oneui_clipboard_get_text(wchar_t* buffer, int buffer_len);
+/* Returns required buffer bytes including the trailing NUL; returns 0 on error. */
+ONEUI_API int oneui_clipboard_set_text_utf8(OneUiUtf8String text);
+ONEUI_API size_t oneui_clipboard_get_text_utf8(char* buffer, size_t buffer_len);
 
 ONEUI_API OneUiWidget* oneui_stack_create(OneUiStackDirection direction);
 ONEUI_API void oneui_stack_add(OneUiWidget* stack, OneUiWidget* child);
@@ -303,6 +333,8 @@ ONEUI_API void oneui_panel_set_shadow(
 
 ONEUI_API OneUiWidget* oneui_label_create(const wchar_t* text);
 ONEUI_API void oneui_label_set_text(OneUiWidget* label, const wchar_t* text);
+ONEUI_API OneUiWidget* oneui_label_create_utf8(OneUiUtf8String text);
+ONEUI_API void oneui_label_set_text_utf8(OneUiWidget* label, OneUiUtf8String text);
 ONEUI_API void oneui_label_set_color(OneUiWidget* label, unsigned char r, unsigned char g, unsigned char b, unsigned char a);
 ONEUI_API void oneui_label_set_font_size(OneUiWidget* label, float font_size);
 ONEUI_API void oneui_label_set_font_weight(OneUiWidget* label, int font_weight);
@@ -451,19 +483,25 @@ ONEUI_API void oneui_radio_group_set_on_changed(OneUiWidget* radio_group, OneUiI
 
 ONEUI_API OneUiWidget* oneui_text_field_create(const wchar_t* placeholder);
 ONEUI_API void oneui_text_field_set_text(OneUiWidget* text_field, const wchar_t* text);
+ONEUI_API OneUiWidget* oneui_text_field_create_utf8(OneUiUtf8String placeholder);
+ONEUI_API void oneui_text_field_set_text_utf8(OneUiWidget* text_field, OneUiUtf8String text);
 ONEUI_API void oneui_text_field_set_read_only(OneUiWidget* text_field, int read_only);
 ONEUI_API void oneui_text_field_set_prefix_icon(OneUiWidget* text_field, int symbol);
 ONEUI_API void oneui_text_field_clear_prefix_icon(OneUiWidget* text_field);
 ONEUI_API void oneui_text_field_set_suffix_icon(OneUiWidget* text_field, int symbol);
 ONEUI_API void oneui_text_field_clear_suffix_icon(OneUiWidget* text_field);
 ONEUI_API void oneui_text_field_set_on_changed(OneUiWidget* text_field, OneUiTextCallback callback, void* user_data);
+ONEUI_API void oneui_text_field_set_on_changed_utf8(OneUiWidget* text_field, OneUiUtf8TextCallback callback, void* user_data);
 ONEUI_API void oneui_text_field_set_style(OneUiWidget* text_field, const OneUiTextFieldStyle* style);
 ONEUI_API void oneui_text_field_clear_style(OneUiWidget* text_field);
 
 ONEUI_API OneUiWidget* oneui_search_box_create(const wchar_t* placeholder);
+ONEUI_API OneUiWidget* oneui_search_box_create_utf8(OneUiUtf8String placeholder);
 
 ONEUI_API OneUiWidget* oneui_button_create(const wchar_t* text);
 ONEUI_API void oneui_button_set_text(OneUiWidget* button, const wchar_t* text);
+ONEUI_API OneUiWidget* oneui_button_create_utf8(OneUiUtf8String text);
+ONEUI_API void oneui_button_set_text_utf8(OneUiWidget* button, OneUiUtf8String text);
 /* symbol: IconSymbol ordinal; negative clears the leading icon */
 ONEUI_API void oneui_button_set_icon(OneUiWidget* button, int symbol);
 ONEUI_API void oneui_button_set_variant(OneUiWidget* button, OneUiButtonVariant variant);
