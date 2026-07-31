@@ -193,10 +193,15 @@ The native route must replace behavior, not only visual widgets.
   migration branch. Its `native-shell` package starts a visible OneUI window,
   mounts Chinese UTF-8 content, and exits cleanly. It does not modify the
   enterprise Tauri release branch or `src-tauri/`.
+- `UiDispatcher` is now a cloneable Rust bridge for background services. It
+  accepts `Send + 'static` work, executes it on the window's UI thread, and
+  cancels queued work exactly once when that window closes. `Window::new`
+  establishes the hidden native handle on its caller's UI thread before a
+  dispatcher may be shared with workers.
 
 Still open before an iShellPro production page moves: Linux platform backend,
-Rust dispatcher/lifetime binding, DPI/IME acceptance matrix, virtualized data
-controls, native terminal surface, and the production vertical-slice shell.
+DPI/IME acceptance matrix, virtualized data controls, native terminal surface,
+and the production vertical-slice shell.
 
 ### Phase 0: Framework Release Gates
 

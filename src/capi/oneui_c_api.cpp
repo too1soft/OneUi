@@ -78,6 +78,26 @@ struct OneUiTray {
 #endif
 };
 
+struct OneUiOwnedCallback {
+    OneUiVoidCallback callback = nullptr;
+    OneUiDestroyCallback cleanup = nullptr;
+    void* userData = nullptr;
+    bool invoked = false;
+
+    ~OneUiOwnedCallback() {
+        if (!invoked && cleanup) {
+            cleanup(userData);
+        }
+    }
+
+    void run() {
+        invoked = true;
+        if (callback) {
+            callback(userData);
+        }
+    }
+};
+
 namespace {
 
 std::weak_ptr<oneui::StyleSheet> gDefaultStyleSheet;
@@ -840,6 +860,13 @@ void oneui_window_destroy(OneUiWindow* window) {
     delete window;
 }
 
+void oneui_window_initialize(OneUiWindow* window) {
+    if (!window || !window->window) {
+        return;
+    }
+    window->window->initialize();
+}
+
 void oneui_window_show(OneUiWindow* window) {
     if (!window || !window->window) {
         return;
@@ -919,12 +946,27 @@ void oneui_window_set_close_to_tray(OneUiWindow* window, int close_to_tray) {
 }
 
 void oneui_window_post(OneUiWindow* window, OneUiVoidCallback callback, void* user_data) {
+    (void)oneui_window_post_owned(window, callback, user_data, nullptr);
+}
+
+int oneui_window_post_owned(
+    OneUiWindow* window,
+    OneUiVoidCallback callback,
+    void* user_data,
+    OneUiDestroyCallback cleanup) {
     if (!window || !window->window || !callback) {
-        return;
+        if (cleanup) {
+            cleanup(user_data);
+        }
+        return 0;
     }
-    window->window->post([callback, user_data] {
-        callback(user_data);
-    });
+    auto ownedCallback = std::make_shared<OneUiOwnedCallback>();
+    ownedCallback->callback = callback;
+    ownedCallback->cleanup = cleanup;
+    ownedCallback->userData = user_data;
+    return window->window->post([ownedCallback] {
+        ownedCallback->run();
+    }) ? 1 : 0;
 }
 
 void oneui_window_request_animation_frame(OneUiWindow* window, OneUiFrameCallback callback, void* user_data) {

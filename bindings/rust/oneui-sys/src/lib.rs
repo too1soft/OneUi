@@ -57,17 +57,26 @@ pub struct OneUiInsets {
 
 pub type OneUiUtf8TextCallback =
     Option<unsafe extern "C" fn(text: *const c_char, length: usize, user_data: *mut c_void)>;
+pub type OneUiVoidCallback = Option<unsafe extern "C" fn(user_data: *mut c_void)>;
 
 extern "C" {
     pub fn oneui_utf8_abi_version() -> c_uint;
 
     pub fn oneui_window_create_utf8(options: *const OneUiWindowOptionsUtf8) -> *mut OneUiWindow;
     pub fn oneui_window_destroy(window: *mut OneUiWindow);
+    pub fn oneui_window_initialize(window: *mut OneUiWindow);
     pub fn oneui_window_show(window: *mut OneUiWindow);
     pub fn oneui_window_run(window: *mut OneUiWindow) -> c_int;
     pub fn oneui_window_close(window: *mut OneUiWindow);
+    pub fn oneui_window_request_close(window: *mut OneUiWindow);
     pub fn oneui_window_set_title_utf8(window: *mut OneUiWindow, title: OneUiUtf8String);
     pub fn oneui_window_set_content(window: *mut OneUiWindow, widget: *mut OneUiWidget);
+    pub fn oneui_window_post_owned(
+        window: *mut OneUiWindow,
+        callback: OneUiVoidCallback,
+        user_data: *mut c_void,
+        cleanup: OneUiVoidCallback,
+    ) -> c_int;
 
     pub fn oneui_widget_destroy(widget: *mut OneUiWidget);
     // 0 = column, 1 = row. These values are part of the stable C ABI.

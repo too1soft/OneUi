@@ -26,6 +26,57 @@ struct Utf8CallbackState {
     int calls = 0;
 };
 
+struct OwnedCallbackState {
+    int invoked = 0;
+    int cleaned = 0;
+};
+
+void onOwnedCallback(void* userData) {
+    auto* state = static_cast<OwnedCallbackState*>(userData);
+    if (state) {
+        ++state->invoked;
+    }
+}
+
+void onOwnedCallbackCleanup(void* userData) {
+    auto* state = static_cast<OwnedCallbackState*>(userData);
+    if (state) {
+        ++state->cleaned;
+    }
+}
+
+void testOwnedWindowPostCleansUpCancelledWork() {
+    OneUiWindowOptionsUtf8 options{};
+    options.title = utf8View("OneUI owned post test");
+    options.width = 320;
+    options.height = 240;
+    OneUiWindow* window = oneui_window_create_utf8(&options);
+    expectTrue("owned post window create", window != nullptr);
+    if (!window) {
+        return;
+    }
+
+    OwnedCallbackState queuedState;
+    const int queued = oneui_window_post_owned(
+        window,
+        onOwnedCallback,
+        &queuedState,
+        onOwnedCallbackCleanup);
+    expectTrue("owned post accepted", queued == 1);
+    oneui_window_destroy(window);
+    expectTrue("cancelled post not invoked", queuedState.invoked == 0);
+    expectTrue("cancelled post cleaned once", queuedState.cleaned == 1);
+
+    OwnedCallbackState rejectedState;
+    const int rejected = oneui_window_post_owned(
+        nullptr,
+        onOwnedCallback,
+        &rejectedState,
+        onOwnedCallbackCleanup);
+    expectTrue("invalid window post rejected", rejected == 0);
+    expectTrue("rejected post cleaned once", rejectedState.cleaned == 1);
+}
+
 void onUtf8TextChanged(const char* text, size_t length, void* userData) {
     auto* state = static_cast<Utf8CallbackState*>(userData);
     if (!state) {
@@ -375,6 +426,7 @@ void testClipboardAbiRoundTripIfAvailable() {
 
 int main() {
     expectTrue("version exported", std::strcmp(oneui_version(), "0.1.0") == 0);
+    testOwnedWindowPostCleansUpCancelledWork();
     testUtf8AbiRoundTripsUnicodeText();
     testWindowDpiMetricsAbiUsesLogicalAndPhysicalSizes();
     testAppShellAbiCreatesReusableSlots();

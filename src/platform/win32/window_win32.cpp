@@ -819,6 +819,8 @@ public:
         , renderTraceFilePath_(renderTraceFilePath()) {}
 
     ~Win32Window() override {
+        acceptingPostedCallbacks_.store(false, std::memory_order_release);
+        discardPostedCallbacks();
         if (hwnd_) {
             DestroyWindow(hwnd_);
         }
@@ -840,6 +842,10 @@ public:
         requestRedraw();
     }
 
+    void initialize() override {
+        ensureCreated();
+    }
+
     void show() override {
         ensureCreated();
         ShowWindow(hwnd_, SW_SHOW);
@@ -848,6 +854,7 @@ public:
     }
 
     int run() override {
+        ensureCreated();
         MSG message{};
         while (GetMessageW(&message, nullptr, 0, 0) > 0) {
             TranslateMessage(&message);
@@ -913,17 +920,28 @@ public:
         }
     }
 
-    void post(std::function<void()> callback) override {
-        if (!callback) {
-            return;
+    bool post(std::function<void()> callback) override {
+        if (!callback || !acceptingPostedCallbacks_.load(std::memory_order_acquire)) {
+            return false;
         }
 
         ensureCreated();
+        if (!hwnd_ || !acceptingPostedCallbacks_.load(std::memory_order_acquire)) {
+            return false;
+        }
         {
             std::lock_guard<std::mutex> lock(postedCallbacksMutex_);
+            if (!acceptingPostedCallbacks_.load(std::memory_order_relaxed)) {
+                return false;
+            }
             postedCallbacks_.push(std::move(callback));
         }
-        PostMessageW(hwnd_, kOneUiRunPostedCallbacks, 0, 0);
+        if (!PostMessageW(hwnd_, kOneUiRunPostedCallbacks, 0, 0)) {
+            acceptingPostedCallbacks_.store(false, std::memory_order_release);
+            discardPostedCallbacks();
+            return false;
+        }
+        return true;
     }
 
     void requestAnimationFrame(std::function<void(double)> callback) override {
@@ -1272,7 +1290,7 @@ private:
     }
 
     void ensureCreated() {
-        if (hwnd_) {
+        if (hwnd_ || !acceptingPostedCallbacks_.load(std::memory_order_acquire)) {
             return;
         }
 
@@ -1538,6 +1556,8 @@ private:
             return 0;
         case WM_NCDESTROY:
         {
+            acceptingPostedCallbacks_.store(false, std::memory_order_release);
+            discardPostedCallbacks();
             shutdownGPU();
             destroyShadowWindow(); // 主窗销毁时一并销毁独立的伴随投影窗
             HWND destroyedHwnd = hwnd_;
@@ -1891,6 +1911,12 @@ private:
             callback(nowMs);
         }
         flushPendingPaint();
+    }
+
+    void discardPostedCallbacks() {
+        std::queue<std::function<void()>> callbacks;
+        std::lock_guard<std::mutex> lock(postedCallbacksMutex_);
+        callbacks.swap(postedCallbacks_);
     }
 
     void runInteractivePaintFrame() {
@@ -2597,6 +2623,7 @@ private:
     sk_sp<GrDirectContext> grContext_;
     bool gpuAvailable_ = false;
     std::shared_ptr<Widget> content_;
+    std::atomic_bool acceptingPostedCallbacks_{true};
     std::mutex postedCallbacksMutex_;
     std::queue<std::function<void()>> postedCallbacks_;
     std::mutex animationCallbacksMutex_;

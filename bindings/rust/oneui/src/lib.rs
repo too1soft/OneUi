@@ -4,7 +4,11 @@
 //! handling. Higher-level controls and async UI dispatch will be added without
 //! changing the raw ABI exposed by `oneui-sys`.
 
+use std::marker::PhantomData;
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::ptr::NonNull;
+use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 
 pub use oneui_sys as sys;
 
@@ -13,6 +17,7 @@ pub enum Error {
     AbiVersionMismatch { expected: u32, actual: u32 },
     WindowCreationFailed,
     WidgetCreationFailed,
+    WindowClosed,
 }
 
 #[derive(Debug, Clone)]
@@ -43,7 +48,92 @@ impl Default for WindowOptions {
 }
 
 pub struct Window {
-    raw: NonNull<sys::OneUiWindow>,
+    state: Arc<WindowState>,
+    _ui_thread: PhantomData<Rc<()>>,
+}
+
+struct WindowState {
+    raw: Mutex<Option<NonNull<sys::OneUiWindow>>>,
+}
+
+#[derive(Clone)]
+pub struct UiDispatcher {
+    state: Arc<WindowState>,
+}
+
+struct DispatchedTask {
+    task: Option<Box<dyn FnOnce() + Send + 'static>>,
+}
+
+unsafe impl Send for UiDispatcher {}
+unsafe impl Sync for UiDispatcher {}
+
+impl WindowState {
+    fn current_raw(&self) -> Option<NonNull<sys::OneUiWindow>> {
+        *self.raw.lock().expect("OneUI window state lock poisoned")
+    }
+
+    fn with_raw<R>(&self, action: impl FnOnce(*mut sys::OneUiWindow) -> R) -> Option<R> {
+        let raw = self.raw.lock().expect("OneUI window state lock poisoned");
+        raw.as_ref().map(|raw| action(raw.as_ptr()))
+    }
+
+    fn destroy(&self) {
+        let raw = self
+            .raw
+            .lock()
+            .expect("OneUI window state lock poisoned")
+            .take();
+        if let Some(raw) = raw {
+            unsafe { sys::oneui_window_destroy(raw.as_ptr()) };
+        }
+    }
+}
+
+unsafe extern "C" fn run_dispatched_task(user_data: *mut std::ffi::c_void) {
+    let mut task = unsafe { Box::from_raw(user_data.cast::<DispatchedTask>()) };
+    if let Some(task) = task.task.take() {
+        let _ = catch_unwind(AssertUnwindSafe(task));
+    }
+}
+
+unsafe extern "C" fn drop_dispatched_task(user_data: *mut std::ffi::c_void) {
+    drop(unsafe { Box::from_raw(user_data.cast::<DispatchedTask>()) });
+}
+
+impl UiDispatcher {
+    pub fn dispatch<F>(&self, task: F) -> Result<(), Error>
+    where
+        F: FnOnce() + Send + 'static,
+    {
+        let task = Box::new(DispatchedTask {
+            task: Some(Box::new(task)),
+        });
+        let user_data = Box::into_raw(task).cast();
+        let accepted = self.state.with_raw(|raw| unsafe {
+            sys::oneui_window_post_owned(
+                raw,
+                Some(run_dispatched_task),
+                user_data,
+                Some(drop_dispatched_task),
+            )
+        });
+
+        match accepted {
+            Some(1) => Ok(()),
+            Some(_) => Err(Error::WindowClosed),
+            None => {
+                drop(unsafe { Box::from_raw(user_data.cast::<DispatchedTask>()) });
+                Err(Error::WindowClosed)
+            }
+        }
+    }
+
+    pub fn request_close(&self) {
+        self.state.with_raw(|raw| unsafe {
+            sys::oneui_window_request_close(raw);
+        });
+    }
 }
 
 pub struct Widget {
@@ -170,40 +260,75 @@ impl Window {
         };
         let raw = unsafe { sys::oneui_window_create_utf8(&native_options) };
         let raw = NonNull::new(raw).ok_or(Error::WindowCreationFailed)?;
-        Ok(Self { raw })
+        unsafe { sys::oneui_window_initialize(raw.as_ptr()) };
+        Ok(Self {
+            state: Arc::new(WindowState {
+                raw: Mutex::new(Some(raw)),
+            }),
+            _ui_thread: PhantomData,
+        })
     }
 
     pub fn set_title(&self, title: &str) {
         let title = sys::OneUiUtf8String::from_str(title);
-        unsafe { sys::oneui_window_set_title_utf8(self.raw.as_ptr(), title) };
+        self.state.with_raw(|raw| unsafe {
+            sys::oneui_window_set_title_utf8(raw, title);
+        });
     }
 
     pub fn set_content(&self, content: &Widget) {
-        unsafe { sys::oneui_window_set_content(self.raw.as_ptr(), content.as_raw()) };
+        self.state.with_raw(|raw| unsafe {
+            sys::oneui_window_set_content(raw, content.as_raw());
+        });
     }
 
     pub fn show(&self) {
-        unsafe { sys::oneui_window_show(self.raw.as_ptr()) };
+        self.state.with_raw(|raw| unsafe {
+            sys::oneui_window_show(raw);
+        });
     }
 
     pub fn run(&self) -> i32 {
-        unsafe { sys::oneui_window_run(self.raw.as_ptr()) }
+        self.state
+            .current_raw()
+            .map(|raw| unsafe { sys::oneui_window_run(raw.as_ptr()) })
+            .unwrap_or(-1)
     }
 
     pub fn close(&self) {
-        unsafe { sys::oneui_window_close(self.raw.as_ptr()) };
+        self.state.with_raw(|raw| unsafe {
+            sys::oneui_window_close(raw);
+        });
+    }
+
+    pub fn dispatcher(&self) -> UiDispatcher {
+        UiDispatcher {
+            state: Arc::clone(&self.state),
+        }
+    }
+
+    pub fn dispatch<F>(&self, task: F) -> Result<(), Error>
+    where
+        F: FnOnce() + Send + 'static,
+    {
+        self.dispatcher().dispatch(task)
     }
 }
 
 impl Drop for Window {
     fn drop(&mut self) {
-        unsafe { sys::oneui_window_destroy(self.raw.as_ptr()) };
+        self.state.destroy();
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Insets, Label, Stack, StackDirection, Window, WindowOptions};
+    use super::{Error, Insets, Label, Stack, StackDirection, Window, WindowOptions};
+    use std::sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    };
+    use std::thread;
 
     #[test]
     fn creates_hidden_window_through_utf8_abi() {
@@ -229,5 +354,57 @@ mod tests {
         label.set_font_size(20.0);
         content.add(label.as_widget());
         window.set_content(content.as_widget());
+    }
+
+    #[test]
+    fn dispatcher_runs_work_on_the_window_thread() {
+        let window = Window::new(&WindowOptions::default()).expect("window should be created");
+        let dispatcher = window.dispatcher();
+        let callback_thread = Arc::new(Mutex::new(None));
+        let callback_thread_from_worker = Arc::clone(&callback_thread);
+        let ui_thread = thread::current().id();
+        let worker = thread::spawn(move || {
+            let close_dispatcher = dispatcher.clone();
+            dispatcher
+                .dispatch(move || {
+                    *callback_thread_from_worker.lock().expect("callback lock") =
+                        Some(thread::current().id());
+                    close_dispatcher.request_close();
+                })
+                .expect("window should accept dispatched work");
+        });
+
+        assert_eq!(window.run(), 0);
+        worker.join().expect("worker should finish");
+        assert_eq!(
+            *callback_thread.lock().expect("callback lock"),
+            Some(ui_thread)
+        );
+    }
+
+    #[test]
+    fn dispatcher_cancels_queued_work_when_window_closes() {
+        struct DropFlag(Arc<AtomicBool>);
+
+        impl Drop for DropFlag {
+            fn drop(&mut self) {
+                self.0.store(true, Ordering::Release);
+            }
+        }
+
+        let window = Window::new(&WindowOptions::default()).expect("window should be created");
+        let dispatcher = window.dispatcher();
+        let dropped = Arc::new(AtomicBool::new(false));
+        let flag = DropFlag(Arc::clone(&dropped));
+        dispatcher
+            .dispatch(move || drop(flag))
+            .expect("window should accept queued work");
+        window.close();
+
+        assert!(dropped.load(Ordering::Acquire));
+        assert!(matches!(
+            dispatcher.dispatch(|| {}),
+            Err(Error::WindowClosed)
+        ));
     }
 }

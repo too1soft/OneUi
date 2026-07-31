@@ -32,12 +32,15 @@ public:
     static std::unique_ptr<Window> create(WindowOptions options);
 
     virtual void setContent(std::shared_ptr<Widget> widget) = 0;
+    // Creates the native handle on the calling UI thread without showing it.
+    virtual void initialize() = 0;
     virtual void show() = 0;
     virtual int run() = 0;
     virtual void close() = 0;
     virtual void minimize() = 0;
     virtual void requestRedraw() = 0;
-    virtual void post(std::function<void()> callback) = 0;
+    // Returns false when the window no longer accepts UI work.
+    virtual bool post(std::function<void()> callback) = 0;
     virtual void requestAnimationFrame(std::function<void(double nowMs)> callback) = 0;
     virtual NativeWindowHandle nativeHandle() const = 0;
     // Logical client size in OneUI device-independent pixels.

@@ -15,6 +15,7 @@ typedef struct OneUiStyleSheet OneUiStyleSheet;
 typedef struct OneUiTray OneUiTray;
 
 typedef void (*OneUiVoidCallback)(void* user_data);
+typedef void (*OneUiDestroyCallback)(void* user_data);
 typedef void (*OneUiFrameCallback)(double now_ms, void* user_data);
 typedef void (*OneUiTextCallback)(const wchar_t* text, void* user_data);
 typedef void (*OneUiUtf8TextCallback)(const char* text, size_t length, void* user_data);
@@ -188,6 +189,7 @@ ONEUI_API unsigned int oneui_utf8_abi_version(void);
 ONEUI_API OneUiWindow* oneui_window_create(const OneUiWindowOptions* options);
 ONEUI_API OneUiWindow* oneui_window_create_utf8(const OneUiWindowOptionsUtf8* options);
 ONEUI_API void oneui_window_destroy(OneUiWindow* window);
+ONEUI_API void oneui_window_initialize(OneUiWindow* window);
 ONEUI_API void oneui_window_show(OneUiWindow* window);
 ONEUI_API int oneui_window_run(OneUiWindow* window);
 ONEUI_API void oneui_window_close(OneUiWindow* window);
@@ -199,6 +201,16 @@ ONEUI_API void oneui_window_set_title_bar_drag_metrics(OneUiWindow* window, floa
 ONEUI_API void oneui_window_set_corner_radius(OneUiWindow* window, float radius);
 ONEUI_API void oneui_window_set_close_to_tray(OneUiWindow* window, int close_to_tray);
 ONEUI_API void oneui_window_post(OneUiWindow* window, OneUiVoidCallback callback, void* user_data);
+/*
+ * Queues callback on the window UI thread. Returns 1 when accepted. When the
+ * callback cannot run because the window is closed, cleanup receives user_data
+ * exactly once. The callback owns user_data after a successful return.
+ */
+ONEUI_API int oneui_window_post_owned(
+    OneUiWindow* window,
+    OneUiVoidCallback callback,
+    void* user_data,
+    OneUiDestroyCallback cleanup);
 ONEUI_API void oneui_window_request_animation_frame(OneUiWindow* window, OneUiFrameCallback callback, void* user_data);
 ONEUI_API void oneui_window_set_title(OneUiWindow* window, const wchar_t* title);
 ONEUI_API void oneui_window_set_title_utf8(OneUiWindow* window, OneUiUtf8String title);

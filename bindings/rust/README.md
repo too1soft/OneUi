@@ -22,3 +22,8 @@ application binary or register it through the platform loader path.
 
 New Rust code must use the UTF-8 APIs. The older `wchar_t*` C functions remain
 only for compatibility with existing Windows consumers.
+
+`Window::new` initializes the hidden native handle on the calling thread. Call
+it on the application UI thread, then clone `Window::dispatcher()` for
+background services. `UiDispatcher::dispatch` runs `Send + 'static` work on
+that UI thread and cancels queued work when the window closes.
