@@ -65,10 +65,16 @@ and are not independently painted.
 ## Rust API
 
 The `oneui` safe binding exposes `TerminalView`, `TerminalCell`,
-`TerminalCursor`, `TerminalColor`, `RawKeyEvent`, and `terminal_style`.
-Callbacks are owned by the Rust view, cleared before destruction, and protected
-from panics crossing the C ABI. `TerminalView` is a UI-thread object; session
-workers must dispatch frame updates to the window UI dispatcher.
+`TerminalCursor`, `TerminalFrame`, `TerminalColor`, `RawKeyEvent`, and
+`terminal_style`. Callbacks are owned by the Rust view, cleared before
+destruction, and protected from panics crossing the C ABI.
+
+`TerminalView` is a UI-thread object. A session worker must obtain a
+`TerminalViewHandle` from `Window::terminal_view_handle(&terminal)` and call
+`submit_frame(frame)`. The handle keeps only the newest pending frame and posts
+one UI task at a time, so high-volume output does not create an unbounded queue.
+When the terminal view is dropped, pending data is discarded and future submits
+return `Error::WidgetDestroyed` without dereferencing the native widget.
 
 ## Validation
 

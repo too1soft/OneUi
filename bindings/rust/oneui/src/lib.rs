@@ -8,7 +8,10 @@ use std::marker::PhantomData;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::ptr::NonNull;
 use std::rc::Rc;
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    atomic::{AtomicBool, AtomicPtr, Ordering},
+    Arc, Mutex,
+};
 
 pub use oneui_sys as sys;
 
@@ -17,6 +20,7 @@ pub enum Error {
     AbiVersionMismatch { expected: u32, actual: u32 },
     WindowCreationFailed,
     WidgetCreationFailed,
+    WidgetDestroyed,
     WindowClosed,
 }
 
@@ -307,9 +311,7 @@ pub struct TextField {
 impl TextField {
     pub fn new(placeholder: &str) -> Result<Self, Error> {
         let placeholder = sys::OneUiUtf8String::from_str(placeholder);
-        let widget = Widget::from_raw(unsafe {
-            sys::oneui_text_field_create_utf8(placeholder)
-        })?;
+        let widget = Widget::from_raw(unsafe { sys::oneui_text_field_create_utf8(placeholder) })?;
         Ok(Self { widget })
     }
 
@@ -398,6 +400,15 @@ pub struct TerminalCursor {
     pub visible: bool,
 }
 
+/// An owned terminal snapshot that can be submitted from a session worker.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TerminalFrame {
+    pub rows: u16,
+    pub columns: u16,
+    pub cells: Vec<TerminalCell>,
+    pub cursor: TerminalCursor,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RawKeyEvent {
     pub virtual_key: u32,
@@ -435,6 +446,89 @@ struct TerminalRawKeyCallback {
     handler: Box<dyn FnMut(RawKeyEvent) + 'static>,
 }
 
+struct TerminalViewState {
+    raw: AtomicPtr<sys::OneUiWidget>,
+    pending_frame: Mutex<Option<TerminalFrame>>,
+    update_scheduled: AtomicBool,
+}
+
+/// A thread-safe producer for the latest native terminal frame.
+///
+/// A session worker may submit frames from any thread. OneUI applies them only
+/// through the owning window's dispatcher, coalescing bursts to the newest
+/// frame so terminal output cannot grow an unbounded UI work queue.
+#[derive(Clone)]
+pub struct TerminalViewHandle {
+    state: Arc<TerminalViewState>,
+    dispatcher: UiDispatcher,
+}
+
+impl TerminalViewHandle {
+    pub fn submit_frame(&self, frame: TerminalFrame) -> Result<(), Error> {
+        if self.state.raw.load(Ordering::Acquire).is_null() {
+            return Err(Error::WidgetDestroyed);
+        }
+
+        *self
+            .state
+            .pending_frame
+            .lock()
+            .expect("terminal pending frame lock poisoned") = Some(frame);
+
+        if self.state.update_scheduled.swap(true, Ordering::AcqRel) {
+            return Ok(());
+        }
+
+        let state = Arc::clone(&self.state);
+        let dispatched_state = Arc::clone(&state);
+        if let Err(error) = self
+            .dispatcher
+            .dispatch(move || Self::drain_pending_frame(&dispatched_state))
+        {
+            state.update_scheduled.store(false, Ordering::Release);
+            state
+                .pending_frame
+                .lock()
+                .expect("terminal pending frame lock poisoned")
+                .take();
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    fn drain_pending_frame(state: &TerminalViewState) {
+        loop {
+            let frame = state
+                .pending_frame
+                .lock()
+                .expect("terminal pending frame lock poisoned")
+                .take();
+            let raw = state.raw.load(Ordering::Acquire);
+            if raw.is_null() {
+                state.update_scheduled.store(false, Ordering::Release);
+                return;
+            }
+            if let Some(frame) = frame {
+                apply_terminal_frame(raw, &frame);
+            }
+
+            state.update_scheduled.store(false, Ordering::Release);
+            if state
+                .pending_frame
+                .lock()
+                .expect("terminal pending frame lock poisoned")
+                .is_none()
+            {
+                return;
+            }
+            if !state.update_scheduled.swap(true, Ordering::AcqRel) {
+                continue;
+            }
+            return;
+        }
+    }
+}
+
 unsafe extern "C" fn run_terminal_text_input_callback(
     text: *const std::ffi::c_char,
     length: usize,
@@ -467,6 +561,7 @@ unsafe extern "C" fn run_terminal_raw_key_callback(
 /// by the view and are cleared in `Drop` before OneUI destroys the widget.
 pub struct TerminalView {
     widget: Widget,
+    state: Arc<TerminalViewState>,
     text_input_callback: Option<Box<TerminalTextInputCallback>>,
     raw_key_callback: Option<Box<TerminalRawKeyCallback>>,
 }
@@ -475,6 +570,11 @@ impl TerminalView {
     pub fn new() -> Result<Self, Error> {
         let widget = Widget::from_raw(unsafe { sys::oneui_terminal_view_create() })?;
         Ok(Self {
+            state: Arc::new(TerminalViewState {
+                raw: AtomicPtr::new(widget.as_raw()),
+                pending_frame: Mutex::new(None),
+                update_scheduled: AtomicBool::new(false),
+            }),
             widget,
             text_input_callback: None,
             raw_key_callback: None,
@@ -502,24 +602,7 @@ impl TerminalView {
     }
 
     pub fn set_grid(&self, rows: u16, columns: u16, cells: &[TerminalCell]) {
-        let native_cells: Vec<sys::OneUiTerminalCellUtf8> = cells
-            .iter()
-            .map(|cell| sys::OneUiTerminalCellUtf8 {
-                text: sys::OneUiUtf8String::from_str(&cell.text),
-                foreground: cell.foreground.into(),
-                background: cell.background.into(),
-                style: cell.style,
-            })
-            .collect();
-        unsafe {
-            sys::oneui_terminal_view_set_grid_utf8(
-                self.widget.as_raw(),
-                rows,
-                columns,
-                native_cells.as_ptr(),
-                native_cells.len(),
-            )
-        };
+        apply_terminal_grid(self.widget.as_raw(), rows, columns, cells);
     }
 
     pub fn set_cursor(&self, cursor: TerminalCursor) {
@@ -608,9 +691,56 @@ impl TerminalView {
 
 impl Drop for TerminalView {
     fn drop(&mut self) {
+        self.state
+            .raw
+            .store(std::ptr::null_mut(), Ordering::Release);
+        self.state
+            .pending_frame
+            .lock()
+            .expect("terminal pending frame lock poisoned")
+            .take();
+        self.state.update_scheduled.store(false, Ordering::Release);
         self.clear_text_input_callback();
         self.clear_raw_key_callback();
     }
+}
+
+fn apply_terminal_frame(raw: *mut sys::OneUiWidget, frame: &TerminalFrame) {
+    apply_terminal_grid(raw, frame.rows, frame.columns, &frame.cells);
+    unsafe {
+        sys::oneui_terminal_view_set_cursor(
+            raw,
+            frame.cursor.row,
+            frame.cursor.column,
+            i32::from(frame.cursor.visible),
+        )
+    };
+}
+
+fn apply_terminal_grid(
+    raw: *mut sys::OneUiWidget,
+    rows: u16,
+    columns: u16,
+    cells: &[TerminalCell],
+) {
+    let native_cells: Vec<sys::OneUiTerminalCellUtf8> = cells
+        .iter()
+        .map(|cell| sys::OneUiTerminalCellUtf8 {
+            text: sys::OneUiUtf8String::from_str(&cell.text),
+            foreground: cell.foreground.into(),
+            background: cell.background.into(),
+            style: cell.style,
+        })
+        .collect();
+    unsafe {
+        sys::oneui_terminal_view_set_grid_utf8(
+            raw,
+            rows,
+            columns,
+            native_cells.as_ptr(),
+            native_cells.len(),
+        )
+    };
 }
 
 /// Structured list data. Every field is UTF-8 and may contain punctuation,
@@ -737,6 +867,15 @@ impl Window {
         }
     }
 
+    /// Returns the only thread-safe update path for a terminal mounted in this
+    /// window. The terminal itself remains UI-thread bound.
+    pub fn terminal_view_handle(&self, terminal: &TerminalView) -> TerminalViewHandle {
+        TerminalViewHandle {
+            state: Arc::clone(&terminal.state),
+            dispatcher: self.dispatcher(),
+        }
+    }
+
     pub fn dispatch<F>(&self, task: F) -> Result<(), Error>
     where
         F: FnOnce() + Send + 'static,
@@ -755,8 +894,8 @@ impl Drop for Window {
 mod tests {
     use super::{
         terminal_style, Button, Error, Insets, Label, List, ListItem, ScrollView, Stack,
-        StackDirection, TerminalCell, TerminalColor, TerminalCursor, TerminalView, TextField,
-        Window, WindowOptions,
+        StackDirection, TerminalCell, TerminalColor, TerminalCursor, TerminalFrame, TerminalView,
+        TextField, Window, WindowOptions,
     };
     use std::sync::{
         atomic::{AtomicBool, Ordering},
@@ -867,6 +1006,63 @@ mod tests {
             visible: true,
         });
         window.set_content(terminal.as_widget());
+    }
+
+    #[test]
+    fn terminal_handle_submits_a_worker_frame_on_the_window_thread() {
+        let _guard = window_test_lock().lock().expect("window test lock");
+        let window = Window::new(&WindowOptions::default()).expect("window should be created");
+        let terminal = TerminalView::new().expect("terminal should be created");
+        window.set_content(terminal.as_widget());
+        let handle = window.terminal_view_handle(&terminal);
+        let worker = thread::spawn(move || {
+            handle
+                .submit_frame(TerminalFrame {
+                    rows: 1,
+                    columns: 1,
+                    cells: vec![TerminalCell {
+                        text: "X".to_owned(),
+                        ..TerminalCell::default()
+                    }],
+                    cursor: TerminalCursor {
+                        row: 0,
+                        column: 0,
+                        visible: true,
+                    },
+                })
+                .expect("worker should submit a terminal frame");
+        });
+        worker.join().expect("worker should finish");
+
+        let close_dispatcher = window.dispatcher();
+        window
+            .dispatch(move || close_dispatcher.request_close())
+            .expect("window should accept close request");
+        assert_eq!(window.run(), 0);
+    }
+
+    #[test]
+    fn terminal_handle_rejects_updates_after_the_view_is_destroyed() {
+        let _guard = window_test_lock().lock().expect("window test lock");
+        let window = Window::new(&WindowOptions::default()).expect("window should be created");
+        let handle = {
+            let terminal = TerminalView::new().expect("terminal should be created");
+            window.terminal_view_handle(&terminal)
+        };
+
+        assert!(matches!(
+            handle.submit_frame(TerminalFrame {
+                rows: 1,
+                columns: 1,
+                cells: vec![TerminalCell::default()],
+                cursor: TerminalCursor {
+                    row: 0,
+                    column: 0,
+                    visible: true,
+                },
+            }),
+            Err(Error::WidgetDestroyed)
+        ));
     }
 
     #[test]
