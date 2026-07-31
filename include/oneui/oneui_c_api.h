@@ -31,6 +31,15 @@ typedef struct OneUiUtf8String {
     size_t length;
 } OneUiUtf8String;
 
+/*
+ * Structured UTF-8 list data. The caller owns both string buffers and the
+ * array; OneUI copies every field before oneui_list_set_items_utf8 returns.
+ */
+typedef struct OneUiListItemUtf8 {
+    OneUiUtf8String title;
+    OneUiUtf8String detail;
+} OneUiListItemUtf8;
+
 typedef struct OneUiWindowOptionsUtf8 {
     OneUiUtf8String title;
     int width;
@@ -420,6 +429,7 @@ ONEUI_API void oneui_segmented_control_set_on_changed(OneUiWidget* segmented_con
 
 ONEUI_API OneUiWidget* oneui_list_create(void);
 ONEUI_API void oneui_list_set_items(OneUiWidget* list, const wchar_t* items);
+ONEUI_API void oneui_list_set_items_utf8(OneUiWidget* list, const OneUiListItemUtf8* items, size_t count);
 ONEUI_API void oneui_list_set_selected_index(OneUiWidget* list, int index);
 ONEUI_API int oneui_list_selected_index(OneUiWidget* list);
 ONEUI_API void oneui_list_set_on_changed(OneUiWidget* list, OneUiIntCallback callback, void* user_data);

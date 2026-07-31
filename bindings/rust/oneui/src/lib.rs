@@ -1,8 +1,8 @@
 //! Safe foundation bindings for OneUI.
 //!
-//! This crate intentionally starts with window lifecycle and UTF-8 title
-//! handling. Higher-level controls and async UI dispatch will be added without
-//! changing the raw ABI exposed by `oneui-sys`.
+//! This crate owns the safe Rust boundary for OneUI's UTF-8 C ABI. It begins
+//! with window lifetime and grows reusable controls without exposing raw FFI to
+//! product applications.
 
 use std::marker::PhantomData;
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -213,6 +213,38 @@ impl Stack {
     }
 }
 
+/// A scroll container whose child remains owned by the Rust composition tree.
+pub struct ScrollView {
+    widget: Widget,
+}
+
+impl ScrollView {
+    pub fn new() -> Result<Self, Error> {
+        let widget = Widget::from_raw(unsafe { sys::oneui_scroll_view_create() })?;
+        Ok(Self { widget })
+    }
+
+    pub fn set_content(&self, child: &Widget) {
+        unsafe { sys::oneui_scroll_view_set_content(self.widget.as_raw(), child.as_raw()) };
+    }
+
+    pub fn set_content_height(&self, height: f32) {
+        unsafe { sys::oneui_scroll_view_set_content_height(self.widget.as_raw(), height) };
+    }
+
+    pub fn set_wheel_step(&self, step: f32) {
+        unsafe { sys::oneui_scroll_view_set_wheel_step(self.widget.as_raw(), step) };
+    }
+
+    pub fn scroll_to_bottom(&self) {
+        unsafe { sys::oneui_scroll_view_scroll_to_bottom(self.widget.as_raw()) };
+    }
+
+    pub fn as_widget(&self) -> &Widget {
+        &self.widget
+    }
+}
+
 pub struct Label {
     widget: Widget,
 }
@@ -231,6 +263,106 @@ impl Label {
 
     pub fn set_font_size(&self, font_size: f32) {
         unsafe { sys::oneui_label_set_font_size(self.widget.as_raw(), font_size) };
+    }
+
+    pub fn as_widget(&self) -> &Widget {
+        &self.widget
+    }
+}
+
+/// A standard command button without an application-specific callback model.
+pub struct Button {
+    widget: Widget,
+}
+
+impl Button {
+    pub fn new(text: &str) -> Result<Self, Error> {
+        let text = sys::OneUiUtf8String::from_str(text);
+        let widget = Widget::from_raw(unsafe { sys::oneui_button_create_utf8(text) })?;
+        Ok(Self { widget })
+    }
+
+    pub fn set_text(&self, text: &str) {
+        let text = sys::OneUiUtf8String::from_str(text);
+        unsafe { sys::oneui_button_set_text_utf8(self.widget.as_raw(), text) };
+    }
+
+    pub fn as_widget(&self) -> &Widget {
+        &self.widget
+    }
+}
+
+/// A basic UTF-8 text field. Callback ownership is intentionally deferred
+/// until the safe callback lifetime model is added for all controls together.
+pub struct TextField {
+    widget: Widget,
+}
+
+impl TextField {
+    pub fn new(placeholder: &str) -> Result<Self, Error> {
+        let placeholder = sys::OneUiUtf8String::from_str(placeholder);
+        let widget = Widget::from_raw(unsafe {
+            sys::oneui_text_field_create_utf8(placeholder)
+        })?;
+        Ok(Self { widget })
+    }
+
+    pub fn set_text(&self, text: &str) {
+        let text = sys::OneUiUtf8String::from_str(text);
+        unsafe { sys::oneui_text_field_set_text_utf8(self.widget.as_raw(), text) };
+    }
+
+    pub fn set_read_only(&self, read_only: bool) {
+        unsafe { sys::oneui_text_field_set_read_only(self.widget.as_raw(), i32::from(read_only)) };
+    }
+
+    pub fn as_widget(&self) -> &Widget {
+        &self.widget
+    }
+}
+
+/// Structured list data. Every field is UTF-8 and may contain punctuation,
+/// tabs, or newlines without relying on a delimiter encoding.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ListItem {
+    pub title: String,
+    pub detail: String,
+}
+
+/// A selectable native list.
+pub struct List {
+    widget: Widget,
+}
+
+impl List {
+    pub fn new() -> Result<Self, Error> {
+        let widget = Widget::from_raw(unsafe { sys::oneui_list_create() })?;
+        Ok(Self { widget })
+    }
+
+    pub fn set_items(&self, items: &[ListItem]) {
+        let native_items: Vec<sys::OneUiListItemUtf8> = items
+            .iter()
+            .map(|item| sys::OneUiListItemUtf8 {
+                title: sys::OneUiUtf8String::from_str(&item.title),
+                detail: sys::OneUiUtf8String::from_str(&item.detail),
+            })
+            .collect();
+        unsafe {
+            sys::oneui_list_set_items_utf8(
+                self.widget.as_raw(),
+                native_items.as_ptr(),
+                native_items.len(),
+            )
+        };
+    }
+
+    pub fn set_selected_index(&self, index: i32) {
+        unsafe { sys::oneui_list_set_selected_index(self.widget.as_raw(), index) };
+    }
+
+    pub fn selected_index(&self) -> i32 {
+        unsafe { sys::oneui_list_selected_index(self.widget.as_raw()) }
     }
 
     pub fn as_widget(&self) -> &Widget {
@@ -323,15 +455,24 @@ impl Drop for Window {
 
 #[cfg(test)]
 mod tests {
-    use super::{Error, Insets, Label, Stack, StackDirection, Window, WindowOptions};
+    use super::{
+        Button, Error, Insets, Label, List, ListItem, ScrollView, Stack, StackDirection,
+        TextField, Window, WindowOptions,
+    };
     use std::sync::{
         atomic::{AtomicBool, Ordering},
-        Arc, Mutex,
+        Arc, Mutex, OnceLock,
     };
     use std::thread;
 
+    fn window_test_lock() -> &'static Mutex<()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+    }
+
     #[test]
     fn creates_hidden_window_through_utf8_abi() {
+        let _guard = window_test_lock().lock().expect("window test lock");
         let window = Window::new(&WindowOptions {
             title: "iShellPro 麒麟 🚀".to_owned(),
             ..WindowOptions::default()
@@ -342,6 +483,7 @@ mod tests {
 
     #[test]
     fn mounts_rust_composed_content_into_a_hidden_window() {
+        let _guard = window_test_lock().lock().expect("window test lock");
         let window = Window::new(&WindowOptions::default()).expect("window should be created");
         let content = Stack::new(StackDirection::Column).expect("stack should be created");
         content.set_padding(Insets {
@@ -357,7 +499,39 @@ mod tests {
     }
 
     #[test]
+    fn mounts_safe_inventory_controls_with_structured_utf8_list_items() {
+        let _guard = window_test_lock().lock().expect("window test lock");
+        let window = Window::new(&WindowOptions::default()).expect("window should be created");
+        let content = Stack::new(StackDirection::Column).expect("stack should be created");
+        let search = TextField::new("搜索主机、标签或地址").expect("text field should be created");
+        let refresh = Button::new("刷新").expect("button should be created");
+        let list = List::new().expect("list should be created");
+        list.set_items(&[
+            ListItem {
+                title: "生产 SSH\t主机".to_string(),
+                detail: "10.0.0.1\n兴业银行股份有限公司".to_string(),
+            },
+            ListItem {
+                title: "Kylin V10".to_string(),
+                detail: "堡垒机直连".to_string(),
+            },
+        ]);
+        list.set_selected_index(1);
+        assert_eq!(list.selected_index(), 1);
+
+        let scroll = ScrollView::new().expect("scroll view should be created");
+        scroll.set_wheel_step(40.0);
+        scroll.set_content(list.as_widget());
+
+        content.add(search.as_widget());
+        content.add(refresh.as_widget());
+        content.add(scroll.as_widget());
+        window.set_content(content.as_widget());
+    }
+
+    #[test]
     fn dispatcher_runs_work_on_the_window_thread() {
+        let _guard = window_test_lock().lock().expect("window test lock");
         let window = Window::new(&WindowOptions::default()).expect("window should be created");
         let dispatcher = window.dispatcher();
         let callback_thread = Arc::new(Mutex::new(None));
@@ -384,6 +558,7 @@ mod tests {
 
     #[test]
     fn dispatcher_cancels_queued_work_when_window_closes() {
+        let _guard = window_test_lock().lock().expect("window test lock");
         struct DropFlag(Arc<AtomicBool>);
 
         impl Drop for DropFlag {

@@ -24,6 +24,13 @@ pub struct OneUiUtf8String {
     pub length: usize,
 }
 
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct OneUiListItemUtf8 {
+    pub title: OneUiUtf8String,
+    pub detail: OneUiUtf8String,
+}
+
 impl OneUiUtf8String {
     pub fn from_str(value: &str) -> Self {
         Self {
@@ -84,6 +91,11 @@ extern "C" {
     pub fn oneui_stack_add(stack: *mut OneUiWidget, child: *mut OneUiWidget);
     pub fn oneui_stack_set_gap(stack: *mut OneUiWidget, gap: f32);
     pub fn oneui_stack_set_padding(stack: *mut OneUiWidget, insets: OneUiInsets);
+    pub fn oneui_scroll_view_create() -> *mut OneUiWidget;
+    pub fn oneui_scroll_view_set_content(view: *mut OneUiWidget, child: *mut OneUiWidget);
+    pub fn oneui_scroll_view_set_content_height(view: *mut OneUiWidget, height: f32);
+    pub fn oneui_scroll_view_set_wheel_step(view: *mut OneUiWidget, step: f32);
+    pub fn oneui_scroll_view_scroll_to_bottom(view: *mut OneUiWidget);
     pub fn oneui_label_create_utf8(text: OneUiUtf8String) -> *mut OneUiWidget;
     pub fn oneui_label_set_text_utf8(label: *mut OneUiWidget, text: OneUiUtf8String);
     pub fn oneui_label_set_font_size(label: *mut OneUiWidget, font_size: f32);
@@ -91,12 +103,21 @@ extern "C" {
     pub fn oneui_button_set_text_utf8(button: *mut OneUiWidget, text: OneUiUtf8String);
     pub fn oneui_text_field_create_utf8(placeholder: OneUiUtf8String) -> *mut OneUiWidget;
     pub fn oneui_text_field_set_text_utf8(text_field: *mut OneUiWidget, text: OneUiUtf8String);
+    pub fn oneui_text_field_set_read_only(text_field: *mut OneUiWidget, read_only: c_int);
     pub fn oneui_text_field_set_on_changed_utf8(
         text_field: *mut OneUiWidget,
         callback: OneUiUtf8TextCallback,
         user_data: *mut c_void,
     );
     pub fn oneui_search_box_create_utf8(placeholder: OneUiUtf8String) -> *mut OneUiWidget;
+    pub fn oneui_list_create() -> *mut OneUiWidget;
+    pub fn oneui_list_set_items_utf8(
+        list: *mut OneUiWidget,
+        items: *const OneUiListItemUtf8,
+        count: usize,
+    );
+    pub fn oneui_list_set_selected_index(list: *mut OneUiWidget, index: c_int);
+    pub fn oneui_list_selected_index(list: *mut OneUiWidget) -> c_int;
 
     pub fn oneui_clipboard_set_text_utf8(text: OneUiUtf8String) -> c_int;
     pub fn oneui_clipboard_get_text_utf8(buffer: *mut c_char, buffer_len: usize) -> usize;

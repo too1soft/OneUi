@@ -326,6 +326,24 @@ std::vector<oneui::ListItem> splitWideListItems(const wchar_t* text) {
     return result;
 }
 
+std::vector<oneui::ListItem> listItemsFromUtf8(const OneUiListItemUtf8* items, std::size_t count) {
+    std::vector<oneui::ListItem> result;
+    if (!items || count == 0) {
+        return result;
+    }
+
+    result.reserve(count);
+    for (std::size_t index = 0; index < count; ++index) {
+        oneui::ListItem item;
+        item.title = utf8OrEmpty(items[index].title);
+        item.detail = utf8OrEmpty(items[index].detail);
+        if (!item.title.empty() || !item.detail.empty()) {
+            result.push_back(std::move(item));
+        }
+    }
+    return result;
+}
+
 std::vector<oneui::TableColumn> splitWideTableColumns(const wchar_t* text) {
     std::vector<oneui::TableColumn> result;
     for (const auto& row : splitWideItems(text)) {
@@ -2364,6 +2382,17 @@ void oneui_list_set_items(OneUiWidget* list, const wchar_t* items) {
         return;
     }
     nativeList->setItems(splitWideListItems(items));
+}
+
+void oneui_list_set_items_utf8(
+    OneUiWidget* list,
+    const OneUiListItemUtf8* items,
+    std::size_t count) {
+    auto* nativeList = asWidget<oneui::List>(list);
+    if (!nativeList) {
+        return;
+    }
+    nativeList->setItems(listItemsFromUtf8(items, count));
 }
 
 void oneui_list_set_selected_index(OneUiWidget* list, int index) {

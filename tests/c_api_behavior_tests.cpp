@@ -134,6 +134,29 @@ void testUtf8AbiRoundTripsUnicodeText() {
     oneui_window_destroy(window);
 }
 
+void testUtf8ListUsesStructuredItems() {
+    OneUiWidget* list = oneui_list_create();
+    expectTrue("utf8 list create", list != nullptr);
+    if (!list) {
+        return;
+    }
+
+    const std::string title = "\xE7\x94\x9F\xE4\xBA\xA7 SSH\t\xE4\xB8\xBB\xE6\x9C\xBA";
+    const std::string detail = "10.0.0.1\n\xE5\x85\xB4\xE4\xB8\x9A\xE9\x93\xB6\xE8\xA1\x8C\xE8\x82\xA1\xE4\xBB\xBD\xE6\x9C\x89\xE9\x99\x90\xE5\x85\xAC\xE5\x8F\xB8";
+    const std::string secondTitle = "Kylin V10";
+    const std::string secondDetail = "\xE5\xA0\xA1\xE5\x9E\x92\xE6\x9C\xBA\xE7\x9B\xB4\xE8\xBF\x9E";
+    const OneUiListItemUtf8 items[] = {
+        OneUiListItemUtf8{utf8View(title), utf8View(detail)},
+        OneUiListItemUtf8{utf8View(secondTitle), utf8View(secondDetail)},
+    };
+
+    oneui_list_set_items_utf8(list, items, sizeof(items) / sizeof(items[0]));
+    oneui_list_set_selected_index(list, 1);
+    expectTrue("utf8 list selected index", oneui_list_selected_index(list) == 1);
+
+    oneui_widget_destroy(list);
+}
+
 void testWindowDpiMetricsAbiUsesLogicalAndPhysicalSizes() {
     OneUiWindowOptions options{};
     options.title = L"OneUI C ABI DPI Metrics";
@@ -428,6 +451,7 @@ int main() {
     expectTrue("version exported", std::strcmp(oneui_version(), "0.1.0") == 0);
     testOwnedWindowPostCleansUpCancelledWork();
     testUtf8AbiRoundTripsUnicodeText();
+    testUtf8ListUsesStructuredItems();
     testWindowDpiMetricsAbiUsesLogicalAndPhysicalSizes();
     testAppShellAbiCreatesReusableSlots();
     testProductShellAbiIsPublicProductFrame();

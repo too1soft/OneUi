@@ -189,6 +189,11 @@ The native route must replace behavior, not only visual widgets.
 - The safe Rust layer now also owns the first composition primitives: `Widget`,
   `Stack`, `Label`, `Insets`, and `Window::set_content`. These keep raw widget
   ownership inside OneUI rather than asking products to make unsafe C calls.
+- The safe Rust layer now exposes `ScrollView`, `List`, structured UTF-8
+  `ListItem`, `Button`, and `TextField`. `ListItem` crosses the C ABI as an
+  array of title/detail UTF-8 fields rather than delimiter-packed text, so
+  downstream product data may safely contain tabs, line breaks, Chinese, and
+  other Unicode content.
 - iShellPro has a separate Windows-only `codex/ishellpro-oneui-window-shell`
   migration branch. Its `native-shell` package starts a visible OneUI window,
   mounts Chinese UTF-8 content, and exits cleanly. It does not modify the
