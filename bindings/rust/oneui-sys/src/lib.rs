@@ -46,6 +46,15 @@ pub struct OneUiWindowOptionsUtf8 {
     pub resizable: c_int,
 }
 
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct OneUiInsets {
+    pub top: f32,
+    pub right: f32,
+    pub bottom: f32,
+    pub left: f32,
+}
+
 pub type OneUiUtf8TextCallback =
     Option<unsafe extern "C" fn(text: *const c_char, length: usize, user_data: *mut c_void)>;
 
@@ -58,10 +67,17 @@ extern "C" {
     pub fn oneui_window_run(window: *mut OneUiWindow) -> c_int;
     pub fn oneui_window_close(window: *mut OneUiWindow);
     pub fn oneui_window_set_title_utf8(window: *mut OneUiWindow, title: OneUiUtf8String);
+    pub fn oneui_window_set_content(window: *mut OneUiWindow, widget: *mut OneUiWidget);
 
     pub fn oneui_widget_destroy(widget: *mut OneUiWidget);
+    // 0 = column, 1 = row. These values are part of the stable C ABI.
+    pub fn oneui_stack_create(direction: c_int) -> *mut OneUiWidget;
+    pub fn oneui_stack_add(stack: *mut OneUiWidget, child: *mut OneUiWidget);
+    pub fn oneui_stack_set_gap(stack: *mut OneUiWidget, gap: f32);
+    pub fn oneui_stack_set_padding(stack: *mut OneUiWidget, insets: OneUiInsets);
     pub fn oneui_label_create_utf8(text: OneUiUtf8String) -> *mut OneUiWidget;
     pub fn oneui_label_set_text_utf8(label: *mut OneUiWidget, text: OneUiUtf8String);
+    pub fn oneui_label_set_font_size(label: *mut OneUiWidget, font_size: f32);
     pub fn oneui_button_create_utf8(text: OneUiUtf8String) -> *mut OneUiWidget;
     pub fn oneui_button_set_text_utf8(button: *mut OneUiWidget, text: OneUiUtf8String);
     pub fn oneui_text_field_create_utf8(placeholder: OneUiUtf8String) -> *mut OneUiWidget;

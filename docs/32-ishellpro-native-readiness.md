@@ -186,10 +186,17 @@ The native route must replace behavior, not only visual widgets.
 - `bindings/rust` now contains `oneui-sys` for the raw ABI and `oneui` for safe
   window ownership. Its smoke test creates and destroys a hidden native window
   through the UTF-8 ABI, including Chinese and four-byte Unicode titles.
+- The safe Rust layer now also owns the first composition primitives: `Widget`,
+  `Stack`, `Label`, `Insets`, and `Window::set_content`. These keep raw widget
+  ownership inside OneUI rather than asking products to make unsafe C calls.
+- iShellPro has a separate Windows-only `codex/ishellpro-oneui-window-shell`
+  migration branch. Its `native-shell` package starts a visible OneUI window,
+  mounts Chinese UTF-8 content, and exits cleanly. It does not modify the
+  enterprise Tauri release branch or `src-tauri/`.
 
 Still open before an iShellPro production page moves: Linux platform backend,
 Rust dispatcher/lifetime binding, DPI/IME acceptance matrix, virtualized data
-controls, native terminal surface, and the vertical-slice shell.
+controls, native terminal surface, and the production vertical-slice shell.
 
 ### Phase 0: Framework Release Gates
 
@@ -266,7 +273,8 @@ The next implementation slice is Phase 0 only:
 1. Make the OneUI test suite deterministic again.
 2. Freeze the UTF-8 C ABI and Rust binding requirements.
 3. Design and implement the Kylin Linux platform backend contract.
-4. Build a native shell smoke application that exercises a real Rust callback,
-   logical DPI, Chinese text, keyboard input, clipboard, and clean shutdown.
+4. Expand the existing native shell smoke application to exercise a real Rust
+   callback, logical DPI, Chinese text, keyboard input, clipboard, and clean
+   shutdown.
 
 No iShellPro production page is migrated before these gates are met.

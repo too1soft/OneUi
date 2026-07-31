@@ -2,6 +2,9 @@
 
 `oneui-sys` maps the portable UTF-8 C ABI without adding ownership policy.
 `oneui` is the safe foundation layer for Rust applications such as iShellPro.
+It currently exposes owned windows plus the first composable content surface:
+stacks, labels, UTF-8 text, layout padding, and content mounting. New product
+code should build on these safe types instead of calling the raw C ABI.
 
 The C++ library must be built before Rust bindings are compiled. On Windows:
 
