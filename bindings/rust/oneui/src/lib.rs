@@ -134,6 +134,12 @@ impl UiDispatcher {
             sys::oneui_window_request_close(raw);
         });
     }
+
+    pub fn request_activate(&self) {
+        self.state.with_raw(|raw| unsafe {
+            sys::oneui_window_activate(raw);
+        });
+    }
 }
 
 pub struct Widget {
@@ -417,6 +423,12 @@ impl Window {
     pub fn show(&self) {
         self.state.with_raw(|raw| unsafe {
             sys::oneui_window_show(raw);
+        });
+    }
+
+    pub fn activate(&self) {
+        self.state.with_raw(|raw| unsafe {
+            sys::oneui_window_activate(raw);
         });
     }
 

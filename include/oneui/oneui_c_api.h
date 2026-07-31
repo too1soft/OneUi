@@ -200,6 +200,7 @@ ONEUI_API OneUiWindow* oneui_window_create_utf8(const OneUiWindowOptionsUtf8* op
 ONEUI_API void oneui_window_destroy(OneUiWindow* window);
 ONEUI_API void oneui_window_initialize(OneUiWindow* window);
 ONEUI_API void oneui_window_show(OneUiWindow* window);
+ONEUI_API void oneui_window_activate(OneUiWindow* window);
 ONEUI_API int oneui_window_run(OneUiWindow* window);
 ONEUI_API void oneui_window_close(OneUiWindow* window);
 ONEUI_API void oneui_window_request_close(OneUiWindow* window);

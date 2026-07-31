@@ -853,6 +853,17 @@ public:
         UpdateWindow(hwnd_);
     }
 
+    void activate() override {
+        ensureCreated();
+        if (!hwnd_) {
+            return;
+        }
+        ShowWindow(hwnd_, IsIconic(hwnd_) ? SW_RESTORE : SW_SHOW);
+        SetForegroundWindow(hwnd_);
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        UpdateWindow(hwnd_);
+    }
+
     int run() override {
         ensureCreated();
         MSG message{};

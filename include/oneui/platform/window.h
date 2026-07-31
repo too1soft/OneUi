@@ -35,6 +35,9 @@ public:
     // Creates the native handle on the calling UI thread without showing it.
     virtual void initialize() = 0;
     virtual void show() = 0;
+    // Restores a minimized window when needed and requests foreground attention.
+    // Platforms without a foreground concept retain the regular show behavior.
+    virtual void activate() { show(); }
     virtual int run() = 0;
     virtual void close() = 0;
     virtual void minimize() = 0;

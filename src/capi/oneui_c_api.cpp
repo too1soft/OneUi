@@ -892,6 +892,13 @@ void oneui_window_show(OneUiWindow* window) {
     window->window->show();
 }
 
+void oneui_window_activate(OneUiWindow* window) {
+    if (!window || !window->window) {
+        return;
+    }
+    window->window->activate();
+}
+
 int oneui_window_run(OneUiWindow* window) {
     if (!window || !window->window) {
         return -1;

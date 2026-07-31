@@ -73,6 +73,7 @@ extern "C" {
     pub fn oneui_window_destroy(window: *mut OneUiWindow);
     pub fn oneui_window_initialize(window: *mut OneUiWindow);
     pub fn oneui_window_show(window: *mut OneUiWindow);
+    pub fn oneui_window_activate(window: *mut OneUiWindow);
     pub fn oneui_window_run(window: *mut OneUiWindow) -> c_int;
     pub fn oneui_window_close(window: *mut OneUiWindow);
     pub fn oneui_window_request_close(window: *mut OneUiWindow);
