@@ -153,7 +153,14 @@ void TerminalView::paint(Canvas& canvas) {
             }
             if (!cell->text.empty()) {
                 const int weight = hasStyle(*cell, TerminalCellBold) ? 700 : 400;
-                canvas.drawTextStyled(cell->text, cellRect, foreground, fontSize_, TextAlign::Left, weight);
+                canvas.drawTextStyledWithFont(
+                    cell->text,
+                    cellRect,
+                    foreground,
+                    fontSize_,
+                    TextAlign::Left,
+                    TextFontFamily::Monospace,
+                    weight);
             }
             if (hasStyle(*cell, TerminalCellUnderline)) {
                 const float underlineY = cellRect.y + std::max(1.0f, cellRect.height - 2.0f);
@@ -226,7 +233,8 @@ AccessibilityInfo TerminalView::accessibilityInfo() const {
 }
 
 TerminalView::GridMetrics TerminalView::gridMetrics(const Canvas& canvas) const {
-    const float measured = canvas.measureTextWidth(L"M", fontSize_, 400);
+    const float measured = canvas.measureTextWidthWithFont(
+        L"M", fontSize_, TextFontFamily::Monospace, 400);
     return GridMetrics{
         std::max(1.0f, measured),
         std::max(fontSize_ * 1.30f, fontSize_ + 2.0f),

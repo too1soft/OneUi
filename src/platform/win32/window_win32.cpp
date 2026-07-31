@@ -247,9 +247,10 @@ struct TextBlobKey {
     std::wstring text;
     int size = 0;
     int weight = 0;
+    TextFontFamily family = TextFontFamily::Default;
 
     bool operator<(const TextBlobKey& other) const {
-        return std::tie(text, size, weight) < std::tie(other.text, other.size, other.weight);
+        return std::tie(text, size, weight, family) < std::tie(other.text, other.size, other.weight, other.family);
     }
 };
 
@@ -530,6 +531,17 @@ public:
     }
 
     void drawTextStyled(const std::wstring& text, Rect rect, Color color, float size, TextAlign align = TextAlign::Center, int weight = 400) override {
+        drawTextStyledWithFont(text, rect, color, size, align, TextFontFamily::Default, weight);
+    }
+
+    void drawTextStyledWithFont(
+        const std::wstring& text,
+        Rect rect,
+        Color color,
+        float size,
+        TextAlign align,
+        TextFontFamily family,
+        int weight = 400) override {
         if (text.empty() || rect.width <= 0.0f || rect.height <= 0.0f) {
             return;
         }
@@ -539,7 +551,7 @@ public:
         paint.setAntiAlias(true);
         paint.setColor(toSkColor(color));
 
-        const TextBlobEntry& textBlob = cachedTextBlob(text, size, weight);
+        const TextBlobEntry& textBlob = cachedTextBlob(text, size, family, weight);
         if (!textBlob.blob) {
             return;
         }
@@ -561,11 +573,19 @@ public:
     }
 
     float measureTextWidth(const std::wstring& text, float size, int weight = 400) const override {
+        return measureTextWidthWithFont(text, size, TextFontFamily::Default, weight);
+    }
+
+    float measureTextWidthWithFont(
+        const std::wstring& text,
+        float size,
+        TextFontFamily family,
+        int weight = 400) const override {
         if (text.empty()) {
             return 0.0f;
         }
         const double traceStartMs = currentTimeMs();
-        const TextBlobEntry& textBlob = cachedTextBlob(text, size, weight);
+        const TextBlobEntry& textBlob = cachedTextBlob(text, size, family, weight);
         ++g_primitivePaintTrace.textMeasureCalls;
         g_primitivePaintTrace.textMeasureMs += currentTimeMs() - traceStartMs;
         return textBlob.bounds.width();
@@ -596,7 +616,7 @@ public:
     }
 
 private:
-    static sk_sp<SkTypeface> defaultTypeface(int weight) {
+    static sk_sp<SkTypeface> typeface(TextFontFamily family, int weight) {
         static sk_sp<SkFontMgr> fontMgr = [] {
             auto mgr = SkFontMgr_New_DirectWrite();
             if (!mgr) {
@@ -609,32 +629,49 @@ private:
         }
 
         const int clampedWeight = std::clamp(weight, 100, 900);
-        static std::map<int, sk_sp<SkTypeface>> cache;
-        if (auto cached = cache.find(clampedWeight); cached != cache.end()) {
+        static std::map<std::pair<TextFontFamily, int>, sk_sp<SkTypeface>> cache;
+        const auto cacheKey = std::make_pair(family, clampedWeight);
+        if (auto cached = cache.find(cacheKey); cached != cache.end()) {
             return cached->second;
         }
 
         const SkFontStyle style(clampedWeight, SkFontStyle::kNormal_Width, SkFontStyle::kUpright_Slant);
+        if (family == TextFontFamily::Monospace) {
+            for (const char* candidate : {"JetBrains Mono", "Cascadia Mono", "Consolas", "NSimSun"}) {
+                if (auto face = fontMgr->legacyMakeTypeface(candidate, style)) {
+                    cache[cacheKey] = face;
+                    return face;
+                }
+            }
+        }
         if (auto face = fontMgr->legacyMakeTypeface("Microsoft YaHei", style)) {
-            cache[clampedWeight] = face;
+            cache[cacheKey] = face;
             return face;
         }
         if (auto face = fontMgr->legacyMakeTypeface("SimSun", style)) {
-            cache[clampedWeight] = face;
+            cache[cacheKey] = face;
             return face;
         }
         auto face = fontMgr->legacyMakeTypeface("Segoe UI", style);
-        cache[clampedWeight] = face;
+        cache[cacheKey] = face;
         return face;
     }
 
-    static const TextBlobEntry& cachedTextBlob(const std::wstring& text, float size, int weight) {
+    static const TextBlobEntry& cachedTextBlob(
+        const std::wstring& text,
+        float size,
+        TextFontFamily family,
+        int weight) {
         static TextBlobEntry empty;
         if (text.empty()) {
             return empty;
         }
 
-        const TextBlobKey key{text, static_cast<int>(std::round(size * 10.0f)), std::clamp(weight, 100, 900)};
+        const TextBlobKey key{
+            text,
+            static_cast<int>(std::round(size * 10.0f)),
+            std::clamp(weight, 100, 900),
+            family};
         static std::map<TextBlobKey, TextBlobEntry> cache;
         if (auto cached = cache.find(key); cached != cache.end()) {
             return cached->second;
@@ -643,7 +680,7 @@ private:
             cache.clear();
         }
 
-        SkFont font(defaultTypeface(weight), size);
+        SkFont font(typeface(family, weight), size);
         font.setSubpixel(true);
         font.setEdging(SkFont::Edging::kAntiAlias);
 

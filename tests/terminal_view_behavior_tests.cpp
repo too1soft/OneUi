@@ -16,6 +16,7 @@ public:
         oneui::Rect rect;
         oneui::Color color;
         int weight = 400;
+        oneui::TextFontFamily family = oneui::TextFontFamily::Default;
     };
 
     void save() override {}
@@ -33,10 +34,29 @@ public:
     void drawTextStyled(const std::wstring& text, oneui::Rect rect, oneui::Color color, float, oneui::TextAlign = oneui::TextAlign::Center, int weight = 400) override {
         texts.push_back(TextCall{text, rect, color, weight});
     }
+    void drawTextStyledWithFont(
+        const std::wstring& text,
+        oneui::Rect rect,
+        oneui::Color color,
+        float,
+        oneui::TextAlign,
+        oneui::TextFontFamily family,
+        int weight = 400) override {
+        texts.push_back(TextCall{text, rect, color, weight, family});
+    }
     float measureTextWidth(const std::wstring&, float size, int = 400) const override { return size * 0.60f; }
+    float measureTextWidthWithFont(
+        const std::wstring&,
+        float size,
+        oneui::TextFontFamily family,
+        int = 400) const override {
+        lastMeasuredFamily = family;
+        return size * 0.60f;
+    }
 
     int fillCount = 0;
     int lineCount = 0;
+    mutable oneui::TextFontFamily lastMeasuredFamily = oneui::TextFontFamily::Default;
     std::vector<TextCall> texts;
 };
 
@@ -87,6 +107,14 @@ void testPaintHonorsWideCellsStylesAndCursor() {
 
     expectEqual("terminal paints one glyph per non-continuation cell", static_cast<int>(canvas.texts.size()), 2);
     expectEqual("terminal bold weight", canvas.texts.front().weight, 700);
+    expectEqual(
+        "terminal uses monospace font",
+        canvas.texts.front().family == oneui::TextFontFamily::Monospace ? 1 : 0,
+        1);
+    expectEqual(
+        "terminal measures monospace font",
+        canvas.lastMeasuredFamily == oneui::TextFontFamily::Monospace ? 1 : 0,
+        1);
     expectNear("terminal wide glyph width", canvas.texts.back().rect.width, 24.0f);
     expectEqual("terminal underline painted", canvas.lineCount, 1);
     expectEqual("terminal paints background and cursor", canvas.fillCount >= 2 ? 1 : 0, 1);

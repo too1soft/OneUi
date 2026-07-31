@@ -20,6 +20,12 @@ frame after `setGrid` / `set_grid` returns. A malformed or incomplete grid is
 normalized to blank cells; it never becomes a delimiter-encoded string or an
 unbounded allocation.
 
+Terminal text uses the `Canvas` monospace-family path for both glyph metrics
+and painting. On Windows, OneUI selects `JetBrains Mono`, `Cascadia Mono`,
+`Consolas`, then `NSimSun` when available, before falling back to the default
+system face. This keeps renderer cell geometry stable without changing fonts
+used by the rest of the application.
+
 `TerminalView` deliberately does not include a PTY, SSH client, shell selection,
 escape-sequence parser, scrollback store, or key encoder. Those are session
 engine concerns. The first iShellPro integration uses `vt100` as the parser and

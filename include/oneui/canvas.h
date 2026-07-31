@@ -16,6 +16,14 @@ enum class TextAlign {
     Right
 };
 
+/// Selects a stable text family for controls with layout-sensitive glyphs.
+/// Backends that cannot provide the requested family may fall back to their
+/// default face without changing the caller's layout contract.
+enum class TextFontFamily {
+    Default,
+    Monospace
+};
+
 struct BoxShadow {
     Color color{0, 0, 0, 0};
     Point offset{};
@@ -62,9 +70,28 @@ public:
         (void)weight;
         drawText(text, rect, color, size, align);
     }
+    virtual void drawTextStyledWithFont(
+        const std::wstring& text,
+        Rect rect,
+        Color color,
+        float size,
+        TextAlign align,
+        TextFontFamily family,
+        int weight = 400) {
+        (void)family;
+        drawTextStyled(text, rect, color, size, align, weight);
+    }
     virtual float measureTextWidth(const std::wstring& text, float size, int weight = 400) const {
         (void)weight;
         return static_cast<float>(text.size()) * size * 0.5f;
+    }
+    virtual float measureTextWidthWithFont(
+        const std::wstring& text,
+        float size,
+        TextFontFamily family,
+        int weight = 400) const {
+        (void)family;
+        return measureTextWidth(text, size, weight);
     }
 
     // Draws an owned or caller-retained pixel buffer during this paint pass.
