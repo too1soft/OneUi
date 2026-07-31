@@ -36,3 +36,5 @@ ninja.err
 uout.txt
 uerr.txt
 *.log
+.codebase-memory/
+bindings/rust/target/

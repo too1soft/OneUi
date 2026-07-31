@@ -1,0 +1,6 @@
+[workspace]
+members = [
+    "oneui-sys",
+    "oneui",
+]
+resolver = "2"

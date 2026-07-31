@@ -183,6 +183,9 @@ The native route must replace behavior, not only visual widgets.
 - The UTF-8 ABI test verifies Chinese and four-byte Unicode round trips. The
   legacy `wchar_t*` ABI remains available for existing Windows consumers but is
   not the interface for new Rust or Linux work.
+- `bindings/rust` now contains `oneui-sys` for the raw ABI and `oneui` for safe
+  window ownership. Its smoke test creates and destroys a hidden native window
+  through the UTF-8 ABI, including Chinese and four-byte Unicode titles.
 
 Still open before an iShellPro production page moves: Linux platform backend,
 Rust dispatcher/lifetime binding, DPI/IME acceptance matrix, virtualized data

@@ -1,0 +1,9 @@
+[package]
+name = "oneui"
+version = "0.1.0"
+edition = "2021"
+description = "Safe foundation bindings for OneUI's portable UTF-8 ABI."
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+oneui-sys = { path = "../oneui-sys" }
