@@ -154,12 +154,15 @@ void TreeView::setExpanded(std::wstring id, bool expanded) {
         return;
     }
     if (expanded) {
-        expandedIds_.insert(std::move(id));
+        expandedIds_.insert(id);
     } else {
         expandedIds_.erase(id);
     }
     ensureSelectionVisible();
     updatePreferredHeight();
+    if (onExpansionChanged_) {
+        onExpansionChanged_(id, expanded);
+    }
     invalidate();
 }
 
@@ -175,6 +178,10 @@ void TreeView::clearStyleOverride() {
 
 void TreeView::setOnSelectionChanged(std::function<void(const std::wstring&)> callback) {
     onSelectionChanged_ = std::move(callback);
+}
+
+void TreeView::setOnExpansionChanged(std::function<void(const std::wstring&, bool)> callback) {
+    onExpansionChanged_ = std::move(callback);
 }
 
 std::size_t TreeView::visibleItemCount() const {

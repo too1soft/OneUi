@@ -92,6 +92,14 @@ pub struct OneUiInsets {
 
 pub type OneUiUtf8TextCallback =
     Option<unsafe extern "C" fn(text: *const c_char, length: usize, user_data: *mut c_void)>;
+pub type OneUiTreeExpansionCallback = Option<
+    unsafe extern "C" fn(
+        id: *const c_char,
+        length: usize,
+        expanded: c_int,
+        user_data: *mut c_void,
+    ),
+>;
 pub type OneUiVoidCallback = Option<unsafe extern "C" fn(user_data: *mut c_void)>;
 
 #[repr(C)]
@@ -218,6 +226,11 @@ extern "C" {
     pub fn oneui_tree_view_set_on_selection_changed_utf8(
         tree_view: *mut OneUiWidget,
         callback: OneUiUtf8TextCallback,
+        user_data: *mut c_void,
+    );
+    pub fn oneui_tree_view_set_on_expansion_changed_utf8(
+        tree_view: *mut OneUiWidget,
+        callback: OneUiTreeExpansionCallback,
         user_data: *mut c_void,
     );
 

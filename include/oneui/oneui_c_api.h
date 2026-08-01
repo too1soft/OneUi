@@ -19,6 +19,7 @@ typedef void (*OneUiDestroyCallback)(void* user_data);
 typedef void (*OneUiFrameCallback)(double now_ms, void* user_data);
 typedef void (*OneUiTextCallback)(const wchar_t* text, void* user_data);
 typedef void (*OneUiUtf8TextCallback)(const char* text, size_t length, void* user_data);
+typedef void (*OneUiTreeExpansionCallback)(const char* id, size_t length, int expanded, void* user_data);
 typedef void (*OneUiBoolCallback)(int checked, void* user_data);
 typedef void (*OneUiIntCallback)(int value, void* user_data);
 
@@ -477,6 +478,10 @@ ONEUI_API size_t oneui_tree_view_selected_id_utf8(OneUiWidget* tree_view, char* 
 ONEUI_API void oneui_tree_view_set_on_selection_changed_utf8(
     OneUiWidget* tree_view,
     OneUiUtf8TextCallback callback,
+    void* user_data);
+ONEUI_API void oneui_tree_view_set_on_expansion_changed_utf8(
+    OneUiWidget* tree_view,
+    OneUiTreeExpansionCallback callback,
     void* user_data);
 
 ONEUI_API OneUiWidget* oneui_table_create(void);

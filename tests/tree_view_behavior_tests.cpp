@@ -80,15 +80,26 @@ void testPointerToggleAndSelectionCallbacks() {
     populateTree(tree);
     std::wstring changed;
     int changeCount = 0;
+    std::wstring expansionChanged;
+    bool expansionState = true;
+    int expansionChangeCount = 0;
     tree.setOnSelectionChanged([&](const std::wstring& id) {
         changed = id;
         ++changeCount;
+    });
+    tree.setOnExpansionChanged([&](const std::wstring& id, bool expanded) {
+        expansionChanged = id;
+        expansionState = expanded;
+        ++expansionChangeCount;
     });
 
     tree.onMouseDown(oneui::MouseEvent{{10.0f, 16.0f}, oneui::MouseButton::Left});
     tree.onMouseUp(oneui::MouseEvent{{10.0f, 16.0f}, oneui::MouseButton::Left});
     expectTrue("pointer toggles root", !tree.isExpanded(L"platform"));
     expectEqual("pointer collapse hides child rows", tree.visibleItemCount(), 2);
+    expectTrue("expansion callback reports ID", expansionChanged == L"platform");
+    expectTrue("expansion callback reports collapsed state", !expansionState);
+    expectEqual("expansion callback once", static_cast<std::size_t>(expansionChangeCount), 1);
 
     tree.onMouseDown(oneui::MouseEvent{{90.0f, 48.0f}, oneui::MouseButton::Left});
     tree.onMouseUp(oneui::MouseEvent{{90.0f, 48.0f}, oneui::MouseButton::Left});

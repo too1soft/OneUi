@@ -869,6 +869,10 @@ struct TreeViewSelectionCallback {
     handler: Box<dyn FnMut(String) + 'static>,
 }
 
+struct TreeViewExpansionCallback {
+    handler: Box<dyn FnMut(String, bool) + 'static>,
+}
+
 unsafe extern "C" fn run_tree_view_selection_callback(
     text: *const std::ffi::c_char,
     length: usize,
@@ -883,10 +887,26 @@ unsafe extern "C" fn run_tree_view_selection_callback(
     let _ = catch_unwind(AssertUnwindSafe(|| (callback.handler)(id)));
 }
 
+unsafe extern "C" fn run_tree_view_expansion_callback(
+    id: *const std::ffi::c_char,
+    length: usize,
+    expanded: i32,
+    user_data: *mut std::ffi::c_void,
+) {
+    if id.is_null() || user_data.is_null() {
+        return;
+    }
+    let bytes = unsafe { std::slice::from_raw_parts(id.cast::<u8>(), length) };
+    let id = String::from_utf8_lossy(bytes).into_owned();
+    let callback = unsafe { &mut *user_data.cast::<TreeViewExpansionCallback>() };
+    let _ = catch_unwind(AssertUnwindSafe(|| (callback.handler)(id, expanded != 0)));
+}
+
 /// Native hierarchical navigation with ID-based selection and local expansion.
 pub struct TreeView {
     widget: Widget,
     selection_callback: Option<Box<TreeViewSelectionCallback>>,
+    expansion_callback: Option<Box<TreeViewExpansionCallback>>,
 }
 
 impl TreeView {
@@ -895,6 +915,7 @@ impl TreeView {
         Ok(Self {
             widget,
             selection_callback: None,
+            expansion_callback: None,
         })
     }
 
@@ -984,6 +1005,40 @@ impl TreeView {
         self.selection_callback = None;
     }
 
+    pub fn set_on_expansion_changed<F>(&mut self, callback: F)
+    where
+        F: FnMut(String, bool) + 'static,
+    {
+        self.clear_expansion_callback();
+        self.expansion_callback = Some(Box::new(TreeViewExpansionCallback {
+            handler: Box::new(callback),
+        }));
+        let user_data = (self
+            .expansion_callback
+            .as_deref_mut()
+            .expect("tree view expansion callback was just installed")
+            as *mut TreeViewExpansionCallback)
+            .cast();
+        unsafe {
+            sys::oneui_tree_view_set_on_expansion_changed_utf8(
+                self.widget.as_raw(),
+                Some(run_tree_view_expansion_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn clear_expansion_callback(&mut self) {
+        unsafe {
+            sys::oneui_tree_view_set_on_expansion_changed_utf8(
+                self.widget.as_raw(),
+                None,
+                std::ptr::null_mut(),
+            )
+        };
+        self.expansion_callback = None;
+    }
+
     pub fn as_widget(&self) -> &Widget {
         &self.widget
     }
@@ -992,6 +1047,7 @@ impl TreeView {
 impl Drop for TreeView {
     fn drop(&mut self) {
         self.clear_selection_callback();
+        self.clear_expansion_callback();
     }
 }
 

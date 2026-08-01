@@ -38,6 +38,7 @@ public:
     void setStyleOverride(TreeViewStyleOverride style);
     void clearStyleOverride();
     void setOnSelectionChanged(std::function<void(const std::wstring&)> callback);
+    void setOnExpansionChanged(std::function<void(const std::wstring&, bool)> callback);
 
     std::size_t visibleItemCount() const;
     float contentHeight() const;
@@ -87,6 +88,7 @@ private:
     bool pressedToggle_ = false;
     std::optional<TreeViewStyleOverride> styleOverride_;
     std::function<void(const std::wstring&)> onSelectionChanged_;
+    std::function<void(const std::wstring&, bool)> onExpansionChanged_;
 };
 
 } // namespace oneui

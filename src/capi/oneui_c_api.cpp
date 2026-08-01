@@ -2509,6 +2509,24 @@ void oneui_tree_view_set_on_selection_changed_utf8(
     });
 }
 
+void oneui_tree_view_set_on_expansion_changed_utf8(
+    OneUiWidget* tree_view,
+    OneUiTreeExpansionCallback callback,
+    void* user_data) {
+    auto* nativeTree = asWidget<oneui::TreeView>(tree_view);
+    if (!nativeTree) {
+        return;
+    }
+    if (!callback) {
+        nativeTree->setOnExpansionChanged(nullptr);
+        return;
+    }
+    nativeTree->setOnExpansionChanged([callback, user_data](const std::wstring& id, bool expanded) {
+        const std::string utf8 = utf8FromWide(id);
+        callback(utf8.data(), utf8.size(), expanded ? 1 : 0, user_data);
+    });
+}
+
 OneUiWidget* oneui_table_create() {
     return wrap(std::make_shared<oneui::Table>());
 }

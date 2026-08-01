@@ -17,7 +17,10 @@ The component owns two pieces of view state:
 - expanded or collapsed state for nodes with children.
 
 Selection is ID-based, so products can refresh data without translating a
-visual row index back into a domain identifier. Keyboard navigation follows
+visual row index back into a domain identifier. Expansion callbacks report the
+item ID and new state after the visible rows and `contentHeight()` update, so
+an enclosing `ScrollView` can synchronize its content height without reading
+tree internals. Keyboard navigation follows
 standard tree behavior: Up/Down move between visible rows, Right expands or
 enters a branch, Left collapses or moves to the parent, and Enter/Space toggles
 the selected branch. The expand marker is independently clickable.
@@ -48,9 +51,9 @@ The UTF-8 ABI uses `OneUiTreeItemUtf8` with explicit `id`, `parent_id`,
 it with a null buffer to get the number of bytes including the final NUL.
 
 The safe Rust binding exposes `TreeView` and `TreeItem` with `set_items`,
-`set_selected_id`, `selected_id`, and an owned selection callback. Callback
-panics never cross the C ABI, and the callback is cleared before the native
-widget is destroyed.
+`set_selected_id`, `selected_id`, and owned selection and expansion callbacks.
+Callback panics never cross the C ABI, and callbacks are cleared before the
+native widget is destroyed.
 
 `contentHeight()` / `oneui_tree_view_content_height` / `TreeView::content_height`
 report the height of the currently visible rows. When a tree is put inside a
