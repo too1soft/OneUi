@@ -159,6 +159,12 @@ impl Widget {
     fn as_raw(&self) -> *mut sys::OneUiWidget {
         self.raw.as_ptr()
     }
+
+    /// Sets the layout hint used by parent containers. A zero dimension stays
+    /// flexible on that axis, matching OneUI's native layout contract.
+    pub fn set_preferred_size(&self, width: f32, height: f32) {
+        unsafe { sys::oneui_widget_set_preferred_size(self.as_raw(), width, height) };
+    }
 }
 
 impl Drop for Widget {
@@ -1250,6 +1256,7 @@ mod tests {
         tree.set_selected_id("production");
         assert_eq!(tree.selected_id(), "production");
         assert_eq!(tree.content_height(), 64.0);
+        tree.as_widget().set_preferred_size(240.0, 0.0);
         window.set_content(tree.as_widget());
     }
 

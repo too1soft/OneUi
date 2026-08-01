@@ -142,6 +142,7 @@ extern "C" {
     ) -> c_int;
 
     pub fn oneui_widget_destroy(widget: *mut OneUiWidget);
+    pub fn oneui_widget_set_preferred_size(widget: *mut OneUiWidget, width: f32, height: f32);
     // 0 = column, 1 = row. These values are part of the stable C ABI.
     pub fn oneui_stack_create(direction: c_int) -> *mut OneUiWidget;
     pub fn oneui_stack_add(stack: *mut OneUiWidget, child: *mut OneUiWidget);
