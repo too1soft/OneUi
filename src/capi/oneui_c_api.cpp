@@ -8,6 +8,7 @@
 #include "oneui/controls/menu.h"
 #include "oneui/controls/icon_button.h"
 #include "oneui/controls/icon_view.h"
+#include "oneui/controls/interactive_surface.h"
 #include "oneui/controls/label.h"
 #include "oneui/controls/list.h"
 #include "oneui/controls/nav_item.h"
@@ -439,6 +440,26 @@ oneui::ButtonStyleOverride toButtonOverride(const OneUiButtonStyle& style) {
     result.pressed = toButtonStateOverride(style.pressed);
     result.disabled = toButtonStateOverride(style.disabled);
     result.focusVisible = toButtonStateOverride(style.focus_visible);
+    return result;
+}
+
+oneui::InteractiveSurfaceStateStyle toInteractiveSurfaceStateStyle(
+    const OneUiInteractiveSurfaceStateStyle& style) {
+    oneui::InteractiveSurfaceStateStyle result;
+    result.background = toNativeColor(style.background);
+    result.border = toNativeColor(style.border);
+    result.borderWidth = style.border_width;
+    result.radius = style.radius;
+    return result;
+}
+
+oneui::InteractiveSurfaceStyle toInteractiveSurfaceStyle(
+    const OneUiInteractiveSurfaceStyle& style) {
+    oneui::InteractiveSurfaceStyle result;
+    result.normal = toInteractiveSurfaceStateStyle(style.normal);
+    result.hovered = toInteractiveSurfaceStateStyle(style.hovered);
+    result.pressed = toInteractiveSurfaceStateStyle(style.pressed);
+    result.disabled = toInteractiveSurfaceStateStyle(style.disabled);
     return result;
 }
 
@@ -2557,6 +2578,52 @@ void oneui_card_set_content(OneUiWidget* card, OneUiWidget* child) {
         return;
     }
     nativeCard->setContent(child ? child->widget : nullptr);
+}
+
+OneUiWidget* oneui_interactive_surface_create() {
+    return wrap(std::make_shared<oneui::InteractiveSurface>());
+}
+
+void oneui_interactive_surface_set_content(OneUiWidget* surface, OneUiWidget* child) {
+    auto* nativeSurface = asWidget<oneui::InteractiveSurface>(surface);
+    if (!nativeSurface) {
+        return;
+    }
+    nativeSurface->setContent(child ? child->widget : nullptr);
+}
+
+void oneui_interactive_surface_set_padding(OneUiWidget* surface, OneUiInsets padding) {
+    auto* nativeSurface = asWidget<oneui::InteractiveSurface>(surface);
+    if (nativeSurface) {
+        nativeSurface->setPadding(toNativeInsets(padding));
+    }
+}
+
+void oneui_interactive_surface_set_style(
+    OneUiWidget* surface,
+    const OneUiInteractiveSurfaceStyle* style) {
+    auto* nativeSurface = asWidget<oneui::InteractiveSurface>(surface);
+    if (!nativeSurface || !style) {
+        return;
+    }
+    nativeSurface->setStyle(toInteractiveSurfaceStyle(*style));
+}
+
+void oneui_interactive_surface_set_on_click(
+    OneUiWidget* surface,
+    OneUiVoidCallback callback,
+    void* user_data) {
+    auto* nativeSurface = asWidget<oneui::InteractiveSurface>(surface);
+    if (!nativeSurface) {
+        return;
+    }
+    if (!callback) {
+        nativeSurface->setOnClick(nullptr);
+        return;
+    }
+    nativeSurface->setOnClick([callback, user_data] {
+        callback(user_data);
+    });
 }
 
 OneUiWidget* oneui_realtime_frame_view_create(void) {

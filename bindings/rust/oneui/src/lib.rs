@@ -144,6 +144,18 @@ impl UiDispatcher {
             sys::oneui_window_activate(raw);
         });
     }
+
+    pub fn minimize(&self) {
+        self.state.with_raw(|raw| unsafe {
+            sys::oneui_window_minimize(raw);
+        });
+    }
+
+    pub fn toggle_maximize(&self) {
+        self.state.with_raw(|raw| unsafe {
+            sys::oneui_window_toggle_maximize(raw);
+        });
+    }
 }
 
 pub struct Widget {
@@ -165,6 +177,14 @@ impl Widget {
     pub fn set_preferred_size(&self, width: f32, height: f32) {
         unsafe { sys::oneui_widget_set_preferred_size(self.as_raw(), width, height) };
     }
+
+    pub fn set_disabled(&self, disabled: bool) {
+        unsafe { sys::oneui_widget_set_disabled(self.as_raw(), i32::from(disabled)) };
+    }
+
+    pub fn set_visible(&self, visible: bool) {
+        unsafe { sys::oneui_widget_set_visible(self.as_raw(), i32::from(visible)) };
+    }
 }
 
 impl Drop for Widget {
@@ -185,6 +205,258 @@ pub struct Insets {
     pub right: f32,
     pub bottom: f32,
     pub left: f32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Color {
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+    pub a: u8,
+}
+
+impl Color {
+    pub const fn rgb(r: u8, g: u8, b: u8) -> Self {
+        Self { r, g, b, a: 255 }
+    }
+
+    pub const fn rgba(r: u8, g: u8, b: u8, a: u8) -> Self {
+        Self { r, g, b, a }
+    }
+}
+
+impl From<Color> for sys::OneUiColor {
+    fn from(value: Color) -> Self {
+        Self {
+            r: value.r,
+            g: value.g,
+            b: value.b,
+            a: value.a,
+        }
+    }
+}
+
+/// The focus treatment used by interactive controls. It is exposed as a
+/// first-class value so product shells can remain keyboard accessible while
+/// using a custom visual theme.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct FocusRingStyle {
+    pub color: Color,
+    pub width: f32,
+    pub offset: f32,
+    pub radius: f32,
+    pub visible: bool,
+}
+
+impl FocusRingStyle {
+    pub const fn hidden() -> Self {
+        Self {
+            color: Color::rgba(0, 0, 0, 0),
+            width: 0.0,
+            offset: 0.0,
+            radius: 0.0,
+            visible: false,
+        }
+    }
+}
+
+impl From<FocusRingStyle> for sys::OneUiFocusRingStyle {
+    fn from(value: FocusRingStyle) -> Self {
+        Self {
+            color: value.color.into(),
+            width: value.width,
+            offset: value.offset,
+            radius: value.radius,
+            visible: i32::from(value.visible),
+        }
+    }
+}
+
+/// Colors and geometry for one state in a native button transition.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ButtonStateStyle {
+    pub background: Color,
+    pub foreground: Color,
+    pub border: Color,
+    pub border_width: f32,
+    pub radius: f32,
+    pub focus_ring: FocusRingStyle,
+}
+
+impl ButtonStateStyle {
+    pub const fn solid(background: Color, foreground: Color, border: Color, radius: f32) -> Self {
+        Self {
+            background,
+            foreground,
+            border,
+            border_width: 1.0,
+            radius,
+            focus_ring: FocusRingStyle::hidden(),
+        }
+    }
+}
+
+impl From<ButtonStateStyle> for sys::OneUiButtonStateStyle {
+    fn from(value: ButtonStateStyle) -> Self {
+        Self {
+            background: value.background.into(),
+            foreground: value.foreground.into(),
+            border: value.border.into(),
+            border_width: value.border_width,
+            radius: value.radius,
+            focus_ring: value.focus_ring.into(),
+        }
+    }
+}
+
+/// A full five-state visual contract for a native [`Button`]. OneUI animates
+/// between these values on hover and press; applications only describe the
+/// visual states and never hand-roll pointer animations.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ButtonStyle {
+    pub normal: ButtonStateStyle,
+    pub hovered: ButtonStateStyle,
+    pub pressed: ButtonStateStyle,
+    pub disabled: ButtonStateStyle,
+    pub focus_visible: ButtonStateStyle,
+}
+
+impl From<ButtonStyle> for sys::OneUiButtonStyle {
+    fn from(value: ButtonStyle) -> Self {
+        Self {
+            normal: value.normal.into(),
+            hovered: value.hovered.into(),
+            pressed: value.pressed.into(),
+            disabled: value.disabled.into(),
+            focus_visible: value.focus_visible.into(),
+        }
+    }
+}
+
+/// The visual state for a content-bearing interactive surface such as a card
+/// or list row. It intentionally excludes text colors because the surface may
+/// host any arbitrary child composition.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct InteractiveSurfaceStateStyle {
+    pub background: Color,
+    pub border: Color,
+    pub border_width: f32,
+    pub radius: f32,
+}
+
+impl InteractiveSurfaceStateStyle {
+    pub const fn solid(background: Color, border: Color, radius: f32) -> Self {
+        Self {
+            background,
+            border,
+            border_width: 1.0,
+            radius,
+        }
+    }
+}
+
+impl From<InteractiveSurfaceStateStyle> for sys::OneUiInteractiveSurfaceStateStyle {
+    fn from(value: InteractiveSurfaceStateStyle) -> Self {
+        Self {
+            background: value.background.into(),
+            border: value.border.into(),
+            border_width: value.border_width,
+            radius: value.radius,
+        }
+    }
+}
+
+/// Native hover and press states for an [`InteractiveSurface`]. OneUI owns
+/// the animation clock and preserves events for controls nested inside it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct InteractiveSurfaceStyle {
+    pub normal: InteractiveSurfaceStateStyle,
+    pub hovered: InteractiveSurfaceStateStyle,
+    pub pressed: InteractiveSurfaceStateStyle,
+    pub disabled: InteractiveSurfaceStateStyle,
+}
+
+impl From<InteractiveSurfaceStyle> for sys::OneUiInteractiveSurfaceStyle {
+    fn from(value: InteractiveSurfaceStyle) -> Self {
+        Self {
+            normal: value.normal.into(),
+            hovered: value.hovered.into(),
+            pressed: value.pressed.into(),
+            disabled: value.disabled.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IconSymbol {
+    BrandBloom = 0,
+    Search = 1,
+    RemoteAssist = 2,
+    Monitor = 3,
+    Device = 4,
+    Toolbox = 5,
+    Compass = 6,
+    Settings = 7,
+    Bell = 8,
+    Minimize = 9,
+    Maximize = 10,
+    Restore = 11,
+    Close = 12,
+    Heart = 13,
+    Desktop = 14,
+    File = 15,
+    Sparkle = 16,
+    RadioOn = 17,
+    RadioOff = 18,
+    ToggleOn = 19,
+    KeyDots = 20,
+    Copy = 21,
+    ChevronDown = 22,
+    ChevronUp = 23,
+    Plus = 24,
+    User = 25,
+    Globe = 26,
+    Play = 27,
+    Check = 28,
+    BrandMark = 29,
+    CheckCircle = 30,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LabelAlign {
+    Start = 0,
+    Center = 1,
+    End = 2,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StackAlign {
+    Start = 0,
+    Center = 1,
+    End = 2,
+    Stretch = 3,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ButtonVariant {
+    Primary = 0,
+    Secondary = 1,
+}
+
+struct VoidCallback {
+    handler: Box<dyn FnMut() + 'static>,
+}
+
+unsafe extern "C" fn run_void_callback(user_data: *mut std::ffi::c_void) {
+    if user_data.is_null() {
+        return;
+    }
+    let callback = unsafe { &mut *user_data.cast::<VoidCallback>() };
+    let _ = catch_unwind(AssertUnwindSafe(|| (callback.handler)()));
+}
+
+fn wide_null_terminated(value: &str) -> Vec<u16> {
+    value.encode_utf16().chain(std::iter::once(0)).collect()
 }
 
 impl From<Insets> for sys::OneUiInsets {
@@ -222,6 +494,63 @@ impl Stack {
 
     pub fn set_padding(&self, padding: Insets) {
         unsafe { sys::oneui_stack_set_padding(self.widget.as_raw(), padding.into()) };
+    }
+
+    pub fn set_align(&self, align: StackAlign) {
+        unsafe { sys::oneui_stack_set_align(self.widget.as_raw(), align as i32) };
+    }
+
+    pub fn as_widget(&self) -> &Widget {
+        &self.widget
+    }
+}
+
+/// A simple native surface used to compose application regions and cards.
+pub struct Panel {
+    widget: Widget,
+}
+
+impl Panel {
+    pub fn new() -> Result<Self, Error> {
+        let widget = Widget::from_raw(unsafe { sys::oneui_panel_create() })?;
+        Ok(Self { widget })
+    }
+
+    pub fn set_content(&self, child: &Widget) {
+        unsafe { sys::oneui_panel_set_content(self.widget.as_raw(), child.as_raw()) };
+    }
+
+    pub fn set_background(&self, color: Color) {
+        unsafe {
+            sys::oneui_panel_set_background(
+                self.widget.as_raw(),
+                color.r,
+                color.g,
+                color.b,
+                color.a,
+            )
+        };
+    }
+
+    pub fn set_border(&self, color: Color, width: f32) {
+        unsafe {
+            sys::oneui_panel_set_border(
+                self.widget.as_raw(),
+                color.r,
+                color.g,
+                color.b,
+                color.a,
+                width,
+            )
+        };
+    }
+
+    pub fn set_radius(&self, radius: f32) {
+        unsafe { sys::oneui_panel_set_radius(self.widget.as_raw(), radius) };
+    }
+
+    pub fn set_padding(&self, padding: Insets) {
+        unsafe { sys::oneui_panel_set_padding(self.widget.as_raw(), padding.into()) };
     }
 
     pub fn as_widget(&self) -> &Widget {
@@ -281,21 +610,39 @@ impl Label {
         unsafe { sys::oneui_label_set_font_size(self.widget.as_raw(), font_size) };
     }
 
+    pub fn set_color(&self, color: Color) {
+        unsafe {
+            sys::oneui_label_set_color(self.widget.as_raw(), color.r, color.g, color.b, color.a)
+        };
+    }
+
+    pub fn set_font_weight(&self, weight: i32) {
+        unsafe { sys::oneui_label_set_font_weight(self.widget.as_raw(), weight) };
+    }
+
+    pub fn set_align(&self, align: LabelAlign) {
+        unsafe { sys::oneui_label_set_align(self.widget.as_raw(), align as i32) };
+    }
+
     pub fn as_widget(&self) -> &Widget {
         &self.widget
     }
 }
 
-/// A standard command button without an application-specific callback model.
+/// A standard command button with callback lifetime bound to the Rust wrapper.
 pub struct Button {
     widget: Widget,
+    callback: Option<Box<VoidCallback>>,
 }
 
 impl Button {
     pub fn new(text: &str) -> Result<Self, Error> {
         let text = sys::OneUiUtf8String::from_str(text);
         let widget = Widget::from_raw(unsafe { sys::oneui_button_create_utf8(text) })?;
-        Ok(Self { widget })
+        Ok(Self {
+            widget,
+            callback: None,
+        })
     }
 
     pub fn set_text(&self, text: &str) {
@@ -303,8 +650,416 @@ impl Button {
         unsafe { sys::oneui_button_set_text_utf8(self.widget.as_raw(), text) };
     }
 
+    pub fn set_icon(&self, symbol: IconSymbol) {
+        unsafe { sys::oneui_button_set_icon(self.widget.as_raw(), symbol as i32) };
+    }
+
+    pub fn set_variant(&self, variant: ButtonVariant) {
+        unsafe { sys::oneui_button_set_variant(self.widget.as_raw(), variant as i32) };
+    }
+
+    /// Applies all visual states while preserving OneUI's native hover and
+    /// press transitions.
+    pub fn set_style(&self, style: ButtonStyle) {
+        let style: sys::OneUiButtonStyle = style.into();
+        unsafe { sys::oneui_button_set_style(self.widget.as_raw(), &style) };
+    }
+
+    pub fn clear_style(&self) {
+        unsafe { sys::oneui_button_clear_style(self.widget.as_raw()) };
+    }
+
+    pub fn set_on_click<F>(&mut self, callback: F)
+    where
+        F: FnMut() + 'static,
+    {
+        self.clear_on_click();
+        self.callback = Some(Box::new(VoidCallback {
+            handler: Box::new(callback),
+        }));
+        let user_data = (self
+            .callback
+            .as_deref_mut()
+            .expect("button callback was just installed")
+            as *mut VoidCallback)
+            .cast();
+        unsafe {
+            sys::oneui_button_set_on_click(self.widget.as_raw(), Some(run_void_callback), user_data)
+        };
+    }
+
+    pub fn clear_on_click(&mut self) {
+        unsafe { sys::oneui_button_set_on_click(self.widget.as_raw(), None, std::ptr::null_mut()) };
+        self.callback = None;
+    }
+
     pub fn as_widget(&self) -> &Widget {
         &self.widget
+    }
+}
+
+impl Drop for Button {
+    fn drop(&mut self) {
+        self.clear_on_click();
+    }
+}
+
+/// A reusable native card/list-row surface with hover and press transitions.
+pub struct InteractiveSurface {
+    widget: Widget,
+    callback: Option<Box<VoidCallback>>,
+}
+
+impl InteractiveSurface {
+    pub fn new() -> Result<Self, Error> {
+        let widget = Widget::from_raw(unsafe { sys::oneui_interactive_surface_create() })?;
+        Ok(Self {
+            widget,
+            callback: None,
+        })
+    }
+
+    pub fn set_content(&self, child: &Widget) {
+        unsafe { sys::oneui_interactive_surface_set_content(self.widget.as_raw(), child.as_raw()) };
+    }
+
+    pub fn set_padding(&self, padding: Insets) {
+        unsafe { sys::oneui_interactive_surface_set_padding(self.widget.as_raw(), padding.into()) };
+    }
+
+    pub fn set_style(&self, style: InteractiveSurfaceStyle) {
+        let style: sys::OneUiInteractiveSurfaceStyle = style.into();
+        unsafe { sys::oneui_interactive_surface_set_style(self.widget.as_raw(), &style) };
+    }
+
+    pub fn set_on_click<F>(&mut self, callback: F)
+    where
+        F: FnMut() + 'static,
+    {
+        self.clear_on_click();
+        self.callback = Some(Box::new(VoidCallback {
+            handler: Box::new(callback),
+        }));
+        let user_data = (self
+            .callback
+            .as_deref_mut()
+            .expect("interactive surface callback was just installed")
+            as *mut VoidCallback)
+            .cast();
+        unsafe {
+            sys::oneui_interactive_surface_set_on_click(
+                self.widget.as_raw(),
+                Some(run_void_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn clear_on_click(&mut self) {
+        unsafe {
+            sys::oneui_interactive_surface_set_on_click(
+                self.widget.as_raw(),
+                None,
+                std::ptr::null_mut(),
+            )
+        };
+        self.callback = None;
+    }
+
+    pub fn as_widget(&self) -> &Widget {
+        &self.widget
+    }
+}
+
+impl Drop for InteractiveSurface {
+    fn drop(&mut self) {
+        self.clear_on_click();
+    }
+}
+
+pub struct Icon {
+    widget: Widget,
+}
+
+impl Icon {
+    pub fn new(symbol: IconSymbol) -> Result<Self, Error> {
+        let widget = Widget::from_raw(unsafe { sys::oneui_icon_create(symbol as i32) })?;
+        Ok(Self { widget })
+    }
+
+    pub fn set_symbol(&self, symbol: IconSymbol) {
+        unsafe { sys::oneui_icon_set_symbol(self.widget.as_raw(), symbol as i32) };
+    }
+
+    pub fn set_color(&self, color: Color) {
+        unsafe {
+            sys::oneui_icon_set_color(self.widget.as_raw(), color.r, color.g, color.b, color.a)
+        };
+    }
+
+    pub fn as_widget(&self) -> &Widget {
+        &self.widget
+    }
+}
+
+pub struct IconButton {
+    widget: Widget,
+    callback: Option<Box<VoidCallback>>,
+}
+
+impl IconButton {
+    pub fn new(symbol: IconSymbol) -> Result<Self, Error> {
+        let widget = Widget::from_raw(unsafe { sys::oneui_icon_button_create(symbol as i32) })?;
+        Ok(Self {
+            widget,
+            callback: None,
+        })
+    }
+
+    pub fn set_symbol(&self, symbol: IconSymbol) {
+        unsafe { sys::oneui_icon_button_set_symbol(self.widget.as_raw(), symbol as i32) };
+    }
+
+    pub fn set_on_click<F>(&mut self, callback: F)
+    where
+        F: FnMut() + 'static,
+    {
+        self.clear_on_click();
+        self.callback = Some(Box::new(VoidCallback {
+            handler: Box::new(callback),
+        }));
+        let user_data = (self
+            .callback
+            .as_deref_mut()
+            .expect("icon button callback was just installed")
+            as *mut VoidCallback)
+            .cast();
+        unsafe {
+            sys::oneui_icon_button_set_on_click(
+                self.widget.as_raw(),
+                Some(run_void_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn clear_on_click(&mut self) {
+        unsafe {
+            sys::oneui_icon_button_set_on_click(self.widget.as_raw(), None, std::ptr::null_mut())
+        };
+        self.callback = None;
+    }
+
+    pub fn as_widget(&self) -> &Widget {
+        &self.widget
+    }
+}
+
+impl Drop for IconButton {
+    fn drop(&mut self) {
+        self.clear_on_click();
+    }
+}
+
+/// Native title bar for borderless desktop windows.
+pub struct WindowTitleBar {
+    widget: Widget,
+    minimize_callback: Option<Box<VoidCallback>>,
+    maximize_callback: Option<Box<VoidCallback>>,
+    close_callback: Option<Box<VoidCallback>>,
+}
+
+impl WindowTitleBar {
+    pub fn new(title: &str) -> Result<Self, Error> {
+        let title = wide_null_terminated(title);
+        let widget = Widget::from_raw(unsafe { sys::oneui_title_bar_create(title.as_ptr()) })?;
+        Ok(Self {
+            widget,
+            minimize_callback: None,
+            maximize_callback: None,
+            close_callback: None,
+        })
+    }
+
+    pub fn set_title(&self, title: &str) {
+        let title = wide_null_terminated(title);
+        unsafe { sys::oneui_title_bar_set_title(self.widget.as_raw(), title.as_ptr()) };
+    }
+
+    pub fn set_icon(&self, symbol: IconSymbol) {
+        unsafe { sys::oneui_title_bar_set_icon_symbol(self.widget.as_raw(), symbol as i32) };
+    }
+
+    /// Selects a named built-in chrome variant, such as `dark`.
+    pub fn set_variant(&self, variant: &str) {
+        let variant = std::ffi::CString::new(variant)
+            .expect("OneUI title bar variants cannot contain a NUL byte");
+        unsafe { sys::oneui_title_bar_set_variant(self.widget.as_raw(), variant.as_ptr()) };
+    }
+
+    pub fn set_on_minimize<F>(&mut self, callback: F)
+    where
+        F: FnMut() + 'static,
+    {
+        self.clear_on_minimize();
+        self.minimize_callback = Some(Box::new(VoidCallback {
+            handler: Box::new(callback),
+        }));
+        let user_data = (self
+            .minimize_callback
+            .as_deref_mut()
+            .expect("title bar minimize callback was just installed")
+            as *mut VoidCallback)
+            .cast();
+        unsafe {
+            sys::oneui_title_bar_set_on_minimize(
+                self.widget.as_raw(),
+                Some(run_void_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn set_on_maximize<F>(&mut self, callback: F)
+    where
+        F: FnMut() + 'static,
+    {
+        self.clear_on_maximize();
+        self.maximize_callback = Some(Box::new(VoidCallback {
+            handler: Box::new(callback),
+        }));
+        let user_data = (self
+            .maximize_callback
+            .as_deref_mut()
+            .expect("title bar maximize callback was just installed")
+            as *mut VoidCallback)
+            .cast();
+        unsafe {
+            sys::oneui_title_bar_set_on_maximize(
+                self.widget.as_raw(),
+                Some(run_void_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn set_on_close<F>(&mut self, callback: F)
+    where
+        F: FnMut() + 'static,
+    {
+        self.clear_on_close();
+        self.close_callback = Some(Box::new(VoidCallback {
+            handler: Box::new(callback),
+        }));
+        let user_data = (self
+            .close_callback
+            .as_deref_mut()
+            .expect("title bar close callback was just installed")
+            as *mut VoidCallback)
+            .cast();
+        unsafe {
+            sys::oneui_title_bar_set_on_close(
+                self.widget.as_raw(),
+                Some(run_void_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn clear_on_minimize(&mut self) {
+        unsafe {
+            sys::oneui_title_bar_set_on_minimize(self.widget.as_raw(), None, std::ptr::null_mut())
+        };
+        self.minimize_callback = None;
+    }
+
+    pub fn clear_on_maximize(&mut self) {
+        unsafe {
+            sys::oneui_title_bar_set_on_maximize(self.widget.as_raw(), None, std::ptr::null_mut())
+        };
+        self.maximize_callback = None;
+    }
+
+    pub fn clear_on_close(&mut self) {
+        unsafe {
+            sys::oneui_title_bar_set_on_close(self.widget.as_raw(), None, std::ptr::null_mut())
+        };
+        self.close_callback = None;
+    }
+
+    pub fn as_widget(&self) -> &Widget {
+        &self.widget
+    }
+}
+
+impl Drop for WindowTitleBar {
+    fn drop(&mut self) {
+        self.clear_on_minimize();
+        self.clear_on_maximize();
+        self.clear_on_close();
+    }
+}
+
+/// Animated desktop-sidebar navigation item.
+pub struct NavItem {
+    widget: Widget,
+    callback: Option<Box<VoidCallback>>,
+}
+
+impl NavItem {
+    pub fn new(text: &str, symbol: IconSymbol, selected: bool) -> Result<Self, Error> {
+        let text = wide_null_terminated(text);
+        let widget = Widget::from_raw(unsafe {
+            sys::oneui_nav_item_create(text.as_ptr(), symbol as i32, i32::from(selected))
+        })?;
+        Ok(Self {
+            widget,
+            callback: None,
+        })
+    }
+
+    pub fn set_selected(&self, selected: bool) {
+        unsafe { sys::oneui_nav_item_set_selected(self.widget.as_raw(), i32::from(selected)) };
+    }
+
+    pub fn set_on_click<F>(&mut self, callback: F)
+    where
+        F: FnMut() + 'static,
+    {
+        self.clear_on_click();
+        self.callback = Some(Box::new(VoidCallback {
+            handler: Box::new(callback),
+        }));
+        let user_data = (self
+            .callback
+            .as_deref_mut()
+            .expect("nav item callback was just installed")
+            as *mut VoidCallback)
+            .cast();
+        unsafe {
+            sys::oneui_nav_item_set_on_click(
+                self.widget.as_raw(),
+                Some(run_void_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn clear_on_click(&mut self) {
+        unsafe {
+            sys::oneui_nav_item_set_on_click(self.widget.as_raw(), None, std::ptr::null_mut())
+        };
+        self.callback = None;
+    }
+
+    pub fn as_widget(&self) -> &Widget {
+        &self.widget
+    }
+}
+
+impl Drop for NavItem {
+    fn drop(&mut self) {
+        self.clear_on_click();
     }
 }
 
@@ -1145,6 +1900,28 @@ impl Window {
         });
     }
 
+    pub fn set_borderless(&self, borderless: bool) {
+        self.state.with_raw(|raw| unsafe {
+            sys::oneui_window_set_borderless(raw, i32::from(borderless));
+        });
+    }
+
+    pub fn set_title_bar_drag_metrics(&self, title_bar_height: f32, reserved_button_width: f32) {
+        self.state.with_raw(|raw| unsafe {
+            sys::oneui_window_set_title_bar_drag_metrics(
+                raw,
+                title_bar_height,
+                reserved_button_width,
+            );
+        });
+    }
+
+    pub fn set_corner_radius(&self, radius: f32) {
+        self.state.with_raw(|raw| unsafe {
+            sys::oneui_window_set_corner_radius(raw, radius);
+        });
+    }
+
     pub fn set_content(&self, content: &Widget) {
         self.state.with_raw(|raw| unsafe {
             sys::oneui_window_set_content(raw, content.as_raw());
@@ -1208,9 +1985,10 @@ impl Drop for Window {
 #[cfg(test)]
 mod tests {
     use super::{
-        terminal_style, Button, Error, Insets, Label, List, ListItem, ScrollView, Stack,
-        StackDirection, TerminalCell, TerminalColor, TerminalCursor, TerminalFrame, TerminalView,
-        TextField, TreeItem, TreeView, Window, WindowOptions,
+        terminal_style, Button, Color, Error, Insets, InteractiveSurface,
+        InteractiveSurfaceStateStyle, InteractiveSurfaceStyle, Label, List, ListItem, ScrollView,
+        Stack, StackDirection, TerminalCell, TerminalColor, TerminalCursor, TerminalFrame,
+        TerminalView, TextField, TreeItem, TreeView, Window, WindowOptions,
     };
     use std::sync::{
         atomic::{AtomicBool, Ordering},
@@ -1249,6 +2027,44 @@ mod tests {
         label.set_font_size(20.0);
         content.add(label.as_widget());
         window.set_content(content.as_widget());
+    }
+
+    #[test]
+    fn mounts_a_styled_interactive_surface_with_native_hover_states() {
+        let _guard = window_test_lock().lock().expect("window test lock");
+        let window = Window::new(&WindowOptions::default()).expect("window should be created");
+        let surface = InteractiveSurface::new().expect("surface should be created");
+        surface.set_style(InteractiveSurfaceStyle {
+            normal: InteractiveSurfaceStateStyle::solid(
+                Color::rgb(33, 35, 50),
+                Color::rgb(57, 60, 79),
+                10.0,
+            ),
+            hovered: InteractiveSurfaceStateStyle::solid(
+                Color::rgb(48, 51, 70),
+                Color::rgb(80, 84, 113),
+                10.0,
+            ),
+            pressed: InteractiveSurfaceStateStyle::solid(
+                Color::rgb(40, 42, 58),
+                Color::rgb(101, 88, 241),
+                10.0,
+            ),
+            disabled: InteractiveSurfaceStateStyle::solid(
+                Color::rgb(33, 35, 50),
+                Color::rgb(57, 60, 79),
+                10.0,
+            ),
+        });
+        surface.set_padding(Insets {
+            top: 12.0,
+            right: 12.0,
+            bottom: 12.0,
+            left: 12.0,
+        });
+        let label = Label::new("Native card").expect("label should be created");
+        surface.set_content(label.as_widget());
+        window.set_content(surface.as_widget());
     }
 
     #[test]

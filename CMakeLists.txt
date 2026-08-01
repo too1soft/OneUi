@@ -37,6 +37,7 @@ add_library(oneui_core OBJECT
     src/core/icon.cpp
     src/core/icon_badge.cpp
     src/core/icon_button.cpp
+    src/core/interactive_surface.cpp
     src/core/icon_view.cpp
     src/core/label.cpp
     src/core/log_view.cpp

@@ -9,6 +9,7 @@
 #include "oneui/controls/card.h"
 #include "oneui/controls/checkbox.h"
 #include "oneui/controls/form_field.h"
+#include "oneui/controls/interactive_surface.h"
 #include "oneui/controls/label.h"
 #include "oneui/controls/list.h"
 #include "oneui/controls/popup.h"

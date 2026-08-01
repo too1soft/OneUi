@@ -125,6 +125,20 @@ typedef struct OneUiButtonStyle {
     OneUiButtonStateStyle focus_visible;
 } OneUiButtonStyle;
 
+typedef struct OneUiInteractiveSurfaceStateStyle {
+    OneUiColor background;
+    OneUiColor border;
+    float border_width;
+    float radius;
+} OneUiInteractiveSurfaceStateStyle;
+
+typedef struct OneUiInteractiveSurfaceStyle {
+    OneUiInteractiveSurfaceStateStyle normal;
+    OneUiInteractiveSurfaceStateStyle hovered;
+    OneUiInteractiveSurfaceStateStyle pressed;
+    OneUiInteractiveSurfaceStateStyle disabled;
+} OneUiInteractiveSurfaceStyle;
+
 typedef struct OneUiTextFieldStateStyle {
     OneUiColor background;
     OneUiColor foreground;
@@ -490,6 +504,12 @@ ONEUI_API void oneui_table_set_rows(OneUiWidget* table, const wchar_t* rows);
 
 ONEUI_API OneUiWidget* oneui_card_create();
 ONEUI_API void oneui_card_set_content(OneUiWidget* card, OneUiWidget* child);
+
+ONEUI_API OneUiWidget* oneui_interactive_surface_create();
+ONEUI_API void oneui_interactive_surface_set_content(OneUiWidget* surface, OneUiWidget* child);
+ONEUI_API void oneui_interactive_surface_set_padding(OneUiWidget* surface, OneUiInsets padding);
+ONEUI_API void oneui_interactive_surface_set_style(OneUiWidget* surface, const OneUiInteractiveSurfaceStyle* style);
+ONEUI_API void oneui_interactive_surface_set_on_click(OneUiWidget* surface, OneUiVoidCallback callback, void* user_data);
 
 ONEUI_API OneUiWidget* oneui_realtime_frame_view_create(void);
 ONEUI_API void oneui_realtime_frame_view_set_scale_mode(OneUiWidget* frame_view, OneUiVideoScaleMode scale_mode);

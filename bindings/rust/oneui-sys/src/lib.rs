@@ -51,6 +51,55 @@ pub struct OneUiColor {
 }
 
 #[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct OneUiFocusRingStyle {
+    pub color: OneUiColor,
+    pub width: f32,
+    pub offset: f32,
+    pub radius: f32,
+    pub visible: c_int,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct OneUiButtonStateStyle {
+    pub background: OneUiColor,
+    pub foreground: OneUiColor,
+    pub border: OneUiColor,
+    pub border_width: f32,
+    pub radius: f32,
+    pub focus_ring: OneUiFocusRingStyle,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct OneUiButtonStyle {
+    pub normal: OneUiButtonStateStyle,
+    pub hovered: OneUiButtonStateStyle,
+    pub pressed: OneUiButtonStateStyle,
+    pub disabled: OneUiButtonStateStyle,
+    pub focus_visible: OneUiButtonStateStyle,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct OneUiInteractiveSurfaceStateStyle {
+    pub background: OneUiColor,
+    pub border: OneUiColor,
+    pub border_width: f32,
+    pub radius: f32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct OneUiInteractiveSurfaceStyle {
+    pub normal: OneUiInteractiveSurfaceStateStyle,
+    pub hovered: OneUiInteractiveSurfaceStateStyle,
+    pub pressed: OneUiInteractiveSurfaceStateStyle,
+    pub disabled: OneUiInteractiveSurfaceStateStyle,
+}
+
+#[repr(C)]
 #[derive(Clone, Copy)]
 pub struct OneUiTerminalCellUtf8 {
     pub text: OneUiUtf8String,
@@ -132,6 +181,15 @@ extern "C" {
     pub fn oneui_window_run(window: *mut OneUiWindow) -> c_int;
     pub fn oneui_window_close(window: *mut OneUiWindow);
     pub fn oneui_window_request_close(window: *mut OneUiWindow);
+    pub fn oneui_window_minimize(window: *mut OneUiWindow);
+    pub fn oneui_window_toggle_maximize(window: *mut OneUiWindow);
+    pub fn oneui_window_set_borderless(window: *mut OneUiWindow, borderless: c_int);
+    pub fn oneui_window_set_title_bar_drag_metrics(
+        window: *mut OneUiWindow,
+        title_bar_height: f32,
+        reserved_button_width: f32,
+    );
+    pub fn oneui_window_set_corner_radius(window: *mut OneUiWindow, radius: f32);
     pub fn oneui_window_set_title_utf8(window: *mut OneUiWindow, title: OneUiUtf8String);
     pub fn oneui_window_set_content(window: *mut OneUiWindow, widget: *mut OneUiWidget);
     pub fn oneui_window_post_owned(
@@ -143,11 +201,52 @@ extern "C" {
 
     pub fn oneui_widget_destroy(widget: *mut OneUiWidget);
     pub fn oneui_widget_set_preferred_size(widget: *mut OneUiWidget, width: f32, height: f32);
+    pub fn oneui_widget_set_disabled(widget: *mut OneUiWidget, disabled: c_int);
+    pub fn oneui_widget_set_visible(widget: *mut OneUiWidget, visible: c_int);
     // 0 = column, 1 = row. These values are part of the stable C ABI.
     pub fn oneui_stack_create(direction: c_int) -> *mut OneUiWidget;
     pub fn oneui_stack_add(stack: *mut OneUiWidget, child: *mut OneUiWidget);
     pub fn oneui_stack_set_gap(stack: *mut OneUiWidget, gap: f32);
     pub fn oneui_stack_set_padding(stack: *mut OneUiWidget, insets: OneUiInsets);
+    pub fn oneui_stack_set_align(stack: *mut OneUiWidget, align: c_int);
+
+    pub fn oneui_panel_create() -> *mut OneUiWidget;
+    pub fn oneui_panel_set_content(panel: *mut OneUiWidget, child: *mut OneUiWidget);
+    pub fn oneui_panel_set_background(
+        panel: *mut OneUiWidget,
+        r: u8,
+        g: u8,
+        b: u8,
+        a: u8,
+    );
+    pub fn oneui_panel_set_border(
+        panel: *mut OneUiWidget,
+        r: u8,
+        g: u8,
+        b: u8,
+        a: u8,
+        width: f32,
+    );
+    pub fn oneui_panel_set_radius(panel: *mut OneUiWidget, radius: f32);
+    pub fn oneui_panel_set_padding(panel: *mut OneUiWidget, insets: OneUiInsets);
+    pub fn oneui_interactive_surface_create() -> *mut OneUiWidget;
+    pub fn oneui_interactive_surface_set_content(
+        surface: *mut OneUiWidget,
+        child: *mut OneUiWidget,
+    );
+    pub fn oneui_interactive_surface_set_padding(
+        surface: *mut OneUiWidget,
+        insets: OneUiInsets,
+    );
+    pub fn oneui_interactive_surface_set_style(
+        surface: *mut OneUiWidget,
+        style: *const OneUiInteractiveSurfaceStyle,
+    );
+    pub fn oneui_interactive_surface_set_on_click(
+        surface: *mut OneUiWidget,
+        callback: OneUiVoidCallback,
+        user_data: *mut c_void,
+    );
     pub fn oneui_scroll_view_create() -> *mut OneUiWidget;
     pub fn oneui_scroll_view_set_content(view: *mut OneUiWidget, child: *mut OneUiWidget);
     pub fn oneui_scroll_view_set_content_height(view: *mut OneUiWidget, height: f32);
@@ -155,9 +254,62 @@ extern "C" {
     pub fn oneui_scroll_view_scroll_to_bottom(view: *mut OneUiWidget);
     pub fn oneui_label_create_utf8(text: OneUiUtf8String) -> *mut OneUiWidget;
     pub fn oneui_label_set_text_utf8(label: *mut OneUiWidget, text: OneUiUtf8String);
+    pub fn oneui_label_set_color(label: *mut OneUiWidget, r: u8, g: u8, b: u8, a: u8);
     pub fn oneui_label_set_font_size(label: *mut OneUiWidget, font_size: f32);
+    pub fn oneui_label_set_font_weight(label: *mut OneUiWidget, font_weight: c_int);
+    pub fn oneui_label_set_align(label: *mut OneUiWidget, align: c_int);
+
+    pub fn oneui_icon_create(symbol: c_int) -> *mut OneUiWidget;
+    pub fn oneui_icon_set_symbol(icon: *mut OneUiWidget, symbol: c_int);
+    pub fn oneui_icon_set_color(icon: *mut OneUiWidget, r: u8, g: u8, b: u8, a: u8);
+
+    pub fn oneui_icon_button_create(symbol: c_int) -> *mut OneUiWidget;
+    pub fn oneui_icon_button_set_symbol(icon_button: *mut OneUiWidget, symbol: c_int);
+    pub fn oneui_icon_button_set_on_click(
+        icon_button: *mut OneUiWidget,
+        callback: OneUiVoidCallback,
+        user_data: *mut c_void,
+    );
+
+    pub fn oneui_title_bar_create(title: *const u16) -> *mut OneUiWidget;
+    pub fn oneui_title_bar_set_title(title_bar: *mut OneUiWidget, title: *const u16);
+    pub fn oneui_title_bar_set_icon_symbol(title_bar: *mut OneUiWidget, symbol: c_int);
+    pub fn oneui_title_bar_set_variant(title_bar: *mut OneUiWidget, variant: *const c_char);
+    pub fn oneui_title_bar_set_on_minimize(
+        title_bar: *mut OneUiWidget,
+        callback: OneUiVoidCallback,
+        user_data: *mut c_void,
+    );
+    pub fn oneui_title_bar_set_on_maximize(
+        title_bar: *mut OneUiWidget,
+        callback: OneUiVoidCallback,
+        user_data: *mut c_void,
+    );
+    pub fn oneui_title_bar_set_on_close(
+        title_bar: *mut OneUiWidget,
+        callback: OneUiVoidCallback,
+        user_data: *mut c_void,
+    );
+
+    pub fn oneui_nav_item_create(text: *const u16, symbol: c_int, selected: c_int)
+        -> *mut OneUiWidget;
+    pub fn oneui_nav_item_set_selected(nav_item: *mut OneUiWidget, selected: c_int);
+    pub fn oneui_nav_item_set_on_click(
+        nav_item: *mut OneUiWidget,
+        callback: OneUiVoidCallback,
+        user_data: *mut c_void,
+    );
     pub fn oneui_button_create_utf8(text: OneUiUtf8String) -> *mut OneUiWidget;
     pub fn oneui_button_set_text_utf8(button: *mut OneUiWidget, text: OneUiUtf8String);
+    pub fn oneui_button_set_icon(button: *mut OneUiWidget, symbol: c_int);
+    pub fn oneui_button_set_variant(button: *mut OneUiWidget, variant: c_int);
+    pub fn oneui_button_set_on_click(
+        button: *mut OneUiWidget,
+        callback: OneUiVoidCallback,
+        user_data: *mut c_void,
+    );
+    pub fn oneui_button_set_style(button: *mut OneUiWidget, style: *const OneUiButtonStyle);
+    pub fn oneui_button_clear_style(button: *mut OneUiWidget);
     pub fn oneui_text_field_create_utf8(placeholder: OneUiUtf8String) -> *mut OneUiWidget;
     pub fn oneui_text_field_set_text_utf8(text_field: *mut OneUiWidget, text: OneUiUtf8String);
     pub fn oneui_text_field_set_read_only(text_field: *mut OneUiWidget, read_only: c_int);
