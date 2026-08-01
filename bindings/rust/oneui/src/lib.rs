@@ -819,15 +819,31 @@ pub struct ListItem {
     pub detail: String,
 }
 
+struct ListChangedCallback {
+    handler: Box<dyn FnMut(i32) + 'static>,
+}
+
+unsafe extern "C" fn run_list_changed_callback(value: i32, user_data: *mut std::ffi::c_void) {
+    if user_data.is_null() {
+        return;
+    }
+    let callback = unsafe { &mut *user_data.cast::<ListChangedCallback>() };
+    let _ = catch_unwind(AssertUnwindSafe(|| (callback.handler)(value)));
+}
+
 /// A selectable native list.
 pub struct List {
     widget: Widget,
+    changed_callback: Option<Box<ListChangedCallback>>,
 }
 
 impl List {
     pub fn new() -> Result<Self, Error> {
         let widget = Widget::from_raw(unsafe { sys::oneui_list_create() })?;
-        Ok(Self { widget })
+        Ok(Self {
+            widget,
+            changed_callback: None,
+        })
     }
 
     pub fn set_items(&self, items: &[ListItem]) {
@@ -855,8 +871,42 @@ impl List {
         unsafe { sys::oneui_list_selected_index(self.widget.as_raw()) }
     }
 
+    pub fn set_on_changed<F>(&mut self, callback: F)
+    where
+        F: FnMut(i32) + 'static,
+    {
+        self.clear_on_changed();
+        self.changed_callback = Some(Box::new(ListChangedCallback {
+            handler: Box::new(callback),
+        }));
+        let user_data = (self
+            .changed_callback
+            .as_deref_mut()
+            .expect("list callback was just installed")
+            as *mut ListChangedCallback)
+            .cast();
+        unsafe {
+            sys::oneui_list_set_on_changed(
+                self.widget.as_raw(),
+                Some(run_list_changed_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn clear_on_changed(&mut self) {
+        unsafe { sys::oneui_list_set_on_changed(self.widget.as_raw(), None, std::ptr::null_mut()) };
+        self.changed_callback = None;
+    }
+
     pub fn as_widget(&self) -> &Widget {
         &self.widget
+    }
+}
+
+impl Drop for List {
+    fn drop(&mut self) {
+        self.clear_on_changed();
     }
 }
 
@@ -1230,6 +1280,30 @@ mod tests {
         content.add(refresh.as_widget());
         content.add(scroll.as_widget());
         window.set_content(content.as_widget());
+    }
+
+    #[test]
+    fn reports_native_list_selection_changes_to_rust() {
+        let _guard = window_test_lock().lock().expect("window test lock");
+        let window = Window::new(&WindowOptions::default()).expect("window should be created");
+        let selected = std::rc::Rc::new(std::cell::RefCell::new(None));
+        let mut list = List::new().expect("list should be created");
+        list.set_items(&[
+            ListItem {
+                title: "Production".to_owned(),
+                detail: "10.0.0.1".to_owned(),
+            },
+            ListItem {
+                title: "Staging".to_owned(),
+                detail: "10.0.0.2".to_owned(),
+            },
+        ]);
+        let observed = std::rc::Rc::clone(&selected);
+        list.set_on_changed(move |index| *observed.borrow_mut() = Some(index));
+        list.set_selected_index(1);
+
+        assert_eq!(*selected.borrow(), Some(1));
+        window.set_content(list.as_widget());
     }
 
     #[test]

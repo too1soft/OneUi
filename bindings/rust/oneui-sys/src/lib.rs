@@ -211,6 +211,11 @@ extern "C" {
     );
     pub fn oneui_list_set_selected_index(list: *mut OneUiWidget, index: c_int);
     pub fn oneui_list_selected_index(list: *mut OneUiWidget) -> c_int;
+    pub fn oneui_list_set_on_changed(
+        list: *mut OneUiWidget,
+        callback: Option<unsafe extern "C" fn(value: c_int, user_data: *mut c_void)>,
+        user_data: *mut c_void,
+    );
     pub fn oneui_tree_view_create() -> *mut OneUiWidget;
     pub fn oneui_tree_view_set_items_utf8(
         tree_view: *mut OneUiWidget,
