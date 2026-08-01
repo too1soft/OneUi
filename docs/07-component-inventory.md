@@ -36,7 +36,7 @@
 - `Checkbox`、`Switch`：布尔输入。
 - `Slider`：数值输入，支持范围、步进、拖拽、键盘箭头和 typed style override；`ProgressBar`：数值展示，支持 typed style override。
 - `Tabs`、`RadioGroup`、`Select`：单选类控件；三者均支持 typed style override。
-- `Badge`、`Separator`、`List`、`ListItem`、`Table`：基础展示控件；`Badge`、`Separator`、`List` 和 `Table` 支持 typed style override。
+- `Badge`、`Separator`、`List`、`ListItem`、`TreeView`、`Table`：基础展示控件；`Badge`、`Separator`、`List`、`TreeView` 和 `Table` 支持 typed style override。
 - `OverlayHost`：浮层挂载、移除、层级、边界、基础事件转发、`OverlayOptions::trapsFocus` 键盘焦点边界、`OverlayOptions::blocksOutsidePointer` 外部指针阻断、`OverlayOptions::modal/modeless` 薄预设、overlay-to-overlay 焦点历史和普通 View 焦点恢复。
 - `PopupPlacement`：浮层几何定位 resolver，支持 Bottom/Top/Left/Right 的 start/end 或 start 侧向定位、主轴 flip、shift 和 clamp。
 - `Popup`：anchor/content 命中、鼠标焦点交接、键盘转发、`open/bindOpen`、`PopupOutsidePointerPolicy` 外部指针三态策略、`PopupInteractionMode` 交互模式预设、Escape 关闭和基础阴影。

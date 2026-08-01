@@ -20,6 +20,7 @@
 #include "oneui/controls/tabs.h"
 #include "oneui/controls/text_field.h"
 #include "oneui/controls/terminal_view.h"
+#include "oneui/controls/tree_view.h"
 #include "oneui/controls/tile.h"
 #include "oneui/controls/toast.h"
 #include "oneui/controls/window_title_bar.h"
@@ -341,6 +342,25 @@ std::vector<oneui::ListItem> listItemsFromUtf8(const OneUiListItemUtf8* items, s
         if (!item.title.empty() || !item.detail.empty()) {
             result.push_back(std::move(item));
         }
+    }
+    return result;
+}
+
+std::vector<oneui::TreeItem> treeItemsFromUtf8(const OneUiTreeItemUtf8* items, std::size_t count) {
+    std::vector<oneui::TreeItem> result;
+    if (!items || count == 0) {
+        return result;
+    }
+
+    result.reserve(count);
+    for (std::size_t index = 0; index < count; ++index) {
+        oneui::TreeItem item;
+        item.id = utf8OrEmpty(items[index].id);
+        item.parentId = utf8OrEmpty(items[index].parent_id);
+        item.title = utf8OrEmpty(items[index].title);
+        item.detail = utf8OrEmpty(items[index].detail);
+        item.expanded = items[index].expanded != 0;
+        result.push_back(std::move(item));
     }
     return result;
 }
@@ -2432,6 +2452,60 @@ void oneui_list_set_on_changed(OneUiWidget* list, OneUiIntCallback callback, voi
     }
     nativeList->setOnChanged([callback, user_data](int value) {
         callback(value, user_data);
+    });
+}
+
+OneUiWidget* oneui_tree_view_create() {
+    return wrap(std::make_shared<oneui::TreeView>());
+}
+
+void oneui_tree_view_set_items_utf8(
+    OneUiWidget* tree_view,
+    const OneUiTreeItemUtf8* items,
+    std::size_t count) {
+    if (auto* nativeTree = asWidget<oneui::TreeView>(tree_view)) {
+        nativeTree->setItems(treeItemsFromUtf8(items, count));
+    }
+}
+
+void oneui_tree_view_set_selected_id_utf8(OneUiWidget* tree_view, OneUiUtf8String id) {
+    if (auto* nativeTree = asWidget<oneui::TreeView>(tree_view)) {
+        nativeTree->setSelectedId(utf8OrEmpty(id));
+    }
+}
+
+float oneui_tree_view_content_height(OneUiWidget* tree_view) {
+    if (const auto* nativeTree = asWidget<oneui::TreeView>(tree_view)) {
+        return nativeTree->contentHeight();
+    }
+    return 0.0f;
+}
+
+std::size_t oneui_tree_view_selected_id_utf8(OneUiWidget* tree_view, char* buffer, std::size_t buffer_len) {
+    const auto* nativeTree = asWidget<oneui::TreeView>(tree_view);
+    if (!nativeTree) {
+        return 0;
+    }
+    const std::string id = utf8FromWide(nativeTree->selectedId());
+    copyUtf8Field(id, buffer, buffer_len);
+    return id.size() + 1;
+}
+
+void oneui_tree_view_set_on_selection_changed_utf8(
+    OneUiWidget* tree_view,
+    OneUiUtf8TextCallback callback,
+    void* user_data) {
+    auto* nativeTree = asWidget<oneui::TreeView>(tree_view);
+    if (!nativeTree) {
+        return;
+    }
+    if (!callback) {
+        nativeTree->setOnSelectionChanged(nullptr);
+        return;
+    }
+    nativeTree->setOnSelectionChanged([callback, user_data](const std::wstring& id) {
+        const std::string utf8 = utf8FromWide(id);
+        callback(utf8.data(), utf8.size(), user_data);
     });
 }
 

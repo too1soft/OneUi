@@ -157,6 +157,33 @@ void testUtf8ListUsesStructuredItems() {
     oneui_widget_destroy(list);
 }
 
+void testUtf8TreeViewUsesStableIdsAndStructuredParents() {
+    OneUiWidget* tree = oneui_tree_view_create();
+    expectTrue("utf8 tree view create", tree != nullptr);
+    if (!tree) {
+        return;
+    }
+
+    const std::string rootId = "platform";
+    const std::string childId = "production";
+    const std::string rootTitle = "Platform ä¸»æº";
+    const std::string childTitle = "çäº§ SSH";
+    const OneUiTreeItemUtf8 items[] = {
+        {utf8View(rootId), {}, utf8View(rootTitle), utf8View("12"), 1},
+        {utf8View(childId), utf8View(rootId), utf8View(childTitle), utf8View("8"), 1},
+    };
+    oneui_tree_view_set_items_utf8(tree, items, sizeof(items) / sizeof(items[0]));
+    oneui_tree_view_set_selected_id_utf8(tree, utf8View(childId));
+
+    const size_t required = oneui_tree_view_selected_id_utf8(tree, nullptr, 0);
+    expectTrue("utf8 tree selected id has required length", required == childId.size() + 1);
+    char buffer[64]{};
+    const size_t copied = oneui_tree_view_selected_id_utf8(tree, buffer, sizeof(buffer));
+    expectTrue("utf8 tree selected id round trips", copied == required && std::string(buffer) == childId);
+
+    oneui_widget_destroy(tree);
+}
+
 void testWindowDpiMetricsAbiUsesLogicalAndPhysicalSizes() {
     OneUiWindowOptions options{};
     options.title = L"OneUI C ABI DPI Metrics";
@@ -491,6 +518,7 @@ int main() {
     testOwnedWindowPostCleansUpCancelledWork();
     testUtf8AbiRoundTripsUnicodeText();
     testUtf8ListUsesStructuredItems();
+    testUtf8TreeViewUsesStableIdsAndStructuredParents();
     testWindowDpiMetricsAbiUsesLogicalAndPhysicalSizes();
     testAppShellAbiCreatesReusableSlots();
     testProductShellAbiIsPublicProductFrame();

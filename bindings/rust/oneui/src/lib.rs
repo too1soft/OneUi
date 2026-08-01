@@ -854,6 +854,147 @@ impl List {
     }
 }
 
+/// Structured tree data. `id` is a stable opaque identifier; an empty
+/// `parent_id` denotes a root and every field remains UTF-8 at the ABI edge.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TreeItem {
+    pub id: String,
+    pub parent_id: String,
+    pub title: String,
+    pub detail: String,
+    pub expanded: bool,
+}
+
+struct TreeViewSelectionCallback {
+    handler: Box<dyn FnMut(String) + 'static>,
+}
+
+unsafe extern "C" fn run_tree_view_selection_callback(
+    text: *const std::ffi::c_char,
+    length: usize,
+    user_data: *mut std::ffi::c_void,
+) {
+    if text.is_null() || user_data.is_null() {
+        return;
+    }
+    let bytes = unsafe { std::slice::from_raw_parts(text.cast::<u8>(), length) };
+    let id = String::from_utf8_lossy(bytes).into_owned();
+    let callback = unsafe { &mut *user_data.cast::<TreeViewSelectionCallback>() };
+    let _ = catch_unwind(AssertUnwindSafe(|| (callback.handler)(id)));
+}
+
+/// Native hierarchical navigation with ID-based selection and local expansion.
+pub struct TreeView {
+    widget: Widget,
+    selection_callback: Option<Box<TreeViewSelectionCallback>>,
+}
+
+impl TreeView {
+    pub fn new() -> Result<Self, Error> {
+        let widget = Widget::from_raw(unsafe { sys::oneui_tree_view_create() })?;
+        Ok(Self {
+            widget,
+            selection_callback: None,
+        })
+    }
+
+    pub fn set_items(&self, items: &[TreeItem]) {
+        let native_items: Vec<sys::OneUiTreeItemUtf8> = items
+            .iter()
+            .map(|item| sys::OneUiTreeItemUtf8 {
+                id: sys::OneUiUtf8String::from_str(&item.id),
+                parent_id: sys::OneUiUtf8String::from_str(&item.parent_id),
+                title: sys::OneUiUtf8String::from_str(&item.title),
+                detail: sys::OneUiUtf8String::from_str(&item.detail),
+                expanded: i32::from(item.expanded),
+            })
+            .collect();
+        unsafe {
+            sys::oneui_tree_view_set_items_utf8(
+                self.widget.as_raw(),
+                native_items.as_ptr(),
+                native_items.len(),
+            )
+        };
+    }
+
+    pub fn set_selected_id(&self, id: &str) {
+        unsafe {
+            sys::oneui_tree_view_set_selected_id_utf8(
+                self.widget.as_raw(),
+                sys::OneUiUtf8String::from_str(id),
+            )
+        };
+    }
+
+    pub fn content_height(&self) -> f32 {
+        unsafe { sys::oneui_tree_view_content_height(self.widget.as_raw()) }
+    }
+
+    pub fn selected_id(&self) -> String {
+        let required = unsafe {
+            sys::oneui_tree_view_selected_id_utf8(self.widget.as_raw(), std::ptr::null_mut(), 0)
+        };
+        if required <= 1 {
+            return String::new();
+        }
+        let mut bytes = vec![0u8; required];
+        unsafe {
+            sys::oneui_tree_view_selected_id_utf8(
+                self.widget.as_raw(),
+                bytes.as_mut_ptr().cast(),
+                bytes.len(),
+            )
+        };
+        bytes.pop();
+        String::from_utf8_lossy(&bytes).into_owned()
+    }
+
+    pub fn set_on_selection_changed<F>(&mut self, callback: F)
+    where
+        F: FnMut(String) + 'static,
+    {
+        self.clear_selection_callback();
+        self.selection_callback = Some(Box::new(TreeViewSelectionCallback {
+            handler: Box::new(callback),
+        }));
+        let user_data = (self
+            .selection_callback
+            .as_deref_mut()
+            .expect("tree view selection callback was just installed")
+            as *mut TreeViewSelectionCallback)
+            .cast();
+        unsafe {
+            sys::oneui_tree_view_set_on_selection_changed_utf8(
+                self.widget.as_raw(),
+                Some(run_tree_view_selection_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn clear_selection_callback(&mut self) {
+        unsafe {
+            sys::oneui_tree_view_set_on_selection_changed_utf8(
+                self.widget.as_raw(),
+                None,
+                std::ptr::null_mut(),
+            )
+        };
+        self.selection_callback = None;
+    }
+
+    pub fn as_widget(&self) -> &Widget {
+        &self.widget
+    }
+}
+
+impl Drop for TreeView {
+    fn drop(&mut self) {
+        self.clear_selection_callback();
+    }
+}
+
 impl Window {
     pub fn new(options: &WindowOptions) -> Result<Self, Error> {
         let actual = unsafe { sys::oneui_utf8_abi_version() };
@@ -957,7 +1098,7 @@ mod tests {
     use super::{
         terminal_style, Button, Error, Insets, Label, List, ListItem, ScrollView, Stack,
         StackDirection, TerminalCell, TerminalColor, TerminalCursor, TerminalFrame, TerminalView,
-        TextField, Window, WindowOptions,
+        TextField, TreeItem, TreeView, Window, WindowOptions,
     };
     use std::sync::{
         atomic::{AtomicBool, Ordering},
@@ -1027,6 +1168,33 @@ mod tests {
         content.add(refresh.as_widget());
         content.add(scroll.as_widget());
         window.set_content(content.as_widget());
+    }
+
+    #[test]
+    fn mounts_native_tree_with_structured_id_based_items() {
+        let _guard = window_test_lock().lock().expect("window test lock");
+        let window = Window::new(&WindowOptions::default()).expect("window should be created");
+        let tree = TreeView::new().expect("tree view should be created");
+        tree.set_items(&[
+            TreeItem {
+                id: "platform".to_owned(),
+                title: "Platform".to_owned(),
+                detail: "12".to_owned(),
+                expanded: true,
+                ..TreeItem::default()
+            },
+            TreeItem {
+                id: "production".to_owned(),
+                parent_id: "platform".to_owned(),
+                title: "Production".to_owned(),
+                detail: "8".to_owned(),
+                expanded: true,
+            },
+        ]);
+        tree.set_selected_id("production");
+        assert_eq!(tree.selected_id(), "production");
+        assert_eq!(tree.content_height(), 64.0);
+        window.set_content(tree.as_widget());
     }
 
     #[test]

@@ -40,6 +40,18 @@ typedef struct OneUiListItemUtf8 {
     OneUiUtf8String detail;
 } OneUiListItemUtf8;
 
+/*
+ * Structured tree data. `id` is a stable opaque identifier; an empty
+ * parent_id denotes a root. OneUI copies every field before the call returns.
+ */
+typedef struct OneUiTreeItemUtf8 {
+    OneUiUtf8String id;
+    OneUiUtf8String parent_id;
+    OneUiUtf8String title;
+    OneUiUtf8String detail;
+    int expanded;
+} OneUiTreeItemUtf8;
+
 typedef struct OneUiWindowOptionsUtf8 {
     OneUiUtf8String title;
     int width;
@@ -455,6 +467,17 @@ ONEUI_API void oneui_list_set_items_utf8(OneUiWidget* list, const OneUiListItemU
 ONEUI_API void oneui_list_set_selected_index(OneUiWidget* list, int index);
 ONEUI_API int oneui_list_selected_index(OneUiWidget* list);
 ONEUI_API void oneui_list_set_on_changed(OneUiWidget* list, OneUiIntCallback callback, void* user_data);
+
+ONEUI_API OneUiWidget* oneui_tree_view_create(void);
+ONEUI_API void oneui_tree_view_set_items_utf8(OneUiWidget* tree_view, const OneUiTreeItemUtf8* items, size_t count);
+ONEUI_API void oneui_tree_view_set_selected_id_utf8(OneUiWidget* tree_view, OneUiUtf8String id);
+ONEUI_API float oneui_tree_view_content_height(OneUiWidget* tree_view);
+/* Returns required bytes including the trailing NUL; returns 0 for an invalid view. */
+ONEUI_API size_t oneui_tree_view_selected_id_utf8(OneUiWidget* tree_view, char* buffer, size_t buffer_len);
+ONEUI_API void oneui_tree_view_set_on_selection_changed_utf8(
+    OneUiWidget* tree_view,
+    OneUiUtf8TextCallback callback,
+    void* user_data);
 
 ONEUI_API OneUiWidget* oneui_table_create(void);
 ONEUI_API void oneui_table_set_columns(OneUiWidget* table, const wchar_t* columns);

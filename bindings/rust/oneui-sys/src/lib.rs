@@ -32,6 +32,16 @@ pub struct OneUiListItemUtf8 {
 }
 
 #[repr(C)]
+#[derive(Clone, Copy)]
+pub struct OneUiTreeItemUtf8 {
+    pub id: OneUiUtf8String,
+    pub parent_id: OneUiUtf8String,
+    pub title: OneUiUtf8String,
+    pub detail: OneUiUtf8String,
+    pub expanded: c_int,
+}
+
+#[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
 pub struct OneUiColor {
     pub r: u8,
@@ -192,6 +202,24 @@ extern "C" {
     );
     pub fn oneui_list_set_selected_index(list: *mut OneUiWidget, index: c_int);
     pub fn oneui_list_selected_index(list: *mut OneUiWidget) -> c_int;
+    pub fn oneui_tree_view_create() -> *mut OneUiWidget;
+    pub fn oneui_tree_view_set_items_utf8(
+        tree_view: *mut OneUiWidget,
+        items: *const OneUiTreeItemUtf8,
+        count: usize,
+    );
+    pub fn oneui_tree_view_set_selected_id_utf8(tree_view: *mut OneUiWidget, id: OneUiUtf8String);
+    pub fn oneui_tree_view_content_height(tree_view: *mut OneUiWidget) -> f32;
+    pub fn oneui_tree_view_selected_id_utf8(
+        tree_view: *mut OneUiWidget,
+        buffer: *mut c_char,
+        buffer_len: usize,
+    ) -> usize;
+    pub fn oneui_tree_view_set_on_selection_changed_utf8(
+        tree_view: *mut OneUiWidget,
+        callback: OneUiUtf8TextCallback,
+        user_data: *mut c_void,
+    );
 
     pub fn oneui_clipboard_set_text_utf8(text: OneUiUtf8String) -> c_int;
     pub fn oneui_clipboard_get_text_utf8(buffer: *mut c_char, buffer_len: usize) -> usize;

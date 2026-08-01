@@ -65,6 +65,7 @@ add_library(oneui_core OBJECT
     src/core/text_field.cpp
     src/core/text_input_bridge.cpp
     src/core/terminal_view.cpp
+    src/core/tree_view.cpp
     src/core/title_bar_bridge.cpp
     src/core/tile.cpp
     src/core/toast.cpp
@@ -202,6 +203,22 @@ if(BUILD_TESTING)
     )
 
     add_test(NAME oneui_terminal_view_behavior_tests COMMAND oneui_terminal_view_behavior_tests)
+
+    add_executable(oneui_tree_view_behavior_tests
+        tests/tree_view_behavior_tests.cpp
+    )
+
+    target_link_libraries(oneui_tree_view_behavior_tests
+        PRIVATE
+            oneui_core
+    )
+
+    target_compile_definitions(oneui_tree_view_behavior_tests
+        PRIVATE
+            ONEUI_BUILDING_DLL
+    )
+
+    add_test(NAME oneui_tree_view_behavior_tests COMMAND oneui_tree_view_behavior_tests)
 
     add_executable(oneui_panel_behavior_tests
         tests/panel_behavior_tests.cpp

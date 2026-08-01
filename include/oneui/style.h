@@ -392,6 +392,12 @@ struct ListStyleOverride {
     std::optional<ListStateStyleOverride> focusVisible;
 };
 
+// Tree navigation follows the same visual contract as a selectable list while
+// adding hierarchy through the TreeView control itself.
+using TreeViewStyle = ListStyle;
+using TreeViewStateStyleOverride = ListStateStyleOverride;
+using TreeViewStyleOverride = ListStyleOverride;
+
 struct TableStyle {
     Color background{255, 255, 255};
     Color border{211, 216, 224};
