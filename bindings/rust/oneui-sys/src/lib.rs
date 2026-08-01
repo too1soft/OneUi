@@ -100,6 +100,8 @@ pub struct OneUiRawKeyEvent {
 
 pub type OneUiRawKeyCallback =
     Option<unsafe extern "C" fn(event: *const OneUiRawKeyEvent, user_data: *mut c_void)>;
+pub type OneUiTerminalViewportCallback =
+    Option<unsafe extern "C" fn(rows: c_ushort, columns: c_ushort, user_data: *mut c_void)>;
 
 extern "C" {
     pub fn oneui_utf8_abi_version() -> c_uint;
@@ -174,6 +176,11 @@ extern "C" {
     pub fn oneui_terminal_view_set_on_raw_key(
         view: *mut OneUiWidget,
         callback: OneUiRawKeyCallback,
+        user_data: *mut c_void,
+    );
+    pub fn oneui_terminal_view_set_on_viewport_changed(
+        view: *mut OneUiWidget,
+        callback: OneUiTerminalViewportCallback,
         user_data: *mut c_void,
     );
     pub fn oneui_search_box_create_utf8(placeholder: OneUiUtf8String) -> *mut OneUiWidget;

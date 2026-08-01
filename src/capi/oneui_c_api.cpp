@@ -2704,6 +2704,21 @@ void oneui_terminal_view_set_on_raw_key(
     }
 }
 
+void oneui_terminal_view_set_on_viewport_changed(
+    OneUiWidget* view,
+    OneUiTerminalViewportCallback callback,
+    void* user_data) {
+    if (auto* nativeView = asWidget<oneui::TerminalView>(view)) {
+        if (!callback) {
+            nativeView->setOnViewportChanged(nullptr);
+            return;
+        }
+        nativeView->setOnViewportChanged([callback, user_data](oneui::TerminalViewport viewport) {
+            callback(viewport.rows, viewport.columns, user_data);
+        });
+    }
+}
+
 OneUiWidget* oneui_tile_create(const wchar_t* title, const wchar_t* subtitle) {
     return wrap(std::make_shared<oneui::Tile>(wideOrEmpty(title), wideOrEmpty(subtitle)));
 }

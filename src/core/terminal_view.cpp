@@ -106,6 +106,12 @@ void TerminalView::setOnRawKey(RawKeyCallback callback) {
     onRawKey_ = std::move(callback);
 }
 
+void TerminalView::setOnViewportChanged(ViewportChangedCallback callback) {
+    onViewportChanged_ = std::move(callback);
+    viewport_ = {};
+    invalidate();
+}
+
 void TerminalView::paint(Canvas& canvas) {
     const Rect bounds = frame();
     canvas.fillRect(bounds, background_);
@@ -114,6 +120,7 @@ void TerminalView::paint(Canvas& canvas) {
     }
 
     const GridMetrics metrics = gridMetrics(canvas);
+    reportViewport(bounds, metrics);
     canvas.save();
     canvas.clipRect(bounds);
 
@@ -239,6 +246,25 @@ TerminalView::GridMetrics TerminalView::gridMetrics(const Canvas& canvas) const 
         std::max(1.0f, measured),
         std::max(fontSize_ * 1.30f, fontSize_ + 2.0f),
     };
+}
+
+void TerminalView::reportViewport(Rect bounds, GridMetrics metrics) {
+    const auto columns = static_cast<std::uint16_t>(std::clamp(
+        static_cast<int>(std::floor(bounds.width / std::max(1.0f, metrics.cellWidth))),
+        1,
+        static_cast<int>(std::numeric_limits<std::uint16_t>::max())));
+    const auto rows = static_cast<std::uint16_t>(std::clamp(
+        static_cast<int>(std::floor(bounds.height / std::max(1.0f, metrics.cellHeight))),
+        1,
+        static_cast<int>(std::numeric_limits<std::uint16_t>::max())));
+    const TerminalViewport viewport{rows, columns};
+    if (viewport.rows == viewport_.rows && viewport.columns == viewport_.columns) {
+        return;
+    }
+    viewport_ = viewport;
+    if (onViewportChanged_) {
+        onViewportChanged_(viewport);
+    }
 }
 
 std::size_t TerminalView::cellIndex(std::uint16_t row, std::uint16_t column) const {

@@ -53,6 +53,11 @@ virtual-key, scan-code, modifier, repeat, and key-up/down information for the
 terminal session's key encoder. A product must avoid writing both events for
 the same keystroke.
 
+`setOnViewportChanged` / `set_on_viewport_changed` reports the integer row and
+column capacity calculated from the view's actual native canvas and monospace
+font metrics. Session controllers should resize their PTY or remote terminal
+only after this callback, rather than duplicating font or pixel calculations.
+
 ## Style Flags
 
 The ABI-stable style bits are:

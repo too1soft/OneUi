@@ -35,6 +35,12 @@ struct TerminalCursor {
     bool visible = true;
 };
 
+/// The number of whole terminal cells that fit in the current viewport.
+struct TerminalViewport {
+    std::uint16_t rows = 1;
+    std::uint16_t columns = 1;
+};
+
 // TerminalView is an ANSI-terminal renderer, not a log viewer. The terminal
 // emulator owns escape-sequence parsing and supplies a structured cell grid;
 // this control owns pixel rendering, focus, and native input delivery.
@@ -42,6 +48,7 @@ class ONEUI_API TerminalView final : public Widget {
 public:
     using TextInputCallback = std::function<void(const std::wstring&)>;
     using RawKeyCallback = std::function<void(const KeyEvent&)>;
+    using ViewportChangedCallback = std::function<void(TerminalViewport)>;
 
     TerminalView();
 
@@ -58,6 +65,7 @@ public:
 
     void setOnTextInput(TextInputCallback callback);
     void setOnRawKey(RawKeyCallback callback);
+    void setOnViewportChanged(ViewportChangedCallback callback);
 
     void paint(Canvas& canvas) override;
     bool onMouseDown(const MouseEvent& event) override;
@@ -75,6 +83,7 @@ private:
     };
 
     GridMetrics gridMetrics(const Canvas& canvas) const;
+    void reportViewport(Rect bounds, GridMetrics metrics);
     std::size_t cellIndex(std::uint16_t row, std::uint16_t column) const;
 
     std::uint16_t rows_ = 0;
@@ -87,6 +96,8 @@ private:
     Color cursorColor_{196, 181, 253, 255};
     TextInputCallback onTextInput_;
     RawKeyCallback onRawKey_;
+    ViewportChangedCallback onViewportChanged_;
+    TerminalViewport viewport_{};
 };
 
 } // namespace oneui

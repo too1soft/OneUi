@@ -400,6 +400,13 @@ pub struct TerminalCursor {
     pub visible: bool,
 }
 
+/// The whole-cell terminal viewport reported by the native renderer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TerminalViewport {
+    pub rows: u16,
+    pub columns: u16,
+}
+
 /// An owned terminal snapshot that can be submitted from a session worker.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TerminalFrame {
@@ -444,6 +451,10 @@ struct TerminalTextInputCallback {
 
 struct TerminalRawKeyCallback {
     handler: Box<dyn FnMut(RawKeyEvent) + 'static>,
+}
+
+struct TerminalViewportCallback {
+    handler: Box<dyn FnMut(TerminalViewport) + 'static>,
 }
 
 struct TerminalViewState {
@@ -555,6 +566,20 @@ unsafe extern "C" fn run_terminal_raw_key_callback(
     let _ = catch_unwind(AssertUnwindSafe(|| (callback.handler)(event)));
 }
 
+unsafe extern "C" fn run_terminal_viewport_callback(
+    rows: u16,
+    columns: u16,
+    user_data: *mut std::ffi::c_void,
+) {
+    if user_data.is_null() {
+        return;
+    }
+    let callback = unsafe { &mut *user_data.cast::<TerminalViewportCallback>() };
+    let _ = catch_unwind(AssertUnwindSafe(|| {
+        (callback.handler)(TerminalViewport { rows, columns })
+    }));
+}
+
 /// Native terminal grid with explicit frame and input boundaries.
 ///
 /// The `TerminalView` itself stays on the UI thread. Its callbacks are owned
@@ -564,6 +589,7 @@ pub struct TerminalView {
     state: Arc<TerminalViewState>,
     text_input_callback: Option<Box<TerminalTextInputCallback>>,
     raw_key_callback: Option<Box<TerminalRawKeyCallback>>,
+    viewport_callback: Option<Box<TerminalViewportCallback>>,
 }
 
 impl TerminalView {
@@ -578,6 +604,7 @@ impl TerminalView {
             widget,
             text_input_callback: None,
             raw_key_callback: None,
+            viewport_callback: None,
         })
     }
 
@@ -662,6 +689,29 @@ impl TerminalView {
         };
     }
 
+    pub fn set_on_viewport_changed<F>(&mut self, callback: F)
+    where
+        F: FnMut(TerminalViewport) + 'static,
+    {
+        self.clear_viewport_callback();
+        self.viewport_callback = Some(Box::new(TerminalViewportCallback {
+            handler: Box::new(callback),
+        }));
+        let user_data = (self
+            .viewport_callback
+            .as_deref_mut()
+            .expect("terminal viewport callback was just installed")
+            as *mut TerminalViewportCallback)
+            .cast();
+        unsafe {
+            sys::oneui_terminal_view_set_on_viewport_changed(
+                self.widget.as_raw(),
+                Some(run_terminal_viewport_callback),
+                user_data,
+            )
+        };
+    }
+
     pub fn clear_text_input_callback(&mut self) {
         unsafe {
             sys::oneui_terminal_view_set_on_text_input_utf8(
@@ -684,6 +734,17 @@ impl TerminalView {
         self.raw_key_callback = None;
     }
 
+    pub fn clear_viewport_callback(&mut self) {
+        unsafe {
+            sys::oneui_terminal_view_set_on_viewport_changed(
+                self.widget.as_raw(),
+                None,
+                std::ptr::null_mut(),
+            )
+        };
+        self.viewport_callback = None;
+    }
+
     pub fn as_widget(&self) -> &Widget {
         &self.widget
     }
@@ -702,6 +763,7 @@ impl Drop for TerminalView {
         self.state.update_scheduled.store(false, Ordering::Release);
         self.clear_text_input_callback();
         self.clear_raw_key_callback();
+        self.clear_viewport_callback();
     }
 }
 

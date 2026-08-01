@@ -489,6 +489,8 @@ ONEUI_API void oneui_remote_input_region_set_on_raw_key(
     void* user_data);
 ONEUI_API void oneui_remote_input_region_release_all_inputs(OneUiWidget* region);
 
+typedef void (*OneUiTerminalViewportCallback)(unsigned short rows, unsigned short columns, void* user_data);
+
 ONEUI_API OneUiWidget* oneui_terminal_view_create(void);
 ONEUI_API void oneui_terminal_view_set_font_size(OneUiWidget* view, float size);
 ONEUI_API void oneui_terminal_view_set_palette(
@@ -514,6 +516,10 @@ ONEUI_API void oneui_terminal_view_set_on_text_input_utf8(
 ONEUI_API void oneui_terminal_view_set_on_raw_key(
     OneUiWidget* view,
     OneUiRawKeyCallback callback,
+    void* user_data);
+ONEUI_API void oneui_terminal_view_set_on_viewport_changed(
+    OneUiWidget* view,
+    OneUiTerminalViewportCallback callback,
     void* user_data);
 
 ONEUI_API OneUiWidget* oneui_tile_create(const wchar_t* title, const wchar_t* subtitle);

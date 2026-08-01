@@ -101,6 +101,12 @@ void testPaintHonorsWideCellsStylesAndCursor() {
         oneui::TerminalCell{L"", {240, 200, 80, 255}, {20, 24, 36, 255}, oneui::TerminalCellWideContinuation},
     });
     terminal.setCursor(oneui::TerminalCursor{0, 1, true});
+    oneui::TerminalViewport viewport{};
+    int viewportChanges = 0;
+    terminal.setOnViewportChanged([&](oneui::TerminalViewport value) {
+        viewport = value;
+        ++viewportChanges;
+    });
 
     RecordingCanvas canvas;
     terminal.paint(canvas);
@@ -118,6 +124,12 @@ void testPaintHonorsWideCellsStylesAndCursor() {
     expectNear("terminal wide glyph width", canvas.texts.back().rect.width, 24.0f);
     expectEqual("terminal underline painted", canvas.lineCount, 1);
     expectEqual("terminal paints background and cursor", canvas.fillCount >= 2 ? 1 : 0, 1);
+    expectEqual("terminal reports viewport once", viewportChanges, 1);
+    expectEqual("terminal viewport columns", viewport.columns, 25);
+    expectEqual("terminal viewport rows", viewport.rows, 6);
+
+    terminal.paint(canvas);
+    expectEqual("terminal suppresses duplicate viewport", viewportChanges, 1);
 }
 
 void testTextAndRawKeyCallbacksStaySeparate() {
