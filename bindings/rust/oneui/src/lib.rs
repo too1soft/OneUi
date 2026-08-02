@@ -4,8 +4,10 @@
 //! with window lifetime and grows reusable controls without exposing raw FFI to
 //! product applications.
 
+use std::ffi::{CStr, CString};
 use std::marker::PhantomData;
 use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::path::Path;
 use std::ptr::NonNull;
 use std::rc::Rc;
 use std::sync::{
@@ -22,6 +24,113 @@ pub enum Error {
     WidgetCreationFailed,
     WidgetDestroyed,
     WindowClosed,
+}
+
+/// Writes UTF-8 text to the operating system clipboard.
+pub fn set_clipboard_text(text: &str) -> bool {
+    let text = sys::OneUiUtf8String::from_str(text);
+    unsafe { sys::oneui_clipboard_set_text_utf8(text) != 0 }
+}
+
+/// Reads UTF-8 text from the operating system clipboard.
+pub fn clipboard_text() -> Option<String> {
+    let required = unsafe { sys::oneui_clipboard_get_text_utf8(std::ptr::null_mut(), 0) };
+    if required == 0 {
+        return None;
+    }
+
+    let mut buffer = vec![0u8; required];
+    let written =
+        unsafe { sys::oneui_clipboard_get_text_utf8(buffer.as_mut_ptr().cast(), buffer.len()) };
+    if written == 0 {
+        return None;
+    }
+    if buffer.last() == Some(&0) {
+        buffer.pop();
+    }
+    String::from_utf8(buffer).ok()
+}
+
+/// Errors returned while building a native OneUI style sheet from CSS.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StyleSheetError {
+    CreationFailed,
+    InteriorNul,
+    ParseFailed(String),
+    ReadFailed(String),
+}
+
+/// A reusable CSS theme for OneUI windows and widgets.
+///
+/// The style sheet is owned by Rust while OneUI retains a shared native copy
+/// after it is installed on a window. Applications should assign semantic
+/// classes to widgets instead of reproducing visual tokens in every page.
+pub struct StyleSheet {
+    raw: NonNull<sys::OneUiStyleSheet>,
+}
+
+impl StyleSheet {
+    pub fn new() -> Result<Self, StyleSheetError> {
+        let raw = NonNull::new(unsafe { sys::oneui_style_sheet_create() })
+            .ok_or(StyleSheetError::CreationFailed)?;
+        Ok(Self { raw })
+    }
+
+    pub fn from_css(css: &str) -> Result<Self, StyleSheetError> {
+        let mut style_sheet = Self::new()?;
+        style_sheet.add_css(css)?;
+        Ok(style_sheet)
+    }
+
+    pub fn add_css(&mut self, css: &str) -> Result<(), StyleSheetError> {
+        let css = CString::new(css).map_err(|_| StyleSheetError::InteriorNul)?;
+        let mut error = [0i8; 1024];
+        let applied = unsafe {
+            sys::oneui_style_sheet_add_css(
+                self.raw.as_ptr(),
+                css.as_ptr(),
+                error.as_mut_ptr(),
+                error.len() as i32,
+            )
+        };
+        if applied != 0 {
+            return Ok(());
+        }
+
+        let message = unsafe { CStr::from_ptr(error.as_ptr()) }
+            .to_string_lossy()
+            .into_owned();
+        Err(StyleSheetError::ParseFailed(message))
+    }
+
+    pub fn load_file(&mut self, path: impl AsRef<Path>) -> Result<(), StyleSheetError> {
+        let css = std::fs::read_to_string(path.as_ref())
+            .map_err(|error| StyleSheetError::ReadFailed(error.to_string()))?;
+        self.add_css(&css)
+    }
+
+    pub fn set_custom_property(&mut self, name: &str, value: &str) -> Result<(), StyleSheetError> {
+        let name = CString::new(name).map_err(|_| StyleSheetError::InteriorNul)?;
+        let value = CString::new(value).map_err(|_| StyleSheetError::InteriorNul)?;
+        unsafe {
+            sys::oneui_style_sheet_set_custom_property(
+                self.raw.as_ptr(),
+                name.as_ptr(),
+                value.as_ptr(),
+            )
+        };
+        Ok(())
+    }
+
+    fn as_raw(&self) -> *mut sys::OneUiStyleSheet {
+        self.raw.as_ptr()
+    }
+}
+
+impl Drop for StyleSheet {
+    fn drop(&mut self) {
+        unsafe { sys::oneui_style_sheet_destroy(self.raw.as_ptr()) };
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -184,6 +293,27 @@ impl Widget {
 
     pub fn set_visible(&self, visible: bool) {
         unsafe { sys::oneui_widget_set_visible(self.as_raw(), i32::from(visible)) };
+    }
+
+    /// Assigns semantic CSS classes. The currently installed window style
+    /// sheet is reapplied immediately by the native runtime.
+    pub fn set_classes(&self, classes: &str) -> Result<(), StyleSheetError> {
+        let classes = CString::new(classes).map_err(|_| StyleSheetError::InteriorNul)?;
+        unsafe { sys::oneui_widget_set_classes(self.as_raw(), classes.as_ptr()) };
+        Ok(())
+    }
+
+    /// Overrides the native element name while preserving a semantic class
+    /// list. Use this for layout regions such as `aside`, `main`, and `header`.
+    pub fn set_style_node(&self, tag: &str, classes: &str) -> Result<(), StyleSheetError> {
+        let tag = CString::new(tag).map_err(|_| StyleSheetError::InteriorNul)?;
+        let classes = CString::new(classes).map_err(|_| StyleSheetError::InteriorNul)?;
+        unsafe { sys::oneui_widget_set_style_node(self.as_raw(), tag.as_ptr(), classes.as_ptr()) };
+        Ok(())
+    }
+
+    pub fn apply_style_sheet(&self, style_sheet: &StyleSheet) {
+        unsafe { sys::oneui_widget_apply_style_sheet(self.as_raw(), style_sheet.as_raw()) };
     }
 }
 
@@ -420,6 +550,27 @@ pub enum IconSymbol {
     Check = 28,
     BrandMark = 29,
     CheckCircle = 30,
+    Terminal = 31,
+    Server = 32,
+    LayoutGrid = 33,
+    List = 34,
+    Refresh = 35,
+    Upload = 36,
+    Download = 37,
+    Sliders = 38,
+    Code = 39,
+    Database = 40,
+    Cube = 41,
+    Notebook = 42,
+    Edit = 43,
+    Trash = 44,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ButtonContentAlign {
+    Start = 0,
+    Center = 1,
+    End = 2,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -505,6 +656,232 @@ impl Stack {
     }
 }
 
+/// Alignment for overlays positioned inside an [`OverlayHost`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OverlayAlignment {
+    Start = 0,
+    Center = 1,
+    End = 2,
+}
+
+/// A native overlay composition root.
+///
+/// Use an overlay host whenever a product needs transient UI such as dialogs,
+/// menus, or teaching callouts. Modal overlays trap focus and prevent pointer
+/// input from leaking into the page below.
+pub struct OverlayHost {
+    widget: Widget,
+}
+
+impl OverlayHost {
+    pub fn new() -> Result<Self, Error> {
+        let widget = Widget::from_raw(unsafe { sys::oneui_overlay_host_create() })?;
+        Ok(Self { widget })
+    }
+
+    pub fn set_content(&self, child: &Widget) {
+        unsafe { sys::oneui_overlay_host_set_content(self.widget.as_raw(), child.as_raw()) };
+    }
+
+    pub fn add_modal_anchored_overlay(
+        &self,
+        child: &Widget,
+        layer: i32,
+        width: f32,
+        height: f32,
+        margin: Insets,
+        horizontal_alignment: OverlayAlignment,
+        vertical_alignment: OverlayAlignment,
+    ) {
+        unsafe {
+            sys::oneui_overlay_host_add_modal_anchored_overlay(
+                self.widget.as_raw(),
+                child.as_raw(),
+                layer,
+                width,
+                height,
+                margin.into(),
+                horizontal_alignment as i32,
+                vertical_alignment as i32,
+            )
+        };
+    }
+
+    pub fn remove_overlay(&self, child: &Widget) -> bool {
+        unsafe { sys::oneui_overlay_host_remove_overlay(self.widget.as_raw(), child.as_raw()) != 0 }
+    }
+
+    pub fn as_widget(&self) -> &Widget {
+        &self.widget
+    }
+}
+
+/// Standard native dialog chrome for content supplied by the application.
+///
+/// Place the dialog in an [`OverlayHost`] with a modal overlay to receive
+/// focus trapping and outside-pointer blocking.
+pub struct Dialog {
+    widget: Widget,
+    close_callback: Option<Box<VoidCallback>>,
+}
+
+impl Dialog {
+    pub fn new(title: &str, subtitle: &str) -> Result<Self, Error> {
+        let title = wide_null_terminated(title);
+        let subtitle = wide_null_terminated(subtitle);
+        let widget = Widget::from_raw(unsafe {
+            sys::oneui_dialog_create(title.as_ptr(), subtitle.as_ptr())
+        })?;
+        Ok(Self {
+            widget,
+            close_callback: None,
+        })
+    }
+
+    pub fn set_title(&self, title: &str) {
+        let title = wide_null_terminated(title);
+        unsafe { sys::oneui_dialog_set_title(self.widget.as_raw(), title.as_ptr()) };
+    }
+
+    pub fn set_subtitle(&self, subtitle: &str) {
+        let subtitle = wide_null_terminated(subtitle);
+        unsafe { sys::oneui_dialog_set_subtitle(self.widget.as_raw(), subtitle.as_ptr()) };
+    }
+
+    pub fn set_icon(&self, symbol: IconSymbol) {
+        unsafe { sys::oneui_dialog_set_icon(self.widget.as_raw(), symbol as i32) };
+    }
+
+    pub fn set_close_visible(&self, visible: bool) {
+        unsafe { sys::oneui_dialog_set_close_visible(self.widget.as_raw(), i32::from(visible)) };
+    }
+
+    pub fn set_content(&self, child: &Widget) {
+        unsafe { sys::oneui_dialog_set_content(self.widget.as_raw(), child.as_raw()) };
+    }
+
+    pub fn set_actions(&self, child: &Widget) {
+        unsafe { sys::oneui_dialog_set_actions(self.widget.as_raw(), child.as_raw()) };
+    }
+
+    pub fn set_on_close<F>(&mut self, callback: F)
+    where
+        F: FnMut() + 'static,
+    {
+        self.clear_on_close();
+        self.close_callback = Some(Box::new(VoidCallback {
+            handler: Box::new(callback),
+        }));
+        let user_data = (self
+            .close_callback
+            .as_deref_mut()
+            .expect("dialog close callback was just installed")
+            as *mut VoidCallback)
+            .cast();
+        unsafe {
+            sys::oneui_dialog_set_on_close(self.widget.as_raw(), Some(run_void_callback), user_data)
+        };
+    }
+
+    pub fn clear_on_close(&mut self) {
+        unsafe { sys::oneui_dialog_set_on_close(self.widget.as_raw(), None, std::ptr::null_mut()) };
+        self.close_callback = None;
+    }
+
+    pub fn as_widget(&self) -> &Widget {
+        &self.widget
+    }
+}
+
+impl Drop for Dialog {
+    fn drop(&mut self) {
+        self.clear_on_close();
+    }
+}
+
+/// A centered, semantic status surface for empty, loading, no-result, and error states.
+pub struct StateView {
+    widget: Widget,
+    action_callback: Option<Box<VoidCallback>>,
+}
+
+impl StateView {
+    pub fn new(title: &str, message: &str) -> Result<Self, Error> {
+        let title = wide_null_terminated(title);
+        let message = wide_null_terminated(message);
+        let widget = Widget::from_raw(unsafe {
+            sys::oneui_state_view_create(title.as_ptr(), message.as_ptr())
+        })?;
+        Ok(Self {
+            widget,
+            action_callback: None,
+        })
+    }
+
+    pub fn set_title(&self, title: &str) {
+        let title = wide_null_terminated(title);
+        unsafe { sys::oneui_state_view_set_title(self.widget.as_raw(), title.as_ptr()) };
+    }
+
+    pub fn set_message(&self, message: &str) {
+        let message = wide_null_terminated(message);
+        unsafe { sys::oneui_state_view_set_message(self.widget.as_raw(), message.as_ptr()) };
+    }
+
+    pub fn set_icon(&self, symbol: IconSymbol) {
+        unsafe { sys::oneui_state_view_set_icon(self.widget.as_raw(), symbol as i32) };
+    }
+
+    pub fn set_action(&self, text: &str) {
+        let text = wide_null_terminated(text);
+        unsafe { sys::oneui_state_view_set_action(self.widget.as_raw(), text.as_ptr()) };
+    }
+
+    pub fn set_on_action<F>(&mut self, callback: F)
+    where
+        F: FnMut() + 'static,
+    {
+        self.clear_on_action();
+        self.action_callback = Some(Box::new(VoidCallback {
+            handler: Box::new(callback),
+        }));
+        let user_data = (self
+            .action_callback
+            .as_deref_mut()
+            .expect("state view action callback was just installed")
+            as *mut VoidCallback)
+            .cast();
+        unsafe {
+            sys::oneui_state_view_set_on_action(
+                self.widget.as_raw(),
+                Some(run_void_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn clear_on_action(&mut self) {
+        unsafe {
+            sys::oneui_state_view_set_on_action(
+                self.widget.as_raw(),
+                None,
+                std::ptr::null_mut(),
+            )
+        };
+        self.action_callback = None;
+    }
+
+    pub fn as_widget(&self) -> &Widget {
+        &self.widget
+    }
+}
+
+impl Drop for StateView {
+    fn drop(&mut self) {
+        self.clear_on_action();
+    }
+}
+
 /// A simple native surface used to compose application regions and cards.
 pub struct Panel {
     widget: Widget,
@@ -581,6 +958,25 @@ impl ScrollView {
         unsafe { sys::oneui_scroll_view_set_wheel_step(self.widget.as_raw(), step) };
     }
 
+    pub fn set_chrome_visible(&self, visible: bool) {
+        unsafe {
+            sys::oneui_scroll_view_set_chrome_visible(self.widget.as_raw(), i32::from(visible))
+        };
+    }
+
+    pub fn set_scrollbar_style(&self, color: Color, thickness: f32) {
+        unsafe {
+            sys::oneui_scroll_view_set_scrollbar_style(
+                self.widget.as_raw(),
+                color.r,
+                color.g,
+                color.b,
+                color.a,
+                thickness,
+            )
+        };
+    }
+
     pub fn scroll_to_bottom(&self) {
         unsafe { sys::oneui_scroll_view_scroll_to_bottom(self.widget.as_raw()) };
     }
@@ -652,6 +1048,15 @@ impl Button {
 
     pub fn set_icon(&self, symbol: IconSymbol) {
         unsafe { sys::oneui_button_set_icon(self.widget.as_raw(), symbol as i32) };
+    }
+
+    pub fn set_content_align(&self, align: ButtonContentAlign) {
+        unsafe { sys::oneui_button_set_content_align(self.widget.as_raw(), align as i32) };
+    }
+
+    pub fn set_trailing_text(&self, text: &str) {
+        let text = sys::OneUiUtf8String::from_str(text);
+        unsafe { sys::oneui_button_set_trailing_text_utf8(self.widget.as_raw(), text) };
     }
 
     pub fn set_variant(&self, variant: ButtonVariant) {
@@ -1063,17 +1468,38 @@ impl Drop for NavItem {
     }
 }
 
-/// A basic UTF-8 text field. Callback ownership is intentionally deferred
-/// until the safe callback lifetime model is added for all controls together.
+struct TextFieldChangedCallback {
+    handler: Box<dyn FnMut(String) + 'static>,
+}
+
+unsafe extern "C" fn run_text_field_changed_callback(
+    text: *const std::ffi::c_char,
+    length: usize,
+    user_data: *mut std::ffi::c_void,
+) {
+    if text.is_null() || user_data.is_null() {
+        return;
+    }
+    let bytes = unsafe { std::slice::from_raw_parts(text.cast::<u8>(), length) };
+    let value = String::from_utf8_lossy(bytes).into_owned();
+    let callback = unsafe { &mut *user_data.cast::<TextFieldChangedCallback>() };
+    let _ = catch_unwind(AssertUnwindSafe(|| (callback.handler)(value)));
+}
+
+/// A basic UTF-8 text field with an owned text-change callback.
 pub struct TextField {
     widget: Widget,
+    changed_callback: Option<Box<TextFieldChangedCallback>>,
 }
 
 impl TextField {
     pub fn new(placeholder: &str) -> Result<Self, Error> {
         let placeholder = sys::OneUiUtf8String::from_str(placeholder);
         let widget = Widget::from_raw(unsafe { sys::oneui_text_field_create_utf8(placeholder) })?;
-        Ok(Self { widget })
+        Ok(Self {
+            widget,
+            changed_callback: None,
+        })
     }
 
     pub fn set_text(&self, text: &str) {
@@ -1085,8 +1511,295 @@ impl TextField {
         unsafe { sys::oneui_text_field_set_read_only(self.widget.as_raw(), i32::from(read_only)) };
     }
 
+    pub fn set_on_changed<F>(&mut self, callback: F)
+    where
+        F: FnMut(String) + 'static,
+    {
+        self.clear_on_changed();
+        self.changed_callback = Some(Box::new(TextFieldChangedCallback {
+            handler: Box::new(callback),
+        }));
+        let user_data = (self
+            .changed_callback
+            .as_deref_mut()
+            .expect("text field callback was just installed")
+            as *mut TextFieldChangedCallback)
+            .cast();
+        unsafe {
+            sys::oneui_text_field_set_on_changed_utf8(
+                self.widget.as_raw(),
+                Some(run_text_field_changed_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn clear_on_changed(&mut self) {
+        unsafe {
+            sys::oneui_text_field_set_on_changed_utf8(
+                self.widget.as_raw(),
+                None,
+                std::ptr::null_mut(),
+            )
+        };
+        self.changed_callback = None;
+    }
+
     pub fn as_widget(&self) -> &Widget {
         &self.widget
+    }
+}
+
+impl Drop for TextField {
+    fn drop(&mut self) {
+        self.clear_on_changed();
+    }
+}
+
+/// A native UTF-8 multiline editor with owned change callbacks.
+pub struct TextArea {
+    widget: Widget,
+    changed_callback: Option<Box<TextFieldChangedCallback>>,
+}
+
+impl TextArea {
+    pub fn new(placeholder: &str) -> Result<Self, Error> {
+        let placeholder = sys::OneUiUtf8String::from_str(placeholder);
+        let widget = Widget::from_raw(unsafe { sys::oneui_text_area_create_utf8(placeholder) })?;
+        unsafe { sys::oneui_text_field_set_multiline(widget.as_raw(), 1) };
+        Ok(Self {
+            widget,
+            changed_callback: None,
+        })
+    }
+
+    pub fn set_text(&self, text: &str) {
+        let text = sys::OneUiUtf8String::from_str(text);
+        unsafe { sys::oneui_text_field_set_text_utf8(self.widget.as_raw(), text) };
+    }
+
+    pub fn set_read_only(&self, read_only: bool) {
+        unsafe { sys::oneui_text_field_set_read_only(self.widget.as_raw(), i32::from(read_only)) };
+    }
+
+    pub fn set_line_height(&self, line_height: f32) {
+        unsafe { sys::oneui_text_field_set_line_height(self.widget.as_raw(), line_height) };
+    }
+
+    pub fn set_on_changed<F>(&mut self, callback: F)
+    where
+        F: FnMut(String) + 'static,
+    {
+        self.clear_on_changed();
+        self.changed_callback = Some(Box::new(TextFieldChangedCallback {
+            handler: Box::new(callback),
+        }));
+        let user_data = (self
+            .changed_callback
+            .as_deref_mut()
+            .expect("text area callback was just installed")
+            as *mut TextFieldChangedCallback)
+            .cast();
+        unsafe {
+            sys::oneui_text_field_set_on_changed_utf8(
+                self.widget.as_raw(),
+                Some(run_text_field_changed_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn clear_on_changed(&mut self) {
+        unsafe {
+            sys::oneui_text_field_set_on_changed_utf8(
+                self.widget.as_raw(),
+                None,
+                std::ptr::null_mut(),
+            )
+        };
+        self.changed_callback = None;
+    }
+
+    pub fn as_widget(&self) -> &Widget {
+        &self.widget
+    }
+}
+
+impl Drop for TextArea {
+    fn drop(&mut self) {
+        self.clear_on_changed();
+    }
+}
+
+struct BoolChangedCallback {
+    handler: Box<dyn FnMut(bool) + 'static>,
+}
+
+unsafe extern "C" fn run_bool_changed_callback(value: i32, user_data: *mut std::ffi::c_void) {
+    if user_data.is_null() {
+        return;
+    }
+    let callback = unsafe { &mut *user_data.cast::<BoolChangedCallback>() };
+    let _ = catch_unwind(AssertUnwindSafe(|| (callback.handler)(value != 0)));
+}
+
+/// A native binary setting control. The callback is retained by the wrapper,
+/// so the C++ event handler can never outlive Rust-owned state.
+pub struct Switch {
+    widget: Widget,
+    changed_callback: Option<Box<BoolChangedCallback>>,
+}
+
+impl Switch {
+    pub fn new(text: &str) -> Result<Self, Error> {
+        let text = wide_null_terminated(text);
+        let widget = Widget::from_raw(unsafe { sys::oneui_switch_create(text.as_ptr()) })?;
+        Ok(Self {
+            widget,
+            changed_callback: None,
+        })
+    }
+
+    pub fn set_text(&self, text: &str) {
+        let text = wide_null_terminated(text);
+        unsafe { sys::oneui_switch_set_text(self.widget.as_raw(), text.as_ptr()) };
+    }
+
+    pub fn set_checked(&self, checked: bool) {
+        unsafe { sys::oneui_switch_set_checked(self.widget.as_raw(), i32::from(checked)) };
+    }
+
+    pub fn checked(&self) -> bool {
+        unsafe { sys::oneui_switch_checked(self.widget.as_raw()) != 0 }
+    }
+
+    pub fn set_on_changed<F>(&mut self, callback: F)
+    where
+        F: FnMut(bool) + 'static,
+    {
+        self.clear_on_changed();
+        self.changed_callback = Some(Box::new(BoolChangedCallback {
+            handler: Box::new(callback),
+        }));
+        let user_data = (self
+            .changed_callback
+            .as_deref_mut()
+            .expect("switch callback was just installed")
+            as *mut BoolChangedCallback)
+            .cast();
+        unsafe {
+            sys::oneui_switch_set_on_changed(
+                self.widget.as_raw(),
+                Some(run_bool_changed_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn clear_on_changed(&mut self) {
+        unsafe {
+            sys::oneui_switch_set_on_changed(self.widget.as_raw(), None, std::ptr::null_mut())
+        };
+        self.changed_callback = None;
+    }
+
+    pub fn as_widget(&self) -> &Widget {
+        &self.widget
+    }
+}
+
+impl Drop for Switch {
+    fn drop(&mut self) {
+        self.clear_on_changed();
+    }
+}
+
+struct IndexChangedCallback {
+    handler: Box<dyn FnMut(i32) + 'static>,
+}
+
+unsafe extern "C" fn run_index_changed_callback(value: i32, user_data: *mut std::ffi::c_void) {
+    if user_data.is_null() {
+        return;
+    }
+    let callback = unsafe { &mut *user_data.cast::<IndexChangedCallback>() };
+    let _ = catch_unwind(AssertUnwindSafe(|| (callback.handler)(value)));
+}
+
+/// Keyboard-accessible segmented choice control backed by OneUI's `Tabs`.
+/// Item labels are serialized only at the FFI boundary; product code works
+/// exclusively with structured UTF-8 strings.
+pub struct SegmentedControl {
+    widget: Widget,
+    changed_callback: Option<Box<IndexChangedCallback>>,
+}
+
+impl SegmentedControl {
+    pub fn new(items: &[String]) -> Result<Self, Error> {
+        let widget = Widget::from_raw(unsafe { sys::oneui_segmented_control_create() })?;
+        let control = Self {
+            widget,
+            changed_callback: None,
+        };
+        control.set_items(items);
+        Ok(control)
+    }
+
+    pub fn set_items(&self, items: &[String]) {
+        let items = wide_null_terminated(&items.join("|"));
+        unsafe { sys::oneui_segmented_control_set_items(self.widget.as_raw(), items.as_ptr()) };
+    }
+
+    pub fn set_selected_index(&self, index: i32) {
+        unsafe { sys::oneui_segmented_control_set_selected_index(self.widget.as_raw(), index) };
+    }
+
+    pub fn selected_index(&self) -> i32 {
+        unsafe { sys::oneui_segmented_control_selected_index(self.widget.as_raw()) }
+    }
+
+    pub fn set_on_changed<F>(&mut self, callback: F)
+    where
+        F: FnMut(i32) + 'static,
+    {
+        self.clear_on_changed();
+        self.changed_callback = Some(Box::new(IndexChangedCallback {
+            handler: Box::new(callback),
+        }));
+        let user_data = (self
+            .changed_callback
+            .as_deref_mut()
+            .expect("segmented control callback was just installed")
+            as *mut IndexChangedCallback)
+            .cast();
+        unsafe {
+            sys::oneui_segmented_control_set_on_changed(
+                self.widget.as_raw(),
+                Some(run_index_changed_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn clear_on_changed(&mut self) {
+        unsafe {
+            sys::oneui_segmented_control_set_on_changed(
+                self.widget.as_raw(),
+                None,
+                std::ptr::null_mut(),
+            )
+        };
+        self.changed_callback = None;
+    }
+
+    pub fn as_widget(&self) -> &Widget {
+        &self.widget
+    }
+}
+
+impl Drop for SegmentedControl {
+    fn drop(&mut self) {
+        self.clear_on_changed();
     }
 }
 
@@ -1566,6 +2279,70 @@ fn apply_terminal_grid(
     };
 }
 
+/// A single immutable line for the selectable native log view.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LogLine {
+    pub text: String,
+    pub color: Color,
+}
+
+/// A native, selectable, multi-line log surface.
+///
+/// Use this for command output and diagnostics. It deliberately keeps one
+/// structured line per append, rather than asking a label control to emulate
+/// terminal layout with embedded newlines.
+pub struct LogView {
+    widget: Widget,
+}
+
+impl LogView {
+    pub fn new() -> Result<Self, Error> {
+        let widget = Widget::from_raw(unsafe { sys::oneui_log_view_create() })?;
+        Ok(Self { widget })
+    }
+
+    pub fn append_line(&self, line: &LogLine) {
+        let text = wide_null_terminated(&line.text);
+        unsafe {
+            sys::oneui_log_view_append_line(
+                self.widget.as_raw(),
+                text.as_ptr(),
+                line.color.r,
+                line.color.g,
+                line.color.b,
+                line.color.a,
+            )
+        };
+    }
+
+    pub fn set_lines(&self, lines: &[LogLine]) {
+        self.clear();
+        for line in lines {
+            self.append_line(line);
+        }
+    }
+
+    pub fn clear(&self) {
+        unsafe { sys::oneui_log_view_clear(self.widget.as_raw()) };
+    }
+
+    pub fn content_height(&self) -> f32 {
+        unsafe { sys::oneui_log_view_content_height(self.widget.as_raw()) }
+    }
+
+    pub fn set_font_size(&self, size: f32) {
+        unsafe { sys::oneui_log_view_set_font_size(self.widget.as_raw(), size) };
+    }
+
+    pub fn set_line_height(&self, height: f32) {
+        unsafe { sys::oneui_log_view_set_line_height(self.widget.as_raw(), height) };
+    }
+
+    pub fn as_widget(&self) -> &Widget {
+        &self.widget
+    }
+}
+
 /// Structured list data. Every field is UTF-8 and may contain punctuation,
 /// tabs, or newlines without relying on a delimiter encoding.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -1660,6 +2437,111 @@ impl List {
 }
 
 impl Drop for List {
+    fn drop(&mut self) {
+        self.clear_on_changed();
+    }
+}
+
+/// A fixed-height viewport-virtualized list for large structured data sets.
+///
+/// Unlike [`List`], this control retains all data but only paints rows visible
+/// in its viewport. Keep row content to a title and optional detail line.
+pub struct VirtualList {
+    widget: Widget,
+    changed_callback: Option<Box<ListChangedCallback>>,
+}
+
+impl VirtualList {
+    pub fn new() -> Result<Self, Error> {
+        let widget = Widget::from_raw(unsafe { sys::oneui_virtual_list_create() })?;
+        Ok(Self {
+            widget,
+            changed_callback: None,
+        })
+    }
+
+    pub fn set_items(&self, items: &[ListItem]) {
+        let native_items: Vec<sys::OneUiListItemUtf8> = items
+            .iter()
+            .map(|item| sys::OneUiListItemUtf8 {
+                title: sys::OneUiUtf8String::from_str(&item.title),
+                detail: sys::OneUiUtf8String::from_str(&item.detail),
+            })
+            .collect();
+        unsafe {
+            sys::oneui_virtual_list_set_items_utf8(
+                self.widget.as_raw(),
+                native_items.as_ptr(),
+                native_items.len(),
+            )
+        };
+    }
+
+    pub fn set_selected_index(&self, index: i32) {
+        unsafe { sys::oneui_virtual_list_set_selected_index(self.widget.as_raw(), index) };
+    }
+
+    /// Clears the active row while preserving the list contents and scroll position.
+    pub fn clear_selection(&self) {
+        self.set_selected_index(-1);
+    }
+
+    pub fn selected_index(&self) -> i32 {
+        unsafe { sys::oneui_virtual_list_selected_index(self.widget.as_raw()) }
+    }
+
+    pub fn set_row_height(&self, height: f32) {
+        unsafe { sys::oneui_virtual_list_set_row_height(self.widget.as_raw(), height) };
+    }
+
+    pub fn set_scroll_offset(&self, offset: f32) {
+        unsafe { sys::oneui_virtual_list_set_scroll_offset(self.widget.as_raw(), offset) };
+    }
+
+    pub fn scroll_offset(&self) -> f32 {
+        unsafe { sys::oneui_virtual_list_scroll_offset(self.widget.as_raw()) }
+    }
+
+    pub fn max_scroll_offset(&self) -> f32 {
+        unsafe { sys::oneui_virtual_list_max_scroll_offset(self.widget.as_raw()) }
+    }
+
+    pub fn set_on_changed<F>(&mut self, callback: F)
+    where
+        F: FnMut(i32) + 'static,
+    {
+        self.clear_on_changed();
+        self.changed_callback = Some(Box::new(ListChangedCallback {
+            handler: Box::new(callback),
+        }));
+        let user_data = (self
+            .changed_callback
+            .as_deref_mut()
+            .expect("virtual list callback was just installed")
+            as *mut ListChangedCallback)
+            .cast();
+        unsafe {
+            sys::oneui_virtual_list_set_on_changed(
+                self.widget.as_raw(),
+                Some(run_list_changed_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn clear_on_changed(&mut self) {
+        unsafe {
+            sys::oneui_virtual_list_set_on_changed(self.widget.as_raw(), None, std::ptr::null_mut())
+        };
+        self.changed_callback = None;
+    }
+
+    pub fn as_widget(&self) -> &Widget {
+        &self.widget
+    }
+}
+
+impl Drop for VirtualList {
     fn drop(&mut self) {
         self.clear_on_changed();
     }
@@ -1928,6 +2810,15 @@ impl Window {
         });
     }
 
+    /// Installs the application theme before composing the window tree.
+    /// Widgets created afterwards inherit it, and explicit widget styling can
+    /// still use [`Widget::apply_style_sheet`] where needed.
+    pub fn set_style_sheet(&self, style_sheet: &StyleSheet) {
+        self.state.with_raw(|raw| unsafe {
+            sys::oneui_window_set_style_sheet(raw, style_sheet.as_raw());
+        });
+    }
+
     pub fn show(&self) {
         self.state.with_raw(|raw| unsafe {
             sys::oneui_window_show(raw);
@@ -1985,10 +2876,12 @@ impl Drop for Window {
 #[cfg(test)]
 mod tests {
     use super::{
-        terminal_style, Button, Color, Error, Insets, InteractiveSurface,
-        InteractiveSurfaceStateStyle, InteractiveSurfaceStyle, Label, List, ListItem, ScrollView,
-        Stack, StackDirection, TerminalCell, TerminalColor, TerminalCursor, TerminalFrame,
-        TerminalView, TextField, TreeItem, TreeView, Window, WindowOptions,
+        terminal_style, Button, Color, Dialog, Error, IconSymbol, Insets, InteractiveSurface,
+        InteractiveSurfaceStateStyle, InteractiveSurfaceStyle, Label, List, ListItem, LogLine,
+        LogView, OverlayAlignment, OverlayHost, Panel, ScrollView, SegmentedControl, Stack,
+        StackDirection, StyleSheet, Switch, TerminalCell, TerminalColor, TerminalCursor,
+        TerminalFrame, TerminalView, TextField, TreeItem, TreeView, VirtualList, Window,
+        WindowOptions,
     };
     use std::sync::{
         atomic::{AtomicBool, Ordering},
@@ -2027,6 +2920,33 @@ mod tests {
         label.set_font_size(20.0);
         content.add(label.as_widget());
         window.set_content(content.as_widget());
+    }
+
+    #[test]
+    fn applies_css_theme_to_semantic_widget_nodes() {
+        let _guard = window_test_lock().lock().expect("window test lock");
+        let window = Window::new(&WindowOptions::default()).expect("window should be created");
+        let theme = StyleSheet::from_css(
+            ":root { --surface: #1e1e2e; --text: #dcdeec; }\n\
+             section.workspace { background: var(--surface); }\n\
+             label.page-title { color: var(--text); font-size: 18px; font-weight: 600; }",
+        )
+        .expect("CSS should parse");
+        window.set_style_sheet(&theme);
+
+        let root = Panel::new().expect("panel should be created");
+        root.as_widget()
+            .set_style_node("section", "workspace")
+            .expect("classes should be valid");
+        let title = Label::new("Host management").expect("label should be created");
+        title
+            .as_widget()
+            .set_classes("page-title")
+            .expect("classes should be valid");
+        let content = Stack::new(StackDirection::Column).expect("stack should be created");
+        content.add(title.as_widget());
+        root.set_content(content.as_widget());
+        window.set_content(root.as_widget());
     }
 
     #[test]
@@ -2099,6 +3019,48 @@ mod tests {
     }
 
     #[test]
+    fn retains_text_field_change_callbacks_through_programmatic_updates() {
+        let _guard = window_test_lock().lock().expect("window test lock");
+        let observed = Arc::new(Mutex::new(Vec::new()));
+        let mut field = TextField::new("搜索主机").expect("text field should be created");
+        let observed_for_callback = Arc::clone(&observed);
+        field.set_on_changed(move |value| {
+            observed_for_callback
+                .lock()
+                .expect("observed values lock")
+                .push(value);
+        });
+
+        field.set_text("生产堡垒机");
+        assert_eq!(
+            observed.lock().expect("observed values lock").as_slice(),
+            ["生产堡垒机"]
+        );
+    }
+
+    #[test]
+    fn mounts_stateful_native_setting_controls() {
+        let _guard = window_test_lock().lock().expect("window test lock");
+        let window = Window::new(&WindowOptions::default()).expect("window should be created");
+        let content = Stack::new(StackDirection::Column).expect("stack should be created");
+        let mut segmented =
+            SegmentedControl::new(&["卡片视图".to_string(), "列表视图".to_string()])
+                .expect("segmented control should be created");
+        segmented.set_selected_index(1);
+        assert_eq!(segmented.selected_index(), 1);
+        segmented.set_on_changed(|_| {});
+
+        let mut switch = Switch::new("启用 Docker 管理").expect("switch should be created");
+        switch.set_checked(true);
+        assert!(switch.checked());
+        switch.set_on_changed(|_| {});
+
+        content.add(segmented.as_widget());
+        content.add(switch.as_widget());
+        window.set_content(content.as_widget());
+    }
+
+    #[test]
     fn reports_native_list_selection_changes_to_rust() {
         let _guard = window_test_lock().lock().expect("window test lock");
         let window = Window::new(&WindowOptions::default()).expect("window should be created");
@@ -2120,6 +3082,88 @@ mod tests {
 
         assert_eq!(*selected.borrow(), Some(1));
         window.set_content(list.as_widget());
+    }
+
+    #[test]
+    fn mounts_virtual_list_with_large_structured_data_without_widget_per_row() {
+        let _guard = window_test_lock().lock().expect("window test lock");
+        let window = Window::new(&WindowOptions::default()).expect("window should be created");
+        let mut list = VirtualList::new().expect("virtual list should be created");
+        let items: Vec<ListItem> = (0..5_000)
+            .map(|index| ListItem {
+                title: format!("Host {index}"),
+                detail: format!("10.0.{}.{}", index / 255, index % 255),
+            })
+            .collect();
+        list.set_items(&items);
+        list.set_row_height(44.0);
+        list.set_selected_index(4_999);
+        assert_eq!(list.selected_index(), 4_999);
+        assert!(list.max_scroll_offset() >= list.scroll_offset());
+
+        let observed = std::rc::Rc::new(std::cell::RefCell::new(None));
+        let callback_observed = std::rc::Rc::clone(&observed);
+        list.set_on_changed(move |index| *callback_observed.borrow_mut() = Some(index));
+        list.set_selected_index(12);
+        assert_eq!(*observed.borrow(), Some(12));
+        window.set_content(list.as_widget());
+    }
+
+    #[test]
+    fn mounts_multiline_log_view_with_structured_colored_lines() {
+        let _guard = window_test_lock().lock().expect("window test lock");
+        let window = Window::new(&WindowOptions::default()).expect("window should be created");
+        let log = LogView::new().expect("log view should be created");
+        log.set_font_size(13.0);
+        log.set_line_height(21.0);
+        log.set_lines(&[
+            LogLine {
+                text: "ops@node:~$ uptime".to_owned(),
+                color: Color::rgb(220, 226, 240),
+            },
+            LogLine {
+                text: "load average: 0.12, 0.08, 0.05".to_owned(),
+                color: Color::rgb(116, 218, 156),
+            },
+        ]);
+        assert!(log.content_height() >= 42.0);
+        log.clear();
+        log.append_line(&LogLine {
+            text: "fresh line".to_owned(),
+            color: Color::rgb(132, 145, 255),
+        });
+        window.set_content(log.as_widget());
+    }
+
+    #[test]
+    fn mounts_and_removes_a_modal_dialog_from_an_overlay_host() {
+        let _guard = window_test_lock().lock().expect("window test lock");
+        let window = Window::new(&WindowOptions::default()).expect("window should be created");
+        let overlay = OverlayHost::new().expect("overlay host should be created");
+        let page = Panel::new().expect("page should be created");
+        overlay.set_content(page.as_widget());
+
+        let mut dialog =
+            Dialog::new("新建主机", "仅用于原生界面交互演示").expect("dialog should be created");
+        dialog.set_icon(IconSymbol::Server);
+        let dialog_body = Label::new("表单内容由产品层组合，弹层能力由 OneUI 统一提供。")
+            .expect("dialog body should be created");
+        dialog.set_content(dialog_body.as_widget());
+        let closed = Arc::new(AtomicBool::new(false));
+        let closed_for_callback = Arc::clone(&closed);
+        dialog.set_on_close(move || closed_for_callback.store(true, Ordering::SeqCst));
+        overlay.add_modal_anchored_overlay(
+            dialog.as_widget(),
+            10,
+            440.0,
+            240.0,
+            Insets::default(),
+            OverlayAlignment::Center,
+            OverlayAlignment::Center,
+        );
+        window.set_content(overlay.as_widget());
+        assert!(overlay.remove_overlay(dialog.as_widget()));
+        assert!(!closed.load(Ordering::SeqCst));
     }
 
     #[test]

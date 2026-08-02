@@ -827,6 +827,9 @@ StylePseudoMask parseStylePseudoState(const std::string& pseudo) {
 std::optional<Color> parseStyleColor(const std::string& value) {
     std::string text = trim(value);
     const std::string lowered = lower(text);
+    if (lowered == "transparent") {
+        return Color{0, 0, 0, 0};
+    }
     if (startsWith(lowered, "rgb(") || startsWith(lowered, "rgba(")) {
         const std::size_t open = text.find('(');
         const std::size_t close = text.rfind(')');

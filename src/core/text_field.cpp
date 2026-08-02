@@ -128,6 +128,10 @@ TextField::TextField(std::wstring placeholder) : placeholder_(std::move(placehol
     setPreferredSize(Size{194.0f, 36.0f});
 }
 
+TextArea::TextArea(std::wstring placeholder) : TextField(std::move(placeholder)) {
+    setMultiline(true);
+}
+
 void TextField::setPlaceholder(std::wstring placeholder) {
     placeholder_ = std::move(placeholder);
     invalidate();
@@ -279,6 +283,37 @@ bool TextField::readOnly() const {
     return readOnly_;
 }
 
+void TextField::setMultiline(bool multiline) {
+    if (multiline_ == multiline) {
+        return;
+    }
+    multiline_ = multiline;
+    textScrollOffset_ = 0;
+    verticalScrollLine_ = 0;
+    horizontalScrollOffset_ = 0.0f;
+    invalidateTextMetrics();
+    setPreferredSize(multiline ? Size{320.0f, 160.0f} : Size{194.0f, 36.0f});
+    invalidate();
+}
+
+bool TextField::multiline() const {
+    return multiline_;
+}
+
+void TextField::setLineHeight(float lineHeight) {
+    const float next = std::max(12.0f, lineHeight);
+    if (std::fabs(lineHeight_ - next) < 0.01f) {
+        return;
+    }
+    lineHeight_ = next;
+    ensureCaretVisible();
+    invalidate();
+}
+
+float TextField::lineHeight() const {
+    return lineHeight_;
+}
+
 void TextField::setClipboard(std::shared_ptr<Clipboard> clipboard) {
     clipboard_ = std::move(clipboard);
 }
@@ -415,6 +450,10 @@ void TextField::paint(Canvas& canvas) {
         insetRect.width = std::max(0.0f, insetRect.width - affixSpace);
     }
     const Rect contentRect{insetRect.x, insetRect.y, std::max(0.0f, insetRect.width), std::max(0.0f, insetRect.height)};
+    if (multiline_) {
+        paintMultilineContent(canvas, contentRect, style, hasText, shouldPaintPlaceholder);
+        return;
+    }
     updateTextMetrics(&canvas);
     const float scrollX = textWidthAt(textScrollOffset_);
 
@@ -531,19 +570,53 @@ bool TextField::onKeyDown(const KeyEvent& event) {
         return true;
     }
 
+    if (multiline_ && event.key == Key::Up) {
+        return moveCaretVertically(-1, event.shift);
+    }
+
+    if (multiline_ && event.key == Key::Down) {
+        return moveCaretVertically(1, event.shift);
+    }
+
     if (event.key == Key::Home) {
-        if (caretIndex() == 0) {
+        std::size_t target = 0;
+        if (multiline_) {
+            updateMultilineTextMetrics();
+            const std::size_t line = multilineLineIndexForCaret(caretIndex());
+            target = measuredLines_[line].start;
+        }
+        if (caretIndex() == target) {
             return false;
         }
-        setCaretIndexInternal(0, event.shift);
+        setCaretIndexInternal(target, event.shift);
         return true;
     }
 
     if (event.key == Key::End) {
-        if (caretIndex() >= value().size()) {
+        std::size_t target = value().size();
+        if (multiline_) {
+            updateMultilineTextMetrics();
+            const std::size_t line = multilineLineIndexForCaret(caretIndex());
+            target = measuredLines_[line].end;
+        }
+        if (caretIndex() == target) {
             return false;
         }
-        setCaretIndexInternal(value().size(), event.shift);
+        setCaretIndexInternal(target, event.shift);
+        return true;
+    }
+
+    if (event.key == Key::Enter) {
+        if (!multiline_ || !editable()) {
+            return false;
+        }
+        std::wstring next = value();
+        const std::size_t insertionIndex = hasSelection() ? selectionStart() : caretIndex();
+        if (hasSelection()) {
+            next.erase(selectionStart(), selectionEnd() - selectionStart());
+        }
+        next.insert(next.begin() + static_cast<std::wstring::difference_type>(insertionIndex), L'\n');
+        assignText(std::move(next), insertionIndex + 1, true);
         return true;
     }
 
@@ -586,6 +659,12 @@ bool TextField::onKeyDown(const KeyEvent& event) {
 bool TextField::onTextInput(wchar_t character) {
     if (!editable()) {
         return false;
+    }
+    if (character == L'\r' || character == L'\n') {
+        if (!multiline_) {
+            return false;
+        }
+        character = L'\n';
     }
     std::wstring next = value();
     const std::size_t insertionIndex = hasSelection() ? selectionStart() : caretIndex();
@@ -880,6 +959,9 @@ void TextField::restartCaretBlink() {
 }
 
 std::size_t TextField::caretIndexFromPoint(Point point) const {
+    if (multiline_) {
+        return multilineCaretIndexFromPoint(point);
+    }
     const TextFieldStyle style = resolvedStyle();
     const float prefixOffset = prefixIcon_ ? AffixIconSize + AffixIconGap : 0.0f;
     const float localX = std::max(0.0f, point.x - frame().x - style.padding.left - prefixOffset) + textWidthAt(textScrollOffset_);
@@ -903,7 +985,63 @@ std::size_t TextField::caretIndexFromPoint(Point point) const {
     return lowerDistance <= upperDistance ? lower : upper;
 }
 
+std::size_t TextField::multilineCaretIndexFromPoint(Point point) const {
+    updateMultilineTextMetrics();
+    if (measuredLines_.empty()) {
+        return 0;
+    }
+
+    const TextFieldStyle style = resolvedStyle();
+    const float prefixOffset = prefixIcon_ ? AffixIconSize + AffixIconGap : 0.0f;
+    const float localY = std::max(0.0f, point.y - frame().y - style.padding.top);
+    const std::size_t relativeLine = static_cast<std::size_t>(localY / lineHeight_);
+    const std::size_t lineIndex = std::min(
+        verticalScrollLine_ + relativeLine,
+        measuredLines_.size() - 1);
+    const auto& widths = measuredLinePrefixWidths_[lineIndex];
+    const float localX = std::max(
+        0.0f,
+        point.x - frame().x - style.padding.left - prefixOffset + horizontalScrollOffset_);
+
+    auto it = std::lower_bound(widths.begin(), widths.end(), localX);
+    std::size_t column = 0;
+    if (it == widths.end()) {
+        column = widths.size() - 1;
+    } else if (it != widths.begin()) {
+        const std::size_t upper = static_cast<std::size_t>(it - widths.begin());
+        const std::size_t lower = upper - 1;
+        column = std::fabs(localX - widths[lower]) <= std::fabs(widths[upper] - localX)
+            ? lower
+            : upper;
+    }
+    return measuredLines_[lineIndex].start + column;
+}
+
+bool TextField::moveCaretVertically(int direction, bool extendSelection) {
+    updateMultilineTextMetrics();
+    if (measuredLines_.empty() || direction == 0) {
+        return false;
+    }
+
+    const std::size_t currentLine = multilineLineIndexForCaret(caretIndex());
+    const std::size_t targetLine = direction < 0
+        ? (currentLine == 0 ? 0 : currentLine - 1)
+        : std::min(currentLine + 1, measuredLines_.size() - 1);
+    if (targetLine == currentLine) {
+        return false;
+    }
+
+    const std::size_t column = caretIndex() - measuredLines_[currentLine].start;
+    const TextLine& target = measuredLines_[targetLine];
+    setCaretIndexInternal(target.start + std::min(column, target.end - target.start), extendSelection);
+    return true;
+}
+
 void TextField::ensureCaretVisible() {
+    if (multiline_) {
+        ensureMultilineCaretVisible();
+        return;
+    }
     updateTextMetrics();
     const std::size_t size = value().size();
     textScrollOffset_ = std::min(textScrollOffset_, size);
@@ -937,6 +1075,39 @@ void TextField::ensureCaretVisible() {
     }
 }
 
+void TextField::ensureMultilineCaretVisible() {
+    updateMultilineTextMetrics();
+    if (measuredLines_.empty()) {
+        verticalScrollLine_ = 0;
+        horizontalScrollOffset_ = 0.0f;
+        return;
+    }
+    if (!focused() && !selecting_) {
+        verticalScrollLine_ = 0;
+        horizontalScrollOffset_ = 0.0f;
+        return;
+    }
+
+    const std::size_t lineIndex = multilineLineIndexForCaret(caretIndex());
+    const float contentHeight = std::max(0.0f, frame().height - resolvedStyle().padding.vertical());
+    const std::size_t visibleLines = std::max<std::size_t>(
+        1,
+        static_cast<std::size_t>(std::floor(contentHeight / lineHeight_)));
+    if (lineIndex < verticalScrollLine_) {
+        verticalScrollLine_ = lineIndex;
+    } else if (lineIndex >= verticalScrollLine_ + visibleLines) {
+        verticalScrollLine_ = lineIndex - visibleLines + 1;
+    }
+
+    const float contentWidth = contentWidthForText();
+    const float caretX = multilineTextWidthAt(lineIndex, caretIndex());
+    if (caretX < horizontalScrollOffset_) {
+        horizontalScrollOffset_ = caretX;
+    } else if (caretX - horizontalScrollOffset_ > contentWidth) {
+        horizontalScrollOffset_ = std::max(0.0f, caretX - contentWidth + CaretWidth + 2.0f);
+    }
+}
+
 float TextField::contentWidthForText() const {
     const TextFieldStyle style = resolvedStyle();
     const float affixWidth = (prefixIcon_ ? AffixIconSize + AffixIconGap : 0.0f) +
@@ -944,10 +1115,92 @@ float TextField::contentWidthForText() const {
     return std::max(0.0f, frame().width - style.padding.horizontal() - affixWidth);
 }
 
+void TextField::paintMultilineContent(
+    Canvas& canvas,
+    Rect contentRect,
+    const TextFieldStyle& style,
+    bool hasText,
+    bool shouldPaintPlaceholder) {
+    updateMultilineTextMetrics(&canvas);
+    ensureMultilineCaretVisible();
+
+    canvas.save();
+    canvas.clipRect(contentRect);
+
+    if (!hasText && shouldPaintPlaceholder) {
+        canvas.drawText(
+            placeholder_,
+            Rect{contentRect.x, contentRect.y, contentRect.width, lineHeight_},
+            style.placeholderForeground,
+            theme().fontMd,
+            TextAlign::Left);
+    }
+
+    const std::wstring display = displayText();
+    const std::size_t firstLine = std::min(verticalScrollLine_, measuredLines_.size() - 1);
+    const std::size_t visibleLines = std::max<std::size_t>(
+        1,
+        static_cast<std::size_t>(std::ceil(contentRect.height / lineHeight_)) + 1);
+    const std::size_t lastLine = std::min(measuredLines_.size(), firstLine + visibleLines);
+
+    for (std::size_t lineIndex = firstLine; lineIndex < lastLine; ++lineIndex) {
+        const TextLine& line = measuredLines_[lineIndex];
+        const float y = contentRect.y + static_cast<float>(lineIndex - firstLine) * lineHeight_;
+        const Rect lineRect{
+            contentRect.x - horizontalScrollOffset_,
+            y,
+            contentRect.width + horizontalScrollOffset_,
+            lineHeight_};
+
+        if (hasSelection()) {
+            const std::size_t start = std::max(selectionStart(), line.start);
+            const std::size_t end = std::min(selectionEnd(), line.end);
+            if (end > start ||
+                (selectionEnd() > line.end && selectionStart() <= line.end && lineIndex + 1 < measuredLines_.size())) {
+                const float selectionX = contentRect.x + multilineTextWidthAt(lineIndex, start) - horizontalScrollOffset_;
+                float selectionWidth = multilineTextWidthAt(lineIndex, end) - multilineTextWidthAt(lineIndex, start);
+                if (selectionEnd() > line.end && lineIndex + 1 < measuredLines_.size()) {
+                    selectionWidth += std::max(4.0f, theme().fontMd * 0.45f);
+                }
+                canvas.fillRect(
+                    Rect{selectionX, y + 2.0f, selectionWidth, std::max(0.0f, lineHeight_ - 4.0f)},
+                    style.selectionBackground,
+                    3.0f);
+            }
+        }
+
+        if (line.end > line.start) {
+            canvas.drawText(
+                display.substr(line.start, line.end - line.start),
+                lineRect,
+                style.foreground,
+                theme().fontMd,
+                TextAlign::Left);
+        }
+    }
+
+    if (focused() && editable() && caretBlinkVisible_) {
+        const std::size_t lineIndex = multilineLineIndexForCaret(caretIndex());
+        if (lineIndex >= firstLine && lineIndex < lastLine) {
+            float caretX = contentRect.x + multilineTextWidthAt(lineIndex, caretIndex()) - horizontalScrollOffset_;
+            caretX = std::floor(caretX) + 0.5f;
+            const float caretHeight = std::min(CaretMaxHeight, std::max(CaretMinHeight, lineHeight_ - 6.0f));
+            const float lineY = contentRect.y + static_cast<float>(lineIndex - firstLine) * lineHeight_;
+            const float caretY = lineY + (lineHeight_ - caretHeight) * 0.5f;
+            canvas.fillRect(Rect{caretX, caretY, CaretWidth, caretHeight}, style.caretColor, 0.5f);
+        }
+    }
+
+    canvas.restore();
+}
+
 void TextField::invalidateTextMetrics() {
     measuredDisplayText_.clear();
     measuredPrefixWidths_.clear();
     measuredTextMetricsExact_ = false;
+    measuredLines_.clear();
+    measuredLinePrefixWidths_.clear();
+    measuredMultilineMetricsExact_ = false;
 }
 
 void TextField::updateTextMetrics(const Canvas* canvas) const {
@@ -983,6 +1236,72 @@ float TextField::textWidthAt(std::size_t index) const {
         return 0.0f;
     }
     return measuredPrefixWidths_[std::min(index, measuredPrefixWidths_.size() - 1)];
+}
+
+void TextField::updateMultilineTextMetrics(const Canvas* canvas) const {
+    const std::wstring display = displayText();
+    if (!measuredLines_.empty() && measuredDisplayText_ == display &&
+        (measuredMultilineMetricsExact_ || canvas == nullptr)) {
+        return;
+    }
+
+    measuredDisplayText_ = display;
+    measuredLines_.clear();
+    measuredLinePrefixWidths_.clear();
+
+    std::size_t lineStart = 0;
+    for (std::size_t index = 0; index <= display.size(); ++index) {
+        if (index != display.size() && display[index] != L'\n') {
+            continue;
+        }
+        measuredLines_.push_back(TextLine{lineStart, index});
+        lineStart = index + 1;
+    }
+    if (measuredLines_.empty()) {
+        measuredLines_.push_back(TextLine{});
+    }
+
+    measuredLinePrefixWidths_.reserve(measuredLines_.size());
+    for (const TextLine& line : measuredLines_) {
+        std::vector<float> widths(line.end - line.start + 1, 0.0f);
+        if (canvas) {
+            std::wstring prefix;
+            prefix.reserve(line.end - line.start);
+            for (std::size_t index = line.start; index < line.end; ++index) {
+                prefix.push_back(display[index]);
+                widths[index - line.start + 1] = canvas->measureTextWidth(prefix, theme().fontMd);
+            }
+        } else {
+            for (std::size_t index = line.start; index < line.end; ++index) {
+                widths[index - line.start + 1] = widths[index - line.start] + approximateGlyphWidth(display[index]);
+            }
+        }
+        measuredLinePrefixWidths_.push_back(std::move(widths));
+    }
+    measuredMultilineMetricsExact_ = canvas != nullptr;
+}
+
+float TextField::multilineTextWidthAt(std::size_t lineIndex, std::size_t index) const {
+    updateMultilineTextMetrics();
+    if (measuredLines_.empty()) {
+        return 0.0f;
+    }
+    lineIndex = std::min(lineIndex, measuredLines_.size() - 1);
+    const TextLine& line = measuredLines_[lineIndex];
+    const std::size_t column = std::clamp(index, line.start, line.end) - line.start;
+    const auto& widths = measuredLinePrefixWidths_[lineIndex];
+    return widths[std::min(column, widths.size() - 1)];
+}
+
+std::size_t TextField::multilineLineIndexForCaret(std::size_t index) const {
+    updateMultilineTextMetrics();
+    const std::size_t caret = std::min(index, value().size());
+    for (std::size_t line = 0; line < measuredLines_.size(); ++line) {
+        if (caret <= measuredLines_[line].end) {
+            return line;
+        }
+    }
+    return measuredLines_.empty() ? 0 : measuredLines_.size() - 1;
 }
 
 bool TextField::hasInteractionState() const {

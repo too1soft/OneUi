@@ -112,6 +112,44 @@ SwitchStateStyleOverride switchStateStyleOverrideFromStyleBox(const StyleBox& bo
     return override;
 }
 
+ListStateStyleOverride listStateStyleOverrideFromStyleBox(const StyleBox& box) {
+    ListStateStyleOverride override;
+    override.background = box.background.color;
+    override.border = box.borderColor;
+    override.separator = box.borderColor;
+    override.rowBackground = box.content.backgroundColor;
+    override.titleColor = box.foreground;
+    override.detailColor = box.foreground;
+    override.selectedRowBackground = box.content.backgroundColor;
+    override.selectedTitleColor = box.foreground;
+    override.selectedDetailColor = box.foreground;
+    override.borderWidth = box.borderWidth;
+    override.radius = box.radius;
+    override.rowRadius = box.content.radius;
+    override.rowInset = box.padding;
+    if (box.outlineColor || box.outlineWidth || box.outlineOffset || box.radius) {
+        override.focusRing = focusRingOverrideFromStyleBox(box);
+    }
+    return override;
+}
+
+InteractiveSurfaceStateStyle interactiveSurfaceStateStyleFromStyleBox(const StyleBox& box) {
+    InteractiveSurfaceStateStyle style;
+    if (box.background.color) {
+        style.background = *box.background.color;
+    }
+    if (box.borderColor) {
+        style.border = *box.borderColor;
+    }
+    if (box.borderWidth) {
+        style.borderWidth = *box.borderWidth;
+    }
+    if (box.radius) {
+        style.radius = *box.radius;
+    }
+    return style;
+}
+
 StyleBox buttonStyleBoxFromStyleSheet(const StyleSheet& sheet, StyleNode node, StylePseudoMask state) {
     return resolveState(sheet, std::move(node), state);
 }
@@ -150,6 +188,34 @@ SwitchStyleOverride switchStyleOverrideFromStyleSheet(const StyleSheet& sheet, S
     override.selected = switchStateStyleOverrideFromStyleBox(resolveState(sheet, node, StyleStateSelected));
     override.focusVisible = switchStateStyleOverrideFromStyleBox(resolveState(sheet, std::move(node), StyleStateFocus));
     return override;
+}
+
+ListStyleOverride listStyleOverrideFromStyleSheet(const StyleSheet& sheet, StyleNode node) {
+    ListStyleOverride override;
+    override.normal = listStateStyleOverrideFromStyleBox(resolveState(sheet, node, StyleStateNone));
+    override.hovered = listStateStyleOverrideFromStyleBox(resolveState(sheet, node, StyleStateHover));
+    override.pressed = listStateStyleOverrideFromStyleBox(resolveState(sheet, node, StyleStateActive));
+    override.selected = listStateStyleOverrideFromStyleBox(resolveState(sheet, node, StyleStateSelected));
+    override.disabled = listStateStyleOverrideFromStyleBox(resolveState(sheet, node, StyleStateDisabled));
+    override.focusVisible = listStateStyleOverrideFromStyleBox(resolveState(sheet, std::move(node), StyleStateFocus));
+    return override;
+}
+
+TreeViewStyleOverride treeViewStyleOverrideFromStyleSheet(const StyleSheet& sheet, StyleNode node) {
+    return listStyleOverrideFromStyleSheet(sheet, std::move(node));
+}
+
+InteractiveSurfaceStyle interactiveSurfaceStyleFromStyleSheet(const StyleSheet& sheet, StyleNode node) {
+    InteractiveSurfaceStyle style;
+    const StyleBox normal = resolveState(sheet, node, StyleStateNone);
+    style.normal = interactiveSurfaceStateStyleFromStyleBox(normal);
+    style.hovered = interactiveSurfaceStateStyleFromStyleBox(resolveState(sheet, node, StyleStateHover));
+    style.pressed = interactiveSurfaceStateStyleFromStyleBox(resolveState(sheet, node, StyleStateActive));
+    style.disabled = interactiveSurfaceStateStyleFromStyleBox(resolveState(sheet, std::move(node), StyleStateDisabled));
+    if (const auto transition = transitionOverrideFromStyleBox(normal)) {
+        style.transition = *transition;
+    }
+    return style;
 }
 
 StyleBox cardStyleBoxFromStyleSheet(const StyleSheet& sheet, StyleNode node) {

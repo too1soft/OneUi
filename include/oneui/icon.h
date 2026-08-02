@@ -40,7 +40,21 @@ enum class IconSymbol {
     Play,
     Check,
     BrandMark,
-    CheckCircle
+    CheckCircle,
+    Terminal,
+    Server,
+    LayoutGrid,
+    List,
+    Refresh,
+    Upload,
+    Download,
+    Sliders,
+    Code,
+    Database,
+    Cube,
+    Notebook,
+    Edit,
+    Trash
 };
 
 enum class IconPrimitiveKind {

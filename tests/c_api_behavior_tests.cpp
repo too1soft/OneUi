@@ -236,6 +236,7 @@ void testAppShellAbiCreatesReusableSlots() {
     OneUiWidget* footer = oneui_label_create(L"status");
     OneUiWidget* notify = oneui_icon_button_create(8);
     OneUiWidget* strip = oneui_status_strip_create(L"Status", L"Ready");
+    OneUiWidget* stateView = oneui_state_view_create(L"Empty", L"No data yet");
     OneUiWidget* tile = oneui_tile_create(L"Remote Desktop", L"169 510 1007");
     OneUiWidget* segmented = oneui_segmented_control_create();
     OneUiWidget* titleBar = oneui_title_bar_create(L"Product");
@@ -247,6 +248,7 @@ void testAppShellAbiCreatesReusableSlots() {
     expectTrue("footer create", footer != nullptr);
     expectTrue("icon button create", notify != nullptr);
     expectTrue("status strip create", strip != nullptr);
+    expectTrue("state view create", stateView != nullptr);
     expectTrue("tile create", tile != nullptr);
     expectTrue("segmented control create", segmented != nullptr);
     expectTrue("title bar create", titleBar != nullptr);
@@ -271,6 +273,11 @@ void testAppShellAbiCreatesReusableSlots() {
     oneui_status_strip_set_secondary_action(strip, L"Details");
     oneui_status_strip_set_on_primary_action(strip, nullptr, nullptr);
     oneui_status_strip_set_on_secondary_action(strip, nullptr, nullptr);
+    oneui_state_view_set_title(stateView, L"No results");
+    oneui_state_view_set_message(stateView, L"Adjust the active filters");
+    oneui_state_view_set_icon(stateView, 4);
+    oneui_state_view_set_action(stateView, L"Reset");
+    oneui_state_view_set_on_action(stateView, nullptr, nullptr);
     oneui_tile_set_title(tile, L"Recent Assist");
     oneui_tile_set_subtitle(tile, L"164 709 2397");
     oneui_tile_set_leading_symbol(tile, 14);
@@ -290,6 +297,7 @@ void testAppShellAbiCreatesReusableSlots() {
     oneui_widget_destroy(titleBar);
     oneui_widget_destroy(segmented);
     oneui_widget_destroy(tile);
+    oneui_widget_destroy(stateView);
     oneui_widget_destroy(strip);
     oneui_widget_destroy(notify);
     oneui_widget_destroy(footer);

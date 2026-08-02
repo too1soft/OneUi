@@ -173,6 +173,25 @@ list->bindSelectedIndex(selectedProject);
 
 限制：不是虚拟列表，不适合大数据量；暂无多选、分组、图标、右侧操作区。
 
+## StateView
+
+用途：统一承载页面级空数据、无搜索结果、加载中和错误状态。组件负责居中布局、语义图标、标题、说明和一个可选操作，不应再由业务页面手工拼接临时 `Panel + Label + Button`。
+
+```cpp
+auto empty = std::make_shared<oneui::StateView>(
+    L"还没有任何主机",
+    L"新建主机，或从其他终端工具导入连接配置。");
+empty->setIcon(oneui::IconSymbol::Server);
+empty->setAction(L"新建主机");
+empty->setOnAction([&] {
+    openHostEditor();
+});
+```
+
+标准样式节点为 `state-view`，内部语义类为 `.state-view-icon`、`.state-view-title`、`.state-view-message` 和 `.state-view-action`。产品可以追加 `.content-state-empty`、`.content-state-no-results`、`.content-state-loading` 或 `.content-state-error` 等状态类，但颜色、字号和间距应继续来自统一 CSS token。
+
+Rust 封装提供同名 `StateView`，C ABI 使用 `oneui_state_view_*`。操作回调由调用方持有的 Rust 包装对象管理；只要控件仍在原生视图树中并需要回调，包装对象就必须保持存活。
+
 ## Table
 
 用途：展示小型固定列数据，例如构建产物、状态列表、属性表。
@@ -400,7 +419,8 @@ for (const oneui::MonitorInfo& monitor : oneui::enumerateMonitors()) {
 
 ### ScrollView
 
-用途：滚动 viewport。
+用途：滚动 viewport。滚轮输入使用统一的 120 ms ease-out 过渡；连续滚轮会按目标位置累积，
+而 `setScrollOffset`、键盘滚动和滚动条拖拽保持即时，便于精确定位。
 
 ```cpp
 auto scroll = std::make_shared<oneui::ScrollView>();
@@ -444,7 +464,8 @@ scroll->setHorizontalScrollOffset(80.0f);
 - IME 和复杂文本编辑。
 - 完整 Accessibility。当前 `Widget` 基础语义 API 已有，Button/TextField/Checkbox/Select/Slider/RadioGroup/Tabs/List/Table 已有默认语义；更多控件默认语义、语义树和平台 bridge 仍待实现。
 - 完整 Popup/Menu/Dialog/Tooltip/Toast。
-- 大数据 DataGrid / VirtualList。
+- 可变行高的大数据 DataGrid。固定行高的简单数据集请使用 `VirtualList`；它只绘制可见行并
+  共享标准滚轮过渡，详细约定见 `docs/17-virtual-list.md`。
 - Linux/macOS 目前只有平台骨架，不是可运行后端。
 - 稳定应用启动封装。
 - 完整视觉快照测试。

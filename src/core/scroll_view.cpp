@@ -3,10 +3,21 @@
 #include "oneui/style.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <utility>
 
 namespace oneui {
+namespace {
+
+double currentTimeMs() {
+    const auto now = std::chrono::steady_clock::now().time_since_epoch();
+    return std::chrono::duration<double, std::milli>(now).count();
+}
+
+constexpr TransitionSpec kWheelScrollTransition{120.0, EasingCurve::EaseOutCubic};
+
+} // namespace
 
 ScrollView::ScrollView() {
     setPreferredSize(Size{0.0f, 160.0f});
@@ -20,6 +31,7 @@ void ScrollView::setContent(std::shared_ptr<Widget> content) {
     }
     horizontalScrollOffset_ = clampHorizontalOffset(horizontalScrollOffset_);
     scrollOffset_ = clampOffset(scrollOffset_);
+    scrollTransition_.reset(scrollOffset_);
     invalidate();
 }
 
@@ -32,11 +44,26 @@ void ScrollView::setContentWidth(float width) {
 void ScrollView::setContentHeight(float height) {
     contentHeight_ = std::max(0.0f, height);
     scrollOffset_ = clampOffset(scrollOffset_);
+    scrollTransition_.reset(scrollOffset_);
     invalidate();
 }
 
 void ScrollView::setWheelStep(float step) {
     wheelStep_ = std::max(1.0f, step);
+}
+
+void ScrollView::setChromeVisible(bool visible) {
+    if (chromeVisible_ == visible) {
+        return;
+    }
+    chromeVisible_ = visible;
+    invalidate();
+}
+
+void ScrollView::setScrollbarStyle(Color color, float thickness) {
+    scrollbarColor_ = color;
+    scrollbarThickness_ = std::max(1.0f, thickness);
+    invalidate();
 }
 
 void ScrollView::setHorizontalScrollOffset(float offset) {
@@ -51,6 +78,7 @@ void ScrollView::setHorizontalScrollOffset(float offset) {
 
 void ScrollView::setScrollOffset(float offset) {
     const float next = clampOffset(offset);
+    scrollTransition_.reset(next);
     if (std::fabs(next - scrollOffset_) <= 0.001f) {
         return;
     }
@@ -78,10 +106,12 @@ float ScrollView::maxScrollOffset() const {
 void ScrollView::paint(Canvas& canvas) {
     layoutChildren();
 
-    const auto& t = theme();
     const Rect viewport = viewportRect();
-    canvas.fillRect(viewport, t.surface, t.radiusMd);
-    canvas.strokeRect(viewport, t.border, t.radiusMd, 1.0f);
+    if (chromeVisible_) {
+        const auto& t = theme();
+        canvas.fillRect(viewport, t.surface, t.radiusMd);
+        canvas.strokeRect(viewport, t.border, t.radiusMd, 1.0f);
+    }
 
     canvas.save();
     canvas.clipRect(viewport);
@@ -92,12 +122,12 @@ void ScrollView::paint(Canvas& canvas) {
 
     if (hasVerticalOverflow()) {
         const Rect thumb = verticalThumbRect();
-        canvas.fillRect(thumb, Color{148, 163, 184, 180}, thumb.width / 2.0f);
+        canvas.fillRect(thumb, scrollbarColor_, thumb.width / 2.0f);
     }
 
     if (hasHorizontalOverflow()) {
         const Rect thumb = horizontalThumbRect();
-        canvas.fillRect(thumb, Color{148, 163, 184, 180}, thumb.height / 2.0f);
+        canvas.fillRect(thumb, scrollbarColor_, thumb.height / 2.0f);
     }
 }
 
@@ -154,9 +184,38 @@ bool ScrollView::onMouseWheel(const MouseWheelEvent& event) {
         return false;
     }
 
-    const float previous = scrollOffset_;
-    setScrollOffset(scrollOffset_ - event.deltaY * wheelStep_);
-    return std::fabs(previous - scrollOffset_) > 0.001f;
+    const float from = scrollTransition_.running() ? scrollTransition_.target() : scrollOffset_;
+    const float target = clampOffset(from - event.deltaY * wheelStep_);
+    if (std::fabs(target - from) <= 0.001f) {
+        return false;
+    }
+
+    scrollTransition_.animateTo(target, currentTimeMs(), kWheelScrollTransition);
+    const float next = clampOffset(scrollTransition_.value());
+    if (std::fabs(next - scrollOffset_) > 0.001f) {
+        scrollOffset_ = next;
+        layoutChildren();
+    }
+    invalidate();
+    requestAnimationFrame();
+    return true;
+}
+
+bool ScrollView::tickAnimations(double nowMs) {
+    const bool childrenRunning = View::tickAnimations(nowMs);
+    const bool ticked = scrollTransition_.tick(nowMs);
+    if (ticked) {
+        const float next = clampOffset(scrollTransition_.value());
+        if (std::fabs(next - scrollOffset_) > 0.001f) {
+            scrollOffset_ = next;
+            layoutChildren();
+        }
+        invalidate();
+    }
+    if (scrollTransition_.running()) {
+        requestAnimationFrame();
+    }
+    return childrenRunning || ticked;
 }
 
 bool ScrollView::onKeyDown(const KeyEvent& event) {
@@ -202,11 +261,15 @@ void ScrollView::layoutChildren() {
 
     // 视口或内容尺寸变化后，既有偏移可能越界（例如初次布局前预设了“滚动到底”，
     // 或窗口变大后底部露白），布局时统一回夹到合法区间。
-    scrollOffset_ = clampOffset(scrollOffset_);
+    const float clampedOffset = clampOffset(scrollOffset_);
+    if (std::fabs(clampedOffset - scrollOffset_) > 0.001f) {
+        scrollOffset_ = clampedOffset;
+        scrollTransition_.reset(clampedOffset);
+    }
     horizontalScrollOffset_ = clampHorizontalOffset(horizontalScrollOffset_);
 
     const Rect viewport = viewportRect();
-    const float scrollbarReserve = hasVerticalOverflow() ? 14.0f : 0.0f;
+    const float scrollbarReserve = hasVerticalOverflow() ? scrollbarThickness_ + 10.0f : 0.0f;
     const float fallbackWidth = std::max(0.0f, viewport.width - scrollbarReserve);
     const bool hasContentWidth = contentWidth_ > 0.0f || (content_ && content_->preferredSize().width > 0.0f);
     const float contentWidth = hasContentWidth ? std::max(fallbackWidth, resolvedContentWidth()) : fallbackWidth;
@@ -223,7 +286,7 @@ Rect ScrollView::horizontalThumbRect() const {
         return Rect{};
     }
 
-    constexpr float thumbHeight = 4.0f;
+    const float thumbHeight = scrollbarThickness_;
     constexpr float thumbInset = 5.0f;
     constexpr float minThumbWidth = 24.0f;
     const Rect viewport = viewportRect();
@@ -239,7 +302,7 @@ Rect ScrollView::verticalThumbRect() const {
         return Rect{};
     }
 
-    constexpr float thumbWidth = 4.0f;
+    const float thumbWidth = scrollbarThickness_;
     constexpr float thumbInset = 5.0f;
     constexpr float minThumbHeight = 24.0f;
     const Rect viewport = viewportRect();

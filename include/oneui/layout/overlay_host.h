@@ -12,6 +12,7 @@ struct OverlayEntry {
     int layer = 0;
     bool trapsFocus = false;
     bool blocksOutsidePointer = false;
+    Color backdrop{0, 0, 0, 0};
     Size size{};
     Insets margin{};
     int horizontalAlignment = 2;
@@ -23,13 +24,16 @@ struct OverlayOptions {
     int layer = 0;
     bool trapsFocus = false;
     bool blocksOutsidePointer = false;
+    Color backdrop{0, 0, 0, 0};
 
     static OverlayOptions modeless(int layer = 0) {
         return OverlayOptions{layer, false, false};
     }
 
     static OverlayOptions modal(int layer = 0) {
-        return OverlayOptions{layer, true, true};
+        // A modal surface always dims the inactive context. The color lives in
+        // OneUI rather than product code so every native dialog behaves alike.
+        return OverlayOptions{layer, true, true, Color{0, 0, 0, 104}};
     }
 };
 

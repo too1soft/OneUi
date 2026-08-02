@@ -203,6 +203,86 @@ std::vector<IconPrimitive> buildIconPrimitives(
         primitives.push_back(shape(IconPrimitiveKind::Circle, r(rect, 0.10f, 0.10f, 0.80f, 0.80f), color, sw));
         primitives.push_back(poly(rect, {Point{0.32f, 0.52f}, Point{0.46f, 0.66f}, Point{0.70f, 0.36f}}, color, sw));
         break;
+    case IconSymbol::Terminal:
+        primitives.push_back(shape(IconPrimitiveKind::RoundRect, r(rect, 0.10f, 0.14f, 0.80f, 0.72f), color, sw, false, rect.width * 0.08f));
+        primitives.push_back(poly(rect, {Point{0.28f, 0.36f}, Point{0.44f, 0.50f}, Point{0.28f, 0.64f}}, color, sw));
+        primitives.push_back(line(rect, 0.52f, 0.64f, 0.72f, 0.64f, color, sw));
+        break;
+    case IconSymbol::Server:
+        primitives.push_back(shape(IconPrimitiveKind::RoundRect, r(rect, 0.16f, 0.18f, 0.68f, 0.24f), color, sw, false, rect.width * 0.06f));
+        primitives.push_back(shape(IconPrimitiveKind::RoundRect, r(rect, 0.16f, 0.58f, 0.68f, 0.24f), color, sw, false, rect.width * 0.06f));
+        primitives.push_back(shape(IconPrimitiveKind::Circle, r(rect, 0.25f, 0.28f, 0.08f, 0.08f), accentColor, sw, true));
+        primitives.push_back(shape(IconPrimitiveKind::Circle, r(rect, 0.25f, 0.68f, 0.08f, 0.08f), accentColor, sw, true));
+        break;
+    case IconSymbol::LayoutGrid:
+        for (float y : {0.20f, 0.56f}) {
+            for (float x : {0.20f, 0.56f}) {
+                primitives.push_back(shape(IconPrimitiveKind::RoundRect, r(rect, x, y, 0.24f, 0.24f), color, sw, false, rect.width * 0.04f));
+            }
+        }
+        break;
+    case IconSymbol::List:
+        for (float y : {0.26f, 0.50f, 0.74f}) {
+            primitives.push_back(shape(IconPrimitiveKind::Circle, r(rect, 0.16f, y - 0.035f, 0.07f, 0.07f), color, sw, true));
+            primitives.push_back(line(rect, 0.34f, y, 0.80f, y, color, sw));
+        }
+        break;
+    case IconSymbol::Refresh:
+        primitives.push_back(shape(IconPrimitiveKind::Circle, r(rect, 0.18f, 0.18f, 0.64f, 0.64f), color, sw));
+        primitives.push_back(poly(rect, {Point{0.66f, 0.16f}, Point{0.84f, 0.18f}, Point{0.76f, 0.34f}}, accentColor, sw, true));
+        break;
+    case IconSymbol::Upload:
+        primitives.push_back(line(rect, 0.50f, 0.18f, 0.50f, 0.68f, color, sw));
+        primitives.push_back(poly(rect, {Point{0.30f, 0.38f}, Point{0.50f, 0.18f}, Point{0.70f, 0.38f}}, color, sw));
+        primitives.push_back(shape(IconPrimitiveKind::RoundRect, r(rect, 0.20f, 0.70f, 0.60f, 0.12f), color, sw, false, rect.width * 0.04f));
+        break;
+    case IconSymbol::Download:
+        primitives.push_back(line(rect, 0.50f, 0.18f, 0.50f, 0.68f, color, sw));
+        primitives.push_back(poly(rect, {Point{0.30f, 0.50f}, Point{0.50f, 0.70f}, Point{0.70f, 0.50f}}, color, sw));
+        primitives.push_back(shape(IconPrimitiveKind::RoundRect, r(rect, 0.20f, 0.70f, 0.60f, 0.12f), color, sw, false, rect.width * 0.04f));
+        break;
+    case IconSymbol::Sliders:
+        primitives.push_back(line(rect, 0.20f, 0.28f, 0.80f, 0.28f, color, sw));
+        primitives.push_back(line(rect, 0.20f, 0.50f, 0.80f, 0.50f, color, sw));
+        primitives.push_back(line(rect, 0.20f, 0.72f, 0.80f, 0.72f, color, sw));
+        primitives.push_back(shape(IconPrimitiveKind::Circle, r(rect, 0.32f, 0.20f, 0.16f, 0.16f), accentColor, sw, true));
+        primitives.push_back(shape(IconPrimitiveKind::Circle, r(rect, 0.58f, 0.42f, 0.16f, 0.16f), accentColor, sw, true));
+        primitives.push_back(shape(IconPrimitiveKind::Circle, r(rect, 0.40f, 0.64f, 0.16f, 0.16f), accentColor, sw, true));
+        break;
+    case IconSymbol::Code:
+        primitives.push_back(poly(rect, {Point{0.36f, 0.24f}, Point{0.16f, 0.50f}, Point{0.36f, 0.76f}}, color, sw));
+        primitives.push_back(poly(rect, {Point{0.64f, 0.24f}, Point{0.84f, 0.50f}, Point{0.64f, 0.76f}}, color, sw));
+        primitives.push_back(line(rect, 0.56f, 0.16f, 0.44f, 0.84f, accentColor, sw));
+        break;
+    case IconSymbol::Database:
+        primitives.push_back(shape(IconPrimitiveKind::RoundRect, r(rect, 0.20f, 0.18f, 0.60f, 0.18f), color, sw, false, rect.width * 0.09f));
+        primitives.push_back(shape(IconPrimitiveKind::RoundRect, r(rect, 0.20f, 0.41f, 0.60f, 0.18f), color, sw, false, rect.width * 0.09f));
+        primitives.push_back(shape(IconPrimitiveKind::RoundRect, r(rect, 0.20f, 0.64f, 0.60f, 0.18f), color, sw, false, rect.width * 0.09f));
+        break;
+    case IconSymbol::Cube:
+        primitives.push_back(poly(rect, {Point{0.50f, 0.12f}, Point{0.82f, 0.30f}, Point{0.82f, 0.68f}, Point{0.50f, 0.86f}, Point{0.18f, 0.68f}, Point{0.18f, 0.30f}}, color, sw, false, true));
+        primitives.push_back(line(rect, 0.50f, 0.12f, 0.50f, 0.50f, accentColor, sw));
+        primitives.push_back(line(rect, 0.18f, 0.30f, 0.50f, 0.50f, accentColor, sw));
+        primitives.push_back(line(rect, 0.82f, 0.30f, 0.50f, 0.50f, accentColor, sw));
+        break;
+    case IconSymbol::Notebook:
+        primitives.push_back(shape(IconPrimitiveKind::RoundRect, r(rect, 0.22f, 0.14f, 0.58f, 0.72f), color, sw, false, rect.width * 0.06f));
+        primitives.push_back(line(rect, 0.38f, 0.14f, 0.38f, 0.86f, accentColor, sw));
+        primitives.push_back(line(rect, 0.48f, 0.38f, 0.68f, 0.38f, color, sw));
+        primitives.push_back(line(rect, 0.48f, 0.58f, 0.68f, 0.58f, color, sw));
+        break;
+    case IconSymbol::Edit:
+        primitives.push_back(poly(rect, {Point{0.24f, 0.68f}, Point{0.30f, 0.48f}, Point{0.66f, 0.16f}, Point{0.82f, 0.32f}, Point{0.46f, 0.66f}}, color, sw, false, true));
+        primitives.push_back(line(rect, 0.60f, 0.22f, 0.76f, 0.38f, accentColor, sw));
+        primitives.push_back(line(rect, 0.22f, 0.78f, 0.52f, 0.78f, color, sw));
+        break;
+    case IconSymbol::Trash:
+        primitives.push_back(shape(IconPrimitiveKind::RoundRect, r(rect, 0.28f, 0.30f, 0.44f, 0.54f), color, sw, false, rect.width * 0.04f));
+        primitives.push_back(line(rect, 0.20f, 0.24f, 0.80f, 0.24f, color, sw));
+        primitives.push_back(line(rect, 0.38f, 0.16f, 0.62f, 0.16f, accentColor, sw));
+        primitives.push_back(line(rect, 0.42f, 0.40f, 0.42f, 0.72f, color, sw));
+        primitives.push_back(line(rect, 0.58f, 0.40f, 0.58f, 0.72f, color, sw));
+        break;
     }
 
     return primitives;

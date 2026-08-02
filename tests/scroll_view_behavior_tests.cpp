@@ -70,6 +70,13 @@ void expectRect(const char* name, oneui::Rect actual, oneui::Rect expected) {
     expectNear((std::string(name) + " height").c_str(), actual.height, expected.height);
 }
 
+void expectColor(const char* name, oneui::Color actual, oneui::Color expected) {
+    if (actual.r != expected.r || actual.g != expected.g || actual.b != expected.b || actual.a != expected.a) {
+        std::cerr << name << ": color mismatch\n";
+        ++failures;
+    }
+}
+
 void testOffsetsClampToContentBounds() {
     auto content = std::make_shared<LayoutProbe>(oneui::Size{0.0f, 0.0f});
     oneui::ScrollView scroll;
@@ -101,14 +108,18 @@ void testWheelKeepsExistingVerticalBehavior() {
 
     const bool handled = scroll.onMouseWheel(oneui::MouseWheelEvent{oneui::Point{20.0f, 20.0f}, -1.0f});
     expectEqual("ScrollView wheel down handled", handled ? 1 : 0, 1);
+    expectEqual("ScrollView wheel begins a transition", scroll.scrollOffset() > 0.0f && scroll.scrollOffset() < 50.0f ? 1 : 0, 1);
+    scroll.tickAnimations(1.0e15);
     expectNear("ScrollView wheel down offset", scroll.scrollOffset(), 50.0f);
     expectNear("ScrollView wheel keeps horizontal offset", scroll.horizontalScrollOffset(), 0.0f);
     expectRect("ScrollView wheel layout preserves vertical reserve", content->frame(), oneui::Rect{0.0f, -50.0f, 106.0f, 300.0f});
 
     scroll.onMouseWheel(oneui::MouseWheelEvent{oneui::Point{20.0f, 20.0f}, -10.0f});
+    scroll.tickAnimations(1.0e15);
     expectNear("ScrollView wheel clamps bottom", scroll.scrollOffset(), 200.0f);
 
     scroll.onMouseWheel(oneui::MouseWheelEvent{oneui::Point{20.0f, 20.0f}, 10.0f});
+    scroll.tickAnimations(1.0e15);
     expectNear("ScrollView wheel clamps top", scroll.scrollOffset(), 0.0f);
 }
 
@@ -197,6 +208,23 @@ void testHorizontalThumbDragUpdatesAndClampsOffset() {
     expectNear("ScrollView horizontal thumb drag clamps start", scroll.horizontalScrollOffset(), 0.0f);
 }
 
+void testChromeAndScrollbarStyleCanBeCustomized() {
+    auto content = std::make_shared<LayoutProbe>(oneui::Size{0.0f, 0.0f});
+    oneui::ScrollView scroll;
+    scroll.setFrame(oneui::Rect{10.0f, 20.0f, 100.0f, 80.0f});
+    scroll.setContent(content);
+    scroll.setContentHeight(240.0f);
+    scroll.setChromeVisible(false);
+    scroll.setScrollbarStyle(oneui::Color{70, 80, 90, 100}, 3.0f);
+
+    RecordingCanvas canvas;
+    scroll.paint(canvas);
+
+    expectEqual("ScrollView custom chrome omits viewport fill", static_cast<int>(canvas.fillRects.size()), 1);
+    expectNear("ScrollView custom scrollbar thickness", canvas.fillRects.front().rect.width, 3.0f);
+    expectColor("ScrollView custom scrollbar color", canvas.fillRects.front().color, oneui::Color{70, 80, 90, 100});
+}
+
 } // namespace
 
 int main() {
@@ -206,6 +234,7 @@ int main() {
     testHorizontalOffsetAppliesToContentLayout();
     testHorizontalThumbPaintsWhenContentOverflows();
     testHorizontalThumbDragUpdatesAndClampsOffset();
+    testChromeAndScrollbarStyleCanBeCustomized();
 
     if (failures != 0) {
         std::cerr << failures << " scroll view behavior test(s) failed.\n";

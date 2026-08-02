@@ -160,6 +160,16 @@ void Button::clearIcon() {
     invalidate();
 }
 
+void Button::setContentAlign(TextAlign align) {
+    contentAlign_ = align;
+    invalidate();
+}
+
+void Button::setTrailingText(std::wstring text) {
+    trailingText_ = std::move(text);
+    invalidate();
+}
+
 void Button::setStyleOverride(ButtonStyleOverride style) {
     const ButtonStyle previous = resolvedStyle();
     styleOverride_ = std::move(style);
@@ -218,7 +228,25 @@ void Button::paint(Canvas& canvas) {
     }
     const std::wstring& label = this->text();
     if (!icon_) {
-        canvas.drawTextStyled(label, rect, style.foreground, style.fontSize, TextAlign::Center, style.fontWeight);
+        if (!trailingText_.empty()) {
+            const float inset = std::min(12.0f, std::max(0.0f, rect.width / 4.0f));
+            const float gap = 8.0f;
+            const float trailingWidth = canvas.measureTextWidth(trailingText_, style.fontSize, style.fontWeight);
+            const Rect labelRect{
+                rect.x + inset,
+                rect.y,
+                std::max(0.0f, rect.width - inset * 2.0f - gap - trailingWidth),
+                rect.height};
+            const Rect trailingRect{
+                rect.x + rect.width - inset - trailingWidth,
+                rect.y,
+                trailingWidth,
+                rect.height};
+            canvas.drawTextStyled(label, labelRect, style.foreground, style.fontSize, contentAlign_, style.fontWeight);
+            canvas.drawTextStyled(trailingText_, trailingRect, style.foreground, style.fontSize, TextAlign::Right, style.fontWeight);
+            return;
+        }
+        canvas.drawTextStyled(label, rect, style.foreground, style.fontSize, contentAlign_, style.fontWeight);
         return;
     }
 
@@ -227,7 +255,12 @@ void Button::paint(Canvas& canvas) {
     const float gap = label.empty() ? 0.0f : 6.0f;
     const float textWidth = label.empty() ? 0.0f : canvas.measureTextWidth(label, style.fontSize, style.fontWeight);
     const float total = iconSide + gap + textWidth;
-    const float startX = rect.x + std::max(0.0f, (rect.width - total) / 2.0f);
+    const float inset = std::min(12.0f, std::max(0.0f, rect.width / 4.0f));
+    const float startX = contentAlign_ == TextAlign::Left
+        ? rect.x + inset
+        : contentAlign_ == TextAlign::Right
+            ? rect.x + std::max(0.0f, rect.width - total - inset)
+            : rect.x + std::max(0.0f, (rect.width - total) / 2.0f);
     const Rect iconRect{startX, rect.y + (rect.height - iconSide) / 2.0f, iconSide, iconSide};
     paintIcon(canvas, *icon_, iconRect, style.foreground, Color{0, 0, 0, 0}, 1.6f);
     if (!label.empty()) {

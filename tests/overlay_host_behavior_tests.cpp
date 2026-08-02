@@ -25,6 +25,24 @@ public:
     void drawText(const std::wstring&, oneui::Rect, oneui::Color, float, oneui::TextAlign = oneui::TextAlign::Center) override {}
 };
 
+class BackdropCanvas final : public oneui::Canvas {
+public:
+    void save() override {}
+    void restore() override {}
+    void clipRect(oneui::Rect) override {}
+    void clear(oneui::Color) override {}
+    void fillRect(oneui::Rect, oneui::Color color, float = 0.0f) override {
+        fills.push_back(color);
+    }
+    void strokeRect(oneui::Rect, oneui::Color, float = 0.0f, float = 1.0f) override {}
+    void fillEllipse(oneui::Rect, oneui::Color) override {}
+    void strokeEllipse(oneui::Rect, oneui::Color, float = 1.0f) override {}
+    void drawLine(oneui::Point, oneui::Point, oneui::Color, float = 1.0f) override {}
+    void drawText(const std::wstring&, oneui::Rect, oneui::Color, float, oneui::TextAlign = oneui::TextAlign::Center) override {}
+
+    std::vector<oneui::Color> fills;
+};
+
 class OverlayProbe final : public oneui::Widget {
 public:
     OverlayProbe(int probeId, std::vector<int>& paintLog, std::vector<int>& eventLog)
@@ -165,6 +183,26 @@ void testPaintOrdersByLayerWithStableEqualLayers() {
     host.paint(canvas);
 
     expectSequence("OverlayHost paint layer order", paintLog, {2, 4, 1, 3});
+}
+
+void testModalOverlayPaintsTheStandardBackdrop() {
+    std::vector<int> paintLog;
+    std::vector<int> eventLog;
+    oneui::OverlayHost host;
+    host.setFrame(oneui::Rect{0.0f, 0.0f, 320.0f, 240.0f});
+    BackdropCanvas canvas;
+
+    host.addOverlay(makeProbe(1, paintLog, eventLog), oneui::OverlayOptions::modeless(0));
+    host.addOverlay(makeProbe(2, paintLog, eventLog), oneui::OverlayOptions::modal(10));
+    host.paint(canvas);
+
+    expectEqual("Modal overlay paints one backdrop", static_cast<int>(canvas.fills.size()), 1);
+    if (!canvas.fills.empty()) {
+        expectEqual("Modal backdrop red", canvas.fills.front().r, 0);
+        expectEqual("Modal backdrop green", canvas.fills.front().g, 0);
+        expectEqual("Modal backdrop blue", canvas.fills.front().b, 0);
+        expectEqual("Modal backdrop alpha", canvas.fills.front().a, 104);
+    }
 }
 
 void testAnchoredOverlayLaysOutAgainstHostFrame() {
@@ -748,6 +786,7 @@ void testFocusedPopupReceivesEscapeThroughOverlayHost() {
 int main() {
     testAddOverlayPreservesEntryOrderAndLayerValues();
     testPaintOrdersByLayerWithStableEqualLayers();
+    testModalOverlayPaintsTheStandardBackdrop();
     testAnchoredOverlayLaysOutAgainstHostFrame();
     testAnchoredOverlayCanFillHostFrameWithNegativeSize();
     testRemoveOverlayRemovesOnlyMatchingEntry();

@@ -18,7 +18,7 @@ void OverlayHost::setContent(std::shared_ptr<Widget> child) {
 }
 
 void OverlayHost::addOverlay(std::shared_ptr<Widget> child, int layer) {
-    addOverlay(std::move(child), OverlayOptions{layer, false, false});
+    addOverlay(std::move(child), OverlayOptions::modeless(layer));
 }
 
 void OverlayHost::addOverlay(std::shared_ptr<Widget> child, OverlayOptions options) {
@@ -26,7 +26,13 @@ void OverlayHost::addOverlay(std::shared_ptr<Widget> child, OverlayOptions optio
         return;
     }
     installOverlayHostCallbacks(*child);
-    overlays_.push_back(OverlayEntry{std::move(child), options.layer, options.trapsFocus, options.blocksOutsidePointer});
+    OverlayEntry entry;
+    entry.child = std::move(child);
+    entry.layer = options.layer;
+    entry.trapsFocus = options.trapsFocus;
+    entry.blocksOutsidePointer = options.blocksOutsidePointer;
+    entry.backdrop = options.backdrop;
+    overlays_.push_back(std::move(entry));
     invalidate();
 }
 
@@ -46,6 +52,7 @@ void OverlayHost::addAnchoredOverlay(
     entry.layer = options.layer;
     entry.trapsFocus = options.trapsFocus;
     entry.blocksOutsidePointer = options.blocksOutsidePointer;
+    entry.backdrop = options.backdrop;
     entry.size = size;
     entry.margin = margin;
     entry.horizontalAlignment = std::clamp(horizontalAlignment, 0, 2);
@@ -148,8 +155,12 @@ void OverlayHost::paint(Canvas& canvas) {
     View::paint(canvas);
     layoutAnchoredOverlays();
     for (const std::size_t index : paintOrder()) {
-        const auto& child = overlays_[index].child;
+        const auto& entry = overlays_[index];
+        const auto& child = entry.child;
         if (child->visible()) {
+            if (entry.backdrop.a != 0) {
+                canvas.fillRect(frame(), entry.backdrop);
+            }
             child->paint(canvas);
         }
     }

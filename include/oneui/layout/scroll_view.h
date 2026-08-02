@@ -1,5 +1,6 @@
 #pragma once
 
+#include "oneui/animation.h"
 #include "oneui/export.h"
 #include "oneui/view.h"
 
@@ -15,6 +16,8 @@ public:
     void setContentWidth(float width);
     void setContentHeight(float height);
     void setWheelStep(float step);
+    void setChromeVisible(bool visible);
+    void setScrollbarStyle(Color color, float thickness);
     void setHorizontalScrollOffset(float offset);
     void setScrollOffset(float offset);
     float horizontalScrollOffset() const;
@@ -28,6 +31,7 @@ public:
     bool onMouseUp(const MouseEvent& event) override;
     bool onMouseWheel(const MouseWheelEvent& event) override;
     bool onKeyDown(const KeyEvent& event) override;
+    bool tickAnimations(double nowMs) override;
 
 private:
     void layoutChildren() override;
@@ -48,9 +52,13 @@ private:
     float horizontalScrollOffset_ = 0.0f;
     float scrollOffset_ = 0.0f;
     float wheelStep_ = 42.0f;
+    bool chromeVisible_ = true;
+    Color scrollbarColor_{148, 163, 184, 180};
+    float scrollbarThickness_ = 4.0f;
     bool draggingHorizontalThumb_ = false;
     float dragStartX_ = 0.0f;
     float dragStartHorizontalOffset_ = 0.0f;
+    FloatTransition scrollTransition_;
 };
 
 } // namespace oneui

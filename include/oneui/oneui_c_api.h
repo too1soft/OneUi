@@ -362,6 +362,16 @@ ONEUI_API void oneui_overlay_host_add_anchored_overlay(
     OneUiInsets margin,
     int horizontal_alignment,
     int vertical_alignment);
+/* Modal overlays trap focus and block pointer events outside their bounds. */
+ONEUI_API void oneui_overlay_host_add_modal_anchored_overlay(
+    OneUiWidget* host,
+    OneUiWidget* child,
+    int layer,
+    float width,
+    float height,
+    OneUiInsets margin,
+    int horizontal_alignment,
+    int vertical_alignment);
 ONEUI_API int oneui_overlay_host_update_anchored_overlay(
     OneUiWidget* host,
     OneUiWidget* child,
@@ -370,6 +380,7 @@ ONEUI_API int oneui_overlay_host_update_anchored_overlay(
     OneUiInsets margin,
     int horizontal_alignment,
     int vertical_alignment);
+ONEUI_API int oneui_overlay_host_remove_overlay(OneUiWidget* host, OneUiWidget* child);
 
 ONEUI_API OneUiWidget* oneui_log_view_create(void);
 ONEUI_API void oneui_log_view_append_line(OneUiWidget* view, const wchar_t* text, unsigned char r, unsigned char g, unsigned char b, unsigned char a);
@@ -382,6 +393,8 @@ ONEUI_API OneUiWidget* oneui_scroll_view_create(void);
 ONEUI_API void oneui_scroll_view_set_content(OneUiWidget* view, OneUiWidget* child);
 ONEUI_API void oneui_scroll_view_set_content_height(OneUiWidget* view, float height);
 ONEUI_API void oneui_scroll_view_set_wheel_step(OneUiWidget* view, float step);
+ONEUI_API void oneui_scroll_view_set_chrome_visible(OneUiWidget* view, int visible);
+ONEUI_API void oneui_scroll_view_set_scrollbar_style(OneUiWidget* view, unsigned char r, unsigned char g, unsigned char b, unsigned char a, float thickness);
 ONEUI_API void oneui_scroll_view_scroll_to_bottom(OneUiWidget* view);
 
 ONEUI_API OneUiWidget* oneui_panel_create(void);
@@ -482,6 +495,20 @@ ONEUI_API void oneui_list_set_items_utf8(OneUiWidget* list, const OneUiListItemU
 ONEUI_API void oneui_list_set_selected_index(OneUiWidget* list, int index);
 ONEUI_API int oneui_list_selected_index(OneUiWidget* list);
 ONEUI_API void oneui_list_set_on_changed(OneUiWidget* list, OneUiIntCallback callback, void* user_data);
+
+/*
+ * Fixed-height viewport-virtualized list. Use this for large result sets;
+ * OneUI only paints rows intersecting the current viewport.
+ */
+ONEUI_API OneUiWidget* oneui_virtual_list_create(void);
+ONEUI_API void oneui_virtual_list_set_items_utf8(OneUiWidget* list, const OneUiListItemUtf8* items, size_t count);
+ONEUI_API void oneui_virtual_list_set_selected_index(OneUiWidget* list, int index);
+ONEUI_API int oneui_virtual_list_selected_index(OneUiWidget* list);
+ONEUI_API void oneui_virtual_list_set_row_height(OneUiWidget* list, float height);
+ONEUI_API void oneui_virtual_list_set_scroll_offset(OneUiWidget* list, float offset);
+ONEUI_API float oneui_virtual_list_scroll_offset(OneUiWidget* list);
+ONEUI_API float oneui_virtual_list_max_scroll_offset(OneUiWidget* list);
+ONEUI_API void oneui_virtual_list_set_on_changed(OneUiWidget* list, OneUiIntCallback callback, void* user_data);
 
 ONEUI_API OneUiWidget* oneui_tree_view_create(void);
 ONEUI_API void oneui_tree_view_set_items_utf8(OneUiWidget* tree_view, const OneUiTreeItemUtf8* items, size_t count);
@@ -587,6 +614,13 @@ ONEUI_API void oneui_status_strip_set_secondary_action(OneUiWidget* status_strip
 ONEUI_API void oneui_status_strip_set_on_primary_action(OneUiWidget* status_strip, OneUiVoidCallback callback, void* user_data);
 ONEUI_API void oneui_status_strip_set_on_secondary_action(OneUiWidget* status_strip, OneUiVoidCallback callback, void* user_data);
 
+ONEUI_API OneUiWidget* oneui_state_view_create(const wchar_t* title, const wchar_t* message);
+ONEUI_API void oneui_state_view_set_title(OneUiWidget* state_view, const wchar_t* title);
+ONEUI_API void oneui_state_view_set_message(OneUiWidget* state_view, const wchar_t* message);
+ONEUI_API void oneui_state_view_set_icon(OneUiWidget* state_view, int symbol);
+ONEUI_API void oneui_state_view_set_action(OneUiWidget* state_view, const wchar_t* text);
+ONEUI_API void oneui_state_view_set_on_action(OneUiWidget* state_view, OneUiVoidCallback callback, void* user_data);
+
 ONEUI_API OneUiWidget* oneui_toast_create(const wchar_t* title, const wchar_t* message);
 ONEUI_API void oneui_toast_set_title(OneUiWidget* toast, const wchar_t* title);
 ONEUI_API void oneui_toast_set_message(OneUiWidget* toast, const wchar_t* message);
@@ -611,6 +645,9 @@ ONEUI_API void oneui_text_field_set_text(OneUiWidget* text_field, const wchar_t*
 ONEUI_API OneUiWidget* oneui_text_field_create_utf8(OneUiUtf8String placeholder);
 ONEUI_API void oneui_text_field_set_text_utf8(OneUiWidget* text_field, OneUiUtf8String text);
 ONEUI_API void oneui_text_field_set_read_only(OneUiWidget* text_field, int read_only);
+ONEUI_API void oneui_text_field_set_multiline(OneUiWidget* text_field, int multiline);
+ONEUI_API void oneui_text_field_set_line_height(OneUiWidget* text_field, float line_height);
+ONEUI_API OneUiWidget* oneui_text_area_create_utf8(OneUiUtf8String placeholder);
 ONEUI_API void oneui_text_field_set_prefix_icon(OneUiWidget* text_field, int symbol);
 ONEUI_API void oneui_text_field_clear_prefix_icon(OneUiWidget* text_field);
 ONEUI_API void oneui_text_field_set_suffix_icon(OneUiWidget* text_field, int symbol);
@@ -629,6 +666,9 @@ ONEUI_API OneUiWidget* oneui_button_create_utf8(OneUiUtf8String text);
 ONEUI_API void oneui_button_set_text_utf8(OneUiWidget* button, OneUiUtf8String text);
 /* symbol: IconSymbol ordinal; negative clears the leading icon */
 ONEUI_API void oneui_button_set_icon(OneUiWidget* button, int symbol);
+/* align: 0 = left, 1 = center, 2 = right */
+ONEUI_API void oneui_button_set_content_align(OneUiWidget* button, int align);
+ONEUI_API void oneui_button_set_trailing_text_utf8(OneUiWidget* button, OneUiUtf8String text);
 ONEUI_API void oneui_button_set_variant(OneUiWidget* button, OneUiButtonVariant variant);
 ONEUI_API void oneui_button_set_on_click(OneUiWidget* button, OneUiVoidCallback callback, void* user_data);
 ONEUI_API void oneui_button_set_style(OneUiWidget* button, const OneUiButtonStyle* style);

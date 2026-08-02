@@ -30,6 +30,15 @@ StyleSheet defaultTitleBarSheet() {
         .window-button.chrome-dark:active { background: #16203a; border-color: #16203a; }
         .window-button.chrome-dark.close:hover { background: #dc2626; border-color: #dc2626; color: #ffffff; }
 
+        /* Compact dark product chrome. This variant gives desktop tools a
+           distinct title band without requiring an app-specific title bar. */
+        .titlebar.chrome-product { background: #2e2e3d; border-color: #393947; border-width: 1px; color: #b9bbcc; }
+        .titlebar-icon.chrome-product { background: #050507; border-color: #050507; border-width: 1px; border-radius: 4px; color: #f6f7fb; }
+        .window-button.chrome-product { background: rgba(0,0,0,0); border-color: rgba(0,0,0,0); border-width: 1px; border-radius: 6px; color: #a8a9b8; transition: all 120ms ease-out; }
+        .window-button.chrome-product:hover { background: #3b3b4c; border-color: #3b3b4c; color: #ffffff; }
+        .window-button.chrome-product:active { background: #343443; border-color: #343443; }
+        .window-button.chrome-product.close:hover { background: #dc2626; border-color: #dc2626; color: #ffffff; }
+
         .titlebar.chrome-flat { background: rgba(0,0,0,0); border-width: 0px; color: #202124; }
         .window-button.chrome-flat { background: rgba(0,0,0,0); border-color: rgba(0,0,0,0); border-width: 1px; border-radius: 6px; color: #666a70; transition: all 120ms ease-out; }
         .window-button.chrome-flat:hover { background: #e9ebef; border-color: #e9ebef; color: #202124; }

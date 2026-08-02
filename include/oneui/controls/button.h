@@ -27,6 +27,8 @@ public:
     void setVariant(ButtonVariant variant);
     void setIcon(IconSymbol symbol);
     void clearIcon();
+    void setContentAlign(TextAlign align);
+    void setTrailingText(std::wstring text);
     void setStyleOverride(ButtonStyleOverride style);
     void clearStyleOverride();
     void setDisabled(bool disabled) override;
@@ -54,6 +56,8 @@ private:
     Binding<std::wstring> textBinding_;
     ButtonVariant variant_ = ButtonVariant::Primary;
     std::optional<IconSymbol> icon_;
+    TextAlign contentAlign_ = TextAlign::Center;
+    std::wstring trailingText_;
     std::optional<ButtonStyleOverride> styleOverride_;
     bool hovered_ = false;
     bool pressed_ = false;

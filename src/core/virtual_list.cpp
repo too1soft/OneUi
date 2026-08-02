@@ -1,0 +1,408 @@
+#include "oneui/controls/virtual_list.h"
+
+#include "list_style_internal.h"
+
+#include <algorithm>
+#include <chrono>
+#include <cmath>
+#include <utility>
+
+namespace oneui {
+namespace {
+
+double currentTimeMs() {
+    const auto now = std::chrono::steady_clock::now().time_since_epoch();
+    return std::chrono::duration<double, std::milli>(now).count();
+}
+
+constexpr TransitionSpec kWheelScrollTransition{120.0, EasingCurve::EaseOutCubic};
+
+} // namespace
+
+VirtualList::VirtualList() {
+    setPreferredSize(Size{220.0f, 264.0f});
+}
+
+void VirtualList::setItems(std::vector<ListItem> items) {
+    items_ = std::move(items);
+    hoveredIndex_ = -1;
+    pressedIndex_ = -1;
+    scrollOffset_ = std::clamp(scrollOffset_, 0.0f, maxScrollOffset());
+    scrollTransition_.reset(scrollOffset_);
+    assignSelectedIndex(selectedIndex_);
+    invalidate();
+}
+
+void VirtualList::setSelectedIndex(int index) {
+    assignSelectedIndex(index);
+}
+
+int VirtualList::selectedIndex() const {
+    return selectedIndex_;
+}
+
+void VirtualList::setRowHeight(float height) {
+    const float next = std::max(24.0f, height);
+    if (std::fabs(next - rowHeight_) <= 0.001f) {
+        return;
+    }
+    rowHeight_ = next;
+    scrollOffset_ = std::clamp(scrollOffset_, 0.0f, maxScrollOffset());
+    scrollTransition_.reset(scrollOffset_);
+    invalidate();
+}
+
+float VirtualList::rowHeight() const {
+    return rowHeight_;
+}
+
+void VirtualList::setWheelStep(float step) {
+    wheelStep_ = std::max(1.0f, step);
+}
+
+void VirtualList::setScrollOffset(float offset) {
+    const float next = std::clamp(offset, 0.0f, maxScrollOffset());
+    scrollTransition_.reset(next);
+    if (std::fabs(next - scrollOffset_) <= 0.001f) {
+        return;
+    }
+    scrollOffset_ = next;
+    invalidate();
+}
+
+float VirtualList::scrollOffset() const {
+    return scrollOffset_;
+}
+
+float VirtualList::maxScrollOffset() const {
+    return std::max(0.0f, static_cast<float>(items_.size()) * rowHeight_ - frame().height);
+}
+
+void VirtualList::setStyleOverride(ListStyleOverride style) {
+    styleOverride_ = std::move(style);
+    invalidate();
+}
+
+void VirtualList::clearStyleOverride() {
+    styleOverride_.reset();
+    invalidate();
+}
+
+void VirtualList::setOnChanged(std::function<void(int)> callback) {
+    onChanged_ = std::move(callback);
+}
+
+void VirtualList::paint(Canvas& canvas) {
+    const Rect rect = frame();
+    const ListStyle containerStyle = resolvedContainerStyle();
+    if (focusVisible() && !disabled() && containerStyle.focusRing.visible) {
+        const float offset = containerStyle.focusRing.offset;
+        canvas.strokeRect(
+            Rect{rect.x - offset, rect.y - offset, rect.width + offset * 2.0f, rect.height + offset * 2.0f},
+            containerStyle.focusRing.color,
+            containerStyle.focusRing.radius,
+            containerStyle.focusRing.width);
+    }
+    canvas.fillRect(rect, containerStyle.background, containerStyle.radius);
+    canvas.strokeRect(rect, containerStyle.border, containerStyle.radius, containerStyle.borderWidth);
+    if (items_.empty() || rect.height <= 0.0f) {
+        return;
+    }
+
+    const int first = std::max(0, static_cast<int>(std::floor(scrollOffset_ / rowHeight_)) - 1);
+    const int last = std::min(
+        static_cast<int>(items_.size()),
+        static_cast<int>(std::ceil((scrollOffset_ + rect.height) / rowHeight_)) + 1);
+
+    canvas.save();
+    canvas.clipRect(rect);
+    for (int index = first; index < last; ++index) {
+        const Rect row = itemRect(index);
+        const ListStyle itemStyle = resolvedItemStyle(index);
+        if (index > 0) {
+            canvas.drawLine(
+                Point{rect.x + itemStyle.textInset, row.y},
+                Point{rect.x + rect.width - itemStyle.textInset, row.y},
+                itemStyle.separator,
+                1.0f);
+        }
+        if (itemStyle.rowBackground.a > 0) {
+            canvas.fillRect(row.inset(itemStyle.rowInset), itemStyle.rowBackground, itemStyle.rowRadius);
+        }
+
+        const auto& item = items_[static_cast<std::size_t>(index)];
+        if (item.detail.empty()) {
+            canvas.drawText(
+                item.title,
+                Rect{row.x + itemStyle.textInset, row.y, row.width - itemStyle.textInset * 2.0f, row.height},
+                itemStyle.titleColor,
+                theme().fontMd,
+                TextAlign::Left);
+        } else {
+            canvas.drawText(
+                item.title,
+                Rect{row.x + itemStyle.textInset, row.y + itemStyle.titleOffsetY, row.width - itemStyle.textInset * 2.0f, 18.0f},
+                itemStyle.titleColor,
+                theme().fontMd,
+                TextAlign::Left);
+            canvas.drawText(
+                item.detail,
+                Rect{row.x + itemStyle.textInset, row.y + itemStyle.detailOffsetY, row.width - itemStyle.textInset * 2.0f, 16.0f},
+                itemStyle.detailColor,
+                theme().fontSm,
+                TextAlign::Left);
+        }
+    }
+    canvas.restore();
+
+    if (maxScrollOffset() > 0.001f) {
+        const Rect thumb = verticalThumbRect();
+        canvas.fillRect(thumb, theme().borderStrong, thumb.width / 2.0f);
+    }
+}
+
+bool VirtualList::onMouseMove(const MouseEvent& event) {
+    if (!interactive()) {
+        return false;
+    }
+    const int next = hitItemIndex(event.position);
+    if (next == hoveredIndex_) {
+        return false;
+    }
+    hoveredIndex_ = next;
+    invalidate();
+    return true;
+}
+
+bool VirtualList::onMouseDown(const MouseEvent& event) {
+    if (!interactive()) {
+        return false;
+    }
+    pressedIndex_ = hitItemIndex(event.position);
+    if (pressedIndex_ < 0) {
+        return false;
+    }
+    invalidate();
+    return true;
+}
+
+bool VirtualList::onMouseUp(const MouseEvent& event) {
+    if (!interactive()) {
+        return false;
+    }
+    const int pressed = pressedIndex_;
+    pressedIndex_ = -1;
+    if (pressed < 0) {
+        return false;
+    }
+    if (hitItemIndex(event.position) == pressed) {
+        assignSelectedIndex(pressed);
+    }
+    invalidate();
+    return true;
+}
+
+bool VirtualList::onMouseWheel(const MouseWheelEvent& event) {
+    if (!interactive() || !contains(event.position) || maxScrollOffset() <= 0.001f) {
+        return false;
+    }
+    const float from = scrollTransition_.running() ? scrollTransition_.target() : scrollOffset_;
+    const float target = std::clamp(from - event.deltaY * wheelStep_, 0.0f, maxScrollOffset());
+    if (std::fabs(target - from) <= 0.001f) {
+        return false;
+    }
+
+    scrollTransition_.animateTo(target, currentTimeMs(), kWheelScrollTransition);
+    scrollOffset_ = std::clamp(scrollTransition_.value(), 0.0f, maxScrollOffset());
+    invalidate();
+    requestAnimationFrame();
+    return true;
+}
+
+bool VirtualList::tickAnimations(double nowMs) {
+    const bool ticked = scrollTransition_.tick(nowMs);
+    if (!ticked) {
+        return false;
+    }
+
+    const float next = std::clamp(scrollTransition_.value(), 0.0f, maxScrollOffset());
+    if (std::fabs(next - scrollOffset_) > 0.001f) {
+        scrollOffset_ = next;
+    }
+    invalidate();
+    if (scrollTransition_.running()) {
+        requestAnimationFrame();
+    }
+    return true;
+}
+
+bool VirtualList::onKeyDown(const KeyEvent& event) {
+    if (!interactive() || items_.empty()) {
+        return false;
+    }
+    const int selected = effectiveSelectedIndex();
+    if (event.key == Key::Down) {
+        assignSelectedIndex(std::min(static_cast<int>(items_.size()) - 1, selected + 1));
+        return true;
+    }
+    if (event.key == Key::Up) {
+        assignSelectedIndex(std::max(0, selected - 1));
+        return true;
+    }
+    if (event.key == Key::Home) {
+        assignSelectedIndex(0);
+        setScrollOffset(0.0f);
+        return true;
+    }
+    if (event.key == Key::End) {
+        assignSelectedIndex(static_cast<int>(items_.size()) - 1);
+        setScrollOffset(maxScrollOffset());
+        return true;
+    }
+    return false;
+}
+
+bool VirtualList::isFocusable() const {
+    return interactive() && !items_.empty();
+}
+
+AccessibilityInfo VirtualList::accessibilityInfo() const {
+    auto info = Widget::accessibilityInfo();
+    if (info.role == AccessibilityRole::None) {
+        info.role = AccessibilityRole::List;
+    }
+    const int selected = effectiveSelectedIndex();
+    if (selected >= 0) {
+        const auto& item = items_[static_cast<std::size_t>(selected)];
+        info.value = item.detail.empty() ? item.title : item.title + L" - " + item.detail;
+        info.state.selected = true;
+    }
+    return info;
+}
+
+void VirtualList::assignSelectedIndex(int index) {
+    if (items_.empty()) {
+        selectedIndex_ = -1;
+        scrollOffset_ = 0.0f;
+        invalidate();
+        return;
+    }
+    const int previous = effectiveSelectedIndex();
+    selectedIndex_ = index < 0
+        ? -1
+        : std::clamp(index, 0, static_cast<int>(items_.size()) - 1);
+    if (selectedIndex_ >= 0) {
+        ensureSelectionVisible();
+    }
+    if (previous != selectedIndex_ && onChanged_) {
+        onChanged_(selectedIndex_);
+    }
+    invalidate();
+}
+
+int VirtualList::effectiveSelectedIndex() const {
+    if (items_.empty() || selectedIndex_ < 0) {
+        return -1;
+    }
+    return std::clamp(selectedIndex_, 0, static_cast<int>(items_.size()) - 1);
+}
+
+int VirtualList::hitItemIndex(Point point) const {
+    if (items_.empty() || !contains(point)) {
+        return -1;
+    }
+    const int index = static_cast<int>((point.y - frame().y + scrollOffset_) / rowHeight_);
+    return index >= 0 && index < static_cast<int>(items_.size()) ? index : -1;
+}
+
+Rect VirtualList::itemRect(int index) const {
+    const Rect rect = frame();
+    return Rect{rect.x, rect.y + static_cast<float>(index) * rowHeight_ - scrollOffset_, rect.width, rowHeight_};
+}
+
+Rect VirtualList::verticalThumbRect() const {
+    const Rect rect = frame();
+    const float contentHeight = static_cast<float>(items_.size()) * rowHeight_;
+    const float thumbHeight = std::max(24.0f, rect.height * rect.height / contentHeight);
+    const float travel = std::max(0.0f, rect.height - thumbHeight - 10.0f);
+    const float progress = maxScrollOffset() <= 0.001f ? 0.0f : scrollOffset_ / maxScrollOffset();
+    return Rect{rect.x + rect.width - 9.0f, rect.y + 5.0f + progress * travel, 4.0f, thumbHeight};
+}
+
+void VirtualList::ensureSelectionVisible() {
+    const int selected = effectiveSelectedIndex();
+    if (selected < 0 || frame().height <= 0.001f) {
+        return;
+    }
+    const float top = static_cast<float>(selected) * rowHeight_;
+    const float bottom = top + rowHeight_;
+    if (top < scrollOffset_) {
+        scrollOffset_ = top;
+    } else if (bottom > scrollOffset_ + frame().height) {
+        scrollOffset_ = bottom - frame().height;
+    }
+    scrollOffset_ = std::clamp(scrollOffset_, 0.0f, maxScrollOffset());
+    scrollTransition_.reset(scrollOffset_);
+}
+
+ListStyle VirtualList::resolvedContainerStyle() const {
+    ListStyle style = detail::baseListStyle(false, disabled(), false, false);
+    if (!styleOverride_) {
+        return style;
+    }
+    if (styleOverride_->normal) {
+        detail::applyListStateOverride(style, *styleOverride_->normal);
+    }
+    if (disabled() && styleOverride_->disabled) {
+        detail::applyListStateOverride(style, *styleOverride_->disabled);
+    }
+    if (focusVisible() && styleOverride_->focusVisible) {
+        detail::applyListStateOverride(style, *styleOverride_->focusVisible);
+    }
+    return style;
+}
+
+ListStyle VirtualList::resolvedItemStyle(int index) const {
+    const bool selected = index == effectiveSelectedIndex();
+    const bool hovered = index == hoveredIndex_;
+    const bool pressed = index == pressedIndex_;
+    ListStyle style = detail::baseListStyle(selected, disabled(), hovered, pressed);
+    if (!styleOverride_) {
+        return style;
+    }
+    if (styleOverride_->normal) {
+        detail::applyListStateOverride(style, *styleOverride_->normal);
+    }
+    if (selected) {
+        style.rowBackground = style.selectedRowBackground;
+        style.titleColor = style.selectedTitleColor;
+        style.detailColor = style.selectedDetailColor;
+    }
+    if (disabled() && styleOverride_->disabled) {
+        detail::applyListStateOverride(style, *styleOverride_->disabled);
+    } else if (pressed && styleOverride_->pressed) {
+        detail::applyListStateOverride(style, *styleOverride_->pressed);
+    } else if (selected && styleOverride_->selected) {
+        detail::applyListStateOverride(style, *styleOverride_->selected);
+        style.rowBackground = style.selectedRowBackground;
+        style.titleColor = style.selectedTitleColor;
+        style.detailColor = style.selectedDetailColor;
+    } else if (hovered && styleOverride_->hovered) {
+        detail::applyListStateOverride(style, *styleOverride_->hovered);
+    }
+    if (focusVisible() && styleOverride_->focusVisible) {
+        detail::applyListStateOverride(style, *styleOverride_->focusVisible);
+    }
+    return style;
+}
+
+bool VirtualList::hasInteractionState() const {
+    return hoveredIndex_ >= 0 || pressedIndex_ >= 0;
+}
+
+void VirtualList::resetInteractionState() {
+    hoveredIndex_ = -1;
+    pressedIndex_ = -1;
+}
+
+} // namespace oneui

@@ -17,7 +17,7 @@
 
 namespace oneui {
 
-class ONEUI_API TextField final : public Widget {
+class ONEUI_API TextField : public Widget {
 public:
     explicit TextField(std::wstring placeholder = {});
 
@@ -40,6 +40,10 @@ public:
     bool redo();
     void setReadOnly(bool readOnly);
     bool readOnly() const;
+    void setMultiline(bool multiline);
+    bool multiline() const;
+    void setLineHeight(float lineHeight);
+    float lineHeight() const;
     void setClipboard(std::shared_ptr<Clipboard> clipboard);
     std::shared_ptr<Clipboard> clipboard() const;
     void setPasswordMode(bool enabled);
@@ -81,6 +85,11 @@ private:
         TextEditSnapshot after;
     };
 
+    struct TextLine {
+        std::size_t start = 0;
+        std::size_t end = 0;
+    };
+
     bool assignText(std::wstring text, std::size_t nextCaretIndex, bool recordUndo = false);
     bool editable() const;
     TextEditSnapshot makeEditSnapshot() const;
@@ -97,11 +106,23 @@ private:
     void beginVisualTransition(TextFieldStyle from, TextFieldStyle target);
     void restartCaretBlink();
     std::size_t caretIndexFromPoint(Point point) const;
+    std::size_t multilineCaretIndexFromPoint(Point point) const;
+    bool moveCaretVertically(int direction, bool extendSelection);
     void ensureCaretVisible();
+    void ensureMultilineCaretVisible();
     float contentWidthForText() const;
     void invalidateTextMetrics();
     void updateTextMetrics(const Canvas* canvas = nullptr) const;
+    void updateMultilineTextMetrics(const Canvas* canvas = nullptr) const;
     float textWidthAt(std::size_t index) const;
+    float multilineTextWidthAt(std::size_t lineIndex, std::size_t index) const;
+    std::size_t multilineLineIndexForCaret(std::size_t index) const;
+    void paintMultilineContent(
+        Canvas& canvas,
+        Rect contentRect,
+        const TextFieldStyle& style,
+        bool hasText,
+        bool shouldPaintPlaceholder);
     bool hasInteractionState() const override;
     void resetInteractionState() override;
 
@@ -113,6 +134,10 @@ private:
     bool hasSelection_ = false;
     bool passwordMode_ = false;
     bool readOnly_ = false;
+    bool multiline_ = false;
+    float lineHeight_ = 20.0f;
+    std::size_t verticalScrollLine_ = 0;
+    float horizontalScrollOffset_ = 0.0f;
     wchar_t passwordMask_ = L'*';
     bool hovered_ = false;
     bool selecting_ = false;
@@ -135,6 +160,15 @@ private:
     mutable std::wstring measuredDisplayText_;
     mutable std::vector<float> measuredPrefixWidths_;
     mutable bool measuredTextMetricsExact_ = false;
+    mutable std::vector<TextLine> measuredLines_;
+    mutable std::vector<std::vector<float>> measuredLinePrefixWidths_;
+    mutable bool measuredMultilineMetricsExact_ = false;
+};
+
+/// A native multiline text editor using the same style contract as TextField.
+class ONEUI_API TextArea final : public TextField {
+public:
+    explicit TextArea(std::wstring placeholder = {});
 };
 
 } // namespace oneui

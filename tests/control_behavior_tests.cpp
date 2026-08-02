@@ -6,6 +6,7 @@
 #include "oneui/controls/form_field.h"
 #include "oneui/controls/icon_view.h"
 #include "oneui/controls/list.h"
+#include "oneui/controls/virtual_list.h"
 #include "oneui/controls/nav_item.h"
 #include "oneui/controls/popup.h"
 #include "oneui/controls/progress_bar.h"
@@ -14,11 +15,13 @@
 #include "oneui/controls/separator.h"
 #include "oneui/controls/slider.h"
 #include "oneui/controls/status_strip.h"
+#include "oneui/controls/state_view.h"
 #include "oneui/controls/switch.h"
 #include "oneui/controls/tabs.h"
 #include "oneui/controls/table.h"
 #include "oneui/controls/text_field.h"
 #include "oneui/controls/text_input_bridge.h"
+#include "oneui/controls/tree_view.h"
 #include "oneui/controls/tile.h"
 #include "oneui/controls/toast.h"
 #include "oneui/controls/validation_message.h"
@@ -2328,6 +2331,89 @@ void testListDisabledStyleOverrideWinsAndClearRestoresDefault() {
     expectEqual("List clearStyleOverride removes disabled background", countFillRectsWithColor(defaultCanvas, disabledBackground), 0);
 }
 
+void testVirtualListPaintsOnlyViewportRowsAndMaintainsScrollSelection() {
+    std::vector<oneui::ListItem> items;
+    items.reserve(5000);
+    for (int index = 0; index < 5000; ++index) {
+        items.push_back(oneui::ListItem{L"Row " + std::to_wstring(index), L""});
+    }
+
+    oneui::VirtualList list;
+    list.setItems(std::move(items));
+    expectNear(
+        "VirtualList does not scroll before it has a viewport",
+        list.scrollOffset(),
+        0.0f);
+    list.setRowHeight(40.0f);
+    list.setFrame(oneui::Rect{0.0f, 0.0f, 240.0f, 240.0f});
+    list.setScrollOffset(100000.0f);
+
+    RecordingCanvas canvas;
+    list.paint(canvas);
+
+    expectEqual("VirtualList clips the viewport exactly once", static_cast<int>(canvas.clips.size()), 1);
+    expectEqual("VirtualList paints a bounded number of visible rows", static_cast<int>(canvas.texts.size()) <= 8 ? 1 : 0, 1);
+    expectEqual("VirtualList paints the row at the scroll offset", countTextsWithText(canvas, L"Row 2500"), 1);
+
+    list.setSelectedIndex(4999);
+    expectEqual("VirtualList selected index updates", list.selectedIndex(), 4999);
+    expectNear("VirtualList keeps keyboard selection visible", list.scrollOffset(), list.maxScrollOffset());
+
+    const float offsetBeforeWheel = list.scrollOffset();
+    const bool wheelHandled = list.onMouseWheel(oneui::MouseWheelEvent{oneui::Point{10.0f, 10.0f}, 2.0f});
+    expectEqual("VirtualList handles wheel events when scrollable", wheelHandled ? 1 : 0, 1);
+    expectEqual("VirtualList wheel begins a transition", list.scrollOffset() < offsetBeforeWheel && list.scrollOffset() > offsetBeforeWheel - 96.0f ? 1 : 0, 1);
+    list.tickAnimations(1.0e15);
+    expectEqual("VirtualList wheel scrolls upward", list.scrollOffset() < offsetBeforeWheel ? 1 : 0, 1);
+
+    list.setSelectedIndex(-1);
+    expectEqual("VirtualList supports an explicit empty selection", list.selectedIndex(), -1);
+    expectEqual(
+        "VirtualList empty selection is reflected in accessibility state",
+        list.accessibilityInfo().state.selected ? 1 : 0,
+        0);
+    list.onKeyDown(oneui::KeyEvent{oneui::Key::Down});
+    expectEqual("VirtualList keyboard navigation resumes from the first row", list.selectedIndex(), 0);
+}
+
+void testTreeViewStyleAdapterSharesListContract() {
+    oneui::StyleSheet sheet;
+    std::string error;
+    const bool parsed = sheet.addRulesFromCss(R"css(
+        tree-view.data-list {
+            background: #101820;
+            color: #d5e3ff;
+            border-color: #384963;
+            border-width: 2px;
+            border-radius: 7px;
+            content-background: transparent;
+        }
+        tree-view.data-list:selected {
+            content-background: #263f7a;
+            color: #92b7ff;
+        }
+    )css", &error);
+    expectEqual("TreeView CSS style parses", parsed ? 1 : 0, 1);
+
+    oneui::TreeView tree;
+    tree.setItems({
+        oneui::TreeItem{L"root", L"", L"Root", L"", true},
+        oneui::TreeItem{L"child", L"root", L"Child", L"Detail", true},
+    });
+    tree.setSelectedId(L"child");
+    tree.setFrame(oneui::Rect{0.0f, 0.0f, 220.0f, 88.0f});
+    tree.setStyleOverride(oneui::treeViewStyleOverrideFromStyleSheet(
+        sheet,
+        oneui::StyleNode{"tree-view", {"data-list"}, oneui::StyleStateNone}));
+
+    RecordingCanvas canvas;
+    tree.paint(canvas);
+
+    expectEqual("TreeView style adapter applies dark container", countFillRectsWithColor(canvas, oneui::Color{16, 24, 32}), 1);
+    expectEqual("TreeView style adapter applies selected row", countFillRectsWithColor(canvas, oneui::Color{38, 63, 122}), 1);
+    expectEqual("TreeView style adapter applies selected title", countTextsWithTextAndColor(canvas, L"Child", oneui::Color{146, 183, 255}), 1);
+}
+
 void testTableStyleOverridePaintsCustomColorsAndGeometry() {
     oneui::Table table;
     table.setColumns({
@@ -3275,6 +3361,45 @@ void testTextFieldUndoRedoTextInputAndBinding() {
     expectEqual("TextField external binding update does not call onChanged", changes, 3);
 }
 
+void testTextAreaSupportsMultilineEditingAndLineNavigation() {
+    oneui::TextArea area(L"Write notes");
+    expectEqual("TextArea enables multiline mode", area.multiline() ? 1 : 0, 1);
+    expectNear("TextArea default preferred height", area.preferredSize().height, 160.0f);
+
+    area.setText(L"alpha\nbeta\ngamma");
+    area.setFrame(oneui::Rect{0.0f, 0.0f, 320.0f, 160.0f});
+    RecordingCanvas canvas;
+    area.paint(canvas);
+    expectEqual("TextArea paints one draw call per line", static_cast<int>(canvas.texts.size()), 3);
+    if (canvas.texts.size() == 3) {
+        expectWideEqual("TextArea first painted line", canvas.texts[0].text, L"alpha");
+        expectWideEqual("TextArea second painted line", canvas.texts[1].text, L"beta");
+        expectWideEqual("TextArea third painted line", canvas.texts[2].text, L"gamma");
+        expectNear("TextArea line spacing", canvas.texts[1].rect.y - canvas.texts[0].rect.y, area.lineHeight());
+    }
+    int changes = 0;
+    area.setOnChanged([&](const std::wstring&) {
+        ++changes;
+    });
+    area.setCaretIndex(8);
+
+    expectEqual("TextArea Up moves to matching column", area.onKeyDown(oneui::KeyEvent{oneui::Key::Up}) ? 1 : 0, 1);
+    expectEqual("TextArea Up caret", static_cast<int>(area.caretIndex()), 2);
+    expectEqual("TextArea Down moves to matching column", area.onKeyDown(oneui::KeyEvent{oneui::Key::Down}) ? 1 : 0, 1);
+    expectEqual("TextArea Down caret", static_cast<int>(area.caretIndex()), 8);
+    expectEqual("TextArea End moves to current line end", area.onKeyDown(oneui::KeyEvent{oneui::Key::End}) ? 1 : 0, 1);
+    expectEqual("TextArea End caret", static_cast<int>(area.caretIndex()), 10);
+    expectEqual("TextArea Home moves to current line start", area.onKeyDown(oneui::KeyEvent{oneui::Key::Home}) ? 1 : 0, 1);
+    expectEqual("TextArea Home caret", static_cast<int>(area.caretIndex()), 6);
+
+    expectEqual("TextArea Enter inserts newline", area.onKeyDown(oneui::KeyEvent{oneui::Key::Enter}) ? 1 : 0, 1);
+    expectWideEqual("TextArea Enter result", area.text(), L"alpha\n\nbeta\ngamma");
+    expectEqual("TextArea Enter emits once", changes, 1);
+    expectEqual("TextArea text input handled", area.onTextInput(L'X') ? 1 : 0, 1);
+    expectWideEqual("TextArea inserts after newline", area.text(), L"alpha\n\nXbeta\ngamma");
+    expectEqual("TextArea text input emits", changes, 2);
+}
+
 void testTextFieldDisabledDoesNotEditOrCut() {
     oneui::TextField field(L"Name");
     field.setText(L"abcdef");
@@ -4088,6 +4213,10 @@ void testStyleSheetParsesCssLikeRules() {
             background: linear-gradient(135deg, #5386ff, #5930d2);
         }
 
+        .transparent-surface {
+            background: transparent;
+        }
+
         .chip {
             border: 2px solid rgba(42, 45, 56, 0.75);
             outline: 3px solid rgb(31, 84, 218);
@@ -4097,7 +4226,7 @@ void testStyleSheetParsesCssLikeRules() {
     )css", &error);
 
     expectEqual("StyleSheet CSS parse succeeds", ok ? 1 : 0, 1);
-    expectEqual("StyleSheet CSS parse stores rules", static_cast<int>(sheet.rules().size()), 5);
+    expectEqual("StyleSheet CSS parse stores rules", static_cast<int>(sheet.rules().size()), 6);
     expectEqual("StyleSheet CSS stores root variables", static_cast<int>(sheet.customProperties().size()), 4);
     const auto inputBg = sheet.customProperty("--input-bg");
     expectEqual("StyleSheet CSS custom property lookup exists", inputBg ? 1 : 0, 1);
@@ -4133,6 +4262,9 @@ void testStyleSheetParsesCssLikeRules() {
     expectEqual("StyleSheet CSS gradient start blue", card.background.gradientStart->b, 255);
     expectEqual("StyleSheet CSS gradient end red", card.background.gradientEnd->r, 89);
     expectEqual("StyleSheet CSS gradient angle", static_cast<int>(card.background.gradientAngleDegrees.value_or(0.0f)), 135);
+
+    const auto transparent = sheet.resolve(oneui::StyleNode{"div", {"transparent-surface"}, oneui::StyleStateNone});
+    expectEqual("StyleSheet CSS parses transparent keyword", transparent.background.color->a, 0);
 
     const auto chip = sheet.resolve(oneui::StyleNode{"span", {"chip"}, oneui::StyleStateNone});
     expectEqual("StyleSheet CSS border shorthand width", static_cast<int>(chip.borderWidth.value_or(0.0f)), 2);
@@ -4208,6 +4340,27 @@ void testStyleAdapterBuildsButtonAndTextFieldOverrides() {
             color: #a8afbd;
         }
 
+        .interactive-surface {
+            background: #1f2130;
+            border-color: #3a3e50;
+            border-width: 1px;
+            border-radius: 8px;
+            transition-duration: 120ms;
+            transition-timing-function: ease-out;
+        }
+
+        .interactive-surface:hover {
+            background: #292d40;
+        }
+
+        .interactive-surface:active {
+            background: #191b28;
+        }
+
+        .interactive-surface:disabled {
+            border-color: #252836;
+        }
+
         .card {
             background: #181a20;
             border-color: #303440;
@@ -4260,6 +4413,16 @@ void testStyleAdapterBuildsButtonAndTextFieldOverrides() {
     expectEqual("StyleAdapter input focus border", textField.focusVisible->border->r, 74);
     expectEqual("StyleAdapter input read-only background", textField.readOnly->background->r, 32);
     expectEqual("StyleAdapter input read-only foreground", textField.readOnly->foreground->r, 168);
+
+    const auto interactive = oneui::interactiveSurfaceStyleFromStyleSheet(
+        sheet,
+        oneui::StyleNode{"interactive-surface", {"interactive-surface"}, oneui::StyleStateNone});
+    expectEqual("StyleAdapter interactive normal background", interactive.normal.background.r, 31);
+    expectEqual("StyleAdapter interactive hover background", interactive.hovered.background.r, 41);
+    expectEqual("StyleAdapter interactive pressed background", interactive.pressed.background.r, 25);
+    expectEqual("StyleAdapter interactive disabled border", interactive.disabled.border.r, 37);
+    expectEqual("StyleAdapter interactive transition duration", static_cast<int>(interactive.transition.durationMs), 120);
+    expectEqual("StyleAdapter interactive transition easing", static_cast<int>(interactive.transition.easing), static_cast<int>(oneui::EasingCurve::EaseOutCubic));
 
     const auto card = oneui::cardStyleBoxFromStyleSheet(sheet, oneui::StyleNode{"section", {"card"}, oneui::StyleStateNone});
     expectEqual("StyleAdapter card background", card.background.color->r, 24);
@@ -4644,6 +4807,54 @@ void testStatusStripActionStyleComesFromCss() {
     expectEqual("StatusStrip hover action background comes from CSS", countFillRectsWithColor(hoverCanvas, oneui::Color{41, 41, 50}), 1);
 }
 
+void testStateViewPaintsSemanticContentAndDispatchesAction() {
+    oneui::StateView state(L"No hosts yet", L"Create a host or import an existing connection.");
+    state.setFrame(oneui::Rect{0.0f, 0.0f, 400.0f, 220.0f});
+    state.setAction(L"Create host");
+
+    int actionClicks = 0;
+    state.setOnAction([&] {
+        ++actionClicks;
+    });
+
+    oneui::StyleSheet sheet;
+    std::string error;
+    sheet.addRulesFromCss(R"css(
+        .content-state {
+            background: #171821;
+            color: #f2f3f8;
+            padding: 24px;
+        }
+        .state-view-action {
+            background: #5146d9;
+            border-color: #6e64ef;
+            border-width: 1px;
+            border-radius: 6px;
+            color: #ffffff;
+        }
+        .state-view-action:hover {
+            background: #665be8;
+        }
+    )css", &error);
+    state.setStyleSheet(
+        std::make_shared<oneui::StyleSheet>(sheet),
+        oneui::StyleNode{"state-view", {"content-state"}, oneui::StyleStateNone});
+
+    RecordingCanvas canvas;
+    state.paint(canvas);
+    expectEqual("StateView paints semantic title", countTextsWithText(canvas, L"No hosts yet"), 1);
+    expectEqual("StateView paints semantic message", countTextsWithText(canvas, L"Create a host or import an existing connection."), 1);
+    expectEqual("StateView paints CSS action background", countFillRectsWithColor(canvas, oneui::Color{81, 70, 217}), 1);
+
+    state.onMouseMove(oneui::MouseEvent{oneui::Point{200.0f, 178.0f}});
+    RecordingCanvas hoverCanvas;
+    state.paint(hoverCanvas);
+    expectEqual("StateView hover action background comes from CSS", countFillRectsWithColor(hoverCanvas, oneui::Color{102, 91, 232}), 1);
+    state.onMouseDown(oneui::MouseEvent{oneui::Point{200.0f, 178.0f}});
+    state.onMouseUp(oneui::MouseEvent{oneui::Point{200.0f, 178.0f}});
+    expectEqual("StateView action click", actionClicks, 1);
+}
+
 void testCardLaysOutContentWithPadding() {
     oneui::Card card;
     card.setFrame(oneui::Rect{10.0f, 20.0f, 200.0f, 80.0f});
@@ -4705,6 +4916,31 @@ void testIconPrimitivesProvideReusableNativeShapes() {
         oneui::Rect{0.0f, 0.0f, 16.0f, 16.0f},
         oneui::Color{160, 168, 184});
     expectEqual("Icon copy emits two sheets", static_cast<int>(copy.size()), 2);
+
+    const auto terminal = oneui::buildIconPrimitives(
+        oneui::IconSymbol::Terminal,
+        oneui::Rect{0.0f, 0.0f, 24.0f, 24.0f},
+        oneui::Color{209, 218, 255});
+    expectEqual("Icon terminal emits frame prompt and baseline", static_cast<int>(terminal.size()), 3);
+    expectEqual("Icon terminal starts with rounded frame", static_cast<int>(terminal.front().kind), static_cast<int>(oneui::IconPrimitiveKind::RoundRect));
+
+    const auto grid = oneui::buildIconPrimitives(
+        oneui::IconSymbol::LayoutGrid,
+        oneui::Rect{0.0f, 0.0f, 16.0f, 16.0f},
+        oneui::Color{209, 218, 255});
+    expectEqual("Icon grid emits four cells", static_cast<int>(grid.size()), 4);
+
+    const auto edit = oneui::buildIconPrimitives(
+        oneui::IconSymbol::Edit,
+        oneui::Rect{0.0f, 0.0f, 16.0f, 16.0f},
+        oneui::Color{209, 218, 255});
+    expectEqual("Icon edit emits pencil and baseline", static_cast<int>(edit.size()), 3);
+
+    const auto trash = oneui::buildIconPrimitives(
+        oneui::IconSymbol::Trash,
+        oneui::Rect{0.0f, 0.0f, 16.0f, 16.0f},
+        oneui::Color{209, 218, 255});
+    expectEqual("Icon trash emits bin structure", static_cast<int>(trash.size()), 5);
 }
 
 void testIconViewPaintsRegistryPrimitives() {
@@ -4718,6 +4954,20 @@ void testIconViewPaintsRegistryPrimitives() {
 
     expectEqual("IconView brand paints filled circles", static_cast<int>(canvas.fillEllipses.size()), 6);
     expectEqual("IconView accent alpha", canvas.fillEllipses.front().color.a, 255);
+}
+
+void testButtonSupportsLeadingContentAndTrailingMetadata() {
+    oneui::Button button(L"default");
+    button.setFrame(oneui::Rect{0.0f, 0.0f, 200.0f, 32.0f});
+    button.setContentAlign(oneui::TextAlign::Left);
+    button.setTrailingText(L"4");
+
+    RecordingCanvas canvas;
+    button.paint(canvas);
+
+    expectEqual("Button trailing metadata paints both labels", static_cast<int>(canvas.texts.size()), 2);
+    expectEqual("Button primary label stays left", static_cast<int>(canvas.texts[0].rect.x), 12);
+    expectEqual("Button trailing metadata stays right", static_cast<int>(canvas.texts[1].rect.x), 181);
 }
 
 void testWindowTitleBarPaintsAndDispatchesChromeActions() {
@@ -4990,13 +5240,17 @@ void testScrollViewWheelClampsToContentBounds() {
     scroll.setWheelStep(50.0f);
 
     scroll.onMouseWheel(oneui::MouseWheelEvent{oneui::Point{20.0f, 20.0f}, -1.0f});
+    expectEqual("ScrollView wheel begins a transition", scroll.scrollOffset() > 0.0f && scroll.scrollOffset() < 50.0f ? 1 : 0, 1);
+    scroll.tickAnimations(1.0e15);
     expectNear("ScrollView wheel down offset", scroll.scrollOffset(), 50.0f);
     expectRect("ScrollView content shifted after wheel", content->frame(), oneui::Rect{0.0f, -50.0f, 106.0f, 300.0f});
 
     scroll.onMouseWheel(oneui::MouseWheelEvent{oneui::Point{20.0f, 20.0f}, -10.0f});
+    scroll.tickAnimations(1.0e15);
     expectNear("ScrollView clamps bottom", scroll.scrollOffset(), 200.0f);
 
     scroll.onMouseWheel(oneui::MouseWheelEvent{oneui::Point{20.0f, 20.0f}, 10.0f});
+    scroll.tickAnimations(1.0e15);
     expectNear("ScrollView clamps top", scroll.scrollOffset(), 0.0f);
 }
 
@@ -5430,6 +5684,8 @@ int main() {
     testListEmptyStyleOverrideKeepsDefaultPaint();
     testListStyleOverrideCanHideFocusRingAndStylePressed();
     testListDisabledStyleOverrideWinsAndClearRestoresDefault();
+    testVirtualListPaintsOnlyViewportRowsAndMaintainsScrollSelection();
+    testTreeViewStyleAdapterSharesListContract();
     testTableStyleOverridePaintsCustomColorsAndGeometry();
     testTableEmptyStyleOverrideKeepsDefaultPaint();
     testTableDisabledStyleAndClearRestoresDefault();
@@ -5460,6 +5716,7 @@ int main() {
     testTextFieldClipboardKeyboardShortcuts();
     testTextFieldUndoRedoEditingPaths();
     testTextFieldUndoRedoTextInputAndBinding();
+    testTextAreaSupportsMultilineEditingAndLineNavigation();
     testTextFieldDisabledDoesNotEditOrCut();
     testTextFieldReadOnlyAllowsSelectionCopyAndNavigationButNotMutation();
     testTextFieldPasswordModeMasksDisplayOnly();
@@ -5497,8 +5754,10 @@ int main() {
     testCardCanPaintStyleBox();
     testToastPaintsAndDispatchesActions();
     testStatusStripActionStyleComesFromCss();
+    testStateViewPaintsSemanticContentAndDispatchesAction();
     testCardLaysOutContentWithPadding();
     testIconPrimitivesProvideReusableNativeShapes();
+    testButtonSupportsLeadingContentAndTrailingMetadata();
     testIconViewPaintsRegistryPrimitives();
     testWindowTitleBarPaintsAndDispatchesChromeActions();
     testNavItemPaintsSelectionAndDispatchesClick();

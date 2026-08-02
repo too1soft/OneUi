@@ -74,6 +74,8 @@ add_library(oneui_core OBJECT
     src/core/validation_message.cpp
     src/core/window_title_bar.cpp
     src/core/list.cpp
+    src/core/state_view.cpp
+    src/core/virtual_list.cpp
     src/core/overlay_host.cpp
     src/core/panel.cpp
     src/core/popup.cpp
