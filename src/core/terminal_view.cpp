@@ -20,6 +20,7 @@ constexpr unsigned int kVirtualKeyRightWin = 0x5C;
 constexpr double kCursorBlinkPeriodMs = 1060.0;
 constexpr double kCursorBlinkOnMs = 530.0;
 constexpr double kMultiClickIntervalMs = 500.0;
+constexpr std::size_t kMaximumSparseInvalidations = 32;
 
 bool hasStyle(const TerminalCell& cell, TerminalCellStyle style) {
     return (cell.style & static_cast<std::uint32_t>(style)) != 0;
@@ -34,6 +35,11 @@ Color dim(Color color) {
 
 bool sameColor(Color left, Color right) {
     return left.r == right.r && left.g == right.g && left.b == right.b && left.a == right.a;
+}
+
+bool sameTerminalCell(const TerminalCell& left, const TerminalCell& right) {
+    return left.text == right.text && sameColor(left.foreground, right.foreground) &&
+           sameColor(left.background, right.background) && left.style == right.style;
 }
 
 bool isCopyShortcut(const KeyEvent& event) {
@@ -67,26 +73,72 @@ TerminalView::TerminalView() {
 }
 
 void TerminalView::setGrid(std::uint16_t rows, std::uint16_t columns, std::vector<TerminalCell> cells) {
-    const bool dimensionsChanged = rows != rows_ || columns != columns_;
-    const std::size_t requested = static_cast<std::size_t>(rows) * static_cast<std::size_t>(columns);
+    std::size_t requested = static_cast<std::size_t>(rows) * static_cast<std::size_t>(columns);
     if (requested > kMaximumCells) {
         rows = 0;
         columns = 0;
+        requested = 0;
         cells.clear();
     } else {
         cells.resize(requested);
     }
 
-    rows_ = rows;
-    columns_ = columns;
-    cells_ = std::move(cells);
+    const bool dimensionsChanged = rows != rows_ || columns != columns_;
     if (dimensionsChanged) {
+        rows_ = rows;
+        columns_ = columns;
+        cells_ = std::move(cells);
         clearSelection();
+        if (cursor_.row >= rows_ || cursor_.column >= columns_) {
+            cursor_.visible = false;
+        }
+        invalidate();
+        return;
     }
-    if (cursor_.row >= rows_ || cursor_.column >= columns_) {
-        cursor_.visible = false;
+
+    std::vector<std::pair<std::size_t, std::size_t>> dirtyRanges;
+    dirtyRanges.reserve(4);
+    std::size_t dirtyStart = std::numeric_limits<std::size_t>::max();
+    std::size_t firstChanged = std::numeric_limits<std::size_t>::max();
+    std::size_t lastChanged = 0;
+    bool collapsed = false;
+    for (std::size_t index = 0; index < requested; ++index) {
+        if (sameTerminalCell(cells_[index], cells[index])) {
+            if (dirtyStart != std::numeric_limits<std::size_t>::max()) {
+                if (!collapsed) {
+                    dirtyRanges.emplace_back(dirtyStart, index - dirtyStart);
+                    if (dirtyRanges.size() > kMaximumSparseInvalidations) {
+                        dirtyRanges.clear();
+                        collapsed = true;
+                    }
+                }
+                dirtyStart = std::numeric_limits<std::size_t>::max();
+            }
+            continue;
+        }
+        firstChanged = std::min(firstChanged, index);
+        lastChanged = index;
+        if (dirtyStart == std::numeric_limits<std::size_t>::max()) {
+            dirtyStart = index;
+        }
+        cells_[index] = std::move(cells[index]);
     }
-    invalidate();
+    if (dirtyStart != std::numeric_limits<std::size_t>::max() && !collapsed) {
+        dirtyRanges.emplace_back(dirtyStart, requested - dirtyStart);
+        if (dirtyRanges.size() > kMaximumSparseInvalidations) {
+            collapsed = true;
+        }
+    }
+    if (firstChanged == std::numeric_limits<std::size_t>::max()) {
+        return;
+    }
+    if (collapsed) {
+        invalidateCellRange(firstChanged, lastChanged - firstChanged + 1);
+        return;
+    }
+    for (const auto& [first, count] : dirtyRanges) {
+        invalidateCellRange(first, count);
+    }
 }
 
 void TerminalView::updateCells(std::size_t firstCell, std::vector<TerminalCell> cells) {
@@ -95,8 +147,24 @@ void TerminalView::updateCells(std::size_t firstCell, std::vector<TerminalCell> 
     }
 
     const std::size_t count = std::min(cells.size(), cells_.size() - firstCell);
-    std::move(cells.begin(), cells.begin() + count, cells_.begin() + firstCell);
-    invalidateCellRange(firstCell, count);
+    std::size_t dirtyStart = std::numeric_limits<std::size_t>::max();
+    for (std::size_t offset = 0; offset < count; ++offset) {
+        const std::size_t target = firstCell + offset;
+        if (sameTerminalCell(cells_[target], cells[offset])) {
+            if (dirtyStart != std::numeric_limits<std::size_t>::max()) {
+                invalidateCellRange(dirtyStart, target - dirtyStart);
+                dirtyStart = std::numeric_limits<std::size_t>::max();
+            }
+            continue;
+        }
+        if (dirtyStart == std::numeric_limits<std::size_t>::max()) {
+            dirtyStart = target;
+        }
+        cells_[target] = std::move(cells[offset]);
+    }
+    if (dirtyStart != std::numeric_limits<std::size_t>::max()) {
+        invalidateCellRange(dirtyStart, firstCell + count - dirtyStart);
+    }
 }
 
 Size TerminalView::gridSize() const {
@@ -220,7 +288,7 @@ void TerminalView::setStyleBox(const StyleBox& style) {
         selectionBackground_ = *style.selectionColor;
     }
     if (style.fontSize) {
-        fontSize_ = std::clamp(*style.fontSize, 8.0f, 72.0f);
+        setFontSize(*style.fontSize);
     }
     invalidate();
 }
@@ -255,6 +323,7 @@ void TerminalView::selectAll() {
     if (rows_ == 0 || columns_ == 0) {
         return;
     }
+    const SelectionSnapshot previous = selectionSnapshot();
     selectionAnchor_ = TextPosition{0, 0};
     selectionCaret_ = TextPosition{
         static_cast<std::uint16_t>(rows_ - 1),
@@ -262,7 +331,7 @@ void TerminalView::selectAll() {
     };
     hasSelection_ = true;
     selecting_ = false;
-    invalidate();
+    invalidateSelectionDelta(previous);
 }
 
 void TerminalView::setSelection(
@@ -274,6 +343,7 @@ void TerminalView::setSelection(
         clearSelection();
         return;
     }
+    const SelectionSnapshot previous = selectionSnapshot();
 
     const auto clampPosition = [&](std::uint16_t row, std::uint16_t column) {
         TextPosition position{
@@ -290,15 +360,16 @@ void TerminalView::setSelection(
     selectionCaret_ = clampPosition(endRow, endColumn);
     hasSelection_ = !(selectionAnchor_ == selectionCaret_);
     selecting_ = false;
-    invalidate();
+    invalidateSelectionDelta(previous);
 }
 
 void TerminalView::clearSelection() {
+    const SelectionSnapshot previous = selectionSnapshot();
     selectionAnchor_ = {};
     selectionCaret_ = {};
     hasSelection_ = false;
     selecting_ = false;
-    invalidate();
+    invalidateSelectionDelta(previous);
 }
 
 bool TerminalView::hasSelection() const {
@@ -413,7 +484,23 @@ void TerminalView::setAnimationScheduler(std::function<void()> scheduler) {
 
 void TerminalView::paint(Canvas& canvas) {
     const Rect bounds = frame();
-    canvas.fillRect(bounds, background_);
+    Rect paintBounds = bounds;
+    if (const auto clip = canvas.clipBounds()) {
+        const float left = std::max(bounds.x, clip->x);
+        const float top = std::max(bounds.y, clip->y);
+        const float right = std::min(bounds.x + bounds.width, clip->x + clip->width);
+        const float bottom = std::min(bounds.y + bounds.height, clip->y + clip->height);
+        paintBounds = Rect{
+            left,
+            top,
+            std::max(0.0f, right - left),
+            std::max(0.0f, bottom - top),
+        };
+    }
+    if (paintBounds.width <= 0.0f || paintBounds.height <= 0.0f) {
+        return;
+    }
+    canvas.fillRect(paintBounds, background_);
     if (rows_ == 0 || columns_ == 0) {
         return;
     }
@@ -424,6 +511,25 @@ void TerminalView::paint(Canvas& canvas) {
     reportViewport(bounds, metrics);
     canvas.save();
     canvas.clipRect(bounds);
+
+    const auto firstRow = static_cast<std::uint16_t>(std::clamp(
+        static_cast<int>(std::floor((paintBounds.y - bounds.y) / metrics.cellHeight)),
+        0,
+        static_cast<int>(rows_ - 1)));
+    const auto lastRow = static_cast<std::uint16_t>(std::clamp(
+        static_cast<int>(std::ceil(
+            (paintBounds.y + paintBounds.height - bounds.y) / metrics.cellHeight)),
+        static_cast<int>(firstRow + 1),
+        static_cast<int>(rows_)));
+    const auto firstColumn = static_cast<std::uint16_t>(std::clamp(
+        static_cast<int>(std::floor((paintBounds.x - bounds.x) / metrics.cellWidth)),
+        0,
+        static_cast<int>(columns_ - 1)));
+    const auto lastColumn = static_cast<std::uint16_t>(std::clamp(
+        static_cast<int>(std::ceil(
+            (paintBounds.x + paintBounds.width - bounds.x) / metrics.cellWidth)),
+        static_cast<int>(firstColumn + 1),
+        static_cast<int>(columns_)));
 
     struct PaintStyle {
         Color foreground;
@@ -513,9 +619,16 @@ void TerminalView::paint(Canvas& canvas) {
     };
 
     std::wstring textRun;
-    textRun.reserve(columns_);
-    for (std::uint16_t row = 0; row < rows_; ++row) {
-        for (std::uint16_t column = 0; column < columns_;) {
+    textRun.reserve(lastColumn - firstColumn);
+    for (std::uint16_t row = firstRow; row < lastRow; ++row) {
+        std::uint16_t column = firstColumn;
+        if (column > 0) {
+            const TerminalCell* first = cellAt(row, column);
+            if (first && hasStyle(*first, TerminalCellWideContinuation)) {
+                --column;
+            }
+        }
+        for (; column < lastColumn;) {
             const TerminalCell* cell = cellAt(row, column);
             if (!cell || hasStyle(*cell, TerminalCellWideContinuation)) {
                 ++column;
@@ -535,7 +648,7 @@ void TerminalView::paint(Canvas& canvas) {
 
             textRun.assign(cell->text);
             std::uint16_t end = static_cast<std::uint16_t>(column + 1);
-            while (end < columns_) {
+            while (end < lastColumn) {
                 const TerminalCell* next = cellAt(row, end);
                 if (!next || hasStyle(*next, TerminalCellWide) ||
                     hasStyle(*next, TerminalCellWideContinuation) || next->text.size() != 1 ||
@@ -581,6 +694,7 @@ bool TerminalView::onMouseDown(const MouseEvent& event) {
         return false;
     }
 
+    const SelectionSnapshot previous = selectionSnapshot();
     const TextPosition cellPosition = normalizedCellPosition(cellPositionFromPoint(event.position));
     const double nowMs = currentTimeMs();
     if (cellPosition == lastClickPosition_ && nowMs - lastClickMs_ <= kMultiClickIntervalMs) {
@@ -610,12 +724,13 @@ bool TerminalView::onMouseDown(const MouseEvent& event) {
         hasSelection_ = true;
     }
     selecting_ = true;
-    invalidate();
+    invalidateSelectionDelta(previous);
     return true;
 }
 
 bool TerminalView::onMouseMove(const MouseEvent& event) {
     if (selecting_) {
+        const SelectionSnapshot previous = selectionSnapshot();
         const TextPosition previousAnchor = selectionAnchor_;
         const TextPosition previousCaret = selectionCaret_;
         switch (selectionMode_) {
@@ -633,7 +748,7 @@ bool TerminalView::onMouseMove(const MouseEvent& event) {
             return false;
         }
         hasSelection_ = !(selectionAnchor_ == selectionCaret_);
-        invalidate();
+        invalidateSelectionDelta(previous);
         return true;
     }
     if (mouseReporting_ && onPointer_ && contains(event.position) &&
@@ -656,7 +771,6 @@ bool TerminalView::onMouseUp(const MouseEvent& event) {
         selecting_ = false;
         if (selectionAnchor_ == selectionCaret_) {
             hasSelection_ = false;
-            invalidate();
         }
         if (copyOnSelect_ && hasSelection()) {
             copySelectionToClipboard();
@@ -883,6 +997,56 @@ TerminalView::TextPosition TerminalView::selectionStart() const {
 
 TerminalView::TextPosition TerminalView::selectionEnd() const {
     return selectionAnchor_ < selectionCaret_ ? selectionCaret_ : selectionAnchor_;
+}
+
+TerminalView::SelectionSnapshot TerminalView::selectionSnapshot() const {
+    if (!hasSelection() || columns_ == 0 || cells_.empty()) {
+        return {};
+    }
+
+    const auto linearIndex = [&](TextPosition position) {
+        const std::size_t row = std::min<std::size_t>(position.row, rows_);
+        const std::size_t column = std::min<std::size_t>(position.column, columns_);
+        return std::min(cells_.size(), row * static_cast<std::size_t>(columns_) + column);
+    };
+    const std::size_t start = linearIndex(selectionStart());
+    const std::size_t end = linearIndex(selectionEnd());
+    return SelectionSnapshot{start, end, start < end};
+}
+
+void TerminalView::invalidateSelectionDelta(SelectionSnapshot previous) {
+    const SelectionSnapshot current = selectionSnapshot();
+    const auto invalidateRange = [&](std::size_t start, std::size_t end) {
+        if (start < end) {
+            invalidateCellRange(start, end - start);
+        }
+    };
+
+    if (!previous.active) {
+        if (current.active) {
+            invalidateRange(current.start, current.end);
+        }
+        return;
+    }
+    if (!current.active) {
+        invalidateRange(previous.start, previous.end);
+        return;
+    }
+    if (previous.start == current.start && previous.end == current.end) {
+        return;
+    }
+    if (previous.end <= current.start || current.end <= previous.start) {
+        invalidateRange(previous.start, previous.end);
+        invalidateRange(current.start, current.end);
+        return;
+    }
+
+    invalidateRange(
+        std::min(previous.start, current.start),
+        std::max(previous.start, current.start));
+    invalidateRange(
+        std::min(previous.end, current.end),
+        std::max(previous.end, current.end));
 }
 
 TerminalView::TextPosition TerminalView::positionFromPoint(Point point) const {

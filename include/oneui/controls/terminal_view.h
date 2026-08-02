@@ -178,11 +178,19 @@ private:
         TextPosition end;
     };
 
+    struct SelectionSnapshot {
+        std::size_t start = 0;
+        std::size_t end = 0;
+        bool active = false;
+    };
+
     GridMetrics gridMetrics(const Canvas& canvas) const;
     void reportViewport(Rect bounds, GridMetrics metrics);
     std::size_t cellIndex(std::uint16_t row, std::uint16_t column) const;
     TextPosition selectionStart() const;
     TextPosition selectionEnd() const;
+    SelectionSnapshot selectionSnapshot() const;
+    void invalidateSelectionDelta(SelectionSnapshot previous);
     TextPosition positionFromPoint(Point point) const;
     TextPosition cellPositionFromPoint(Point point) const;
     TextPosition normalizedCellPosition(TextPosition position) const;

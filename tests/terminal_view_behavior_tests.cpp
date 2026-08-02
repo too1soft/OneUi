@@ -28,6 +28,7 @@ public:
     void save() override {}
     void restore() override {}
     void clipRect(oneui::Rect) override {}
+    std::optional<oneui::Rect> clipBounds() const override { return clipOverride; }
     void clear(oneui::Color) override {}
     void fillRect(oneui::Rect rect, oneui::Color color, float = 0.0f) override {
         ++fillCount;
@@ -65,6 +66,7 @@ public:
 
     int fillCount = 0;
     int lineCount = 0;
+    std::optional<oneui::Rect> clipOverride;
     std::vector<FillCall> fills;
     mutable oneui::TextFontFamily lastMeasuredFamily = oneui::TextFontFamily::Default;
     std::vector<TextCall> texts;
@@ -199,6 +201,30 @@ void testPaintBatchesCompatibleAsciiCellsIntoRuns() {
     expectNear("terminal ASCII run spans whole cell range", canvas.texts.front().rect.width, 36.0f);
 }
 
+void testPaintVisitsOnlyCellsInsideTheDirtyClip() {
+    oneui::TerminalView terminal;
+    terminal.setFrame(oneui::Rect{0.0f, 0.0f, 120.0f, 80.0f});
+    terminal.setFontSize(10.0f);
+    terminal.setGrid(3, 6, {
+        oneui::TerminalCell{L"a"}, oneui::TerminalCell{L"b"}, oneui::TerminalCell{L"c"},
+        oneui::TerminalCell{L"d"}, oneui::TerminalCell{L"e"}, oneui::TerminalCell{L"f"},
+        oneui::TerminalCell{L"g"}, oneui::TerminalCell{L"h"}, oneui::TerminalCell{L"i"},
+        oneui::TerminalCell{L"j"}, oneui::TerminalCell{L"k"}, oneui::TerminalCell{L"l"},
+        oneui::TerminalCell{L"m"}, oneui::TerminalCell{L"n"}, oneui::TerminalCell{L"o"},
+        oneui::TerminalCell{L"p"}, oneui::TerminalCell{L"q"}, oneui::TerminalCell{L"r"},
+    });
+    terminal.setCursor(oneui::TerminalCursor{0, 0, false});
+
+    RecordingCanvas canvas;
+    canvas.clipOverride = oneui::Rect{12.0f, 13.0f, 6.0f, 13.0f};
+    terminal.paint(canvas);
+
+    expectEqual("terminal dirty clip paints one text run", static_cast<int>(canvas.texts.size()), 1);
+    expectEqual("terminal dirty clip visits the intersecting cell", canvas.texts.front().text == L"i" ? 1 : 0, 1);
+    expectNear("terminal dirty clip clears only damaged width", canvas.fills.front().rect.width, 6.0f);
+    expectNear("terminal dirty clip clears only damaged height", canvas.fills.front().rect.height, 13.0f);
+}
+
 void testLineHeightAndCursorStylesAreNativeMetrics() {
     oneui::TerminalView terminal;
     terminal.setFrame(oneui::Rect{0.0f, 0.0f, 120.0f, 120.0f});
@@ -261,9 +287,52 @@ void testTerminalUpdatesInvalidateOnlyDirtyCells() {
     }
 
     dirtyRects.clear();
+    terminal.updateCells(5, {
+        oneui::TerminalCell{L"X"},
+        oneui::TerminalCell{L"Y"},
+    });
+    expectEqual("terminal unchanged cells skip invalidation", static_cast<int>(dirtyRects.size()), 0);
+
+    dirtyRects.clear();
     terminal.setCursor(oneui::TerminalCursor{2, 3, true});
     expectEqual("terminal cursor movement invalidates old and new cells", static_cast<int>(dirtyRects.size()), 2);
     expectEqual("terminal cursor movement avoids full invalidation", fullInvalidations, 0);
+}
+
+void testSelectionInvalidatesOnlyItsChangedCells() {
+    oneui::TerminalView terminal;
+    terminal.setFrame(oneui::Rect{10.0f, 20.0f, 180.0f, 40.0f});
+    terminal.setFontSize(20.0f);
+    terminal.setGrid(1, 10, {});
+    terminal.setCursor(oneui::TerminalCursor{0, 0, false});
+    RecordingCanvas canvas;
+    terminal.paint(canvas);
+
+    int fullInvalidations = 0;
+    std::vector<oneui::Rect> dirtyRects;
+    terminal.setInvalidator([&] { ++fullInvalidations; });
+    terminal.setRectInvalidator([&](oneui::Rect rect) { dirtyRects.push_back(rect); });
+
+    terminal.setSelection(0, 1, 0, 4);
+    expectEqual("terminal selection avoids full invalidation", fullInvalidations, 0);
+    expectEqual("terminal selection invalidates its initial range", static_cast<int>(dirtyRects.size()), 1);
+    if (!dirtyRects.empty()) {
+        expectNear("terminal selection starts at selected column", dirtyRects.front().x, 22.0f);
+        expectNear("terminal selection spans selected columns", dirtyRects.front().width, 36.0f);
+    }
+
+    dirtyRects.clear();
+    terminal.setSelection(0, 1, 0, 6);
+    expectEqual("terminal selection extension invalidates one edge", static_cast<int>(dirtyRects.size()), 1);
+    if (!dirtyRects.empty()) {
+        expectNear("terminal selection extension starts at old edge", dirtyRects.front().x, 58.0f);
+        expectNear("terminal selection extension spans only new cells", dirtyRects.front().width, 24.0f);
+    }
+
+    dirtyRects.clear();
+    terminal.clearSelection();
+    expectEqual("terminal selection clear avoids full invalidation", fullInvalidations, 0);
+    expectEqual("terminal selection clear repaints old range", static_cast<int>(dirtyRects.size()), 1);
 }
 
 void testTextAndRawKeyCallbacksStaySeparate() {
@@ -558,8 +627,10 @@ int main() {
     testGridUpdatesOnlyRequestedCells();
     testPaintHonorsWideCellsStylesAndCursor();
     testPaintBatchesCompatibleAsciiCellsIntoRuns();
+    testPaintVisitsOnlyCellsInsideTheDirtyClip();
     testLineHeightAndCursorStylesAreNativeMetrics();
     testTerminalUpdatesInvalidateOnlyDirtyCells();
+    testSelectionInvalidatesOnlyItsChangedCells();
     testTextAndRawKeyCallbacksStaySeparate();
     testCommittedUnicodeAndImeCaretStayCellAligned();
     testStyleBoxControlsTerminalVisualTokens();

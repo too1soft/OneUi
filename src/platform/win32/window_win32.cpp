@@ -16,6 +16,7 @@
 #include "include/gpu/ganesh/GrBackendSurface.h"
 #include "include/gpu/ganesh/gl/GrGLBackendSurface.h"
 #include "include/gpu/ganesh/gl/GrGLTypes.h"
+#include "include/gpu/GpuTypes.h"
 
 #include "include/core/SkCanvas.h"
 #include "include/core/SkBlurTypes.h"
@@ -262,6 +263,7 @@ struct TextBlobEntry {
     sk_sp<SkTextBlob> blob;
     SkRect bounds = SkRect::MakeEmpty();
     SkFontMetrics metrics{};
+    float advanceWidth = 0.0f;
 };
 
 bool renderTraceEnabled() {
@@ -562,9 +564,9 @@ public:
 
         float x = rect.x;
         if (align == TextAlign::Center) {
-            x = rect.x + (rect.width - textBlob.bounds.width()) / 2.0f - textBlob.bounds.left();
+            x = rect.x + (rect.width - textBlob.advanceWidth) / 2.0f - textBlob.bounds.left();
         } else if (align == TextAlign::Right) {
-            x = rect.x + rect.width - textBlob.bounds.width() - textBlob.bounds.left();
+            x = rect.x + rect.width - textBlob.advanceWidth - textBlob.bounds.left();
         }
 
         const float baseline = rect.y + (rect.height - textBlob.metrics.fDescent - textBlob.metrics.fAscent) / 2.0f;
@@ -592,7 +594,7 @@ public:
         const TextBlobEntry& textBlob = cachedTextBlob(text, size, family, weight);
         ++g_primitivePaintTrace.textMeasureCalls;
         g_primitivePaintTrace.textMeasureMs += currentTimeMs() - traceStartMs;
-        return textBlob.bounds.width();
+        return textBlob.advanceWidth;
     }
 
     void drawPixels(Rect rect, const std::uint8_t* pixels, int width, int height, int stride, CanvasPixelFormat format) override {
@@ -646,22 +648,37 @@ private:
 
         const SkFontStyle style(clampedWeight, SkFontStyle::kNormal_Width, SkFontStyle::kUpright_Slant);
         if (family == TextFontFamily::Monospace) {
-            for (const char* candidate : {"JetBrains Mono", "Cascadia Mono", "Consolas", "NSimSun"}) {
-                if (auto face = fontMgr->legacyMakeTypeface(candidate, style)) {
+            // legacyMakeTypeface may silently substitute the system UI font when
+            // a requested family is missing.  That turns terminal text
+            // proportional while the grid is still measured from "M", causing
+            // cumulative cursor drift.  matchFamilyStyle is strict, and the
+            // fixed-pitch check keeps the terminal grid contract explicit.
+            for (const char* candidate : {
+                     "JetBrains Mono",
+                     "Cascadia Mono",
+                     "Cascadia Code",
+                     "Consolas",
+                     "Courier New",
+                     "NSimSun"}) {
+                if (auto face = fontMgr->matchFamilyStyle(candidate, style);
+                    face && face->isFixedPitch()) {
                     cache[cacheKey] = face;
                     return face;
                 }
             }
         }
-        if (auto face = fontMgr->legacyMakeTypeface("Microsoft YaHei", style)) {
+        if (auto face = fontMgr->matchFamilyStyle("Microsoft YaHei", style)) {
             cache[cacheKey] = face;
             return face;
         }
-        if (auto face = fontMgr->legacyMakeTypeface("SimSun", style)) {
+        if (auto face = fontMgr->matchFamilyStyle("SimSun", style)) {
             cache[cacheKey] = face;
             return face;
         }
-        auto face = fontMgr->legacyMakeTypeface("Segoe UI", style);
+        auto face = fontMgr->matchFamilyStyle("Segoe UI", style);
+        if (!face) {
+            face = fontMgr->legacyMakeTypeface(nullptr, style);
+        }
         cache[cacheKey] = face;
         return face;
     }
@@ -738,7 +755,8 @@ private:
 
         TextBlobEntry entry;
         const auto byteLength = text.size() * sizeof(wchar_t);
-        font.measureText(text.data(), byteLength, SkTextEncoding::kUTF16, &entry.bounds);
+        entry.advanceWidth = font.measureText(
+            text.data(), byteLength, SkTextEncoding::kUTF16, &entry.bounds);
         font.getMetrics(&entry.metrics);
         entry.blob = SkTextBlob::MakeFromText(text.data(), byteLength, font, SkTextEncoding::kUTF16);
 
@@ -2142,18 +2160,11 @@ private:
             glViewport(0, 0,
                 static_cast<GLsizei>(clientRect.right - clientRect.left),
                 static_cast<GLsizei>(clientRect.bottom - clientRect.top));
-            glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-            glClear(GL_COLOR_BUFFER_BIT);
         }
         PAINTSTRUCT paintStruct{};
         HDC paintDc = BeginPaint(hwnd_, &paintStruct);
         HDC dc = useGPU ? glDC_ : paintDc;
-        RECT dirtyRect{};
-        if (useGPU) {
-            dirtyRect = clientRect;
-        } else {
-            dirtyRect = paintStruct.rcPaint;
-        }
+        RECT dirtyRect = paintStruct.rcPaint;
         const int width = std::max<LONG>(1, clientRect.right - clientRect.left);
         const int height = std::max<LONG>(1, clientRect.bottom - clientRect.top);
         const float scale = normalizedDpiScale();
@@ -2167,6 +2178,9 @@ private:
         if (!paintSurface_) {
             EndPaint(hwnd_, &paintStruct);
             return;
+        }
+        if (allocatedSurface) {
+            dirtyRect = clientRect;
         }
         const int dirtyX = std::clamp<LONG>(dirtyRect.left, 0, width);
         const int dirtyY = std::clamp<LONG>(dirtyRect.top, 0, height);
@@ -2214,7 +2228,10 @@ private:
         }
         skCanvas->restore();
 
-        if (gpuAvailable_ && grContext_) {
+        if (gpuAvailable_ && grContext_ && windowSurface_) {
+            SkCanvas* presentCanvas = windowSurface_->getCanvas();
+            presentCanvas->clear(SK_ColorBLACK);
+            paintSurface_->draw(presentCanvas, 0.0f, 0.0f);
             grContext_->flushAndSubmit();
             if (SwapBuffers(glDC_)) {
                 EndPaint(hwnd_, &paintStruct);
@@ -2222,6 +2239,13 @@ private:
                 return;
             }
             gpuAvailable_ = false;
+            windowSurface_.reset();
+            paintSurface_.reset();
+            paintSurfaceWidth_ = 0;
+            paintSurfaceHeight_ = 0;
+            InvalidateRect(hwnd_, nullptr, FALSE);
+            EndPaint(hwnd_, &paintStruct);
+            return;
         }
 
         SkPixmap pixmap;
@@ -2298,7 +2322,8 @@ private:
 
     bool ensurePaintSurfaceCapacity(int width, int height) {
         if (paintSurface_) {
-            if (gpuAvailable_ && paintSurfaceWidth_ == width && paintSurfaceHeight_ == height) {
+            if (gpuAvailable_ && windowSurface_ &&
+                paintSurfaceWidth_ == width && paintSurfaceHeight_ == height) {
                 return false;
             }
             if (!gpuAvailable_ && paintSurfaceWidth_ >= width && paintSurfaceHeight_ >= height) {
@@ -2313,18 +2338,29 @@ private:
             surfaceWidth = width;
             surfaceHeight = height;
             imageInfo = SkImageInfo::Make(surfaceWidth, surfaceHeight, kBGRA_8888_SkColorType, kPremul_SkAlphaType);
+            auto retainedSurface = SkSurfaces::RenderTarget(
+                grContext_.get(),
+                skgpu::Budgeted::kYes,
+                imageInfo,
+                0,
+                kTopLeft_GrSurfaceOrigin,
+                nullptr);
             GrGLFramebufferInfo fbInfo;
             fbInfo.fFBOID = 0;
             fbInfo.fFormat = GL_RGBA8;
             auto backendRT = GrBackendRenderTargets::MakeGL(surfaceWidth, surfaceHeight, 0, 0, fbInfo);
-            paintSurface_ = SkSurfaces::WrapBackendRenderTarget(
+            auto windowSurface = SkSurfaces::WrapBackendRenderTarget(
                 grContext_.get(), backendRT, kBottomLeft_GrSurfaceOrigin,
                 kBGRA_8888_SkColorType, nullptr, nullptr);
-            if (paintSurface_) {
+            if (retainedSurface && windowSurface) {
+                paintSurface_ = std::move(retainedSurface);
+                windowSurface_ = std::move(windowSurface);
                 paintSurfaceWidth_ = surfaceWidth;
                 paintSurfaceHeight_ = surfaceHeight;
                 return true;
             }
+            paintSurface_.reset();
+            windowSurface_.reset();
             gpuAvailable_ = false;
         }
         // 走到这里说明无表面或容量不足，必须重建光栅表面。
@@ -2830,6 +2866,8 @@ private:
     }
 
     void shutdownGPU() {
+        windowSurface_.reset();
+        paintSurface_.reset();
         grContext_.reset();
         if (glContext_) {
             wglMakeCurrent(nullptr, nullptr);
@@ -2891,6 +2929,7 @@ private:
     Point lastCursorPoint_{};
     bool hasLastCursorPoint_ = false;
     sk_sp<SkSurface> paintSurface_;
+    sk_sp<SkSurface> windowSurface_;
     int paintSurfaceWidth_ = 0;
     int paintSurfaceHeight_ = 0;
     int traceLastWidth_ = 0;
