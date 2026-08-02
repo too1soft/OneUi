@@ -1186,6 +1186,13 @@ void oneui_window_set_content(OneUiWindow* window, OneUiWidget* widget) {
     window->window->setContent(widget->widget);
 }
 
+int oneui_window_request_focus(OneUiWindow* window, OneUiWidget* widget, int focus_visible) {
+    if (!window || !window->window || !widget || !widget->widget) {
+        return 0;
+    }
+    return window->window->requestFocus(widget->widget.get(), focus_visible != 0) ? 1 : 0;
+}
+
 void oneui_window_set_style_sheet(OneUiWindow* window, OneUiStyleSheet* style_sheet) {
     if (!window || !style_sheet || !style_sheet->sheet) {
         return;
@@ -3066,6 +3073,17 @@ void oneui_terminal_view_set_cursor(
 void oneui_terminal_view_select_all(OneUiWidget* view) {
     if (auto* nativeView = asWidget<oneui::TerminalView>(view)) {
         nativeView->selectAll();
+    }
+}
+
+void oneui_terminal_view_set_selection(
+    OneUiWidget* view,
+    unsigned short start_row,
+    unsigned short start_column,
+    unsigned short end_row,
+    unsigned short end_column) {
+    if (auto* nativeView = asWidget<oneui::TerminalView>(view)) {
+        nativeView->setSelection(start_row, start_column, end_row, end_column);
     }
 }
 

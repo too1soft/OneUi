@@ -506,6 +506,8 @@ void testTerminalViewAbiUsesStructuredCells() {
         oneui_terminal_view_get_selected_text_utf8(view, selected, sizeof(selected));
     expectTrue("terminal view selected text size", selectedRequired > 1);
     expectTrue("terminal view selected text utf8", std::string(selected).find("A") == 0);
+    oneui_terminal_view_set_selection(view, 0, 0, 0, 1);
+    expectTrue("terminal view programmatic selection", oneui_terminal_view_has_selection(view) != 0);
     oneui_terminal_view_clear_selection(view);
     expectTrue("terminal view clear selection", oneui_terminal_view_has_selection(view) == 0);
     oneui_terminal_view_set_on_text_input_utf8(view, onTerminalTextInput, nullptr);

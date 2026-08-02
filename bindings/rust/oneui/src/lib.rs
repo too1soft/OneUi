@@ -24,6 +24,7 @@ pub enum Error {
     WidgetCreationFailed,
     WidgetDestroyed,
     WindowClosed,
+    WrongThread,
     UiThreadBlockingOperation,
 }
 
@@ -217,6 +218,21 @@ unsafe extern "C" fn drop_dispatched_task(user_data: *mut std::ffi::c_void) {
 }
 
 impl UiDispatcher {
+    /// Requests focus for a widget already mounted in this window.
+    ///
+    /// Focus changes are synchronous and must originate on the window thread.
+    pub fn request_focus(&self, widget: &Widget, focus_visible: bool) -> Result<bool, Error> {
+        if std::thread::current().id() != self.state.ui_thread {
+            return Err(Error::WrongThread);
+        }
+        Ok(self
+            .state
+            .with_raw(|raw| unsafe {
+                sys::oneui_window_request_focus(raw, widget.as_raw(), i32::from(focus_visible)) != 0
+            })
+            .unwrap_or(false))
+    }
+
     pub fn dispatch<F>(&self, task: F) -> Result<(), Error>
     where
         F: FnOnce() + Send + 'static,
@@ -2024,6 +2040,15 @@ pub struct TerminalCursor {
     pub visible: bool,
 }
 
+/// A half-open terminal cell range. The end column is exclusive.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TerminalSelection {
+    pub start_row: u16,
+    pub start_column: u16,
+    pub end_row: u16,
+    pub end_column: u16,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(i32)]
 pub enum TerminalCursorStyle {
@@ -2157,9 +2182,22 @@ struct TerminalViewportCallback {
 
 struct TerminalViewState {
     raw: AtomicPtr<sys::OneUiWidget>,
-    pending_frame: Mutex<Option<TerminalFrame>>,
+    pending_update: Mutex<Option<TerminalFrameUpdate>>,
     last_applied_frame: Mutex<Option<TerminalFrame>>,
     update_scheduled: AtomicBool,
+}
+
+#[derive(Debug, Clone)]
+struct TerminalFrameUpdate {
+    frame: TerminalFrame,
+    selection: TerminalSelectionUpdate,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum TerminalSelectionUpdate {
+    Preserve,
+    Set(TerminalSelection),
+    Clear,
 }
 
 /// A thread-safe producer for the latest native terminal frame.
@@ -2174,16 +2212,53 @@ pub struct TerminalViewHandle {
 }
 
 impl TerminalViewHandle {
+    /// Updates terminal metrics on the owning window thread.
+    pub fn set_font_size(&self, size: f32) -> Result<(), Error> {
+        if self.state.raw.load(Ordering::Acquire).is_null() {
+            return Err(Error::WidgetDestroyed);
+        }
+        let state = Arc::clone(&self.state);
+        self.dispatcher.dispatch(move || {
+            let raw = state.raw.load(Ordering::Acquire);
+            if !raw.is_null() {
+                unsafe { sys::oneui_terminal_view_set_font_size(raw, size) };
+            }
+        })
+    }
+
     pub fn submit_frame(&self, frame: TerminalFrame) -> Result<(), Error> {
+        self.submit_update(frame, TerminalSelectionUpdate::Preserve)
+    }
+
+    /// Atomically applies a terminal frame and its matching search highlight.
+    pub fn submit_frame_with_selection(
+        &self,
+        frame: TerminalFrame,
+        selection: TerminalSelection,
+    ) -> Result<(), Error> {
+        self.submit_update(frame, TerminalSelectionUpdate::Set(selection))
+    }
+
+    /// Clears a programmatic terminal selection on the owning window thread.
+    pub fn submit_frame_clearing_selection(&self, frame: TerminalFrame) -> Result<(), Error> {
+        self.submit_update(frame, TerminalSelectionUpdate::Clear)
+    }
+
+    fn submit_update(
+        &self,
+        frame: TerminalFrame,
+        selection: TerminalSelectionUpdate,
+    ) -> Result<(), Error> {
         if self.state.raw.load(Ordering::Acquire).is_null() {
             return Err(Error::WidgetDestroyed);
         }
 
         *self
             .state
-            .pending_frame
+            .pending_update
             .lock()
-            .expect("terminal pending frame lock poisoned") = Some(frame);
+            .expect("terminal pending update lock poisoned") =
+            Some(TerminalFrameUpdate { frame, selection });
 
         if self.state.update_scheduled.swap(true, Ordering::AcqRel) {
             return Ok(());
@@ -2197,9 +2272,9 @@ impl TerminalViewHandle {
         {
             state.update_scheduled.store(false, Ordering::Release);
             state
-                .pending_frame
+                .pending_update
                 .lock()
-                .expect("terminal pending frame lock poisoned")
+                .expect("terminal pending update lock poisoned")
                 .take();
             return Err(error);
         }
@@ -2208,30 +2283,45 @@ impl TerminalViewHandle {
 
     fn drain_pending_frame(state: &TerminalViewState) {
         loop {
-            let frame = state
-                .pending_frame
+            let update = state
+                .pending_update
                 .lock()
-                .expect("terminal pending frame lock poisoned")
+                .expect("terminal pending update lock poisoned")
                 .take();
             let raw = state.raw.load(Ordering::Acquire);
             if raw.is_null() {
                 state.update_scheduled.store(false, Ordering::Release);
                 return;
             }
-            if let Some(frame) = frame {
+            if let Some(update) = update {
                 let mut last_applied = state
                     .last_applied_frame
                     .lock()
                     .expect("terminal last applied frame lock poisoned");
-                apply_terminal_frame(raw, &frame, last_applied.as_ref());
-                *last_applied = Some(frame);
+                apply_terminal_frame(raw, &update.frame, last_applied.as_ref());
+                match update.selection {
+                    TerminalSelectionUpdate::Preserve => {}
+                    TerminalSelectionUpdate::Set(selection) => unsafe {
+                        sys::oneui_terminal_view_set_selection(
+                            raw,
+                            selection.start_row,
+                            selection.start_column,
+                            selection.end_row,
+                            selection.end_column,
+                        )
+                    },
+                    TerminalSelectionUpdate::Clear => unsafe {
+                        sys::oneui_terminal_view_clear_selection(raw)
+                    },
+                }
+                *last_applied = Some(update.frame);
             }
 
             state.update_scheduled.store(false, Ordering::Release);
             if state
-                .pending_frame
+                .pending_update
                 .lock()
-                .expect("terminal pending frame lock poisoned")
+                .expect("terminal pending update lock poisoned")
                 .is_none()
             {
                 return;
@@ -2325,7 +2415,7 @@ impl TerminalView {
         Ok(Self {
             state: Arc::new(TerminalViewState {
                 raw: AtomicPtr::new(widget.as_raw()),
-                pending_frame: Mutex::new(None),
+                pending_update: Mutex::new(None),
                 last_applied_frame: Mutex::new(None),
                 update_scheduled: AtomicBool::new(false),
             }),
@@ -2406,6 +2496,18 @@ impl TerminalView {
 
     pub fn select_all(&self) {
         unsafe { sys::oneui_terminal_view_select_all(self.widget.as_raw()) };
+    }
+
+    pub fn set_selection(&self, selection: TerminalSelection) {
+        unsafe {
+            sys::oneui_terminal_view_set_selection(
+                self.widget.as_raw(),
+                selection.start_row,
+                selection.start_column,
+                selection.end_row,
+                selection.end_column,
+            )
+        };
     }
 
     pub fn clear_selection(&self) {
@@ -2655,9 +2757,9 @@ impl Drop for TerminalView {
             .raw
             .store(std::ptr::null_mut(), Ordering::Release);
         self.state
-            .pending_frame
+            .pending_update
             .lock()
-            .expect("terminal pending frame lock poisoned")
+            .expect("terminal pending update lock poisoned")
             .take();
         self.state
             .last_applied_frame
@@ -2685,8 +2787,7 @@ fn apply_terminal_frame(
             && previous.cells.len() == frame.cells.len()
     });
     if can_update_in_place {
-        if let Some(range) = terminal_dirty_range(previous.expect("previous frame checked"), frame)
-        {
+        for range in terminal_dirty_ranges(previous.expect("previous frame checked"), frame) {
             apply_terminal_cell_update(raw, range.start, &frame.cells[range]);
         }
     } else {
@@ -2703,22 +2804,47 @@ fn apply_terminal_frame(
     };
 }
 
-fn terminal_dirty_range(
+fn terminal_dirty_ranges(
     previous: &TerminalFrame,
     frame: &TerminalFrame,
-) -> Option<std::ops::Range<usize>> {
-    let first = previous
-        .cells
-        .iter()
-        .zip(&frame.cells)
-        .position(|(previous, current)| previous != current)?;
-    let last = previous
-        .cells
-        .iter()
-        .zip(&frame.cells)
-        .rposition(|(previous, current)| previous != current)
-        .expect("a first changed cell guarantees a last changed cell");
-    Some(first..last + 1)
+) -> Vec<std::ops::Range<usize>> {
+    const MAX_SPARSE_RANGES: usize = 32;
+
+    let mut ranges = Vec::with_capacity(4);
+    let mut current_start = None;
+    let mut first_changed = None;
+    let mut last_changed = 0;
+    let mut collapsed = false;
+
+    for (index, (previous, current)) in previous.cells.iter().zip(&frame.cells).enumerate() {
+        if previous != current {
+            first_changed.get_or_insert(index);
+            last_changed = index;
+            current_start.get_or_insert(index);
+        } else if let Some(start) = current_start.take() {
+            if !collapsed {
+                ranges.push(start..index);
+                if ranges.len() > MAX_SPARSE_RANGES {
+                    ranges.clear();
+                    collapsed = true;
+                }
+            }
+        }
+    }
+    if let Some(start) = current_start {
+        if !collapsed {
+            ranges.push(start..last_changed + 1);
+            if ranges.len() > MAX_SPARSE_RANGES {
+                collapsed = true;
+            }
+        }
+    }
+
+    if collapsed {
+        vec![first_changed.expect("collapsed ranges require a changed cell")..last_changed + 1]
+    } else {
+        ranges
+    }
 }
 
 fn apply_terminal_grid(
@@ -3299,6 +3425,14 @@ impl Window {
         });
     }
 
+    pub fn request_focus(&self, widget: &Widget, focus_visible: bool) -> bool {
+        self.state
+            .with_raw(|raw| unsafe {
+                sys::oneui_window_request_focus(raw, widget.as_raw(), i32::from(focus_visible)) != 0
+            })
+            .unwrap_or(false)
+    }
+
     /// Installs the application theme before composing the window tree.
     /// Widgets created afterwards inherit it, and explicit widget styling can
     /// still use [`Widget::apply_style_sheet`] where needed.
@@ -3372,8 +3506,8 @@ mod tests {
         InteractiveSurfaceStateStyle, InteractiveSurfaceStyle, Label, List, ListItem, LogLine,
         LogView, OverlayAlignment, OverlayHost, Panel, ScrollView, SegmentedControl, Stack,
         StackDirection, StyleSheet, Switch, TerminalCell, TerminalColor, TerminalCursor,
-        TerminalFrame, TerminalView, TextField, TreeItem, TreeView, VirtualList, Window,
-        WindowOptions,
+        TerminalFrame, TerminalSelection, TerminalView, TextField, TreeItem, TreeView, VirtualList,
+        Window, WindowOptions,
     };
     use std::sync::{
         atomic::{AtomicBool, Ordering},
@@ -3687,7 +3821,7 @@ mod tests {
     }
 
     #[test]
-    fn terminal_dirty_range_tracks_the_smallest_contiguous_update() {
+    fn terminal_dirty_ranges_preserve_sparse_updates() {
         let mut previous = TerminalFrame {
             rows: 2,
             columns: 3,
@@ -3700,14 +3834,47 @@ mod tests {
             mouse_reporting: false,
         };
         let mut current = previous.clone();
-        assert_eq!(super::terminal_dirty_range(&previous, &current), None);
+        assert_eq!(
+            super::terminal_dirty_ranges(&previous, &current),
+            Vec::new()
+        );
 
         current.cells[4].text = "X".to_owned();
-        assert_eq!(super::terminal_dirty_range(&previous, &current), Some(4..5));
+        assert_eq!(
+            super::terminal_dirty_ranges(&previous, &current),
+            vec![4..5]
+        );
 
         previous.cells[1].text = "before".to_owned();
         current.cells[1].text = "after".to_owned();
-        assert_eq!(super::terminal_dirty_range(&previous, &current), Some(1..5));
+        assert_eq!(
+            super::terminal_dirty_ranges(&previous, &current),
+            vec![1..2, 4..5]
+        );
+    }
+
+    #[test]
+    fn terminal_dirty_ranges_collapse_pathological_fragmentation() {
+        let previous = TerminalFrame {
+            rows: 1,
+            columns: 80,
+            cells: vec![TerminalCell::default(); 80],
+            cursor: TerminalCursor {
+                row: 0,
+                column: 0,
+                visible: true,
+            },
+            mouse_reporting: false,
+        };
+        let mut current = previous.clone();
+        for index in (0..80).step_by(2) {
+            current.cells[index].text = "X".to_owned();
+        }
+
+        assert_eq!(
+            super::terminal_dirty_ranges(&previous, &current),
+            vec![0..79]
+        );
     }
 
     #[test]
@@ -3751,6 +3918,13 @@ mod tests {
         terminal.select_all();
         assert!(terminal.has_selection());
         assert_eq!(terminal.selected_text(), "A宽\r\n");
+        terminal.set_selection(TerminalSelection {
+            start_row: 0,
+            start_column: 0,
+            end_row: 0,
+            end_column: 1,
+        });
+        assert_eq!(terminal.selected_text(), "A");
         terminal.clear_selection();
         assert!(!terminal.has_selection());
         window.set_content(terminal.as_widget());

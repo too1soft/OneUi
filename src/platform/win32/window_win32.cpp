@@ -1,6 +1,7 @@
 #include "oneui/platform/window.h"
 
 #include "oneui/color.h"
+#include "oneui/view.h"
 
 #include <windows.h>
 #include <windowsx.h>
@@ -928,6 +929,32 @@ public:
             });
         }
         requestRedraw();
+    }
+
+    bool requestFocus(Widget* widget, bool focusVisible) override {
+        if (!content_ || !widget) {
+            return false;
+        }
+        bool focused = false;
+        if (content_.get() == widget) {
+            focused = widget->isFocusable();
+            if (focused) {
+                widget->onFocusChanged(true);
+                widget->setFocusVisible(focusVisible);
+            }
+        } else if (auto* root = dynamic_cast<View*>(content_.get())) {
+            focused = root->requestFocus(widget, focusVisible);
+        }
+        if (!focused) {
+            return false;
+        }
+        ensureCreated();
+        if (hwnd_) {
+            SetFocus(hwnd_);
+            updateImePosition();
+        }
+        requestRedraw();
+        return true;
     }
 
     void initialize() override {

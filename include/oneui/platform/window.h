@@ -32,6 +32,13 @@ public:
     static std::unique_ptr<Window> create(WindowOptions options);
 
     virtual void setContent(std::shared_ptr<Widget> widget) = 0;
+    // Establishes the focus path from the window root to a descendant widget.
+    // Returns false when the widget is not part of the active tree.
+    virtual bool requestFocus(Widget* widget, bool focusVisible = true) {
+        (void)widget;
+        (void)focusVisible;
+        return false;
+    }
     // Creates the native handle on the calling UI thread without showing it.
     virtual void initialize() = 0;
     virtual void show() = 0;

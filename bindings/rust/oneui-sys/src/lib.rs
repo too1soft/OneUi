@@ -217,6 +217,11 @@ extern "C" {
     pub fn oneui_window_set_corner_radius(window: *mut OneUiWindow, radius: f32);
     pub fn oneui_window_set_title_utf8(window: *mut OneUiWindow, title: OneUiUtf8String);
     pub fn oneui_window_set_content(window: *mut OneUiWindow, widget: *mut OneUiWidget);
+    pub fn oneui_window_request_focus(
+        window: *mut OneUiWindow,
+        widget: *mut OneUiWidget,
+        focus_visible: c_int,
+    ) -> c_int;
     pub fn oneui_window_set_style_sheet(
         window: *mut OneUiWindow,
         style_sheet: *mut OneUiStyleSheet,
@@ -474,6 +479,13 @@ extern "C" {
         visible: c_int,
     );
     pub fn oneui_terminal_view_select_all(view: *mut OneUiWidget);
+    pub fn oneui_terminal_view_set_selection(
+        view: *mut OneUiWidget,
+        start_row: c_ushort,
+        start_column: c_ushort,
+        end_row: c_ushort,
+        end_column: c_ushort,
+    );
     pub fn oneui_terminal_view_clear_selection(view: *mut OneUiWidget);
     pub fn oneui_terminal_view_has_selection(view: *mut OneUiWidget) -> c_int;
     pub fn oneui_terminal_view_get_selected_text_utf8(

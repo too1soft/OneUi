@@ -1455,6 +1455,20 @@ void testViewClearChildrenClearsFocusedAndPressedChild() {
     expectEqual("View clearChildren pressed child detached", probe->mouseUps, 0);
 }
 
+void testViewCanRequestFocusForNestedDescendant() {
+    auto root = std::make_shared<oneui::View>();
+    auto branch = std::make_shared<oneui::View>();
+    auto field = std::make_shared<oneui::TextField>(L"Search");
+    branch->add(field);
+    root->add(branch);
+
+    expectEqual("View requestFocus finds nested field", root->requestFocus(field.get(), true) ? 1 : 0, 1);
+    expectEqual("View requestFocus focuses nested field", field->focused() ? 1 : 0, 1);
+    expectEqual("View requestFocus keeps focus visible", field->focusVisible() ? 1 : 0, 1);
+    expectEqual("View requestFocus routes text input", root->onTextInput(L'x') ? 1 : 0, 1);
+    expectWideEqual("View requestFocus edits nested field", field->text(), L"x");
+}
+
 void testViewMouseMoveDoesNotInvalidateSiblingsWhenHoverUnchanged() {
     oneui::View view;
     view.setFrame(oneui::Rect{0.0f, 0.0f, 240.0f, 96.0f});
@@ -5651,6 +5665,7 @@ int main() {
     testDisabledPressedChildDoesNotReceiveMouseUp();
     testHiddenPressedChildDoesNotReceiveMouseUp();
     testViewClearChildrenClearsFocusedAndPressedChild();
+    testViewCanRequestFocusForNestedDescendant();
     testViewMouseMoveDoesNotInvalidateSiblingsWhenHoverUnchanged();
     testViewMouseMoveKeepsSingleHoveredChild();
     testViewMouseMoveSweepInvalidatesOnlyExitAndEnter();

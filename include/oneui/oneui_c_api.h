@@ -307,6 +307,7 @@ ONEUI_API int oneui_window_client_pixel_width(OneUiWindow* window);
 ONEUI_API int oneui_window_client_pixel_height(OneUiWindow* window);
 ONEUI_API float oneui_window_dpi_scale(OneUiWindow* window);
 ONEUI_API void oneui_window_set_content(OneUiWindow* window, OneUiWidget* widget);
+ONEUI_API int oneui_window_request_focus(OneUiWindow* window, OneUiWidget* widget, int focus_visible);
 ONEUI_API void oneui_window_set_style_sheet(OneUiWindow* window, OneUiStyleSheet* style_sheet);
 
 ONEUI_API OneUiTray* oneui_tray_create(OneUiWindow* window, const wchar_t* tooltip);
@@ -621,6 +622,12 @@ ONEUI_API void oneui_terminal_view_set_cursor(
     unsigned short column,
     int visible);
 ONEUI_API void oneui_terminal_view_select_all(OneUiWidget* view);
+ONEUI_API void oneui_terminal_view_set_selection(
+    OneUiWidget* view,
+    unsigned short start_row,
+    unsigned short start_column,
+    unsigned short end_row,
+    unsigned short end_column);
 ONEUI_API void oneui_terminal_view_clear_selection(OneUiWidget* view);
 ONEUI_API int oneui_terminal_view_has_selection(OneUiWidget* view);
 ONEUI_API size_t oneui_terminal_view_get_selected_text_utf8(

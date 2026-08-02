@@ -235,6 +235,34 @@ void TerminalView::selectAll() {
     invalidate();
 }
 
+void TerminalView::setSelection(
+    std::uint16_t startRow,
+    std::uint16_t startColumn,
+    std::uint16_t endRow,
+    std::uint16_t endColumn) {
+    if (rows_ == 0 || columns_ == 0) {
+        clearSelection();
+        return;
+    }
+
+    const auto clampPosition = [&](std::uint16_t row, std::uint16_t column) {
+        TextPosition position{
+            std::min<std::uint16_t>(row, static_cast<std::uint16_t>(rows_ - 1)),
+            std::min<std::uint16_t>(column, columns_),
+        };
+        if (position.column < columns_) {
+            position = normalizedCellPosition(position);
+        }
+        return position;
+    };
+
+    selectionAnchor_ = clampPosition(startRow, startColumn);
+    selectionCaret_ = clampPosition(endRow, endColumn);
+    hasSelection_ = !(selectionAnchor_ == selectionCaret_);
+    selecting_ = false;
+    invalidate();
+}
+
 void TerminalView::clearSelection() {
     selectionAnchor_ = {};
     selectionCaret_ = {};
@@ -453,6 +481,8 @@ void TerminalView::paint(Canvas& canvas) {
         }
     };
 
+    std::wstring textRun;
+    textRun.reserve(columns_);
     for (std::uint16_t row = 0; row < rows_; ++row) {
         for (std::uint16_t column = 0; column < columns_;) {
             const TerminalCell* cell = cellAt(row, column);
@@ -472,7 +502,7 @@ void TerminalView::paint(Canvas& canvas) {
                 continue;
             }
 
-            std::wstring run = cell->text;
+            textRun.assign(cell->text);
             std::uint16_t end = static_cast<std::uint16_t>(column + 1);
             while (end < columns_) {
                 const TerminalCell* next = cellAt(row, end);
@@ -485,10 +515,15 @@ void TerminalView::paint(Canvas& canvas) {
                 if (nextStyle.cursor || !samePaintStyle(style, nextStyle)) {
                     break;
                 }
-                run += next->text;
+                textRun += next->text;
                 ++end;
             }
-            paintTextRun(row, column, static_cast<std::uint16_t>(end - column), run, style);
+            paintTextRun(
+                row,
+                column,
+                static_cast<std::uint16_t>(end - column),
+                textRun,
+                style);
             column = end;
         }
     }

@@ -434,6 +434,34 @@ bool View::focusLastLeaf() {
     return true;
 }
 
+bool View::requestFocus(Widget* descendant, bool focusVisible) {
+    if (!descendant || !descendant->visible() || descendant->disabled()) {
+        return false;
+    }
+
+    for (const auto& child : children_) {
+        if (!isChildInteractive(child.get())) {
+            continue;
+        }
+        if (child.get() == descendant) {
+            if (!descendant->isFocusable()) {
+                return false;
+            }
+            focusChild(descendant, focusVisible);
+            invalidate();
+            return true;
+        }
+
+        auto* childView = dynamic_cast<View*>(child.get());
+        if (childView && childView->requestFocus(descendant, focusVisible)) {
+            focusChild(child.get(), focusVisible);
+            invalidate();
+            return true;
+        }
+    }
+    return false;
+}
+
 bool View::isChildInteractive(const Widget* child) {
     return child && child->visible() && !child->disabled();
 }

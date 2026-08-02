@@ -106,6 +106,11 @@ public:
 
     void setClipboard(std::shared_ptr<Clipboard> clipboard);
     void selectAll();
+    void setSelection(
+        std::uint16_t startRow,
+        std::uint16_t startColumn,
+        std::uint16_t endRow,
+        std::uint16_t endColumn);
     void clearSelection();
     bool hasSelection() const;
     std::wstring selectedText() const;

@@ -395,6 +395,23 @@ void testDoubleClickWordTripleClickLineAndCopyOnSelect() {
     expectEqual("terminal copy-on-select copies completed line", clipboard->text() == text ? 1 : 0, 1);
 }
 
+void testProgrammaticSelectionUsesHalfOpenCellRanges() {
+    oneui::TerminalView terminal;
+    terminal.setGrid(2, 6, {
+        oneui::TerminalCell{L"a"}, oneui::TerminalCell{L"l"}, oneui::TerminalCell{L"p"},
+        oneui::TerminalCell{L"h"}, oneui::TerminalCell{L"a"}, oneui::TerminalCell{},
+        oneui::TerminalCell{L"b"}, oneui::TerminalCell{L"e"}, oneui::TerminalCell{L"t"},
+        oneui::TerminalCell{L"a"}, oneui::TerminalCell{}, oneui::TerminalCell{},
+    });
+
+    terminal.setSelection(0, 1, 0, 4);
+    expectEqual("terminal programmatic selection is half open", terminal.selectedText() == L"lph" ? 1 : 0, 1);
+    terminal.setSelection(1, 0, 1, 4);
+    expectEqual("terminal programmatic selection changes rows", terminal.selectedText() == L"beta" ? 1 : 0, 1);
+    terminal.setSelection(9, 9, 9, 9);
+    expectEqual("terminal programmatic selection clamps safely", terminal.hasSelection() ? 1 : 0, 0);
+}
+
 void testWheelReportsWholeScrollbackRows() {
     oneui::TerminalView terminal;
     terminal.setFrame(oneui::Rect{10.0f, 10.0f, 240.0f, 80.0f});
@@ -478,6 +495,7 @@ int main() {
     testCommittedUnicodeAndImeCaretStayCellAligned();
     testSelectionCopyPasteAndTerminalShortcuts();
     testDoubleClickWordTripleClickLineAndCopyOnSelect();
+    testProgrammaticSelectionUsesHalfOpenCellRanges();
     testWheelReportsWholeScrollbackRows();
     testMouseReportingPreservesApplicationInputAndShiftSelection();
 
