@@ -248,6 +248,22 @@ impl UiDispatcher {
         });
     }
 
+    /// Creates a thread-safe text producer for a label mounted in this window.
+    pub fn label_handle(&self, label: &Label) -> LabelHandle {
+        LabelHandle {
+            state: Arc::clone(&label.state),
+            dispatcher: self.clone(),
+        }
+    }
+
+    /// Creates a thread-safe frame producer for a terminal in this window.
+    pub fn terminal_view_handle(&self, terminal: &TerminalView) -> TerminalViewHandle {
+        TerminalViewHandle {
+            state: Arc::clone(&terminal.state),
+            dispatcher: self.clone(),
+        }
+    }
+
     pub fn request_activate(&self) {
         self.state.with_raw(|raw| unsafe {
             sys::oneui_window_activate(raw);
@@ -982,15 +998,106 @@ impl ScrollView {
     }
 }
 
+struct LabelState {
+    raw: AtomicPtr<sys::OneUiWidget>,
+    pending_text: Mutex<Option<String>>,
+    update_scheduled: AtomicBool,
+}
+
+/// Thread-safe producer for label text owned by a window.
+///
+/// Worker threads submit only the latest value. OneUI coalesces bursts and
+/// applies text on the owning UI thread, matching the terminal frame handle's
+/// lifetime and thread-affinity guarantees.
+#[derive(Clone)]
+pub struct LabelHandle {
+    state: Arc<LabelState>,
+    dispatcher: UiDispatcher,
+}
+
+impl LabelHandle {
+    pub fn set_text(&self, text: impl Into<String>) -> Result<(), Error> {
+        if self.state.raw.load(Ordering::Acquire).is_null() {
+            return Err(Error::WidgetDestroyed);
+        }
+
+        *self
+            .state
+            .pending_text
+            .lock()
+            .expect("label pending text lock poisoned") = Some(text.into());
+        if self.state.update_scheduled.swap(true, Ordering::AcqRel) {
+            return Ok(());
+        }
+
+        let state = Arc::clone(&self.state);
+        let dispatched_state = Arc::clone(&state);
+        if let Err(error) = self
+            .dispatcher
+            .dispatch(move || Self::drain_pending_text(&dispatched_state))
+        {
+            state.update_scheduled.store(false, Ordering::Release);
+            state
+                .pending_text
+                .lock()
+                .expect("label pending text lock poisoned")
+                .take();
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    fn drain_pending_text(state: &LabelState) {
+        loop {
+            let text = state
+                .pending_text
+                .lock()
+                .expect("label pending text lock poisoned")
+                .take();
+            let raw = state.raw.load(Ordering::Acquire);
+            if raw.is_null() {
+                state.update_scheduled.store(false, Ordering::Release);
+                return;
+            }
+            if let Some(text) = text {
+                let text = sys::OneUiUtf8String::from_str(&text);
+                unsafe { sys::oneui_label_set_text_utf8(raw, text) };
+            }
+
+            state.update_scheduled.store(false, Ordering::Release);
+            if state
+                .pending_text
+                .lock()
+                .expect("label pending text lock poisoned")
+                .is_none()
+            {
+                return;
+            }
+            if !state.update_scheduled.swap(true, Ordering::AcqRel) {
+                continue;
+            }
+            return;
+        }
+    }
+}
+
 pub struct Label {
     widget: Widget,
+    state: Arc<LabelState>,
 }
 
 impl Label {
     pub fn new(text: &str) -> Result<Self, Error> {
         let text = sys::OneUiUtf8String::from_str(text);
         let widget = Widget::from_raw(unsafe { sys::oneui_label_create_utf8(text) })?;
-        Ok(Self { widget })
+        Ok(Self {
+            state: Arc::new(LabelState {
+                raw: AtomicPtr::new(widget.as_raw()),
+                pending_text: Mutex::new(None),
+                update_scheduled: AtomicBool::new(false),
+            }),
+            widget,
+        })
     }
 
     pub fn set_text(&self, text: &str) {
@@ -1018,6 +1125,20 @@ impl Label {
 
     pub fn as_widget(&self) -> &Widget {
         &self.widget
+    }
+}
+
+impl Drop for Label {
+    fn drop(&mut self) {
+        self.state
+            .raw
+            .store(std::ptr::null_mut(), Ordering::Release);
+        self.state
+            .pending_text
+            .lock()
+            .expect("label pending text lock poisoned")
+            .take();
+        self.state.update_scheduled.store(false, Ordering::Release);
     }
 }
 
@@ -3159,10 +3280,13 @@ impl Window {
     /// Returns the only thread-safe update path for a terminal mounted in this
     /// window. The terminal itself remains UI-thread bound.
     pub fn terminal_view_handle(&self, terminal: &TerminalView) -> TerminalViewHandle {
-        TerminalViewHandle {
-            state: Arc::clone(&terminal.state),
-            dispatcher: self.dispatcher(),
-        }
+        self.dispatcher().terminal_view_handle(terminal)
+    }
+
+    /// Returns the only thread-safe update path for a label mounted in this
+    /// window. Bursts are coalesced to the latest text value.
+    pub fn label_handle(&self, label: &Label) -> LabelHandle {
+        self.dispatcher().label_handle(label)
     }
 
     pub fn dispatch<F>(&self, task: F) -> Result<(), Error>
@@ -3625,6 +3749,45 @@ mod tests {
                 },
                 mouse_reporting: false,
             }),
+            Err(Error::WidgetDestroyed)
+        ));
+    }
+
+    #[test]
+    fn label_handle_coalesces_worker_updates_on_the_window_thread() {
+        let _guard = window_test_lock().lock().expect("window test lock");
+        let window = Window::new(&WindowOptions::default()).expect("window should be created");
+        let label = Label::new("connecting").expect("label should be created");
+        window.set_content(label.as_widget());
+        let handle = window.label_handle(&label);
+        let worker = thread::spawn(move || {
+            handle
+                .set_text("authenticating")
+                .expect("worker should submit label text");
+            handle
+                .set_text("connected")
+                .expect("worker should replace pending label text");
+        });
+        worker.join().expect("worker should finish");
+
+        let close_dispatcher = window.dispatcher();
+        window
+            .dispatch(move || close_dispatcher.request_close())
+            .expect("window should accept close request");
+        assert_eq!(window.run(), 0);
+    }
+
+    #[test]
+    fn label_handle_rejects_updates_after_the_label_is_destroyed() {
+        let _guard = window_test_lock().lock().expect("window test lock");
+        let window = Window::new(&WindowOptions::default()).expect("window should be created");
+        let handle = {
+            let label = Label::new("temporary").expect("label should be created");
+            window.label_handle(&label)
+        };
+
+        assert!(matches!(
+            handle.set_text("too late"),
             Err(Error::WidgetDestroyed)
         ));
     }
