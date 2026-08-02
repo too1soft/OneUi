@@ -198,6 +198,11 @@ extern "C" {
     pub fn oneui_window_initialize(window: *mut OneUiWindow);
     pub fn oneui_window_show(window: *mut OneUiWindow);
     pub fn oneui_window_activate(window: *mut OneUiWindow);
+    pub fn oneui_window_confirm(
+        window: *mut OneUiWindow,
+        title: *const u16,
+        message: *const u16,
+    ) -> c_int;
     pub fn oneui_window_run(window: *mut OneUiWindow) -> c_int;
     pub fn oneui_window_close(window: *mut OneUiWindow);
     pub fn oneui_window_request_close(window: *mut OneUiWindow);

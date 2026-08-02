@@ -24,6 +24,7 @@ pub enum Error {
     WidgetCreationFailed,
     WidgetDestroyed,
     WindowClosed,
+    UiThreadBlockingOperation,
 }
 
 /// Writes UTF-8 text to the operating system clipboard.
@@ -167,6 +168,7 @@ pub struct Window {
 
 struct WindowState {
     raw: Mutex<Option<NonNull<sys::OneUiWindow>>>,
+    ui_thread: std::thread::ThreadId,
 }
 
 #[derive(Clone)]
@@ -240,6 +242,37 @@ impl UiDispatcher {
                 Err(Error::WindowClosed)
             }
         }
+    }
+
+    /// Displays a platform-native confirmation prompt on the window thread
+    /// and waits for the user's decision on the calling worker thread.
+    ///
+    /// This method is intended for background operations that must pause at a
+    /// security or destructive-action boundary. It must not be called from the
+    /// window thread because the caller waits until the dispatched UI work has
+    /// completed. Closing the window while the request is queued returns
+    /// [`Error::WindowClosed`].
+    pub fn confirm_blocking(&self, title: &str, message: &str) -> Result<bool, Error> {
+        if std::thread::current().id() == self.state.ui_thread {
+            return Err(Error::UiThreadBlockingOperation);
+        }
+        let title = wide_null_terminated(title);
+        let message = wide_null_terminated(message);
+        let dispatcher = self.clone();
+        let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+        self.dispatch(move || {
+            let accepted = dispatcher.confirm_on_window_thread(&title, &message);
+            let _ = sender.send(accepted);
+        })?;
+        receiver.recv().map_err(|_| Error::WindowClosed)
+    }
+
+    fn confirm_on_window_thread(&self, title: &[u16], message: &[u16]) -> bool {
+        self.state
+            .with_raw(|raw| unsafe {
+                sys::oneui_window_confirm(raw, title.as_ptr(), message.as_ptr()) != 0
+            })
+            .unwrap_or(false)
     }
 
     pub fn request_close(&self) {
@@ -3225,6 +3258,7 @@ impl Window {
         Ok(Self {
             state: Arc::new(WindowState {
                 raw: Mutex::new(Some(raw)),
+                ui_thread: std::thread::current().id(),
             }),
             _ui_thread: PhantomData,
         })
@@ -3865,6 +3899,10 @@ mod tests {
         dispatcher
             .dispatch(move || drop(flag))
             .expect("window should accept queued work");
+        assert!(matches!(
+            dispatcher.confirm_blocking("Confirm", "Continue?"),
+            Err(Error::UiThreadBlockingOperation)
+        ));
         window.close();
 
         assert!(dropped.load(Ordering::Acquire));
@@ -3872,5 +3910,10 @@ mod tests {
             dispatcher.dispatch(|| {}),
             Err(Error::WindowClosed)
         ));
+        let closed_result =
+            thread::spawn(move || dispatcher.confirm_blocking("Confirm", "Continue?"))
+                .join()
+                .expect("worker should finish");
+        assert!(matches!(closed_result, Err(Error::WindowClosed)));
     }
 }
