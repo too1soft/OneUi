@@ -660,6 +660,10 @@ ONEUI_API void oneui_terminal_view_set_on_viewport_changed(
     OneUiWidget* view,
     OneUiTerminalViewportCallback callback,
     void* user_data);
+ONEUI_API void oneui_terminal_view_set_on_focus_changed(
+    OneUiWidget* view,
+    OneUiBoolCallback callback,
+    void* user_data);
 
 ONEUI_API OneUiWidget* oneui_tile_create(const wchar_t* title, const wchar_t* subtitle);
 ONEUI_API void oneui_tile_set_title(OneUiWidget* tile, const wchar_t* title);

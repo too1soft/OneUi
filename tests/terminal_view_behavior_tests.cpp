@@ -620,6 +620,20 @@ void testMouseReportingPreservesApplicationInputAndShiftSelection() {
     expectEqual("terminal shift wheel scrolls local history", scrolledRows, 3);
 }
 
+void testFocusCallbackReportsRealFocusTransitions() {
+    oneui::TerminalView terminal;
+    std::vector<bool> changes;
+    terminal.setOnFocusChanged([&changes](bool focused) { changes.push_back(focused); });
+
+    terminal.onFocusChanged(true);
+    terminal.onFocusChanged(true);
+    terminal.onFocusChanged(false);
+
+    expectEqual("terminal reports only changed focus states", static_cast<int>(changes.size()), 2);
+    expectEqual("terminal focus callback reports focus", changes.front() ? 1 : 0, 1);
+    expectEqual("terminal focus callback reports blur", changes.back() ? 1 : 0, 0);
+}
+
 } // namespace
 
 int main() {
@@ -640,6 +654,7 @@ int main() {
     testProgrammaticSelectionUsesHalfOpenCellRanges();
     testWheelReportsWholeScrollbackRows();
     testMouseReportingPreservesApplicationInputAndShiftSelection();
+    testFocusCallbackReportsRealFocusTransitions();
 
     if (failures != 0) {
         std::cerr << failures << " terminal view behavior test(s) failed.\n";

@@ -79,6 +79,7 @@ public:
     using ScrollCallback = std::function<void(int)>;
     using PointerCallback = std::function<void(const TerminalPointerEvent&)>;
     using ViewportChangedCallback = std::function<void(TerminalViewport)>;
+    using FocusChangedCallback = std::function<void(bool)>;
 
     TerminalView();
 
@@ -125,6 +126,7 @@ public:
     void setOnScroll(ScrollCallback callback);
     void setOnPointer(PointerCallback callback);
     void setOnViewportChanged(ViewportChangedCallback callback);
+    void setOnFocusChanged(FocusChangedCallback callback);
     void setAnimationScheduler(std::function<void()> scheduler) override;
 
     void paint(Canvas& canvas) override;
@@ -249,6 +251,7 @@ private:
     ScrollCallback onScroll_;
     PointerCallback onPointer_;
     ViewportChangedCallback onViewportChanged_;
+    FocusChangedCallback onFocusChanged_;
     TerminalViewport viewport_{};
     GridMetrics lastMetrics_{};
     bool hasGridMetrics_ = false;

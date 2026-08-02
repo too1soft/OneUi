@@ -3243,6 +3243,21 @@ void oneui_terminal_view_set_on_viewport_changed(
     }
 }
 
+void oneui_terminal_view_set_on_focus_changed(
+    OneUiWidget* view,
+    OneUiBoolCallback callback,
+    void* user_data) {
+    if (auto* nativeView = asWidget<oneui::TerminalView>(view)) {
+        if (!callback) {
+            nativeView->setOnFocusChanged(nullptr);
+            return;
+        }
+        nativeView->setOnFocusChanged([callback, user_data](bool focused) {
+            callback(focused ? 1 : 0, user_data);
+        });
+    }
+}
+
 OneUiWidget* oneui_tile_create(const wchar_t* title, const wchar_t* subtitle) {
     return wrap(std::make_shared<oneui::Tile>(wideOrEmpty(title), wideOrEmpty(subtitle)));
 }

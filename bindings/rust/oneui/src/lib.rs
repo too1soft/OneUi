@@ -2071,6 +2071,8 @@ pub struct TerminalFrame {
     pub columns: u16,
     pub cells: Vec<TerminalCell>,
     pub cursor: TerminalCursor,
+    pub cursor_style: TerminalCursorStyle,
+    pub cursor_blinking: bool,
     /// Whether terminal applications currently own pointer input. Shift still
     /// bypasses reporting so users can select text locally.
     pub mouse_reporting: bool,
@@ -2407,6 +2409,7 @@ pub struct TerminalView {
     scroll_callback: Option<Box<TerminalScrollCallback>>,
     pointer_callback: Option<Box<TerminalPointerCallback>>,
     viewport_callback: Option<Box<TerminalViewportCallback>>,
+    focus_callback: Option<Box<BoolChangedCallback>>,
 }
 
 impl TerminalView {
@@ -2426,6 +2429,7 @@ impl TerminalView {
             scroll_callback: None,
             pointer_callback: None,
             viewport_callback: None,
+            focus_callback: None,
         })
     }
 
@@ -2684,6 +2688,29 @@ impl TerminalView {
         };
     }
 
+    pub fn set_on_focus_changed<F>(&mut self, callback: F)
+    where
+        F: FnMut(bool) + 'static,
+    {
+        self.clear_focus_callback();
+        self.focus_callback = Some(Box::new(BoolChangedCallback {
+            handler: Box::new(callback),
+        }));
+        let user_data = (self
+            .focus_callback
+            .as_deref_mut()
+            .expect("terminal focus callback was just installed")
+            as *mut BoolChangedCallback)
+            .cast();
+        unsafe {
+            sys::oneui_terminal_view_set_on_focus_changed(
+                self.widget.as_raw(),
+                Some(run_bool_changed_callback),
+                user_data,
+            )
+        };
+    }
+
     pub fn clear_text_input_callback(&mut self) {
         unsafe {
             sys::oneui_terminal_view_set_on_text_input_utf8(
@@ -2746,6 +2773,17 @@ impl TerminalView {
         self.viewport_callback = None;
     }
 
+    pub fn clear_focus_callback(&mut self) {
+        unsafe {
+            sys::oneui_terminal_view_set_on_focus_changed(
+                self.widget.as_raw(),
+                None,
+                std::ptr::null_mut(),
+            )
+        };
+        self.focus_callback = None;
+    }
+
     pub fn as_widget(&self) -> &Widget {
         &self.widget
     }
@@ -2773,6 +2811,7 @@ impl Drop for TerminalView {
         self.clear_scroll_callback();
         self.clear_pointer_callback();
         self.clear_viewport_callback();
+        self.clear_focus_callback();
     }
 }
 
@@ -2795,6 +2834,8 @@ fn apply_terminal_frame(
     }
     unsafe {
         sys::oneui_terminal_view_set_mouse_reporting(raw, i32::from(frame.mouse_reporting));
+        sys::oneui_terminal_view_set_cursor_style(raw, frame.cursor_style as i32);
+        sys::oneui_terminal_view_set_cursor_blinking(raw, i32::from(frame.cursor_blinking));
         sys::oneui_terminal_view_set_cursor(
             raw,
             frame.cursor.row,
@@ -3506,8 +3547,8 @@ mod tests {
         InteractiveSurfaceStateStyle, InteractiveSurfaceStyle, Label, List, ListItem, LogLine,
         LogView, OverlayAlignment, OverlayHost, Panel, ScrollView, SegmentedControl, Stack,
         StackDirection, StyleSheet, Switch, TerminalCell, TerminalColor, TerminalCursor,
-        TerminalFrame, TerminalSelection, TerminalView, TextField, TreeItem, TreeView, VirtualList,
-        Window, WindowOptions,
+        TerminalCursorStyle, TerminalFrame, TerminalSelection, TerminalView, TextField, TreeItem,
+        TreeView, VirtualList, Window, WindowOptions,
     };
     use std::sync::{
         atomic::{AtomicBool, Ordering},
@@ -3831,6 +3872,8 @@ mod tests {
                 column: 0,
                 visible: true,
             },
+            cursor_style: TerminalCursorStyle::Block,
+            cursor_blinking: true,
             mouse_reporting: false,
         };
         let mut current = previous.clone();
@@ -3864,6 +3907,8 @@ mod tests {
                 column: 0,
                 visible: true,
             },
+            cursor_style: TerminalCursorStyle::Block,
+            cursor_blinking: true,
             mouse_reporting: false,
         };
         let mut current = previous.clone();
@@ -3951,6 +3996,8 @@ mod tests {
                         column: 0,
                         visible: true,
                     },
+                    cursor_style: TerminalCursorStyle::Bar,
+                    cursor_blinking: false,
                     mouse_reporting: true,
                 })
                 .expect("worker should submit a terminal frame");
@@ -3983,6 +4030,8 @@ mod tests {
                     column: 0,
                     visible: true,
                 },
+                cursor_style: TerminalCursorStyle::Block,
+                cursor_blinking: true,
                 mouse_reporting: false,
             }),
             Err(Error::WidgetDestroyed)

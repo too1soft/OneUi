@@ -525,6 +525,11 @@ extern "C" {
         callback: OneUiTerminalViewportCallback,
         user_data: *mut c_void,
     );
+    pub fn oneui_terminal_view_set_on_focus_changed(
+        view: *mut OneUiWidget,
+        callback: OneUiBoolCallback,
+        user_data: *mut c_void,
+    );
     pub fn oneui_search_box_create_utf8(placeholder: OneUiUtf8String) -> *mut OneUiWidget;
     pub fn oneui_list_create() -> *mut OneUiWidget;
     pub fn oneui_list_set_items_utf8(

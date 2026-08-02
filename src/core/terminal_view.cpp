@@ -475,6 +475,10 @@ void TerminalView::setOnViewportChanged(ViewportChangedCallback callback) {
     invalidate();
 }
 
+void TerminalView::setOnFocusChanged(FocusChangedCallback callback) {
+    onFocusChanged_ = std::move(callback);
+}
+
 void TerminalView::setAnimationScheduler(std::function<void()> scheduler) {
     Widget::setAnimationScheduler(std::move(scheduler));
     if (focused() && cursorBlinking_ && cursor_.visible) {
@@ -913,6 +917,9 @@ bool TerminalView::onFocusChanged(bool focused) {
     } else if (!cursorBlinkVisible_) {
         cursorBlinkVisible_ = true;
         invalidateCell(TextPosition{cursor_.row, cursor_.column});
+    }
+    if (onFocusChanged_) {
+        onFocusChanged_(focused);
     }
     return true;
 }
