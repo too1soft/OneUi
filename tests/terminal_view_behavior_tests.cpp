@@ -12,6 +12,11 @@ int failures = 0;
 
 class RecordingCanvas final : public oneui::Canvas {
 public:
+    struct FillCall {
+        oneui::Rect rect;
+        oneui::Color color;
+    };
+
     struct TextCall {
         std::wstring text;
         oneui::Rect rect;
@@ -24,7 +29,10 @@ public:
     void restore() override {}
     void clipRect(oneui::Rect) override {}
     void clear(oneui::Color) override {}
-    void fillRect(oneui::Rect, oneui::Color, float = 0.0f) override { ++fillCount; }
+    void fillRect(oneui::Rect rect, oneui::Color color, float = 0.0f) override {
+        ++fillCount;
+        fills.push_back(FillCall{rect, color});
+    }
     void strokeRect(oneui::Rect, oneui::Color, float, float = 1.0f) override {}
     void fillEllipse(oneui::Rect, oneui::Color) override {}
     void strokeEllipse(oneui::Rect, oneui::Color, float = 1.0f) override {}
@@ -57,6 +65,7 @@ public:
 
     int fillCount = 0;
     int lineCount = 0;
+    std::vector<FillCall> fills;
     mutable oneui::TextFontFamily lastMeasuredFamily = oneui::TextFontFamily::Default;
     std::vector<TextCall> texts;
 };
@@ -73,6 +82,10 @@ void expectNear(const char* name, float actual, float expected) {
         std::cerr << name << ": expected " << expected << ", got " << actual << '\n';
         ++failures;
     }
+}
+
+bool sameColor(oneui::Color left, oneui::Color right) {
+    return left.r == right.r && left.g == right.g && left.b == right.b && left.a == right.a;
 }
 
 void testGridCopiesCellsAndCursor() {
@@ -294,6 +307,33 @@ void testCommittedUnicodeAndImeCaretStayCellAligned() {
     expectNear("terminal IME caret height matches cell", caret.height, 26.0f);
 }
 
+void testStyleBoxControlsTerminalVisualTokens() {
+    oneui::TerminalView terminal;
+    oneui::StyleBox style;
+    style.background.color = oneui::Color{11, 17, 29, 255};
+    style.foreground = oneui::Color{209, 216, 235, 255};
+    style.caretColor = oneui::Color{132, 145, 255, 255};
+    style.selectionColor = oneui::Color{63, 69, 112, 255};
+    style.fontSize = 17.0f;
+    terminal.setStyleBox(style);
+    terminal.setFrame(oneui::Rect{0.0f, 0.0f, 80.0f, 30.0f});
+    terminal.setGrid(1, 1, {oneui::TerminalCell{L"A"}});
+    terminal.setCursor(oneui::TerminalCursor{0, 0, false});
+    terminal.setSelection(0, 0, 0, 1);
+
+    RecordingCanvas canvas;
+    terminal.paint(canvas);
+    expectNear("terminal style box font size", terminal.fontSize(), 17.0f);
+    expectEqual(
+        "terminal style box paints background",
+        !canvas.fills.empty() && sameColor(canvas.fills.front().color, *style.background.color) ? 1 : 0,
+        1);
+    expectEqual(
+        "terminal style box paints selection",
+        canvas.fills.size() >= 2 && sameColor(canvas.fills[1].color, *style.selectionColor) ? 1 : 0,
+        1);
+}
+
 void testSelectionCopyPasteAndTerminalShortcuts() {
     oneui::TerminalView terminal;
     terminal.setFrame(oneui::Rect{0.0f, 0.0f, 240.0f, 80.0f});
@@ -357,11 +397,40 @@ void testSelectionCopyPasteAndTerminalShortcuts() {
     terminal.onKeyDown(paste);
     expectEqual("terminal paste uses dedicated callback", pasted == L"echo 你好" ? 1 : 0, 1);
     expectEqual("terminal paste shortcut is not forwarded", rawKeyCount, 1);
+    expectEqual("terminal paste clears the previous selection", terminal.hasSelection() ? 1 : 0, 0);
 
     terminal.selectAll();
     expectEqual("terminal select all trims blank cell padding", terminal.selectedText() == L"A中\r\nBC" ? 1 : 0, 1);
     terminal.setGrid(3, 5, {});
     expectEqual("terminal resize clears stale selection", terminal.hasSelection() ? 1 : 0, 0);
+}
+
+void testInputClearsSelectionWithoutBreakingModifierShortcuts() {
+    oneui::TerminalView terminal;
+    terminal.setGrid(1, 4, {
+        oneui::TerminalCell{L"t"}, oneui::TerminalCell{L"e"},
+        oneui::TerminalCell{L"s"}, oneui::TerminalCell{L"t"},
+    });
+    auto clipboard = std::make_shared<oneui::MemoryClipboard>();
+    terminal.setClipboard(clipboard);
+    terminal.selectAll();
+
+    oneui::KeyEvent control;
+    control.virtualKey = 0x11;
+    control.control = true;
+    terminal.onKeyDown(control);
+    expectEqual("terminal modifier keeps selection available for copy", terminal.hasSelection() ? 1 : 0, 1);
+
+    oneui::KeyEvent copy;
+    copy.key = oneui::Key::C;
+    copy.virtualKey = 0x43;
+    copy.control = true;
+    copy.shift = true;
+    terminal.onKeyDown(copy);
+    expectEqual("terminal modifier sequence still copies selection", clipboard->text() == L"test" ? 1 : 0, 1);
+
+    expectEqual("terminal committed input is handled", terminal.onTextInputText(L"x") ? 1 : 0, 1);
+    expectEqual("terminal committed input clears selection", terminal.hasSelection() ? 1 : 0, 0);
 }
 
 void testDoubleClickWordTripleClickLineAndCopyOnSelect() {
@@ -493,7 +562,9 @@ int main() {
     testTerminalUpdatesInvalidateOnlyDirtyCells();
     testTextAndRawKeyCallbacksStaySeparate();
     testCommittedUnicodeAndImeCaretStayCellAligned();
+    testStyleBoxControlsTerminalVisualTokens();
     testSelectionCopyPasteAndTerminalShortcuts();
+    testInputClearsSelectionWithoutBreakingModifierShortcuts();
     testDoubleClickWordTripleClickLineAndCopyOnSelect();
     testProgrammaticSelectionUsesHalfOpenCellRanges();
     testWheelReportsWholeScrollbackRows();

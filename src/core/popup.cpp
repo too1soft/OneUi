@@ -456,6 +456,16 @@ bool Popup::onTextInput(wchar_t character) {
     return focusedChild_ ? focusedChild_->onTextInput(character) : false;
 }
 
+bool Popup::onTextInputText(const std::wstring& text) {
+    if (!interactive() || text.empty()) {
+        return false;
+    }
+    if (focusedChild_ && !isInteractive(focusedChild_)) {
+        focusChild(nullptr);
+    }
+    return focusedChild_ ? focusedChild_->onTextInputText(text) : false;
+}
+
 bool Popup::onFocusChanged(bool focused) {
     Widget::onFocusChanged(focused);
     if (!focused && focusedChild_) {

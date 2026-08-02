@@ -820,6 +820,10 @@ void applyStyleSheet(OneUiWidget* wrapper, std::shared_ptr<oneui::StyleSheet> sh
         textField->setStyleOverride(oneui::textFieldStyleOverrideFromStyleSheet(*wrapper->styleSheet, node));
         return;
     }
+    if (auto* terminal = dynamic_cast<oneui::TerminalView*>(wrapper->widget.get())) {
+        terminal->setStyleBox(wrapper->styleSheet->resolve(node));
+        return;
+    }
     if (auto* scrollView = dynamic_cast<oneui::ScrollView*>(wrapper->widget.get())) {
         const oneui::StyleBox box = wrapper->styleSheet->resolve(node);
         if (box.foreground || box.borderWidth) {

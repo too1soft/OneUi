@@ -3,6 +3,7 @@
 #include "oneui/clipboard.h"
 #include "oneui/color.h"
 #include "oneui/export.h"
+#include "oneui/style_sheet.h"
 #include "oneui/widget.h"
 
 #include <cstdint>
@@ -99,6 +100,7 @@ public:
     float lineHeight() const;
     void setPalette(Color background, Color foreground, Color cursor);
     void setSelectionBackground(Color color);
+    void setStyleBox(const StyleBox& style);
     void setCopyOnSelect(bool enabled);
     bool copyOnSelect() const;
     void setScrollRowsPerWheel(float rows);

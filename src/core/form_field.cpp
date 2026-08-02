@@ -284,6 +284,10 @@ bool FormField::onTextInput(wchar_t character) {
     return interactive() && child_ ? child_->onTextInput(character) : false;
 }
 
+bool FormField::onTextInputText(const std::wstring& text) {
+    return interactive() && child_ ? child_->onTextInputText(text) : false;
+}
+
 bool FormField::onFocusChanged(bool focused) {
     Widget::onFocusChanged(focused);
     if (child_) {

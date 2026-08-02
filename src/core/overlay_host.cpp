@@ -415,6 +415,49 @@ bool OverlayHost::focusLastLeaf() {
     return false;
 }
 
+bool OverlayHost::requestFocus(Widget* descendant, bool focusVisible) {
+    if (!descendant || !descendant->visible() || descendant->disabled()) {
+        return false;
+    }
+
+    for (const auto& entry : overlays_) {
+        Widget* overlay = entry.child.get();
+        if (!isInteractive(overlay) || !isFocusAllowed(overlay)) {
+            continue;
+        }
+        bool found = false;
+        if (overlay == descendant) {
+            found = descendant->isFocusable();
+        } else if (auto* view = dynamic_cast<View*>(overlay)) {
+            found = view->requestFocus(descendant, focusVisible);
+        }
+        if (found) {
+            focusOverlay(overlay, focusVisible);
+            invalidate();
+            return true;
+        }
+    }
+
+    if (hasActiveFocusTrap() || !isInteractive(content_.get())) {
+        return false;
+    }
+    bool found = false;
+    if (content_.get() == descendant) {
+        found = descendant->isFocusable();
+    } else if (auto* view = dynamic_cast<View*>(content_.get())) {
+        found = view->requestFocus(descendant, focusVisible);
+    }
+    if (!found) {
+        return false;
+    }
+
+    focusOverlay(nullptr);
+    content_->onFocusChanged(true);
+    content_->setFocusVisible(focusVisible);
+    invalidate();
+    return true;
+}
+
 bool OverlayHost::onKeyUp(const KeyEvent& event) {
     if (!interactive()) {
         return false;
@@ -447,6 +490,23 @@ bool OverlayHost::onTextInput(wchar_t character) {
         return true;
     }
     return View::onTextInput(character);
+}
+
+bool OverlayHost::onTextInputText(const std::wstring& text) {
+    if (!interactive() || text.empty()) {
+        return false;
+    }
+
+    if (focusedOverlay_ && !isInteractive(focusedOverlay_)) {
+        focusOverlay(nullptr);
+    }
+    if (focusedOverlay_ && focusedOverlay_->onTextInputText(text)) {
+        return true;
+    }
+    if (content_ && content_->visible() && !content_->disabled() && content_->onTextInputText(text)) {
+        return true;
+    }
+    return View::onTextInputText(text);
 }
 
 bool OverlayHost::onFocusChanged(bool focused) {

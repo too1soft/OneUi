@@ -47,6 +47,7 @@ public:
     bool onMouseWheel(const MouseWheelEvent& event) override;
     bool onKeyDown(const KeyEvent& event) override;
     bool onTextInput(wchar_t character) override;
+    bool onTextInputText(const std::wstring& text) override;
     bool onFocusChanged(bool focused) override;
     bool isFocusable() const override;
     CursorKind cursor(Point point) const override;

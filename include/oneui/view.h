@@ -32,7 +32,7 @@ public:
     bool focusLastLeaf() override;
     // Focuses a visible, enabled descendant and establishes the complete
     // parent focus chain needed for keyboard and text-input routing.
-    bool requestFocus(Widget* descendant, bool focusVisible = true);
+    virtual bool requestFocus(Widget* descendant, bool focusVisible = true);
     CursorKind cursor(Point point) const override;
     void setFocusVisible(bool visible) override;
     bool tickAnimations(double nowMs) override;

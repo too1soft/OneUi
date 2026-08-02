@@ -70,10 +70,12 @@ public:
     bool onKeyDown(const KeyEvent& event) override;
     bool onKeyUp(const KeyEvent& event) override;
     bool onTextInput(wchar_t character) override;
+    bool onTextInputText(const std::wstring& text) override;
     bool onFocusChanged(bool focused) override;
     bool isFocusable() const override;
     bool focusFirstLeaf() override;
     bool focusLastLeaf() override;
+    bool requestFocus(Widget* descendant, bool focusVisible = true) override;
     CursorKind cursor(Point point) const override;
     void setFocusVisible(bool visible) override;
     bool tickAnimations(double nowMs) override;

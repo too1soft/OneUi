@@ -12,6 +12,11 @@ namespace {
 
 constexpr std::size_t kMaximumCells = 2'000'000;
 constexpr unsigned int kVirtualKeyInsert = 0x2D;
+constexpr unsigned int kVirtualKeyShift = 0x10;
+constexpr unsigned int kVirtualKeyControl = 0x11;
+constexpr unsigned int kVirtualKeyAlt = 0x12;
+constexpr unsigned int kVirtualKeyLeftWin = 0x5B;
+constexpr unsigned int kVirtualKeyRightWin = 0x5C;
 constexpr double kCursorBlinkPeriodMs = 1060.0;
 constexpr double kCursorBlinkOnMs = 530.0;
 constexpr double kMultiClickIntervalMs = 500.0;
@@ -39,6 +44,12 @@ bool isCopyShortcut(const KeyEvent& event) {
 bool isPasteShortcut(const KeyEvent& event) {
     return (event.control && event.shift && event.key == Key::V) ||
            (!event.control && event.shift && event.virtualKey == kVirtualKeyInsert);
+}
+
+bool isModifierKey(const KeyEvent& event) {
+    return event.virtualKey == kVirtualKeyShift || event.virtualKey == kVirtualKeyControl ||
+           event.virtualKey == kVirtualKeyAlt || event.virtualKey == kVirtualKeyLeftWin ||
+           event.virtualKey == kVirtualKeyRightWin;
 }
 
 double currentTimeMs() {
@@ -195,6 +206,25 @@ void TerminalView::setSelectionBackground(Color color) {
     invalidate();
 }
 
+void TerminalView::setStyleBox(const StyleBox& style) {
+    if (style.background.color) {
+        background_ = *style.background.color;
+    }
+    if (style.foreground) {
+        foreground_ = *style.foreground;
+    }
+    if (style.caretColor) {
+        cursorColor_ = *style.caretColor;
+    }
+    if (style.selectionColor) {
+        selectionBackground_ = *style.selectionColor;
+    }
+    if (style.fontSize) {
+        fontSize_ = std::clamp(*style.fontSize, 8.0f, 72.0f);
+    }
+    invalidate();
+}
+
 void TerminalView::setCopyOnSelect(bool enabled) {
     copyOnSelect_ = enabled;
 }
@@ -333,6 +363,7 @@ bool TerminalView::pasteFromClipboard() {
     if (text.empty()) {
         return false;
     }
+    clearSelection();
     if (onPaste_) {
         onPaste_(text);
     } else if (onTextInput_) {
@@ -696,6 +727,9 @@ bool TerminalView::onKeyDown(const KeyEvent& event) {
         pasteFromClipboard();
         return true;
     }
+    if (!isModifierKey(event) && hasSelection()) {
+        clearSelection();
+    }
     if (onRawKey_) {
         onRawKey_(event);
     }
@@ -723,6 +757,9 @@ bool TerminalView::onTextInput(wchar_t character) {
     if (!interactive() || character == L'\0') {
         return false;
     }
+    if (hasSelection()) {
+        clearSelection();
+    }
     if (onTextInput_) {
         onTextInput_(std::wstring(1, character));
     }
@@ -733,6 +770,9 @@ bool TerminalView::onTextInput(wchar_t character) {
 bool TerminalView::onTextInputText(const std::wstring& text) {
     if (!interactive() || text.empty()) {
         return false;
+    }
+    if (hasSelection()) {
+        clearSelection();
     }
     if (onTextInput_) {
         onTextInput_(text);

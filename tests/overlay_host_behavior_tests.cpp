@@ -1,6 +1,8 @@
 #include "oneui/controls/button.h"
 #include "oneui/controls/popup.h"
+#include "oneui/controls/terminal_view.h"
 #include "oneui/layout/overlay_host.h"
+#include "oneui/view.h"
 
 #include <iostream>
 #include <memory>
@@ -781,6 +783,35 @@ void testFocusedPopupReceivesEscapeThroughOverlayHost() {
     expectEqual("OverlayHost Escape closes focused popup", popup->isOpen() ? 1 : 0, 0);
 }
 
+void testCommittedTextAndProgrammaticFocusReachNestedTerminal() {
+    oneui::OverlayHost host;
+    auto content = std::make_shared<oneui::View>();
+    auto terminal = std::make_shared<oneui::TerminalView>();
+    std::wstring received;
+    terminal->setOnTextInput([&](const std::wstring& text) { received += text; });
+    content->add(terminal);
+    host.setContent(content);
+
+    expectEqual(
+        "OverlayHost requestFocus finds nested terminal",
+        host.requestFocus(terminal.get(), false) ? 1 : 0,
+        1);
+
+    const std::wstring committed{
+        L'A',
+        static_cast<wchar_t>(0xD83D),
+        static_cast<wchar_t>(0xDE80),
+    };
+    expectEqual(
+        "OverlayHost routes committed text batch",
+        host.onTextInputText(committed) ? 1 : 0,
+        1);
+    expectEqual(
+        "OverlayHost preserves committed text batch",
+        received == committed ? 1 : 0,
+        1);
+}
+
 } // namespace
 
 int main() {
@@ -809,6 +840,7 @@ int main() {
     testPopupBlockOutsidePolicyStopsLowerOverlayWithoutClosing();
     testPopupModalModeCombinesFocusTrapAndPointerBlocker();
     testFocusedPopupReceivesEscapeThroughOverlayHost();
+    testCommittedTextAndProgrammaticFocusReachNestedTerminal();
 
     if (failures != 0) {
         std::cerr << failures << " overlay host behavior test(s) failed\n";
