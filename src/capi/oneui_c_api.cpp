@@ -548,6 +548,34 @@ OneUiPointerButton toCButton(oneui::PointerButton button) {
     }
 }
 
+OneUiPointerButton toCButton(oneui::MouseButton button) {
+    switch (button) {
+    case oneui::MouseButton::Left:
+        return OneUiPointerButtonLeft;
+    case oneui::MouseButton::Right:
+        return OneUiPointerButtonRight;
+    case oneui::MouseButton::Middle:
+        return OneUiPointerButtonMiddle;
+    case oneui::MouseButton::None:
+    default:
+        return OneUiPointerButtonNone;
+    }
+}
+
+OneUiTerminalPointerAction toCTerminalPointerAction(oneui::TerminalPointerAction action) {
+    switch (action) {
+    case oneui::TerminalPointerAction::Press:
+        return OneUiTerminalPointerActionPress;
+    case oneui::TerminalPointerAction::Release:
+        return OneUiTerminalPointerActionRelease;
+    case oneui::TerminalPointerAction::Wheel:
+        return OneUiTerminalPointerActionWheel;
+    case oneui::TerminalPointerAction::Move:
+    default:
+        return OneUiTerminalPointerActionMove;
+    }
+}
+
 template <typename T>
 T* asWidget(OneUiWidget* widget) {
     static_assert(std::is_base_of<oneui::Widget, T>::value, "T must be a OneUI widget");
@@ -2912,7 +2940,9 @@ void oneui_remote_input_region_release_all_inputs(OneUiWidget* region) {
 }
 
 OneUiWidget* oneui_terminal_view_create(void) {
-    auto* wrapper = wrap(std::make_shared<oneui::TerminalView>());
+    auto terminal = std::make_shared<oneui::TerminalView>();
+    terminal->setClipboard(std::make_shared<oneui::SystemClipboard>());
+    auto* wrapper = wrap(std::move(terminal));
     if (wrapper) {
         wrapper->tag = "terminal-view";
         applyCurrentStyleSheet(wrapper);
@@ -2969,6 +2999,31 @@ void oneui_terminal_view_set_grid_utf8(
     nativeView->setGrid(rows, columns, std::move(nativeCells));
 }
 
+void oneui_terminal_view_update_cells_utf8(
+    OneUiWidget* view,
+    size_t first_cell,
+    const OneUiTerminalCellUtf8* cells,
+    size_t cell_count) {
+    auto* nativeView = asWidget<oneui::TerminalView>(view);
+    if (!nativeView || !cells || cell_count == 0 || first_cell >= nativeView->cellCount()) {
+        return;
+    }
+
+    const std::size_t copied = std::min(cell_count, nativeView->cellCount() - first_cell);
+    std::vector<oneui::TerminalCell> nativeCells;
+    nativeCells.reserve(copied);
+    for (std::size_t index = 0; index < copied; ++index) {
+        const OneUiTerminalCellUtf8& cell = cells[index];
+        nativeCells.push_back(oneui::TerminalCell{
+            utf8OrEmpty(cell.text),
+            toNativeColor(cell.foreground),
+            toNativeColor(cell.background),
+            cell.style,
+        });
+    }
+    nativeView->updateCells(first_cell, std::move(nativeCells));
+}
+
 void oneui_terminal_view_set_cursor(
     OneUiWidget* view,
     unsigned short row,
@@ -2977,6 +3032,40 @@ void oneui_terminal_view_set_cursor(
     if (auto* nativeView = asWidget<oneui::TerminalView>(view)) {
         nativeView->setCursor(oneui::TerminalCursor{row, column, visible != 0});
     }
+}
+
+void oneui_terminal_view_select_all(OneUiWidget* view) {
+    if (auto* nativeView = asWidget<oneui::TerminalView>(view)) {
+        nativeView->selectAll();
+    }
+}
+
+void oneui_terminal_view_clear_selection(OneUiWidget* view) {
+    if (auto* nativeView = asWidget<oneui::TerminalView>(view)) {
+        nativeView->clearSelection();
+    }
+}
+
+int oneui_terminal_view_has_selection(OneUiWidget* view) {
+    if (auto* nativeView = asWidget<oneui::TerminalView>(view)) {
+        return nativeView->hasSelection() ? 1 : 0;
+    }
+    return 0;
+}
+
+std::size_t oneui_terminal_view_get_selected_text_utf8(
+    OneUiWidget* view,
+    char* buffer,
+    std::size_t buffer_len) {
+    if (auto* nativeView = asWidget<oneui::TerminalView>(view)) {
+        const std::string value = utf8FromWide(nativeView->selectedText());
+        copyUtf8Field(value, buffer, buffer_len);
+        return value.size() + 1;
+    }
+    if (buffer && buffer_len > 0) {
+        buffer[0] = '\0';
+    }
+    return 0;
 }
 
 void oneui_terminal_view_set_on_text_input_utf8(
@@ -2989,6 +3078,22 @@ void oneui_terminal_view_set_on_text_input_utf8(
             return;
         }
         nativeView->setOnTextInput([callback, user_data](const std::wstring& text) {
+            const std::string utf8 = utf8FromWide(text);
+            callback(utf8.data(), utf8.size(), user_data);
+        });
+    }
+}
+
+void oneui_terminal_view_set_on_paste_utf8(
+    OneUiWidget* view,
+    OneUiUtf8TextCallback callback,
+    void* user_data) {
+    if (auto* nativeView = asWidget<oneui::TerminalView>(view)) {
+        if (!callback) {
+            nativeView->setOnPaste(nullptr);
+            return;
+        }
+        nativeView->setOnPaste([callback, user_data](const std::wstring& text) {
             const std::string utf8 = utf8FromWide(text);
             callback(utf8.data(), utf8.size(), user_data);
         });
@@ -3015,6 +3120,58 @@ void oneui_terminal_view_set_on_raw_key(
             cEvent.ctrl = event.control ? 1 : 0;
             cEvent.shift = event.shift ? 1 : 0;
             cEvent.win = event.win ? 1 : 0;
+            callback(&cEvent, user_data);
+        });
+    }
+}
+
+void oneui_terminal_view_set_scroll_rows_per_wheel(OneUiWidget* view, float rows) {
+    if (auto* nativeView = asWidget<oneui::TerminalView>(view)) {
+        nativeView->setScrollRowsPerWheel(rows);
+    }
+}
+
+void oneui_terminal_view_set_on_scroll(
+    OneUiWidget* view,
+    OneUiIntCallback callback,
+    void* user_data) {
+    if (auto* nativeView = asWidget<oneui::TerminalView>(view)) {
+        if (!callback) {
+            nativeView->setOnScroll(nullptr);
+            return;
+        }
+        nativeView->setOnScroll([callback, user_data](int rows) {
+            callback(rows, user_data);
+        });
+    }
+}
+
+void oneui_terminal_view_set_mouse_reporting(OneUiWidget* view, int enabled) {
+    if (auto* nativeView = asWidget<oneui::TerminalView>(view)) {
+        nativeView->setMouseReporting(enabled != 0);
+    }
+}
+
+void oneui_terminal_view_set_on_pointer(
+    OneUiWidget* view,
+    OneUiTerminalPointerCallback callback,
+    void* user_data) {
+    if (auto* nativeView = asWidget<oneui::TerminalView>(view)) {
+        if (!callback) {
+            nativeView->setOnPointer(nullptr);
+            return;
+        }
+        nativeView->setOnPointer([callback, user_data](const oneui::TerminalPointerEvent& event) {
+            const OneUiTerminalPointerEvent cEvent{
+                toCTerminalPointerAction(event.action),
+                toCButton(event.button),
+                event.row,
+                event.column,
+                event.wheelDelta,
+                event.shift ? 1 : 0,
+                event.control ? 1 : 0,
+                event.alt ? 1 : 0,
+            };
             callback(&cEvent, user_data);
         });
     }

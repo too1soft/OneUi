@@ -254,6 +254,7 @@ if(WIN32 AND ONEUI_BUILD_PLATFORM_WIN32)
             gdi32
             shell32
             dwmapi
+            imm32
             dwrite
             opengl32
             ole32
@@ -296,6 +297,7 @@ if(WIN32 AND ONEUI_BUILD_PLATFORM_WIN32)
             gdi32
             shell32
             dwmapi
+            imm32
             dwrite
             opengl32
             ole32

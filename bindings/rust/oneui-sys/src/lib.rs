@@ -114,6 +114,9 @@ pub struct OneUiTerminalCellUtf8 {
 }
 
 impl OneUiUtf8String {
+    // This ABI view borrows the input bytes, so the owned FromStr contract is
+    // intentionally not applicable.
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(value: &str) -> Self {
         Self {
             data: value.as_ptr().cast(),
@@ -147,12 +150,7 @@ pub struct OneUiInsets {
 pub type OneUiUtf8TextCallback =
     Option<unsafe extern "C" fn(text: *const c_char, length: usize, user_data: *mut c_void)>;
 pub type OneUiTreeExpansionCallback = Option<
-    unsafe extern "C" fn(
-        id: *const c_char,
-        length: usize,
-        expanded: c_int,
-        user_data: *mut c_void,
-    ),
+    unsafe extern "C" fn(id: *const c_char, length: usize, expanded: c_int, user_data: *mut c_void),
 >;
 pub type OneUiVoidCallback = Option<unsafe extern "C" fn(user_data: *mut c_void)>;
 pub type OneUiBoolCallback = Option<unsafe extern "C" fn(value: c_int, user_data: *mut c_void)>;
@@ -172,8 +170,23 @@ pub struct OneUiRawKeyEvent {
     pub win: c_int,
 }
 
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct OneUiTerminalPointerEvent {
+    pub action: c_int,
+    pub button: c_int,
+    pub row: c_ushort,
+    pub column: c_ushort,
+    pub wheel_delta: c_int,
+    pub shift: c_int,
+    pub control: c_int,
+    pub alt: c_int,
+}
+
 pub type OneUiRawKeyCallback =
     Option<unsafe extern "C" fn(event: *const OneUiRawKeyEvent, user_data: *mut c_void)>;
+pub type OneUiTerminalPointerCallback =
+    Option<unsafe extern "C" fn(event: *const OneUiTerminalPointerEvent, user_data: *mut c_void)>;
 pub type OneUiTerminalViewportCallback =
     Option<unsafe extern "C" fn(rows: c_ushort, columns: c_ushort, user_data: *mut c_void)>;
 
@@ -291,21 +304,8 @@ extern "C" {
 
     pub fn oneui_panel_create() -> *mut OneUiWidget;
     pub fn oneui_panel_set_content(panel: *mut OneUiWidget, child: *mut OneUiWidget);
-    pub fn oneui_panel_set_background(
-        panel: *mut OneUiWidget,
-        r: u8,
-        g: u8,
-        b: u8,
-        a: u8,
-    );
-    pub fn oneui_panel_set_border(
-        panel: *mut OneUiWidget,
-        r: u8,
-        g: u8,
-        b: u8,
-        a: u8,
-        width: f32,
-    );
+    pub fn oneui_panel_set_background(panel: *mut OneUiWidget, r: u8, g: u8, b: u8, a: u8);
+    pub fn oneui_panel_set_border(panel: *mut OneUiWidget, r: u8, g: u8, b: u8, a: u8, width: f32);
     pub fn oneui_panel_set_radius(panel: *mut OneUiWidget, radius: f32);
     pub fn oneui_panel_set_padding(panel: *mut OneUiWidget, insets: OneUiInsets);
     pub fn oneui_interactive_surface_create() -> *mut OneUiWidget;
@@ -313,10 +313,7 @@ extern "C" {
         surface: *mut OneUiWidget,
         child: *mut OneUiWidget,
     );
-    pub fn oneui_interactive_surface_set_padding(
-        surface: *mut OneUiWidget,
-        insets: OneUiInsets,
-    );
+    pub fn oneui_interactive_surface_set_padding(surface: *mut OneUiWidget, insets: OneUiInsets);
     pub fn oneui_interactive_surface_set_style(
         surface: *mut OneUiWidget,
         style: *const OneUiInteractiveSurfaceStyle,
@@ -378,9 +375,7 @@ extern "C" {
         segmented_control: *mut OneUiWidget,
         index: c_int,
     );
-    pub fn oneui_segmented_control_selected_index(
-        segmented_control: *mut OneUiWidget,
-    ) -> c_int;
+    pub fn oneui_segmented_control_selected_index(segmented_control: *mut OneUiWidget) -> c_int;
     pub fn oneui_segmented_control_set_on_changed(
         segmented_control: *mut OneUiWidget,
         callback: OneUiIntCallback,
@@ -407,8 +402,11 @@ extern "C" {
         user_data: *mut c_void,
     );
 
-    pub fn oneui_nav_item_create(text: *const u16, symbol: c_int, selected: c_int)
-        -> *mut OneUiWidget;
+    pub fn oneui_nav_item_create(
+        text: *const u16,
+        symbol: c_int,
+        selected: c_int,
+    ) -> *mut OneUiWidget;
     pub fn oneui_nav_item_set_selected(nav_item: *mut OneUiWidget, selected: c_int);
     pub fn oneui_nav_item_set_on_click(
         nav_item: *mut OneUiWidget,
@@ -454,13 +452,32 @@ extern "C" {
         cells: *const OneUiTerminalCellUtf8,
         cell_count: usize,
     );
+    pub fn oneui_terminal_view_update_cells_utf8(
+        view: *mut OneUiWidget,
+        first_cell: usize,
+        cells: *const OneUiTerminalCellUtf8,
+        cell_count: usize,
+    );
     pub fn oneui_terminal_view_set_cursor(
         view: *mut OneUiWidget,
         row: c_ushort,
         column: c_ushort,
         visible: c_int,
     );
+    pub fn oneui_terminal_view_select_all(view: *mut OneUiWidget);
+    pub fn oneui_terminal_view_clear_selection(view: *mut OneUiWidget);
+    pub fn oneui_terminal_view_has_selection(view: *mut OneUiWidget) -> c_int;
+    pub fn oneui_terminal_view_get_selected_text_utf8(
+        view: *mut OneUiWidget,
+        buffer: *mut c_char,
+        buffer_len: usize,
+    ) -> usize;
     pub fn oneui_terminal_view_set_on_text_input_utf8(
+        view: *mut OneUiWidget,
+        callback: OneUiUtf8TextCallback,
+        user_data: *mut c_void,
+    );
+    pub fn oneui_terminal_view_set_on_paste_utf8(
         view: *mut OneUiWidget,
         callback: OneUiUtf8TextCallback,
         user_data: *mut c_void,
@@ -468,6 +485,18 @@ extern "C" {
     pub fn oneui_terminal_view_set_on_raw_key(
         view: *mut OneUiWidget,
         callback: OneUiRawKeyCallback,
+        user_data: *mut c_void,
+    );
+    pub fn oneui_terminal_view_set_scroll_rows_per_wheel(view: *mut OneUiWidget, rows: f32);
+    pub fn oneui_terminal_view_set_on_scroll(
+        view: *mut OneUiWidget,
+        callback: OneUiIntCallback,
+        user_data: *mut c_void,
+    );
+    pub fn oneui_terminal_view_set_mouse_reporting(view: *mut OneUiWidget, enabled: c_int);
+    pub fn oneui_terminal_view_set_on_pointer(
+        view: *mut OneUiWidget,
+        callback: OneUiTerminalPointerCallback,
         user_data: *mut c_void,
     );
     pub fn oneui_terminal_view_set_on_viewport_changed(
@@ -511,10 +540,7 @@ extern "C" {
         message: *const c_ushort,
     ) -> *mut OneUiWidget;
     pub fn oneui_state_view_set_title(state_view: *mut OneUiWidget, title: *const c_ushort);
-    pub fn oneui_state_view_set_message(
-        state_view: *mut OneUiWidget,
-        message: *const c_ushort,
-    );
+    pub fn oneui_state_view_set_message(state_view: *mut OneUiWidget, message: *const c_ushort);
     pub fn oneui_state_view_set_icon(state_view: *mut OneUiWidget, symbol: c_int);
     pub fn oneui_state_view_set_action(state_view: *mut OneUiWidget, text: *const c_ushort);
     pub fn oneui_state_view_set_on_action(

@@ -467,6 +467,8 @@ void onTerminalTextInput(const char*, size_t, void*) {}
 
 void onTerminalRawKey(const OneUiRawKeyEvent*, void*) {}
 
+void onTerminalPointer(const OneUiTerminalPointerEvent*, void*) {}
+
 void testTerminalViewAbiUsesStructuredCells() {
     OneUiWidget* view = oneui_terminal_view_create();
     expectTrue("terminal view create", view != nullptr);
@@ -495,9 +497,24 @@ void testTerminalViewAbiUsesStructuredCells() {
         OneUiColor{220, 226, 240, 255},
         OneUiColor{196, 181, 253, 255});
     oneui_terminal_view_set_grid_utf8(view, 2, 3, cells, 2);
+    oneui_terminal_view_update_cells_utf8(view, 1, cells, 1);
     oneui_terminal_view_set_cursor(view, 1, 2, 1);
+    oneui_terminal_view_select_all(view);
+    expectTrue("terminal view selection", oneui_terminal_view_has_selection(view) != 0);
+    char selected[32]{};
+    const size_t selectedRequired =
+        oneui_terminal_view_get_selected_text_utf8(view, selected, sizeof(selected));
+    expectTrue("terminal view selected text size", selectedRequired > 1);
+    expectTrue("terminal view selected text utf8", std::string(selected).find("A") == 0);
+    oneui_terminal_view_clear_selection(view);
+    expectTrue("terminal view clear selection", oneui_terminal_view_has_selection(view) == 0);
     oneui_terminal_view_set_on_text_input_utf8(view, onTerminalTextInput, nullptr);
+    oneui_terminal_view_set_on_paste_utf8(view, onTerminalTextInput, nullptr);
     oneui_terminal_view_set_on_raw_key(view, onTerminalRawKey, nullptr);
+    oneui_terminal_view_set_scroll_rows_per_wheel(view, 4.0f);
+    oneui_terminal_view_set_on_scroll(view, nullptr, nullptr);
+    oneui_terminal_view_set_mouse_reporting(view, 1);
+    oneui_terminal_view_set_on_pointer(view, onTerminalPointer, nullptr);
 
     oneui_widget_destroy(view);
 }

@@ -5,6 +5,7 @@
 #include <windows.h>
 #include <windowsx.h>
 #include <dwmapi.h>
+#include <imm.h>
 
 #include <GL/gl.h>
 #include "include/gpu/ganesh/GrDirectContext.h"
@@ -40,11 +41,13 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <climits>
 #include <cstdio>
 #include <cstdint>
 #include <cmath>
 #include <cstring>
 #include <functional>
+#include <iterator>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -269,7 +272,7 @@ bool renderTraceEnabled() {
 bool gpuRenderingEnabled() {
     wchar_t value[8]{};
     const DWORD length = GetEnvironmentVariableW(L"ONEUI_ENABLE_GPU", value, static_cast<DWORD>(std::size(value)));
-    return length > 0 && value[0] != L'0';
+    return length == 0 || value[0] != L'0';
 }
 
 std::wstring renderTraceFilePath() {
@@ -616,7 +619,7 @@ public:
     }
 
 private:
-    static sk_sp<SkTypeface> typeface(TextFontFamily family, int weight) {
+    static sk_sp<SkFontMgr> fontManager() {
         static sk_sp<SkFontMgr> fontMgr = [] {
             auto mgr = SkFontMgr_New_DirectWrite();
             if (!mgr) {
@@ -624,6 +627,11 @@ private:
             }
             return mgr;
         }();
+        return fontMgr;
+    }
+
+    static sk_sp<SkTypeface> typeface(TextFontFamily family, int weight) {
+        const auto fontMgr = fontManager();
         if (!fontMgr) {
             return {};
         }
@@ -657,6 +665,49 @@ private:
         return face;
     }
 
+    static SkUnichar firstCodepoint(const std::wstring& text) {
+        if (text.empty()) {
+            return 0;
+        }
+#if WCHAR_MAX <= 0xFFFF
+        const auto first = static_cast<std::uint16_t>(text.front());
+        if (first >= 0xD800 && first <= 0xDBFF && text.size() > 1) {
+            const auto second = static_cast<std::uint16_t>(text[1]);
+            if (second >= 0xDC00 && second <= 0xDFFF) {
+                return static_cast<SkUnichar>(
+                    0x10000 + ((first - 0xD800) << 10) + (second - 0xDC00));
+            }
+        }
+#endif
+        return static_cast<SkUnichar>(text.front());
+    }
+
+    static sk_sp<SkTypeface> typefaceForText(
+        TextFontFamily family,
+        int weight,
+        const std::wstring& text) {
+        auto primary = typeface(family, weight);
+        const SkUnichar codepoint = firstCodepoint(text);
+        if (codepoint == 0 || (primary && primary->unicharToGlyph(codepoint) != 0)) {
+            return primary;
+        }
+
+        const auto fontMgr = fontManager();
+        if (!fontMgr) {
+            return primary;
+        }
+        const int clampedWeight = std::clamp(weight, 100, 900);
+        const SkFontStyle style(clampedWeight, SkFontStyle::kNormal_Width, SkFontStyle::kUpright_Slant);
+        const char* locales[] = {"zh-CN", "en-US"};
+        auto fallback = fontMgr->matchFamilyStyleCharacter(
+            nullptr,
+            style,
+            locales,
+            static_cast<int>(std::size(locales)),
+            codepoint);
+        return fallback ? fallback : primary;
+    }
+
     static const TextBlobEntry& cachedTextBlob(
         const std::wstring& text,
         float size,
@@ -680,7 +731,7 @@ private:
             cache.clear();
         }
 
-        SkFont font(typeface(family, weight), size);
+        SkFont font(typefaceForText(family, weight, text), size);
         font.setSubpixel(true);
         font.setEdging(SkFont::Edging::kAntiAlias);
 
@@ -885,6 +936,7 @@ public:
 
     void show() override {
         ensureCreated();
+        initGPU();
         ShowWindow(hwnd_, SW_SHOW);
         InvalidateRect(hwnd_, nullptr, FALSE);
         UpdateWindow(hwnd_);
@@ -895,6 +947,7 @@ public:
         if (!hwnd_) {
             return;
         }
+        initGPU();
         ShowWindow(hwnd_, IsIconic(hwnd_) ? SW_RESTORE : SW_SHOW);
         SetForegroundWindow(hwnd_);
         InvalidateRect(hwnd_, nullptr, FALSE);
@@ -1383,7 +1436,9 @@ private:
             dpiScale_ = dpiScaleForWindowHandle(hwnd_);
             applyBorderlessShadow();
             applyRoundedCorners();
-            initGPU();
+            if (options_.visible) {
+                initGPU();
+            }
         }
 
         if (hwnd_ && options_.fullscreen) {
@@ -1589,6 +1644,7 @@ private:
             dispatchFocusChanged(true);
             return 0;
         case WM_KILLFOCUS:
+            pendingHighSurrogate_ = 0;
             dispatchFocusChanged(false);
             return 0;
         case WM_KEYDOWN:
@@ -1600,6 +1656,16 @@ private:
         case WM_CHAR:
             dispatchTextInput(wParam);
             return 0;
+        case WM_UNICHAR:
+            if (wParam == UNICODE_NOCHAR) {
+                return TRUE;
+            }
+            dispatchUnicodeScalar(static_cast<std::uint32_t>(wParam));
+            return 0;
+        case WM_IME_STARTCOMPOSITION:
+        case WM_IME_COMPOSITION:
+            updateImePosition();
+            return DefWindowProcW(hwnd_, message, wParam, lParam);
         case WM_DESTROY:
             return 0;
         case WM_NCDESTROY:
@@ -2053,13 +2119,12 @@ private:
             glClear(GL_COLOR_BUFFER_BIT);
         }
         PAINTSTRUCT paintStruct{};
-        HDC dc = nullptr;
+        HDC paintDc = BeginPaint(hwnd_, &paintStruct);
+        HDC dc = useGPU ? glDC_ : paintDc;
         RECT dirtyRect{};
         if (useGPU) {
-            dc = glDC_;
             dirtyRect = clientRect;
         } else {
-            dc = BeginPaint(hwnd_, &paintStruct);
             dirtyRect = paintStruct.rcPaint;
         }
         const int width = std::max<LONG>(1, clientRect.right - clientRect.left);
@@ -2073,7 +2138,7 @@ private:
         const double surfaceMs = currentTimeMs() - surfaceStartMs;
 
         if (!paintSurface_) {
-            if (!useGPU) EndPaint(hwnd_, &paintStruct);
+            EndPaint(hwnd_, &paintStruct);
             return;
         }
         const int dirtyX = std::clamp<LONG>(dirtyRect.left, 0, width);
@@ -2083,7 +2148,7 @@ private:
         const int dirtyWidth = dirtyRight - dirtyX;
         const int dirtyHeight = dirtyBottom - dirtyY;
         if (dirtyWidth <= 0 || dirtyHeight <= 0) {
-            if (!useGPU) EndPaint(hwnd_, &paintStruct);
+            EndPaint(hwnd_, &paintStruct);
             return;
         }
 
@@ -2125,6 +2190,8 @@ private:
         if (gpuAvailable_ && grContext_) {
             grContext_->flushAndSubmit();
             if (SwapBuffers(glDC_)) {
+                EndPaint(hwnd_, &paintStruct);
+                recordPaint(width, height, fullPaint, allocatedSurface, surfaceMs, currentTimeMs() - paintStartMs);
                 return;
             }
             gpuAvailable_ = false;
@@ -2193,7 +2260,7 @@ private:
             recordBlit(currentTimeMs() - blitStartMs);
         }
 
-        if (!useGPU) EndPaint(hwnd_, &paintStruct);
+        EndPaint(hwnd_, &paintStruct);
         recordPaint(width, height, fullPaint, allocatedSurface, surfaceMs, currentTimeMs() - paintStartMs);
     }
 
@@ -2203,8 +2270,13 @@ private:
     }
 
     bool ensurePaintSurfaceCapacity(int width, int height) {
-        if (!gpuAvailable_ && paintSurface_ && paintSurfaceWidth_ >= width && paintSurfaceHeight_ >= height) {
-            return false;
+        if (paintSurface_) {
+            if (gpuAvailable_ && paintSurfaceWidth_ == width && paintSurfaceHeight_ == height) {
+                return false;
+            }
+            if (!gpuAvailable_ && paintSurfaceWidth_ >= width && paintSurfaceHeight_ >= height) {
+                return false;
+            }
         }
 
         int surfaceWidth = alignedPaintSurfaceSize(width);
@@ -2467,7 +2539,13 @@ private:
         POINT point{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
         ScreenToClient(hwnd_, &point);
         const float delta = static_cast<float>(GET_WHEEL_DELTA_WPARAM(wParam)) / static_cast<float>(WHEEL_DELTA);
-        MouseWheelEvent event{logicalPointFromClientPixels(point.x, point.y), delta};
+        MouseWheelEvent event{
+            logicalPointFromClientPixels(point.x, point.y),
+            delta,
+            (GET_KEYSTATE_WPARAM(wParam) & MK_SHIFT) != 0,
+            (GET_KEYSTATE_WPARAM(wParam) & MK_CONTROL) != 0,
+            (GetKeyState(VK_MENU) & 0x8000) != 0,
+        };
         if (content_->onMouseWheel(event)) {
             requestInteractiveRedraw();
         }
@@ -2557,13 +2635,85 @@ private:
         }
 
         const wchar_t character = static_cast<wchar_t>(wParam);
-        if (character < 32) {
+        if (character >= 0xD800 && character <= 0xDBFF) {
+            pendingHighSurrogate_ = character;
             return;
         }
 
-        if (content_->onTextInput(character)) {
+        std::wstring text;
+        if (character >= 0xDC00 && character <= 0xDFFF) {
+            if (pendingHighSurrogate_ != 0) {
+                text.push_back(pendingHighSurrogate_);
+                text.push_back(character);
+                pendingHighSurrogate_ = 0;
+            } else {
+                text.push_back(L'\uFFFD');
+            }
+        } else {
+            if (pendingHighSurrogate_ != 0) {
+                text.push_back(L'\uFFFD');
+                pendingHighSurrogate_ = 0;
+            }
+            if (character >= 32) {
+                text.push_back(character);
+            }
+        }
+        dispatchCommittedText(text);
+    }
+
+    void dispatchUnicodeScalar(std::uint32_t scalar) {
+        if (scalar < 32 || scalar > 0x10FFFF || (scalar >= 0xD800 && scalar <= 0xDFFF)) {
+            return;
+        }
+        std::wstring text;
+        if (scalar <= 0xFFFF) {
+            text.push_back(static_cast<wchar_t>(scalar));
+        } else {
+            scalar -= 0x10000;
+            text.push_back(static_cast<wchar_t>(0xD800 + (scalar >> 10)));
+            text.push_back(static_cast<wchar_t>(0xDC00 + (scalar & 0x3FF)));
+        }
+        dispatchCommittedText(text);
+    }
+
+    void dispatchCommittedText(const std::wstring& text) {
+        if (text.empty() || !content_ || !content_->visible()) {
+            return;
+        }
+        if (content_->onTextInputText(text)) {
             requestInteractiveRedraw();
         }
+    }
+
+    void updateImePosition() {
+        if (!hwnd_ || !content_ || !content_->visible()) {
+            return;
+        }
+
+        const Rect logical = content_->textInputCaretRect();
+        const float scale = normalizedDpiScale();
+        const LONG left = static_cast<LONG>(std::lround(logical.x * scale));
+        const LONG top = static_cast<LONG>(std::lround(logical.y * scale));
+        const LONG right = static_cast<LONG>(std::lround((logical.x + logical.width) * scale));
+        const LONG bottom = static_cast<LONG>(std::lround((logical.y + logical.height) * scale));
+
+        HIMC context = ImmGetContext(hwnd_);
+        if (!context) {
+            return;
+        }
+
+        COMPOSITIONFORM composition{};
+        composition.dwStyle = CFS_POINT;
+        composition.ptCurrentPos = POINT{left, bottom};
+        ImmSetCompositionWindow(context, &composition);
+
+        CANDIDATEFORM candidate{};
+        candidate.dwIndex = 0;
+        candidate.dwStyle = CFS_EXCLUDE;
+        candidate.ptCurrentPos = POINT{left, bottom};
+        candidate.rcArea = RECT{left, top, std::max(left + 1, right), std::max(top + 1, bottom)};
+        ImmSetCandidateWindow(context, &candidate);
+        ImmReleaseContext(hwnd_, context);
     }
 
     template <typename Handler>
@@ -2574,6 +2724,9 @@ private:
 
         MouseEvent event{logicalPointFromLParam(lParam)};
         event.button = button;
+        event.shift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
+        event.control = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
+        event.alt = (GetKeyState(VK_MENU) & 0x8000) != 0;
         if (handler(*content_, event)) {
             requestInteractiveRedraw();
         }
@@ -2593,6 +2746,10 @@ private:
     }
 
     void initGPU() {
+        if (gpuInitializationAttempted_ || !hwnd_) {
+            return;
+        }
+        gpuInitializationAttempted_ = true;
         if (!gpuRenderingEnabled()) {
             return;
         }
@@ -2669,8 +2826,10 @@ private:
     HGLRC glContext_ = nullptr;
     HDC glDC_ = nullptr;
     sk_sp<GrDirectContext> grContext_;
+    bool gpuInitializationAttempted_ = false;
     bool gpuAvailable_ = false;
     std::shared_ptr<Widget> content_;
+    wchar_t pendingHighSurrogate_ = 0;
     std::atomic_bool acceptingPostedCallbacks_{true};
     std::mutex postedCallbacksMutex_;
     std::queue<std::function<void()>> postedCallbacks_;

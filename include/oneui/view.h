@@ -24,6 +24,8 @@ public:
     bool onKeyDown(const KeyEvent& event) override;
     bool onKeyUp(const KeyEvent& event) override;
     bool onTextInput(wchar_t character) override;
+    bool onTextInputText(const std::wstring& text) override;
+    Rect textInputCaretRect() const override;
     bool onFocusChanged(bool focused) override;
     bool isFocusable() const override;
     bool focusFirstLeaf() override;

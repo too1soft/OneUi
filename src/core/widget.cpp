@@ -135,6 +135,18 @@ bool Widget::onTextInput(wchar_t) {
     return false;
 }
 
+bool Widget::onTextInputText(const std::wstring& text) {
+    bool handled = false;
+    for (const wchar_t character : text) {
+        handled = onTextInput(character) || handled;
+    }
+    return handled;
+}
+
+Rect Widget::textInputCaretRect() const {
+    return frame();
+}
+
 bool Widget::onFocusChanged(bool focused) {
     const bool previousFocused = focused_;
     const bool previousFocusVisible = focusVisible_;

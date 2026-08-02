@@ -264,6 +264,22 @@ bool View::onTextInput(wchar_t character) {
     return focusedChild_ ? focusedChild_->onTextInput(character) : false;
 }
 
+bool View::onTextInputText(const std::wstring& text) {
+    if (!interactive()) {
+        return false;
+    }
+    if (focusedChild_ && !isChildInteractive(focusedChild_)) {
+        focusChild(nullptr);
+    }
+    return focusedChild_ ? focusedChild_->onTextInputText(text) : false;
+}
+
+Rect View::textInputCaretRect() const {
+    return focusedChild_ && isChildInteractive(focusedChild_)
+        ? focusedChild_->textInputCaretRect()
+        : frame();
+}
+
 bool View::onFocusChanged(bool focused) {
     setFocused(focused);
     if (!focused && focusedChild_) {

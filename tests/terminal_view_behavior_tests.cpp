@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <iostream>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -91,6 +92,33 @@ void testGridCopiesCellsAndCursor() {
     expectEqual("terminal cursor visible", terminal.cursorState().visible ? 1 : 0, 1);
 }
 
+void testGridUpdatesOnlyRequestedCells() {
+    oneui::TerminalView terminal;
+    terminal.setGrid(1, 4, {
+        oneui::TerminalCell{L"A"},
+        oneui::TerminalCell{L"B"},
+        oneui::TerminalCell{L"C"},
+        oneui::TerminalCell{L"D"},
+    });
+
+    terminal.updateCells(1, {
+        oneui::TerminalCell{L"X"},
+        oneui::TerminalCell{L"Y"},
+    });
+
+    expectEqual("terminal partial update keeps prefix", terminal.cellAt(0, 0)->text == L"A" ? 1 : 0, 1);
+    expectEqual("terminal partial update first cell", terminal.cellAt(0, 1)->text == L"X" ? 1 : 0, 1);
+    expectEqual("terminal partial update second cell", terminal.cellAt(0, 2)->text == L"Y" ? 1 : 0, 1);
+    expectEqual("terminal partial update keeps suffix", terminal.cellAt(0, 3)->text == L"D" ? 1 : 0, 1);
+
+    terminal.updateCells(3, {
+        oneui::TerminalCell{L"Z"},
+        oneui::TerminalCell{L"ignored"},
+    });
+    expectEqual("terminal partial update clamps to grid", terminal.cellAt(0, 3)->text == L"Z" ? 1 : 0, 1);
+    expectEqual("terminal partial update keeps cell count", static_cast<int>(terminal.cellCount()), 4);
+}
+
 void testPaintHonorsWideCellsStylesAndCursor() {
     oneui::TerminalView terminal;
     terminal.setFrame(oneui::Rect{5.0f, 8.0f, 300.0f, 160.0f});
@@ -132,6 +160,32 @@ void testPaintHonorsWideCellsStylesAndCursor() {
     expectEqual("terminal suppresses duplicate viewport", viewportChanges, 1);
 }
 
+void testPaintBatchesCompatibleAsciiCellsIntoRuns() {
+    oneui::TerminalView terminal;
+    terminal.setFrame(oneui::Rect{0.0f, 0.0f, 300.0f, 80.0f});
+    terminal.setFontSize(20.0f);
+    const oneui::Color first{220, 226, 240, 255};
+    const oneui::Color second{80, 180, 255, 255};
+    const oneui::Color background{20, 24, 36, 255};
+    terminal.setGrid(1, 6, {
+        oneui::TerminalCell{L"A", first, background},
+        oneui::TerminalCell{L"B", first, background},
+        oneui::TerminalCell{L"C", first, background},
+        oneui::TerminalCell{L"D", second, background},
+        oneui::TerminalCell{L"E", second, background},
+        oneui::TerminalCell{L"F", second, background},
+    });
+    terminal.setCursor(oneui::TerminalCursor{0, 0, false});
+
+    RecordingCanvas canvas;
+    terminal.paint(canvas);
+
+    expectEqual("terminal batches ASCII cells by paint style", static_cast<int>(canvas.texts.size()), 2);
+    expectEqual("terminal first ASCII run keeps text", canvas.texts.front().text == L"ABC" ? 1 : 0, 1);
+    expectEqual("terminal second ASCII run keeps text", canvas.texts.back().text == L"DEF" ? 1 : 0, 1);
+    expectNear("terminal ASCII run spans whole cell range", canvas.texts.front().rect.width, 36.0f);
+}
+
 void testTextAndRawKeyCallbacksStaySeparate() {
     oneui::TerminalView terminal;
     std::wstring typed;
@@ -151,12 +205,180 @@ void testTextAndRawKeyCallbacksStaySeparate() {
     expectEqual("terminal key up marked released", keys.back().pressed ? 1 : 0, 0);
 }
 
+void testCommittedUnicodeAndImeCaretStayCellAligned() {
+    oneui::TerminalView terminal;
+    terminal.setFrame(oneui::Rect{5.0f, 8.0f, 300.0f, 160.0f});
+    terminal.setFontSize(20.0f);
+    terminal.setGrid(2, 3, {});
+    terminal.setCursor(oneui::TerminalCursor{1, 2, true});
+
+    std::wstring typed;
+    terminal.setOnTextInput([&](const std::wstring& text) { typed = text; });
+    const std::wstring nonBmp{static_cast<wchar_t>(0xD83D), static_cast<wchar_t>(0xDE80)};
+    expectEqual("terminal accepts committed Unicode text", terminal.onTextInputText(nonBmp) ? 1 : 0, 1);
+    expectEqual("terminal preserves surrogate pair in one callback", typed == nonBmp ? 1 : 0, 1);
+
+    RecordingCanvas canvas;
+    terminal.paint(canvas);
+    const oneui::Rect caret = terminal.textInputCaretRect();
+    expectNear("terminal IME caret x follows cursor column", caret.x, 29.0f);
+    expectNear("terminal IME caret y follows cursor row", caret.y, 34.0f);
+    expectNear("terminal IME caret width matches cell", caret.width, 12.0f);
+    expectNear("terminal IME caret height matches cell", caret.height, 26.0f);
+}
+
+void testSelectionCopyPasteAndTerminalShortcuts() {
+    oneui::TerminalView terminal;
+    terminal.setFrame(oneui::Rect{0.0f, 0.0f, 240.0f, 80.0f});
+    terminal.setFontSize(20.0f);
+    terminal.setGrid(2, 5, {
+        oneui::TerminalCell{L"A"},
+        oneui::TerminalCell{
+            L"中",
+            {220, 226, 240, 255},
+            {20, 24, 36, 255},
+            oneui::TerminalCellWide,
+        },
+        oneui::TerminalCell{
+            L"",
+            {220, 226, 240, 255},
+            {20, 24, 36, 255},
+            oneui::TerminalCellWideContinuation,
+        },
+        oneui::TerminalCell{},
+        oneui::TerminalCell{},
+        oneui::TerminalCell{L"B"},
+        oneui::TerminalCell{L"C"},
+        oneui::TerminalCell{},
+        oneui::TerminalCell{},
+        oneui::TerminalCell{},
+    });
+    auto clipboard = std::make_shared<oneui::MemoryClipboard>();
+    terminal.setClipboard(clipboard);
+    std::wstring pasted;
+    int rawKeyCount = 0;
+    terminal.setOnPaste([&](const std::wstring& text) { pasted = text; });
+    terminal.setOnRawKey([&](const oneui::KeyEvent&) { ++rawKeyCount; });
+
+    RecordingCanvas canvas;
+    terminal.paint(canvas);
+    terminal.onMouseDown(oneui::MouseEvent{{0.0f, 8.0f}, oneui::MouseButton::Left});
+    terminal.onMouseMove(oneui::MouseEvent{{36.0f, 8.0f}, oneui::MouseButton::Left});
+    terminal.onMouseUp(oneui::MouseEvent{{36.0f, 8.0f}, oneui::MouseButton::Left});
+    expectEqual("terminal drag creates selection", terminal.hasSelection() ? 1 : 0, 1);
+    expectEqual("terminal selection skips wide continuation", terminal.selectedText() == L"A中" ? 1 : 0, 1);
+
+    oneui::KeyEvent copy;
+    copy.key = oneui::Key::C;
+    copy.control = true;
+    copy.shift = true;
+    terminal.onKeyDown(copy);
+    expectEqual("terminal copy shortcut writes clipboard", clipboard->text() == L"A中" ? 1 : 0, 1);
+    expectEqual("terminal copy shortcut is not forwarded", rawKeyCount, 0);
+
+    oneui::KeyEvent interrupt;
+    interrupt.key = oneui::Key::C;
+    interrupt.control = true;
+    terminal.onKeyDown(interrupt);
+    expectEqual("terminal ctrl-c remains a raw terminal key", rawKeyCount, 1);
+
+    clipboard->setText(L"echo 你好");
+    oneui::KeyEvent paste;
+    paste.key = oneui::Key::V;
+    paste.control = true;
+    paste.shift = true;
+    terminal.onKeyDown(paste);
+    expectEqual("terminal paste uses dedicated callback", pasted == L"echo 你好" ? 1 : 0, 1);
+    expectEqual("terminal paste shortcut is not forwarded", rawKeyCount, 1);
+
+    terminal.selectAll();
+    expectEqual("terminal select all trims blank cell padding", terminal.selectedText() == L"A中\r\nBC" ? 1 : 0, 1);
+    terminal.setGrid(3, 5, {});
+    expectEqual("terminal resize clears stale selection", terminal.hasSelection() ? 1 : 0, 0);
+}
+
+void testWheelReportsWholeScrollbackRows() {
+    oneui::TerminalView terminal;
+    terminal.setFrame(oneui::Rect{10.0f, 10.0f, 240.0f, 80.0f});
+    terminal.setScrollRowsPerWheel(4.0f);
+    int scrolledRows = 0;
+    terminal.setOnScroll([&](int rows) { scrolledRows += rows; });
+
+    expectEqual(
+        "terminal wheel outside bounds is ignored",
+        terminal.onMouseWheel(oneui::MouseWheelEvent{{0.0f, 0.0f}, 1.0f}) ? 1 : 0,
+        0);
+    expectEqual(
+        "terminal wheel inside bounds is handled",
+        terminal.onMouseWheel(oneui::MouseWheelEvent{{20.0f, 20.0f}, 1.0f}) ? 1 : 0,
+        1);
+    expectEqual("terminal wheel reports configured rows", scrolledRows, 4);
+    terminal.onMouseWheel(oneui::MouseWheelEvent{{20.0f, 20.0f}, -0.5f});
+    expectEqual("terminal wheel preserves direction", scrolledRows, 2);
+}
+
+void testMouseReportingPreservesApplicationInputAndShiftSelection() {
+    oneui::TerminalView terminal;
+    terminal.setFrame(oneui::Rect{10.0f, 20.0f, 240.0f, 100.0f});
+    terminal.setFontSize(20.0f);
+    terminal.setGrid(3, 5, {});
+    RecordingCanvas canvas;
+    terminal.paint(canvas);
+
+    std::vector<oneui::TerminalPointerEvent> pointers;
+    int scrolledRows = 0;
+    terminal.setOnPointer([&](const oneui::TerminalPointerEvent& event) {
+        pointers.push_back(event);
+    });
+    terminal.setOnScroll([&](int rows) { scrolledRows += rows; });
+    terminal.setMouseReporting(true);
+
+    oneui::MouseEvent press{{35.0f, 50.0f}, oneui::MouseButton::Left};
+    press.control = true;
+    terminal.onMouseDown(press);
+    terminal.onMouseMove(oneui::MouseEvent{{47.0f, 50.0f}, oneui::MouseButton::Left});
+    oneui::MouseEvent release{{47.0f, 50.0f}, oneui::MouseButton::Left};
+    release.shift = true;
+    terminal.onMouseUp(release);
+
+    expectEqual("terminal reports pointer press move and release", static_cast<int>(pointers.size()), 3);
+    expectEqual("terminal pointer row is cell based", pointers.front().row, 1);
+    expectEqual("terminal pointer column is cell based", pointers.front().column, 2);
+    expectEqual("terminal pointer keeps modifiers", pointers.front().control ? 1 : 0, 1);
+    expectEqual(
+        "terminal release survives modifier changes",
+        pointers.back().action == oneui::TerminalPointerAction::Release ? 1 : 0,
+        1);
+
+    terminal.onMouseWheel(oneui::MouseWheelEvent{{35.0f, 50.0f}, 1.0f});
+    expectEqual("terminal reports application wheel", static_cast<int>(pointers.size()), 4);
+    expectEqual("terminal application wheel does not scroll history", scrolledRows, 0);
+
+    oneui::MouseEvent selectionStart{{10.0f, 20.0f}, oneui::MouseButton::Left};
+    selectionStart.shift = true;
+    terminal.onMouseDown(selectionStart);
+    terminal.onMouseMove(oneui::MouseEvent{{34.0f, 20.0f}, oneui::MouseButton::Left});
+    terminal.onMouseUp(oneui::MouseEvent{{34.0f, 20.0f}, oneui::MouseButton::Left});
+    expectEqual("terminal shift drag keeps local selection", terminal.hasSelection() ? 1 : 0, 1);
+
+    oneui::MouseWheelEvent historyWheel{{35.0f, 50.0f}, 1.0f};
+    historyWheel.shift = true;
+    terminal.onMouseWheel(historyWheel);
+    expectEqual("terminal shift wheel scrolls local history", scrolledRows, 3);
+}
+
 } // namespace
 
 int main() {
     testGridCopiesCellsAndCursor();
+    testGridUpdatesOnlyRequestedCells();
     testPaintHonorsWideCellsStylesAndCursor();
+    testPaintBatchesCompatibleAsciiCellsIntoRuns();
     testTextAndRawKeyCallbacksStaySeparate();
+    testCommittedUnicodeAndImeCaretStayCellAligned();
+    testSelectionCopyPasteAndTerminalShortcuts();
+    testWheelReportsWholeScrollbackRows();
+    testMouseReportingPreservesApplicationInputAndShiftSelection();
 
     if (failures != 0) {
         std::cerr << failures << " terminal view behavior test(s) failed.\n";

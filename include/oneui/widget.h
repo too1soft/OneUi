@@ -20,11 +20,17 @@ enum class MouseButton {
 struct MouseEvent {
     Point position;
     MouseButton button = MouseButton::Left;
+    bool shift = false;
+    bool control = false;
+    bool alt = false;
 };
 
 struct MouseWheelEvent {
     Point position;
     float deltaY = 0.0f;
+    bool shift = false;
+    bool control = false;
+    bool alt = false;
 };
 
 enum class Key {
@@ -141,6 +147,13 @@ public:
     virtual bool onKeyDown(const KeyEvent& event);
     virtual bool onKeyUp(const KeyEvent& event);
     virtual bool onTextInput(wchar_t character);
+    /// Delivers one committed Unicode text unit. The default implementation
+    /// preserves legacy character handlers by dispatching each UTF-16 code unit.
+    virtual bool onTextInputText(const std::wstring& text);
+    /// Returns the logical client-space rectangle where an IME should place
+    /// its composition and candidate UI. Containers forward this to their
+    /// focused descendant.
+    virtual Rect textInputCaretRect() const;
     virtual bool onFocusChanged(bool focused);
     virtual bool isFocusable() const;
     // tabStop：是否参与 Tab 焦点遍历。窗口按钮、纯装饰性可点区域设 false，排除出 Tab 序。

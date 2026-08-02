@@ -862,11 +862,7 @@ impl StateView {
 
     pub fn clear_on_action(&mut self) {
         unsafe {
-            sys::oneui_state_view_set_on_action(
-                self.widget.as_raw(),
-                None,
-                std::ptr::null_mut(),
-            )
+            sys::oneui_state_view_set_on_action(self.widget.as_raw(), None, std::ptr::null_mut())
         };
         self.action_callback = None;
     }
@@ -1888,6 +1884,9 @@ pub struct TerminalFrame {
     pub columns: u16,
     pub cells: Vec<TerminalCell>,
     pub cursor: TerminalCursor,
+    /// Whether terminal applications currently own pointer input. Shift still
+    /// bypasses reporting so users can select text locally.
+    pub mouse_reporting: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1919,12 +1918,75 @@ impl From<sys::OneUiRawKeyEvent> for RawKeyEvent {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TerminalPointerAction {
+    Press,
+    Release,
+    Move,
+    Wheel,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TerminalPointerButton {
+    None,
+    Left,
+    Right,
+    Middle,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TerminalPointerEvent {
+    pub action: TerminalPointerAction,
+    pub button: TerminalPointerButton,
+    pub row: u16,
+    pub column: u16,
+    pub wheel_delta: i32,
+    pub shift: bool,
+    pub control: bool,
+    pub alt: bool,
+}
+
+impl From<sys::OneUiTerminalPointerEvent> for TerminalPointerEvent {
+    fn from(value: sys::OneUiTerminalPointerEvent) -> Self {
+        let action = match value.action {
+            0 => TerminalPointerAction::Press,
+            1 => TerminalPointerAction::Release,
+            3 => TerminalPointerAction::Wheel,
+            _ => TerminalPointerAction::Move,
+        };
+        let button = match value.button {
+            1 => TerminalPointerButton::Left,
+            2 => TerminalPointerButton::Right,
+            3 => TerminalPointerButton::Middle,
+            _ => TerminalPointerButton::None,
+        };
+        Self {
+            action,
+            button,
+            row: value.row,
+            column: value.column,
+            wheel_delta: value.wheel_delta,
+            shift: value.shift != 0,
+            control: value.control != 0,
+            alt: value.alt != 0,
+        }
+    }
+}
+
 struct TerminalTextInputCallback {
     handler: Box<dyn FnMut(String) + 'static>,
 }
 
 struct TerminalRawKeyCallback {
     handler: Box<dyn FnMut(RawKeyEvent) + 'static>,
+}
+
+struct TerminalScrollCallback {
+    handler: Box<dyn FnMut(i32) + 'static>,
+}
+
+struct TerminalPointerCallback {
+    handler: Box<dyn FnMut(TerminalPointerEvent) + 'static>,
 }
 
 struct TerminalViewportCallback {
@@ -1934,6 +1996,7 @@ struct TerminalViewportCallback {
 struct TerminalViewState {
     raw: AtomicPtr<sys::OneUiWidget>,
     pending_frame: Mutex<Option<TerminalFrame>>,
+    last_applied_frame: Mutex<Option<TerminalFrame>>,
     update_scheduled: AtomicBool,
 }
 
@@ -1994,7 +2057,12 @@ impl TerminalViewHandle {
                 return;
             }
             if let Some(frame) = frame {
-                apply_terminal_frame(raw, &frame);
+                let mut last_applied = state
+                    .last_applied_frame
+                    .lock()
+                    .expect("terminal last applied frame lock poisoned");
+                apply_terminal_frame(raw, &frame, last_applied.as_ref());
+                *last_applied = Some(frame);
             }
 
             state.update_scheduled.store(false, Ordering::Release);
@@ -2040,6 +2108,26 @@ unsafe extern "C" fn run_terminal_raw_key_callback(
     let _ = catch_unwind(AssertUnwindSafe(|| (callback.handler)(event)));
 }
 
+unsafe extern "C" fn run_terminal_scroll_callback(rows: i32, user_data: *mut std::ffi::c_void) {
+    if user_data.is_null() {
+        return;
+    }
+    let callback = unsafe { &mut *user_data.cast::<TerminalScrollCallback>() };
+    let _ = catch_unwind(AssertUnwindSafe(|| (callback.handler)(rows)));
+}
+
+unsafe extern "C" fn run_terminal_pointer_callback(
+    event: *const sys::OneUiTerminalPointerEvent,
+    user_data: *mut std::ffi::c_void,
+) {
+    if event.is_null() || user_data.is_null() {
+        return;
+    }
+    let event = TerminalPointerEvent::from(unsafe { *event });
+    let callback = unsafe { &mut *user_data.cast::<TerminalPointerCallback>() };
+    let _ = catch_unwind(AssertUnwindSafe(|| (callback.handler)(event)));
+}
+
 unsafe extern "C" fn run_terminal_viewport_callback(
     rows: u16,
     columns: u16,
@@ -2062,7 +2150,10 @@ pub struct TerminalView {
     widget: Widget,
     state: Arc<TerminalViewState>,
     text_input_callback: Option<Box<TerminalTextInputCallback>>,
+    paste_callback: Option<Box<TerminalTextInputCallback>>,
     raw_key_callback: Option<Box<TerminalRawKeyCallback>>,
+    scroll_callback: Option<Box<TerminalScrollCallback>>,
+    pointer_callback: Option<Box<TerminalPointerCallback>>,
     viewport_callback: Option<Box<TerminalViewportCallback>>,
 }
 
@@ -2073,11 +2164,15 @@ impl TerminalView {
             state: Arc::new(TerminalViewState {
                 raw: AtomicPtr::new(widget.as_raw()),
                 pending_frame: Mutex::new(None),
+                last_applied_frame: Mutex::new(None),
                 update_scheduled: AtomicBool::new(false),
             }),
             widget,
             text_input_callback: None,
+            paste_callback: None,
             raw_key_callback: None,
+            scroll_callback: None,
+            pointer_callback: None,
             viewport_callback: None,
         })
     }
@@ -2117,6 +2212,56 @@ impl TerminalView {
         };
     }
 
+    pub fn set_scroll_rows_per_wheel(&self, rows: f32) {
+        unsafe { sys::oneui_terminal_view_set_scroll_rows_per_wheel(self.widget.as_raw(), rows) };
+    }
+
+    pub fn set_mouse_reporting(&self, enabled: bool) {
+        unsafe {
+            sys::oneui_terminal_view_set_mouse_reporting(self.widget.as_raw(), i32::from(enabled))
+        };
+    }
+
+    pub fn select_all(&self) {
+        unsafe { sys::oneui_terminal_view_select_all(self.widget.as_raw()) };
+    }
+
+    pub fn clear_selection(&self) {
+        unsafe { sys::oneui_terminal_view_clear_selection(self.widget.as_raw()) };
+    }
+
+    pub fn has_selection(&self) -> bool {
+        unsafe { sys::oneui_terminal_view_has_selection(self.widget.as_raw()) != 0 }
+    }
+
+    pub fn selected_text(&self) -> String {
+        let required = unsafe {
+            sys::oneui_terminal_view_get_selected_text_utf8(
+                self.widget.as_raw(),
+                std::ptr::null_mut(),
+                0,
+            )
+        };
+        if required == 0 {
+            return String::new();
+        }
+        let mut buffer = vec![0u8; required];
+        let written = unsafe {
+            sys::oneui_terminal_view_get_selected_text_utf8(
+                self.widget.as_raw(),
+                buffer.as_mut_ptr().cast(),
+                buffer.len(),
+            )
+        };
+        if written == 0 {
+            return String::new();
+        }
+        if buffer.last() == Some(&0) {
+            buffer.pop();
+        }
+        String::from_utf8_lossy(&buffer).into_owned()
+    }
+
     pub fn set_on_text_input<F>(&mut self, callback: F)
     where
         F: FnMut(String) + 'static,
@@ -2133,6 +2278,29 @@ impl TerminalView {
             .cast();
         unsafe {
             sys::oneui_terminal_view_set_on_text_input_utf8(
+                self.widget.as_raw(),
+                Some(run_terminal_text_input_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn set_on_paste<F>(&mut self, callback: F)
+    where
+        F: FnMut(String) + 'static,
+    {
+        self.clear_paste_callback();
+        self.paste_callback = Some(Box::new(TerminalTextInputCallback {
+            handler: Box::new(callback),
+        }));
+        let user_data = (self
+            .paste_callback
+            .as_deref_mut()
+            .expect("terminal paste callback was just installed")
+            as *mut TerminalTextInputCallback)
+            .cast();
+        unsafe {
+            sys::oneui_terminal_view_set_on_paste_utf8(
                 self.widget.as_raw(),
                 Some(run_terminal_text_input_callback),
                 user_data,
@@ -2158,6 +2326,52 @@ impl TerminalView {
             sys::oneui_terminal_view_set_on_raw_key(
                 self.widget.as_raw(),
                 Some(run_terminal_raw_key_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn set_on_scroll<F>(&mut self, callback: F)
+    where
+        F: FnMut(i32) + 'static,
+    {
+        self.clear_scroll_callback();
+        self.scroll_callback = Some(Box::new(TerminalScrollCallback {
+            handler: Box::new(callback),
+        }));
+        let user_data = (self
+            .scroll_callback
+            .as_deref_mut()
+            .expect("terminal scroll callback was just installed")
+            as *mut TerminalScrollCallback)
+            .cast();
+        unsafe {
+            sys::oneui_terminal_view_set_on_scroll(
+                self.widget.as_raw(),
+                Some(run_terminal_scroll_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn set_on_pointer<F>(&mut self, callback: F)
+    where
+        F: FnMut(TerminalPointerEvent) + 'static,
+    {
+        self.clear_pointer_callback();
+        self.pointer_callback = Some(Box::new(TerminalPointerCallback {
+            handler: Box::new(callback),
+        }));
+        let user_data = (self
+            .pointer_callback
+            .as_deref_mut()
+            .expect("terminal pointer callback was just installed")
+            as *mut TerminalPointerCallback)
+            .cast();
+        unsafe {
+            sys::oneui_terminal_view_set_on_pointer(
+                self.widget.as_raw(),
+                Some(run_terminal_pointer_callback),
                 user_data,
             )
         };
@@ -2197,6 +2411,17 @@ impl TerminalView {
         self.text_input_callback = None;
     }
 
+    pub fn clear_paste_callback(&mut self) {
+        unsafe {
+            sys::oneui_terminal_view_set_on_paste_utf8(
+                self.widget.as_raw(),
+                None,
+                std::ptr::null_mut(),
+            )
+        };
+        self.paste_callback = None;
+    }
+
     pub fn clear_raw_key_callback(&mut self) {
         unsafe {
             sys::oneui_terminal_view_set_on_raw_key(
@@ -2206,6 +2431,24 @@ impl TerminalView {
             )
         };
         self.raw_key_callback = None;
+    }
+
+    pub fn clear_scroll_callback(&mut self) {
+        unsafe {
+            sys::oneui_terminal_view_set_on_scroll(self.widget.as_raw(), None, std::ptr::null_mut())
+        };
+        self.scroll_callback = None;
+    }
+
+    pub fn clear_pointer_callback(&mut self) {
+        unsafe {
+            sys::oneui_terminal_view_set_on_pointer(
+                self.widget.as_raw(),
+                None,
+                std::ptr::null_mut(),
+            )
+        };
+        self.pointer_callback = None;
     }
 
     pub fn clear_viewport_callback(&mut self) {
@@ -2234,16 +2477,41 @@ impl Drop for TerminalView {
             .lock()
             .expect("terminal pending frame lock poisoned")
             .take();
+        self.state
+            .last_applied_frame
+            .lock()
+            .expect("terminal last applied frame lock poisoned")
+            .take();
         self.state.update_scheduled.store(false, Ordering::Release);
         self.clear_text_input_callback();
+        self.clear_paste_callback();
         self.clear_raw_key_callback();
+        self.clear_scroll_callback();
+        self.clear_pointer_callback();
         self.clear_viewport_callback();
     }
 }
 
-fn apply_terminal_frame(raw: *mut sys::OneUiWidget, frame: &TerminalFrame) {
-    apply_terminal_grid(raw, frame.rows, frame.columns, &frame.cells);
+fn apply_terminal_frame(
+    raw: *mut sys::OneUiWidget,
+    frame: &TerminalFrame,
+    previous: Option<&TerminalFrame>,
+) {
+    let can_update_in_place = previous.is_some_and(|previous| {
+        previous.rows == frame.rows
+            && previous.columns == frame.columns
+            && previous.cells.len() == frame.cells.len()
+    });
+    if can_update_in_place {
+        if let Some(range) = terminal_dirty_range(previous.expect("previous frame checked"), frame)
+        {
+            apply_terminal_cell_update(raw, range.start, &frame.cells[range]);
+        }
+    } else {
+        apply_terminal_grid(raw, frame.rows, frame.columns, &frame.cells);
+    }
     unsafe {
+        sys::oneui_terminal_view_set_mouse_reporting(raw, i32::from(frame.mouse_reporting));
         sys::oneui_terminal_view_set_cursor(
             raw,
             frame.cursor.row,
@@ -2253,21 +2521,31 @@ fn apply_terminal_frame(raw: *mut sys::OneUiWidget, frame: &TerminalFrame) {
     };
 }
 
+fn terminal_dirty_range(
+    previous: &TerminalFrame,
+    frame: &TerminalFrame,
+) -> Option<std::ops::Range<usize>> {
+    let first = previous
+        .cells
+        .iter()
+        .zip(&frame.cells)
+        .position(|(previous, current)| previous != current)?;
+    let last = previous
+        .cells
+        .iter()
+        .zip(&frame.cells)
+        .rposition(|(previous, current)| previous != current)
+        .expect("a first changed cell guarantees a last changed cell");
+    Some(first..last + 1)
+}
+
 fn apply_terminal_grid(
     raw: *mut sys::OneUiWidget,
     rows: u16,
     columns: u16,
     cells: &[TerminalCell],
 ) {
-    let native_cells: Vec<sys::OneUiTerminalCellUtf8> = cells
-        .iter()
-        .map(|cell| sys::OneUiTerminalCellUtf8 {
-            text: sys::OneUiUtf8String::from_str(&cell.text),
-            foreground: cell.foreground.into(),
-            background: cell.background.into(),
-            style: cell.style,
-        })
-        .collect();
+    let native_cells = native_terminal_cells(cells);
     unsafe {
         sys::oneui_terminal_view_set_grid_utf8(
             raw,
@@ -2277,6 +2555,34 @@ fn apply_terminal_grid(
             native_cells.len(),
         )
     };
+}
+
+fn apply_terminal_cell_update(
+    raw: *mut sys::OneUiWidget,
+    first_cell: usize,
+    cells: &[TerminalCell],
+) {
+    let native_cells = native_terminal_cells(cells);
+    unsafe {
+        sys::oneui_terminal_view_update_cells_utf8(
+            raw,
+            first_cell,
+            native_cells.as_ptr(),
+            native_cells.len(),
+        )
+    };
+}
+
+fn native_terminal_cells(cells: &[TerminalCell]) -> Vec<sys::OneUiTerminalCellUtf8> {
+    cells
+        .iter()
+        .map(|cell| sys::OneUiTerminalCellUtf8 {
+            text: sys::OneUiUtf8String::from_str(&cell.text),
+            foreground: cell.foreground.into(),
+            background: cell.background.into(),
+            style: cell.style,
+        })
+        .collect()
 }
 
 /// A single immutable line for the selectable native log view.
@@ -3195,6 +3501,30 @@ mod tests {
     }
 
     #[test]
+    fn terminal_dirty_range_tracks_the_smallest_contiguous_update() {
+        let mut previous = TerminalFrame {
+            rows: 2,
+            columns: 3,
+            cells: vec![TerminalCell::default(); 6],
+            cursor: TerminalCursor {
+                row: 0,
+                column: 0,
+                visible: true,
+            },
+            mouse_reporting: false,
+        };
+        let mut current = previous.clone();
+        assert_eq!(super::terminal_dirty_range(&previous, &current), None);
+
+        current.cells[4].text = "X".to_owned();
+        assert_eq!(super::terminal_dirty_range(&previous, &current), Some(4..5));
+
+        previous.cells[1].text = "before".to_owned();
+        current.cells[1].text = "after".to_owned();
+        assert_eq!(super::terminal_dirty_range(&previous, &current), Some(1..5));
+    }
+
+    #[test]
     fn mounts_terminal_grid_with_wide_cells_and_cursor() {
         let _guard = window_test_lock().lock().expect("window test lock");
         let window = Window::new(&WindowOptions::default()).expect("window should be created");
@@ -3232,6 +3562,11 @@ mod tests {
             column: 2,
             visible: true,
         });
+        terminal.select_all();
+        assert!(terminal.has_selection());
+        assert_eq!(terminal.selected_text(), "A宽\r\n");
+        terminal.clear_selection();
+        assert!(!terminal.has_selection());
         window.set_content(terminal.as_widget());
     }
 
@@ -3256,6 +3591,7 @@ mod tests {
                         column: 0,
                         visible: true,
                     },
+                    mouse_reporting: true,
                 })
                 .expect("worker should submit a terminal frame");
         });
@@ -3287,6 +3623,7 @@ mod tests {
                     column: 0,
                     visible: true,
                 },
+                mouse_reporting: false,
             }),
             Err(Error::WidgetDestroyed)
         ));

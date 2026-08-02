@@ -226,8 +226,27 @@ typedef struct OneUiRawKeyEvent {
     int win;
 } OneUiRawKeyEvent;
 
+typedef enum OneUiTerminalPointerAction {
+    OneUiTerminalPointerActionPress = 0,
+    OneUiTerminalPointerActionRelease = 1,
+    OneUiTerminalPointerActionMove = 2,
+    OneUiTerminalPointerActionWheel = 3
+} OneUiTerminalPointerAction;
+
+typedef struct OneUiTerminalPointerEvent {
+    OneUiTerminalPointerAction action;
+    OneUiPointerButton button;
+    unsigned short row;
+    unsigned short column;
+    int wheel_delta;
+    int shift;
+    int control;
+    int alt;
+} OneUiTerminalPointerEvent;
+
 typedef void (*OneUiRemotePointerCallback)(const OneUiRemotePointerEvent* event, void* user_data);
 typedef void (*OneUiRawKeyCallback)(const OneUiRawKeyEvent* event, void* user_data);
+typedef void (*OneUiTerminalPointerCallback)(const OneUiTerminalPointerEvent* event, void* user_data);
 
 enum {
     OneUiTerminalCellBold = 1u << 0,
@@ -579,18 +598,44 @@ ONEUI_API void oneui_terminal_view_set_grid_utf8(
     unsigned short columns,
     const OneUiTerminalCellUtf8* cells,
     size_t cell_count);
+ONEUI_API void oneui_terminal_view_update_cells_utf8(
+    OneUiWidget* view,
+    size_t first_cell,
+    const OneUiTerminalCellUtf8* cells,
+    size_t cell_count);
 ONEUI_API void oneui_terminal_view_set_cursor(
     OneUiWidget* view,
     unsigned short row,
     unsigned short column,
     int visible);
+ONEUI_API void oneui_terminal_view_select_all(OneUiWidget* view);
+ONEUI_API void oneui_terminal_view_clear_selection(OneUiWidget* view);
+ONEUI_API int oneui_terminal_view_has_selection(OneUiWidget* view);
+ONEUI_API size_t oneui_terminal_view_get_selected_text_utf8(
+    OneUiWidget* view,
+    char* buffer,
+    size_t buffer_len);
 ONEUI_API void oneui_terminal_view_set_on_text_input_utf8(
+    OneUiWidget* view,
+    OneUiUtf8TextCallback callback,
+    void* user_data);
+ONEUI_API void oneui_terminal_view_set_on_paste_utf8(
     OneUiWidget* view,
     OneUiUtf8TextCallback callback,
     void* user_data);
 ONEUI_API void oneui_terminal_view_set_on_raw_key(
     OneUiWidget* view,
     OneUiRawKeyCallback callback,
+    void* user_data);
+ONEUI_API void oneui_terminal_view_set_scroll_rows_per_wheel(OneUiWidget* view, float rows);
+ONEUI_API void oneui_terminal_view_set_on_scroll(
+    OneUiWidget* view,
+    OneUiIntCallback callback,
+    void* user_data);
+ONEUI_API void oneui_terminal_view_set_mouse_reporting(OneUiWidget* view, int enabled);
+ONEUI_API void oneui_terminal_view_set_on_pointer(
+    OneUiWidget* view,
+    OneUiTerminalPointerCallback callback,
     void* user_data);
 ONEUI_API void oneui_terminal_view_set_on_viewport_changed(
     OneUiWidget* view,
