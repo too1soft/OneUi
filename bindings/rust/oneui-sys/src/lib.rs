@@ -439,6 +439,10 @@ extern "C" {
     );
     pub fn oneui_terminal_view_create() -> *mut OneUiWidget;
     pub fn oneui_terminal_view_set_font_size(view: *mut OneUiWidget, size: f32);
+    pub fn oneui_terminal_view_set_line_height(view: *mut OneUiWidget, multiplier: f32);
+    pub fn oneui_terminal_view_set_cursor_style(view: *mut OneUiWidget, style: c_int);
+    pub fn oneui_terminal_view_set_cursor_blinking(view: *mut OneUiWidget, enabled: c_int);
+    pub fn oneui_terminal_view_set_copy_on_select(view: *mut OneUiWidget, enabled: c_int);
     pub fn oneui_terminal_view_set_palette(
         view: *mut OneUiWidget,
         background: OneUiColor,

@@ -2956,6 +2956,35 @@ void oneui_terminal_view_set_font_size(OneUiWidget* view, float size) {
     }
 }
 
+void oneui_terminal_view_set_line_height(OneUiWidget* view, float multiplier) {
+    if (auto* nativeView = asWidget<oneui::TerminalView>(view)) {
+        nativeView->setLineHeight(multiplier);
+    }
+}
+
+void oneui_terminal_view_set_cursor_style(OneUiWidget* view, OneUiTerminalCursorStyle style) {
+    if (auto* nativeView = asWidget<oneui::TerminalView>(view)) {
+        const auto nativeStyle = style == OneUiTerminalCursorStyleBar
+                                     ? oneui::TerminalCursorStyle::Bar
+                                     : (style == OneUiTerminalCursorStyleUnderline
+                                            ? oneui::TerminalCursorStyle::Underline
+                                            : oneui::TerminalCursorStyle::Block);
+        nativeView->setCursorStyle(nativeStyle);
+    }
+}
+
+void oneui_terminal_view_set_cursor_blinking(OneUiWidget* view, int enabled) {
+    if (auto* nativeView = asWidget<oneui::TerminalView>(view)) {
+        nativeView->setCursorBlinking(enabled != 0);
+    }
+}
+
+void oneui_terminal_view_set_copy_on_select(OneUiWidget* view, int enabled) {
+    if (auto* nativeView = asWidget<oneui::TerminalView>(view)) {
+        nativeView->setCopyOnSelect(enabled != 0);
+    }
+}
+
 void oneui_terminal_view_set_palette(
     OneUiWidget* view,
     OneUiColor background,

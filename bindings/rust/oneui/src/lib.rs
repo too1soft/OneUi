@@ -1991,6 +1991,14 @@ pub struct TerminalCursor {
     pub visible: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(i32)]
+pub enum TerminalCursorStyle {
+    Block = 0,
+    Bar = 1,
+    Underline = 2,
+}
+
 /// The whole-cell terminal viewport reported by the native renderer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TerminalViewport {
@@ -2300,6 +2308,26 @@ impl TerminalView {
 
     pub fn set_font_size(&self, size: f32) {
         unsafe { sys::oneui_terminal_view_set_font_size(self.widget.as_raw(), size) };
+    }
+
+    pub fn set_line_height(&self, multiplier: f32) {
+        unsafe { sys::oneui_terminal_view_set_line_height(self.widget.as_raw(), multiplier) };
+    }
+
+    pub fn set_cursor_style(&self, style: TerminalCursorStyle) {
+        unsafe { sys::oneui_terminal_view_set_cursor_style(self.widget.as_raw(), style as i32) };
+    }
+
+    pub fn set_cursor_blinking(&self, enabled: bool) {
+        unsafe {
+            sys::oneui_terminal_view_set_cursor_blinking(self.widget.as_raw(), i32::from(enabled))
+        };
+    }
+
+    pub fn set_copy_on_select(&self, enabled: bool) {
+        unsafe {
+            sys::oneui_terminal_view_set_copy_on_select(self.widget.as_raw(), i32::from(enabled))
+        };
     }
 
     pub fn set_palette(

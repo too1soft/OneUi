@@ -37,6 +37,12 @@ struct TerminalCursor {
     bool visible = true;
 };
 
+enum class TerminalCursorStyle {
+    Block,
+    Bar,
+    Underline,
+};
+
 /// The number of whole terminal cells that fit in the current viewport.
 struct TerminalViewport {
     std::uint16_t rows = 1;
@@ -83,10 +89,18 @@ public:
 
     void setCursor(TerminalCursor cursor);
     TerminalCursor cursorState() const;
+    void setCursorStyle(TerminalCursorStyle style);
+    TerminalCursorStyle cursorStyle() const;
+    void setCursorBlinking(bool enabled);
+    bool cursorBlinking() const;
     void setFontSize(float size);
     float fontSize() const;
+    void setLineHeight(float multiplier);
+    float lineHeight() const;
     void setPalette(Color background, Color foreground, Color cursor);
     void setSelectionBackground(Color color);
+    void setCopyOnSelect(bool enabled);
+    bool copyOnSelect() const;
     void setScrollRowsPerWheel(float rows);
     void setMouseReporting(bool enabled);
 
@@ -104,6 +118,7 @@ public:
     void setOnScroll(ScrollCallback callback);
     void setOnPointer(PointerCallback callback);
     void setOnViewportChanged(ViewportChangedCallback callback);
+    void setAnimationScheduler(std::function<void()> scheduler) override;
 
     void paint(Canvas& canvas) override;
     bool onMouseDown(const MouseEvent& event) override;
@@ -115,8 +130,10 @@ public:
     bool onTextInput(wchar_t character) override;
     bool onTextInputText(const std::wstring& text) override;
     Rect textInputCaretRect() const override;
+    bool onFocusChanged(bool focused) override;
     bool isFocusable() const override;
     CursorKind cursor(Point point) const override;
+    bool tickAnimations(double nowMs) override;
     AccessibilityInfo accessibilityInfo() const override;
 
 private:
@@ -137,6 +154,23 @@ private:
         }
     };
 
+    enum class SelectionMode {
+        Character,
+        Word,
+        Line,
+    };
+
+    enum class CellWordClass {
+        Whitespace,
+        Word,
+        Punctuation,
+    };
+
+    struct SelectionRange {
+        TextPosition start;
+        TextPosition end;
+    };
+
     GridMetrics gridMetrics(const Canvas& canvas) const;
     void reportViewport(Rect bounds, GridMetrics metrics);
     std::size_t cellIndex(std::uint16_t row, std::uint16_t column) const;
@@ -144,6 +178,18 @@ private:
     TextPosition selectionEnd() const;
     TextPosition positionFromPoint(Point point) const;
     TextPosition cellPositionFromPoint(Point point) const;
+    TextPosition normalizedCellPosition(TextPosition position) const;
+    CellWordClass wordClassAt(TextPosition position) const;
+    SelectionRange wordRangeAt(TextPosition position) const;
+    void selectWordAt(TextPosition position);
+    void selectLineAt(std::uint16_t row);
+    void extendWordSelection(TextPosition position);
+    void extendLineSelection(std::uint16_t row);
+    void restartCursorBlink();
+    bool cursorPaintVisible() const;
+    Rect cellRect(TextPosition position) const;
+    void invalidateCell(TextPosition position);
+    void invalidateCellRange(std::size_t firstCell, std::size_t count);
     void reportPointer(
         TerminalPointerAction action,
         MouseButton button,
@@ -160,15 +206,27 @@ private:
     std::uint16_t columns_ = 0;
     std::vector<TerminalCell> cells_;
     TerminalCursor cursor_;
+    TerminalCursorStyle cursorStyle_ = TerminalCursorStyle::Block;
+    bool cursorBlinking_ = true;
+    bool cursorBlinkVisible_ = true;
+    double cursorBlinkStartMs_ = 0.0;
     float fontSize_ = 14.0f;
+    float lineHeight_ = 1.30f;
     Color background_{20, 24, 36, 255};
     Color foreground_{220, 226, 240, 255};
     Color cursorColor_{196, 181, 253, 255};
     Color selectionBackground_{69, 83, 144, 255};
     TextPosition selectionAnchor_{};
     TextPosition selectionCaret_{};
+    TextPosition selectionOriginStart_{};
+    TextPosition selectionOriginEnd_{};
+    TextPosition lastClickPosition_{};
+    SelectionMode selectionMode_ = SelectionMode::Character;
+    int clickCount_ = 0;
+    double lastClickMs_ = 0.0;
     bool selecting_ = false;
     bool hasSelection_ = false;
+    bool copyOnSelect_ = false;
     std::shared_ptr<Clipboard> clipboard_;
     TextInputCallback onTextInput_;
     PasteCallback onPaste_;
@@ -178,6 +236,7 @@ private:
     ViewportChangedCallback onViewportChanged_;
     TerminalViewport viewport_{};
     GridMetrics lastMetrics_{};
+    bool hasGridMetrics_ = false;
     float scrollRowsPerWheel_ = 3.0f;
     float wheelRowRemainder_ = 0.0f;
     float pointerWheelRemainder_ = 0.0f;
