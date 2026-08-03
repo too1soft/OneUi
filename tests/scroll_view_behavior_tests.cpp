@@ -132,6 +132,7 @@ void testWheelRetargetsContinuousMotionAndAcceptsPrecisionDelta() {
 
     scroll.onMouseWheel(oneui::MouseWheelEvent{oneui::Point{20.0f, 20.0f}, -1.0f});
     const float firstOffset = scroll.scrollOffset();
+    expectEqual("ScrollView first frame consumes responsive distance", firstOffset >= 12.0f ? 1 : 0, 1);
     scroll.onMouseWheel(oneui::MouseWheelEvent{oneui::Point{20.0f, 20.0f}, -1.0f});
     expectEqual("ScrollView retarget keeps moving immediately", scroll.scrollOffset() > firstOffset ? 1 : 0, 1);
     scroll.tickAnimations(1.0e15);

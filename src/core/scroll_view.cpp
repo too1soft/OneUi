@@ -19,8 +19,9 @@ double currentTimeMs() {
 // precision-touchpad events extend or reverse the target. The previous
 // duration-based easing restarted on every event, which produced a visible
 // move/pause rhythm even when frames were presented at the monitor rate.
-constexpr double kWheelSpringAngularFrequency = 60.0;
+constexpr double kWheelSpringAngularFrequency = 100.0;
 constexpr double kWheelInputPreviewSeconds = 0.008;
+constexpr double kWheelInputVelocityRatio = 0.65;
 constexpr float kWheelSettleDistance = 0.05f;
 constexpr float kWheelSettleVelocity = 1.0f;
 
@@ -205,6 +206,15 @@ bool ScrollView::onMouseWheel(const MouseWheelEvent& event) {
         // Direction changes should feel immediate instead of first coasting in
         // the direction of the previous gesture.
         scrollVelocity_ *= 0.25f;
+    }
+    const float inputVelocity = static_cast<float>(
+        targetDelta * kWheelSpringAngularFrequency * kWheelInputVelocityRatio);
+    if (scrollVelocity_ * targetDelta <= 0.0f
+        || std::fabs(scrollVelocity_) < std::fabs(inputVelocity)) {
+        // A wheel notch is both a position request and a velocity impulse.
+        // Seeding the spring velocity removes first-frame latency while later
+        // events can retain a faster existing velocity.
+        scrollVelocity_ = inputVelocity;
     }
     scrollTargetOffset_ = target;
     scrollAnimationRunning_ = true;
