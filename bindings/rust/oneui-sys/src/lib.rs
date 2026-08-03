@@ -455,6 +455,20 @@ extern "C" {
         user_data: *mut c_void,
     );
 
+    pub fn oneui_tabs_create() -> *mut OneUiWidget;
+    pub fn oneui_tabs_set_items_utf8(
+        tabs: *mut OneUiWidget,
+        items: *const OneUiUtf8String,
+        count: usize,
+    );
+    pub fn oneui_tabs_set_selected_index(tabs: *mut OneUiWidget, index: c_int);
+    pub fn oneui_tabs_selected_index(tabs: *mut OneUiWidget) -> c_int;
+    pub fn oneui_tabs_set_on_changed(
+        tabs: *mut OneUiWidget,
+        callback: OneUiIntCallback,
+        user_data: *mut c_void,
+    );
+
     pub fn oneui_title_bar_create(title: *const u16) -> *mut OneUiWidget;
     pub fn oneui_title_bar_set_title(title_bar: *mut OneUiWidget, title: *const u16);
     pub fn oneui_title_bar_set_icon_symbol(title_bar: *mut OneUiWidget, symbol: c_int);

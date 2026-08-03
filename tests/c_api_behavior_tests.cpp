@@ -252,6 +252,7 @@ void testAppShellAbiCreatesReusableSlots() {
     OneUiWidget* stateView = oneui_state_view_create(L"Empty", L"No data yet");
     OneUiWidget* tile = oneui_tile_create(L"Remote Desktop", L"169 510 1007");
     OneUiWidget* segmented = oneui_segmented_control_create();
+    OneUiWidget* tabs = oneui_tabs_create();
     OneUiWidget* select = oneui_select_create();
     OneUiWidget* titleBar = oneui_title_bar_create(L"Product");
 
@@ -265,6 +266,7 @@ void testAppShellAbiCreatesReusableSlots() {
     expectTrue("state view create", stateView != nullptr);
     expectTrue("tile create", tile != nullptr);
     expectTrue("segmented control create", segmented != nullptr);
+    expectTrue("tabs create", tabs != nullptr);
     expectTrue("select create", select != nullptr);
     expectTrue("title bar create", titleBar != nullptr);
 
@@ -302,6 +304,18 @@ void testAppShellAbiCreatesReusableSlots() {
     oneui_segmented_control_set_selected_index(segmented, 1);
     expectTrue("segmented selected index", oneui_segmented_control_selected_index(segmented) == 1);
     oneui_segmented_control_set_on_changed(segmented, nullptr, nullptr);
+    const OneUiUtf8String tabItems[] = {
+        utf8View("Production bastion"),
+        utf8View("Kylin V10"),
+    };
+    IndexCallbackState tabsCallbackState;
+    oneui_tabs_set_items_utf8(tabs, tabItems, 2);
+    oneui_tabs_set_on_changed(tabs, onIndexChanged, &tabsCallbackState);
+    oneui_tabs_set_selected_index(tabs, 1);
+    expectTrue("tabs selected index", oneui_tabs_selected_index(tabs) == 1);
+    expectTrue(
+        "tabs changed callback",
+        tabsCallbackState.calls == 1 && tabsCallbackState.index == 1);
     const OneUiUtf8String selectItems[] = {
         utf8View("All protocols"),
         utf8View("SSH"),
@@ -323,6 +337,7 @@ void testAppShellAbiCreatesReusableSlots() {
     oneui_title_bar_set_on_close(titleBar, nullptr, nullptr);
 
     oneui_widget_destroy(titleBar);
+    oneui_widget_destroy(tabs);
     oneui_widget_destroy(select);
     oneui_widget_destroy(segmented);
     oneui_widget_destroy(tile);

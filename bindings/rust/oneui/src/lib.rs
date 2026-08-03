@@ -2383,6 +2383,80 @@ impl Drop for SegmentedControl {
     }
 }
 
+/// Keyboard-accessible tab strip for switching between peer workspace views.
+pub struct Tabs {
+    widget: Widget,
+    changed_callback: Option<Box<IndexChangedCallback>>,
+}
+
+impl Tabs {
+    pub fn new(items: &[String]) -> Result<Self, Error> {
+        let widget = Widget::from_raw(unsafe { sys::oneui_tabs_create() })?;
+        let control = Self {
+            widget,
+            changed_callback: None,
+        };
+        control.set_items(items);
+        Ok(control)
+    }
+
+    pub fn set_items(&self, items: &[String]) {
+        let views: Vec<sys::OneUiUtf8String> = items
+            .iter()
+            .map(|item| sys::OneUiUtf8String::from_str(item))
+            .collect();
+        unsafe {
+            sys::oneui_tabs_set_items_utf8(self.widget.as_raw(), views.as_ptr(), views.len())
+        };
+    }
+
+    pub fn set_selected_index(&self, index: i32) {
+        unsafe { sys::oneui_tabs_set_selected_index(self.widget.as_raw(), index) };
+    }
+
+    pub fn selected_index(&self) -> i32 {
+        unsafe { sys::oneui_tabs_selected_index(self.widget.as_raw()) }
+    }
+
+    pub fn set_on_changed<F>(&mut self, callback: F)
+    where
+        F: FnMut(i32) + 'static,
+    {
+        self.clear_on_changed();
+        self.changed_callback = Some(Box::new(IndexChangedCallback {
+            handler: Box::new(callback),
+        }));
+        let user_data = (self
+            .changed_callback
+            .as_deref_mut()
+            .expect("tabs callback was just installed")
+            as *mut IndexChangedCallback)
+            .cast();
+        unsafe {
+            sys::oneui_tabs_set_on_changed(
+                self.widget.as_raw(),
+                Some(run_index_changed_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn clear_on_changed(&mut self) {
+        unsafe { sys::oneui_tabs_set_on_changed(self.widget.as_raw(), None, std::ptr::null_mut()) };
+        self.changed_callback = None;
+    }
+
+    pub fn as_widget(&self) -> &Widget {
+        &self.widget
+    }
+}
+
+impl Drop for Tabs {
+    fn drop(&mut self) {
+        self.clear_on_changed();
+    }
+}
+
 /// RGBA color used by the native terminal grid.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TerminalColor {
@@ -4293,7 +4367,7 @@ mod tests {
         InteractiveSurfaceStateStyle, InteractiveSurfaceStyle, Label, List, ListItem, LogLine,
         LogView, Menu, OverlayAlignment, OverlayHost, Panel, Popup, PopupInteractionMode,
         PopupPreferredPlacement, ScrollView, SegmentedControl, Select, SelectionMode, Stack,
-        StackDirection, StyleSheet, Switch, TerminalCell, TerminalColor, TerminalCursor,
+        StackDirection, StyleSheet, Switch, Tabs, TerminalCell, TerminalColor, TerminalCursor,
         TerminalCursorStyle, TerminalFrame, TerminalSelection, TerminalUnderlineStyle,
         TerminalView, TextField, TreeItem, TreeView, VirtualList, Window, WindowOptions,
     };
@@ -4474,6 +4548,22 @@ mod tests {
         content.add(segmented.as_widget());
         content.add(switch.as_widget());
         window.set_content(content.as_widget());
+    }
+
+    #[test]
+    fn mounts_utf8_workspace_tabs_and_reports_selection_changes() {
+        let _guard = window_test_lock().lock().expect("window test lock");
+        let window = Window::new(&WindowOptions::default()).expect("window should be created");
+        let observed = std::rc::Rc::new(std::cell::RefCell::new(None));
+        let mut tabs = Tabs::new(&["生产堡垒机".to_string(), "Kylin V10 🚀".to_string()])
+            .expect("tabs should be created");
+        let observed_for_callback = std::rc::Rc::clone(&observed);
+        tabs.set_on_changed(move |index| *observed_for_callback.borrow_mut() = Some(index));
+        tabs.set_selected_index(1);
+
+        assert_eq!(tabs.selected_index(), 1);
+        assert_eq!(*observed.borrow(), Some(1));
+        window.set_content(tabs.as_widget());
     }
 
     #[test]

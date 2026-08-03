@@ -2639,6 +2639,55 @@ void oneui_segmented_control_set_on_changed(OneUiWidget* segmented_control, OneU
     });
 }
 
+OneUiWidget* oneui_tabs_create() {
+    return wrap(std::make_shared<oneui::Tabs>());
+}
+
+void oneui_tabs_set_items_utf8(
+    OneUiWidget* tabs,
+    const OneUiUtf8String* items,
+    std::size_t count) {
+    auto* nativeTabs = asWidget<oneui::Tabs>(tabs);
+    if (!nativeTabs) {
+        return;
+    }
+    std::vector<std::wstring> values;
+    if (items && count > 0) {
+        values.reserve(count);
+        for (std::size_t index = 0; index < count; ++index) {
+            values.push_back(utf8OrEmpty(items[index]));
+        }
+    }
+    nativeTabs->setItems(std::move(values));
+}
+
+void oneui_tabs_set_selected_index(OneUiWidget* tabs, int index) {
+    if (auto* nativeTabs = asWidget<oneui::Tabs>(tabs)) {
+        nativeTabs->setSelectedIndex(index);
+    }
+}
+
+int oneui_tabs_selected_index(OneUiWidget* tabs) {
+    if (auto* nativeTabs = asWidget<oneui::Tabs>(tabs)) {
+        return nativeTabs->selectedIndex();
+    }
+    return 0;
+}
+
+void oneui_tabs_set_on_changed(OneUiWidget* tabs, OneUiIntCallback callback, void* user_data) {
+    auto* nativeTabs = asWidget<oneui::Tabs>(tabs);
+    if (!nativeTabs) {
+        return;
+    }
+    if (!callback) {
+        nativeTabs->setOnChanged(nullptr);
+        return;
+    }
+    nativeTabs->setOnChanged([callback, user_data](int value) {
+        callback(value, user_data);
+    });
+}
+
 OneUiWidget* oneui_select_create() {
     return wrap(std::make_shared<oneui::Select>());
 }

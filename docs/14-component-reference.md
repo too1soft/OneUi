@@ -156,6 +156,21 @@ tabs->setItems({L"控件", L"数据", L"样式"});
 tabs->bindSelectedIndex(tab);
 ```
 
+Rust 应用使用安全包装层管理回调生命周期：
+
+```rust
+let mut tabs = oneui::Tabs::new(&[
+    "生产堡垒机".to_string(),
+    "Kylin V10".to_string(),
+])?;
+tabs.set_on_changed(|index| {
+    // 切换与该索引关联的工作区内容。
+});
+```
+
+C ABI 对应 `oneui_tabs_*`，标签通过结构化 UTF-8 数组传递。`SegmentedControl`
+用于少量互斥模式，工作区、文档和会话切换应使用 `Tabs`，不要混用两种语义。
+
 限制：当前只负责 tab bar，不自动管理对应 page 内容；暂无关闭按钮、可拖拽 tab、溢出菜单。
 
 ## List / ListItem

@@ -556,6 +556,19 @@ ONEUI_API void oneui_segmented_control_set_selected_index(OneUiWidget* segmented
 ONEUI_API int oneui_segmented_control_selected_index(OneUiWidget* segmented_control);
 ONEUI_API void oneui_segmented_control_set_on_changed(OneUiWidget* segmented_control, OneUiIntCallback callback, void* user_data);
 
+/* Standard tab strip for switching between peer workspace views. */
+ONEUI_API OneUiWidget* oneui_tabs_create(void);
+ONEUI_API void oneui_tabs_set_items_utf8(
+    OneUiWidget* tabs,
+    const OneUiUtf8String* items,
+    size_t count);
+ONEUI_API void oneui_tabs_set_selected_index(OneUiWidget* tabs, int index);
+ONEUI_API int oneui_tabs_selected_index(OneUiWidget* tabs);
+ONEUI_API void oneui_tabs_set_on_changed(
+    OneUiWidget* tabs,
+    OneUiIntCallback callback,
+    void* user_data);
+
 /* Standard compact option selector with keyboard navigation and light dismiss. */
 ONEUI_API OneUiWidget* oneui_select_create(void);
 ONEUI_API void oneui_select_set_items_utf8(
