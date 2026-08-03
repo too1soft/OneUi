@@ -76,6 +76,11 @@ constexpr UINT kOneUiDeferredFullPaint = WM_APP + 3;
 constexpr UINT kOneUiDpiChanged = 0x02E0;
 constexpr UINT_PTR kOneUiAnimationTimer = 0x4f10;
 constexpr UINT_PTR kOneUiInteractivePaintTimer = 0x4f11;
+// SetTimer rounds a 16 ms request up to two 15.6 ms clock ticks on systems
+// using the default Windows timer resolution. Request the documented minimum
+// so animation callbacks land on the next clock tick instead of falling to
+// roughly 32 FPS. Rendering remains paint-coalesced and never busy-waits.
+constexpr UINT kOneUiAnimationFrameIntervalMs = USER_TIMER_MINIMUM;
 constexpr UINT kOneUiInteractivePaintIntervalMs = 8;
 constexpr int kPaintSurfaceAlignment = 128;
 constexpr int kPaintSurfaceGrowthPadding = 256;
@@ -1101,7 +1106,7 @@ public:
             animationCallbacks_.push(std::move(callback));
         }
         if (!animationTimerActive_) {
-            SetTimer(hwnd_, kOneUiAnimationTimer, 16, nullptr);
+            SetTimer(hwnd_, kOneUiAnimationTimer, kOneUiAnimationFrameIntervalMs, nullptr);
             animationTimerActive_ = true;
         }
     }
