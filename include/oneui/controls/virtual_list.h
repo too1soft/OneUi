@@ -44,6 +44,8 @@ public:
 
 private:
     void assignSelectedIndex(int index);
+    void resetScrollMotion(float offset);
+    bool advanceScrollMotion(double nowMs);
     int effectiveSelectedIndex() const;
     int hitItemIndex(Point point) const;
     Rect itemRect(int index) const;
@@ -61,7 +63,9 @@ private:
     float rowHeight_ = 48.0f;
     float wheelStep_ = 48.0f;
     float scrollOffset_ = 0.0f;
-    FloatTransition scrollTransition_;
+    SmoothScrollMotion scrollMotion_;
+    double scrollTraceLastWheelMs_ = 0.0;
+    double scrollTraceLastTickMs_ = 0.0;
     std::optional<ListStyleOverride> styleOverride_;
     std::function<void(int)> onChanged_;
 };

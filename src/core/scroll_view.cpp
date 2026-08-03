@@ -16,16 +16,6 @@ double currentTimeMs() {
     return std::chrono::duration<double, std::milli>(now).count();
 }
 
-// A single analytic motion state consumes every wheel packet. Input adds
-// distance and momentum to the current state instead of restarting a second
-// transition, so accelerated mouse packets remain one continuous gesture.
-constexpr ScrollMotionSpec kWheelScrollMotion{
-    150.0,
-    110.0,
-    0.55,
-    0.90,
-};
-
 } // namespace
 
 ScrollView::ScrollView() {
@@ -222,7 +212,7 @@ bool ScrollView::onMouseWheel(const MouseWheelEvent& event) {
         0.0f,
         maxScrollOffset(),
         nowMs,
-        kWheelScrollMotion);
+        kDefaultWheelScrollMotionSpec);
     if (accepted || scrollMotion_.running()) {
         requestAnimationFrame();
     }
@@ -230,7 +220,7 @@ bool ScrollView::onMouseWheel(const MouseWheelEvent& event) {
         internal::writeScrollTrace(internal::ScrollTraceEvent{
             "scroll_view", "wheel_applied", reinterpret_cast<std::uintptr_t>(this),
             event.deltaY, scrollOffset_, scrollMotion_.target(), scrollMotion_.velocity(),
-            wheelIntervalMs, maxScrollOffset(), kWheelScrollMotion.retargetSettlingDurationMs,
+            wheelIntervalMs, maxScrollOffset(), kDefaultWheelScrollMotionSpec.retargetSettlingDurationMs,
             inputDistance, accepted ? 1.0 : 0.0});
     }
     return accepted || caughtUp;

@@ -1,5 +1,6 @@
 #include "oneui/controls/virtual_list.h"
 
+#include "internal/scroll_trace.h"
 #include "list_style_internal.h"
 
 #include <algorithm>
@@ -16,8 +17,6 @@ double currentTimeMs() {
     return std::chrono::duration<double, std::milli>(now).count();
 }
 
-constexpr TransitionSpec kWheelScrollTransition{120.0, EasingCurve::EaseOutCubic};
-
 } // namespace
 
 VirtualList::VirtualList() {
@@ -29,7 +28,7 @@ void VirtualList::setItems(std::vector<ListItem> items) {
     hoveredIndex_ = -1;
     pressedIndex_ = -1;
     scrollOffset_ = std::clamp(scrollOffset_, 0.0f, maxScrollOffset());
-    scrollTransition_.reset(scrollOffset_);
+    resetScrollMotion(scrollOffset_);
     assignSelectedIndex(selectedIndex_);
     invalidate();
 }
@@ -49,7 +48,7 @@ void VirtualList::setRowHeight(float height) {
     }
     rowHeight_ = next;
     scrollOffset_ = std::clamp(scrollOffset_, 0.0f, maxScrollOffset());
-    scrollTransition_.reset(scrollOffset_);
+    resetScrollMotion(scrollOffset_);
     invalidate();
 }
 
@@ -63,7 +62,7 @@ void VirtualList::setWheelStep(float step) {
 
 void VirtualList::setScrollOffset(float offset) {
     const float next = std::clamp(offset, 0.0f, maxScrollOffset());
-    scrollTransition_.reset(next);
+    resetScrollMotion(next);
     if (std::fabs(next - scrollOffset_) <= 0.001f) {
         return;
     }
@@ -216,35 +215,59 @@ bool VirtualList::onMouseWheel(const MouseWheelEvent& event) {
     if (!interactive() || !contains(event.position) || maxScrollOffset() <= 0.001f) {
         return false;
     }
-    const float from = scrollTransition_.running() ? scrollTransition_.target() : scrollOffset_;
-    const float target = std::clamp(from - event.deltaY * wheelStep_, 0.0f, maxScrollOffset());
-    if (std::fabs(target - from) <= 0.001f) {
-        return false;
+    const double nowMs = event.timestampMs > 0.0 ? event.timestampMs : currentTimeMs();
+    const double wheelIntervalMs = scrollTraceLastWheelMs_ > 0.0
+        ? nowMs - scrollTraceLastWheelMs_
+        : 0.0;
+    scrollTraceLastWheelMs_ = nowMs;
+    if (internal::scrollTraceEnabled()) {
+        internal::writeScrollTrace(internal::ScrollTraceEvent{
+            "virtual_list", "wheel_enter", reinterpret_cast<std::uintptr_t>(this),
+            event.deltaY, scrollOffset_, scrollMotion_.target(), scrollMotion_.velocity(),
+            wheelIntervalMs, maxScrollOffset(), 0.0, wheelStep_,
+            scrollMotion_.running() ? 1.0 : 0.0});
     }
 
-    scrollTransition_.animateTo(target, currentTimeMs(), kWheelScrollTransition);
-    scrollOffset_ = std::clamp(scrollTransition_.value(), 0.0f, maxScrollOffset());
-    invalidate();
-    requestAnimationFrame();
-    return true;
+    const bool caughtUp = advanceScrollMotion(nowMs);
+    const float inputDistance = -event.deltaY * wheelStep_;
+    const bool accepted = scrollMotion_.addDelta(
+        inputDistance,
+        0.0f,
+        maxScrollOffset(),
+        nowMs,
+        kDefaultWheelScrollMotionSpec);
+    if (accepted || scrollMotion_.running()) {
+        requestAnimationFrame();
+    }
+    if (internal::scrollTraceEnabled()) {
+        internal::writeScrollTrace(internal::ScrollTraceEvent{
+            "virtual_list", "wheel_applied", reinterpret_cast<std::uintptr_t>(this),
+            event.deltaY, scrollOffset_, scrollMotion_.target(), scrollMotion_.velocity(),
+            wheelIntervalMs, maxScrollOffset(),
+            kDefaultWheelScrollMotionSpec.retargetSettlingDurationMs,
+            inputDistance, accepted ? 1.0 : 0.0});
+    }
+    return accepted || caughtUp;
 }
 
 bool VirtualList::tickAnimations(double nowMs) {
-    const bool ticked = scrollTransition_.tick(nowMs);
-    if (!ticked) {
-        return false;
+    const double frameIntervalMs = scrollTraceLastTickMs_ > 0.0
+        ? nowMs - scrollTraceLastTickMs_
+        : 0.0;
+    scrollTraceLastTickMs_ = nowMs;
+    const float previousOffset = scrollOffset_;
+    const bool ticked = advanceScrollMotion(nowMs);
+    if (internal::scrollTraceEnabled() && ticked) {
+        internal::writeScrollTrace(internal::ScrollTraceEvent{
+            "virtual_list", "animation_tick", reinterpret_cast<std::uintptr_t>(this),
+            0.0, scrollOffset_, scrollMotion_.target(), scrollMotion_.velocity(),
+            frameIntervalMs, maxScrollOffset(), 0.0,
+            scrollOffset_ - previousOffset, 0.0});
     }
-
-    const float next = std::clamp(scrollTransition_.value(), 0.0f, maxScrollOffset());
-    const bool changed = std::fabs(next - scrollOffset_) > 0.001f;
-    if (changed) {
-        scrollOffset_ = next;
-        invalidate();
-    }
-    if (scrollTransition_.running()) {
+    if (scrollMotion_.running()) {
         requestAnimationFrame();
     }
-    return true;
+    return ticked;
 }
 
 bool VirtualList::onKeyDown(const KeyEvent& event) {
@@ -354,7 +377,25 @@ void VirtualList::ensureSelectionVisible() {
         scrollOffset_ = bottom - frame().height;
     }
     scrollOffset_ = std::clamp(scrollOffset_, 0.0f, maxScrollOffset());
-    scrollTransition_.reset(scrollOffset_);
+    resetScrollMotion(scrollOffset_);
+}
+
+void VirtualList::resetScrollMotion(float offset) {
+    scrollMotion_.reset(offset);
+}
+
+bool VirtualList::advanceScrollMotion(double nowMs) {
+    if (!scrollMotion_.running()) {
+        return false;
+    }
+
+    const float previous = scrollOffset_;
+    scrollMotion_.tick(nowMs);
+    scrollOffset_ = std::clamp(scrollMotion_.value(), 0.0f, maxScrollOffset());
+    if (std::fabs(scrollOffset_ - previous) > 0.001f) {
+        invalidate();
+    }
+    return true;
 }
 
 ListStyle VirtualList::resolvedContainerStyle() const {

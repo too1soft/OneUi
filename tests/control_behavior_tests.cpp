@@ -2375,11 +2375,27 @@ void testVirtualListPaintsOnlyViewportRowsAndMaintainsScrollSelection() {
     expectNear("VirtualList keeps keyboard selection visible", list.scrollOffset(), list.maxScrollOffset());
 
     const float offsetBeforeWheel = list.scrollOffset();
-    const bool wheelHandled = list.onMouseWheel(oneui::MouseWheelEvent{oneui::Point{10.0f, 10.0f}, 2.0f});
+    const bool wheelHandled = list.onMouseWheel(oneui::MouseWheelEvent{
+        oneui::Point{10.0f, 10.0f}, 2.0f, false, false, false, 1000.0});
     expectEqual("VirtualList handles wheel events when scrollable", wheelHandled ? 1 : 0, 1);
-    expectEqual("VirtualList wheel begins a transition", list.scrollOffset() < offsetBeforeWheel && list.scrollOffset() > offsetBeforeWheel - 96.0f ? 1 : 0, 1);
-    list.tickAnimations(1.0e15);
-    expectEqual("VirtualList wheel scrolls upward", list.scrollOffset() < offsetBeforeWheel ? 1 : 0, 1);
+    expectNear("VirtualList defers motion until the display frame", list.scrollOffset(), offsetBeforeWheel);
+    list.tickAnimations(1005.0);
+    expectEqual(
+        "VirtualList first display frame advances without jumping to target",
+        list.scrollOffset() < offsetBeforeWheel && list.scrollOffset() > offsetBeforeWheel - 96.0f ? 1 : 0,
+        1);
+    list.onMouseWheel(oneui::MouseWheelEvent{
+        oneui::Point{10.0f, 10.0f}, 6.0f, false, false, false, 1258.0});
+    list.tickAnimations(1263.0);
+    expectEqual(
+        "VirtualList retargets the same continuous wheel gesture",
+        list.scrollOffset() < offsetBeforeWheel - 96.0f ? 1 : 0,
+        1);
+    list.tickAnimations(2000.0);
+    expectNear(
+        "VirtualList settles at the combined wheel distance",
+        list.scrollOffset(),
+        offsetBeforeWheel - 384.0f);
 
     list.setSelectedIndex(-1);
     expectEqual("VirtualList supports an explicit empty selection", list.selectedIndex(), -1);

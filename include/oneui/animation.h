@@ -27,6 +27,11 @@ struct ScrollMotionSpec {
     double maximumVelocityRatio = 0.90;
 };
 
+// Shared wheel motion contract for scrolling controls. Products may supply a
+// different spec through lower-level motion APIs, but standard OneUI scroll
+// surfaces must use one common behavior.
+inline constexpr ScrollMotionSpec kDefaultWheelScrollMotionSpec{};
+
 ONEUI_API double clampUnit(double value);
 ONEUI_API double applyEasing(EasingCurve curve, double progress);
 ONEUI_API float interpolateFloat(float from, float to, double progress);
