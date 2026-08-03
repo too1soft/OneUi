@@ -485,12 +485,18 @@ void testTerminalViewAbiUsesStructuredCells() {
             {20, 24, 36, 255},
             OneUiTerminalCellBold,
             42,
+            3,
+            {12, 34, 56, 255},
+            1,
         },
         {
             {"\xE4\xB8\xAD", 3},
             {240, 200, 80, 255},
             {20, 24, 36, 255},
             OneUiTerminalCellWide,
+            0,
+            0,
+            {0, 0, 0, 255},
             0,
         },
     };

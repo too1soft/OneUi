@@ -12,8 +12,8 @@ frame to the view:
 
 - grid rows and columns;
 - one `TerminalCell` per grid position;
-- per-cell text, foreground, background, style flags, and an optional stable
-  hyperlink identifier;
+- per-cell text, foreground, background, style flags, underline shape and
+  optional underline color, plus an optional stable hyperlink identifier;
 - a cursor position and visibility state.
 
 The component copies incoming cells. Callers can reuse or drop their source
@@ -79,6 +79,20 @@ The ABI-stable style bits are:
 - `TerminalCellStyleInverse`
 - `TerminalCellStyleWide`
 - `TerminalCellStyleWideContinuation`
+- `TerminalCellStyleBlinkSlow`
+- `TerminalCellStyleBlinkRapid`
+- `TerminalCellStyleConceal`
+- `TerminalCellStyleStrikethrough`
+- `TerminalCellStyleOverline`
+
+`TerminalUnderlineStyle` carries none, single, double, curly, dotted, or
+dashed underlines independently from the color. An unset underline color
+follows the effective foreground color, including inverse video. The legacy
+underline flag remains ABI-stable and maps to a single underline.
+
+Blinking text uses OneUI's shared animation scheduler. It keeps terminal cell
+content intact and invalidates only contiguous slow- or rapid-blink ranges, so
+selection and copy semantics remain stable without repainting the whole view.
 
 Wide continuation cells reserve layout space for the preceding wide character
 and are not independently painted.
@@ -100,7 +114,9 @@ return `Error::WidgetDestroyed` without dereferencing the native widget.
 ## Validation
 
 The component has C++ behavior coverage for grid normalization, wide cells,
-cursor state, separated input callbacks, hyperlink hover, and explicit
+cursor state, extended decorations, conceal and copy semantics, independent
+blink phases, separated input callbacks, hyperlink hover, and explicit
 Ctrl-click activation. The C ABI test covers structured UTF-8 cells and callback
-registration. Rust binding tests cover hyperlink identifiers in frame diffs and
-across the C ABI, and mount a native terminal view in a native window.
+registration. Rust binding tests cover extended attributes and hyperlink
+identifiers across frame diffs and the C ABI, and mount a native terminal view
+in a native window.

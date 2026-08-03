@@ -99,6 +99,9 @@ typedef struct OneUiTerminalCellUtf8 {
     OneUiColor background;
     unsigned int style;
     unsigned int hyperlink_id;
+    unsigned int underline_style;
+    OneUiColor underline_color;
+    int underline_color_set;
 } OneUiTerminalCellUtf8;
 
 typedef enum OneUiTerminalCursorStyle {
@@ -263,10 +266,15 @@ enum {
     OneUiTerminalCellUnderline = 1u << 3,
     OneUiTerminalCellInverse = 1u << 4,
     OneUiTerminalCellWide = 1u << 5,
-    OneUiTerminalCellWideContinuation = 1u << 6
+    OneUiTerminalCellWideContinuation = 1u << 6,
+    OneUiTerminalCellBlinkSlow = 1u << 7,
+    OneUiTerminalCellBlinkRapid = 1u << 8,
+    OneUiTerminalCellConceal = 1u << 9,
+    OneUiTerminalCellStrikethrough = 1u << 10,
+    OneUiTerminalCellOverline = 1u << 11
 };
 
-#define ONEUI_UTF8_ABI_VERSION 2u
+#define ONEUI_UTF8_ABI_VERSION 3u
 
 ONEUI_API const char* oneui_version(void);
 ONEUI_API unsigned int oneui_utf8_abi_version(void);

@@ -2010,6 +2010,23 @@ pub mod terminal_style {
     pub const INVERSE: u32 = 1 << 4;
     pub const WIDE: u32 = 1 << 5;
     pub const WIDE_CONTINUATION: u32 = 1 << 6;
+    pub const BLINK_SLOW: u32 = 1 << 7;
+    pub const BLINK_RAPID: u32 = 1 << 8;
+    pub const CONCEAL: u32 = 1 << 9;
+    pub const STRIKETHROUGH: u32 = 1 << 10;
+    pub const OVERLINE: u32 = 1 << 11;
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[repr(u32)]
+pub enum TerminalUnderlineStyle {
+    #[default]
+    None = 0,
+    Single = 1,
+    Double = 2,
+    Curly = 3,
+    Dotted = 4,
+    Dashed = 5,
 }
 
 /// One terminal cell. It deliberately holds text and colors separately so a
@@ -2022,6 +2039,9 @@ pub struct TerminalCell {
     pub style: u32,
     /// Stable emulator-owned OSC 8 hyperlink identifier. Zero means no link.
     pub hyperlink_id: u32,
+    pub underline_style: TerminalUnderlineStyle,
+    /// `None` follows the effective foreground, including inverse video.
+    pub underline_color: Option<TerminalColor>,
 }
 
 impl Default for TerminalCell {
@@ -2032,6 +2052,8 @@ impl Default for TerminalCell {
             background: TerminalColor::rgb(20, 24, 36),
             style: 0,
             hyperlink_id: 0,
+            underline_style: TerminalUnderlineStyle::None,
+            underline_color: None,
         }
     }
 }
@@ -2988,6 +3010,12 @@ fn native_terminal_cells(cells: &[TerminalCell]) -> Vec<sys::OneUiTerminalCellUt
             background: cell.background.into(),
             style: cell.style,
             hyperlink_id: cell.hyperlink_id,
+            underline_style: cell.underline_style as u32,
+            underline_color: cell
+                .underline_color
+                .unwrap_or(TerminalColor::rgb(0, 0, 0))
+                .into(),
+            underline_color_set: i32::from(cell.underline_color.is_some()),
         })
         .collect()
 }
@@ -3605,8 +3633,8 @@ mod tests {
         InteractiveSurfaceStateStyle, InteractiveSurfaceStyle, Label, List, ListItem, LogLine,
         LogView, OverlayAlignment, OverlayHost, Panel, ScrollView, SegmentedControl, Stack,
         StackDirection, StyleSheet, Switch, TerminalCell, TerminalColor, TerminalCursor,
-        TerminalCursorStyle, TerminalFrame, TerminalSelection, TerminalView, TextField, TreeItem,
-        TreeView, VirtualList, Window, WindowOptions,
+        TerminalCursorStyle, TerminalFrame, TerminalSelection, TerminalUnderlineStyle,
+        TerminalView, TextField, TreeItem, TreeView, VirtualList, Window, WindowOptions,
     };
     use std::sync::{
         atomic::{AtomicBool, Ordering},
@@ -3961,14 +3989,24 @@ mod tests {
     }
 
     #[test]
-    fn terminal_cells_preserve_hyperlink_ids_across_the_c_abi() {
+    fn terminal_cells_preserve_extended_attributes_across_the_c_abi() {
         let native = super::native_terminal_cells(&[TerminalCell {
             text: "docs".to_owned(),
             hyperlink_id: 73,
+            underline_style: TerminalUnderlineStyle::Curly,
+            underline_color: Some(TerminalColor::rgb(12, 34, 56)),
             ..TerminalCell::default()
         }]);
         assert_eq!(native.len(), 1);
         assert_eq!(native[0].hyperlink_id, 73);
+        assert_eq!(
+            native[0].underline_style,
+            TerminalUnderlineStyle::Curly as u32
+        );
+        assert_eq!(native[0].underline_color.r, 12);
+        assert_eq!(native[0].underline_color.g, 34);
+        assert_eq!(native[0].underline_color.b, 56);
+        assert_eq!(native[0].underline_color_set, 1);
     }
 
     #[test]

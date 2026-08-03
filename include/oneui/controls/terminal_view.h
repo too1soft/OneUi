@@ -23,6 +23,20 @@ enum TerminalCellStyle : std::uint32_t {
     TerminalCellInverse = 1u << 4,
     TerminalCellWide = 1u << 5,
     TerminalCellWideContinuation = 1u << 6,
+    TerminalCellBlinkSlow = 1u << 7,
+    TerminalCellBlinkRapid = 1u << 8,
+    TerminalCellConceal = 1u << 9,
+    TerminalCellStrikethrough = 1u << 10,
+    TerminalCellOverline = 1u << 11,
+};
+
+enum class TerminalUnderlineStyle : std::uint32_t {
+    None = 0,
+    Single = 1,
+    Double = 2,
+    Curly = 3,
+    Dotted = 4,
+    Dashed = 5,
 };
 
 struct TerminalCell {
@@ -33,6 +47,9 @@ struct TerminalCell {
     /// Stable identifier owned by the terminal emulator. A value of zero
     /// means this cell is not part of an OSC 8 hyperlink.
     std::uint32_t hyperlinkId = 0;
+    TerminalUnderlineStyle underlineStyle = TerminalUnderlineStyle::None;
+    Color underlineColor{0, 0, 0, 255};
+    bool underlineColorSet = false;
 };
 
 struct TerminalCursor {
@@ -209,6 +226,12 @@ private:
     void extendLineSelection(std::uint16_t row);
     void restartCursorBlink();
     bool cursorPaintVisible() const;
+    void rebuildBlinkCellCounts();
+    void updateBlinkCellCounts(const TerminalCell& previous, const TerminalCell& current);
+    void refreshTextBlinkAnimation(bool wasActive);
+    void invalidateBlinkingCells(TerminalCellStyle blinkStyle);
+    bool textPaintVisible(const TerminalCell& cell) const;
+    bool hasBlinkingText() const;
     Rect cellRect(TextPosition position) const;
     void invalidateCell(TextPosition position);
     void invalidateCellRange(std::size_t firstCell, std::size_t count);
@@ -235,6 +258,11 @@ private:
     bool cursorBlinking_ = true;
     bool cursorBlinkVisible_ = true;
     double cursorBlinkStartMs_ = 0.0;
+    std::size_t slowBlinkCellCount_ = 0;
+    std::size_t rapidBlinkCellCount_ = 0;
+    bool slowBlinkVisible_ = true;
+    bool rapidBlinkVisible_ = true;
+    double textBlinkStartMs_ = 0.0;
     float fontSize_ = 14.0f;
     float lineHeight_ = 1.30f;
     Color background_{20, 24, 36, 255};

@@ -1,5 +1,6 @@
 #include "oneui/controls/terminal_view.h"
 
+#include <algorithm>
 #include <cmath>
 #include <iostream>
 #include <memory>
@@ -25,6 +26,13 @@ public:
         oneui::TextFontFamily family = oneui::TextFontFamily::Default;
     };
 
+    struct LineCall {
+        oneui::Point from;
+        oneui::Point to;
+        oneui::Color color;
+        float width = 1.0f;
+    };
+
     void save() override {}
     void restore() override {}
     void clipRect(oneui::Rect) override {}
@@ -37,7 +45,14 @@ public:
     void strokeRect(oneui::Rect, oneui::Color, float, float = 1.0f) override {}
     void fillEllipse(oneui::Rect, oneui::Color) override {}
     void strokeEllipse(oneui::Rect, oneui::Color, float = 1.0f) override {}
-    void drawLine(oneui::Point, oneui::Point, oneui::Color, float = 1.0f) override { ++lineCount; }
+    void drawLine(
+        oneui::Point from,
+        oneui::Point to,
+        oneui::Color color,
+        float width = 1.0f) override {
+        ++lineCount;
+        lines.push_back(LineCall{from, to, color, width});
+    }
     void drawText(const std::wstring& text, oneui::Rect rect, oneui::Color color, float, oneui::TextAlign = oneui::TextAlign::Center) override {
         texts.push_back(TextCall{text, rect, color});
     }
@@ -68,6 +83,7 @@ public:
     int lineCount = 0;
     std::optional<oneui::Rect> clipOverride;
     std::vector<FillCall> fills;
+    std::vector<LineCall> lines;
     mutable oneui::TextFontFamily lastMeasuredFamily = oneui::TextFontFamily::Default;
     std::vector<TextCall> texts;
 };
@@ -199,6 +215,82 @@ void testPaintBatchesCompatibleAsciiCellsIntoRuns() {
     expectEqual("terminal first ASCII run keeps text", canvas.texts.front().text == L"ABC" ? 1 : 0, 1);
     expectEqual("terminal second ASCII run keeps text", canvas.texts.back().text == L"DEF" ? 1 : 0, 1);
     expectNear("terminal ASCII run spans whole cell range", canvas.texts.front().rect.width, 36.0f);
+}
+
+void testPaintsExtendedDecorationsWithoutExposingConcealedText() {
+    oneui::TerminalView terminal;
+    terminal.setFrame(oneui::Rect{0.0f, 0.0f, 180.0f, 40.0f});
+    terminal.setFontSize(20.0f);
+    terminal.setCursor(oneui::TerminalCursor{0, 0, false});
+
+    oneui::TerminalCell doubleUnderline{L"A"};
+    doubleUnderline.underlineStyle = oneui::TerminalUnderlineStyle::Double;
+    doubleUnderline.underlineColor = oneui::Color{12, 34, 56, 255};
+    doubleUnderline.underlineColorSet = true;
+    oneui::TerminalCell curlyUnderline{L"B"};
+    curlyUnderline.underlineStyle = oneui::TerminalUnderlineStyle::Curly;
+    oneui::TerminalCell dottedStrike{L"C"};
+    dottedStrike.underlineStyle = oneui::TerminalUnderlineStyle::Dotted;
+    dottedStrike.style = oneui::TerminalCellStrikethrough;
+    oneui::TerminalCell dashedOverline{L"D"};
+    dashedOverline.underlineStyle = oneui::TerminalUnderlineStyle::Dashed;
+    dashedOverline.style = oneui::TerminalCellOverline;
+    oneui::TerminalCell concealed{L"E"};
+    concealed.style = oneui::TerminalCellConceal;
+    terminal.setGrid(
+        1,
+        5,
+        {doubleUnderline, curlyUnderline, dottedStrike, dashedOverline, concealed});
+
+    RecordingCanvas canvas;
+    terminal.paint(canvas);
+    expectEqual("terminal conceal suppresses only the glyph", static_cast<int>(canvas.texts.size()), 4);
+    expectEqual("terminal extended decorations emit native strokes", canvas.lineCount > 8 ? 1 : 0, 1);
+    const bool usesExplicitUnderlineColor = std::any_of(
+        canvas.lines.begin(),
+        canvas.lines.end(),
+        [](const RecordingCanvas::LineCall& call) {
+            return sameColor(call.color, oneui::Color{12, 34, 56, 255});
+        });
+    expectEqual("terminal underline keeps its explicit color", usesExplicitUnderlineColor ? 1 : 0, 1);
+
+    terminal.selectAll();
+    expectEqual("terminal conceal remains copyable", terminal.selectedText() == L"ABCDE" ? 1 : 0, 1);
+}
+
+void testTextBlinkUsesTheSharedAnimationScheduler() {
+    oneui::TerminalView terminal;
+    terminal.setFrame(oneui::Rect{0.0f, 0.0f, 120.0f, 40.0f});
+    terminal.setFontSize(20.0f);
+    terminal.setCursor(oneui::TerminalCursor{0, 0, false});
+    oneui::TerminalCell slowBlink{L"S"};
+    slowBlink.style = oneui::TerminalCellBlinkSlow;
+    oneui::TerminalCell rapidBlink{L"R"};
+    rapidBlink.style = oneui::TerminalCellBlinkRapid;
+    terminal.setGrid(1, 2, {slowBlink, rapidBlink});
+
+    int animationSchedules = 0;
+    terminal.setAnimationScheduler([&] { ++animationSchedules; });
+    expectEqual("terminal blink schedules native animation", animationSchedules, 1);
+    expectEqual("terminal blink keeps animation alive", terminal.tickAnimations(1000.0) ? 1 : 0, 1);
+
+    RecordingCanvas visibleCanvas;
+    terminal.paint(visibleCanvas);
+    expectEqual("terminal blink starts visible", static_cast<int>(visibleCanvas.texts.size()), 1);
+    expectEqual(
+        "terminal visible blink cells remain batchable",
+        visibleCanvas.texts.front().text == L"SR" ? 1 : 0,
+        1);
+
+    terminal.tickAnimations(1600.0);
+    RecordingCanvas slowHiddenCanvas;
+    terminal.paint(slowHiddenCanvas);
+    expectEqual("terminal slow blink hides independently", static_cast<int>(slowHiddenCanvas.texts.size()), 1);
+
+    terminal.tickAnimations(1800.0);
+    RecordingCanvas bothHiddenCanvas;
+    terminal.paint(bothHiddenCanvas);
+    expectEqual("terminal rapid blink uses its own phase", static_cast<int>(bothHiddenCanvas.texts.size()), 0);
 }
 
 void testPaintVisitsOnlyCellsInsideTheDirtyClip() {
@@ -704,6 +796,8 @@ int main() {
     testGridUpdatesOnlyRequestedCells();
     testPaintHonorsWideCellsStylesAndCursor();
     testPaintBatchesCompatibleAsciiCellsIntoRuns();
+    testPaintsExtendedDecorationsWithoutExposingConcealedText();
+    testTextBlinkUsesTheSharedAnimationScheduler();
     testPaintVisitsOnlyCellsInsideTheDirtyClip();
     testLineHeightAndCursorStylesAreNativeMetrics();
     testTerminalUpdatesInvalidateOnlyDirtyCells();

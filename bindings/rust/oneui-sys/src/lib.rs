@@ -5,7 +5,7 @@
 
 use std::ffi::{c_char, c_int, c_uint, c_ushort, c_void};
 
-pub const UTF8_ABI_VERSION: c_uint = 2;
+pub const UTF8_ABI_VERSION: c_uint = 3;
 
 #[repr(C)]
 pub struct OneUiWindow {
@@ -112,6 +112,9 @@ pub struct OneUiTerminalCellUtf8 {
     pub background: OneUiColor,
     pub style: c_uint,
     pub hyperlink_id: c_uint,
+    pub underline_style: c_uint,
+    pub underline_color: OneUiColor,
+    pub underline_color_set: c_int,
 }
 
 impl OneUiUtf8String {

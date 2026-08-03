@@ -275,6 +275,23 @@ oneui::Color toNativeColor(OneUiColor color) {
     return oneui::Color{color.r, color.g, color.b, color.a};
 }
 
+oneui::TerminalUnderlineStyle toNativeTerminalUnderlineStyle(unsigned int style) {
+    switch (style) {
+    case 1:
+        return oneui::TerminalUnderlineStyle::Single;
+    case 2:
+        return oneui::TerminalUnderlineStyle::Double;
+    case 3:
+        return oneui::TerminalUnderlineStyle::Curly;
+    case 4:
+        return oneui::TerminalUnderlineStyle::Dotted;
+    case 5:
+        return oneui::TerminalUnderlineStyle::Dashed;
+    default:
+        return oneui::TerminalUnderlineStyle::None;
+    }
+}
+
 std::vector<std::string> splitClasses(const char* text) {
     std::vector<std::string> result;
     if (!text) {
@@ -3035,6 +3052,9 @@ void oneui_terminal_view_set_grid_utf8(
             toNativeColor(cell.background),
             cell.style,
             cell.hyperlink_id,
+            toNativeTerminalUnderlineStyle(cell.underline_style),
+            toNativeColor(cell.underline_color),
+            cell.underline_color_set != 0,
         });
     }
     nativeView->setGrid(rows, columns, std::move(nativeCells));
@@ -3061,6 +3081,9 @@ void oneui_terminal_view_update_cells_utf8(
             toNativeColor(cell.background),
             cell.style,
             cell.hyperlink_id,
+            toNativeTerminalUnderlineStyle(cell.underline_style),
+            toNativeColor(cell.underline_color),
+            cell.underline_color_set != 0,
         });
     }
     nativeView->updateCells(first_cell, std::move(nativeCells));

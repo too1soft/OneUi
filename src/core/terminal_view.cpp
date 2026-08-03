@@ -19,6 +19,10 @@ constexpr unsigned int kVirtualKeyLeftWin = 0x5B;
 constexpr unsigned int kVirtualKeyRightWin = 0x5C;
 constexpr double kCursorBlinkPeriodMs = 1060.0;
 constexpr double kCursorBlinkOnMs = 530.0;
+constexpr double kSlowTextBlinkPeriodMs = 1000.0;
+constexpr double kSlowTextBlinkOnMs = 500.0;
+constexpr double kRapidTextBlinkPeriodMs = 500.0;
+constexpr double kRapidTextBlinkOnMs = 250.0;
 constexpr double kMultiClickIntervalMs = 500.0;
 constexpr std::size_t kMaximumSparseInvalidations = 32;
 
@@ -40,7 +44,10 @@ bool sameColor(Color left, Color right) {
 bool sameTerminalCell(const TerminalCell& left, const TerminalCell& right) {
     return left.text == right.text && sameColor(left.foreground, right.foreground) &&
            sameColor(left.background, right.background) && left.style == right.style &&
-           left.hyperlinkId == right.hyperlinkId;
+           left.hyperlinkId == right.hyperlinkId &&
+           left.underlineStyle == right.underlineStyle &&
+           sameColor(left.underlineColor, right.underlineColor) &&
+           left.underlineColorSet == right.underlineColorSet;
 }
 
 bool isCopyShortcut(const KeyEvent& event) {
@@ -64,6 +71,69 @@ double currentTimeMs() {
     return std::chrono::duration<double, std::milli>(now).count();
 }
 
+void drawTerminalUnderline(
+    Canvas& canvas,
+    Rect rect,
+    Color color,
+    TerminalUnderlineStyle style,
+    float strokeWidth) {
+    if (style == TerminalUnderlineStyle::None || rect.width <= 0.0f) {
+        return;
+    }
+
+    const float stroke = std::max(1.0f, strokeWidth);
+    const float left = rect.x + 1.0f;
+    const float right = rect.x + std::max(1.0f, rect.width - 1.0f);
+    const float baseline = rect.y + std::max(stroke, rect.height - stroke * 1.5f);
+    const auto line = [&](float startX, float y, float endX) {
+        canvas.drawLine(Point{startX, y}, Point{endX, y}, color, stroke);
+    };
+
+    switch (style) {
+    case TerminalUnderlineStyle::None:
+        return;
+    case TerminalUnderlineStyle::Single:
+        line(left, baseline, right);
+        return;
+    case TerminalUnderlineStyle::Double:
+        line(left, baseline - stroke * 2.0f, right);
+        line(left, baseline, right);
+        return;
+    case TerminalUnderlineStyle::Curly: {
+        const float amplitude = std::max(1.0f, stroke);
+        const float step = std::max(2.0f, rect.height * 0.16f);
+        float x = left;
+        float y = baseline - amplitude;
+        bool descending = true;
+        while (x < right) {
+            const float nextX = std::min(right, x + step);
+            const float nextY = descending ? baseline + amplitude : baseline - amplitude;
+            canvas.drawLine(Point{x, y}, Point{nextX, nextY}, color, stroke);
+            x = nextX;
+            y = nextY;
+            descending = !descending;
+        }
+        return;
+    }
+    case TerminalUnderlineStyle::Dotted: {
+        const float mark = stroke;
+        const float advance = stroke * 3.0f;
+        for (float x = left; x < right; x += advance) {
+            line(x, baseline, std::min(right, x + mark));
+        }
+        return;
+    }
+    case TerminalUnderlineStyle::Dashed: {
+        const float mark = std::max(stroke * 3.0f, rect.height * 0.28f);
+        const float advance = mark + stroke * 2.0f;
+        for (float x = left; x < right; x += advance) {
+            line(x, baseline, std::min(right, x + mark));
+        }
+        return;
+    }
+    }
+}
+
 } // namespace
 
 TerminalView::TerminalView() {
@@ -74,6 +144,7 @@ TerminalView::TerminalView() {
 }
 
 void TerminalView::setGrid(std::uint16_t rows, std::uint16_t columns, std::vector<TerminalCell> cells) {
+    const bool wasBlinking = hasBlinkingText();
     std::size_t requested = static_cast<std::size_t>(rows) * static_cast<std::size_t>(columns);
     if (requested > kMaximumCells) {
         rows = 0;
@@ -95,6 +166,8 @@ void TerminalView::setGrid(std::uint16_t rows, std::uint16_t columns, std::vecto
         }
         hoveredHyperlink_ = 0;
         pressedHyperlink_ = 0;
+        rebuildBlinkCellCounts();
+        refreshTextBlinkAnimation(wasBlinking);
         invalidate();
         return;
     }
@@ -124,6 +197,7 @@ void TerminalView::setGrid(std::uint16_t rows, std::uint16_t columns, std::vecto
         if (dirtyStart == std::numeric_limits<std::size_t>::max()) {
             dirtyStart = index;
         }
+        updateBlinkCellCounts(cells_[index], cells[index]);
         cells_[index] = std::move(cells[index]);
     }
     if (dirtyStart != std::numeric_limits<std::size_t>::max() && !collapsed) {
@@ -147,6 +221,7 @@ void TerminalView::setGrid(std::uint16_t rows, std::uint16_t columns, std::vecto
         })) {
         pressedHyperlink_ = 0;
     }
+    refreshTextBlinkAnimation(wasBlinking);
     if (collapsed) {
         invalidateCellRange(firstChanged, lastChanged - firstChanged + 1);
         return;
@@ -161,6 +236,7 @@ void TerminalView::updateCells(std::size_t firstCell, std::vector<TerminalCell> 
         return;
     }
 
+    const bool wasBlinking = hasBlinkingText();
     const std::size_t count = std::min(cells.size(), cells_.size() - firstCell);
     std::size_t dirtyStart = std::numeric_limits<std::size_t>::max();
     for (std::size_t offset = 0; offset < count; ++offset) {
@@ -175,6 +251,7 @@ void TerminalView::updateCells(std::size_t firstCell, std::vector<TerminalCell> 
         if (dirtyStart == std::numeric_limits<std::size_t>::max()) {
             dirtyStart = target;
         }
+        updateBlinkCellCounts(cells_[target], cells[offset]);
         cells_[target] = std::move(cells[offset]);
     }
     if (dirtyStart != std::numeric_limits<std::size_t>::max()) {
@@ -192,6 +269,7 @@ void TerminalView::updateCells(std::size_t firstCell, std::vector<TerminalCell> 
         })) {
         pressedHyperlink_ = 0;
     }
+    refreshTextBlinkAnimation(wasBlinking);
 }
 
 Size TerminalView::gridSize() const {
@@ -513,7 +591,7 @@ void TerminalView::setOnFocusChanged(FocusChangedCallback callback) {
 
 void TerminalView::setAnimationScheduler(std::function<void()> scheduler) {
     Widget::setAnimationScheduler(std::move(scheduler));
-    if (focused() && cursorBlinking_ && cursor_.visible) {
+    if ((focused() && cursorBlinking_ && cursor_.visible) || hasBlinkingText()) {
         requestAnimationFrame();
     }
 }
@@ -570,13 +648,17 @@ void TerminalView::paint(Canvas& canvas) {
     struct PaintStyle {
         Color foreground;
         Color background;
+        Color underlineColor;
         int weight = 400;
-        bool underline = false;
+        TerminalUnderlineStyle underlineStyle = TerminalUnderlineStyle::None;
+        bool strikethrough = false;
+        bool overline = false;
+        bool textVisible = true;
         bool cursor = false;
     };
 
     const auto styleFor = [&](const TerminalCell& cell, std::uint16_t row, std::uint16_t column) {
-        PaintStyle style{cell.foreground, cell.background};
+        PaintStyle style{cell.foreground, cell.background, cell.foreground};
         if (hasStyle(cell, TerminalCellInverse)) {
             std::swap(style.foreground, style.background);
         }
@@ -592,16 +674,31 @@ void TerminalView::paint(Canvas& canvas) {
             style.foreground = background_;
         }
         style.weight = hasStyle(cell, TerminalCellBold) ? 700 : 400;
-        style.underline = hasStyle(cell, TerminalCellUnderline) ||
-                          (cell.hyperlinkId != 0 && cell.hyperlinkId == hoveredHyperlink_);
+        style.underlineStyle = cell.underlineStyle;
+        if (style.underlineStyle == TerminalUnderlineStyle::None &&
+            hasStyle(cell, TerminalCellUnderline)) {
+            style.underlineStyle = TerminalUnderlineStyle::Single;
+        }
+        if (style.underlineStyle == TerminalUnderlineStyle::None && cell.hyperlinkId != 0 &&
+            cell.hyperlinkId == hoveredHyperlink_) {
+            style.underlineStyle = TerminalUnderlineStyle::Single;
+        }
+        style.underlineColor = cell.underlineColorSet ? cell.underlineColor : style.foreground;
+        style.strikethrough = hasStyle(cell, TerminalCellStrikethrough);
+        style.overline = hasStyle(cell, TerminalCellOverline);
+        style.textVisible = textPaintVisible(cell) && !hasStyle(cell, TerminalCellConceal);
         return style;
     };
 
     const auto samePaintStyle = [&](const PaintStyle& left, const PaintStyle& right) {
         return sameColor(left.foreground, right.foreground) &&
                sameColor(left.background, right.background) &&
+               sameColor(left.underlineColor, right.underlineColor) &&
                left.weight == right.weight &&
-               left.underline == right.underline &&
+               left.underlineStyle == right.underlineStyle &&
+               left.strikethrough == right.strikethrough &&
+               left.overline == right.overline &&
+               left.textVisible == right.textVisible &&
                left.cursor == right.cursor;
     };
 
@@ -620,7 +717,7 @@ void TerminalView::paint(Canvas& canvas) {
             (style.cursor && cursorStyle_ == TerminalCursorStyle::Block)) {
             canvas.fillRect(runRect, style.background);
         }
-        if (!text.empty()) {
+        if (style.textVisible && !text.empty()) {
             canvas.drawTextStyledWithFont(
                 text,
                 runRect,
@@ -630,13 +727,30 @@ void TerminalView::paint(Canvas& canvas) {
                 TextFontFamily::Monospace,
                 style.weight);
         }
-        if (style.underline) {
-            const float underlineY = runRect.y + std::max(1.0f, runRect.height - 2.0f);
+        const float decorationStroke = std::max(1.0f, fontSize_ / 14.0f);
+        if (style.textVisible && style.underlineStyle != TerminalUnderlineStyle::None) {
+            drawTerminalUnderline(
+                canvas,
+                runRect,
+                style.underlineColor,
+                style.underlineStyle,
+                decorationStroke);
+        }
+        if (style.textVisible && style.strikethrough) {
+            const float strikeY = runRect.y + runRect.height * 0.52f;
             canvas.drawLine(
-                Point{runRect.x + 1.0f, underlineY},
-                Point{runRect.x + std::max(1.0f, runRect.width - 1.0f), underlineY},
+                Point{runRect.x + 1.0f, strikeY},
+                Point{runRect.x + std::max(1.0f, runRect.width - 1.0f), strikeY},
                 style.foreground,
-                1.0f);
+                decorationStroke);
+        }
+        if (style.textVisible && style.overline) {
+            const float overlineY = runRect.y + decorationStroke;
+            canvas.drawLine(
+                Point{runRect.x + 1.0f, overlineY},
+                Point{runRect.x + std::max(1.0f, runRect.width - 1.0f), overlineY},
+                style.foreground,
+                decorationStroke);
         }
         if (style.cursor && cursorStyle_ == TerminalCursorStyle::Bar) {
             const float cursorX = runRect.x + 1.0f;
@@ -993,7 +1107,8 @@ CursorKind TerminalView::cursor(Point point) const {
 }
 
 bool TerminalView::tickAnimations(double nowMs) {
-    if (focused() && cursorBlinking_ && cursor_.visible) {
+    const bool cursorActive = focused() && cursorBlinking_ && cursor_.visible;
+    if (cursorActive) {
         const double elapsed = std::fmod(
             std::max(0.0, nowMs - cursorBlinkStartMs_),
             kCursorBlinkPeriodMs);
@@ -1002,13 +1117,33 @@ bool TerminalView::tickAnimations(double nowMs) {
             cursorBlinkVisible_ = visible;
             invalidateCell(TextPosition{cursor_.row, cursor_.column});
         }
-        return true;
-    }
-    if (!cursorBlinkVisible_) {
+    } else if (!cursorBlinkVisible_) {
         cursorBlinkVisible_ = true;
         invalidateCell(TextPosition{cursor_.row, cursor_.column});
     }
-    return false;
+
+    const bool textBlinkActive = hasBlinkingText();
+    if (textBlinkActive) {
+        if (textBlinkStartMs_ <= 0.0) {
+            textBlinkStartMs_ = nowMs;
+        }
+        const double elapsed = std::max(0.0, nowMs - textBlinkStartMs_);
+        if (slowBlinkCellCount_ != 0) {
+            const bool visible = std::fmod(elapsed, kSlowTextBlinkPeriodMs) < kSlowTextBlinkOnMs;
+            if (visible != slowBlinkVisible_) {
+                slowBlinkVisible_ = visible;
+                invalidateBlinkingCells(TerminalCellBlinkSlow);
+            }
+        }
+        if (rapidBlinkCellCount_ != 0) {
+            const bool visible = std::fmod(elapsed, kRapidTextBlinkPeriodMs) < kRapidTextBlinkOnMs;
+            if (visible != rapidBlinkVisible_) {
+                rapidBlinkVisible_ = visible;
+                invalidateBlinkingCells(TerminalCellBlinkRapid);
+            }
+        }
+    }
+    return cursorActive || textBlinkActive;
 }
 
 AccessibilityInfo TerminalView::accessibilityInfo() const {
@@ -1273,6 +1408,87 @@ void TerminalView::restartCursorBlink() {
     if (focused() && cursorBlinking_ && cursor_.visible) {
         requestAnimationFrame();
     }
+}
+
+void TerminalView::rebuildBlinkCellCounts() {
+    slowBlinkCellCount_ = 0;
+    rapidBlinkCellCount_ = 0;
+    for (const TerminalCell& cell : cells_) {
+        slowBlinkCellCount_ += hasStyle(cell, TerminalCellBlinkSlow) ? 1u : 0u;
+        rapidBlinkCellCount_ += hasStyle(cell, TerminalCellBlinkRapid) ? 1u : 0u;
+    }
+}
+
+void TerminalView::updateBlinkCellCounts(
+    const TerminalCell& previous,
+    const TerminalCell& current) {
+    const auto updateCount = [&](TerminalCellStyle style, std::size_t& count) {
+        const bool hadStyle = hasStyle(previous, style);
+        const bool hasCurrentStyle = hasStyle(current, style);
+        if (hadStyle == hasCurrentStyle) {
+            return;
+        }
+        if (hasCurrentStyle) {
+            ++count;
+        } else if (count != 0) {
+            --count;
+        }
+    };
+    updateCount(TerminalCellBlinkSlow, slowBlinkCellCount_);
+    updateCount(TerminalCellBlinkRapid, rapidBlinkCellCount_);
+}
+
+void TerminalView::refreshTextBlinkAnimation(bool wasActive) {
+    const bool active = hasBlinkingText();
+    if (!active) {
+        textBlinkStartMs_ = 0.0;
+        slowBlinkVisible_ = true;
+        rapidBlinkVisible_ = true;
+        return;
+    }
+    if (!wasActive) {
+        textBlinkStartMs_ = 0.0;
+        slowBlinkVisible_ = true;
+        rapidBlinkVisible_ = true;
+        requestAnimationFrame();
+    }
+    if (slowBlinkCellCount_ == 0) {
+        slowBlinkVisible_ = true;
+    }
+    if (rapidBlinkCellCount_ == 0) {
+        rapidBlinkVisible_ = true;
+    }
+}
+
+void TerminalView::invalidateBlinkingCells(TerminalCellStyle blinkStyle) {
+    if (cells_.empty() || columns_ == 0) {
+        return;
+    }
+    for (std::size_t row = 0; row < rows_; ++row) {
+        const std::size_t rowStart = row * columns_;
+        std::size_t column = 0;
+        while (column < columns_) {
+            while (column < columns_ && !hasStyle(cells_[rowStart + column], blinkStyle)) {
+                ++column;
+            }
+            const std::size_t first = column;
+            while (column < columns_ && hasStyle(cells_[rowStart + column], blinkStyle)) {
+                ++column;
+            }
+            if (first < column) {
+                invalidateCellRange(rowStart + first, column - first);
+            }
+        }
+    }
+}
+
+bool TerminalView::textPaintVisible(const TerminalCell& cell) const {
+    return (!hasStyle(cell, TerminalCellBlinkSlow) || slowBlinkVisible_) &&
+           (!hasStyle(cell, TerminalCellBlinkRapid) || rapidBlinkVisible_);
+}
+
+bool TerminalView::hasBlinkingText() const {
+    return slowBlinkCellCount_ != 0 || rapidBlinkCellCount_ != 0;
 }
 
 bool TerminalView::cursorPaintVisible() const {
