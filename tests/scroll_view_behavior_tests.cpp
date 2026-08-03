@@ -63,6 +63,24 @@ void expectNear(const char* name, float actual, float expected) {
     }
 }
 
+void expectBetween(const char* name, float actual, float minimum, float maximum) {
+    if (actual < minimum || actual > maximum) {
+        std::cerr << name << ": expected [" << minimum << ", " << maximum
+                  << "], got " << actual << '\n';
+        ++failures;
+    }
+}
+
+oneui::MouseWheelEvent wheelEvent(float deltaY, double timestampMs) {
+    return oneui::MouseWheelEvent{
+        oneui::Point{20.0f, 20.0f},
+        deltaY,
+        false,
+        false,
+        false,
+        timestampMs};
+}
+
 void expectRect(const char* name, oneui::Rect actual, oneui::Rect expected) {
     expectNear((std::string(name) + " x").c_str(), actual.x, expected.x);
     expectNear((std::string(name) + " y").c_str(), actual.y, expected.y);
@@ -108,7 +126,7 @@ void testWheelKeepsExistingVerticalBehavior() {
 
     const bool handled = scroll.onMouseWheel(oneui::MouseWheelEvent{oneui::Point{20.0f, 20.0f}, -1.0f});
     expectEqual("ScrollView wheel down handled", handled ? 1 : 0, 1);
-    expectEqual("ScrollView wheel begins a transition", scroll.scrollOffset() > 0.0f && scroll.scrollOffset() < 50.0f ? 1 : 0, 1);
+    expectNear("ScrollView wheel does not fabricate elapsed time", scroll.scrollOffset(), 0.0f);
     scroll.tickAnimations(1.0e15);
     expectNear("ScrollView wheel down offset", scroll.scrollOffset(), 50.0f);
     expectNear("ScrollView wheel keeps horizontal offset", scroll.horizontalScrollOffset(), 0.0f);
@@ -130,18 +148,107 @@ void testWheelRetargetsContinuousMotionAndAcceptsPrecisionDelta() {
     scroll.setContent(content);
     scroll.setWheelStep(40.0f);
 
-    scroll.onMouseWheel(oneui::MouseWheelEvent{oneui::Point{20.0f, 20.0f}, -1.0f});
-    const float firstOffset = scroll.scrollOffset();
-    expectEqual("ScrollView first frame consumes responsive distance", firstOffset >= 12.0f ? 1 : 0, 1);
-    scroll.onMouseWheel(oneui::MouseWheelEvent{oneui::Point{20.0f, 20.0f}, -1.0f});
-    expectEqual("ScrollView retarget keeps moving immediately", scroll.scrollOffset() > firstOffset ? 1 : 0, 1);
+    scroll.onMouseWheel(wheelEvent(-1.0f, 1000.0));
+    expectNear("ScrollView wheel starts at the sampled position", scroll.scrollOffset(), 0.0f);
+    scroll.tickAnimations(1008.0);
+    const float firstFrameOffset = scroll.scrollOffset();
+    expectBetween("ScrollView first frame advances without jumping to target",
+                  firstFrameOffset, 0.01f, 39.99f);
+
+    scroll.onMouseWheel(wheelEvent(-1.0f, 1100.0));
+    const float retargetOffset = scroll.scrollOffset();
+    expectEqual("ScrollView retarget samples a later position on the running curve",
+                retargetOffset > firstFrameOffset && retargetOffset < 40.0f ? 1 : 0,
+                1);
+    scroll.tickAnimations(1116.0);
+    expectEqual("ScrollView retarget continues forward", scroll.scrollOffset() > retargetOffset ? 1 : 0, 1);
     scroll.tickAnimations(1.0e15);
     expectNear("ScrollView accumulated wheel target", scroll.scrollOffset(), 80.0f);
 
-    scroll.onMouseWheel(oneui::MouseWheelEvent{oneui::Point{20.0f, 20.0f}, 0.25f});
-    expectEqual("ScrollView precision delta responds immediately", scroll.scrollOffset() < 80.0f ? 1 : 0, 1);
+    scroll.onMouseWheel(wheelEvent(0.25f, 2000.0));
+    expectNear("ScrollView precision delta keeps the current sample", scroll.scrollOffset(), 80.0f);
     scroll.tickAnimations(1.0e15);
     expectNear("ScrollView precision delta target", scroll.scrollOffset(), 70.0f);
+}
+
+void testBatchedWheelDeltaIsDistributedAcrossFrames() {
+    auto content = std::make_shared<LayoutProbe>(oneui::Size{0.0f, 800.0f});
+    oneui::ScrollView scroll;
+    scroll.setFrame(oneui::Rect{0.0f, 0.0f, 120.0f, 100.0f});
+    scroll.setContent(content);
+    scroll.setWheelStep(40.0f);
+
+    scroll.onMouseWheel(wheelEvent(-6.0f, 1000.0));
+    scroll.tickAnimations(1008.0);
+    expectBetween("ScrollView batched wheel avoids a large first-frame jump",
+                  scroll.scrollOffset(), 0.01f, 60.0f);
+    scroll.tickAnimations(1.0e15);
+    expectNear("ScrollView batched wheel reaches its full target", scroll.scrollOffset(), 240.0f);
+}
+
+void testWheelDirectionChangeDropsOpposingQueuedMotion() {
+    auto content = std::make_shared<LayoutProbe>(oneui::Size{0.0f, 800.0f});
+    oneui::ScrollView scroll;
+    scroll.setFrame(oneui::Rect{0.0f, 0.0f, 120.0f, 100.0f});
+    scroll.setContent(content);
+    scroll.setWheelStep(40.0f);
+
+    scroll.onMouseWheel(wheelEvent(-6.0f, 1000.0));
+    scroll.onMouseWheel(wheelEvent(1.0f, 1020.0));
+    const float reversalSample = scroll.scrollOffset();
+    scroll.tickAnimations(1.0e15);
+    expectNear("ScrollView reversal discards queued distance and applies one reverse step",
+               scroll.scrollOffset(), std::max(0.0f, reversalSample - 40.0f));
+}
+
+void testAcceleratedWheelPacketsStayInOneContinuousMotion() {
+    auto content = std::make_shared<LayoutProbe>(oneui::Size{0.0f, 900.0f});
+    oneui::ScrollView scroll;
+    scroll.setFrame(oneui::Rect{0.0f, 0.0f, 120.0f, 100.0f});
+    scroll.setContent(content);
+    scroll.setWheelStep(54.0f);
+
+    scroll.onMouseWheel(wheelEvent(-1.0f, 1000.0));
+    scroll.tickAnimations(1250.0);
+    const float leadPacketOffset = scroll.scrollOffset();
+    expectBetween("ScrollView lead packet stays within its target",
+                  leadPacketOffset, 0.01f, 54.0f);
+
+    scroll.onMouseWheel(wheelEvent(-6.0f, 1258.0));
+    const float retargetOffset = scroll.scrollOffset();
+    expectEqual("ScrollView accelerated packet catches up without restarting",
+                retargetOffset > leadPacketOffset ? 1 : 0, 1);
+    scroll.tickAnimations(1274.0);
+    expectEqual("ScrollView accelerated packet continues on the next frame",
+                scroll.scrollOffset() > retargetOffset ? 1 : 0, 1);
+
+    scroll.tickAnimations(1.0e15);
+    expectNear("ScrollView accelerated packets preserve their full distance",
+               scroll.scrollOffset(), 378.0f);
+}
+
+void testSmoothScrollMotionPreservesVelocityWhenTargetExtends() {
+    oneui::SmoothScrollMotion motion;
+    const oneui::ScrollMotionSpec spec{150.0, 110.0, 0.55, 0.90};
+
+    expectEqual("SmoothScrollMotion accepts the lead packet",
+                motion.addDelta(54.0f, 0.0f, 800.0f, 1000.0, spec) ? 1 : 0,
+                1);
+    motion.tick(1258.0);
+    const float velocityBeforeRetarget = motion.velocity();
+    expectEqual("SmoothScrollMotion remains active across the device packet gap",
+                motion.running() ? 1 : 0,
+                1);
+
+    expectEqual("SmoothScrollMotion accepts the accelerated packet",
+                motion.addDelta(324.0f, 0.0f, 800.0f, 1258.0, spec) ? 1 : 0,
+                1);
+    expectNear("SmoothScrollMotion retarget preserves velocity",
+               motion.velocity(), velocityBeforeRetarget);
+    motion.tick(1274.0);
+    expectEqual("SmoothScrollMotion accelerates continuously toward the new target",
+                motion.velocity() > velocityBeforeRetarget ? 1 : 0,
+                1);
 }
 
 void testKeyboardScrollsVerticalAndHorizontalOffsets() {
@@ -252,6 +359,10 @@ int main() {
     testOffsetsClampToContentBounds();
     testWheelKeepsExistingVerticalBehavior();
     testWheelRetargetsContinuousMotionAndAcceptsPrecisionDelta();
+    testBatchedWheelDeltaIsDistributedAcrossFrames();
+    testWheelDirectionChangeDropsOpposingQueuedMotion();
+    testAcceleratedWheelPacketsStayInOneContinuousMotion();
+    testSmoothScrollMotionPreservesVelocityWhenTargetExtends();
     testKeyboardScrollsVerticalAndHorizontalOffsets();
     testHorizontalOffsetAppliesToContentLayout();
     testHorizontalThumbPaintsWhenContentOverflows();

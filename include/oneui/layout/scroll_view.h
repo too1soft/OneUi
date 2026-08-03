@@ -1,5 +1,6 @@
 #pragma once
 
+#include "oneui/animation.h"
 #include "oneui/export.h"
 #include "oneui/view.h"
 
@@ -44,19 +45,17 @@ private:
     bool hasHorizontalOverflow() const;
     bool hasVerticalOverflow() const;
     Rect viewportRect() const;
-    void resetScrollAnimation(float offset);
-    bool advanceScrollAnimation(double nowMs);
-    void advanceScrollAnimationBy(double elapsedSeconds);
+    void resetScrollMotion(float offset);
+    bool advanceScrollMotion(double nowMs);
 
     std::shared_ptr<Widget> content_;
     float contentWidth_ = 0.0f;
     float contentHeight_ = 0.0f;
     float horizontalScrollOffset_ = 0.0f;
     float scrollOffset_ = 0.0f;
-    float scrollTargetOffset_ = 0.0f;
-    float scrollVelocity_ = 0.0f;
-    double scrollAnimationLastMs_ = 0.0;
-    bool scrollAnimationRunning_ = false;
+    SmoothScrollMotion scrollMotion_;
+    double scrollTraceLastWheelMs_ = 0.0;
+    double scrollTraceLastTickMs_ = 0.0;
     float wheelStep_ = 42.0f;
     bool chromeVisible_ = true;
     Color scrollbarColor_{148, 163, 184, 180};

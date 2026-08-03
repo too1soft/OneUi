@@ -2,6 +2,7 @@
 
 #include "oneui/color.h"
 #include "oneui/view.h"
+#include "internal/scroll_trace.h"
 
 #include <windows.h>
 #include <windowsx.h>
@@ -73,16 +74,19 @@ SkRect toSkRect(Rect rect) {
 constexpr UINT kOneUiRunPostedCallbacks = WM_APP + 1;
 constexpr UINT kOneUiFinishWindowStatePaint = WM_APP + 2;
 constexpr UINT kOneUiDeferredFullPaint = WM_APP + 3;
-constexpr UINT kOneUiAnimationFrameReady = WM_APP + 4;
 constexpr UINT kOneUiDpiChanged = 0x02E0;
 constexpr UINT_PTR kOneUiAnimationTimer = 0x4f10;
 constexpr UINT_PTR kOneUiInteractivePaintTimer = 0x4f11;
-constexpr UINT kOneUiBackgroundAnimationIntervalMs = USER_TIMER_MINIMUM;
+constexpr UINT kOneUiAnimationFrameIntervalMs = USER_TIMER_MINIMUM;
 constexpr UINT kOneUiInteractivePaintIntervalMs = 8;
 constexpr int kPaintSurfaceAlignment = 128;
 constexpr int kPaintSurfaceGrowthPadding = 256;
 constexpr float kDefaultDpi = 96.0f;
 constexpr int kProcessPerMonitorDpiAware = 2;
+
+#ifndef CREATE_WAITABLE_TIMER_HIGH_RESOLUTION
+#define CREATE_WAITABLE_TIMER_HIGH_RESOLUTION 0x00000002
+#endif
 
 using WglSwapIntervalExtProc = BOOL(WINAPI*)(int);
 
@@ -927,13 +931,27 @@ public:
         : options_(std::move(options))
         , dpiScale_(dpiScaleForWindowHandle(nullptr))
         , renderTraceEnabled_(renderTraceEnabled())
-        , renderTraceFilePath_(renderTraceFilePath()) {}
+        , renderTraceFilePath_(renderTraceFilePath()) {
+        animationFrameTimer_ = CreateWaitableTimerExW(
+            nullptr,
+            nullptr,
+            CREATE_WAITABLE_TIMER_HIGH_RESOLUTION,
+            TIMER_ALL_ACCESS);
+        if (!animationFrameTimer_) {
+            animationFrameTimer_ = CreateWaitableTimerW(nullptr, FALSE, nullptr);
+        }
+    }
 
     ~Win32Window() override {
         acceptingPostedCallbacks_.store(false, std::memory_order_release);
         discardPostedCallbacks();
         if (hwnd_) {
             DestroyWindow(hwnd_);
+        }
+        if (animationFrameTimer_) {
+            CancelWaitableTimer(animationFrameTimer_);
+            CloseHandle(animationFrameTimer_);
+            animationFrameTimer_ = nullptr;
         }
     }
 
@@ -1006,11 +1024,32 @@ public:
     int run() override {
         ensureCreated();
         MSG message{};
-        while (GetMessageW(&message, nullptr, 0, 0) > 0) {
-            TranslateMessage(&message);
-            DispatchMessageW(&message);
+        while (true) {
+            while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE)) {
+                if (message.message == WM_QUIT) {
+                    return static_cast<int>(message.wParam);
+                }
+                TranslateMessage(&message);
+                DispatchMessageW(&message);
+            }
+
+            const DWORD handleCount = animationFrameTimer_ ? 1u : 0u;
+            HANDLE handles[1]{animationFrameTimer_};
+            const DWORD waitResult = MsgWaitForMultipleObjectsEx(
+                handleCount,
+                handleCount > 0 ? handles : nullptr,
+                INFINITE,
+                QS_ALLINPUT,
+                MWMO_INPUTAVAILABLE);
+            if (handleCount > 0 && waitResult == WAIT_OBJECT_0) {
+                runAnimationFrameCallbacks();
+                continue;
+            }
+            if (waitResult == WAIT_OBJECT_0 + handleCount) {
+                continue;
+            }
+            return -1;
         }
-        return static_cast<int>(message.wParam);
     }
 
     void close() override {
@@ -1109,13 +1148,10 @@ public:
         }
 
         animationFramePending_ = true;
-        if (IsWindowVisible(hwnd_) && !IsIconic(hwnd_)) {
-            if (PostMessageW(hwnd_, kOneUiAnimationFrameReady, 0, 0)) {
-                return;
-            }
+        if (armAnimationFrameTimer()) {
+            return;
         }
-
-        if (SetTimer(hwnd_, kOneUiAnimationTimer, kOneUiBackgroundAnimationIntervalMs, nullptr)) {
+        if (SetTimer(hwnd_, kOneUiAnimationTimer, kOneUiAnimationFrameIntervalMs, nullptr)) {
             animationTimerActive_ = true;
         } else {
             animationFramePending_ = false;
@@ -1568,9 +1604,6 @@ private:
         case kOneUiDeferredFullPaint:
             flushDeferredFullPaint();
             return 0;
-        case kOneUiAnimationFrameReady:
-            runAnimationFrameCallbacks();
-            return 0;
         case WM_TIMER:
             if (wParam == kOneUiAnimationTimer) {
                 runAnimationFrameCallbacks();
@@ -1651,6 +1684,10 @@ private:
             updateShadowWindow();
             return r;
         }
+        case WM_DISPLAYCHANGE:
+            animationFrameMonitor_ = nullptr;
+            animationFrameIntervalMs_ = 1000.0 / 60.0;
+            return 0;
         case WM_SHOWWINDOW:
             updateShadowWindow(); // 显隐（含托盘还原/隐藏）时同步投影窗显隐
             return DefWindowProcW(hwnd_, message, wParam, lParam);
@@ -1736,6 +1773,9 @@ private:
         {
             acceptingPostedCallbacks_.store(false, std::memory_order_release);
             discardPostedCallbacks();
+            if (animationFrameTimer_) {
+                CancelWaitableTimer(animationFrameTimer_);
+            }
             shutdownGPU();
             destroyShadowWindow(); // 主窗销毁时一并销毁独立的伴随投影窗
             HWND destroyedHwnd = hwnd_;
@@ -2070,6 +2110,14 @@ private:
     }
 
     void runAnimationFrameCallbacks() {
+        const bool traceScroll = internal::scrollTraceEnabled();
+        const double frameStartMs = traceScroll ? internal::scrollTraceNowMs() : 0.0;
+        const double frameIntervalMs = traceScroll && scrollTraceLastAnimationFrameMs_ > 0.0
+            ? frameStartMs - scrollTraceLastAnimationFrameMs_
+            : 0.0;
+        if (traceScroll) {
+            scrollTraceLastAnimationFrameMs_ = frameStartMs;
+        }
         if (hwnd_ && animationTimerActive_) {
             KillTimer(hwnd_, kOneUiAnimationTimer);
             animationTimerActive_ = false;
@@ -2081,20 +2129,92 @@ private:
             std::lock_guard<std::mutex> lock(animationCallbacksMutex_);
             callbacks.swap(animationCallbacks_);
         }
+        if (traceScroll) {
+            internal::writeScrollTrace(internal::ScrollTraceEvent{
+                "win32", "animation_frame_begin", reinterpret_cast<std::uintptr_t>(hwnd_),
+                0.0, 0.0, 0.0, 0.0, frameIntervalMs, 0.0, 0.0,
+                static_cast<double>(callbacks.size()), swapIntervalEnabled_ ? 1.0 : 0.0});
+        }
 
         const auto now = std::chrono::steady_clock::now().time_since_epoch();
         const double nowMs = std::chrono::duration<double, std::milli>(now).count();
+        lastAnimationFrameMs_ = nowMs;
         while (!callbacks.empty()) {
             auto callback = std::move(callbacks.front());
             callbacks.pop();
             callback(nowMs);
         }
         flushPendingPaint();
-        if (!swapIntervalEnabled_ && hwnd_ && IsWindowVisible(hwnd_)) {
-            // Raster rendering and older OpenGL drivers do not expose a swap
-            // interval. DWM still provides a compositor-paced fallback.
-            DwmFlush();
+        if (traceScroll) {
+            internal::writeScrollTrace(internal::ScrollTraceEvent{
+                "win32", "animation_frame_presented", reinterpret_cast<std::uintptr_t>(hwnd_),
+                0.0, 0.0, 0.0, 0.0, frameIntervalMs, 0.0,
+                internal::scrollTraceNowMs() - frameStartMs, 0.0,
+                swapIntervalEnabled_ ? 1.0 : 0.0});
         }
+    }
+
+    bool armAnimationFrameTimer() {
+        if (!animationFrameTimer_) {
+            return false;
+        }
+
+        const double nowMs = currentTimeMs();
+        const double refreshIntervalMs = animationFrameIntervalMs();
+        const double scheduledMs = lastAnimationFrameMs_ > 0.0
+            ? lastAnimationFrameMs_ + refreshIntervalMs
+            : nowMs;
+        const double delayMs = std::max(0.5, scheduledMs - nowMs);
+        LARGE_INTEGER dueTime{};
+        dueTime.QuadPart = -std::max<LONGLONG>(
+            1,
+            static_cast<LONGLONG>(std::llround(delayMs * 10000.0)));
+        return SetWaitableTimer(
+            animationFrameTimer_,
+            &dueTime,
+            0,
+            nullptr,
+            nullptr,
+            FALSE) == TRUE;
+    }
+
+    double animationFrameIntervalMs() {
+        const HMONITOR monitor = hwnd_
+            ? MonitorFromWindow(hwnd_, MONITOR_DEFAULTTONEAREST)
+            : nullptr;
+        if (monitor && monitor != animationFrameMonitor_) {
+            animationFrameMonitor_ = monitor;
+            animationFrameIntervalMs_ = 1000.0 / 60.0;
+
+            MONITORINFOEXW monitorInfo{};
+            monitorInfo.cbSize = sizeof(monitorInfo);
+            DEVMODEW displayMode{};
+            displayMode.dmSize = sizeof(displayMode);
+            if (GetMonitorInfoW(monitor, &monitorInfo)
+                && EnumDisplaySettingsW(
+                    monitorInfo.szDevice,
+                    ENUM_CURRENT_SETTINGS,
+                    &displayMode)
+                && displayMode.dmDisplayFrequency > 1) {
+                animationFrameIntervalMs_ = 1000.0
+                    / static_cast<double>(displayMode.dmDisplayFrequency);
+                return animationFrameIntervalMs_;
+            }
+
+            DWM_TIMING_INFO timingInfo{};
+            timingInfo.cbSize = sizeof(timingInfo);
+            if (SUCCEEDED(DwmGetCompositionTimingInfo(hwnd_, &timingInfo))
+                && timingInfo.rateRefresh.uiNumerator > 0
+                && timingInfo.rateRefresh.uiDenominator > 0) {
+                const double intervalMs = 1000.0
+                    * static_cast<double>(timingInfo.rateRefresh.uiDenominator)
+                    / static_cast<double>(timingInfo.rateRefresh.uiNumerator);
+                if (intervalMs >= 2.0 && intervalMs <= 100.0) {
+                    animationFrameIntervalMs_ = intervalMs;
+                }
+            }
+        }
+        return animationFrameIntervalMs_;
     }
 
     void discardPostedCallbacks() {
@@ -2441,19 +2561,32 @@ private:
     }
 
     void recordPaint(int width, int height, bool fullPaint, bool allocatedSurface, double surfaceMs, double elapsedMs) {
+        const double nowMs = currentTimeMs();
+        double frameIntervalMs = 0.0;
+        if (internal::scrollTraceEnabled()) {
+            const double traceNowMs = internal::scrollTraceNowMs();
+            frameIntervalMs = scrollTraceLastPaintMs_ > 0.0
+                ? traceNowMs - scrollTraceLastPaintMs_
+                : 0.0;
+            scrollTraceLastPaintMs_ = traceNowMs;
+            internal::writeScrollTrace(internal::ScrollTraceEvent{
+                "win32", "paint_presented", reinterpret_cast<std::uintptr_t>(hwnd_),
+                0.0, 0.0, 0.0, 0.0, frameIntervalMs, 0.0, elapsedMs,
+                fullPaint ? 1.0 : 0.0,
+                static_cast<double>(width) * static_cast<double>(height)});
+        }
         if (!renderTraceEnabled_) {
             return;
         }
-        const double nowMs = currentTimeMs();
         if (traceLastPaintMs_ > 0.0) {
-            const double frameIntervalMs = nowMs - traceLastPaintMs_;
-            if (frameIntervalMs > 0.0 && frameIntervalMs < 250.0) {
-                traceFrameIntervalMs_ += frameIntervalMs;
+            const double renderFrameIntervalMs = nowMs - traceLastPaintMs_;
+            if (renderFrameIntervalMs > 0.0 && renderFrameIntervalMs < 250.0) {
+                traceFrameIntervalMs_ += renderFrameIntervalMs;
                 ++traceFrameIntervals_;
-                if (traceMinFrameIntervalMs_ == 0.0 || frameIntervalMs < traceMinFrameIntervalMs_) {
-                    traceMinFrameIntervalMs_ = frameIntervalMs;
+                if (traceMinFrameIntervalMs_ == 0.0 || renderFrameIntervalMs < traceMinFrameIntervalMs_) {
+                    traceMinFrameIntervalMs_ = renderFrameIntervalMs;
                 }
-                traceMaxFrameIntervalMs_ = std::max(traceMaxFrameIntervalMs_, frameIntervalMs);
+                traceMaxFrameIntervalMs_ = std::max(traceMaxFrameIntervalMs_, renderFrameIntervalMs);
             }
         }
         traceLastPaintMs_ = nowMs;
@@ -2610,7 +2743,15 @@ private:
         // User input and live resize feedback should be rendered in the same message turn.
         // Timer coalescing remains available for animation callbacks and non-interactive work,
         // but pointer hover/focus/pressed states need immediate feedback to feel attached.
+        const bool traceScroll = internal::scrollTraceEnabled();
+        const double startMs = traceScroll ? internal::scrollTraceNowMs() : 0.0;
         flushPendingPaint();
+        if (traceScroll) {
+            internal::writeScrollTrace(internal::ScrollTraceEvent{
+                "win32", "interactive_flush", reinterpret_cast<std::uintptr_t>(hwnd_),
+                0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                internal::scrollTraceNowMs() - startMs, 0.0, 0.0});
+        }
     }
 
     void scheduleInteractivePaint() {
@@ -2651,21 +2792,44 @@ private:
             return;
         }
 
+        const bool traceScroll = internal::scrollTraceEnabled();
+        const double inputStartMs = traceScroll ? internal::scrollTraceNowMs() : 0.0;
+        const double inputIntervalMs = traceScroll && scrollTraceLastWheelMessageMs_ > 0.0
+            ? inputStartMs - scrollTraceLastWheelMessageMs_
+            : 0.0;
+        if (traceScroll) {
+            scrollTraceLastWheelMessageMs_ = inputStartMs;
+        }
+
         POINT point{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
         ScreenToClient(hwnd_, &point);
-        const float delta = static_cast<float>(GET_WHEEL_DELTA_WPARAM(wParam)) / static_cast<float>(WHEEL_DELTA);
+        const short rawDelta = GET_WHEEL_DELTA_WPARAM(wParam);
+        const float delta = static_cast<float>(rawDelta) / static_cast<float>(WHEEL_DELTA);
+        if (traceScroll) {
+            internal::writeScrollTrace(internal::ScrollTraceEvent{
+                "win32", "wheel_received", reinterpret_cast<std::uintptr_t>(hwnd_),
+                delta, 0.0, 0.0, 0.0, inputIntervalMs, 0.0, 0.0,
+                static_cast<double>(rawDelta), static_cast<double>(WHEEL_DELTA)});
+        }
         MouseWheelEvent event{
             logicalPointFromClientPixels(point.x, point.y),
             delta,
             (GET_KEYSTATE_WPARAM(wParam) & MK_SHIFT) != 0,
             (GET_KEYSTATE_WPARAM(wParam) & MK_CONTROL) != 0,
             (GetKeyState(VK_MENU) & 0x8000) != 0,
+            currentTimeMs(),
         };
-        if (content_->onMouseWheel(event)) {
-            // Scroll controls invalidate their own viewport. Preserve that dirty rect
-            // instead of promoting every wheel notch to a synchronous full-window paint.
-            flushInteractivePaint();
+        const bool handled = content_->onMouseWheel(event);
+        if (traceScroll) {
+            internal::writeScrollTrace(internal::ScrollTraceEvent{
+                "win32", "wheel_dispatched", reinterpret_cast<std::uintptr_t>(hwnd_),
+                delta, 0.0, 0.0, 0.0, inputIntervalMs, 0.0,
+                internal::scrollTraceNowMs() - inputStartMs,
+                handled ? 1.0 : 0.0, 0.0});
         }
+        // Scroll animations are sampled on the display-synchronized frame.
+        // A synchronous paint here would present an unchanged frame, block input
+        // dispatch, and shift the first useful sample away from vsync.
     }
 
     void dispatchFocusChanged(bool focused) {
@@ -2944,6 +3108,7 @@ private:
     }
 
     HWND hwnd_ = nullptr;
+    HANDLE animationFrameTimer_ = nullptr;
     WindowOptions options_;
     float dpiScale_ = 1.0f;
     // 无边框窗口的拖拽命中区（逻辑像素）：标题栏高度内、且不在右侧预留区，视为可拖拽 caption。
@@ -2981,6 +3146,9 @@ private:
     bool mouseLeaveTracking_ = false;
     bool animationTimerActive_ = false;
     bool animationFramePending_ = false;
+    double lastAnimationFrameMs_ = 0.0;
+    HMONITOR animationFrameMonitor_ = nullptr;
+    double animationFrameIntervalMs_ = 1000.0 / 60.0;
     bool contentAnimationFramePending_ = false;
     bool interactivePaintTimerActive_ = false;
     bool applyingWindowState_ = false;
@@ -2989,6 +3157,9 @@ private:
     bool interactiveResizeActive_ = false;
     bool renderTraceEnabled_ = false;
     std::wstring renderTraceFilePath_;
+    double scrollTraceLastWheelMessageMs_ = 0.0;
+    double scrollTraceLastAnimationFrameMs_ = 0.0;
+    double scrollTraceLastPaintMs_ = 0.0;
     CursorKind lastCursorKind_ = CursorKind::Default;
     Point lastCursorPoint_{};
     bool hasLastCursorPoint_ = false;

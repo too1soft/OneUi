@@ -1,6 +1,7 @@
 #include "oneui/layout/scroll_view.h"
 
 #include "oneui/style.h"
+#include "internal/scroll_trace.h"
 
 #include <algorithm>
 #include <chrono>
@@ -15,15 +16,15 @@ double currentTimeMs() {
     return std::chrono::duration<double, std::milli>(now).count();
 }
 
-// A critically damped spring keeps velocity continuous while wheel and
-// precision-touchpad events extend or reverse the target. The previous
-// duration-based easing restarted on every event, which produced a visible
-// move/pause rhythm even when frames were presented at the monitor rate.
-constexpr double kWheelSpringAngularFrequency = 100.0;
-constexpr double kWheelInputPreviewSeconds = 0.008;
-constexpr double kWheelInputVelocityRatio = 0.65;
-constexpr float kWheelSettleDistance = 0.05f;
-constexpr float kWheelSettleVelocity = 1.0f;
+// A single analytic motion state consumes every wheel packet. Input adds
+// distance and momentum to the current state instead of restarting a second
+// transition, so accelerated mouse packets remain one continuous gesture.
+constexpr ScrollMotionSpec kWheelScrollMotion{
+    150.0,
+    110.0,
+    0.55,
+    0.90,
+};
 
 } // namespace
 
@@ -39,7 +40,7 @@ void ScrollView::setContent(std::shared_ptr<Widget> content) {
     }
     horizontalScrollOffset_ = clampHorizontalOffset(horizontalScrollOffset_);
     scrollOffset_ = clampOffset(scrollOffset_);
-    resetScrollAnimation(scrollOffset_);
+    resetScrollMotion(scrollOffset_);
     invalidate();
 }
 
@@ -52,7 +53,7 @@ void ScrollView::setContentWidth(float width) {
 void ScrollView::setContentHeight(float height) {
     contentHeight_ = std::max(0.0f, height);
     scrollOffset_ = clampOffset(scrollOffset_);
-    resetScrollAnimation(scrollOffset_);
+    resetScrollMotion(scrollOffset_);
     invalidate();
 }
 
@@ -86,7 +87,7 @@ void ScrollView::setHorizontalScrollOffset(float offset) {
 
 void ScrollView::setScrollOffset(float offset) {
     const float next = clampOffset(offset);
-    resetScrollAnimation(next);
+    resetScrollMotion(next);
     if (std::fabs(next - scrollOffset_) <= 0.001f) {
         return;
     }
@@ -192,44 +193,68 @@ bool ScrollView::onMouseWheel(const MouseWheelEvent& event) {
         return false;
     }
 
-    const double nowMs = currentTimeMs();
-    advanceScrollAnimation(nowMs);
-
-    const float previousTarget = scrollAnimationRunning_ ? scrollTargetOffset_ : scrollOffset_;
-    const float target = clampOffset(previousTarget - event.deltaY * wheelStep_);
-    if (std::fabs(target - previousTarget) <= 0.001f) {
-        return false;
+    const double nowMs = event.timestampMs > 0.0 ? event.timestampMs : currentTimeMs();
+    const double wheelIntervalMs = scrollTraceLastWheelMs_ > 0.0
+        ? nowMs - scrollTraceLastWheelMs_
+        : 0.0;
+    scrollTraceLastWheelMs_ = nowMs;
+    if (internal::scrollTraceEnabled()) {
+        internal::writeScrollTrace(internal::ScrollTraceEvent{
+            "scroll_view", "wheel_enter", reinterpret_cast<std::uintptr_t>(this),
+            event.deltaY, scrollOffset_, scrollMotion_.target(), scrollMotion_.velocity(),
+            wheelIntervalMs, maxScrollOffset(), 0.0, wheelStep_,
+            scrollMotion_.running() ? 1.0 : 0.0});
     }
 
-    const float targetDelta = target - previousTarget;
-    if (scrollVelocity_ * targetDelta < 0.0f) {
-        // Direction changes should feel immediate instead of first coasting in
-        // the direction of the previous gesture.
-        scrollVelocity_ *= 0.25f;
+    const double catchupStartMs = internal::scrollTraceNowMs();
+    const bool caughtUp = advanceScrollMotion(nowMs);
+    if (internal::scrollTraceEnabled()) {
+        internal::writeScrollTrace(internal::ScrollTraceEvent{
+            "scroll_view", "wheel_catchup", reinterpret_cast<std::uintptr_t>(this),
+            event.deltaY, scrollOffset_, scrollMotion_.target(), scrollMotion_.velocity(),
+            wheelIntervalMs, maxScrollOffset(), internal::scrollTraceNowMs() - catchupStartMs,
+            caughtUp ? 1.0 : 0.0, 0.0});
     }
-    const float inputVelocity = static_cast<float>(
-        targetDelta * kWheelSpringAngularFrequency * kWheelInputVelocityRatio);
-    if (scrollVelocity_ * targetDelta <= 0.0f
-        || std::fabs(scrollVelocity_) < std::fabs(inputVelocity)) {
-        // A wheel notch is both a position request and a velocity impulse.
-        // Seeding the spring velocity removes first-frame latency while later
-        // events can retain a faster existing velocity.
-        scrollVelocity_ = inputVelocity;
+
+    const float inputDistance = -event.deltaY * wheelStep_;
+    const bool accepted = scrollMotion_.addDelta(
+        inputDistance,
+        0.0f,
+        maxScrollOffset(),
+        nowMs,
+        kWheelScrollMotion);
+    if (accepted || scrollMotion_.running()) {
+        requestAnimationFrame();
     }
-    scrollTargetOffset_ = target;
-    scrollAnimationRunning_ = true;
-    scrollAnimationLastMs_ = nowMs;
-    advanceScrollAnimationBy(kWheelInputPreviewSeconds);
-    layoutChildren();
-    invalidate();
-    requestAnimationFrame();
-    return true;
+    if (internal::scrollTraceEnabled()) {
+        internal::writeScrollTrace(internal::ScrollTraceEvent{
+            "scroll_view", "wheel_applied", reinterpret_cast<std::uintptr_t>(this),
+            event.deltaY, scrollOffset_, scrollMotion_.target(), scrollMotion_.velocity(),
+            wheelIntervalMs, maxScrollOffset(), kWheelScrollMotion.retargetSettlingDurationMs,
+            inputDistance, accepted ? 1.0 : 0.0});
+    }
+    return accepted || caughtUp;
 }
 
 bool ScrollView::tickAnimations(double nowMs) {
     const bool childrenRunning = View::tickAnimations(nowMs);
-    const bool ticked = advanceScrollAnimation(nowMs);
-    if (scrollAnimationRunning_) {
+    const double frameIntervalMs = scrollTraceLastTickMs_ > 0.0
+        ? nowMs - scrollTraceLastTickMs_
+        : 0.0;
+    scrollTraceLastTickMs_ = nowMs;
+    const float previousOffset = scrollOffset_;
+    const double tickStartMs = internal::scrollTraceNowMs();
+    const bool ticked = advanceScrollMotion(nowMs);
+    if (internal::scrollTraceEnabled() && ticked) {
+        internal::writeScrollTrace(internal::ScrollTraceEvent{
+            "scroll_view", "animation_tick", reinterpret_cast<std::uintptr_t>(this),
+            0.0, scrollOffset_, scrollMotion_.target(), scrollMotion_.velocity(),
+            frameIntervalMs,
+            maxScrollOffset(), internal::scrollTraceNowMs() - tickStartMs,
+            scrollOffset_ - previousOffset,
+            content_ ? content_->frame().y : 0.0});
+    }
+    if (scrollMotion_.running()) {
         requestAnimationFrame();
     }
     return childrenRunning || ticked;
@@ -281,7 +306,7 @@ void ScrollView::layoutChildren() {
     const float clampedOffset = clampOffset(scrollOffset_);
     if (std::fabs(clampedOffset - scrollOffset_) > 0.001f) {
         scrollOffset_ = clampedOffset;
-        resetScrollAnimation(clampedOffset);
+        resetScrollMotion(clampedOffset);
     }
     horizontalScrollOffset_ = clampHorizontalOffset(horizontalScrollOffset_);
 
@@ -370,55 +395,23 @@ Rect ScrollView::viewportRect() const {
     return frame();
 }
 
-void ScrollView::resetScrollAnimation(float offset) {
-    scrollTargetOffset_ = offset;
-    scrollVelocity_ = 0.0f;
-    scrollAnimationLastMs_ = 0.0;
-    scrollAnimationRunning_ = false;
+void ScrollView::resetScrollMotion(float offset) {
+    scrollMotion_.reset(offset);
 }
 
-bool ScrollView::advanceScrollAnimation(double nowMs) {
-    if (!scrollAnimationRunning_) {
+bool ScrollView::advanceScrollMotion(double nowMs) {
+    if (!scrollMotion_.running()) {
         return false;
     }
 
-    if (scrollAnimationLastMs_ <= 0.0) {
-        scrollAnimationLastMs_ = nowMs;
-        return true;
-    }
-
-    const double elapsedSeconds = std::max(0.0, (nowMs - scrollAnimationLastMs_) / 1000.0);
-    scrollAnimationLastMs_ = nowMs;
-    if (elapsedSeconds <= 0.0) {
-        return true;
-    }
-
     const float previous = scrollOffset_;
-    advanceScrollAnimationBy(elapsedSeconds);
+    scrollMotion_.tick(nowMs);
+    scrollOffset_ = clampOffset(scrollMotion_.value());
     if (std::fabs(scrollOffset_ - previous) > 0.001f) {
         layoutChildren();
         invalidate();
     }
     return true;
-}
-
-void ScrollView::advanceScrollAnimationBy(double elapsedSeconds) {
-    const double displacement = static_cast<double>(scrollOffset_ - scrollTargetOffset_);
-    const double velocity = static_cast<double>(scrollVelocity_);
-    const double coefficient = velocity + kWheelSpringAngularFrequency * displacement;
-    const double decay = std::exp(-kWheelSpringAngularFrequency * elapsedSeconds);
-    const double nextDisplacement = (displacement + coefficient * elapsedSeconds) * decay;
-    const double nextVelocity = (velocity - kWheelSpringAngularFrequency * coefficient * elapsedSeconds) * decay;
-
-    scrollOffset_ = clampOffset(scrollTargetOffset_ + static_cast<float>(nextDisplacement));
-    scrollVelocity_ = static_cast<float>(nextVelocity);
-
-    if (std::fabs(scrollTargetOffset_ - scrollOffset_) <= kWheelSettleDistance
-        && std::fabs(scrollVelocity_) <= kWheelSettleVelocity) {
-        scrollOffset_ = scrollTargetOffset_;
-        scrollVelocity_ = 0.0f;
-        scrollAnimationRunning_ = false;
-    }
 }
 
 } // namespace oneui

@@ -23,6 +23,10 @@ bool sameColor(Color lhs, Color rhs) {
 }
 
 constexpr double kFirstVisualFrameMs = 8.0;
+constexpr double kCriticalDampingFivePercent = 4.743864518390577;
+constexpr double kMinimumScrollSettlingDurationMs = 1.0;
+constexpr double kScrollSettleDistance = 0.05;
+constexpr double kScrollSettleVelocity = 1.0;
 
 } // namespace
 
@@ -106,6 +110,137 @@ float FloatTransition::target() const {
 }
 
 bool FloatTransition::running() const {
+    return running_;
+}
+
+SmoothScrollMotion::SmoothScrollMotion(float value)
+    : value_(value), target_(value), minimum_(value), maximum_(value) {}
+
+void SmoothScrollMotion::reset(float value) {
+    value_ = value;
+    target_ = value;
+    velocity_ = 0.0f;
+    minimum_ = value;
+    maximum_ = value;
+    lastMs_ = 0.0;
+    angularFrequency_ = 0.0;
+    running_ = false;
+}
+
+bool SmoothScrollMotion::addDelta(
+    float delta,
+    float minimum,
+    float maximum,
+    double nowMs,
+    ScrollMotionSpec spec) {
+    if (maximum < minimum || std::fabs(delta) <= 0.0001f) {
+        return false;
+    }
+
+    const bool wasRunning = running_;
+    if (wasRunning) {
+        tick(nowMs);
+    }
+
+    minimum_ = minimum;
+    maximum_ = maximum;
+    value_ = std::clamp(value_, minimum_, maximum_);
+    target_ = std::clamp(target_, minimum_, maximum_);
+
+    const float queued = target_ - value_;
+    const bool reversesQueuedMotion = delta * queued < 0.0f;
+    const float previousTarget = reversesQueuedMotion ? value_ : target_;
+    const float nextTarget = std::clamp(previousTarget + delta, minimum_, maximum_);
+    const float acceptedDelta = nextTarget - previousTarget;
+    if (std::fabs(acceptedDelta) <= 0.0001f) {
+        return false;
+    }
+
+    spec_ = spec;
+    const double settlingDurationMs = wasRunning
+        ? spec_.retargetSettlingDurationMs
+        : spec_.initialSettlingDurationMs;
+    const double settlingSeconds = std::max(
+        settlingDurationMs,
+        kMinimumScrollSettlingDurationMs) / 1000.0;
+    angularFrequency_ = kCriticalDampingFivePercent / settlingSeconds;
+
+    const bool startsNewDirection = reversesQueuedMotion
+        || velocity_ * acceptedDelta < 0.0f;
+    if (startsNewDirection) {
+        velocity_ = 0.0f;
+    }
+    target_ = nextTarget;
+
+    // Seed a responsive initial speed only when a motion begins. Packets that
+    // extend an existing gesture update the target while preserving velocity;
+    // adding another impulse there would count the same input twice and create
+    // a visible second kick on accelerated mouse wheels.
+    if (!wasRunning || startsNewDirection) {
+        const double impulse = static_cast<double>(acceptedDelta)
+            * angularFrequency_ * std::max(0.0, spec_.inputVelocityRatio);
+        velocity_ = static_cast<float>(impulse);
+    }
+
+    const double remaining = static_cast<double>(target_ - value_);
+    const double maximumVelocity = std::fabs(remaining) * angularFrequency_
+        * std::max(0.0, spec_.maximumVelocityRatio);
+    if (maximumVelocity > 0.0 && std::fabs(velocity_) > maximumVelocity) {
+        velocity_ = static_cast<float>(std::copysign(maximumVelocity, velocity_));
+    }
+
+    lastMs_ = nowMs;
+    running_ = true;
+    return true;
+}
+
+bool SmoothScrollMotion::tick(double nowMs) {
+    if (!running_) {
+        return false;
+    }
+
+    const double elapsedSeconds = std::max(0.0, (nowMs - lastMs_) / 1000.0);
+    lastMs_ = nowMs;
+    if (elapsedSeconds <= 0.0) {
+        return true;
+    }
+
+    const double displacement = static_cast<double>(value_ - target_);
+    const double velocity = static_cast<double>(velocity_);
+    const double coefficient = velocity + angularFrequency_ * displacement;
+    const double decay = std::exp(-angularFrequency_ * elapsedSeconds);
+    const double nextDisplacement = (displacement + coefficient * elapsedSeconds) * decay;
+    const double nextVelocity =
+        (velocity - angularFrequency_ * coefficient * elapsedSeconds) * decay;
+
+    value_ = std::clamp(
+        target_ + static_cast<float>(nextDisplacement),
+        minimum_,
+        maximum_);
+    velocity_ = static_cast<float>(nextVelocity);
+
+    if (std::fabs(target_ - value_) <= kScrollSettleDistance
+        && std::fabs(velocity_) <= kScrollSettleVelocity) {
+        value_ = target_;
+        velocity_ = 0.0f;
+        running_ = false;
+    }
+    return true;
+}
+
+float SmoothScrollMotion::value() const {
+    return value_;
+}
+
+float SmoothScrollMotion::target() const {
+    return target_;
+}
+
+float SmoothScrollMotion::velocity() const {
+    return velocity_;
+}
+
+bool SmoothScrollMotion::running() const {
     return running_;
 }
 

@@ -16,6 +16,17 @@ struct TransitionSpec {
     EasingCurve easing = EasingCurve::EaseOutCubic;
 };
 
+struct ScrollMotionSpec {
+    // Approximate time for the first impulse and an in-flight retarget to
+    // settle within five percent of their target. Keeping these separate lets
+    // a gesture stay continuous across delayed device packets while appended
+    // distance converges promptly. The analytic solver is frame-rate agnostic.
+    double initialSettlingDurationMs = 150.0;
+    double retargetSettlingDurationMs = 110.0;
+    double inputVelocityRatio = 0.55;
+    double maximumVelocityRatio = 0.90;
+};
+
 ONEUI_API double clampUnit(double value);
 ONEUI_API double applyEasing(EasingCurve curve, double progress);
 ONEUI_API float interpolateFloat(float from, float to, double progress);
@@ -38,6 +49,35 @@ private:
     float target_ = 0.0f;
     double startMs_ = 0.0;
     TransitionSpec spec_;
+    bool running_ = false;
+};
+
+class ONEUI_API SmoothScrollMotion final {
+public:
+    explicit SmoothScrollMotion(float value = 0.0f);
+
+    void reset(float value);
+    bool addDelta(
+        float delta,
+        float minimum,
+        float maximum,
+        double nowMs,
+        ScrollMotionSpec spec = {});
+    bool tick(double nowMs);
+    float value() const;
+    float target() const;
+    float velocity() const;
+    bool running() const;
+
+private:
+    float value_ = 0.0f;
+    float target_ = 0.0f;
+    float velocity_ = 0.0f;
+    float minimum_ = 0.0f;
+    float maximum_ = 0.0f;
+    double lastMs_ = 0.0;
+    double angularFrequency_ = 0.0;
+    ScrollMotionSpec spec_;
     bool running_ = false;
 };
 

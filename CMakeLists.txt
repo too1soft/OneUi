@@ -49,6 +49,7 @@ add_library(oneui_core OBJECT
     src/core/radio_group.cpp
     src/core/realtime_frame_view.cpp
     src/core/remote_input_region.cpp
+    src/core/scroll_trace.cpp
     src/core/scroll_view.cpp
     src/core/select.cpp
     src/core/separator.cpp
@@ -87,6 +88,8 @@ add_library(oneui_core OBJECT
 target_include_directories(oneui_core
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
 target_compile_definitions(oneui_core
@@ -262,6 +265,11 @@ if(WIN32 AND ONEUI_BUILD_PLATFORM_WIN32)
             uuid
             fontsub
             usp10
+    )
+
+    target_include_directories(oneui_platform_win32
+        PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/src
     )
 
     if(MINGW)

@@ -31,6 +31,7 @@ struct MouseWheelEvent {
     bool shift = false;
     bool control = false;
     bool alt = false;
+    double timestampMs = 0.0;
 };
 
 enum class Key {

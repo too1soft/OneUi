@@ -5389,7 +5389,7 @@ void testScrollViewWheelClampsToContentBounds() {
     scroll.setWheelStep(50.0f);
 
     scroll.onMouseWheel(oneui::MouseWheelEvent{oneui::Point{20.0f, 20.0f}, -1.0f});
-    expectEqual("ScrollView wheel begins a transition", scroll.scrollOffset() > 0.0f && scroll.scrollOffset() < 50.0f ? 1 : 0, 1);
+    expectNear("ScrollView wheel waits for a sampled frame", scroll.scrollOffset(), 0.0f);
     scroll.tickAnimations(1.0e15);
     expectNear("ScrollView wheel down offset", scroll.scrollOffset(), 50.0f);
     expectRect("ScrollView content shifted after wheel", content->frame(), oneui::Rect{0.0f, -50.0f, 106.0f, 300.0f});
