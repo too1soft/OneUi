@@ -1275,6 +1275,86 @@ impl Drop for Button {
     }
 }
 
+/// A compact native option selector with keyboard navigation and light dismiss.
+pub struct Select {
+    widget: Widget,
+    changed_callback: Option<Box<ListChangedCallback>>,
+}
+
+impl Select {
+    pub fn new(items: &[String]) -> Result<Self, Error> {
+        let widget = Widget::from_raw(unsafe { sys::oneui_select_create() })?;
+        let select = Self {
+            widget,
+            changed_callback: None,
+        };
+        select.set_items(items);
+        Ok(select)
+    }
+
+    pub fn set_items(&self, items: &[String]) {
+        let native_items: Vec<sys::OneUiUtf8String> = items
+            .iter()
+            .map(|item| sys::OneUiUtf8String::from_str(item))
+            .collect();
+        unsafe {
+            sys::oneui_select_set_items_utf8(
+                self.widget.as_raw(),
+                native_items.as_ptr(),
+                native_items.len(),
+            )
+        };
+    }
+
+    pub fn set_selected_index(&self, index: i32) {
+        unsafe { sys::oneui_select_set_selected_index(self.widget.as_raw(), index) };
+    }
+
+    pub fn selected_index(&self) -> i32 {
+        unsafe { sys::oneui_select_selected_index(self.widget.as_raw()) }
+    }
+
+    pub fn set_on_changed<F>(&mut self, callback: F)
+    where
+        F: FnMut(i32) + 'static,
+    {
+        self.clear_on_changed();
+        self.changed_callback = Some(Box::new(ListChangedCallback {
+            handler: Box::new(callback),
+        }));
+        let user_data = (self
+            .changed_callback
+            .as_deref_mut()
+            .expect("select callback was just installed")
+            as *mut ListChangedCallback)
+            .cast();
+        unsafe {
+            sys::oneui_select_set_on_changed(
+                self.widget.as_raw(),
+                Some(run_list_changed_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn clear_on_changed(&mut self) {
+        unsafe {
+            sys::oneui_select_set_on_changed(self.widget.as_raw(), None, std::ptr::null_mut())
+        };
+        self.changed_callback = None;
+    }
+
+    pub fn as_widget(&self) -> &Widget {
+        &self.widget
+    }
+}
+
+impl Drop for Select {
+    fn drop(&mut self) {
+        self.clear_on_changed();
+    }
+}
+
 /// A reusable native card/list-row surface with hover and press transitions.
 pub struct InteractiveSurface {
     widget: Widget,
@@ -3631,7 +3711,7 @@ mod tests {
     use super::{
         terminal_style, Button, Color, Dialog, Error, IconSymbol, Insets, InteractiveSurface,
         InteractiveSurfaceStateStyle, InteractiveSurfaceStyle, Label, List, ListItem, LogLine,
-        LogView, OverlayAlignment, OverlayHost, Panel, ScrollView, SegmentedControl, Stack,
+        LogView, OverlayAlignment, OverlayHost, Panel, ScrollView, SegmentedControl, Select, Stack,
         StackDirection, StyleSheet, Switch, TerminalCell, TerminalColor, TerminalCursor,
         TerminalCursorStyle, TerminalFrame, TerminalSelection, TerminalUnderlineStyle,
         TerminalView, TextField, TreeItem, TreeView, VirtualList, Window, WindowOptions,
@@ -3811,6 +3891,26 @@ mod tests {
         content.add(segmented.as_widget());
         content.add(switch.as_widget());
         window.set_content(content.as_widget());
+    }
+
+    #[test]
+    fn mounts_utf8_select_and_reports_selection_changes() {
+        let _guard = window_test_lock().lock().expect("window test lock");
+        let window = Window::new(&WindowOptions::default()).expect("window should be created");
+        let observed = std::rc::Rc::new(std::cell::RefCell::new(None));
+        let mut select = Select::new(&[
+            "手动排序".to_string(),
+            "按名称".to_string(),
+            "最近使用".to_string(),
+        ])
+        .expect("select should be created");
+        let observed_for_callback = std::rc::Rc::clone(&observed);
+        select.set_on_changed(move |index| *observed_for_callback.borrow_mut() = Some(index));
+        select.set_selected_index(2);
+
+        assert_eq!(select.selected_index(), 2);
+        assert_eq!(*observed.borrow(), Some(2));
+        window.set_content(select.as_widget());
     }
 
     #[test]

@@ -26,6 +26,11 @@ struct Utf8CallbackState {
     int calls = 0;
 };
 
+struct IndexCallbackState {
+    int index = -1;
+    int calls = 0;
+};
+
 struct OwnedCallbackState {
     int invoked = 0;
     int cleaned = 0;
@@ -84,6 +89,14 @@ void onUtf8TextChanged(const char* text, size_t length, void* userData) {
     }
     state->text.assign(text ? text : "", length);
     ++state->calls;
+}
+
+void onIndexChanged(int index, void* userData) {
+    auto* state = static_cast<IndexCallbackState*>(userData);
+    if (state) {
+        state->index = index;
+        ++state->calls;
+    }
 }
 
 void testUtf8AbiRoundTripsUnicodeText() {
@@ -239,6 +252,7 @@ void testAppShellAbiCreatesReusableSlots() {
     OneUiWidget* stateView = oneui_state_view_create(L"Empty", L"No data yet");
     OneUiWidget* tile = oneui_tile_create(L"Remote Desktop", L"169 510 1007");
     OneUiWidget* segmented = oneui_segmented_control_create();
+    OneUiWidget* select = oneui_select_create();
     OneUiWidget* titleBar = oneui_title_bar_create(L"Product");
 
     expectTrue("app shell create", shell != nullptr);
@@ -251,6 +265,7 @@ void testAppShellAbiCreatesReusableSlots() {
     expectTrue("state view create", stateView != nullptr);
     expectTrue("tile create", tile != nullptr);
     expectTrue("segmented control create", segmented != nullptr);
+    expectTrue("select create", select != nullptr);
     expectTrue("title bar create", titleBar != nullptr);
 
     oneui_widget_set_style_node(shell, "app-shell", "app-shell");
@@ -287,6 +302,19 @@ void testAppShellAbiCreatesReusableSlots() {
     oneui_segmented_control_set_selected_index(segmented, 1);
     expectTrue("segmented selected index", oneui_segmented_control_selected_index(segmented) == 1);
     oneui_segmented_control_set_on_changed(segmented, nullptr, nullptr);
+    const OneUiUtf8String selectItems[] = {
+        utf8View("All protocols"),
+        utf8View("SSH"),
+        utf8View("Remote Desktop"),
+    };
+    oneui_select_set_items_utf8(select, selectItems, 3);
+    IndexCallbackState selectCallbackState;
+    oneui_select_set_on_changed(select, onIndexChanged, &selectCallbackState);
+    oneui_select_set_selected_index(select, 2);
+    expectTrue("select selected index", oneui_select_selected_index(select) == 2);
+    expectTrue(
+        "select changed callback",
+        selectCallbackState.calls == 1 && selectCallbackState.index == 2);
     oneui_title_bar_set_title(titleBar, L"Updated Product");
     oneui_title_bar_set_icon_symbol(titleBar, 2);
     oneui_title_bar_set_maximized(titleBar, 0);
@@ -295,6 +323,7 @@ void testAppShellAbiCreatesReusableSlots() {
     oneui_title_bar_set_on_close(titleBar, nullptr, nullptr);
 
     oneui_widget_destroy(titleBar);
+    oneui_widget_destroy(select);
     oneui_widget_destroy(segmented);
     oneui_widget_destroy(tile);
     oneui_widget_destroy(stateView);

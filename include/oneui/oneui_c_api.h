@@ -525,6 +525,19 @@ ONEUI_API void oneui_segmented_control_set_selected_index(OneUiWidget* segmented
 ONEUI_API int oneui_segmented_control_selected_index(OneUiWidget* segmented_control);
 ONEUI_API void oneui_segmented_control_set_on_changed(OneUiWidget* segmented_control, OneUiIntCallback callback, void* user_data);
 
+/* Standard compact option selector with keyboard navigation and light dismiss. */
+ONEUI_API OneUiWidget* oneui_select_create(void);
+ONEUI_API void oneui_select_set_items_utf8(
+    OneUiWidget* select,
+    const OneUiUtf8String* items,
+    size_t count);
+ONEUI_API void oneui_select_set_selected_index(OneUiWidget* select, int index);
+ONEUI_API int oneui_select_selected_index(OneUiWidget* select);
+ONEUI_API void oneui_select_set_on_changed(
+    OneUiWidget* select,
+    OneUiIntCallback callback,
+    void* user_data);
+
 ONEUI_API OneUiWidget* oneui_list_create(void);
 ONEUI_API void oneui_list_set_items(OneUiWidget* list, const wchar_t* items);
 ONEUI_API void oneui_list_set_items_utf8(OneUiWidget* list, const OneUiListItemUtf8* items, size_t count);

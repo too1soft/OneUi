@@ -442,6 +442,19 @@ extern "C" {
     );
     pub fn oneui_button_set_style(button: *mut OneUiWidget, style: *const OneUiButtonStyle);
     pub fn oneui_button_clear_style(button: *mut OneUiWidget);
+    pub fn oneui_select_create() -> *mut OneUiWidget;
+    pub fn oneui_select_set_items_utf8(
+        select: *mut OneUiWidget,
+        items: *const OneUiUtf8String,
+        count: usize,
+    );
+    pub fn oneui_select_set_selected_index(select: *mut OneUiWidget, index: c_int);
+    pub fn oneui_select_selected_index(select: *mut OneUiWidget) -> c_int;
+    pub fn oneui_select_set_on_changed(
+        select: *mut OneUiWidget,
+        callback: OneUiIntCallback,
+        user_data: *mut c_void,
+    );
     pub fn oneui_text_field_create_utf8(placeholder: OneUiUtf8String) -> *mut OneUiWidget;
     pub fn oneui_text_field_set_text_utf8(text_field: *mut OneUiWidget, text: OneUiUtf8String);
     pub fn oneui_text_field_set_read_only(text_field: *mut OneUiWidget, read_only: c_int);

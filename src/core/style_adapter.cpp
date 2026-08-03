@@ -112,6 +112,29 @@ SwitchStateStyleOverride switchStateStyleOverrideFromStyleBox(const StyleBox& bo
     return override;
 }
 
+SelectStateStyleOverride selectStateStyleOverrideFromStyleBox(const StyleBox& box) {
+    SelectStateStyleOverride override;
+    override.background = box.background.color;
+    override.foreground = box.foreground;
+    override.border = box.borderColor;
+    override.arrowColor = box.foreground;
+    override.popupBackground = box.content.backgroundColor ? box.content.backgroundColor : box.background.color;
+    override.popupBorder = box.borderColor;
+    override.optionBackground = box.background.color;
+    override.optionForeground = box.foreground;
+    override.selectedOptionBackground = box.content.backgroundColor ? box.content.backgroundColor : box.background.color;
+    override.selectedOptionForeground = box.foreground;
+    override.borderWidth = box.borderWidth;
+    override.radius = box.radius;
+    override.popupRadius = box.content.radius ? box.content.radius : box.radius;
+    override.optionRadius = box.content.radius ? box.content.radius : box.radius;
+    override.padding = box.padding;
+    if (box.outlineColor || box.outlineWidth || box.outlineOffset || box.radius) {
+        override.focusRing = focusRingOverrideFromStyleBox(box);
+    }
+    return override;
+}
+
 ListStateStyleOverride listStateStyleOverrideFromStyleBox(const StyleBox& box) {
     ListStateStyleOverride override;
     override.background = box.background.color;
@@ -119,10 +142,10 @@ ListStateStyleOverride listStateStyleOverrideFromStyleBox(const StyleBox& box) {
     override.separator = box.borderColor;
     override.rowBackground = box.content.backgroundColor;
     override.titleColor = box.foreground;
-    override.detailColor = box.foreground;
+    override.detailColor = box.placeholderColor ? box.placeholderColor : box.foreground;
     override.selectedRowBackground = box.content.backgroundColor;
     override.selectedTitleColor = box.foreground;
-    override.selectedDetailColor = box.foreground;
+    override.selectedDetailColor = box.placeholderColor ? box.placeholderColor : box.foreground;
     override.borderWidth = box.borderWidth;
     override.radius = box.radius;
     override.rowRadius = box.content.radius;
@@ -187,6 +210,17 @@ SwitchStyleOverride switchStyleOverrideFromStyleSheet(const StyleSheet& sheet, S
     override.disabled = switchStateStyleOverrideFromStyleBox(resolveState(sheet, node, StyleStateDisabled));
     override.selected = switchStateStyleOverrideFromStyleBox(resolveState(sheet, node, StyleStateSelected));
     override.focusVisible = switchStateStyleOverrideFromStyleBox(resolveState(sheet, std::move(node), StyleStateFocus));
+    return override;
+}
+
+SelectStyleOverride selectStyleOverrideFromStyleSheet(const StyleSheet& sheet, StyleNode node) {
+    SelectStyleOverride override;
+    override.normal = selectStateStyleOverrideFromStyleBox(resolveState(sheet, node, StyleStateNone));
+    override.hovered = selectStateStyleOverrideFromStyleBox(resolveState(sheet, node, StyleStateHover));
+    override.pressed = selectStateStyleOverrideFromStyleBox(resolveState(sheet, node, StyleStateActive));
+    override.disabled = selectStateStyleOverrideFromStyleBox(resolveState(sheet, node, StyleStateDisabled));
+    override.selected = selectStateStyleOverrideFromStyleBox(resolveState(sheet, node, StyleStateSelected));
+    override.focusVisible = selectStateStyleOverrideFromStyleBox(resolveState(sheet, std::move(node), StyleStateFocus));
     return override;
 }
 

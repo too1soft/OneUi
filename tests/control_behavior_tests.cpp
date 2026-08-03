@@ -4354,6 +4354,33 @@ void testStyleAdapterBuildsButtonAndTextFieldOverrides() {
             color: #a8afbd;
         }
 
+        .select {
+            background: #22242b;
+            content-background: #111318;
+            color: #d7dbe5;
+            border-color: #414552;
+            border-width: 1px;
+            border-radius: 4px;
+            content-radius: 3px;
+            padding: 0px 8px;
+            outline-color: #1f54da44;
+            outline-width: 2px;
+            outline-offset: 1px;
+        }
+
+        .select:hover {
+            background: #333640;
+        }
+
+        .select:selected {
+            content-background: #44495a;
+            color: #f2f4f8;
+        }
+
+        .select:focus {
+            border-color: #4a79e6;
+        }
+
         .interactive-surface {
             background: #1f2130;
             border-color: #3a3e50;
@@ -4427,6 +4454,19 @@ void testStyleAdapterBuildsButtonAndTextFieldOverrides() {
     expectEqual("StyleAdapter input focus border", textField.focusVisible->border->r, 74);
     expectEqual("StyleAdapter input read-only background", textField.readOnly->background->r, 32);
     expectEqual("StyleAdapter input read-only foreground", textField.readOnly->foreground->r, 168);
+
+    const auto select = oneui::selectStyleOverrideFromStyleSheet(
+        sheet,
+        oneui::StyleNode{"select", {"select"}, oneui::StyleStateNone});
+    expectEqual("StyleAdapter select normal background", select.normal->background->r, 34);
+    expectEqual("StyleAdapter select popup background", select.normal->popupBackground->r, 17);
+    expectEqual("StyleAdapter select option foreground", select.normal->optionForeground->r, 215);
+    expectEqual("StyleAdapter select hover option background", select.hovered->optionBackground->r, 51);
+    expectEqual(
+        "StyleAdapter select selected option background",
+        select.selected->selectedOptionBackground->r,
+        68);
+    expectEqual("StyleAdapter select focus border", select.focusVisible->border->r, 74);
 
     const auto interactive = oneui::interactiveSurfaceStyleFromStyleSheet(
         sheet,

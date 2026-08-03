@@ -16,6 +16,7 @@
 #include "oneui/controls/radio_group.h"
 #include "oneui/controls/realtime_frame_view.h"
 #include "oneui/controls/remote_input_region.h"
+#include "oneui/controls/select.h"
 #include "oneui/controls/status_strip.h"
 #include "oneui/controls/state_view.h"
 #include "oneui/controls/switch.h"
@@ -633,6 +634,8 @@ oneui::StyleNode styleNodeFor(const OneUiWidget* widget) {
             tag = "state-view";
         } else if (dynamic_cast<oneui::Tabs*>(widget->widget.get())) {
             tag = "segmented-control";
+        } else if (dynamic_cast<oneui::Select*>(widget->widget.get())) {
+            tag = "select";
         } else if (dynamic_cast<oneui::VirtualList*>(widget->widget.get())) {
             tag = "virtual-list";
         } else if (dynamic_cast<oneui::List*>(widget->widget.get())) {
@@ -819,6 +822,11 @@ void applyStyleSheet(OneUiWidget* wrapper, std::shared_ptr<oneui::StyleSheet> sh
         style.disabled = stateOverride(wrapper->styleSheet->resolve(oneui::StyleNode{node.tag, node.classes, oneui::StyleStateDisabled}));
         style.focusVisible = stateOverride(wrapper->styleSheet->resolve(oneui::StyleNode{node.tag, node.classes, oneui::StyleStateFocus}));
         tabs->setStyleOverride(style);
+        return;
+    }
+    if (auto* select = dynamic_cast<oneui::Select*>(wrapper->widget.get())) {
+        select->setStyleOverride(
+            oneui::selectStyleOverrideFromStyleSheet(*wrapper->styleSheet, node));
         return;
     }
     if (auto* virtualList = dynamic_cast<oneui::VirtualList*>(wrapper->widget.get())) {
@@ -2566,6 +2574,58 @@ void oneui_segmented_control_set_on_changed(OneUiWidget* segmented_control, OneU
         return;
     }
     nativeTabs->setOnChanged([callback, user_data](int value) {
+        callback(value, user_data);
+    });
+}
+
+OneUiWidget* oneui_select_create() {
+    return wrap(std::make_shared<oneui::Select>());
+}
+
+void oneui_select_set_items_utf8(
+    OneUiWidget* select,
+    const OneUiUtf8String* items,
+    std::size_t count) {
+    auto* nativeSelect = asWidget<oneui::Select>(select);
+    if (!nativeSelect) {
+        return;
+    }
+    std::vector<std::wstring> values;
+    if (items && count > 0) {
+        values.reserve(count);
+        for (std::size_t index = 0; index < count; ++index) {
+            values.push_back(utf8OrEmpty(items[index]));
+        }
+    }
+    nativeSelect->setItems(std::move(values));
+}
+
+void oneui_select_set_selected_index(OneUiWidget* select, int index) {
+    if (auto* nativeSelect = asWidget<oneui::Select>(select)) {
+        nativeSelect->setSelectedIndex(index);
+    }
+}
+
+int oneui_select_selected_index(OneUiWidget* select) {
+    if (auto* nativeSelect = asWidget<oneui::Select>(select)) {
+        return nativeSelect->selectedIndex();
+    }
+    return -1;
+}
+
+void oneui_select_set_on_changed(
+    OneUiWidget* select,
+    OneUiIntCallback callback,
+    void* user_data) {
+    auto* nativeSelect = asWidget<oneui::Select>(select);
+    if (!nativeSelect) {
+        return;
+    }
+    if (!callback) {
+        nativeSelect->setOnChanged(nullptr);
+        return;
+    }
+    nativeSelect->setOnChanged([callback, user_data](int value) {
         callback(value, user_data);
     });
 }
