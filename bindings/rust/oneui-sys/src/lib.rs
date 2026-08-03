@@ -159,6 +159,8 @@ pub type OneUiTreeExpansionCallback = Option<
 pub type OneUiVoidCallback = Option<unsafe extern "C" fn(user_data: *mut c_void)>;
 pub type OneUiBoolCallback = Option<unsafe extern "C" fn(value: c_int, user_data: *mut c_void)>;
 pub type OneUiIntCallback = Option<unsafe extern "C" fn(value: c_int, user_data: *mut c_void)>;
+pub type OneUiIndexPointCallback =
+    Option<unsafe extern "C" fn(index: c_int, x: f32, y: f32, user_data: *mut c_void)>;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
@@ -276,6 +278,21 @@ extern "C" {
 
     pub fn oneui_overlay_host_create() -> *mut OneUiWidget;
     pub fn oneui_overlay_host_set_content(host: *mut OneUiWidget, child: *mut OneUiWidget);
+    pub fn oneui_overlay_host_add_overlay(
+        host: *mut OneUiWidget,
+        child: *mut OneUiWidget,
+        layer: c_int,
+    );
+    pub fn oneui_overlay_host_add_anchored_overlay(
+        host: *mut OneUiWidget,
+        child: *mut OneUiWidget,
+        layer: c_int,
+        width: f32,
+        height: f32,
+        margin: OneUiInsets,
+        horizontal_alignment: c_int,
+        vertical_alignment: c_int,
+    );
     pub fn oneui_overlay_host_add_modal_anchored_overlay(
         host: *mut OneUiWidget,
         child: *mut OneUiWidget,
@@ -290,6 +307,22 @@ extern "C" {
         host: *mut OneUiWidget,
         child: *mut OneUiWidget,
     ) -> c_int;
+
+    pub fn oneui_popup_create() -> *mut OneUiWidget;
+    pub fn oneui_popup_set_anchor(popup: *mut OneUiWidget, anchor: *mut OneUiWidget);
+    pub fn oneui_popup_set_content(popup: *mut OneUiWidget, content: *mut OneUiWidget);
+    pub fn oneui_popup_set_open(popup: *mut OneUiWidget, open: c_int);
+    pub fn oneui_popup_is_open(popup: *mut OneUiWidget) -> c_int;
+    pub fn oneui_popup_set_anchor_rect(
+        popup: *mut OneUiWidget,
+        x: f32,
+        y: f32,
+        width: f32,
+        height: f32,
+    );
+    pub fn oneui_popup_clear_anchor_rect(popup: *mut OneUiWidget);
+    pub fn oneui_popup_set_preferred_placement(popup: *mut OneUiWidget, placement: c_int);
+    pub fn oneui_popup_set_interaction_mode(popup: *mut OneUiWidget, mode: c_int);
 
     pub fn oneui_dialog_create(title: *const u16, subtitle: *const u16) -> *mut OneUiWidget;
     pub fn oneui_dialog_set_title(dialog: *mut OneUiWidget, title: *const u16);
@@ -442,6 +475,26 @@ extern "C" {
     );
     pub fn oneui_button_set_style(button: *mut OneUiWidget, style: *const OneUiButtonStyle);
     pub fn oneui_button_clear_style(button: *mut OneUiWidget);
+    pub fn oneui_menu_create() -> *mut OneUiWidget;
+    pub fn oneui_menu_add_header(
+        menu: *mut OneUiWidget,
+        title: *const c_ushort,
+        subtitle: *const c_ushort,
+    );
+    pub fn oneui_menu_add_item(
+        menu: *mut OneUiWidget,
+        text: *const c_ushort,
+        icon_symbol: c_int,
+        danger: c_int,
+    ) -> c_int;
+    pub fn oneui_menu_add_separator(menu: *mut OneUiWidget);
+    pub fn oneui_menu_set_item_disabled(menu: *mut OneUiWidget, index: c_int, disabled: c_int);
+    pub fn oneui_menu_preferred_height(menu: *mut OneUiWidget) -> f32;
+    pub fn oneui_menu_set_on_activated(
+        menu: *mut OneUiWidget,
+        callback: OneUiIntCallback,
+        user_data: *mut c_void,
+    );
     pub fn oneui_select_create() -> *mut OneUiWidget;
     pub fn oneui_select_set_items_utf8(
         select: *mut OneUiWidget,
@@ -576,6 +629,17 @@ extern "C" {
     );
     pub fn oneui_virtual_list_set_selected_index(list: *mut OneUiWidget, index: c_int);
     pub fn oneui_virtual_list_selected_index(list: *mut OneUiWidget) -> c_int;
+    pub fn oneui_virtual_list_set_selection_mode(list: *mut OneUiWidget, mode: c_int);
+    pub fn oneui_virtual_list_set_selected_indices(
+        list: *mut OneUiWidget,
+        indices: *const c_int,
+        count: usize,
+    );
+    pub fn oneui_virtual_list_selected_indices(
+        list: *mut OneUiWidget,
+        buffer: *mut c_int,
+        buffer_len: usize,
+    ) -> usize;
     pub fn oneui_virtual_list_set_row_height(list: *mut OneUiWidget, height: f32);
     pub fn oneui_virtual_list_set_scroll_offset(list: *mut OneUiWidget, offset: f32);
     pub fn oneui_virtual_list_scroll_offset(list: *mut OneUiWidget) -> f32;
@@ -583,6 +647,28 @@ extern "C" {
     pub fn oneui_virtual_list_set_on_changed(
         list: *mut OneUiWidget,
         callback: Option<unsafe extern "C" fn(value: c_int, user_data: *mut c_void)>,
+        user_data: *mut c_void,
+    );
+    pub fn oneui_virtual_list_set_on_selection_changed(
+        list: *mut OneUiWidget,
+        callback: Option<
+            unsafe extern "C" fn(values: *const c_int, count: usize, user_data: *mut c_void),
+        >,
+        user_data: *mut c_void,
+    );
+    pub fn oneui_virtual_list_set_on_activated(
+        list: *mut OneUiWidget,
+        callback: OneUiIntCallback,
+        user_data: *mut c_void,
+    );
+    pub fn oneui_virtual_list_set_on_edit_requested(
+        list: *mut OneUiWidget,
+        callback: OneUiIntCallback,
+        user_data: *mut c_void,
+    );
+    pub fn oneui_virtual_list_set_on_context_menu_requested(
+        list: *mut OneUiWidget,
+        callback: OneUiIndexPointCallback,
         user_data: *mut c_void,
     );
     pub fn oneui_state_view_create(

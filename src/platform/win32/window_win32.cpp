@@ -2864,6 +2864,8 @@ private:
             key = Key::End;
         } else if (wParam == VK_DELETE) {
             key = Key::Delete;
+        } else if (wParam == VK_F2) {
+            key = Key::F2;
         } else if (wParam == 'A') {
             key = Key::A;
         } else if (wParam == 'C') {

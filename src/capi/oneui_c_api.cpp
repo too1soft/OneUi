@@ -13,6 +13,7 @@
 #include "oneui/controls/list.h"
 #include "oneui/controls/virtual_list.h"
 #include "oneui/controls/nav_item.h"
+#include "oneui/controls/popup.h"
 #include "oneui/controls/radio_group.h"
 #include "oneui/controls/realtime_frame_view.h"
 #include "oneui/controls/remote_input_region.h"
@@ -1897,6 +1898,66 @@ int oneui_overlay_host_remove_overlay(OneUiWidget* host, OneUiWidget* child) {
     return nativeHost->removeOverlay(child->widget.get()) ? 1 : 0;
 }
 
+OneUiWidget* oneui_popup_create(void) {
+    return wrap(std::make_shared<oneui::Popup>());
+}
+
+void oneui_popup_set_anchor(OneUiWidget* popup, OneUiWidget* anchor) {
+    if (auto* nativePopup = asWidget<oneui::Popup>(popup)) {
+        nativePopup->setAnchor(anchor ? anchor->widget : nullptr);
+    }
+}
+
+void oneui_popup_set_content(OneUiWidget* popup, OneUiWidget* content) {
+    if (auto* nativePopup = asWidget<oneui::Popup>(popup)) {
+        nativePopup->setContent(content ? content->widget : nullptr);
+    }
+}
+
+void oneui_popup_set_open(OneUiWidget* popup, int open) {
+    if (auto* nativePopup = asWidget<oneui::Popup>(popup)) {
+        nativePopup->setOpen(open != 0);
+    }
+}
+
+int oneui_popup_is_open(OneUiWidget* popup) {
+    if (const auto* nativePopup = asWidget<oneui::Popup>(popup)) {
+        return nativePopup->isOpen() ? 1 : 0;
+    }
+    return 0;
+}
+
+void oneui_popup_set_anchor_rect(
+    OneUiWidget* popup,
+    float x,
+    float y,
+    float width,
+    float height) {
+    if (auto* nativePopup = asWidget<oneui::Popup>(popup)) {
+        nativePopup->setAnchorRect(oneui::Rect{x, y, width, height});
+    }
+}
+
+void oneui_popup_clear_anchor_rect(OneUiWidget* popup) {
+    if (auto* nativePopup = asWidget<oneui::Popup>(popup)) {
+        nativePopup->clearAnchorRect();
+    }
+}
+
+void oneui_popup_set_preferred_placement(OneUiWidget* popup, int placement) {
+    if (auto* nativePopup = asWidget<oneui::Popup>(popup)) {
+        nativePopup->setPreferredPlacement(static_cast<oneui::PopupPreferredPlacement>(
+            std::clamp(placement, 0, 5)));
+    }
+}
+
+void oneui_popup_set_interaction_mode(OneUiWidget* popup, int mode) {
+    if (auto* nativePopup = asWidget<oneui::Popup>(popup)) {
+        nativePopup->setInteractionMode(static_cast<oneui::PopupInteractionMode>(
+            std::clamp(mode, 0, 2)));
+    }
+}
+
 OneUiWidget* oneui_log_view_create(void) {
     auto view = std::make_shared<oneui::LogView>();
     // 日志查看器默认接系统剪贴板，Ctrl+C 复制选中内容开箱即用。
@@ -2709,6 +2770,43 @@ int oneui_virtual_list_selected_index(OneUiWidget* list) {
     return 0;
 }
 
+void oneui_virtual_list_set_selection_mode(OneUiWidget* list, int mode) {
+    if (auto* nativeList = asWidget<oneui::VirtualList>(list)) {
+        nativeList->setSelectionMode(
+            mode == 1 ? oneui::SelectionMode::Multiple : oneui::SelectionMode::Single);
+    }
+}
+
+void oneui_virtual_list_set_selected_indices(
+    OneUiWidget* list,
+    const int* indices,
+    std::size_t count) {
+    auto* nativeList = asWidget<oneui::VirtualList>(list);
+    if (!nativeList) {
+        return;
+    }
+    std::vector<int> values;
+    if (indices && count > 0) {
+        values.assign(indices, indices + count);
+    }
+    nativeList->setSelectedIndices(std::move(values));
+}
+
+std::size_t oneui_virtual_list_selected_indices(
+    OneUiWidget* list,
+    int* buffer,
+    std::size_t buffer_len) {
+    auto* nativeList = asWidget<oneui::VirtualList>(list);
+    if (!nativeList) {
+        return 0;
+    }
+    const auto& values = nativeList->selectedIndices();
+    if (buffer && buffer_len > 0) {
+        std::copy_n(values.begin(), std::min(buffer_len, values.size()), buffer);
+    }
+    return values.size();
+}
+
 void oneui_virtual_list_set_row_height(OneUiWidget* list, float height) {
     if (auto* nativeList = asWidget<oneui::VirtualList>(list)) {
         nativeList->setRowHeight(height);
@@ -2747,6 +2845,63 @@ void oneui_virtual_list_set_on_changed(OneUiWidget* list, OneUiIntCallback callb
     nativeList->setOnChanged([callback, user_data](int value) {
         callback(value, user_data);
     });
+}
+
+void oneui_virtual_list_set_on_selection_changed(
+    OneUiWidget* list,
+    OneUiIntArrayCallback callback,
+    void* user_data) {
+    auto* nativeList = asWidget<oneui::VirtualList>(list);
+    if (!nativeList) {
+        return;
+    }
+    if (!callback) {
+        nativeList->setOnSelectionChanged(nullptr);
+        return;
+    }
+    nativeList->setOnSelectionChanged([callback, user_data](const std::vector<int>& values) {
+        callback(values.data(), values.size(), user_data);
+    });
+}
+
+void oneui_virtual_list_set_on_activated(
+    OneUiWidget* list,
+    OneUiIntCallback callback,
+    void* user_data) {
+    auto* nativeList = asWidget<oneui::VirtualList>(list);
+    if (!nativeList) {
+        return;
+    }
+    nativeList->setOnActivated(callback ? std::function<void(int)>{[callback, user_data](int index) {
+        callback(index, user_data);
+    }} : nullptr);
+}
+
+void oneui_virtual_list_set_on_edit_requested(
+    OneUiWidget* list,
+    OneUiIntCallback callback,
+    void* user_data) {
+    auto* nativeList = asWidget<oneui::VirtualList>(list);
+    if (!nativeList) {
+        return;
+    }
+    nativeList->setOnEditRequested(callback ? std::function<void(int)>{[callback, user_data](int index) {
+        callback(index, user_data);
+    }} : nullptr);
+}
+
+void oneui_virtual_list_set_on_context_menu_requested(
+    OneUiWidget* list,
+    OneUiIndexPointCallback callback,
+    void* user_data) {
+    auto* nativeList = asWidget<oneui::VirtualList>(list);
+    if (!nativeList) {
+        return;
+    }
+    nativeList->setOnContextMenuRequested(
+        callback ? std::function<void(int, oneui::Point)>{[callback, user_data](int index, oneui::Point point) {
+            callback(index, point.x, point.y, user_data);
+        }} : nullptr);
 }
 
 OneUiWidget* oneui_tree_view_create() {

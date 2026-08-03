@@ -51,6 +51,7 @@ add_library(oneui_core OBJECT
     src/core/remote_input_region.cpp
     src/core/scroll_trace.cpp
     src/core/scroll_view.cpp
+    src/core/selection_model.cpp
     src/core/select.cpp
     src/core/separator.cpp
     src/core/sidebar_nav_bridge.cpp
@@ -113,6 +114,22 @@ if(BUILD_TESTING)
     )
 
     add_test(NAME oneui_control_behavior_tests COMMAND oneui_control_behavior_tests)
+
+    add_executable(oneui_selection_model_tests
+        tests/selection_model_tests.cpp
+    )
+
+    target_link_libraries(oneui_selection_model_tests
+        PRIVATE
+            oneui_core
+    )
+
+    target_compile_definitions(oneui_selection_model_tests
+        PRIVATE
+            ONEUI_BUILDING_DLL
+    )
+
+    add_test(NAME oneui_selection_model_tests COMMAND oneui_selection_model_tests)
 
     add_executable(oneui_overlay_host_behavior_tests
         tests/overlay_host_behavior_tests.cpp

@@ -24,12 +24,24 @@ VirtualList::VirtualList() {
 }
 
 void VirtualList::setItems(std::vector<ListItem> items) {
+    const auto previousIndices = selection_.selectedIndices();
+    const int previousSelectedIndex = selectedIndex();
+    const bool wasUninitialized = selection_.itemCount() == 0
+        && previousIndices.empty()
+        && selection_.activeIndex() < 0;
     items_ = std::move(items);
+    selection_.setItemCount(static_cast<int>(items_.size()));
+    if (wasUninitialized && !items_.empty()) {
+        selection_.selectOnly(0);
+    }
     hoveredIndex_ = -1;
     pressedIndex_ = -1;
     scrollOffset_ = std::clamp(scrollOffset_, 0.0f, maxScrollOffset());
     resetScrollMotion(scrollOffset_);
-    assignSelectedIndex(selectedIndex_);
+    if (selection_.activeIndex() >= 0) {
+        ensureSelectionVisible();
+    }
+    notifySelectionChanged(previousIndices, previousSelectedIndex);
     invalidate();
 }
 
@@ -38,7 +50,38 @@ void VirtualList::setSelectedIndex(int index) {
 }
 
 int VirtualList::selectedIndex() const {
-    return selectedIndex_;
+    const int active = selection_.activeIndex();
+    if (selection_.contains(active)) {
+        return active;
+    }
+    return selection_.selectedIndices().empty() ? -1 : selection_.selectedIndices().back();
+}
+
+void VirtualList::setSelectionMode(SelectionMode mode) {
+    const auto previousIndices = selection_.selectedIndices();
+    const int previousSelectedIndex = selectedIndex();
+    selection_.setMode(mode);
+    notifySelectionChanged(previousIndices, previousSelectedIndex);
+    invalidate();
+}
+
+SelectionMode VirtualList::selectionMode() const {
+    return selection_.mode();
+}
+
+void VirtualList::setSelectedIndices(std::vector<int> indices) {
+    const auto previousIndices = selection_.selectedIndices();
+    const int previousSelectedIndex = selectedIndex();
+    selection_.setSelectedIndices(std::move(indices));
+    if (selection_.activeIndex() >= 0) {
+        ensureSelectionVisible();
+    }
+    notifySelectionChanged(previousIndices, previousSelectedIndex);
+    invalidate();
+}
+
+const std::vector<int>& VirtualList::selectedIndices() const {
+    return selection_.selectedIndices();
 }
 
 void VirtualList::setRowHeight(float height) {
@@ -92,6 +135,22 @@ void VirtualList::setOnChanged(std::function<void(int)> callback) {
     onChanged_ = std::move(callback);
 }
 
+void VirtualList::setOnSelectionChanged(std::function<void(const std::vector<int>&)> callback) {
+    onSelectionChanged_ = std::move(callback);
+}
+
+void VirtualList::setOnActivated(std::function<void(int)> callback) {
+    onActivated_ = std::move(callback);
+}
+
+void VirtualList::setOnEditRequested(std::function<void(int)> callback) {
+    onEditRequested_ = std::move(callback);
+}
+
+void VirtualList::setOnContextMenuRequested(std::function<void(int, Point)> callback) {
+    onContextMenuRequested_ = std::move(callback);
+}
+
 void VirtualList::paint(Canvas& canvas) {
     const Rect rect = frame();
     const ListStyle containerStyle = resolvedContainerStyle();
@@ -119,7 +178,7 @@ void VirtualList::paint(Canvas& canvas) {
     const ListStyle normalItemStyle = resolvedItemStyle(-1);
     for (int index = first; index < last; ++index) {
         const Rect row = itemRect(index);
-        const bool hasRowState = index == effectiveSelectedIndex() || index == hoveredIndex_ || index == pressedIndex_;
+        const bool hasRowState = selection_.contains(index) || index == hoveredIndex_ || index == pressedIndex_;
         std::optional<ListStyle> stateItemStyle;
         if (hasRowState) {
             stateItemStyle = resolvedItemStyle(index);
@@ -184,7 +243,7 @@ bool VirtualList::onMouseMove(const MouseEvent& event) {
 }
 
 bool VirtualList::onMouseDown(const MouseEvent& event) {
-    if (!interactive()) {
+    if (!interactive() || (event.button != MouseButton::Left && event.button != MouseButton::Right)) {
         return false;
     }
     pressedIndex_ = hitItemIndex(event.position);
@@ -205,7 +264,20 @@ bool VirtualList::onMouseUp(const MouseEvent& event) {
         return false;
     }
     if (hitItemIndex(event.position) == pressed) {
-        assignSelectedIndex(pressed);
+        const auto previousIndices = selection_.selectedIndices();
+        const int previousSelectedIndex = selectedIndex();
+        if (event.button == MouseButton::Right) {
+            if (!selection_.contains(pressed)) {
+                selection_.selectOnly(pressed);
+            }
+        } else {
+            selection_.applyPointerSelection(pressed, event.control, event.shift);
+        }
+        ensureSelectionVisible();
+        notifySelectionChanged(previousIndices, previousSelectedIndex);
+        if (event.button == MouseButton::Right && onContextMenuRequested_) {
+            onContextMenuRequested_(pressed, event.position);
+        }
     }
     invalidate();
     return true;
@@ -274,23 +346,41 @@ bool VirtualList::onKeyDown(const KeyEvent& event) {
     if (!interactive() || items_.empty()) {
         return false;
     }
-    const int selected = effectiveSelectedIndex();
+    if (event.key == Key::A && event.control && selection_.mode() == SelectionMode::Multiple) {
+        const auto previousIndices = selection_.selectedIndices();
+        const int previousSelectedIndex = selectedIndex();
+        selection_.selectAll();
+        notifySelectionChanged(previousIndices, previousSelectedIndex);
+        invalidate();
+        return true;
+    }
+    const int active = selection_.activeIndex();
+    if (active >= 0 && event.key == Key::Enter && onActivated_) {
+        onActivated_(active);
+        return true;
+    }
+    if (active >= 0 && event.key == Key::F2 && onEditRequested_) {
+        onEditRequested_(active);
+        return true;
+    }
+    const int selected = active >= 0 ? active : -1;
+    int target = -1;
     if (event.key == Key::Down) {
-        assignSelectedIndex(std::min(static_cast<int>(items_.size()) - 1, selected + 1));
-        return true;
+        target = std::min(static_cast<int>(items_.size()) - 1, selected + 1);
+    } else if (event.key == Key::Up) {
+        target = selected < 0 ? 0 : std::max(0, selected - 1);
+    } else if (event.key == Key::Home) {
+        target = 0;
+    } else if (event.key == Key::End) {
+        target = static_cast<int>(items_.size()) - 1;
     }
-    if (event.key == Key::Up) {
-        assignSelectedIndex(std::max(0, selected - 1));
-        return true;
-    }
-    if (event.key == Key::Home) {
-        assignSelectedIndex(0);
-        setScrollOffset(0.0f);
-        return true;
-    }
-    if (event.key == Key::End) {
-        assignSelectedIndex(static_cast<int>(items_.size()) - 1);
-        setScrollOffset(maxScrollOffset());
+    if (target >= 0) {
+        const auto previousIndices = selection_.selectedIndices();
+        const int previousSelectedIndex = selectedIndex();
+        selection_.applyKeyboardSelection(target, event.control, event.shift);
+        ensureSelectionVisible();
+        notifySelectionChanged(previousIndices, previousSelectedIndex);
+        invalidate();
         return true;
     }
     return false;
@@ -315,30 +405,47 @@ AccessibilityInfo VirtualList::accessibilityInfo() const {
 }
 
 void VirtualList::assignSelectedIndex(int index) {
+    const auto previousIndices = selection_.selectedIndices();
+    const int previousSelectedIndex = selectedIndex();
     if (items_.empty()) {
-        selectedIndex_ = -1;
+        selection_.clear();
         scrollOffset_ = 0.0f;
+        notifySelectionChanged(previousIndices, previousSelectedIndex);
         invalidate();
         return;
     }
-    const int previous = effectiveSelectedIndex();
-    selectedIndex_ = index < 0
-        ? -1
-        : std::clamp(index, 0, static_cast<int>(items_.size()) - 1);
-    if (selectedIndex_ >= 0) {
+    if (index < 0) {
+        selection_.clear();
+    } else {
+        selection_.selectOnly(std::clamp(index, 0, static_cast<int>(items_.size()) - 1));
+    }
+    if (selection_.activeIndex() >= 0) {
         ensureSelectionVisible();
     }
-    if (previous != selectedIndex_ && onChanged_) {
-        onChanged_(selectedIndex_);
-    }
+    notifySelectionChanged(previousIndices, previousSelectedIndex);
     invalidate();
 }
 
+void VirtualList::notifySelectionChanged(
+    const std::vector<int>& previousIndices,
+    int previousSelectedIndex) {
+    if (previousIndices == selection_.selectedIndices()) {
+        return;
+    }
+    const int nextSelectedIndex = selectedIndex();
+    if (previousSelectedIndex != nextSelectedIndex && onChanged_) {
+        onChanged_(nextSelectedIndex);
+    }
+    if (onSelectionChanged_) {
+        onSelectionChanged_(selection_.selectedIndices());
+    }
+}
+
 int VirtualList::effectiveSelectedIndex() const {
-    if (items_.empty() || selectedIndex_ < 0) {
+    if (items_.empty()) {
         return -1;
     }
-    return std::clamp(selectedIndex_, 0, static_cast<int>(items_.size()) - 1);
+    return selection_.activeIndex();
 }
 
 int VirtualList::hitItemIndex(Point point) const {
@@ -417,7 +524,7 @@ ListStyle VirtualList::resolvedContainerStyle() const {
 
 ListStyle VirtualList::resolvedItemStyle(int index) const {
     const bool hasItem = index >= 0;
-    const bool selected = hasItem && index == effectiveSelectedIndex();
+    const bool selected = hasItem && selection_.contains(index);
     const bool hovered = hasItem && index == hoveredIndex_;
     const bool pressed = hasItem && index == pressedIndex_;
     ListStyle style = detail::baseListStyle(selected, disabled(), hovered, pressed);

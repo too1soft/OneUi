@@ -1,4 +1,5 @@
 #include "oneui/controls/button.h"
+#include "oneui/controls/menu.h"
 #include "oneui/controls/popup.h"
 #include "oneui/controls/terminal_view.h"
 #include "oneui/layout/overlay_host.h"
@@ -703,6 +704,46 @@ void testPopupWithOutsideCloseDisabledDoesNotBlockLowerOverlay() {
     expectSequence("Popup non-closing outside click reaches lower overlay", eventLog, {12});
 }
 
+void testFillOverlayGivesPopupAViewportForMenuLayout() {
+    oneui::OverlayHost host;
+    host.setFrame(oneui::Rect{0.0f, 0.0f, 1600.0f, 1000.0f});
+
+    auto anchor = std::make_shared<oneui::View>();
+    anchor->setVisible(false);
+    auto menu = std::make_shared<oneui::Menu>();
+    menu->addHeader(L"Production", L"root@10.0.0.1:22");
+    menu->addItem(L"Connect", oneui::IconSymbol::Terminal);
+    menu->addItem(L"Delete", oneui::IconSymbol::Trash, true);
+    menu->setPreferredSize(oneui::Size{224.0f, menu->preferredHeight()});
+
+    auto popup = std::make_shared<oneui::Popup>();
+    popup->setAnchor(anchor);
+    popup->setAnchorRect(oneui::Rect{700.0f, 270.0f, 1.0f, 1.0f});
+    popup->setContent(menu);
+    popup->setOpen(true);
+
+    host.addAnchoredOverlay(
+        popup,
+        oneui::OverlayOptions::modeless(100),
+        oneui::Size{-1.0f, -1.0f},
+        oneui::Insets{},
+        0,
+        0);
+
+    NullCanvas canvas;
+    host.paint(canvas);
+
+    expectEqual("Fill popup overlay width", static_cast<int>(popup->frame().width), 1600);
+    expectEqual("Fill popup overlay height", static_cast<int>(popup->frame().height), 1000);
+    expectEqual("Popup menu x includes surface padding", static_cast<int>(menu->frame().x), 708);
+    expectEqual("Popup menu y includes offset and padding", static_cast<int>(menu->frame().y), 285);
+    expectEqual("Popup menu width excludes surface padding", static_cast<int>(menu->frame().width), 208);
+    expectEqual(
+        "Popup menu keeps non-zero natural height",
+        menu->frame().height > 0.0f ? 1 : 0,
+        1);
+}
+
 void testPopupBlockOutsidePolicyStopsLowerOverlayWithoutClosing() {
     std::vector<int> paintLog;
     std::vector<int> eventLog;
@@ -837,6 +878,7 @@ int main() {
     testPointerBlockerConsumesOutsideEventsBeforeLowerTargets();
     testHigherOverlayCanReceivePointerAboveBlocker();
     testPopupWithOutsideCloseDisabledDoesNotBlockLowerOverlay();
+    testFillOverlayGivesPopupAViewportForMenuLayout();
     testPopupBlockOutsidePolicyStopsLowerOverlayWithoutClosing();
     testPopupModalModeCombinesFocusTrapAndPointerBlocker();
     testFocusedPopupReceivesEscapeThroughOverlayHost();

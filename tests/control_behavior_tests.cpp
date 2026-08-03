@@ -2407,6 +2407,92 @@ void testVirtualListPaintsOnlyViewportRowsAndMaintainsScrollSelection() {
     expectEqual("VirtualList keyboard navigation resumes from the first row", list.selectedIndex(), 0);
 }
 
+void testVirtualListUsesStandardMultipleSelectionSemantics() {
+    std::vector<oneui::ListItem> items;
+    for (int index = 0; index < 8; ++index) {
+        items.push_back(oneui::ListItem{L"Row " + std::to_wstring(index), L""});
+    }
+
+    oneui::VirtualList list;
+    list.setItems(std::move(items));
+    list.setRowHeight(40.0f);
+    list.setFrame(oneui::Rect{0.0f, 0.0f, 240.0f, 320.0f});
+    list.setSelectionMode(oneui::SelectionMode::Multiple);
+    list.setSelectedIndex(1);
+
+    int selectionChanges = 0;
+    list.setOnSelectionChanged([&selectionChanges](const std::vector<int>&) {
+        ++selectionChanges;
+    });
+
+    const oneui::MouseEvent ctrlRow3{
+        oneui::Point{20.0f, 140.0f}, oneui::MouseButton::Left, false, true, false};
+    list.onMouseDown(ctrlRow3);
+    list.onMouseUp(ctrlRow3);
+    expectEqual("VirtualList Ctrl click keeps prior selection", list.selectedIndices().size(), 2);
+    expectEqual("VirtualList Ctrl click selects target", list.selectedIndices().back(), 3);
+
+    const oneui::MouseEvent shiftRow5{
+        oneui::Point{20.0f, 220.0f}, oneui::MouseButton::Left, true, false, false};
+    list.onMouseDown(shiftRow5);
+    list.onMouseUp(shiftRow5);
+    expectEqual("VirtualList Shift click creates anchored range", list.selectedIndices().size(), 3);
+    expectEqual("VirtualList Shift range starts at anchor", list.selectedIndices().front(), 3);
+    expectEqual("VirtualList Shift range ends at target", list.selectedIndices().back(), 5);
+
+    list.onKeyDown(oneui::KeyEvent{oneui::Key::A, false, true});
+    expectEqual("VirtualList Ctrl+A selects every row", list.selectedIndices().size(), 8);
+    expectEqual("VirtualList emits each selection collection change", selectionChanges, 3);
+
+    list.onKeyDown(oneui::KeyEvent{oneui::Key::Down, false, true});
+    expectEqual("VirtualList Ctrl+Down preserves selected rows", list.selectedIndices().size(), 8);
+}
+
+void testVirtualListExposesStandardRowCommands() {
+    std::vector<oneui::ListItem> items;
+    for (int index = 0; index < 6; ++index) {
+        items.push_back(oneui::ListItem{L"Row " + std::to_wstring(index), L""});
+    }
+
+    oneui::VirtualList list;
+    list.setItems(std::move(items));
+    list.setRowHeight(40.0f);
+    list.setFrame(oneui::Rect{0.0f, 0.0f, 240.0f, 240.0f});
+    list.setSelectionMode(oneui::SelectionMode::Multiple);
+    list.setSelectedIndices({1, 2});
+
+    int activated = -1;
+    int editRequested = -1;
+    int contextIndex = -1;
+    oneui::Point contextPoint{};
+    list.setOnActivated([&activated](int index) { activated = index; });
+    list.setOnEditRequested([&editRequested](int index) { editRequested = index; });
+    list.setOnContextMenuRequested([&contextIndex, &contextPoint](int index, oneui::Point point) {
+        contextIndex = index;
+        contextPoint = point;
+    });
+
+    const oneui::MouseEvent selectedContext{
+        oneui::Point{20.0f, 100.0f}, oneui::MouseButton::Right};
+    list.onMouseDown(selectedContext);
+    list.onMouseUp(selectedContext);
+    expectEqual("VirtualList context click preserves an existing selection", list.selectedIndices().size(), 2);
+    expectEqual("VirtualList reports the context row", contextIndex, 2);
+    expectNear("VirtualList reports the context x coordinate", contextPoint.x, 20.0f);
+
+    const oneui::MouseEvent unselectedContext{
+        oneui::Point{30.0f, 180.0f}, oneui::MouseButton::Right};
+    list.onMouseDown(unselectedContext);
+    list.onMouseUp(unselectedContext);
+    expectEqual("VirtualList context click selects an unselected row", list.selectedIndices().size(), 1);
+    expectEqual("VirtualList context click makes its row active", list.selectedIndex(), 4);
+
+    list.onKeyDown(oneui::KeyEvent{oneui::Key::Enter});
+    list.onKeyDown(oneui::KeyEvent{oneui::Key::F2});
+    expectEqual("VirtualList Enter activates the active row", activated, 4);
+    expectEqual("VirtualList F2 requests editing for the active row", editRequested, 4);
+}
+
 void testVirtualListCssControlsCompactTypographyAndScrollbar() {
     oneui::StyleSheet sheet;
     std::string error;
@@ -5851,6 +5937,8 @@ int main() {
     testListStyleOverrideCanHideFocusRingAndStylePressed();
     testListDisabledStyleOverrideWinsAndClearRestoresDefault();
     testVirtualListPaintsOnlyViewportRowsAndMaintainsScrollSelection();
+    testVirtualListUsesStandardMultipleSelectionSemantics();
+    testVirtualListExposesStandardRowCommands();
     testVirtualListCssControlsCompactTypographyAndScrollbar();
     testTreeViewStyleAdapterSharesListContract();
     testTableStyleOverridePaintsCustomColorsAndGeometry();

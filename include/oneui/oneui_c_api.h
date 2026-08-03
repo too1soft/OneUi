@@ -22,6 +22,8 @@ typedef void (*OneUiUtf8TextCallback)(const char* text, size_t length, void* use
 typedef void (*OneUiTreeExpansionCallback)(const char* id, size_t length, int expanded, void* user_data);
 typedef void (*OneUiBoolCallback)(int checked, void* user_data);
 typedef void (*OneUiIntCallback)(int value, void* user_data);
+typedef void (*OneUiIntArrayCallback)(const int* values, size_t count, void* user_data);
+typedef void (*OneUiIndexPointCallback)(int index, float x, float y, void* user_data);
 
 /*
  * Cross-platform string ABI. The caller owns data and it is only read during
@@ -418,6 +420,23 @@ ONEUI_API int oneui_overlay_host_update_anchored_overlay(
     int vertical_alignment);
 ONEUI_API int oneui_overlay_host_remove_overlay(OneUiWidget* host, OneUiWidget* child);
 
+ONEUI_API OneUiWidget* oneui_popup_create(void);
+ONEUI_API void oneui_popup_set_anchor(OneUiWidget* popup, OneUiWidget* anchor);
+ONEUI_API void oneui_popup_set_content(OneUiWidget* popup, OneUiWidget* content);
+ONEUI_API void oneui_popup_set_open(OneUiWidget* popup, int open);
+ONEUI_API int oneui_popup_is_open(OneUiWidget* popup);
+ONEUI_API void oneui_popup_set_anchor_rect(
+    OneUiWidget* popup,
+    float x,
+    float y,
+    float width,
+    float height);
+ONEUI_API void oneui_popup_clear_anchor_rect(OneUiWidget* popup);
+/* placement: 0 bottom-start, 1 bottom-end, 2 top-start, 3 top-end, 4 left-start, 5 right-start */
+ONEUI_API void oneui_popup_set_preferred_placement(OneUiWidget* popup, int placement);
+/* mode: 0 modeless, 1 light-dismiss, 2 modal */
+ONEUI_API void oneui_popup_set_interaction_mode(OneUiWidget* popup, int mode);
+
 ONEUI_API OneUiWidget* oneui_log_view_create(void);
 ONEUI_API void oneui_log_view_append_line(OneUiWidget* view, const wchar_t* text, unsigned char r, unsigned char g, unsigned char b, unsigned char a);
 ONEUI_API void oneui_log_view_clear(OneUiWidget* view);
@@ -553,11 +572,38 @@ ONEUI_API OneUiWidget* oneui_virtual_list_create(void);
 ONEUI_API void oneui_virtual_list_set_items_utf8(OneUiWidget* list, const OneUiListItemUtf8* items, size_t count);
 ONEUI_API void oneui_virtual_list_set_selected_index(OneUiWidget* list, int index);
 ONEUI_API int oneui_virtual_list_selected_index(OneUiWidget* list);
+/* mode: 0 = single, 1 = multiple */
+ONEUI_API void oneui_virtual_list_set_selection_mode(OneUiWidget* list, int mode);
+ONEUI_API void oneui_virtual_list_set_selected_indices(
+    OneUiWidget* list,
+    const int* indices,
+    size_t count);
+/* Returns the required number of indices and copies up to buffer_len values. */
+ONEUI_API size_t oneui_virtual_list_selected_indices(
+    OneUiWidget* list,
+    int* buffer,
+    size_t buffer_len);
 ONEUI_API void oneui_virtual_list_set_row_height(OneUiWidget* list, float height);
 ONEUI_API void oneui_virtual_list_set_scroll_offset(OneUiWidget* list, float offset);
 ONEUI_API float oneui_virtual_list_scroll_offset(OneUiWidget* list);
 ONEUI_API float oneui_virtual_list_max_scroll_offset(OneUiWidget* list);
 ONEUI_API void oneui_virtual_list_set_on_changed(OneUiWidget* list, OneUiIntCallback callback, void* user_data);
+ONEUI_API void oneui_virtual_list_set_on_selection_changed(
+    OneUiWidget* list,
+    OneUiIntArrayCallback callback,
+    void* user_data);
+ONEUI_API void oneui_virtual_list_set_on_activated(
+    OneUiWidget* list,
+    OneUiIntCallback callback,
+    void* user_data);
+ONEUI_API void oneui_virtual_list_set_on_edit_requested(
+    OneUiWidget* list,
+    OneUiIntCallback callback,
+    void* user_data);
+ONEUI_API void oneui_virtual_list_set_on_context_menu_requested(
+    OneUiWidget* list,
+    OneUiIndexPointCallback callback,
+    void* user_data);
 
 ONEUI_API OneUiWidget* oneui_tree_view_create(void);
 ONEUI_API void oneui_tree_view_set_items_utf8(OneUiWidget* tree_view, const OneUiTreeItemUtf8* items, size_t count);

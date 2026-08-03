@@ -748,6 +748,34 @@ impl OverlayHost {
         unsafe { sys::oneui_overlay_host_set_content(self.widget.as_raw(), child.as_raw()) };
     }
 
+    pub fn add_overlay(&self, child: &Widget, layer: i32) {
+        unsafe { sys::oneui_overlay_host_add_overlay(self.widget.as_raw(), child.as_raw(), layer) };
+    }
+
+    pub fn add_anchored_overlay(
+        &self,
+        child: &Widget,
+        layer: i32,
+        width: f32,
+        height: f32,
+        margin: Insets,
+        horizontal_alignment: OverlayAlignment,
+        vertical_alignment: OverlayAlignment,
+    ) {
+        unsafe {
+            sys::oneui_overlay_host_add_anchored_overlay(
+                self.widget.as_raw(),
+                child.as_raw(),
+                layer,
+                width,
+                height,
+                margin.into(),
+                horizontal_alignment as i32,
+                vertical_alignment as i32,
+            )
+        };
+    }
+
     pub fn add_modal_anchored_overlay(
         &self,
         child: &Widget,
@@ -778,6 +806,173 @@ impl OverlayHost {
 
     pub fn as_widget(&self) -> &Widget {
         &self.widget
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PopupPreferredPlacement {
+    BottomStart = 0,
+    BottomEnd = 1,
+    TopStart = 2,
+    TopEnd = 3,
+    LeftStart = 4,
+    RightStart = 5,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PopupInteractionMode {
+    Modeless = 0,
+    LightDismiss = 1,
+    Modal = 2,
+}
+
+/// A native popup surface with viewport-aware placement and light-dismiss behavior.
+pub struct Popup {
+    widget: Widget,
+}
+
+impl Popup {
+    pub fn new() -> Result<Self, Error> {
+        let widget = Widget::from_raw(unsafe { sys::oneui_popup_create() })?;
+        Ok(Self { widget })
+    }
+
+    pub fn set_anchor(&self, anchor: &Widget) {
+        unsafe { sys::oneui_popup_set_anchor(self.widget.as_raw(), anchor.as_raw()) };
+    }
+
+    pub fn set_content(&self, content: &Widget) {
+        unsafe { sys::oneui_popup_set_content(self.widget.as_raw(), content.as_raw()) };
+    }
+
+    pub fn set_open(&self, open: bool) {
+        unsafe { sys::oneui_popup_set_open(self.widget.as_raw(), i32::from(open)) };
+    }
+
+    pub fn is_open(&self) -> bool {
+        unsafe { sys::oneui_popup_is_open(self.widget.as_raw()) != 0 }
+    }
+
+    pub fn set_anchor_rect(&self, x: f32, y: f32, width: f32, height: f32) {
+        unsafe { sys::oneui_popup_set_anchor_rect(self.widget.as_raw(), x, y, width, height) };
+    }
+
+    pub fn clear_anchor_rect(&self) {
+        unsafe { sys::oneui_popup_clear_anchor_rect(self.widget.as_raw()) };
+    }
+
+    pub fn set_preferred_placement(&self, placement: PopupPreferredPlacement) {
+        unsafe { sys::oneui_popup_set_preferred_placement(self.widget.as_raw(), placement as i32) };
+    }
+
+    pub fn set_interaction_mode(&self, mode: PopupInteractionMode) {
+        unsafe { sys::oneui_popup_set_interaction_mode(self.widget.as_raw(), mode as i32) };
+    }
+
+    pub fn as_widget(&self) -> &Widget {
+        &self.widget
+    }
+}
+
+struct MenuActivatedCallback {
+    handler: Box<dyn FnMut(i32) + 'static>,
+}
+
+unsafe extern "C" fn run_menu_activated_callback(index: i32, user_data: *mut std::ffi::c_void) {
+    if user_data.is_null() {
+        return;
+    }
+    let callback = unsafe { &mut *user_data.cast::<MenuActivatedCallback>() };
+    let _ = catch_unwind(AssertUnwindSafe(|| (callback.handler)(index)));
+}
+
+/// A standard native command menu suitable for popups and context menus.
+pub struct Menu {
+    widget: Widget,
+    activated_callback: Option<Box<MenuActivatedCallback>>,
+}
+
+impl Menu {
+    pub fn new() -> Result<Self, Error> {
+        let widget = Widget::from_raw(unsafe { sys::oneui_menu_create() })?;
+        Ok(Self {
+            widget,
+            activated_callback: None,
+        })
+    }
+
+    pub fn add_header(&self, title: &str, subtitle: &str) {
+        let title = wide_null_terminated(title);
+        let subtitle = wide_null_terminated(subtitle);
+        unsafe {
+            sys::oneui_menu_add_header(self.widget.as_raw(), title.as_ptr(), subtitle.as_ptr())
+        };
+    }
+
+    pub fn add_item(&self, text: &str, icon: Option<IconSymbol>, danger: bool) -> i32 {
+        let text = wide_null_terminated(text);
+        unsafe {
+            sys::oneui_menu_add_item(
+                self.widget.as_raw(),
+                text.as_ptr(),
+                icon.map_or(-1, |symbol| symbol as i32),
+                i32::from(danger),
+            )
+        }
+    }
+
+    pub fn add_separator(&self) {
+        unsafe { sys::oneui_menu_add_separator(self.widget.as_raw()) };
+    }
+
+    pub fn set_item_disabled(&self, index: i32, disabled: bool) {
+        unsafe {
+            sys::oneui_menu_set_item_disabled(self.widget.as_raw(), index, i32::from(disabled))
+        };
+    }
+
+    pub fn preferred_height(&self) -> f32 {
+        unsafe { sys::oneui_menu_preferred_height(self.widget.as_raw()) }
+    }
+
+    pub fn set_on_activated<F>(&mut self, callback: F)
+    where
+        F: FnMut(i32) + 'static,
+    {
+        self.clear_on_activated();
+        self.activated_callback = Some(Box::new(MenuActivatedCallback {
+            handler: Box::new(callback),
+        }));
+        let user_data = (self
+            .activated_callback
+            .as_deref_mut()
+            .expect("menu callback was just installed")
+            as *mut MenuActivatedCallback)
+            .cast();
+        unsafe {
+            sys::oneui_menu_set_on_activated(
+                self.widget.as_raw(),
+                Some(run_menu_activated_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn clear_on_activated(&mut self) {
+        unsafe {
+            sys::oneui_menu_set_on_activated(self.widget.as_raw(), None, std::ptr::null_mut())
+        };
+        self.activated_callback = None;
+    }
+
+    pub fn as_widget(&self) -> &Widget {
+        &self.widget
+    }
+}
+
+impl Drop for Menu {
+    fn drop(&mut self) {
+        self.clear_on_activated();
     }
 }
 
@@ -3172,6 +3367,12 @@ pub struct ListItem {
     pub detail: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SelectionMode {
+    Single,
+    Multiple,
+}
+
 struct ListChangedCallback {
     handler: Box<dyn FnMut(i32) + 'static>,
 }
@@ -3182,6 +3383,52 @@ unsafe extern "C" fn run_list_changed_callback(value: i32, user_data: *mut std::
     }
     let callback = unsafe { &mut *user_data.cast::<ListChangedCallback>() };
     let _ = catch_unwind(AssertUnwindSafe(|| (callback.handler)(value)));
+}
+
+struct ListSelectionChangedCallback {
+    handler: Box<dyn FnMut(Vec<i32>) + 'static>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ContextMenuRequest {
+    pub index: i32,
+    pub x: f32,
+    pub y: f32,
+}
+
+struct ContextMenuRequestedCallback {
+    handler: Box<dyn FnMut(ContextMenuRequest) + 'static>,
+}
+
+unsafe extern "C" fn run_list_selection_changed_callback(
+    values: *const i32,
+    count: usize,
+    user_data: *mut std::ffi::c_void,
+) {
+    if user_data.is_null() || (values.is_null() && count > 0) {
+        return;
+    }
+    let selected = if count == 0 {
+        Vec::new()
+    } else {
+        unsafe { std::slice::from_raw_parts(values, count) }.to_vec()
+    };
+    let callback = unsafe { &mut *user_data.cast::<ListSelectionChangedCallback>() };
+    let _ = catch_unwind(AssertUnwindSafe(|| (callback.handler)(selected)));
+}
+
+unsafe extern "C" fn run_context_menu_requested_callback(
+    index: i32,
+    x: f32,
+    y: f32,
+    user_data: *mut std::ffi::c_void,
+) {
+    if user_data.is_null() {
+        return;
+    }
+    let callback = unsafe { &mut *user_data.cast::<ContextMenuRequestedCallback>() };
+    let request = ContextMenuRequest { index, x, y };
+    let _ = catch_unwind(AssertUnwindSafe(|| (callback.handler)(request)));
 }
 
 /// A selectable native list.
@@ -3270,6 +3517,10 @@ impl Drop for List {
 pub struct VirtualList {
     widget: Widget,
     changed_callback: Option<Box<ListChangedCallback>>,
+    selection_changed_callback: Option<Box<ListSelectionChangedCallback>>,
+    activated_callback: Option<Box<ListChangedCallback>>,
+    edit_requested_callback: Option<Box<ListChangedCallback>>,
+    context_menu_requested_callback: Option<Box<ContextMenuRequestedCallback>>,
 }
 
 impl VirtualList {
@@ -3278,6 +3529,10 @@ impl VirtualList {
         Ok(Self {
             widget,
             changed_callback: None,
+            selection_changed_callback: None,
+            activated_callback: None,
+            edit_requested_callback: None,
+            context_menu_requested_callback: None,
         })
     }
 
@@ -3309,6 +3564,41 @@ impl VirtualList {
 
     pub fn selected_index(&self) -> i32 {
         unsafe { sys::oneui_virtual_list_selected_index(self.widget.as_raw()) }
+    }
+
+    pub fn set_selection_mode(&self, mode: SelectionMode) {
+        let native_mode = match mode {
+            SelectionMode::Single => 0,
+            SelectionMode::Multiple => 1,
+        };
+        unsafe { sys::oneui_virtual_list_set_selection_mode(self.widget.as_raw(), native_mode) };
+    }
+
+    pub fn set_selected_indices(&self, indices: &[i32]) {
+        unsafe {
+            sys::oneui_virtual_list_set_selected_indices(
+                self.widget.as_raw(),
+                indices.as_ptr(),
+                indices.len(),
+            )
+        };
+    }
+
+    pub fn selected_indices(&self) -> Vec<i32> {
+        let count = unsafe {
+            sys::oneui_virtual_list_selected_indices(self.widget.as_raw(), std::ptr::null_mut(), 0)
+        };
+        let mut values = vec![0; count];
+        if count > 0 {
+            unsafe {
+                sys::oneui_virtual_list_selected_indices(
+                    self.widget.as_raw(),
+                    values.as_mut_ptr(),
+                    values.len(),
+                )
+            };
+        }
+        values
     }
 
     pub fn set_row_height(&self, height: f32) {
@@ -3357,6 +3647,142 @@ impl VirtualList {
         self.changed_callback = None;
     }
 
+    pub fn set_on_selection_changed<F>(&mut self, callback: F)
+    where
+        F: FnMut(Vec<i32>) + 'static,
+    {
+        self.clear_on_selection_changed();
+        self.selection_changed_callback = Some(Box::new(ListSelectionChangedCallback {
+            handler: Box::new(callback),
+        }));
+        let user_data = (self
+            .selection_changed_callback
+            .as_deref_mut()
+            .expect("virtual list selection callback was just installed")
+            as *mut ListSelectionChangedCallback)
+            .cast();
+        unsafe {
+            sys::oneui_virtual_list_set_on_selection_changed(
+                self.widget.as_raw(),
+                Some(run_list_selection_changed_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn clear_on_selection_changed(&mut self) {
+        unsafe {
+            sys::oneui_virtual_list_set_on_selection_changed(
+                self.widget.as_raw(),
+                None,
+                std::ptr::null_mut(),
+            )
+        };
+        self.selection_changed_callback = None;
+    }
+
+    pub fn set_on_activated<F>(&mut self, callback: F)
+    where
+        F: FnMut(i32) + 'static,
+    {
+        self.clear_on_activated();
+        self.activated_callback = Some(Box::new(ListChangedCallback {
+            handler: Box::new(callback),
+        }));
+        let user_data = (self
+            .activated_callback
+            .as_deref_mut()
+            .expect("virtual list activation callback was just installed")
+            as *mut ListChangedCallback)
+            .cast();
+        unsafe {
+            sys::oneui_virtual_list_set_on_activated(
+                self.widget.as_raw(),
+                Some(run_list_changed_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn clear_on_activated(&mut self) {
+        unsafe {
+            sys::oneui_virtual_list_set_on_activated(
+                self.widget.as_raw(),
+                None,
+                std::ptr::null_mut(),
+            )
+        };
+        self.activated_callback = None;
+    }
+
+    pub fn set_on_edit_requested<F>(&mut self, callback: F)
+    where
+        F: FnMut(i32) + 'static,
+    {
+        self.clear_on_edit_requested();
+        self.edit_requested_callback = Some(Box::new(ListChangedCallback {
+            handler: Box::new(callback),
+        }));
+        let user_data = (self
+            .edit_requested_callback
+            .as_deref_mut()
+            .expect("virtual list edit callback was just installed")
+            as *mut ListChangedCallback)
+            .cast();
+        unsafe {
+            sys::oneui_virtual_list_set_on_edit_requested(
+                self.widget.as_raw(),
+                Some(run_list_changed_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn clear_on_edit_requested(&mut self) {
+        unsafe {
+            sys::oneui_virtual_list_set_on_edit_requested(
+                self.widget.as_raw(),
+                None,
+                std::ptr::null_mut(),
+            )
+        };
+        self.edit_requested_callback = None;
+    }
+
+    pub fn set_on_context_menu_requested<F>(&mut self, callback: F)
+    where
+        F: FnMut(ContextMenuRequest) + 'static,
+    {
+        self.clear_on_context_menu_requested();
+        self.context_menu_requested_callback = Some(Box::new(ContextMenuRequestedCallback {
+            handler: Box::new(callback),
+        }));
+        let user_data = (self
+            .context_menu_requested_callback
+            .as_deref_mut()
+            .expect("virtual list context menu callback was just installed")
+            as *mut ContextMenuRequestedCallback)
+            .cast();
+        unsafe {
+            sys::oneui_virtual_list_set_on_context_menu_requested(
+                self.widget.as_raw(),
+                Some(run_context_menu_requested_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn clear_on_context_menu_requested(&mut self) {
+        unsafe {
+            sys::oneui_virtual_list_set_on_context_menu_requested(
+                self.widget.as_raw(),
+                None,
+                std::ptr::null_mut(),
+            )
+        };
+        self.context_menu_requested_callback = None;
+    }
+
     pub fn as_widget(&self) -> &Widget {
         &self.widget
     }
@@ -3364,6 +3790,10 @@ impl VirtualList {
 
 impl Drop for VirtualList {
     fn drop(&mut self) {
+        self.clear_on_context_menu_requested();
+        self.clear_on_edit_requested();
+        self.clear_on_activated();
+        self.clear_on_selection_changed();
         self.clear_on_changed();
     }
 }
@@ -3711,7 +4141,8 @@ mod tests {
     use super::{
         terminal_style, Button, Color, Dialog, Error, IconSymbol, Insets, InteractiveSurface,
         InteractiveSurfaceStateStyle, InteractiveSurfaceStyle, Label, List, ListItem, LogLine,
-        LogView, OverlayAlignment, OverlayHost, Panel, ScrollView, SegmentedControl, Select, Stack,
+        LogView, Menu, OverlayAlignment, OverlayHost, Panel, Popup, PopupInteractionMode,
+        PopupPreferredPlacement, ScrollView, SegmentedControl, Select, SelectionMode, Stack,
         StackDirection, StyleSheet, Switch, TerminalCell, TerminalColor, TerminalCursor,
         TerminalCursorStyle, TerminalFrame, TerminalSelection, TerminalUnderlineStyle,
         TerminalView, TextField, TreeItem, TreeView, VirtualList, Window, WindowOptions,
@@ -3959,6 +4390,19 @@ mod tests {
         list.set_on_changed(move |index| *callback_observed.borrow_mut() = Some(index));
         list.set_selected_index(12);
         assert_eq!(*observed.borrow(), Some(12));
+
+        let selected_sets = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+        let selected_sets_for_callback = std::rc::Rc::clone(&selected_sets);
+        list.set_on_selection_changed(move |indices| {
+            *selected_sets_for_callback.borrow_mut() = indices;
+        });
+        list.set_selection_mode(SelectionMode::Multiple);
+        list.set_selected_indices(&[2, 5, 9]);
+        assert_eq!(list.selected_indices(), vec![2, 5, 9]);
+        assert_eq!(*selected_sets.borrow(), vec![2, 5, 9]);
+        list.set_on_activated(|_| {});
+        list.set_on_edit_requested(|_| {});
+        list.set_on_context_menu_requested(|_| {});
         window.set_content(list.as_widget());
     }
 
@@ -4017,6 +4461,50 @@ mod tests {
         window.set_content(overlay.as_widget());
         assert!(overlay.remove_overlay(dialog.as_widget()));
         assert!(!closed.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn mounts_a_light_dismiss_native_context_menu() {
+        let _guard = window_test_lock().lock().expect("window test lock");
+        let window = Window::new(&WindowOptions::default()).expect("window should be created");
+        let overlay = OverlayHost::new().expect("overlay host should be created");
+        let page = Panel::new().expect("page should be created");
+        overlay.set_content(page.as_widget());
+
+        let anchor = Panel::new().expect("popup anchor should be created");
+        anchor.as_widget().set_preferred_size(1.0, 1.0);
+        let mut menu = Menu::new().expect("menu should be created");
+        menu.add_header("Production", "root@10.0.0.1:22");
+        assert_eq!(
+            menu.add_item("Connect", Some(IconSymbol::Terminal), false),
+            0
+        );
+        menu.add_separator();
+        assert_eq!(menu.add_item("Delete", Some(IconSymbol::Trash), true), 1);
+        menu.set_on_activated(|_| {});
+        menu.as_widget()
+            .set_preferred_size(220.0, menu.preferred_height());
+
+        let popup = Popup::new().expect("popup should be created");
+        popup.set_anchor(anchor.as_widget());
+        popup.set_content(menu.as_widget());
+        popup.set_anchor_rect(40.0, 50.0, 1.0, 1.0);
+        popup.set_preferred_placement(PopupPreferredPlacement::BottomStart);
+        popup.set_interaction_mode(PopupInteractionMode::LightDismiss);
+        popup.set_open(true);
+        assert!(popup.is_open());
+
+        overlay.add_anchored_overlay(
+            popup.as_widget(),
+            100,
+            -1.0,
+            -1.0,
+            Insets::default(),
+            OverlayAlignment::Start,
+            OverlayAlignment::Start,
+        );
+        window.set_content(overlay.as_widget());
+        assert!(overlay.remove_overlay(popup.as_widget()));
     }
 
     #[test]

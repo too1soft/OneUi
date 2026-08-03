@@ -51,7 +51,8 @@ enum class Key {
     A,
     C,
     V,
-    X
+    X,
+    F2
 };
 
 enum class CursorKind {

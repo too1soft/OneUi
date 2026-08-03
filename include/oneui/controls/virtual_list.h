@@ -3,6 +3,7 @@
 #include "oneui/animation.h"
 #include "oneui/controls/list.h"
 #include "oneui/export.h"
+#include "oneui/selection_model.h"
 
 #include <functional>
 #include <optional>
@@ -22,6 +23,10 @@ public:
     void setItems(std::vector<ListItem> items);
     void setSelectedIndex(int index);
     int selectedIndex() const;
+    void setSelectionMode(SelectionMode mode);
+    SelectionMode selectionMode() const;
+    void setSelectedIndices(std::vector<int> indices);
+    const std::vector<int>& selectedIndices() const;
     void setRowHeight(float height);
     float rowHeight() const;
     void setWheelStep(float step);
@@ -31,6 +36,10 @@ public:
     void setStyleOverride(ListStyleOverride style);
     void clearStyleOverride();
     void setOnChanged(std::function<void(int)> callback);
+    void setOnSelectionChanged(std::function<void(const std::vector<int>&)> callback);
+    void setOnActivated(std::function<void(int)> callback);
+    void setOnEditRequested(std::function<void(int)> callback);
+    void setOnContextMenuRequested(std::function<void(int, Point)> callback);
 
     void paint(Canvas& canvas) override;
     bool onMouseMove(const MouseEvent& event) override;
@@ -44,6 +53,7 @@ public:
 
 private:
     void assignSelectedIndex(int index);
+    void notifySelectionChanged(const std::vector<int>& previousIndices, int previousSelectedIndex);
     void resetScrollMotion(float offset);
     bool advanceScrollMotion(double nowMs);
     int effectiveSelectedIndex() const;
@@ -57,7 +67,7 @@ private:
     void resetInteractionState() override;
 
     std::vector<ListItem> items_;
-    int selectedIndex_ = 0;
+    SelectionModel selection_;
     int hoveredIndex_ = -1;
     int pressedIndex_ = -1;
     float rowHeight_ = 48.0f;
@@ -68,6 +78,10 @@ private:
     double scrollTraceLastTickMs_ = 0.0;
     std::optional<ListStyleOverride> styleOverride_;
     std::function<void(int)> onChanged_;
+    std::function<void(const std::vector<int>&)> onSelectionChanged_;
+    std::function<void(int)> onActivated_;
+    std::function<void(int)> onEditRequested_;
+    std::function<void(int, Point)> onContextMenuRequested_;
 };
 
 } // namespace oneui
