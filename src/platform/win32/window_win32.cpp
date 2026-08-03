@@ -73,19 +73,18 @@ SkRect toSkRect(Rect rect) {
 constexpr UINT kOneUiRunPostedCallbacks = WM_APP + 1;
 constexpr UINT kOneUiFinishWindowStatePaint = WM_APP + 2;
 constexpr UINT kOneUiDeferredFullPaint = WM_APP + 3;
+constexpr UINT kOneUiAnimationFrameReady = WM_APP + 4;
 constexpr UINT kOneUiDpiChanged = 0x02E0;
 constexpr UINT_PTR kOneUiAnimationTimer = 0x4f10;
 constexpr UINT_PTR kOneUiInteractivePaintTimer = 0x4f11;
-// SetTimer rounds a 16 ms request up to two 15.6 ms clock ticks on systems
-// using the default Windows timer resolution. Request the documented minimum
-// so animation callbacks land on the next clock tick instead of falling to
-// roughly 32 FPS. Rendering remains paint-coalesced and never busy-waits.
-constexpr UINT kOneUiAnimationFrameIntervalMs = USER_TIMER_MINIMUM;
+constexpr UINT kOneUiBackgroundAnimationIntervalMs = USER_TIMER_MINIMUM;
 constexpr UINT kOneUiInteractivePaintIntervalMs = 8;
 constexpr int kPaintSurfaceAlignment = 128;
 constexpr int kPaintSurfaceGrowthPadding = 256;
 constexpr float kDefaultDpi = 96.0f;
 constexpr int kProcessPerMonitorDpiAware = 2;
+
+using WglSwapIntervalExtProc = BOOL(WINAPI*)(int);
 
 #ifndef DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2
 #define DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 reinterpret_cast<HANDLE>(-4)
@@ -1105,9 +1104,21 @@ public:
             std::lock_guard<std::mutex> lock(animationCallbacksMutex_);
             animationCallbacks_.push(std::move(callback));
         }
-        if (!animationTimerActive_) {
-            SetTimer(hwnd_, kOneUiAnimationTimer, kOneUiAnimationFrameIntervalMs, nullptr);
+        if (animationFramePending_) {
+            return;
+        }
+
+        animationFramePending_ = true;
+        if (IsWindowVisible(hwnd_) && !IsIconic(hwnd_)) {
+            if (PostMessageW(hwnd_, kOneUiAnimationFrameReady, 0, 0)) {
+                return;
+            }
+        }
+
+        if (SetTimer(hwnd_, kOneUiAnimationTimer, kOneUiBackgroundAnimationIntervalMs, nullptr)) {
             animationTimerActive_ = true;
+        } else {
+            animationFramePending_ = false;
         }
     }
 
@@ -1556,6 +1567,9 @@ private:
             return 0;
         case kOneUiDeferredFullPaint:
             flushDeferredFullPaint();
+            return 0;
+        case kOneUiAnimationFrameReady:
+            runAnimationFrameCallbacks();
             return 0;
         case WM_TIMER:
             if (wParam == kOneUiAnimationTimer) {
@@ -2060,6 +2074,7 @@ private:
             KillTimer(hwnd_, kOneUiAnimationTimer);
             animationTimerActive_ = false;
         }
+        animationFramePending_ = false;
 
         std::queue<std::function<void(double)>> callbacks;
         {
@@ -2075,6 +2090,11 @@ private:
             callback(nowMs);
         }
         flushPendingPaint();
+        if (!swapIntervalEnabled_ && hwnd_ && IsWindowVisible(hwnd_)) {
+            // Raster rendering and older OpenGL drivers do not expose a swap
+            // interval. DWM still provides a compositor-paced fallback.
+            DwmFlush();
+        }
     }
 
     void discardPostedCallbacks() {
@@ -2244,6 +2264,7 @@ private:
                 return;
             }
             gpuAvailable_ = false;
+            swapIntervalEnabled_ = false;
             windowSurface_.reset();
             paintSurface_.reset();
             paintSurfaceWidth_ = 0;
@@ -2367,6 +2388,7 @@ private:
             paintSurface_.reset();
             windowSurface_.reset();
             gpuAvailable_ = false;
+            swapIntervalEnabled_ = false;
         }
         // 走到这里说明无表面或容量不足，必须重建光栅表面。
         // 旧逻辑仅在表面为空时新建：容量不足时沿用小表面、记账尺寸却改成大的，
@@ -2422,6 +2444,19 @@ private:
         if (!renderTraceEnabled_) {
             return;
         }
+        const double nowMs = currentTimeMs();
+        if (traceLastPaintMs_ > 0.0) {
+            const double frameIntervalMs = nowMs - traceLastPaintMs_;
+            if (frameIntervalMs > 0.0 && frameIntervalMs < 250.0) {
+                traceFrameIntervalMs_ += frameIntervalMs;
+                ++traceFrameIntervals_;
+                if (traceMinFrameIntervalMs_ == 0.0 || frameIntervalMs < traceMinFrameIntervalMs_) {
+                    traceMinFrameIntervalMs_ = frameIntervalMs;
+                }
+                traceMaxFrameIntervalMs_ = std::max(traceMaxFrameIntervalMs_, frameIntervalMs);
+            }
+        }
+        traceLastPaintMs_ = nowMs;
         ++tracePaints_;
         if (fullPaint) {
             ++traceFullPaints_;
@@ -2459,11 +2494,15 @@ private:
         const double paintAvg = tracePaints_ > 0 ? tracePaintMs_ / static_cast<double>(tracePaints_) : 0.0;
         const double contentAvg = tracePaints_ > 0 ? traceContentPaintMs_ / static_cast<double>(tracePaints_) : 0.0;
         const double blitAvg = tracePaints_ > 0 ? traceBlitMs_ / static_cast<double>(tracePaints_) : 0.0;
+        const double frameIntervalAvg = traceFrameIntervals_ > 0
+            ? traceFrameIntervalMs_ / static_cast<double>(traceFrameIntervals_)
+            : 0.0;
+        const double presentedFps = frameIntervalAvg > 0.0 ? 1000.0 / frameIntervalAvg : 0.0;
         char line[1536]{};
         std::snprintf(
             line,
             sizeof(line),
-            "[oneui-render] size=%dx%d wm_size=%llu interactive_size=%llu max=%llu restore=%llu paints=%llu full=%llu partial=%llu surface_alloc=%llu avg_paint=%.2fms avg_content=%.2fms avg_blit=%.2fms surface_alloc_ms=%.2f text=%llu/%.2fms measure=%llu/%.2fms shadow=%llu/%.2fms gradient=%llu/%.2fms\n",
+            "[oneui-render] size=%dx%d wm_size=%llu interactive_size=%llu max=%llu restore=%llu paints=%llu full=%llu partial=%llu frame=%.2fms/%.1ffps min=%.2fms max=%.2fms surface_alloc=%llu avg_paint=%.2fms avg_content=%.2fms avg_blit=%.2fms surface_alloc_ms=%.2f text=%llu/%.2fms measure=%llu/%.2fms shadow=%llu/%.2fms gradient=%llu/%.2fms\n",
             traceLastWidth_,
             traceLastHeight_,
             static_cast<unsigned long long>(traceResizeMessages_),
@@ -2473,6 +2512,10 @@ private:
             static_cast<unsigned long long>(tracePaints_),
             static_cast<unsigned long long>(traceFullPaints_),
             static_cast<unsigned long long>(tracePartialPaints_),
+            frameIntervalAvg,
+            presentedFps,
+            traceMinFrameIntervalMs_,
+            traceMaxFrameIntervalMs_,
             static_cast<unsigned long long>(traceSurfaceAllocations_),
             paintAvg,
             contentAvg,
@@ -2504,6 +2547,10 @@ private:
         tracePaints_ = 0;
         traceFullPaints_ = 0;
         tracePartialPaints_ = 0;
+        traceFrameIntervals_ = 0;
+        traceFrameIntervalMs_ = 0.0;
+        traceMinFrameIntervalMs_ = 0.0;
+        traceMaxFrameIntervalMs_ = 0.0;
         traceSurfaceAllocations_ = 0;
         tracePaintMs_ = 0.0;
         traceContentPaintMs_ = 0.0;
@@ -2867,9 +2914,16 @@ private:
             return;
         }
 
+        const auto swapInterval = reinterpret_cast<WglSwapIntervalExtProc>(
+            wglGetProcAddress("wglSwapIntervalEXT"));
+        swapIntervalEnabled_ = swapInterval && swapInterval(1) == TRUE;
+
         glContext_ = tempContext;
         gpuAvailable_ = true;
-        std::fprintf(stderr, "OneUI GPU rendering enabled (OpenGL+Skia Ganesh)\n");
+        std::fprintf(
+            stderr,
+            "OneUI GPU rendering enabled (OpenGL+Skia Ganesh, vsync=%s)\n",
+            swapIntervalEnabled_ ? "on" : "dwm-fallback");
     }
 
     void shutdownGPU() {
@@ -2886,6 +2940,7 @@ private:
             glDC_ = nullptr;
         }
         gpuAvailable_ = false;
+        swapIntervalEnabled_ = false;
     }
 
     HWND hwnd_ = nullptr;
@@ -2900,6 +2955,7 @@ private:
     sk_sp<GrDirectContext> grContext_;
     bool gpuInitializationAttempted_ = false;
     bool gpuAvailable_ = false;
+    bool swapIntervalEnabled_ = false;
     std::shared_ptr<Widget> content_;
     wchar_t pendingHighSurrogate_ = 0;
     std::atomic_bool acceptingPostedCallbacks_{true};
@@ -2924,6 +2980,7 @@ private:
     int shadowBuiltH_ = 0;
     bool mouseLeaveTracking_ = false;
     bool animationTimerActive_ = false;
+    bool animationFramePending_ = false;
     bool contentAnimationFramePending_ = false;
     bool interactivePaintTimerActive_ = false;
     bool applyingWindowState_ = false;
@@ -2948,12 +3005,17 @@ private:
     std::uint64_t tracePaints_ = 0;
     std::uint64_t traceFullPaints_ = 0;
     std::uint64_t tracePartialPaints_ = 0;
+    std::uint64_t traceFrameIntervals_ = 0;
     std::uint64_t traceSurfaceAllocations_ = 0;
     std::uint64_t traceTextCalls_ = 0;
     std::uint64_t traceTextMeasureCalls_ = 0;
     std::uint64_t traceShadowCalls_ = 0;
     std::uint64_t traceGradientCalls_ = 0;
     double traceLastPrintMs_ = 0.0;
+    double traceLastPaintMs_ = 0.0;
+    double traceFrameIntervalMs_ = 0.0;
+    double traceMinFrameIntervalMs_ = 0.0;
+    double traceMaxFrameIntervalMs_ = 0.0;
     double tracePaintMs_ = 0.0;
     double traceContentPaintMs_ = 0.0;
     double traceBlitMs_ = 0.0;
