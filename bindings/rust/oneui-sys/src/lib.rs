@@ -57,6 +57,18 @@ pub struct OneUiColor {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
+pub struct OneUiPointerEvent {
+    pub x: f32,
+    pub y: f32,
+    pub button: c_int,
+    pub click_count: c_int,
+    pub shift: c_int,
+    pub control: c_int,
+    pub alt: c_int,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct OneUiFocusRingStyle {
     pub color: OneUiColor,
     pub width: f32,
@@ -161,6 +173,8 @@ pub type OneUiBoolCallback = Option<unsafe extern "C" fn(value: c_int, user_data
 pub type OneUiIntCallback = Option<unsafe extern "C" fn(value: c_int, user_data: *mut c_void)>;
 pub type OneUiIndexPointCallback =
     Option<unsafe extern "C" fn(index: c_int, x: f32, y: f32, user_data: *mut c_void)>;
+pub type OneUiPointerCallback =
+    Option<unsafe extern "C" fn(event: *const OneUiPointerEvent, user_data: *mut c_void)>;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
@@ -370,6 +384,16 @@ extern "C" {
     pub fn oneui_interactive_surface_set_on_click(
         surface: *mut OneUiWidget,
         callback: OneUiVoidCallback,
+        user_data: *mut c_void,
+    );
+    pub fn oneui_interactive_surface_set_on_pointer_activated(
+        surface: *mut OneUiWidget,
+        callback: OneUiPointerCallback,
+        user_data: *mut c_void,
+    );
+    pub fn oneui_interactive_surface_set_on_context_menu_requested(
+        surface: *mut OneUiWidget,
+        callback: OneUiPointerCallback,
         user_data: *mut c_void,
     );
     pub fn oneui_scroll_view_create() -> *mut OneUiWidget;

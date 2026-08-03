@@ -1499,6 +1499,7 @@ private:
         const wchar_t* className = L"OneUIWindow";
 
         WNDCLASSW windowClass{};
+        windowClass.style = CS_DBLCLKS;
         windowClass.lpfnWndProc = &Win32Window::windowProc;
         windowClass.hInstance = instance;
         windowClass.lpszClassName = className;
@@ -1658,6 +1659,11 @@ private:
             SetFocus(hwnd_);
             SetCapture(hwnd_);
             dispatchMouseDown(lParam, MouseButton::Left);
+            return 0;
+        case WM_LBUTTONDBLCLK:
+            SetFocus(hwnd_);
+            SetCapture(hwnd_);
+            dispatchMouseDown(lParam, MouseButton::Left, 2);
             return 0;
         case WM_LBUTTONUP:
             ReleaseCapture();
@@ -2775,14 +2781,17 @@ private:
         }
     }
 
-    void dispatchMouseDown(LPARAM lParam, MouseButton button = MouseButton::Left) {
-        dispatchMouse(lParam, button, [](Widget& widget, const MouseEvent& event) {
+    void dispatchMouseDown(
+        LPARAM lParam,
+        MouseButton button = MouseButton::Left,
+        int clickCount = 1) {
+        dispatchMouse(lParam, button, clickCount, [](Widget& widget, const MouseEvent& event) {
             return widget.onMouseDown(event);
         });
     }
 
     void dispatchMouseUp(LPARAM lParam, MouseButton button = MouseButton::Left) {
-        dispatchMouse(lParam, button, [](Widget& widget, const MouseEvent& event) {
+        dispatchMouse(lParam, button, 1, [](Widget& widget, const MouseEvent& event) {
             return widget.onMouseUp(event);
         });
     }
@@ -3000,7 +3009,7 @@ private:
     }
 
     template <typename Handler>
-    void dispatchMouse(LPARAM lParam, MouseButton button, Handler handler) {
+    void dispatchMouse(LPARAM lParam, MouseButton button, int clickCount, Handler handler) {
         if (!content_ || !content_->visible()) {
             return;
         }
@@ -3010,6 +3019,7 @@ private:
         event.shift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
         event.control = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
         event.alt = (GetKeyState(VK_MENU) & 0x8000) != 0;
+        event.clickCount = clickCount;
         if (handler(*content_, event)) {
             requestInteractiveRedraw();
         }

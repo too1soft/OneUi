@@ -50,7 +50,20 @@ void InteractiveSurface::setContent(std::shared_ptr<Widget> child) {
 
 void InteractiveSurface::setOnClick(std::function<void()> callback) {
     onClick_ = std::move(callback);
-    setAccessibleRole(onClick_ ? AccessibilityRole::Button : AccessibilityRole::None);
+    setAccessibleRole(
+        onClick_ || onPointerActivated_ ? AccessibilityRole::Button : AccessibilityRole::None);
+}
+
+void InteractiveSurface::setOnPointerActivated(
+    std::function<void(const MouseEvent&)> callback) {
+    onPointerActivated_ = std::move(callback);
+    setAccessibleRole(
+        onClick_ || onPointerActivated_ ? AccessibilityRole::Button : AccessibilityRole::None);
+}
+
+void InteractiveSurface::setOnContextMenuRequested(
+    std::function<void(const MouseEvent&)> callback) {
+    onContextMenuRequested_ = std::move(callback);
 }
 
 void InteractiveSurface::setDisabled(bool disabled) {
@@ -88,12 +101,15 @@ bool InteractiveSurface::onMouseMove(const MouseEvent& event) {
 
 bool InteractiveSurface::onMouseDown(const MouseEvent& event) {
     const bool childHandled = View::onMouseDown(event);
-    if (!interactive() || !contains(event.position)) {
+    if (childHandled || !interactive() || !contains(event.position) ||
+        (event.button != MouseButton::Left && event.button != MouseButton::Right)) {
         return childHandled;
     }
 
     const auto previous = resolvedStyle();
-    pressed_ = true;
+    pressed_ = event.button == MouseButton::Left;
+    pressedButton_ = event.button;
+    pressedClickCount_ = event.clickCount;
     beginVisualTransition(previous, resolvedStyle());
     invalidate();
     return true;
@@ -101,17 +117,31 @@ bool InteractiveSurface::onMouseDown(const MouseEvent& event) {
 
 bool InteractiveSurface::onMouseUp(const MouseEvent& event) {
     const bool childHandled = View::onMouseUp(event);
-    if (!pressed_) {
+    if (pressedButton_ == MouseButton::None) {
         return childHandled;
     }
 
     const auto previous = resolvedStyle();
-    const bool activate = contains(event.position) && !childHandled;
+    const MouseButton pressedButton = pressedButton_;
+    const int pressedClickCount = pressedClickCount_;
+    const bool activate = contains(event.position) && !childHandled &&
+        event.button == pressedButton;
     pressed_ = false;
+    pressedButton_ = MouseButton::None;
+    pressedClickCount_ = 1;
     beginVisualTransition(previous, resolvedStyle());
     invalidate();
-    if (activate && onClick_) {
-        onClick_();
+    if (activate && pressedButton == MouseButton::Left) {
+        MouseEvent activation = event;
+        activation.clickCount = pressedClickCount;
+        if (onPointerActivated_) {
+            onPointerActivated_(activation);
+        }
+        if (onClick_) {
+            onClick_();
+        }
+    } else if (activate && pressedButton == MouseButton::Right && onContextMenuRequested_) {
+        onContextMenuRequested_(event);
     }
     return true;
 }
@@ -125,7 +155,7 @@ CursorKind InteractiveSurface::cursor(Point point) const {
 }
 
 bool InteractiveSurface::isFocusable() const {
-    return static_cast<bool>(onClick_) && interactive();
+    return static_cast<bool>(onClick_ || onPointerActivated_) && interactive();
 }
 
 bool InteractiveSurface::tickAnimations(double nowMs) {
@@ -154,6 +184,8 @@ bool InteractiveSurface::hasInteractionState() const {
 void InteractiveSurface::resetInteractionState() {
     hovered_ = false;
     pressed_ = false;
+    pressedButton_ = MouseButton::None;
+    pressedClickCount_ = 1;
     View::resetInteractionState();
     const auto target = resolvedStyle();
     backgroundTransition_.reset(target.background);

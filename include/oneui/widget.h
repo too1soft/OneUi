@@ -23,6 +23,7 @@ struct MouseEvent {
     bool shift = false;
     bool control = false;
     bool alt = false;
+    int clickCount = 1;
 };
 
 struct MouseWheelEvent {

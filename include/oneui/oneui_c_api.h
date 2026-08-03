@@ -24,6 +24,8 @@ typedef void (*OneUiBoolCallback)(int checked, void* user_data);
 typedef void (*OneUiIntCallback)(int value, void* user_data);
 typedef void (*OneUiIntArrayCallback)(const int* values, size_t count, void* user_data);
 typedef void (*OneUiIndexPointCallback)(int index, float x, float y, void* user_data);
+typedef struct OneUiPointerEvent OneUiPointerEvent;
+typedef void (*OneUiPointerCallback)(const OneUiPointerEvent* event, void* user_data);
 
 /*
  * Cross-platform string ABI. The caller owns data and it is only read during
@@ -90,6 +92,16 @@ typedef struct OneUiColor {
     unsigned char b;
     unsigned char a;
 } OneUiColor;
+
+typedef struct OneUiPointerEvent {
+    float x;
+    float y;
+    int button;
+    int click_count;
+    int shift;
+    int control;
+    int alt;
+} OneUiPointerEvent;
 
 /*
  * Terminal cells are structured so text, colors, and styles never depend on
@@ -632,6 +644,14 @@ ONEUI_API void oneui_interactive_surface_set_content(OneUiWidget* surface, OneUi
 ONEUI_API void oneui_interactive_surface_set_padding(OneUiWidget* surface, OneUiInsets padding);
 ONEUI_API void oneui_interactive_surface_set_style(OneUiWidget* surface, const OneUiInteractiveSurfaceStyle* style);
 ONEUI_API void oneui_interactive_surface_set_on_click(OneUiWidget* surface, OneUiVoidCallback callback, void* user_data);
+ONEUI_API void oneui_interactive_surface_set_on_pointer_activated(
+    OneUiWidget* surface,
+    OneUiPointerCallback callback,
+    void* user_data);
+ONEUI_API void oneui_interactive_surface_set_on_context_menu_requested(
+    OneUiWidget* surface,
+    OneUiPointerCallback callback,
+    void* user_data);
 
 ONEUI_API OneUiWidget* oneui_realtime_frame_view_create(void);
 ONEUI_API void oneui_realtime_frame_view_set_scale_mode(OneUiWidget* frame_view, OneUiVideoScaleMode scale_mode);

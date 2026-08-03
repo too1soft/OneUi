@@ -2493,6 +2493,56 @@ void testVirtualListExposesStandardRowCommands() {
     expectEqual("VirtualList F2 requests editing for the active row", editRequested, 4);
 }
 
+void testPointerActivationUsesSystemClickCountAndSeparateContextAction() {
+    oneui::InteractiveSurface surface;
+    surface.setFrame(oneui::Rect{0.0f, 0.0f, 240.0f, 80.0f});
+
+    int activationCount = 0;
+    int activationClicks = 0;
+    bool activationControl = false;
+    int contextCount = 0;
+    oneui::Point contextPoint{};
+    surface.setOnPointerActivated(
+        [&](const oneui::MouseEvent& event) {
+            ++activationCount;
+            activationClicks = event.clickCount;
+            activationControl = event.control;
+        });
+    surface.setOnContextMenuRequested(
+        [&](const oneui::MouseEvent& event) {
+            ++contextCount;
+            contextPoint = event.position;
+        });
+
+    const oneui::MouseEvent doubleClick{
+        oneui::Point{40.0f, 30.0f}, oneui::MouseButton::Left, false, true, false, 2};
+    surface.onMouseDown(doubleClick);
+    surface.onMouseUp(doubleClick);
+    expectEqual("InteractiveSurface emits one pointer activation", activationCount, 1);
+    expectEqual("InteractiveSurface preserves the system click count", activationClicks, 2);
+    expectEqual("InteractiveSurface preserves pointer modifiers", activationControl ? 1 : 0, 1);
+
+    const oneui::MouseEvent context{
+        oneui::Point{52.0f, 36.0f}, oneui::MouseButton::Right};
+    surface.onMouseDown(context);
+    surface.onMouseUp(context);
+    expectEqual("InteractiveSurface keeps context separate from activation", activationCount, 1);
+    expectEqual("InteractiveSurface emits one context request", contextCount, 1);
+    expectNear("InteractiveSurface context retains x", contextPoint.x, 52.0f);
+
+    oneui::VirtualList list;
+    list.setItems({{L"Alpha", L""}, {L"Beta", L""}});
+    list.setRowHeight(40.0f);
+    list.setFrame(oneui::Rect{0.0f, 0.0f, 240.0f, 80.0f});
+    int activated = -1;
+    list.setOnActivated([&activated](int index) { activated = index; });
+    const oneui::MouseEvent rowDoubleClick{
+        oneui::Point{20.0f, 60.0f}, oneui::MouseButton::Left, false, false, false, 2};
+    list.onMouseDown(rowDoubleClick);
+    list.onMouseUp(rowDoubleClick);
+    expectEqual("VirtualList double click activates the row", activated, 1);
+}
+
 void testVirtualListCssControlsCompactTypographyAndScrollbar() {
     oneui::StyleSheet sheet;
     std::string error;
@@ -5939,6 +5989,7 @@ int main() {
     testVirtualListPaintsOnlyViewportRowsAndMaintainsScrollSelection();
     testVirtualListUsesStandardMultipleSelectionSemantics();
     testVirtualListExposesStandardRowCommands();
+    testPointerActivationUsesSystemClickCountAndSeparateContextAction();
     testVirtualListCssControlsCompactTypographyAndScrollbar();
     testTreeViewStyleAdapterSharesListContract();
     testTableStyleOverridePaintsCustomColorsAndGeometry();

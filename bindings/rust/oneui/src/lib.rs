@@ -1550,10 +1550,67 @@ impl Drop for Select {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PointerButton {
+    None,
+    Left,
+    Right,
+    Middle,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PointerEvent {
+    pub x: f32,
+    pub y: f32,
+    pub button: PointerButton,
+    pub click_count: i32,
+    pub shift: bool,
+    pub control: bool,
+    pub alt: bool,
+}
+
+impl From<sys::OneUiPointerEvent> for PointerEvent {
+    fn from(value: sys::OneUiPointerEvent) -> Self {
+        let button = match value.button {
+            1 => PointerButton::Left,
+            2 => PointerButton::Right,
+            3 => PointerButton::Middle,
+            _ => PointerButton::None,
+        };
+        Self {
+            x: value.x,
+            y: value.y,
+            button,
+            click_count: value.click_count,
+            shift: value.shift != 0,
+            control: value.control != 0,
+            alt: value.alt != 0,
+        }
+    }
+}
+
+struct PointerCallback {
+    handler: Box<dyn FnMut(PointerEvent) + 'static>,
+}
+
+unsafe extern "C" fn run_pointer_callback(
+    event: *const sys::OneUiPointerEvent,
+    user_data: *mut std::ffi::c_void,
+) {
+    if event.is_null() || user_data.is_null() {
+        return;
+    }
+    let event = PointerEvent::from(unsafe { *event });
+    let callback = unsafe { &mut *user_data.cast::<PointerCallback>() };
+    let _ = catch_unwind(AssertUnwindSafe(|| (callback.handler)(event)));
+}
+
 /// A reusable native card/list-row surface with hover and press transitions.
 pub struct InteractiveSurface {
     widget: Widget,
-    callback: Option<Box<VoidCallback>>,
+    click_callback: Option<Box<VoidCallback>>,
+    pointer_callback: Option<Box<PointerCallback>>,
+    context_menu_callback: Option<Box<PointerCallback>>,
 }
 
 impl InteractiveSurface {
@@ -1561,7 +1618,9 @@ impl InteractiveSurface {
         let widget = Widget::from_raw(unsafe { sys::oneui_interactive_surface_create() })?;
         Ok(Self {
             widget,
-            callback: None,
+            click_callback: None,
+            pointer_callback: None,
+            context_menu_callback: None,
         })
     }
 
@@ -1583,13 +1642,13 @@ impl InteractiveSurface {
         F: FnMut() + 'static,
     {
         self.clear_on_click();
-        self.callback = Some(Box::new(VoidCallback {
+        self.click_callback = Some(Box::new(VoidCallback {
             handler: Box::new(callback),
         }));
         let user_data = (self
-            .callback
+            .click_callback
             .as_deref_mut()
-            .expect("interactive surface callback was just installed")
+            .expect("interactive surface click callback was just installed")
             as *mut VoidCallback)
             .cast();
         unsafe {
@@ -1609,7 +1668,75 @@ impl InteractiveSurface {
                 std::ptr::null_mut(),
             )
         };
-        self.callback = None;
+        self.click_callback = None;
+    }
+
+    pub fn set_on_pointer_activated<F>(&mut self, callback: F)
+    where
+        F: FnMut(PointerEvent) + 'static,
+    {
+        self.clear_on_pointer_activated();
+        self.pointer_callback = Some(Box::new(PointerCallback {
+            handler: Box::new(callback),
+        }));
+        let user_data = (self
+            .pointer_callback
+            .as_deref_mut()
+            .expect("interactive surface pointer callback was just installed")
+            as *mut PointerCallback)
+            .cast();
+        unsafe {
+            sys::oneui_interactive_surface_set_on_pointer_activated(
+                self.widget.as_raw(),
+                Some(run_pointer_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn clear_on_pointer_activated(&mut self) {
+        unsafe {
+            sys::oneui_interactive_surface_set_on_pointer_activated(
+                self.widget.as_raw(),
+                None,
+                std::ptr::null_mut(),
+            )
+        };
+        self.pointer_callback = None;
+    }
+
+    pub fn set_on_context_menu_requested<F>(&mut self, callback: F)
+    where
+        F: FnMut(PointerEvent) + 'static,
+    {
+        self.clear_on_context_menu_requested();
+        self.context_menu_callback = Some(Box::new(PointerCallback {
+            handler: Box::new(callback),
+        }));
+        let user_data = (self
+            .context_menu_callback
+            .as_deref_mut()
+            .expect("interactive surface context menu callback was just installed")
+            as *mut PointerCallback)
+            .cast();
+        unsafe {
+            sys::oneui_interactive_surface_set_on_context_menu_requested(
+                self.widget.as_raw(),
+                Some(run_pointer_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn clear_on_context_menu_requested(&mut self) {
+        unsafe {
+            sys::oneui_interactive_surface_set_on_context_menu_requested(
+                self.widget.as_raw(),
+                None,
+                std::ptr::null_mut(),
+            )
+        };
+        self.context_menu_callback = None;
     }
 
     pub fn as_widget(&self) -> &Widget {
@@ -1620,6 +1747,8 @@ impl InteractiveSurface {
 impl Drop for InteractiveSurface {
     fn drop(&mut self) {
         self.clear_on_click();
+        self.clear_on_pointer_activated();
+        self.clear_on_context_menu_requested();
     }
 }
 

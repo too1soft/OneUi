@@ -35,6 +35,8 @@ public:
     void setPadding(Insets padding);
     void setContent(std::shared_ptr<Widget> child);
     void setOnClick(std::function<void()> callback);
+    void setOnPointerActivated(std::function<void(const MouseEvent&)> callback);
+    void setOnContextMenuRequested(std::function<void(const MouseEvent&)> callback);
     void setDisabled(bool disabled) override;
 
     void paint(Canvas& canvas) override;
@@ -61,10 +63,14 @@ private:
     Insets padding_;
     bool hovered_ = false;
     bool pressed_ = false;
+    MouseButton pressedButton_ = MouseButton::None;
+    int pressedClickCount_ = 1;
     bool visualInitialized_ = false;
     ColorTransition backgroundTransition_;
     ColorTransition borderTransition_;
     std::function<void()> onClick_;
+    std::function<void(const MouseEvent&)> onPointerActivated_;
+    std::function<void(const MouseEvent&)> onContextMenuRequested_;
 };
 
 } // namespace oneui

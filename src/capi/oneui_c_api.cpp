@@ -3054,6 +3054,58 @@ void oneui_interactive_surface_set_on_click(
     });
 }
 
+void oneui_interactive_surface_set_on_pointer_activated(
+    OneUiWidget* surface,
+    OneUiPointerCallback callback,
+    void* user_data) {
+    auto* nativeSurface = asWidget<oneui::InteractiveSurface>(surface);
+    if (!nativeSurface) {
+        return;
+    }
+    if (!callback) {
+        nativeSurface->setOnPointerActivated(nullptr);
+        return;
+    }
+    nativeSurface->setOnPointerActivated([callback, user_data](const oneui::MouseEvent& event) {
+        const OneUiPointerEvent value{
+            event.position.x,
+            event.position.y,
+            static_cast<int>(event.button),
+            event.clickCount,
+            event.shift ? 1 : 0,
+            event.control ? 1 : 0,
+            event.alt ? 1 : 0,
+        };
+        callback(&value, user_data);
+    });
+}
+
+void oneui_interactive_surface_set_on_context_menu_requested(
+    OneUiWidget* surface,
+    OneUiPointerCallback callback,
+    void* user_data) {
+    auto* nativeSurface = asWidget<oneui::InteractiveSurface>(surface);
+    if (!nativeSurface) {
+        return;
+    }
+    if (!callback) {
+        nativeSurface->setOnContextMenuRequested(nullptr);
+        return;
+    }
+    nativeSurface->setOnContextMenuRequested([callback, user_data](const oneui::MouseEvent& event) {
+        const OneUiPointerEvent value{
+            event.position.x,
+            event.position.y,
+            static_cast<int>(event.button),
+            event.clickCount,
+            event.shift ? 1 : 0,
+            event.control ? 1 : 0,
+            event.alt ? 1 : 0,
+        };
+        callback(&value, user_data);
+    });
+}
+
 OneUiWidget* oneui_realtime_frame_view_create(void) {
     auto* wrapper = wrap(std::make_shared<oneui::RealtimeFrameView>());
     if (wrapper) {

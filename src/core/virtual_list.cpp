@@ -247,6 +247,7 @@ bool VirtualList::onMouseDown(const MouseEvent& event) {
         return false;
     }
     pressedIndex_ = hitItemIndex(event.position);
+    pressedClickCount_ = event.clickCount;
     if (pressedIndex_ < 0) {
         return false;
     }
@@ -259,7 +260,9 @@ bool VirtualList::onMouseUp(const MouseEvent& event) {
         return false;
     }
     const int pressed = pressedIndex_;
+    const int clickCount = pressedClickCount_;
     pressedIndex_ = -1;
+    pressedClickCount_ = 1;
     if (pressed < 0) {
         return false;
     }
@@ -277,6 +280,8 @@ bool VirtualList::onMouseUp(const MouseEvent& event) {
         notifySelectionChanged(previousIndices, previousSelectedIndex);
         if (event.button == MouseButton::Right && onContextMenuRequested_) {
             onContextMenuRequested_(pressed, event.position);
+        } else if (event.button == MouseButton::Left && clickCount == 2 && onActivated_) {
+            onActivated_(pressed);
         }
     }
     invalidate();

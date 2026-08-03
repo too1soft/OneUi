@@ -70,6 +70,7 @@ private:
     SelectionModel selection_;
     int hoveredIndex_ = -1;
     int pressedIndex_ = -1;
+    int pressedClickCount_ = 1;
     float rowHeight_ = 48.0f;
     float wheelStep_ = 48.0f;
     float scrollOffset_ = 0.0f;
