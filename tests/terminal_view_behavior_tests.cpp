@@ -468,6 +468,137 @@ void testCommittedUnicodeAndImeCaretStayCellAligned() {
     expectNear("terminal IME caret height matches cell", caret.height, 26.0f);
 }
 
+void testEmojiClustersWideCellsAndSelectionStayAligned() {
+    oneui::TerminalView terminal;
+    terminal.setFrame(oneui::Rect{0.0f, 0.0f, 240.0f, 40.0f});
+    terminal.setFontSize(20.0f);
+    const std::wstring technologist = L"\U0001F469\u200D\U0001F4BB";
+    const std::wstring combining = L"e\u0301";
+    const std::wstring emojiPresentation = L"\u2708\uFE0F";
+    terminal.setGrid(1, 6, {
+        oneui::TerminalCell{
+            technologist,
+            {220, 226, 240, 255},
+            {20, 24, 36, 255},
+            oneui::TerminalCellWide,
+        },
+        oneui::TerminalCell{
+            L"",
+            {220, 226, 240, 255},
+            {20, 24, 36, 255},
+            oneui::TerminalCellWideContinuation,
+        },
+        oneui::TerminalCell{combining},
+        oneui::TerminalCell{
+            emojiPresentation,
+            {220, 226, 240, 255},
+            {20, 24, 36, 255},
+            oneui::TerminalCellWide,
+        },
+        oneui::TerminalCell{
+            L"",
+            {220, 226, 240, 255},
+            {20, 24, 36, 255},
+            oneui::TerminalCellWideContinuation,
+        },
+        oneui::TerminalCell{L"A"},
+    });
+    terminal.setCursor(oneui::TerminalCursor{0, 5, true});
+
+    RecordingCanvas canvas;
+    terminal.paint(canvas);
+    expectEqual("terminal paints each Emoji cluster once", static_cast<int>(canvas.texts.size()), 4);
+    expectEqual("terminal keeps ZWJ Emoji text", canvas.texts[0].text == technologist ? 1 : 0, 1);
+    expectNear("terminal ZWJ Emoji spans two cells", canvas.texts[0].rect.width, 24.0f);
+    expectEqual("terminal keeps combining text in one cell", canvas.texts[1].text == combining ? 1 : 0, 1);
+    expectEqual(
+        "terminal keeps Emoji presentation selector",
+        canvas.texts[2].text == emojiPresentation ? 1 : 0,
+        1);
+    expectNear("terminal Emoji presentation spans two cells", canvas.texts[2].rect.width, 24.0f);
+
+    terminal.selectAll();
+    expectEqual(
+        "terminal Emoji selection skips continuation cells",
+        terminal.selectedText() == technologist + combining + emojiPresentation + L"A" ? 1 : 0,
+        1);
+}
+
+void testFontSizeMatrixKeepsViewportCaretAndWideCellsAligned() {
+    for (float fontSize : {9.0f, 13.0f, 18.0f, 28.0f}) {
+        oneui::TerminalView terminal;
+        terminal.setFrame(oneui::Rect{11.0f, 17.0f, 720.0f, 360.0f});
+        terminal.setFontSize(fontSize);
+        terminal.setLineHeight(1.30f);
+        std::vector<oneui::TerminalCell> cells(4 * 20);
+        cells[0] = oneui::TerminalCell{
+            L"中",
+            {220, 226, 240, 255},
+            {20, 24, 36, 255},
+            oneui::TerminalCellWide,
+        };
+        cells[1] = oneui::TerminalCell{
+            L"",
+            {220, 226, 240, 255},
+            {20, 24, 36, 255},
+            oneui::TerminalCellWideContinuation,
+        };
+        terminal.setGrid(4, 20, std::move(cells));
+        terminal.setCursor(oneui::TerminalCursor{2, 7, true});
+        oneui::TerminalViewport viewport{};
+        terminal.setOnViewportChanged([&](oneui::TerminalViewport value) { viewport = value; });
+
+        RecordingCanvas canvas;
+        terminal.paint(canvas);
+        const float cellWidth = fontSize * 0.60f;
+        const float cellHeight = std::max(fontSize * 1.30f, fontSize + 2.0f);
+        const oneui::Rect caret = terminal.textInputCaretRect();
+        expectNear("terminal zoom caret x", caret.x, 11.0f + cellWidth * 7.0f);
+        expectNear("terminal zoom caret y", caret.y, 17.0f + cellHeight * 2.0f);
+        expectNear("terminal zoom caret width", caret.width, cellWidth);
+        expectNear("terminal zoom caret height", caret.height, cellHeight);
+        expectEqual(
+            "terminal zoom viewport columns",
+            viewport.columns,
+            static_cast<int>(std::floor(720.0f / cellWidth)));
+        expectEqual(
+            "terminal zoom viewport rows",
+            viewport.rows,
+            static_cast<int>(std::floor(360.0f / cellHeight)));
+        expectNear("terminal zoom keeps wide cell geometry", canvas.texts.front().rect.width, cellWidth * 2.0f);
+
+        terminal.setSelection(0, 0, 0, 2);
+        expectEqual("terminal zoom keeps wide selection", terminal.selectedText() == L"中" ? 1 : 0, 1);
+    }
+}
+
+void testLargeGridPaintingRemainsBoundedByTheDirtyClip() {
+    constexpr std::uint16_t rows = 2'000;
+    constexpr std::uint16_t columns = 120;
+    oneui::TerminalView terminal;
+    terminal.setFrame(oneui::Rect{0.0f, 0.0f, 960.0f, 640.0f});
+    terminal.setFontSize(13.0f);
+    std::vector<oneui::TerminalCell> cells(static_cast<std::size_t>(rows) * columns);
+    const std::size_t target = static_cast<std::size_t>(2) * columns + 8;
+    cells[target] = oneui::TerminalCell{L"X"};
+    terminal.setGrid(rows, columns, std::move(cells));
+    terminal.setCursor(oneui::TerminalCursor{0, 0, false});
+
+    RecordingCanvas canvas;
+    const float cellWidth = 13.0f * 0.60f;
+    const float cellHeight = 13.0f * 1.30f;
+    canvas.clipOverride = oneui::Rect{
+        cellWidth * 8.0f,
+        cellHeight * 2.0f,
+        cellWidth,
+        cellHeight,
+    };
+    terminal.paint(canvas);
+    expectEqual("terminal large grid paints only clipped text", static_cast<int>(canvas.texts.size()), 1);
+    expectEqual("terminal large grid clipped glyph", canvas.texts.front().text == L"X" ? 1 : 0, 1);
+    expectEqual("terminal large grid keeps requested cells", static_cast<int>(terminal.cellCount()), rows * columns);
+}
+
 void testStyleBoxControlsTerminalVisualTokens() {
     oneui::TerminalView terminal;
     oneui::StyleBox style;
@@ -804,6 +935,9 @@ int main() {
     testSelectionInvalidatesOnlyItsChangedCells();
     testTextAndRawKeyCallbacksStaySeparate();
     testCommittedUnicodeAndImeCaretStayCellAligned();
+    testEmojiClustersWideCellsAndSelectionStayAligned();
+    testFontSizeMatrixKeepsViewportCaretAndWideCellsAligned();
+    testLargeGridPaintingRemainsBoundedByTheDirtyClip();
     testStyleBoxControlsTerminalVisualTokens();
     testSelectionCopyPasteAndTerminalShortcuts();
     testInputClearsSelectionWithoutBreakingModifierShortcuts();
