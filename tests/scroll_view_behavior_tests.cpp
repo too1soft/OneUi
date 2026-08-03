@@ -123,6 +123,26 @@ void testWheelKeepsExistingVerticalBehavior() {
     expectNear("ScrollView wheel clamps top", scroll.scrollOffset(), 0.0f);
 }
 
+void testWheelRetargetsContinuousMotionAndAcceptsPrecisionDelta() {
+    auto content = std::make_shared<LayoutProbe>(oneui::Size{0.0f, 400.0f});
+    oneui::ScrollView scroll;
+    scroll.setFrame(oneui::Rect{0.0f, 0.0f, 120.0f, 100.0f});
+    scroll.setContent(content);
+    scroll.setWheelStep(40.0f);
+
+    scroll.onMouseWheel(oneui::MouseWheelEvent{oneui::Point{20.0f, 20.0f}, -1.0f});
+    const float firstOffset = scroll.scrollOffset();
+    scroll.onMouseWheel(oneui::MouseWheelEvent{oneui::Point{20.0f, 20.0f}, -1.0f});
+    expectEqual("ScrollView retarget keeps moving immediately", scroll.scrollOffset() > firstOffset ? 1 : 0, 1);
+    scroll.tickAnimations(1.0e15);
+    expectNear("ScrollView accumulated wheel target", scroll.scrollOffset(), 80.0f);
+
+    scroll.onMouseWheel(oneui::MouseWheelEvent{oneui::Point{20.0f, 20.0f}, 0.25f});
+    expectEqual("ScrollView precision delta responds immediately", scroll.scrollOffset() < 80.0f ? 1 : 0, 1);
+    scroll.tickAnimations(1.0e15);
+    expectNear("ScrollView precision delta target", scroll.scrollOffset(), 70.0f);
+}
+
 void testKeyboardScrollsVerticalAndHorizontalOffsets() {
     auto content = std::make_shared<LayoutProbe>(oneui::Size{0.0f, 0.0f});
     oneui::ScrollView scroll;
@@ -230,6 +250,7 @@ void testChromeAndScrollbarStyleCanBeCustomized() {
 int main() {
     testOffsetsClampToContentBounds();
     testWheelKeepsExistingVerticalBehavior();
+    testWheelRetargetsContinuousMotionAndAcceptsPrecisionDelta();
     testKeyboardScrollsVerticalAndHorizontalOffsets();
     testHorizontalOffsetAppliesToContentLayout();
     testHorizontalThumbPaintsWhenContentOverflows();
