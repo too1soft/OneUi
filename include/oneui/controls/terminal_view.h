@@ -30,6 +30,9 @@ struct TerminalCell {
     Color foreground{220, 226, 240, 255};
     Color background{20, 24, 36, 255};
     std::uint32_t style = 0;
+    /// Stable identifier owned by the terminal emulator. A value of zero
+    /// means this cell is not part of an OSC 8 hyperlink.
+    std::uint32_t hyperlinkId = 0;
 };
 
 struct TerminalCursor {
@@ -78,6 +81,7 @@ public:
     using RawKeyCallback = std::function<void(const KeyEvent&)>;
     using ScrollCallback = std::function<void(int)>;
     using PointerCallback = std::function<void(const TerminalPointerEvent&)>;
+    using HyperlinkCallback = std::function<void(std::uint32_t)>;
     using ViewportChangedCallback = std::function<void(TerminalViewport)>;
     using FocusChangedCallback = std::function<void(bool)>;
 
@@ -125,6 +129,7 @@ public:
     void setOnRawKey(RawKeyCallback callback);
     void setOnScroll(ScrollCallback callback);
     void setOnPointer(PointerCallback callback);
+    void setOnHyperlink(HyperlinkCallback callback);
     void setOnViewportChanged(ViewportChangedCallback callback);
     void setOnFocusChanged(FocusChangedCallback callback);
     void setAnimationScheduler(std::function<void()> scheduler) override;
@@ -207,6 +212,9 @@ private:
     Rect cellRect(TextPosition position) const;
     void invalidateCell(TextPosition position);
     void invalidateCellRange(std::size_t firstCell, std::size_t count);
+    std::uint32_t hyperlinkAt(Point point) const;
+    void setHoveredHyperlink(std::uint32_t hyperlinkId);
+    void invalidateHyperlink(std::uint32_t hyperlinkId);
     void reportPointer(
         TerminalPointerAction action,
         MouseButton button,
@@ -250,6 +258,7 @@ private:
     RawKeyCallback onRawKey_;
     ScrollCallback onScroll_;
     PointerCallback onPointer_;
+    HyperlinkCallback onHyperlink_;
     ViewportChangedCallback onViewportChanged_;
     FocusChangedCallback onFocusChanged_;
     TerminalViewport viewport_{};
@@ -260,6 +269,8 @@ private:
     float pointerWheelRemainder_ = 0.0f;
     MouseButton reportedButton_ = MouseButton::None;
     bool mouseReporting_ = false;
+    std::uint32_t hoveredHyperlink_ = 0;
+    std::uint32_t pressedHyperlink_ = 0;
 };
 
 } // namespace oneui

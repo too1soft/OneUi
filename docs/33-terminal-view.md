@@ -12,7 +12,8 @@ frame to the view:
 
 - grid rows and columns;
 - one `TerminalCell` per grid position;
-- per-cell text, foreground, background, and style flags;
+- per-cell text, foreground, background, style flags, and an optional stable
+  hyperlink identifier;
 - a cursor position and visibility state.
 
 The component copies incoming cells. Callers can reuse or drop their source
@@ -31,6 +32,12 @@ escape-sequence parser, scrollback store, or key encoder. Those are session
 engine concerns. The first iShellPro integration uses `vt100` as the parser and
 maps its frame into this public component contract.
 
+OSC 8 URI strings remain owned by the terminal engine. Cells carry only a
+bounded integer identifier, and `setOnHyperlink` / `set_on_hyperlink` reports
+that identifier after a completed Ctrl+left-click. OneUI adds hover underline
+and pointer feedback, but it never resolves or opens a URI. The product must
+resolve the identifier and apply its own protocol and trust policy.
+
 ## C++ API
 
 ```cpp
@@ -44,6 +51,9 @@ terminal->setGrid(rows, columns, cells);
 terminal->setCursor(oneui::TerminalCursor{row, column, true});
 terminal->setOnTextInput([&](const std::wstring& text) {
     session.writeUtf8(text);
+});
+terminal->setOnHyperlink([&](std::uint32_t hyperlinkId) {
+    session.activateHyperlink(hyperlinkId);
 });
 ```
 
@@ -90,6 +100,7 @@ return `Error::WidgetDestroyed` without dereferencing the native widget.
 ## Validation
 
 The component has C++ behavior coverage for grid normalization, wide cells,
-cursor state, and separated input callbacks. The C ABI test covers structured
-UTF-8 cells and callback registration. The Rust binding test creates the native
-view, sets a wide-character frame and cursor, and mounts it in a native window.
+cursor state, separated input callbacks, hyperlink hover, and explicit
+Ctrl-click activation. The C ABI test covers structured UTF-8 cells and callback
+registration. Rust binding tests cover hyperlink identifiers in frame diffs and
+across the C ABI, and mount a native terminal view in a native window.

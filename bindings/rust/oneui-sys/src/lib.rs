@@ -5,7 +5,7 @@
 
 use std::ffi::{c_char, c_int, c_uint, c_ushort, c_void};
 
-pub const UTF8_ABI_VERSION: c_uint = 1;
+pub const UTF8_ABI_VERSION: c_uint = 2;
 
 #[repr(C)]
 pub struct OneUiWindow {
@@ -111,6 +111,7 @@ pub struct OneUiTerminalCellUtf8 {
     pub foreground: OneUiColor,
     pub background: OneUiColor,
     pub style: c_uint,
+    pub hyperlink_id: c_uint,
 }
 
 impl OneUiUtf8String {
@@ -187,6 +188,8 @@ pub type OneUiRawKeyCallback =
     Option<unsafe extern "C" fn(event: *const OneUiRawKeyEvent, user_data: *mut c_void)>;
 pub type OneUiTerminalPointerCallback =
     Option<unsafe extern "C" fn(event: *const OneUiTerminalPointerEvent, user_data: *mut c_void)>;
+pub type OneUiTerminalHyperlinkCallback =
+    Option<unsafe extern "C" fn(hyperlink_id: c_uint, user_data: *mut c_void)>;
 pub type OneUiTerminalViewportCallback =
     Option<unsafe extern "C" fn(rows: c_ushort, columns: c_ushort, user_data: *mut c_void)>;
 
@@ -518,6 +521,11 @@ extern "C" {
     pub fn oneui_terminal_view_set_on_pointer(
         view: *mut OneUiWidget,
         callback: OneUiTerminalPointerCallback,
+        user_data: *mut c_void,
+    );
+    pub fn oneui_terminal_view_set_on_hyperlink(
+        view: *mut OneUiWidget,
+        callback: OneUiTerminalHyperlinkCallback,
         user_data: *mut c_void,
     );
     pub fn oneui_terminal_view_set_on_viewport_changed(

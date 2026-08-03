@@ -2020,6 +2020,8 @@ pub struct TerminalCell {
     pub foreground: TerminalColor,
     pub background: TerminalColor,
     pub style: u32,
+    /// Stable emulator-owned OSC 8 hyperlink identifier. Zero means no link.
+    pub hyperlink_id: u32,
 }
 
 impl Default for TerminalCell {
@@ -2029,6 +2031,7 @@ impl Default for TerminalCell {
             foreground: TerminalColor::default(),
             background: TerminalColor::rgb(20, 24, 36),
             style: 0,
+            hyperlink_id: 0,
         }
     }
 }
@@ -2176,6 +2179,10 @@ struct TerminalScrollCallback {
 
 struct TerminalPointerCallback {
     handler: Box<dyn FnMut(TerminalPointerEvent) + 'static>,
+}
+
+struct TerminalHyperlinkCallback {
+    handler: Box<dyn FnMut(u32) + 'static>,
 }
 
 struct TerminalViewportCallback {
@@ -2382,6 +2389,17 @@ unsafe extern "C" fn run_terminal_pointer_callback(
     let _ = catch_unwind(AssertUnwindSafe(|| (callback.handler)(event)));
 }
 
+unsafe extern "C" fn run_terminal_hyperlink_callback(
+    hyperlink_id: u32,
+    user_data: *mut std::ffi::c_void,
+) {
+    if user_data.is_null() {
+        return;
+    }
+    let callback = unsafe { &mut *user_data.cast::<TerminalHyperlinkCallback>() };
+    let _ = catch_unwind(AssertUnwindSafe(|| (callback.handler)(hyperlink_id)));
+}
+
 unsafe extern "C" fn run_terminal_viewport_callback(
     rows: u16,
     columns: u16,
@@ -2408,6 +2426,7 @@ pub struct TerminalView {
     raw_key_callback: Option<Box<TerminalRawKeyCallback>>,
     scroll_callback: Option<Box<TerminalScrollCallback>>,
     pointer_callback: Option<Box<TerminalPointerCallback>>,
+    hyperlink_callback: Option<Box<TerminalHyperlinkCallback>>,
     viewport_callback: Option<Box<TerminalViewportCallback>>,
     focus_callback: Option<Box<BoolChangedCallback>>,
 }
@@ -2428,6 +2447,7 @@ impl TerminalView {
             raw_key_callback: None,
             scroll_callback: None,
             pointer_callback: None,
+            hyperlink_callback: None,
             viewport_callback: None,
             focus_callback: None,
         })
@@ -2665,6 +2685,31 @@ impl TerminalView {
         };
     }
 
+    /// Installs the activation callback for OSC 8 cells. OneUI emits this
+    /// only after a completed Ctrl+left-click on the same hyperlink.
+    pub fn set_on_hyperlink<F>(&mut self, callback: F)
+    where
+        F: FnMut(u32) + 'static,
+    {
+        self.clear_hyperlink_callback();
+        self.hyperlink_callback = Some(Box::new(TerminalHyperlinkCallback {
+            handler: Box::new(callback),
+        }));
+        let user_data = (self
+            .hyperlink_callback
+            .as_deref_mut()
+            .expect("terminal hyperlink callback was just installed")
+            as *mut TerminalHyperlinkCallback)
+            .cast();
+        unsafe {
+            sys::oneui_terminal_view_set_on_hyperlink(
+                self.widget.as_raw(),
+                Some(run_terminal_hyperlink_callback),
+                user_data,
+            )
+        };
+    }
+
     pub fn set_on_viewport_changed<F>(&mut self, callback: F)
     where
         F: FnMut(TerminalViewport) + 'static,
@@ -2762,6 +2807,17 @@ impl TerminalView {
         self.pointer_callback = None;
     }
 
+    pub fn clear_hyperlink_callback(&mut self) {
+        unsafe {
+            sys::oneui_terminal_view_set_on_hyperlink(
+                self.widget.as_raw(),
+                None,
+                std::ptr::null_mut(),
+            )
+        };
+        self.hyperlink_callback = None;
+    }
+
     pub fn clear_viewport_callback(&mut self) {
         unsafe {
             sys::oneui_terminal_view_set_on_viewport_changed(
@@ -2810,6 +2866,7 @@ impl Drop for TerminalView {
         self.clear_raw_key_callback();
         self.clear_scroll_callback();
         self.clear_pointer_callback();
+        self.clear_hyperlink_callback();
         self.clear_viewport_callback();
         self.clear_focus_callback();
     }
@@ -2930,6 +2987,7 @@ fn native_terminal_cells(cells: &[TerminalCell]) -> Vec<sys::OneUiTerminalCellUt
             foreground: cell.foreground.into(),
             background: cell.background.into(),
             style: cell.style,
+            hyperlink_id: cell.hyperlink_id,
         })
         .collect()
 }
@@ -3894,6 +3952,23 @@ mod tests {
             super::terminal_dirty_ranges(&previous, &current),
             vec![1..2, 4..5]
         );
+
+        current.cells[0].hyperlink_id = 42;
+        assert_eq!(
+            super::terminal_dirty_ranges(&previous, &current),
+            vec![0..2, 4..5]
+        );
+    }
+
+    #[test]
+    fn terminal_cells_preserve_hyperlink_ids_across_the_c_abi() {
+        let native = super::native_terminal_cells(&[TerminalCell {
+            text: "docs".to_owned(),
+            hyperlink_id: 73,
+            ..TerminalCell::default()
+        }]);
+        assert_eq!(native.len(), 1);
+        assert_eq!(native[0].hyperlink_id, 73);
     }
 
     #[test]

@@ -98,6 +98,7 @@ typedef struct OneUiTerminalCellUtf8 {
     OneUiColor foreground;
     OneUiColor background;
     unsigned int style;
+    unsigned int hyperlink_id;
 } OneUiTerminalCellUtf8;
 
 typedef enum OneUiTerminalCursorStyle {
@@ -253,6 +254,7 @@ typedef struct OneUiTerminalPointerEvent {
 typedef void (*OneUiRemotePointerCallback)(const OneUiRemotePointerEvent* event, void* user_data);
 typedef void (*OneUiRawKeyCallback)(const OneUiRawKeyEvent* event, void* user_data);
 typedef void (*OneUiTerminalPointerCallback)(const OneUiTerminalPointerEvent* event, void* user_data);
+typedef void (*OneUiTerminalHyperlinkCallback)(unsigned int hyperlink_id, void* user_data);
 
 enum {
     OneUiTerminalCellBold = 1u << 0,
@@ -264,7 +266,7 @@ enum {
     OneUiTerminalCellWideContinuation = 1u << 6
 };
 
-#define ONEUI_UTF8_ABI_VERSION 1u
+#define ONEUI_UTF8_ABI_VERSION 2u
 
 ONEUI_API const char* oneui_version(void);
 ONEUI_API unsigned int oneui_utf8_abi_version(void);
@@ -655,6 +657,10 @@ ONEUI_API void oneui_terminal_view_set_mouse_reporting(OneUiWidget* view, int en
 ONEUI_API void oneui_terminal_view_set_on_pointer(
     OneUiWidget* view,
     OneUiTerminalPointerCallback callback,
+    void* user_data);
+ONEUI_API void oneui_terminal_view_set_on_hyperlink(
+    OneUiWidget* view,
+    OneUiTerminalHyperlinkCallback callback,
     void* user_data);
 ONEUI_API void oneui_terminal_view_set_on_viewport_changed(
     OneUiWidget* view,

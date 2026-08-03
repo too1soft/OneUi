@@ -620,6 +620,69 @@ void testMouseReportingPreservesApplicationInputAndShiftSelection() {
     expectEqual("terminal shift wheel scrolls local history", scrolledRows, 3);
 }
 
+void testOsc8HyperlinksUseExplicitCtrlClickActivation() {
+    oneui::TerminalView terminal;
+    terminal.setFrame(oneui::Rect{0.0f, 0.0f, 120.0f, 40.0f});
+    terminal.setFontSize(20.0f);
+    oneui::TerminalCell first;
+    first.text = L"A";
+    first.hyperlinkId = 42;
+    oneui::TerminalCell second;
+    second.text = L"B";
+    second.hyperlinkId = 84;
+    terminal.setGrid(1, 3, {first, second, oneui::TerminalCell{L"C"}});
+
+    RecordingCanvas initialCanvas;
+    terminal.paint(initialCanvas);
+    std::vector<std::uint32_t> activations;
+    std::vector<oneui::TerminalPointerEvent> pointers;
+    terminal.setOnHyperlink([&](std::uint32_t hyperlinkId) {
+        activations.push_back(hyperlinkId);
+    });
+    terminal.setOnPointer([&](const oneui::TerminalPointerEvent& event) {
+        pointers.push_back(event);
+    });
+
+    expectEqual(
+        "terminal hyperlink uses pointer cursor",
+        terminal.cursor({6.0f, 10.0f}) == oneui::CursorKind::Pointer ? 1 : 0,
+        1);
+    expectEqual(
+        "terminal plain cell keeps text cursor",
+        terminal.cursor({30.0f, 10.0f}) == oneui::CursorKind::Text ? 1 : 0,
+        1);
+
+    terminal.onMouseMove(oneui::MouseEvent{{6.0f, 10.0f}});
+    RecordingCanvas hoveredCanvas;
+    terminal.paint(hoveredCanvas);
+    expectEqual("terminal hovered hyperlink is underlined", hoveredCanvas.lineCount > 0 ? 1 : 0, 1);
+
+    terminal.onMouseDown(oneui::MouseEvent{{6.0f, 10.0f}, oneui::MouseButton::Left});
+    terminal.onMouseUp(oneui::MouseEvent{{6.0f, 10.0f}, oneui::MouseButton::Left});
+    expectEqual("terminal plain click does not activate hyperlink", static_cast<int>(activations.size()), 0);
+
+    oneui::MouseEvent controlPress{{6.0f, 10.0f}, oneui::MouseButton::Left};
+    controlPress.control = true;
+    terminal.onMouseDown(controlPress);
+    oneui::MouseEvent controlRelease{{6.0f, 10.0f}, oneui::MouseButton::Left};
+    controlRelease.control = true;
+    terminal.onMouseUp(controlRelease);
+    expectEqual("terminal ctrl-click activates hyperlink", static_cast<int>(activations.size()), 1);
+    expectEqual("terminal activates stable hyperlink id", activations.front(), 42);
+
+    terminal.onMouseDown(controlPress);
+    oneui::MouseEvent otherRelease{{18.0f, 10.0f}, oneui::MouseButton::Left};
+    otherRelease.control = true;
+    terminal.onMouseUp(otherRelease);
+    expectEqual("terminal drag between links cancels activation", static_cast<int>(activations.size()), 1);
+
+    terminal.setMouseReporting(true);
+    terminal.onMouseDown(controlPress);
+    terminal.onMouseUp(controlRelease);
+    expectEqual("terminal ctrl-link overrides application mouse reporting", static_cast<int>(pointers.size()), 0);
+    expectEqual("terminal ctrl-link still activates in mouse mode", static_cast<int>(activations.size()), 2);
+}
+
 void testFocusCallbackReportsRealFocusTransitions() {
     oneui::TerminalView terminal;
     std::vector<bool> changes;
@@ -654,6 +717,7 @@ int main() {
     testProgrammaticSelectionUsesHalfOpenCellRanges();
     testWheelReportsWholeScrollbackRows();
     testMouseReportingPreservesApplicationInputAndShiftSelection();
+    testOsc8HyperlinksUseExplicitCtrlClickActivation();
     testFocusCallbackReportsRealFocusTransitions();
 
     if (failures != 0) {

@@ -469,6 +469,8 @@ void onTerminalRawKey(const OneUiRawKeyEvent*, void*) {}
 
 void onTerminalPointer(const OneUiTerminalPointerEvent*, void*) {}
 
+void onTerminalHyperlink(unsigned int, void*) {}
+
 void testTerminalViewAbiUsesStructuredCells() {
     OneUiWidget* view = oneui_terminal_view_create();
     expectTrue("terminal view create", view != nullptr);
@@ -482,12 +484,14 @@ void testTerminalViewAbiUsesStructuredCells() {
             {220, 226, 240, 255},
             {20, 24, 36, 255},
             OneUiTerminalCellBold,
+            42,
         },
         {
             {"\xE4\xB8\xAD", 3},
             {240, 200, 80, 255},
             {20, 24, 36, 255},
             OneUiTerminalCellWide,
+            0,
         },
     };
     oneui_terminal_view_set_font_size(view, 14.0f);
@@ -517,6 +521,7 @@ void testTerminalViewAbiUsesStructuredCells() {
     oneui_terminal_view_set_on_scroll(view, nullptr, nullptr);
     oneui_terminal_view_set_mouse_reporting(view, 1);
     oneui_terminal_view_set_on_pointer(view, onTerminalPointer, nullptr);
+    oneui_terminal_view_set_on_hyperlink(view, onTerminalHyperlink, nullptr);
 
     oneui_widget_destroy(view);
 }

@@ -39,7 +39,8 @@ bool sameColor(Color left, Color right) {
 
 bool sameTerminalCell(const TerminalCell& left, const TerminalCell& right) {
     return left.text == right.text && sameColor(left.foreground, right.foreground) &&
-           sameColor(left.background, right.background) && left.style == right.style;
+           sameColor(left.background, right.background) && left.style == right.style &&
+           left.hyperlinkId == right.hyperlinkId;
 }
 
 bool isCopyShortcut(const KeyEvent& event) {
@@ -92,6 +93,8 @@ void TerminalView::setGrid(std::uint16_t rows, std::uint16_t columns, std::vecto
         if (cursor_.row >= rows_ || cursor_.column >= columns_) {
             cursor_.visible = false;
         }
+        hoveredHyperlink_ = 0;
+        pressedHyperlink_ = 0;
         invalidate();
         return;
     }
@@ -132,6 +135,18 @@ void TerminalView::setGrid(std::uint16_t rows, std::uint16_t columns, std::vecto
     if (firstChanged == std::numeric_limits<std::size_t>::max()) {
         return;
     }
+    if (hoveredHyperlink_ != 0 &&
+        std::none_of(cells_.begin(), cells_.end(), [&](const TerminalCell& cell) {
+            return cell.hyperlinkId == hoveredHyperlink_;
+        })) {
+        hoveredHyperlink_ = 0;
+    }
+    if (pressedHyperlink_ != 0 &&
+        std::none_of(cells_.begin(), cells_.end(), [&](const TerminalCell& cell) {
+            return cell.hyperlinkId == pressedHyperlink_;
+        })) {
+        pressedHyperlink_ = 0;
+    }
     if (collapsed) {
         invalidateCellRange(firstChanged, lastChanged - firstChanged + 1);
         return;
@@ -164,6 +179,18 @@ void TerminalView::updateCells(std::size_t firstCell, std::vector<TerminalCell> 
     }
     if (dirtyStart != std::numeric_limits<std::size_t>::max()) {
         invalidateCellRange(dirtyStart, firstCell + count - dirtyStart);
+    }
+    if (hoveredHyperlink_ != 0 &&
+        std::none_of(cells_.begin(), cells_.end(), [&](const TerminalCell& cell) {
+            return cell.hyperlinkId == hoveredHyperlink_;
+        })) {
+        hoveredHyperlink_ = 0;
+    }
+    if (pressedHyperlink_ != 0 &&
+        std::none_of(cells_.begin(), cells_.end(), [&](const TerminalCell& cell) {
+            return cell.hyperlinkId == pressedHyperlink_;
+        })) {
+        pressedHyperlink_ = 0;
     }
 }
 
@@ -469,6 +496,11 @@ void TerminalView::setOnPointer(PointerCallback callback) {
     pointerWheelRemainder_ = 0.0f;
 }
 
+void TerminalView::setOnHyperlink(HyperlinkCallback callback) {
+    onHyperlink_ = std::move(callback);
+    pressedHyperlink_ = 0;
+}
+
 void TerminalView::setOnViewportChanged(ViewportChangedCallback callback) {
     onViewportChanged_ = std::move(callback);
     viewport_ = {};
@@ -560,7 +592,8 @@ void TerminalView::paint(Canvas& canvas) {
             style.foreground = background_;
         }
         style.weight = hasStyle(cell, TerminalCellBold) ? 700 : 400;
-        style.underline = hasStyle(cell, TerminalCellUnderline);
+        style.underline = hasStyle(cell, TerminalCellUnderline) ||
+                          (cell.hyperlinkId != 0 && cell.hyperlinkId == hoveredHyperlink_);
         return style;
     };
 
@@ -682,6 +715,11 @@ bool TerminalView::onMouseDown(const MouseEvent& event) {
     if (!interactive() || !contains(event.position) || rows_ == 0 || columns_ == 0) {
         return false;
     }
+    const std::uint32_t hyperlinkId = hyperlinkAt(event.position);
+    if (event.button == MouseButton::Left && event.control && hyperlinkId != 0 && onHyperlink_) {
+        pressedHyperlink_ = hyperlinkId;
+        return true;
+    }
     if (mouseReporting_ && !event.shift && onPointer_) {
         reportedButton_ = event.button;
         reportPointer(
@@ -733,6 +771,13 @@ bool TerminalView::onMouseDown(const MouseEvent& event) {
 }
 
 bool TerminalView::onMouseMove(const MouseEvent& event) {
+    const std::uint32_t hyperlinkId = interactive() && contains(event.position)
+                                          ? hyperlinkAt(event.position)
+                                          : 0;
+    const bool hyperlinkChanged = hyperlinkId != hoveredHyperlink_;
+    if (hyperlinkChanged) {
+        setHoveredHyperlink(hyperlinkId);
+    }
     if (selecting_) {
         const SelectionSnapshot previous = selectionSnapshot();
         const TextPosition previousAnchor = selectionAnchor_;
@@ -749,7 +794,7 @@ bool TerminalView::onMouseMove(const MouseEvent& event) {
             break;
         }
         if (previousAnchor == selectionAnchor_ && previousCaret == selectionCaret_) {
-            return false;
+            return hyperlinkChanged;
         }
         hasSelection_ = !(selectionAnchor_ == selectionCaret_);
         invalidateSelectionDelta(previous);
@@ -767,10 +812,19 @@ bool TerminalView::onMouseMove(const MouseEvent& event) {
             event.alt);
         return true;
     }
-    return false;
+    return hyperlinkChanged;
 }
 
 bool TerminalView::onMouseUp(const MouseEvent& event) {
+    if (pressedHyperlink_ != 0) {
+        const std::uint32_t hyperlinkId = pressedHyperlink_;
+        pressedHyperlink_ = 0;
+        if (event.button == MouseButton::Left && hyperlinkAt(event.position) == hyperlinkId &&
+            onHyperlink_) {
+            onHyperlink_(hyperlinkId);
+        }
+        return true;
+    }
     if (selecting_) {
         selecting_ = false;
         if (selectionAnchor_ == selectionCaret_) {
@@ -929,7 +983,13 @@ bool TerminalView::isFocusable() const {
 }
 
 CursorKind TerminalView::cursor(Point point) const {
-    return contains(point) && !mouseReporting_ ? CursorKind::Text : CursorKind::Default;
+    if (!contains(point)) {
+        return CursorKind::Default;
+    }
+    if (hyperlinkAt(point) != 0) {
+        return CursorKind::Pointer;
+    }
+    return !mouseReporting_ ? CursorKind::Text : CursorKind::Default;
 }
 
 bool TerminalView::tickAnimations(double nowMs) {
@@ -1244,6 +1304,48 @@ void TerminalView::invalidateCell(TextPosition position) {
     invalidateRect(cellRect(normalizedCellPosition(position)));
 }
 
+std::uint32_t TerminalView::hyperlinkAt(Point point) const {
+    if (!contains(point) || rows_ == 0 || columns_ == 0) {
+        return 0;
+    }
+    const TextPosition position = normalizedCellPosition(cellPositionFromPoint(point));
+    const TerminalCell* cell = cellAt(position.row, position.column);
+    return cell ? cell->hyperlinkId : 0;
+}
+
+void TerminalView::setHoveredHyperlink(std::uint32_t hyperlinkId) {
+    if (hyperlinkId == hoveredHyperlink_) {
+        return;
+    }
+    const std::uint32_t previous = hoveredHyperlink_;
+    hoveredHyperlink_ = hyperlinkId;
+    invalidateHyperlink(previous);
+    invalidateHyperlink(hyperlinkId);
+}
+
+void TerminalView::invalidateHyperlink(std::uint32_t hyperlinkId) {
+    if (hyperlinkId == 0 || rows_ == 0 || columns_ == 0) {
+        return;
+    }
+    for (std::uint16_t row = 0; row < rows_; ++row) {
+        std::uint16_t column = 0;
+        while (column < columns_) {
+            while (column < columns_ &&
+                   cells_[cellIndex(row, column)].hyperlinkId != hyperlinkId) {
+                ++column;
+            }
+            const std::uint16_t first = column;
+            while (column < columns_ &&
+                   cells_[cellIndex(row, column)].hyperlinkId == hyperlinkId) {
+                ++column;
+            }
+            if (first < column) {
+                invalidateCellRange(cellIndex(row, first), column - first);
+            }
+        }
+    }
+}
+
 void TerminalView::invalidateCellRange(std::size_t firstCell, std::size_t count) {
     if (count == 0) {
         return;
@@ -1337,12 +1439,14 @@ bool TerminalView::cellSelected(std::uint16_t row, std::uint16_t column) const {
 }
 
 bool TerminalView::hasInteractionState() const {
-    return selecting_ || reportedButton_ != MouseButton::None;
+    return selecting_ || reportedButton_ != MouseButton::None || pressedHyperlink_ != 0;
 }
 
 void TerminalView::resetInteractionState() {
     selecting_ = false;
     reportedButton_ = MouseButton::None;
+    pressedHyperlink_ = 0;
+    setHoveredHyperlink(0);
 }
 
 } // namespace oneui

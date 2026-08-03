@@ -3034,6 +3034,7 @@ void oneui_terminal_view_set_grid_utf8(
             toNativeColor(cell.foreground),
             toNativeColor(cell.background),
             cell.style,
+            cell.hyperlink_id,
         });
     }
     nativeView->setGrid(rows, columns, std::move(nativeCells));
@@ -3059,6 +3060,7 @@ void oneui_terminal_view_update_cells_utf8(
             toNativeColor(cell.foreground),
             toNativeColor(cell.background),
             cell.style,
+            cell.hyperlink_id,
         });
     }
     nativeView->updateCells(first_cell, std::move(nativeCells));
@@ -3224,6 +3226,21 @@ void oneui_terminal_view_set_on_pointer(
                 event.alt ? 1 : 0,
             };
             callback(&cEvent, user_data);
+        });
+    }
+}
+
+void oneui_terminal_view_set_on_hyperlink(
+    OneUiWidget* view,
+    OneUiTerminalHyperlinkCallback callback,
+    void* user_data) {
+    if (auto* nativeView = asWidget<oneui::TerminalView>(view)) {
+        if (!callback) {
+            nativeView->setOnHyperlink(nullptr);
+            return;
+        }
+        nativeView->setOnHyperlink([callback, user_data](std::uint32_t hyperlinkId) {
+            callback(hyperlinkId, user_data);
         });
     }
 }
