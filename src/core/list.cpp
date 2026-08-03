@@ -19,6 +19,18 @@ void List::setItems(std::vector<ListItem> items) {
     invalidate();
 }
 
+void List::setSelectionRequired(bool required) {
+    if (selectionRequired_ == required) {
+        return;
+    }
+    selectionRequired_ = required;
+    assignSelectedIndex(selectedIndex());
+}
+
+bool List::selectionRequired() const {
+    return selectionRequired_;
+}
+
 void List::setSelectedIndex(int index) {
     assignSelectedIndex(index);
 }
@@ -166,8 +178,9 @@ AccessibilityInfo List::accessibilityInfo() const {
     if (info.role == AccessibilityRole::None) {
         info.role = AccessibilityRole::List;
     }
-    if (!items_.empty()) {
-        const auto& item = items_[static_cast<std::size_t>(effectiveSelectedIndex())];
+    const int selected = effectiveSelectedIndex();
+    if (selected >= 0) {
+        const auto& item = items_[static_cast<std::size_t>(selected)];
         info.value = item.detail.empty() ? item.title : item.title + L" - " + item.detail;
         info.state.selected = true;
     }
@@ -177,16 +190,18 @@ AccessibilityInfo List::accessibilityInfo() const {
 void List::assignSelectedIndex(int index) {
     if (items_.empty()) {
         const int previous = selectedIndex();
-        selectedBinding_.set(0, selectedIndex_);
-        if (previous != 0 && onChanged_) {
-            onChanged_(0);
+        const int next = selectionRequired_ ? 0 : -1;
+        selectedBinding_.set(next, selectedIndex_);
+        if (previous != next && onChanged_) {
+            onChanged_(next);
         }
         invalidate();
         return;
     }
 
     const int previous = effectiveSelectedIndex();
-    const int next = std::clamp(index, 0, static_cast<int>(items_.size()) - 1);
+    const int minimum = selectionRequired_ ? 0 : -1;
+    const int next = std::clamp(index, minimum, static_cast<int>(items_.size()) - 1);
     selectedBinding_.set(next, selectedIndex_);
     if (previous != next && onChanged_) {
         onChanged_(next);
@@ -196,9 +211,10 @@ void List::assignSelectedIndex(int index) {
 
 int List::effectiveSelectedIndex() const {
     if (items_.empty()) {
-        return 0;
+        return selectionRequired_ ? 0 : -1;
     }
-    return std::clamp(selectedIndex(), 0, static_cast<int>(items_.size()) - 1);
+    const int minimum = selectionRequired_ ? 0 : -1;
+    return std::clamp(selectedIndex(), minimum, static_cast<int>(items_.size()) - 1);
 }
 
 int List::hitItemIndex(Point point) const {

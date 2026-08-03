@@ -572,6 +572,7 @@ ONEUI_API void oneui_select_set_on_changed(
 ONEUI_API OneUiWidget* oneui_list_create(void);
 ONEUI_API void oneui_list_set_items(OneUiWidget* list, const wchar_t* items);
 ONEUI_API void oneui_list_set_items_utf8(OneUiWidget* list, const OneUiListItemUtf8* items, size_t count);
+ONEUI_API void oneui_list_set_selection_required(OneUiWidget* list, int required);
 ONEUI_API void oneui_list_set_selected_index(OneUiWidget* list, int index);
 ONEUI_API int oneui_list_selected_index(OneUiWidget* list);
 ONEUI_API void oneui_list_set_on_changed(OneUiWidget* list, OneUiIntCallback callback, void* user_data);
@@ -806,6 +807,8 @@ ONEUI_API void oneui_text_field_set_text(OneUiWidget* text_field, const wchar_t*
 ONEUI_API OneUiWidget* oneui_text_field_create_utf8(OneUiUtf8String placeholder);
 ONEUI_API void oneui_text_field_set_text_utf8(OneUiWidget* text_field, OneUiUtf8String text);
 ONEUI_API void oneui_text_field_set_read_only(OneUiWidget* text_field, int read_only);
+ONEUI_API void oneui_text_field_set_password_mode(OneUiWidget* text_field, int enabled);
+ONEUI_API void oneui_text_field_set_password_mask(OneUiWidget* text_field, unsigned int codepoint);
 ONEUI_API void oneui_text_field_set_multiline(OneUiWidget* text_field, int multiline);
 ONEUI_API void oneui_text_field_set_line_height(OneUiWidget* text_field, float line_height);
 ONEUI_API OneUiWidget* oneui_text_area_create_utf8(OneUiUtf8String placeholder);

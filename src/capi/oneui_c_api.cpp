@@ -2714,6 +2714,14 @@ void oneui_list_set_items_utf8(
     nativeList->setItems(listItemsFromUtf8(items, count));
 }
 
+void oneui_list_set_selection_required(OneUiWidget* list, int required) {
+    auto* nativeList = asWidget<oneui::List>(list);
+    if (!nativeList) {
+        return;
+    }
+    nativeList->setSelectionRequired(required != 0);
+}
+
 void oneui_list_set_selected_index(OneUiWidget* list, int index) {
     auto* nativeList = asWidget<oneui::List>(list);
     if (!nativeList) {
@@ -3871,6 +3879,22 @@ void oneui_text_field_set_read_only(OneUiWidget* text_field, int read_only) {
         return;
     }
     nativeTextField->setReadOnly(read_only != 0);
+}
+
+void oneui_text_field_set_password_mode(OneUiWidget* text_field, int enabled) {
+    auto* nativeTextField = asWidget<oneui::TextField>(text_field);
+    if (!nativeTextField) {
+        return;
+    }
+    nativeTextField->setPasswordMode(enabled != 0);
+}
+
+void oneui_text_field_set_password_mask(OneUiWidget* text_field, unsigned int codepoint) {
+    auto* nativeTextField = asWidget<oneui::TextField>(text_field);
+    if (!nativeTextField || codepoint == 0 || codepoint > 0xFFFFu) {
+        return;
+    }
+    nativeTextField->setPasswordMask(static_cast<wchar_t>(codepoint));
 }
 
 void oneui_text_field_set_multiline(OneUiWidget* text_field, int multiline) {

@@ -535,6 +535,8 @@ extern "C" {
     pub fn oneui_text_field_create_utf8(placeholder: OneUiUtf8String) -> *mut OneUiWidget;
     pub fn oneui_text_field_set_text_utf8(text_field: *mut OneUiWidget, text: OneUiUtf8String);
     pub fn oneui_text_field_set_read_only(text_field: *mut OneUiWidget, read_only: c_int);
+    pub fn oneui_text_field_set_password_mode(text_field: *mut OneUiWidget, enabled: c_int);
+    pub fn oneui_text_field_set_password_mask(text_field: *mut OneUiWidget, codepoint: c_uint);
     pub fn oneui_text_field_set_multiline(text_field: *mut OneUiWidget, multiline: c_int);
     pub fn oneui_text_field_set_line_height(text_field: *mut OneUiWidget, line_height: f32);
     pub fn oneui_text_area_create_utf8(placeholder: OneUiUtf8String) -> *mut OneUiWidget;
@@ -638,6 +640,7 @@ extern "C" {
         items: *const OneUiListItemUtf8,
         count: usize,
     );
+    pub fn oneui_list_set_selection_required(list: *mut OneUiWidget, required: c_int);
     pub fn oneui_list_set_selected_index(list: *mut OneUiWidget, index: c_int);
     pub fn oneui_list_selected_index(list: *mut OneUiWidget) -> c_int;
     pub fn oneui_list_set_on_changed(

@@ -2081,6 +2081,16 @@ impl TextField {
         unsafe { sys::oneui_text_field_set_read_only(self.widget.as_raw(), i32::from(read_only)) };
     }
 
+    pub fn set_password_mode(&self, enabled: bool) {
+        unsafe {
+            sys::oneui_text_field_set_password_mode(self.widget.as_raw(), i32::from(enabled))
+        };
+    }
+
+    pub fn set_password_mask(&self, mask: char) {
+        unsafe { sys::oneui_text_field_set_password_mask(self.widget.as_raw(), u32::from(mask)) };
+    }
+
     pub fn set_on_changed<F>(&mut self, callback: F)
     where
         F: FnMut(String) + 'static,
@@ -3592,6 +3602,17 @@ impl List {
         };
     }
 
+    /// Controls whether the list must always keep one item selected.
+    ///
+    /// The default is `true` for backward compatibility. Set this to `false`
+    /// before assigning index `-1` when the surrounding editor has an explicit
+    /// new/empty state.
+    pub fn set_selection_required(&self, required: bool) {
+        unsafe {
+            sys::oneui_list_set_selection_required(self.widget.as_raw(), i32::from(required))
+        };
+    }
+
     pub fn set_selected_index(&self, index: i32) {
         unsafe { sys::oneui_list_set_selected_index(self.widget.as_raw(), index) };
     }
@@ -4416,6 +4437,8 @@ mod tests {
         let _guard = window_test_lock().lock().expect("window test lock");
         let observed = Arc::new(Mutex::new(Vec::new()));
         let mut field = TextField::new("搜索主机").expect("text field should be created");
+        field.set_password_mode(true);
+        field.set_password_mask('●');
         let observed_for_callback = Arc::clone(&observed);
         field.set_on_changed(move |value| {
             observed_for_callback
@@ -4494,6 +4517,28 @@ mod tests {
         list.set_selected_index(1);
 
         assert_eq!(*selected.borrow(), Some(1));
+        window.set_content(list.as_widget());
+    }
+
+    #[test]
+    fn supports_an_explicit_unselected_list_state() {
+        let _guard = window_test_lock().lock().expect("window test lock");
+        let window = Window::new(&WindowOptions::default()).expect("window should be created");
+        let list = List::new().expect("list should be created");
+        list.set_items(&[
+            ListItem {
+                title: "Production".to_owned(),
+                detail: "10.0.0.1".to_owned(),
+            },
+            ListItem {
+                title: "Staging".to_owned(),
+                detail: "10.0.0.2".to_owned(),
+            },
+        ]);
+        list.set_selection_required(false);
+        list.set_selected_index(-1);
+
+        assert_eq!(list.selected_index(), -1);
         window.set_content(list.as_widget());
     }
 

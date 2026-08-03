@@ -22,6 +22,8 @@ public:
     List();
 
     void setItems(std::vector<ListItem> items);
+    void setSelectionRequired(bool required);
+    bool selectionRequired() const;
     void setSelectedIndex(int index);
     int selectedIndex() const;
     void bindSelectedIndex(State<int>& state);
@@ -49,6 +51,7 @@ private:
     void resetInteractionState() override;
 
     std::vector<ListItem> items_;
+    bool selectionRequired_ = true;
     int selectedIndex_ = 0;
     int hoveredIndex_ = -1;
     int pressedIndex_ = -1;

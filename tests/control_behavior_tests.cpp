@@ -631,6 +631,21 @@ void testListNoopOnChanged() {
     expectEqual("List same-value setSelectedIndex", changes, 0);
 }
 
+void testListSupportsOptionalSelection() {
+    oneui::List list;
+    list.setItems({
+        oneui::ListItem{L"One", L"First"},
+        oneui::ListItem{L"Two", L"Second"},
+    });
+    list.setSelectionRequired(false);
+    list.setSelectedIndex(-1);
+
+    expectEqual("Optional List preserves no selection", list.selectedIndex(), -1);
+
+    list.setSelectionRequired(true);
+    expectEqual("Required List restores the first selection", list.selectedIndex(), 0);
+}
+
 void testBoundListSelectedIndex() {
     oneui::State<int> selected(0);
     oneui::List list;
@@ -5917,6 +5932,7 @@ int main() {
     testRadioGroupNoopOnChanged();
     testSelectNoopOnChanged();
     testListNoopOnChanged();
+    testListSupportsOptionalSelection();
     testBoundListSelectedIndex();
     testBoundSelectEffectiveNoopOnChanged();
     testSelectSetItemsShrinkClampsAndEmitsOnce();
