@@ -47,7 +47,7 @@ private:
     int effectiveSelectedIndex() const;
     int hitItemIndex(Point point) const;
     Rect itemRect(int index) const;
-    Rect verticalThumbRect() const;
+    Rect verticalThumbRect(float width) const;
     void ensureSelectionVisible();
     ListStyle resolvedContainerStyle() const;
     ListStyle resolvedItemStyle(int index) const;

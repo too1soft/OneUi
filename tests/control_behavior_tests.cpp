@@ -49,6 +49,7 @@
 #include "oneui/style_transition.h"
 #include "oneui/view.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <functional>
@@ -2390,6 +2391,86 @@ void testVirtualListPaintsOnlyViewportRowsAndMaintainsScrollSelection() {
     expectEqual("VirtualList keyboard navigation resumes from the first row", list.selectedIndex(), 0);
 }
 
+void testVirtualListCssControlsCompactTypographyAndScrollbar() {
+    oneui::StyleSheet sheet;
+    std::string error;
+    const bool parsed = sheet.addRulesFromCss(R"css(
+        virtual-list.compact-data-list {
+            content-background: transparent;
+            font-size: 12px;
+            font-weight: 600;
+            detail-font-size: 11px;
+            detail-font-weight: 400;
+            text-inset: 9px;
+            title-offset-y: 4px;
+            detail-offset-y: 22px;
+            scrollbar-color: #6d7188aa;
+            scrollbar-width: 3px;
+        }
+        virtual-list.compact-data-list:hover {
+            content-background: #253142;
+        }
+        virtual-list.compact-data-list:active {
+            content-background: #34445a;
+        }
+    )css", &error);
+    expectEqual("VirtualList compact CSS parses", parsed ? 1 : 0, 1);
+
+    const auto style = oneui::listStyleOverrideFromStyleSheet(
+        sheet,
+        oneui::StyleNode{"virtual-list", {"compact-data-list"}, oneui::StyleStateNone});
+    expectEqual("VirtualList CSS has a normal state", style.normal.has_value() ? 1 : 0, 1);
+    if (!style.normal) {
+        return;
+    }
+    expectNear("VirtualList CSS title font size", style.normal->titleFontSize.value_or(0.0f), 12.0f);
+    expectNear("VirtualList CSS detail font size", style.normal->detailFontSize.value_or(0.0f), 11.0f);
+    expectEqual("VirtualList CSS title font weight", style.normal->titleFontWeight.value_or(0), 600);
+    expectNear("VirtualList CSS text inset", style.normal->textInset.value_or(0.0f), 9.0f);
+    expectNear("VirtualList CSS title offset", style.normal->titleOffsetY.value_or(0.0f), 4.0f);
+    expectNear("VirtualList CSS detail offset", style.normal->detailOffsetY.value_or(0.0f), 22.0f);
+    expectNear("VirtualList CSS scrollbar width", style.normal->scrollbarWidth.value_or(0.0f), 3.0f);
+    expectEqual("VirtualList CSS scrollbar alpha", style.normal->scrollbarColor->a, 170);
+
+    oneui::VirtualList list;
+    list.setItems({
+        {L"Alpha", L"First"},
+        {L"Beta", L"Second"},
+        {L"Gamma", L"Third"},
+        {L"Delta", L"Fourth"},
+    });
+    list.setRowHeight(44.0f);
+    list.setFrame(oneui::Rect{0.0f, 0.0f, 220.0f, 88.0f});
+    list.setStyleOverride(style);
+    list.setSelectedIndex(-1);
+    RecordingCanvas canvas;
+    list.paint(canvas);
+    expectEqual(
+        "VirtualList normal rows do not inherit hover state",
+        countFillRectsWithColor(canvas, oneui::Color{37, 49, 66, 255}),
+        0);
+    expectEqual(
+        "VirtualList normal rows do not inherit pressed state",
+        countFillRectsWithColor(canvas, oneui::Color{52, 68, 90, 255}),
+        0);
+    const oneui::Color scrollbar{109, 113, 136, 170};
+    const auto thumb = std::find_if(canvas.fillRects.begin(), canvas.fillRects.end(), [&](const FillRectCall& call) {
+        return sameColor(call.color, scrollbar);
+    });
+    expectEqual("VirtualList paints configured scrollbar", thumb != canvas.fillRects.end() ? 1 : 0, 1);
+    if (thumb != canvas.fillRects.end()) {
+        expectNear("VirtualList paints configured scrollbar width", thumb->rect.width, 3.0f);
+    }
+
+    list.onMouseMove(oneui::MouseEvent{oneui::Point{20.0f, 60.0f}});
+    RecordingCanvas hoverCanvas;
+    list.paint(hoverCanvas);
+    expectEqual(
+        "VirtualList hover styles only the active row",
+        countFillRectsWithColor(hoverCanvas, oneui::Color{37, 49, 66, 255}),
+        1);
+}
+
 void testTreeViewStyleAdapterSharesListContract() {
     oneui::StyleSheet sheet;
     std::string error;
@@ -4202,6 +4283,13 @@ void testStyleSheetParsesCssLikeRules() {
             height: 42px;
             font-size: 13px;
             font-weight: 600;
+            detail-font-size: 11px;
+            detail-font-weight: 400;
+            text-inset: 9px;
+            title-offset-y: 4px;
+            detail-offset-y: 22px;
+            scrollbar-color: #6d7188aa;
+            scrollbar-width: 3px;
             outline-color: var(--unknown-outline, #1f54da44);
             outline-width: 2px;
             outline-offset: 1px;
@@ -4256,6 +4344,13 @@ void testStyleSheetParsesCssLikeRules() {
     expectEqual("StyleSheet CSS parses opacity", static_cast<int>(focused.opacity.value_or(0.0f) * 100.0f), 50);
     expectEqual("StyleSheet CSS parses font size", static_cast<int>(focused.fontSize.value_or(0.0f)), 13);
     expectEqual("StyleSheet CSS parses font weight", focused.fontWeight.value_or(0), 600);
+    expectEqual("StyleSheet CSS parses detail font size", static_cast<int>(focused.detailFontSize.value_or(0.0f)), 11);
+    expectEqual("StyleSheet CSS parses detail font weight", focused.detailFontWeight.value_or(0), 400);
+    expectEqual("StyleSheet CSS parses text inset", static_cast<int>(focused.textInset.value_or(0.0f)), 9);
+    expectEqual("StyleSheet CSS parses title offset", static_cast<int>(focused.titleOffsetY.value_or(0.0f)), 4);
+    expectEqual("StyleSheet CSS parses detail offset", static_cast<int>(focused.detailOffsetY.value_or(0.0f)), 22);
+    expectEqual("StyleSheet CSS parses scrollbar alpha", focused.scrollbarColor->a, 170);
+    expectEqual("StyleSheet CSS parses scrollbar width", static_cast<int>(focused.scrollbarWidth.value_or(0.0f)), 3);
     expectEqual("StyleSheet CSS parses width", static_cast<int>(focused.width.value_or(0.0f)), 240);
     expectEqual("StyleSheet CSS parses height", static_cast<int>(focused.height.value_or(0.0f)), 42);
     expectEqual("StyleSheet CSS parses placeholder color", focused.placeholderColor->r, 139);
@@ -5740,6 +5835,7 @@ int main() {
     testListStyleOverrideCanHideFocusRingAndStylePressed();
     testListDisabledStyleOverrideWinsAndClearRestoresDefault();
     testVirtualListPaintsOnlyViewportRowsAndMaintainsScrollSelection();
+    testVirtualListCssControlsCompactTypographyAndScrollbar();
     testTreeViewStyleAdapterSharesListContract();
     testTableStyleOverridePaintsCustomColorsAndGeometry();
     testTableEmptyStyleOverrideKeepsDefaultPaint();

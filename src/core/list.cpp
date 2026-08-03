@@ -3,6 +3,7 @@
 #include "list_style_internal.h"
 
 #include <algorithm>
+#include <optional>
 #include <utility>
 
 namespace oneui {
@@ -63,9 +64,15 @@ void List::paint(Canvas& canvas) {
     canvas.fillRect(rect, containerStyle.background, containerStyle.radius);
     canvas.strokeRect(rect, containerStyle.border, containerStyle.radius, containerStyle.borderWidth);
 
+    const ListStyle normalItemStyle = resolvedItemStyle(-1);
     for (int i = 0; i < static_cast<int>(items_.size()); ++i) {
         const Rect row = itemRect(i);
-        const ListStyle itemStyle = resolvedItemStyle(i);
+        const bool hasRowState = i == effectiveSelectedIndex() || i == hoveredIndex_ || i == pressedIndex_;
+        std::optional<ListStyle> stateItemStyle;
+        if (hasRowState) {
+            stateItemStyle = resolvedItemStyle(i);
+        }
+        const ListStyle& itemStyle = stateItemStyle ? *stateItemStyle : normalItemStyle;
         if (i > 0) {
             canvas.drawLine(Point{rect.x + itemStyle.textInset, row.y}, Point{rect.x + rect.width - itemStyle.textInset, row.y}, itemStyle.separator, 1.0f);
         }
@@ -75,10 +82,10 @@ void List::paint(Canvas& canvas) {
 
         const auto& item = items_[static_cast<std::size_t>(i)];
         if (item.detail.empty()) {
-            canvas.drawText(item.title, Rect{row.x + itemStyle.textInset, row.y, row.width - itemStyle.textInset * 2.0f, row.height}, itemStyle.titleColor, theme().fontMd, TextAlign::Left);
+            canvas.drawTextStyled(item.title, Rect{row.x + itemStyle.textInset, row.y, row.width - itemStyle.textInset * 2.0f, row.height}, itemStyle.titleColor, itemStyle.titleFontSize, TextAlign::Left, itemStyle.titleFontWeight);
         } else {
-            canvas.drawText(item.title, Rect{row.x + itemStyle.textInset, row.y + itemStyle.titleOffsetY, row.width - itemStyle.textInset * 2.0f, 18.0f}, itemStyle.titleColor, theme().fontMd, TextAlign::Left);
-            canvas.drawText(item.detail, Rect{row.x + itemStyle.textInset, row.y + itemStyle.detailOffsetY, row.width - itemStyle.textInset * 2.0f, 16.0f}, itemStyle.detailColor, theme().fontSm, TextAlign::Left);
+            canvas.drawTextStyled(item.title, Rect{row.x + itemStyle.textInset, row.y + itemStyle.titleOffsetY, row.width - itemStyle.textInset * 2.0f, 18.0f}, itemStyle.titleColor, itemStyle.titleFontSize, TextAlign::Left, itemStyle.titleFontWeight);
+            canvas.drawTextStyled(item.detail, Rect{row.x + itemStyle.textInset, row.y + itemStyle.detailOffsetY, row.width - itemStyle.textInset * 2.0f, 16.0f}, itemStyle.detailColor, itemStyle.detailFontSize, TextAlign::Left, itemStyle.detailFontWeight);
         }
     }
 }
@@ -231,9 +238,10 @@ ListStyle List::resolvedContainerStyle() const {
 }
 
 ListStyle List::resolvedItemStyle(int index) const {
-    const bool active = index == effectiveSelectedIndex();
-    const bool hovered = index == hoveredIndex_;
-    const bool pressed = index == pressedIndex_;
+    const bool hasItem = index >= 0;
+    const bool active = hasItem && index == effectiveSelectedIndex();
+    const bool hovered = hasItem && index == hoveredIndex_;
+    const bool pressed = hasItem && index == pressedIndex_;
     ListStyle style = detail::baseListStyle(active, disabled(), hovered, pressed);
     if (!styleOverride_) {
         return style;

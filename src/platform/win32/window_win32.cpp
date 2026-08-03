@@ -2610,7 +2610,9 @@ private:
             (GetKeyState(VK_MENU) & 0x8000) != 0,
         };
         if (content_->onMouseWheel(event)) {
-            requestInteractiveRedraw();
+            // Scroll controls invalidate their own viewport. Preserve that dirty rect
+            // instead of promoting every wheel notch to a synchronous full-window paint.
+            flushInteractivePaint();
         }
     }
 

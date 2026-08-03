@@ -150,6 +150,15 @@ ListStateStyleOverride listStateStyleOverrideFromStyleBox(const StyleBox& box) {
     override.radius = box.radius;
     override.rowRadius = box.content.radius;
     override.rowInset = box.padding;
+    override.titleFontSize = box.fontSize;
+    override.detailFontSize = box.detailFontSize;
+    override.titleFontWeight = box.fontWeight;
+    override.detailFontWeight = box.detailFontWeight;
+    override.textInset = box.textInset;
+    override.titleOffsetY = box.titleOffsetY;
+    override.detailOffsetY = box.detailOffsetY;
+    override.scrollbarColor = box.scrollbarColor;
+    override.scrollbarWidth = box.scrollbarWidth;
     if (box.outlineColor || box.outlineWidth || box.outlineOffset || box.radius) {
         override.focusRing = focusRingOverrideFromStyleBox(box);
     }

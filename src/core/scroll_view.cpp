@@ -209,8 +209,8 @@ bool ScrollView::tickAnimations(double nowMs) {
         if (std::fabs(next - scrollOffset_) > 0.001f) {
             scrollOffset_ = next;
             layoutChildren();
+            invalidate();
         }
-        invalidate();
     }
     if (scrollTransition_.running()) {
         requestAnimationFrame();

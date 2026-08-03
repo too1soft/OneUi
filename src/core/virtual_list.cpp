@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <optional>
 #include <utility>
 
 namespace oneui {
@@ -116,9 +117,15 @@ void VirtualList::paint(Canvas& canvas) {
 
     canvas.save();
     canvas.clipRect(rect);
+    const ListStyle normalItemStyle = resolvedItemStyle(-1);
     for (int index = first; index < last; ++index) {
         const Rect row = itemRect(index);
-        const ListStyle itemStyle = resolvedItemStyle(index);
+        const bool hasRowState = index == effectiveSelectedIndex() || index == hoveredIndex_ || index == pressedIndex_;
+        std::optional<ListStyle> stateItemStyle;
+        if (hasRowState) {
+            stateItemStyle = resolvedItemStyle(index);
+        }
+        const ListStyle& itemStyle = stateItemStyle ? *stateItemStyle : normalItemStyle;
         if (index > 0) {
             canvas.drawLine(
                 Point{rect.x + itemStyle.textInset, row.y},
@@ -132,32 +139,35 @@ void VirtualList::paint(Canvas& canvas) {
 
         const auto& item = items_[static_cast<std::size_t>(index)];
         if (item.detail.empty()) {
-            canvas.drawText(
+            canvas.drawTextStyled(
                 item.title,
                 Rect{row.x + itemStyle.textInset, row.y, row.width - itemStyle.textInset * 2.0f, row.height},
                 itemStyle.titleColor,
-                theme().fontMd,
-                TextAlign::Left);
+                itemStyle.titleFontSize,
+                TextAlign::Left,
+                itemStyle.titleFontWeight);
         } else {
-            canvas.drawText(
+            canvas.drawTextStyled(
                 item.title,
                 Rect{row.x + itemStyle.textInset, row.y + itemStyle.titleOffsetY, row.width - itemStyle.textInset * 2.0f, 18.0f},
                 itemStyle.titleColor,
-                theme().fontMd,
-                TextAlign::Left);
-            canvas.drawText(
+                itemStyle.titleFontSize,
+                TextAlign::Left,
+                itemStyle.titleFontWeight);
+            canvas.drawTextStyled(
                 item.detail,
                 Rect{row.x + itemStyle.textInset, row.y + itemStyle.detailOffsetY, row.width - itemStyle.textInset * 2.0f, 16.0f},
                 itemStyle.detailColor,
-                theme().fontSm,
-                TextAlign::Left);
+                itemStyle.detailFontSize,
+                TextAlign::Left,
+                itemStyle.detailFontWeight);
         }
     }
     canvas.restore();
 
     if (maxScrollOffset() > 0.001f) {
-        const Rect thumb = verticalThumbRect();
-        canvas.fillRect(thumb, theme().borderStrong, thumb.width / 2.0f);
+        const Rect thumb = verticalThumbRect(containerStyle.scrollbarWidth);
+        canvas.fillRect(thumb, containerStyle.scrollbarColor, thumb.width / 2.0f);
     }
 }
 
@@ -226,10 +236,11 @@ bool VirtualList::tickAnimations(double nowMs) {
     }
 
     const float next = std::clamp(scrollTransition_.value(), 0.0f, maxScrollOffset());
-    if (std::fabs(next - scrollOffset_) > 0.001f) {
+    const bool changed = std::fabs(next - scrollOffset_) > 0.001f;
+    if (changed) {
         scrollOffset_ = next;
+        invalidate();
     }
-    invalidate();
     if (scrollTransition_.running()) {
         requestAnimationFrame();
     }
@@ -320,13 +331,14 @@ Rect VirtualList::itemRect(int index) const {
     return Rect{rect.x, rect.y + static_cast<float>(index) * rowHeight_ - scrollOffset_, rect.width, rowHeight_};
 }
 
-Rect VirtualList::verticalThumbRect() const {
+Rect VirtualList::verticalThumbRect(float width) const {
     const Rect rect = frame();
+    const float thumbWidth = std::max(1.0f, width);
     const float contentHeight = static_cast<float>(items_.size()) * rowHeight_;
     const float thumbHeight = std::max(24.0f, rect.height * rect.height / contentHeight);
     const float travel = std::max(0.0f, rect.height - thumbHeight - 10.0f);
     const float progress = maxScrollOffset() <= 0.001f ? 0.0f : scrollOffset_ / maxScrollOffset();
-    return Rect{rect.x + rect.width - 9.0f, rect.y + 5.0f + progress * travel, 4.0f, thumbHeight};
+    return Rect{rect.x + rect.width - thumbWidth - 4.0f, rect.y + 5.0f + progress * travel, thumbWidth, thumbHeight};
 }
 
 void VirtualList::ensureSelectionVisible() {
@@ -363,9 +375,10 @@ ListStyle VirtualList::resolvedContainerStyle() const {
 }
 
 ListStyle VirtualList::resolvedItemStyle(int index) const {
-    const bool selected = index == effectiveSelectedIndex();
-    const bool hovered = index == hoveredIndex_;
-    const bool pressed = index == pressedIndex_;
+    const bool hasItem = index >= 0;
+    const bool selected = hasItem && index == effectiveSelectedIndex();
+    const bool hovered = hasItem && index == hoveredIndex_;
+    const bool pressed = hasItem && index == pressedIndex_;
     ListStyle style = detail::baseListStyle(selected, disabled(), hovered, pressed);
     if (!styleOverride_) {
         return style;

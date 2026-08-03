@@ -550,6 +550,41 @@ bool applyDeclaration(
             rule.box.fontWeight = std::clamp(static_cast<int>(*fontWeight), 100, 900);
             return true;
         }
+    } else if (name == "detail-font-size") {
+        if (auto fontSize = parsePx(value)) {
+            rule.box.detailFontSize = *fontSize;
+            return true;
+        }
+    } else if (name == "detail-font-weight") {
+        if (auto fontWeight = parseNumber(value)) {
+            rule.box.detailFontWeight = std::clamp(static_cast<int>(*fontWeight), 100, 900);
+            return true;
+        }
+    } else if (name == "text-inset") {
+        if (auto inset = parsePx(value)) {
+            rule.box.textInset = *inset;
+            return true;
+        }
+    } else if (name == "title-offset-y") {
+        if (auto offset = parsePx(value)) {
+            rule.box.titleOffsetY = *offset;
+            return true;
+        }
+    } else if (name == "detail-offset-y") {
+        if (auto offset = parsePx(value)) {
+            rule.box.detailOffsetY = *offset;
+            return true;
+        }
+    } else if (name == "scrollbar-color") {
+        if (auto color = parseStyleColor(value)) {
+            rule.box.scrollbarColor = *color;
+            return true;
+        }
+    } else if (name == "scrollbar-width") {
+        if (auto width = parsePx(value)) {
+            rule.box.scrollbarWidth = *width;
+            return true;
+        }
     } else if (name == "transition-duration") {
         if (auto duration = parseDurationMs(value)) {
             rule.box.transitionDurationMs = *duration;
@@ -1022,6 +1057,27 @@ StyleBox mergeStyleBox(StyleBox base, const StyleBox& overlay) {
     }
     if (overlay.fontWeight) {
         base.fontWeight = overlay.fontWeight;
+    }
+    if (overlay.detailFontSize) {
+        base.detailFontSize = overlay.detailFontSize;
+    }
+    if (overlay.detailFontWeight) {
+        base.detailFontWeight = overlay.detailFontWeight;
+    }
+    if (overlay.textInset) {
+        base.textInset = overlay.textInset;
+    }
+    if (overlay.titleOffsetY) {
+        base.titleOffsetY = overlay.titleOffsetY;
+    }
+    if (overlay.detailOffsetY) {
+        base.detailOffsetY = overlay.detailOffsetY;
+    }
+    if (overlay.scrollbarColor) {
+        base.scrollbarColor = overlay.scrollbarColor;
+    }
+    if (overlay.scrollbarWidth) {
+        base.scrollbarWidth = overlay.scrollbarWidth;
     }
     if (overlay.transitionDurationMs) {
         base.transitionDurationMs = overlay.transitionDurationMs;

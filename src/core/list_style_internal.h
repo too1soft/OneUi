@@ -2,6 +2,8 @@
 
 #include "oneui/style.h"
 
+#include <algorithm>
+
 namespace oneui::detail {
 
 inline void applyFocusRingOverride(FocusRingStyle& style, const FocusRingStyleOverride& override) {
@@ -71,6 +73,24 @@ inline void applyListStateOverride(ListStyle& style, const ListStateStyleOverrid
     if (override.detailOffsetY) {
         style.detailOffsetY = *override.detailOffsetY;
     }
+    if (override.titleFontSize) {
+        style.titleFontSize = std::max(1.0f, *override.titleFontSize);
+    }
+    if (override.detailFontSize) {
+        style.detailFontSize = std::max(1.0f, *override.detailFontSize);
+    }
+    if (override.titleFontWeight) {
+        style.titleFontWeight = *override.titleFontWeight;
+    }
+    if (override.detailFontWeight) {
+        style.detailFontWeight = *override.detailFontWeight;
+    }
+    if (override.scrollbarColor) {
+        style.scrollbarColor = *override.scrollbarColor;
+    }
+    if (override.scrollbarWidth) {
+        style.scrollbarWidth = std::max(1.0f, *override.scrollbarWidth);
+    }
     if (override.focusRing) {
         applyFocusRingOverride(style.focusRing, *override.focusRing);
     }
@@ -95,6 +115,12 @@ inline ListStyle baseListStyle(bool selected, bool disabled, bool hovered, bool 
     style.textInset = 12.0f;
     style.titleOffsetY = 7.0f;
     style.detailOffsetY = 27.0f;
+    style.titleFontSize = t.fontMd;
+    style.detailFontSize = t.fontSm;
+    style.titleFontWeight = 400;
+    style.detailFontWeight = 400;
+    style.scrollbarColor = t.borderStrong;
+    style.scrollbarWidth = 4.0f;
     style.focusRing = FocusRingStyle{t.focusOutline, t.focusOutlineWidth, t.focusOutlineOffset, t.radiusLg, true};
 
     if (selected) {

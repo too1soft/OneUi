@@ -360,6 +360,12 @@ struct ListStyle {
     float textInset = 12.0f;
     float titleOffsetY = 7.0f;
     float detailOffsetY = 27.0f;
+    float titleFontSize = 14.0f;
+    float detailFontSize = 12.0f;
+    int titleFontWeight = 400;
+    int detailFontWeight = 400;
+    Color scrollbarColor{0, 0, 0, 0};
+    float scrollbarWidth = 4.0f;
     FocusRingStyle focusRing{};
 };
 
@@ -380,6 +386,12 @@ struct ListStateStyleOverride {
     std::optional<float> textInset;
     std::optional<float> titleOffsetY;
     std::optional<float> detailOffsetY;
+    std::optional<float> titleFontSize;
+    std::optional<float> detailFontSize;
+    std::optional<int> titleFontWeight;
+    std::optional<int> detailFontWeight;
+    std::optional<Color> scrollbarColor;
+    std::optional<float> scrollbarWidth;
     std::optional<FocusRingStyleOverride> focusRing;
 };
 
