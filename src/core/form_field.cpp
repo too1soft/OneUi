@@ -242,7 +242,7 @@ void FormField::paint(Canvas& canvas) {
 
     if (hasLabel()) {
         const Rect labelRect{content.x, cursorY, content.width, style.labelLineHeight};
-        canvas.drawText(label(), labelRect, disabled() ? theme().textSubtle : style.labelColor, style.labelFontSize, TextAlign::Left);
+        canvas.drawTextEllipsized(label(), labelRect, disabled() ? theme().textSubtle : style.labelColor, style.labelFontSize, TextAlign::Left);
 
         if (required()) {
             const float markerX = content.x + estimatedTextWidth(label(), style.labelFontSize) + 4.0f;
@@ -261,7 +261,7 @@ void FormField::paint(Canvas& canvas) {
     if (hasMessage()) {
         const Color messageColor = invalid() ? style.errorColor : style.helperColor;
         const Rect messageRect{content.x, cursorY + style.controlGap, content.width, style.messageLineHeight};
-        canvas.drawText(activeMessageText(), messageRect, disabled() ? theme().textSubtle : messageColor, style.messageFontSize, TextAlign::Left);
+        canvas.drawTextEllipsized(activeMessageText(), messageRect, disabled() ? theme().textSubtle : messageColor, style.messageFontSize, TextAlign::Left);
     }
 }
 

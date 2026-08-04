@@ -175,7 +175,7 @@ void Tabs::paint(Canvas& canvas) {
         if (active) {
             canvas.strokeRect(itemRect, itemStyle.selectedItemBorder, itemStyle.itemRadius, itemStyle.itemBorderWidth);
         }
-        canvas.drawText(items_[static_cast<std::size_t>(i)], itemRect, itemStyle.itemForeground, theme().fontMd, TextAlign::Center);
+        canvas.drawTextEllipsized(items_[static_cast<std::size_t>(i)], itemRect, itemStyle.itemForeground, theme().fontMd, TextAlign::Center);
     }
 }
 

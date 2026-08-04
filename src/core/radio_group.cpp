@@ -183,7 +183,7 @@ void RadioGroup::paint(Canvas& canvas) {
         }
 
         const float labelX = outer.x + indicatorSize + style.labelGap;
-        canvas.drawText(
+        canvas.drawTextEllipsized(
             items_[static_cast<std::size_t>(i)],
             Rect{labelX, item.y, std::max(0.0f, item.x + item.width - labelX), item.height},
             active ? style.selectedLabelColor : style.labelColor,

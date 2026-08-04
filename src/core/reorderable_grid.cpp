@@ -107,9 +107,11 @@ void ReorderableGrid::setItemHeight(float height) {
 }
 
 float ReorderableGrid::contentHeight() const {
+    const float contentWidth = std::max(0.0f, frame().inset(padding()).width);
+    const int columns = effectiveColumnCount(contentWidth);
     const int rows = items_.empty()
         ? 0
-        : (static_cast<int>(items_.size()) + columns_ - 1) / columns_;
+        : (static_cast<int>(items_.size()) + columns - 1) / columns;
     const Insets insets = padding();
     return insets.top + insets.bottom
         + static_cast<float>(rows) * resolvedItemHeight()
@@ -227,22 +229,24 @@ bool ReorderableGrid::onMouseUp(const MouseEvent& event) {
 
 void ReorderableGrid::layoutChildren() {
     const Rect content = frame().inset(padding());
+    const int columns = effectiveColumnCount(content.width);
     const float columnGap = resolvedColumnGap();
     const float rowGap = resolvedRowGap();
     const float itemHeight = resolvedItemHeight();
-    const float totalGap = static_cast<float>(std::max(0, columns_ - 1)) * columnGap;
+    const float totalGap = static_cast<float>(std::max(0, columns - 1)) * columnGap;
     const float itemWidth = std::max(
         0.0f,
-        (content.width - totalGap) / static_cast<float>(columns_));
+        (content.width - totalGap) / static_cast<float>(columns));
     for (int index = 0; index < itemCount(); ++index) {
-        const int row = index / columns_;
-        const int column = index % columns_;
+        const int row = index / columns;
+        const int column = index % columns;
         items_[static_cast<std::size_t>(index)].content->setFrame(Rect{
             content.x + static_cast<float>(column) * (itemWidth + columnGap),
             content.y + static_cast<float>(row) * (itemHeight + rowGap),
             itemWidth,
             itemHeight});
     }
+    updatePreferredHeight();
 }
 
 void ReorderableGrid::resetInteractionState() {
@@ -265,10 +269,11 @@ int ReorderableGrid::insertionIndexAt(Point point) const {
         return 0;
     }
     const Rect content = frame().inset(padding());
+    const int columns = effectiveColumnCount(content.width);
     if (point.y <= content.y) {
         return 0;
     }
-    const int rowCount = (itemCount() + columns_ - 1) / columns_;
+    const int rowCount = (itemCount() + columns - 1) / columns;
     const float rowStride = resolvedItemHeight() + resolvedRowGap();
     int row = rowStride > 0.0f
         ? static_cast<int>(std::floor((point.y - content.y) / rowStride))
@@ -278,8 +283,8 @@ int ReorderableGrid::insertionIndexAt(Point point) const {
         return itemCount();
     }
 
-    const int start = row * columns_;
-    const int end = std::min(itemCount(), start + columns_);
+    const int start = row * columns;
+    const int end = std::min(itemCount(), start + columns);
     for (int index = start; index < end; ++index) {
         const Rect item = items_[static_cast<std::size_t>(index)].content->frame();
         if (point.x < item.x + item.width / 2.0f) {
@@ -305,7 +310,23 @@ void ReorderableGrid::resetReorderState() {
 
 void ReorderableGrid::updatePreferredHeight() {
     const Size current = preferredSize();
-    setPreferredSize(Size{current.width, contentHeight()});
+    const float nextHeight = contentHeight();
+    if (std::abs(current.height - nextHeight) <= 0.5f) {
+        return;
+    }
+    setPreferredSize(Size{current.width, nextHeight});
+}
+
+int ReorderableGrid::effectiveColumnCount(float contentWidth) const {
+    const int maximum = std::max(1, columns_);
+    const float minimumWidth = style_.gridMinColumnWidth.value_or(0.0f);
+    if (minimumWidth <= 0.0f || contentWidth <= 0.0f) {
+        return maximum;
+    }
+    const float gap = resolvedColumnGap();
+    const int fitting = static_cast<int>(std::floor(
+        (contentWidth + gap) / (minimumWidth + gap)));
+    return std::clamp(fitting, 1, maximum);
 }
 
 Insets ReorderableGrid::padding() const {

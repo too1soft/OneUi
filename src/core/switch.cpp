@@ -138,7 +138,7 @@ void Switch::paint(Canvas& canvas) {
         canvas.strokeRect(track, style.border, style.radius, style.borderWidth);
     }
     canvas.fillRect(Rect{track.x + (active ? 24.0f : 4.0f), track.y + 4.0f, 16.0f, 16.0f}, style.thumbBackground, 8.0f);
-    canvas.drawText(text_, Rect{rect.x + 58.0f, rect.y, rect.width - 58.0f, rect.height}, style.labelColor, t.fontMd, TextAlign::Left);
+    canvas.drawTextEllipsized(text_, Rect{rect.x + 58.0f, rect.y, rect.width - 58.0f, rect.height}, style.labelColor, t.fontMd, TextAlign::Left);
 }
 
 bool Switch::onMouseMove(const MouseEvent& event) {

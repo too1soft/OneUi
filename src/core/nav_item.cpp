@@ -136,7 +136,7 @@ void NavItem::paint(Canvas& canvas) {
     const auto item = layout();
     paintStyleBox(canvas, item.frame, item.style);
     paintIcon(canvas, item.symbol, item.icon, item.foreground);
-    canvas.drawText(text_, item.label, item.foreground, 13.0f, TextAlign::Left);
+    canvas.drawTextEllipsized(text_, item.label, item.foreground, 13.0f, TextAlign::Left);
 }
 
 bool NavItem::onMouseMove(const MouseEvent& event) {

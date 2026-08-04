@@ -422,9 +422,9 @@ for (const oneui::MonitorInfo& monitor : oneui::enumerateMonitors()) {
 
 ### ReorderableGrid
 
-固定列卡片网格，负责子项布局、拖拽阈值、插入位置和指示线绘制。每个子项必须提供稳定 ID；控件只报告 `(sourceId, finalTargetIndex)`，不会擅自修改产品数据。产品持久化成功后调用 `moveItem` 原位应用顺序，避免重建整棵控件树。
+响应式卡片网格，负责子项布局、拖拽阈值、插入位置和指示线绘制。每个子项必须提供稳定 ID；控件只报告 `(sourceId, finalTargetIndex)`，不会擅自修改产品数据。产品持久化成功后调用 `moveItem` 原位应用顺序，避免重建整棵控件树。
 
-`gap`、`height`（单项高度）、`padding`、`outline-color` 和 `outline-width` 由 CSS-like 样式控制。列数属于容器布局策略，通过 API 设置。详细契约见 [`docs/25-reorder-contract.md`](25-reorder-contract.md)。
+`gap`、`height`（单项高度）、`padding`、`outline-color` 和 `outline-width` 由 CSS-like 样式控制。API 的列数是最大列数；设置 `grid-min-column-width` 后，控件会根据可用宽度自动减少列数，且拖拽命中、内容高度与视觉列数使用同一计算结果。详细契约见 [`docs/25-reorder-contract.md`](25-reorder-contract.md)。
 
 ### Wrap
 

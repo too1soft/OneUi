@@ -94,10 +94,10 @@ void List::paint(Canvas& canvas) {
 
         const auto& item = items_[static_cast<std::size_t>(i)];
         if (item.detail.empty()) {
-            canvas.drawTextStyled(item.title, Rect{row.x + itemStyle.textInset, row.y, row.width - itemStyle.textInset * 2.0f, row.height}, itemStyle.titleColor, itemStyle.titleFontSize, TextAlign::Left, itemStyle.titleFontWeight);
+            canvas.drawTextStyledEllipsized(item.title, Rect{row.x + itemStyle.textInset, row.y, row.width - itemStyle.textInset * 2.0f, row.height}, itemStyle.titleColor, itemStyle.titleFontSize, TextAlign::Left, itemStyle.titleFontWeight);
         } else {
-            canvas.drawTextStyled(item.title, Rect{row.x + itemStyle.textInset, row.y + itemStyle.titleOffsetY, row.width - itemStyle.textInset * 2.0f, 18.0f}, itemStyle.titleColor, itemStyle.titleFontSize, TextAlign::Left, itemStyle.titleFontWeight);
-            canvas.drawTextStyled(item.detail, Rect{row.x + itemStyle.textInset, row.y + itemStyle.detailOffsetY, row.width - itemStyle.textInset * 2.0f, 16.0f}, itemStyle.detailColor, itemStyle.detailFontSize, TextAlign::Left, itemStyle.detailFontWeight);
+            canvas.drawTextStyledEllipsized(item.title, Rect{row.x + itemStyle.textInset, row.y + itemStyle.titleOffsetY, row.width - itemStyle.textInset * 2.0f, 18.0f}, itemStyle.titleColor, itemStyle.titleFontSize, TextAlign::Left, itemStyle.titleFontWeight);
+            canvas.drawTextStyledEllipsized(item.detail, Rect{row.x + itemStyle.textInset, row.y + itemStyle.detailOffsetY, row.width - itemStyle.textInset * 2.0f, 16.0f}, itemStyle.detailColor, itemStyle.detailFontSize, TextAlign::Left, itemStyle.detailFontWeight);
         }
     }
 }

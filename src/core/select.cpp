@@ -209,7 +209,7 @@ void Select::paint(Canvas& canvas) {
 
     canvas.fillRect(rect, fieldStyle.background, fieldStyle.radius);
     canvas.strokeRect(rect, fieldStyle.border, fieldStyle.radius, fieldStyle.borderWidth);
-    canvas.drawText(
+    canvas.drawTextStyledEllipsized(
         selectedText(),
         Rect{
             rect.x + fieldStyle.padding.left,
@@ -241,7 +241,7 @@ void Select::paint(Canvas& canvas) {
         if (optionStyle.optionBackground.a > 0) {
             canvas.fillRect(row.inset(optionStyle.optionInset), optionStyle.optionBackground, optionStyle.optionRadius);
         }
-        canvas.drawText(
+        canvas.drawTextStyledEllipsized(
             items_[static_cast<std::size_t>(i)],
             Rect{row.x + optionStyle.padding.left, row.y + optionStyle.padding.top, std::max(0.0f, row.width - optionStyle.padding.horizontal()), std::max(0.0f, row.height - optionStyle.padding.vertical())},
             i == selected ? optionStyle.selectedOptionForeground : optionStyle.optionForeground,

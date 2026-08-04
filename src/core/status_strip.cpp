@@ -97,8 +97,8 @@ void StatusStrip::paint(Canvas& canvas) {
 
     const Layout l = layout();
     paintIcon(canvas, IconSymbol::Bell, l.icon, Color{174, 177, 188}, Color{0, 0, 0, 0}, 1.4f);
-    canvas.drawTextStyled(title_, l.title, foreground, 13.0f, TextAlign::Left, std::max(500, fontWeight));
-    canvas.drawText(message_, l.message, Color{190, 193, 203}, 12.0f, TextAlign::Left);
+    canvas.drawTextStyledEllipsized(title_, l.title, foreground, 13.0f, TextAlign::Left, std::max(500, fontWeight));
+    canvas.drawTextEllipsized(message_, l.message, Color{190, 193, 203}, 12.0f, TextAlign::Left);
 
     auto paintAction = [&](Rect rect, const std::wstring& text, Action action) {
         if (text.empty()) {
@@ -106,7 +106,7 @@ void StatusStrip::paint(Canvas& canvas) {
         }
         const StyleBox actionStyle = resolvedActionStyle(action);
         paintStyleBox(canvas, rect, actionStyle);
-        canvas.drawTextStyled(
+        canvas.drawTextStyledEllipsized(
             text,
             rect,
             actionStyle.foreground.value_or(foreground),

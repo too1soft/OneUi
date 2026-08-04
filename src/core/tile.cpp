@@ -129,8 +129,8 @@ void Tile::paint(Canvas& canvas) {
         paintIcon(canvas, *trailingSymbol_, Rect{right - 18.0f, top + 1.0f, 16.0f, 16.0f}, foreground, Color{0, 0, 0, 0}, 1.4f);
     }
 
-    canvas.drawTextStyled(title_, Rect{titleX, top, std::max(0.0f, right - titleX - 24.0f), 22.0f}, foreground, fontSize, TextAlign::Left, fontWeight);
-    canvas.drawTextStyled(subtitle_, Rect{left, bottom - 24.0f, std::max(0.0f, right - left), 22.0f}, foreground, fontSize, TextAlign::Left, fontWeight);
+    canvas.drawTextStyledEllipsized(title_, Rect{titleX, top, std::max(0.0f, right - titleX - 24.0f), 22.0f}, foreground, fontSize, TextAlign::Left, fontWeight);
+    canvas.drawTextStyledEllipsized(subtitle_, Rect{left, bottom - 24.0f, std::max(0.0f, right - left), 22.0f}, foreground, fontSize, TextAlign::Left, fontWeight);
 }
 
 bool Tile::onMouseMove(const MouseEvent& event) {

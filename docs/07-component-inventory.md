@@ -20,7 +20,7 @@
 
 - `Stack`：row/column、gap、padding、start/center/end/stretch alignment，跳过 invisible child。
 - `Grid`：固定列数、行列 gap、padding、auto rows，跳过 invisible child。
-- `ReorderableGrid`：面向产品卡片的固定列布局，使用稳定 item ID 报告鼠标拖拽重排；`gap`、`height`、`padding` 和插入指示线由 CSS-like 样式驱动，产品确认后再原位应用顺序。
+- `ReorderableGrid`：面向产品卡片的响应式布局，使用稳定 item ID 报告鼠标拖拽重排；API 设置最大列数，`grid-min-column-width`、`gap`、`height`、`padding` 和插入指示线由 CSS-like 样式驱动，产品确认后再原位应用顺序。
 - `Wrap`：左到右换行骨架。
 - `DockView`：top/right/bottom/left/center app-shell 区域骨架。
 - `SplitView`：静态横向/纵向双栏骨架，split ratio 可钳制。

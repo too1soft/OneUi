@@ -70,6 +70,7 @@ struct StyleBox {
     std::optional<float> gap;
     std::optional<float> width;
     std::optional<float> height;
+    std::optional<float> gridMinColumnWidth;
     std::optional<float> fontSize;
     std::optional<int> fontWeight;
     std::optional<float> detailFontSize;

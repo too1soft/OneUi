@@ -45,7 +45,13 @@ void Label::setAlign(TextAlign align) {
 }
 
 void Label::paint(Canvas& canvas) {
-    canvas.drawTextStyled(text(), frame(), disabled() ? Color{148, 163, 184} : color_, fontSize_, align_, fontWeight_);
+    canvas.drawTextStyledEllipsized(
+        text(),
+        frame(),
+        disabled() ? Color{148, 163, 184} : color_,
+        fontSize_,
+        align_,
+        fontWeight_);
 }
 
 } // namespace oneui

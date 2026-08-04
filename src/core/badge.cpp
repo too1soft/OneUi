@@ -96,7 +96,7 @@ void Badge::paint(Canvas& canvas) {
     const Rect rect = frame();
     canvas.fillRect(rect, style.background, style.radius);
     canvas.strokeRect(rect, style.border, style.radius, style.borderWidth);
-    canvas.drawText(text(), rect.inset(style.padding), style.foreground, style.fontSize);
+    canvas.drawTextEllipsized(text(), rect.inset(style.padding), style.foreground, style.fontSize);
 }
 
 BadgeStyle Badge::resolvedStyle() const {

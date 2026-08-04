@@ -25,7 +25,7 @@ The C ABI copies callback arguments for the duration of the call. Safe Rust wrap
 
 ## Styling And DPI
 
-Reorder indicators use `outline-color`, `outline-width`, and `text-inset` where applicable. `ReorderableGrid` also consumes `gap`, `height`, and `padding`. These values are logical device-independent units and are converted to physical pixels by the per-monitor DPI-aware Win32 backend.
+Reorder indicators use `outline-color`, `outline-width`, and `text-inset` where applicable. `ReorderableGrid` also consumes `gap`, `height`, `padding`, and the optional `grid-min-column-width`. Its API column count is the maximum; layout, content height, hit testing, and insertion geometry all use the same width-derived effective column count. These values are logical device-independent units and are converted to physical pixels by the per-monitor DPI-aware Win32 backend.
 
 ## Performance
 

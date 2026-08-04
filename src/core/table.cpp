@@ -101,7 +101,7 @@ void Table::paint(Canvas& canvas) {
         if (columnIndex > 0) {
             canvas.drawLine(Point{x, rect.y}, Point{x, rect.y + rect.height}, style.gridLine, 1.0f);
         }
-        canvas.drawText(columns_[static_cast<std::size_t>(columnIndex)].header, cell.inset(style.cellPadding), style.headerForeground, theme().fontSm, TextAlign::Left);
+        canvas.drawTextEllipsized(columns_[static_cast<std::size_t>(columnIndex)].header, cell.inset(style.cellPadding), style.headerForeground, theme().fontSm, TextAlign::Left);
 
         for (int rowIndex = 0; rowIndex < static_cast<int>(rows_.size()); ++rowIndex) {
             const float y = rect.y + headerHeight + rowHeight * static_cast<float>(rowIndex);
@@ -113,7 +113,7 @@ void Table::paint(Canvas& canvas) {
             const auto& row = rows_[static_cast<std::size_t>(rowIndex)];
             const std::wstring empty;
             const std::wstring& text = columnIndex < static_cast<int>(row.size()) ? row[static_cast<std::size_t>(columnIndex)] : empty;
-            canvas.drawText(text, rowCell.inset(style.cellPadding), style.cellForeground, theme().fontMd, TextAlign::Left);
+            canvas.drawTextEllipsized(text, rowCell.inset(style.cellPadding), style.cellForeground, theme().fontMd, TextAlign::Left);
         }
 
         x += width;

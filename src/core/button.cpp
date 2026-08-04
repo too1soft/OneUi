@@ -242,20 +242,28 @@ void Button::paint(Canvas& canvas) {
                 rect.y,
                 trailingWidth,
                 rect.height};
-            canvas.drawTextStyled(label, labelRect, style.foreground, style.fontSize, contentAlign_, style.fontWeight);
-            canvas.drawTextStyled(trailingText_, trailingRect, style.foreground, style.fontSize, TextAlign::Right, style.fontWeight);
+            canvas.drawTextStyledEllipsized(label, labelRect, style.foreground, style.fontSize, contentAlign_, style.fontWeight);
+            canvas.drawTextStyledEllipsized(trailingText_, trailingRect, style.foreground, style.fontSize, TextAlign::Right, style.fontWeight);
             return;
         }
-        canvas.drawTextStyled(label, rect, style.foreground, style.fontSize, contentAlign_, style.fontWeight);
+        canvas.drawTextStyledEllipsized(label, rect, style.foreground, style.fontSize, contentAlign_, style.fontWeight);
         return;
     }
 
     // 图标 + 文字作为整体水平居中：图标为字号等大的正方形，随前景色着色。
     const float iconSide = style.fontSize + 2.0f;
     const float gap = label.empty() ? 0.0f : 6.0f;
-    const float textWidth = label.empty() ? 0.0f : canvas.measureTextWidth(label, style.fontSize, style.fontWeight);
-    const float total = iconSide + gap + textWidth;
     const float inset = std::min(12.0f, std::max(0.0f, rect.width / 4.0f));
+    const float edgeReserve = contentAlign_ == TextAlign::Center ? 0.0f : inset * 2.0f;
+    const float availableTextWidth = std::max(
+        0.0f, rect.width - edgeReserve - iconSide - gap);
+    const std::wstring fittedLabel = label.empty()
+        ? std::wstring{}
+        : canvas.ellipsizeText(label, availableTextWidth, style.fontSize, style.fontWeight);
+    const float textWidth = fittedLabel.empty()
+        ? 0.0f
+        : canvas.measureTextWidth(fittedLabel, style.fontSize, style.fontWeight);
+    const float total = iconSide + gap + textWidth;
     const float startX = contentAlign_ == TextAlign::Left
         ? rect.x + inset
         : contentAlign_ == TextAlign::Right
@@ -263,13 +271,13 @@ void Button::paint(Canvas& canvas) {
             : rect.x + std::max(0.0f, (rect.width - total) / 2.0f);
     const Rect iconRect{startX, rect.y + (rect.height - iconSide) / 2.0f, iconSide, iconSide};
     paintIcon(canvas, *icon_, iconRect, style.foreground, Color{0, 0, 0, 0}, 1.6f);
-    if (!label.empty()) {
+    if (!fittedLabel.empty()) {
         const Rect textRect{
             iconRect.x + iconSide + gap,
             rect.y,
             std::max(0.0f, rect.x + rect.width - (iconRect.x + iconSide + gap)),
             rect.height};
-        canvas.drawTextStyled(label, textRect, style.foreground, style.fontSize, TextAlign::Left, style.fontWeight);
+        canvas.drawTextStyled(fittedLabel, textRect, style.foreground, style.fontSize, TextAlign::Left, style.fontWeight);
     }
 }
 

@@ -137,8 +137,8 @@ void Toast::paint(Canvas& canvas) {
     if (iconSymbol_) {
         paintIcon(canvas, *iconSymbol_, l.icon, Color{255, 159, 56}, Color{0, 0, 0, 0});
     }
-    canvas.drawTextStyled(title_, l.title, foreground, 13.0f, TextAlign::Left, fontWeight);
-    canvas.drawText(message_, l.message, muted, 12.0f, TextAlign::Left);
+    canvas.drawTextStyledEllipsized(title_, l.title, foreground, 13.0f, TextAlign::Left, fontWeight);
+    canvas.drawTextEllipsized(message_, l.message, muted, 12.0f, TextAlign::Left);
 
     auto paintButton = [&](Rect rect, const std::wstring& text, Action action, bool primary) {
         if (text.empty()) {
@@ -147,7 +147,7 @@ void Toast::paint(Canvas& canvas) {
         (void)primary;
         const StyleBox actionStyle = resolvedActionStyle(action);
         paintStyleBox(canvas, rect, actionStyle);
-        canvas.drawTextStyled(
+        canvas.drawTextStyledEllipsized(
             text,
             rect,
             actionStyle.foreground.value_or(foreground),

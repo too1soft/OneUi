@@ -71,7 +71,7 @@ void ValidationMessage::paint(Canvas& canvas) {
 
     const ValidationMessageStyle style = resolvedStyle();
     const Color color = tone_ == ValidationMessageTone::Error ? style.errorColor : style.helperColor;
-    canvas.drawText(text(), frame(), disabled() ? theme().textSubtle : color, style.fontSize, TextAlign::Left);
+    canvas.drawTextEllipsized(text(), frame(), disabled() ? theme().textSubtle : color, style.fontSize, TextAlign::Left);
 }
 
 ValidationMessageStyle ValidationMessage::resolvedStyle() const {

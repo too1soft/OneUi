@@ -115,7 +115,7 @@ void StateView::paint(Canvas& canvas) {
         1.6f);
 
     const StyleBox titleStyle = sheet.resolve(childStyleNode({"state-view-title"}, StyleStateNone));
-    canvas.drawTextStyled(
+    canvas.drawTextStyledEllipsized(
         title_,
         l.title,
         titleStyle.foreground.value_or(box.foreground.value_or(Color{238, 239, 245})),
@@ -124,7 +124,7 @@ void StateView::paint(Canvas& canvas) {
         titleStyle.fontWeight.value_or(600));
 
     const StyleBox messageStyle = sheet.resolve(childStyleNode({"state-view-message"}, StyleStateNone));
-    canvas.drawTextStyled(
+    canvas.drawTextStyledEllipsized(
         message_,
         l.message,
         messageStyle.foreground.value_or(Color{174, 177, 188}),
@@ -135,7 +135,7 @@ void StateView::paint(Canvas& canvas) {
     if (!action_.empty()) {
         const StyleBox actionStyle = resolvedActionStyle();
         paintStyleBox(canvas, l.action, actionStyle);
-        canvas.drawTextStyled(
+        canvas.drawTextStyledEllipsized(
             action_,
             l.action,
             actionStyle.foreground.value_or(Color{255, 255, 255}),

@@ -279,7 +279,7 @@ void TreeView::paint(Canvas& canvas) {
                 itemStyle.detailFontSize,
                 itemStyle.detailFontWeight) + 8.0f;
         const float textWidth = std::max(0.0f, row.x + row.width - itemStyle.textInset - textLeft - detailWidth);
-        canvas.drawTextStyled(
+        canvas.drawTextStyledEllipsized(
             item.title,
             Rect{textLeft, row.y, textWidth, row.height},
             itemStyle.titleColor,
@@ -287,7 +287,7 @@ void TreeView::paint(Canvas& canvas) {
             TextAlign::Left,
             itemStyle.titleFontWeight);
         if (!item.detail.empty()) {
-            canvas.drawTextStyled(
+            canvas.drawTextStyledEllipsized(
                 item.detail,
                 Rect{row.x + row.width - itemStyle.textInset - detailWidth, row.y, detailWidth, row.height},
                 itemStyle.detailColor,

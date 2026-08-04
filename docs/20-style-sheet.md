@@ -148,7 +148,12 @@ Supported CSS-like declarations currently include:
 - `content-radius`
 - `opacity`
 - `padding`
+- `grid-min-column-width` for responsive `ReorderableGrid` columns
 - `box-shadow`, including `inset`
+
+Single-line controls use measured ellipsis rendering when their text exceeds
+the assigned content rectangle. Products should provide semantic dimensions
+through CSS and must not pre-truncate labels or replace the ellipsis contract.
 
 This is not a complete browser CSS engine yet. The intended growth path is:
 

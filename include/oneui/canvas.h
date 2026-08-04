@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace oneui {
 
@@ -92,6 +93,83 @@ public:
         int weight = 400) const {
         (void)family;
         return measureTextWidth(text, size, weight);
+    }
+
+    /// Returns a single-line rendering string that fits the requested width.
+    /// The returned prefix never splits a UTF-16 surrogate pair on Windows.
+    std::wstring ellipsizeText(
+        const std::wstring& text,
+        float maxWidth,
+        float size,
+        int weight = 400,
+        TextFontFamily family = TextFontFamily::Default) const {
+        if (text.empty() || maxWidth <= 0.0f) {
+            return {};
+        }
+        if (measureTextWidthWithFont(text, size, family, weight) <= maxWidth) {
+            return text;
+        }
+
+        const std::wstring ellipsis = L"\u2026";
+        if (measureTextWidthWithFont(ellipsis, size, family, weight) > maxWidth) {
+            return {};
+        }
+
+        std::vector<std::size_t> boundaries;
+        boundaries.reserve(text.size() + 1);
+        boundaries.push_back(0);
+        for (std::size_t index = 0; index < text.size();) {
+            if constexpr (sizeof(wchar_t) == 2) {
+                const auto current = static_cast<unsigned int>(text[index]);
+                if (current >= 0xD800U && current <= 0xDBFFU && index + 1 < text.size()) {
+                    const auto next = static_cast<unsigned int>(text[index + 1]);
+                    if (next >= 0xDC00U && next <= 0xDFFFU) {
+                        index += 2;
+                        boundaries.push_back(index);
+                        continue;
+                    }
+                }
+            }
+            ++index;
+            boundaries.push_back(index);
+        }
+
+        std::size_t low = 0;
+        std::size_t high = boundaries.size() - 1;
+        while (low < high) {
+            const std::size_t middle = low + (high - low + 1) / 2;
+            const std::wstring candidate = text.substr(0, boundaries[middle]) + ellipsis;
+            if (measureTextWidthWithFont(candidate, size, family, weight) <= maxWidth) {
+                low = middle;
+            } else {
+                high = middle - 1;
+            }
+        }
+        return text.substr(0, boundaries[low]) + ellipsis;
+    }
+
+    /// Draws a single line with a measured ellipsis instead of clipping glyphs.
+    void drawTextStyledEllipsized(
+        const std::wstring& text,
+        Rect rect,
+        Color color,
+        float size,
+        TextAlign align = TextAlign::Center,
+        int weight = 400,
+        TextFontFamily family = TextFontFamily::Default) {
+        const std::wstring fitted = ellipsizeText(text, rect.width, size, weight, family);
+        if (!fitted.empty()) {
+            drawTextStyledWithFont(fitted, rect, color, size, align, family, weight);
+        }
+    }
+
+    void drawTextEllipsized(
+        const std::wstring& text,
+        Rect rect,
+        Color color,
+        float size,
+        TextAlign align = TextAlign::Center) {
+        drawTextStyledEllipsized(text, rect, color, size, align);
     }
 
     // Draws an owned or caller-retained pixel buffer during this paint pass.

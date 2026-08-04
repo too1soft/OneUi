@@ -540,6 +540,11 @@ bool applyDeclaration(
             rule.box.height = *height;
             return true;
         }
+    } else if (name == "grid-min-column-width") {
+        if (auto width = parsePx(value)) {
+            rule.box.gridMinColumnWidth = *width;
+            return true;
+        }
     } else if (name == "font-size") {
         if (auto fontSize = parsePx(value)) {
             rule.box.fontSize = *fontSize;
@@ -1051,6 +1056,9 @@ StyleBox mergeStyleBox(StyleBox base, const StyleBox& overlay) {
     }
     if (overlay.height) {
         base.height = overlay.height;
+    }
+    if (overlay.gridMinColumnWidth) {
+        base.gridMinColumnWidth = overlay.gridMinColumnWidth;
     }
     if (overlay.fontSize) {
         base.fontSize = overlay.fontSize;

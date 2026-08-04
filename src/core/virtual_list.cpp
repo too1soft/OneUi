@@ -216,7 +216,7 @@ void VirtualList::paint(Canvas& canvas) {
 
         const auto& item = items_[static_cast<std::size_t>(index)];
         if (item.detail.empty()) {
-            canvas.drawTextStyled(
+            canvas.drawTextStyledEllipsized(
                 item.title,
                 Rect{row.x + itemStyle.textInset, row.y, row.width - itemStyle.textInset * 2.0f, row.height},
                 itemStyle.titleColor,
@@ -224,14 +224,14 @@ void VirtualList::paint(Canvas& canvas) {
                 TextAlign::Left,
                 itemStyle.titleFontWeight);
         } else {
-            canvas.drawTextStyled(
+            canvas.drawTextStyledEllipsized(
                 item.title,
                 Rect{row.x + itemStyle.textInset, row.y + itemStyle.titleOffsetY, row.width - itemStyle.textInset * 2.0f, 18.0f},
                 itemStyle.titleColor,
                 itemStyle.titleFontSize,
                 TextAlign::Left,
                 itemStyle.titleFontWeight);
-            canvas.drawTextStyled(
+            canvas.drawTextStyledEllipsized(
                 item.detail,
                 Rect{row.x + itemStyle.textInset, row.y + itemStyle.detailOffsetY, row.width - itemStyle.textInset * 2.0f, 16.0f},
                 itemStyle.detailColor,

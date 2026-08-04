@@ -201,7 +201,7 @@ void Dialog::paint(Canvas& canvas) {
     }
 
     const Color titleColor = surface.foreground.value_or(Color{32, 33, 36});
-    canvas.drawTextStyled(
+    canvas.drawTextStyledEllipsized(
         title_,
         header.title,
         titleColor,
@@ -209,7 +209,7 @@ void Dialog::paint(Canvas& canvas) {
         TextAlign::Left,
         surface.fontWeight.value_or(600));
     if (!subtitle_.empty()) {
-        canvas.drawText(subtitle_, header.subtitle, Color{90, 100, 114}, 13.0f, TextAlign::Left);
+        canvas.drawTextEllipsized(subtitle_, header.subtitle, Color{90, 100, 114}, 13.0f, TextAlign::Left);
     }
 
     if (closeVisible_) {

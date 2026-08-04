@@ -57,6 +57,7 @@ private:
     void updateReorderTarget(Point point);
     void resetReorderState();
     void updatePreferredHeight();
+    int effectiveColumnCount(float contentWidth) const;
     Insets padding() const;
     float resolvedColumnGap() const;
     float resolvedRowGap() const;

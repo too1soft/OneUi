@@ -215,7 +215,7 @@ void WindowTitleBar::paint(Canvas& canvas) {
     const Color logoAccent = layout.logoStyle.background.color.value_or(Color{123, 212, 198});
     paintIcon(canvas, iconSymbol_, layout.logoIcon, logoColor, logoAccent, layout.logoStyle.borderWidth.value_or(1.5f));
     const Color titleColor = layout.titleBarStyle.foreground.value_or(Color{32, 33, 36});
-    canvas.drawText(title_, layout.title, titleColor, 12.0f, TextAlign::Left);
+    canvas.drawTextEllipsized(title_, layout.title, titleColor, 12.0f, TextAlign::Left);
 
     for (const auto& button : layout.buttons) {
         const StyleBox style = visualButtonStyle(button.id, button.style);

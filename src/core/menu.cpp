@@ -194,8 +194,8 @@ void Menu::paint(Canvas& canvas) {
         switch (entry.kind) {
         case Entry::Kind::Header: {
             const Rect inner = rect.inset(Insets{6.0f, kItemPaddingX});
-            canvas.drawTextStyled(entry.title, Rect{inner.x, inner.y, inner.width, 18.0f}, headerTitle, 13.0f, TextAlign::Left, 600);
-            canvas.drawText(entry.subtitle, Rect{inner.x, inner.y + 19.0f, inner.width, 14.0f}, headerSubtitle, 11.0f, TextAlign::Left);
+            canvas.drawTextStyledEllipsized(entry.title, Rect{inner.x, inner.y, inner.width, 18.0f}, headerTitle, 13.0f, TextAlign::Left, 600);
+            canvas.drawTextEllipsized(entry.subtitle, Rect{inner.x, inner.y + 19.0f, inner.width, 14.0f}, headerSubtitle, 11.0f, TextAlign::Left);
             break;
         }
         case Entry::Kind::Separator: {
@@ -219,7 +219,7 @@ void Menu::paint(Canvas& canvas) {
                 paintIcon(canvas, *entry.icon, iconRect, foreground, Color{0, 0, 0, 0}, 1.5f);
                 textX += kItemIconSize + kItemGap;
             }
-            canvas.drawTextStyled(
+            canvas.drawTextStyledEllipsized(
                 entry.title,
                 Rect{textX, rect.y, std::max(0.0f, rect.x + rect.width - kItemPaddingX - textX), rect.height},
                 foreground,

@@ -294,6 +294,23 @@ void expectRect(const char* name, oneui::Rect actual, oneui::Rect expected) {
     expectNear((std::string(name) + " height").c_str(), actual.height, expected.height);
 }
 
+void testSingleLineTextEllipsizesByMeasuredWidth() {
+    RecordingCanvas canvas;
+    const std::wstring fitted = canvas.ellipsizeText(L"Cloud synchronization", 52.0f, 14.0f);
+    expectEqual("Canvas ellipsis preserves a visible prefix", fitted.size() > 1 ? 1 : 0, 1);
+    expectEqual("Canvas ellipsis uses one semantic ellipsis glyph", fitted.back() == L'\u2026' ? 1 : 0, 1);
+    expectEqual(
+        "Canvas ellipsis respects the measured width",
+        canvas.measureTextWidth(fitted, 14.0f) <= 52.0f ? 1 : 0,
+        1);
+
+    oneui::Label label(L"A long host name that must not be abruptly clipped");
+    label.setFrame(oneui::Rect{0.0f, 0.0f, 72.0f, 22.0f});
+    label.paint(canvas);
+    expectEqual("Label paints exactly one fitted line", static_cast<int>(canvas.texts.size()), 1);
+    expectEqual("Label delegates overflow to the shared ellipsis contract", canvas.texts.back().text.back() == L'\u2026' ? 1 : 0, 1);
+}
+
 void testWidgetAccessibilityInfoReflectsSemanticAndDynamicState() {
     LayoutProbe widget(oneui::Size{100.0f, 30.0f});
     widget.setAccessibleRole(oneui::AccessibilityRole::TextBox);
@@ -2615,6 +2632,7 @@ void testReorderableGridOwnsLayoutGestureAndCssIndicator() {
             padding: 2px 4px 6px 4px;
             gap: 12px;
             height: 80px;
+            grid-min-column-width: 96px;
             outline-color: #22d3ee;
             outline-width: 3px;
         }
@@ -2649,6 +2667,15 @@ void testReorderableGridOwnsLayoutGestureAndCssIndicator() {
     expectNear("ReorderableGrid lays out first column from CSS padding", surfaces[0]->frame().x, 4.0f);
     expectNear("ReorderableGrid lays out equal card widths", surfaces[0]->frame().width, 100.0f);
     expectNear("ReorderableGrid computes reusable content height", grid.contentHeight(), 180.0f);
+
+    grid.setFrame(oneui::Rect{0.0f, 0.0f, 150.0f, 380.0f});
+    RecordingCanvas narrowCanvas;
+    grid.paint(narrowCanvas);
+    expectNear("ReorderableGrid drops a column below its CSS minimum", surfaces[0]->frame().width, 142.0f);
+    expectNear("ReorderableGrid recomputes responsive content height", grid.contentHeight(), 364.0f);
+    grid.setFrame(oneui::Rect{0.0f, 0.0f, 220.0f, 180.0f});
+    RecordingCanvas restoredCanvas;
+    grid.paint(restoredCanvas);
 
     int reorderCount = 0;
     std::wstring sourceId;
@@ -4725,6 +4752,7 @@ void testStyleSheetParsesCssLikeRules() {
             border-radius: 8px;
             width: 240px;
             height: 42px;
+            grid-min-column-width: 228px;
             font-size: 13px;
             font-weight: 600;
             detail-font-size: 11px;
@@ -4797,6 +4825,7 @@ void testStyleSheetParsesCssLikeRules() {
     expectEqual("StyleSheet CSS parses scrollbar width", static_cast<int>(focused.scrollbarWidth.value_or(0.0f)), 3);
     expectEqual("StyleSheet CSS parses width", static_cast<int>(focused.width.value_or(0.0f)), 240);
     expectEqual("StyleSheet CSS parses height", static_cast<int>(focused.height.value_or(0.0f)), 42);
+    expectEqual("StyleSheet CSS parses grid minimum column width", static_cast<int>(focused.gridMinColumnWidth.value_or(0.0f)), 228);
     expectEqual("StyleSheet CSS parses placeholder color", focused.placeholderColor->r, 139);
     expectEqual("StyleSheet CSS parses caret color", focused.caretColor->b, 230);
     expectEqual("StyleSheet CSS parses selection color alpha", focused.selectionColor->a, 102);
@@ -6198,6 +6227,7 @@ void testLogViewSelectionAndCopy() {
 } // namespace
 
 int main() {
+    testSingleLineTextEllipsizesByMeasuredWidth();
     testWidgetAccessibilityInfoReflectsSemanticAndDynamicState();
     testCommonControlsExposeDefaultAccessibilityInfo();
     testSelectionAndDataControlsExposeDefaultAccessibilityInfo();
