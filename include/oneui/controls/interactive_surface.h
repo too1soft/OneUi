@@ -21,6 +21,7 @@ struct InteractiveSurfaceStyle {
     InteractiveSurfaceStateStyle hovered;
     InteractiveSurfaceStateStyle pressed;
     InteractiveSurfaceStateStyle disabled;
+    InteractiveSurfaceStateStyle focusVisible;
     TransitionSpec transition{120.0, EasingCurve::EaseOutCubic};
 };
 
@@ -34,7 +35,10 @@ public:
     void setStyle(InteractiveSurfaceStyle style);
     void setPadding(Insets padding);
     void setContent(std::shared_ptr<Widget> child);
+    /// Semantic action used by keyboard activation and by pointer activation
+    /// when no pointer-specific callback is installed.
     void setOnClick(std::function<void()> callback);
+    /// Pointer-specific activation for selection, click-count, and modifier semantics.
     void setOnPointerActivated(std::function<void(const MouseEvent&)> callback);
     void setOnContextMenuRequested(std::function<void(const MouseEvent&)> callback);
     void setDisabled(bool disabled) override;
@@ -43,6 +47,7 @@ public:
     bool onMouseMove(const MouseEvent& event) override;
     bool onMouseDown(const MouseEvent& event) override;
     bool onMouseUp(const MouseEvent& event) override;
+    bool onKeyDown(const KeyEvent& event) override;
     CursorKind cursor(Point point) const override;
     bool isFocusable() const override;
     bool tickAnimations(double nowMs) override;

@@ -482,6 +482,7 @@ oneui::InteractiveSurfaceStyle toInteractiveSurfaceStyle(
     result.hovered = toInteractiveSurfaceStateStyle(style.hovered);
     result.pressed = toInteractiveSurfaceStateStyle(style.pressed);
     result.disabled = toInteractiveSurfaceStateStyle(style.disabled);
+    result.focusVisible = toInteractiveSurfaceStateStyle(style.focus_visible);
     return result;
 }
 
@@ -742,6 +743,11 @@ void applyStyleSheet(OneUiWidget* wrapper, std::shared_ptr<oneui::StyleSheet> sh
     }
     if (auto* iconBadge = dynamic_cast<oneui::IconBadge*>(wrapper->widget.get())) {
         iconBadge->setStyleBox(wrapper->styleSheet->resolve(node));
+        return;
+    }
+    if (auto* popup = dynamic_cast<oneui::Popup*>(wrapper->widget.get())) {
+        popup->setStyleOverride(
+            oneui::popupStyleOverrideFromStyleSheet(*wrapper->styleSheet, node));
         return;
     }
     if (auto* menu = dynamic_cast<oneui::Menu*>(wrapper->widget.get())) {

@@ -27,6 +27,8 @@ InteractiveSurface::InteractiveSurface() {
     style_.hovered = defaultState(Color{248, 250, 252}, Color{203, 213, 225});
     style_.pressed = defaultState(Color{241, 245, 249}, Color{148, 163, 184});
     style_.disabled = defaultState(Color{248, 250, 252}, Color{226, 232, 240});
+    style_.focusVisible = defaultState(Color{255, 255, 255}, Color{59, 130, 246});
+    style_.focusVisible.borderWidth = 2.0f;
 }
 
 void InteractiveSurface::setStyle(InteractiveSurfaceStyle style) {
@@ -78,6 +80,12 @@ void InteractiveSurface::paint(Canvas& canvas) {
     canvas.fillRect(rect, style.background, style.radius);
     if (style.borderWidth > 0.0f && style.border.a > 0) {
         canvas.strokeRect(rect, style.border, style.radius, style.borderWidth);
+    }
+    if (focusVisible() && interactive()) {
+        const auto& focus = style_.focusVisible;
+        if (focus.borderWidth > 0.0f && focus.border.a > 0) {
+            canvas.strokeRect(rect, focus.border, focus.radius, focus.borderWidth);
+        }
     }
     View::paint(canvas);
 }
@@ -136,12 +144,32 @@ bool InteractiveSurface::onMouseUp(const MouseEvent& event) {
         activation.clickCount = pressedClickCount;
         if (onPointerActivated_) {
             onPointerActivated_(activation);
-        }
-        if (onClick_) {
+        } else if (onClick_) {
             onClick_();
         }
     } else if (activate && pressedButton == MouseButton::Right && onContextMenuRequested_) {
         onContextMenuRequested_(event);
+    }
+    return true;
+}
+
+bool InteractiveSurface::onKeyDown(const KeyEvent& event) {
+    if (!interactive() || (event.key != Key::Enter && event.key != Key::Space)) {
+        return false;
+    }
+
+    if (onClick_) {
+        onClick_();
+    } else if (onPointerActivated_) {
+        MouseEvent activation;
+        const auto rect = frame();
+        activation.position = Point{rect.x + rect.width / 2.0f, rect.y + rect.height / 2.0f};
+        activation.button = MouseButton::Left;
+        activation.shift = event.shift;
+        activation.control = event.control;
+        activation.alt = event.alt;
+        activation.clickCount = 1;
+        onPointerActivated_(activation);
     }
     return true;
 }

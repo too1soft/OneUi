@@ -174,7 +174,10 @@ bool View::onMouseDown(const MouseEvent& event) {
         if (handled || child.isFocusable()) {
             focusChild(&child, false);
         }
-        return handled || child.isFocusable();
+        // Composite views participate in keyboard focus because they own
+        // focusable descendants. An otherwise unhandled pointer event inside
+        // that view must remain available to an interactive parent surface.
+        return handled;
     }
 
     focusChild(nullptr);

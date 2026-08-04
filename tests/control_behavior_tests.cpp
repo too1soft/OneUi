@@ -2773,6 +2773,7 @@ void testPointerActivationUsesSystemClickCountAndSeparateContextAction() {
     int activationCount = 0;
     int activationClicks = 0;
     bool activationControl = false;
+    int semanticActivationCount = 0;
     int contextCount = 0;
     oneui::Point contextPoint{};
     surface.setOnPointerActivated(
@@ -2786,6 +2787,7 @@ void testPointerActivationUsesSystemClickCountAndSeparateContextAction() {
             ++contextCount;
             contextPoint = event.position;
         });
+    surface.setOnClick([&] { ++semanticActivationCount; });
 
     const oneui::MouseEvent doubleClick{
         oneui::Point{40.0f, 30.0f}, oneui::MouseButton::Left, false, true, false, 2};
@@ -2794,6 +2796,15 @@ void testPointerActivationUsesSystemClickCountAndSeparateContextAction() {
     expectEqual("InteractiveSurface emits one pointer activation", activationCount, 1);
     expectEqual("InteractiveSurface preserves the system click count", activationClicks, 2);
     expectEqual("InteractiveSurface preserves pointer modifiers", activationControl ? 1 : 0, 1);
+    expectEqual("InteractiveSurface pointer callback owns pointer activation", semanticActivationCount, 0);
+
+    surface.onKeyDown(oneui::KeyEvent{oneui::Key::Enter, false, true});
+    expectEqual("InteractiveSurface keyboard activation uses the semantic action", semanticActivationCount, 1);
+    expectEqual("InteractiveSurface keyboard activation does not fake pointer input", activationCount, 1);
+    expectEqual(
+        "InteractiveSurface ignores unrelated keys",
+        surface.onKeyDown(oneui::KeyEvent{oneui::Key::Escape}) ? 1 : 0,
+        0);
 
     const oneui::MouseEvent context{
         oneui::Point{52.0f, 36.0f}, oneui::MouseButton::Right};
@@ -2802,6 +2813,31 @@ void testPointerActivationUsesSystemClickCountAndSeparateContextAction() {
     expectEqual("InteractiveSurface keeps context separate from activation", activationCount, 1);
     expectEqual("InteractiveSurface emits one context request", contextCount, 1);
     expectNear("InteractiveSurface context retains x", contextPoint.x, 52.0f);
+
+    auto compositeContent = std::make_shared<oneui::View>();
+    compositeContent->setFrame(oneui::Rect{0.0f, 0.0f, 240.0f, 80.0f});
+    auto childButton = std::make_shared<oneui::Button>(L"Child action");
+    childButton->setFrame(oneui::Rect{8.0f, 8.0f, 88.0f, 32.0f});
+    int childActivationCount = 0;
+    childButton->setOnClick([&] { ++childActivationCount; });
+    compositeContent->add(childButton);
+    surface.setContent(compositeContent);
+
+    const oneui::MouseEvent compositeBlank{
+        oneui::Point{180.0f, 60.0f}, oneui::MouseButton::Left};
+    surface.onMouseDown(compositeBlank);
+    surface.onMouseUp(compositeBlank);
+    expectEqual(
+        "InteractiveSurface activates unhandled space around focusable descendants",
+        activationCount,
+        2);
+
+    const oneui::MouseEvent childClick{
+        oneui::Point{20.0f, 20.0f}, oneui::MouseButton::Left};
+    surface.onMouseDown(childClick);
+    surface.onMouseUp(childClick);
+    expectEqual("InteractiveSurface preserves child actions", childActivationCount, 1);
+    expectEqual("InteractiveSurface does not duplicate child actions", activationCount, 2);
 
     oneui::VirtualList list;
     list.setItems({{L"Alpha", L""}, {L"Beta", L""}});
@@ -4750,6 +4786,15 @@ void testStyleSheetResolvesCssLikeSelectorsAndStates() {
 
     expectEqual("StyleSheet selected pseudo parsing", static_cast<int>(oneui::parseStylePseudoState("selected")), static_cast<int>(oneui::StyleStateSelected));
     expectEqual("StyleSheet read-only pseudo parsing", static_cast<int>(oneui::parseStylePseudoState("read-only")), static_cast<int>(oneui::StyleStateReadOnly));
+    expectEqual("StyleSheet focus-visible pseudo parsing", static_cast<int>(oneui::parseStylePseudoState("focus-visible")), static_cast<int>(oneui::StyleStateFocus));
+    expectEqual(
+        "StyleSheet unsupported pseudo does not match normal state",
+        oneui::selectorMatches(
+            ".button:unsupported",
+            oneui::StyleNode{"button", {"button"}, oneui::StyleStateNone})
+            ? 1
+            : 0,
+        0);
 }
 
 void testStyleSheetParsesCssLikeRules() {
@@ -4971,6 +5016,17 @@ void testStyleAdapterBuildsButtonAndTextFieldOverrides() {
             border-color: #4a79e6;
         }
 
+        .popup {
+            background: #14161c;
+            color: #eef1f7;
+            border-color: #363b48;
+            border-width: 2px;
+            border-radius: 6px;
+            padding: 4px 8px;
+            gap: 7px;
+            box-shadow: 0px 20px 30px #00000080;
+        }
+
         .interactive-surface {
             background: #1f2130;
             border-color: #3a3e50;
@@ -4990,6 +5046,11 @@ void testStyleAdapterBuildsButtonAndTextFieldOverrides() {
 
         .interactive-surface:disabled {
             border-color: #252836;
+        }
+
+        .interactive-surface:focus {
+            border-color: #4a79e6;
+            border-width: 2px;
         }
 
         .card {
@@ -5058,6 +5119,18 @@ void testStyleAdapterBuildsButtonAndTextFieldOverrides() {
         68);
     expectEqual("StyleAdapter select focus border", select.focusVisible->border->r, 74);
 
+    const auto popup = oneui::popupStyleOverrideFromStyleSheet(
+        sheet,
+        oneui::StyleNode{"popup", {"popup"}, oneui::StyleStateNone});
+    expectEqual("StyleAdapter popup background", popup.background->r, 20);
+    expectEqual("StyleAdapter popup foreground", popup.foreground->r, 238);
+    expectEqual("StyleAdapter popup border", popup.border->r, 54);
+    expectEqual("StyleAdapter popup border width", static_cast<int>(*popup.borderWidth), 2);
+    expectEqual("StyleAdapter popup radius", static_cast<int>(*popup.radius), 6);
+    expectEqual("StyleAdapter popup padding left", static_cast<int>(popup.padding->left), 8);
+    expectEqual("StyleAdapter popup offset", static_cast<int>(*popup.offset), 7);
+    expectEqual("StyleAdapter popup elevation", static_cast<int>(*popup.elevation), 3);
+
     const auto interactive = oneui::interactiveSurfaceStyleFromStyleSheet(
         sheet,
         oneui::StyleNode{"interactive-surface", {"interactive-surface"}, oneui::StyleStateNone});
@@ -5065,6 +5138,8 @@ void testStyleAdapterBuildsButtonAndTextFieldOverrides() {
     expectEqual("StyleAdapter interactive hover background", interactive.hovered.background.r, 41);
     expectEqual("StyleAdapter interactive pressed background", interactive.pressed.background.r, 25);
     expectEqual("StyleAdapter interactive disabled border", interactive.disabled.border.r, 37);
+    expectEqual("StyleAdapter interactive focus border", interactive.focusVisible.border.r, 74);
+    expectEqual("StyleAdapter interactive focus width", static_cast<int>(interactive.focusVisible.borderWidth), 2);
     expectEqual("StyleAdapter interactive transition duration", static_cast<int>(interactive.transition.durationMs), 120);
     expectEqual("StyleAdapter interactive transition easing", static_cast<int>(interactive.transition.easing), static_cast<int>(oneui::EasingCurve::EaseOutCubic));
 

@@ -640,6 +640,7 @@ pub struct InteractiveSurfaceStyle {
     pub hovered: InteractiveSurfaceStateStyle,
     pub pressed: InteractiveSurfaceStateStyle,
     pub disabled: InteractiveSurfaceStateStyle,
+    pub focus_visible: InteractiveSurfaceStateStyle,
 }
 
 impl From<InteractiveSurfaceStyle> for sys::OneUiInteractiveSurfaceStyle {
@@ -649,6 +650,7 @@ impl From<InteractiveSurfaceStyle> for sys::OneUiInteractiveSurfaceStyle {
             hovered: value.hovered.into(),
             pressed: value.pressed.into(),
             disabled: value.disabled.into(),
+            focus_visible: value.focus_visible.into(),
         }
     }
 }
@@ -4994,6 +4996,11 @@ mod tests {
             disabled: InteractiveSurfaceStateStyle::solid(
                 Color::rgb(33, 35, 50),
                 Color::rgb(57, 60, 79),
+                10.0,
+            ),
+            focus_visible: InteractiveSurfaceStateStyle::solid(
+                Color::rgb(33, 35, 50),
+                Color::rgb(101, 88, 241),
                 10.0,
             ),
         });

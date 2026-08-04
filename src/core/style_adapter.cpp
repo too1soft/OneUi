@@ -233,6 +233,29 @@ SelectStyleOverride selectStyleOverrideFromStyleSheet(const StyleSheet& sheet, S
     return override;
 }
 
+PopupStyleOverride popupStyleOverrideFromStyleSheet(const StyleSheet& sheet, StyleNode node) {
+    const StyleBox box = sheet.resolve(std::move(node));
+    PopupStyleOverride style;
+    style.background = box.background.color;
+    style.foreground = box.foreground;
+    style.border = box.borderColor;
+    style.borderWidth = box.borderWidth;
+    style.radius = box.radius;
+    style.padding = box.padding;
+    style.offset = box.gap;
+
+    const auto shadow = std::find_if(
+        box.shadows.begin(),
+        box.shadows.end(),
+        [](const StyleShadow& candidate) { return !candidate.inset; });
+    if (shadow != box.shadows.end()) {
+        style.elevation = shadow->color.a == 0
+            ? 0.0f
+            : std::max(0.0f, shadow->blurRadius / 10.0f);
+    }
+    return style;
+}
+
 ListStyleOverride listStyleOverrideFromStyleSheet(const StyleSheet& sheet, StyleNode node) {
     ListStyleOverride override;
     override.normal = listStateStyleOverrideFromStyleBox(resolveState(sheet, node, StyleStateNone));
@@ -254,7 +277,8 @@ InteractiveSurfaceStyle interactiveSurfaceStyleFromStyleSheet(const StyleSheet& 
     style.normal = interactiveSurfaceStateStyleFromStyleBox(normal);
     style.hovered = interactiveSurfaceStateStyleFromStyleBox(resolveState(sheet, node, StyleStateHover));
     style.pressed = interactiveSurfaceStateStyleFromStyleBox(resolveState(sheet, node, StyleStateActive));
-    style.disabled = interactiveSurfaceStateStyleFromStyleBox(resolveState(sheet, std::move(node), StyleStateDisabled));
+    style.disabled = interactiveSurfaceStateStyleFromStyleBox(resolveState(sheet, node, StyleStateDisabled));
+    style.focusVisible = interactiveSurfaceStateStyleFromStyleBox(resolveState(sheet, std::move(node), StyleStateFocus));
     if (const auto transition = transitionOverrideFromStyleBox(normal)) {
         style.transition = *transition;
     }

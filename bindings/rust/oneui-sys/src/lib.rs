@@ -114,6 +114,7 @@ pub struct OneUiInteractiveSurfaceStyle {
     pub hovered: OneUiInteractiveSurfaceStateStyle,
     pub pressed: OneUiInteractiveSurfaceStateStyle,
     pub disabled: OneUiInteractiveSurfaceStateStyle,
+    pub focus_visible: OneUiInteractiveSurfaceStateStyle,
 }
 
 #[repr(C)]

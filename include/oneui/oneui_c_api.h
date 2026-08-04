@@ -173,6 +173,7 @@ typedef struct OneUiInteractiveSurfaceStyle {
     OneUiInteractiveSurfaceStateStyle hovered;
     OneUiInteractiveSurfaceStateStyle pressed;
     OneUiInteractiveSurfaceStateStyle disabled;
+    OneUiInteractiveSurfaceStateStyle focus_visible;
 } OneUiInteractiveSurfaceStyle;
 
 typedef struct OneUiTextFieldStateStyle {

@@ -683,7 +683,11 @@ ParsedSelector parseSelector(const std::string& selector) {
     }
 
     for (std::size_t index = 1; index < raw_parts.size(); ++index) {
-        parsed.pseudos |= parseStylePseudoState(trim(raw_parts[index]));
+        const auto pseudo = parseStylePseudoState(trim(raw_parts[index]));
+        if (pseudo == StyleStateNone) {
+            return parsed;
+        }
+        parsed.pseudos |= pseudo;
     }
     parsed.valid = true;
     return parsed;
@@ -849,7 +853,7 @@ StylePseudoMask parseStylePseudoState(const std::string& pseudo) {
     if (pseudo == "active") {
         return StyleStateActive;
     }
-    if (pseudo == "focus") {
+    if (pseudo == "focus" || pseudo == "focus-visible") {
         return StyleStateFocus;
     }
     if (pseudo == "disabled") {
