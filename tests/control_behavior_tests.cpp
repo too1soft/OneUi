@@ -2414,6 +2414,28 @@ void testVirtualListPaintsOnlyViewportRowsAndMaintainsScrollSelection() {
     expectEqual("VirtualList paints a bounded number of visible rows", static_cast<int>(canvas.texts.size()) <= 8 ? 1 : 0, 1);
     expectEqual("VirtualList paints the row at the scroll offset", countTextsWithText(canvas, L"Row 2500"), 1);
 
+    const float offsetBeforeUpdate = list.scrollOffset();
+    const int selectionBeforeUpdate = list.selectedIndex();
+    expectEqual(
+        "VirtualList updates one row in place",
+        list.updateItem(2500, oneui::ListItem{L"Updated 2500", L"Ready"}) ? 1 : 0,
+        1);
+    expectNear("VirtualList row update preserves scroll offset", list.scrollOffset(), offsetBeforeUpdate);
+    expectEqual(
+        "VirtualList row update preserves selection",
+        list.selectedIndex(),
+        selectionBeforeUpdate);
+    RecordingCanvas updatedCanvas;
+    list.paint(updatedCanvas);
+    expectEqual(
+        "VirtualList paints the updated row",
+        countTextsWithText(updatedCanvas, L"Updated 2500"),
+        1);
+    expectEqual(
+        "VirtualList rejects an out-of-range row update",
+        list.updateItem(5000, oneui::ListItem{L"Out of range", L""}) ? 1 : 0,
+        0);
+
     list.setSelectedIndex(4999);
     expectEqual("VirtualList selected index updates", list.selectedIndex(), 4999);
     expectNear("VirtualList keeps keyboard selection visible", list.scrollOffset(), list.maxScrollOffset());

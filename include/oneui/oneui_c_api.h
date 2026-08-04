@@ -608,6 +608,7 @@ ONEUI_API void oneui_list_set_on_changed(OneUiWidget* list, OneUiIntCallback cal
  */
 ONEUI_API OneUiWidget* oneui_virtual_list_create(void);
 ONEUI_API void oneui_virtual_list_set_items_utf8(OneUiWidget* list, const OneUiListItemUtf8* items, size_t count);
+ONEUI_API int oneui_virtual_list_update_item_utf8(OneUiWidget* list, size_t index, const OneUiListItemUtf8* item);
 ONEUI_API void oneui_virtual_list_set_selected_index(OneUiWidget* list, int index);
 ONEUI_API int oneui_virtual_list_selected_index(OneUiWidget* list);
 /* mode: 0 = single, 1 = multiple */

@@ -6,6 +6,7 @@
 #include "oneui/selection_model.h"
 
 #include <functional>
+#include <cstddef>
 #include <optional>
 #include <vector>
 
@@ -21,6 +22,7 @@ public:
     VirtualList();
 
     void setItems(std::vector<ListItem> items);
+    bool updateItem(std::size_t index, ListItem item);
     void setSelectedIndex(int index);
     int selectedIndex() const;
     void setSelectionMode(SelectionMode mode);

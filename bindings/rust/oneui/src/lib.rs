@@ -4,6 +4,7 @@
 //! with window lifetime and grows reusable controls without exposing raw FFI to
 //! product applications.
 
+use std::collections::BTreeMap;
 use std::ffi::{CStr, CString};
 use std::marker::PhantomData;
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -363,6 +364,14 @@ impl UiDispatcher {
     pub fn label_handle(&self, label: &Label) -> LabelHandle {
         LabelHandle {
             state: Arc::clone(&label.state),
+            dispatcher: self.clone(),
+        }
+    }
+
+    /// Creates a thread-safe producer for in-place virtual-list row updates.
+    pub fn virtual_list_handle(&self, list: &VirtualList) -> VirtualListHandle {
+        VirtualListHandle {
+            state: Arc::clone(&list.state),
             dispatcher: self.clone(),
         }
     }
@@ -3977,8 +3986,99 @@ impl Drop for List {
 ///
 /// Unlike [`List`], this control retains all data but only paints rows visible
 /// in its viewport. Keep row content to a title and optional detail line.
+struct VirtualListState {
+    raw: AtomicPtr<sys::OneUiWidget>,
+    pending_items: Mutex<BTreeMap<usize, ListItem>>,
+    update_scheduled: AtomicBool,
+}
+
+/// Thread-safe producer for in-place row updates on a mounted virtual list.
+///
+/// Updates are coalesced per row and applied on the owning UI thread. Unlike a
+/// full item reset, row updates preserve selection, scroll offset, and active
+/// scroll motion.
+#[derive(Clone)]
+pub struct VirtualListHandle {
+    state: Arc<VirtualListState>,
+    dispatcher: UiDispatcher,
+}
+
+impl VirtualListHandle {
+    pub fn update_item(&self, index: usize, item: ListItem) -> Result<(), Error> {
+        if self.state.raw.load(Ordering::Acquire).is_null() {
+            return Err(Error::WidgetDestroyed);
+        }
+
+        self.state
+            .pending_items
+            .lock()
+            .expect("virtual list pending items lock poisoned")
+            .insert(index, item);
+        if self.state.update_scheduled.swap(true, Ordering::AcqRel) {
+            return Ok(());
+        }
+
+        let state = Arc::clone(&self.state);
+        let dispatched_state = Arc::clone(&state);
+        if let Err(error) = self
+            .dispatcher
+            .dispatch(move || Self::drain_pending_items(&dispatched_state))
+        {
+            state.update_scheduled.store(false, Ordering::Release);
+            state
+                .pending_items
+                .lock()
+                .expect("virtual list pending items lock poisoned")
+                .clear();
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    fn drain_pending_items(state: &VirtualListState) {
+        loop {
+            let items = std::mem::take(
+                &mut *state
+                    .pending_items
+                    .lock()
+                    .expect("virtual list pending items lock poisoned"),
+            );
+            let raw = state.raw.load(Ordering::Acquire);
+            if raw.is_null() {
+                state.update_scheduled.store(false, Ordering::Release);
+                return;
+            }
+
+            for (index, item) in items {
+                let native_item = sys::OneUiListItemUtf8 {
+                    title: sys::OneUiUtf8String::from_str(&item.title),
+                    detail: sys::OneUiUtf8String::from_str(&item.detail),
+                };
+                unsafe {
+                    sys::oneui_virtual_list_update_item_utf8(raw, index, &native_item);
+                }
+            }
+
+            state.update_scheduled.store(false, Ordering::Release);
+            if state
+                .pending_items
+                .lock()
+                .expect("virtual list pending items lock poisoned")
+                .is_empty()
+            {
+                return;
+            }
+            if !state.update_scheduled.swap(true, Ordering::AcqRel) {
+                continue;
+            }
+            return;
+        }
+    }
+}
+
 pub struct VirtualList {
     widget: Widget,
+    state: Arc<VirtualListState>,
     changed_callback: Option<Box<ListChangedCallback>>,
     selection_changed_callback: Option<Box<ListSelectionChangedCallback>>,
     activated_callback: Option<Box<ListChangedCallback>>,
@@ -3991,6 +4091,11 @@ impl VirtualList {
     pub fn new() -> Result<Self, Error> {
         let widget = Widget::from_raw(unsafe { sys::oneui_virtual_list_create() })?;
         Ok(Self {
+            state: Arc::new(VirtualListState {
+                raw: AtomicPtr::new(widget.as_raw()),
+                pending_items: Mutex::new(BTreeMap::new()),
+                update_scheduled: AtomicBool::new(false),
+            }),
             widget,
             changed_callback: None,
             selection_changed_callback: None,
@@ -4002,6 +4107,14 @@ impl VirtualList {
     }
 
     pub fn set_items(&self, items: &[ListItem]) {
+        // A full data revision invalidates queued row patches from the previous
+        // revision. Keep the scheduled drain alive so updates submitted after
+        // this reset still use the already queued UI-thread task.
+        self.state
+            .pending_items
+            .lock()
+            .expect("virtual list pending items lock poisoned")
+            .clear();
         let native_items: Vec<sys::OneUiListItemUtf8> = items
             .iter()
             .map(|item| sys::OneUiListItemUtf8 {
@@ -4016,6 +4129,17 @@ impl VirtualList {
                 native_items.len(),
             )
         };
+    }
+
+    /// Replaces one row without resetting selection, scrolling, or motion.
+    pub fn update_item(&self, index: usize, item: &ListItem) -> bool {
+        let native_item = sys::OneUiListItemUtf8 {
+            title: sys::OneUiUtf8String::from_str(&item.title),
+            detail: sys::OneUiUtf8String::from_str(&item.detail),
+        };
+        unsafe {
+            sys::oneui_virtual_list_update_item_utf8(self.widget.as_raw(), index, &native_item) != 0
+        }
     }
 
     pub fn set_selected_index(&self, index: i32) {
@@ -4306,6 +4430,15 @@ impl Drop for VirtualList {
         self.clear_on_activated();
         self.clear_on_selection_changed();
         self.clear_on_changed();
+        self.state
+            .raw
+            .store(std::ptr::null_mut(), Ordering::Release);
+        self.state
+            .pending_items
+            .lock()
+            .expect("virtual list pending items lock poisoned")
+            .clear();
+        self.state.update_scheduled.store(false, Ordering::Release);
     }
 }
 
@@ -4712,6 +4845,11 @@ impl Window {
     /// window. Bursts are coalesced to the latest text value.
     pub fn label_handle(&self, label: &Label) -> LabelHandle {
         self.dispatcher().label_handle(label)
+    }
+
+    /// Returns the thread-safe update path for rows in a mounted virtual list.
+    pub fn virtual_list_handle(&self, list: &VirtualList) -> VirtualListHandle {
+        self.dispatcher().virtual_list_handle(list)
     }
 
     pub fn dispatch<F>(&self, task: F) -> Result<(), Error>
@@ -5458,6 +5596,112 @@ mod tests {
             handle.set_text("too late"),
             Err(Error::WidgetDestroyed)
         ));
+    }
+
+    #[test]
+    fn virtual_list_handle_coalesces_row_updates_on_the_window_thread() {
+        let _guard = window_test_lock().lock().expect("window test lock");
+        let window = Window::new(&WindowOptions::default()).expect("window should be created");
+        let list = VirtualList::new().expect("virtual list should be created");
+        list.set_items(&[
+            ListItem {
+                title: "Alpha".to_owned(),
+                detail: "Pending".to_owned(),
+            },
+            ListItem {
+                title: "Beta".to_owned(),
+                detail: "Pending".to_owned(),
+            },
+        ]);
+        window.set_content(list.as_widget());
+        let handle = window.virtual_list_handle(&list);
+        let worker = thread::spawn(move || {
+            handle
+                .update_item(
+                    1,
+                    ListItem {
+                        title: "Beta".to_owned(),
+                        detail: "Checking".to_owned(),
+                    },
+                )
+                .expect("worker should submit a row update");
+            handle
+                .update_item(
+                    1,
+                    ListItem {
+                        title: "Beta".to_owned(),
+                        detail: "Online".to_owned(),
+                    },
+                )
+                .expect("worker should replace the pending row update");
+        });
+        worker.join().expect("worker should finish");
+
+        let close_dispatcher = window.dispatcher();
+        window
+            .dispatch(move || close_dispatcher.request_close())
+            .expect("window should accept close request");
+        assert_eq!(window.run(), 0);
+    }
+
+    #[test]
+    fn virtual_list_handle_rejects_updates_after_the_list_is_destroyed() {
+        let _guard = window_test_lock().lock().expect("window test lock");
+        let window = Window::new(&WindowOptions::default()).expect("window should be created");
+        let handle = {
+            let list = VirtualList::new().expect("virtual list should be created");
+            window.virtual_list_handle(&list)
+        };
+
+        assert!(matches!(
+            handle.update_item(
+                0,
+                ListItem {
+                    title: "Too late".to_owned(),
+                    detail: String::new(),
+                },
+            ),
+            Err(Error::WidgetDestroyed)
+        ));
+    }
+
+    #[test]
+    fn virtual_list_full_reset_discards_row_patches_from_the_previous_revision() {
+        let _guard = window_test_lock().lock().expect("window test lock");
+        let window = Window::new(&WindowOptions::default()).expect("window should be created");
+        let list = VirtualList::new().expect("virtual list should be created");
+        list.set_items(&[ListItem {
+            title: "Old".to_owned(),
+            detail: "Pending".to_owned(),
+        }]);
+        window.set_content(list.as_widget());
+        let handle = window.virtual_list_handle(&list);
+        handle
+            .update_item(
+                0,
+                ListItem {
+                    title: "Old".to_owned(),
+                    detail: "Online".to_owned(),
+                },
+            )
+            .expect("row patch should be queued");
+
+        list.set_items(&[ListItem {
+            title: "New".to_owned(),
+            detail: "Unknown".to_owned(),
+        }]);
+        assert!(list
+            .state
+            .pending_items
+            .lock()
+            .expect("virtual list pending items lock")
+            .is_empty());
+
+        let close_dispatcher = window.dispatcher();
+        window
+            .dispatch(move || close_dispatcher.request_close())
+            .expect("window should accept close request");
+        assert_eq!(window.run(), 0);
     }
 
     #[test]

@@ -2821,6 +2821,20 @@ void oneui_virtual_list_set_items_utf8(
     }
 }
 
+int oneui_virtual_list_update_item_utf8(
+    OneUiWidget* list,
+    std::size_t index,
+    const OneUiListItemUtf8* item) {
+    auto* nativeList = asWidget<oneui::VirtualList>(list);
+    if (!nativeList || !item) {
+        return 0;
+    }
+    return nativeList->updateItem(index, oneui::ListItem{
+        utf8OrEmpty(item->title),
+        utf8OrEmpty(item->detail),
+    }) ? 1 : 0;
+}
+
 void oneui_virtual_list_set_selected_index(OneUiWidget* list, int index) {
     if (auto* nativeList = asWidget<oneui::VirtualList>(list)) {
         nativeList->setSelectedIndex(index);

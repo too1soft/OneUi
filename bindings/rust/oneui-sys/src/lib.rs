@@ -403,17 +403,10 @@ extern "C" {
         target_index: c_int,
     ) -> c_int;
     pub fn oneui_reorderable_grid_set_column_count(grid: *mut OneUiWidget, columns: c_int);
-    pub fn oneui_reorderable_grid_set_gaps(
-        grid: *mut OneUiWidget,
-        column_gap: f32,
-        row_gap: f32,
-    );
+    pub fn oneui_reorderable_grid_set_gaps(grid: *mut OneUiWidget, column_gap: f32, row_gap: f32);
     pub fn oneui_reorderable_grid_set_item_height(grid: *mut OneUiWidget, height: f32);
     pub fn oneui_reorderable_grid_content_height(grid: *mut OneUiWidget) -> f32;
-    pub fn oneui_reorderable_grid_set_reorder_enabled(
-        grid: *mut OneUiWidget,
-        enabled: c_int,
-    );
+    pub fn oneui_reorderable_grid_set_reorder_enabled(grid: *mut OneUiWidget, enabled: c_int);
     pub fn oneui_reorderable_grid_reorder_enabled(grid: *mut OneUiWidget) -> c_int;
     pub fn oneui_reorderable_grid_set_on_reorder_requested_utf8(
         grid: *mut OneUiWidget,
@@ -717,6 +710,11 @@ extern "C" {
         items: *const OneUiListItemUtf8,
         count: usize,
     );
+    pub fn oneui_virtual_list_update_item_utf8(
+        list: *mut OneUiWidget,
+        index: usize,
+        item: *const OneUiListItemUtf8,
+    ) -> c_int;
     pub fn oneui_virtual_list_set_selected_index(list: *mut OneUiWidget, index: c_int);
     pub fn oneui_virtual_list_selected_index(list: *mut OneUiWidget) -> c_int;
     pub fn oneui_virtual_list_set_selection_mode(list: *mut OneUiWidget, mode: c_int);

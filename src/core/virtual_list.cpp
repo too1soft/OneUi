@@ -47,6 +47,18 @@ void VirtualList::setItems(std::vector<ListItem> items) {
     invalidate();
 }
 
+bool VirtualList::updateItem(std::size_t index, ListItem item) {
+    if (index >= items_.size()) {
+        return false;
+    }
+    if (items_[index].title == item.title && items_[index].detail == item.detail) {
+        return true;
+    }
+    items_[index] = std::move(item);
+    invalidate();
+    return true;
+}
+
 void VirtualList::setSelectedIndex(int index) {
     assignSelectedIndex(index);
 }
