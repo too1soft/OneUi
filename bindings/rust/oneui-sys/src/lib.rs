@@ -5,7 +5,7 @@
 
 use std::ffi::{c_char, c_int, c_uint, c_ushort, c_void};
 
-pub const UTF8_ABI_VERSION: c_uint = 3;
+pub const UTF8_ABI_VERSION: c_uint = 4;
 
 #[repr(C)]
 pub struct OneUiWindow {
@@ -173,6 +173,25 @@ pub type OneUiBoolCallback = Option<unsafe extern "C" fn(value: c_int, user_data
 pub type OneUiIntCallback = Option<unsafe extern "C" fn(value: c_int, user_data: *mut c_void)>;
 pub type OneUiIndexPointCallback =
     Option<unsafe extern "C" fn(index: c_int, x: f32, y: f32, user_data: *mut c_void)>;
+pub type OneUiReorderRequestedCallback =
+    Option<unsafe extern "C" fn(source_index: c_int, target_index: c_int, user_data: *mut c_void)>;
+pub type OneUiTreeReorderRequestedCallback = Option<
+    unsafe extern "C" fn(
+        source_id: *const c_char,
+        source_length: usize,
+        target_id: *const c_char,
+        target_length: usize,
+        user_data: *mut c_void,
+    ),
+>;
+pub type OneUiGridReorderRequestedCallback = Option<
+    unsafe extern "C" fn(
+        source_id: *const c_char,
+        source_length: usize,
+        target_index: c_int,
+        user_data: *mut c_void,
+    ),
+>;
 pub type OneUiPointerCallback =
     Option<unsafe extern "C" fn(event: *const OneUiPointerEvent, user_data: *mut c_void)>;
 
@@ -371,6 +390,36 @@ extern "C" {
     pub fn oneui_panel_set_border(panel: *mut OneUiWidget, r: u8, g: u8, b: u8, a: u8, width: f32);
     pub fn oneui_panel_set_radius(panel: *mut OneUiWidget, radius: f32);
     pub fn oneui_panel_set_padding(panel: *mut OneUiWidget, insets: OneUiInsets);
+    pub fn oneui_reorderable_grid_create() -> *mut OneUiWidget;
+    pub fn oneui_reorderable_grid_clear_items(grid: *mut OneUiWidget);
+    pub fn oneui_reorderable_grid_add_item_utf8(
+        grid: *mut OneUiWidget,
+        id: OneUiUtf8String,
+        child: *mut OneUiWidget,
+    );
+    pub fn oneui_reorderable_grid_move_item_utf8(
+        grid: *mut OneUiWidget,
+        source_id: OneUiUtf8String,
+        target_index: c_int,
+    ) -> c_int;
+    pub fn oneui_reorderable_grid_set_column_count(grid: *mut OneUiWidget, columns: c_int);
+    pub fn oneui_reorderable_grid_set_gaps(
+        grid: *mut OneUiWidget,
+        column_gap: f32,
+        row_gap: f32,
+    );
+    pub fn oneui_reorderable_grid_set_item_height(grid: *mut OneUiWidget, height: f32);
+    pub fn oneui_reorderable_grid_content_height(grid: *mut OneUiWidget) -> f32;
+    pub fn oneui_reorderable_grid_set_reorder_enabled(
+        grid: *mut OneUiWidget,
+        enabled: c_int,
+    );
+    pub fn oneui_reorderable_grid_reorder_enabled(grid: *mut OneUiWidget) -> c_int;
+    pub fn oneui_reorderable_grid_set_on_reorder_requested_utf8(
+        grid: *mut OneUiWidget,
+        callback: OneUiGridReorderRequestedCallback,
+        user_data: *mut c_void,
+    );
     pub fn oneui_interactive_surface_create() -> *mut OneUiWidget;
     pub fn oneui_interactive_surface_set_content(
         surface: *mut OneUiWidget,
@@ -712,6 +761,13 @@ extern "C" {
         callback: OneUiIndexPointCallback,
         user_data: *mut c_void,
     );
+    pub fn oneui_virtual_list_set_reorder_enabled(list: *mut OneUiWidget, enabled: c_int);
+    pub fn oneui_virtual_list_reorder_enabled(list: *mut OneUiWidget) -> c_int;
+    pub fn oneui_virtual_list_set_on_reorder_requested(
+        list: *mut OneUiWidget,
+        callback: OneUiReorderRequestedCallback,
+        user_data: *mut c_void,
+    );
     pub fn oneui_state_view_create(
         title: *const c_ushort,
         message: *const c_ushort,
@@ -746,6 +802,13 @@ extern "C" {
     pub fn oneui_tree_view_set_on_expansion_changed_utf8(
         tree_view: *mut OneUiWidget,
         callback: OneUiTreeExpansionCallback,
+        user_data: *mut c_void,
+    );
+    pub fn oneui_tree_view_set_reorder_enabled(tree_view: *mut OneUiWidget, enabled: c_int);
+    pub fn oneui_tree_view_reorder_enabled(tree_view: *mut OneUiWidget) -> c_int;
+    pub fn oneui_tree_view_set_on_reorder_requested_utf8(
+        tree_view: *mut OneUiWidget,
+        callback: OneUiTreeReorderRequestedCallback,
         user_data: *mut c_void,
     );
 

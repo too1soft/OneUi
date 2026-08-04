@@ -33,6 +33,7 @@
 #include "oneui/layout/overlay_host.h"
 #include "oneui/controls/log_view.h"
 #include "oneui/layout/panel.h"
+#include "oneui/layout/reorderable_grid.h"
 #include "oneui/layout/scroll_view.h"
 #include "oneui/layout/stack.h"
 #include "oneui/layout/top_bar.h"
@@ -663,6 +664,8 @@ oneui::StyleNode styleNodeFor(const OneUiWidget* widget) {
             tag = "titlebar";
         } else if (dynamic_cast<oneui::ScrollView*>(widget->widget.get())) {
             tag = "scroll-view";
+        } else if (dynamic_cast<oneui::ReorderableGrid*>(widget->widget.get())) {
+            tag = "reorderable-grid";
         } else if (dynamic_cast<oneui::NavItem*>(widget->widget.get())) {
             tag = "button";
         } else if (dynamic_cast<oneui::AppShell*>(widget->widget.get())) {
@@ -857,6 +860,10 @@ void applyStyleSheet(OneUiWidget* wrapper, std::shared_ptr<oneui::StyleSheet> sh
                 box.foreground.value_or(oneui::Color{148, 163, 184, 180}),
                 box.borderWidth.value_or(4.0f));
         }
+        return;
+    }
+    if (auto* grid = dynamic_cast<oneui::ReorderableGrid*>(wrapper->widget.get())) {
+        grid->setStyleBox(wrapper->styleSheet->resolve(node));
         return;
     }
     if (auto* surface = dynamic_cast<oneui::InteractiveSurface*>(wrapper->widget.get())) {
@@ -2961,6 +2968,33 @@ void oneui_virtual_list_set_on_context_menu_requested(
         }} : nullptr);
 }
 
+void oneui_virtual_list_set_reorder_enabled(OneUiWidget* list, int enabled) {
+    if (auto* nativeList = asWidget<oneui::VirtualList>(list)) {
+        nativeList->setReorderEnabled(enabled != 0);
+    }
+}
+
+int oneui_virtual_list_reorder_enabled(OneUiWidget* list) {
+    if (const auto* nativeList = asWidget<oneui::VirtualList>(list)) {
+        return nativeList->reorderEnabled() ? 1 : 0;
+    }
+    return 0;
+}
+
+void oneui_virtual_list_set_on_reorder_requested(
+    OneUiWidget* list,
+    OneUiReorderRequestedCallback callback,
+    void* user_data) {
+    auto* nativeList = asWidget<oneui::VirtualList>(list);
+    if (!nativeList) {
+        return;
+    }
+    nativeList->setOnReorderRequested(
+        callback ? std::function<void(int, int)>{[callback, user_data](int source, int target) {
+            callback(source, target, user_data);
+        }} : nullptr);
+}
+
 OneUiWidget* oneui_tree_view_create() {
     return wrap(std::make_shared<oneui::TreeView>());
 }
@@ -3033,6 +3067,43 @@ void oneui_tree_view_set_on_expansion_changed_utf8(
     });
 }
 
+void oneui_tree_view_set_reorder_enabled(OneUiWidget* tree_view, int enabled) {
+    if (auto* nativeTree = asWidget<oneui::TreeView>(tree_view)) {
+        nativeTree->setReorderEnabled(enabled != 0);
+    }
+}
+
+int oneui_tree_view_reorder_enabled(OneUiWidget* tree_view) {
+    if (const auto* nativeTree = asWidget<oneui::TreeView>(tree_view)) {
+        return nativeTree->reorderEnabled() ? 1 : 0;
+    }
+    return 0;
+}
+
+void oneui_tree_view_set_on_reorder_requested_utf8(
+    OneUiWidget* tree_view,
+    OneUiTreeReorderRequestedCallback callback,
+    void* user_data) {
+    auto* nativeTree = asWidget<oneui::TreeView>(tree_view);
+    if (!nativeTree) {
+        return;
+    }
+    nativeTree->setOnReorderRequested(
+        callback
+            ? std::function<void(const std::wstring&, const std::wstring&)>{
+                [callback, user_data](const std::wstring& source, const std::wstring& target) {
+                    const std::string sourceUtf8 = utf8FromWide(source);
+                    const std::string targetUtf8 = utf8FromWide(target);
+                    callback(
+                        sourceUtf8.data(),
+                        sourceUtf8.size(),
+                        targetUtf8.data(),
+                        targetUtf8.size(),
+                        user_data);
+                }}
+            : nullptr);
+}
+
 OneUiWidget* oneui_table_create() {
     return wrap(std::make_shared<oneui::Table>());
 }
@@ -3063,6 +3134,99 @@ void oneui_card_set_content(OneUiWidget* card, OneUiWidget* child) {
         return;
     }
     nativeCard->setContent(child ? child->widget : nullptr);
+}
+
+OneUiWidget* oneui_reorderable_grid_create(void) {
+    return wrap(std::make_shared<oneui::ReorderableGrid>());
+}
+
+void oneui_reorderable_grid_clear_items(OneUiWidget* grid) {
+    if (auto* nativeGrid = asWidget<oneui::ReorderableGrid>(grid)) {
+        nativeGrid->clearItems();
+    }
+}
+
+void oneui_reorderable_grid_add_item_utf8(
+    OneUiWidget* grid,
+    OneUiUtf8String id,
+    OneUiWidget* child) {
+    auto* nativeGrid = asWidget<oneui::ReorderableGrid>(grid);
+    if (!nativeGrid || !child || !child->widget) {
+        return;
+    }
+    nativeGrid->addItem(oneui::ReorderableGridItem{
+        utf8OrEmpty(id), child->widget});
+}
+
+int oneui_reorderable_grid_move_item_utf8(
+    OneUiWidget* grid,
+    OneUiUtf8String source_id,
+    int target_index) {
+    if (auto* nativeGrid = asWidget<oneui::ReorderableGrid>(grid)) {
+        return nativeGrid->moveItem(utf8OrEmpty(source_id), target_index) ? 1 : 0;
+    }
+    return 0;
+}
+
+void oneui_reorderable_grid_set_column_count(OneUiWidget* grid, int columns) {
+    if (auto* nativeGrid = asWidget<oneui::ReorderableGrid>(grid)) {
+        nativeGrid->setColumnCount(columns);
+    }
+}
+
+void oneui_reorderable_grid_set_gaps(
+    OneUiWidget* grid,
+    float column_gap,
+    float row_gap) {
+    if (auto* nativeGrid = asWidget<oneui::ReorderableGrid>(grid)) {
+        nativeGrid->setColumnGap(column_gap);
+        nativeGrid->setRowGap(row_gap);
+    }
+}
+
+void oneui_reorderable_grid_set_item_height(OneUiWidget* grid, float height) {
+    if (auto* nativeGrid = asWidget<oneui::ReorderableGrid>(grid)) {
+        nativeGrid->setItemHeight(height);
+    }
+}
+
+float oneui_reorderable_grid_content_height(OneUiWidget* grid) {
+    if (const auto* nativeGrid = asWidget<oneui::ReorderableGrid>(grid)) {
+        return nativeGrid->contentHeight();
+    }
+    return 0.0f;
+}
+
+void oneui_reorderable_grid_set_reorder_enabled(OneUiWidget* grid, int enabled) {
+    if (auto* nativeGrid = asWidget<oneui::ReorderableGrid>(grid)) {
+        nativeGrid->setReorderEnabled(enabled != 0);
+    }
+}
+
+int oneui_reorderable_grid_reorder_enabled(OneUiWidget* grid) {
+    if (const auto* nativeGrid = asWidget<oneui::ReorderableGrid>(grid)) {
+        return nativeGrid->reorderEnabled() ? 1 : 0;
+    }
+    return 0;
+}
+
+void oneui_reorderable_grid_set_on_reorder_requested_utf8(
+    OneUiWidget* grid,
+    OneUiGridReorderRequestedCallback callback,
+    void* user_data) {
+    auto* nativeGrid = asWidget<oneui::ReorderableGrid>(grid);
+    if (!nativeGrid) {
+        return;
+    }
+    nativeGrid->setOnReorderRequested(
+        callback
+            ? std::function<void(const std::wstring&, int)>{
+                [callback, user_data](const std::wstring& source, int target) {
+                    const std::string sourceUtf8 = utf8FromWide(source);
+                    callback(
+                        sourceUtf8.data(), sourceUtf8.size(), target, user_data);
+                }}
+            : nullptr);
 }
 
 OneUiWidget* oneui_interactive_surface_create() {

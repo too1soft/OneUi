@@ -2,6 +2,7 @@
 
 #include "internal/scroll_trace.h"
 #include "list_style_internal.h"
+#include "reorder_internal.h"
 
 #include <algorithm>
 #include <chrono>
@@ -36,6 +37,7 @@ void VirtualList::setItems(std::vector<ListItem> items) {
     }
     hoveredIndex_ = -1;
     pressedIndex_ = -1;
+    resetReorderState();
     scrollOffset_ = std::clamp(scrollOffset_, 0.0f, maxScrollOffset());
     resetScrollMotion(scrollOffset_);
     if (selection_.activeIndex() >= 0) {
@@ -151,6 +153,23 @@ void VirtualList::setOnContextMenuRequested(std::function<void(int, Point)> call
     onContextMenuRequested_ = std::move(callback);
 }
 
+void VirtualList::setReorderEnabled(bool enabled) {
+    if (reorderEnabled_ == enabled) {
+        return;
+    }
+    reorderEnabled_ = enabled;
+    resetReorderState();
+    invalidate();
+}
+
+bool VirtualList::reorderEnabled() const {
+    return reorderEnabled_;
+}
+
+void VirtualList::setOnReorderRequested(std::function<void(int, int)> callback) {
+    onReorderRequested_ = std::move(callback);
+}
+
 void VirtualList::paint(Canvas& canvas) {
     const Rect rect = frame();
     const ListStyle containerStyle = resolvedContainerStyle();
@@ -221,6 +240,18 @@ void VirtualList::paint(Canvas& canvas) {
                 itemStyle.detailFontWeight);
         }
     }
+    if (reordering_ && reorderInsertionIndex_ >= 0) {
+        const float rawY = rect.y
+            + static_cast<float>(reorderInsertionIndex_) * rowHeight_
+            - scrollOffset_;
+        const float indicatorY = std::clamp(rawY, rect.y + 1.0f, rect.y + rect.height - 1.0f);
+        const float indicatorInset = std::max(4.0f, normalItemStyle.textInset);
+        canvas.drawLine(
+            Point{rect.x + indicatorInset, indicatorY},
+            Point{rect.x + rect.width - indicatorInset, indicatorY},
+            containerStyle.focusRing.color,
+            std::max(2.0f, containerStyle.focusRing.width));
+    }
     canvas.restore();
 
     if (maxScrollOffset() > 0.001f) {
@@ -232,6 +263,19 @@ void VirtualList::paint(Canvas& canvas) {
 bool VirtualList::onMouseMove(const MouseEvent& event) {
     if (!interactive()) {
         return false;
+    }
+    if (reorderEnabled_ && reorderSourceIndex_ >= 0) {
+        if (!reordering_ && detail::exceedsReorderDragThreshold(
+                event.position.x - reorderStartPoint_.x,
+                event.position.y - reorderStartPoint_.y)) {
+            reordering_ = true;
+        }
+        if (reordering_) {
+            updateReorderTarget(event.position);
+            hoveredIndex_ = hitItemIndex(event.position);
+            invalidate();
+            return true;
+        }
     }
     const int next = hitItemIndex(event.position);
     if (next == hoveredIndex_) {
@@ -246,10 +290,16 @@ bool VirtualList::onMouseDown(const MouseEvent& event) {
     if (!interactive() || (event.button != MouseButton::Left && event.button != MouseButton::Right)) {
         return false;
     }
+    resetReorderState();
     pressedIndex_ = hitItemIndex(event.position);
     pressedClickCount_ = event.clickCount;
     if (pressedIndex_ < 0) {
         return false;
+    }
+    if (event.button == MouseButton::Left && reorderEnabled_) {
+        reorderStartPoint_ = event.position;
+        reorderSourceIndex_ = pressedIndex_;
+        reorderTargetIndex_ = pressedIndex_;
     }
     invalidate();
     return true;
@@ -259,10 +309,25 @@ bool VirtualList::onMouseUp(const MouseEvent& event) {
     if (!interactive()) {
         return false;
     }
+    if (event.button == MouseButton::Left && reordering_) {
+        updateReorderTarget(event.position);
+        const int source = reorderSourceIndex_;
+        const int target = reorderTargetIndex_;
+        const auto callback = onReorderRequested_;
+        pressedIndex_ = -1;
+        pressedClickCount_ = 1;
+        resetReorderState();
+        invalidate();
+        if (source >= 0 && target >= 0 && source != target && callback) {
+            callback(source, target);
+        }
+        return true;
+    }
     const int pressed = pressedIndex_;
     const int clickCount = pressedClickCount_;
     pressedIndex_ = -1;
     pressedClickCount_ = 1;
+    resetReorderState();
     if (pressed < 0) {
         return false;
     }
@@ -360,6 +425,17 @@ bool VirtualList::onKeyDown(const KeyEvent& event) {
         return true;
     }
     const int active = selection_.activeIndex();
+    if (reorderEnabled_ && event.alt && !event.control && active >= 0
+        && (event.key == Key::Up || event.key == Key::Down)) {
+        const int target = event.key == Key::Up
+            ? std::max(0, active - 1)
+            : std::min(static_cast<int>(items_.size()) - 1, active + 1);
+        const auto callback = onReorderRequested_;
+        if (target != active && callback) {
+            callback(active, target);
+        }
+        return true;
+    }
     if (active >= 0 && event.key == Key::Enter && onActivated_) {
         onActivated_(active);
         return true;
@@ -476,6 +552,27 @@ Rect VirtualList::verticalThumbRect(float width) const {
     return Rect{rect.x + rect.width - thumbWidth - 4.0f, rect.y + 5.0f + progress * travel, thumbWidth, thumbHeight};
 }
 
+void VirtualList::resetReorderState() {
+    reordering_ = false;
+    reorderStartPoint_ = {};
+    reorderSourceIndex_ = -1;
+    reorderTargetIndex_ = -1;
+    reorderInsertionIndex_ = -1;
+}
+
+void VirtualList::updateReorderTarget(Point point) {
+    reorderInsertionIndex_ = detail::reorderInsertionIndex(
+        point.y,
+        frame().y,
+        scrollOffset_,
+        rowHeight_,
+        static_cast<int>(items_.size()));
+    reorderTargetIndex_ = detail::reorderTargetIndex(
+        reorderSourceIndex_,
+        reorderInsertionIndex_,
+        static_cast<int>(items_.size()));
+}
+
 void VirtualList::ensureSelectionVisible() {
     const int selected = effectiveSelectedIndex();
     if (selected < 0 || frame().height <= 0.001f) {
@@ -569,6 +666,8 @@ bool VirtualList::hasInteractionState() const {
 void VirtualList::resetInteractionState() {
     hoveredIndex_ = -1;
     pressedIndex_ = -1;
+    pressedClickCount_ = 1;
+    resetReorderState();
 }
 
 } // namespace oneui

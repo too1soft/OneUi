@@ -420,6 +420,12 @@ for (const oneui::MonitorInfo& monitor : oneui::enumerateMonitors()) {
 
 固定列数网格。限制：无 span、`fr`、`minmax`、auto-fit。
 
+### ReorderableGrid
+
+固定列卡片网格，负责子项布局、拖拽阈值、插入位置和指示线绘制。每个子项必须提供稳定 ID；控件只报告 `(sourceId, finalTargetIndex)`，不会擅自修改产品数据。产品持久化成功后调用 `moveItem` 原位应用顺序，避免重建整棵控件树。
+
+`gap`、`height`（单项高度）、`padding`、`outline-color` 和 `outline-width` 由 CSS-like 样式控制。列数属于容器布局策略，通过 API 设置。详细契约见 [`docs/25-reorder-contract.md`](25-reorder-contract.md)。
+
 ### Wrap
 
 自动换行排列 chip/tag/button。限制：对齐和尺寸策略仍很简单。

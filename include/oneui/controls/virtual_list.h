@@ -40,6 +40,9 @@ public:
     void setOnActivated(std::function<void(int)> callback);
     void setOnEditRequested(std::function<void(int)> callback);
     void setOnContextMenuRequested(std::function<void(int, Point)> callback);
+    void setReorderEnabled(bool enabled);
+    bool reorderEnabled() const;
+    void setOnReorderRequested(std::function<void(int, int)> callback);
 
     void paint(Canvas& canvas) override;
     bool onMouseMove(const MouseEvent& event) override;
@@ -60,6 +63,8 @@ private:
     int hitItemIndex(Point point) const;
     Rect itemRect(int index) const;
     Rect verticalThumbRect(float width) const;
+    void resetReorderState();
+    void updateReorderTarget(Point point);
     void ensureSelectionVisible();
     ListStyle resolvedContainerStyle() const;
     ListStyle resolvedItemStyle(int index) const;
@@ -71,6 +76,12 @@ private:
     int hoveredIndex_ = -1;
     int pressedIndex_ = -1;
     int pressedClickCount_ = 1;
+    bool reorderEnabled_ = false;
+    bool reordering_ = false;
+    Point reorderStartPoint_{};
+    int reorderSourceIndex_ = -1;
+    int reorderTargetIndex_ = -1;
+    int reorderInsertionIndex_ = -1;
     float rowHeight_ = 48.0f;
     float wheelStep_ = 48.0f;
     float scrollOffset_ = 0.0f;
@@ -83,6 +94,7 @@ private:
     std::function<void(int)> onActivated_;
     std::function<void(int)> onEditRequested_;
     std::function<void(int, Point)> onContextMenuRequested_;
+    std::function<void(int, int)> onReorderRequested_;
 };
 
 } // namespace oneui

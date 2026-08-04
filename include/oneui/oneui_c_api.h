@@ -24,6 +24,18 @@ typedef void (*OneUiBoolCallback)(int checked, void* user_data);
 typedef void (*OneUiIntCallback)(int value, void* user_data);
 typedef void (*OneUiIntArrayCallback)(const int* values, size_t count, void* user_data);
 typedef void (*OneUiIndexPointCallback)(int index, float x, float y, void* user_data);
+typedef void (*OneUiReorderRequestedCallback)(int source_index, int target_index, void* user_data);
+typedef void (*OneUiTreeReorderRequestedCallback)(
+    const char* source_id,
+    size_t source_length,
+    const char* target_id,
+    size_t target_length,
+    void* user_data);
+typedef void (*OneUiGridReorderRequestedCallback)(
+    const char* source_id,
+    size_t source_length,
+    int target_index,
+    void* user_data);
 typedef struct OneUiPointerEvent OneUiPointerEvent;
 typedef void (*OneUiPointerCallback)(const OneUiPointerEvent* event, void* user_data);
 
@@ -288,7 +300,7 @@ enum {
     OneUiTerminalCellOverline = 1u << 11
 };
 
-#define ONEUI_UTF8_ABI_VERSION 3u
+#define ONEUI_UTF8_ABI_VERSION 4u
 
 ONEUI_API const char* oneui_version(void);
 ONEUI_API unsigned int oneui_utf8_abi_version(void);
@@ -630,6 +642,12 @@ ONEUI_API void oneui_virtual_list_set_on_context_menu_requested(
     OneUiWidget* list,
     OneUiIndexPointCallback callback,
     void* user_data);
+ONEUI_API void oneui_virtual_list_set_reorder_enabled(OneUiWidget* list, int enabled);
+ONEUI_API int oneui_virtual_list_reorder_enabled(OneUiWidget* list);
+ONEUI_API void oneui_virtual_list_set_on_reorder_requested(
+    OneUiWidget* list,
+    OneUiReorderRequestedCallback callback,
+    void* user_data);
 
 ONEUI_API OneUiWidget* oneui_tree_view_create(void);
 ONEUI_API void oneui_tree_view_set_items_utf8(OneUiWidget* tree_view, const OneUiTreeItemUtf8* items, size_t count);
@@ -645,6 +663,12 @@ ONEUI_API void oneui_tree_view_set_on_expansion_changed_utf8(
     OneUiWidget* tree_view,
     OneUiTreeExpansionCallback callback,
     void* user_data);
+ONEUI_API void oneui_tree_view_set_reorder_enabled(OneUiWidget* tree_view, int enabled);
+ONEUI_API int oneui_tree_view_reorder_enabled(OneUiWidget* tree_view);
+ONEUI_API void oneui_tree_view_set_on_reorder_requested_utf8(
+    OneUiWidget* tree_view,
+    OneUiTreeReorderRequestedCallback callback,
+    void* user_data);
 
 ONEUI_API OneUiWidget* oneui_table_create(void);
 ONEUI_API void oneui_table_set_columns(OneUiWidget* table, const wchar_t* columns);
@@ -652,6 +676,30 @@ ONEUI_API void oneui_table_set_rows(OneUiWidget* table, const wchar_t* rows);
 
 ONEUI_API OneUiWidget* oneui_card_create();
 ONEUI_API void oneui_card_set_content(OneUiWidget* card, OneUiWidget* child);
+
+ONEUI_API OneUiWidget* oneui_reorderable_grid_create(void);
+ONEUI_API void oneui_reorderable_grid_clear_items(OneUiWidget* grid);
+ONEUI_API void oneui_reorderable_grid_add_item_utf8(
+    OneUiWidget* grid,
+    OneUiUtf8String id,
+    OneUiWidget* child);
+ONEUI_API int oneui_reorderable_grid_move_item_utf8(
+    OneUiWidget* grid,
+    OneUiUtf8String source_id,
+    int target_index);
+ONEUI_API void oneui_reorderable_grid_set_column_count(OneUiWidget* grid, int columns);
+ONEUI_API void oneui_reorderable_grid_set_gaps(
+    OneUiWidget* grid,
+    float column_gap,
+    float row_gap);
+ONEUI_API void oneui_reorderable_grid_set_item_height(OneUiWidget* grid, float height);
+ONEUI_API float oneui_reorderable_grid_content_height(OneUiWidget* grid);
+ONEUI_API void oneui_reorderable_grid_set_reorder_enabled(OneUiWidget* grid, int enabled);
+ONEUI_API int oneui_reorderable_grid_reorder_enabled(OneUiWidget* grid);
+ONEUI_API void oneui_reorderable_grid_set_on_reorder_requested_utf8(
+    OneUiWidget* grid,
+    OneUiGridReorderRequestedCallback callback,
+    void* user_data);
 
 ONEUI_API OneUiWidget* oneui_interactive_surface_create();
 ONEUI_API void oneui_interactive_surface_set_content(OneUiWidget* surface, OneUiWidget* child);

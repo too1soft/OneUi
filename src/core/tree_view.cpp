@@ -1,6 +1,7 @@
 #include "oneui/controls/tree_view.h"
 
 #include "oneui/style.h"
+#include "reorder_internal.h"
 
 #include <algorithm>
 #include <utility>
@@ -75,6 +76,18 @@ void applyTreeViewStateOverride(TreeViewStyle& style, const TreeViewStateStyleOv
     if (override.detailOffsetY) {
         style.detailOffsetY = *override.detailOffsetY;
     }
+    if (override.titleFontSize) {
+        style.titleFontSize = std::max(1.0f, *override.titleFontSize);
+    }
+    if (override.detailFontSize) {
+        style.detailFontSize = std::max(1.0f, *override.detailFontSize);
+    }
+    if (override.titleFontWeight) {
+        style.titleFontWeight = std::clamp(*override.titleFontWeight, 100, 900);
+    }
+    if (override.detailFontWeight) {
+        style.detailFontWeight = std::clamp(*override.detailFontWeight, 100, 900);
+    }
     if (override.focusRing) {
         applyFocusRingOverride(style.focusRing, *override.focusRing);
     }
@@ -97,6 +110,10 @@ TreeViewStyle baseTreeViewStyle(bool selected, bool disabled, bool hovered, bool
     style.rowRadius = t.radiusSm;
     style.rowInset = Insets{2.0f, 3.0f};
     style.textInset = 8.0f;
+    style.titleFontSize = t.fontMd;
+    style.detailFontSize = t.fontSm;
+    style.titleFontWeight = 400;
+    style.detailFontWeight = 400;
     style.focusRing = FocusRingStyle{t.focusOutline, t.focusOutlineWidth, t.focusOutlineOffset, t.radiusLg, true};
 
     if (selected) {
@@ -126,6 +143,7 @@ void TreeView::setItems(std::vector<TreeItem> items) {
     hoveredIndex_ = -1;
     pressedIndex_ = -1;
     pressedToggle_ = false;
+    resetReorderState();
     ensureSelectionVisible();
     updatePreferredHeight();
     invalidate();
@@ -184,6 +202,24 @@ void TreeView::setOnExpansionChanged(std::function<void(const std::wstring&, boo
     onExpansionChanged_ = std::move(callback);
 }
 
+void TreeView::setReorderEnabled(bool enabled) {
+    if (reorderEnabled_ == enabled) {
+        return;
+    }
+    reorderEnabled_ = enabled;
+    resetReorderState();
+    invalidate();
+}
+
+bool TreeView::reorderEnabled() const {
+    return reorderEnabled_;
+}
+
+void TreeView::setOnReorderRequested(
+    std::function<void(const std::wstring&, const std::wstring&)> callback) {
+    onReorderRequested_ = std::move(callback);
+}
+
 std::size_t TreeView::visibleItemCount() const {
     return visibleItems().size();
 }
@@ -226,33 +262,49 @@ void TreeView::paint(Canvas& canvas) {
         const Rect toggleRect{toggleLeft, row.y, toggleWidth(), row.height};
         const bool expandable = hasChildren(visibleItem.index);
         if (expandable) {
-            canvas.drawText(
+            canvas.drawTextStyled(
                 isExpanded(item.id) ? L"v" : L">",
                 toggleRect,
                 itemStyle.detailColor,
-                theme().fontSm,
-                TextAlign::Center);
+                itemStyle.detailFontSize,
+                TextAlign::Center,
+                itemStyle.detailFontWeight);
         }
 
         const float textLeft = toggleLeft + toggleWidth();
         const float detailWidth = item.detail.empty()
             ? 0.0f
-            : canvas.measureTextWidth(item.detail, theme().fontSm) + 8.0f;
+            : canvas.measureTextWidth(
+                item.detail,
+                itemStyle.detailFontSize,
+                itemStyle.detailFontWeight) + 8.0f;
         const float textWidth = std::max(0.0f, row.x + row.width - itemStyle.textInset - textLeft - detailWidth);
-        canvas.drawText(
+        canvas.drawTextStyled(
             item.title,
             Rect{textLeft, row.y, textWidth, row.height},
             itemStyle.titleColor,
-            theme().fontMd,
-            TextAlign::Left);
+            itemStyle.titleFontSize,
+            TextAlign::Left,
+            itemStyle.titleFontWeight);
         if (!item.detail.empty()) {
-            canvas.drawText(
+            canvas.drawTextStyled(
                 item.detail,
                 Rect{row.x + row.width - itemStyle.textInset - detailWidth, row.y, detailWidth, row.height},
                 itemStyle.detailColor,
-                theme().fontSm,
-                TextAlign::Right);
+                itemStyle.detailFontSize,
+                TextAlign::Right,
+                itemStyle.detailFontWeight);
         }
+    }
+    if (reordering_ && reorderInsertionIndex_ >= 0) {
+        const float rawY = rect.y + static_cast<float>(reorderInsertionIndex_) * rowHeight();
+        const float indicatorY = std::clamp(rawY, rect.y + 1.0f, rect.y + rect.height - 1.0f);
+        const float indicatorInset = std::max(4.0f, containerStyle.textInset);
+        canvas.drawLine(
+            Point{rect.x + indicatorInset, indicatorY},
+            Point{rect.x + rect.width - indicatorInset, indicatorY},
+            containerStyle.focusRing.color,
+            std::max(2.0f, containerStyle.focusRing.width));
     }
 }
 
@@ -260,7 +312,21 @@ bool TreeView::onMouseMove(const MouseEvent& event) {
     if (!interactive()) {
         return false;
     }
-    const int next = hitItemIndex(event.position, visibleItems());
+    const auto visible = visibleItems();
+    if (reorderEnabled_ && reorderSourceIndex_ >= 0 && !pressedToggle_) {
+        if (!reordering_ && detail::exceedsReorderDragThreshold(
+                event.position.x - reorderStartPoint_.x,
+                event.position.y - reorderStartPoint_.y)) {
+            reordering_ = true;
+        }
+        if (reordering_) {
+            updateReorderTarget(event.position, visible);
+            hoveredIndex_ = hitItemIndex(event.position, visible);
+            invalidate();
+            return true;
+        }
+    }
+    const int next = hitItemIndex(event.position, visible);
     if (next == hoveredIndex_) {
         return false;
     }
@@ -273,12 +339,18 @@ bool TreeView::onMouseDown(const MouseEvent& event) {
     if (!interactive() || event.button != MouseButton::Left) {
         return false;
     }
+    resetReorderState();
     const auto visible = visibleItems();
     pressedIndex_ = hitItemIndex(event.position, visible);
     if (pressedIndex_ < 0) {
         return false;
     }
     pressedToggle_ = isToggleHit(event.position, visible[static_cast<std::size_t>(pressedIndex_)], pressedIndex_);
+    if (reorderEnabled_ && !pressedToggle_) {
+        reorderStartPoint_ = event.position;
+        reorderSourceIndex_ = pressedIndex_;
+        reorderTargetIndex_ = pressedIndex_;
+    }
     invalidate();
     return true;
 }
@@ -288,10 +360,36 @@ bool TreeView::onMouseUp(const MouseEvent& event) {
         return false;
     }
     const auto visible = visibleItems();
+    if (reordering_) {
+        updateReorderTarget(event.position, visible);
+        const int sourceIndex = reorderSourceIndex_;
+        const int targetIndex = reorderTargetIndex_;
+        const bool valid = sourceIndex >= 0
+            && sourceIndex < static_cast<int>(visible.size())
+            && targetIndex >= 0
+            && targetIndex < static_cast<int>(visible.size())
+            && sourceIndex != targetIndex;
+        const std::wstring sourceId = valid
+            ? items_[visible[static_cast<std::size_t>(sourceIndex)].index].id
+            : std::wstring{};
+        const std::wstring targetId = valid
+            ? items_[visible[static_cast<std::size_t>(targetIndex)].index].id
+            : std::wstring{};
+        const auto callback = onReorderRequested_;
+        pressedIndex_ = -1;
+        pressedToggle_ = false;
+        resetReorderState();
+        invalidate();
+        if (valid && callback) {
+            callback(sourceId, targetId);
+        }
+        return true;
+    }
     const int wasPressed = pressedIndex_;
     const bool wasToggle = pressedToggle_;
     pressedIndex_ = -1;
     pressedToggle_ = false;
+    resetReorderState();
     if (wasPressed < 0 || hitItemIndex(event.position, visible) != wasPressed) {
         invalidate();
         return wasPressed >= 0;
@@ -319,6 +417,20 @@ bool TreeView::onKeyDown(const KeyEvent& event) {
     const int selected = visibleIndexForId(selectedId_, visible);
     const int effectiveSelected = selected >= 0 ? selected : 0;
     const auto& current = visible[static_cast<std::size_t>(effectiveSelected)];
+
+    if (reorderEnabled_ && event.alt && !event.control
+        && (event.key == Key::Up || event.key == Key::Down)) {
+        const int target = event.key == Key::Up
+            ? std::max(0, effectiveSelected - 1)
+            : std::min(static_cast<int>(visible.size()) - 1, effectiveSelected + 1);
+        const auto callback = onReorderRequested_;
+        if (target != effectiveSelected && callback) {
+            const std::wstring sourceId = items_[current.index].id;
+            const std::wstring targetId = items_[visible[static_cast<std::size_t>(target)].index].id;
+            callback(sourceId, targetId);
+        }
+        return true;
+    }
 
     if (event.key == Key::Down) {
         const int next = std::min(static_cast<int>(visible.size()) - 1, effectiveSelected + 1);
@@ -509,6 +621,27 @@ bool TreeView::isToggleHit(Point point, const VisibleItem& item, int visibleInde
     return Rect{left, row.y, toggleWidth(), row.height}.contains(point);
 }
 
+void TreeView::resetReorderState() {
+    reordering_ = false;
+    reorderStartPoint_ = {};
+    reorderSourceIndex_ = -1;
+    reorderTargetIndex_ = -1;
+    reorderInsertionIndex_ = -1;
+}
+
+void TreeView::updateReorderTarget(Point point, const std::vector<VisibleItem>& visible) {
+    reorderInsertionIndex_ = detail::reorderInsertionIndex(
+        point.y,
+        frame().y,
+        0.0f,
+        rowHeight(),
+        static_cast<int>(visible.size()));
+    reorderTargetIndex_ = detail::reorderTargetIndex(
+        reorderSourceIndex_,
+        reorderInsertionIndex_,
+        static_cast<int>(visible.size()));
+}
+
 bool TreeView::hasChildren(std::size_t index) const {
     return index < children_.size() && !children_[index].empty();
 }
@@ -603,6 +736,7 @@ void TreeView::resetInteractionState() {
     hoveredIndex_ = -1;
     pressedIndex_ = -1;
     pressedToggle_ = false;
+    resetReorderState();
 }
 
 } // namespace oneui

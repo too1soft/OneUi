@@ -41,9 +41,9 @@ OneUI has moved beyond its original window-and-button prototype. The repository 
 | Area | Current capabilities |
 | --- | --- |
 | Foundation | `Widget`, `View`, `Canvas`, animation, `State<T>` / `Binding<T>` |
-| Layout | Stack, Grid, Wrap, Dock, Split, Scroll, Panel, Overlay, App/Product Shell |
+| Layout | Stack, Grid, ReorderableGrid, Wrap, Dock, Split, Scroll, Panel, Overlay, App/Product Shell |
 | Forms | Button, IconButton, TextField, Checkbox, Switch, RadioGroup, Slider, Select, FormField |
-| Navigation and data | Tabs, List, VirtualList, TreeView, Table, Menu, NavItem |
+| Navigation and data | Tabs, List, VirtualList, TreeView, Table, Menu, NavItem; stable reorder requests for lists, trees, and grids |
 | Feedback and surfaces | Card, Badge, ProgressBar, Dialog, Popup, Toast, StateView, StatusStrip |
 | Specialized views | TerminalView, LogView, RealtimeFrameView, RemoteInputRegion |
 | Platform and interop | Win32 window, DPI/monitor, clipboard, IME path, UTF-8 C ABI, Rust bindings |

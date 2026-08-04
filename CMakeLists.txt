@@ -47,6 +47,7 @@ add_library(oneui_core OBJECT
     src/core/progress_bar.cpp
     src/core/product_shell.cpp
     src/core/radio_group.cpp
+    src/core/reorderable_grid.cpp
     src/core/realtime_frame_view.cpp
     src/core/remote_input_region.cpp
     src/core/scroll_trace.cpp

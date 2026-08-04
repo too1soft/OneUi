@@ -20,6 +20,7 @@
 
 - `Stack`：row/column、gap、padding、start/center/end/stretch alignment，跳过 invisible child。
 - `Grid`：固定列数、行列 gap、padding、auto rows，跳过 invisible child。
+- `ReorderableGrid`：面向产品卡片的固定列布局，使用稳定 item ID 报告鼠标拖拽重排；`gap`、`height`、`padding` 和插入指示线由 CSS-like 样式驱动，产品确认后再原位应用顺序。
 - `Wrap`：左到右换行骨架。
 - `DockView`：top/right/bottom/left/center app-shell 区域骨架。
 - `SplitView`：静态横向/纵向双栏骨架，split ratio 可钳制。
@@ -36,7 +37,7 @@
 - `Checkbox`、`Switch`：布尔输入。
 - `Slider`：数值输入，支持范围、步进、拖拽、键盘箭头和 typed style override；`ProgressBar`：数值展示，支持 typed style override。
 - `Tabs`、`RadioGroup`、`Select`：单选类控件；三者均支持 typed style override。
-- `Badge`、`Separator`、`List`、`ListItem`、`TreeView`、`Table`：基础展示控件；`Badge`、`Separator`、`List`、`TreeView` 和 `Table` 支持 typed style override。
+- `Badge`、`Separator`、`List`、`ListItem`、`TreeView`、`Table`：基础展示控件；`Badge`、`Separator`、`List`、`TreeView` 和 `Table` 支持 typed style override。`VirtualList` 与 `TreeView` 支持指针拖拽和 `Alt+方向键` 重排请求，并保持选择状态不被框架擅自修改。
 - `OverlayHost`：浮层挂载、移除、层级、边界、基础事件转发、`OverlayOptions::trapsFocus` 键盘焦点边界、`OverlayOptions::blocksOutsidePointer` 外部指针阻断、`OverlayOptions::modal/modeless` 薄预设、overlay-to-overlay 焦点历史和普通 View 焦点恢复。
 - `PopupPlacement`：浮层几何定位 resolver，支持 Bottom/Top/Left/Right 的 start/end 或 start 侧向定位、主轴 flip、shift 和 clamp。
 - `Popup`：anchor/content 命中、鼠标焦点交接、键盘转发、`open/bindOpen`、`PopupOutsidePointerPolicy` 外部指针三态策略、`PopupInteractionMode` 交互模式预设、Escape 关闭和基础阴影。

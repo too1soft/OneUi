@@ -1,0 +1,39 @@
+# Reorder Contract
+
+OneUI owns input interpretation and insertion geometry. Products own domain validation, persistence, and the accepted order. This separation is shared by `VirtualList`, `TreeView`, and `ReorderableGrid`.
+
+## Semantics
+
+- A pointer move shorter than 4 logical pixels remains a normal click.
+- A drag suppresses the child activation that would otherwise follow mouse-up.
+- The callback fires once on release and reports the final position after removal of the source item.
+- `VirtualList` reports source and final target indices.
+- `TreeView` reports stable source and target IDs; the product decides whether parent and sibling rules allow the move.
+- `ReorderableGrid` reports a stable source ID and final target index.
+- Selection is not silently changed by a reorder request.
+- `Alt+Up` and `Alt+Down` provide the keyboard reorder path for list and tree controls.
+
+## Product Integration
+
+1. Keep stable, non-empty, unique IDs separate from rendered labels and current indices. `ReorderableGrid` rejects ambiguous IDs at its boundary.
+2. Validate the request against product rules.
+3. Persist the accepted domain order.
+4. Apply the accepted order in place (`ReorderableGrid::moveItem`) or replace the data model once.
+5. Do not destroy the callback-owning control from inside its own native callback.
+
+The C ABI copies callback arguments for the duration of the call. Safe Rust wrappers own callback storage, catch panics at the ABI boundary, unregister native callbacks before dropping storage, and expose UTF-8 values as owned Rust strings.
+
+## Styling And DPI
+
+Reorder indicators use `outline-color`, `outline-width`, and `text-inset` where applicable. `ReorderableGrid` also consumes `gap`, `height`, and `padding`. These values are logical device-independent units and are converted to physical pixels by the per-monitor DPI-aware Win32 backend.
+
+## Performance
+
+- Pointer movement updates only transient reorder state and invalidates the affected control.
+- Accepted grid moves reorder existing child handles in place.
+- `VirtualList` continues to paint only visible rows and does not allocate one widget per item.
+- Products should persist once on release, not on every pointer move.
+
+## Required Tests
+
+Changes to reorder behavior must cover below-threshold clicks, drag suppression, stable IDs, final-index semantics, keyboard behavior, CSS indicator geometry, callback cleanup, and at least one non-symmetric padding case.

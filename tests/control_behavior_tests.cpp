@@ -31,6 +31,7 @@
 #include "oneui/layout/overlay_host.h"
 #include "oneui/layout/panel.h"
 #include "oneui/layout/product_shell.h"
+#include "oneui/layout/reorderable_grid.h"
 #include "oneui/layout/scroll_view.h"
 #include "oneui/layout/sidebar_nav_bridge.h"
 #include "oneui/layout/split_view.h"
@@ -91,6 +92,8 @@ struct DrawTextCall {
     std::wstring text;
     oneui::Rect rect;
     oneui::Color color;
+    float size = 0.0f;
+    int weight = 400;
 };
 
 struct DrawLineCall {
@@ -146,8 +149,17 @@ public:
     void drawBoxShadow(oneui::Rect rect, const oneui::BoxShadow& shadow, float radius = 0.0f) override {
         boxShadows.push_back(BoxShadowCall{rect, shadow, radius});
     }
-    void drawText(const std::wstring& text, oneui::Rect rect, oneui::Color color, float, oneui::TextAlign = oneui::TextAlign::Center) override {
-        texts.push_back(DrawTextCall{text, rect, color});
+    void drawText(const std::wstring& text, oneui::Rect rect, oneui::Color color, float size, oneui::TextAlign = oneui::TextAlign::Center) override {
+        texts.push_back(DrawTextCall{text, rect, color, size, 400});
+    }
+    void drawTextStyled(
+        const std::wstring& text,
+        oneui::Rect rect,
+        oneui::Color color,
+        float size,
+        oneui::TextAlign = oneui::TextAlign::Center,
+        int weight = 400) override {
+        texts.push_back(DrawTextCall{text, rect, color, size, weight});
     }
     float measureTextWidth(const std::wstring& text, float size, int weight = 400) const override {
         (void)weight;
@@ -2508,6 +2520,203 @@ void testVirtualListExposesStandardRowCommands() {
     expectEqual("VirtualList F2 requests editing for the active row", editRequested, 4);
 }
 
+void testVirtualListReportsReorderRequestsWithoutMutatingSelection() {
+    oneui::VirtualList list;
+    list.setItems({
+        {L"Alpha", L""},
+        {L"Beta", L""},
+        {L"Gamma", L""},
+        {L"Delta", L""},
+    });
+    list.setRowHeight(40.0f);
+    list.setFrame(oneui::Rect{0.0f, 0.0f, 240.0f, 160.0f});
+    list.setSelectedIndex(0);
+    list.setReorderEnabled(true);
+
+    int reorderCount = 0;
+    int sourceIndex = -1;
+    int targetIndex = -1;
+    list.setOnReorderRequested([&](int source, int target) {
+        ++reorderCount;
+        sourceIndex = source;
+        targetIndex = target;
+    });
+
+    const oneui::MouseEvent betaDown{
+        oneui::Point{40.0f, 60.0f}, oneui::MouseButton::Left};
+    list.onMouseDown(betaDown);
+    list.onMouseMove(oneui::MouseEvent{oneui::Point{42.0f, 61.0f}});
+    list.onMouseUp(oneui::MouseEvent{
+        oneui::Point{42.0f, 61.0f}, oneui::MouseButton::Left});
+    expectEqual("VirtualList movement below drag threshold does not reorder", reorderCount, 0);
+    expectEqual("VirtualList normal click still selects the row", list.selectedIndex(), 1);
+
+    list.setSelectedIndex(0);
+    list.onMouseDown(betaDown);
+    list.onMouseMove(oneui::MouseEvent{oneui::Point{40.0f, 142.0f}});
+    list.onMouseUp(oneui::MouseEvent{
+        oneui::Point{40.0f, 142.0f}, oneui::MouseButton::Left});
+    expectEqual("VirtualList drag emits exactly one reorder request", reorderCount, 1);
+    expectEqual("VirtualList reorder reports the source index", sourceIndex, 1);
+    expectEqual("VirtualList reorder reports the final target index", targetIndex, 3);
+    expectEqual("VirtualList reorder does not mutate selection", list.selectedIndex(), 0);
+
+    list.setSelectedIndex(2);
+    oneui::KeyEvent altUp{oneui::Key::Up};
+    altUp.alt = true;
+    list.onKeyDown(altUp);
+    expectEqual("VirtualList Alt+Up emits a reorder request", reorderCount, 2);
+    expectEqual("VirtualList keyboard reorder reports source", sourceIndex, 2);
+    expectEqual("VirtualList keyboard reorder reports target", targetIndex, 1);
+    expectEqual("VirtualList keyboard reorder preserves selection", list.selectedIndex(), 2);
+}
+
+void testVirtualListReorderIndicatorUsesCssFocusStyle() {
+    oneui::StyleSheet sheet;
+    std::string error;
+    const bool parsed = sheet.addRulesFromCss(R"css(
+        virtual-list.reorderable {
+            outline-color: #38bdf8;
+            outline-width: 3px;
+            text-inset: 11px;
+        }
+    )css", &error);
+    expectEqual("VirtualList reorder CSS parses", parsed ? 1 : 0, 1);
+
+    oneui::VirtualList list;
+    list.setItems({{L"Alpha", L""}, {L"Beta", L""}, {L"Gamma", L""}});
+    list.setRowHeight(40.0f);
+    list.setFrame(oneui::Rect{0.0f, 0.0f, 220.0f, 120.0f});
+    list.setStyleOverride(oneui::listStyleOverrideFromStyleSheet(
+        sheet,
+        oneui::StyleNode{"virtual-list", {"reorderable"}, oneui::StyleStateNone}));
+    list.setReorderEnabled(true);
+    list.onMouseDown(oneui::MouseEvent{
+        oneui::Point{40.0f, 20.0f}, oneui::MouseButton::Left});
+    list.onMouseMove(oneui::MouseEvent{oneui::Point{40.0f, 100.0f}});
+
+    RecordingCanvas canvas;
+    list.paint(canvas);
+    const auto indicator = std::find_if(canvas.lines.begin(), canvas.lines.end(), [](const DrawLineCall& line) {
+        return sameColor(line.color, oneui::Color{56, 189, 248});
+    });
+    expectEqual("VirtualList paints a CSS-colored reorder indicator", indicator != canvas.lines.end() ? 1 : 0, 1);
+    if (indicator != canvas.lines.end()) {
+        expectNear("VirtualList paints the CSS reorder indicator width", indicator->width, 3.0f);
+        expectNear("VirtualList applies CSS inset to the reorder indicator", indicator->from.x, 11.0f);
+    }
+}
+
+void testReorderableGridOwnsLayoutGestureAndCssIndicator() {
+    oneui::StyleSheet sheet;
+    std::string error;
+    const bool parsed = sheet.addRulesFromCss(R"css(
+        reorderable-grid.hosts {
+            padding: 2px 4px 6px 4px;
+            gap: 12px;
+            height: 80px;
+            outline-color: #22d3ee;
+            outline-width: 3px;
+        }
+    )css", &error);
+    expectEqual("ReorderableGrid CSS parses", parsed ? 1 : 0, 1);
+
+    oneui::ReorderableGrid grid;
+    grid.setColumnCount(2);
+    grid.setStyleBox(sheet.resolve(
+        oneui::StyleNode{"reorderable-grid", {"hosts"}, oneui::StyleStateNone}));
+    grid.setFrame(oneui::Rect{0.0f, 0.0f, 220.0f, 180.0f});
+    grid.setReorderEnabled(true);
+
+    int activationCount = 0;
+    std::vector<std::shared_ptr<oneui::InteractiveSurface>> surfaces;
+    for (const wchar_t* id : {L"alpha", L"beta", L"gamma", L"delta"}) {
+        auto surface = std::make_shared<oneui::InteractiveSurface>();
+        surface->setOnPointerActivated([&](const oneui::MouseEvent&) {
+            ++activationCount;
+        });
+        grid.addItem(oneui::ReorderableGridItem{id, surface});
+        surfaces.push_back(std::move(surface));
+    }
+    grid.addItem(oneui::ReorderableGridItem{
+        L"alpha", std::make_shared<oneui::InteractiveSurface>()});
+    grid.addItem(oneui::ReorderableGridItem{
+        L"", std::make_shared<oneui::InteractiveSurface>()});
+    expectEqual("ReorderableGrid rejects ambiguous item IDs", grid.itemCount(), 4);
+
+    RecordingCanvas initialCanvas;
+    grid.paint(initialCanvas);
+    expectNear("ReorderableGrid lays out first column from CSS padding", surfaces[0]->frame().x, 4.0f);
+    expectNear("ReorderableGrid lays out equal card widths", surfaces[0]->frame().width, 100.0f);
+    expectNear("ReorderableGrid computes reusable content height", grid.contentHeight(), 180.0f);
+
+    int reorderCount = 0;
+    std::wstring sourceId;
+    int targetIndex = -1;
+    grid.setOnReorderRequested([&](const std::wstring& source, int target) {
+        ++reorderCount;
+        sourceId = source;
+        targetIndex = target;
+    });
+
+    const oneui::MouseEvent betaDown{
+        oneui::Point{160.0f, 40.0f}, oneui::MouseButton::Left};
+    grid.onMouseDown(betaDown);
+    grid.onMouseMove(oneui::MouseEvent{oneui::Point{162.0f, 41.0f}});
+    grid.onMouseUp(oneui::MouseEvent{
+        oneui::Point{162.0f, 41.0f}, oneui::MouseButton::Left});
+    expectEqual("ReorderableGrid movement below threshold remains a click", reorderCount, 0);
+    expectEqual("ReorderableGrid preserves child activation below threshold", activationCount, 1);
+
+    grid.onMouseDown(oneui::MouseEvent{
+        oneui::Point{40.0f, 40.0f}, oneui::MouseButton::Left});
+    grid.onMouseMove(oneui::MouseEvent{oneui::Point{10.0f, 175.0f}});
+    grid.onMouseUp(oneui::MouseEvent{
+        oneui::Point{10.0f, 175.0f}, oneui::MouseButton::Left});
+    expectEqual(
+        "ReorderableGrid uses the absolute content bottom with asymmetric padding",
+        targetIndex,
+        3);
+    reorderCount = 0;
+
+    grid.onMouseDown(betaDown);
+    grid.onMouseMove(oneui::MouseEvent{oneui::Point{205.0f, 140.0f}});
+    RecordingCanvas dragCanvas;
+    grid.paint(dragCanvas);
+    grid.onMouseUp(oneui::MouseEvent{
+        oneui::Point{205.0f, 140.0f}, oneui::MouseButton::Left});
+    expectEqual("ReorderableGrid drag emits exactly one request", reorderCount, 1);
+    expectEqual("ReorderableGrid reports a stable source ID", sourceId == L"beta" ? 1 : 0, 1);
+    expectEqual("ReorderableGrid reports the final target index", targetIndex, 3);
+    expectEqual("ReorderableGrid drag suppresses child activation", activationCount, 1);
+    const auto indicator = std::find_if(
+        dragCanvas.lines.begin(), dragCanvas.lines.end(), [](const DrawLineCall& line) {
+            return sameColor(line.color, oneui::Color{34, 211, 238});
+        });
+    expectEqual(
+        "ReorderableGrid paints a CSS-colored insertion indicator",
+        indicator != dragCanvas.lines.end() ? 1 : 0,
+        1);
+    if (indicator != dragCanvas.lines.end()) {
+        expectNear("ReorderableGrid applies CSS indicator width", indicator->width, 3.0f);
+    }
+    expectEqual(
+        "ReorderableGrid applies an accepted request in place",
+        grid.moveItem(L"beta", targetIndex) ? 1 : 0,
+        1);
+    RecordingCanvas reorderedCanvas;
+    grid.paint(reorderedCanvas);
+    expectNear(
+        "ReorderableGrid relayouts the accepted item at its target row",
+        surfaces[1]->frame().y,
+        94.0f);
+    grid.setStyleBox(oneui::StyleBox{});
+    expectNear(
+        "ReorderableGrid clears CSS geometry without mutating API defaults",
+        grid.contentHeight(),
+        320.0f);
+}
+
 void testPointerActivationUsesSystemClickCountAndSeparateContextAction() {
     oneui::InteractiveSurface surface;
     surface.setFrame(oneui::Rect{0.0f, 0.0f, 240.0f, 80.0f});
@@ -2649,6 +2858,10 @@ void testTreeViewStyleAdapterSharesListContract() {
             border-width: 2px;
             border-radius: 7px;
             content-background: transparent;
+            font-size: 13px;
+            font-weight: 600;
+            detail-font-size: 10px;
+            detail-font-weight: 500;
         }
         tree-view.data-list:selected {
             content-background: #263f7a;
@@ -2674,6 +2887,70 @@ void testTreeViewStyleAdapterSharesListContract() {
     expectEqual("TreeView style adapter applies dark container", countFillRectsWithColor(canvas, oneui::Color{16, 24, 32}), 1);
     expectEqual("TreeView style adapter applies selected row", countFillRectsWithColor(canvas, oneui::Color{38, 63, 122}), 1);
     expectEqual("TreeView style adapter applies selected title", countTextsWithTextAndColor(canvas, L"Child", oneui::Color{146, 183, 255}), 1);
+    const auto title = std::find_if(canvas.texts.begin(), canvas.texts.end(), [](const DrawTextCall& text) {
+        return text.text == L"Child";
+    });
+    const auto detail = std::find_if(canvas.texts.begin(), canvas.texts.end(), [](const DrawTextCall& text) {
+        return text.text == L"Detail";
+    });
+    expectEqual("TreeView paints the CSS title font", title != canvas.texts.end() ? 1 : 0, 1);
+    expectEqual("TreeView paints the CSS detail font", detail != canvas.texts.end() ? 1 : 0, 1);
+    if (title != canvas.texts.end()) {
+        expectNear("TreeView applies CSS title font size", title->size, 13.0f);
+        expectEqual("TreeView applies CSS title font weight", title->weight, 600);
+    }
+    if (detail != canvas.texts.end()) {
+        expectNear("TreeView applies CSS detail font size", detail->size, 10.0f);
+        expectEqual("TreeView applies CSS detail font weight", detail->weight, 500);
+    }
+}
+
+void testTreeViewReportsStableReorderIdsAndPreservesToggleBehavior() {
+    oneui::TreeView tree;
+    tree.setItems({
+        oneui::TreeItem{L"root", L"", L"Root", L"", true},
+        oneui::TreeItem{L"alpha", L"root", L"Alpha", L"1", true},
+        oneui::TreeItem{L"beta", L"root", L"Beta", L"2", true},
+    });
+    tree.setSelectedId(L"alpha");
+    tree.setFrame(oneui::Rect{0.0f, 0.0f, 220.0f, 96.0f});
+    tree.setReorderEnabled(true);
+
+    int reorderCount = 0;
+    std::wstring sourceId;
+    std::wstring targetId;
+    tree.setOnReorderRequested([&](const std::wstring& source, const std::wstring& target) {
+        ++reorderCount;
+        sourceId = source;
+        targetId = target;
+    });
+
+    tree.onMouseDown(oneui::MouseEvent{
+        oneui::Point{60.0f, 48.0f}, oneui::MouseButton::Left});
+    tree.onMouseMove(oneui::MouseEvent{oneui::Point{60.0f, 88.0f}});
+    tree.onMouseUp(oneui::MouseEvent{
+        oneui::Point{60.0f, 88.0f}, oneui::MouseButton::Left});
+    expectEqual("TreeView drag emits one reorder request", reorderCount, 1);
+    expectEqual("TreeView reorder source uses a stable ID", sourceId == L"alpha" ? 1 : 0, 1);
+    expectEqual("TreeView reorder target uses a stable ID", targetId == L"beta" ? 1 : 0, 1);
+    expectEqual("TreeView reorder preserves selection", tree.selectedId() == L"alpha" ? 1 : 0, 1);
+
+    tree.onMouseDown(oneui::MouseEvent{
+        oneui::Point{12.0f, 16.0f}, oneui::MouseButton::Left});
+    tree.onMouseMove(oneui::MouseEvent{oneui::Point{12.0f, 80.0f}});
+    tree.onMouseUp(oneui::MouseEvent{
+        oneui::Point{12.0f, 16.0f}, oneui::MouseButton::Left});
+    expectEqual("TreeView expansion toggle never starts a reorder", reorderCount, 1);
+    expectEqual("TreeView expansion toggle keeps its original behavior", tree.isExpanded(L"root") ? 1 : 0, 0);
+
+    tree.setExpanded(L"root", true);
+    tree.setSelectedId(L"beta");
+    oneui::KeyEvent altUp{oneui::Key::Up};
+    altUp.alt = true;
+    tree.onKeyDown(altUp);
+    expectEqual("TreeView Alt+Up emits a reorder request", reorderCount, 2);
+    expectEqual("TreeView keyboard reorder source uses selected ID", sourceId == L"beta" ? 1 : 0, 1);
+    expectEqual("TreeView keyboard reorder target uses adjacent ID", targetId == L"alpha" ? 1 : 0, 1);
 }
 
 void testTableStyleOverridePaintsCustomColorsAndGeometry() {
@@ -6005,9 +6282,13 @@ int main() {
     testVirtualListPaintsOnlyViewportRowsAndMaintainsScrollSelection();
     testVirtualListUsesStandardMultipleSelectionSemantics();
     testVirtualListExposesStandardRowCommands();
+    testVirtualListReportsReorderRequestsWithoutMutatingSelection();
+    testVirtualListReorderIndicatorUsesCssFocusStyle();
+    testReorderableGridOwnsLayoutGestureAndCssIndicator();
     testPointerActivationUsesSystemClickCountAndSeparateContextAction();
     testVirtualListCssControlsCompactTypographyAndScrollbar();
     testTreeViewStyleAdapterSharesListContract();
+    testTreeViewReportsStableReorderIdsAndPreservesToggleBehavior();
     testTableStyleOverridePaintsCustomColorsAndGeometry();
     testTableEmptyStyleOverrideKeepsDefaultPaint();
     testTableDisabledStyleAndClearRestoresDefault();

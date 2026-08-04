@@ -1667,6 +1667,155 @@ unsafe extern "C" fn run_pointer_callback(
     run_callback_guarded("pointer.activated", || (callback.handler)(event));
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GridReorderRequest {
+    pub source_id: String,
+    pub target_index: usize,
+}
+
+struct GridReorderRequestedCallback {
+    handler: Box<dyn FnMut(GridReorderRequest) + 'static>,
+}
+
+unsafe extern "C" fn run_grid_reorder_requested_callback(
+    source_id: *const std::ffi::c_char,
+    source_length: usize,
+    target_index: std::ffi::c_int,
+    user_data: *mut std::ffi::c_void,
+) {
+    if source_id.is_null() || user_data.is_null() || target_index < 0 {
+        return;
+    }
+    let source = unsafe { std::slice::from_raw_parts(source_id.cast::<u8>(), source_length) };
+    let request = GridReorderRequest {
+        source_id: String::from_utf8_lossy(source).into_owned(),
+        target_index: target_index as usize,
+    };
+    let callback = unsafe { &mut *user_data.cast::<GridReorderRequestedCallback>() };
+    run_callback_guarded("reorderable_grid.reorder_requested", || {
+        (callback.handler)(request)
+    });
+}
+
+/// A native responsive grid that lays out arbitrary widgets and emits
+/// reorder requests without mutating product-owned domain data.
+pub struct ReorderableGrid {
+    widget: Widget,
+    reorder_callback: Option<Box<GridReorderRequestedCallback>>,
+}
+
+impl ReorderableGrid {
+    pub fn new() -> Result<Self, Error> {
+        let widget = Widget::from_raw(unsafe { sys::oneui_reorderable_grid_create() })?;
+        Ok(Self {
+            widget,
+            reorder_callback: None,
+        })
+    }
+
+    pub fn clear_items(&self) {
+        unsafe { sys::oneui_reorderable_grid_clear_items(self.widget.as_raw()) };
+    }
+
+    pub fn add_item(&self, id: &str, child: &Widget) {
+        unsafe {
+            sys::oneui_reorderable_grid_add_item_utf8(
+                self.widget.as_raw(),
+                sys::OneUiUtf8String::from_str(id),
+                child.as_raw(),
+            )
+        };
+    }
+
+    pub fn move_item(&self, source_id: &str, target_index: usize) -> bool {
+        unsafe {
+            sys::oneui_reorderable_grid_move_item_utf8(
+                self.widget.as_raw(),
+                sys::OneUiUtf8String::from_str(source_id),
+                target_index.min(std::ffi::c_int::MAX as usize) as std::ffi::c_int,
+            ) != 0
+        }
+    }
+
+    pub fn set_column_count(&self, columns: usize) {
+        unsafe {
+            sys::oneui_reorderable_grid_set_column_count(
+                self.widget.as_raw(),
+                columns.min(std::ffi::c_int::MAX as usize) as std::ffi::c_int,
+            )
+        };
+    }
+
+    pub fn set_gaps(&self, column_gap: f32, row_gap: f32) {
+        unsafe { sys::oneui_reorderable_grid_set_gaps(self.widget.as_raw(), column_gap, row_gap) };
+    }
+
+    pub fn set_item_height(&self, height: f32) {
+        unsafe { sys::oneui_reorderable_grid_set_item_height(self.widget.as_raw(), height) };
+    }
+
+    pub fn content_height(&self) -> f32 {
+        unsafe { sys::oneui_reorderable_grid_content_height(self.widget.as_raw()) }
+    }
+
+    pub fn set_reorder_enabled(&self, enabled: bool) {
+        unsafe {
+            sys::oneui_reorderable_grid_set_reorder_enabled(
+                self.widget.as_raw(),
+                i32::from(enabled),
+            )
+        };
+    }
+
+    pub fn reorder_enabled(&self) -> bool {
+        unsafe { sys::oneui_reorderable_grid_reorder_enabled(self.widget.as_raw()) != 0 }
+    }
+
+    pub fn set_on_reorder_requested<F>(&mut self, callback: F)
+    where
+        F: FnMut(GridReorderRequest) + 'static,
+    {
+        self.clear_on_reorder_requested();
+        self.reorder_callback = Some(Box::new(GridReorderRequestedCallback {
+            handler: Box::new(callback),
+        }));
+        let user_data = (self
+            .reorder_callback
+            .as_deref_mut()
+            .expect("grid reorder callback was just installed")
+            as *mut GridReorderRequestedCallback)
+            .cast();
+        unsafe {
+            sys::oneui_reorderable_grid_set_on_reorder_requested_utf8(
+                self.widget.as_raw(),
+                Some(run_grid_reorder_requested_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn clear_on_reorder_requested(&mut self) {
+        unsafe {
+            sys::oneui_reorderable_grid_set_on_reorder_requested_utf8(
+                self.widget.as_raw(),
+                None,
+                std::ptr::null_mut(),
+            )
+        };
+        self.reorder_callback = None;
+    }
+
+    pub fn as_widget(&self) -> &Widget {
+        &self.widget
+    }
+}
+
+impl Drop for ReorderableGrid {
+    fn drop(&mut self) {
+        self.clear_on_reorder_requested();
+    }
+}
+
 /// A reusable native card/list-row surface with hover and press transitions.
 pub struct InteractiveSurface {
     widget: Widget,
@@ -3671,8 +3820,20 @@ pub struct ContextMenuRequest {
     pub y: f32,
 }
 
+/// A proposed list reorder. The control never mutates application data;
+/// callers validate and apply this request before assigning updated items.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ReorderRequest {
+    pub source_index: i32,
+    pub target_index: i32,
+}
+
 struct ContextMenuRequestedCallback {
     handler: Box<dyn FnMut(ContextMenuRequest) + 'static>,
+}
+
+struct ReorderRequestedCallback {
+    handler: Box<dyn FnMut(ReorderRequest) + 'static>,
 }
 
 unsafe extern "C" fn run_list_selection_changed_callback(
@@ -3704,6 +3865,22 @@ unsafe extern "C" fn run_context_menu_requested_callback(
     let callback = unsafe { &mut *user_data.cast::<ContextMenuRequestedCallback>() };
     let request = ContextMenuRequest { index, x, y };
     run_callback_guarded("list.context_menu", || (callback.handler)(request));
+}
+
+unsafe extern "C" fn run_reorder_requested_callback(
+    source_index: i32,
+    target_index: i32,
+    user_data: *mut std::ffi::c_void,
+) {
+    if user_data.is_null() {
+        return;
+    }
+    let callback = unsafe { &mut *user_data.cast::<ReorderRequestedCallback>() };
+    let request = ReorderRequest {
+        source_index,
+        target_index,
+    };
+    run_callback_guarded("list.reorder_requested", || (callback.handler)(request));
 }
 
 /// A selectable native list.
@@ -3807,6 +3984,7 @@ pub struct VirtualList {
     activated_callback: Option<Box<ListChangedCallback>>,
     edit_requested_callback: Option<Box<ListChangedCallback>>,
     context_menu_requested_callback: Option<Box<ContextMenuRequestedCallback>>,
+    reorder_requested_callback: Option<Box<ReorderRequestedCallback>>,
 }
 
 impl VirtualList {
@@ -3819,6 +3997,7 @@ impl VirtualList {
             activated_callback: None,
             edit_requested_callback: None,
             context_menu_requested_callback: None,
+            reorder_requested_callback: None,
         })
     }
 
@@ -4069,6 +4248,51 @@ impl VirtualList {
         self.context_menu_requested_callback = None;
     }
 
+    /// Enables pointer and `Alt+Up`/`Alt+Down` reorder requests.
+    pub fn set_reorder_enabled(&self, enabled: bool) {
+        unsafe {
+            sys::oneui_virtual_list_set_reorder_enabled(self.widget.as_raw(), i32::from(enabled))
+        };
+    }
+
+    pub fn reorder_enabled(&self) -> bool {
+        unsafe { sys::oneui_virtual_list_reorder_enabled(self.widget.as_raw()) != 0 }
+    }
+
+    pub fn set_on_reorder_requested<F>(&mut self, callback: F)
+    where
+        F: FnMut(ReorderRequest) + 'static,
+    {
+        self.clear_on_reorder_requested();
+        self.reorder_requested_callback = Some(Box::new(ReorderRequestedCallback {
+            handler: Box::new(callback),
+        }));
+        let user_data = (self
+            .reorder_requested_callback
+            .as_deref_mut()
+            .expect("virtual list reorder callback was just installed")
+            as *mut ReorderRequestedCallback)
+            .cast();
+        unsafe {
+            sys::oneui_virtual_list_set_on_reorder_requested(
+                self.widget.as_raw(),
+                Some(run_reorder_requested_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn clear_on_reorder_requested(&mut self) {
+        unsafe {
+            sys::oneui_virtual_list_set_on_reorder_requested(
+                self.widget.as_raw(),
+                None,
+                std::ptr::null_mut(),
+            )
+        };
+        self.reorder_requested_callback = None;
+    }
+
     pub fn as_widget(&self) -> &Widget {
         &self.widget
     }
@@ -4076,6 +4300,7 @@ impl VirtualList {
 
 impl Drop for VirtualList {
     fn drop(&mut self) {
+        self.clear_on_reorder_requested();
         self.clear_on_context_menu_requested();
         self.clear_on_edit_requested();
         self.clear_on_activated();
@@ -4101,6 +4326,17 @@ struct TreeViewSelectionCallback {
 
 struct TreeViewExpansionCallback {
     handler: Box<dyn FnMut(String, bool) + 'static>,
+}
+
+/// A proposed tree reorder addressed by stable application IDs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TreeReorderRequest {
+    pub source_id: String,
+    pub target_id: String,
+}
+
+struct TreeViewReorderCallback {
+    handler: Box<dyn FnMut(TreeReorderRequest) + 'static>,
 }
 
 unsafe extern "C" fn run_tree_view_selection_callback(
@@ -4134,11 +4370,32 @@ unsafe extern "C" fn run_tree_view_expansion_callback(
     });
 }
 
+unsafe extern "C" fn run_tree_view_reorder_callback(
+    source_id: *const std::ffi::c_char,
+    source_length: usize,
+    target_id: *const std::ffi::c_char,
+    target_length: usize,
+    user_data: *mut std::ffi::c_void,
+) {
+    if source_id.is_null() || target_id.is_null() || user_data.is_null() {
+        return;
+    }
+    let source = unsafe { std::slice::from_raw_parts(source_id.cast::<u8>(), source_length) };
+    let target = unsafe { std::slice::from_raw_parts(target_id.cast::<u8>(), target_length) };
+    let request = TreeReorderRequest {
+        source_id: String::from_utf8_lossy(source).into_owned(),
+        target_id: String::from_utf8_lossy(target).into_owned(),
+    };
+    let callback = unsafe { &mut *user_data.cast::<TreeViewReorderCallback>() };
+    run_callback_guarded("tree.reorder_requested", || (callback.handler)(request));
+}
+
 /// Native hierarchical navigation with ID-based selection and local expansion.
 pub struct TreeView {
     widget: Widget,
     selection_callback: Option<Box<TreeViewSelectionCallback>>,
     expansion_callback: Option<Box<TreeViewExpansionCallback>>,
+    reorder_callback: Option<Box<TreeViewReorderCallback>>,
 }
 
 impl TreeView {
@@ -4148,6 +4405,7 @@ impl TreeView {
             widget,
             selection_callback: None,
             expansion_callback: None,
+            reorder_callback: None,
         })
     }
 
@@ -4271,6 +4529,51 @@ impl TreeView {
         self.expansion_callback = None;
     }
 
+    /// Enables pointer and `Alt+Up`/`Alt+Down` reorder requests.
+    pub fn set_reorder_enabled(&self, enabled: bool) {
+        unsafe {
+            sys::oneui_tree_view_set_reorder_enabled(self.widget.as_raw(), i32::from(enabled))
+        };
+    }
+
+    pub fn reorder_enabled(&self) -> bool {
+        unsafe { sys::oneui_tree_view_reorder_enabled(self.widget.as_raw()) != 0 }
+    }
+
+    pub fn set_on_reorder_requested<F>(&mut self, callback: F)
+    where
+        F: FnMut(TreeReorderRequest) + 'static,
+    {
+        self.clear_reorder_callback();
+        self.reorder_callback = Some(Box::new(TreeViewReorderCallback {
+            handler: Box::new(callback),
+        }));
+        let user_data = (self
+            .reorder_callback
+            .as_deref_mut()
+            .expect("tree view reorder callback was just installed")
+            as *mut TreeViewReorderCallback)
+            .cast();
+        unsafe {
+            sys::oneui_tree_view_set_on_reorder_requested_utf8(
+                self.widget.as_raw(),
+                Some(run_tree_view_reorder_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn clear_reorder_callback(&mut self) {
+        unsafe {
+            sys::oneui_tree_view_set_on_reorder_requested_utf8(
+                self.widget.as_raw(),
+                None,
+                std::ptr::null_mut(),
+            )
+        };
+        self.reorder_callback = None;
+    }
+
     pub fn as_widget(&self) -> &Widget {
         &self.widget
     }
@@ -4278,6 +4581,7 @@ impl TreeView {
 
 impl Drop for TreeView {
     fn drop(&mut self) {
+        self.clear_reorder_callback();
         self.clear_selection_callback();
         self.clear_expansion_callback();
     }
@@ -4431,10 +4735,11 @@ mod tests {
         Button, Color, Dialog, Error, IconSymbol, Insets, InteractiveSurface,
         InteractiveSurfaceStateStyle, InteractiveSurfaceStyle, Label, List, ListItem, LogLine,
         LogView, Menu, OverlayAlignment, OverlayHost, Panel, Popup, PopupInteractionMode,
-        PopupPreferredPlacement, ScrollView, SegmentedControl, Select, SelectionMode, Stack,
-        StackDirection, StyleSheet, Switch, Tabs, TerminalCell, TerminalColor, TerminalCursor,
-        TerminalCursorStyle, TerminalFrame, TerminalSelection, TerminalUnderlineStyle,
-        TerminalView, TextField, TreeItem, TreeView, VirtualList, Window, WindowOptions,
+        PopupPreferredPlacement, ReorderableGrid, ScrollView, SegmentedControl, Select,
+        SelectionMode, Stack, StackDirection, StyleSheet, Switch, Tabs, TerminalCell,
+        TerminalColor, TerminalCursor, TerminalCursorStyle, TerminalFrame, TerminalSelection,
+        TerminalUnderlineStyle, TerminalView, TextField, TreeItem, TreeView, VirtualList, Window,
+        WindowOptions,
     };
     use std::sync::{
         atomic::{AtomicBool, Ordering},
@@ -4563,6 +4868,29 @@ mod tests {
         let label = Label::new("Native card").expect("label should be created");
         surface.set_content(label.as_widget());
         window.set_content(surface.as_widget());
+    }
+
+    #[test]
+    fn configures_a_native_reorderable_grid_without_product_geometry() {
+        let grid = ReorderableGrid::new().expect("grid should be created");
+        grid.set_column_count(2);
+        grid.set_gaps(12.0, 8.0);
+        grid.set_item_height(40.0);
+        grid.set_reorder_enabled(true);
+
+        let first = Panel::new().expect("first panel should be created");
+        let second = Panel::new().expect("second panel should be created");
+        let third = Panel::new().expect("third panel should be created");
+        grid.add_item("alpha", first.as_widget());
+        grid.add_item("beta", second.as_widget());
+        grid.add_item("gamma", third.as_widget());
+
+        assert!(grid.reorder_enabled());
+        assert!((grid.content_height() - 88.0).abs() < 0.001);
+        assert!(grid.move_item("alpha", 2));
+        assert!(!grid.move_item("missing", 0));
+        grid.clear_items();
+        assert!(grid.content_height().abs() < 0.001);
     }
 
     #[test]

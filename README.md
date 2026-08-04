@@ -34,9 +34,9 @@ OneUI 已经超出最初的窗口与 Button 原型，目前包括：
 | 范围 | 当前能力 |
 | --- | --- |
 | 基础 | `Widget`、`View`、`Canvas`、动画、`State<T>` / `Binding<T>` |
-| 布局 | Stack、Grid、Wrap、Dock、Split、Scroll、Panel、Overlay、App/Product Shell |
+| 布局 | Stack、Grid、ReorderableGrid、Wrap、Dock、Split、Scroll、Panel、Overlay、App/Product Shell |
 | 表单 | Button、IconButton、TextField、Checkbox、Switch、RadioGroup、Slider、Select、FormField |
-| 导航与数据 | Tabs、List、VirtualList、TreeView、Table、Menu、NavItem |
+| 导航与数据 | Tabs、List、VirtualList、TreeView、Table、Menu、NavItem；列表、树和网格均可报告稳定的重排请求 |
 | 反馈与容器 | Card、Badge、ProgressBar、Dialog、Popup、Toast、StateView、StatusStrip |
 | 专用视图 | TerminalView、LogView、RealtimeFrameView、RemoteInputRegion |
 | 平台与互操作 | Win32 window、DPI/monitor、clipboard、IME 路径、UTF-8 C ABI、Rust bindings |

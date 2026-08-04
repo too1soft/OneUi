@@ -39,6 +39,10 @@ public:
     void clearStyleOverride();
     void setOnSelectionChanged(std::function<void(const std::wstring&)> callback);
     void setOnExpansionChanged(std::function<void(const std::wstring&, bool)> callback);
+    void setReorderEnabled(bool enabled);
+    bool reorderEnabled() const;
+    void setOnReorderRequested(
+        std::function<void(const std::wstring&, const std::wstring&)> callback);
 
     std::size_t visibleItemCount() const;
     float contentHeight() const;
@@ -66,6 +70,8 @@ private:
     int hitItemIndex(Point point, const std::vector<VisibleItem>& visible) const;
     Rect itemRect(int visibleIndex) const;
     bool isToggleHit(Point point, const VisibleItem& item, int visibleIndex) const;
+    void resetReorderState();
+    void updateReorderTarget(Point point, const std::vector<VisibleItem>& visible);
     bool hasChildren(std::size_t index) const;
     void toggleItem(std::size_t index);
     std::optional<std::size_t> parentIndex(std::size_t index) const;
@@ -86,9 +92,16 @@ private:
     int hoveredIndex_ = -1;
     int pressedIndex_ = -1;
     bool pressedToggle_ = false;
+    bool reorderEnabled_ = false;
+    bool reordering_ = false;
+    Point reorderStartPoint_{};
+    int reorderSourceIndex_ = -1;
+    int reorderTargetIndex_ = -1;
+    int reorderInsertionIndex_ = -1;
     std::optional<TreeViewStyleOverride> styleOverride_;
     std::function<void(const std::wstring&)> onSelectionChanged_;
     std::function<void(const std::wstring&, bool)> onExpansionChanged_;
+    std::function<void(const std::wstring&, const std::wstring&)> onReorderRequested_;
 };
 
 } // namespace oneui
