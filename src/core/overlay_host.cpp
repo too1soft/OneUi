@@ -5,9 +5,19 @@
 
 namespace oneui {
 
+OverlayHost::~OverlayHost() {
+    if (content_) {
+        content_->detachFromOwner(this);
+    }
+    for (const auto& entry : overlays_) {
+        entry.child->detachFromOwner(this);
+    }
+}
+
 void OverlayHost::setContent(std::shared_ptr<Widget> child) {
     if (content_) {
         content_->onFocusChanged(false);
+        content_->detachFromOwner(this);
     }
     content_ = std::move(child);
     if (content_) {
@@ -95,6 +105,7 @@ bool OverlayHost::removeOverlay(const Widget* child) {
     const bool restoreFocus = focusedOverlay_ == it->child.get();
     const bool restoreFocusVisible = restoreFocus && it->child->focusVisible();
     clearOverlayReferences(it->child.get(), false);
+    it->child->detachFromOwner(this);
     overlays_.erase(it);
     if (restoreFocus) {
         if (!restorePreviousOverlayFocus()) {
@@ -107,6 +118,9 @@ bool OverlayHost::removeOverlay(const Widget* child) {
 
 void OverlayHost::clearOverlays() {
     focusOverlay(nullptr);
+    for (const auto& entry : overlays_) {
+        entry.child->detachFromOwner(this);
+    }
     overlays_.clear();
     overlayFocusHistory_.clear();
     pressedOverlay_ = nullptr;
@@ -120,30 +134,38 @@ const std::vector<OverlayEntry>& OverlayHost::overlays() const {
 void OverlayHost::setInvalidator(std::function<void()> invalidator) {
     View::setInvalidator(std::move(invalidator));
     if (content_) {
-        installOverlayHostCallbacks(*content_);
+        content_->attachInvalidatorToOwner(this, [this] { invalidate(); });
     }
     for (const auto& entry : overlays_) {
-        installOverlayHostCallbacks(*entry.child);
+        entry.child->attachInvalidatorToOwner(this, [this] { invalidate(); });
     }
 }
 
 void OverlayHost::setRectInvalidator(std::function<void(Rect)> invalidator) {
     View::setRectInvalidator(std::move(invalidator));
     if (content_) {
-        installOverlayHostCallbacks(*content_);
+        content_->attachRectInvalidatorToOwner(
+            this,
+            [this](Rect rect) { invalidateRect(rect); });
     }
     for (const auto& entry : overlays_) {
-        installOverlayHostCallbacks(*entry.child);
+        entry.child->attachRectInvalidatorToOwner(
+            this,
+            [this](Rect rect) { invalidateRect(rect); });
     }
 }
 
 void OverlayHost::setAnimationScheduler(std::function<void()> scheduler) {
     View::setAnimationScheduler(std::move(scheduler));
     if (content_) {
-        installOverlayHostCallbacks(*content_);
+        content_->attachAnimationSchedulerToOwner(
+            this,
+            [this] { requestAnimationFrame(); });
     }
     for (const auto& entry : overlays_) {
-        installOverlayHostCallbacks(*entry.child);
+        entry.child->attachAnimationSchedulerToOwner(
+            this,
+            [this] { requestAnimationFrame(); });
     }
 }
 
@@ -827,15 +849,11 @@ void OverlayHost::clearOverlayReferences(Widget* child, bool restorePreviousFocu
 }
 
 void OverlayHost::installOverlayHostCallbacks(Widget& child) {
-    child.setInvalidator([this] {
-        invalidate();
-    });
-    child.setRectInvalidator([this](Rect rect) {
-        invalidateRect(rect);
-    });
-    child.setAnimationScheduler([this] {
-        requestAnimationFrame();
-    });
+    child.attachToOwner(
+        this,
+        [this] { invalidate(); },
+        [this](Rect rect) { invalidateRect(rect); },
+        [this] { requestAnimationFrame(); });
 }
 
 bool OverlayHost::isInteractive(const Widget* child) {

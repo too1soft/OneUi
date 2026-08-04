@@ -143,12 +143,22 @@ Popup::Popup() {
     setPreferredSize(Size{0.0f, 0.0f});
 }
 
+Popup::~Popup() {
+    if (anchor_) {
+        anchor_->detachFromOwner(this);
+    }
+    if (content_) {
+        content_->detachFromOwner(this);
+    }
+}
+
 void Popup::setAnchor(std::shared_ptr<Widget> anchor) {
+    if (anchor_) {
+        anchor_->detachFromOwner(this);
+    }
     anchor_ = std::move(anchor);
     if (anchor_) {
-        anchor_->setInvalidator([this] {
-            invalidate();
-        });
+        installAnchorCallbacks();
         setPreferredSize(anchor_->preferredSize());
     }
     invalidate();
@@ -159,11 +169,12 @@ std::shared_ptr<Widget> Popup::anchor() const {
 }
 
 void Popup::setContent(std::shared_ptr<Widget> content) {
+    if (content_) {
+        content_->detachFromOwner(this);
+    }
     content_ = std::move(content);
     if (content_) {
-        content_->setInvalidator([this] {
-            invalidate();
-        });
+        installContentCallbacks();
     }
     invalidate();
 }
@@ -302,15 +313,19 @@ Rect Popup::resolvedContentRect() const {
 void Popup::setInvalidator(std::function<void()> invalidator) {
     Widget::setInvalidator(std::move(invalidator));
     if (anchor_) {
-        anchor_->setInvalidator([this] {
-            invalidate();
-        });
+        installAnchorCallbacks();
     }
     if (content_) {
-        content_->setInvalidator([this] {
-            invalidate();
-        });
+        installContentCallbacks();
     }
+}
+
+void Popup::installAnchorCallbacks() {
+    anchor_->attachInvalidatorToOwner(this, [this] { invalidate(); });
+}
+
+void Popup::installContentCallbacks() {
+    content_->attachInvalidatorToOwner(this, [this] { invalidate(); });
 }
 
 void Popup::paint(Canvas& canvas) {

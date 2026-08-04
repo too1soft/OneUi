@@ -39,6 +39,8 @@ struct OverlayOptions {
 
 class ONEUI_API OverlayHost : public View {
 public:
+    ~OverlayHost() override;
+
     void setContent(std::shared_ptr<Widget> child);
     void addOverlay(std::shared_ptr<Widget> child, int layer = 0);
     void addOverlay(std::shared_ptr<Widget> child, OverlayOptions options);

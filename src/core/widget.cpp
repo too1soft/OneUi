@@ -96,15 +96,61 @@ bool Widget::clearInteractionState() {
 }
 
 void Widget::setInvalidator(std::function<void()> invalidator) {
+    invalidatorOwner_ = nullptr;
     invalidator_ = std::move(invalidator);
 }
 
 void Widget::setRectInvalidator(std::function<void(Rect)> invalidator) {
+    rectInvalidatorOwner_ = nullptr;
     rectInvalidator_ = std::move(invalidator);
 }
 
 void Widget::setAnimationScheduler(std::function<void()> scheduler) {
+    animationSchedulerOwner_ = nullptr;
     animationScheduler_ = std::move(scheduler);
+}
+
+void Widget::attachToOwner(
+    const void* owner,
+    std::function<void()> invalidator,
+    std::function<void(Rect)> rectInvalidator,
+    std::function<void()> animationScheduler) {
+    attachInvalidatorToOwner(owner, std::move(invalidator));
+    attachRectInvalidatorToOwner(owner, std::move(rectInvalidator));
+    attachAnimationSchedulerToOwner(owner, std::move(animationScheduler));
+}
+
+void Widget::attachInvalidatorToOwner(
+    const void* owner,
+    std::function<void()> invalidator) {
+    setInvalidator(std::move(invalidator));
+    invalidatorOwner_ = owner;
+}
+
+void Widget::attachRectInvalidatorToOwner(
+    const void* owner,
+    std::function<void(Rect)> invalidator) {
+    setRectInvalidator(std::move(invalidator));
+    rectInvalidatorOwner_ = owner;
+}
+
+void Widget::attachAnimationSchedulerToOwner(
+    const void* owner,
+    std::function<void()> scheduler) {
+    setAnimationScheduler(std::move(scheduler));
+    animationSchedulerOwner_ = owner;
+}
+
+void Widget::detachFromOwner(const void* owner) {
+    if (invalidatorOwner_ == owner) {
+        setInvalidator({});
+    }
+    if (rectInvalidatorOwner_ == owner) {
+        setRectInvalidator({});
+    }
+    if (animationSchedulerOwner_ == owner) {
+        setAnimationScheduler({});
+    }
 }
 
 bool Widget::onMouseMove(const MouseEvent&) {

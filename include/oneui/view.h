@@ -9,6 +9,8 @@ namespace oneui {
 
 class ONEUI_API View : public Widget {
 public:
+    ~View() override;
+
     void add(std::shared_ptr<Widget> child);
     void clearChildren();
     const std::vector<std::shared_ptr<Widget>>& children() const;
@@ -46,6 +48,7 @@ protected:
     void resetInteractionState() override;
 
 private:
+    void installChildCallbacks(Widget& child);
     static bool isChildInteractive(const Widget* child);
     Widget* hitTestChild(Point point) const;
     bool clearHoveredChildExcept(Widget* child);

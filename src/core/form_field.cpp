@@ -53,7 +53,16 @@ FormField::FormField() {
     updatePreferredSize();
 }
 
+FormField::~FormField() {
+    if (child_) {
+        child_->detachFromOwner(this);
+    }
+}
+
 void FormField::setChild(std::shared_ptr<Widget> child) {
+    if (child_) {
+        child_->detachFromOwner(this);
+    }
     child_ = std::move(child);
     installChildCallbacks();
     applyChildAccessibility();
@@ -66,6 +75,9 @@ std::shared_ptr<Widget> FormField::child() const {
 }
 
 void FormField::clearChild() {
+    if (child_) {
+        child_->detachFromOwner(this);
+    }
     child_.reset();
     propagatedAccessibleName_.clear();
     propagatedAccessibleDescription_.clear();
@@ -194,19 +206,32 @@ void FormField::clearStyleOverride() {
 
 void FormField::setInvalidator(std::function<void()> invalidator) {
     Widget::setInvalidator(std::move(invalidator));
-    installChildCallbacks();
+    if (child_) {
+        child_->attachInvalidatorToOwner(this, [this] {
+            updatePreferredSize();
+            invalidate();
+        });
+    }
     applyChildAccessibility();
 }
 
 void FormField::setRectInvalidator(std::function<void(Rect)> invalidator) {
     Widget::setRectInvalidator(std::move(invalidator));
-    installChildCallbacks();
+    if (child_) {
+        child_->attachRectInvalidatorToOwner(
+            this,
+            [this](Rect rect) { invalidateRect(rect); });
+    }
     applyChildAccessibility();
 }
 
 void FormField::setAnimationScheduler(std::function<void()> scheduler) {
     Widget::setAnimationScheduler(std::move(scheduler));
-    installChildCallbacks();
+    if (child_) {
+        child_->attachAnimationSchedulerToOwner(
+            this,
+            [this] { requestAnimationFrame(); });
+    }
     applyChildAccessibility();
 }
 
@@ -327,16 +352,14 @@ void FormField::installChildCallbacks() {
     if (!child_) {
         return;
     }
-    child_->setInvalidator([this] {
-        updatePreferredSize();
-        invalidate();
-    });
-    child_->setRectInvalidator([this](Rect rect) {
-        invalidateRect(rect);
-    });
-    child_->setAnimationScheduler([this] {
-        requestAnimationFrame();
-    });
+    child_->attachToOwner(
+        this,
+        [this] {
+            updatePreferredSize();
+            invalidate();
+        },
+        [this](Rect rect) { invalidateRect(rect); },
+        [this] { requestAnimationFrame(); });
 }
 
 FormFieldStyle FormField::resolvedStyle() const {

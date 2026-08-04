@@ -2,6 +2,8 @@ param(
     [string]$VsInstall = "D:\Program Files\Microsoft Visual Studio\18\Community",
     [ValidateSet("x64", "x86")]
     [string]$Arch = "x64",
+    [ValidateSet("Debug", "Release", "RelWithDebInfo")]
+    [string]$Configuration = "RelWithDebInfo",
     [string]$BuildDir = "",
     [string]$SkiaOut = ""
 )
@@ -36,7 +38,7 @@ if (!(Test-Path $skiaOutPath)) {
     throw "Skia build output not found: $skiaOutPath"
 }
 
-$configure = "`"$vcvars`" $Arch && `"$cmake`" -S `"$root`" -B `"$buildPath`" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded -DCMAKE_MAKE_PROGRAM=`"$ninja`" -DONEUI_SKIA_MODE=bundled-static -DONEUI_BUNDLED_SKIA_ROOT=`"$root/third_party/skia`" -DONEUI_BUNDLED_SKIA_OUT=`"$skiaOutPath`""
+$configure = "`"$vcvars`" $Arch && `"$cmake`" -S `"$root`" -B `"$buildPath`" -G Ninja -DCMAKE_BUILD_TYPE=$Configuration -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded -DCMAKE_MAKE_PROGRAM=`"$ninja`" -DONEUI_SKIA_MODE=bundled-static -DONEUI_BUNDLED_SKIA_ROOT=`"$root/third_party/skia`" -DONEUI_BUNDLED_SKIA_OUT=`"$skiaOutPath`""
 $build = "`"$vcvars`" $Arch && `"$cmake`" --build `"$buildPath`""
 
 cmd.exe /c $configure

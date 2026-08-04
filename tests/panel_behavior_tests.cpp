@@ -56,11 +56,47 @@ public:
 
 class LayoutProbe final : public oneui::Widget {
 public:
+    void setInvalidator(std::function<void()> invalidator) override {
+        ++invalidatorInstallCount;
+        Widget::setInvalidator(std::move(invalidator));
+    }
+
+    void setRectInvalidator(std::function<void(oneui::Rect)> invalidator) override {
+        ++rectInvalidatorInstallCount;
+        Widget::setRectInvalidator(std::move(invalidator));
+    }
+
+    void setAnimationScheduler(std::function<void()> scheduler) override {
+        ++animationSchedulerInstallCount;
+        Widget::setAnimationScheduler(std::move(scheduler));
+    }
+
     void paint(oneui::Canvas&) override {
         painted = true;
     }
 
     bool painted = false;
+    int invalidatorInstallCount = 0;
+    int rectInvalidatorInstallCount = 0;
+    int animationSchedulerInstallCount = 0;
+
+    void requestInvalidation() {
+        invalidate();
+    }
+
+    void requestRectInvalidation() {
+        invalidateRect(oneui::Rect{1.0f, 2.0f, 3.0f, 4.0f});
+    }
+
+    void requestAnimation() {
+        requestAnimationFrame();
+    }
+
+    void resetInstallCounts() {
+        invalidatorInstallCount = 0;
+        rectInvalidatorInstallCount = 0;
+        animationSchedulerInstallCount = 0;
+    }
 };
 
 void expectEqual(const char* name, int actual, int expected) {
@@ -129,11 +165,74 @@ void testPanelCanReplaceContent() {
     expectRect("Panel second child fills frame", second->frame(), oneui::Rect{0.0f, 0.0f, 100.0f, 80.0f});
 }
 
+void testReparentedContentKeepsNewOwnerCallbacks() {
+    auto child = std::make_shared<LayoutProbe>();
+    int oldInvalidations = 0;
+    int newInvalidations = 0;
+    int oldRectInvalidations = 0;
+    int newRectInvalidations = 0;
+    int oldAnimationRequests = 0;
+    int newAnimationRequests = 0;
+    auto oldParent = std::make_unique<oneui::Panel>();
+    auto newParent = std::make_unique<oneui::Panel>();
+    oldParent->setInvalidator([&] { ++oldInvalidations; });
+    newParent->setInvalidator([&] { ++newInvalidations; });
+    oldParent->setRectInvalidator([&](oneui::Rect) { ++oldRectInvalidations; });
+    newParent->setRectInvalidator([&](oneui::Rect) { ++newRectInvalidations; });
+    oldParent->setAnimationScheduler([&] { ++oldAnimationRequests; });
+    newParent->setAnimationScheduler([&] { ++newAnimationRequests; });
+
+    oldParent->setContent(child);
+    newParent->setContent(child);
+    oldParent.reset();
+    child->requestRectInvalidation();
+    child->requestAnimation();
+    newParent->setRectInvalidator({});
+    child->requestInvalidation();
+
+    expectEqual("Reparented child ignores destroyed owner", oldInvalidations, 0);
+    expectEqual("Reparented child invalidates current owner", newInvalidations, 1);
+    expectEqual("Reparented child ignores destroyed rect owner", oldRectInvalidations, 0);
+    expectEqual("Reparented child invalidates current rect owner", newRectInvalidations, 1);
+    expectEqual("Reparented child ignores destroyed animation owner", oldAnimationRequests, 0);
+    expectEqual("Reparented child schedules with current owner", newAnimationRequests, 1);
+}
+
+void testNestedCallbackPropagationStaysLinear() {
+    auto child = std::make_shared<LayoutProbe>();
+    auto middle = std::make_shared<oneui::Panel>();
+    oneui::Panel root;
+    middle->setContent(child);
+    child->resetInstallCounts();
+
+    root.setContent(middle);
+
+    expectEqual("Nested invalidator installed once", child->invalidatorInstallCount, 1);
+    expectEqual("Nested rect invalidator installed once", child->rectInvalidatorInstallCount, 1);
+    expectEqual("Nested animation scheduler installed once", child->animationSchedulerInstallCount, 1);
+}
+
+void testDestroyedParentDetachesRetainedContent() {
+    auto child = std::make_shared<LayoutProbe>();
+    int invalidations = 0;
+    {
+        oneui::Panel parent;
+        parent.setInvalidator([&] { ++invalidations; });
+        parent.setContent(child);
+    }
+
+    child->requestInvalidation();
+    expectEqual("Retained child ignores destroyed parent", invalidations, 0);
+}
+
 } // namespace
 
 int main() {
     testPanelPaintsChromeAndLaysOutContent();
     testPanelCanReplaceContent();
+    testReparentedContentKeepsNewOwnerCallbacks();
+    testNestedCallbackPropagationStaysLinear();
+    testDestroyedParentDetachesRetainedContent();
 
     if (failures != 0) {
         std::cerr << failures << " panel behavior test(s) failed.\n";

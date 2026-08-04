@@ -945,6 +945,9 @@ public:
     ~Win32Window() override {
         acceptingPostedCallbacks_.store(false, std::memory_order_release);
         discardPostedCallbacks();
+        if (content_) {
+            content_->detachFromOwner(this);
+        }
         if (hwnd_) {
             DestroyWindow(hwnd_);
         }
@@ -956,17 +959,16 @@ public:
     }
 
     void setContent(std::shared_ptr<Widget> widget) override {
+        if (content_) {
+            content_->detachFromOwner(this);
+        }
         content_ = std::move(widget);
         if (content_) {
-            content_->setInvalidator([this] {
-                requestRedraw();
-            });
-            content_->setRectInvalidator([this](Rect rect) {
-                requestRedrawRect(rect);
-            });
-            content_->setAnimationScheduler([this] {
-                scheduleContentAnimationFrame();
-            });
+            content_->attachToOwner(
+                this,
+                [this] { requestRedraw(); },
+                [this](Rect rect) { requestRedrawRect(rect); },
+                [this] { scheduleContentAnimationFrame(); });
         }
         requestRedraw();
     }

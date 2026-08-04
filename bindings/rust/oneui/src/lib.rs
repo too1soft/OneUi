@@ -12,7 +12,7 @@ use std::ptr::NonNull;
 use std::rc::Rc;
 use std::sync::{
     atomic::{AtomicBool, AtomicPtr, Ordering},
-    Arc, Mutex,
+    Arc, Mutex, OnceLock,
 };
 
 pub use oneui_sys as sys;
@@ -26,6 +26,68 @@ pub enum Error {
     WindowClosed,
     WrongThread,
     UiThreadBlockingOperation,
+}
+
+/// Describes a panic caught at the Rust-to-OneUI callback boundary.
+///
+/// Panics must never unwind through the C ABI. OneUI catches them at the
+/// boundary and reports this context to the application instead.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CallbackPanic {
+    pub context: &'static str,
+    pub message: String,
+}
+
+type CallbackPanicHandler = Arc<dyn Fn(CallbackPanic) + Send + Sync + 'static>;
+
+fn callback_panic_handler() -> &'static Mutex<Option<CallbackPanicHandler>> {
+    static HANDLER: OnceLock<Mutex<Option<CallbackPanicHandler>>> = OnceLock::new();
+    HANDLER.get_or_init(|| Mutex::new(None))
+}
+
+/// Installs the process-wide observer for panics caught by OneUI callbacks.
+///
+/// Applications should install this during startup, before creating windows.
+/// Setting a new handler replaces the previous one.
+pub fn set_callback_panic_handler<F>(handler: F)
+where
+    F: Fn(CallbackPanic) + Send + Sync + 'static,
+{
+    *callback_panic_handler()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(Arc::new(handler));
+}
+
+fn panic_message(payload: &(dyn std::any::Any + Send)) -> String {
+    if let Some(message) = payload.downcast_ref::<&str>() {
+        (*message).to_owned()
+    } else if let Some(message) = payload.downcast_ref::<String>() {
+        message.clone()
+    } else {
+        "non-string panic payload".to_owned()
+    }
+}
+
+fn run_callback_guarded<R>(context: &'static str, callback: impl FnOnce() -> R) -> Option<R> {
+    match catch_unwind(AssertUnwindSafe(callback)) {
+        Ok(value) => Some(value),
+        Err(payload) => {
+            let report = CallbackPanic {
+                context,
+                message: panic_message(payload.as_ref()),
+            };
+            let handler = callback_panic_handler()
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .clone();
+            if let Some(handler) = handler {
+                // A diagnostic observer is also application code. Keep a
+                // failing observer from ever unwinding across the C ABI.
+                let _ = catch_unwind(AssertUnwindSafe(|| handler(report)));
+            }
+            None
+        }
+    }
 }
 
 /// Writes UTF-8 text to the operating system clipboard.
@@ -209,7 +271,7 @@ impl WindowState {
 unsafe extern "C" fn run_dispatched_task(user_data: *mut std::ffi::c_void) {
     let mut task = unsafe { Box::from_raw(user_data.cast::<DispatchedTask>()) };
     if let Some(task) = task.task.take() {
-        let _ = catch_unwind(AssertUnwindSafe(task));
+        run_callback_guarded("dispatcher.task", task);
     }
 }
 
@@ -668,7 +730,7 @@ unsafe extern "C" fn run_void_callback(user_data: *mut std::ffi::c_void) {
         return;
     }
     let callback = unsafe { &mut *user_data.cast::<VoidCallback>() };
-    let _ = catch_unwind(AssertUnwindSafe(|| (callback.handler)()));
+    run_callback_guarded("widget.command", || (callback.handler)());
 }
 
 fn wide_null_terminated(value: &str) -> Vec<u16> {
@@ -883,7 +945,7 @@ unsafe extern "C" fn run_menu_activated_callback(index: i32, user_data: *mut std
         return;
     }
     let callback = unsafe { &mut *user_data.cast::<MenuActivatedCallback>() };
-    let _ = catch_unwind(AssertUnwindSafe(|| (callback.handler)(index)));
+    run_callback_guarded("menu.activated", || (callback.handler)(index));
 }
 
 /// A standard native command menu suitable for popups and context menus.
@@ -1602,7 +1664,7 @@ unsafe extern "C" fn run_pointer_callback(
     }
     let event = PointerEvent::from(unsafe { *event });
     let callback = unsafe { &mut *user_data.cast::<PointerCallback>() };
-    let _ = catch_unwind(AssertUnwindSafe(|| (callback.handler)(event)));
+    run_callback_guarded("pointer.activated", || (callback.handler)(event));
 }
 
 /// A reusable native card/list-row surface with hover and press transitions.
@@ -2053,7 +2115,7 @@ unsafe extern "C" fn run_text_field_changed_callback(
     let bytes = unsafe { std::slice::from_raw_parts(text.cast::<u8>(), length) };
     let value = String::from_utf8_lossy(bytes).into_owned();
     let callback = unsafe { &mut *user_data.cast::<TextFieldChangedCallback>() };
-    let _ = catch_unwind(AssertUnwindSafe(|| (callback.handler)(value)));
+    run_callback_guarded("text.changed", || (callback.handler)(value));
 }
 
 /// A basic UTF-8 text field with an owned text-change callback.
@@ -2220,7 +2282,7 @@ unsafe extern "C" fn run_bool_changed_callback(value: i32, user_data: *mut std::
         return;
     }
     let callback = unsafe { &mut *user_data.cast::<BoolChangedCallback>() };
-    let _ = catch_unwind(AssertUnwindSafe(|| (callback.handler)(value != 0)));
+    run_callback_guarded("value.bool_changed", || (callback.handler)(value != 0));
 }
 
 /// A native binary setting control. The callback is retained by the wrapper,
@@ -2303,7 +2365,7 @@ unsafe extern "C" fn run_index_changed_callback(value: i32, user_data: *mut std:
         return;
     }
     let callback = unsafe { &mut *user_data.cast::<IndexChangedCallback>() };
-    let _ = catch_unwind(AssertUnwindSafe(|| (callback.handler)(value)));
+    run_callback_guarded("value.index_changed", || (callback.handler)(value));
 }
 
 /// Keyboard-accessible segmented choice control backed by OneUI's `Tabs`.
@@ -2864,7 +2926,7 @@ unsafe extern "C" fn run_terminal_text_input_callback(
     let bytes = unsafe { std::slice::from_raw_parts(text.cast::<u8>(), length) };
     let value = String::from_utf8_lossy(bytes).into_owned();
     let callback = unsafe { &mut *user_data.cast::<TerminalTextInputCallback>() };
-    let _ = catch_unwind(AssertUnwindSafe(|| (callback.handler)(value)));
+    run_callback_guarded("terminal.text_input", || (callback.handler)(value));
 }
 
 unsafe extern "C" fn run_terminal_raw_key_callback(
@@ -2876,7 +2938,7 @@ unsafe extern "C" fn run_terminal_raw_key_callback(
     }
     let event = RawKeyEvent::from(unsafe { *event });
     let callback = unsafe { &mut *user_data.cast::<TerminalRawKeyCallback>() };
-    let _ = catch_unwind(AssertUnwindSafe(|| (callback.handler)(event)));
+    run_callback_guarded("terminal.raw_key", || (callback.handler)(event));
 }
 
 unsafe extern "C" fn run_terminal_scroll_callback(rows: i32, user_data: *mut std::ffi::c_void) {
@@ -2884,7 +2946,7 @@ unsafe extern "C" fn run_terminal_scroll_callback(rows: i32, user_data: *mut std
         return;
     }
     let callback = unsafe { &mut *user_data.cast::<TerminalScrollCallback>() };
-    let _ = catch_unwind(AssertUnwindSafe(|| (callback.handler)(rows)));
+    run_callback_guarded("terminal.scroll", || (callback.handler)(rows));
 }
 
 unsafe extern "C" fn run_terminal_pointer_callback(
@@ -2896,7 +2958,7 @@ unsafe extern "C" fn run_terminal_pointer_callback(
     }
     let event = TerminalPointerEvent::from(unsafe { *event });
     let callback = unsafe { &mut *user_data.cast::<TerminalPointerCallback>() };
-    let _ = catch_unwind(AssertUnwindSafe(|| (callback.handler)(event)));
+    run_callback_guarded("terminal.pointer", || (callback.handler)(event));
 }
 
 unsafe extern "C" fn run_terminal_hyperlink_callback(
@@ -2907,7 +2969,7 @@ unsafe extern "C" fn run_terminal_hyperlink_callback(
         return;
     }
     let callback = unsafe { &mut *user_data.cast::<TerminalHyperlinkCallback>() };
-    let _ = catch_unwind(AssertUnwindSafe(|| (callback.handler)(hyperlink_id)));
+    run_callback_guarded("terminal.hyperlink", || (callback.handler)(hyperlink_id));
 }
 
 unsafe extern "C" fn run_terminal_viewport_callback(
@@ -2919,9 +2981,9 @@ unsafe extern "C" fn run_terminal_viewport_callback(
         return;
     }
     let callback = unsafe { &mut *user_data.cast::<TerminalViewportCallback>() };
-    let _ = catch_unwind(AssertUnwindSafe(|| {
+    run_callback_guarded("terminal.viewport", || {
         (callback.handler)(TerminalViewport { rows, columns })
-    }));
+    });
 }
 
 /// Native terminal grid with explicit frame and input boundaries.
@@ -3595,7 +3657,7 @@ unsafe extern "C" fn run_list_changed_callback(value: i32, user_data: *mut std::
         return;
     }
     let callback = unsafe { &mut *user_data.cast::<ListChangedCallback>() };
-    let _ = catch_unwind(AssertUnwindSafe(|| (callback.handler)(value)));
+    run_callback_guarded("list.index_changed", || (callback.handler)(value));
 }
 
 struct ListSelectionChangedCallback {
@@ -3627,7 +3689,7 @@ unsafe extern "C" fn run_list_selection_changed_callback(
         unsafe { std::slice::from_raw_parts(values, count) }.to_vec()
     };
     let callback = unsafe { &mut *user_data.cast::<ListSelectionChangedCallback>() };
-    let _ = catch_unwind(AssertUnwindSafe(|| (callback.handler)(selected)));
+    run_callback_guarded("list.selection_changed", || (callback.handler)(selected));
 }
 
 unsafe extern "C" fn run_context_menu_requested_callback(
@@ -3641,7 +3703,7 @@ unsafe extern "C" fn run_context_menu_requested_callback(
     }
     let callback = unsafe { &mut *user_data.cast::<ContextMenuRequestedCallback>() };
     let request = ContextMenuRequest { index, x, y };
-    let _ = catch_unwind(AssertUnwindSafe(|| (callback.handler)(request)));
+    run_callback_guarded("list.context_menu", || (callback.handler)(request));
 }
 
 /// A selectable native list.
@@ -4052,7 +4114,7 @@ unsafe extern "C" fn run_tree_view_selection_callback(
     let bytes = unsafe { std::slice::from_raw_parts(text.cast::<u8>(), length) };
     let id = String::from_utf8_lossy(bytes).into_owned();
     let callback = unsafe { &mut *user_data.cast::<TreeViewSelectionCallback>() };
-    let _ = catch_unwind(AssertUnwindSafe(|| (callback.handler)(id)));
+    run_callback_guarded("tree.selection_changed", || (callback.handler)(id));
 }
 
 unsafe extern "C" fn run_tree_view_expansion_callback(
@@ -4067,7 +4129,9 @@ unsafe extern "C" fn run_tree_view_expansion_callback(
     let bytes = unsafe { std::slice::from_raw_parts(id.cast::<u8>(), length) };
     let id = String::from_utf8_lossy(bytes).into_owned();
     let callback = unsafe { &mut *user_data.cast::<TreeViewExpansionCallback>() };
-    let _ = catch_unwind(AssertUnwindSafe(|| (callback.handler)(id, expanded != 0)));
+    run_callback_guarded("tree.expansion_changed", || {
+        (callback.handler)(id, expanded != 0)
+    });
 }
 
 /// Native hierarchical navigation with ID-based selection and local expansion.
@@ -4363,7 +4427,8 @@ impl Drop for Window {
 #[cfg(test)]
 mod tests {
     use super::{
-        terminal_style, Button, Color, Dialog, Error, IconSymbol, Insets, InteractiveSurface,
+        callback_panic_handler, run_callback_guarded, set_callback_panic_handler, terminal_style,
+        Button, Color, Dialog, Error, IconSymbol, Insets, InteractiveSurface,
         InteractiveSurfaceStateStyle, InteractiveSurfaceStyle, Label, List, ListItem, LogLine,
         LogView, Menu, OverlayAlignment, OverlayHost, Panel, Popup, PopupInteractionMode,
         PopupPreferredPlacement, ScrollView, SegmentedControl, Select, SelectionMode, Stack,
@@ -4380,6 +4445,31 @@ mod tests {
     fn window_test_lock() -> &'static Mutex<()> {
         static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
         LOCK.get_or_init(|| Mutex::new(()))
+    }
+
+    #[test]
+    fn reports_panics_caught_at_callback_boundaries() {
+        let _guard = window_test_lock().lock().expect("window test lock");
+        let reports = Arc::new(Mutex::new(Vec::new()));
+        let reports_for_handler = Arc::clone(&reports);
+        set_callback_panic_handler(move |report| {
+            reports_for_handler
+                .lock()
+                .expect("callback panic reports lock")
+                .push(report);
+        });
+
+        let result = run_callback_guarded("test.callback", || panic!("callback failed"));
+
+        assert!(result.is_none());
+        let reports = reports.lock().expect("callback panic reports lock");
+        assert_eq!(reports.len(), 1);
+        assert_eq!(reports[0].context, "test.callback");
+        assert_eq!(reports[0].message, "callback failed");
+        drop(reports);
+        *callback_panic_handler()
+            .lock()
+            .expect("callback panic handler lock") = None;
     }
 
     #[test]

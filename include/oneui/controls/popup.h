@@ -54,6 +54,7 @@ public:
 class ONEUI_API Popup final : public Widget {
 public:
     Popup();
+    ~Popup() override;
 
     void setAnchor(std::shared_ptr<Widget> anchor);
     std::shared_ptr<Widget> anchor() const;
@@ -97,6 +98,8 @@ public:
     void setFocusVisible(bool visible) override;
 
 private:
+    void installAnchorCallbacks();
+    void installContentCallbacks();
     Rect resolvedAnchorRect() const;
     Rect resolvedViewport() const;
     void layoutAnchor();

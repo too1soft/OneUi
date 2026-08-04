@@ -15,6 +15,7 @@ namespace oneui {
 class ONEUI_API FormField final : public Widget {
 public:
     FormField();
+    ~FormField() override;
 
     void setChild(std::shared_ptr<Widget> child);
     std::shared_ptr<Widget> child() const;

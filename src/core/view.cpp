@@ -14,16 +14,15 @@ bool intersects(Rect lhs, Rect rhs) {
 
 } // namespace
 
+View::~View() {
+    clearChildren();
+}
+
 void View::add(std::shared_ptr<Widget> child) {
-    child->setInvalidator([this] {
-        invalidate();
-    });
-    child->setRectInvalidator([this](Rect rect) {
-        invalidateRect(rect);
-    });
-    child->setAnimationScheduler([this] {
-        requestAnimationFrame();
-    });
+    if (!child) {
+        return;
+    }
+    installChildCallbacks(*child);
     children_.push_back(std::move(child));
 }
 
@@ -34,6 +33,9 @@ void View::clearChildren() {
     focusedChild_ = nullptr;
     pressedChild_ = nullptr;
     hoveredChild_ = nullptr;
+    for (const auto& child : children_) {
+        child->detachFromOwner(this);
+    }
     children_.clear();
 }
 
@@ -44,28 +46,34 @@ const std::vector<std::shared_ptr<Widget>>& View::children() const {
 void View::setInvalidator(std::function<void()> invalidator) {
     Widget::setInvalidator(std::move(invalidator));
     for (const auto& child : children_) {
-        child->setInvalidator([this] {
-            invalidate();
-        });
+        child->attachInvalidatorToOwner(this, [this] { invalidate(); });
     }
 }
 
 void View::setRectInvalidator(std::function<void(Rect)> invalidator) {
     Widget::setRectInvalidator(std::move(invalidator));
     for (const auto& child : children_) {
-        child->setRectInvalidator([this](Rect rect) {
-            invalidateRect(rect);
-        });
+        child->attachRectInvalidatorToOwner(
+            this,
+            [this](Rect rect) { invalidateRect(rect); });
     }
 }
 
 void View::setAnimationScheduler(std::function<void()> scheduler) {
     Widget::setAnimationScheduler(std::move(scheduler));
     for (const auto& child : children_) {
-        child->setAnimationScheduler([this] {
-            requestAnimationFrame();
-        });
+        child->attachAnimationSchedulerToOwner(
+            this,
+            [this] { requestAnimationFrame(); });
     }
+}
+
+void View::installChildCallbacks(Widget& child) {
+    child.attachToOwner(
+        this,
+        [this] { invalidate(); },
+        [this](Rect rect) { invalidateRect(rect); },
+        [this] { requestAnimationFrame(); });
 }
 
 void View::paint(Canvas& canvas) {

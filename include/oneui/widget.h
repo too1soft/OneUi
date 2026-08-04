@@ -141,6 +141,26 @@ public:
     virtual void setInvalidator(std::function<void()> invalidator);
     virtual void setRectInvalidator(std::function<void(Rect)> invalidator);
     virtual void setAnimationScheduler(std::function<void()> scheduler);
+    /// Installs the callbacks used by the widget that currently owns this
+    /// widget in the native composition tree. Each callback channel tracks
+    /// its owner independently so propagation remains linear through nested
+    /// containers while reparenting stays safe.
+    void attachToOwner(
+        const void* owner,
+        std::function<void()> invalidator,
+        std::function<void(Rect)> rectInvalidator,
+        std::function<void()> animationScheduler);
+    void attachInvalidatorToOwner(const void* owner, std::function<void()> invalidator);
+    void attachRectInvalidatorToOwner(
+        const void* owner,
+        std::function<void(Rect)> invalidator);
+    void attachAnimationSchedulerToOwner(
+        const void* owner,
+        std::function<void()> scheduler);
+    /// Clears composition callbacks only when they still belong to `owner`.
+    /// This makes destruction of an old parent safe after a child was
+    /// reparented into a new native tree.
+    void detachFromOwner(const void* owner);
 
     virtual void paint(Canvas& canvas) = 0;
     virtual bool onMouseMove(const MouseEvent& event);
@@ -203,6 +223,9 @@ private:
     std::function<void()> invalidator_;
     std::function<void(Rect)> rectInvalidator_;
     std::function<void()> animationScheduler_;
+    const void* invalidatorOwner_ = nullptr;
+    const void* rectInvalidatorOwner_ = nullptr;
+    const void* animationSchedulerOwner_ = nullptr;
     bool focused_ = false;
     bool focusVisible_ = false;
     bool disabled_ = false;

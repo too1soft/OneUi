@@ -30,6 +30,24 @@ The public ABI uses:
 This keeps the binary boundary usable from Rust, Go, C, C#, Python FFI, and
 other runtimes.
 
+## Callback Failure Boundary
+
+Language exceptions and Rust panics must never unwind through a OneUI C ABI
+callback. The safe Rust binding guards every dispatcher, command, value,
+pointer, list, tree, menu, and terminal callback. Applications install a
+process-wide observer with `oneui::set_callback_panic_handler`; the observer
+receives a stable callback context and panic message after the panic hook has
+captured the original stack.
+
+The observer is for diagnostics only. It must not retry the callback or mutate
+the control that is currently dispatching. Product applications remain
+responsible for their own route or operation rollback and for preserving exact
+build symbols when diagnosing native crashes.
+
+The standard Windows build script defaults to `RelWithDebInfo`: optimized
+runtime behavior is retained while `oneui.pdb` is produced for internal symbol
+archives. Public or customer packages should ship the DLL, not the PDB.
+
 ## Current Surface
 
 The initial ABI surface supports:
