@@ -39,7 +39,7 @@ OneUI 已经超出最初的窗口与 Button 原型，目前包括：
 | 导航与数据 | Tabs、List、VirtualList、TreeView、Table、Menu、NavItem；列表、树和网格均可报告稳定的重排请求 |
 | 反馈与容器 | Card、Badge、ProgressBar、Dialog、Popup、Toast、StateView、StatusStrip |
 | 专用视图 | TerminalView、LogView、RealtimeFrameView、RemoteInputRegion |
-| 平台与互操作 | Win32 window、DPI/monitor、clipboard、IME 路径、UTF-8 C ABI、Rust bindings |
+| 平台与互操作 | Win32 window、DPI/monitor、clipboard、IME 路径、平台确认与文本/密码提示、UTF-8 C ABI、Rust bindings |
 
 这些组件的成熟度并不完全相同。准备在产品中使用某个组件前，请查阅
 [组件参考](docs/14-component-reference.md)和[组件清单](docs/07-component-inventory.md)。

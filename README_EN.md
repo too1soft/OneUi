@@ -46,7 +46,7 @@ OneUI has moved beyond its original window-and-button prototype. The repository 
 | Navigation and data | Tabs, List, VirtualList, TreeView, Table, Menu, NavItem; stable reorder requests for lists, trees, and grids |
 | Feedback and surfaces | Card, Badge, ProgressBar, Dialog, Popup, Toast, StateView, StatusStrip |
 | Specialized views | TerminalView, LogView, RealtimeFrameView, RemoteInputRegion |
-| Platform and interop | Win32 window, DPI/monitor, clipboard, IME path, UTF-8 C ABI, Rust bindings |
+| Platform and interop | Win32 window, DPI/monitor, clipboard, IME path, platform confirmation and text/password prompts, UTF-8 C ABI, Rust bindings |
 
 Components do not all have the same stability level. Before adopting one in a product, review the
 [component reference](docs/14-component-reference.md) and

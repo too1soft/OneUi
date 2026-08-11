@@ -240,6 +240,14 @@ pub struct UiDispatcher {
     state: Arc<WindowState>,
 }
 
+/// Presentation options for [`UiDispatcher::prompt_blocking`].
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct PromptOptions<'a> {
+    pub initial_value: &'a str,
+    pub placeholder: &'a str,
+    pub password: bool,
+}
+
 struct DispatchedTask {
     task: Option<Box<dyn FnOnce() + Send + 'static>>,
 }
@@ -352,6 +360,77 @@ impl UiDispatcher {
                 sys::oneui_window_confirm(raw, title.as_ptr(), message.as_ptr()) != 0
             })
             .unwrap_or(false)
+    }
+
+    /// Displays a platform-native text or password prompt and waits on the
+    /// calling worker thread. The entered value is never retained by OneUI.
+    ///
+    /// Like [`Self::confirm_blocking`], this method must not be called from the
+    /// window thread. Closing the prompt returns `Ok(None)`; closing the owner
+    /// before queued work runs returns [`Error::WindowClosed`].
+    pub fn prompt_blocking(
+        &self,
+        title: &str,
+        message: &str,
+        options: PromptOptions<'_>,
+    ) -> Result<Option<String>, Error> {
+        if std::thread::current().id() == self.state.ui_thread {
+            return Err(Error::UiThreadBlockingOperation);
+        }
+        let title = wide_null_terminated(title);
+        let message = wide_null_terminated(message);
+        let initial_value = SecretWide::new(options.initial_value);
+        let placeholder = wide_null_terminated(options.placeholder);
+        let password = options.password;
+        let dispatcher = self.clone();
+        let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+        self.dispatch(move || {
+            let result = dispatcher.prompt_on_window_thread(
+                &title,
+                &message,
+                initial_value.as_slice(),
+                &placeholder,
+                password,
+            );
+            let _ = sender.send(result);
+        })?;
+        receiver.recv().map_err(|_| Error::WindowClosed)
+    }
+
+    fn prompt_on_window_thread(
+        &self,
+        title: &[u16],
+        message: &[u16],
+        initial_value: &[u16],
+        placeholder: &[u16],
+        password: bool,
+    ) -> Option<String> {
+        const MAX_PROMPT_CODE_UNITS: usize = 4096;
+        let mut output = vec![0_u16; MAX_PROMPT_CODE_UNITS];
+        let accepted = self
+            .state
+            .with_raw(|raw| unsafe {
+                sys::oneui_window_prompt_text(
+                    raw,
+                    title.as_ptr(),
+                    message.as_ptr(),
+                    initial_value.as_ptr(),
+                    placeholder.as_ptr(),
+                    i32::from(password),
+                    output.as_mut_ptr(),
+                    output.len() as i32,
+                ) != 0
+            })
+            .unwrap_or(false);
+        let value = accepted.then(|| {
+            let length = output
+                .iter()
+                .position(|code_unit| *code_unit == 0)
+                .unwrap_or(output.len());
+            String::from_utf16_lossy(&output[..length])
+        });
+        output.fill(0);
+        value
     }
 
     pub fn request_close(&self) {
@@ -746,6 +825,24 @@ unsafe extern "C" fn run_void_callback(user_data: *mut std::ffi::c_void) {
 
 fn wide_null_terminated(value: &str) -> Vec<u16> {
     value.encode_utf16().chain(std::iter::once(0)).collect()
+}
+
+struct SecretWide(Vec<u16>);
+
+impl SecretWide {
+    fn new(value: &str) -> Self {
+        Self(wide_null_terminated(value))
+    }
+
+    fn as_slice(&self) -> &[u16] {
+        &self.0
+    }
+}
+
+impl Drop for SecretWide {
+    fn drop(&mut self) {
+        self.0.fill(0);
+    }
 }
 
 impl From<Insets> for sys::OneUiInsets {
@@ -4875,8 +4972,8 @@ mod tests {
         Button, Color, Dialog, Error, IconSymbol, Insets, InteractiveSurface,
         InteractiveSurfaceStateStyle, InteractiveSurfaceStyle, Label, List, ListItem, LogLine,
         LogView, Menu, OverlayAlignment, OverlayHost, Panel, Popup, PopupInteractionMode,
-        PopupPreferredPlacement, ReorderableGrid, ScrollView, SegmentedControl, Select,
-        SelectionMode, Stack, StackDirection, StyleSheet, Switch, Tabs, TerminalCell,
+        PopupPreferredPlacement, PromptOptions, ReorderableGrid, ScrollView, SegmentedControl,
+        Select, SelectionMode, Stack, StackDirection, StyleSheet, Switch, Tabs, TerminalCell,
         TerminalColor, TerminalCursor, TerminalCursorStyle, TerminalFrame, TerminalSelection,
         TerminalUnderlineStyle, TerminalView, TextField, TreeItem, TreeView, VirtualList, Window,
         WindowOptions,
@@ -5758,6 +5855,17 @@ mod tests {
             .expect("window should accept queued work");
         assert!(matches!(
             dispatcher.confirm_blocking("Confirm", "Continue?"),
+            Err(Error::UiThreadBlockingOperation)
+        ));
+        assert!(matches!(
+            dispatcher.prompt_blocking(
+                "Authentication",
+                "Enter a value",
+                PromptOptions {
+                    placeholder: "Value",
+                    ..PromptOptions::default()
+                }
+            ),
             Err(Error::UiThreadBlockingOperation)
         ));
         window.close();

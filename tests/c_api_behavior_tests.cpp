@@ -593,6 +593,20 @@ void testClipboardAbiRoundTripIfAvailable() {
         std::wcscmp(buffer, L"OneUI C ABI clipboard smoke") == 0);
 }
 
+void testPromptAbiRejectsInvalidOutput() {
+    expectTrue(
+        "prompt C ABI rejects a missing output buffer",
+        oneui_window_prompt_text(
+            nullptr,
+            L"Input",
+            L"Enter a value",
+            L"",
+            L"Value",
+            0,
+            nullptr,
+            0) == 0);
+}
+
 } // namespace
 
 int main() {
@@ -608,6 +622,7 @@ int main() {
     testRealtimeFrameViewAbiAcceptsBgraFrames();
     testRemoteInputRegionAbiCreatesAndAcceptsCallbacks();
     testTerminalViewAbiUsesStructuredCells();
+    testPromptAbiRejectsInvalidOutput();
     testClipboardAbiRoundTripIfAvailable();
 
     if (failures != 0) {

@@ -245,6 +245,16 @@ extern "C" {
         title: *const u16,
         message: *const u16,
     ) -> c_int;
+    pub fn oneui_window_prompt_text(
+        window: *mut OneUiWindow,
+        title: *const u16,
+        message: *const u16,
+        initial_value: *const u16,
+        placeholder: *const u16,
+        password: c_int,
+        out: *mut u16,
+        out_len: c_int,
+    ) -> c_int;
     pub fn oneui_window_run(window: *mut OneUiWindow) -> c_int;
     pub fn oneui_window_close(window: *mut OneUiWindow);
     pub fn oneui_window_request_close(window: *mut OneUiWindow);

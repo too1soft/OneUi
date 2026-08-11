@@ -49,6 +49,7 @@
 #include <cstdio>
 #include <fstream>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -57,6 +58,7 @@
 
 #ifdef _WIN32
 #include <windows.h>
+#include <commctrl.h>
 #include <shobjidl.h>
 #include <shellapi.h>
 #endif
@@ -121,6 +123,115 @@ void copyWideField(wchar_t (&target)[N], const wchar_t* text) {
     }
     std::wcsncpy(target, text, N - 1);
     target[N - 1] = L'\0';
+}
+
+constexpr wchar_t kPromptWindowClass[] = L"OneUiPlatformPromptWindow";
+constexpr int kPromptEditId = 1001;
+
+struct PromptDialogState {
+    HWND dialog = nullptr;
+    HWND edit = nullptr;
+    int maxChars = 0;
+    bool completed = false;
+    bool accepted = false;
+    std::wstring value;
+};
+
+void secureClear(std::wstring& value) {
+    if (!value.empty()) {
+        SecureZeroMemory(value.data(), value.size() * sizeof(wchar_t));
+    }
+    value.clear();
+}
+
+void completePrompt(PromptDialogState* state, bool accepted) {
+    if (!state || state->completed) {
+        return;
+    }
+    state->accepted = accepted;
+    if (accepted && state->edit) {
+        const int length = std::clamp(GetWindowTextLengthW(state->edit), 0, state->maxChars);
+        secureClear(state->value);
+        state->value.resize(static_cast<std::size_t>(length) + 1, L'\0');
+        GetWindowTextW(state->edit, state->value.data(), length + 1);
+        state->value.resize(std::wcslen(state->value.c_str()));
+    }
+    state->completed = true;
+    ShowWindow(state->dialog, SW_HIDE);
+}
+
+LRESULT CALLBACK promptWindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
+    auto* state = reinterpret_cast<PromptDialogState*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    if (message == WM_NCCREATE) {
+        const auto* create = reinterpret_cast<const CREATESTRUCTW*>(lParam);
+        state = static_cast<PromptDialogState*>(create->lpCreateParams);
+        SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(state));
+        if (state) {
+            state->dialog = hwnd;
+        }
+    }
+
+    switch (message) {
+    case WM_COMMAND:
+        if (LOWORD(wParam) == IDOK) {
+            completePrompt(state, true);
+            return 0;
+        }
+        if (LOWORD(wParam) == IDCANCEL) {
+            completePrompt(state, false);
+            return 0;
+        }
+        break;
+    case WM_CLOSE:
+        completePrompt(state, false);
+        return 0;
+    case WM_DESTROY:
+        if (state) {
+            state->completed = true;
+        }
+        return 0;
+    default:
+        break;
+    }
+    return DefWindowProcW(hwnd, message, wParam, lParam);
+}
+
+bool ensurePromptWindowClass() {
+    static std::once_flag once;
+    static bool registered = false;
+    std::call_once(once, [] {
+        WNDCLASSW windowClass{};
+        windowClass.lpfnWndProc = promptWindowProc;
+        windowClass.hInstance = GetModuleHandleW(nullptr);
+        windowClass.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+        windowClass.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
+        windowClass.lpszClassName = kPromptWindowClass;
+        registered = RegisterClassW(&windowClass) != 0 || GetLastError() == ERROR_CLASS_ALREADY_EXISTS;
+    });
+    return registered;
+}
+
+const wchar_t* promptAcceptLabel() {
+    return PRIMARYLANGID(GetUserDefaultUILanguage()) == LANG_CHINESE ? L"确定" : L"OK";
+}
+
+const wchar_t* promptCancelLabel() {
+    return PRIMARYLANGID(GetUserDefaultUILanguage()) == LANG_CHINESE ? L"取消" : L"Cancel";
+}
+
+int promptDpi(HWND owner) {
+    using GetDpiForWindowFn = UINT(WINAPI*)(HWND);
+    const auto getDpiForWindow = reinterpret_cast<GetDpiForWindowFn>(
+        GetProcAddress(GetModuleHandleW(L"user32.dll"), "GetDpiForWindow"));
+    if (owner && getDpiForWindow) {
+        return static_cast<int>(getDpiForWindow(owner));
+    }
+    HDC deviceContext = GetDC(owner);
+    const int dpi = deviceContext ? GetDeviceCaps(deviceContext, LOGPIXELSX) : 96;
+    if (deviceContext) {
+        ReleaseDC(owner, deviceContext);
+    }
+    return dpi;
 }
 
 NOTIFYICONDATAW trayData(const OneUiTray* tray) {
@@ -1310,6 +1421,186 @@ int oneui_window_confirm(OneUiWindow* window, const wchar_t* title, const wchar_
     (void)window;
     (void)title;
     (void)message;
+    return 0;
+#endif
+}
+
+int oneui_window_prompt_text(
+    OneUiWindow* window,
+    const wchar_t* title,
+    const wchar_t* message,
+    const wchar_t* initialValue,
+    const wchar_t* placeholder,
+    int password,
+    wchar_t* out,
+    int outLen) {
+#ifdef _WIN32
+    if (!out || outLen <= 0) {
+        return 0;
+    }
+    SecureZeroMemory(out, static_cast<std::size_t>(outLen) * sizeof(wchar_t));
+    if (!ensurePromptWindowClass()) {
+        return 0;
+    }
+
+    HWND owner = nullptr;
+    if (window && window->window) {
+        owner = reinterpret_cast<HWND>(window->window->nativeHandle());
+    }
+
+    const int dpi = promptDpi(owner);
+    const auto scaled = [dpi](int value) { return MulDiv(value, dpi, 96); };
+    const int width = scaled(480);
+    const int height = scaled(205);
+
+    RECT anchor{};
+    if (!owner || !GetWindowRect(owner, &anchor)) {
+        SystemParametersInfoW(SPI_GETWORKAREA, 0, &anchor, 0);
+    }
+    const int left = anchor.left + std::max(0L, (anchor.right - anchor.left - width) / 2);
+    const int top = anchor.top + std::max(0L, (anchor.bottom - anchor.top - height) / 2);
+
+    PromptDialogState state;
+    state.maxChars = outLen - 1;
+    const wchar_t* dialogTitle = title && title[0] != L'\0' ? title : L"Input";
+    HWND dialog = CreateWindowExW(
+        WS_EX_CONTROLPARENT | WS_EX_DLGMODALFRAME,
+        kPromptWindowClass,
+        dialogTitle,
+        WS_CAPTION | WS_SYSMENU | WS_POPUP,
+        left,
+        top,
+        width,
+        height,
+        owner,
+        nullptr,
+        GetModuleHandleW(nullptr),
+        &state);
+    if (!dialog) {
+        return 0;
+    }
+
+    HFONT font = static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
+    const int margin = scaled(18);
+    HWND messageControl = CreateWindowExW(
+        0,
+        L"STATIC",
+        message ? message : L"",
+        WS_CHILD | WS_VISIBLE | SS_LEFT,
+        margin,
+        scaled(18),
+        width - margin * 2,
+        scaled(48),
+        dialog,
+        nullptr,
+        GetModuleHandleW(nullptr),
+        nullptr);
+
+    DWORD editStyle = WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL;
+    if (password != 0) {
+        editStyle |= ES_PASSWORD;
+    }
+    state.edit = CreateWindowExW(
+        WS_EX_CLIENTEDGE,
+        L"EDIT",
+        initialValue ? initialValue : L"",
+        editStyle,
+        margin,
+        scaled(73),
+        width - margin * 2,
+        scaled(27),
+        dialog,
+        reinterpret_cast<HMENU>(static_cast<INT_PTR>(kPromptEditId)),
+        GetModuleHandleW(nullptr),
+        nullptr);
+    SendMessageW(state.edit, EM_SETLIMITTEXT, static_cast<WPARAM>(state.maxChars), 0);
+    if (placeholder && placeholder[0] != L'\0') {
+        SendMessageW(state.edit, EM_SETCUEBANNER, FALSE, reinterpret_cast<LPARAM>(placeholder));
+    }
+
+    const int buttonWidth = scaled(86);
+    const int buttonHeight = scaled(28);
+    const int buttonTop = scaled(119);
+    HWND acceptButton = CreateWindowExW(
+        0,
+        L"BUTTON",
+        promptAcceptLabel(),
+        WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
+        width - margin - buttonWidth * 2 - scaled(10),
+        buttonTop,
+        buttonWidth,
+        buttonHeight,
+        dialog,
+        reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDOK)),
+        GetModuleHandleW(nullptr),
+        nullptr);
+    HWND cancelButton = CreateWindowExW(
+        0,
+        L"BUTTON",
+        promptCancelLabel(),
+        WS_CHILD | WS_VISIBLE | WS_TABSTOP,
+        width - margin - buttonWidth,
+        buttonTop,
+        buttonWidth,
+        buttonHeight,
+        dialog,
+        reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDCANCEL)),
+        GetModuleHandleW(nullptr),
+        nullptr);
+
+    for (HWND control : {messageControl, state.edit, acceptButton, cancelButton}) {
+        if (control) {
+            SendMessageW(control, WM_SETFONT, reinterpret_cast<WPARAM>(font), TRUE);
+        }
+    }
+
+    const bool restoreOwner = owner && IsWindowEnabled(owner);
+    if (restoreOwner) {
+        EnableWindow(owner, FALSE);
+    }
+    ShowWindow(dialog, SW_SHOW);
+    UpdateWindow(dialog);
+    SetForegroundWindow(dialog);
+    SetFocus(state.edit);
+    SendMessageW(state.edit, EM_SETSEL, 0, -1);
+
+    MSG nativeMessage{};
+    while (!state.completed) {
+        const BOOL messageResult = GetMessageW(&nativeMessage, nullptr, 0, 0);
+        if (messageResult <= 0) {
+            if (messageResult == 0) {
+                PostQuitMessage(static_cast<int>(nativeMessage.wParam));
+            }
+            break;
+        }
+        if (!IsDialogMessageW(dialog, &nativeMessage)) {
+            TranslateMessage(&nativeMessage);
+            DispatchMessageW(&nativeMessage);
+        }
+    }
+
+    SetWindowTextW(state.edit, L"");
+    DestroyWindow(dialog);
+    if (restoreOwner) {
+        EnableWindow(owner, TRUE);
+        SetActiveWindow(owner);
+    }
+
+    const bool accepted = state.completed && state.accepted;
+    if (accepted) {
+        lstrcpynW(out, state.value.c_str(), outLen);
+    }
+    secureClear(state.value);
+    return accepted ? 1 : 0;
+#else
+    (void)window;
+    (void)title;
+    (void)message;
+    (void)initialValue;
+    (void)placeholder;
+    (void)password;
+    (void)out;
+    (void)outLen;
     return 0;
 #endif
 }

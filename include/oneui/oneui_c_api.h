@@ -336,6 +336,20 @@ ONEUI_API void oneui_window_set_title(OneUiWindow* window, const wchar_t* title)
 ONEUI_API void oneui_window_set_title_utf8(OneUiWindow* window, OneUiUtf8String title);
 ONEUI_API void* oneui_window_native_handle(OneUiWindow* window);
 ONEUI_API int oneui_window_confirm(OneUiWindow* window, const wchar_t* title, const wchar_t* message);
+/*
+ * Displays a platform-native modal text prompt owned by window. Returns 1 and
+ * writes a null-terminated value to out when accepted; returns 0 on cancel or
+ * failure. Set password to a non-zero value to mask the edit control.
+ */
+ONEUI_API int oneui_window_prompt_text(
+    OneUiWindow* window,
+    const wchar_t* title,
+    const wchar_t* message,
+    const wchar_t* initial_value,
+    const wchar_t* placeholder,
+    int password,
+    wchar_t* out,
+    int out_len);
 // 打开系统“选择文件夹”对话框；选中写入 out(最多 outLen 个 wchar)并返回 1，取消返回 0。
 ONEUI_API int oneui_window_pick_folder(OneUiWindow* window, const wchar_t* title, wchar_t* out, int outLen);
 ONEUI_API int oneui_window_client_width(OneUiWindow* window);
