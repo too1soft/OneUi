@@ -229,6 +229,39 @@ void testWindowDpiMetricsAbiUsesLogicalAndPhysicalSizes() {
     oneui_window_destroy(window);
 }
 
+void testWindowPlacementAbiRoundTripsRestoredBounds() {
+    OneUiWindowOptions options{};
+    options.title = L"OneUI C ABI Placement";
+    options.width = 640;
+    options.height = 480;
+    options.visible = 0;
+    options.borderless = 1;
+    options.resizable = 1;
+
+    OneUiWindow* window = oneui_window_create(&options);
+    expectTrue("placement window create", window != nullptr);
+    if (!window) {
+        return;
+    }
+
+    oneui_window_initialize(window);
+    OneUiWindowPlacement requested{120, 140, 720, 520, 0};
+    expectTrue("placement restore accepted", oneui_window_set_placement(window, &requested) == 1);
+
+    OneUiWindowPlacement actual{};
+    expectTrue("placement query accepted", oneui_window_get_placement(window, &actual) == 1);
+    expectTrue("placement width round trip", actual.width == requested.width);
+    expectTrue("placement height round trip", actual.height == requested.height);
+    expectTrue("placement restored state round trip", actual.maximized == 0);
+
+    expectTrue("placement rejects null output", oneui_window_get_placement(window, nullptr) == 0);
+    const OneUiWindowPlacement invalid{};
+    expectTrue(
+        "placement rejects invalid size",
+        oneui_window_set_placement(window, &invalid) == 0);
+    oneui_window_destroy(window);
+}
+
 void testAppShellAbiCreatesReusableSlots() {
     OneUiStyleSheet* sheet = oneui_style_sheet_create();
     expectTrue("style sheet create", sheet != nullptr);
@@ -616,6 +649,7 @@ int main() {
     testUtf8ListUsesStructuredItems();
     testUtf8TreeViewUsesStableIdsAndStructuredParents();
     testWindowDpiMetricsAbiUsesLogicalAndPhysicalSizes();
+    testWindowPlacementAbiRoundTripsRestoredBounds();
     testAppShellAbiCreatesReusableSlots();
     testProductShellAbiIsPublicProductFrame();
     testOverlayToastAbiSupportsAnchoredNotice();

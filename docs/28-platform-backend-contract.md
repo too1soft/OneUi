@@ -36,6 +36,8 @@
 - `setFullscreen`
 - `setBorderless`
 - `setTitle`
+- `getWindowPlacement`
+- `setWindowPlacement`
 - `clientSize`
 - `nativeHandle`
 
@@ -44,6 +46,8 @@
 - `WindowOptions` 是跨平台输入契约，不能让调用方传平台专属结构。
 - `nativeHandle` 只用于高级集成和诊断，普通控件不得依赖它。
 - 最大化、还原、全屏、退出全屏必须尽量使用平台原子操作，避免白屏、旧帧闪烁和可见中间态。
+- `WindowPlacement` 只用于窗口状态往返持久化；边界是正常还原状态下的窗口外框，平台后端必须在恢复时校正到可见工作区。
+- 下游产品不得轮询窗口位置，也不得在移动或缩放热路径中写数据库；推荐在首次显示前恢复、在消息循环退出后保存一次。
 
 ### 2. Event Loop And Scheduling
 

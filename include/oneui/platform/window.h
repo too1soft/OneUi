@@ -24,6 +24,18 @@ struct WindowOptions {
     bool resizable = true;
 };
 
+// Round-trippable native window state for application persistence. Bounds are
+// the restored outer frame in platform screen coordinates, not client layout
+// units. Callers should treat them as opaque persistence values and let OneUI
+// validate visibility when restoring them.
+struct WindowPlacement {
+    int x = 0;
+    int y = 0;
+    int width = 0;
+    int height = 0;
+    bool maximized = false;
+};
+
 class ONEUI_API Window {
 public:
     virtual ~Window() = default;
@@ -63,6 +75,14 @@ public:
     virtual void setFullscreen(bool enabled) = 0;
     virtual void setBorderless(bool enabled) = 0;
     virtual void toggleMaximize() = 0;
+    virtual bool getWindowPlacement(WindowPlacement& placement) const {
+        (void)placement;
+        return false;
+    }
+    virtual bool setWindowPlacement(const WindowPlacement& placement) {
+        (void)placement;
+        return false;
+    }
     // 配置无边框窗口的拖拽命中区（逻辑像素）：标题栏高度 + 右侧不可拖拽预留宽（留给窗口按钮/账号按钮）。
     // 默认空实现，仅需拖拽命中的后端（Win32）覆盖。
     virtual void setTitleBarDragMetrics(float titleBarHeight, float reservedButtonWidth) {

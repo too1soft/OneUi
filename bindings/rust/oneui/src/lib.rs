@@ -225,6 +225,20 @@ impl Default for WindowOptions {
     }
 }
 
+/// Round-trippable native window state for application persistence.
+///
+/// Bounds describe the restored outer frame in platform screen coordinates.
+/// They are deliberately not OneUI layout units; persist them unchanged and
+/// let OneUI clamp them to a visible work area during restoration.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct WindowPlacement {
+    pub x: i32,
+    pub y: i32,
+    pub width: i32,
+    pub height: i32,
+    pub maximized: bool,
+}
+
 pub struct Window {
     state: Arc<WindowState>,
     _ui_thread: PhantomData<Rc<()>>,
@@ -4864,6 +4878,33 @@ impl Window {
         });
     }
 
+    pub fn placement(&self) -> Option<WindowPlacement> {
+        self.state.with_raw(|raw| {
+            let mut native = sys::OneUiWindowPlacement::default();
+            let available = unsafe { sys::oneui_window_get_placement(raw, &mut native) } != 0;
+            available.then_some(WindowPlacement {
+                x: native.x,
+                y: native.y,
+                width: native.width,
+                height: native.height,
+                maximized: native.maximized != 0,
+            })
+        })?
+    }
+
+    pub fn set_placement(&self, placement: WindowPlacement) -> bool {
+        let native = sys::OneUiWindowPlacement {
+            x: placement.x,
+            y: placement.y,
+            width: placement.width,
+            height: placement.height,
+            maximized: i32::from(placement.maximized),
+        };
+        self.state
+            .with_raw(|raw| unsafe { sys::oneui_window_set_placement(raw, &native) != 0 })
+            .unwrap_or(false)
+    }
+
     pub fn set_title_bar_drag_metrics(&self, title_bar_height: f32, reserved_button_width: f32) {
         self.state.with_raw(|raw| unsafe {
             sys::oneui_window_set_title_bar_drag_metrics(
@@ -4976,7 +5017,7 @@ mod tests {
         Select, SelectionMode, Stack, StackDirection, StyleSheet, Switch, Tabs, TerminalCell,
         TerminalColor, TerminalCursor, TerminalCursorStyle, TerminalFrame, TerminalSelection,
         TerminalUnderlineStyle, TerminalView, TextField, TreeItem, TreeView, VirtualList, Window,
-        WindowOptions,
+        WindowOptions, WindowPlacement,
     };
     use std::sync::{
         atomic::{AtomicBool, Ordering},
@@ -5023,6 +5064,29 @@ mod tests {
         })
         .expect("OneUI window should be created through the UTF-8 ABI");
         window.set_title("兴业银行股份有限公司");
+    }
+
+    #[test]
+    fn round_trips_window_placement_through_the_safe_binding() {
+        let _guard = window_test_lock().lock().expect("window test lock");
+        let window = Window::new(&WindowOptions {
+            borderless: true,
+            ..WindowOptions::default()
+        })
+        .expect("window should be created");
+        let requested = WindowPlacement {
+            x: 120,
+            y: 140,
+            width: 720,
+            height: 520,
+            maximized: true,
+        };
+
+        assert!(window.set_placement(requested));
+        let actual = window.placement().expect("placement should be available");
+        assert_eq!(actual.width, requested.width);
+        assert_eq!(actual.height, requested.height);
+        assert!(actual.maximized);
     }
 
     #[test]

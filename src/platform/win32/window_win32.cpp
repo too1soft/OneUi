@@ -1006,7 +1006,7 @@ public:
     void show() override {
         ensureCreated();
         initGPU();
-        ShowWindow(hwnd_, SW_SHOW);
+        showWithPlacementState(false);
         InvalidateRect(hwnd_, nullptr, FALSE);
         UpdateWindow(hwnd_);
     }
@@ -1017,7 +1017,7 @@ public:
             return;
         }
         initGPU();
-        ShowWindow(hwnd_, IsIconic(hwnd_) ? SW_RESTORE : SW_SHOW);
+        showWithPlacementState(true);
         SetForegroundWindow(hwnd_);
         InvalidateRect(hwnd_, nullptr, FALSE);
         UpdateWindow(hwnd_);
@@ -1250,7 +1250,125 @@ public:
         applyBorderlessMaximize(!borderlessMaximized_);
     }
 
+    bool getWindowPlacement(WindowPlacement& placement) const override {
+        if (!hasNormalPlacement_) {
+            return false;
+        }
+        placement.x = lastNormalRect_.left;
+        placement.y = lastNormalRect_.top;
+        placement.width = lastNormalRect_.right - lastNormalRect_.left;
+        placement.height = lastNormalRect_.bottom - lastNormalRect_.top;
+        placement.maximized = placementStatePending_ ? pendingMaximized_ : lastKnownMaximized_;
+        return placement.width > 0 && placement.height > 0;
+    }
+
+    bool setWindowPlacement(const WindowPlacement& placement) override {
+        if (placement.width <= 0 || placement.height <= 0) {
+            return false;
+        }
+        ensureCreated();
+        if (!hwnd_) {
+            return false;
+        }
+
+        const auto toLong = [](std::int64_t value) {
+            return static_cast<LONG>(std::clamp<std::int64_t>(value, LONG_MIN, LONG_MAX));
+        };
+        RECT requested{
+            toLong(placement.x),
+            toLong(placement.y),
+            toLong(static_cast<std::int64_t>(placement.x) + placement.width),
+            toLong(static_cast<std::int64_t>(placement.y) + placement.height)};
+        const HMONITOR monitor = MonitorFromRect(&requested, MONITOR_DEFAULTTONEAREST);
+        MONITORINFO monitorInfo{};
+        monitorInfo.cbSize = sizeof(monitorInfo);
+        if (!monitor || !GetMonitorInfoW(monitor, &monitorInfo)) {
+            return false;
+        }
+
+        const RECT& work = monitorInfo.rcWork;
+        const int workWidth = static_cast<int>(std::max(1L, work.right - work.left));
+        const int workHeight = static_cast<int>(std::max(1L, work.bottom - work.top));
+        const int width = std::clamp(placement.width, 1, workWidth);
+        const int height = std::clamp(placement.height, 1, workHeight);
+        const int x = std::clamp(
+            placement.x,
+            static_cast<int>(work.left),
+            static_cast<int>(work.right) - width);
+        const int y = std::clamp(
+            placement.y,
+            static_cast<int>(work.top),
+            static_cast<int>(work.bottom) - height);
+
+        const bool visible = IsWindowVisible(hwnd_) != FALSE;
+        if (borderlessMaximized_) {
+            applyBorderlessMaximize(false);
+        } else if (visible && IsZoomed(hwnd_)) {
+            ShowWindow(hwnd_, SW_RESTORE);
+        }
+
+        if (!SetWindowPos(
+            hwnd_,
+            options_.topmost ? HWND_TOPMOST : HWND_NOTOPMOST,
+            x,
+            y,
+            width,
+            height,
+            SWP_NOOWNERZORDER | SWP_NOACTIVATE)) {
+            return false;
+        }
+        lastNormalRect_ = RECT{x, y, x + width, y + height};
+        hasNormalPlacement_ = true;
+        placementStatePending_ = !visible;
+        pendingMaximized_ = placement.maximized;
+        lastKnownMaximized_ = placement.maximized;
+
+        if (visible && placement.maximized) {
+            if (options_.borderless) {
+                applyBorderlessMaximize(true);
+            } else {
+                ShowWindow(hwnd_, SW_MAXIMIZE);
+            }
+        }
+        return true;
+    }
+
 private:
+    void showWithPlacementState(bool restoreIconic) {
+        if (!placementStatePending_) {
+            ShowWindow(hwnd_, restoreIconic && IsIconic(hwnd_) ? SW_RESTORE : SW_SHOW);
+            return;
+        }
+
+        if (pendingMaximized_) {
+            if (options_.borderless) {
+                applyBorderlessMaximize(true);
+                ShowWindow(hwnd_, SW_SHOW);
+            } else {
+                ShowWindow(hwnd_, SW_MAXIMIZE);
+            }
+        } else {
+            if (borderlessMaximized_) {
+                applyBorderlessMaximize(false);
+            }
+            ShowWindow(hwnd_, !options_.borderless && IsZoomed(hwnd_) ? SW_RESTORE : SW_SHOW);
+        }
+        placementStatePending_ = false;
+        pendingMaximized_ = false;
+    }
+
+    void captureNormalPlacement() {
+        if (!hwnd_ || options_.fullscreen || borderlessMaximized_ || IsIconic(hwnd_) || IsZoomed(hwnd_)) {
+            return;
+        }
+        RECT rect{};
+        if (!GetWindowRect(hwnd_, &rect) || rect.right <= rect.left || rect.bottom <= rect.top) {
+            return;
+        }
+        lastNormalRect_ = rect;
+        hasNormalPlacement_ = true;
+    }
+
     // 无边框(WS_POPUP)窗口默认没有 DWM 投影，会像一张贴在桌面上的平面图。
     // 向客户区扩 1px glass 边即可启用系统标准窗口阴影（内容不透出、不影响命中）。
     // GetSystemMetricsForDpi 在 Win10 运行时存在，但 mingw-w64 头文件未声明，动态解析；
@@ -1536,6 +1654,7 @@ private:
             dpiScale_ = dpiScaleForWindowHandle(hwnd_);
             applyBorderlessShadow();
             applyRoundedCorners();
+            captureNormalPlacement();
             if (options_.visible) {
                 initGPU();
             }
@@ -1689,6 +1808,7 @@ private:
             // 下方——修复“失焦后投影消失、要移动一下才回来”。必须先走默认处理，好派生出
             // WM_MOVE/WM_SIZE（区域圆角重算依赖 WM_SIZE）。
             const LRESULT r = DefWindowProcW(hwnd_, message, wParam, lParam);
+            captureNormalPlacement();
             updateShadowWindow();
             return r;
         }
@@ -1701,6 +1821,11 @@ private:
             return DefWindowProcW(hwnd_, message, wParam, lParam);
         case WM_SIZE:
             recordResizeMessage(wParam);
+            if (wParam == SIZE_MAXIMIZED) {
+                lastKnownMaximized_ = true;
+            } else if (wParam == SIZE_RESTORED) {
+                lastKnownMaximized_ = borderlessMaximized_;
+            }
             if (wParam == SIZE_MINIMIZED && shadowHwnd_) {
                 ShowWindow(shadowHwnd_, SW_HIDE); // 最小化立刻收起投影
             }
@@ -1779,6 +1904,7 @@ private:
             return 0;
         case WM_NCDESTROY:
         {
+            captureNormalPlacement();
             acceptingPostedCallbacks_.store(false, std::memory_order_release);
             discardPostedCallbacks();
             if (animationFrameTimer_) {
@@ -3149,6 +3275,11 @@ private:
     DWORD savedExStyle_ = 0;
     bool fullscreenApplied_ = false;
     bool borderlessMaximized_ = false;
+    RECT lastNormalRect_{};
+    bool hasNormalPlacement_ = false;
+    bool lastKnownMaximized_ = false;
+    bool placementStatePending_ = false;
+    bool pendingMaximized_ = false;
     float cornerRadiusLogical_ = 0.0f;
     bool closeToTray_ = false;
     // Win10 圆角回退（SetWindowRgn）会丢掉 DWM 柔和投影，用一个分层伴随窗口在主窗

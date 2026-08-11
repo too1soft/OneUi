@@ -91,6 +91,19 @@ typedef struct OneUiWindowOptions {
     int resizable;
 } OneUiWindowOptions;
 
+/*
+ * Restored outer-frame bounds in platform screen coordinates. This structure
+ * is intended for round-trip application persistence; OneUI validates and
+ * clamps the bounds to a visible work area when restoring them.
+ */
+typedef struct OneUiWindowPlacement {
+    int x;
+    int y;
+    int width;
+    int height;
+    int maximized;
+} OneUiWindowPlacement;
+
 typedef struct OneUiInsets {
     float top;
     float right;
@@ -301,7 +314,7 @@ enum {
     OneUiTerminalCellOverline = 1u << 11
 };
 
-#define ONEUI_UTF8_ABI_VERSION 4u
+#define ONEUI_UTF8_ABI_VERSION 5u
 
 ONEUI_API const char* oneui_version(void);
 ONEUI_API unsigned int oneui_utf8_abi_version(void);
@@ -316,6 +329,8 @@ ONEUI_API void oneui_window_close(OneUiWindow* window);
 ONEUI_API void oneui_window_request_close(OneUiWindow* window);
 ONEUI_API void oneui_window_minimize(OneUiWindow* window);
 ONEUI_API void oneui_window_toggle_maximize(OneUiWindow* window);
+ONEUI_API int oneui_window_get_placement(OneUiWindow* window, OneUiWindowPlacement* placement);
+ONEUI_API int oneui_window_set_placement(OneUiWindow* window, const OneUiWindowPlacement* placement);
 ONEUI_API void oneui_window_set_borderless(OneUiWindow* window, int borderless);
 ONEUI_API void oneui_window_set_title_bar_drag_metrics(OneUiWindow* window, float title_bar_height, float reserved_button_width);
 ONEUI_API void oneui_window_set_corner_radius(OneUiWindow* window, float radius);

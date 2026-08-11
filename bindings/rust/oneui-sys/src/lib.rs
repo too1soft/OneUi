@@ -5,7 +5,7 @@
 
 use std::ffi::{c_char, c_int, c_uint, c_ushort, c_void};
 
-pub const UTF8_ABI_VERSION: c_uint = 4;
+pub const UTF8_ABI_VERSION: c_uint = 5;
 
 #[repr(C)]
 pub struct OneUiWindow {
@@ -156,6 +156,16 @@ pub struct OneUiWindowOptionsUtf8 {
 }
 
 #[repr(C)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct OneUiWindowPlacement {
+    pub x: c_int,
+    pub y: c_int,
+    pub width: c_int,
+    pub height: c_int,
+    pub maximized: c_int,
+}
+
+#[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
 pub struct OneUiInsets {
     pub top: f32,
@@ -260,6 +270,14 @@ extern "C" {
     pub fn oneui_window_request_close(window: *mut OneUiWindow);
     pub fn oneui_window_minimize(window: *mut OneUiWindow);
     pub fn oneui_window_toggle_maximize(window: *mut OneUiWindow);
+    pub fn oneui_window_get_placement(
+        window: *mut OneUiWindow,
+        placement: *mut OneUiWindowPlacement,
+    ) -> c_int;
+    pub fn oneui_window_set_placement(
+        window: *mut OneUiWindow,
+        placement: *const OneUiWindowPlacement,
+    ) -> c_int;
     pub fn oneui_window_set_borderless(window: *mut OneUiWindow, borderless: c_int);
     pub fn oneui_window_set_title_bar_drag_metrics(
         window: *mut OneUiWindow,

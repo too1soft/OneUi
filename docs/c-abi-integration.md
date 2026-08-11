@@ -53,6 +53,8 @@ archives. Public or customer packages should ship the DLL, not the PDB.
 The initial ABI surface supports:
 
 - window create/show/run/close
+- round-trip window placement through `OneUiWindowPlacement`; OneUI validates
+  restored bounds against a visible platform work area
 - setting a window content widget
 - generic widget preferred size, disabled, visible
 - `Panel` for background, border, radius, shadow, padding, and content layout

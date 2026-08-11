@@ -1213,6 +1213,36 @@ void oneui_window_toggle_maximize(OneUiWindow* window) {
     window->window->toggleMaximize();
 }
 
+int oneui_window_get_placement(OneUiWindow* window, OneUiWindowPlacement* placement) {
+    if (!window || !window->window || !placement) {
+        return 0;
+    }
+    oneui::WindowPlacement nativePlacement;
+    if (!window->window->getWindowPlacement(nativePlacement)) {
+        return 0;
+    }
+    placement->x = nativePlacement.x;
+    placement->y = nativePlacement.y;
+    placement->width = nativePlacement.width;
+    placement->height = nativePlacement.height;
+    placement->maximized = nativePlacement.maximized ? 1 : 0;
+    return 1;
+}
+
+int oneui_window_set_placement(OneUiWindow* window, const OneUiWindowPlacement* placement) {
+    if (!window || !window->window || !placement) {
+        return 0;
+    }
+    return window->window->setWindowPlacement(oneui::WindowPlacement{
+        placement->x,
+        placement->y,
+        placement->width,
+        placement->height,
+        placement->maximized != 0})
+        ? 1
+        : 0;
+}
+
 void oneui_window_set_borderless(OneUiWindow* window, int borderless) {
     if (!window || !window->window) {
         return;
@@ -1836,8 +1866,9 @@ int oneui_style_sheet_load_file(OneUiStyleSheet* style_sheet, const wchar_t* pat
 int oneui_clipboard_set_text(const wchar_t* text) {
     try {
         oneui::SystemClipboard clipboard;
-        clipboard.setText(wideOrEmpty(text));
-        return 1;
+        const std::wstring value = wideOrEmpty(text);
+        clipboard.setText(value);
+        return clipboard.text() == value ? 1 : 0;
     } catch (...) {
         return 0;
     }
@@ -1865,8 +1896,9 @@ int oneui_clipboard_get_text(wchar_t* buffer, int buffer_len) {
 int oneui_clipboard_set_text_utf8(OneUiUtf8String text) {
     try {
         oneui::SystemClipboard clipboard;
-        clipboard.setText(utf8OrEmpty(text));
-        return 1;
+        const std::wstring value = utf8OrEmpty(text);
+        clipboard.setText(value);
+        return clipboard.text() == value ? 1 : 0;
     } catch (...) {
         return 0;
     }
