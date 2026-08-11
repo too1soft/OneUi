@@ -266,6 +266,10 @@ struct DispatchedTask {
     task: Option<Box<dyn FnOnce() + Send + 'static>>,
 }
 
+struct LocalDispatchedTask {
+    task: Option<Box<dyn FnOnce() + 'static>>,
+}
+
 unsafe impl Send for UiDispatcher {}
 unsafe impl Sync for UiDispatcher {}
 
@@ -300,6 +304,17 @@ unsafe extern "C" fn run_dispatched_task(user_data: *mut std::ffi::c_void) {
 
 unsafe extern "C" fn drop_dispatched_task(user_data: *mut std::ffi::c_void) {
     drop(unsafe { Box::from_raw(user_data.cast::<DispatchedTask>()) });
+}
+
+unsafe extern "C" fn run_local_dispatched_task(user_data: *mut std::ffi::c_void) {
+    let mut task = unsafe { Box::from_raw(user_data.cast::<LocalDispatchedTask>()) };
+    if let Some(task) = task.task.take() {
+        run_callback_guarded("dispatcher.local_task", task);
+    }
+}
+
+unsafe extern "C" fn drop_local_dispatched_task(user_data: *mut std::ffi::c_void) {
+    drop(unsafe { Box::from_raw(user_data.cast::<LocalDispatchedTask>()) });
 }
 
 impl UiDispatcher {
@@ -340,6 +355,41 @@ impl UiDispatcher {
             Some(_) => Err(Error::WindowClosed),
             None => {
                 drop(unsafe { Box::from_raw(user_data.cast::<DispatchedTask>()) });
+                Err(Error::WindowClosed)
+            }
+        }
+    }
+
+    /// Defers non-`Send` UI-owned work until after the current native event callback returns.
+    ///
+    /// This is intentionally restricted to the window thread. Use [`Self::dispatch`] for
+    /// background services. The queued closure is executed or destroyed on the owning
+    /// window thread, so it may safely capture `Rc`-owned widget and product state.
+    pub fn dispatch_local<F>(&self, task: F) -> Result<(), Error>
+    where
+        F: FnOnce() + 'static,
+    {
+        if std::thread::current().id() != self.state.ui_thread {
+            return Err(Error::WrongThread);
+        }
+        let task = Box::new(LocalDispatchedTask {
+            task: Some(Box::new(task)),
+        });
+        let user_data = Box::into_raw(task).cast();
+        let accepted = self.state.with_raw(|raw| unsafe {
+            sys::oneui_window_post_owned(
+                raw,
+                Some(run_local_dispatched_task),
+                user_data,
+                Some(drop_local_dispatched_task),
+            )
+        });
+
+        match accepted {
+            Some(1) => Ok(()),
+            Some(_) => Err(Error::WindowClosed),
+            None => {
+                drop(unsafe { Box::from_raw(user_data.cast::<LocalDispatchedTask>()) });
                 Err(Error::WindowClosed)
             }
         }
@@ -5161,6 +5211,8 @@ mod tests {
         TerminalUnderlineStyle, TerminalView, TextField, TreeItem, TreeView, VirtualList, Window,
         WindowOptions, WindowPlacement,
     };
+    use std::cell::Cell;
+    use std::rc::Rc;
     use std::sync::{
         atomic::{AtomicBool, Ordering},
         Arc, Mutex, OnceLock,
@@ -6045,6 +6097,26 @@ mod tests {
             *callback_thread.lock().expect("callback lock"),
             Some(ui_thread)
         );
+    }
+
+    #[test]
+    fn dispatcher_defers_non_send_ui_work_without_crossing_threads() {
+        let _guard = window_test_lock().lock().expect("window test lock");
+        let window = Window::new(&WindowOptions::default()).expect("window should be created");
+        let dispatcher = window.dispatcher();
+        let observed = Rc::new(Cell::new(false));
+        let observed_from_task = Rc::clone(&observed);
+        let close_dispatcher = dispatcher.clone();
+        dispatcher
+            .dispatch_local(move || {
+                observed_from_task.set(true);
+                close_dispatcher.request_close();
+            })
+            .expect("window should accept local deferred work");
+
+        assert!(!observed.get());
+        assert_eq!(window.run(), 0);
+        assert!(observed.get());
     }
 
     #[test]

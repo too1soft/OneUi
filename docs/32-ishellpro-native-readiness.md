@@ -203,6 +203,10 @@ The native route must replace behavior, not only visual widgets.
   cancels queued work exactly once when that window closes. `Window::new`
   establishes the hidden native handle on its caller's UI thread before a
   dispatcher may be shared with workers.
+- `UiDispatcher::dispatch_local` is the UI-thread-only reentrancy boundary for
+  non-`Send` widget/product state. It posts work until after the current native
+  callback returns, allowing safe page rebuilds without timers, unsafe `Send`
+  wrappers, or destruction of a callback-owning control on its own stack.
 
 Still open before an iShellPro production page moves: Linux platform backend,
 DPI/IME acceptance matrix, virtualized data controls, native terminal surface,
