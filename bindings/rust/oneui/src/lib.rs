@@ -4351,6 +4351,7 @@ pub struct VirtualList {
     edit_requested_callback: Option<Box<ListChangedCallback>>,
     context_menu_requested_callback: Option<Box<ContextMenuRequestedCallback>>,
     reorder_requested_callback: Option<Box<ReorderRequestedCallback>>,
+    item_drag_callback: Option<Box<ItemDragCallback>>,
 }
 
 impl VirtualList {
@@ -4369,6 +4370,7 @@ impl VirtualList {
             edit_requested_callback: None,
             context_menu_requested_callback: None,
             reorder_requested_callback: None,
+            item_drag_callback: None,
         })
     }
 
@@ -4683,6 +4685,71 @@ impl VirtualList {
         self.reorder_requested_callback = None;
     }
 
+    /// Assigns stable domain identifiers to the current rows for external drag operations.
+    ///
+    /// The identifiers must be non-empty, unique, and exactly match the current row count.
+    /// A full [`Self::set_items`] reset clears them so stale identities cannot be emitted.
+    pub fn set_item_drag_ids(&self, ids: &[String]) -> bool {
+        let native_ids: Vec<sys::OneUiUtf8String> = ids
+            .iter()
+            .map(|id| sys::OneUiUtf8String::from_str(id))
+            .collect();
+        unsafe {
+            sys::oneui_virtual_list_set_item_drag_ids_utf8(
+                self.widget.as_raw(),
+                native_ids.as_ptr(),
+                native_ids.len(),
+            ) != 0
+        }
+    }
+
+    pub fn set_item_drag_enabled(&self, enabled: bool) {
+        unsafe {
+            sys::oneui_virtual_list_set_item_drag_enabled(
+                self.widget.as_raw(),
+                i32::from(enabled),
+            )
+        };
+    }
+
+    pub fn item_drag_enabled(&self) -> bool {
+        unsafe { sys::oneui_virtual_list_item_drag_enabled(self.widget.as_raw()) != 0 }
+    }
+
+    pub fn set_on_item_drag<F>(&mut self, callback: F)
+    where
+        F: FnMut(ItemDragEvent) + 'static,
+    {
+        self.clear_on_item_drag();
+        self.item_drag_callback = Some(Box::new(ItemDragCallback {
+            handler: Box::new(callback),
+        }));
+        let user_data = (self
+            .item_drag_callback
+            .as_deref_mut()
+            .expect("virtual list item drag callback was just installed")
+            as *mut ItemDragCallback)
+            .cast();
+        unsafe {
+            sys::oneui_virtual_list_set_on_item_drag_utf8(
+                self.widget.as_raw(),
+                Some(run_item_drag_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn clear_on_item_drag(&mut self) {
+        unsafe {
+            sys::oneui_virtual_list_set_on_item_drag_utf8(
+                self.widget.as_raw(),
+                None,
+                std::ptr::null_mut(),
+            )
+        };
+        self.item_drag_callback = None;
+    }
+
     pub fn as_widget(&self) -> &Widget {
         &self.widget
     }
@@ -4690,6 +4757,7 @@ impl VirtualList {
 
 impl Drop for VirtualList {
     fn drop(&mut self) {
+        self.clear_on_item_drag();
         self.clear_on_reorder_requested();
         self.clear_on_context_menu_requested();
         self.clear_on_edit_requested();
@@ -5565,6 +5633,15 @@ mod tests {
             })
             .collect();
         list.set_items(&items);
+        let drag_ids: Vec<String> = (0..5_000).map(|index| format!("host-{index}")).collect();
+        assert!(list.set_item_drag_ids(&drag_ids));
+        assert!(!list.set_item_drag_ids(&drag_ids[..4_999]));
+        let mut duplicate_drag_ids = drag_ids.clone();
+        duplicate_drag_ids[4_999] = duplicate_drag_ids[0].clone();
+        assert!(!list.set_item_drag_ids(&duplicate_drag_ids));
+        list.set_item_drag_enabled(true);
+        assert!(list.item_drag_enabled());
+        list.set_on_item_drag(|_| {});
         list.set_row_height(44.0);
         list.set_selected_index(4_999);
         assert_eq!(list.selected_index(), 4_999);

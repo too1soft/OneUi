@@ -812,6 +812,18 @@ extern "C" {
         callback: OneUiReorderRequestedCallback,
         user_data: *mut c_void,
     );
+    pub fn oneui_virtual_list_set_item_drag_ids_utf8(
+        list: *mut OneUiWidget,
+        ids: *const OneUiUtf8String,
+        count: usize,
+    ) -> c_int;
+    pub fn oneui_virtual_list_set_item_drag_enabled(list: *mut OneUiWidget, enabled: c_int);
+    pub fn oneui_virtual_list_item_drag_enabled(list: *mut OneUiWidget) -> c_int;
+    pub fn oneui_virtual_list_set_on_item_drag_utf8(
+        list: *mut OneUiWidget,
+        callback: OneUiItemDragCallback,
+        user_data: *mut c_void,
+    );
     pub fn oneui_state_view_create(
         title: *const c_ushort,
         message: *const c_ushort,

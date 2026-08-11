@@ -3,6 +3,7 @@
 #include "oneui/animation.h"
 #include "oneui/controls/list.h"
 #include "oneui/export.h"
+#include "oneui/input/item_drag.h"
 #include "oneui/selection_model.h"
 
 #include <functional>
@@ -45,6 +46,10 @@ public:
     void setReorderEnabled(bool enabled);
     bool reorderEnabled() const;
     void setOnReorderRequested(std::function<void(int, int)> callback);
+    bool setItemDragIds(std::vector<std::wstring> ids);
+    void setItemDragEnabled(bool enabled);
+    bool itemDragEnabled() const;
+    void setOnItemDrag(std::function<void(const ItemDragEvent&)> callback);
 
     void paint(Canvas& canvas) override;
     bool onMouseMove(const MouseEvent& event) override;
@@ -66,6 +71,7 @@ private:
     Rect itemRect(int index) const;
     Rect verticalThumbRect(float width) const;
     void resetReorderState();
+    void emitItemDrag(ItemDragPhase phase, Point position);
     void updateReorderTarget(Point point);
     void ensureSelectionVisible();
     ListStyle resolvedContainerStyle() const;
@@ -80,7 +86,10 @@ private:
     int pressedClickCount_ = 1;
     bool reorderEnabled_ = false;
     bool reordering_ = false;
+    bool externalDragging_ = false;
+    bool itemDragEnabled_ = false;
     Point reorderStartPoint_{};
+    Point reorderCurrentPoint_{};
     int reorderSourceIndex_ = -1;
     int reorderTargetIndex_ = -1;
     int reorderInsertionIndex_ = -1;
@@ -97,6 +106,8 @@ private:
     std::function<void(int)> onEditRequested_;
     std::function<void(int, Point)> onContextMenuRequested_;
     std::function<void(int, int)> onReorderRequested_;
+    std::vector<std::wstring> itemDragIds_;
+    std::function<void(const ItemDragEvent&)> onItemDrag_;
 };
 
 } // namespace oneui

@@ -207,6 +207,10 @@ The native route must replace behavior, not only visual widgets.
   non-`Send` widget/product state. It posts work until after the current native
   callback returns, allowing safe page rebuilds without timers, unsafe `Send`
   wrappers, or destruction of a callback-owning control on its own stack.
+- `VirtualList` and `ReorderableGrid` now share the stable external item-drag
+  contract. Virtualized rows keep domain identity separate from rendered text,
+  while `TreeView` owns visible drop-target hit testing; product validation and
+  persistence still happen once, after a completed drop.
 
 Still open before an iShellPro production page moves: Linux platform backend,
 DPI/IME acceptance matrix, virtualized data controls, native terminal surface,

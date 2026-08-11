@@ -1,6 +1,7 @@
 #pragma once
 
 #include "oneui/export.h"
+#include "oneui/input/item_drag.h"
 #include "oneui/style_sheet.h"
 #include "oneui/view.h"
 
@@ -15,19 +16,6 @@ namespace oneui {
 struct ReorderableGridItem {
     std::wstring id;
     std::shared_ptr<Widget> content;
-};
-
-enum class ItemDragPhase {
-    Started = 0,
-    Updated = 1,
-    Dropped = 2,
-    Cancelled = 3,
-};
-
-struct ItemDragEvent {
-    std::wstring sourceId;
-    ItemDragPhase phase = ItemDragPhase::Updated;
-    Point position;
 };
 
 /// A responsive native grid for arbitrary child widgets. The control owns

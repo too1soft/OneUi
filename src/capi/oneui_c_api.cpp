@@ -3338,6 +3338,59 @@ void oneui_virtual_list_set_on_reorder_requested(
         }} : nullptr);
 }
 
+int oneui_virtual_list_set_item_drag_ids_utf8(
+    OneUiWidget* list,
+    const OneUiUtf8String* ids,
+    std::size_t count) {
+    auto* nativeList = asWidget<oneui::VirtualList>(list);
+    if (!nativeList || (count > 0 && !ids)) {
+        return 0;
+    }
+    std::vector<std::wstring> nativeIds;
+    nativeIds.reserve(count);
+    for (std::size_t index = 0; index < count; ++index) {
+        nativeIds.push_back(utf8OrEmpty(ids[index]));
+    }
+    return nativeList->setItemDragIds(std::move(nativeIds)) ? 1 : 0;
+}
+
+void oneui_virtual_list_set_item_drag_enabled(OneUiWidget* list, int enabled) {
+    if (auto* nativeList = asWidget<oneui::VirtualList>(list)) {
+        nativeList->setItemDragEnabled(enabled != 0);
+    }
+}
+
+int oneui_virtual_list_item_drag_enabled(OneUiWidget* list) {
+    if (const auto* nativeList = asWidget<oneui::VirtualList>(list)) {
+        return nativeList->itemDragEnabled() ? 1 : 0;
+    }
+    return 0;
+}
+
+void oneui_virtual_list_set_on_item_drag_utf8(
+    OneUiWidget* list,
+    OneUiItemDragCallback callback,
+    void* user_data) {
+    auto* nativeList = asWidget<oneui::VirtualList>(list);
+    if (!nativeList) {
+        return;
+    }
+    nativeList->setOnItemDrag(
+        callback
+            ? std::function<void(const oneui::ItemDragEvent&)>{
+                [callback, user_data](const oneui::ItemDragEvent& event) {
+                    const std::string sourceUtf8 = utf8FromWide(event.sourceId);
+                    callback(
+                        sourceUtf8.data(),
+                        sourceUtf8.size(),
+                        static_cast<int>(event.phase),
+                        event.position.x,
+                        event.position.y,
+                        user_data);
+                }}
+            : nullptr);
+}
+
 OneUiWidget* oneui_tree_view_create() {
     return wrap(std::make_shared<oneui::TreeView>());
 }

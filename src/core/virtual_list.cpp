@@ -8,6 +8,7 @@
 #include <chrono>
 #include <cmath>
 #include <optional>
+#include <unordered_set>
 #include <utility>
 
 namespace oneui {
@@ -25,18 +26,28 @@ VirtualList::VirtualList() {
 }
 
 void VirtualList::setItems(std::vector<ListItem> items) {
+    const int dragSource = reorderSourceIndex_;
+    const bool notifyCancellation = externalDragging_ && itemDragEnabled_ && onItemDrag_
+        && dragSource >= 0 && dragSource < static_cast<int>(itemDragIds_.size());
+    const ItemDragEvent cancellation{
+        notifyCancellation ? itemDragIds_[static_cast<std::size_t>(dragSource)] : std::wstring{},
+        ItemDragPhase::Cancelled,
+        reorderCurrentPoint_};
+    const auto dragCallback = onItemDrag_;
     const auto previousIndices = selection_.selectedIndices();
     const int previousSelectedIndex = selectedIndex();
     const bool wasUninitialized = selection_.itemCount() == 0
         && previousIndices.empty()
         && selection_.activeIndex() < 0;
     items_ = std::move(items);
+    itemDragIds_.clear();
     selection_.setItemCount(static_cast<int>(items_.size()));
     if (wasUninitialized && !items_.empty()) {
         selection_.selectOnly(0);
     }
     hoveredIndex_ = -1;
     pressedIndex_ = -1;
+    pressedClickCount_ = 1;
     resetReorderState();
     scrollOffset_ = std::clamp(scrollOffset_, 0.0f, maxScrollOffset());
     resetScrollMotion(scrollOffset_);
@@ -45,6 +56,9 @@ void VirtualList::setItems(std::vector<ListItem> items) {
     }
     notifySelectionChanged(previousIndices, previousSelectedIndex);
     invalidate();
+    if (notifyCancellation) {
+        dragCallback(cancellation);
+    }
 }
 
 bool VirtualList::updateItem(std::size_t index, ListItem item) {
@@ -182,6 +196,52 @@ void VirtualList::setOnReorderRequested(std::function<void(int, int)> callback) 
     onReorderRequested_ = std::move(callback);
 }
 
+bool VirtualList::setItemDragIds(std::vector<std::wstring> ids) {
+    if (reorderSourceIndex_ >= 0 || reordering_ || externalDragging_) {
+        return false;
+    }
+    if (ids.size() != items_.size()) {
+        return false;
+    }
+    std::unordered_set<std::wstring> uniqueIds;
+    uniqueIds.reserve(ids.size());
+    for (auto& id : ids) {
+        if (id.empty() || !uniqueIds.insert(id).second) {
+            return false;
+        }
+    }
+    itemDragIds_ = std::move(ids);
+    return true;
+}
+
+void VirtualList::setItemDragEnabled(bool enabled) {
+    if (itemDragEnabled_ == enabled) {
+        return;
+    }
+    const int source = reorderSourceIndex_;
+    const bool notifyCancellation = externalDragging_ && itemDragEnabled_ && onItemDrag_
+        && source >= 0 && source < static_cast<int>(itemDragIds_.size());
+    const ItemDragEvent cancellation{
+        notifyCancellation ? itemDragIds_[static_cast<std::size_t>(source)] : std::wstring{},
+        ItemDragPhase::Cancelled,
+        reorderCurrentPoint_};
+    const auto callback = onItemDrag_;
+    itemDragEnabled_ = enabled;
+    resetReorderState();
+    invalidate();
+    if (notifyCancellation) {
+        callback(cancellation);
+    }
+}
+
+bool VirtualList::itemDragEnabled() const {
+    return itemDragEnabled_;
+}
+
+void VirtualList::setOnItemDrag(std::function<void(const ItemDragEvent&)> callback) {
+    onItemDrag_ = std::move(callback);
+}
+
 void VirtualList::paint(Canvas& canvas) {
     const Rect rect = frame();
     const ListStyle containerStyle = resolvedContainerStyle();
@@ -276,14 +336,42 @@ bool VirtualList::onMouseMove(const MouseEvent& event) {
     if (!interactive()) {
         return false;
     }
-    if (reorderEnabled_ && reorderSourceIndex_ >= 0) {
+    if ((reorderEnabled_ || itemDragEnabled_) && reorderSourceIndex_ >= 0) {
         if (!reordering_ && detail::exceedsReorderDragThreshold(
                 event.position.x - reorderStartPoint_.x,
                 event.position.y - reorderStartPoint_.y)) {
             reordering_ = true;
+            reorderCurrentPoint_ = event.position;
+            if (itemDragEnabled_ && !contains(event.position)) {
+                externalDragging_ = true;
+                reorderTargetIndex_ = -1;
+                reorderInsertionIndex_ = -1;
+                invalidate();
+                emitItemDrag(ItemDragPhase::Started, event.position);
+                return true;
+            }
         }
         if (reordering_) {
-            updateReorderTarget(event.position);
+            reorderCurrentPoint_ = event.position;
+            if (externalDragging_) {
+                invalidate();
+                emitItemDrag(ItemDragPhase::Updated, event.position);
+                return true;
+            }
+            if (itemDragEnabled_ && !contains(event.position)) {
+                externalDragging_ = true;
+                reorderTargetIndex_ = -1;
+                reorderInsertionIndex_ = -1;
+                invalidate();
+                emitItemDrag(ItemDragPhase::Started, event.position);
+                return true;
+            }
+            if (reorderEnabled_) {
+                updateReorderTarget(event.position);
+            } else {
+                reorderTargetIndex_ = -1;
+                reorderInsertionIndex_ = -1;
+            }
             hoveredIndex_ = hitItemIndex(event.position);
             invalidate();
             return true;
@@ -308,8 +396,10 @@ bool VirtualList::onMouseDown(const MouseEvent& event) {
     if (pressedIndex_ < 0) {
         return false;
     }
-    if (event.button == MouseButton::Left && reorderEnabled_) {
+    if (event.button == MouseButton::Left
+        && (reorderEnabled_ || (itemDragEnabled_ && itemDragIds_.size() == items_.size()))) {
         reorderStartPoint_ = event.position;
+        reorderCurrentPoint_ = event.position;
         reorderSourceIndex_ = pressedIndex_;
         reorderTargetIndex_ = pressedIndex_;
     }
@@ -322,16 +412,34 @@ bool VirtualList::onMouseUp(const MouseEvent& event) {
         return false;
     }
     if (event.button == MouseButton::Left && reordering_) {
-        updateReorderTarget(event.position);
+        if (!externalDragging_ && reorderEnabled_ && contains(event.position)) {
+            updateReorderTarget(event.position);
+        } else {
+            reorderTargetIndex_ = -1;
+            reorderInsertionIndex_ = -1;
+        }
         const int source = reorderSourceIndex_;
         const int target = reorderTargetIndex_;
-        const auto callback = onReorderRequested_;
+        const std::wstring sourceId = source >= 0 && source < static_cast<int>(itemDragIds_.size())
+            ? itemDragIds_[static_cast<std::size_t>(source)]
+            : std::wstring{};
+        const bool externalDrop = externalDragging_;
+        const bool internalDrop = !externalDrop && reorderEnabled_ && contains(event.position);
+        const auto reorderCallback = onReorderRequested_;
+        const auto dragCallback = onItemDrag_;
+        const ItemDragEvent dragEvent{sourceId, ItemDragPhase::Dropped, event.position};
         pressedIndex_ = -1;
         pressedClickCount_ = 1;
         resetReorderState();
         invalidate();
-        if (source >= 0 && target >= 0 && source != target && callback) {
-            callback(source, target);
+        if (externalDrop) {
+            if (itemDragEnabled_ && !sourceId.empty() && dragCallback) {
+                dragCallback(dragEvent);
+            }
+        } else if (internalDrop) {
+            if (source >= 0 && target >= 0 && source != target && reorderCallback) {
+                reorderCallback(source, target);
+            }
         }
         return true;
     }
@@ -566,10 +674,21 @@ Rect VirtualList::verticalThumbRect(float width) const {
 
 void VirtualList::resetReorderState() {
     reordering_ = false;
+    externalDragging_ = false;
     reorderStartPoint_ = {};
+    reorderCurrentPoint_ = {};
     reorderSourceIndex_ = -1;
     reorderTargetIndex_ = -1;
     reorderInsertionIndex_ = -1;
+}
+
+void VirtualList::emitItemDrag(ItemDragPhase phase, Point position) {
+    if (!itemDragEnabled_ || !onItemDrag_ || reorderSourceIndex_ < 0
+        || reorderSourceIndex_ >= static_cast<int>(itemDragIds_.size())) {
+        return;
+    }
+    onItemDrag_(ItemDragEvent{
+        itemDragIds_[static_cast<std::size_t>(reorderSourceIndex_)], phase, position});
 }
 
 void VirtualList::updateReorderTarget(Point point) {
@@ -676,10 +795,21 @@ bool VirtualList::hasInteractionState() const {
 }
 
 void VirtualList::resetInteractionState() {
+    const int source = reorderSourceIndex_;
+    const bool notifyCancellation = externalDragging_ && itemDragEnabled_ && onItemDrag_
+        && source >= 0 && source < static_cast<int>(itemDragIds_.size());
+    const ItemDragEvent cancellation{
+        notifyCancellation ? itemDragIds_[static_cast<std::size_t>(source)] : std::wstring{},
+        ItemDragPhase::Cancelled,
+        reorderCurrentPoint_};
+    const auto callback = onItemDrag_;
     hoveredIndex_ = -1;
     pressedIndex_ = -1;
     pressedClickCount_ = 1;
     resetReorderState();
+    if (notifyCancellation) {
+        callback(cancellation);
+    }
 }
 
 } // namespace oneui

@@ -686,6 +686,16 @@ ONEUI_API void oneui_virtual_list_set_on_reorder_requested(
     OneUiWidget* list,
     OneUiReorderRequestedCallback callback,
     void* user_data);
+ONEUI_API int oneui_virtual_list_set_item_drag_ids_utf8(
+    OneUiWidget* list,
+    const OneUiUtf8String* ids,
+    size_t count);
+ONEUI_API void oneui_virtual_list_set_item_drag_enabled(OneUiWidget* list, int enabled);
+ONEUI_API int oneui_virtual_list_item_drag_enabled(OneUiWidget* list);
+ONEUI_API void oneui_virtual_list_set_on_item_drag_utf8(
+    OneUiWidget* list,
+    OneUiItemDragCallback callback,
+    void* user_data);
 
 ONEUI_API OneUiWidget* oneui_tree_view_create(void);
 ONEUI_API void oneui_tree_view_set_items_utf8(OneUiWidget* tree_view, const OneUiTreeItemUtf8* items, size_t count);

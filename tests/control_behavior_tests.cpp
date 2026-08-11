@@ -2610,6 +2610,89 @@ void testVirtualListReportsReorderRequestsWithoutMutatingSelection() {
     expectEqual("VirtualList keyboard reorder preserves selection", list.selectedIndex(), 2);
 }
 
+void testVirtualListEmitsStableExternalItemDragWithoutBreakingReorder() {
+    oneui::VirtualList list;
+    list.setItems({
+        {L"Alpha", L""},
+        {L"Beta", L""},
+        {L"Gamma", L""},
+    });
+    list.setRowHeight(40.0f);
+    list.setFrame(oneui::Rect{0.0f, 0.0f, 220.0f, 120.0f});
+    expectEqual(
+        "VirtualList rejects mismatched external drag IDs",
+        list.setItemDragIds({L"alpha", L"beta"}) ? 1 : 0,
+        0);
+    expectEqual(
+        "VirtualList rejects duplicate external drag IDs",
+        list.setItemDragIds({L"alpha", L"alpha", L"gamma"}) ? 1 : 0,
+        0);
+    expectEqual(
+        "VirtualList accepts stable external drag IDs",
+        list.setItemDragIds({L"alpha", L"beta", L"gamma"}) ? 1 : 0,
+        1);
+    list.setItemDragEnabled(true);
+    list.setReorderEnabled(true);
+
+    int reorderCount = 0;
+    list.setOnReorderRequested([&](int, int) { ++reorderCount; });
+    std::vector<oneui::ItemDragEvent> events;
+    list.setOnItemDrag([&](const oneui::ItemDragEvent& event) {
+        events.push_back(event);
+    });
+
+    const oneui::MouseEvent betaDown{
+        oneui::Point{40.0f, 60.0f}, oneui::MouseButton::Left};
+    list.onMouseDown(betaDown);
+    list.onMouseMove(oneui::MouseEvent{oneui::Point{230.0f, 60.0f}});
+    list.onMouseMove(oneui::MouseEvent{oneui::Point{250.0f, 66.0f}});
+    list.onMouseUp(oneui::MouseEvent{
+        oneui::Point{250.0f, 66.0f}, oneui::MouseButton::Left});
+
+    expectEqual("VirtualList external drag emits three phases", static_cast<int>(events.size()), 3);
+    if (events.size() == 3) {
+        expectEqual("VirtualList external drag starts once", events[0].phase == oneui::ItemDragPhase::Started ? 1 : 0, 1);
+        expectEqual("VirtualList external drag updates once", events[1].phase == oneui::ItemDragPhase::Updated ? 1 : 0, 1);
+        expectEqual("VirtualList external drag drops once", events[2].phase == oneui::ItemDragPhase::Dropped ? 1 : 0, 1);
+        expectEqual("VirtualList external drag keeps a stable ID", events[2].sourceId == L"beta" ? 1 : 0, 1);
+        expectNear("VirtualList external drag reports client x", events[2].position.x, 250.0f);
+        expectNear("VirtualList external drag reports client y", events[2].position.y, 66.0f);
+    }
+    expectEqual("VirtualList external drag does not request an internal reorder", reorderCount, 0);
+
+    list.onMouseDown(betaDown);
+    list.onMouseMove(oneui::MouseEvent{oneui::Point{40.0f, 105.0f}});
+    list.onMouseUp(oneui::MouseEvent{
+        oneui::Point{40.0f, 105.0f}, oneui::MouseButton::Left});
+    expectEqual("VirtualList internal drag still requests one reorder", reorderCount, 1);
+    expectEqual(
+        "VirtualList internal reorder does not leak external drag phases",
+        static_cast<int>(events.size()),
+        3);
+
+    list.onMouseDown(betaDown);
+    list.onMouseMove(oneui::MouseEvent{oneui::Point{230.0f, 60.0f}});
+    list.setItems({{L"Replacement", L""}});
+    expectEqual(
+        "VirtualList model reset cancels the active external drag",
+        static_cast<int>(events.size()),
+        5);
+    if (events.size() == 5) {
+        expectEqual(
+            "VirtualList model reset emits cancellation after start",
+            events[4].phase == oneui::ItemDragPhase::Cancelled ? 1 : 0,
+            1);
+        expectEqual(
+            "VirtualList model reset cancellation retains the old stable ID",
+            events[4].sourceId == L"beta" ? 1 : 0,
+            1);
+    }
+    expectEqual(
+        "VirtualList item reset clears stale external drag IDs",
+        list.setItemDragIds({L"replacement"}) ? 1 : 0,
+        1);
+}
+
 void testVirtualListReorderIndicatorUsesCssFocusStyle() {
     oneui::StyleSheet sheet;
     std::string error;
@@ -6480,6 +6563,7 @@ int main() {
     testVirtualListUsesStandardMultipleSelectionSemantics();
     testVirtualListExposesStandardRowCommands();
     testVirtualListReportsReorderRequestsWithoutMutatingSelection();
+    testVirtualListEmitsStableExternalItemDragWithoutBreakingReorder();
     testVirtualListReorderIndicatorUsesCssFocusStyle();
     testReorderableGridOwnsLayoutGestureAndCssIndicator();
     testReorderableGridEmitsExternalItemDragWithoutInternalReorder();
