@@ -203,6 +203,16 @@ pub type OneUiGridReorderRequestedCallback = Option<
         user_data: *mut c_void,
     ),
 >;
+pub type OneUiItemDragCallback = Option<
+    unsafe extern "C" fn(
+        source_id: *const c_char,
+        source_length: usize,
+        phase: c_int,
+        x: f32,
+        y: f32,
+        user_data: *mut c_void,
+    ),
+>;
 pub type OneUiPointerCallback =
     Option<unsafe extern "C" fn(event: *const OneUiPointerEvent, user_data: *mut c_void)>;
 
@@ -440,6 +450,13 @@ extern "C" {
     pub fn oneui_reorderable_grid_set_on_reorder_requested_utf8(
         grid: *mut OneUiWidget,
         callback: OneUiGridReorderRequestedCallback,
+        user_data: *mut c_void,
+    );
+    pub fn oneui_reorderable_grid_set_item_drag_enabled(grid: *mut OneUiWidget, enabled: c_int);
+    pub fn oneui_reorderable_grid_item_drag_enabled(grid: *mut OneUiWidget) -> c_int;
+    pub fn oneui_reorderable_grid_set_on_item_drag_utf8(
+        grid: *mut OneUiWidget,
+        callback: OneUiItemDragCallback,
         user_data: *mut c_void,
     );
     pub fn oneui_interactive_surface_create() -> *mut OneUiWidget;
@@ -838,6 +855,17 @@ extern "C" {
         callback: OneUiTreeReorderRequestedCallback,
         user_data: *mut c_void,
     );
+    pub fn oneui_tree_view_update_external_drop_target(
+        tree_view: *mut OneUiWidget,
+        x: f32,
+        y: f32,
+    );
+    pub fn oneui_tree_view_clear_external_drop_target(tree_view: *mut OneUiWidget);
+    pub fn oneui_tree_view_external_drop_target_id_utf8(
+        tree_view: *mut OneUiWidget,
+        buffer: *mut c_char,
+        buffer_len: usize,
+    ) -> usize;
 
     pub fn oneui_clipboard_set_text_utf8(text: OneUiUtf8String) -> c_int;
     pub fn oneui_clipboard_get_text_utf8(buffer: *mut c_char, buffer_len: usize) -> usize;

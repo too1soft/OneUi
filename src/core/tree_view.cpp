@@ -143,6 +143,7 @@ void TreeView::setItems(std::vector<TreeItem> items) {
     hoveredIndex_ = -1;
     pressedIndex_ = -1;
     pressedToggle_ = false;
+    clearExternalDropTarget();
     resetReorderState();
     ensureSelectionVisible();
     updatePreferredHeight();
@@ -220,6 +221,33 @@ void TreeView::setOnReorderRequested(
     onReorderRequested_ = std::move(callback);
 }
 
+void TreeView::updateExternalDropTarget(Point point) {
+    const auto visible = visibleItems();
+    const int next = hitItemIndex(point, visible);
+    const std::wstring nextId = next >= 0
+        ? items_[visible[static_cast<std::size_t>(next)].index].id
+        : std::wstring{};
+    if (next == externalDropTargetIndex_ && nextId == externalDropTargetId_) {
+        return;
+    }
+    externalDropTargetIndex_ = next;
+    externalDropTargetId_ = nextId;
+    invalidate();
+}
+
+void TreeView::clearExternalDropTarget() {
+    if (externalDropTargetIndex_ < 0 && externalDropTargetId_.empty()) {
+        return;
+    }
+    externalDropTargetIndex_ = -1;
+    externalDropTargetId_.clear();
+    invalidate();
+}
+
+const std::wstring& TreeView::externalDropTargetId() const {
+    return externalDropTargetId_;
+}
+
 std::size_t TreeView::visibleItemCount() const {
     return visibleItems().size();
 }
@@ -248,7 +276,9 @@ void TreeView::paint(Canvas& canvas) {
         const auto& visibleItem = visible[static_cast<std::size_t>(visibleIndex)];
         const auto& item = items_[visibleItem.index];
         const bool selected = item.id == selectedId_;
-        const TreeViewStyle itemStyle = resolvedItemStyle(selected, visibleIndex == hoveredIndex_, visibleIndex == pressedIndex_);
+        const bool hovered = visibleIndex == hoveredIndex_
+            || visibleIndex == externalDropTargetIndex_;
+        const TreeViewStyle itemStyle = resolvedItemStyle(selected, hovered, visibleIndex == pressedIndex_);
         const Rect row = itemRect(visibleIndex);
         if (row.y >= rect.y + rect.height) {
             break;
@@ -729,7 +759,7 @@ void TreeView::updatePreferredHeight() {
 }
 
 bool TreeView::hasInteractionState() const {
-    return hoveredIndex_ >= 0 || pressedIndex_ >= 0;
+    return hoveredIndex_ >= 0 || pressedIndex_ >= 0 || externalDropTargetIndex_ >= 0;
 }
 
 void TreeView::resetInteractionState() {
@@ -737,6 +767,7 @@ void TreeView::resetInteractionState() {
     pressedIndex_ = -1;
     pressedToggle_ = false;
     resetReorderState();
+    clearExternalDropTarget();
 }
 
 } // namespace oneui

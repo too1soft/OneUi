@@ -3374,6 +3374,34 @@ std::size_t oneui_tree_view_selected_id_utf8(OneUiWidget* tree_view, char* buffe
     return id.size() + 1;
 }
 
+void oneui_tree_view_update_external_drop_target(
+    OneUiWidget* tree_view,
+    float x,
+    float y) {
+    if (auto* nativeTree = asWidget<oneui::TreeView>(tree_view)) {
+        nativeTree->updateExternalDropTarget(oneui::Point{x, y});
+    }
+}
+
+void oneui_tree_view_clear_external_drop_target(OneUiWidget* tree_view) {
+    if (auto* nativeTree = asWidget<oneui::TreeView>(tree_view)) {
+        nativeTree->clearExternalDropTarget();
+    }
+}
+
+std::size_t oneui_tree_view_external_drop_target_id_utf8(
+    OneUiWidget* tree_view,
+    char* buffer,
+    std::size_t buffer_len) {
+    const auto* nativeTree = asWidget<oneui::TreeView>(tree_view);
+    if (!nativeTree) {
+        return 0;
+    }
+    const std::string id = utf8FromWide(nativeTree->externalDropTargetId());
+    copyUtf8Field(id, buffer, buffer_len);
+    return id.size() + 1;
+}
+
 void oneui_tree_view_set_on_selection_changed_utf8(
     OneUiWidget* tree_view,
     OneUiUtf8TextCallback callback,
@@ -3568,6 +3596,43 @@ void oneui_reorderable_grid_set_on_reorder_requested_utf8(
                     const std::string sourceUtf8 = utf8FromWide(source);
                     callback(
                         sourceUtf8.data(), sourceUtf8.size(), target, user_data);
+                }}
+            : nullptr);
+}
+
+void oneui_reorderable_grid_set_item_drag_enabled(OneUiWidget* grid, int enabled) {
+    if (auto* nativeGrid = asWidget<oneui::ReorderableGrid>(grid)) {
+        nativeGrid->setItemDragEnabled(enabled != 0);
+    }
+}
+
+int oneui_reorderable_grid_item_drag_enabled(OneUiWidget* grid) {
+    if (const auto* nativeGrid = asWidget<oneui::ReorderableGrid>(grid)) {
+        return nativeGrid->itemDragEnabled() ? 1 : 0;
+    }
+    return 0;
+}
+
+void oneui_reorderable_grid_set_on_item_drag_utf8(
+    OneUiWidget* grid,
+    OneUiItemDragCallback callback,
+    void* user_data) {
+    auto* nativeGrid = asWidget<oneui::ReorderableGrid>(grid);
+    if (!nativeGrid) {
+        return;
+    }
+    nativeGrid->setOnItemDrag(
+        callback
+            ? std::function<void(const oneui::ItemDragEvent&)>{
+                [callback, user_data](const oneui::ItemDragEvent& event) {
+                    const std::string sourceUtf8 = utf8FromWide(event.sourceId);
+                    callback(
+                        sourceUtf8.data(),
+                        sourceUtf8.size(),
+                        static_cast<int>(event.phase),
+                        event.position.x,
+                        event.position.y,
+                        user_data);
                 }}
             : nullptr);
 }

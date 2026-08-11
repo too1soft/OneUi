@@ -17,6 +17,19 @@ struct ReorderableGridItem {
     std::shared_ptr<Widget> content;
 };
 
+enum class ItemDragPhase {
+    Started = 0,
+    Updated = 1,
+    Dropped = 2,
+    Cancelled = 3,
+};
+
+struct ItemDragEvent {
+    std::wstring sourceId;
+    ItemDragPhase phase = ItemDragPhase::Updated;
+    Point position;
+};
+
 /// A responsive native grid for arbitrary child widgets. The control owns
 /// layout, drag gesture recognition, hit testing and insertion feedback; the
 /// product owns its domain order and applies accepted reorder requests.
@@ -41,6 +54,9 @@ public:
     void setReorderEnabled(bool enabled);
     bool reorderEnabled() const;
     void setOnReorderRequested(std::function<void(const std::wstring&, int)> callback);
+    void setItemDragEnabled(bool enabled);
+    bool itemDragEnabled() const;
+    void setOnItemDrag(std::function<void(const ItemDragEvent&)> callback);
 
     void paint(Canvas& canvas) override;
     bool onMouseMove(const MouseEvent& event) override;
@@ -56,6 +72,7 @@ private:
     int insertionIndexAt(Point point) const;
     void updateReorderTarget(Point point);
     void resetReorderState();
+    void emitItemDrag(ItemDragPhase phase, Point position);
     void updatePreferredHeight();
     int effectiveColumnCount(float contentWidth) const;
     Insets padding() const;
@@ -73,12 +90,16 @@ private:
     float itemHeight_ = 160.0f;
     StyleBox style_;
     bool reorderEnabled_ = false;
+    bool itemDragEnabled_ = false;
     bool reordering_ = false;
+    bool externalDragging_ = false;
     Point reorderStartPoint_;
+    Point reorderCurrentPoint_;
     int reorderSourceIndex_ = -1;
     int reorderTargetIndex_ = -1;
     int reorderInsertionIndex_ = -1;
     std::function<void(const std::wstring&, int)> onReorderRequested_;
+    std::function<void(const ItemDragEvent&)> onItemDrag_;
 };
 
 } // namespace oneui

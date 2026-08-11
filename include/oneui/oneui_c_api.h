@@ -36,6 +36,13 @@ typedef void (*OneUiGridReorderRequestedCallback)(
     size_t source_length,
     int target_index,
     void* user_data);
+typedef void (*OneUiItemDragCallback)(
+    const char* source_id,
+    size_t source_length,
+    int phase,
+    float x,
+    float y,
+    void* user_data);
 typedef struct OneUiPointerEvent OneUiPointerEvent;
 typedef void (*OneUiPointerCallback)(const OneUiPointerEvent* event, void* user_data);
 
@@ -700,6 +707,16 @@ ONEUI_API void oneui_tree_view_set_on_reorder_requested_utf8(
     OneUiWidget* tree_view,
     OneUiTreeReorderRequestedCallback callback,
     void* user_data);
+ONEUI_API void oneui_tree_view_update_external_drop_target(
+    OneUiWidget* tree_view,
+    float x,
+    float y);
+ONEUI_API void oneui_tree_view_clear_external_drop_target(OneUiWidget* tree_view);
+/* Returns required bytes including the trailing NUL; returns 0 for an invalid view. */
+ONEUI_API size_t oneui_tree_view_external_drop_target_id_utf8(
+    OneUiWidget* tree_view,
+    char* buffer,
+    size_t buffer_len);
 
 ONEUI_API OneUiWidget* oneui_table_create(void);
 ONEUI_API void oneui_table_set_columns(OneUiWidget* table, const wchar_t* columns);
@@ -730,6 +747,12 @@ ONEUI_API int oneui_reorderable_grid_reorder_enabled(OneUiWidget* grid);
 ONEUI_API void oneui_reorderable_grid_set_on_reorder_requested_utf8(
     OneUiWidget* grid,
     OneUiGridReorderRequestedCallback callback,
+    void* user_data);
+ONEUI_API void oneui_reorderable_grid_set_item_drag_enabled(OneUiWidget* grid, int enabled);
+ONEUI_API int oneui_reorderable_grid_item_drag_enabled(OneUiWidget* grid);
+ONEUI_API void oneui_reorderable_grid_set_on_item_drag_utf8(
+    OneUiWidget* grid,
+    OneUiItemDragCallback callback,
     void* user_data);
 
 ONEUI_API OneUiWidget* oneui_interactive_surface_create();

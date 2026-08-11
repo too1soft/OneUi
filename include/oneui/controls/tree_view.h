@@ -43,6 +43,9 @@ public:
     bool reorderEnabled() const;
     void setOnReorderRequested(
         std::function<void(const std::wstring&, const std::wstring&)> callback);
+    void updateExternalDropTarget(Point point);
+    void clearExternalDropTarget();
+    const std::wstring& externalDropTargetId() const;
 
     std::size_t visibleItemCount() const;
     float contentHeight() const;
@@ -98,6 +101,8 @@ private:
     int reorderSourceIndex_ = -1;
     int reorderTargetIndex_ = -1;
     int reorderInsertionIndex_ = -1;
+    int externalDropTargetIndex_ = -1;
+    std::wstring externalDropTargetId_;
     std::optional<TreeViewStyleOverride> styleOverride_;
     std::function<void(const std::wstring&)> onSelectionChanged_;
     std::function<void(const std::wstring&, bool)> onExpansionChanged_;

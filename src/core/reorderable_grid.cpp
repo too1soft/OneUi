@@ -142,9 +142,27 @@ void ReorderableGrid::setOnReorderRequested(
     onReorderRequested_ = std::move(callback);
 }
 
+void ReorderableGrid::setItemDragEnabled(bool enabled) {
+    if (itemDragEnabled_ == enabled) {
+        return;
+    }
+    itemDragEnabled_ = enabled;
+    resetReorderState();
+    invalidate();
+}
+
+bool ReorderableGrid::itemDragEnabled() const {
+    return itemDragEnabled_;
+}
+
+void ReorderableGrid::setOnItemDrag(
+    std::function<void(const ItemDragEvent&)> callback) {
+    onItemDrag_ = std::move(callback);
+}
+
 void ReorderableGrid::paint(Canvas& canvas) {
     View::paint(canvas);
-    if (!reordering_ || reorderInsertionIndex_ < 0 || items_.empty()) {
+    if (!reorderEnabled_ || !reordering_ || reorderInsertionIndex_ < 0 || items_.empty()) {
         return;
     }
 
@@ -168,15 +186,51 @@ bool ReorderableGrid::onMouseMove(const MouseEvent& event) {
     if (!interactive()) {
         return false;
     }
-    if (reorderEnabled_ && reorderSourceIndex_ >= 0) {
+    if ((reorderEnabled_ || itemDragEnabled_) && reorderSourceIndex_ >= 0) {
         if (!reordering_ && detail::exceedsReorderDragThreshold(
                 event.position.x - reorderStartPoint_.x,
                 event.position.y - reorderStartPoint_.y)) {
             reordering_ = true;
+            reorderCurrentPoint_ = event.position;
             View::resetInteractionState();
+            if (itemDragEnabled_ && !contains(event.position)) {
+                externalDragging_ = true;
+                reorderTargetIndex_ = -1;
+                reorderInsertionIndex_ = -1;
+                invalidate();
+                emitItemDrag(ItemDragPhase::Started, event.position);
+                return true;
+            }
+            if (reorderEnabled_) {
+                updateReorderTarget(event.position);
+            } else {
+                reorderTargetIndex_ = -1;
+                reorderInsertionIndex_ = -1;
+            }
+            invalidate();
+            return true;
         }
         if (reordering_) {
-            updateReorderTarget(event.position);
+            reorderCurrentPoint_ = event.position;
+            if (externalDragging_) {
+                invalidate();
+                emitItemDrag(ItemDragPhase::Updated, event.position);
+                return true;
+            }
+            if (itemDragEnabled_ && !contains(event.position)) {
+                externalDragging_ = true;
+                reorderTargetIndex_ = -1;
+                reorderInsertionIndex_ = -1;
+                invalidate();
+                emitItemDrag(ItemDragPhase::Started, event.position);
+                return true;
+            }
+            if (reorderEnabled_) {
+                updateReorderTarget(event.position);
+            } else {
+                reorderTargetIndex_ = -1;
+                reorderInsertionIndex_ = -1;
+            }
             invalidate();
             return true;
         }
@@ -189,10 +243,11 @@ bool ReorderableGrid::onMouseDown(const MouseEvent& event) {
         return false;
     }
     resetReorderState();
-    if (event.button == MouseButton::Left && reorderEnabled_) {
+    if (event.button == MouseButton::Left && (reorderEnabled_ || itemDragEnabled_)) {
         reorderSourceIndex_ = itemIndexAt(event.position);
         if (reorderSourceIndex_ >= 0) {
             reorderStartPoint_ = event.position;
+            reorderCurrentPoint_ = event.position;
             reorderTargetIndex_ = reorderSourceIndex_;
             reorderInsertionIndex_ = reorderSourceIndex_;
         }
@@ -206,17 +261,32 @@ bool ReorderableGrid::onMouseUp(const MouseEvent& event) {
         return false;
     }
     if (event.button == MouseButton::Left && reordering_) {
-        updateReorderTarget(event.position);
+        if (!externalDragging_ && reorderEnabled_ && contains(event.position)) {
+            updateReorderTarget(event.position);
+        } else {
+            reorderTargetIndex_ = -1;
+            reorderInsertionIndex_ = -1;
+        }
         const int source = reorderSourceIndex_;
         const int target = reorderTargetIndex_;
         const std::wstring sourceId = source >= 0 && source < itemCount()
             ? items_[static_cast<std::size_t>(source)].id
             : std::wstring{};
-        const auto callback = onReorderRequested_;
+        const bool externalDrop = externalDragging_;
+        const bool internalDrop = !externalDrop && reorderEnabled_ && contains(event.position);
+        const auto reorderCallback = onReorderRequested_;
+        const auto dragCallback = onItemDrag_;
+        const ItemDragEvent dragEvent{sourceId, ItemDragPhase::Dropped, event.position};
         resetReorderState();
         invalidate();
-        if (!sourceId.empty() && target >= 0 && source != target && callback) {
-            callback(sourceId, target);
+        if (externalDrop) {
+            if (itemDragEnabled_ && !sourceId.empty() && dragCallback) {
+                dragCallback(dragEvent);
+            }
+        } else if (internalDrop) {
+            if (!sourceId.empty() && target >= 0 && source != target && reorderCallback) {
+                reorderCallback(sourceId, target);
+            }
         }
         return true;
     }
@@ -250,8 +320,20 @@ void ReorderableGrid::layoutChildren() {
 }
 
 void ReorderableGrid::resetInteractionState() {
+    const int source = reorderSourceIndex_;
+    const bool notifyCancellation = externalDragging_ && itemDragEnabled_ && onItemDrag_
+        && source >= 0 && source < itemCount();
+    const ItemDragEvent event{
+        notifyCancellation ? items_[static_cast<std::size_t>(source)].id : std::wstring{},
+        ItemDragPhase::Cancelled,
+        reorderCurrentPoint_};
+    const auto callback = onItemDrag_;
     View::resetInteractionState();
     resetReorderState();
+    invalidate();
+    if (notifyCancellation) {
+        callback(event);
+    }
 }
 
 int ReorderableGrid::itemIndexAt(Point point) const {
@@ -302,10 +384,23 @@ void ReorderableGrid::updateReorderTarget(Point point) {
 
 void ReorderableGrid::resetReorderState() {
     reordering_ = false;
+    externalDragging_ = false;
     reorderStartPoint_ = {};
+    reorderCurrentPoint_ = {};
     reorderSourceIndex_ = -1;
     reorderTargetIndex_ = -1;
     reorderInsertionIndex_ = -1;
+}
+
+void ReorderableGrid::emitItemDrag(ItemDragPhase phase, Point position) {
+    if (!itemDragEnabled_ || !onItemDrag_ || reorderSourceIndex_ < 0
+        || reorderSourceIndex_ >= itemCount()) {
+        return;
+    }
+    onItemDrag_(ItemDragEvent{
+        items_[static_cast<std::size_t>(reorderSourceIndex_)].id,
+        phase,
+        position});
 }
 
 void ReorderableGrid::updatePreferredHeight() {

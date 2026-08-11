@@ -55,6 +55,13 @@ The safe Rust binding exposes `TreeView` and `TreeItem` with `set_items`,
 Callback panics never cross the C ABI, and callbacks are cleared before the
 native widget is destroyed.
 
+External drag sources may use `update_external_drop_target(x, y)`,
+`external_drop_target_id()`, and `clear_external_drop_target()`. Coordinates
+are client-space logical units shared by controls in the same OneUI window.
+The target is transient UI state only: TreeView never moves product records,
+and it reuses the configured hover style instead of introducing a separate
+hard-coded drag color.
+
 `contentHeight()` / `oneui_tree_view_content_height` / `TreeView::content_height`
 report the height of the currently visible rows. When a tree is put inside a
 `ScrollView`, use this value as the content height after changing its items or
@@ -64,5 +71,7 @@ expansion state.
 
 `TreeView` is intended for navigation and moderately sized grouped data, such
 as host groups, folders, and policies. It intentionally does not implement
-editing, drag-and-drop, checkboxes, or large-data virtualization yet; those are
-separate components and should not be smuggled into a navigation primitive.
+inline editing, checkboxes, or large-data virtualization. It supports internal
+reorder requests and external drop-target presentation, but domain validation
+and persistence remain product responsibilities and must not be smuggled into
+the navigation primitive.

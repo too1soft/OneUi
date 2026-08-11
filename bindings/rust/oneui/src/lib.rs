@@ -1795,8 +1795,39 @@ pub struct GridReorderRequest {
     pub target_index: usize,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ItemDragPhase {
+    Started,
+    Updated,
+    Dropped,
+    Cancelled,
+}
+
+impl ItemDragPhase {
+    fn from_raw(value: std::ffi::c_int) -> Self {
+        match value {
+            0 => Self::Started,
+            1 => Self::Updated,
+            2 => Self::Dropped,
+            _ => Self::Cancelled,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ItemDragEvent {
+    pub source_id: String,
+    pub phase: ItemDragPhase,
+    pub x: f32,
+    pub y: f32,
+}
+
 struct GridReorderRequestedCallback {
     handler: Box<dyn FnMut(GridReorderRequest) + 'static>,
+}
+
+struct ItemDragCallback {
+    handler: Box<dyn FnMut(ItemDragEvent) + 'static>,
 }
 
 unsafe extern "C" fn run_grid_reorder_requested_callback(
@@ -1819,11 +1850,34 @@ unsafe extern "C" fn run_grid_reorder_requested_callback(
     });
 }
 
+unsafe extern "C" fn run_item_drag_callback(
+    source_id: *const std::ffi::c_char,
+    source_length: usize,
+    phase: std::ffi::c_int,
+    x: f32,
+    y: f32,
+    user_data: *mut std::ffi::c_void,
+) {
+    if source_id.is_null() || user_data.is_null() {
+        return;
+    }
+    let source = unsafe { std::slice::from_raw_parts(source_id.cast::<u8>(), source_length) };
+    let event = ItemDragEvent {
+        source_id: String::from_utf8_lossy(source).into_owned(),
+        phase: ItemDragPhase::from_raw(phase),
+        x,
+        y,
+    };
+    let callback = unsafe { &mut *user_data.cast::<ItemDragCallback>() };
+    run_callback_guarded("reorderable_grid.item_drag", || (callback.handler)(event));
+}
+
 /// A native responsive grid that lays out arbitrary widgets and emits
 /// reorder requests without mutating product-owned domain data.
 pub struct ReorderableGrid {
     widget: Widget,
     reorder_callback: Option<Box<GridReorderRequestedCallback>>,
+    item_drag_callback: Option<Box<ItemDragCallback>>,
 }
 
 impl ReorderableGrid {
@@ -1832,6 +1886,7 @@ impl ReorderableGrid {
         Ok(Self {
             widget,
             reorder_callback: None,
+            item_drag_callback: None,
         })
     }
 
@@ -1927,6 +1982,53 @@ impl ReorderableGrid {
         self.reorder_callback = None;
     }
 
+    pub fn set_item_drag_enabled(&self, enabled: bool) {
+        unsafe {
+            sys::oneui_reorderable_grid_set_item_drag_enabled(
+                self.widget.as_raw(),
+                i32::from(enabled),
+            )
+        };
+    }
+
+    pub fn item_drag_enabled(&self) -> bool {
+        unsafe { sys::oneui_reorderable_grid_item_drag_enabled(self.widget.as_raw()) != 0 }
+    }
+
+    pub fn set_on_item_drag<F>(&mut self, callback: F)
+    where
+        F: FnMut(ItemDragEvent) + 'static,
+    {
+        self.clear_on_item_drag();
+        self.item_drag_callback = Some(Box::new(ItemDragCallback {
+            handler: Box::new(callback),
+        }));
+        let user_data = (self
+            .item_drag_callback
+            .as_deref_mut()
+            .expect("item drag callback was just installed")
+            as *mut ItemDragCallback)
+            .cast();
+        unsafe {
+            sys::oneui_reorderable_grid_set_on_item_drag_utf8(
+                self.widget.as_raw(),
+                Some(run_item_drag_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn clear_on_item_drag(&mut self) {
+        unsafe {
+            sys::oneui_reorderable_grid_set_on_item_drag_utf8(
+                self.widget.as_raw(),
+                None,
+                std::ptr::null_mut(),
+            )
+        };
+        self.item_drag_callback = None;
+    }
+
     pub fn as_widget(&self) -> &Widget {
         &self.widget
     }
@@ -1934,6 +2036,7 @@ impl ReorderableGrid {
 
 impl Drop for ReorderableGrid {
     fn drop(&mut self) {
+        self.clear_on_item_drag();
         self.clear_on_reorder_requested();
     }
 }
@@ -4707,6 +4810,45 @@ impl TreeView {
         String::from_utf8_lossy(&bytes).into_owned()
     }
 
+    /// Updates the externally dragged item's drop target using client-space coordinates.
+    ///
+    /// The returned ID is empty when the pointer is outside a visible row. This API only
+    /// owns transient presentation state; product code remains responsible for validating
+    /// and applying the domain operation when the drag is dropped.
+    pub fn update_external_drop_target(&self, x: f32, y: f32) -> String {
+        unsafe {
+            sys::oneui_tree_view_update_external_drop_target(self.widget.as_raw(), x, y)
+        };
+        self.external_drop_target_id()
+    }
+
+    pub fn clear_external_drop_target(&self) {
+        unsafe { sys::oneui_tree_view_clear_external_drop_target(self.widget.as_raw()) };
+    }
+
+    pub fn external_drop_target_id(&self) -> String {
+        let required = unsafe {
+            sys::oneui_tree_view_external_drop_target_id_utf8(
+                self.widget.as_raw(),
+                std::ptr::null_mut(),
+                0,
+            )
+        };
+        if required <= 1 {
+            return String::new();
+        }
+        let mut bytes = vec![0u8; required];
+        unsafe {
+            sys::oneui_tree_view_external_drop_target_id_utf8(
+                self.widget.as_raw(),
+                bytes.as_mut_ptr().cast(),
+                bytes.len(),
+            )
+        };
+        bytes.pop();
+        String::from_utf8_lossy(&bytes).into_owned()
+    }
+
     pub fn set_on_selection_changed<F>(&mut self, callback: F)
     where
         F: FnMut(String) + 'static,
@@ -5178,11 +5320,13 @@ mod tests {
 
     #[test]
     fn configures_a_native_reorderable_grid_without_product_geometry() {
-        let grid = ReorderableGrid::new().expect("grid should be created");
+        let mut grid = ReorderableGrid::new().expect("grid should be created");
         grid.set_column_count(2);
         grid.set_gaps(12.0, 8.0);
         grid.set_item_height(40.0);
         grid.set_reorder_enabled(true);
+        grid.set_item_drag_enabled(true);
+        grid.set_on_item_drag(|_| {});
 
         let first = Panel::new().expect("first panel should be created");
         let second = Panel::new().expect("second panel should be created");
@@ -5192,6 +5336,7 @@ mod tests {
         grid.add_item("gamma", third.as_widget());
 
         assert!(grid.reorder_enabled());
+        assert!(grid.item_drag_enabled());
         assert!((grid.content_height() - 88.0).abs() < 0.001);
         assert!(grid.move_item("alpha", 2));
         assert!(!grid.move_item("missing", 0));
@@ -5518,6 +5663,9 @@ mod tests {
         ]);
         tree.set_selected_id("production");
         assert_eq!(tree.selected_id(), "production");
+        assert_eq!(tree.update_external_drop_target(-1.0, -1.0), "");
+        assert_eq!(tree.external_drop_target_id(), "");
+        tree.clear_external_drop_target();
         assert_eq!(tree.content_height(), 64.0);
         tree.as_widget().set_preferred_size(240.0, 0.0);
         window.set_content(tree.as_widget());

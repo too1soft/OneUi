@@ -2707,6 +2707,11 @@ void testReorderableGridOwnsLayoutGestureAndCssIndicator() {
         sourceId = source;
         targetIndex = target;
     });
+    int externalDragEventCount = 0;
+    grid.setItemDragEnabled(true);
+    grid.setOnItemDrag([&](const oneui::ItemDragEvent&) {
+        ++externalDragEventCount;
+    });
 
     const oneui::MouseEvent betaDown{
         oneui::Point{160.0f, 40.0f}, oneui::MouseButton::Left};
@@ -2738,6 +2743,7 @@ void testReorderableGridOwnsLayoutGestureAndCssIndicator() {
     expectEqual("ReorderableGrid reports a stable source ID", sourceId == L"beta" ? 1 : 0, 1);
     expectEqual("ReorderableGrid reports the final target index", targetIndex, 3);
     expectEqual("ReorderableGrid drag suppresses child activation", activationCount, 1);
+    expectEqual("ReorderableGrid internal reorder does not leak external drag phases", externalDragEventCount, 0);
     const auto indicator = std::find_if(
         dragCanvas.lines.begin(), dragCanvas.lines.end(), [](const DrawLineCall& line) {
             return sameColor(line.color, oneui::Color{34, 211, 238});
@@ -2764,6 +2770,41 @@ void testReorderableGridOwnsLayoutGestureAndCssIndicator() {
         "ReorderableGrid clears CSS geometry without mutating API defaults",
         grid.contentHeight(),
         320.0f);
+}
+
+void testReorderableGridEmitsExternalItemDragWithoutInternalReorder() {
+    oneui::ReorderableGrid grid;
+    grid.setColumnCount(1);
+    grid.setFrame(oneui::Rect{0.0f, 0.0f, 180.0f, 100.0f});
+    grid.setReorderEnabled(false);
+    grid.setItemDragEnabled(true);
+    grid.addItem(oneui::ReorderableGridItem{
+        L"host-42", std::make_shared<oneui::InteractiveSurface>()});
+    RecordingCanvas canvas;
+    grid.paint(canvas);
+
+    std::vector<oneui::ItemDragEvent> events;
+    grid.setOnItemDrag([&](const oneui::ItemDragEvent& event) {
+        events.push_back(event);
+    });
+    grid.onMouseDown(oneui::MouseEvent{
+        oneui::Point{40.0f, 30.0f}, oneui::MouseButton::Left});
+    grid.onMouseMove(oneui::MouseEvent{oneui::Point{50.0f, 42.0f}});
+    grid.onMouseMove(oneui::MouseEvent{oneui::Point{220.0f, 60.0f}});
+    grid.onMouseMove(oneui::MouseEvent{oneui::Point{230.0f, 64.0f}});
+    grid.onMouseUp(oneui::MouseEvent{
+        oneui::Point{230.0f, 64.0f}, oneui::MouseButton::Left});
+
+    expectEqual("ReorderableGrid external drag emits three phases", static_cast<int>(events.size()), 3);
+    if (events.size() == 3) {
+        expectEqual("ReorderableGrid external drag starts once", events[0].phase == oneui::ItemDragPhase::Started ? 1 : 0, 1);
+        expectEqual("ReorderableGrid external drag updates once", events[1].phase == oneui::ItemDragPhase::Updated ? 1 : 0, 1);
+        expectEqual("ReorderableGrid external drag drops once", events[2].phase == oneui::ItemDragPhase::Dropped ? 1 : 0, 1);
+        expectEqual("ReorderableGrid external drag keeps a stable ID", events[2].sourceId == L"host-42" ? 1 : 0, 1);
+        expectNear("ReorderableGrid external drag reports client x", events[2].position.x, 230.0f);
+        expectNear("ReorderableGrid external drag reports client y", events[2].position.y, 64.0f);
+    }
+
 }
 
 void testPointerActivationUsesSystemClickCountAndSeparateContextAction() {
@@ -3036,6 +3077,35 @@ void testTreeViewReportsStableReorderIdsAndPreservesToggleBehavior() {
     expectEqual("TreeView Alt+Up emits a reorder request", reorderCount, 2);
     expectEqual("TreeView keyboard reorder source uses selected ID", sourceId == L"beta" ? 1 : 0, 1);
     expectEqual("TreeView keyboard reorder target uses adjacent ID", targetId == L"alpha" ? 1 : 0, 1);
+}
+
+void testTreeViewOwnsTransientExternalDropTargetState() {
+    oneui::TreeView tree;
+    tree.setItems({
+        oneui::TreeItem{L"all", L"", L"All hosts", L"", true},
+        oneui::TreeItem{L"group:platform", L"", L"Platform", L"", true},
+        oneui::TreeItem{L"group:database", L"", L"Database", L"", true},
+    });
+    tree.setFrame(oneui::Rect{20.0f, 40.0f, 220.0f, 96.0f});
+
+    tree.updateExternalDropTarget(oneui::Point{80.0f, 88.0f});
+    expectEqual(
+        "TreeView external drop target uses the visible row stable ID",
+        tree.externalDropTargetId() == L"group:platform" ? 1 : 0,
+        1);
+
+    tree.updateExternalDropTarget(oneui::Point{260.0f, 88.0f});
+    expectEqual(
+        "TreeView clears the external target outside its frame",
+        tree.externalDropTargetId().empty() ? 1 : 0,
+        1);
+
+    tree.updateExternalDropTarget(oneui::Point{80.0f, 120.0f});
+    tree.clearExternalDropTarget();
+    expectEqual(
+        "TreeView exposes explicit external target cleanup",
+        tree.externalDropTargetId().empty() ? 1 : 0,
+        1);
 }
 
 void testTableStyleOverridePaintsCustomColorsAndGeometry() {
@@ -6412,10 +6482,12 @@ int main() {
     testVirtualListReportsReorderRequestsWithoutMutatingSelection();
     testVirtualListReorderIndicatorUsesCssFocusStyle();
     testReorderableGridOwnsLayoutGestureAndCssIndicator();
+    testReorderableGridEmitsExternalItemDragWithoutInternalReorder();
     testPointerActivationUsesSystemClickCountAndSeparateContextAction();
     testVirtualListCssControlsCompactTypographyAndScrollbar();
     testTreeViewStyleAdapterSharesListContract();
     testTreeViewReportsStableReorderIdsAndPreservesToggleBehavior();
+    testTreeViewOwnsTransientExternalDropTargetState();
     testTableStyleOverridePaintsCustomColorsAndGeometry();
     testTableEmptyStyleOverrideKeepsDefaultPaint();
     testTableDisabledStyleAndClearRestoresDefault();
