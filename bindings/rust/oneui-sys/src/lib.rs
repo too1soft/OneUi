@@ -5,7 +5,7 @@
 
 use std::ffi::{c_char, c_float, c_int, c_uint, c_ushort, c_void};
 
-pub const UTF8_ABI_VERSION: c_uint = 8;
+pub const UTF8_ABI_VERSION: c_uint = 9;
 
 #[repr(C)]
 pub struct OneUiWindow {
@@ -53,6 +53,15 @@ pub struct OneUiColor {
     pub g: u8,
     pub b: u8,
     pub a: u8,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct OneUiRect {
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
 }
 
 #[repr(C)]
@@ -739,6 +748,10 @@ extern "C" {
         column: c_ushort,
         visible: c_int,
     );
+    pub fn oneui_terminal_view_text_input_caret_rect(
+        view: *mut OneUiWidget,
+        out_rect: *mut OneUiRect,
+    ) -> c_int;
     pub fn oneui_terminal_view_select_all(view: *mut OneUiWidget);
     pub fn oneui_terminal_view_copy_selection(view: *mut OneUiWidget) -> c_int;
     pub fn oneui_terminal_view_paste_clipboard(view: *mut OneUiWidget) -> c_int;

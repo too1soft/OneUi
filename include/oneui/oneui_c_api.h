@@ -147,6 +147,13 @@ typedef struct OneUiInsets {
     float left;
 } OneUiInsets;
 
+typedef struct OneUiRect {
+    float x;
+    float y;
+    float width;
+    float height;
+} OneUiRect;
+
 typedef struct OneUiColor {
     unsigned char r;
     unsigned char g;
@@ -364,7 +371,7 @@ enum {
     OneUiTerminalCellOverline = 1u << 11
 };
 
-#define ONEUI_UTF8_ABI_VERSION 8u
+#define ONEUI_UTF8_ABI_VERSION 9u
 
 ONEUI_API const char* oneui_version(void);
 ONEUI_API unsigned int oneui_utf8_abi_version(void);
@@ -920,6 +927,10 @@ ONEUI_API void oneui_terminal_view_set_cursor(
     unsigned short row,
     unsigned short column,
     int visible);
+/* Returns the terminal's IME/text-input caret rectangle in window coordinates. */
+ONEUI_API int oneui_terminal_view_text_input_caret_rect(
+    OneUiWidget* view,
+    OneUiRect* out_rect);
 ONEUI_API void oneui_terminal_view_select_all(OneUiWidget* view);
 ONEUI_API int oneui_terminal_view_copy_selection(OneUiWidget* view);
 ONEUI_API int oneui_terminal_view_paste_clipboard(OneUiWidget* view);

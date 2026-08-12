@@ -608,6 +608,14 @@ void testTerminalViewAbiUsesStructuredCells() {
     oneui_terminal_view_set_grid_utf8(view, 2, 3, cells, 2);
     oneui_terminal_view_update_cells_utf8(view, 1, cells, 1);
     oneui_terminal_view_set_cursor(view, 1, 2, 1);
+    OneUiRect caret{};
+    expectTrue(
+        "terminal view caret rect",
+        oneui_terminal_view_text_input_caret_rect(view, &caret) != 0 &&
+            caret.x >= 2.0f && caret.y >= 1.0f && caret.width >= 1.0f && caret.height >= 1.0f);
+    expectTrue(
+        "terminal view caret rect validates output",
+        oneui_terminal_view_text_input_caret_rect(view, nullptr) == 0);
     oneui_terminal_view_select_all(view);
     expectTrue("terminal view selection", oneui_terminal_view_has_selection(view) != 0);
     expectTrue("terminal view copy selection", oneui_terminal_view_copy_selection(view) != 0);

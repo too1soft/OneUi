@@ -4367,6 +4367,18 @@ void oneui_terminal_view_set_cursor(
     }
 }
 
+int oneui_terminal_view_text_input_caret_rect(
+    OneUiWidget* view,
+    OneUiRect* out_rect) {
+    const auto* nativeView = asWidget<oneui::TerminalView>(view);
+    if (!nativeView || !out_rect) {
+        return 0;
+    }
+    const oneui::Rect rect = nativeView->textInputCaretRect();
+    *out_rect = OneUiRect{rect.x, rect.y, rect.width, rect.height};
+    return 1;
+}
+
 void oneui_terminal_view_select_all(OneUiWidget* view) {
     if (auto* nativeView = asWidget<oneui::TerminalView>(view)) {
         nativeView->selectAll();

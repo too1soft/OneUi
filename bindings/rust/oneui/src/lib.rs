@@ -780,6 +780,15 @@ pub struct Insets {
     pub left: f32,
 }
 
+/// A rectangle in logical window coordinates.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct Rect {
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Color {
     pub r: u8,
@@ -3835,6 +3844,26 @@ impl TerminalView {
         };
     }
 
+    /// Returns the native text-input caret rectangle in logical window coordinates.
+    ///
+    /// Anchored overlays such as completion lists and IME candidates should use
+    /// this geometry instead of reconstructing terminal cell metrics.
+    pub fn text_input_caret_rect(&self) -> Option<Rect> {
+        let mut rect = sys::OneUiRect::default();
+        let available = unsafe {
+            sys::oneui_terminal_view_text_input_caret_rect(
+                self.widget.as_raw(),
+                &mut rect,
+            )
+        };
+        (available != 0).then_some(Rect {
+            x: rect.x,
+            y: rect.y,
+            width: rect.width,
+            height: rect.height,
+        })
+    }
+
     pub fn set_scroll_rows_per_wheel(&self, rows: f32) {
         unsafe { sys::oneui_terminal_view_set_scroll_rows_per_wheel(self.widget.as_raw(), rows) };
     }
@@ -6380,6 +6409,26 @@ mod tests {
         terminal.clear_selection();
         assert!(!terminal.has_selection());
         window.set_content(terminal.as_widget());
+    }
+
+    #[test]
+    fn exposes_terminal_caret_geometry_for_native_overlays() {
+        let _guard = window_test_lock().lock().expect("window test lock");
+        let window = Window::new(&WindowOptions::default()).expect("window should be created");
+        let terminal = TerminalView::new().unwrap();
+        terminal.set_grid(2, 4, &vec![TerminalCell::default(); 8]);
+        terminal.set_cursor(TerminalCursor {
+            row: 1,
+            column: 3,
+            visible: true,
+        });
+        window.set_content(terminal.as_widget());
+
+        let caret = terminal.text_input_caret_rect().expect("caret rectangle");
+        assert!(caret.x >= 3.0);
+        assert!(caret.y >= 1.0);
+        assert!(caret.width >= 1.0);
+        assert!(caret.height >= 1.0);
     }
 
     #[test]
