@@ -300,6 +300,8 @@ typedef enum OneUiTerminalPointerAction {
 typedef struct OneUiTerminalPointerEvent {
     OneUiTerminalPointerAction action;
     OneUiPointerButton button;
+    float x;
+    float y;
     unsigned short row;
     unsigned short column;
     int wheel_delta;
@@ -328,7 +330,7 @@ enum {
     OneUiTerminalCellOverline = 1u << 11
 };
 
-#define ONEUI_UTF8_ABI_VERSION 5u
+#define ONEUI_UTF8_ABI_VERSION 6u
 
 ONEUI_API const char* oneui_version(void);
 ONEUI_API unsigned int oneui_utf8_abi_version(void);
@@ -853,6 +855,8 @@ ONEUI_API void oneui_terminal_view_set_cursor(
     unsigned short column,
     int visible);
 ONEUI_API void oneui_terminal_view_select_all(OneUiWidget* view);
+ONEUI_API int oneui_terminal_view_copy_selection(OneUiWidget* view);
+ONEUI_API int oneui_terminal_view_paste_clipboard(OneUiWidget* view);
 ONEUI_API void oneui_terminal_view_set_selection(
     OneUiWidget* view,
     unsigned short start_row,

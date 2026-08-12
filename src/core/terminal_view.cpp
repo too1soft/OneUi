@@ -1683,6 +1683,7 @@ void TerminalView::reportPointer(
     onPointer_(TerminalPointerEvent{
         action,
         button,
+        point,
         position.row,
         position.column,
         wheelDelta,

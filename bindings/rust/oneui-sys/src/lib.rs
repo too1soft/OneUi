@@ -3,9 +3,9 @@
 //! All UTF-8 strings are borrowed for the duration of the FFI call. Callback
 //! bytes are also borrowed and must be copied before the callback returns.
 
-use std::ffi::{c_char, c_int, c_uint, c_ushort, c_void};
+use std::ffi::{c_char, c_float, c_int, c_uint, c_ushort, c_void};
 
-pub const UTF8_ABI_VERSION: c_uint = 5;
+pub const UTF8_ABI_VERSION: c_uint = 6;
 
 #[repr(C)]
 pub struct OneUiWindow {
@@ -235,6 +235,8 @@ pub struct OneUiRawKeyEvent {
 pub struct OneUiTerminalPointerEvent {
     pub action: c_int,
     pub button: c_int,
+    pub x: c_float,
+    pub y: c_float,
     pub row: c_ushort,
     pub column: c_ushort,
     pub wheel_delta: c_int,
@@ -685,6 +687,8 @@ extern "C" {
         visible: c_int,
     );
     pub fn oneui_terminal_view_select_all(view: *mut OneUiWidget);
+    pub fn oneui_terminal_view_copy_selection(view: *mut OneUiWidget) -> c_int;
+    pub fn oneui_terminal_view_paste_clipboard(view: *mut OneUiWidget) -> c_int;
     pub fn oneui_terminal_view_set_selection(
         view: *mut OneUiWidget,
         start_row: c_ushort,

@@ -90,6 +90,7 @@ enum class TerminalAuxiliaryButtonAction {
 struct TerminalPointerEvent {
     TerminalPointerAction action = TerminalPointerAction::Move;
     MouseButton button = MouseButton::None;
+    Point position{};
     std::uint16_t row = 0;
     std::uint16_t column = 0;
     int wheelDelta = 0;

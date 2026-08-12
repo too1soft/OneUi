@@ -591,6 +591,7 @@ void testTerminalViewAbiUsesStructuredCells() {
     oneui_terminal_view_set_cursor(view, 1, 2, 1);
     oneui_terminal_view_select_all(view);
     expectTrue("terminal view selection", oneui_terminal_view_has_selection(view) != 0);
+    expectTrue("terminal view copy selection", oneui_terminal_view_copy_selection(view) != 0);
     char selected[32]{};
     const size_t selectedRequired =
         oneui_terminal_view_get_selected_text_utf8(view, selected, sizeof(selected));

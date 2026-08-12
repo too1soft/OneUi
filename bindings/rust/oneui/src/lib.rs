@@ -3131,10 +3131,12 @@ pub enum TerminalAuxiliaryButtonAction {
     Callback = 3,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TerminalPointerEvent {
     pub action: TerminalPointerAction,
     pub button: TerminalPointerButton,
+    pub x: f32,
+    pub y: f32,
     pub row: u16,
     pub column: u16,
     pub wheel_delta: i32,
@@ -3160,6 +3162,8 @@ impl From<sys::OneUiTerminalPointerEvent> for TerminalPointerEvent {
         Self {
             action,
             button,
+            x: value.x,
+            y: value.y,
             row: value.row,
             column: value.column,
             wheel_delta: value.wheel_delta,
@@ -3572,6 +3576,14 @@ impl TerminalView {
 
     pub fn select_all(&self) {
         unsafe { sys::oneui_terminal_view_select_all(self.widget.as_raw()) };
+    }
+
+    pub fn copy_selection(&self) -> bool {
+        unsafe { sys::oneui_terminal_view_copy_selection(self.widget.as_raw()) != 0 }
+    }
+
+    pub fn paste_clipboard(&self) -> bool {
+        unsafe { sys::oneui_terminal_view_paste_clipboard(self.widget.as_raw()) != 0 }
     }
 
     pub fn set_selection(&self, selection: TerminalSelection) {
@@ -5985,6 +5997,7 @@ mod tests {
         });
         terminal.select_all();
         assert!(terminal.has_selection());
+        assert!(terminal.copy_selection());
         assert_eq!(terminal.selected_text(), "A宽\r\n");
         terminal.set_selection(TerminalSelection {
             start_row: 0,

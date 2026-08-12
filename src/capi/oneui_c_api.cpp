@@ -4093,6 +4093,20 @@ void oneui_terminal_view_select_all(OneUiWidget* view) {
     }
 }
 
+int oneui_terminal_view_copy_selection(OneUiWidget* view) {
+    if (auto* nativeView = asWidget<oneui::TerminalView>(view)) {
+        return nativeView->copySelectionToClipboard() ? 1 : 0;
+    }
+    return 0;
+}
+
+int oneui_terminal_view_paste_clipboard(OneUiWidget* view) {
+    if (auto* nativeView = asWidget<oneui::TerminalView>(view)) {
+        return nativeView->pasteFromClipboard() ? 1 : 0;
+    }
+    return 0;
+}
+
 void oneui_terminal_view_set_selection(
     OneUiWidget* view,
     unsigned short start_row,
@@ -4229,6 +4243,8 @@ void oneui_terminal_view_set_on_pointer(
             const OneUiTerminalPointerEvent cEvent{
                 toCTerminalPointerAction(event.action),
                 toCButton(event.button),
+                event.position.x,
+                event.position.y,
                 event.row,
                 event.column,
                 event.wheelDelta,
