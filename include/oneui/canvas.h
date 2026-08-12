@@ -82,6 +82,18 @@ public:
         (void)family;
         drawTextStyled(text, rect, color, size, align, weight);
     }
+    virtual void drawTextStyledWithNamedFont(
+        const std::wstring& text,
+        Rect rect,
+        Color color,
+        float size,
+        TextAlign align,
+        const std::wstring& familyName,
+        TextFontFamily fallbackFamily,
+        int weight = 400) {
+        (void)familyName;
+        drawTextStyledWithFont(text, rect, color, size, align, fallbackFamily, weight);
+    }
     virtual float measureTextWidth(const std::wstring& text, float size, int weight = 400) const {
         (void)weight;
         return static_cast<float>(text.size()) * size * 0.5f;
@@ -93,6 +105,15 @@ public:
         int weight = 400) const {
         (void)family;
         return measureTextWidth(text, size, weight);
+    }
+    virtual float measureTextWidthWithNamedFont(
+        const std::wstring& text,
+        float size,
+        const std::wstring& familyName,
+        TextFontFamily fallbackFamily,
+        int weight = 400) const {
+        (void)familyName;
+        return measureTextWidthWithFont(text, size, fallbackFamily, weight);
     }
 
     /// Returns a single-line rendering string that fits the requested width.

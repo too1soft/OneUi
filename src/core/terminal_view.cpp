@@ -352,6 +352,20 @@ float TerminalView::fontSize() const {
     return fontSize_;
 }
 
+void TerminalView::setFontFamily(std::wstring family) {
+    if (fontFamily_ == family) {
+        return;
+    }
+    fontFamily_ = std::move(family);
+    viewport_ = {};
+    hasGridMetrics_ = false;
+    invalidate();
+}
+
+const std::wstring& TerminalView::fontFamily() const {
+    return fontFamily_;
+}
+
 void TerminalView::setLineHeight(float multiplier) {
     const float clamped = std::clamp(multiplier, 1.0f, 2.0f);
     if (lineHeight_ == clamped) {
@@ -574,6 +588,14 @@ void TerminalView::setOnPointer(PointerCallback callback) {
     pointerWheelRemainder_ = 0.0f;
 }
 
+void TerminalView::setRightButtonAction(TerminalAuxiliaryButtonAction action) {
+    rightButtonAction_ = action;
+}
+
+void TerminalView::setMiddleButtonAction(TerminalAuxiliaryButtonAction action) {
+    middleButtonAction_ = action;
+}
+
 void TerminalView::setOnHyperlink(HyperlinkCallback callback) {
     onHyperlink_ = std::move(callback);
     pressedHyperlink_ = 0;
@@ -718,12 +740,13 @@ void TerminalView::paint(Canvas& canvas) {
             canvas.fillRect(runRect, style.background);
         }
         if (style.textVisible && !text.empty()) {
-            canvas.drawTextStyledWithFont(
+            canvas.drawTextStyledWithNamedFont(
                 text,
                 runRect,
                 style.foreground,
                 fontSize_,
                 TextAlign::Left,
+                fontFamily_,
                 TextFontFamily::Monospace,
                 style.weight);
         }
@@ -846,6 +869,9 @@ bool TerminalView::onMouseDown(const MouseEvent& event) {
             event.alt);
         return true;
     }
+    if (handleAuxiliaryButton(event)) {
+        return true;
+    }
     if (event.button != MouseButton::Left) {
         return false;
     }
@@ -882,6 +908,36 @@ bool TerminalView::onMouseDown(const MouseEvent& event) {
     selecting_ = true;
     invalidateSelectionDelta(previous);
     return true;
+}
+
+bool TerminalView::handleAuxiliaryButton(const MouseEvent& event) {
+    const TerminalAuxiliaryButtonAction action = event.button == MouseButton::Right
+        ? rightButtonAction_
+        : (event.button == MouseButton::Middle
+               ? middleButtonAction_
+               : TerminalAuxiliaryButtonAction::Ignore);
+    switch (action) {
+    case TerminalAuxiliaryButtonAction::Copy:
+        return copySelectionToClipboard();
+    case TerminalAuxiliaryButtonAction::Paste:
+        return pasteFromClipboard();
+    case TerminalAuxiliaryButtonAction::Callback:
+        if (!onPointer_) {
+            return false;
+        }
+        reportPointer(
+            TerminalPointerAction::Press,
+            event.button,
+            event.position,
+            0,
+            event.shift,
+            event.control,
+            event.alt);
+        return true;
+    case TerminalAuxiliaryButtonAction::Ignore:
+        return false;
+    }
+    return false;
 }
 
 bool TerminalView::onMouseMove(const MouseEvent& event) {
@@ -1159,8 +1215,8 @@ AccessibilityInfo TerminalView::accessibilityInfo() const {
 }
 
 TerminalView::GridMetrics TerminalView::gridMetrics(const Canvas& canvas) const {
-    const float measured = canvas.measureTextWidthWithFont(
-        L"M", fontSize_, TextFontFamily::Monospace, 400);
+    const float measured = canvas.measureTextWidthWithNamedFont(
+        L"M", fontSize_, fontFamily_, TextFontFamily::Monospace, 400);
     return GridMetrics{
         std::max(1.0f, measured),
         std::max(fontSize_ * lineHeight_, fontSize_ + 2.0f),

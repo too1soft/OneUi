@@ -1089,6 +1089,21 @@ void applyCurrentStyleSheet(OneUiWidget* wrapper) {
     }
 }
 
+oneui::TerminalAuxiliaryButtonAction terminalAuxiliaryButtonAction(
+    OneUiTerminalAuxiliaryButtonAction action) {
+    switch (action) {
+    case OneUiTerminalAuxiliaryButtonCopy:
+        return oneui::TerminalAuxiliaryButtonAction::Copy;
+    case OneUiTerminalAuxiliaryButtonPaste:
+        return oneui::TerminalAuxiliaryButtonAction::Paste;
+    case OneUiTerminalAuxiliaryButtonCallback:
+        return oneui::TerminalAuxiliaryButtonAction::Callback;
+    case OneUiTerminalAuxiliaryButtonIgnore:
+    default:
+        return oneui::TerminalAuxiliaryButtonAction::Ignore;
+    }
+}
+
 } // namespace
 
 const char* oneui_version(void) {
@@ -3933,6 +3948,14 @@ void oneui_terminal_view_set_font_size(OneUiWidget* view, float size) {
     }
 }
 
+void oneui_terminal_view_set_font_family_utf8(
+    OneUiWidget* view,
+    OneUiUtf8String family) {
+    if (auto* nativeView = asWidget<oneui::TerminalView>(view)) {
+        nativeView->setFontFamily(utf8OrEmpty(family));
+    }
+}
+
 void oneui_terminal_view_set_line_height(OneUiWidget* view, float multiplier) {
     if (auto* nativeView = asWidget<oneui::TerminalView>(view)) {
         nativeView->setLineHeight(multiplier);
@@ -3959,6 +3982,22 @@ void oneui_terminal_view_set_cursor_blinking(OneUiWidget* view, int enabled) {
 void oneui_terminal_view_set_copy_on_select(OneUiWidget* view, int enabled) {
     if (auto* nativeView = asWidget<oneui::TerminalView>(view)) {
         nativeView->setCopyOnSelect(enabled != 0);
+    }
+}
+
+void oneui_terminal_view_set_right_button_action(
+    OneUiWidget* view,
+    OneUiTerminalAuxiliaryButtonAction action) {
+    if (auto* nativeView = asWidget<oneui::TerminalView>(view)) {
+        nativeView->setRightButtonAction(terminalAuxiliaryButtonAction(action));
+    }
+}
+
+void oneui_terminal_view_set_middle_button_action(
+    OneUiWidget* view,
+    OneUiTerminalAuxiliaryButtonAction action) {
+    if (auto* nativeView = asWidget<oneui::TerminalView>(view)) {
+        nativeView->setMiddleButtonAction(terminalAuxiliaryButtonAction(action));
     }
 }
 

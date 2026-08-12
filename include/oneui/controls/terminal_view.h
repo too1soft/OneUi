@@ -77,6 +77,16 @@ enum class TerminalPointerAction {
     Wheel,
 };
 
+/// Local action for auxiliary mouse buttons when the remote application is
+/// not consuming pointer input. Remote mouse reporting still takes priority;
+/// Shift explicitly bypasses it and restores this local policy.
+enum class TerminalAuxiliaryButtonAction {
+    Ignore,
+    Copy,
+    Paste,
+    Callback,
+};
+
 struct TerminalPointerEvent {
     TerminalPointerAction action = TerminalPointerAction::Move;
     MouseButton button = MouseButton::None;
@@ -118,6 +128,11 @@ public:
     bool cursorBlinking() const;
     void setFontSize(float size);
     float fontSize() const;
+    /// Sets the preferred monospace font family. A missing or proportional
+    /// family falls back to OneUI's platform monospace chain so cell metrics
+    /// and caret placement remain stable.
+    void setFontFamily(std::wstring family);
+    const std::wstring& fontFamily() const;
     void setLineHeight(float multiplier);
     float lineHeight() const;
     void setPalette(Color background, Color foreground, Color cursor);
@@ -127,6 +142,8 @@ public:
     bool copyOnSelect() const;
     void setScrollRowsPerWheel(float rows);
     void setMouseReporting(bool enabled);
+    void setRightButtonAction(TerminalAuxiliaryButtonAction action);
+    void setMiddleButtonAction(TerminalAuxiliaryButtonAction action);
 
     void setClipboard(std::shared_ptr<Clipboard> clipboard);
     void selectAll();
@@ -246,6 +263,7 @@ private:
         bool shift,
         bool control,
         bool alt);
+    bool handleAuxiliaryButton(const MouseEvent& event);
     bool cellSelected(std::uint16_t row, std::uint16_t column) const;
     bool hasInteractionState() const override;
     void resetInteractionState() override;
@@ -264,6 +282,7 @@ private:
     bool rapidBlinkVisible_ = true;
     double textBlinkStartMs_ = 0.0;
     float fontSize_ = 14.0f;
+    std::wstring fontFamily_;
     float lineHeight_ = 1.30f;
     Color background_{20, 24, 36, 255};
     Color foreground_{220, 226, 240, 255};
@@ -297,6 +316,8 @@ private:
     float pointerWheelRemainder_ = 0.0f;
     MouseButton reportedButton_ = MouseButton::None;
     bool mouseReporting_ = false;
+    TerminalAuxiliaryButtonAction rightButtonAction_ = TerminalAuxiliaryButtonAction::Ignore;
+    TerminalAuxiliaryButtonAction middleButtonAction_ = TerminalAuxiliaryButtonAction::Ignore;
     std::uint32_t hoveredHyperlink_ = 0;
     std::uint32_t pressedHyperlink_ = 0;
 };

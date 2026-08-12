@@ -3123,6 +3123,15 @@ pub enum TerminalPointerButton {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(i32)]
+pub enum TerminalAuxiliaryButtonAction {
+    Ignore = 0,
+    Copy = 1,
+    Paste = 2,
+    Callback = 3,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TerminalPointerEvent {
     pub action: TerminalPointerAction,
     pub button: TerminalPointerButton,
@@ -3227,6 +3236,26 @@ impl TerminalViewHandle {
             let raw = state.raw.load(Ordering::Acquire);
             if !raw.is_null() {
                 unsafe { sys::oneui_terminal_view_set_font_size(raw, size) };
+            }
+        })
+    }
+
+    /// Updates the preferred terminal font family on the owning window thread.
+    pub fn set_font_family(&self, family: impl Into<String>) -> Result<(), Error> {
+        if self.state.raw.load(Ordering::Acquire).is_null() {
+            return Err(Error::WidgetDestroyed);
+        }
+        let state = Arc::clone(&self.state);
+        let family = family.into();
+        self.dispatcher.dispatch(move || {
+            let raw = state.raw.load(Ordering::Acquire);
+            if !raw.is_null() {
+                unsafe {
+                    sys::oneui_terminal_view_set_font_family_utf8(
+                        raw,
+                        sys::OneUiUtf8String::from_str(&family),
+                    )
+                };
             }
         })
     }
@@ -3453,6 +3482,15 @@ impl TerminalView {
         unsafe { sys::oneui_terminal_view_set_font_size(self.widget.as_raw(), size) };
     }
 
+    pub fn set_font_family(&self, family: &str) {
+        unsafe {
+            sys::oneui_terminal_view_set_font_family_utf8(
+                self.widget.as_raw(),
+                sys::OneUiUtf8String::from_str(family),
+            )
+        };
+    }
+
     pub fn set_line_height(&self, multiplier: f32) {
         unsafe { sys::oneui_terminal_view_set_line_height(self.widget.as_raw(), multiplier) };
     }
@@ -3470,6 +3508,24 @@ impl TerminalView {
     pub fn set_copy_on_select(&self, enabled: bool) {
         unsafe {
             sys::oneui_terminal_view_set_copy_on_select(self.widget.as_raw(), i32::from(enabled))
+        };
+    }
+
+    pub fn set_right_button_action(&self, action: TerminalAuxiliaryButtonAction) {
+        unsafe {
+            sys::oneui_terminal_view_set_right_button_action(
+                self.widget.as_raw(),
+                action as i32,
+            )
+        };
+    }
+
+    pub fn set_middle_button_action(&self, action: TerminalAuxiliaryButtonAction) {
+        unsafe {
+            sys::oneui_terminal_view_set_middle_button_action(
+                self.widget.as_raw(),
+                action as i32,
+            )
         };
     }
 
@@ -5894,6 +5950,7 @@ mod tests {
         let window = Window::new(&WindowOptions::default()).expect("window should be created");
         let terminal = TerminalView::new().expect("terminal should be created");
         terminal.set_font_size(13.0);
+        terminal.set_font_family("Cascadia Mono");
         terminal.set_palette(
             TerminalColor::rgb(20, 24, 36),
             TerminalColor::rgb(220, 226, 240),

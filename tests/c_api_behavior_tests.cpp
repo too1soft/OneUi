@@ -578,6 +578,9 @@ void testTerminalViewAbiUsesStructuredCells() {
         },
     };
     oneui_terminal_view_set_font_size(view, 14.0f);
+    oneui_terminal_view_set_font_family_utf8(view, {"Cascadia Mono", 13});
+    oneui_terminal_view_set_right_button_action(view, OneUiTerminalAuxiliaryButtonCopy);
+    oneui_terminal_view_set_middle_button_action(view, OneUiTerminalAuxiliaryButtonPaste);
     oneui_terminal_view_set_palette(
         view,
         OneUiColor{20, 24, 36, 255},

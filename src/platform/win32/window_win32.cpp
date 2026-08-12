@@ -261,9 +261,11 @@ struct TextBlobKey {
     int size = 0;
     int weight = 0;
     TextFontFamily family = TextFontFamily::Default;
+    std::wstring familyName;
 
     bool operator<(const TextBlobKey& other) const {
-        return std::tie(text, size, weight, family) < std::tie(other.text, other.size, other.weight, other.family);
+        return std::tie(text, size, weight, family, familyName) <
+            std::tie(other.text, other.size, other.weight, other.family, other.familyName);
     }
 };
 
@@ -556,6 +558,19 @@ public:
         TextAlign align,
         TextFontFamily family,
         int weight = 400) override {
+        drawTextStyledWithNamedFont(
+            text, rect, color, size, align, {}, family, weight);
+    }
+
+    void drawTextStyledWithNamedFont(
+        const std::wstring& text,
+        Rect rect,
+        Color color,
+        float size,
+        TextAlign align,
+        const std::wstring& familyName,
+        TextFontFamily fallbackFamily,
+        int weight = 400) override {
         if (text.empty() || rect.width <= 0.0f || rect.height <= 0.0f) {
             return;
         }
@@ -565,7 +580,8 @@ public:
         paint.setAntiAlias(true);
         paint.setColor(toSkColor(color));
 
-        const TextBlobEntry& textBlob = cachedTextBlob(text, size, family, weight);
+        const TextBlobEntry& textBlob =
+            cachedTextBlob(text, size, fallbackFamily, familyName, weight);
         if (!textBlob.blob) {
             return;
         }
@@ -595,11 +611,21 @@ public:
         float size,
         TextFontFamily family,
         int weight = 400) const override {
+        return measureTextWidthWithNamedFont(text, size, {}, family, weight);
+    }
+
+    float measureTextWidthWithNamedFont(
+        const std::wstring& text,
+        float size,
+        const std::wstring& familyName,
+        TextFontFamily fallbackFamily,
+        int weight = 400) const override {
         if (text.empty()) {
             return 0.0f;
         }
         const double traceStartMs = currentTimeMs();
-        const TextBlobEntry& textBlob = cachedTextBlob(text, size, family, weight);
+        const TextBlobEntry& textBlob =
+            cachedTextBlob(text, size, fallbackFamily, familyName, weight);
         ++g_primitivePaintTrace.textMeasureCalls;
         g_primitivePaintTrace.textMeasureMs += currentTimeMs() - traceStartMs;
         return textBlob.advanceWidth;
@@ -641,20 +667,62 @@ private:
         return fontMgr;
     }
 
-    static sk_sp<SkTypeface> typeface(TextFontFamily family, int weight) {
+    static std::string utf8FontFamily(const std::wstring& familyName) {
+        if (familyName.empty()) {
+            return {};
+        }
+        const int length = WideCharToMultiByte(
+            CP_UTF8,
+            WC_ERR_INVALID_CHARS,
+            familyName.data(),
+            static_cast<int>(familyName.size()),
+            nullptr,
+            0,
+            nullptr,
+            nullptr);
+        if (length <= 0) {
+            return {};
+        }
+        std::string result(static_cast<std::size_t>(length), '\0');
+        if (WideCharToMultiByte(
+                CP_UTF8,
+                WC_ERR_INVALID_CHARS,
+                familyName.data(),
+                static_cast<int>(familyName.size()),
+                result.data(),
+                length,
+                nullptr,
+                nullptr) != length) {
+            return {};
+        }
+        return result;
+    }
+
+    static sk_sp<SkTypeface> typeface(
+        TextFontFamily family,
+        int weight,
+        const std::wstring& familyName = {}) {
         const auto fontMgr = fontManager();
         if (!fontMgr) {
             return {};
         }
 
         const int clampedWeight = std::clamp(weight, 100, 900);
-        static std::map<std::pair<TextFontFamily, int>, sk_sp<SkTypeface>> cache;
-        const auto cacheKey = std::make_pair(family, clampedWeight);
+        using TypefaceKey = std::tuple<TextFontFamily, int, std::wstring>;
+        static std::map<TypefaceKey, sk_sp<SkTypeface>> cache;
+        const TypefaceKey cacheKey{family, clampedWeight, familyName};
         if (auto cached = cache.find(cacheKey); cached != cache.end()) {
             return cached->second;
         }
 
         const SkFontStyle style(clampedWeight, SkFontStyle::kNormal_Width, SkFontStyle::kUpright_Slant);
+        if (const std::string requested = utf8FontFamily(familyName); !requested.empty()) {
+            if (auto face = fontMgr->matchFamilyStyle(requested.c_str(), style);
+                face && (family != TextFontFamily::Monospace || face->isFixedPitch())) {
+                cache[cacheKey] = face;
+                return face;
+            }
+        }
         if (family == TextFontFamily::Monospace) {
             // legacyMakeTypeface may silently substitute the system UI font when
             // a requested family is missing.  That turns terminal text
@@ -711,8 +779,9 @@ private:
     static sk_sp<SkTypeface> typefaceForText(
         TextFontFamily family,
         int weight,
+        const std::wstring& familyName,
         const std::wstring& text) {
-        auto primary = typeface(family, weight);
+        auto primary = typeface(family, weight, familyName);
         const SkUnichar codepoint = firstCodepoint(text);
         if (codepoint == 0 || (primary && primary->unicharToGlyph(codepoint) != 0)) {
             return primary;
@@ -738,6 +807,7 @@ private:
         const std::wstring& text,
         float size,
         TextFontFamily family,
+        const std::wstring& familyName,
         int weight) {
         static TextBlobEntry empty;
         if (text.empty()) {
@@ -748,7 +818,8 @@ private:
             text,
             static_cast<int>(std::round(size * 10.0f)),
             std::clamp(weight, 100, 900),
-            family};
+            family,
+            familyName};
         static std::map<TextBlobKey, TextBlobEntry> cache;
         if (auto cached = cache.find(key); cached != cache.end()) {
             return cached->second;
@@ -757,7 +828,7 @@ private:
             cache.clear();
         }
 
-        SkFont font(typefaceForText(family, weight, text), size);
+        SkFont font(typefaceForText(family, weight, familyName, text), size);
         font.setSubpixel(true);
         font.setEdging(SkFont::Edging::kAntiAlias);
 

@@ -756,6 +756,50 @@ void testDoubleClickWordTripleClickLineAndCopyOnSelect() {
     expectEqual("terminal copy-on-select copies completed line", clipboard->text() == text ? 1 : 0, 1);
 }
 
+void testAuxiliaryButtonPoliciesRespectRemoteMouseOwnership() {
+    oneui::TerminalView terminal;
+    terminal.setFrame(oneui::Rect{0.0f, 0.0f, 240.0f, 80.0f});
+    terminal.setFontSize(20.0f);
+    terminal.setGrid(1, 4, {
+        oneui::TerminalCell{L"e"},
+        oneui::TerminalCell{L"c"},
+        oneui::TerminalCell{L"h"},
+        oneui::TerminalCell{L"o"},
+    });
+    auto clipboard = std::make_shared<oneui::MemoryClipboard>();
+    terminal.setClipboard(clipboard);
+    terminal.selectAll();
+    terminal.setRightButtonAction(oneui::TerminalAuxiliaryButtonAction::Copy);
+    terminal.onMouseDown(oneui::MouseEvent{{6.0f, 8.0f}, oneui::MouseButton::Right});
+    expectEqual(
+        "terminal right-button copy policy writes selection",
+        clipboard->text() == L"echo" ? 1 : 0,
+        1);
+
+    std::wstring pasted;
+    clipboard->setText(L"pwd");
+    terminal.setOnPaste([&](const std::wstring& text) { pasted = text; });
+    terminal.setMiddleButtonAction(oneui::TerminalAuxiliaryButtonAction::Paste);
+    terminal.onMouseDown(oneui::MouseEvent{{6.0f, 8.0f}, oneui::MouseButton::Middle});
+    expectEqual("terminal middle-button paste policy emits clipboard", pasted == L"pwd" ? 1 : 0, 1);
+
+    std::vector<oneui::TerminalPointerEvent> pointers;
+    terminal.setOnPointer([&](const oneui::TerminalPointerEvent& event) {
+        pointers.push_back(event);
+    });
+    terminal.setMouseReporting(true);
+    terminal.onMouseDown(oneui::MouseEvent{{6.0f, 8.0f}, oneui::MouseButton::Middle});
+    expectEqual("terminal remote mouse reporting owns middle button", static_cast<int>(pointers.size()), 1);
+    expectEqual("terminal remote mouse bypass does not paste", pasted == L"pwd" ? 1 : 0, 1);
+
+    oneui::MouseEvent shifted{{6.0f, 8.0f}, oneui::MouseButton::Middle};
+    shifted.shift = true;
+    clipboard->setText(L"whoami");
+    terminal.onMouseDown(shifted);
+    expectEqual("terminal shift restores local middle policy", pasted == L"whoami" ? 1 : 0, 1);
+    expectEqual("terminal shift bypass is not reported remotely", static_cast<int>(pointers.size()), 1);
+}
+
 void testProgrammaticSelectionUsesHalfOpenCellRanges() {
     oneui::TerminalView terminal;
     terminal.setGrid(2, 6, {
@@ -942,6 +986,7 @@ int main() {
     testSelectionCopyPasteAndTerminalShortcuts();
     testInputClearsSelectionWithoutBreakingModifierShortcuts();
     testDoubleClickWordTripleClickLineAndCopyOnSelect();
+    testAuxiliaryButtonPoliciesRespectRemoteMouseOwnership();
     testProgrammaticSelectionUsesHalfOpenCellRanges();
     testWheelReportsWholeScrollbackRows();
     testMouseReportingPreservesApplicationInputAndShiftSelection();

@@ -156,6 +156,13 @@ typedef enum OneUiTerminalCursorStyle {
     OneUiTerminalCursorStyleUnderline = 2
 } OneUiTerminalCursorStyle;
 
+typedef enum OneUiTerminalAuxiliaryButtonAction {
+    OneUiTerminalAuxiliaryButtonIgnore = 0,
+    OneUiTerminalAuxiliaryButtonCopy = 1,
+    OneUiTerminalAuxiliaryButtonPaste = 2,
+    OneUiTerminalAuxiliaryButtonCallback = 3
+} OneUiTerminalAuxiliaryButtonAction;
+
 typedef struct OneUiFocusRingStyle {
     OneUiColor color;
     float width;
@@ -809,12 +816,21 @@ typedef void (*OneUiTerminalViewportCallback)(unsigned short rows, unsigned shor
 
 ONEUI_API OneUiWidget* oneui_terminal_view_create(void);
 ONEUI_API void oneui_terminal_view_set_font_size(OneUiWidget* view, float size);
+ONEUI_API void oneui_terminal_view_set_font_family_utf8(
+    OneUiWidget* view,
+    OneUiUtf8String family);
 ONEUI_API void oneui_terminal_view_set_line_height(OneUiWidget* view, float multiplier);
 ONEUI_API void oneui_terminal_view_set_cursor_style(
     OneUiWidget* view,
     OneUiTerminalCursorStyle style);
 ONEUI_API void oneui_terminal_view_set_cursor_blinking(OneUiWidget* view, int enabled);
 ONEUI_API void oneui_terminal_view_set_copy_on_select(OneUiWidget* view, int enabled);
+ONEUI_API void oneui_terminal_view_set_right_button_action(
+    OneUiWidget* view,
+    OneUiTerminalAuxiliaryButtonAction action);
+ONEUI_API void oneui_terminal_view_set_middle_button_action(
+    OneUiWidget* view,
+    OneUiTerminalAuxiliaryButtonAction action);
 ONEUI_API void oneui_terminal_view_set_palette(
     OneUiWidget* view,
     OneUiColor background,
