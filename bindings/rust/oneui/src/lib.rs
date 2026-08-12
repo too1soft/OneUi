@@ -3420,6 +3420,29 @@ pub enum TerminalAuxiliaryButtonAction {
     Callback = 3,
 }
 
+/// Complete visual and pointer configuration for a terminal view.
+///
+/// Applying this value through a `TerminalViewHandle` uses one UI-thread
+/// dispatch, so a settings change cannot enqueue a burst of independent
+/// terminal mutations.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TerminalViewOptions {
+    pub font_family: String,
+    pub font_size: f32,
+    pub line_height: f32,
+    pub letter_spacing: f32,
+    pub cursor_style: TerminalCursorStyle,
+    pub cursor_blinking: bool,
+    pub copy_on_select: bool,
+    pub right_button_action: TerminalAuxiliaryButtonAction,
+    pub middle_button_action: TerminalAuxiliaryButtonAction,
+    pub scroll_rows_per_wheel: f32,
+    pub line_numbers_visible: bool,
+    pub background: TerminalColor,
+    pub foreground: TerminalColor,
+    pub cursor: TerminalColor,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TerminalPointerEvent {
     pub action: TerminalPointerAction,
@@ -3519,6 +3542,19 @@ pub struct TerminalViewHandle {
 }
 
 impl TerminalViewHandle {
+    pub fn apply_options(&self, options: TerminalViewOptions) -> Result<(), Error> {
+        if self.state.raw.load(Ordering::Acquire).is_null() {
+            return Err(Error::WidgetDestroyed);
+        }
+        let state = Arc::clone(&self.state);
+        self.dispatcher.dispatch(move || {
+            let raw = state.raw.load(Ordering::Acquire);
+            if !raw.is_null() {
+                apply_terminal_view_options(raw, &options);
+            }
+        })
+    }
+
     /// Updates terminal metrics on the owning window thread.
     pub fn set_font_size(&self, size: f32) -> Result<(), Error> {
         if self.state.raw.load(Ordering::Acquire).is_null() {
@@ -3801,6 +3837,10 @@ impl TerminalView {
 
     pub fn set_font_size(&self, size: f32) {
         unsafe { sys::oneui_terminal_view_set_font_size(self.widget.as_raw(), size) };
+    }
+
+    pub fn apply_options(&self, options: &TerminalViewOptions) {
+        apply_terminal_view_options(self.widget.as_raw(), options);
     }
 
     pub fn set_font_family(&self, family: &str) {
@@ -4365,6 +4405,40 @@ fn terminal_dirty_ranges(
         vec![first_changed.expect("collapsed ranges require a changed cell")..last_changed + 1]
     } else {
         ranges
+    }
+}
+
+fn apply_terminal_view_options(raw: *mut sys::OneUiWidget, options: &TerminalViewOptions) {
+    unsafe {
+        sys::oneui_terminal_view_set_font_family_utf8(
+            raw,
+            sys::OneUiUtf8String::from_str(&options.font_family),
+        );
+        sys::oneui_terminal_view_set_font_size(raw, options.font_size);
+        sys::oneui_terminal_view_set_line_height(raw, options.line_height);
+        sys::oneui_terminal_view_set_letter_spacing(raw, options.letter_spacing);
+        sys::oneui_terminal_view_set_cursor_style(raw, options.cursor_style as i32);
+        sys::oneui_terminal_view_set_cursor_blinking(raw, i32::from(options.cursor_blinking));
+        sys::oneui_terminal_view_set_copy_on_select(raw, i32::from(options.copy_on_select));
+        sys::oneui_terminal_view_set_right_button_action(
+            raw,
+            options.right_button_action as i32,
+        );
+        sys::oneui_terminal_view_set_middle_button_action(
+            raw,
+            options.middle_button_action as i32,
+        );
+        sys::oneui_terminal_view_set_scroll_rows_per_wheel(raw, options.scroll_rows_per_wheel);
+        sys::oneui_terminal_view_set_line_numbers_visible(
+            raw,
+            i32::from(options.line_numbers_visible),
+        );
+        sys::oneui_terminal_view_set_palette(
+            raw,
+            options.background.into(),
+            options.foreground.into(),
+            options.cursor.into(),
+        );
     }
 }
 
