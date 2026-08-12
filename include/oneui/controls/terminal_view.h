@@ -136,6 +136,12 @@ public:
     const std::wstring& fontFamily() const;
     void setLineHeight(float multiplier);
     float lineHeight() const;
+    void setLetterSpacing(float pixels);
+    float letterSpacing() const;
+    void setLineNumbersVisible(bool visible);
+    bool lineNumbersVisible() const;
+    void setFirstVisibleLineNumber(std::uint64_t lineNumber);
+    std::uint64_t firstVisibleLineNumber() const;
     void setPalette(Color background, Color foreground, Color cursor);
     void setSelectionBackground(Color color);
     void setStyleBox(const StyleBox& style);
@@ -227,6 +233,8 @@ private:
     };
 
     GridMetrics gridMetrics(const Canvas& canvas) const;
+    float lineNumberGutterWidth(GridMetrics metrics) const;
+    Rect contentBounds(Rect bounds, GridMetrics metrics) const;
     void reportViewport(Rect bounds, GridMetrics metrics);
     std::size_t cellIndex(std::uint16_t row, std::uint16_t column) const;
     TextPosition selectionStart() const;
@@ -285,6 +293,9 @@ private:
     float fontSize_ = 14.0f;
     std::wstring fontFamily_;
     float lineHeight_ = 1.30f;
+    float letterSpacing_ = 0.0f;
+    bool lineNumbersVisible_ = false;
+    std::uint64_t firstVisibleLineNumber_ = 1;
     Color background_{20, 24, 36, 255};
     Color foreground_{220, 226, 240, 255};
     Color cursorColor_{196, 181, 253, 255};

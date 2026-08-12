@@ -895,6 +895,11 @@ ONEUI_API void oneui_terminal_view_set_font_family_utf8(
     OneUiWidget* view,
     OneUiUtf8String family);
 ONEUI_API void oneui_terminal_view_set_line_height(OneUiWidget* view, float multiplier);
+ONEUI_API void oneui_terminal_view_set_letter_spacing(OneUiWidget* view, float pixels);
+ONEUI_API void oneui_terminal_view_set_line_numbers_visible(OneUiWidget* view, int visible);
+ONEUI_API void oneui_terminal_view_set_first_visible_line_number(
+    OneUiWidget* view,
+    unsigned long long line_number);
 ONEUI_API void oneui_terminal_view_set_cursor_style(
     OneUiWidget* view,
     OneUiTerminalCursorStyle style);

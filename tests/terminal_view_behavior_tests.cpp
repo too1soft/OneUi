@@ -217,6 +217,56 @@ void testPaintBatchesCompatibleAsciiCellsIntoRuns() {
     expectNear("terminal ASCII run spans whole cell range", canvas.texts.front().rect.width, 36.0f);
 }
 
+void testLineNumbersAndLetterSpacingShareTerminalGeometry() {
+    oneui::TerminalView terminal;
+    terminal.setFrame(oneui::Rect{10.0f, 20.0f, 300.0f, 80.0f});
+    terminal.setFontSize(20.0f);
+    terminal.setLetterSpacing(2.0f);
+    terminal.setLineNumbersVisible(true);
+    terminal.setFirstVisibleLineNumber(98);
+    terminal.setGrid(2, 3, {
+        oneui::TerminalCell{L"A"},
+        oneui::TerminalCell{L"B"},
+        oneui::TerminalCell{L"C"},
+        oneui::TerminalCell{L"D"},
+        oneui::TerminalCell{L"E"},
+        oneui::TerminalCell{L"F"},
+    });
+    terminal.setCursor(oneui::TerminalCursor{0, 2, true});
+    oneui::TerminalViewport viewport{};
+    terminal.setOnViewportChanged([&](oneui::TerminalViewport value) { viewport = value; });
+
+    RecordingCanvas canvas;
+    terminal.paint(canvas);
+
+    const auto line98 = std::find_if(
+        canvas.texts.begin(), canvas.texts.end(),
+        [](const RecordingCanvas::TextCall& call) { return call.text == L"98"; });
+    const auto glyphA = std::find_if(
+        canvas.texts.begin(), canvas.texts.end(),
+        [](const RecordingCanvas::TextCall& call) { return call.text == L"A"; });
+    const auto glyphB = std::find_if(
+        canvas.texts.begin(), canvas.texts.end(),
+        [](const RecordingCanvas::TextCall& call) { return call.text == L"B"; });
+    expectEqual("terminal paints first physical line number", line98 != canvas.texts.end(), 1);
+    expectEqual("terminal paints cells after the gutter", glyphA != canvas.texts.end(), 1);
+    expectEqual("terminal paints spaced cells independently", glyphB != canvas.texts.end(), 1);
+    if (line98 != canvas.texts.end() && glyphA != canvas.texts.end() && glyphB != canvas.texts.end()) {
+        expectEqual("terminal gutter precedes content", glyphA->rect.x > line98->rect.x, 1);
+        expectNear("terminal letter spacing advances the next cell", glyphB->rect.x - glyphA->rect.x, 14.0f);
+    }
+    expectEqual("terminal gutter reduces reported columns", viewport.columns, 17);
+
+    const oneui::Rect caret = terminal.textInputCaretRect();
+    expectNear("terminal caret includes line-number gutter", caret.x, 90.0f);
+
+    oneui::TerminalPointerEvent pointer{};
+    terminal.setOnPointer([&](const oneui::TerminalPointerEvent& event) { pointer = event; });
+    terminal.setMouseReporting(true);
+    terminal.onMouseDown(oneui::MouseEvent{{glyphB->rect.x + 2.0f, 24.0f}, oneui::MouseButton::Left});
+    expectEqual("terminal pointer columns share gutter geometry", pointer.column, 1);
+}
+
 void testPaintsExtendedDecorationsWithoutExposingConcealedText() {
     oneui::TerminalView terminal;
     terminal.setFrame(oneui::Rect{0.0f, 0.0f, 180.0f, 40.0f});
@@ -971,6 +1021,7 @@ int main() {
     testGridUpdatesOnlyRequestedCells();
     testPaintHonorsWideCellsStylesAndCursor();
     testPaintBatchesCompatibleAsciiCellsIntoRuns();
+    testLineNumbersAndLetterSpacingShareTerminalGeometry();
     testPaintsExtendedDecorationsWithoutExposingConcealedText();
     testTextBlinkUsesTheSharedAnimationScheduler();
     testPaintVisitsOnlyCellsInsideTheDirtyClip();

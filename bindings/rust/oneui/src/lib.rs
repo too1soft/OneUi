@@ -3361,6 +3361,9 @@ pub struct TerminalFrame {
     /// Whether terminal applications currently own pointer input. Shift still
     /// bypasses reporting so users can select text locally.
     pub mouse_reporting: bool,
+    /// One-based physical row number for the first visible row. Zero hides
+    /// numbers for this frame (for example while using an alternate screen).
+    pub first_visible_line_number: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -3545,6 +3548,34 @@ impl TerminalViewHandle {
                         raw,
                         sys::OneUiUtf8String::from_str(&family),
                     )
+                };
+            }
+        })
+    }
+
+    pub fn set_letter_spacing(&self, pixels: f32) -> Result<(), Error> {
+        if self.state.raw.load(Ordering::Acquire).is_null() {
+            return Err(Error::WidgetDestroyed);
+        }
+        let state = Arc::clone(&self.state);
+        self.dispatcher.dispatch(move || {
+            let raw = state.raw.load(Ordering::Acquire);
+            if !raw.is_null() {
+                unsafe { sys::oneui_terminal_view_set_letter_spacing(raw, pixels) };
+            }
+        })
+    }
+
+    pub fn set_line_numbers_visible(&self, visible: bool) -> Result<(), Error> {
+        if self.state.raw.load(Ordering::Acquire).is_null() {
+            return Err(Error::WidgetDestroyed);
+        }
+        let state = Arc::clone(&self.state);
+        self.dispatcher.dispatch(move || {
+            let raw = state.raw.load(Ordering::Acquire);
+            if !raw.is_null() {
+                unsafe {
+                    sys::oneui_terminal_view_set_line_numbers_visible(raw, i32::from(visible))
                 };
             }
         })
@@ -3783,6 +3814,28 @@ impl TerminalView {
 
     pub fn set_line_height(&self, multiplier: f32) {
         unsafe { sys::oneui_terminal_view_set_line_height(self.widget.as_raw(), multiplier) };
+    }
+
+    pub fn set_letter_spacing(&self, pixels: f32) {
+        unsafe { sys::oneui_terminal_view_set_letter_spacing(self.widget.as_raw(), pixels) };
+    }
+
+    pub fn set_line_numbers_visible(&self, visible: bool) {
+        unsafe {
+            sys::oneui_terminal_view_set_line_numbers_visible(
+                self.widget.as_raw(),
+                i32::from(visible),
+            )
+        };
+    }
+
+    pub fn set_first_visible_line_number(&self, line_number: u64) {
+        unsafe {
+            sys::oneui_terminal_view_set_first_visible_line_number(
+                self.widget.as_raw(),
+                line_number,
+            )
+        };
     }
 
     pub fn set_cursor_style(&self, style: TerminalCursorStyle) {
@@ -4241,6 +4294,12 @@ fn apply_terminal_frame(
     frame: &TerminalFrame,
     previous: Option<&TerminalFrame>,
 ) {
+    unsafe {
+        sys::oneui_terminal_view_set_first_visible_line_number(
+            raw,
+            frame.first_visible_line_number,
+        )
+    };
     let can_update_in_place = previous.is_some_and(|previous| {
         previous.rows == frame.rows
             && previous.columns == frame.columns
@@ -6282,6 +6341,7 @@ mod tests {
             cursor_style: TerminalCursorStyle::Block,
             cursor_blinking: true,
             mouse_reporting: false,
+            first_visible_line_number: 1,
         };
         let mut current = previous.clone();
         assert_eq!(
@@ -6344,6 +6404,7 @@ mod tests {
             cursor_style: TerminalCursorStyle::Block,
             cursor_blinking: true,
             mouse_reporting: false,
+            first_visible_line_number: 1,
         };
         let mut current = previous.clone();
         for index in (0..80).step_by(2) {
@@ -6455,6 +6516,7 @@ mod tests {
                     cursor_style: TerminalCursorStyle::Bar,
                     cursor_blinking: false,
                     mouse_reporting: true,
+                    first_visible_line_number: 1,
                 })
                 .expect("worker should submit a terminal frame");
         });
@@ -6489,6 +6551,7 @@ mod tests {
                 cursor_style: TerminalCursorStyle::Block,
                 cursor_blinking: true,
                 mouse_reporting: false,
+                first_visible_line_number: 1,
             }),
             Err(Error::WidgetDestroyed)
         ));

@@ -4242,6 +4242,26 @@ void oneui_terminal_view_set_line_height(OneUiWidget* view, float multiplier) {
     }
 }
 
+void oneui_terminal_view_set_letter_spacing(OneUiWidget* view, float pixels) {
+    if (auto* nativeView = asWidget<oneui::TerminalView>(view)) {
+        nativeView->setLetterSpacing(pixels);
+    }
+}
+
+void oneui_terminal_view_set_line_numbers_visible(OneUiWidget* view, int visible) {
+    if (auto* nativeView = asWidget<oneui::TerminalView>(view)) {
+        nativeView->setLineNumbersVisible(visible != 0);
+    }
+}
+
+void oneui_terminal_view_set_first_visible_line_number(
+    OneUiWidget* view,
+    unsigned long long line_number) {
+    if (auto* nativeView = asWidget<oneui::TerminalView>(view)) {
+        nativeView->setFirstVisibleLineNumber(line_number);
+    }
+}
+
 void oneui_terminal_view_set_cursor_style(OneUiWidget* view, OneUiTerminalCursorStyle style) {
     if (auto* nativeView = asWidget<oneui::TerminalView>(view)) {
         const auto nativeStyle = style == OneUiTerminalCursorStyleBar

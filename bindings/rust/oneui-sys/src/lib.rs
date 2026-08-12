@@ -718,6 +718,12 @@ extern "C" {
         family: OneUiUtf8String,
     );
     pub fn oneui_terminal_view_set_line_height(view: *mut OneUiWidget, multiplier: f32);
+    pub fn oneui_terminal_view_set_letter_spacing(view: *mut OneUiWidget, pixels: f32);
+    pub fn oneui_terminal_view_set_line_numbers_visible(view: *mut OneUiWidget, visible: c_int);
+    pub fn oneui_terminal_view_set_first_visible_line_number(
+        view: *mut OneUiWidget,
+        line_number: u64,
+    );
     pub fn oneui_terminal_view_set_cursor_style(view: *mut OneUiWidget, style: c_int);
     pub fn oneui_terminal_view_set_cursor_blinking(view: *mut OneUiWidget, enabled: c_int);
     pub fn oneui_terminal_view_set_copy_on_select(view: *mut OneUiWidget, enabled: c_int);

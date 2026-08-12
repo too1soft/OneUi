@@ -381,6 +381,61 @@ float TerminalView::lineHeight() const {
     return lineHeight_;
 }
 
+void TerminalView::setLetterSpacing(float pixels) {
+    const float clamped = std::clamp(pixels, 0.0f, 8.0f);
+    if (letterSpacing_ == clamped) {
+        return;
+    }
+    letterSpacing_ = clamped;
+    viewport_ = {};
+    hasGridMetrics_ = false;
+    invalidate();
+}
+
+float TerminalView::letterSpacing() const {
+    return letterSpacing_;
+}
+
+void TerminalView::setLineNumbersVisible(bool visible) {
+    if (lineNumbersVisible_ == visible) {
+        return;
+    }
+    lineNumbersVisible_ = visible;
+    viewport_ = {};
+    hasGridMetrics_ = false;
+    invalidate();
+}
+
+bool TerminalView::lineNumbersVisible() const {
+    return lineNumbersVisible_;
+}
+
+void TerminalView::setFirstVisibleLineNumber(std::uint64_t lineNumber) {
+    if (firstVisibleLineNumber_ == lineNumber) {
+        return;
+    }
+    if (!lineNumbersVisible_) {
+        firstVisibleLineNumber_ = lineNumber;
+        return;
+    }
+
+    const float previousGutter = hasGridMetrics_ ? lineNumberGutterWidth(lastMetrics_) : -1.0f;
+    firstVisibleLineNumber_ = lineNumber;
+    const float nextGutter = hasGridMetrics_ ? lineNumberGutterWidth(lastMetrics_) : -1.0f;
+    if (!hasGridMetrics_ || previousGutter != nextGutter) {
+        viewport_ = {};
+        invalidate();
+        return;
+    }
+
+    const Rect bounds = frame();
+    invalidateRect(Rect{bounds.x, bounds.y, nextGutter, bounds.height});
+}
+
+std::uint64_t TerminalView::firstVisibleLineNumber() const {
+    return firstVisibleLineNumber_;
+}
+
 void TerminalView::setPalette(Color background, Color foreground, Color cursor) {
     background_ = background;
     foreground_ = foreground;
@@ -642,6 +697,7 @@ void TerminalView::paint(Canvas& canvas) {
     }
 
     const GridMetrics metrics = gridMetrics(canvas);
+    const Rect terminalBounds = contentBounds(bounds, metrics);
     lastMetrics_ = metrics;
     hasGridMetrics_ = true;
     reportViewport(bounds, metrics);
@@ -658,14 +714,44 @@ void TerminalView::paint(Canvas& canvas) {
         static_cast<int>(firstRow + 1),
         static_cast<int>(rows_)));
     const auto firstColumn = static_cast<std::uint16_t>(std::clamp(
-        static_cast<int>(std::floor((paintBounds.x - bounds.x) / metrics.cellWidth)),
+        static_cast<int>(std::floor((paintBounds.x - terminalBounds.x) / metrics.cellWidth)),
         0,
         static_cast<int>(columns_ - 1)));
     const auto lastColumn = static_cast<std::uint16_t>(std::clamp(
         static_cast<int>(std::ceil(
-            (paintBounds.x + paintBounds.width - bounds.x) / metrics.cellWidth)),
+            (paintBounds.x + paintBounds.width - terminalBounds.x) / metrics.cellWidth)),
         static_cast<int>(firstColumn + 1),
         static_cast<int>(columns_)));
+
+    if (lineNumbersVisible_ && firstVisibleLineNumber_ != 0) {
+        const float gutterWidth = lineNumberGutterWidth(metrics);
+        const Color gutterText = dim(dim(foreground_));
+        const Color separator = dim(gutterText);
+        const float numberSize = std::max(8.0f, fontSize_ * 0.78f);
+        for (std::uint16_t row = firstRow; row < lastRow; ++row) {
+            const auto number = std::to_wstring(firstVisibleLineNumber_ + row);
+            canvas.drawTextStyledWithNamedFont(
+                number,
+                Rect{
+                    bounds.x,
+                    bounds.y + metrics.cellHeight * static_cast<float>(row),
+                    std::max(1.0f, gutterWidth - metrics.cellWidth * 0.55f),
+                    metrics.cellHeight,
+                },
+                gutterText,
+                numberSize,
+                TextAlign::Right,
+                fontFamily_,
+                TextFontFamily::Monospace,
+                400);
+        }
+        const float separatorX = terminalBounds.x - std::max(2.0f, metrics.cellWidth * 0.28f);
+        canvas.drawLine(
+            Point{separatorX, bounds.y},
+            Point{separatorX, bounds.y + bounds.height},
+            separator,
+            1.0f);
+    }
 
     struct PaintStyle {
         Color foreground;
@@ -730,7 +816,7 @@ void TerminalView::paint(Canvas& canvas) {
                                   const std::wstring& text,
                                   const PaintStyle& style) {
         const Rect runRect{
-            bounds.x + metrics.cellWidth * static_cast<float>(column),
+            terminalBounds.x + metrics.cellWidth * static_cast<float>(column),
             bounds.y + metrics.cellHeight * static_cast<float>(row),
             metrics.cellWidth * static_cast<float>(span),
             metrics.cellHeight,
@@ -822,7 +908,7 @@ void TerminalView::paint(Canvas& canvas) {
 
             textRun.assign(cell->text);
             std::uint16_t end = static_cast<std::uint16_t>(column + 1);
-            while (end < lastColumn) {
+            while (letterSpacing_ == 0.0f && end < lastColumn) {
                 const TerminalCell* next = cellAt(row, end);
                 if (!next || hasStyle(*next, TerminalCellWide) ||
                     hasStyle(*next, TerminalCellWideContinuation) || next->text.size() != 1 ||
@@ -1127,7 +1213,8 @@ Rect TerminalView::textInputCaretRect() const {
     const Rect bounds = frame();
     const float cellWidth = std::max(1.0f, lastMetrics_.cellWidth);
     const float cellHeight = std::max(1.0f, lastMetrics_.cellHeight);
-    const float x = bounds.x + cellWidth * static_cast<float>(cursor_.column);
+    const float x = contentBounds(bounds, lastMetrics_).x +
+                    cellWidth * static_cast<float>(cursor_.column);
     const float y = bounds.y + cellHeight * static_cast<float>(cursor_.row);
     return Rect{x, y, cellWidth, cellHeight};
 }
@@ -1218,12 +1305,27 @@ TerminalView::GridMetrics TerminalView::gridMetrics(const Canvas& canvas) const 
     const float measured = canvas.measureTextWidthWithNamedFont(
         L"M", fontSize_, fontFamily_, TextFontFamily::Monospace, 400);
     return GridMetrics{
-        std::max(1.0f, measured),
+        std::max(1.0f, measured + letterSpacing_),
         std::max(fontSize_ * lineHeight_, fontSize_ + 2.0f),
     };
 }
 
+float TerminalView::lineNumberGutterWidth(GridMetrics metrics) const {
+    if (!lineNumbersVisible_ || firstVisibleLineNumber_ == 0) {
+        return 0.0f;
+    }
+    const std::uint64_t last = firstVisibleLineNumber_ + (rows_ == 0 ? 0 : rows_ - 1);
+    const float digits = static_cast<float>(std::to_wstring(last).size());
+    return std::ceil((digits + 1.65f) * std::max(1.0f, metrics.cellWidth));
+}
+
+Rect TerminalView::contentBounds(Rect bounds, GridMetrics metrics) const {
+    const float gutter = std::min(bounds.width, lineNumberGutterWidth(metrics));
+    return Rect{bounds.x + gutter, bounds.y, std::max(0.0f, bounds.width - gutter), bounds.height};
+}
+
 void TerminalView::reportViewport(Rect bounds, GridMetrics metrics) {
+    bounds = contentBounds(bounds, metrics);
     const auto columns = static_cast<std::uint16_t>(std::clamp(
         static_cast<int>(std::floor(bounds.width / std::max(1.0f, metrics.cellWidth))),
         1,
@@ -1312,7 +1414,7 @@ TerminalView::TextPosition TerminalView::positionFromPoint(Point point) const {
         return {};
     }
     const Rect bounds = frame();
-    const float localX = std::max(0.0f, point.x - bounds.x);
+    const float localX = std::max(0.0f, point.x - contentBounds(bounds, lastMetrics_).x);
     const float localY = std::max(0.0f, point.y - bounds.y);
     const float cellWidth = std::max(1.0f, lastMetrics_.cellWidth);
     const float cellHeight = std::max(1.0f, lastMetrics_.cellHeight);
@@ -1340,7 +1442,8 @@ TerminalView::TextPosition TerminalView::cellPositionFromPoint(Point point) cons
         0,
         static_cast<int>(rows_ - 1)));
     const auto column = static_cast<std::uint16_t>(std::clamp(
-        static_cast<int>(std::floor((point.x - bounds.x) / cellWidth)),
+        static_cast<int>(std::floor(
+            (point.x - contentBounds(bounds, lastMetrics_).x) / cellWidth)),
         0,
         static_cast<int>(columns_ - 1)));
     return TextPosition{row, column};
@@ -1561,7 +1664,7 @@ Rect TerminalView::cellRect(TextPosition position) const {
         span = 2;
     }
     return Rect{
-        bounds.x + width * static_cast<float>(position.column),
+        contentBounds(bounds, lastMetrics_).x + width * static_cast<float>(position.column),
         bounds.y + height * static_cast<float>(position.row),
         width * static_cast<float>(span),
         height,
@@ -1633,12 +1736,13 @@ void TerminalView::invalidateCellRange(std::size_t firstCell, std::size_t count)
     const std::size_t firstColumn = firstCell % columns_;
     const std::size_t lastColumn = lastCell % columns_;
     const Rect bounds = frame();
+    const float contentX = contentBounds(bounds, lastMetrics_).x;
     const float width = std::max(1.0f, lastMetrics_.cellWidth);
     const float height = std::max(1.0f, lastMetrics_.cellHeight);
 
     if (firstRow == lastRow) {
         invalidateRect(Rect{
-            bounds.x + width * static_cast<float>(firstColumn),
+            contentX + width * static_cast<float>(firstColumn),
             bounds.y + height * static_cast<float>(firstRow),
             width * static_cast<float>(lastColumn - firstColumn + 1),
             height,
@@ -1647,21 +1751,21 @@ void TerminalView::invalidateCellRange(std::size_t firstCell, std::size_t count)
     }
 
     invalidateRect(Rect{
-        bounds.x + width * static_cast<float>(firstColumn),
+        contentX + width * static_cast<float>(firstColumn),
         bounds.y + height * static_cast<float>(firstRow),
         width * static_cast<float>(columns_ - firstColumn),
         height,
     });
     if (lastRow > firstRow + 1) {
         invalidateRect(Rect{
-            bounds.x,
+            contentX,
             bounds.y + height * static_cast<float>(firstRow + 1),
             width * static_cast<float>(columns_),
             height * static_cast<float>(lastRow - firstRow - 1),
         });
     }
     invalidateRect(Rect{
-        bounds.x,
+        contentX,
         bounds.y + height * static_cast<float>(lastRow),
         width * static_cast<float>(lastColumn + 1),
         height,
