@@ -540,6 +540,19 @@ impl UiDispatcher {
         receiver.recv().map_err(|_| Error::WindowClosed)
     }
 
+    /// Displays a platform-native confirmation prompt owned by this window.
+    ///
+    /// This synchronous form is intended for command callbacks already running
+    /// on the window thread. The platform dialog owns its nested message loop;
+    /// long-running work following confirmation must still run on a worker.
+    pub fn confirm(&self, title: &str, message: &str) -> Result<bool, Error> {
+        if std::thread::current().id() != self.state.ui_thread {
+            return Err(Error::WrongThread);
+        }
+        Ok(self
+            .confirm_on_window_thread(&wide_null_terminated(title), &wide_null_terminated(message)))
+    }
+
     fn confirm_on_window_thread(&self, title: &[u16], message: &[u16]) -> bool {
         self.state
             .with_raw(|raw| unsafe {
@@ -581,6 +594,29 @@ impl UiDispatcher {
             let _ = sender.send(result);
         })?;
         receiver.recv().map_err(|_| Error::WindowClosed)
+    }
+
+    /// Displays a platform-native text or password prompt owned by this window.
+    ///
+    /// Call this form from a window-thread command callback. The returned value
+    /// is not retained by OneUI and the temporary UTF-16 buffer is cleared.
+    pub fn prompt(
+        &self,
+        title: &str,
+        message: &str,
+        options: PromptOptions<'_>,
+    ) -> Result<Option<String>, Error> {
+        if std::thread::current().id() != self.state.ui_thread {
+            return Err(Error::WrongThread);
+        }
+        let initial_value = SecretWide::new(options.initial_value);
+        Ok(self.prompt_on_window_thread(
+            &wide_null_terminated(title),
+            &wide_null_terminated(message),
+            initial_value.as_slice(),
+            &wide_null_terminated(options.placeholder),
+            options.password,
+        ))
     }
 
     fn prompt_on_window_thread(
@@ -5537,6 +5573,19 @@ impl Window {
         self.dispatcher().file_dialog(options)
     }
 
+    pub fn confirm(&self, title: &str, message: &str) -> Result<bool, Error> {
+        self.dispatcher().confirm(title, message)
+    }
+
+    pub fn prompt(
+        &self,
+        title: &str,
+        message: &str,
+        options: PromptOptions<'_>,
+    ) -> Result<Option<String>, Error> {
+        self.dispatcher().prompt(title, message, options)
+    }
+
     /// Returns the only thread-safe update path for a terminal mounted in this
     /// window. The terminal itself remains UI-thread bound.
     pub fn terminal_view_handle(&self, terminal: &TerminalView) -> TerminalViewHandle {
@@ -6584,6 +6633,17 @@ mod tests {
             ),
             Err(Error::UiThreadBlockingOperation)
         ));
+        let background_dispatcher = dispatcher.clone();
+        let direct_prompt_result = thread::spawn(move || {
+            (
+                background_dispatcher.confirm("Confirm", "Continue?"),
+                background_dispatcher.prompt("Prompt", "Enter a value", PromptOptions::default()),
+            )
+        })
+        .join()
+        .expect("worker should finish");
+        assert!(matches!(direct_prompt_result.0, Err(Error::WrongThread)));
+        assert!(matches!(direct_prompt_result.1, Err(Error::WrongThread)));
         window.close();
 
         assert!(dropped.load(Ordering::Acquire));

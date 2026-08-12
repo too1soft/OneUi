@@ -209,6 +209,9 @@ $env:PATH = "$env:ONEUI_LIB_DIR;$env:PATH"
 OneUI 的 Rust 安全绑定还提供窗口归属的原生文件对话框：`FileDialogOptions::open`、
 `FileDialogOptions::save` 与 `FileDialogOptions::select_folder`。文件名、路径和过滤器始终
 通过 UTF-8 ABI 传递；产品代码不需要直接调用 Win32 对话框。
+窗口线程中的命令回调可直接调用 `UiDispatcher::confirm` 与 `UiDispatcher::prompt`；
+后台任务需要等待用户输入时使用对应的 `confirm_blocking` 与 `prompt_blocking`。两组 API
+都由窗口拥有，调用线程约束明确，产品无需自行创建平台消息循环。
 cargo test --manifest-path .\bindings\rust\Cargo.toml
 ```
 

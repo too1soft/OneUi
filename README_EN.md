@@ -219,6 +219,10 @@ The safe Rust binding also provides owner-bound native file dialogs through
 `FileDialogOptions::open`, `FileDialogOptions::save`, and
 `FileDialogOptions::select_folder`. File names, paths, and filters always cross
 the portable UTF-8 ABI, so product code does not need direct Win32 calls.
+Window-thread command callbacks can call `UiDispatcher::confirm` and
+`UiDispatcher::prompt` directly. Worker operations that must wait for input use
+the corresponding `confirm_blocking` and `prompt_blocking` methods. Both forms
+remain owner-bound and define their thread contract explicitly.
 cargo test --manifest-path .\bindings\rust\Cargo.toml
 ```
 
