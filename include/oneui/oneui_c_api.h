@@ -353,6 +353,7 @@ typedef struct OneUiTerminalPointerEvent {
 
 typedef void (*OneUiRemotePointerCallback)(const OneUiRemotePointerEvent* event, void* user_data);
 typedef void (*OneUiRawKeyCallback)(const OneUiRawKeyEvent* event, void* user_data);
+typedef int (*OneUiWindowRawKeyCallback)(const OneUiRawKeyEvent* event, void* user_data);
 typedef void (*OneUiTerminalPointerCallback)(const OneUiTerminalPointerEvent* event, void* user_data);
 typedef void (*OneUiTerminalHyperlinkCallback)(unsigned int hyperlink_id, void* user_data);
 
@@ -371,7 +372,7 @@ enum {
     OneUiTerminalCellOverline = 1u << 11
 };
 
-#define ONEUI_UTF8_ABI_VERSION 9u
+#define ONEUI_UTF8_ABI_VERSION 10u
 
 ONEUI_API const char* oneui_version(void);
 ONEUI_API unsigned int oneui_utf8_abi_version(void);
@@ -442,6 +443,10 @@ ONEUI_API int oneui_window_client_pixel_height(OneUiWindow* window);
 ONEUI_API float oneui_window_dpi_scale(OneUiWindow* window);
 ONEUI_API void oneui_window_set_content(OneUiWindow* window, OneUiWidget* widget);
 ONEUI_API int oneui_window_request_focus(OneUiWindow* window, OneUiWidget* widget, int focus_visible);
+ONEUI_API void oneui_window_set_on_raw_key(
+    OneUiWindow* window,
+    OneUiWindowRawKeyCallback callback,
+    void* user_data);
 ONEUI_API void oneui_window_set_style_sheet(OneUiWindow* window, OneUiStyleSheet* style_sheet);
 
 ONEUI_API OneUiTray* oneui_tray_create(OneUiWindow* window, const wchar_t* tooltip);

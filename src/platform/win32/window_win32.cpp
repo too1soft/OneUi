@@ -1070,6 +1070,10 @@ public:
         return true;
     }
 
+    void setRawKeyHandler(RawKeyHandler handler) override {
+        rawKeyHandler_ = std::move(handler);
+    }
+
     void initialize() override {
         ensureCreated();
     }
@@ -1958,6 +1962,16 @@ private:
         case WM_KEYUP:
             dispatchKeyUp(wParam, lParam);
             return 0;
+        case WM_SYSKEYDOWN:
+            if (dispatchKeyDown(wParam, lParam)) {
+                return 0;
+            }
+            return DefWindowProcW(hwnd_, message, wParam, lParam);
+        case WM_SYSKEYUP:
+            if (dispatchKeyUp(wParam, lParam)) {
+                return 0;
+            }
+            return DefWindowProcW(hwnd_, message, wParam, lParam);
         case WM_CHAR:
             dispatchTextInput(wParam);
             return 0;
@@ -3098,26 +3112,36 @@ private:
         return event;
     }
 
-    void dispatchKeyDown(WPARAM wParam, LPARAM lParam) {
-        if (!content_ || !content_->visible()) {
-            return;
-        }
-
+    bool dispatchKeyDown(WPARAM wParam, LPARAM lParam) {
         KeyEvent event = makeKeyEvent(wParam, lParam, true);
+        if (rawKeyHandler_ && rawKeyHandler_(event)) {
+            requestInteractiveRedraw();
+            return true;
+        }
+        if (!content_ || !content_->visible()) {
+            return false;
+        }
         if (content_->onKeyDown(event)) {
             requestInteractiveRedraw();
+            return true;
         }
+        return false;
     }
 
-    void dispatchKeyUp(WPARAM wParam, LPARAM lParam) {
-        if (!content_ || !content_->visible()) {
-            return;
-        }
-
+    bool dispatchKeyUp(WPARAM wParam, LPARAM lParam) {
         KeyEvent event = makeKeyEvent(wParam, lParam, false);
+        if (rawKeyHandler_ && rawKeyHandler_(event)) {
+            requestInteractiveRedraw();
+            return true;
+        }
+        if (!content_ || !content_->visible()) {
+            return false;
+        }
         if (content_->onKeyUp(event)) {
             requestInteractiveRedraw();
+            return true;
         }
+        return false;
     }
 
     void dispatchTextInput(WPARAM wParam) {
@@ -3333,6 +3357,7 @@ private:
     bool gpuAvailable_ = false;
     bool swapIntervalEnabled_ = false;
     std::shared_ptr<Widget> content_;
+    RawKeyHandler rawKeyHandler_;
     wchar_t pendingHighSurrogate_ = 0;
     std::atomic_bool acceptingPostedCallbacks_{true};
     std::mutex postedCallbacksMutex_;

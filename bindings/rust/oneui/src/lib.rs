@@ -242,7 +242,12 @@ pub struct WindowPlacement {
 
 pub struct Window {
     state: Arc<WindowState>,
+    raw_key_callback: Option<Box<WindowRawKeyCallback>>,
     _ui_thread: PhantomData<Rc<()>>,
+}
+
+struct WindowRawKeyCallback {
+    handler: Box<dyn FnMut(RawKeyEvent) -> bool + 'static>,
 }
 
 struct WindowState {
@@ -3751,6 +3756,18 @@ unsafe extern "C" fn run_terminal_raw_key_callback(
     run_callback_guarded("terminal.raw_key", || (callback.handler)(event));
 }
 
+unsafe extern "C" fn run_window_raw_key_callback(
+    event: *const sys::OneUiRawKeyEvent,
+    user_data: *mut std::ffi::c_void,
+) -> std::ffi::c_int {
+    if event.is_null() || user_data.is_null() {
+        return 0;
+    }
+    let event = RawKeyEvent::from(unsafe { *event });
+    let callback = unsafe { &mut *user_data.cast::<WindowRawKeyCallback>() };
+    i32::from(run_callback_guarded("window.raw_key", || (callback.handler)(event)).unwrap_or(false))
+}
+
 unsafe extern "C" fn run_terminal_scroll_callback(rows: i32, user_data: *mut std::ffi::c_void) {
     if user_data.is_null() {
         return;
@@ -3944,10 +3961,7 @@ impl TerminalView {
     pub fn text_input_caret_rect(&self) -> Option<Rect> {
         let mut rect = sys::OneUiRect::default();
         let available = unsafe {
-            sys::oneui_terminal_view_text_input_caret_rect(
-                self.widget.as_raw(),
-                &mut rect,
-            )
+            sys::oneui_terminal_view_text_input_caret_rect(self.widget.as_raw(), &mut rect)
         };
         (available != 0).then_some(Rect {
             x: rect.x,
@@ -4335,10 +4349,7 @@ fn apply_terminal_frame(
     previous: Option<&TerminalFrame>,
 ) {
     unsafe {
-        sys::oneui_terminal_view_set_first_visible_line_number(
-            raw,
-            frame.first_visible_line_number,
-        )
+        sys::oneui_terminal_view_set_first_visible_line_number(raw, frame.first_visible_line_number)
     };
     let can_update_in_place = previous.is_some_and(|previous| {
         previous.rows == frame.rows
@@ -4420,14 +4431,8 @@ fn apply_terminal_view_options(raw: *mut sys::OneUiWidget, options: &TerminalVie
         sys::oneui_terminal_view_set_cursor_style(raw, options.cursor_style as i32);
         sys::oneui_terminal_view_set_cursor_blinking(raw, i32::from(options.cursor_blinking));
         sys::oneui_terminal_view_set_copy_on_select(raw, i32::from(options.copy_on_select));
-        sys::oneui_terminal_view_set_right_button_action(
-            raw,
-            options.right_button_action as i32,
-        );
-        sys::oneui_terminal_view_set_middle_button_action(
-            raw,
-            options.middle_button_action as i32,
-        );
+        sys::oneui_terminal_view_set_right_button_action(raw, options.right_button_action as i32);
+        sys::oneui_terminal_view_set_middle_button_action(raw, options.middle_button_action as i32);
         sys::oneui_terminal_view_set_scroll_rows_per_wheel(raw, options.scroll_rows_per_wheel);
         sys::oneui_terminal_view_set_line_numbers_visible(
             raw,
@@ -5654,6 +5659,7 @@ impl Window {
                 raw: Mutex::new(Some(raw)),
                 ui_thread: std::thread::current().id(),
             }),
+            raw_key_callback: None,
             _ui_thread: PhantomData,
         })
     }
@@ -5726,6 +5732,35 @@ impl Window {
                 sys::oneui_window_request_focus(raw, widget.as_raw(), i32::from(focus_visible)) != 0
             })
             .unwrap_or(false)
+    }
+
+    /// Installs a window-level key handler that runs before focused widgets.
+    /// Returning `true` consumes the event. Text composition remains routed
+    /// through the normal IME/text-input path.
+    pub fn set_on_raw_key<F>(&mut self, callback: F)
+    where
+        F: FnMut(RawKeyEvent) -> bool + 'static,
+    {
+        self.clear_raw_key_callback();
+        self.raw_key_callback = Some(Box::new(WindowRawKeyCallback {
+            handler: Box::new(callback),
+        }));
+        let user_data = (self
+            .raw_key_callback
+            .as_deref_mut()
+            .expect("window raw key callback was just installed")
+            as *mut WindowRawKeyCallback)
+            .cast();
+        self.state.with_raw(|raw| unsafe {
+            sys::oneui_window_set_on_raw_key(raw, Some(run_window_raw_key_callback), user_data);
+        });
+    }
+
+    pub fn clear_raw_key_callback(&mut self) {
+        self.state.with_raw(|raw| unsafe {
+            sys::oneui_window_set_on_raw_key(raw, None, std::ptr::null_mut());
+        });
+        self.raw_key_callback = None;
     }
 
     /// Installs the application theme before composing the window tree.
@@ -5812,23 +5847,26 @@ impl Window {
 
 impl Drop for Window {
     fn drop(&mut self) {
+        self.clear_raw_key_callback();
         self.state.destroy();
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::sys;
     use super::{
-        callback_panic_handler, run_callback_guarded, set_callback_panic_handler, terminal_style,
-        Button, Color, Dialog, Error, FileDialogFilter, FileDialogMode, FileDialogOptions,
-        IconSymbol, Insets, InteractiveSurface, InteractiveSurfaceStateStyle,
-        InteractiveSurfaceStyle, Label, List, ListItem, LogLine, LogView, Menu, OverlayAlignment,
-        OverlayHost, Panel, Popup, PopupInteractionMode, PopupPreferredPlacement, PromptOptions,
-        ReorderableGrid, ScrollView, SegmentedControl, Select, SelectionMode, SplitOrientation,
-        SplitView, Stack, StackDirection, StyleSheet, Switch, Tabs, TerminalCell, TerminalColor,
-        TerminalCursor, TerminalCursorStyle, TerminalFrame, TerminalSelection,
-        TerminalUnderlineStyle, TerminalView, TextField, TreeItem, TreeView, VirtualList, Window,
-        WindowOptions, WindowPlacement,
+        callback_panic_handler, run_callback_guarded, run_window_raw_key_callback,
+        set_callback_panic_handler, terminal_style, Button, Color, Dialog, Error, FileDialogFilter,
+        FileDialogMode, FileDialogOptions, IconSymbol, Insets, InteractiveSurface,
+        InteractiveSurfaceStateStyle, InteractiveSurfaceStyle, Label, List, ListItem, LogLine,
+        LogView, Menu, OverlayAlignment, OverlayHost, Panel, Popup, PopupInteractionMode,
+        PopupPreferredPlacement, PromptOptions, RawKeyEvent, ReorderableGrid, ScrollView,
+        SegmentedControl, Select, SelectionMode, SplitOrientation, SplitView, Stack,
+        StackDirection, StyleSheet, Switch, Tabs, TerminalCell, TerminalColor, TerminalCursor,
+        TerminalCursorStyle, TerminalFrame, TerminalSelection, TerminalUnderlineStyle,
+        TerminalView, TextField, TreeItem, TreeView, VirtualList, Window, WindowOptions,
+        WindowPlacement, WindowRawKeyCallback,
     };
     use std::cell::Cell;
     use std::rc::Rc;
@@ -5866,6 +5904,73 @@ mod tests {
         *callback_panic_handler()
             .lock()
             .expect("callback panic handler lock") = None;
+    }
+
+    #[test]
+    fn window_raw_key_callback_reports_consumption_and_preserves_event_data() {
+        let observed = Rc::new(Cell::new(None));
+        let observed_from_callback = Rc::clone(&observed);
+        let mut callback = Box::new(WindowRawKeyCallback {
+            handler: Box::new(move |event| {
+                observed_from_callback.set(Some(event));
+                event.pressed && event.ctrl && event.virtual_key == 0x4B
+            }),
+        });
+        let event = sys::OneUiRawKeyEvent {
+            virtual_key: 0x4B,
+            scan_code: 0x25,
+            pressed: 1,
+            repeat: 0,
+            extended: 0,
+            alt: 0,
+            ctrl: 1,
+            shift: 0,
+            win: 0,
+        };
+
+        let consumed = unsafe {
+            run_window_raw_key_callback(
+                &event,
+                (&mut *callback as *mut WindowRawKeyCallback).cast(),
+            )
+        };
+
+        assert_eq!(consumed, 1);
+        assert_eq!(
+            observed.get(),
+            Some(RawKeyEvent {
+                virtual_key: 0x4B,
+                scan_code: 0x25,
+                pressed: true,
+                repeat: false,
+                extended: false,
+                alt: false,
+                ctrl: true,
+                shift: false,
+                win: false,
+            })
+        );
+    }
+
+    #[test]
+    fn window_raw_key_callback_does_not_consume_null_or_panicking_handlers() {
+        assert_eq!(
+            unsafe { run_window_raw_key_callback(std::ptr::null(), std::ptr::null_mut()) },
+            0
+        );
+
+        let _guard = window_test_lock().lock().expect("window test lock");
+        let mut callback = Box::new(WindowRawKeyCallback {
+            handler: Box::new(|_| panic!("window shortcut failed")),
+        });
+        let event = sys::OneUiRawKeyEvent::default();
+        let consumed = unsafe {
+            run_window_raw_key_callback(
+                &event,
+                (&mut *callback as *mut WindowRawKeyCallback).cast(),
+            )
+        };
+        assert_eq!(consumed, 0);
     }
 
     #[test]

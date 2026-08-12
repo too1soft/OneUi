@@ -38,6 +38,8 @@ struct WindowPlacement {
 
 class ONEUI_API Window {
 public:
+    using RawKeyHandler = std::function<bool(const KeyEvent&)>;
+
     virtual ~Window() = default;
 
     static std::unique_ptr<Window> create(std::wstring title, int width, int height);
@@ -51,6 +53,10 @@ public:
         (void)focusVisible;
         return false;
     }
+    // Runs before focused-widget key routing. Returning true consumes the key
+    // event, which lets applications implement global shortcuts without
+    // duplicating platform message hooks or intercepting IME text input.
+    virtual void setRawKeyHandler(RawKeyHandler handler) { (void)handler; }
     // Creates the native handle on the calling UI thread without showing it.
     virtual void initialize() = 0;
     virtual void show() = 0;

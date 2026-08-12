@@ -1577,6 +1577,33 @@ int oneui_window_request_focus(OneUiWindow* window, OneUiWidget* widget, int foc
     return window->window->requestFocus(widget->widget.get(), focus_visible != 0) ? 1 : 0;
 }
 
+void oneui_window_set_on_raw_key(
+    OneUiWindow* window,
+    OneUiWindowRawKeyCallback callback,
+    void* user_data) {
+    if (!window || !window->window) {
+        return;
+    }
+    if (!callback) {
+        window->window->setRawKeyHandler({});
+        return;
+    }
+    window->window->setRawKeyHandler([callback, user_data](const oneui::KeyEvent& event) {
+        const OneUiRawKeyEvent native{
+            event.virtualKey,
+            event.scanCode,
+            event.pressed ? 1 : 0,
+            event.repeat ? 1 : 0,
+            event.extended ? 1 : 0,
+            event.alt ? 1 : 0,
+            event.control ? 1 : 0,
+            event.shift ? 1 : 0,
+            event.win ? 1 : 0,
+        };
+        return callback(&native, user_data) != 0;
+    });
+}
+
 void oneui_window_set_style_sheet(OneUiWindow* window, OneUiStyleSheet* style_sheet) {
     if (!window || !style_sheet || !style_sheet->sheet) {
         return;

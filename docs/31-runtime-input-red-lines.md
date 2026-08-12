@@ -17,5 +17,7 @@ OneUI owns the visual and input primitives. Downstream products own business run
 9. Streaming JSONL readers may tolerate a final incomplete line from a live writer and must use shared reads for active telemetry files, but invalid completed records must stay fatal.
 10. Real remote-control readiness requires a separate-desktop/VM target-application assertion. Framework primitives can expose input telemetry, but downstream products must also prove that the controlled-side focused application state changes through the visible session window.
 11. Performance work must include instrumentation. For remote-control products, collect per-frame render/input metrics such as capture, encode, transport wait, decode, color conversion, latency, FPS, bitrate, and p95 frame interval before claiming an optimization worked.
+12. Window-scoped shortcuts must use `Window::setRawKeyHandler` (Rust: `Window::set_on_raw_key`) instead of installing product-specific platform hooks. The handler runs before focused-widget routing, must return `true` only for a consumed key event, and must leave IME/composed text on the normal text-input path.
+13. System key combinations that are not consumed by the window handler must continue through the platform default procedure. A global shortcut layer must not suppress operating-system behavior such as the native Alt menu path by accident.
 
 These rules are generic framework rules. They apply to Remote, WYC, iShell, and any future OneUI downstream product.

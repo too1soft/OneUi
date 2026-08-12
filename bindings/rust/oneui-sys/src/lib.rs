@@ -5,7 +5,7 @@
 
 use std::ffi::{c_char, c_float, c_int, c_uint, c_ushort, c_void};
 
-pub const UTF8_ABI_VERSION: c_uint = 9;
+pub const UTF8_ABI_VERSION: c_uint = 10;
 
 #[repr(C)]
 pub struct OneUiWindow {
@@ -281,6 +281,8 @@ pub struct OneUiTerminalPointerEvent {
 
 pub type OneUiRawKeyCallback =
     Option<unsafe extern "C" fn(event: *const OneUiRawKeyEvent, user_data: *mut c_void)>;
+pub type OneUiWindowRawKeyCallback =
+    Option<unsafe extern "C" fn(event: *const OneUiRawKeyEvent, user_data: *mut c_void) -> c_int>;
 pub type OneUiTerminalPointerCallback =
     Option<unsafe extern "C" fn(event: *const OneUiTerminalPointerEvent, user_data: *mut c_void)>;
 pub type OneUiTerminalHyperlinkCallback =
@@ -345,6 +347,11 @@ extern "C" {
         widget: *mut OneUiWidget,
         focus_visible: c_int,
     ) -> c_int;
+    pub fn oneui_window_set_on_raw_key(
+        window: *mut OneUiWindow,
+        callback: OneUiWindowRawKeyCallback,
+        user_data: *mut c_void,
+    );
     pub fn oneui_window_set_style_sheet(
         window: *mut OneUiWindow,
         style_sheet: *mut OneUiStyleSheet,
