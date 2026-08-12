@@ -19,6 +19,9 @@ cargo test --manifest-path .\bindings\rust\Cargo.toml
 `oneui.lib` plus `oneui.dll` on Windows, or `liboneui.so` on Linux. The final
 application installer must ship the matching runtime library beside the Rust
 application binary or register it through the platform loader path.
+On Windows, `oneui-sys` also copies the matching `oneui.dll` into Cargo's
+active profile and test executable directories. This prevents an older DLL
+left beside a test binary from satisfying the loader before `PATH` is checked.
 
 New Rust code must use the UTF-8 APIs. The older `wchar_t*` C functions remain
 only for compatibility with existing Windows consumers.

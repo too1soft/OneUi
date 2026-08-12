@@ -5,7 +5,7 @@
 
 use std::ffi::{c_char, c_float, c_int, c_uint, c_ushort, c_void};
 
-pub const UTF8_ABI_VERSION: c_uint = 6;
+pub const UTF8_ABI_VERSION: c_uint = 7;
 
 #[repr(C)]
 pub struct OneUiWindow {
@@ -182,6 +182,7 @@ pub type OneUiTreeExpansionCallback = Option<
 pub type OneUiVoidCallback = Option<unsafe extern "C" fn(user_data: *mut c_void)>;
 pub type OneUiBoolCallback = Option<unsafe extern "C" fn(value: c_int, user_data: *mut c_void)>;
 pub type OneUiIntCallback = Option<unsafe extern "C" fn(value: c_int, user_data: *mut c_void)>;
+pub type OneUiFloatCallback = Option<unsafe extern "C" fn(value: f32, user_data: *mut c_void)>;
 pub type OneUiIndexPointCallback =
     Option<unsafe extern "C" fn(index: c_int, x: f32, y: f32, user_data: *mut c_void)>;
 pub type OneUiReorderRequestedCallback =
@@ -349,6 +350,27 @@ extern "C" {
     pub fn oneui_stack_set_gap(stack: *mut OneUiWidget, gap: f32);
     pub fn oneui_stack_set_padding(stack: *mut OneUiWidget, insets: OneUiInsets);
     pub fn oneui_stack_set_align(stack: *mut OneUiWidget, align: c_int);
+
+    // 0 = horizontal, 1 = vertical. These values are part of the stable C ABI.
+    pub fn oneui_split_view_create(orientation: c_int) -> *mut OneUiWidget;
+    pub fn oneui_split_view_set_first(split_view: *mut OneUiWidget, child: *mut OneUiWidget);
+    pub fn oneui_split_view_set_second(split_view: *mut OneUiWidget, child: *mut OneUiWidget);
+    pub fn oneui_split_view_set_orientation(split_view: *mut OneUiWidget, orientation: c_int);
+    pub fn oneui_split_view_set_ratio(split_view: *mut OneUiWidget, ratio: f32);
+    pub fn oneui_split_view_ratio(split_view: *mut OneUiWidget) -> f32;
+    pub fn oneui_split_view_set_gap(split_view: *mut OneUiWidget, gap: f32);
+    pub fn oneui_split_view_set_padding(split_view: *mut OneUiWidget, insets: OneUiInsets);
+    pub fn oneui_split_view_set_resizable(split_view: *mut OneUiWidget, resizable: c_int);
+    pub fn oneui_split_view_set_minimum_pane_extent(
+        split_view: *mut OneUiWidget,
+        first: f32,
+        second: f32,
+    );
+    pub fn oneui_split_view_set_on_ratio_changed(
+        split_view: *mut OneUiWidget,
+        callback: OneUiFloatCallback,
+        user_data: *mut c_void,
+    );
 
     pub fn oneui_overlay_host_create() -> *mut OneUiWidget;
     pub fn oneui_overlay_host_set_content(host: *mut OneUiWidget, child: *mut OneUiWidget);
@@ -877,11 +899,7 @@ extern "C" {
         callback: OneUiTreeReorderRequestedCallback,
         user_data: *mut c_void,
     );
-    pub fn oneui_tree_view_update_external_drop_target(
-        tree_view: *mut OneUiWidget,
-        x: f32,
-        y: f32,
-    );
+    pub fn oneui_tree_view_update_external_drop_target(tree_view: *mut OneUiWidget, x: f32, y: f32);
     pub fn oneui_tree_view_clear_external_drop_target(tree_view: *mut OneUiWidget);
     pub fn oneui_tree_view_external_drop_target_id_utf8(
         tree_view: *mut OneUiWidget,

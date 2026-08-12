@@ -23,7 +23,7 @@
 - `ReorderableGrid`：面向产品卡片的响应式布局，使用稳定 item ID 报告鼠标拖拽重排；API 设置最大列数，`grid-min-column-width`、`gap`、`height`、`padding` 和插入指示线由 CSS-like 样式驱动，产品确认后再原位应用顺序。
 - `Wrap`：左到右换行骨架。
 - `DockView`：top/right/bottom/left/center app-shell 区域骨架。
-- `SplitView`：静态横向/纵向双栏骨架，split ratio 可钳制。
+- `SplitView`：横向/纵向双栏、静态或可拖拽比例、双侧最小尺寸、调整光标和比例变更回调。
 - `ScrollView`：垂直滚动 viewport、鼠标滚轮、clipping、offset clamp、水平 content width / offset API、键盘滚动骨架、水平 thumb 绘制和水平 thumb 鼠标拖拽。
 
 已实现控件：

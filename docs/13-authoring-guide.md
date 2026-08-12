@@ -114,11 +114,16 @@ dock->setBottom(statusBar);
 ```cpp
 auto split = std::make_shared<oneui::SplitView>(oneui::SplitOrientation::Horizontal);
 split->setSplitRatio(0.32f);
+split->setGap(6.0f);
+split->setMinimumPaneExtent(220.0f, 320.0f);
+split->setResizable(true);
 split->setFirst(fileTree);
 split->setSecond(editor);
 ```
 
-当前是静态 split，拖拽分割条尚未实现。
+启用 `setResizable(true)` 后，分隔条支持连续鼠标拖拽和横向/纵向调整光标。产品可以通过
+`setOnSplitRatioChanged(...)` 持久化用户调整后的比例；布局会统一钳制两侧最小尺寸，窗口
+缩小时不会产生负尺寸。仅需要静态双栏时保持默认 `resizable=false` 即可。
 
 ### 3.6 ScrollView
 

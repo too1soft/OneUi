@@ -35,6 +35,7 @@
 #include "oneui/layout/panel.h"
 #include "oneui/layout/reorderable_grid.h"
 #include "oneui/layout/scroll_view.h"
+#include "oneui/layout/split_view.h"
 #include "oneui/layout/stack.h"
 #include "oneui/layout/top_bar.h"
 #include "oneui/platform/window.h"
@@ -1985,6 +1986,101 @@ void oneui_stack_set_align(OneUiWidget* stack, OneUiStackAlign align) {
         nativeStack->setAlign(oneui::StackAlign::Stretch);
         break;
     }
+}
+
+OneUiWidget* oneui_split_view_create(OneUiSplitOrientation orientation) {
+    const auto nativeOrientation = orientation == OneUiSplitOrientationVertical
+        ? oneui::SplitOrientation::Vertical
+        : oneui::SplitOrientation::Horizontal;
+    auto* wrapper = wrap(std::make_shared<oneui::SplitView>(nativeOrientation));
+    if (wrapper) {
+        wrapper->tag = "splitview";
+    }
+    return wrapper;
+}
+
+void oneui_split_view_set_first(OneUiWidget* split_view, OneUiWidget* child) {
+    auto* nativeSplit = asWidget<oneui::SplitView>(split_view);
+    if (!nativeSplit) {
+        return;
+    }
+    nativeSplit->setFirst(child ? child->widget : nullptr);
+}
+
+void oneui_split_view_set_second(OneUiWidget* split_view, OneUiWidget* child) {
+    auto* nativeSplit = asWidget<oneui::SplitView>(split_view);
+    if (!nativeSplit) {
+        return;
+    }
+    nativeSplit->setSecond(child ? child->widget : nullptr);
+}
+
+void oneui_split_view_set_orientation(
+    OneUiWidget* split_view,
+    OneUiSplitOrientation orientation) {
+    auto* nativeSplit = asWidget<oneui::SplitView>(split_view);
+    if (!nativeSplit) {
+        return;
+    }
+    nativeSplit->setOrientation(orientation == OneUiSplitOrientationVertical
+        ? oneui::SplitOrientation::Vertical
+        : oneui::SplitOrientation::Horizontal);
+}
+
+void oneui_split_view_set_ratio(OneUiWidget* split_view, float ratio) {
+    auto* nativeSplit = asWidget<oneui::SplitView>(split_view);
+    if (nativeSplit) {
+        nativeSplit->setSplitRatio(ratio);
+    }
+}
+
+float oneui_split_view_ratio(OneUiWidget* split_view) {
+    auto* nativeSplit = asWidget<oneui::SplitView>(split_view);
+    return nativeSplit ? nativeSplit->splitRatio() : 0.0f;
+}
+
+void oneui_split_view_set_gap(OneUiWidget* split_view, float gap) {
+    auto* nativeSplit = asWidget<oneui::SplitView>(split_view);
+    if (nativeSplit) {
+        nativeSplit->setGap(gap);
+    }
+}
+
+void oneui_split_view_set_padding(OneUiWidget* split_view, OneUiInsets insets) {
+    auto* nativeSplit = asWidget<oneui::SplitView>(split_view);
+    if (nativeSplit) {
+        nativeSplit->setPadding(toNativeInsets(insets));
+    }
+}
+
+void oneui_split_view_set_resizable(OneUiWidget* split_view, int resizable) {
+    auto* nativeSplit = asWidget<oneui::SplitView>(split_view);
+    if (nativeSplit) {
+        nativeSplit->setResizable(resizable != 0);
+    }
+}
+
+void oneui_split_view_set_minimum_pane_extent(
+    OneUiWidget* split_view,
+    float first,
+    float second) {
+    auto* nativeSplit = asWidget<oneui::SplitView>(split_view);
+    if (nativeSplit) {
+        nativeSplit->setMinimumPaneExtent(first, second);
+    }
+}
+
+void oneui_split_view_set_on_ratio_changed(
+    OneUiWidget* split_view,
+    OneUiFloatCallback callback,
+    void* user_data) {
+    auto* nativeSplit = asWidget<oneui::SplitView>(split_view);
+    if (!nativeSplit) {
+        return;
+    }
+    nativeSplit->setOnSplitRatioChanged(callback
+        ? [callback, user_data](float ratio) { callback(ratio, user_data); }
+        : std::function<void(float)>{});
 }
 
 OneUiWidget* oneui_top_bar_create(void) {

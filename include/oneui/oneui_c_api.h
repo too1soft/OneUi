@@ -22,6 +22,7 @@ typedef void (*OneUiUtf8TextCallback)(const char* text, size_t length, void* use
 typedef void (*OneUiTreeExpansionCallback)(const char* id, size_t length, int expanded, void* user_data);
 typedef void (*OneUiBoolCallback)(int checked, void* user_data);
 typedef void (*OneUiIntCallback)(int value, void* user_data);
+typedef void (*OneUiFloatCallback)(float value, void* user_data);
 typedef void (*OneUiIntArrayCallback)(const int* values, size_t count, void* user_data);
 typedef void (*OneUiIndexPointCallback)(int index, float x, float y, void* user_data);
 typedef void (*OneUiReorderRequestedCallback)(int source_index, int target_index, void* user_data);
@@ -236,6 +237,11 @@ typedef enum OneUiStackAlign {
     OneUiStackAlignStretch = 3
 } OneUiStackAlign;
 
+typedef enum OneUiSplitOrientation {
+    OneUiSplitOrientationHorizontal = 0,
+    OneUiSplitOrientationVertical = 1
+} OneUiSplitOrientation;
+
 typedef enum OneUiButtonVariant {
     OneUiButtonVariantPrimary = 0,
     OneUiButtonVariantSecondary = 1
@@ -330,7 +336,7 @@ enum {
     OneUiTerminalCellOverline = 1u << 11
 };
 
-#define ONEUI_UTF8_ABI_VERSION 6u
+#define ONEUI_UTF8_ABI_VERSION 7u
 
 ONEUI_API const char* oneui_version(void);
 ONEUI_API unsigned int oneui_utf8_abi_version(void);
@@ -425,6 +431,27 @@ ONEUI_API void oneui_stack_add(OneUiWidget* stack, OneUiWidget* child);
 ONEUI_API void oneui_stack_set_gap(OneUiWidget* stack, float gap);
 ONEUI_API void oneui_stack_set_padding(OneUiWidget* stack, OneUiInsets insets);
 ONEUI_API void oneui_stack_set_align(OneUiWidget* stack, OneUiStackAlign align);
+
+/* Resizable two-pane layout with minimum pane constraints. */
+ONEUI_API OneUiWidget* oneui_split_view_create(OneUiSplitOrientation orientation);
+ONEUI_API void oneui_split_view_set_first(OneUiWidget* split_view, OneUiWidget* child);
+ONEUI_API void oneui_split_view_set_second(OneUiWidget* split_view, OneUiWidget* child);
+ONEUI_API void oneui_split_view_set_orientation(
+    OneUiWidget* split_view,
+    OneUiSplitOrientation orientation);
+ONEUI_API void oneui_split_view_set_ratio(OneUiWidget* split_view, float ratio);
+ONEUI_API float oneui_split_view_ratio(OneUiWidget* split_view);
+ONEUI_API void oneui_split_view_set_gap(OneUiWidget* split_view, float gap);
+ONEUI_API void oneui_split_view_set_padding(OneUiWidget* split_view, OneUiInsets insets);
+ONEUI_API void oneui_split_view_set_resizable(OneUiWidget* split_view, int resizable);
+ONEUI_API void oneui_split_view_set_minimum_pane_extent(
+    OneUiWidget* split_view,
+    float first,
+    float second);
+ONEUI_API void oneui_split_view_set_on_ratio_changed(
+    OneUiWidget* split_view,
+    OneUiFloatCallback callback,
+    void* user_data);
 
 ONEUI_API OneUiWidget* oneui_top_bar_create(void);
 ONEUI_API void oneui_top_bar_set_leading(OneUiWidget* top_bar, OneUiWidget* child);

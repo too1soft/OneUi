@@ -278,6 +278,9 @@ void testAppShellAbiCreatesReusableSlots() {
     OneUiWidget* shell = oneui_app_shell_create();
     OneUiWidget* sidebar = oneui_panel_create();
     OneUiWidget* header = oneui_stack_create(OneUiStackDirectionRow);
+    OneUiWidget* split = oneui_split_view_create(OneUiSplitOrientationHorizontal);
+    OneUiWidget* splitFirst = oneui_panel_create();
+    OneUiWidget* splitSecond = oneui_panel_create();
     OneUiWidget* content = oneui_panel_create();
     OneUiWidget* footer = oneui_label_create(L"status");
     OneUiWidget* notify = oneui_icon_button_create(8);
@@ -292,6 +295,9 @@ void testAppShellAbiCreatesReusableSlots() {
     expectTrue("app shell create", shell != nullptr);
     expectTrue("sidebar create", sidebar != nullptr);
     expectTrue("header create", header != nullptr);
+    expectTrue("split view create", split != nullptr);
+    expectTrue("split first create", splitFirst != nullptr);
+    expectTrue("split second create", splitSecond != nullptr);
     expectTrue("content create", content != nullptr);
     expectTrue("footer create", footer != nullptr);
     expectTrue("icon button create", notify != nullptr);
@@ -315,6 +321,16 @@ void testAppShellAbiCreatesReusableSlots() {
     oneui_app_shell_set_gap(shell, 0.0f);
     oneui_app_shell_set_padding(shell, OneUiInsets{0.0f, 0.0f, 0.0f, 0.0f});
     oneui_app_shell_set_sidebar_visible(shell, 1);
+    oneui_split_view_set_first(split, splitFirst);
+    oneui_split_view_set_second(split, splitSecond);
+    oneui_split_view_set_ratio(split, 0.6f);
+    oneui_split_view_set_gap(split, 6.0f);
+    oneui_split_view_set_padding(split, OneUiInsets{1.0f, 2.0f, 3.0f, 4.0f});
+    oneui_split_view_set_resizable(split, 1);
+    oneui_split_view_set_minimum_pane_extent(split, 80.0f, 60.0f);
+    oneui_split_view_set_on_ratio_changed(split, nullptr, nullptr);
+    expectTrue("split ratio round trip", std::abs(oneui_split_view_ratio(split) - 0.6f) < 0.001f);
+    oneui_split_view_set_orientation(split, OneUiSplitOrientationVertical);
     oneui_icon_button_set_symbol(notify, 13);
     oneui_icon_button_set_on_click(notify, nullptr, nullptr);
     oneui_status_strip_set_title(strip, L"State");
@@ -380,6 +396,9 @@ void testAppShellAbiCreatesReusableSlots() {
     oneui_widget_destroy(footer);
     oneui_widget_destroy(content);
     oneui_widget_destroy(header);
+    oneui_widget_destroy(splitSecond);
+    oneui_widget_destroy(splitFirst);
+    oneui_widget_destroy(split);
     oneui_widget_destroy(sidebar);
     oneui_widget_destroy(shell);
     oneui_style_sheet_destroy(sheet);

@@ -608,6 +608,12 @@ pub enum StackDirection {
     Row,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SplitOrientation {
+    Horizontal = 0,
+    Vertical = 1,
+}
+
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Insets {
     pub top: f32,
@@ -952,6 +958,119 @@ impl Stack {
 
     pub fn as_widget(&self) -> &Widget {
         &self.widget
+    }
+}
+
+struct FloatChangedCallback {
+    handler: Box<dyn FnMut(f32) + 'static>,
+}
+
+unsafe extern "C" fn run_float_changed_callback(value: f32, user_data: *mut std::ffi::c_void) {
+    if user_data.is_null() {
+        return;
+    }
+    let callback = unsafe { &mut *user_data.cast::<FloatChangedCallback>() };
+    run_callback_guarded("value.float_changed", || (callback.handler)(value));
+}
+
+/// Native resizable two-pane layout.
+///
+/// OneUI owns divider hit testing and drag capture. Product code supplies pane
+/// content, minimum extents, and optionally persists ratio changes.
+pub struct SplitView {
+    widget: Widget,
+    ratio_changed_callback: Option<Box<FloatChangedCallback>>,
+}
+
+impl SplitView {
+    pub fn new(orientation: SplitOrientation) -> Result<Self, Error> {
+        let widget = Widget::from_raw(unsafe { sys::oneui_split_view_create(orientation as i32) })?;
+        Ok(Self {
+            widget,
+            ratio_changed_callback: None,
+        })
+    }
+
+    pub fn set_first(&self, child: &Widget) {
+        unsafe { sys::oneui_split_view_set_first(self.widget.as_raw(), child.as_raw()) };
+    }
+
+    pub fn set_second(&self, child: &Widget) {
+        unsafe { sys::oneui_split_view_set_second(self.widget.as_raw(), child.as_raw()) };
+    }
+
+    pub fn set_orientation(&self, orientation: SplitOrientation) {
+        unsafe { sys::oneui_split_view_set_orientation(self.widget.as_raw(), orientation as i32) };
+    }
+
+    pub fn set_ratio(&self, ratio: f32) {
+        unsafe { sys::oneui_split_view_set_ratio(self.widget.as_raw(), ratio) };
+    }
+
+    pub fn ratio(&self) -> f32 {
+        unsafe { sys::oneui_split_view_ratio(self.widget.as_raw()) }
+    }
+
+    pub fn set_gap(&self, gap: f32) {
+        unsafe { sys::oneui_split_view_set_gap(self.widget.as_raw(), gap) };
+    }
+
+    pub fn set_padding(&self, padding: Insets) {
+        unsafe { sys::oneui_split_view_set_padding(self.widget.as_raw(), padding.into()) };
+    }
+
+    pub fn set_resizable(&self, resizable: bool) {
+        unsafe { sys::oneui_split_view_set_resizable(self.widget.as_raw(), i32::from(resizable)) };
+    }
+
+    pub fn set_minimum_pane_extent(&self, first: f32, second: f32) {
+        unsafe {
+            sys::oneui_split_view_set_minimum_pane_extent(self.widget.as_raw(), first, second)
+        };
+    }
+
+    pub fn set_on_ratio_changed<F>(&mut self, callback: F)
+    where
+        F: FnMut(f32) + 'static,
+    {
+        self.clear_on_ratio_changed();
+        self.ratio_changed_callback = Some(Box::new(FloatChangedCallback {
+            handler: Box::new(callback),
+        }));
+        let user_data = (self
+            .ratio_changed_callback
+            .as_deref_mut()
+            .expect("split ratio callback was just installed")
+            as *mut FloatChangedCallback)
+            .cast();
+        unsafe {
+            sys::oneui_split_view_set_on_ratio_changed(
+                self.widget.as_raw(),
+                Some(run_float_changed_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn clear_on_ratio_changed(&mut self) {
+        unsafe {
+            sys::oneui_split_view_set_on_ratio_changed(
+                self.widget.as_raw(),
+                None,
+                std::ptr::null_mut(),
+            )
+        };
+        self.ratio_changed_callback = None;
+    }
+
+    pub fn as_widget(&self) -> &Widget {
+        &self.widget
+    }
+}
+
+impl Drop for SplitView {
+    fn drop(&mut self) {
+        self.clear_on_ratio_changed();
     }
 }
 
@@ -3517,19 +3636,13 @@ impl TerminalView {
 
     pub fn set_right_button_action(&self, action: TerminalAuxiliaryButtonAction) {
         unsafe {
-            sys::oneui_terminal_view_set_right_button_action(
-                self.widget.as_raw(),
-                action as i32,
-            )
+            sys::oneui_terminal_view_set_right_button_action(self.widget.as_raw(), action as i32)
         };
     }
 
     pub fn set_middle_button_action(&self, action: TerminalAuxiliaryButtonAction) {
         unsafe {
-            sys::oneui_terminal_view_set_middle_button_action(
-                self.widget.as_raw(),
-                action as i32,
-            )
+            sys::oneui_terminal_view_set_middle_button_action(self.widget.as_raw(), action as i32)
         };
     }
 
@@ -4773,10 +4886,7 @@ impl VirtualList {
 
     pub fn set_item_drag_enabled(&self, enabled: bool) {
         unsafe {
-            sys::oneui_virtual_list_set_item_drag_enabled(
-                self.widget.as_raw(),
-                i32::from(enabled),
-            )
+            sys::oneui_virtual_list_set_item_drag_enabled(self.widget.as_raw(), i32::from(enabled))
         };
     }
 
@@ -5002,9 +5112,7 @@ impl TreeView {
     /// owns transient presentation state; product code remains responsible for validating
     /// and applying the domain operation when the drag is dropped.
     pub fn update_external_drop_target(&self, x: f32, y: f32) -> String {
-        unsafe {
-            sys::oneui_tree_view_update_external_drop_target(self.widget.as_raw(), x, y)
-        };
+        unsafe { sys::oneui_tree_view_update_external_drop_target(self.widget.as_raw(), x, y) };
         self.external_drop_target_id()
     }
 
@@ -5342,10 +5450,10 @@ mod tests {
         InteractiveSurfaceStateStyle, InteractiveSurfaceStyle, Label, List, ListItem, LogLine,
         LogView, Menu, OverlayAlignment, OverlayHost, Panel, Popup, PopupInteractionMode,
         PopupPreferredPlacement, PromptOptions, ReorderableGrid, ScrollView, SegmentedControl,
-        Select, SelectionMode, Stack, StackDirection, StyleSheet, Switch, Tabs, TerminalCell,
-        TerminalColor, TerminalCursor, TerminalCursorStyle, TerminalFrame, TerminalSelection,
-        TerminalUnderlineStyle, TerminalView, TextField, TreeItem, TreeView, VirtualList, Window,
-        WindowOptions, WindowPlacement,
+        Select, SelectionMode, SplitOrientation, SplitView, Stack, StackDirection, StyleSheet,
+        Switch, Tabs, TerminalCell, TerminalColor, TerminalCursor, TerminalCursorStyle,
+        TerminalFrame, TerminalSelection, TerminalUnderlineStyle, TerminalView, TextField,
+        TreeItem, TreeView, VirtualList, Window, WindowOptions, WindowPlacement,
     };
     use std::cell::Cell;
     use std::rc::Rc;
@@ -5434,6 +5542,32 @@ mod tests {
         label.set_font_size(20.0);
         content.add(label.as_widget());
         window.set_content(content.as_widget());
+    }
+
+    #[test]
+    fn configures_resizable_split_view_through_safe_binding() {
+        let _guard = window_test_lock().lock().expect("window test lock");
+        let mut split =
+            SplitView::new(SplitOrientation::Horizontal).expect("split view should be created");
+        let first = Panel::new().expect("first panel should be created");
+        let second = Panel::new().expect("second panel should be created");
+        split.set_first(first.as_widget());
+        split.set_second(second.as_widget());
+        split.set_gap(6.0);
+        split.set_padding(Insets {
+            top: 1.0,
+            right: 2.0,
+            bottom: 3.0,
+            left: 4.0,
+        });
+        split.set_minimum_pane_extent(120.0, 160.0);
+        split.set_resizable(true);
+        split.set_ratio(0.625);
+        split.set_orientation(SplitOrientation::Vertical);
+        split.set_on_ratio_changed(|_| {});
+
+        assert!((split.ratio() - 0.625).abs() < 0.001);
+        split.clear_on_ratio_changed();
     }
 
     #[test]

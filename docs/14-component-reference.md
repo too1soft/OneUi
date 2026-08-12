@@ -436,7 +436,9 @@ for (const oneui::MonitorInfo& monitor : oneui::enumerateMonitors()) {
 
 ### SplitView
 
-双面板。限制：不可拖拽，只有静态比例。
+横向或纵向双面板。默认保持静态比例；启用 `setResizable(true)` 后提供原生分隔条命中、
+连续拖拽、方向对应的调整光标、双侧最小尺寸约束和比例变更回调。`setGap(...)` 控制可见
+分隔间距，命中区域会保证最小可操作宽度，不要求产品层扩大布局间距。
 
 ### ScrollView
 

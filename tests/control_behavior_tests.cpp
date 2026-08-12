@@ -6104,6 +6104,57 @@ void testSplitViewRatioGapPaddingAndHiddenChild() {
     expectRect("Split second fills when first hidden", second->frame(), oneui::Rect{5.0f, 5.0f, 200.0f, 90.0f});
 }
 
+void testSplitViewResizableDividerHonorsMinimumExtents() {
+    oneui::SplitView split;
+    split.setFrame(oneui::Rect{0.0f, 0.0f, 210.0f, 100.0f});
+    split.setPadding(oneui::Insets{5.0f});
+    split.setGap(10.0f);
+    split.setResizable(true);
+    split.setMinimumPaneExtent(60.0f, 40.0f);
+
+    auto first = std::make_shared<LayoutProbe>(oneui::Size{0.0f, 0.0f});
+    auto second = std::make_shared<LayoutProbe>(oneui::Size{0.0f, 0.0f});
+    split.setFirst(first);
+    split.setSecond(second);
+
+    int changeCount = 0;
+    float changedRatio = 0.0f;
+    split.setOnSplitRatioChanged([&](float ratio) {
+        ++changeCount;
+        changedRatio = ratio;
+    });
+
+    RecordingCanvas canvas;
+    split.paint(canvas);
+    expectEqual(
+        "Split divider exposes horizontal resize cursor",
+        split.cursor(oneui::Point{105.0f, 50.0f}) == oneui::CursorKind::ResizeHorizontal ? 1 : 0,
+        1);
+    expectEqual(
+        "Split divider starts drag",
+        split.onMouseDown(oneui::MouseEvent{oneui::Point{105.0f, 50.0f}, oneui::MouseButton::Left}) ? 1 : 0,
+        1);
+    split.onMouseMove(oneui::MouseEvent{oneui::Point{10.0f, 50.0f}, oneui::MouseButton::Left});
+    split.paint(canvas);
+
+    expectNear("Split drag clamps first minimum", first->frame().width, 60.0f);
+    expectNear("Split drag preserves second extent", second->frame().width, 130.0f);
+    expectEqual("Split drag reports one ratio change", changeCount, 1);
+    expectNear("Split drag reports constrained ratio", changedRatio, 60.0f / 190.0f);
+    expectEqual(
+        "Split divider ends drag",
+        split.onMouseUp(oneui::MouseEvent{oneui::Point{10.0f, 50.0f}, oneui::MouseButton::Left}) ? 1 : 0,
+        1);
+
+    split.setOrientation(oneui::SplitOrientation::Vertical);
+    split.setSplitRatio(0.5f);
+    split.paint(canvas);
+    expectEqual(
+        "Split divider exposes vertical resize cursor",
+        split.cursor(oneui::Point{105.0f, 58.0f}) == oneui::CursorKind::ResizeVertical ? 1 : 0,
+        1);
+}
+
 void testScrollViewWheelClampsToContentBounds() {
     auto content = std::make_shared<LayoutProbe>(oneui::Size{0.0f, 300.0f});
     oneui::ScrollView scroll;
@@ -6652,6 +6703,7 @@ int main() {
     testTextFieldAffixIconsPaintAndOffsetText();
     testSidebarNavItemsRemainVisibleAfterHoverSweep();
     testSplitViewRatioGapPaddingAndHiddenChild();
+    testSplitViewResizableDividerHonorsMinimumExtents();
     testScrollViewWheelClampsToContentBounds();
     testScrollViewNoOverflowDoesNotScrollOrPaintThumb();
     testScrollViewIgnoresWheelOutsideBounds();
