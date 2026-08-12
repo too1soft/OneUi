@@ -212,6 +212,8 @@ OneUI 的 Rust 安全绑定还提供窗口归属的原生文件对话框：`File
 窗口线程中的命令回调可直接调用 `UiDispatcher::confirm` 与 `UiDispatcher::prompt`；
 后台任务需要等待用户输入时使用对应的 `confirm_blocking` 与 `prompt_blocking`。两组 API
 都由窗口拥有，调用线程约束明确，产品无需自行创建平台消息循环。
+后台加载完整数据集时，`VirtualListHandle::set_items` 会将一次整表修订投递到所属窗口线程；
+单行实时状态仍使用 `update_item`，从而保留滚动与选择状态。
 cargo test --manifest-path .\bindings\rust\Cargo.toml
 ```
 

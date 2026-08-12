@@ -4609,6 +4609,43 @@ pub struct VirtualListHandle {
 }
 
 impl VirtualListHandle {
+    /// Replaces the complete data revision on the owning window thread.
+    ///
+    /// Use this for background loads, filters, and directory scans. Incremental
+    /// status changes should continue to use [`Self::update_item`] so active
+    /// scrolling and selection are preserved.
+    pub fn set_items(&self, items: Vec<ListItem>) -> Result<(), Error> {
+        if self.state.raw.load(Ordering::Acquire).is_null() {
+            return Err(Error::WidgetDestroyed);
+        }
+        let state = Arc::clone(&self.state);
+        self.dispatcher.dispatch(move || {
+            state
+                .pending_items
+                .lock()
+                .expect("virtual list pending items lock poisoned")
+                .clear();
+            let raw = state.raw.load(Ordering::Acquire);
+            if raw.is_null() {
+                return;
+            }
+            let native_items = items
+                .iter()
+                .map(|item| sys::OneUiListItemUtf8 {
+                    title: sys::OneUiUtf8String::from_str(&item.title),
+                    detail: sys::OneUiUtf8String::from_str(&item.detail),
+                })
+                .collect::<Vec<_>>();
+            unsafe {
+                sys::oneui_virtual_list_set_items_utf8(
+                    raw,
+                    native_items.as_ptr(),
+                    native_items.len(),
+                )
+            };
+        })
+    }
+
     pub fn update_item(&self, index: usize, item: ListItem) -> Result<(), Error> {
         if self.state.raw.load(Ordering::Acquire).is_null() {
             return Err(Error::WidgetDestroyed);
@@ -6491,6 +6528,37 @@ mod tests {
             .dispatch(move || close_dispatcher.request_close())
             .expect("window should accept close request");
         assert_eq!(window.run(), 0);
+    }
+
+    #[test]
+    fn virtual_list_handle_replaces_a_background_data_revision() {
+        let _guard = window_test_lock().lock().expect("window test lock");
+        let window = Window::new(&WindowOptions::default()).expect("window should be created");
+        let list = VirtualList::new().expect("virtual list should be created");
+        list.set_items(&[ListItem {
+            title: "Loading".to_owned(),
+            detail: String::new(),
+        }]);
+        window.set_content(list.as_widget());
+        let handle = window.virtual_list_handle(&list);
+        let close_dispatcher = window.dispatcher();
+        let worker = thread::spawn(move || {
+            handle
+                .set_items(vec![
+                    ListItem {
+                        title: "Alpha".to_owned(),
+                        detail: "Ready".to_owned(),
+                    },
+                    ListItem {
+                        title: "Beta".to_owned(),
+                        detail: "Ready".to_owned(),
+                    },
+                ])
+                .expect("background revision should be accepted");
+            close_dispatcher.request_close();
+        });
+        assert_eq!(window.run(), 0);
+        worker.join().expect("worker should finish");
     }
 
     #[test]

@@ -223,6 +223,9 @@ Window-thread command callbacks can call `UiDispatcher::confirm` and
 `UiDispatcher::prompt` directly. Worker operations that must wait for input use
 the corresponding `confirm_blocking` and `prompt_blocking` methods. Both forms
 remain owner-bound and define their thread contract explicitly.
+For complete background data loads, `VirtualListHandle::set_items` posts one
+full revision to the owning window thread. Live row status continues to use
+`update_item` so scrolling and selection remain stable.
 cargo test --manifest-path .\bindings\rust\Cargo.toml
 ```
 
