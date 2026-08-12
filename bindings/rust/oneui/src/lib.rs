@@ -328,6 +328,10 @@ struct LocalDispatchedTask {
     task: Option<Box<dyn FnOnce() + 'static>>,
 }
 
+struct AnimationFrameTask {
+    task: Option<Box<dyn FnOnce(f64) + 'static>>,
+}
+
 unsafe impl Send for UiDispatcher {}
 unsafe impl Sync for UiDispatcher {}
 
@@ -373,6 +377,13 @@ unsafe extern "C" fn run_local_dispatched_task(user_data: *mut std::ffi::c_void)
 
 unsafe extern "C" fn drop_local_dispatched_task(user_data: *mut std::ffi::c_void) {
     drop(unsafe { Box::from_raw(user_data.cast::<LocalDispatchedTask>()) });
+}
+
+unsafe extern "C" fn run_animation_frame_task(now_ms: f64, user_data: *mut std::ffi::c_void) {
+    let mut task = unsafe { Box::from_raw(user_data.cast::<AnimationFrameTask>()) };
+    if let Some(task) = task.task.take() {
+        run_callback_guarded("dispatcher.animation_frame", || task(now_ms));
+    }
 }
 
 impl UiDispatcher {
@@ -520,6 +531,35 @@ impl UiDispatcher {
                 Err(Error::WindowClosed)
             }
         }
+    }
+
+    /// Runs a UI-owned callback on the next presentation frame.
+    ///
+    /// The callback executes on the window thread and may capture non-`Send`
+    /// product state. This is a one-shot request; recurring work must explicitly
+    /// request the next frame after deciding it still has work to do.
+    pub fn request_animation_frame_local<F>(&self, task: F) -> Result<(), Error>
+    where
+        F: FnOnce(f64) + 'static,
+    {
+        if std::thread::current().id() != self.state.ui_thread {
+            return Err(Error::WrongThread);
+        }
+        let task = Box::new(AnimationFrameTask {
+            task: Some(Box::new(task)),
+        });
+        let user_data = Box::into_raw(task).cast();
+        let Some(()) = self.state.with_raw(|raw| unsafe {
+            sys::oneui_window_request_animation_frame(
+                raw,
+                Some(run_animation_frame_task),
+                user_data,
+            )
+        }) else {
+            drop(unsafe { Box::from_raw(user_data.cast::<AnimationFrameTask>()) });
+            return Err(Error::WindowClosed);
+        };
+        Ok(())
     }
 
     /// Displays a platform-native confirmation prompt on the window thread
@@ -6953,6 +6993,27 @@ mod tests {
                 close_dispatcher.request_close();
             })
             .expect("window should accept local deferred work");
+
+        assert!(!observed.get());
+        assert_eq!(window.run(), 0);
+        assert!(observed.get());
+    }
+
+    #[test]
+    fn dispatcher_runs_one_shot_animation_frame_on_the_window_thread() {
+        let _guard = window_test_lock().lock().expect("window test lock");
+        let window = Window::new(&WindowOptions::default()).expect("window should be created");
+        let dispatcher = window.dispatcher();
+        let observed = Rc::new(Cell::new(false));
+        let observed_from_frame = Rc::clone(&observed);
+        let close_dispatcher = dispatcher.clone();
+        dispatcher
+            .request_animation_frame_local(move |now_ms| {
+                assert!(now_ms.is_finite());
+                observed_from_frame.set(true);
+                close_dispatcher.request_close();
+            })
+            .expect("window should accept animation frame work");
 
         assert!(!observed.get());
         assert_eq!(window.run(), 0);

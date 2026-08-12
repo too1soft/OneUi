@@ -213,6 +213,7 @@ pub type OneUiTreeExpansionCallback = Option<
     unsafe extern "C" fn(id: *const c_char, length: usize, expanded: c_int, user_data: *mut c_void),
 >;
 pub type OneUiVoidCallback = Option<unsafe extern "C" fn(user_data: *mut c_void)>;
+pub type OneUiFrameCallback = Option<unsafe extern "C" fn(now_ms: f64, user_data: *mut c_void)>;
 pub type OneUiBoolCallback = Option<unsafe extern "C" fn(value: c_int, user_data: *mut c_void)>;
 pub type OneUiIntCallback = Option<unsafe extern "C" fn(value: c_int, user_data: *mut c_void)>;
 pub type OneUiFloatCallback = Option<unsafe extern "C" fn(value: f32, user_data: *mut c_void)>;
@@ -362,6 +363,11 @@ extern "C" {
         user_data: *mut c_void,
         cleanup: OneUiVoidCallback,
     ) -> c_int;
+    pub fn oneui_window_request_animation_frame(
+        window: *mut OneUiWindow,
+        callback: OneUiFrameCallback,
+        user_data: *mut c_void,
+    );
 
     pub fn oneui_widget_destroy(widget: *mut OneUiWidget);
     pub fn oneui_widget_set_preferred_size(widget: *mut OneUiWidget, width: f32, height: f32);
