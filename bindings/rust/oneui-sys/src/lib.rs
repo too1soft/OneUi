@@ -5,7 +5,7 @@
 
 use std::ffi::{c_char, c_float, c_int, c_uint, c_ushort, c_void};
 
-pub const UTF8_ABI_VERSION: c_uint = 7;
+pub const UTF8_ABI_VERSION: c_uint = 8;
 
 #[repr(C)]
 pub struct OneUiWindow {
@@ -155,6 +155,30 @@ pub struct OneUiWindowOptionsUtf8 {
     pub resizable: c_int,
 }
 
+pub const FILE_DIALOG_OPEN_FILE: c_int = 0;
+pub const FILE_DIALOG_SAVE_FILE: c_int = 1;
+pub const FILE_DIALOG_SELECT_FOLDER: c_int = 2;
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct OneUiFileDialogFilterUtf8 {
+    pub name: OneUiUtf8String,
+    pub pattern: OneUiUtf8String,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct OneUiFileDialogOptionsUtf8 {
+    pub mode: c_int,
+    pub title: OneUiUtf8String,
+    pub initial_directory: OneUiUtf8String,
+    pub default_name: OneUiUtf8String,
+    pub default_extension: OneUiUtf8String,
+    pub filters: *const OneUiFileDialogFilterUtf8,
+    pub filter_count: usize,
+    pub confirm_overwrite: c_int,
+}
+
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct OneUiWindowPlacement {
@@ -263,6 +287,13 @@ extern "C" {
     pub fn oneui_window_initialize(window: *mut OneUiWindow);
     pub fn oneui_window_show(window: *mut OneUiWindow);
     pub fn oneui_window_activate(window: *mut OneUiWindow);
+    pub fn oneui_window_file_dialog_utf8(
+        window: *mut OneUiWindow,
+        options: *const OneUiFileDialogOptionsUtf8,
+        buffer: *mut c_char,
+        buffer_len: usize,
+        required_len: *mut usize,
+    ) -> c_int;
     pub fn oneui_window_confirm(
         window: *mut OneUiWindow,
         title: *const u16,

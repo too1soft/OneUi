@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 use std::ffi::{CStr, CString};
 use std::marker::PhantomData;
 use std::panic::{catch_unwind, AssertUnwindSafe};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::ptr::NonNull;
 use std::rc::Rc;
 use std::sync::{
@@ -27,6 +27,7 @@ pub enum Error {
     WindowClosed,
     WrongThread,
     UiThreadBlockingOperation,
+    FileDialogFailed,
 }
 
 /// Describes a panic caught at the Rust-to-OneUI callback boundary.
@@ -262,6 +263,58 @@ pub struct PromptOptions<'a> {
     pub password: bool,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum FileDialogMode {
+    OpenFile,
+    SaveFile,
+    SelectFolder,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct FileDialogFilter<'a> {
+    pub name: &'a str,
+    pub pattern: &'a str,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct FileDialogOptions<'a> {
+    pub mode: FileDialogMode,
+    pub title: &'a str,
+    pub initial_directory: &'a Path,
+    pub default_name: &'a str,
+    pub default_extension: &'a str,
+    pub filters: &'a [FileDialogFilter<'a>],
+    pub confirm_overwrite: bool,
+}
+
+impl<'a> FileDialogOptions<'a> {
+    pub fn open(title: &'a str) -> Self {
+        Self {
+            mode: FileDialogMode::OpenFile,
+            title,
+            initial_directory: Path::new(""),
+            default_name: "",
+            default_extension: "",
+            filters: &[],
+            confirm_overwrite: true,
+        }
+    }
+
+    pub fn save(title: &'a str) -> Self {
+        Self {
+            mode: FileDialogMode::SaveFile,
+            ..Self::open(title)
+        }
+    }
+
+    pub fn select_folder(title: &'a str) -> Self {
+        Self {
+            mode: FileDialogMode::SelectFolder,
+            ..Self::open(title)
+        }
+    }
+}
+
 struct DispatchedTask {
     task: Option<Box<dyn FnOnce() + Send + 'static>>,
 }
@@ -331,6 +384,75 @@ impl UiDispatcher {
                 sys::oneui_window_request_focus(raw, widget.as_raw(), i32::from(focus_visible)) != 0
             })
             .unwrap_or(false))
+    }
+
+    /// Shows a platform-native file dialog owned by this window.
+    ///
+    /// Native dialogs run a nested platform message loop and therefore must be
+    /// opened directly from the owning window thread. Product code should call
+    /// this from a command callback; background services must first dispatch a
+    /// short UI task and continue their I/O after the selected path is returned.
+    pub fn file_dialog(&self, options: FileDialogOptions<'_>) -> Result<Option<PathBuf>, Error> {
+        if std::thread::current().id() != self.state.ui_thread {
+            return Err(Error::WrongThread);
+        }
+        if options.filters.len() > 64 {
+            return Err(Error::FileDialogFailed);
+        }
+
+        let initial_directory = options.initial_directory.to_string_lossy();
+        let filters = options
+            .filters
+            .iter()
+            .map(|filter| sys::OneUiFileDialogFilterUtf8 {
+                name: sys::OneUiUtf8String::from_str(filter.name),
+                pattern: sys::OneUiUtf8String::from_str(filter.pattern),
+            })
+            .collect::<Vec<_>>();
+        let native = sys::OneUiFileDialogOptionsUtf8 {
+            mode: match options.mode {
+                FileDialogMode::OpenFile => sys::FILE_DIALOG_OPEN_FILE,
+                FileDialogMode::SaveFile => sys::FILE_DIALOG_SAVE_FILE,
+                FileDialogMode::SelectFolder => sys::FILE_DIALOG_SELECT_FOLDER,
+            },
+            title: sys::OneUiUtf8String::from_str(options.title),
+            initial_directory: sys::OneUiUtf8String::from_str(&initial_directory),
+            default_name: sys::OneUiUtf8String::from_str(options.default_name),
+            default_extension: sys::OneUiUtf8String::from_str(options.default_extension),
+            filters: filters.as_ptr(),
+            filter_count: filters.len(),
+            confirm_overwrite: i32::from(options.confirm_overwrite),
+        };
+
+        // A Windows file-system path is capped at 32,767 UTF-16 code units.
+        // Four UTF-8 bytes per code unit plus NUL covers the ABI result without
+        // reopening a modal dialog just to resize the caller's buffer.
+        const MAX_FILE_DIALOG_UTF8_BYTES: usize = 32_767 * 4 + 1;
+        let mut output = vec![0_u8; MAX_FILE_DIALOG_UTF8_BYTES];
+        let mut required = 0_usize;
+        let result = self
+            .state
+            .with_raw(|raw| unsafe {
+                sys::oneui_window_file_dialog_utf8(
+                    raw,
+                    &native,
+                    output.as_mut_ptr().cast(),
+                    output.len(),
+                    &mut required,
+                )
+            })
+            .ok_or(Error::WindowClosed)?;
+        match result {
+            0 => Ok(None),
+            1 if required > 0 && required <= output.len() => {
+                output.truncate(required.saturating_sub(1));
+                String::from_utf8(output)
+                    .map(PathBuf::from)
+                    .map(Some)
+                    .map_err(|_| Error::FileDialogFailed)
+            }
+            _ => Err(Error::FileDialogFailed),
+        }
     }
 
     pub fn dispatch<F>(&self, task: F) -> Result<(), Error>
@@ -5411,6 +5533,10 @@ impl Window {
         }
     }
 
+    pub fn file_dialog(&self, options: FileDialogOptions<'_>) -> Result<Option<PathBuf>, Error> {
+        self.dispatcher().file_dialog(options)
+    }
+
     /// Returns the only thread-safe update path for a terminal mounted in this
     /// window. The terminal itself remains UI-thread bound.
     pub fn terminal_view_handle(&self, terminal: &TerminalView) -> TerminalViewHandle {
@@ -5446,14 +5572,15 @@ impl Drop for Window {
 mod tests {
     use super::{
         callback_panic_handler, run_callback_guarded, set_callback_panic_handler, terminal_style,
-        Button, Color, Dialog, Error, IconSymbol, Insets, InteractiveSurface,
-        InteractiveSurfaceStateStyle, InteractiveSurfaceStyle, Label, List, ListItem, LogLine,
-        LogView, Menu, OverlayAlignment, OverlayHost, Panel, Popup, PopupInteractionMode,
-        PopupPreferredPlacement, PromptOptions, ReorderableGrid, ScrollView, SegmentedControl,
-        Select, SelectionMode, SplitOrientation, SplitView, Stack, StackDirection, StyleSheet,
-        Switch, Tabs, TerminalCell, TerminalColor, TerminalCursor, TerminalCursorStyle,
-        TerminalFrame, TerminalSelection, TerminalUnderlineStyle, TerminalView, TextField,
-        TreeItem, TreeView, VirtualList, Window, WindowOptions, WindowPlacement,
+        Button, Color, Dialog, Error, FileDialogFilter, FileDialogMode, FileDialogOptions,
+        IconSymbol, Insets, InteractiveSurface, InteractiveSurfaceStateStyle,
+        InteractiveSurfaceStyle, Label, List, ListItem, LogLine, LogView, Menu, OverlayAlignment,
+        OverlayHost, Panel, Popup, PopupInteractionMode, PopupPreferredPlacement, PromptOptions,
+        ReorderableGrid, ScrollView, SegmentedControl, Select, SelectionMode, SplitOrientation,
+        SplitView, Stack, StackDirection, StyleSheet, Switch, Tabs, TerminalCell, TerminalColor,
+        TerminalCursor, TerminalCursorStyle, TerminalFrame, TerminalSelection,
+        TerminalUnderlineStyle, TerminalView, TextField, TreeItem, TreeView, VirtualList, Window,
+        WindowOptions, WindowPlacement,
     };
     use std::cell::Cell;
     use std::rc::Rc;
@@ -5502,6 +5629,30 @@ mod tests {
         })
         .expect("OneUI window should be created through the UTF-8 ABI");
         window.set_title("兴业银行股份有限公司");
+    }
+
+    #[test]
+    fn file_dialog_options_have_safe_platform_defaults() {
+        let open = FileDialogOptions::open("Open recording");
+        assert_eq!(open.mode, FileDialogMode::OpenFile);
+        assert!(open.initial_directory.as_os_str().is_empty());
+        assert!(open.default_name.is_empty());
+        assert!(open.confirm_overwrite);
+
+        let filters = [FileDialogFilter {
+            name: "Terminal recordings",
+            pattern: "*.cast",
+        }];
+        let save = FileDialogOptions {
+            filters: &filters,
+            default_extension: "cast",
+            ..FileDialogOptions::save("Export recording")
+        };
+        assert_eq!(save.mode, FileDialogMode::SaveFile);
+        assert_eq!(save.filters[0].pattern, "*.cast");
+
+        let folder = FileDialogOptions::select_folder("Choose folder");
+        assert_eq!(folder.mode, FileDialogMode::SelectFolder);
     }
 
     #[test]

@@ -205,6 +205,10 @@ target_link_libraries(my_oneui_app PRIVATE OneUI::oneui)
 ```powershell
 $env:ONEUI_LIB_DIR = (Resolve-Path .\build\msvc-bundled-static)
 $env:PATH = "$env:ONEUI_LIB_DIR;$env:PATH"
+
+OneUI 的 Rust 安全绑定还提供窗口归属的原生文件对话框：`FileDialogOptions::open`、
+`FileDialogOptions::save` 与 `FileDialogOptions::select_folder`。文件名、路径和过滤器始终
+通过 UTF-8 ABI 传递；产品代码不需要直接调用 Win32 对话框。
 cargo test --manifest-path .\bindings\rust\Cargo.toml
 ```
 

@@ -99,6 +99,34 @@ typedef struct OneUiWindowOptions {
     int resizable;
 } OneUiWindowOptions;
 
+typedef enum OneUiFileDialogMode {
+    OneUiFileDialogOpenFile = 0,
+    OneUiFileDialogSaveFile = 1,
+    OneUiFileDialogSelectFolder = 2
+} OneUiFileDialogMode;
+
+/* OneUI copies filter text before the native dialog is shown. */
+typedef struct OneUiFileDialogFilterUtf8 {
+    OneUiUtf8String name;
+    OneUiUtf8String pattern;
+} OneUiFileDialogFilterUtf8;
+
+/*
+ * Platform-native file dialog options. Empty strings use platform defaults.
+ * `initial_directory` must name an existing file-system directory. Filter
+ * patterns follow the platform convention, for example "*.txt;*.log".
+ */
+typedef struct OneUiFileDialogOptionsUtf8 {
+    OneUiFileDialogMode mode;
+    OneUiUtf8String title;
+    OneUiUtf8String initial_directory;
+    OneUiUtf8String default_name;
+    OneUiUtf8String default_extension;
+    const OneUiFileDialogFilterUtf8* filters;
+    size_t filter_count;
+    int confirm_overwrite;
+} OneUiFileDialogOptionsUtf8;
+
 /*
  * Restored outer-frame bounds in platform screen coordinates. This structure
  * is intended for round-trip application persistence; OneUI validates and
@@ -336,7 +364,7 @@ enum {
     OneUiTerminalCellOverline = 1u << 11
 };
 
-#define ONEUI_UTF8_ABI_VERSION 7u
+#define ONEUI_UTF8_ABI_VERSION 8u
 
 ONEUI_API const char* oneui_version(void);
 ONEUI_API unsigned int oneui_utf8_abi_version(void);
@@ -372,6 +400,17 @@ ONEUI_API void oneui_window_request_animation_frame(OneUiWindow* window, OneUiFr
 ONEUI_API void oneui_window_set_title(OneUiWindow* window, const wchar_t* title);
 ONEUI_API void oneui_window_set_title_utf8(OneUiWindow* window, OneUiUtf8String title);
 ONEUI_API void* oneui_window_native_handle(OneUiWindow* window);
+/*
+ * Shows an owner-bound platform file dialog. Returns 1 when a path was
+ * selected, 0 when canceled, -1 on failure, and -2 when `buffer_len` is too
+ * small. `required_len` receives the required UTF-8 byte count including NUL.
+ */
+ONEUI_API int oneui_window_file_dialog_utf8(
+    OneUiWindow* window,
+    const OneUiFileDialogOptionsUtf8* options,
+    char* buffer,
+    size_t buffer_len,
+    size_t* required_len);
 ONEUI_API int oneui_window_confirm(OneUiWindow* window, const wchar_t* title, const wchar_t* message);
 /*
  * Displays a platform-native modal text prompt owned by window. Returns 1 and

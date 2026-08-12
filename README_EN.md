@@ -214,6 +214,11 @@ with explicit ownership. Build the C++ library before running the Rust tests:
 ```powershell
 $env:ONEUI_LIB_DIR = (Resolve-Path .\build\msvc-bundled-static)
 $env:PATH = "$env:ONEUI_LIB_DIR;$env:PATH"
+
+The safe Rust binding also provides owner-bound native file dialogs through
+`FileDialogOptions::open`, `FileDialogOptions::save`, and
+`FileDialogOptions::select_folder`. File names, paths, and filters always cross
+the portable UTF-8 ABI, so product code does not need direct Win32 calls.
 cargo test --manifest-path .\bindings\rust\Cargo.toml
 ```
 

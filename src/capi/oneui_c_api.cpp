@@ -45,6 +45,7 @@
 #include <algorithm>
 #include <atomic>
 #include <climits>
+#include <cstring>
 #include <cstdint>
 #include <cwchar>
 #include <cstdio>
@@ -1339,6 +1340,189 @@ void* oneui_window_native_handle(OneUiWindow* window) {
         return nullptr;
     }
     return window->window->nativeHandle();
+}
+
+int oneui_window_file_dialog_utf8(
+    OneUiWindow* window,
+    const OneUiFileDialogOptionsUtf8* options,
+    char* buffer,
+    std::size_t bufferLength,
+    std::size_t* requiredLength) {
+#ifdef _WIN32
+    if (requiredLength) {
+        *requiredLength = 0;
+    }
+    if (!options || options->filter_count > 64 ||
+        (options->filter_count > 0 && !options->filters)) {
+        return -1;
+    }
+
+    try {
+        struct ComApartment final {
+            HRESULT result = CoInitializeEx(
+                nullptr,
+                COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+            ~ComApartment() {
+                if (SUCCEEDED(result)) {
+                    CoUninitialize();
+                }
+            }
+        } apartment;
+        if (FAILED(apartment.result) && apartment.result != RPC_E_CHANGED_MODE) {
+            return -1;
+        }
+
+        IFileDialog* dialog = nullptr;
+        HRESULT createResult = E_INVALIDARG;
+        if (options->mode == OneUiFileDialogSaveFile) {
+            createResult = CoCreateInstance(
+                CLSID_FileSaveDialog,
+                nullptr,
+                CLSCTX_INPROC_SERVER,
+                IID_PPV_ARGS(&dialog));
+        } else if (options->mode == OneUiFileDialogOpenFile ||
+                   options->mode == OneUiFileDialogSelectFolder) {
+            createResult = CoCreateInstance(
+                CLSID_FileOpenDialog,
+                nullptr,
+                CLSCTX_INPROC_SERVER,
+                IID_PPV_ARGS(&dialog));
+        }
+        if (FAILED(createResult) || !dialog) {
+            return -1;
+        }
+        struct DialogRelease final {
+            IFileDialog* value = nullptr;
+            ~DialogRelease() {
+                if (value) {
+                    value->Release();
+                }
+            }
+        } dialogRelease{dialog};
+
+        DWORD flags = 0;
+        dialog->GetOptions(&flags);
+        flags |= FOS_FORCEFILESYSTEM | FOS_NOCHANGEDIR;
+        if (options->mode == OneUiFileDialogOpenFile) {
+            flags |= FOS_FILEMUSTEXIST | FOS_PATHMUSTEXIST;
+        } else if (options->mode == OneUiFileDialogSelectFolder) {
+            flags |= FOS_PICKFOLDERS | FOS_PATHMUSTEXIST;
+        } else if (options->confirm_overwrite) {
+            flags |= FOS_OVERWRITEPROMPT;
+        }
+        HRESULT configureResult = dialog->SetOptions(flags);
+
+        const std::wstring title = utf8OrEmpty(options->title);
+        if (SUCCEEDED(configureResult) && !title.empty()) {
+            configureResult = dialog->SetTitle(title.c_str());
+        }
+
+        const std::wstring initialDirectory = utf8OrEmpty(options->initial_directory);
+        if (SUCCEEDED(configureResult) && !initialDirectory.empty()) {
+            IShellItem* initialFolder = nullptr;
+            const HRESULT folderResult = SHCreateItemFromParsingName(
+                initialDirectory.c_str(),
+                nullptr,
+                IID_PPV_ARGS(&initialFolder));
+            if (SUCCEEDED(folderResult) && initialFolder) {
+                configureResult = dialog->SetFolder(initialFolder);
+                initialFolder->Release();
+            } else {
+                configureResult = folderResult;
+            }
+        }
+
+        const std::wstring defaultName = utf8OrEmpty(options->default_name);
+        if (SUCCEEDED(configureResult) && !defaultName.empty() &&
+            options->mode != OneUiFileDialogSelectFolder) {
+            configureResult = dialog->SetFileName(defaultName.c_str());
+        }
+
+        const std::wstring defaultExtension = utf8OrEmpty(options->default_extension);
+        if (SUCCEEDED(configureResult) && !defaultExtension.empty() &&
+            options->mode == OneUiFileDialogSaveFile) {
+            const wchar_t* extension = defaultExtension.front() == L'.'
+                ? defaultExtension.c_str() + 1
+                : defaultExtension.c_str();
+            configureResult = dialog->SetDefaultExtension(extension);
+        }
+
+        std::vector<std::wstring> filterNames;
+        std::vector<std::wstring> filterPatterns;
+        std::vector<COMDLG_FILTERSPEC> filterSpecs;
+        if (SUCCEEDED(configureResult) && options->filter_count > 0 &&
+            options->mode != OneUiFileDialogSelectFolder) {
+            filterNames.reserve(options->filter_count);
+            filterPatterns.reserve(options->filter_count);
+            for (std::size_t index = 0; index < options->filter_count; ++index) {
+                filterNames.push_back(utf8OrEmpty(options->filters[index].name));
+                filterPatterns.push_back(utf8OrEmpty(options->filters[index].pattern));
+            }
+            filterSpecs.reserve(options->filter_count);
+            for (std::size_t index = 0; index < options->filter_count; ++index) {
+                if (filterNames[index].empty() || filterPatterns[index].empty()) {
+                    configureResult = E_INVALIDARG;
+                    break;
+                }
+                filterSpecs.push_back({filterNames[index].c_str(), filterPatterns[index].c_str()});
+            }
+            if (SUCCEEDED(configureResult)) {
+                configureResult = dialog->SetFileTypes(
+                    static_cast<UINT>(filterSpecs.size()),
+                    filterSpecs.data());
+                if (SUCCEEDED(configureResult)) {
+                    configureResult = dialog->SetFileTypeIndex(1);
+                }
+            }
+        }
+
+        int result = -1;
+        if (SUCCEEDED(configureResult)) {
+            HWND owner = window && window->window
+                ? reinterpret_cast<HWND>(window->window->nativeHandle())
+                : nullptr;
+            const HRESULT showResult = dialog->Show(owner);
+            if (showResult == HRESULT_FROM_WIN32(ERROR_CANCELLED)) {
+                result = 0;
+            } else if (SUCCEEDED(showResult)) {
+                IShellItem* selectedItem = nullptr;
+                if (SUCCEEDED(dialog->GetResult(&selectedItem)) && selectedItem) {
+                    PWSTR selectedPath = nullptr;
+                    if (SUCCEEDED(selectedItem->GetDisplayName(SIGDN_FILESYSPATH, &selectedPath)) &&
+                        selectedPath) {
+                        const std::string selectedUtf8 = utf8FromWide(selectedPath);
+                        const std::size_t required = selectedUtf8.size() + 1;
+                        if (requiredLength) {
+                            *requiredLength = required;
+                        }
+                        if (!buffer || bufferLength < required) {
+                            result = -2;
+                        } else {
+                            std::memcpy(buffer, selectedUtf8.data(), selectedUtf8.size());
+                            buffer[selectedUtf8.size()] = '\0';
+                            result = 1;
+                        }
+                        CoTaskMemFree(selectedPath);
+                    }
+                    selectedItem->Release();
+                }
+            }
+        }
+
+        return result;
+    } catch (...) {
+        return -1;
+    }
+#else
+    (void)window;
+    (void)options;
+    (void)buffer;
+    (void)bufferLength;
+    if (requiredLength) {
+        *requiredLength = 0;
+    }
+    return -1;
+#endif
 }
 
 int oneui_window_client_width(OneUiWindow* window) {
