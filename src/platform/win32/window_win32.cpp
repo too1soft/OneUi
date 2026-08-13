@@ -269,8 +269,13 @@ struct TextBlobKey {
     }
 };
 
-struct TextBlobEntry {
+struct TextBlobRun {
     sk_sp<SkTextBlob> blob;
+    float x = 0.0f;
+};
+
+struct TextBlobEntry {
+    std::vector<TextBlobRun> runs;
     SkRect bounds = SkRect::MakeEmpty();
     SkFontMetrics metrics{};
     float advanceWidth = 0.0f;
@@ -588,7 +593,7 @@ public:
                 : familyName;
         const TextBlobEntry& textBlob =
             cachedTextBlob(text, size, fallbackFamily, resolvedFamily, weight);
-        if (!textBlob.blob) {
+        if (textBlob.runs.empty()) {
             return;
         }
 
@@ -602,7 +607,11 @@ public:
         const float baseline = rect.y + (rect.height - textBlob.metrics.fDescent - textBlob.metrics.fAscent) / 2.0f;
         canvas_.save();
         canvas_.clipRect(toSkRect(rect));
-        canvas_.drawTextBlob(textBlob.blob, x, baseline, paint);
+        for (const auto& run : textBlob.runs) {
+            if (run.blob) {
+                canvas_.drawTextBlob(run.blob, x + run.x, baseline, paint);
+            }
+        }
         canvas_.restore();
         ++g_primitivePaintTrace.textCalls;
         g_primitivePaintTrace.textMs += currentTimeMs() - traceStartMs;
@@ -610,6 +619,38 @@ public:
 
     float measureTextWidth(const std::wstring& text, float size, int weight = 400) const override {
         return measureTextWidthWithFont(text, size, TextFontFamily::Default, weight);
+    }
+
+    std::vector<float> measureTextPrefixWidths(
+        const std::wstring& text,
+        float size,
+        int weight = 400) const override {
+        std::vector<float> widths(text.size() + 1, 0.0f);
+        if (text.empty()) {
+            return widths;
+        }
+
+        const std::wstring familyName = defaultFontFamily_ ? *defaultFontFamily_ : std::wstring{};
+        const auto primary = typeface(TextFontFamily::Default, weight, familyName);
+        float advance = 0.0f;
+        for (std::size_t offset = 0; offset < text.size();) {
+            const CodepointSpan span = codepointAt(text, offset);
+            const std::size_t length = std::max<std::size_t>(span.length, 1);
+            const auto face = typefaceForCodepoint(
+                TextFontFamily::Default, weight, familyName, span.codepoint, primary);
+            SkFont font(face ? face : primary, size);
+            font.setSubpixel(true);
+            font.setEdging(SkFont::Edging::kAntiAlias);
+            advance += font.measureText(
+                text.data() + offset,
+                length * sizeof(wchar_t),
+                SkTextEncoding::kUTF16);
+            for (std::size_t index = 1; index <= length; ++index) {
+                widths[offset + index] = index == length ? advance : widths[offset];
+            }
+            offset += length;
+        }
+        return widths;
     }
 
     float measureTextWidthWithFont(
@@ -770,30 +811,38 @@ private:
         return face;
     }
 
-    static SkUnichar firstCodepoint(const std::wstring& text) {
-        if (text.empty()) {
-            return 0;
+    struct CodepointSpan {
+        SkUnichar codepoint = 0;
+        std::size_t offset = 0;
+        std::size_t length = 0;
+    };
+
+    static CodepointSpan codepointAt(const std::wstring& text, std::size_t offset) {
+        if (offset >= text.size()) {
+            return {};
         }
 #if WCHAR_MAX <= 0xFFFF
-        const auto first = static_cast<std::uint16_t>(text.front());
-        if (first >= 0xD800 && first <= 0xDBFF && text.size() > 1) {
-            const auto second = static_cast<std::uint16_t>(text[1]);
+        const auto first = static_cast<std::uint16_t>(text[offset]);
+        if (first >= 0xD800 && first <= 0xDBFF && offset + 1 < text.size()) {
+            const auto second = static_cast<std::uint16_t>(text[offset + 1]);
             if (second >= 0xDC00 && second <= 0xDFFF) {
-                return static_cast<SkUnichar>(
-                    0x10000 + ((first - 0xD800) << 10) + (second - 0xDC00));
+                return {
+                    static_cast<SkUnichar>(
+                        0x10000 + ((first - 0xD800) << 10) + (second - 0xDC00)),
+                    offset,
+                    2};
             }
         }
 #endif
-        return static_cast<SkUnichar>(text.front());
+        return {static_cast<SkUnichar>(text[offset]), offset, 1};
     }
 
-    static sk_sp<SkTypeface> typefaceForText(
+    static sk_sp<SkTypeface> typefaceForCodepoint(
         TextFontFamily family,
         int weight,
         const std::wstring& familyName,
-        const std::wstring& text) {
-        auto primary = typeface(family, weight, familyName);
-        const SkUnichar codepoint = firstCodepoint(text);
+        SkUnichar codepoint,
+        const sk_sp<SkTypeface>& primary) {
         if (codepoint == 0 || (primary && primary->unicharToGlyph(codepoint) != 0)) {
             return primary;
         }
@@ -804,6 +853,14 @@ private:
         }
         const int clampedWeight = std::clamp(weight, 100, 900);
         const SkFontStyle style(clampedWeight, SkFontStyle::kNormal_Width, SkFontStyle::kUpright_Slant);
+        if (family == TextFontFamily::Monospace) {
+            for (const char* candidate : {"NSimSun", "Microsoft YaHei Mono"}) {
+                if (auto face = fontMgr->matchFamilyStyle(candidate, style);
+                    face && face->isFixedPitch() && face->unicharToGlyph(codepoint) != 0) {
+                    return face;
+                }
+            }
+        }
         const char* locales[] = {"zh-CN", "en-US"};
         auto fallback = fontMgr->matchFamilyStyleCharacter(
             nullptr,
@@ -839,16 +896,70 @@ private:
             cache.clear();
         }
 
-        SkFont font(typefaceForText(family, weight, familyName, text), size);
-        font.setSubpixel(true);
-        font.setEdging(SkFont::Edging::kAntiAlias);
-
         TextBlobEntry entry;
-        const auto byteLength = text.size() * sizeof(wchar_t);
-        entry.advanceWidth = font.measureText(
-            text.data(), byteLength, SkTextEncoding::kUTF16, &entry.bounds);
-        font.getMetrics(&entry.metrics);
-        entry.blob = SkTextBlob::MakeFromText(text.data(), byteLength, font, SkTextEncoding::kUTF16);
+        const auto primary = typeface(family, weight, familyName);
+        std::size_t runStart = 0;
+        sk_sp<SkTypeface> runTypeface;
+        bool hasBounds = false;
+        bool hasMetrics = false;
+
+        auto appendRun = [&](std::size_t start, std::size_t end, const sk_sp<SkTypeface>& face) {
+            if (end <= start || !face) {
+                return;
+            }
+            SkFont font(face, size);
+            font.setSubpixel(true);
+            font.setEdging(SkFont::Edging::kAntiAlias);
+
+            const auto byteLength = (end - start) * sizeof(wchar_t);
+            SkRect runBounds = SkRect::MakeEmpty();
+            const float runAdvance = font.measureText(
+                text.data() + start, byteLength, SkTextEncoding::kUTF16, &runBounds);
+            runBounds.offset(entry.advanceWidth, 0.0f);
+            if (!runBounds.isEmpty()) {
+                if (hasBounds) {
+                    entry.bounds.join(runBounds);
+                } else {
+                    entry.bounds = runBounds;
+                    hasBounds = true;
+                }
+            }
+
+            SkFontMetrics runMetrics{};
+            font.getMetrics(&runMetrics);
+            if (!hasMetrics) {
+                entry.metrics = runMetrics;
+                hasMetrics = true;
+            } else {
+                entry.metrics.fTop = std::min(entry.metrics.fTop, runMetrics.fTop);
+                entry.metrics.fAscent = std::min(entry.metrics.fAscent, runMetrics.fAscent);
+                entry.metrics.fDescent = std::max(entry.metrics.fDescent, runMetrics.fDescent);
+                entry.metrics.fBottom = std::max(entry.metrics.fBottom, runMetrics.fBottom);
+                entry.metrics.fLeading = std::max(entry.metrics.fLeading, runMetrics.fLeading);
+            }
+
+            entry.runs.push_back({
+                SkTextBlob::MakeFromText(
+                    text.data() + start, byteLength, font, SkTextEncoding::kUTF16),
+                entry.advanceWidth});
+            entry.advanceWidth += runAdvance;
+        };
+
+        for (std::size_t offset = 0; offset < text.size();) {
+            const CodepointSpan span = codepointAt(text, offset);
+            const auto face = typefaceForCodepoint(
+                family, weight, familyName, span.codepoint, primary);
+            if (!runTypeface) {
+                runTypeface = face;
+                runStart = offset;
+            } else if (!face || face->uniqueID() != runTypeface->uniqueID()) {
+                appendRun(runStart, offset, runTypeface);
+                runStart = offset;
+                runTypeface = face ? face : primary;
+            }
+            offset += std::max<std::size_t>(span.length, 1);
+        }
+        appendRun(runStart, text.size(), runTypeface ? runTypeface : primary);
 
         const auto [it, _] = cache.emplace(key, std::move(entry));
         return it->second;

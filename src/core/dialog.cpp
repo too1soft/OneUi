@@ -255,8 +255,9 @@ bool Dialog::onMouseUp(const MouseEvent& event) {
     if (closePressed_) {
         closePressed_ = false;
         invalidate();
-        if (interactive() && headerLayout().close.contains(event.position) && onClose_) {
-            onClose_();
+        const auto callback = onClose_;
+        if (interactive() && headerLayout().close.contains(event.position) && callback) {
+            callback();
         }
         return true;
     }

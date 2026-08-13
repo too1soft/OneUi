@@ -286,12 +286,7 @@ void LogView::updateLineMetrics(std::size_t line, const Canvas* canvas) const {
 
     widths.assign(text.size() + 1, 0.0f);
     if (canvas) {
-        std::wstring prefix;
-        prefix.reserve(text.size());
-        for (std::size_t index = 0; index < text.size(); ++index) {
-            prefix.push_back(text[index]);
-            widths[index + 1] = canvas->measureTextWidth(prefix, fontSize_);
-        }
+        widths = canvas->measureTextPrefixWidths(text, fontSize_);
         metricsExact_[line] = true;
         return;
     }

@@ -65,6 +65,19 @@ void ScrollView::setScrollbarStyle(Color color, float thickness) {
     invalidate();
 }
 
+void ScrollView::setStyleBox(StyleBox style) {
+    styleBox_ = std::move(style);
+    invalidate();
+}
+
+void ScrollView::clearStyleBox() {
+    if (!styleBox_) {
+        return;
+    }
+    styleBox_.reset();
+    invalidate();
+}
+
 void ScrollView::setHorizontalScrollOffset(float offset) {
     const float next = clampHorizontalOffset(offset);
     if (std::fabs(next - horizontalScrollOffset_) <= 0.001f) {
@@ -106,7 +119,9 @@ void ScrollView::paint(Canvas& canvas) {
     layoutChildren();
 
     const Rect viewport = viewportRect();
-    if (chromeVisible_) {
+    if (styleBox_) {
+        paintStyleBox(canvas, viewport, *styleBox_);
+    } else if (chromeVisible_) {
         const auto& t = theme();
         canvas.fillRect(viewport, t.surface, t.radiusMd);
         canvas.strokeRect(viewport, t.border, t.radiusMd, 1.0f);

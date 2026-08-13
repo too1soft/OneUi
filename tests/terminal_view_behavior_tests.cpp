@@ -191,6 +191,46 @@ void testPaintHonorsWideCellsStylesAndCursor() {
     expectEqual("terminal suppresses duplicate viewport", viewportChanges, 1);
 }
 
+void testViewportIgnoresTransientCollapsedLayout() {
+    oneui::TerminalView terminal;
+    terminal.setFontSize(20.0f);
+    terminal.setFrame(oneui::Rect{0.0f, 0.0f, 300.0f, 160.0f});
+    terminal.setGrid(1, 1, {oneui::TerminalCell{L"A"}});
+
+    std::vector<oneui::TerminalViewport> changes;
+    terminal.setOnViewportChanged(
+        [&changes](oneui::TerminalViewport viewport) { changes.push_back(viewport); });
+
+    RecordingCanvas canvas;
+    terminal.paint(canvas);
+    expectEqual("terminal reports initial stable viewport", static_cast<int>(changes.size()), 1);
+    const auto stable = changes.back();
+    expectEqual("terminal initial viewport is wider than one cell", stable.columns > 1 ? 1 : 0, 1);
+    expectEqual("terminal initial viewport is taller than one cell", stable.rows > 1 ? 1 : 0, 1);
+
+    terminal.setFrame(oneui::Rect{0.0f, 0.0f, 0.0f, 0.0f});
+    terminal.paint(canvas);
+    expectEqual(
+        "terminal ignores zero-sized transitional layout",
+        static_cast<int>(changes.size()),
+        1);
+
+    terminal.setFrame(oneui::Rect{0.0f, 0.0f, 4.0f, 4.0f});
+    terminal.paint(canvas);
+    expectEqual(
+        "terminal ignores layout smaller than one complete cell",
+        static_cast<int>(changes.size()),
+        1);
+
+    terminal.setFrame(oneui::Rect{0.0f, 0.0f, 240.0f, 120.0f});
+    terminal.paint(canvas);
+    expectEqual("terminal reports the next stable viewport", static_cast<int>(changes.size()), 2);
+    expectEqual(
+        "terminal restored viewport differs from the initial viewport",
+        changes.back().columns != stable.columns || changes.back().rows != stable.rows ? 1 : 0,
+        1);
+}
+
 void testPaintBatchesCompatibleAsciiCellsIntoRuns() {
     oneui::TerminalView terminal;
     terminal.setFrame(oneui::Rect{0.0f, 0.0f, 300.0f, 80.0f});
@@ -1020,6 +1060,7 @@ int main() {
     testGridCopiesCellsAndCursor();
     testGridUpdatesOnlyRequestedCells();
     testPaintHonorsWideCellsStylesAndCursor();
+    testViewportIgnoresTransientCollapsedLayout();
     testPaintBatchesCompatibleAsciiCellsIntoRuns();
     testLineNumbersAndLetterSpacingShareTerminalGeometry();
     testPaintsExtendedDecorationsWithoutExposingConcealedText();

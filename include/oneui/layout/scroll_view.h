@@ -2,9 +2,11 @@
 
 #include "oneui/animation.h"
 #include "oneui/export.h"
+#include "oneui/style_sheet.h"
 #include "oneui/view.h"
 
 #include <memory>
+#include <optional>
 
 namespace oneui {
 
@@ -18,6 +20,8 @@ public:
     void setWheelStep(float step);
     void setChromeVisible(bool visible);
     void setScrollbarStyle(Color color, float thickness);
+    void setStyleBox(StyleBox style);
+    void clearStyleBox();
     void setHorizontalScrollOffset(float offset);
     void setScrollOffset(float offset);
     float horizontalScrollOffset() const;
@@ -60,6 +64,7 @@ private:
     bool chromeVisible_ = true;
     Color scrollbarColor_{148, 163, 184, 180};
     float scrollbarThickness_ = 4.0f;
+    std::optional<StyleBox> styleBox_;
     bool draggingHorizontalThumb_ = false;
     float dragStartX_ = 0.0f;
     float dragStartHorizontalOffset_ = 0.0f;

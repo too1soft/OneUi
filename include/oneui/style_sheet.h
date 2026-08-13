@@ -88,6 +88,10 @@ struct StyleBox {
 struct StyleRule {
     std::string selector;
     StyleBox box;
+    // CSS declarations retain their source values so var(--token) references
+    // can be resolved again when application theme tokens change at runtime.
+    // Programmatically constructed rules may continue to populate `box` only.
+    std::vector<std::pair<std::string, std::string>> declarations;
     int order = 0;
 };
 

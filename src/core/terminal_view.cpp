@@ -1326,12 +1326,23 @@ Rect TerminalView::contentBounds(Rect bounds, GridMetrics metrics) const {
 
 void TerminalView::reportViewport(Rect bounds, GridMetrics metrics) {
     bounds = contentBounds(bounds, metrics);
+    const float cellWidth = std::max(1.0f, metrics.cellWidth);
+    const float cellHeight = std::max(1.0f, metrics.cellHeight);
+
+    // Layout can temporarily collapse a terminal while its parent replaces or
+    // remeasures content. Publishing that transient size as a 1x1 viewport
+    // resizes the backing PTY and can make interactive shells continuously
+    // repaint. Keep the last stable viewport until at least one complete cell
+    // fits in both dimensions.
+    if (bounds.width < cellWidth || bounds.height < cellHeight) {
+        return;
+    }
     const auto columns = static_cast<std::uint16_t>(std::clamp(
-        static_cast<int>(std::floor(bounds.width / std::max(1.0f, metrics.cellWidth))),
+        static_cast<int>(std::floor(bounds.width / cellWidth)),
         1,
         static_cast<int>(std::numeric_limits<std::uint16_t>::max())));
     const auto rows = static_cast<std::uint16_t>(std::clamp(
-        static_cast<int>(std::floor(bounds.height / std::max(1.0f, metrics.cellHeight))),
+        static_cast<int>(std::floor(bounds.height / cellHeight)),
         1,
         static_cast<int>(std::numeric_limits<std::uint16_t>::max())));
     const TerminalViewport viewport{rows, columns};

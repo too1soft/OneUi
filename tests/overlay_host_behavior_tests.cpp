@@ -3,6 +3,8 @@
 #include "oneui/controls/popup.h"
 #include "oneui/controls/terminal_view.h"
 #include "oneui/layout/overlay_host.h"
+#include "oneui/layout/panel.h"
+#include "oneui/layout/stack.h"
 #include "oneui/view.h"
 
 #include <iostream>
@@ -615,6 +617,83 @@ void testMouseEventsRespectHitTestAndPressedOverlay() {
     expectSequence("OverlayHost hidden lower receives no event", eventLog, {});
 }
 
+void testPressedContentReceivesMouseMoveOutsideItsHitArea() {
+    std::vector<int> paintLog;
+    std::vector<int> eventLog;
+    oneui::OverlayHost host;
+
+    auto content = makeProbe(
+        1,
+        paintLog,
+        eventLog,
+        oneui::Rect{0.0f, 0.0f, 80.0f, 80.0f});
+    host.setContent(content);
+
+    expectEqual(
+        "OverlayHost content mouse-down handled",
+        host.onMouseDown(oneui::MouseEvent{oneui::Point{20.0f, 20.0f}}) ? 1 : 0,
+        1);
+    expectEqual(
+        "OverlayHost pressed content move handled outside hit area",
+        host.onMouseMove(oneui::MouseEvent{oneui::Point{140.0f, 120.0f}}) ? 1 : 0,
+        1);
+    host.onMouseUp(oneui::MouseEvent{oneui::Point{140.0f, 120.0f}});
+
+    expectSequence(
+        "OverlayHost pressed content keeps pointer capture",
+        eventLog,
+        {12, 11, 13});
+}
+
+void testNestedTerminalKeepsPointerCaptureThroughContainerTree() {
+    oneui::OverlayHost host;
+    host.setFrame(oneui::Rect{0.0f, 0.0f, 320.0f, 120.0f});
+
+    auto root = std::make_shared<oneui::Panel>();
+    auto column = std::make_shared<oneui::Stack>(oneui::StackDirection::Column);
+    auto surface = std::make_shared<oneui::Panel>();
+    auto stage = std::make_shared<oneui::Panel>();
+    auto terminal = std::make_shared<oneui::TerminalView>();
+    terminal->setFontSize(20.0f);
+    terminal->setGrid(
+        1,
+        8,
+        {
+            oneui::TerminalCell{L"A"},
+            oneui::TerminalCell{L"B"},
+            oneui::TerminalCell{L"C"},
+            oneui::TerminalCell{L"D"},
+            oneui::TerminalCell{L"E"},
+            oneui::TerminalCell{L"F"},
+            oneui::TerminalCell{L"G"},
+            oneui::TerminalCell{L"H"},
+        });
+
+    stage->setContent(terminal);
+    surface->setContent(stage);
+    column->add(surface);
+    root->setContent(column);
+    host.setContent(root);
+
+    NullCanvas canvas;
+    host.paint(canvas);
+
+    expectEqual(
+        "nested terminal mouse-down handled",
+        host.onMouseDown(oneui::MouseEvent{{1.0f, 10.0f}, oneui::MouseButton::Left}) ? 1 : 0,
+        1);
+    expectEqual(
+        "nested terminal mouse-move handled",
+        host.onMouseMove(oneui::MouseEvent{{49.0f, 10.0f}, oneui::MouseButton::Left}) ? 1 : 0,
+        1);
+    host.onMouseUp(oneui::MouseEvent{{49.0f, 10.0f}, oneui::MouseButton::Left});
+
+    expectEqual(
+        "nested terminal drag extends selection through every container",
+        terminal->selectedText().size() > 1 ? 1 : 0,
+        1);
+}
+
 void testMouseWheelUsesHighestHandledHitOverlay() {
     std::vector<int> paintLog;
     std::vector<int> eventLog;
@@ -874,6 +953,8 @@ int main() {
     testClearOverlaysRemovesEntriesAndStopsDispatch();
     testMouseDownDispatchesToHighestHitLayerFirst();
     testMouseEventsRespectHitTestAndPressedOverlay();
+    testPressedContentReceivesMouseMoveOutsideItsHitArea();
+    testNestedTerminalKeepsPointerCaptureThroughContainerTree();
     testMouseWheelUsesHighestHandledHitOverlay();
     testPointerBlockerConsumesOutsideEventsBeforeLowerTargets();
     testHigherOverlayCanReceivePointerAboveBlocker();

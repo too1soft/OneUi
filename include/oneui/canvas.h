@@ -98,6 +98,35 @@ public:
         (void)weight;
         return static_cast<float>(text.size()) * size * 0.5f;
     }
+    /// Measures every UTF-16 caret boundary in one linear pass. Backends may
+    /// override this to use native glyph advances; the default deliberately
+    /// measures one Unicode scalar at a time so callers never build and
+    /// re-measure successively longer prefixes.
+    virtual std::vector<float> measureTextPrefixWidths(
+        const std::wstring& text,
+        float size,
+        int weight = 400) const {
+        std::vector<float> widths(text.size() + 1, 0.0f);
+        float advance = 0.0f;
+        for (std::size_t index = 0; index < text.size();) {
+            std::size_t length = 1;
+            if constexpr (sizeof(wchar_t) == 2) {
+                const auto current = static_cast<unsigned int>(text[index]);
+                if (current >= 0xD800U && current <= 0xDBFFU && index + 1 < text.size()) {
+                    const auto next = static_cast<unsigned int>(text[index + 1]);
+                    if (next >= 0xDC00U && next <= 0xDFFFU) {
+                        length = 2;
+                    }
+                }
+            }
+            advance += measureTextWidth(text.substr(index, length), size, weight);
+            for (std::size_t offset = 1; offset <= length; ++offset) {
+                widths[index + offset] = offset == length ? advance : widths[index];
+            }
+            index += length;
+        }
+        return widths;
+    }
     virtual float measureTextWidthWithFont(
         const std::wstring& text,
         float size,

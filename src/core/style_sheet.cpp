@@ -785,13 +785,14 @@ bool StyleSheet::addRulesFromCss(const std::string& css, std::string* error) {
                 if (colon == std::string::npos) {
                     continue;
                 }
-                if (!applyDeclaration(rule,
-                                      declaration.substr(0, colon),
-                                      declaration.substr(colon + 1),
+                std::string property = trim(declaration.substr(0, colon));
+                std::string value = trim(declaration.substr(colon + 1));
+                if (!applyDeclaration(rule, property, value,
                                       customProperties_,
                                       error)) {
                     return false;
                 }
+                rule.declarations.emplace_back(std::move(property), std::move(value));
             }
             addRule(std::move(rule));
         }
@@ -828,7 +829,22 @@ StyleBox StyleSheet::resolve(const StyleNode& node) const {
 
     StyleBox resolved;
     for (const auto& match : matches) {
-        resolved = mergeStyleBox(std::move(resolved), match.rule->box);
+        StyleBox current = match.rule->box;
+        if (!match.rule->declarations.empty()) {
+            StyleRule dynamicRule;
+            for (const auto& [property, value] : match.rule->declarations) {
+                // The declaration was validated when the CSS was loaded. A
+                // failed runtime resolution leaves the last valid parsed box
+                // in place instead of partially applying a theme.
+                if (!applyDeclaration(
+                        dynamicRule, property, value, customProperties_, nullptr)) {
+                    dynamicRule.box = match.rule->box;
+                    break;
+                }
+            }
+            current = mergeStyleBox(std::move(current), dynamicRule.box);
+        }
+        resolved = mergeStyleBox(std::move(resolved), current);
     }
     resolveCache_.emplace(cacheKey, resolved);
     return resolved;

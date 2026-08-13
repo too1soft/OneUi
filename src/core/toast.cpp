@@ -204,8 +204,11 @@ bool Toast::onMouseUp(const MouseEvent& event) {
         onPrimaryAction_();
     } else if (pressed == Action::Secondary && onSecondaryAction_) {
         onSecondaryAction_();
-    } else if (pressed == Action::Close && onClose_) {
-        onClose_();
+    } else if (pressed == Action::Close) {
+        const auto callback = onClose_;
+        if (callback) {
+            callback();
+        }
     }
     return true;
 }

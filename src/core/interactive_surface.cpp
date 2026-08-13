@@ -142,10 +142,12 @@ bool InteractiveSurface::onMouseUp(const MouseEvent& event) {
     if (activate && pressedButton == MouseButton::Left) {
         MouseEvent activation = event;
         activation.clickCount = pressedClickCount;
-        if (onPointerActivated_) {
-            onPointerActivated_(activation);
-        } else if (onClick_) {
-            onClick_();
+        const auto pointerActivated = onPointerActivated_;
+        const auto click = onClick_;
+        if (pointerActivated) {
+            pointerActivated(activation);
+        } else if (click) {
+            click();
         }
     } else if (activate && pressedButton == MouseButton::Right && onContextMenuRequested_) {
         onContextMenuRequested_(event);
@@ -158,9 +160,11 @@ bool InteractiveSurface::onKeyDown(const KeyEvent& event) {
         return false;
     }
 
-    if (onClick_) {
-        onClick_();
-    } else if (onPointerActivated_) {
+    const auto click = onClick_;
+    const auto pointerActivated = onPointerActivated_;
+    if (click) {
+        click();
+    } else if (pointerActivated) {
         MouseEvent activation;
         const auto rect = frame();
         activation.position = Point{rect.x + rect.width / 2.0f, rect.y + rect.height / 2.0f};
@@ -169,7 +173,7 @@ bool InteractiveSurface::onKeyDown(const KeyEvent& event) {
         activation.control = event.control;
         activation.alt = event.alt;
         activation.clickCount = 1;
-        onPointerActivated_(activation);
+        pointerActivated(activation);
     }
     return true;
 }

@@ -5,7 +5,7 @@
 
 use std::ffi::{c_char, c_float, c_int, c_uint, c_ushort, c_void};
 
-pub const UTF8_ABI_VERSION: c_uint = 10;
+pub const UTF8_ABI_VERSION: c_uint = 13;
 
 #[repr(C)]
 pub struct OneUiWindow {
@@ -357,6 +357,7 @@ extern "C" {
         window: *mut OneUiWindow,
         style_sheet: *mut OneUiStyleSheet,
     );
+    pub fn oneui_window_refresh_style_sheet(window: *mut OneUiWindow);
     pub fn oneui_window_set_default_font_family_utf8(
         window: *mut OneUiWindow,
         family: OneUiUtf8String,
@@ -376,6 +377,7 @@ extern "C" {
     pub fn oneui_widget_destroy(widget: *mut OneUiWidget);
     pub fn oneui_widget_set_preferred_size(widget: *mut OneUiWidget, width: f32, height: f32);
     pub fn oneui_widget_set_disabled(widget: *mut OneUiWidget, disabled: c_int);
+    pub fn oneui_widget_set_tab_stop(widget: *mut OneUiWidget, tab_stop: c_int);
     pub fn oneui_widget_set_visible(widget: *mut OneUiWidget, visible: c_int);
     pub fn oneui_widget_focused(widget: *const OneUiWidget) -> c_int;
     pub fn oneui_widget_set_classes(widget: *mut OneUiWidget, classes: *const c_char);

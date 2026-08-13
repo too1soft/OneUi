@@ -174,8 +174,9 @@ bool StateView::onMouseUp(const MouseEvent& event) {
     }
     pressed_ = false;
     invalidate();
-    if (interactive() && actionAt(event.position) && onAction_) {
-        onAction_();
+    const auto callback = onAction_;
+    if (interactive() && actionAt(event.position) && callback) {
+        callback();
     }
     return true;
 }

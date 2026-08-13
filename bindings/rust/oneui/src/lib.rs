@@ -4,6 +4,7 @@
 //! with window lifetime and grows reusable controls without exposing raw FFI to
 //! product applications.
 
+use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::ffi::{CStr, CString};
 use std::marker::PhantomData;
@@ -335,6 +336,12 @@ struct AnimationFrameTask {
 unsafe impl Send for UiDispatcher {}
 unsafe impl Sync for UiDispatcher {}
 
+fn trace_ui_task(message: &str) {
+    if std::env::var_os("ONEUI_UI_TRACE").is_some() {
+        eprintln!("[oneui-ui] {message}");
+    }
+}
+
 impl WindowState {
     fn current_raw(&self) -> Option<NonNull<sys::OneUiWindow>> {
         *self.raw.lock().expect("OneUI window state lock poisoned")
@@ -387,6 +394,18 @@ unsafe extern "C" fn run_animation_frame_task(now_ms: f64, user_data: *mut std::
 }
 
 impl UiDispatcher {
+    /// Re-resolves and reapplies the window style sheet after runtime CSS
+    /// custom-property changes.
+    pub fn refresh_style_sheet(&self) -> Result<(), Error> {
+        if std::thread::current().id() != self.state.ui_thread {
+            return Err(Error::WrongThread);
+        }
+        self.state.with_raw(|raw| unsafe {
+            sys::oneui_window_refresh_style_sheet(raw);
+        });
+        Ok(())
+    }
+
     /// Changes the window-wide default UI font on the owning thread.
     pub fn set_default_font_family(&self, family: &str) -> Result<(), Error> {
         if std::thread::current().id() != self.state.ui_thread {
@@ -785,6 +804,13 @@ impl Widget {
         unsafe { sys::oneui_widget_set_disabled(self.as_raw(), i32::from(disabled)) };
     }
 
+    /// Controls whether this widget participates in keyboard Tab traversal.
+    /// Interactive surfaces such as modeless command palettes may keep pointer
+    /// handling enabled while opting out of the focus sequence.
+    pub fn set_tab_stop(&self, tab_stop: bool) {
+        unsafe { sys::oneui_widget_set_tab_stop(self.as_raw(), i32::from(tab_stop)) };
+    }
+
     pub fn set_visible(&self, visible: bool) {
         unsafe { sys::oneui_widget_set_visible(self.as_raw(), i32::from(visible)) };
     }
@@ -1110,15 +1136,31 @@ pub enum ButtonVariant {
 }
 
 struct VoidCallback {
-    handler: Box<dyn FnMut() + 'static>,
+    handler: Rc<RefCell<Box<dyn FnMut() + 'static>>>,
+}
+
+fn run_void_handler(context: &'static str, handler: &Rc<RefCell<Box<dyn FnMut() + 'static>>>) {
+    // Native modal UI (for example the Windows prompt dialog) runs a nested
+    // message loop. That loop can deliver the same command again before the
+    // outer invocation returns. A command callback is edge-triggered, so the
+    // nested duplicate must be ignored instead of attempting a second mutable
+    // borrow and panicking across the FFI boundary.
+    let Ok(mut handler) = handler.try_borrow_mut() else {
+        return;
+    };
+    run_callback_guarded(context, || (handler)());
 }
 
 unsafe extern "C" fn run_void_callback(user_data: *mut std::ffi::c_void) {
     if user_data.is_null() {
         return;
     }
-    let callback = unsafe { &mut *user_data.cast::<VoidCallback>() };
-    run_callback_guarded("widget.command", || (callback.handler)());
+    // Clone the handler before entering product code. Product callbacks may
+    // legitimately destroy the widget and its Rust wrapper, which frees the
+    // callback token pointed to by `user_data`. The local Rc keeps the actual
+    // callable alive until this FFI frame has returned.
+    let handler = unsafe { (&*user_data.cast::<VoidCallback>()).handler.clone() };
+    run_void_handler("widget.command", &handler);
 }
 
 fn wide_null_terminated(value: &str) -> Vec<u16> {
@@ -1611,7 +1653,7 @@ impl Dialog {
     {
         self.clear_on_close();
         self.close_callback = Some(Box::new(VoidCallback {
-            handler: Box::new(callback),
+            handler: Rc::new(RefCell::new(Box::new(callback))),
         }));
         let user_data = (self
             .close_callback
@@ -1684,7 +1726,7 @@ impl StateView {
     {
         self.clear_on_action();
         self.action_callback = Some(Box::new(VoidCallback {
-            handler: Box::new(callback),
+            handler: Rc::new(RefCell::new(Box::new(callback))),
         }));
         let user_data = (self
             .action_callback
@@ -1886,7 +1928,9 @@ impl LabelHandle {
             }
             if let Some(text) = text {
                 let text = sys::OneUiUtf8String::from_str(&text);
+                trace_ui_task("label update started");
                 unsafe { sys::oneui_label_set_text_utf8(raw, text) };
+                trace_ui_task("label update completed");
             }
 
             state.update_scheduled.store(false, Ordering::Release);
@@ -2022,7 +2066,7 @@ impl Button {
     {
         self.clear_on_click();
         self.callback = Some(Box::new(VoidCallback {
-            handler: Box::new(callback),
+            handler: Rc::new(RefCell::new(Box::new(callback))),
         }));
         let user_data = (self
             .callback
@@ -2476,7 +2520,7 @@ impl InteractiveSurface {
     {
         self.clear_on_click();
         self.click_callback = Some(Box::new(VoidCallback {
-            handler: Box::new(callback),
+            handler: Rc::new(RefCell::new(Box::new(callback))),
         }));
         let user_data = (self
             .click_callback
@@ -2634,7 +2678,7 @@ impl IconButton {
     {
         self.clear_on_click();
         self.callback = Some(Box::new(VoidCallback {
-            handler: Box::new(callback),
+            handler: Rc::new(RefCell::new(Box::new(callback))),
         }));
         let user_data = (self
             .callback
@@ -2711,7 +2755,7 @@ impl WindowTitleBar {
     {
         self.clear_on_minimize();
         self.minimize_callback = Some(Box::new(VoidCallback {
-            handler: Box::new(callback),
+            handler: Rc::new(RefCell::new(Box::new(callback))),
         }));
         let user_data = (self
             .minimize_callback
@@ -2734,7 +2778,7 @@ impl WindowTitleBar {
     {
         self.clear_on_maximize();
         self.maximize_callback = Some(Box::new(VoidCallback {
-            handler: Box::new(callback),
+            handler: Rc::new(RefCell::new(Box::new(callback))),
         }));
         let user_data = (self
             .maximize_callback
@@ -2757,7 +2801,7 @@ impl WindowTitleBar {
     {
         self.clear_on_close();
         self.close_callback = Some(Box::new(VoidCallback {
-            handler: Box::new(callback),
+            handler: Rc::new(RefCell::new(Box::new(callback))),
         }));
         let user_data = (self
             .close_callback
@@ -2836,7 +2880,7 @@ impl NavItem {
     {
         self.clear_on_click();
         self.callback = Some(Box::new(VoidCallback {
-            handler: Box::new(callback),
+            handler: Rc::new(RefCell::new(Box::new(callback))),
         }));
         let user_data = (self
             .callback
@@ -4859,6 +4903,7 @@ impl VirtualListHandle {
         }
         let state = Arc::clone(&self.state);
         self.dispatcher.dispatch(move || {
+            trace_ui_task("virtual-list revision started");
             state
                 .pending_items
                 .lock()
@@ -4882,6 +4927,7 @@ impl VirtualListHandle {
                     native_items.len(),
                 )
             };
+            trace_ui_task("virtual-list revision completed");
         })
     }
 
@@ -5976,19 +6022,19 @@ impl Drop for Window {
 mod tests {
     use super::sys;
     use super::{
-        callback_panic_handler, run_callback_guarded, run_window_raw_key_callback,
-        set_callback_panic_handler, terminal_style, Button, Color, Dialog, Error, FileDialogFilter,
-        FileDialogMode, FileDialogOptions, IconSymbol, Insets, InteractiveSurface,
-        InteractiveSurfaceStateStyle, InteractiveSurfaceStyle, Label, List, ListItem, LogLine,
-        LogView, Menu, OverlayAlignment, OverlayHost, Panel, Popup, PopupInteractionMode,
-        PopupPreferredPlacement, PromptOptions, RawKeyEvent, ReorderableGrid, ScrollView,
-        SegmentedControl, Select, SelectionMode, SplitOrientation, SplitView, Stack,
+        callback_panic_handler, run_callback_guarded, run_void_handler,
+        run_window_raw_key_callback, set_callback_panic_handler, terminal_style, Button, Color,
+        Dialog, Error, FileDialogFilter, FileDialogMode, FileDialogOptions, IconSymbol, Insets,
+        InteractiveSurface, InteractiveSurfaceStateStyle, InteractiveSurfaceStyle, Label, List,
+        ListItem, LogLine, LogView, Menu, OverlayAlignment, OverlayHost, Panel, Popup,
+        PopupInteractionMode, PopupPreferredPlacement, PromptOptions, RawKeyEvent, ReorderableGrid,
+        ScrollView, SegmentedControl, Select, SelectionMode, SplitOrientation, SplitView, Stack,
         StackDirection, StyleSheet, Switch, Tabs, TerminalCell, TerminalColor, TerminalCursor,
         TerminalCursorStyle, TerminalFrame, TerminalSelection, TerminalUnderlineStyle,
         TerminalView, TextField, TreeItem, TreeView, VirtualList, Window, WindowOptions,
         WindowPlacement, WindowRawKeyCallback,
     };
-    use std::cell::Cell;
+    use std::cell::{Cell, RefCell};
     use std::rc::Rc;
     use std::sync::{
         atomic::{AtomicBool, Ordering},
@@ -6037,6 +6083,31 @@ mod tests {
         *callback_panic_handler()
             .lock()
             .expect("callback panic handler lock") = None;
+    }
+
+    #[test]
+    fn nested_void_command_is_ignored_instead_of_panicking() {
+        let invocations = Rc::new(Cell::new(0));
+        let callback_slot = Rc::new(RefCell::new(
+            None::<Rc<RefCell<Box<dyn FnMut() + 'static>>>>,
+        ));
+        let slot_for_callback = Rc::clone(&callback_slot);
+        let invocations_for_callback = Rc::clone(&invocations);
+        let handler: Rc<RefCell<Box<dyn FnMut() + 'static>>> =
+            Rc::new(RefCell::new(Box::new(move || {
+                invocations_for_callback.set(invocations_for_callback.get() + 1);
+                let nested = slot_for_callback
+                    .borrow()
+                    .as_ref()
+                    .expect("handler should be installed")
+                    .clone();
+                run_void_handler("test.nested_command", &nested);
+            })));
+        *callback_slot.borrow_mut() = Some(Rc::clone(&handler));
+
+        run_void_handler("test.command", &handler);
+
+        assert_eq!(invocations.get(), 1);
     }
 
     #[test]

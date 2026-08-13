@@ -15,6 +15,12 @@ bool intersects(Rect lhs, Rect rhs) {
 } // namespace
 
 View::~View() {
+    // Destruction only detaches ownership. Emitting invalidation while a view
+    // hierarchy is being torn down can re-enter an ancestor that is itself in
+    // destruction. Explicit add/clear mutations still invalidate normally.
+    Widget::setInvalidator({});
+    Widget::setRectInvalidator({});
+    Widget::setAnimationScheduler({});
     clearChildren();
 }
 
@@ -24,9 +30,11 @@ void View::add(std::shared_ptr<Widget> child) {
     }
     installChildCallbacks(*child);
     children_.push_back(std::move(child));
+    invalidate();
 }
 
 void View::clearChildren() {
+    const bool hadChildren = !children_.empty();
     if (focusedChild_) {
         focusedChild_->onFocusChanged(false);
     }
@@ -37,6 +45,9 @@ void View::clearChildren() {
         child->detachFromOwner(this);
     }
     children_.clear();
+    if (hadChildren) {
+        invalidate();
+    }
 }
 
 const std::vector<std::shared_ptr<Widget>>& View::children() const {

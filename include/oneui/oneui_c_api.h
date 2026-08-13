@@ -372,7 +372,7 @@ enum {
     OneUiTerminalCellOverline = 1u << 11
 };
 
-#define ONEUI_UTF8_ABI_VERSION 10u
+#define ONEUI_UTF8_ABI_VERSION 13u
 
 ONEUI_API const char* oneui_version(void);
 ONEUI_API unsigned int oneui_utf8_abi_version(void);
@@ -448,6 +448,7 @@ ONEUI_API void oneui_window_set_on_raw_key(
     OneUiWindowRawKeyCallback callback,
     void* user_data);
 ONEUI_API void oneui_window_set_style_sheet(OneUiWindow* window, OneUiStyleSheet* style_sheet);
+ONEUI_API void oneui_window_refresh_style_sheet(OneUiWindow* window);
 ONEUI_API void oneui_window_set_default_font_family_utf8(
     OneUiWindow* window,
     OneUiUtf8String family);

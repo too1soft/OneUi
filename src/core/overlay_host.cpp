@@ -194,6 +194,17 @@ bool OverlayHost::onMouseMove(const MouseEvent& event) {
         return false;
     }
 
+    // Preserve pointer capture across the overlay boundary.  Content controls
+    // such as TerminalView and TextField use move events after mouse-down to
+    // extend a selection.  Re-running overlay hit testing here would clear the
+    // pressed content state and turn a drag into a one-cell click.
+    if (pressedOverlay_ && isInteractive(pressedOverlay_)) {
+        return pressedOverlay_->onMouseMove(event);
+    }
+    if (pressedContent_ && isInteractive(pressedContent_)) {
+        return pressedContent_->onMouseMove(event);
+    }
+
     layoutAnchoredOverlays();
     for (const std::size_t index : hitOrder()) {
         const auto& entry = overlays_[index];

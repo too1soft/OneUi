@@ -163,6 +163,8 @@ public:
     }
     float measureTextWidth(const std::wstring& text, float size, int weight = 400) const override {
         (void)weight;
+        ++measureCalls;
+        measuredCodeUnits += text.size();
         const float scale = size / 14.0f;
         float width = 0.0f;
         for (wchar_t character : text) {
@@ -200,6 +202,8 @@ public:
     std::optional<oneui::Rect> clipOverride;
     int saves = 0;
     int restores = 0;
+    mutable std::size_t measureCalls = 0;
+    mutable std::size_t measuredCodeUnits = 0;
 };
 
 class MouseUpProbe final : public oneui::Widget {
@@ -2296,6 +2300,27 @@ void testListStyleOverridePaintsCustomColorsAndGeometry() {
     }
 }
 
+void testListClipsEveryRowWhenViewportIsTooShortForDetails() {
+    oneui::List list;
+    list.setItems({
+        oneui::ListItem{L"Alpha", L"First detail"},
+        oneui::ListItem{L"Beta", L"Second detail"},
+        oneui::ListItem{L"Gamma", L"Third detail"},
+    });
+    list.setFrame(oneui::Rect{4.0f, 8.0f, 180.0f, 72.0f});
+
+    RecordingCanvas canvas;
+    list.paint(canvas);
+
+    expectEqual("List clips each row independently", static_cast<int>(canvas.clips.size()), 3);
+    expectEqual("List balances every row clip restore", canvas.saves, canvas.restores);
+    if (canvas.clips.size() == 3) {
+        expectRect("List first row clip", canvas.clips[0], oneui::Rect{4.0f, 8.0f, 180.0f, 24.0f});
+        expectRect("List second row clip", canvas.clips[1], oneui::Rect{4.0f, 32.0f, 180.0f, 24.0f});
+        expectRect("List third row clip", canvas.clips[2], oneui::Rect{4.0f, 56.0f, 180.0f, 24.0f});
+    }
+}
+
 void testListEmptyStyleOverrideKeepsDefaultPaint() {
     oneui::List list;
     list.setItems({
@@ -2512,6 +2537,35 @@ void testVirtualListUsesStandardMultipleSelectionSemantics() {
 
     list.onKeyDown(oneui::KeyEvent{oneui::Key::Down, false, true});
     expectEqual("VirtualList Ctrl+Down preserves selected rows", list.selectedIndices().size(), 8);
+}
+
+void testVirtualListHitTestingUsesWindowCoordinatesForOffsetFrames() {
+    oneui::VirtualList list;
+    list.setItems({
+        {L"Alpha", L""},
+        {L"Beta", L""},
+        {L"Gamma", L""},
+    });
+    list.setRowHeight(48.0f);
+    list.setFrame(oneui::Rect{320.0f, 350.0f, 420.0f, 144.0f});
+
+    int selected = -1;
+    list.setOnSelectionChanged([&selected](const std::vector<int>& indices) {
+        selected = indices.empty() ? -1 : indices.front();
+    });
+
+    const oneui::MouseEvent thirdRow{
+        oneui::Point{520.0f, 470.0f}, oneui::MouseButton::Left};
+    expectEqual(
+        "VirtualList offset frame accepts third-row mouse down",
+        list.onMouseDown(thirdRow) ? 1 : 0,
+        1);
+    expectEqual(
+        "VirtualList offset frame accepts third-row mouse up",
+        list.onMouseUp(thirdRow) ? 1 : 0,
+        1);
+    expectEqual("VirtualList offset frame selects the third row", selected, 2);
+    expectEqual("VirtualList offset frame exposes the third row as active", list.selectedIndex(), 2);
 }
 
 void testVirtualListExposesStandardRowCommands() {
@@ -4190,6 +4244,31 @@ void testTextAreaSupportsMultilineEditingAndLineNavigation() {
     expectEqual("TextArea text input emits", changes, 2);
 }
 
+void testTextAreaLongDocumentMeasurementIsLinearAndCached() {
+    oneui::TextArea area(L"Long note");
+    std::wstring document;
+    for (int line = 0; line < 128; ++line) {
+        document.append(96, L'a');
+        document += L" 中文🙂e\u0301\n";
+    }
+    area.setText(document);
+    area.setFrame(oneui::Rect{0.0f, 0.0f, 720.0f, 420.0f});
+
+    RecordingCanvas canvas;
+    area.paint(canvas);
+    expectEqual(
+        "TextArea long document measurement stays linear",
+        canvas.measuredCodeUnits <= document.size() + 256 ? 1 : 0,
+        1);
+
+    const std::size_t measuredAfterFirstPaint = canvas.measuredCodeUnits;
+    area.paint(canvas);
+    expectEqual(
+        "TextArea long document reuses exact prefix metrics",
+        canvas.measuredCodeUnits == measuredAfterFirstPaint ? 1 : 0,
+        1);
+}
+
 void testTextFieldDisabledDoesNotEditOrCut() {
     oneui::TextField field(L"Name");
     field.setText(L"abcdef");
@@ -5040,6 +5119,14 @@ void testStyleSheetParsesCssLikeRules() {
     if (inputBg) {
         expectEqual("StyleSheet CSS custom property lookup value", *inputBg == "#191a20" ? 1 : 0, 1);
     }
+
+    const auto beforeThemeChange =
+        sheet.resolve(oneui::StyleNode{"input", {"input"}, oneui::StyleStateNone});
+    expectEqual("StyleSheet CSS variable initially resolves", beforeThemeChange.background.color->r, 25);
+    sheet.setCustomProperty("--input-bg", "#f5f6f8");
+    const auto afterThemeChange =
+        sheet.resolve(oneui::StyleNode{"input", {"input"}, oneui::StyleStateNone});
+    expectEqual("StyleSheet CSS variable re-resolves after update", afterThemeChange.background.color->r, 245);
 
     const auto focused = sheet.resolve(oneui::StyleNode{"input", {"input"}, oneui::StyleStateFocus});
     expectEqual("StyleSheet CSS focus border wins", focused.borderColor->r, 74);
@@ -6620,11 +6707,13 @@ int main() {
     testTabsStyleOverrideCanHideFocusRingAndStylePressed();
     testTabsDisabledStyleOverrideWinsAndClearRestoresDefault();
     testListStyleOverridePaintsCustomColorsAndGeometry();
+    testListClipsEveryRowWhenViewportIsTooShortForDetails();
     testListEmptyStyleOverrideKeepsDefaultPaint();
     testListStyleOverrideCanHideFocusRingAndStylePressed();
     testListDisabledStyleOverrideWinsAndClearRestoresDefault();
     testVirtualListPaintsOnlyViewportRowsAndMaintainsScrollSelection();
     testVirtualListUsesStandardMultipleSelectionSemantics();
+    testVirtualListHitTestingUsesWindowCoordinatesForOffsetFrames();
     testVirtualListExposesStandardRowCommands();
     testVirtualListReportsReorderRequestsWithoutMutatingSelection();
     testVirtualListEmitsStableExternalItemDragWithoutBreakingReorder();
@@ -6667,6 +6756,7 @@ int main() {
     testTextFieldUndoRedoEditingPaths();
     testTextFieldUndoRedoTextInputAndBinding();
     testTextAreaSupportsMultilineEditingAndLineNavigation();
+    testTextAreaLongDocumentMeasurementIsLinearAndCached();
     testTextFieldDisabledDoesNotEditOrCut();
     testTextFieldReadOnlyAllowsSelectionCopyAndNavigationButNotMutation();
     testTextFieldPasswordModeMasksDisplayOnly();

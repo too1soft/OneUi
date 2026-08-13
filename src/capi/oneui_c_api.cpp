@@ -70,11 +70,19 @@ struct OneUiWindow {
     std::shared_ptr<oneui::StyleSheet> styleSheet;
 };
 
+struct OneUiWidgetStyleBinding {
+    std::weak_ptr<oneui::Widget> widget;
+    std::weak_ptr<oneui::StyleSheet> styleSheet;
+    std::string tag;
+    std::vector<std::string> classes;
+};
+
 struct OneUiWidget {
     std::shared_ptr<oneui::Widget> widget;
     std::shared_ptr<oneui::StyleSheet> styleSheet;
     std::string tag;
     std::vector<std::string> classes;
+    std::shared_ptr<OneUiWidgetStyleBinding> styleBinding;
 };
 
 struct OneUiStyleSheet {
@@ -113,6 +121,8 @@ struct OneUiOwnedCallback {
 namespace {
 
 std::weak_ptr<oneui::StyleSheet> gDefaultStyleSheet;
+std::mutex gWidgetRegistryMutex;
+std::vector<std::shared_ptr<OneUiWidgetStyleBinding>> gWidgetRegistry;
 
 #ifdef _WIN32
 std::atomic<UINT> gTrayNextId{1};
@@ -146,18 +156,22 @@ void secureClear(std::wstring& value) {
     value.clear();
 }
 
+void capturePromptValue(PromptDialogState* state) {
+    if (!state || !state->edit) {
+        return;
+    }
+    const int length = std::clamp(GetWindowTextLengthW(state->edit), 0, state->maxChars);
+    secureClear(state->value);
+    state->value.resize(static_cast<std::size_t>(length) + 1, L'\0');
+    const int copied = GetWindowTextW(state->edit, state->value.data(), length + 1);
+    state->value.resize(static_cast<std::size_t>(std::max(0, copied)));
+}
+
 void completePrompt(PromptDialogState* state, bool accepted) {
     if (!state || state->completed) {
         return;
     }
     state->accepted = accepted;
-    if (accepted && state->edit) {
-        const int length = std::clamp(GetWindowTextLengthW(state->edit), 0, state->maxChars);
-        secureClear(state->value);
-        state->value.resize(static_cast<std::size_t>(length) + 1, L'\0');
-        GetWindowTextW(state->edit, state->value.data(), length + 1);
-        state->value.resize(std::wcslen(state->value.c_str()));
-    }
     state->completed = true;
     ShowWindow(state->dialog, SW_HIDE);
 }
@@ -175,6 +189,10 @@ LRESULT CALLBACK promptWindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM
 
     switch (message) {
     case WM_COMMAND:
+        if (LOWORD(wParam) == kPromptEditId && HIWORD(wParam) == EN_CHANGE) {
+            capturePromptValue(state);
+            return 0;
+        }
         if (LOWORD(wParam) == IDOK) {
             completePrompt(state, true);
             return 0;
@@ -726,7 +744,25 @@ OneUiWidget* wrap(std::shared_ptr<oneui::Widget> widget) {
     auto wrapper = std::make_unique<OneUiWidget>();
     wrapper->widget = std::move(widget);
     wrapper->styleSheet = gDefaultStyleSheet.lock();
-    return wrapper.release();
+    wrapper->styleBinding = std::make_shared<OneUiWidgetStyleBinding>();
+    wrapper->styleBinding->widget = wrapper->widget;
+    wrapper->styleBinding->styleSheet = wrapper->styleSheet;
+    OneUiWidget* raw = wrapper.release();
+    {
+        std::lock_guard<std::mutex> lock(gWidgetRegistryMutex);
+        gWidgetRegistry.push_back(raw->styleBinding);
+    }
+    return raw;
+}
+
+void syncStyleBinding(const OneUiWidget* wrapper) {
+    if (!wrapper || !wrapper->styleBinding) {
+        return;
+    }
+    wrapper->styleBinding->widget = wrapper->widget;
+    wrapper->styleBinding->styleSheet = wrapper->styleSheet;
+    wrapper->styleBinding->tag = wrapper->tag;
+    wrapper->styleBinding->classes = wrapper->classes;
 }
 
 oneui::StyleNode styleNodeFor(const OneUiWidget* widget) {
@@ -826,6 +862,7 @@ void applyStyleSheet(OneUiWidget* wrapper, std::shared_ptr<oneui::StyleSheet> sh
         return;
     }
     wrapper->styleSheet = std::move(sheet);
+    syncStyleBinding(wrapper);
     const oneui::StyleNode node = styleNodeFor(wrapper);
     applyPreferredSizeFromStyle(*wrapper->widget, wrapper->styleSheet->resolve(node));
 
@@ -974,6 +1011,7 @@ void applyStyleSheet(OneUiWidget* wrapper, std::shared_ptr<oneui::StyleSheet> sh
     }
     if (auto* scrollView = dynamic_cast<oneui::ScrollView*>(wrapper->widget.get())) {
         const oneui::StyleBox box = wrapper->styleSheet->resolve(node);
+        scrollView->setStyleBox(box);
         if (box.foreground || box.borderWidth) {
             scrollView->setScrollbarStyle(
                 box.foreground.value_or(oneui::Color{148, 163, 184, 180}),
@@ -1612,6 +1650,38 @@ void oneui_window_set_style_sheet(OneUiWindow* window, OneUiStyleSheet* style_sh
     gDefaultStyleSheet = style_sheet->sheet;
 }
 
+void oneui_window_refresh_style_sheet(OneUiWindow* window) {
+    if (!window || !window->window || !window->styleSheet) {
+        return;
+    }
+    std::vector<std::shared_ptr<OneUiWidgetStyleBinding>> bindings;
+    {
+        std::lock_guard<std::mutex> lock(gWidgetRegistryMutex);
+        gWidgetRegistry.erase(
+            std::remove_if(
+                gWidgetRegistry.begin(),
+                gWidgetRegistry.end(),
+                [](const auto& binding) {
+                    return !binding || binding->widget.expired();
+                }),
+            gWidgetRegistry.end());
+        bindings = gWidgetRegistry;
+    }
+    for (const auto& binding : bindings) {
+        auto widget = binding->widget.lock();
+        auto styleSheet = binding->styleSheet.lock();
+        if (widget && styleSheet == window->styleSheet) {
+            OneUiWidget mountedWidget;
+            mountedWidget.widget = std::move(widget);
+            mountedWidget.styleSheet = std::move(styleSheet);
+            mountedWidget.tag = binding->tag;
+            mountedWidget.classes = binding->classes;
+            applyStyleSheet(&mountedWidget, window->styleSheet);
+        }
+    }
+    window->window->requestRedraw();
+}
+
 void oneui_window_set_default_font_family_utf8(
     OneUiWindow* window,
     OneUiUtf8String family) {
@@ -1779,6 +1849,7 @@ int oneui_window_prompt_text(
         reinterpret_cast<HMENU>(static_cast<INT_PTR>(kPromptEditId)),
         GetModuleHandleW(nullptr),
         nullptr);
+    capturePromptValue(&state);
     SendMessageW(state.edit, EM_SETLIMITTEXT, static_cast<WPARAM>(state.maxChars), 0);
     if (placeholder && placeholder[0] != L'\0') {
         SendMessageW(state.edit, EM_SETCUEBANNER, FALSE, reinterpret_cast<LPARAM>(placeholder));
@@ -1845,18 +1916,18 @@ int oneui_window_prompt_text(
         }
     }
 
+    const bool accepted = state.completed && state.accepted;
+    if (accepted) {
+        lstrcpynW(out, state.value.c_str(), outLen);
+    }
     SetWindowTextW(state.edit, L"");
     DestroyWindow(dialog);
     if (restoreOwner) {
         EnableWindow(owner, TRUE);
         SetActiveWindow(owner);
     }
-
-    const bool accepted = state.completed && state.accepted;
-    if (accepted) {
-        lstrcpynW(out, state.value.c_str(), outLen);
-    }
     secureClear(state.value);
+
     return accepted ? 1 : 0;
 #else
     (void)window;
@@ -2035,6 +2106,7 @@ void oneui_widget_set_classes(OneUiWidget* widget, const char* classes) {
         return;
     }
     widget->classes = splitClasses(classes);
+    syncStyleBinding(widget);
     applyCurrentStyleSheet(widget);
 }
 
@@ -2044,6 +2116,7 @@ void oneui_widget_set_style_node(OneUiWidget* widget, const char* tag, const cha
     }
     widget->tag = tag ? tag : "";
     widget->classes = splitClasses(classes);
+    syncStyleBinding(widget);
     applyCurrentStyleSheet(widget);
 }
 

@@ -379,8 +379,13 @@ AccessibilityInfo Button::accessibilityInfo() const {
 }
 
 void Button::click() {
-    if (onClick_) {
-        onClick_();
+    // A command is allowed to rebuild or destroy the widget tree that owns this
+    // button. Keep an independent callback copy alive until invocation returns.
+    // Calling the member std::function directly would otherwise destroy the
+    // callable while it is still executing.
+    const auto callback = onClick_;
+    if (callback) {
+        callback();
     }
 }
 

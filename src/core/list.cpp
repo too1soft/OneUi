@@ -92,6 +92,12 @@ void List::paint(Canvas& canvas) {
             canvas.fillRect(row.inset(itemStyle.rowInset), itemStyle.rowBackground, itemStyle.rowRadius);
         }
 
+        // A List distributes its viewport across all rows. Consumers can still
+        // provide a viewport that is too short for a two-line item, so keep
+        // each row's paint strictly inside its own geometry. Long, scrollable
+        // data sets should use VirtualList with an explicit row height.
+        canvas.save();
+        canvas.clipRect(row);
         const auto& item = items_[static_cast<std::size_t>(i)];
         if (item.detail.empty()) {
             canvas.drawTextStyledEllipsized(item.title, Rect{row.x + itemStyle.textInset, row.y, row.width - itemStyle.textInset * 2.0f, row.height}, itemStyle.titleColor, itemStyle.titleFontSize, TextAlign::Left, itemStyle.titleFontWeight);
@@ -99,6 +105,7 @@ void List::paint(Canvas& canvas) {
             canvas.drawTextStyledEllipsized(item.title, Rect{row.x + itemStyle.textInset, row.y + itemStyle.titleOffsetY, row.width - itemStyle.textInset * 2.0f, 18.0f}, itemStyle.titleColor, itemStyle.titleFontSize, TextAlign::Left, itemStyle.titleFontWeight);
             canvas.drawTextStyledEllipsized(item.detail, Rect{row.x + itemStyle.textInset, row.y + itemStyle.detailOffsetY, row.width - itemStyle.textInset * 2.0f, 16.0f}, itemStyle.detailColor, itemStyle.detailFontSize, TextAlign::Left, itemStyle.detailFontWeight);
         }
+        canvas.restore();
     }
 }
 

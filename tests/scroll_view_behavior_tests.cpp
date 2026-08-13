@@ -353,6 +353,27 @@ void testChromeAndScrollbarStyleCanBeCustomized() {
     expectColor("ScrollView custom scrollbar color", canvas.fillRects.front().color, oneui::Color{70, 80, 90, 100});
 }
 
+void testCssStyleBoxPaintsWhenDefaultChromeIsHidden() {
+    auto content = std::make_shared<LayoutProbe>(oneui::Size{0.0f, 0.0f});
+    oneui::ScrollView scroll;
+    scroll.setFrame(oneui::Rect{10.0f, 20.0f, 100.0f, 80.0f});
+    scroll.setContent(content);
+    scroll.setChromeVisible(false);
+
+    oneui::StyleBox style;
+    style.background.color = oneui::Color{18, 24, 36, 255};
+    style.borderColor = oneui::Color{44, 52, 66, 255};
+    style.borderWidth = 0.0f;
+    scroll.setStyleBox(style);
+
+    RecordingCanvas canvas;
+    scroll.paint(canvas);
+
+    expectEqual("ScrollView CSS background fill count", static_cast<int>(canvas.fillRects.size()), 1);
+    expectRect("ScrollView CSS background rect", canvas.fillRects.front().rect, oneui::Rect{10.0f, 20.0f, 100.0f, 80.0f});
+    expectColor("ScrollView CSS background color", canvas.fillRects.front().color, oneui::Color{18, 24, 36, 255});
+}
+
 } // namespace
 
 int main() {
@@ -368,6 +389,7 @@ int main() {
     testHorizontalThumbPaintsWhenContentOverflows();
     testHorizontalThumbDragUpdatesAndClampsOffset();
     testChromeAndScrollbarStyleCanBeCustomized();
+    testCssStyleBoxPaintsWhenDefaultChromeIsHidden();
 
     if (failures != 0) {
         std::cerr << failures << " scroll view behavior test(s) failed.\n";

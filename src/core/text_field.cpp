@@ -411,8 +411,6 @@ void TextField::paint(Canvas& canvas) {
     const bool hasText = !value().empty();
     const bool shouldPaintPlaceholder = !hasText && !(focused() && editable());
     const TextFieldStyle style = visualStyle(resolvedStyle());
-    updateTextMetrics(&canvas);
-    ensureCaretVisible();
 
     if (focusVisible() && !disabled() && style.focusRing.visible) {
         const float offset = style.focusRing.offset;
@@ -455,6 +453,7 @@ void TextField::paint(Canvas& canvas) {
         return;
     }
     updateTextMetrics(&canvas);
+    ensureCaretVisible();
     const float scrollX = textWidthAt(textScrollOffset_);
 
     canvas.save();
@@ -1214,12 +1213,7 @@ void TextField::updateTextMetrics(const Canvas* canvas) const {
     measuredDisplayText_ = display;
     measuredPrefixWidths_.assign(display.size() + 1, 0.0f);
     if (canvas) {
-        std::wstring prefix;
-        prefix.reserve(display.size());
-        for (std::size_t index = 0; index < display.size(); ++index) {
-            prefix.push_back(display[index]);
-            measuredPrefixWidths_[index + 1] = canvas->measureTextWidth(prefix, theme().fontMd);
-        }
+        measuredPrefixWidths_ = canvas->measureTextPrefixWidths(display, theme().fontMd);
         measuredTextMetricsExact_ = true;
         return;
     }
@@ -1265,12 +1259,9 @@ void TextField::updateMultilineTextMetrics(const Canvas* canvas) const {
     for (const TextLine& line : measuredLines_) {
         std::vector<float> widths(line.end - line.start + 1, 0.0f);
         if (canvas) {
-            std::wstring prefix;
-            prefix.reserve(line.end - line.start);
-            for (std::size_t index = line.start; index < line.end; ++index) {
-                prefix.push_back(display[index]);
-                widths[index - line.start + 1] = canvas->measureTextWidth(prefix, theme().fontMd);
-            }
+            widths = canvas->measureTextPrefixWidths(
+                display.substr(line.start, line.end - line.start),
+                theme().fontMd);
         } else {
             for (std::size_t index = line.start; index < line.end; ++index) {
                 widths[index - line.start + 1] = widths[index - line.start] + approximateGlyphWidth(display[index]);

@@ -266,8 +266,11 @@ bool WindowTitleBar::onMouseUp(const MouseEvent& event) {
         onMinimize_();
     } else if (pressed == TitleBarButtonId::Maximize && onMaximize_) {
         onMaximize_();
-    } else if (pressed == TitleBarButtonId::Close && onClose_) {
-        onClose_();
+    } else if (pressed == TitleBarButtonId::Close) {
+        const auto callback = onClose_;
+        if (callback) {
+            callback();
+        }
     }
     return true;
 }

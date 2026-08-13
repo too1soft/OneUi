@@ -165,6 +165,33 @@ void testPanelCanReplaceContent() {
     expectRect("Panel second child fills frame", second->frame(), oneui::Rect{0.0f, 0.0f, 100.0f, 80.0f});
 }
 
+void testViewMutationsInvalidateTheirPreviousAndNewContent() {
+    int invalidations = 0;
+    oneui::View view;
+    view.setInvalidator([&] { ++invalidations; });
+
+    view.add(std::make_shared<LayoutProbe>());
+    expectEqual("Adding a child invalidates the view", invalidations, 1);
+
+    view.clearChildren();
+    expectEqual("Clearing children invalidates their previous area", invalidations, 2);
+
+    view.clearChildren();
+    expectEqual("Clearing an empty view is a no-op", invalidations, 2);
+}
+
+void testPanelReplacementInvalidatesBothMutations() {
+    int invalidations = 0;
+    oneui::Panel panel;
+    panel.setInvalidator([&] { ++invalidations; });
+    panel.setContent(std::make_shared<LayoutProbe>());
+    invalidations = 0;
+
+    panel.setContent(std::make_shared<LayoutProbe>());
+
+    expectEqual("Replacing panel content invalidates removal and insertion", invalidations, 2);
+}
+
 void testReparentedContentKeepsNewOwnerCallbacks() {
     auto child = std::make_shared<LayoutProbe>();
     int oldInvalidations = 0;
@@ -185,6 +212,12 @@ void testReparentedContentKeepsNewOwnerCallbacks() {
     oldParent->setContent(child);
     newParent->setContent(child);
     oldParent.reset();
+    oldInvalidations = 0;
+    newInvalidations = 0;
+    oldRectInvalidations = 0;
+    newRectInvalidations = 0;
+    oldAnimationRequests = 0;
+    newAnimationRequests = 0;
     child->requestRectInvalidation();
     child->requestAnimation();
     newParent->setRectInvalidator({});
@@ -219,8 +252,10 @@ void testDestroyedParentDetachesRetainedContent() {
         oneui::Panel parent;
         parent.setInvalidator([&] { ++invalidations; });
         parent.setContent(child);
+        invalidations = 0;
     }
 
+    expectEqual("Destroying a parent does not invalidate its former owner", invalidations, 0);
     child->requestInvalidation();
     expectEqual("Retained child ignores destroyed parent", invalidations, 0);
 }
@@ -230,6 +265,8 @@ void testDestroyedParentDetachesRetainedContent() {
 int main() {
     testPanelPaintsChromeAndLaysOutContent();
     testPanelCanReplaceContent();
+    testViewMutationsInvalidateTheirPreviousAndNewContent();
+    testPanelReplacementInvalidatesBothMutations();
     testReparentedContentKeepsNewOwnerCallbacks();
     testNestedCallbackPropagationStaysLinear();
     testDestroyedParentDetachesRetainedContent();
