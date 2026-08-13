@@ -2017,6 +2017,10 @@ void oneui_widget_set_visible(OneUiWidget* widget, int visible) {
     widget->widget->setVisible(visible != 0);
 }
 
+int oneui_widget_focused(const OneUiWidget* widget) {
+    return widget && widget->widget && widget->widget->focused() ? 1 : 0;
+}
+
 void oneui_widget_set_classes(OneUiWidget* widget, const char* classes) {
     if (!widget || !widget->widget) {
         return;
@@ -4939,6 +4943,16 @@ void oneui_text_field_set_text_utf8(OneUiWidget* text_field, OneUiUtf8String tex
         return;
     }
     nativeTextField->setText(utf8OrEmpty(text));
+}
+
+int oneui_text_field_undo(OneUiWidget* text_field) {
+    auto* nativeTextField = asWidget<oneui::TextField>(text_field);
+    return nativeTextField && nativeTextField->undo() ? 1 : 0;
+}
+
+int oneui_text_field_redo(OneUiWidget* text_field) {
+    auto* nativeTextField = asWidget<oneui::TextField>(text_field);
+    return nativeTextField && nativeTextField->redo() ? 1 : 0;
 }
 
 void oneui_text_field_set_read_only(OneUiWidget* text_field, int read_only) {

@@ -461,6 +461,7 @@ ONEUI_API void oneui_widget_set_preferred_size(OneUiWidget* widget, float width,
 ONEUI_API void oneui_widget_set_disabled(OneUiWidget* widget, int disabled);
 ONEUI_API void oneui_widget_set_tab_stop(OneUiWidget* widget, int tab_stop);
 ONEUI_API void oneui_widget_set_visible(OneUiWidget* widget, int visible);
+ONEUI_API int oneui_widget_focused(const OneUiWidget* widget);
 ONEUI_API void oneui_widget_set_classes(OneUiWidget* widget, const char* classes);
 ONEUI_API void oneui_widget_set_style_node(OneUiWidget* widget, const char* tag, const char* classes);
 ONEUI_API void oneui_widget_apply_style_sheet(OneUiWidget* widget, OneUiStyleSheet* style_sheet);
@@ -1038,6 +1039,8 @@ ONEUI_API OneUiWidget* oneui_text_field_create(const wchar_t* placeholder);
 ONEUI_API void oneui_text_field_set_text(OneUiWidget* text_field, const wchar_t* text);
 ONEUI_API OneUiWidget* oneui_text_field_create_utf8(OneUiUtf8String placeholder);
 ONEUI_API void oneui_text_field_set_text_utf8(OneUiWidget* text_field, OneUiUtf8String text);
+ONEUI_API int oneui_text_field_undo(OneUiWidget* text_field);
+ONEUI_API int oneui_text_field_redo(OneUiWidget* text_field);
 ONEUI_API void oneui_text_field_set_read_only(OneUiWidget* text_field, int read_only);
 ONEUI_API void oneui_text_field_set_password_mode(OneUiWidget* text_field, int enabled);
 ONEUI_API void oneui_text_field_set_password_mask(OneUiWidget* text_field, unsigned int codepoint);

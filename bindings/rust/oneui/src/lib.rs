@@ -777,6 +777,10 @@ impl Widget {
         unsafe { sys::oneui_widget_set_visible(self.as_raw(), i32::from(visible)) };
     }
 
+    pub fn is_focused(&self) -> bool {
+        unsafe { sys::oneui_widget_focused(self.as_raw()) != 0 }
+    }
+
     /// Assigns semantic CSS classes. The currently installed window style
     /// sheet is reapplied immediately by the native runtime.
     pub fn set_classes(&self, classes: &str) -> Result<(), StyleSheetError> {
@@ -2894,6 +2898,14 @@ impl TextField {
         unsafe { sys::oneui_text_field_set_text_utf8(self.widget.as_raw(), text) };
     }
 
+    pub fn undo(&self) -> bool {
+        unsafe { sys::oneui_text_field_undo(self.widget.as_raw()) != 0 }
+    }
+
+    pub fn redo(&self) -> bool {
+        unsafe { sys::oneui_text_field_redo(self.widget.as_raw()) != 0 }
+    }
+
     pub fn set_read_only(&self, read_only: bool) {
         unsafe { sys::oneui_text_field_set_read_only(self.widget.as_raw(), i32::from(read_only)) };
     }
@@ -2973,6 +2985,14 @@ impl TextArea {
     pub fn set_text(&self, text: &str) {
         let text = sys::OneUiUtf8String::from_str(text);
         unsafe { sys::oneui_text_field_set_text_utf8(self.widget.as_raw(), text) };
+    }
+
+    pub fn undo(&self) -> bool {
+        unsafe { sys::oneui_text_field_undo(self.widget.as_raw()) != 0 }
+    }
+
+    pub fn redo(&self) -> bool {
+        unsafe { sys::oneui_text_field_redo(self.widget.as_raw()) != 0 }
     }
 
     pub fn set_read_only(&self, read_only: bool) {

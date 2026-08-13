@@ -373,6 +373,7 @@ extern "C" {
     pub fn oneui_widget_set_preferred_size(widget: *mut OneUiWidget, width: f32, height: f32);
     pub fn oneui_widget_set_disabled(widget: *mut OneUiWidget, disabled: c_int);
     pub fn oneui_widget_set_visible(widget: *mut OneUiWidget, visible: c_int);
+    pub fn oneui_widget_focused(widget: *const OneUiWidget) -> c_int;
     pub fn oneui_widget_set_classes(widget: *mut OneUiWidget, classes: *const c_char);
     pub fn oneui_widget_set_style_node(
         widget: *mut OneUiWidget,
@@ -713,6 +714,8 @@ extern "C" {
     );
     pub fn oneui_text_field_create_utf8(placeholder: OneUiUtf8String) -> *mut OneUiWidget;
     pub fn oneui_text_field_set_text_utf8(text_field: *mut OneUiWidget, text: OneUiUtf8String);
+    pub fn oneui_text_field_undo(text_field: *mut OneUiWidget) -> c_int;
+    pub fn oneui_text_field_redo(text_field: *mut OneUiWidget) -> c_int;
     pub fn oneui_text_field_set_read_only(text_field: *mut OneUiWidget, read_only: c_int);
     pub fn oneui_text_field_set_password_mode(text_field: *mut OneUiWidget, enabled: c_int);
     pub fn oneui_text_field_set_password_mask(text_field: *mut OneUiWidget, codepoint: c_uint);

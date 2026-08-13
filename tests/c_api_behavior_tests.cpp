@@ -125,6 +125,12 @@ void testUtf8AbiRoundTripsUnicodeText() {
     expectTrue("utf8 button create", button != nullptr);
     expectTrue("utf8 text field create", field != nullptr);
     expectTrue("utf8 search box create", search != nullptr);
+    expectTrue("widget focused query handles unfocused field", oneui_widget_focused(field) == 0);
+    expectTrue("widget focused query handles null", oneui_widget_focused(nullptr) == 0);
+    expectTrue("text field undo empty history", oneui_text_field_undo(field) == 0);
+    expectTrue("text field redo empty history", oneui_text_field_redo(field) == 0);
+    expectTrue("text field undo handles null", oneui_text_field_undo(nullptr) == 0);
+    expectTrue("text field redo handles null", oneui_text_field_redo(nullptr) == 0);
 
     Utf8CallbackState callbackState;
     oneui_text_field_set_on_changed_utf8(field, onUtf8TextChanged, &callbackState);
