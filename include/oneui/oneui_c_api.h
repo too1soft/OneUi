@@ -448,6 +448,9 @@ ONEUI_API void oneui_window_set_on_raw_key(
     OneUiWindowRawKeyCallback callback,
     void* user_data);
 ONEUI_API void oneui_window_set_style_sheet(OneUiWindow* window, OneUiStyleSheet* style_sheet);
+ONEUI_API void oneui_window_set_default_font_family_utf8(
+    OneUiWindow* window,
+    OneUiUtf8String family);
 
 ONEUI_API OneUiTray* oneui_tray_create(OneUiWindow* window, const wchar_t* tooltip);
 ONEUI_API void oneui_tray_destroy(OneUiTray* tray);

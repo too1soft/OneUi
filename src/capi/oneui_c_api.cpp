@@ -1612,6 +1612,15 @@ void oneui_window_set_style_sheet(OneUiWindow* window, OneUiStyleSheet* style_sh
     gDefaultStyleSheet = style_sheet->sheet;
 }
 
+void oneui_window_set_default_font_family_utf8(
+    OneUiWindow* window,
+    OneUiUtf8String family) {
+    if (!window || !window->window) {
+        return;
+    }
+    window->window->setDefaultFontFamily(utf8OrEmpty(family));
+}
+
 int oneui_window_pick_folder(OneUiWindow* window, const wchar_t* title, wchar_t* out, int outLen) {
 #ifdef _WIN32
     if (!out || outLen <= 0) {

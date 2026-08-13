@@ -357,6 +357,10 @@ extern "C" {
         window: *mut OneUiWindow,
         style_sheet: *mut OneUiStyleSheet,
     );
+    pub fn oneui_window_set_default_font_family_utf8(
+        window: *mut OneUiWindow,
+        family: OneUiUtf8String,
+    );
     pub fn oneui_window_post_owned(
         window: *mut OneUiWindow,
         callback: OneUiVoidCallback,

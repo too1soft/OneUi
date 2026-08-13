@@ -57,6 +57,10 @@ public:
     // event, which lets applications implement global shortcuts without
     // duplicating platform message hooks or intercepting IME text input.
     virtual void setRawKeyHandler(RawKeyHandler handler) { (void)handler; }
+    // Sets the application font used whenever controls request the default
+    // UI family. An empty value restores the platform default. The value is
+    // owned by the window and takes effect on the next paint.
+    virtual void setDefaultFontFamily(std::wstring family) { (void)family; }
     // Creates the native handle on the calling UI thread without showing it.
     virtual void initialize() = 0;
     virtual void show() = 0;

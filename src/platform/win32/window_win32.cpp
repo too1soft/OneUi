@@ -379,7 +379,8 @@ private:
 
 class SkiaCanvas final : public Canvas {
 public:
-    explicit SkiaCanvas(SkCanvas& canvas) : canvas_(canvas) {}
+    explicit SkiaCanvas(SkCanvas& canvas, const std::wstring* defaultFontFamily = nullptr)
+        : canvas_(canvas), defaultFontFamily_(defaultFontFamily) {}
 
     void clear(Color color) override {
         canvas_.clear(toSkColor(color));
@@ -580,8 +581,13 @@ public:
         paint.setAntiAlias(true);
         paint.setColor(toSkColor(color));
 
+        const std::wstring& resolvedFamily =
+            familyName.empty() && fallbackFamily == TextFontFamily::Default &&
+                    defaultFontFamily_ && !defaultFontFamily_->empty()
+                ? *defaultFontFamily_
+                : familyName;
         const TextBlobEntry& textBlob =
-            cachedTextBlob(text, size, fallbackFamily, familyName, weight);
+            cachedTextBlob(text, size, fallbackFamily, resolvedFamily, weight);
         if (!textBlob.blob) {
             return;
         }
@@ -624,8 +630,13 @@ public:
             return 0.0f;
         }
         const double traceStartMs = currentTimeMs();
+        const std::wstring& resolvedFamily =
+            familyName.empty() && fallbackFamily == TextFontFamily::Default &&
+                    defaultFontFamily_ && !defaultFontFamily_->empty()
+                ? *defaultFontFamily_
+                : familyName;
         const TextBlobEntry& textBlob =
-            cachedTextBlob(text, size, fallbackFamily, familyName, weight);
+            cachedTextBlob(text, size, fallbackFamily, resolvedFamily, weight);
         ++g_primitivePaintTrace.textMeasureCalls;
         g_primitivePaintTrace.textMeasureMs += currentTimeMs() - traceStartMs;
         return textBlob.advanceWidth;
@@ -992,6 +1003,7 @@ private:
     }
 
     SkCanvas& canvas_;
+    const std::wstring* defaultFontFamily_ = nullptr;
     std::optional<Rect> clipBounds_;
     std::vector<std::optional<Rect>> clipStack_;
 };
@@ -1072,6 +1084,11 @@ public:
 
     void setRawKeyHandler(RawKeyHandler handler) override {
         rawKeyHandler_ = std::move(handler);
+    }
+
+    void setDefaultFontFamily(std::wstring family) override {
+        defaultFontFamily_ = std::move(family);
+        requestRedraw();
     }
 
     void initialize() override {
@@ -2566,7 +2583,7 @@ private:
 
         skCanvas->save();
         skCanvas->scale(scale, scale);
-        SkiaCanvas canvas(*skCanvas);
+        SkiaCanvas canvas(*skCanvas, &defaultFontFamily_);
         if (!fullPaint) {
             const Rect dirtyCanvasRect{
                 static_cast<float>(dirtyX) / scale,
@@ -3358,6 +3375,7 @@ private:
     bool swapIntervalEnabled_ = false;
     std::shared_ptr<Widget> content_;
     RawKeyHandler rawKeyHandler_;
+    std::wstring defaultFontFamily_;
     wchar_t pendingHighSurrogate_ = 0;
     std::atomic_bool acceptingPostedCallbacks_{true};
     std::mutex postedCallbacksMutex_;

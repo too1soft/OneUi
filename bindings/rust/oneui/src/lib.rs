@@ -387,6 +387,18 @@ unsafe extern "C" fn run_animation_frame_task(now_ms: f64, user_data: *mut std::
 }
 
 impl UiDispatcher {
+    /// Changes the window-wide default UI font on the owning thread.
+    pub fn set_default_font_family(&self, family: &str) -> Result<(), Error> {
+        if std::thread::current().id() != self.state.ui_thread {
+            return Err(Error::WrongThread);
+        }
+        let family = sys::OneUiUtf8String::from_str(family.trim());
+        self.state.with_raw(|raw| unsafe {
+            sys::oneui_window_set_default_font_family_utf8(raw, family);
+        });
+        Ok(())
+    }
+
     /// Requests focus for a widget already mounted in this window.
     ///
     /// Focus changes are synchronous and must originate on the window thread.
@@ -5832,6 +5844,16 @@ impl Window {
         });
     }
 
+    /// Sets the font family used by controls that request the standard UI
+    /// font. Passing an empty string restores the platform default. This is a
+    /// window-wide setting and applies without rebuilding the widget tree.
+    pub fn set_default_font_family(&self, family: &str) {
+        let family = sys::OneUiUtf8String::from_str(family.trim());
+        self.state.with_raw(|raw| unsafe {
+            sys::oneui_window_set_default_font_family_utf8(raw, family);
+        });
+    }
+
     pub fn show(&self) {
         self.state.with_raw(|raw| unsafe {
             sys::oneui_window_show(raw);
@@ -5939,6 +5961,19 @@ mod tests {
     fn window_test_lock() -> &'static Mutex<()> {
         static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
         LOCK.get_or_init(|| Mutex::new(()))
+    }
+
+    #[test]
+    fn window_default_font_can_be_changed_through_window_and_dispatcher() {
+        let _guard = window_test_lock().lock().expect("window test lock");
+        let window = Window::new(&WindowOptions::default()).expect("window should be created");
+        window.set_default_font_family("Segoe UI");
+        window
+            .dispatcher()
+            .set_default_font_family("Microsoft YaHei UI")
+            .expect("UI-thread font update should succeed");
+        window.set_default_font_family("");
+        window.close();
     }
 
     #[test]
