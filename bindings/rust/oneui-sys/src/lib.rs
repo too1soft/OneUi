@@ -902,6 +902,13 @@ extern "C" {
         callback: OneUiIntCallback,
         user_data: *mut c_void,
     );
+    pub fn oneui_virtual_list_set_on_delete_requested(
+        list: *mut OneUiWidget,
+        callback: Option<
+            unsafe extern "C" fn(values: *const c_int, count: usize, user_data: *mut c_void),
+        >,
+        user_data: *mut c_void,
+    );
     pub fn oneui_virtual_list_set_on_context_menu_requested(
         list: *mut OneUiWidget,
         callback: OneUiIndexPointCallback,

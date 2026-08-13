@@ -175,6 +175,10 @@ void VirtualList::setOnEditRequested(std::function<void(int)> callback) {
     onEditRequested_ = std::move(callback);
 }
 
+void VirtualList::setOnDeleteRequested(std::function<void(const std::vector<int>&)> callback) {
+    onDeleteRequested_ = std::move(callback);
+}
+
 void VirtualList::setOnContextMenuRequested(std::function<void(int, Point)> callback) {
     onContextMenuRequested_ = std::move(callback);
 }
@@ -564,6 +568,10 @@ bool VirtualList::onKeyDown(const KeyEvent& event) {
         onEditRequested_(active);
         return true;
     }
+    if (active >= 0 && event.key == Key::Delete && onDeleteRequested_) {
+        onDeleteRequested_(selection_.selectedIndices());
+        return true;
+    }
     const int selected = active >= 0 ? active : -1;
     int target = -1;
     if (event.key == Key::Down) {
@@ -574,6 +582,14 @@ bool VirtualList::onKeyDown(const KeyEvent& event) {
         target = 0;
     } else if (event.key == Key::End) {
         target = static_cast<int>(items_.size()) - 1;
+    } else if (event.key == Key::PageDown || event.key == Key::PageUp) {
+        const int visibleRows = std::max(
+            1,
+            static_cast<int>(std::floor(frame().height / rowHeight_)));
+        const int origin = selected < 0 ? 0 : selected;
+        target = event.key == Key::PageDown
+            ? std::min(static_cast<int>(items_.size()) - 1, origin + visibleRows)
+            : std::max(0, origin - visibleRows);
     }
     if (target >= 0) {
         const auto previousIndices = selection_.selectedIndices();

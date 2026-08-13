@@ -3632,6 +3632,20 @@ void oneui_virtual_list_set_on_edit_requested(
     }} : nullptr);
 }
 
+void oneui_virtual_list_set_on_delete_requested(
+    OneUiWidget* list,
+    OneUiIntArrayCallback callback,
+    void* user_data) {
+    auto* nativeList = asWidget<oneui::VirtualList>(list);
+    if (!nativeList) {
+        return;
+    }
+    nativeList->setOnDeleteRequested(
+        callback ? std::function<void(const std::vector<int>&)>{[callback, user_data](const std::vector<int>& indices) {
+            callback(indices.data(), indices.size(), user_data);
+        }} : nullptr);
+}
+
 void oneui_virtual_list_set_on_context_menu_requested(
     OneUiWidget* list,
     OneUiIndexPointCallback callback,

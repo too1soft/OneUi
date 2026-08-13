@@ -2529,10 +2529,14 @@ void testVirtualListExposesStandardRowCommands() {
 
     int activated = -1;
     int editRequested = -1;
+    std::vector<int> deleteRequested;
     int contextIndex = -1;
     oneui::Point contextPoint{};
     list.setOnActivated([&activated](int index) { activated = index; });
     list.setOnEditRequested([&editRequested](int index) { editRequested = index; });
+    list.setOnDeleteRequested([&deleteRequested](const std::vector<int>& indices) {
+        deleteRequested = indices;
+    });
     list.setOnContextMenuRequested([&contextIndex, &contextPoint](int index, oneui::Point point) {
         contextIndex = index;
         contextPoint = point;
@@ -2555,8 +2559,17 @@ void testVirtualListExposesStandardRowCommands() {
 
     list.onKeyDown(oneui::KeyEvent{oneui::Key::Enter});
     list.onKeyDown(oneui::KeyEvent{oneui::Key::F2});
+    list.onKeyDown(oneui::KeyEvent{oneui::Key::Delete});
     expectEqual("VirtualList Enter activates the active row", activated, 4);
     expectEqual("VirtualList F2 requests editing for the active row", editRequested, 4);
+    expectEqual("VirtualList Delete reports the complete current selection", deleteRequested.size(), 1);
+    expectEqual("VirtualList Delete reports the active row", deleteRequested.front(), 4);
+
+    list.setSelectedIndex(0);
+    list.onKeyDown(oneui::KeyEvent{oneui::Key::PageDown});
+    expectEqual("VirtualList PageDown advances by one viewport", list.selectedIndex(), 5);
+    list.onKeyDown(oneui::KeyEvent{oneui::Key::PageUp});
+    expectEqual("VirtualList PageUp moves back by one viewport", list.selectedIndex(), 0);
 }
 
 void testVirtualListReportsReorderRequestsWithoutMutatingSelection() {

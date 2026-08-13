@@ -767,6 +767,10 @@ ONEUI_API void oneui_virtual_list_set_on_edit_requested(
     OneUiWidget* list,
     OneUiIntCallback callback,
     void* user_data);
+ONEUI_API void oneui_virtual_list_set_on_delete_requested(
+    OneUiWidget* list,
+    OneUiIntArrayCallback callback,
+    void* user_data);
 ONEUI_API void oneui_virtual_list_set_on_context_menu_requested(
     OneUiWidget* list,
     OneUiIndexPointCallback callback,

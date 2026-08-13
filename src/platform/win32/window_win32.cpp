@@ -3101,6 +3101,10 @@ private:
             key = Key::Home;
         } else if (wParam == VK_END) {
             key = Key::End;
+        } else if (wParam == VK_PRIOR) {
+            key = Key::PageUp;
+        } else if (wParam == VK_NEXT) {
+            key = Key::PageDown;
         } else if (wParam == VK_DELETE) {
             key = Key::Delete;
         } else if (wParam == VK_F2) {

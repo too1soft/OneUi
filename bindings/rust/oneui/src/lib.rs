@@ -4964,6 +4964,7 @@ pub struct VirtualList {
     selection_changed_callback: Option<Box<ListSelectionChangedCallback>>,
     activated_callback: Option<Box<ListChangedCallback>>,
     edit_requested_callback: Option<Box<ListChangedCallback>>,
+    delete_requested_callback: Option<Box<ListSelectionChangedCallback>>,
     context_menu_requested_callback: Option<Box<ContextMenuRequestedCallback>>,
     reorder_requested_callback: Option<Box<ReorderRequestedCallback>>,
     item_drag_callback: Option<Box<ItemDragCallback>>,
@@ -4983,6 +4984,7 @@ impl VirtualList {
             selection_changed_callback: None,
             activated_callback: None,
             edit_requested_callback: None,
+            delete_requested_callback: None,
             context_menu_requested_callback: None,
             reorder_requested_callback: None,
             item_drag_callback: None,
@@ -5221,6 +5223,41 @@ impl VirtualList {
         self.edit_requested_callback = None;
     }
 
+    /// Runs the standard Delete command with the complete current selection.
+    pub fn set_on_delete_requested<F>(&mut self, callback: F)
+    where
+        F: FnMut(Vec<i32>) + 'static,
+    {
+        self.clear_on_delete_requested();
+        self.delete_requested_callback = Some(Box::new(ListSelectionChangedCallback {
+            handler: Box::new(callback),
+        }));
+        let user_data = (self
+            .delete_requested_callback
+            .as_deref_mut()
+            .expect("virtual list delete callback was just installed")
+            as *mut ListSelectionChangedCallback)
+            .cast();
+        unsafe {
+            sys::oneui_virtual_list_set_on_delete_requested(
+                self.widget.as_raw(),
+                Some(run_list_selection_changed_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn clear_on_delete_requested(&mut self) {
+        unsafe {
+            sys::oneui_virtual_list_set_on_delete_requested(
+                self.widget.as_raw(),
+                None,
+                std::ptr::null_mut(),
+            )
+        };
+        self.delete_requested_callback = None;
+    }
+
     pub fn set_on_context_menu_requested<F>(&mut self, callback: F)
     where
         F: FnMut(ContextMenuRequest) + 'static,
@@ -5372,6 +5409,7 @@ impl Drop for VirtualList {
         self.clear_on_item_drag();
         self.clear_on_reorder_requested();
         self.clear_on_context_menu_requested();
+        self.clear_on_delete_requested();
         self.clear_on_edit_requested();
         self.clear_on_activated();
         self.clear_on_selection_changed();

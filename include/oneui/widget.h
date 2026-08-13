@@ -48,6 +48,8 @@ enum class Key {
     Other,
     Home,
     End,
+    PageUp,
+    PageDown,
     Delete,
     A,
     C,

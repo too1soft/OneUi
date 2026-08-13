@@ -42,6 +42,7 @@ public:
     void setOnSelectionChanged(std::function<void(const std::vector<int>&)> callback);
     void setOnActivated(std::function<void(int)> callback);
     void setOnEditRequested(std::function<void(int)> callback);
+    void setOnDeleteRequested(std::function<void(const std::vector<int>&)> callback);
     void setOnContextMenuRequested(std::function<void(int, Point)> callback);
     void setReorderEnabled(bool enabled);
     bool reorderEnabled() const;
@@ -104,6 +105,7 @@ private:
     std::function<void(const std::vector<int>&)> onSelectionChanged_;
     std::function<void(int)> onActivated_;
     std::function<void(int)> onEditRequested_;
+    std::function<void(const std::vector<int>&)> onDeleteRequested_;
     std::function<void(int, Point)> onContextMenuRequested_;
     std::function<void(int, int)> onReorderRequested_;
     std::vector<std::wstring> itemDragIds_;
