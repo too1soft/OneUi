@@ -677,6 +677,21 @@ void testPromptAbiRejectsInvalidOutput() {
             0) == 0);
 }
 
+void testProgressBarAbiClampsValues() {
+    OneUiWidget* progress = oneui_progress_bar_create();
+    expectTrue("progress bar create", progress != nullptr);
+    oneui_progress_bar_set_value(progress, 0.625);
+    expectTrue(
+        "progress bar value round trip",
+        std::abs(oneui_progress_bar_value(progress) - 0.625) < 0.0001);
+    oneui_progress_bar_set_value(progress, 4.0);
+    expectTrue("progress bar upper clamp", oneui_progress_bar_value(progress) == 1.0);
+    oneui_progress_bar_set_value(progress, -1.0);
+    expectTrue("progress bar lower clamp", oneui_progress_bar_value(progress) == 0.0);
+    expectTrue("progress bar null query", oneui_progress_bar_value(nullptr) == 0.0);
+    oneui_widget_destroy(progress);
+}
+
 } // namespace
 
 int main() {
@@ -693,6 +708,7 @@ int main() {
     testRealtimeFrameViewAbiAcceptsBgraFrames();
     testRemoteInputRegionAbiCreatesAndAcceptsCallbacks();
     testTerminalViewAbiUsesStructuredCells();
+    testProgressBarAbiClampsValues();
     testPromptAbiRejectsInvalidOutput();
     testClipboardAbiRoundTripIfAvailable();
 

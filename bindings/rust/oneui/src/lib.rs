@@ -745,6 +745,14 @@ impl UiDispatcher {
         }
     }
 
+    /// Creates a thread-safe value producer for a progress bar mounted in this window.
+    pub fn progress_bar_handle(&self, progress_bar: &ProgressBar) -> ProgressBarHandle {
+        ProgressBarHandle {
+            state: Arc::clone(&progress_bar.state),
+            dispatcher: self.clone(),
+        }
+    }
+
     /// Creates a thread-safe producer for in-place virtual-list row updates.
     pub fn virtual_list_handle(&self, list: &VirtualList) -> VirtualListHandle {
         VirtualListHandle {
@@ -2006,6 +2014,131 @@ impl Drop for Label {
             .pending_text
             .lock()
             .expect("label pending text lock poisoned")
+            .take();
+        self.state.update_scheduled.store(false, Ordering::Release);
+    }
+}
+
+struct ProgressBarState {
+    raw: AtomicPtr<sys::OneUiWidget>,
+    pending_value: Mutex<Option<f64>>,
+    update_scheduled: AtomicBool,
+}
+
+/// Thread-safe producer for a determinate progress value owned by a window.
+///
+/// Worker updates are clamped by OneUI, coalesced to the latest value and
+/// applied only on the owning UI thread.
+#[derive(Clone)]
+pub struct ProgressBarHandle {
+    state: Arc<ProgressBarState>,
+    dispatcher: UiDispatcher,
+}
+
+impl ProgressBarHandle {
+    pub fn set_value(&self, value: f64) -> Result<(), Error> {
+        if self.state.raw.load(Ordering::Acquire).is_null() {
+            return Err(Error::WidgetDestroyed);
+        }
+        *self
+            .state
+            .pending_value
+            .lock()
+            .expect("progress bar pending value lock poisoned") = Some(value);
+        if self.state.update_scheduled.swap(true, Ordering::AcqRel) {
+            return Ok(());
+        }
+
+        let state = Arc::clone(&self.state);
+        let dispatched_state = Arc::clone(&state);
+        if let Err(error) = self
+            .dispatcher
+            .dispatch(move || Self::drain_pending_value(&dispatched_state))
+        {
+            state.update_scheduled.store(false, Ordering::Release);
+            state
+                .pending_value
+                .lock()
+                .expect("progress bar pending value lock poisoned")
+                .take();
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    fn drain_pending_value(state: &ProgressBarState) {
+        loop {
+            let value = state
+                .pending_value
+                .lock()
+                .expect("progress bar pending value lock poisoned")
+                .take();
+            let raw = state.raw.load(Ordering::Acquire);
+            if raw.is_null() {
+                state.update_scheduled.store(false, Ordering::Release);
+                return;
+            }
+            if let Some(value) = value {
+                unsafe { sys::oneui_progress_bar_set_value(raw, value) };
+            }
+            state.update_scheduled.store(false, Ordering::Release);
+            if state
+                .pending_value
+                .lock()
+                .expect("progress bar pending value lock poisoned")
+                .is_none()
+            {
+                return;
+            }
+            if !state.update_scheduled.swap(true, Ordering::AcqRel) {
+                continue;
+            }
+            return;
+        }
+    }
+}
+
+/// A standard determinate progress indicator with values in the [0, 1] range.
+pub struct ProgressBar {
+    widget: Widget,
+    state: Arc<ProgressBarState>,
+}
+
+impl ProgressBar {
+    pub fn new() -> Result<Self, Error> {
+        let widget = Widget::from_raw(unsafe { sys::oneui_progress_bar_create() })?;
+        Ok(Self {
+            state: Arc::new(ProgressBarState {
+                raw: AtomicPtr::new(widget.as_raw()),
+                pending_value: Mutex::new(None),
+                update_scheduled: AtomicBool::new(false),
+            }),
+            widget,
+        })
+    }
+
+    pub fn set_value(&self, value: f64) {
+        unsafe { sys::oneui_progress_bar_set_value(self.widget.as_raw(), value) };
+    }
+
+    pub fn value(&self) -> f64 {
+        unsafe { sys::oneui_progress_bar_value(self.widget.as_raw()) }
+    }
+
+    pub fn as_widget(&self) -> &Widget {
+        &self.widget
+    }
+}
+
+impl Drop for ProgressBar {
+    fn drop(&mut self) {
+        self.state
+            .raw
+            .store(std::ptr::null_mut(), Ordering::Release);
+        self.state
+            .pending_value
+            .lock()
+            .expect("progress bar pending value lock poisoned")
             .take();
         self.state.update_scheduled.store(false, Ordering::Release);
     }
@@ -4898,6 +5031,21 @@ impl VirtualListHandle {
     /// status changes should continue to use [`Self::update_item`] so active
     /// scrolling and selection are preserved.
     pub fn set_items(&self, items: Vec<ListItem>) -> Result<(), Error> {
+        self.replace_items(items, false)
+    }
+
+    /// Replaces the complete data revision and clears the selection in the
+    /// same UI-thread task.
+    ///
+    /// Use this when row indices do not identify the same logical objects
+    /// across revisions, such as directory listings after rename or delete.
+    /// Clearing atomically prevents a retained index from targeting a
+    /// different row between the revision and a later selection reset.
+    pub fn set_items_and_clear_selection(&self, items: Vec<ListItem>) -> Result<(), Error> {
+        self.replace_items(items, true)
+    }
+
+    fn replace_items(&self, items: Vec<ListItem>, clear_selection: bool) -> Result<(), Error> {
         if self.state.raw.load(Ordering::Acquire).is_null() {
             return Err(Error::WidgetDestroyed);
         }
@@ -4925,7 +5073,10 @@ impl VirtualListHandle {
                     raw,
                     native_items.as_ptr(),
                     native_items.len(),
-                )
+                );
+                if clear_selection {
+                    sys::oneui_virtual_list_set_selected_index(raw, -1);
+                }
             };
             trace_ui_task("virtual-list revision completed");
         })
@@ -5998,6 +6149,11 @@ impl Window {
         self.dispatcher().label_handle(label)
     }
 
+    /// Returns the only thread-safe update path for a mounted progress bar.
+    pub fn progress_bar_handle(&self, progress_bar: &ProgressBar) -> ProgressBarHandle {
+        self.dispatcher().progress_bar_handle(progress_bar)
+    }
+
     /// Returns the thread-safe update path for rows in a mounted virtual list.
     pub fn virtual_list_handle(&self, list: &VirtualList) -> VirtualListHandle {
         self.dispatcher().virtual_list_handle(list)
@@ -6027,12 +6183,12 @@ mod tests {
         Dialog, Error, FileDialogFilter, FileDialogMode, FileDialogOptions, IconSymbol, Insets,
         InteractiveSurface, InteractiveSurfaceStateStyle, InteractiveSurfaceStyle, Label, List,
         ListItem, LogLine, LogView, Menu, OverlayAlignment, OverlayHost, Panel, Popup,
-        PopupInteractionMode, PopupPreferredPlacement, PromptOptions, RawKeyEvent, ReorderableGrid,
-        ScrollView, SegmentedControl, Select, SelectionMode, SplitOrientation, SplitView, Stack,
-        StackDirection, StyleSheet, Switch, Tabs, TerminalCell, TerminalColor, TerminalCursor,
-        TerminalCursorStyle, TerminalFrame, TerminalSelection, TerminalUnderlineStyle,
-        TerminalView, TextField, TreeItem, TreeView, VirtualList, Window, WindowOptions,
-        WindowPlacement, WindowRawKeyCallback,
+        PopupInteractionMode, PopupPreferredPlacement, ProgressBar, PromptOptions, RawKeyEvent,
+        ReorderableGrid, ScrollView, SegmentedControl, Select, SelectionMode, SplitOrientation,
+        SplitView, Stack, StackDirection, StyleSheet, Switch, Tabs, TerminalCell, TerminalColor,
+        TerminalCursor, TerminalCursorStyle, TerminalFrame, TerminalSelection,
+        TerminalUnderlineStyle, TerminalView, TextField, TreeItem, TreeView, VirtualList, Window,
+        WindowOptions, WindowPlacement, WindowRawKeyCallback,
     };
     use std::cell::{Cell, RefCell};
     use std::rc::Rc;
@@ -6977,6 +7133,43 @@ mod tests {
             handle.set_text("too late"),
             Err(Error::WidgetDestroyed)
         ));
+    }
+
+    #[test]
+    fn progress_bar_clamps_values_and_worker_handle_is_lifetime_safe() {
+        let _guard = window_test_lock().lock().expect("window test lock");
+        let window = Window::new(&WindowOptions::default()).expect("window should be created");
+        let progress = ProgressBar::new().expect("progress bar should be created");
+        progress.set_value(1.5);
+        assert_eq!(progress.value(), 1.0);
+        window.set_content(progress.as_widget());
+        let handle = window.progress_bar_handle(&progress);
+        let worker = thread::spawn(move || {
+            handle
+                .set_value(0.25)
+                .expect("worker should submit progress value");
+            handle
+                .set_value(0.75)
+                .expect("worker should coalesce progress value");
+        });
+        worker.join().expect("worker should finish");
+
+        let close_dispatcher = window.dispatcher();
+        window
+            .dispatch(move || close_dispatcher.request_close())
+            .expect("window should accept close request");
+        assert_eq!(window.run(), 0);
+    }
+
+    #[test]
+    fn progress_bar_handle_rejects_updates_after_widget_destruction() {
+        let _guard = window_test_lock().lock().expect("window test lock");
+        let window = Window::new(&WindowOptions::default()).expect("window should be created");
+        let handle = {
+            let progress = ProgressBar::new().expect("progress bar should be created");
+            window.progress_bar_handle(&progress)
+        };
+        assert!(matches!(handle.set_value(0.5), Err(Error::WidgetDestroyed)));
     }
 
     #[test]

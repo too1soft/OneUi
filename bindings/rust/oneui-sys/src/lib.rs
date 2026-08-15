@@ -589,6 +589,10 @@ extern "C" {
     pub fn oneui_label_set_font_weight(label: *mut OneUiWidget, font_weight: c_int);
     pub fn oneui_label_set_align(label: *mut OneUiWidget, align: c_int);
 
+    pub fn oneui_progress_bar_create() -> *mut OneUiWidget;
+    pub fn oneui_progress_bar_set_value(progress_bar: *mut OneUiWidget, value: f64);
+    pub fn oneui_progress_bar_value(progress_bar: *mut OneUiWidget) -> f64;
+
     pub fn oneui_icon_create(symbol: c_int) -> *mut OneUiWidget;
     pub fn oneui_icon_set_symbol(icon: *mut OneUiWidget, symbol: c_int);
     pub fn oneui_icon_set_color(icon: *mut OneUiWidget, r: u8, g: u8, b: u8, a: u8);

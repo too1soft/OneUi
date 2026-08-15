@@ -14,6 +14,7 @@
 #include "oneui/controls/virtual_list.h"
 #include "oneui/controls/nav_item.h"
 #include "oneui/controls/popup.h"
+#include "oneui/controls/progress_bar.h"
 #include "oneui/controls/radio_group.h"
 #include "oneui/controls/realtime_frame_view.h"
 #include "oneui/controls/remote_input_region.h"
@@ -737,6 +738,8 @@ T* asWidget(OneUiWidget* widget) {
     return dynamic_cast<T*>(widget->widget.get());
 }
 
+void applyStyleSheet(OneUiWidget* wrapper, std::shared_ptr<oneui::StyleSheet> sheet);
+
 OneUiWidget* wrap(std::shared_ptr<oneui::Widget> widget) {
     if (!widget) {
         return nullptr;
@@ -751,6 +754,9 @@ OneUiWidget* wrap(std::shared_ptr<oneui::Widget> widget) {
     {
         std::lock_guard<std::mutex> lock(gWidgetRegistryMutex);
         gWidgetRegistry.push_back(raw->styleBinding);
+    }
+    if (raw->styleSheet) {
+        applyStyleSheet(raw, raw->styleSheet);
     }
     return raw;
 }
@@ -788,6 +794,8 @@ oneui::StyleNode styleNodeFor(const OneUiWidget* widget) {
             tag = "segmented-control";
         } else if (dynamic_cast<oneui::Select*>(widget->widget.get())) {
             tag = "select";
+        } else if (dynamic_cast<oneui::ProgressBar*>(widget->widget.get())) {
+            tag = "progress";
         } else if (dynamic_cast<oneui::VirtualList*>(widget->widget.get())) {
             tag = "virtual-list";
         } else if (dynamic_cast<oneui::List*>(widget->widget.get())) {
@@ -987,6 +995,11 @@ void applyStyleSheet(OneUiWidget* wrapper, std::shared_ptr<oneui::StyleSheet> sh
     if (auto* select = dynamic_cast<oneui::Select*>(wrapper->widget.get())) {
         select->setStyleOverride(
             oneui::selectStyleOverrideFromStyleSheet(*wrapper->styleSheet, node));
+        return;
+    }
+    if (auto* progress = dynamic_cast<oneui::ProgressBar*>(wrapper->widget.get())) {
+        progress->setStyleOverride(
+            oneui::progressBarStyleOverrideFromStyleSheet(*wrapper->styleSheet, node));
         return;
     }
     if (auto* virtualList = dynamic_cast<oneui::VirtualList*>(wrapper->widget.get())) {
@@ -2929,6 +2942,23 @@ void oneui_label_set_align(OneUiWidget* label, int align) {
         nativeLabel->setAlign(oneui::TextAlign::Left);
         break;
     }
+}
+
+OneUiWidget* oneui_progress_bar_create() {
+    return wrap(std::make_shared<oneui::ProgressBar>());
+}
+
+void oneui_progress_bar_set_value(OneUiWidget* progress_bar, double value) {
+    if (auto* nativeProgressBar = asWidget<oneui::ProgressBar>(progress_bar)) {
+        nativeProgressBar->setValue(value);
+    }
+}
+
+double oneui_progress_bar_value(OneUiWidget* progress_bar) {
+    if (auto* nativeProgressBar = asWidget<oneui::ProgressBar>(progress_bar)) {
+        return nativeProgressBar->value();
+    }
+    return 0.0;
 }
 
 OneUiWidget* oneui_icon_create(int symbol) {

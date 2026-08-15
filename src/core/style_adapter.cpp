@@ -256,6 +256,18 @@ PopupStyleOverride popupStyleOverrideFromStyleSheet(const StyleSheet& sheet, Sty
     return style;
 }
 
+ProgressBarStyleOverride progressBarStyleOverrideFromStyleSheet(const StyleSheet& sheet, StyleNode node) {
+    const StyleBox normal = resolveState(sheet, node, StyleStateNone);
+    const StyleBox disabled = resolveState(sheet, std::move(node), StyleStateDisabled);
+
+    ProgressBarStyleOverride override;
+    override.trackBackground = normal.background.color;
+    override.fill = normal.foreground;
+    override.disabledFill = disabled.foreground;
+    override.radius = normal.radius;
+    return override;
+}
+
 ListStyleOverride listStyleOverrideFromStyleSheet(const StyleSheet& sheet, StyleNode node) {
     ListStyleOverride override;
     override.normal = listStateStyleOverrideFromStyleBox(resolveState(sheet, node, StyleStateNone));

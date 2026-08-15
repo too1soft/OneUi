@@ -94,17 +94,17 @@ void applySelectStateOverride(SelectStyle& style, const SelectStateStyleOverride
 SelectStyle baseSelectStyle(bool disabled, bool hovered, bool pressed) {
     const auto& t = theme();
     SelectStyle style;
-    style.background = disabled ? t.surfaceMuted : (pressed ? Color{241, 245, 249} : t.surface);
-    style.foreground = disabled ? t.textSubtle : t.text;
-    style.border = disabled ? t.border : (hovered ? t.borderStrong : t.border);
-    style.arrowColor = disabled ? t.textSubtle : t.textMuted;
+    style.background = disabled ? t.disabledBackground : (pressed ? t.pressedBackground : (hovered ? t.hoverBackground : t.surface));
+    style.foreground = disabled ? t.disabledForeground : t.text;
+    style.border = disabled ? t.disabledBorder : (pressed ? t.pressedBorder : (hovered ? t.hoverBorder : t.border));
+    style.arrowColor = disabled ? t.disabledForeground : t.textMuted;
     style.popupBackground = t.surface;
     style.popupBorder = t.borderStrong;
-    style.popupShadow = Color{148, 163, 184, 60};
+    style.popupShadow = t.shadowColor;
     style.optionBackground = Color{0, 0, 0, 0};
     style.optionForeground = t.text;
-    style.selectedOptionBackground = Color{219, 234, 254};
-    style.selectedOptionForeground = t.primary;
+    style.selectedOptionBackground = t.selectedBackground;
+    style.selectedOptionForeground = t.selectedForeground;
     style.borderWidth = 1.0f;
     style.radius = t.radiusMd;
     style.popupRadius = t.radiusMd;
@@ -477,7 +477,7 @@ SelectStyle Select::resolvedOptionStyle(int index) const {
     if (active) {
         style.optionBackground = style.selectedOptionBackground;
     } else if (hovered) {
-        style.optionBackground = Color{248, 250, 252};
+        style.optionBackground = theme().hoverBackground;
     }
 
     if (!styleOverride_) {

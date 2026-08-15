@@ -632,6 +632,11 @@ ONEUI_API void oneui_label_set_font_weight(OneUiWidget* label, int font_weight);
 /* align: 0 = left, 1 = center, 2 = right */
 ONEUI_API void oneui_label_set_align(OneUiWidget* label, int align);
 
+/* Standard determinate progress indicator. Values are clamped to [0, 1]. */
+ONEUI_API OneUiWidget* oneui_progress_bar_create(void);
+ONEUI_API void oneui_progress_bar_set_value(OneUiWidget* progress_bar, double value);
+ONEUI_API double oneui_progress_bar_value(OneUiWidget* progress_bar);
+
 ONEUI_API OneUiWidget* oneui_icon_create(int symbol);
 ONEUI_API void oneui_icon_set_symbol(OneUiWidget* icon, int symbol);
 ONEUI_API void oneui_icon_set_color(OneUiWidget* icon, unsigned char r, unsigned char g, unsigned char b, unsigned char a);

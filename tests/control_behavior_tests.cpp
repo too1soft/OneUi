@@ -3847,6 +3847,30 @@ void testSelectEmptyStyleOverrideKeepsDefaultPaint() {
     expectEqual("Select empty style override keeps field text", countTextsWithTextAndColor(canvas, L"Linux", oneui::theme().text), 1);
 }
 
+void testSelectDefaultStatesUseSemanticThemeTokens() {
+    oneui::Select select;
+    select.setFrame(oneui::Rect{0.0f, 0.0f, 140.0f, 32.0f});
+    select.setItems({L"Windows", L"Linux", L"macOS"});
+    select.setSelectedIndex(1);
+
+    select.onMouseMove(oneui::MouseEvent{oneui::Point{10.0f, 10.0f}});
+    RecordingCanvas hoveredCanvas;
+    select.paint(hoveredCanvas);
+    expectEqual("Select hovered field uses semantic hover background", countFillRectsWithColor(hoveredCanvas, oneui::theme().hoverBackground), 1);
+
+    select.onMouseDown(oneui::MouseEvent{oneui::Point{10.0f, 10.0f}});
+    RecordingCanvas pressedCanvas;
+    select.paint(pressedCanvas);
+    expectEqual("Select pressed field uses semantic pressed background", countFillRectsWithColor(pressedCanvas, oneui::theme().pressedBackground), 1);
+
+    select.onMouseUp(oneui::MouseEvent{oneui::Point{10.0f, 10.0f}});
+    select.onMouseMove(oneui::MouseEvent{oneui::Point{10.0f, 44.0f}});
+    RecordingCanvas popupCanvas;
+    select.paint(popupCanvas);
+    expectEqual("Select selected option uses semantic selected background", countFillRectsWithColor(popupCanvas, oneui::theme().selectedBackground), 1);
+    expectEqual("Select hovered option uses semantic hover background", countFillRectsWithColor(popupCanvas, oneui::theme().hoverBackground), 1);
+}
+
 void testSelectStyleOverrideCanHideFocusRingAndStylePressed() {
     oneui::Select select;
     select.setFrame(oneui::Rect{0.0f, 0.0f, 140.0f, 32.0f});
@@ -5269,6 +5293,16 @@ void testStyleAdapterBuildsButtonAndTextFieldOverrides() {
             border-color: #4a79e6;
         }
 
+        .progress {
+            background: #303440;
+            color: #5b55d6;
+            border-radius: 3px;
+        }
+
+        .progress:disabled {
+            color: #686b76;
+        }
+
         .popup {
             background: #14161c;
             color: #eef1f7;
@@ -5371,6 +5405,14 @@ void testStyleAdapterBuildsButtonAndTextFieldOverrides() {
         select.selected->selectedOptionBackground->r,
         68);
     expectEqual("StyleAdapter select focus border", select.focusVisible->border->r, 74);
+
+    const auto progress = oneui::progressBarStyleOverrideFromStyleSheet(
+        sheet,
+        oneui::StyleNode{"progress", {"progress"}, oneui::StyleStateNone});
+    expectEqual("StyleAdapter progress track background", progress.trackBackground->r, 48);
+    expectEqual("StyleAdapter progress fill", progress.fill->r, 91);
+    expectEqual("StyleAdapter progress disabled fill", progress.disabledFill->r, 104);
+    expectEqual("StyleAdapter progress radius", static_cast<int>(*progress.radius), 3);
 
     const auto popup = oneui::popupStyleOverrideFromStyleSheet(
         sheet,
@@ -6746,6 +6788,7 @@ int main() {
     testSelectStyleOverridePaintsCustomColorsAndPopupGeometry();
     testSelectPopupGeometryUsesPopupPlacementAdapter();
     testSelectEmptyStyleOverrideKeepsDefaultPaint();
+    testSelectDefaultStatesUseSemanticThemeTokens();
     testSelectStyleOverrideCanHideFocusRingAndStylePressed();
     testSelectDisabledStyleOverrideWinsAndClearRestoresDefault();
     testTextFieldCaretEditingKeys();
