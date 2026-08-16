@@ -745,6 +745,14 @@ impl UiDispatcher {
         }
     }
 
+    /// Creates a thread-safe text producer for a multiline editor mounted in this window.
+    pub fn text_area_handle(&self, text_area: &TextArea) -> TextAreaHandle {
+        TextAreaHandle {
+            state: Arc::clone(&text_area.state),
+            dispatcher: self.clone(),
+        }
+    }
+
     /// Creates a thread-safe value producer for a progress bar mounted in this window.
     pub fn progress_bar_handle(&self, progress_bar: &ProgressBar) -> ProgressBarHandle {
         ProgressBarHandle {
@@ -3154,9 +3162,94 @@ impl Drop for TextField {
     }
 }
 
+struct TextAreaState {
+    raw: AtomicPtr<sys::OneUiWidget>,
+    pending_text: Mutex<Option<String>>,
+    update_scheduled: AtomicBool,
+}
+
+/// Thread-safe producer for multiline editor text owned by a window.
+///
+/// Worker threads submit only the latest value. OneUI coalesces bursts and
+/// applies text on the owning UI thread while respecting the editor lifetime.
+#[derive(Clone)]
+pub struct TextAreaHandle {
+    state: Arc<TextAreaState>,
+    dispatcher: UiDispatcher,
+}
+
+impl TextAreaHandle {
+    pub fn set_text(&self, text: impl Into<String>) -> Result<(), Error> {
+        if self.state.raw.load(Ordering::Acquire).is_null() {
+            return Err(Error::WidgetDestroyed);
+        }
+
+        *self
+            .state
+            .pending_text
+            .lock()
+            .expect("text area pending text lock poisoned") = Some(text.into());
+        if self.state.update_scheduled.swap(true, Ordering::AcqRel) {
+            return Ok(());
+        }
+
+        let state = Arc::clone(&self.state);
+        let dispatched_state = Arc::clone(&state);
+        if let Err(error) = self
+            .dispatcher
+            .dispatch(move || Self::drain_pending_text(&dispatched_state))
+        {
+            state.update_scheduled.store(false, Ordering::Release);
+            state
+                .pending_text
+                .lock()
+                .expect("text area pending text lock poisoned")
+                .take();
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    fn drain_pending_text(state: &TextAreaState) {
+        loop {
+            let text = state
+                .pending_text
+                .lock()
+                .expect("text area pending text lock poisoned")
+                .take();
+            let raw = state.raw.load(Ordering::Acquire);
+            if raw.is_null() {
+                state.update_scheduled.store(false, Ordering::Release);
+                return;
+            }
+            if let Some(text) = text {
+                let text = sys::OneUiUtf8String::from_str(&text);
+                trace_ui_task("text area update started");
+                unsafe { sys::oneui_text_field_set_text_utf8(raw, text) };
+                trace_ui_task("text area update completed");
+            }
+
+            state.update_scheduled.store(false, Ordering::Release);
+            if state
+                .pending_text
+                .lock()
+                .expect("text area pending text lock poisoned")
+                .is_none()
+            {
+                return;
+            }
+            if !state.update_scheduled.swap(true, Ordering::AcqRel) {
+                continue;
+            }
+            return;
+        }
+    }
+}
+
 /// A native UTF-8 multiline editor with owned change callbacks.
 pub struct TextArea {
     widget: Widget,
+    state: Arc<TextAreaState>,
     changed_callback: Option<Box<TextFieldChangedCallback>>,
 }
 
@@ -3166,6 +3259,11 @@ impl TextArea {
         let widget = Widget::from_raw(unsafe { sys::oneui_text_area_create_utf8(placeholder) })?;
         unsafe { sys::oneui_text_field_set_multiline(widget.as_raw(), 1) };
         Ok(Self {
+            state: Arc::new(TextAreaState {
+                raw: AtomicPtr::new(widget.as_raw()),
+                pending_text: Mutex::new(None),
+                update_scheduled: AtomicBool::new(false),
+            }),
             widget,
             changed_callback: None,
         })
@@ -3233,6 +3331,15 @@ impl TextArea {
 
 impl Drop for TextArea {
     fn drop(&mut self) {
+        self.state
+            .raw
+            .store(std::ptr::null_mut(), Ordering::Release);
+        self.state
+            .pending_text
+            .lock()
+            .expect("text area pending text lock poisoned")
+            .take();
+        self.state.update_scheduled.store(false, Ordering::Release);
         self.clear_on_changed();
     }
 }
@@ -6149,6 +6256,11 @@ impl Window {
         self.dispatcher().label_handle(label)
     }
 
+    /// Returns the thread-safe update path for a mounted multiline editor.
+    pub fn text_area_handle(&self, text_area: &TextArea) -> TextAreaHandle {
+        self.dispatcher().text_area_handle(text_area)
+    }
+
     /// Returns the only thread-safe update path for a mounted progress bar.
     pub fn progress_bar_handle(&self, progress_bar: &ProgressBar) -> ProgressBarHandle {
         self.dispatcher().progress_bar_handle(progress_bar)
@@ -6187,8 +6299,8 @@ mod tests {
         ReorderableGrid, ScrollView, SegmentedControl, Select, SelectionMode, SplitOrientation,
         SplitView, Stack, StackDirection, StyleSheet, Switch, Tabs, TerminalCell, TerminalColor,
         TerminalCursor, TerminalCursorStyle, TerminalFrame, TerminalSelection,
-        TerminalUnderlineStyle, TerminalView, TextField, TreeItem, TreeView, VirtualList, Window,
-        WindowOptions, WindowPlacement, WindowRawKeyCallback,
+        TerminalUnderlineStyle, TerminalView, TextArea, TextField, TreeItem, TreeView, VirtualList,
+        Window, WindowOptions, WindowPlacement, WindowRawKeyCallback,
     };
     use std::cell::{Cell, RefCell};
     use std::rc::Rc;
@@ -7127,6 +7239,45 @@ mod tests {
         let handle = {
             let label = Label::new("temporary").expect("label should be created");
             window.label_handle(&label)
+        };
+
+        assert!(matches!(
+            handle.set_text("too late"),
+            Err(Error::WidgetDestroyed)
+        ));
+    }
+
+    #[test]
+    fn text_area_handle_coalesces_worker_updates_on_the_window_thread() {
+        let _guard = window_test_lock().lock().expect("window test lock");
+        let window = Window::new(&WindowOptions::default()).expect("window should be created");
+        let text_area = TextArea::new("").expect("text area should be created");
+        window.set_content(text_area.as_widget());
+        let handle = window.text_area_handle(&text_area);
+        let worker = thread::spawn(move || {
+            handle
+                .set_text("connecting")
+                .expect("worker should submit text area content");
+            handle
+                .set_text("connected")
+                .expect("worker should replace pending text area content");
+        });
+        worker.join().expect("worker should finish");
+
+        let close_dispatcher = window.dispatcher();
+        window
+            .dispatch(move || close_dispatcher.request_close())
+            .expect("window should accept close request");
+        assert_eq!(window.run(), 0);
+    }
+
+    #[test]
+    fn text_area_handle_rejects_updates_after_the_editor_is_destroyed() {
+        let _guard = window_test_lock().lock().expect("window test lock");
+        let window = Window::new(&WindowOptions::default()).expect("window should be created");
+        let handle = {
+            let text_area = TextArea::new("").expect("text area should be created");
+            window.text_area_handle(&text_area)
         };
 
         assert!(matches!(
