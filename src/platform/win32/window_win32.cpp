@@ -366,7 +366,22 @@ HWND clipboardOwnerWindow() {
 
 class ClipboardGuard {
 public:
-    ClipboardGuard() : open_(OpenClipboard(clipboardOwnerWindow()) != FALSE) {}
+    ClipboardGuard() {
+        constexpr int kMaxAttempts = 8;
+        constexpr DWORD kRetryDelayMs = 5;
+        const HWND owner = clipboardOwnerWindow();
+
+        // Clipboard ownership is process-global, so brief contention is expected.
+        for (int attempt = 0; attempt < kMaxAttempts; ++attempt) {
+            if (OpenClipboard(owner) != FALSE) {
+                open_ = true;
+                return;
+            }
+            if (attempt + 1 < kMaxAttempts) {
+                Sleep(kRetryDelayMs);
+            }
+        }
+    }
 
     ~ClipboardGuard() {
         if (open_) {

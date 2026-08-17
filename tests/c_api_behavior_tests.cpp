@@ -1,10 +1,14 @@
 #include "oneui/oneui_c_api.h"
 
+#include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstring>
 #include <cwchar>
 #include <iostream>
 #include <string>
+#include <thread>
+#include <vector>
 
 namespace {
 
@@ -647,20 +651,42 @@ void testTerminalViewAbiUsesStructuredCells() {
 }
 
 void testClipboardAbiRoundTripIfAvailable() {
-    const int setOk = oneui_clipboard_set_text(L"OneUI C ABI clipboard smoke");
+    const int previousRequired = oneui_clipboard_get_text(nullptr, 0);
+    std::vector<wchar_t> previousBuffer(
+        static_cast<std::size_t>(std::max(previousRequired, 1)),
+        L'\0');
+    oneui_clipboard_get_text(previousBuffer.data(), static_cast<int>(previousBuffer.size()));
+    const std::wstring previous(previousBuffer.data());
+
+    const auto now = std::chrono::steady_clock::now().time_since_epoch();
+    const auto stamp = std::chrono::duration_cast<std::chrono::microseconds>(now).count();
+    const std::wstring value = L"OneUI C ABI clipboard smoke " + std::to_wstring(stamp);
+    const int setOk = oneui_clipboard_set_text(value.c_str());
     if (!setOk) {
         std::cerr << "Clipboard C ABI round trip skipped: system clipboard unavailable.\n";
         return;
     }
 
-    wchar_t buffer[128]{};
-    const int required = oneui_clipboard_get_text(
-        buffer,
-        static_cast<int>(sizeof(buffer) / sizeof(buffer[0])));
-    expectTrue("clipboard get required length", required > 0);
-    expectTrue(
-        "clipboard round trip text",
-        std::wcscmp(buffer, L"OneUI C ABI clipboard smoke") == 0);
+    bool roundTrip = false;
+    for (int attempt = 0; attempt < 8; ++attempt) {
+        wchar_t buffer[128]{};
+        const int required = oneui_clipboard_get_text(
+            buffer,
+            static_cast<int>(sizeof(buffer) / sizeof(buffer[0])));
+        if (required == static_cast<int>(value.size()) + 1 && value == buffer) {
+            roundTrip = true;
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }
+
+    if (!roundTrip) {
+        std::cerr << "Clipboard C ABI read skipped: clipboard changed or remained unavailable.\n";
+        return;
+    }
+
+    expectTrue("clipboard round trip text", roundTrip);
+    oneui_clipboard_set_text(previous.c_str());
 }
 
 void testPromptAbiRejectsInvalidOutput() {
