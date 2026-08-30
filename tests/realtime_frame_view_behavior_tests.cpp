@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstdint>
 #include <iostream>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -142,6 +143,33 @@ void testSubmitFrameKeepsOnlyLatestSnapshot() {
     expectEqual("RealtimeFrameView latest copied second row", snapshot->pixels[4], 14);
 }
 
+void testOwnedFrameRetainsAllocationWithoutCopyingOnSubmit() {
+    oneui::RealtimeFrameView view;
+    auto pixels = std::make_shared<std::vector<std::uint8_t>>(std::initializer_list<std::uint8_t>{
+        10, 11, 12, 13, 0, 0, 0, 0,
+        14, 15, 16, 17, 0, 0, 0, 0,
+    });
+    std::weak_ptr<std::vector<std::uint8_t>> lifetime = pixels;
+    std::shared_ptr<const void> owner(pixels, static_cast<const void*>(pixels->data()));
+    const bool accepted = view.submitOwnedFrame(
+        oneui::VideoFrame{pixels->data(), 1, 2, 8, oneui::PixelFormat::Rgba8888, 17, 1700},
+        pixels->size(),
+        std::move(owner));
+    pixels.reset();
+
+    expectEqual("RealtimeFrameView accepts owned frame", accepted ? 1 : 0, 1);
+    expectEqual("RealtimeFrameView retains owned frame allocation", lifetime.expired() ? 1 : 0, 0);
+    const auto snapshot = view.latestFrame();
+    expectEqual("RealtimeFrameView owned snapshot exists", snapshot.has_value() ? 1 : 0, 1);
+    if (snapshot) {
+        expectEqual("RealtimeFrameView owned snapshot compacts stride", snapshot->stride, 4);
+        expectEqual("RealtimeFrameView owned snapshot second row", snapshot->pixels[4], 14);
+    }
+
+    submitSizedFrame(view, 1, 1);
+    expectEqual("RealtimeFrameView replacement releases owned allocation", lifetime.expired() ? 1 : 0, 1);
+}
+
 void testEmptyFrameDoesNotCrash() {
     oneui::RealtimeFrameView view;
     view.setFrame(oneui::Rect{0.0f, 0.0f, 320.0f, 180.0f});
@@ -176,6 +204,7 @@ void testPaintDrawsLatestFramePixelsIntoContentRect() {
 int main() {
     testContentRectScaleModes();
     testSubmitFrameKeepsOnlyLatestSnapshot();
+    testOwnedFrameRetainsAllocationWithoutCopyingOnSubmit();
     testEmptyFrameDoesNotCrash();
     testPaintDrawsLatestFramePixelsIntoContentRect();
 

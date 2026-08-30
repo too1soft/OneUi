@@ -16,7 +16,7 @@ browser process, or WebView.
 The repository currently ships:
 
 - a public C++ API;
-- a versioned UTF-8 C ABI (`ONEUI_UTF8_ABI_VERSION = 17`);
+- a versioned UTF-8 C ABI (`ONEUI_UTF8_ABI_VERSION = 18`);
 - raw `oneui-sys` Rust FFI and the safe `oneui` Rust crate;
 - a Win32 window, input, DPI, clipboard, file-dialog, tray, and Skia presentation backend;
 - a Gallery, a remote-component Gallery, SDK tooling, and 13 CTest behavior/contract targets.
@@ -309,7 +309,7 @@ Start at [docs/README.md](docs/README.md). Frequently used references:
   scenarios still require continued validation.
 - Table does not yet include built-in sorting, filtering, column resize, or an in-cell editor.
 - Tabs/Table/Tree/ReorderableGrid reorder callbacks report requests; product state remains authoritative.
-- RealtimeFrameView paints BGRA/RGBA pixels; NV12 conversion is not implemented.
+- RealtimeFrameView paints BGRA/RGBA pixels and supports ownership-transfer submission plus a coalescing Rust worker handle; NV12 conversion is not implemented.
 - Layout JSON snapshots validate geometry/semantics but are not pixel screenshot tests.
 
 ## Contribution Rules

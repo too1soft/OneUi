@@ -677,6 +677,99 @@ void testRealtimeFrameViewAbiAcceptsBgraFrames() {
     oneui_widget_destroy(frameView);
 }
 
+int ownedFrameReleaseCount = 0;
+const void* lastReleasedFrame = nullptr;
+
+void onOwnedFrameReleased(const void* pixels, void*) {
+    ++ownedFrameReleaseCount;
+    lastReleasedFrame = pixels;
+}
+
+void testRealtimeFrameViewOwnedFramesReleaseExactlyOnce() {
+    ownedFrameReleaseCount = 0;
+    lastReleasedFrame = nullptr;
+    OneUiWidget* frameView = oneui_realtime_frame_view_create();
+    expectTrue("owned realtime frame view create", frameView != nullptr);
+    if (!frameView) {
+        return;
+    }
+
+    unsigned char first[16]{};
+    unsigned char second[16]{};
+    unsigned char rejected[4]{};
+    expectTrue(
+        "first owned frame accepted",
+        oneui_realtime_frame_view_submit_frame_owned(
+            frameView,
+            first,
+            sizeof(first),
+            2,
+            2,
+            8,
+            OneUiPixelFormatBgra8888,
+            1,
+            100,
+            onOwnedFrameReleased,
+            nullptr) == 1);
+    expectTrue("accepted owned frame remains retained", ownedFrameReleaseCount == 0);
+
+    expectTrue(
+        "replacement owned frame accepted",
+        oneui_realtime_frame_view_submit_frame_owned(
+            frameView,
+            second,
+            sizeof(second),
+            2,
+            2,
+            8,
+            OneUiPixelFormatBgra8888,
+            2,
+            200,
+            onOwnedFrameReleased,
+            nullptr) == 1);
+    expectTrue("replaced owned frame released once", ownedFrameReleaseCount == 1);
+    expectTrue("replacement released the first buffer", lastReleasedFrame == first);
+
+    expectTrue(
+        "short owned frame rejected",
+        oneui_realtime_frame_view_submit_frame_owned(
+            frameView,
+            rejected,
+            sizeof(rejected),
+            2,
+            2,
+            8,
+            OneUiPixelFormatBgra8888,
+            3,
+            300,
+            onOwnedFrameReleased,
+            nullptr) == 0);
+    expectTrue("rejected owned frame released once", ownedFrameReleaseCount == 2);
+    expectTrue("rejected buffer was released", lastReleasedFrame == rejected);
+
+    oneui_widget_destroy(frameView);
+    expectTrue("retained owned frame released on destroy", ownedFrameReleaseCount == 3);
+    expectTrue("destroy released the retained second buffer", lastReleasedFrame == second);
+
+    unsigned char orphaned[16]{};
+    expectTrue(
+        "owned frame with invalid widget rejected",
+        oneui_realtime_frame_view_submit_frame_owned(
+            nullptr,
+            orphaned,
+            sizeof(orphaned),
+            2,
+            2,
+            8,
+            OneUiPixelFormatBgra8888,
+            4,
+            400,
+            onOwnedFrameReleased,
+            nullptr) == 0);
+    expectTrue("invalid widget buffer released once", ownedFrameReleaseCount == 4);
+    expectTrue("invalid widget released supplied buffer", lastReleasedFrame == orphaned);
+}
+
 int pointerCallbackCount = 0;
 
 void onRemotePointer(const OneUiRemotePointerEvent* event, void*) {
@@ -1150,6 +1243,7 @@ int main() {
     testProductShellAbiIsPublicProductFrame();
     testOverlayToastAbiSupportsAnchoredNotice();
     testRealtimeFrameViewAbiAcceptsBgraFrames();
+    testRealtimeFrameViewOwnedFramesReleaseExactlyOnce();
     testRemoteInputRegionAbiCreatesAndAcceptsCallbacks();
     testTerminalViewAbiUsesStructuredCells();
     testProgressBarAbiClampsValues();

@@ -62,6 +62,7 @@
 #include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #ifdef _WIN32
@@ -5286,6 +5287,43 @@ void oneui_realtime_frame_view_submit_frame(
     frame.frameId = static_cast<std::uint64_t>(frame_id);
     frame.timestampUs = static_cast<std::uint64_t>(timestamp_us);
     nativeFrameView->submitFrame(frame);
+}
+
+int oneui_realtime_frame_view_submit_frame_owned(
+    OneUiWidget* frame_view,
+    const void* pixels,
+    size_t pixel_bytes,
+    int width,
+    int height,
+    int stride,
+    OneUiPixelFormat pixel_format,
+    unsigned long long frame_id,
+    unsigned long long timestamp_us,
+    OneUiFrameReleaseCallback release_callback,
+    void* user_data) {
+    if (!release_callback) {
+        return 0;
+    }
+
+    std::shared_ptr<const void> owner(
+        pixels,
+        [release_callback, user_data](const void* releasedPixels) {
+            release_callback(releasedPixels, user_data);
+        });
+    auto* nativeFrameView = asWidget<oneui::RealtimeFrameView>(frame_view);
+    if (!nativeFrameView) {
+        return 0;
+    }
+
+    oneui::VideoFrame frame;
+    frame.data = pixels;
+    frame.width = width;
+    frame.height = height;
+    frame.stride = stride;
+    frame.format = toPixelFormat(pixel_format);
+    frame.frameId = static_cast<std::uint64_t>(frame_id);
+    frame.timestampUs = static_cast<std::uint64_t>(timestamp_us);
+    return nativeFrameView->submitOwnedFrame(frame, pixel_bytes, std::move(owner)) ? 1 : 0;
 }
 
 OneUiWidget* oneui_remote_input_region_create(void) {

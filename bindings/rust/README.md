@@ -42,7 +42,7 @@ oneui.dll
 
 ## ABI 检查
 
-`oneui-sys::UTF8_ABI_VERSION` 当前为 17。`Window::new` 创建窗口前调用
+`oneui-sys::UTF8_ABI_VERSION` 当前为 18。`Window::new` 创建窗口前调用
 `oneui_utf8_abi_version()`，不匹配时返回：
 
 ```rust
@@ -141,6 +141,7 @@ Handle 用于后台服务向 UI 线程投递受控更新，而不是把完整 UI
 | `VirtualListHandle` | 整表 revision、清选择、单行更新 |
 | `TableHandle` | 整表 revision、清选择、单行更新 |
 | `TerminalViewHandle` | grid/frame/viewport/选择等高频终端状态 |
+| `RealtimeFrameViewHandle` | 免复制远程画面所有权移交、突发帧合并为最新帧 |
 
 示例：
 

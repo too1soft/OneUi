@@ -364,6 +364,7 @@ typedef struct OneUiTerminalPointerEvent {
 } OneUiTerminalPointerEvent;
 
 typedef void (*OneUiRemotePointerCallback)(const OneUiRemotePointerEvent* event, void* user_data);
+typedef void (*OneUiFrameReleaseCallback)(const void* pixels, void* user_data);
 typedef void (*OneUiRawKeyCallback)(const OneUiRawKeyEvent* event, void* user_data);
 typedef int (*OneUiWindowRawKeyCallback)(const OneUiRawKeyEvent* event, void* user_data);
 typedef void (*OneUiTerminalPointerCallback)(const OneUiTerminalPointerEvent* event, void* user_data);
@@ -384,7 +385,7 @@ enum {
     OneUiTerminalCellOverline = 1u << 11
 };
 
-#define ONEUI_UTF8_ABI_VERSION 17u
+#define ONEUI_UTF8_ABI_VERSION 18u
 
 ONEUI_API const char* oneui_version(void);
 ONEUI_API unsigned int oneui_utf8_abi_version(void);
@@ -1046,6 +1047,22 @@ ONEUI_API void oneui_realtime_frame_view_submit_frame(
     OneUiPixelFormat pixel_format,
     unsigned long long frame_id,
     unsigned long long timestamp_us);
+// Submits an immutable caller-owned frame without copying it. OneUI invokes
+// `release_callback` exactly once when the frame is rejected, replaced,
+// cleared, or the view is destroyed. The callback may run during this call.
+// Returns 1 when accepted, otherwise 0. A null release callback is rejected.
+ONEUI_API int oneui_realtime_frame_view_submit_frame_owned(
+    OneUiWidget* frame_view,
+    const void* pixels,
+    size_t pixel_bytes,
+    int width,
+    int height,
+    int stride,
+    OneUiPixelFormat pixel_format,
+    unsigned long long frame_id,
+    unsigned long long timestamp_us,
+    OneUiFrameReleaseCallback release_callback,
+    void* user_data);
 
 ONEUI_API OneUiWidget* oneui_remote_input_region_create(void);
 ONEUI_API void oneui_remote_input_region_set_remote_size(OneUiWidget* region, float width, float height);

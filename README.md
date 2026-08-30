@@ -15,7 +15,7 @@ CSS-like 样式表构建界面，不依赖浏览器、HTML 或 WebView。
 当前仓库同时提供：
 
 - 公开 C++ API；
-- 版本化的 UTF-8 C ABI（当前 `ONEUI_UTF8_ABI_VERSION = 17`）；
+- 版本化的 UTF-8 C ABI（当前 `ONEUI_UTF8_ABI_VERSION = 18`）；
 - `oneui-sys` 原始 Rust FFI 和 `oneui` 安全 Rust 包装层；
 - Win32 窗口、输入、DPI、剪贴板、文件对话框、托盘和 Skia 呈现后端；
 - Gallery、远程组件 Gallery、SDK 打包脚本和 13 个 CTest 行为/契约测试目标。
@@ -310,7 +310,7 @@ TerminalView、TreeView、Panel、C ABI、显示器与 Win32 后端契约。Rust
 - 文本输入支持基础编辑、选择、撤销/重做、粘贴、密码和提交；复杂 shaping 与完整 IME 场景仍需持续验证。
 - Table 已支持虚拟化绘制和命令回调，但暂不内置排序、筛选、列 resize 或单元格编辑器。
 - Tabs/Table/Tree/ReorderableGrid 的重排回调只报告请求；产品数据成功更新后再提交新顺序。
-- RealtimeFrameView 当前绘制 BGRA/RGBA 像素；NV12 仅保留协议枚举，尚未实现转换。
+- RealtimeFrameView 当前绘制 BGRA/RGBA 像素，支持所有权移交的免复制提交和 Rust 后台线程最新帧合并；NV12 仅保留协议枚举，尚未实现转换。
 - 布局 JSON 快照用于几何/语义诊断，不等同于像素截图测试。
 
 ## 贡献原则

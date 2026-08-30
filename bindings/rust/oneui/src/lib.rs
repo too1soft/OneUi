@@ -30,6 +30,7 @@ pub enum Error {
     UiThreadBlockingOperation,
     FileDialogFailed,
     LayoutSnapshotFailed,
+    InvalidVideoFrame { reason: &'static str },
 }
 
 /// Describes a panic caught at the Rust-to-OneUI callback boundary.
@@ -1029,6 +1030,17 @@ impl UiDispatcher {
     pub fn terminal_view_handle(&self, terminal: &TerminalView) -> TerminalViewHandle {
         TerminalViewHandle {
             state: Arc::clone(&terminal.state),
+            dispatcher: self.clone(),
+        }
+    }
+
+    /// Creates a thread-safe latest-frame producer for a realtime frame view.
+    pub fn realtime_frame_view_handle(
+        &self,
+        frame_view: &RealtimeFrameView,
+    ) -> RealtimeFrameViewHandle {
+        RealtimeFrameViewHandle {
+            state: Arc::clone(&frame_view.state),
             dispatcher: self.clone(),
         }
     }
@@ -4917,6 +4929,540 @@ impl From<sys::OneUiRawKeyEvent> for RawKeyEvent {
     }
 }
 
+/// Pixel layout accepted by [`RealtimeFrameView`].
+///
+/// NV12 is reserved by the C ABI but is not exposed here until OneUI has a
+/// native conversion path; remote decoders should currently submit BGRA or
+/// RGBA frames.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(i32)]
+pub enum PixelFormat {
+    Bgra8888 = 0,
+    Rgba8888 = 1,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(i32)]
+pub enum VideoScaleMode {
+    ActualSize = 0,
+    Fit = 1,
+    Fill = 2,
+    Stretch = 3,
+}
+
+/// Immutable decoded video frame that may be produced on any worker thread.
+///
+/// The pixel allocation is reference-counted and transferred to OneUI without
+/// another full-frame copy. `stride == 0` selects the tightly packed stride.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteFrame {
+    pub pixels: Arc<[u8]>,
+    pub width: i32,
+    pub height: i32,
+    pub stride: i32,
+    pub format: PixelFormat,
+    pub frame_id: u64,
+    pub timestamp_us: u64,
+}
+
+impl RemoteFrame {
+    pub fn new(
+        pixels: impl Into<Arc<[u8]>>,
+        width: i32,
+        height: i32,
+        stride: i32,
+        format: PixelFormat,
+        frame_id: u64,
+        timestamp_us: u64,
+    ) -> Result<Self, Error> {
+        let mut frame = Self {
+            pixels: pixels.into(),
+            width,
+            height,
+            stride,
+            format,
+            frame_id,
+            timestamp_us,
+        };
+        frame.normalize_and_validate()?;
+        Ok(frame)
+    }
+
+    fn normalize_and_validate(&mut self) -> Result<(), Error> {
+        if self.width <= 0 || self.height <= 0 {
+            return Err(Error::InvalidVideoFrame {
+                reason: "width and height must be positive",
+            });
+        }
+        let width = usize::try_from(self.width).map_err(|_| Error::InvalidVideoFrame {
+            reason: "width is outside the supported range",
+        })?;
+        let height = usize::try_from(self.height).map_err(|_| Error::InvalidVideoFrame {
+            reason: "height is outside the supported range",
+        })?;
+        let row_bytes = width.checked_mul(4).ok_or(Error::InvalidVideoFrame {
+            reason: "row byte count overflowed",
+        })?;
+        if row_bytes > i32::MAX as usize {
+            return Err(Error::InvalidVideoFrame {
+                reason: "row byte count exceeds the native stride range",
+            });
+        }
+        if self.stride == 0 {
+            self.stride = row_bytes as i32;
+        }
+        if self.stride < 0 || (self.stride as usize) < row_bytes {
+            return Err(Error::InvalidVideoFrame {
+                reason: "stride is smaller than a pixel row",
+            });
+        }
+        let required_bytes = (height - 1)
+            .checked_mul(self.stride as usize)
+            .and_then(|prefix| prefix.checked_add(row_bytes))
+            .ok_or(Error::InvalidVideoFrame {
+                reason: "frame byte count overflowed",
+            })?;
+        if self.pixels.len() < required_bytes {
+            return Err(Error::InvalidVideoFrame {
+                reason: "pixel buffer is shorter than the frame metadata requires",
+            });
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemotePointerButton {
+    None,
+    Left,
+    Right,
+    Middle,
+    X1,
+    X2,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RemotePointerEvent {
+    pub window_x: f32,
+    pub window_y: f32,
+    pub content_x: f32,
+    pub content_y: f32,
+    pub normalized_x: f32,
+    pub normalized_y: f32,
+    pub remote_x: f32,
+    pub remote_y: f32,
+    pub button: RemotePointerButton,
+    pub pressed: bool,
+    pub wheel_delta_x: i32,
+    pub wheel_delta_y: i32,
+}
+
+impl From<sys::OneUiRemotePointerEvent> for RemotePointerEvent {
+    fn from(value: sys::OneUiRemotePointerEvent) -> Self {
+        let button = match value.button {
+            1 => RemotePointerButton::Left,
+            2 => RemotePointerButton::Right,
+            3 => RemotePointerButton::Middle,
+            4 => RemotePointerButton::X1,
+            5 => RemotePointerButton::X2,
+            _ => RemotePointerButton::None,
+        };
+        Self {
+            window_x: value.window_x,
+            window_y: value.window_y,
+            content_x: value.content_x,
+            content_y: value.content_y,
+            normalized_x: value.normalized_x,
+            normalized_y: value.normalized_y,
+            remote_x: value.remote_x,
+            remote_y: value.remote_y,
+            button,
+            pressed: value.pressed != 0,
+            wheel_delta_x: value.wheel_delta_x,
+            wheel_delta_y: value.wheel_delta_y,
+        }
+    }
+}
+
+struct RealtimeFrameViewState {
+    raw: AtomicPtr<sys::OneUiWidget>,
+    pending_frame: Mutex<Option<RemoteFrame>>,
+    update_scheduled: AtomicBool,
+}
+
+/// Thread-safe latest-frame producer for a mounted [`RealtimeFrameView`].
+///
+/// Decoder bursts are coalesced before reaching the UI thread. At most one
+/// dispatcher task and one pending decoded frame are retained at a time.
+#[derive(Clone)]
+pub struct RealtimeFrameViewHandle {
+    state: Arc<RealtimeFrameViewState>,
+    dispatcher: UiDispatcher,
+}
+
+impl RealtimeFrameViewHandle {
+    pub fn submit_frame(&self, mut frame: RemoteFrame) -> Result<(), Error> {
+        frame.normalize_and_validate()?;
+        if self.state.raw.load(Ordering::Acquire).is_null() {
+            return Err(Error::WidgetDestroyed);
+        }
+        *self
+            .state
+            .pending_frame
+            .lock()
+            .expect("realtime frame pending lock poisoned") = Some(frame);
+        if self.state.update_scheduled.swap(true, Ordering::AcqRel) {
+            return Ok(());
+        }
+
+        let state = Arc::clone(&self.state);
+        let dispatched_state = Arc::clone(&state);
+        if let Err(error) = self
+            .dispatcher
+            .dispatch(move || Self::drain_pending_frame(&dispatched_state))
+        {
+            state.update_scheduled.store(false, Ordering::Release);
+            state
+                .pending_frame
+                .lock()
+                .expect("realtime frame pending lock poisoned")
+                .take();
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    pub fn set_scale_mode(&self, scale_mode: VideoScaleMode) -> Result<(), Error> {
+        if self.state.raw.load(Ordering::Acquire).is_null() {
+            return Err(Error::WidgetDestroyed);
+        }
+        let state = Arc::clone(&self.state);
+        self.dispatcher.dispatch(move || {
+            let raw = state.raw.load(Ordering::Acquire);
+            if !raw.is_null() {
+                unsafe { sys::oneui_realtime_frame_view_set_scale_mode(raw, scale_mode as i32) };
+            }
+        })
+    }
+
+    pub fn set_background(&self, color: Color) -> Result<(), Error> {
+        if self.state.raw.load(Ordering::Acquire).is_null() {
+            return Err(Error::WidgetDestroyed);
+        }
+        let state = Arc::clone(&self.state);
+        self.dispatcher.dispatch(move || {
+            let raw = state.raw.load(Ordering::Acquire);
+            if !raw.is_null() {
+                unsafe {
+                    sys::oneui_realtime_frame_view_set_background(
+                        raw, color.r, color.g, color.b, color.a,
+                    )
+                };
+            }
+        })
+    }
+
+    fn drain_pending_frame(state: &RealtimeFrameViewState) {
+        loop {
+            let frame = state
+                .pending_frame
+                .lock()
+                .expect("realtime frame pending lock poisoned")
+                .take();
+            let raw = state.raw.load(Ordering::Acquire);
+            if raw.is_null() {
+                state.update_scheduled.store(false, Ordering::Release);
+                return;
+            }
+            if let Some(frame) = frame {
+                let accepted = apply_remote_frame(raw, frame);
+                debug_assert!(accepted, "validated remote frame was rejected by OneUI");
+            }
+
+            state.update_scheduled.store(false, Ordering::Release);
+            if state
+                .pending_frame
+                .lock()
+                .expect("realtime frame pending lock poisoned")
+                .is_none()
+            {
+                return;
+            }
+            if !state.update_scheduled.swap(true, Ordering::AcqRel) {
+                continue;
+            }
+            return;
+        }
+    }
+}
+
+unsafe extern "C" fn release_remote_frame(
+    _pixels: *const std::ffi::c_void,
+    user_data: *mut std::ffi::c_void,
+) {
+    if !user_data.is_null() {
+        drop(unsafe { Box::from_raw(user_data.cast::<Arc<[u8]>>()) });
+    }
+}
+
+fn apply_remote_frame(raw: *mut sys::OneUiWidget, frame: RemoteFrame) -> bool {
+    let RemoteFrame {
+        pixels,
+        width,
+        height,
+        stride,
+        format,
+        frame_id,
+        timestamp_us,
+    } = frame;
+    let pixels = Box::new(pixels);
+    let pixel_pointer = pixels.as_ptr().cast();
+    let pixel_bytes = pixels.len();
+    let user_data = Box::into_raw(pixels).cast();
+    unsafe {
+        sys::oneui_realtime_frame_view_submit_frame_owned(
+            raw,
+            pixel_pointer,
+            pixel_bytes,
+            width,
+            height,
+            stride,
+            format as i32,
+            frame_id,
+            timestamp_us,
+            Some(release_remote_frame),
+            user_data,
+        ) != 0
+    }
+}
+
+/// Native video surface. Mutating methods are UI-thread bound; decoders should
+/// obtain a [`RealtimeFrameViewHandle`] from the owning window or dispatcher.
+pub struct RealtimeFrameView {
+    widget: Widget,
+    state: Arc<RealtimeFrameViewState>,
+}
+
+impl RealtimeFrameView {
+    pub fn new() -> Result<Self, Error> {
+        let widget = Widget::from_raw(unsafe { sys::oneui_realtime_frame_view_create() })?;
+        Ok(Self {
+            state: Arc::new(RealtimeFrameViewState {
+                raw: AtomicPtr::new(widget.as_raw()),
+                pending_frame: Mutex::new(None),
+                update_scheduled: AtomicBool::new(false),
+            }),
+            widget,
+        })
+    }
+
+    pub fn set_scale_mode(&self, scale_mode: VideoScaleMode) {
+        unsafe {
+            sys::oneui_realtime_frame_view_set_scale_mode(self.widget.as_raw(), scale_mode as i32)
+        };
+    }
+
+    pub fn set_background(&self, color: Color) {
+        unsafe {
+            sys::oneui_realtime_frame_view_set_background(
+                self.widget.as_raw(),
+                color.r,
+                color.g,
+                color.b,
+                color.a,
+            )
+        };
+    }
+
+    pub fn submit_frame(&self, mut frame: RemoteFrame) -> Result<(), Error> {
+        frame.normalize_and_validate()?;
+        if apply_remote_frame(self.widget.as_raw(), frame) {
+            Ok(())
+        } else {
+            Err(Error::InvalidVideoFrame {
+                reason: "native frame view rejected the frame",
+            })
+        }
+    }
+
+    pub fn as_widget(&self) -> &Widget {
+        &self.widget
+    }
+}
+
+impl Drop for RealtimeFrameView {
+    fn drop(&mut self) {
+        self.state
+            .raw
+            .store(std::ptr::null_mut(), Ordering::Release);
+        self.state
+            .pending_frame
+            .lock()
+            .expect("realtime frame pending lock poisoned")
+            .take();
+        self.state.update_scheduled.store(false, Ordering::Release);
+    }
+}
+
+struct RemotePointerCallback {
+    handler: Box<dyn FnMut(RemotePointerEvent) + 'static>,
+}
+
+struct RemoteRawKeyCallback {
+    handler: Box<dyn FnMut(RawKeyEvent) + 'static>,
+}
+
+unsafe extern "C" fn run_remote_pointer_callback(
+    event: *const sys::OneUiRemotePointerEvent,
+    user_data: *mut std::ffi::c_void,
+) {
+    if event.is_null() || user_data.is_null() {
+        return;
+    }
+    let event = RemotePointerEvent::from(unsafe { *event });
+    let callback = unsafe { &mut *user_data.cast::<RemotePointerCallback>() };
+    run_callback_guarded("remote_input.pointer", || (callback.handler)(event));
+}
+
+unsafe extern "C" fn run_remote_raw_key_callback(
+    event: *const sys::OneUiRawKeyEvent,
+    user_data: *mut std::ffi::c_void,
+) {
+    if event.is_null() || user_data.is_null() {
+        return;
+    }
+    let event = RawKeyEvent::from(unsafe { *event });
+    let callback = unsafe { &mut *user_data.cast::<RemoteRawKeyCallback>() };
+    run_callback_guarded("remote_input.raw_key", || (callback.handler)(event));
+}
+
+/// Transparent input mapper for a remote framebuffer. It translates logical
+/// pointer coordinates into remote pixels and preserves raw keyboard details.
+pub struct RemoteInputRegion {
+    widget: Widget,
+    pointer_callback: Option<Box<RemotePointerCallback>>,
+    raw_key_callback: Option<Box<RemoteRawKeyCallback>>,
+}
+
+impl RemoteInputRegion {
+    pub fn new() -> Result<Self, Error> {
+        let widget = Widget::from_raw(unsafe { sys::oneui_remote_input_region_create() })?;
+        Ok(Self {
+            widget,
+            pointer_callback: None,
+            raw_key_callback: None,
+        })
+    }
+
+    pub fn set_remote_size(&self, width: f32, height: f32) {
+        unsafe {
+            sys::oneui_remote_input_region_set_remote_size(self.widget.as_raw(), width, height)
+        };
+    }
+
+    pub fn set_scale_mode(&self, scale_mode: VideoScaleMode) {
+        unsafe {
+            sys::oneui_remote_input_region_set_scale_mode(self.widget.as_raw(), scale_mode as i32)
+        };
+    }
+
+    #[track_caller]
+    pub fn set_on_pointer<F>(&mut self, callback: F)
+    where
+        F: FnMut(RemotePointerEvent) + 'static,
+    {
+        let trace = InteractionTrace::at(
+            "RemoteInputRegion",
+            "pointer",
+            std::panic::Location::caller(),
+        );
+        self.clear_pointer_callback();
+        self.pointer_callback = Some(Box::new(RemotePointerCallback {
+            handler: Box::new(traced_value_callback(trace, callback)),
+        }));
+        let user_data = (self
+            .pointer_callback
+            .as_deref_mut()
+            .expect("remote pointer callback was just installed")
+            as *mut RemotePointerCallback)
+            .cast();
+        unsafe {
+            sys::oneui_remote_input_region_set_on_pointer(
+                self.widget.as_raw(),
+                Some(run_remote_pointer_callback),
+                user_data,
+            )
+        };
+    }
+
+    #[track_caller]
+    pub fn set_on_raw_key<F>(&mut self, callback: F)
+    where
+        F: FnMut(RawKeyEvent) + 'static,
+    {
+        let trace = InteractionTrace::at(
+            "RemoteInputRegion",
+            "raw_key",
+            std::panic::Location::caller(),
+        );
+        self.clear_raw_key_callback();
+        self.raw_key_callback = Some(Box::new(RemoteRawKeyCallback {
+            handler: Box::new(traced_value_callback(trace, callback)),
+        }));
+        let user_data = (self
+            .raw_key_callback
+            .as_deref_mut()
+            .expect("remote raw-key callback was just installed")
+            as *mut RemoteRawKeyCallback)
+            .cast();
+        unsafe {
+            sys::oneui_remote_input_region_set_on_raw_key(
+                self.widget.as_raw(),
+                Some(run_remote_raw_key_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn release_all_inputs(&self) {
+        unsafe { sys::oneui_remote_input_region_release_all_inputs(self.widget.as_raw()) };
+    }
+
+    pub fn clear_pointer_callback(&mut self) {
+        unsafe {
+            sys::oneui_remote_input_region_set_on_pointer(
+                self.widget.as_raw(),
+                None,
+                std::ptr::null_mut(),
+            )
+        };
+        self.pointer_callback = None;
+    }
+
+    pub fn clear_raw_key_callback(&mut self) {
+        unsafe {
+            sys::oneui_remote_input_region_set_on_raw_key(
+                self.widget.as_raw(),
+                None,
+                std::ptr::null_mut(),
+            )
+        };
+        self.raw_key_callback = None;
+    }
+
+    pub fn as_widget(&self) -> &Widget {
+        &self.widget
+    }
+}
+
+impl Drop for RemoteInputRegion {
+    fn drop(&mut self) {
+        self.release_all_inputs();
+        self.clear_pointer_callback();
+        self.clear_raw_key_callback();
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TerminalPointerAction {
     Press,
@@ -8191,6 +8737,14 @@ impl Window {
         self.dispatcher().terminal_view_handle(terminal)
     }
 
+    /// Returns a thread-safe coalescing producer for decoded remote frames.
+    pub fn realtime_frame_view_handle(
+        &self,
+        frame_view: &RealtimeFrameView,
+    ) -> RealtimeFrameViewHandle {
+        self.dispatcher().realtime_frame_view_handle(frame_view)
+    }
+
     /// Returns a thread-safe adaptive-layout handle for a mounted widget.
     pub fn widget_handle(&self, widget: &Widget) -> WidgetHandle {
         self.dispatcher().widget_handle(widget)
@@ -8258,14 +8812,15 @@ mod tests {
         traced_value_callback, Button, Color, Dialog, Error, FileDialogFilter, FileDialogMode,
         FileDialogOptions, IconSymbol, Insets, InteractionTrace, InteractiveSurface,
         InteractiveSurfaceStateStyle, InteractiveSurfaceStyle, Label, List, ListItem, LogLine,
-        LogView, Menu, OverlayAlignment, OverlayHost, Panel, Popup, PopupInteractionMode,
-        PopupPreferredPlacement, ProgressBar, PromptOptions, RawKeyEvent, ReorderableGrid,
-        ScrollView, SegmentedControl, Select, SelectionMode, SplitOrientation, SplitView, Stack,
-        StackDirection, StyleSheet, Switch, Table, TableColumn, TableRow, Tabs, TerminalCell,
-        TerminalColor, TerminalCursor, TerminalCursorStyle, TerminalFrame, TerminalSelection,
-        TerminalUnderlineStyle, TerminalView, TextArea, TextField, TreeItem, TreeView, VirtualList,
-        Window, WindowClientSizeChangedCallback, WindowOptions, WindowPlacement,
-        WindowRawKeyCallback, WindowState,
+        LogView, Menu, OverlayAlignment, OverlayHost, Panel, PixelFormat, Popup,
+        PopupInteractionMode, PopupPreferredPlacement, ProgressBar, PromptOptions, RawKeyEvent,
+        RealtimeFrameView, RemoteFrame, ReorderableGrid, ScrollView, SegmentedControl, Select,
+        SelectionMode, SplitOrientation, SplitView, Stack, StackDirection, StyleSheet, Switch,
+        Table, TableColumn, TableRow, Tabs, TerminalCell, TerminalColor, TerminalCursor,
+        TerminalCursorStyle, TerminalFrame, TerminalSelection, TerminalUnderlineStyle,
+        TerminalView, TextArea, TextField, TreeItem, TreeView, VirtualList, Window,
+        WindowClientSizeChangedCallback, WindowOptions, WindowPlacement, WindowRawKeyCallback,
+        WindowState,
     };
     use std::cell::{Cell, RefCell};
     use std::ptr::NonNull;
@@ -9324,6 +9879,72 @@ mod tests {
                 mouse_reporting: false,
                 first_visible_line_number: 1,
             }),
+            Err(Error::WidgetDestroyed)
+        ));
+    }
+
+    #[test]
+    fn remote_frame_normalizes_stride_and_rejects_short_buffers() {
+        let frame = RemoteFrame::new(vec![0_u8; 16], 2, 2, 0, PixelFormat::Bgra8888, 7, 700)
+            .expect("tightly packed remote frame should be valid");
+        assert_eq!(frame.stride, 8);
+
+        assert!(matches!(
+            RemoteFrame::new(vec![0_u8; 15], 2, 2, 8, PixelFormat::Rgba8888, 8, 800,),
+            Err(Error::InvalidVideoFrame { .. })
+        ));
+        assert!(matches!(
+            RemoteFrame::new(vec![0_u8; 16], 2, 2, 7, PixelFormat::Bgra8888, 9, 900,),
+            Err(Error::InvalidVideoFrame { .. })
+        ));
+    }
+
+    #[test]
+    fn realtime_frame_handle_submits_worker_frames_on_the_window_thread() {
+        let _guard = window_test_lock().lock().expect("window test lock");
+        let window = Window::new(&WindowOptions::default()).expect("window should be created");
+        let frame_view = RealtimeFrameView::new().expect("frame view should be created");
+        window.set_content(frame_view.as_widget());
+        let handle = window.realtime_frame_view_handle(&frame_view);
+        let worker = thread::spawn(move || {
+            for frame_id in 1..=3 {
+                handle
+                    .submit_frame(
+                        RemoteFrame::new(
+                            vec![frame_id as u8; 16],
+                            2,
+                            2,
+                            0,
+                            PixelFormat::Bgra8888,
+                            frame_id,
+                            frame_id * 100,
+                        )
+                        .expect("worker frame should be valid"),
+                    )
+                    .expect("worker should submit a realtime frame");
+            }
+        });
+        worker.join().expect("worker should finish");
+
+        let close_dispatcher = window.dispatcher();
+        window
+            .dispatch(move || close_dispatcher.request_close())
+            .expect("window should accept close request");
+        assert_eq!(window.run(), 0);
+    }
+
+    #[test]
+    fn realtime_frame_handle_rejects_updates_after_view_destruction() {
+        let _guard = window_test_lock().lock().expect("window test lock");
+        let window = Window::new(&WindowOptions::default()).expect("window should be created");
+        let handle = {
+            let frame_view = RealtimeFrameView::new().expect("frame view should be created");
+            window.realtime_frame_view_handle(&frame_view)
+        };
+        let frame = RemoteFrame::new(vec![0_u8; 4], 1, 1, 0, PixelFormat::Bgra8888, 1, 100)
+            .expect("remote frame should be valid");
+        assert!(matches!(
+            handle.submit_frame(frame),
             Err(Error::WidgetDestroyed)
         ));
     }

@@ -5,7 +5,7 @@
 
 use std::ffi::{c_char, c_float, c_int, c_uint, c_ushort, c_void};
 
-pub const UTF8_ABI_VERSION: c_uint = 17;
+pub const UTF8_ABI_VERSION: c_uint = 18;
 
 #[repr(C)]
 pub struct OneUiWindow {
@@ -281,6 +281,23 @@ pub struct OneUiRawKeyEvent {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
+pub struct OneUiRemotePointerEvent {
+    pub window_x: c_float,
+    pub window_y: c_float,
+    pub content_x: c_float,
+    pub content_y: c_float,
+    pub normalized_x: c_float,
+    pub normalized_y: c_float,
+    pub remote_x: c_float,
+    pub remote_y: c_float,
+    pub button: c_int,
+    pub pressed: c_int,
+    pub wheel_delta_x: c_int,
+    pub wheel_delta_y: c_int,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct OneUiTerminalPointerEvent {
     pub action: c_int,
     pub button: c_int,
@@ -296,6 +313,10 @@ pub struct OneUiTerminalPointerEvent {
 
 pub type OneUiRawKeyCallback =
     Option<unsafe extern "C" fn(event: *const OneUiRawKeyEvent, user_data: *mut c_void)>;
+pub type OneUiRemotePointerCallback =
+    Option<unsafe extern "C" fn(event: *const OneUiRemotePointerEvent, user_data: *mut c_void)>;
+pub type OneUiFrameReleaseCallback =
+    Option<unsafe extern "C" fn(pixels: *const c_void, user_data: *mut c_void)>;
 pub type OneUiWindowRawKeyCallback =
     Option<unsafe extern "C" fn(event: *const OneUiRawKeyEvent, user_data: *mut c_void) -> c_int>;
 pub type OneUiClientSizeChangedCallback =
@@ -619,6 +640,59 @@ extern "C" {
         callback: OneUiPointerCallback,
         user_data: *mut c_void,
     );
+    pub fn oneui_realtime_frame_view_create() -> *mut OneUiWidget;
+    pub fn oneui_realtime_frame_view_set_scale_mode(
+        frame_view: *mut OneUiWidget,
+        scale_mode: c_int,
+    );
+    pub fn oneui_realtime_frame_view_set_background(
+        frame_view: *mut OneUiWidget,
+        r: u8,
+        g: u8,
+        b: u8,
+        a: u8,
+    );
+    pub fn oneui_realtime_frame_view_submit_frame(
+        frame_view: *mut OneUiWidget,
+        pixels: *const c_void,
+        width: c_int,
+        height: c_int,
+        stride: c_int,
+        pixel_format: c_int,
+        frame_id: u64,
+        timestamp_us: u64,
+    );
+    pub fn oneui_realtime_frame_view_submit_frame_owned(
+        frame_view: *mut OneUiWidget,
+        pixels: *const c_void,
+        pixel_bytes: usize,
+        width: c_int,
+        height: c_int,
+        stride: c_int,
+        pixel_format: c_int,
+        frame_id: u64,
+        timestamp_us: u64,
+        release_callback: OneUiFrameReleaseCallback,
+        user_data: *mut c_void,
+    ) -> c_int;
+    pub fn oneui_remote_input_region_create() -> *mut OneUiWidget;
+    pub fn oneui_remote_input_region_set_remote_size(
+        region: *mut OneUiWidget,
+        width: c_float,
+        height: c_float,
+    );
+    pub fn oneui_remote_input_region_set_scale_mode(region: *mut OneUiWidget, scale_mode: c_int);
+    pub fn oneui_remote_input_region_set_on_pointer(
+        region: *mut OneUiWidget,
+        callback: OneUiRemotePointerCallback,
+        user_data: *mut c_void,
+    );
+    pub fn oneui_remote_input_region_set_on_raw_key(
+        region: *mut OneUiWidget,
+        callback: OneUiRawKeyCallback,
+        user_data: *mut c_void,
+    );
+    pub fn oneui_remote_input_region_release_all_inputs(region: *mut OneUiWidget);
     pub fn oneui_scroll_view_create() -> *mut OneUiWidget;
     pub fn oneui_scroll_view_set_content(view: *mut OneUiWidget, child: *mut OneUiWidget);
     pub fn oneui_scroll_view_set_content_height(view: *mut OneUiWidget, height: f32);

@@ -391,13 +391,17 @@ TerminalView 是渲染/输入视图，不负责 SSH/PTTY 协议。当前支持�
 
 保留最新一帧，不累计队列：
 
-- BGRA8888/RGBA8888 拷贝并通过 Canvas 真正绘制；
+- 借用式 C/C++ 提交会复制 BGRA8888/RGBA8888，适合低频调用；
+- ABI v18 的 owned submit 移交不可变像素所有权，替换、拒绝或销毁时恰好回调释放一次；
+- C++ paint 共享最新不可变帧，不再为每次绘制深拷贝整张画面；
+- Rust `RealtimeFrameViewHandle` 从 worker 提交并把突发更新合并为唯一最新帧；
 - ActualSize/Fit/Fill/Stretch；
 - `contentRect()` 供远程输入映射；
 - frameId/timestamp/stride 元数据；
-- submit 状态有 mutex 保护。
+- submit 状态有 mutex 保护，所有权释放发生在锁外，允许安全重入。
 
-NV12 仅有枚举，尚未转换；颜色空间、硬件纹理和零拷贝不在当前实现。
+NV12 仅有枚举，尚未转换；颜色空间和硬件纹理不在当前实现。owned submit 省去
+OneUI 边界处的额外像素复制，但解码器是否直接产出目标像素格式仍由产品决定。
 
 ## RemoteInputRegion
 
@@ -408,6 +412,7 @@ NV12 仅有枚举，尚未转换；颜色空间、硬件纹理和零拷贝不在
 - virtual key/scan code/down-up/repeat/extended/modifier；
 - `releaseAllInputs()`；
 - focus loss 自动释放，避免远端卡键。
+- safe Rust wrapper 会在 Drop 前清理回调，并保留 X1/X2、滚轮和 modifier 数据。
 
 产品仍负责把 Win32/raw input 与远端注入协议完整接线和安全策略。
 
@@ -450,5 +455,6 @@ Rust UI wrapper 是窗口线程对象。后台服务使用 handle：
 - `ProgressBarHandle` / `SparklineHandle`：投递数值/样本；
 - `VirtualListHandle` / `TableHandle`：整表 revision 与单行 patch；
 - `TerminalViewHandle`：grid/frame/viewport 等高频更新。
+- `RealtimeFrameViewHandle`：远程画面所有权移交与最新帧合并。
 
 不要把 UI wrapper 当作任意线程可变对象；通过 dispatcher/handle 保持窗口线程约束。
