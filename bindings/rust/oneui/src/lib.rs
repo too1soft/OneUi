@@ -366,11 +366,16 @@ pub struct WindowPlacement {
 pub struct Window {
     state: Arc<WindowState>,
     raw_key_callback: Option<Box<WindowRawKeyCallback>>,
+    client_size_changed_callback: Option<Box<WindowClientSizeChangedCallback>>,
     _ui_thread: PhantomData<Rc<()>>,
 }
 
 struct WindowRawKeyCallback {
     handler: Box<dyn FnMut(RawKeyEvent) -> bool + 'static>,
+}
+
+struct WindowClientSizeChangedCallback {
+    handler: Box<dyn FnMut(f32, f32) + 'static>,
 }
 
 struct WindowState {
@@ -5293,6 +5298,20 @@ unsafe extern "C" fn run_window_raw_key_callback(
     i32::from(run_callback_guarded("window.raw_key", || (callback.handler)(event)).unwrap_or(false))
 }
 
+unsafe extern "C" fn run_window_client_size_changed_callback(
+    width: f32,
+    height: f32,
+    user_data: *mut std::ffi::c_void,
+) {
+    if user_data.is_null() {
+        return;
+    }
+    let callback = unsafe { &mut *user_data.cast::<WindowClientSizeChangedCallback>() };
+    run_callback_guarded("window.client_size_changed", || {
+        (callback.handler)(width, height)
+    });
+}
+
 unsafe extern "C" fn run_terminal_scroll_callback(rows: i32, user_data: *mut std::ffi::c_void) {
     if user_data.is_null() {
         return;
@@ -7946,6 +7965,7 @@ impl Window {
                 ui_thread: std::thread::current().id(),
             }),
             raw_key_callback: None,
+            client_size_changed_callback: None,
             _ui_thread: PhantomData,
         })
     }
@@ -8059,6 +8079,39 @@ impl Window {
             sys::oneui_window_set_on_raw_key(raw, None, std::ptr::null_mut());
         });
         self.raw_key_callback = None;
+    }
+
+    /// Installs a coalesced logical client-size callback. The callback runs on
+    /// the window UI thread after the backend has committed the latest resize
+    /// message for the frame.
+    pub fn set_on_client_size_changed<F>(&mut self, callback: F)
+    where
+        F: FnMut(f32, f32) + 'static,
+    {
+        self.clear_client_size_changed_callback();
+        self.client_size_changed_callback = Some(Box::new(WindowClientSizeChangedCallback {
+            handler: Box::new(callback),
+        }));
+        let user_data = (self
+            .client_size_changed_callback
+            .as_deref_mut()
+            .expect("window client-size callback was just installed")
+            as *mut WindowClientSizeChangedCallback)
+            .cast();
+        self.state.with_raw(|raw| unsafe {
+            sys::oneui_window_set_on_client_size_changed(
+                raw,
+                Some(run_window_client_size_changed_callback),
+                user_data,
+            );
+        });
+    }
+
+    pub fn clear_client_size_changed_callback(&mut self) {
+        self.state.with_raw(|raw| unsafe {
+            sys::oneui_window_set_on_client_size_changed(raw, None, std::ptr::null_mut());
+        });
+        self.client_size_changed_callback = None;
     }
 
     /// Installs the application theme before composing the window tree.
@@ -8188,6 +8241,7 @@ impl Window {
 
 impl Drop for Window {
     fn drop(&mut self) {
+        self.clear_client_size_changed_callback();
         self.clear_raw_key_callback();
         self.state.destroy();
     }
@@ -8198,8 +8252,8 @@ mod tests {
     use super::sys;
     use super::{
         callback_panic_handler, clear_interaction_trace_handler, emit_interaction_trace,
-        run_callback_guarded, run_void_handler, run_window_raw_key_callback,
-        set_callback_panic_handler, set_interaction_trace_handler,
+        run_callback_guarded, run_void_handler, run_window_client_size_changed_callback,
+        run_window_raw_key_callback, set_callback_panic_handler, set_interaction_trace_handler,
         should_apply_application_cursor_style, terminal_style, traced_callback,
         traced_value_callback, Button, Color, Dialog, Error, FileDialogFilter, FileDialogMode,
         FileDialogOptions, IconSymbol, Insets, InteractionTrace, InteractiveSurface,
@@ -8210,7 +8264,8 @@ mod tests {
         StackDirection, StyleSheet, Switch, Table, TableColumn, TableRow, Tabs, TerminalCell,
         TerminalColor, TerminalCursor, TerminalCursorStyle, TerminalFrame, TerminalSelection,
         TerminalUnderlineStyle, TerminalView, TextArea, TextField, TreeItem, TreeView, VirtualList,
-        Window, WindowOptions, WindowPlacement, WindowRawKeyCallback, WindowState,
+        Window, WindowClientSizeChangedCallback, WindowOptions, WindowPlacement,
+        WindowRawKeyCallback, WindowState,
     };
     use std::cell::{Cell, RefCell};
     use std::ptr::NonNull;
@@ -8232,6 +8287,27 @@ mod tests {
         assert!(!should_apply_application_cursor_style(false, true));
         assert!(!should_apply_application_cursor_style(true, false));
         assert!(should_apply_application_cursor_style(true, true));
+    }
+
+    #[test]
+    fn client_size_callback_preserves_logical_dimensions() {
+        let observed = Rc::new(RefCell::new(None));
+        let observed_from_callback = Rc::clone(&observed);
+        let mut callback = WindowClientSizeChangedCallback {
+            handler: Box::new(move |width, height| {
+                *observed_from_callback.borrow_mut() = Some((width, height));
+            }),
+        };
+
+        unsafe {
+            run_window_client_size_changed_callback(
+                1024.5,
+                720.25,
+                (&mut callback as *mut WindowClientSizeChangedCallback).cast(),
+            );
+        }
+
+        assert_eq!(*observed.borrow(), Some((1024.5, 720.25)));
     }
 
     #[test]

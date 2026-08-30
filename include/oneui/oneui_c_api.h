@@ -17,6 +17,7 @@ typedef struct OneUiTray OneUiTray;
 typedef void (*OneUiVoidCallback)(void* user_data);
 typedef void (*OneUiDestroyCallback)(void* user_data);
 typedef void (*OneUiFrameCallback)(double now_ms, void* user_data);
+typedef void (*OneUiClientSizeChangedCallback)(float width, float height, void* user_data);
 typedef void (*OneUiTextCallback)(const wchar_t* text, void* user_data);
 typedef void (*OneUiUtf8TextCallback)(const char* text, size_t length, void* user_data);
 typedef void (*OneUiTreeExpansionCallback)(const char* id, size_t length, int expanded, void* user_data);
@@ -383,7 +384,7 @@ enum {
     OneUiTerminalCellOverline = 1u << 11
 };
 
-#define ONEUI_UTF8_ABI_VERSION 16u
+#define ONEUI_UTF8_ABI_VERSION 17u
 
 ONEUI_API const char* oneui_version(void);
 ONEUI_API unsigned int oneui_utf8_abi_version(void);
@@ -403,6 +404,14 @@ ONEUI_API int oneui_window_set_placement(OneUiWindow* window, const OneUiWindowP
 ONEUI_API void oneui_window_set_borderless(OneUiWindow* window, int borderless);
 ONEUI_API void oneui_window_set_title_bar_drag_metrics(OneUiWindow* window, float title_bar_height, float reserved_button_width);
 ONEUI_API void oneui_window_set_title_bar_interactive_insets(OneUiWindow* window, float leading_width, float trailing_width);
+/*
+ * Receives coalesced logical client dimensions on the owning UI thread. Pass
+ * NULL before releasing user_data. The callback is not emitted while minimized.
+ */
+ONEUI_API void oneui_window_set_on_client_size_changed(
+    OneUiWindow* window,
+    OneUiClientSizeChangedCallback callback,
+    void* user_data);
 ONEUI_API void oneui_window_set_corner_radius(OneUiWindow* window, float radius);
 ONEUI_API void oneui_window_set_close_to_tray(OneUiWindow* window, int close_to_tray);
 ONEUI_API void oneui_window_post(OneUiWindow* window, OneUiVoidCallback callback, void* user_data);

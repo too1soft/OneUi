@@ -1754,6 +1754,23 @@ void oneui_window_set_title_bar_interactive_insets(OneUiWindow* window, float le
     window->window->setTitleBarInteractiveInsets(leading_width, trailing_width);
 }
 
+void oneui_window_set_on_client_size_changed(
+    OneUiWindow* window,
+    OneUiClientSizeChangedCallback callback,
+    void* user_data) {
+    if (!window || !window->window) {
+        return;
+    }
+    if (!callback) {
+        window->window->setClientSizeChangedHandler({});
+        return;
+    }
+    window->window->setClientSizeChangedHandler(
+        [callback, user_data](oneui::Size size) {
+            callback(size.width, size.height, user_data);
+        });
+}
+
 void oneui_window_set_corner_radius(OneUiWindow* window, float radius) {
     if (!window || !window->window) {
         return;

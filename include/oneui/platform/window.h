@@ -39,6 +39,7 @@ struct WindowPlacement {
 class ONEUI_API Window {
 public:
     using RawKeyHandler = std::function<bool(const KeyEvent&)>;
+    using ClientSizeChangedHandler = std::function<void(Size)>;
 
     virtual ~Window() = default;
 
@@ -57,6 +58,12 @@ public:
     // event, which lets applications implement global shortcuts without
     // duplicating platform message hooks or intercepting IME text input.
     virtual void setRawKeyHandler(RawKeyHandler handler) { (void)handler; }
+    // Delivers coalesced logical client-size updates on the UI thread. Backends
+    // should avoid invoking this once per native resize message when several
+    // messages can be represented by the latest size in one frame.
+    virtual void setClientSizeChangedHandler(ClientSizeChangedHandler handler) {
+        (void)handler;
+    }
     // Sets the application font used whenever controls request the default
     // UI family. An empty value restores the platform default. The value is
     // owned by the window and takes effect on the next paint.

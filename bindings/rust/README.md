@@ -42,7 +42,7 @@ oneui.dll
 
 ## ABI 检查
 
-`oneui-sys::UTF8_ABI_VERSION` 当前为 16。`Window::new` 创建窗口前调用
+`oneui-sys::UTF8_ABI_VERSION` 当前为 17。`Window::new` 创建窗口前调用
 `oneui_utf8_abi_version()`，不匹配时返回：
 
 ```rust
@@ -99,6 +99,7 @@ Rust wrapper Drop 立即消失，但 callback wrapper 被 Drop 时会清除 call
 - `Window::new` 在调用线程创建并初始化隐藏原生窗口；
 - 该线程是 owning UI thread；
 - `show` / `run` / 普通控件 setter 在该线程使用；
+- `Window::set_on_client_size_changed` 在 UI 线程按帧合并派发逻辑像素宽高，适合事件驱动响应式布局；
 - 普通控件 wrapper 不应从 worker 随意调用。
 
 ### UiDispatcher

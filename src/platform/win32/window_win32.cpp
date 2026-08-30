@@ -1225,6 +1225,11 @@ public:
         rawKeyHandler_ = std::move(handler);
     }
 
+    void setClientSizeChangedHandler(ClientSizeChangedHandler handler) override {
+        clientSizeChangedHandler_ = std::move(handler);
+        scheduleClientSizeChanged();
+    }
+
     void setDefaultFontFamily(std::wstring family) override {
         defaultFontFamily_ = std::move(family);
         requestRedraw();
@@ -2104,6 +2109,7 @@ private:
             }
             if (wParam != SIZE_MINIMIZED) {
                 applyRoundedCorners(); // 尺寸变化后重算圆角区域，避免拉伸/露白
+                scheduleClientSizeChanged();
             }
             if (applyingWindowState_) {
                 windowStatePaintPending_ = true;
@@ -2145,6 +2151,15 @@ private:
         case WM_NCHITTEST:
             if (const auto hit = hitTestBorderlessWindow(lParam); hit != HTNOWHERE) {
                 return hit;
+            }
+            return DefWindowProcW(hwnd_, message, wParam, lParam);
+        case WM_NCLBUTTONDBLCLK:
+            // A borderless window has no native caption style for DefWindowProc
+            // to maximize. Preserve the standard title-bar contract explicitly
+            // for drag regions while leaving interactive accessory content alone.
+            if (options_.borderless && wParam == HTCAPTION && !options_.fullscreen) {
+                toggleMaximize();
+                return 0;
             }
             return DefWindowProcW(hwnd_, message, wParam, lParam);
         case WM_SETFOCUS:
@@ -2970,6 +2985,19 @@ private:
         }
     }
 
+    void scheduleClientSizeChanged() {
+        if (!clientSizeChangedHandler_ || clientSizeChangedFramePending_ || !hwnd_) {
+            return;
+        }
+        clientSizeChangedFramePending_ = true;
+        requestAnimationFrame([this](double) {
+            clientSizeChangedFramePending_ = false;
+            if (clientSizeChangedHandler_) {
+                clientSizeChangedHandler_(clientSize());
+            }
+        });
+    }
+
     void recordContentPaint(double elapsedMs) {
         if (renderTraceEnabled_) {
             traceContentPaintMs_ += elapsedMs;
@@ -3693,6 +3721,8 @@ private:
     float titleButtonReservedWidthLogical_ = 132.0f;
     float titleBarInteractiveLeadingWidthLogical_ = -1.0f;
     float titleBarInteractiveTrailingWidthLogical_ = -1.0f;
+    ClientSizeChangedHandler clientSizeChangedHandler_;
+    bool clientSizeChangedFramePending_ = false;
     HGLRC glContext_ = nullptr;
     HDC glDC_ = nullptr;
     sk_sp<GrDirectContext> grContext_;

@@ -15,7 +15,7 @@ CSS-like 样式表构建界面，不依赖浏览器、HTML 或 WebView。
 当前仓库同时提供：
 
 - 公开 C++ API；
-- 版本化的 UTF-8 C ABI（当前 `ONEUI_UTF8_ABI_VERSION = 16`）；
+- 版本化的 UTF-8 C ABI（当前 `ONEUI_UTF8_ABI_VERSION = 17`）；
 - `oneui-sys` 原始 Rust FFI 和 `oneui` 安全 Rust 包装层；
 - Win32 窗口、输入、DPI、剪贴板、文件对话框、托盘和 Skia 呈现后端；
 - Gallery、远程组件 Gallery、SDK 打包脚本和 13 个 CTest 行为/契约测试目标。

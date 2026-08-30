@@ -5,7 +5,7 @@
 
 use std::ffi::{c_char, c_float, c_int, c_uint, c_ushort, c_void};
 
-pub const UTF8_ABI_VERSION: c_uint = 16;
+pub const UTF8_ABI_VERSION: c_uint = 17;
 
 #[repr(C)]
 pub struct OneUiWindow {
@@ -298,6 +298,8 @@ pub type OneUiRawKeyCallback =
     Option<unsafe extern "C" fn(event: *const OneUiRawKeyEvent, user_data: *mut c_void)>;
 pub type OneUiWindowRawKeyCallback =
     Option<unsafe extern "C" fn(event: *const OneUiRawKeyEvent, user_data: *mut c_void) -> c_int>;
+pub type OneUiClientSizeChangedCallback =
+    Option<unsafe extern "C" fn(width: c_float, height: c_float, user_data: *mut c_void)>;
 pub type OneUiTerminalPointerCallback =
     Option<unsafe extern "C" fn(event: *const OneUiTerminalPointerEvent, user_data: *mut c_void)>;
 pub type OneUiTerminalHyperlinkCallback =
@@ -358,6 +360,11 @@ extern "C" {
         window: *mut OneUiWindow,
         leading_width: f32,
         trailing_width: f32,
+    );
+    pub fn oneui_window_set_on_client_size_changed(
+        window: *mut OneUiWindow,
+        callback: OneUiClientSizeChangedCallback,
+        user_data: *mut c_void,
     );
     pub fn oneui_window_set_corner_radius(window: *mut OneUiWindow, radius: f32);
     pub fn oneui_window_set_title_utf8(window: *mut OneUiWindow, title: OneUiUtf8String);

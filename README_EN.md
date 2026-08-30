@@ -16,7 +16,7 @@ browser process, or WebView.
 The repository currently ships:
 
 - a public C++ API;
-- a versioned UTF-8 C ABI (`ONEUI_UTF8_ABI_VERSION = 16`);
+- a versioned UTF-8 C ABI (`ONEUI_UTF8_ABI_VERSION = 17`);
 - raw `oneui-sys` Rust FFI and the safe `oneui` Rust crate;
 - a Win32 window, input, DPI, clipboard, file-dialog, tray, and Skia presentation backend;
 - a Gallery, a remote-component Gallery, SDK tooling, and 13 CTest behavior/contract targets.

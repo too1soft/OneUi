@@ -7,7 +7,7 @@ OneUI 使用版本化 C ABI 为 Rust、Go、C#、Python FFI 和不同 C++ ABI �
 ## 当前版本
 
 ```c
-#define ONEUI_UTF8_ABI_VERSION 16u
+#define ONEUI_UTF8_ABI_VERSION 17u
 ```
 
 运行时检查：
@@ -173,6 +173,16 @@ oneui_button_set_on_click(button, NULL, NULL);
 - callback 内可调用同一窗口的非阻塞 UI API，但应避免递归打开消息循环；
 - 高频 callback（pointer move、ratio changed、terminal update）不要同步做磁盘/网络重活。
 
+窗口客户端尺寸变化使用逻辑像素，并由后端在 UI 线程按帧合并后派发：
+
+```c
+oneui_window_set_on_client_size_changed(window, on_client_size, state);
+// 销毁 state 前清除回调。
+oneui_window_set_on_client_size_changed(window, NULL, NULL);
+```
+
+连续拖动窗口时不会为每一条平台 `WM_SIZE` 消息同步执行产品布局；回调收到的是该帧最新宽高。
+
 ### Rust panic 边界
 
 safe Rust 为 dispatcher、按钮、value/pointer/list/tree/menu/table/terminal 等 callback 安装
@@ -216,7 +226,7 @@ ABI 当前覆盖：
 - logical client size、physical pixel size、DPI scale；
 - default font、StyleSheet 与运行时 refresh；
 - title-bar drag metrics 和 interactive insets；
-- raw key callback；
+- raw key callback 与合并后的客户端尺寸变化 callback；
 - clipboard、file/folder dialog、confirm、prompt；
 - tray 与 notification；
 - UI-thread post 与 animation frame；
