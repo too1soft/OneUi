@@ -417,9 +417,14 @@ struct TableStyle {
     Color headerForeground{97, 103, 114};
     Color cellForeground{25, 28, 33};
     Color gridLine{211, 216, 224};
+    Color rowHovered{241, 245, 249};
+    Color rowPressed{226, 232, 240};
+    Color rowSelected{224, 231, 255};
+    Color scrollbarColor{148, 163, 184};
     float borderWidth = 1.0f;
     float radius = 6.0f;
     float headerHeight = 30.0f;
+    float scrollbarWidth = 4.0f;
     Insets cellPadding{0.0f, 10.0f};
 };
 
@@ -430,9 +435,14 @@ struct TableStyleOverride {
     std::optional<Color> headerForeground;
     std::optional<Color> cellForeground;
     std::optional<Color> gridLine;
+    std::optional<Color> rowHovered;
+    std::optional<Color> rowPressed;
+    std::optional<Color> rowSelected;
+    std::optional<Color> scrollbarColor;
     std::optional<float> borderWidth;
     std::optional<float> radius;
     std::optional<float> headerHeight;
+    std::optional<float> scrollbarWidth;
     std::optional<Insets> cellPadding;
 };
 

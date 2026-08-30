@@ -40,6 +40,12 @@ public:
     void setOnClick(std::function<void()> callback);
     /// Pointer-specific activation for selection, click-count, and modifier semantics.
     void setOnPointerActivated(std::function<void(const MouseEvent&)> callback);
+    /// Continuous pointer movement while the surface owns hover. This is
+    /// intended for data inspection surfaces such as charts and timelines.
+    void setOnPointerMoved(std::function<void(const MouseEvent&)> callback);
+    /// Emits both pointer enter and pointer leave without products polling
+    /// native geometry or duplicating hover-state bookkeeping.
+    void setOnHoverChanged(std::function<void(bool)> callback);
     void setOnContextMenuRequested(std::function<void(const MouseEvent&)> callback);
     void setDisabled(bool disabled) override;
 
@@ -48,6 +54,7 @@ public:
     bool onMouseDown(const MouseEvent& event) override;
     bool onMouseUp(const MouseEvent& event) override;
     bool onKeyDown(const KeyEvent& event) override;
+    bool onFocusChanged(bool focused) override;
     CursorKind cursor(Point point) const override;
     bool isFocusable() const override;
     bool tickAnimations(double nowMs) override;
@@ -75,6 +82,8 @@ private:
     ColorTransition borderTransition_;
     std::function<void()> onClick_;
     std::function<void(const MouseEvent&)> onPointerActivated_;
+    std::function<void(const MouseEvent&)> onPointerMoved_;
+    std::function<void(bool)> onHoverChanged_;
     std::function<void(const MouseEvent&)> onContextMenuRequested_;
 };
 

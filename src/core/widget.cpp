@@ -313,6 +313,21 @@ const std::wstring& Widget::accessibleDescription() const {
     return accessibleDescription_;
 }
 
+void Widget::setTooltip(std::wstring tooltip) {
+    tooltip_ = std::move(tooltip);
+}
+
+const std::wstring& Widget::tooltip() const {
+    return tooltip_;
+}
+
+const std::wstring* Widget::tooltipAt(Point point) const {
+    if (!visible_ || disabled_ || tooltip_.empty() || !hitTest(point)) {
+        return nullptr;
+    }
+    return &tooltip_;
+}
+
 void Widget::setAccessibleValue(std::wstring value) {
     if (accessibleValue_ == value) {
         return;

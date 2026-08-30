@@ -71,6 +71,10 @@ public:
     virtual void close() = 0;
     virtual void minimize() = 0;
     virtual void requestRedraw() = 0;
+    // Commits pending layout before diagnostics inspect widget geometry.
+    // Backends should perform the same synchronous layout/paint pass used by
+    // presentation so snapshots never expose stale frames after tree changes.
+    virtual void prepareLayoutSnapshot() { requestRedraw(); }
     // Returns false when the window no longer accepts UI work.
     virtual bool post(std::function<void()> callback) = 0;
     virtual void requestAnimationFrame(std::function<void(double nowMs)> callback) = 0;
@@ -98,6 +102,12 @@ public:
     virtual void setTitleBarDragMetrics(float titleBarHeight, float reservedButtonWidth) {
         (void)titleBarHeight;
         (void)reservedButtonWidth;
+    }
+    // 配置标题栏中间的客户区命中范围（逻辑像素）。该范围优先于 caption 拖拽，
+    // 用于承载搜索框、标签页等可交互附件；任一参数为负数时恢复整段标题栏拖拽。
+    virtual void setTitleBarInteractiveInsets(float leadingWidth, float trailingWidth) {
+        (void)leadingWidth;
+        (void)trailingWidth;
     }
     // 设置窗口整体圆角半径（逻辑像素，0 = 直角）。默认空实现，Win32 覆盖。
     virtual void setCornerRadius(float radiusLogical) { (void)radiusLogical; }

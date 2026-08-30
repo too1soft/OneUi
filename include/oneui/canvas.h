@@ -47,6 +47,12 @@ public:
     virtual std::optional<Rect> clipBounds() const {
         return std::nullopt;
     }
+    /// Returns the stable logical client-space viewport for this paint pass.
+    /// Unlike clipBounds(), this is not narrowed by dirty-region or container
+    /// clipping and is therefore suitable for edge-aware popup placement.
+    virtual std::optional<Rect> viewportBounds() const {
+        return std::nullopt;
+    }
     virtual void clear(Color color) = 0;
     virtual void fillRect(Rect rect, Color color, float radius = 0.0f) = 0;
     virtual void fillLinearGradient(Rect rect, Color start, Color end, float angleDegrees, float radius = 0.0f) {

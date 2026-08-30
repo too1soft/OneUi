@@ -393,6 +393,10 @@ void TextField::setOnChanged(std::function<void(const std::wstring&)> callback) 
     onChanged_ = std::move(callback);
 }
 
+void TextField::setOnSubmitted(std::function<void(const std::wstring&)> callback) {
+    onSubmitted_ = std::move(callback);
+}
+
 void TextField::setDisabled(bool disabled) {
     const TextFieldStyle previous = resolvedStyle();
     Widget::setDisabled(disabled);
@@ -606,7 +610,14 @@ bool TextField::onKeyDown(const KeyEvent& event) {
     }
 
     if (event.key == Key::Enter) {
-        if (!multiline_ || !editable()) {
+        if (!multiline_) {
+            if (!onSubmitted_) {
+                return false;
+            }
+            onSubmitted_(value());
+            return true;
+        }
+        if (!editable()) {
             return false;
         }
         std::wstring next = value();

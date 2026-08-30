@@ -501,7 +501,13 @@ bool Popup::hitTest(Point point) const {
     if (!interactive()) {
         return false;
     }
-    const bool inAnchor = anchor_ ? resolvedAnchorRect().contains(point) : contains(point);
+    // A synthetic anchor may intentionally be hidden and used only to position
+    // a context popup. Once that popup closes it must not leave an invisible
+    // pointer blocker behind at the anchor rectangle. Keep hit testing aligned
+    // with onMouseDown(), which only routes input to an interactive anchor.
+    const bool inAnchor = anchor_
+        ? isInteractive(anchor_.get()) && resolvedAnchorRect().contains(point)
+        : contains(point);
     const bool inContent = isOpen() && content_ && resolvedContentRect().contains(point);
     return inAnchor || inContent || (isOpen() && outsidePointerPolicy_ != PopupOutsidePointerPolicy::PassThrough);
 }

@@ -32,10 +32,13 @@ public:
     bool isFocusable() const override;
     bool focusFirstLeaf() override;
     bool focusLastLeaf() override;
+    bool hitTest(Point point) const override;
+    bool paintsAboveSiblings() const override;
     // Focuses a visible, enabled descendant and establishes the complete
     // parent focus chain needed for keyboard and text-input routing.
     virtual bool requestFocus(Widget* descendant, bool focusVisible = true);
     CursorKind cursor(Point point) const override;
+    const std::wstring* tooltipAt(Point point) const override;
     void setFocusVisible(bool visible) override;
     bool tickAnimations(double nowMs) override;
 

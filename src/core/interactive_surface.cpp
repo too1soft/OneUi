@@ -1,5 +1,7 @@
 #include "oneui/controls/interactive_surface.h"
 
+#include "internal/scroll_trace.h"
+
 #include <chrono>
 #include <utility>
 
@@ -63,6 +65,15 @@ void InteractiveSurface::setOnPointerActivated(
         onClick_ || onPointerActivated_ ? AccessibilityRole::Button : AccessibilityRole::None);
 }
 
+void InteractiveSurface::setOnPointerMoved(
+    std::function<void(const MouseEvent&)> callback) {
+    onPointerMoved_ = std::move(callback);
+}
+
+void InteractiveSurface::setOnHoverChanged(std::function<void(bool)> callback) {
+    onHoverChanged_ = std::move(callback);
+}
+
 void InteractiveSurface::setOnContextMenuRequested(
     std::function<void(const MouseEvent&)> callback) {
     onContextMenuRequested_ = std::move(callback);
@@ -93,12 +104,18 @@ void InteractiveSurface::paint(Canvas& canvas) {
 bool InteractiveSurface::onMouseMove(const MouseEvent& event) {
     const bool childHandled = View::onMouseMove(event);
     const bool nextHovered = interactive() && contains(event.position);
+    if (nextHovered && onPointerMoved_) {
+        onPointerMoved_(event);
+    }
     if (nextHovered == hovered_) {
         return childHandled;
     }
 
     const auto previous = resolvedStyle();
     hovered_ = nextHovered;
+    if (onHoverChanged_) {
+        onHoverChanged_(hovered_);
+    }
     if (!hovered_) {
         pressed_ = false;
     }
@@ -111,8 +128,23 @@ bool InteractiveSurface::onMouseDown(const MouseEvent& event) {
     const bool childHandled = View::onMouseDown(event);
     if (childHandled || !interactive() || !contains(event.position) ||
         (event.button != MouseButton::Left && event.button != MouseButton::Right)) {
+        if (internal::scrollTraceEnabled()) {
+            internal::writeScrollTrace(internal::ScrollTraceEvent{
+                "interactive_surface",
+                childHandled ? "pointer_down_child" : "pointer_down_missed",
+                reinterpret_cast<std::uintptr_t>(this),
+                static_cast<double>(static_cast<int>(event.button)), 0.0,
+                static_cast<double>(event.clickCount), 0.0, 0.0, 0.0, 0.0,
+                static_cast<double>(event.position.x), static_cast<double>(event.position.y)});
+        }
         return childHandled;
     }
+
+    // A composite content view may tentatively focus its first descendant even
+    // when the pointer landed on otherwise unhandled card space. In that case
+    // the surface itself is the interaction target; keep nested controls
+    // focused only when one of them actually handled the pointer event.
+    focusChild(nullptr);
 
     const auto previous = resolvedStyle();
     pressed_ = event.button == MouseButton::Left;
@@ -120,6 +152,14 @@ bool InteractiveSurface::onMouseDown(const MouseEvent& event) {
     pressedClickCount_ = event.clickCount;
     beginVisualTransition(previous, resolvedStyle());
     invalidate();
+    if (internal::scrollTraceEnabled()) {
+        internal::writeScrollTrace(internal::ScrollTraceEvent{
+            "interactive_surface", "pointer_down_surface",
+            reinterpret_cast<std::uintptr_t>(this),
+            static_cast<double>(static_cast<int>(event.button)), 0.0,
+            static_cast<double>(event.clickCount), 0.0, 0.0, 0.0, 0.0,
+            static_cast<double>(event.position.x), static_cast<double>(event.position.y)});
+    }
     return true;
 }
 
@@ -152,11 +192,37 @@ bool InteractiveSurface::onMouseUp(const MouseEvent& event) {
     } else if (activate && pressedButton == MouseButton::Right && onContextMenuRequested_) {
         onContextMenuRequested_(event);
     }
+    if (internal::scrollTraceEnabled()) {
+        internal::writeScrollTrace(internal::ScrollTraceEvent{
+            "interactive_surface", activate ? "pointer_up_activated" : "pointer_up_cancelled",
+            reinterpret_cast<std::uintptr_t>(this),
+            static_cast<double>(static_cast<int>(event.button)), 0.0,
+            static_cast<double>(pressedClickCount), 0.0, 0.0, 0.0, 0.0,
+            static_cast<double>(event.position.x), static_cast<double>(event.position.y)});
+    }
     return true;
 }
 
 bool InteractiveSurface::onKeyDown(const KeyEvent& event) {
-    if (!interactive() || (event.key != Key::Enter && event.key != Key::Space)) {
+    if (!interactive()) {
+        return false;
+    }
+
+    if (event.key == Key::Tab) {
+        // Forward Tab into nested actions after the surface's own tab stop.
+        // Shift+Tab from the surface itself must leave the surface instead of
+        // jumping directly to its last descendant.
+        if (event.shift && !focusedChild()) {
+            return false;
+        }
+        return View::onKeyDown(event);
+    }
+
+    if (focusedChild() && View::onKeyDown(event)) {
+        return true;
+    }
+
+    if (event.key != Key::Enter && event.key != Key::Space) {
         return false;
     }
 
@@ -176,6 +242,21 @@ bool InteractiveSurface::onKeyDown(const KeyEvent& event) {
         pointerActivated(activation);
     }
     return true;
+}
+
+bool InteractiveSurface::onFocusChanged(bool focused) {
+    if (!focused) {
+        return View::onFocusChanged(false);
+    }
+
+    // InteractiveSurface is both a composite container and an action in its
+    // own right. Focusing the surface must not automatically skip its semantic
+    // action by descending into the first nested control.
+    const bool changed = Widget::onFocusChanged(true);
+    if (auto* child = focusedChild()) {
+        child->onFocusChanged(true);
+    }
+    return changed;
 }
 
 CursorKind InteractiveSurface::cursor(Point point) const {
@@ -214,6 +295,7 @@ bool InteractiveSurface::hasInteractionState() const {
 }
 
 void InteractiveSurface::resetInteractionState() {
+    const bool wasHovered = hovered_;
     hovered_ = false;
     pressed_ = false;
     pressedButton_ = MouseButton::None;
@@ -223,6 +305,9 @@ void InteractiveSurface::resetInteractionState() {
     backgroundTransition_.reset(target.background);
     borderTransition_.reset(target.border);
     visualInitialized_ = true;
+    if (wasHovered && onHoverChanged_) {
+        onHoverChanged_(false);
+    }
 }
 
 InteractiveSurfaceStateStyle InteractiveSurface::resolvedStyle() const {

@@ -27,6 +27,10 @@ void OverlayHost::setContent(std::shared_ptr<Widget> child) {
     invalidate();
 }
 
+std::shared_ptr<Widget> OverlayHost::content() const {
+    return content_;
+}
+
 void OverlayHost::addOverlay(std::shared_ptr<Widget> child, int layer) {
     addOverlay(std::move(child), OverlayOptions::modeless(layer));
 }
@@ -188,6 +192,37 @@ void OverlayHost::paint(Canvas& canvas) {
     }
 }
 
+bool OverlayHost::hitTest(Point point) const {
+    if (View::hitTest(point)) {
+        return true;
+    }
+
+    // OverlayHost owns content and overlay layers outside View::children_.
+    // Include them in subtree hit testing so a popup extending beyond an
+    // intermediate host remains reachable through any number of ancestors.
+    auto* self = const_cast<OverlayHost*>(this);
+    self->layoutAnchoredOverlays();
+    for (const std::size_t index : hitOrder()) {
+        const auto& child = overlays_[index].child;
+        if (child && child->visible() && child->hitTest(point)) {
+            return true;
+        }
+    }
+    return content_ && content_->visible() && content_->hitTest(point);
+}
+
+bool OverlayHost::paintsAboveSiblings() const {
+    if (View::paintsAboveSiblings()) {
+        return true;
+    }
+    if (content_ && content_->visible() && content_->paintsAboveSiblings()) {
+        return true;
+    }
+    return std::any_of(overlays_.begin(), overlays_.end(), [](const OverlayEntry& entry) {
+        return entry.child && entry.child->visible() && entry.child->paintsAboveSiblings();
+    });
+}
+
 bool OverlayHost::onMouseMove(const MouseEvent& event) {
     if (!interactive()) {
         clearInteractionState();
@@ -216,7 +251,7 @@ bool OverlayHost::onMouseMove(const MouseEvent& event) {
             if (entry.blocksOutsidePointer) {
                 bool changed = false;
                 for (const auto& overlay : overlays_) {
-                    if (overlay.child->visible()) {
+                    if (overlay.child->visible() && !overlay.child->paintsAboveSiblings()) {
                         changed = overlay.child->clearInteractionState() || changed;
                     }
                 }
@@ -230,11 +265,13 @@ bool OverlayHost::onMouseMove(const MouseEvent& event) {
         // “清空全部 overlay 交互态”，把刚设置的 hover 清掉，造成 hover 逐帧闪烁。
         bool changed = child->onMouseMove(event);
         for (const auto& other : overlays_) {
-            if (other.child.get() != child.get() && other.child->visible()) {
+            if (other.child.get() != child.get() &&
+                other.child->visible() &&
+                !other.child->paintsAboveSiblings()) {
                 changed = other.child->clearInteractionState() || changed;
             }
         }
-        if (content_ && content_->visible()) {
+        if (content_ && content_->visible() && !child->paintsAboveSiblings()) {
             changed = content_->clearInteractionState() || changed;
         }
         return changed;
@@ -242,7 +279,7 @@ bool OverlayHost::onMouseMove(const MouseEvent& event) {
 
     bool changed = false;
     for (const auto& entry : overlays_) {
-        if (entry.child->visible()) {
+        if (entry.child->visible() && !entry.child->paintsAboveSiblings()) {
             changed = entry.child->clearInteractionState() || changed;
         }
     }

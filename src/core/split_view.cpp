@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <string>
 #include <utility>
 
 namespace oneui {
@@ -86,6 +85,10 @@ void SplitView::setOnSplitRatioChanged(std::function<void(float)> callback) {
     onSplitRatioChanged_ = std::move(callback);
 }
 
+void SplitView::setOnSplitRatioCommitted(std::function<void(float)> callback) {
+    onSplitRatioCommitted_ = std::move(callback);
+}
+
 bool SplitView::onMouseMove(const MouseEvent& event) {
     if (!interactive()) {
         resetInteractionState();
@@ -133,8 +136,8 @@ bool SplitView::onMouseDown(const MouseEvent& event) {
 
 bool SplitView::onMouseUp(const MouseEvent& event) {
     if (draggingDivider_) {
-        draggingDivider_ = false;
         dividerHovered_ = hasResizableDivider() && dividerHitRect().contains(event.position);
+        finishDividerDrag();
         invalidate();
         return true;
     }
@@ -241,6 +244,17 @@ float SplitView::axisPosition(Point point) const {
     return orientation_ == SplitOrientation::Horizontal ? point.x : point.y;
 }
 
+void SplitView::finishDividerDrag() {
+    if (!draggingDivider_) {
+        return;
+    }
+    draggingDivider_ = false;
+    dragOffset_ = 0.0f;
+    if (onSplitRatioCommitted_) {
+        onSplitRatioCommitted_(splitRatio_);
+    }
+}
+
 void SplitView::updateSplitRatio(float ratio, bool notify) {
     const float next = constrainedRatio(ratio);
     if (std::abs(next - splitRatio_) <= kRatioEpsilon) {
@@ -260,8 +274,7 @@ bool SplitView::hasInteractionState() const {
 
 void SplitView::resetInteractionState() {
     dividerHovered_ = false;
-    draggingDivider_ = false;
-    dragOffset_ = 0.0f;
+    finishDividerDrag();
     View::resetInteractionState();
 }
 

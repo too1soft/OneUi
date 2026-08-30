@@ -1,9 +1,12 @@
 #include "oneui/controls/button.h"
+#include "oneui/controls/dialog.h"
 #include "oneui/controls/menu.h"
 #include "oneui/controls/popup.h"
+#include "oneui/controls/select.h"
 #include "oneui/controls/terminal_view.h"
 #include "oneui/layout/overlay_host.h"
 #include "oneui/layout/panel.h"
+#include "oneui/layout/scroll_view.h"
 #include "oneui/layout/stack.h"
 #include "oneui/view.h"
 
@@ -932,6 +935,182 @@ void testCommittedTextAndProgrammaticFocusReachNestedTerminal() {
         1);
 }
 
+void testModalDialogScrollViewRoutesSelectPopupPointerCommit() {
+    oneui::OverlayHost host;
+    NullCanvas canvas;
+    host.setFrame(oneui::Rect{0.0f, 0.0f, 800.0f, 600.0f});
+
+    auto background = std::make_shared<oneui::Button>(L"Background");
+    background->setFrame(oneui::Rect{20.0f, 20.0f, 120.0f, 36.0f});
+    int backgroundClicks = 0;
+    background->setOnClick([&] { ++backgroundClicks; });
+    auto content = std::make_shared<oneui::View>();
+    content->add(background);
+    host.setContent(content);
+
+    auto select = std::make_shared<oneui::Select>();
+    select->setItems({L"Password", L"Password + MFA", L"Private key"});
+    select->setSelectedIndex(0);
+    select->setPreferredSize(oneui::Size{220.0f, 30.0f});
+    int changes = 0;
+    select->setOnChanged([&](int) { ++changes; });
+
+    auto leadingSpace = std::make_shared<oneui::View>();
+    leadingSpace->setPreferredSize(oneui::Size{0.0f, 120.0f});
+    auto form = std::make_shared<oneui::Stack>(oneui::StackDirection::Column);
+    form->setPreferredSize(oneui::Size{0.0f, 520.0f});
+    form->setGap(8.0f);
+    form->add(leadingSpace);
+    form->add(select);
+
+    auto scroll = std::make_shared<oneui::ScrollView>();
+    scroll->setContentHeight(520.0f);
+    scroll->setContent(form);
+
+    auto dialog = std::make_shared<oneui::Dialog>();
+    dialog->setTitle(L"Host editor");
+    dialog->setContent(scroll);
+    host.addAnchoredOverlay(
+        dialog,
+        oneui::OverlayOptions::modal(100),
+        oneui::Size{520.0f, 360.0f},
+        oneui::Insets{},
+        1,
+        1);
+
+    host.paint(canvas);
+    scroll->setScrollOffset(104.0f);
+    host.paint(canvas);
+    expectEqual("Nested Select test uses a non-zero scroll offset", scroll->scrollOffset() > 0.0f ? 1 : 0, 1);
+
+    const oneui::MouseEvent fieldClick{
+        oneui::Point{select->frame().x + 10.0f, select->frame().y + 10.0f}};
+    const oneui::MouseEvent secondOptionClick{
+        oneui::Point{select->frame().x + 10.0f, select->frame().y + 79.0f}};
+
+    expectEqual("Nested Select field mouse-move is routed", host.onMouseMove(fieldClick) ? 1 : 0, 1);
+    expectEqual("Nested Select field mouse-down is routed", host.onMouseDown(fieldClick) ? 1 : 0, 1);
+    expectEqual("Nested Select field mouse-up is routed", host.onMouseUp(fieldClick) ? 1 : 0, 1);
+    expectEqual("Nested Select opens above dialog siblings", select->paintsAboveSiblings() ? 1 : 0, 1);
+
+    expectEqual("Nested Select option mouse-move is routed", host.onMouseMove(secondOptionClick) ? 1 : 0, 1);
+    expectEqual("Nested Select remains open after option hover", select->paintsAboveSiblings() ? 1 : 0, 1);
+    expectEqual("Nested Select option mouse-down is routed", host.onMouseDown(secondOptionClick) ? 1 : 0, 1);
+    expectEqual("Nested Select option mouse-up is routed", host.onMouseUp(secondOptionClick) ? 1 : 0, 1);
+    expectEqual("Nested Select commits expected option", select->selectedIndex(), 1);
+    expectEqual("Nested Select emits exactly one change", changes, 1);
+    expectEqual("Nested Select closes after commit", select->paintsAboveSiblings() ? 1 : 0, 0);
+
+    const oneui::MouseEvent blockedBackgroundClick{oneui::Point{40.0f, 36.0f}};
+    expectEqual("Modal host consumes outside mouse-down", host.onMouseDown(blockedBackgroundClick) ? 1 : 0, 1);
+    expectEqual("Modal host consumes outside mouse-up", host.onMouseUp(blockedBackgroundClick) ? 1 : 0, 1);
+    expectEqual("Modal host blocks background button", backgroundClicks, 0);
+}
+
+void testNestedViewRoutesElevatedSelectOutsideParentBounds() {
+    oneui::OverlayHost host;
+    NullCanvas canvas;
+    host.setFrame(oneui::Rect{0.0f, 0.0f, 800.0f, 600.0f});
+
+    auto select = std::make_shared<oneui::Select>();
+    select->setItems({L"Password", L"Private key", L"Interactive"});
+    select->setSelectedIndex(0);
+
+    auto inner = std::make_shared<oneui::View>();
+    inner->add(select);
+    auto outer = std::make_shared<oneui::View>();
+    outer->add(inner);
+    host.addAnchoredOverlay(
+        outer,
+        oneui::OverlayOptions::modal(100),
+        oneui::Size{300.0f, 60.0f},
+        oneui::Insets{},
+        1,
+        1);
+
+    host.paint(canvas);
+    const oneui::Rect overlayFrame = outer->frame();
+    inner->setFrame(overlayFrame);
+    select->setFrame(oneui::Rect{
+        overlayFrame.x + 10.0f,
+        overlayFrame.y + 10.0f,
+        220.0f,
+        30.0f});
+
+    const oneui::MouseEvent fieldClick{
+        oneui::Point{select->frame().x + 10.0f, select->frame().y + 10.0f}};
+    const oneui::MouseEvent thirdOptionClick{
+        oneui::Point{select->frame().x + 10.0f, select->frame().y + 105.0f}};
+    expectEqual(
+        "Elevated Select regression clicks outside the parent bounds",
+        outer->frame().contains(thirdOptionClick.position) ? 1 : 0,
+        0);
+
+    expectEqual("Elevated Select field mouse-move is routed", host.onMouseMove(fieldClick) ? 1 : 0, 1);
+    expectEqual("Elevated Select field mouse-down is routed", host.onMouseDown(fieldClick) ? 1 : 0, 1);
+    expectEqual("Elevated Select field mouse-up is routed", host.onMouseUp(fieldClick) ? 1 : 0, 1);
+    expectEqual("Nested views surface elevated Select painting", outer->paintsAboveSiblings() ? 1 : 0, 1);
+    expectEqual("Elevated Select option mouse-move is routed", host.onMouseMove(thirdOptionClick) ? 1 : 0, 1);
+    expectEqual("Elevated Select remains open after option hover", select->paintsAboveSiblings() ? 1 : 0, 1);
+    expectEqual("Elevated Select option mouse-down is routed", host.onMouseDown(thirdOptionClick) ? 1 : 0, 1);
+    expectEqual("Elevated Select option mouse-up is routed", host.onMouseUp(thirdOptionClick) ? 1 : 0, 1);
+    expectEqual("Elevated Select commits outside parent bounds", select->selectedIndex(), 2);
+}
+
+void testNestedOverlayHostPropagatesElevatedSelectToAncestors() {
+    oneui::OverlayHost rootHost;
+    NullCanvas canvas;
+    rootHost.setFrame(oneui::Rect{0.0f, 0.0f, 800.0f, 600.0f});
+
+    auto select = std::make_shared<oneui::Select>();
+    select->setItems({L"Password", L"Private key", L"Interactive"});
+    select->setSelectedIndex(0);
+
+    auto dialogContent = std::make_shared<oneui::View>();
+    dialogContent->add(select);
+    auto dialog = std::make_shared<oneui::View>();
+    dialog->add(dialogContent);
+
+    auto nestedHost = std::make_shared<oneui::OverlayHost>();
+    nestedHost->setFrame(rootHost.frame());
+    nestedHost->addAnchoredOverlay(
+        dialog,
+        oneui::OverlayOptions::modal(100),
+        oneui::Size{300.0f, 60.0f},
+        oneui::Insets{},
+        1,
+        1);
+
+    auto rootContent = std::make_shared<oneui::View>();
+    rootContent->add(nestedHost);
+    rootHost.setContent(rootContent);
+    rootHost.paint(canvas);
+
+    const oneui::Rect dialogFrame = dialog->frame();
+    dialogContent->setFrame(dialogFrame);
+    select->setFrame(oneui::Rect{
+        dialogFrame.x + 10.0f,
+        dialogFrame.y + 10.0f,
+        220.0f,
+        30.0f});
+
+    const oneui::MouseEvent fieldClick{
+        oneui::Point{select->frame().x + 10.0f, select->frame().y + 10.0f}};
+    const oneui::MouseEvent thirdOptionClick{
+        oneui::Point{select->frame().x + 10.0f, select->frame().y + 105.0f}};
+
+    expectEqual("Nested OverlayHost field mouse-move is routed", rootHost.onMouseMove(fieldClick) ? 1 : 0, 1);
+    expectEqual("Nested OverlayHost field mouse-down is routed", rootHost.onMouseDown(fieldClick) ? 1 : 0, 1);
+    expectEqual("Nested OverlayHost field mouse-up is routed", rootHost.onMouseUp(fieldClick) ? 1 : 0, 1);
+    expectEqual("Nested OverlayHost surfaces elevated overlay state", nestedHost->paintsAboveSiblings() ? 1 : 0, 1);
+    expectEqual("Ancestor View sees nested OverlayHost elevation", rootContent->paintsAboveSiblings() ? 1 : 0, 1);
+    expectEqual("Nested OverlayHost option mouse-move is routed", rootHost.onMouseMove(thirdOptionClick) ? 1 : 0, 1);
+    expectEqual("Nested OverlayHost keeps Select open after hover", select->paintsAboveSiblings() ? 1 : 0, 1);
+    expectEqual("Nested OverlayHost option mouse-down is routed", rootHost.onMouseDown(thirdOptionClick) ? 1 : 0, 1);
+    expectEqual("Nested OverlayHost option mouse-up is routed", rootHost.onMouseUp(thirdOptionClick) ? 1 : 0, 1);
+    expectEqual("Nested OverlayHost commits option outside dialog", select->selectedIndex(), 2);
+}
+
 } // namespace
 
 int main() {
@@ -964,6 +1143,9 @@ int main() {
     testPopupModalModeCombinesFocusTrapAndPointerBlocker();
     testFocusedPopupReceivesEscapeThroughOverlayHost();
     testCommittedTextAndProgrammaticFocusReachNestedTerminal();
+    testModalDialogScrollViewRoutesSelectPopupPointerCommit();
+    testNestedViewRoutesElevatedSelectOutsideParentBounds();
+    testNestedOverlayHostPropagatesElevatedSelectToAncestors();
 
     if (failures != 0) {
         std::cerr << failures << " overlay host behavior test(s) failed\n";

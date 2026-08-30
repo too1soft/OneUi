@@ -42,7 +42,7 @@ private:
     SelectStyle resolvedOptionStyle(int index) const;
     bool hasInteractionState() const override;
     void resetInteractionState() override;
-    // Local inline popup geometry, named to match future PopupPlacement/OverlayHost handoff.
+    // Local inline popup geometry resolved against the stable paint viewport.
     float popupRowHeight() const;
     Rect popupSurfaceRect() const;
     Rect popupOptionRect(int index) const;
@@ -70,6 +70,7 @@ private:
     LightDismissModel popup_;
     Binding<int> selectedBinding_;
     std::optional<SelectStyleOverride> styleOverride_;
+    std::optional<Rect> popupViewport_;
     std::function<void(int)> onChanged_;
 };
 

@@ -88,6 +88,14 @@ void Menu::addSeparator() {
     invalidate();
 }
 
+void Menu::clearItems() {
+    entries_.clear();
+    itemCount_ = 0;
+    hoveredEntry_ = -1;
+    pressedEntry_ = -1;
+    invalidate();
+}
+
 void Menu::setItemDisabled(int index, bool disabled) {
     for (auto& entry : entries_) {
         if (entry.kind == Entry::Kind::Item && entry.itemIndex == index) {

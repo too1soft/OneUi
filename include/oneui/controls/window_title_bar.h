@@ -4,7 +4,7 @@
 #include "oneui/icon.h"
 #include "oneui/layout/title_bar_bridge.h"
 #include "oneui/style_sheet.h"
-#include "oneui/widget.h"
+#include "oneui/view.h"
 
 #include <functional>
 #include <array>
@@ -13,7 +13,7 @@
 
 namespace oneui {
 
-class ONEUI_API WindowTitleBar final : public Widget {
+class ONEUI_API WindowTitleBar final : public View {
 public:
     explicit WindowTitleBar(std::wstring title = {});
 
@@ -25,6 +25,7 @@ public:
     // 供样式表按类换肤（如登录页深色标题栏）；空则保持默认皮肤。
     void setVariant(std::string variant);
     void setStyleSheet(std::shared_ptr<StyleSheet> sheet);
+    void setAccessory(std::shared_ptr<Widget> accessory);
     void setOnMinimize(std::function<void()> callback);
     void setOnMaximize(std::function<void()> callback);
     void setOnClose(std::function<void()> callback);
@@ -37,6 +38,7 @@ public:
     bool tickAnimations(double nowMs) override;
 
 private:
+    void layoutChildren() override;
     ProductWindowChromeLayout chromeLayout() const;
     TitleBarBridgeLayout titleBarLayout() const;
     StyleBox visualButtonStyle(TitleBarButtonId id, StyleBox target) const;
@@ -48,6 +50,7 @@ private:
     std::string variant_;
     IconSymbol iconSymbol_ = IconSymbol::BrandBloom;
     std::shared_ptr<StyleSheet> styleSheet_;
+    std::shared_ptr<Widget> accessory_;
     bool maximized_ = false;
     TitleBarButtonId hoveredButton_ = TitleBarButtonId::None;
     TitleBarButtonId pressedButton_ = TitleBarButtonId::None;

@@ -113,12 +113,25 @@ void testStackStyleBoxPaintsContainerBackground() {
     expectNear("Stack style box fill red", static_cast<float>(canvas.lastColor.r), 17.0f);
 }
 
+void testContentExtentUsesPreferredChildrenGapAndPadding() {
+    oneui::Stack stack(oneui::StackDirection::Column);
+    stack.setGap(7.0f);
+    stack.setPadding(oneui::Insets{2.0f, 3.0f, 4.0f, 5.0f});
+    stack.add(std::make_shared<LayoutProbe>(oneui::Size{140.0f, 19.0f}));
+    stack.add(std::make_shared<LayoutProbe>(oneui::Size{80.0f, 32.0f}));
+    stack.add(std::make_shared<LayoutProbe>(oneui::Size{120.0f, 28.0f}));
+
+    expectNear("Stack content width", stack.contentWidth(), 148.0f);
+    expectNear("Stack content height", stack.contentHeight(), 99.0f);
+}
+
 } // namespace
 
 int main() {
     testRowDistributesRemainingWidthToFlexibleChildren();
     testColumnDistributesRemainingHeightToFlexibleChildren();
     testStackStyleBoxPaintsContainerBackground();
+    testContentExtentUsesPreferredChildrenGapAndPadding();
 
     if (failures != 0) {
         std::cerr << failures << " stack behavior test(s) failed.\n";

@@ -4,104 +4,145 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-2ea44f.svg)](LICENSE)
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-00599c.svg)](CMakeLists.txt)
-[![Platform](https://img.shields.io/badge/platform-Windows-0078d4.svg)](#平台状态)
-[![Status](https://img.shields.io/badge/status-early%20development-f59e0b.svg)](#项目状态)
+[![Platform](https://img.shields.io/badge/backend-Win32-0078d4.svg)](#平台与成熟度)
+[![UTF-8 ABI](https://img.shields.io/badge/UTF--8%20ABI-v16-6f42c1.svg)](include/oneui/oneui_c_api.h)
+[![Version](https://img.shields.io/badge/version-0.1.0-f59e0b.svg)](CMakeLists.txt)
 
-OneUI 是一个面向桌面应用的原生、自绘 UI 框架。它使用 C++17 构建，以 Skia raster
-作为当前渲染基础，通过保留式控件树、布局系统、响应式状态和 CSS-like 样式表组织界面，
-不依赖浏览器或 WebView。
+OneUI 是一个 **Windows 优先、原生、自绘、保留式** 的桌面 UI 框架。它以 C++17
+实现，使用 Skia raster 渲染，通过 `Widget` / `View` 树、布局容器、响应式状态和
+CSS-like 样式表构建界面，不依赖浏览器、HTML 或 WebView。
 
-项目当前以 Win32 为主线，目标是为工具软件、运维客户端和企业桌面应用提供稳定、紧凑、
-可测试的原生 GUI 基础。OneUI 同时提供 C++ API、稳定 UTF-8 C ABI 和安全 Rust 绑定。
+当前仓库同时提供：
 
-> **项目状态：早期开发阶段。** Win32 后端、Gallery、组件库和 MSVC SDK 已可运行，
-> 但 API 仍可能调整。Linux 与 macOS 目前只有平台骨架，尚不能用于生产应用。
+- 公开 C++ API；
+- 版本化的 UTF-8 C ABI（当前 `ONEUI_UTF8_ABI_VERSION = 16`）；
+- `oneui-sys` 原始 Rust FFI 和 `oneui` 安全 Rust 包装层；
+- Win32 窗口、输入、DPI、剪贴板、文件对话框、托盘和 Skia 呈现后端；
+- Gallery、远程组件 Gallery、SDK 打包脚本和 13 个 CTest 行为/契约测试目标。
 
-## 为什么选择 OneUI
+> **当前版本是 0.1.0 开发版。** Win32 主线已经可以承载真实桌面产品，但公开 API、
+> C ABI 和组件细节仍可能在 `0.x` 阶段调整。Linux 与 macOS 目录目前只是明确报错的
+> 平台骨架，不是可运行后端。
 
-- **真正的原生桌面运行时**：没有 HTML、JavaScript、浏览器进程或 WebView 依赖。
-- **一致的自绘控件**：控件行为和视觉由 OneUI 管理，不受系统控件主题差异影响。
-- **清晰的平台边界**：核心控件与 Win32 窗口、输入、DPI、IME、剪贴板和呈现层分离。
-- **面向复杂工具界面**：包含产品外壳、虚拟列表、树、表格、终端和实时画面等能力。
-- **跨语言接入**：C++ 应用可直接使用，Rust 应用通过 UTF-8 C ABI 和安全包装层接入。
-- **可分发 SDK**：MSVC 产品构建使用静态 MSVC runtime 与 vendored static Skia，
-  终端用户无需另外安装 MSYS2、Skia 或 Visual C++ Runtime。
+## 适用场景
 
-## 项目状态
+OneUI 重点服务高信息密度的原生工具界面，例如：
 
-OneUI 已经超出最初的窗口与 Button 原型，目前包括：
+- SSH/终端、运维和远程控制客户端；
+- 企业控制台、配置工具和内部桌面应用；
+- 包含大量列表、树、表格、分栏、浮层和快捷键的工作台；
+- 需要由 C++ 核心与 Rust 产品层共同维护的 Windows 应用；
+- 不希望引入浏览器运行时，同时需要统一视觉和可测试交互的桌面产品。
 
-| 范围 | 当前能力 |
+## 当前能力总览
+
+| 范围 | 已实现能力 |
 | --- | --- |
-| 基础 | `Widget`、`View`、`Canvas`、动画、`State<T>` / `Binding<T>` |
-| 布局 | Stack、Grid、ReorderableGrid、Wrap、Dock、Split、Scroll、Panel、Overlay、App/Product Shell |
-| 表单 | Button、IconButton、TextField、Checkbox、Switch、RadioGroup、Slider、Select、FormField |
-| 导航与数据 | Tabs、List、VirtualList、TreeView、Table、Menu、NavItem；列表、树和网格均可报告稳定的重排请求 |
-| 反馈与容器 | Card、Badge、ProgressBar、Dialog、Popup、Toast、StateView、StatusStrip |
-| 专用视图 | TerminalView、LogView、RealtimeFrameView、RemoteInputRegion |
-| 平台与互操作 | Win32 window、DPI/monitor、clipboard、IME 路径、平台确认与文本/密码提示、UTF-8 C ABI、Rust bindings |
+| 基础运行时 | `Widget`、`View`、逻辑/物理像素、焦点链、命中测试、键盘/鼠标/滚轮、动画帧、tooltip、无障碍语义元数据 |
+| 响应式状态 | `State<T>`、`Binding<T>`、窗口线程 dispatcher、后台任务投递、控件线程安全 handle |
+| 渲染 | `Canvas`、Skia raster、文字/图元/渐变/阴影/像素帧、clip 与稳定 viewport bounds |
+| 样式 | CSS-like selector、class、伪状态、custom properties、typed style adapter、颜色/透明度过渡 |
+| 布局 | Stack、Grid、Wrap、Panel、ScrollView、SplitView、OverlayHost、ReorderableGrid、AppShell、ProductShell |
+| 表单 | Button、IconButton、TextField/TextArea、Checkbox、Switch、RadioGroup、Slider、Select、FormField |
+| 导航与数据 | Tabs、List、VirtualList、TreeView、Table、Menu、NavItem；选择、激活、上下文菜单、重排和稳定拖拽 ID |
+| 反馈与容器 | Card、Badge、IconBadge、ProgressBar、Sparkline、Dialog、Popup、Toast、StateView、StatusStrip |
+| 专用视图 | TerminalView、LogView、RealtimeFrameView、RemoteInputRegion、WindowTitleBar |
+| 平台服务 | Win32 Window、窗口状态持久化、DPI/显示器、剪贴板、文件/目录选择、confirm/prompt、托盘、全局 raw-key |
+| 可观测性 | 真实控件 frame、Stack 内容尺寸、交互 trace、隐私安全的 OneUI 布局树 JSON 快照 |
+| 互操作 | C++ API、459 个公开 C ABI 函数声明、UTF-8 ABI v16、safe Rust wrappers、回调 panic 边界 |
 
-这些组件的成熟度并不完全相同。准备在产品中使用某个组件前，请查阅
-[组件参考](docs/14-component-reference.md)和[组件清单](docs/07-component-inventory.md)。
+完整逐组件状态、语言覆盖和限制见
+[组件清单](docs/07-component-inventory.md)与
+[组件参考](docs/14-component-reference.md)。
 
-## 平台状态
+## 本次工作区新增/增强能力
+
+当前代码相对上一基线重点增加：
+
+- `Sparkline`：归一化时间序列绘制，并提供 C ABI 与 Rust 安全包装；
+- `Tabs`：紧凑宽度、按文本测量、图标、滚轮溢出、关闭、上下文菜单与受控重排请求；
+- `Table`：结构化 UTF-8 行列、可见行绘制、平滑滚动、单选/多选、键盘命令、编辑/删除请求、内部重排与外部稳定 ID 拖拽；
+- 布局诊断：窗口同步提交布局后导出 JSON；包含节点关系、实际/首选 frame、样式盒和脱敏语义信息；
+- 标题栏：可插入交互附件，并可显式划分可拖拽区与可点击区；
+- 通用交互：tooltip、`InteractiveSurface` pointer move/hover、`TextField` submit、`SplitView` ratio committed；
+- 浮层与命中：嵌套 OverlayHost、越界 popup、滚动容器内 Select 的路由与 viewport 翻转；
+- Rust：新增 `WidgetHandle`、`TextFieldHandle`、`SparklineHandle`、`TableHandle`、布局快照和交互 trace 等产品集成能力。
+
+## 平台与成熟度
 
 | 平台 | 状态 | 说明 |
 | --- | --- | --- |
-| Windows / Win32 | 主线可运行 | 当前开发、测试、Gallery 和 SDK 发布平台 |
-| Windows 7+ | 兼容目标 | API 与依赖选择以兼容为目标，仍需持续做真实系统验收 |
-| Linux | 平台骨架 | X11/Wayland 后端尚未达到可用状态 |
-| macOS | 平台骨架 | Cocoa 后端尚未达到可用状态 |
+| Windows / Win32 | 当前唯一可运行后端 | 开发、Gallery、测试、SDK 和 Rust 产品接入均以此为主线 |
+| Windows 7 API 级别 | 源码兼容目标 | CMake 定义 `_WIN32_WINNT=0x0601`；最终系统兼容性仍取决于所选 MSVC/Skia 构建产物 |
+| Linux | 未实现 | `Window::create` 与剪贴板明确抛出未实现错误 |
+| macOS | 未实现 | `Window::create` 与剪贴板明确抛出未实现错误 |
+
+组件成熟度分为三层：
+
+1. **主线**：已被 Gallery、C ABI/Rust 产品或行为测试覆盖，可用于当前 Win32 产品；
+2. **可用**：核心交互已实现，但仍有明确的高级能力缺口；
+3. **实验性**：API 已存在，适合验证和继续演进，不应解读为稳定版承诺。
+
+精确分类以[组件清单](docs/07-component-inventory.md)为准。
 
 ## 架构
 
 ```text
-Application (C++ or Rust)
+Application (C++ / Rust / another FFI language)
         |
-        +-- C++ API / UTF-8 C ABI / safe Rust bindings
+        +-- public C++ API
+        +-- UTF-8 C ABI v16
+        +-- oneui-sys + safe oneui Rust wrappers
         |
 OneUI retained widget tree
-        +-- state and binding
-        +-- layout and focus
+        +-- state, binding and selection model
+        +-- layout, focus, hit testing and overlays
         +-- CSS-like style sheet and typed adapters
-        +-- input dispatch and accessibility semantics
+        +-- callbacks, animation and accessibility metadata
         |
 Canvas abstraction
         |
 Skia raster renderer
         |
-Platform backend (Win32 today)
+Win32 backend
+        +-- window/message loop/raw key/IME path
+        +-- DPI/monitor/clipboard/file dialogs/tray
+        +-- logical-to-physical presentation
 ```
 
-核心代码不应包含产品专用分支；可复用控件必须先进入 OneUI，并带有行为测试和稳定的
-跨语言边界。架构细节见[架构说明](docs/01-architecture.md)和
-[OneUI 契约红线](docs/24-oneui-contract-red-lines.md)。
+核心代码保持产品无关：可复用的控件、布局、输入和样式能力应先进入 OneUI，再通过 C ABI
+或 Rust 包装被产品使用。详见[架构说明](docs/01-architecture.md)和
+[契约红线](docs/24-oneui-contract-red-lines.md)。
 
 ## 仓库结构
 
 ```text
-include/oneui/        公开 C++ API
-src/core/             跨平台控件、布局、样式和状态实现
-src/platform/         平台后端；当前实现为 Win32
-src/capi/             UTF-8 C ABI
-bindings/rust/        oneui-sys 与安全 Rust 包装层
-examples/gallery/     组件 Gallery
-tests/                控件、布局、终端、C ABI 与后端契约测试
-docs/                 设计、组件、接入和迁移文档
-scripts/              Skia、OneUI、SDK、审计和测试脚本
+include/oneui/        公开 C++ 头文件与 oneui_c_api.h
+src/core/             跨平台控件、布局、样式、状态和绘制逻辑
+src/platform/win32/   当前可运行的 Win32 后端
+src/platform/linux/   未接线的平台骨架
+src/platform/macos/   未接线的平台骨架
+src/capi/             C ABI 实现与跨边界生命周期管理
+bindings/rust/        oneui-sys 与安全 oneui crate
+examples/gallery/     C++ 组件 Gallery
+examples/remote_component_gallery/ 远程/产品组件示例
+tests/                行为、C ABI、后端和平台契约测试
+docs/                 当前规范、组件参考、设计记录和接入说明
+scripts/              Skia 构建、SDK、审计、红线与 smoke test
+website/              Nuxt 文档/组件展示站点源代码
 ```
 
 ## Windows 构建
 
 ### 前置条件
 
-- Git、Python 3、PowerShell
-- CMake 3.16 或更高版本
-- Visual Studio / Build Tools，包含 MSVC C++ 工具链与 Windows SDK
-- Ninja（Visual Studio 安装中通常已包含）
+- Git、Python 3、PowerShell；
+- CMake 3.16 或更高版本；
+- Visual Studio / Build Tools（MSVC C++ 工具链与 Windows SDK）；
+- Ninja；
+- 首次构建需要下载并编译 vendored Skia。
 
-首次构建需要下载并编译 Skia。以下路径请按本机 Visual Studio 和 Windows SDK
-安装位置调整：
+### 推荐：MSVC + 静态 Skia
 
 ```powershell
 git clone https://github.com/too1soft/OneUi.git
@@ -109,28 +150,28 @@ cd OneUi
 
 $vs = "C:\Program Files\Microsoft Visual Studio\2022\Community"
 $windowsSdk = "C:/Program Files (x86)/Windows Kits/10"
-$env:PATH = "$vs\Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja;$env:PATH"
 
 .\scripts\build-skia-static.ps1 `
   -Fetch -SyncDeps -Generate -Build `
   -WinVc ($vs.Replace("\", "/") + "/VC") `
   -WinSdk $windowsSdk
 
-.\scripts\build-oneui-msvc-bundled.ps1 -VsInstall $vs
+.\scripts\build-oneui-msvc-bundled.ps1 `
+  -VsInstall $vs `
+  -Arch x64 `
+  -Configuration RelWithDebInfo
 ```
 
-需要代理时，可给 Skia 脚本增加：
+如需代理，给 Skia 脚本增加 `-Proxy http://127.0.0.1:7897`。
 
-```powershell
--Proxy http://127.0.0.1:7897
-```
-
-构建产物：
+主要产物：
 
 ```text
 build/msvc-bundled-static/oneui.dll
 build/msvc-bundled-static/oneui.lib
+build/msvc-bundled-static/oneui.pdb            # RelWithDebInfo 时
 build/msvc-bundled-static/examples/gallery/oneui_gallery.exe
+build/msvc-bundled-static/examples/remote_component_gallery/oneui_remote_component_gallery.exe
 ```
 
 运行 Gallery：
@@ -139,6 +180,8 @@ build/msvc-bundled-static/examples/gallery/oneui_gallery.exe
 $env:PATH = "$(Resolve-Path .\build\msvc-bundled-static);$env:PATH"
 & .\build\msvc-bundled-static\examples\gallery\oneui_gallery.exe
 ```
+
+MinGW/UCRT 预设和其他 Skia 模式见[入门指南](docs/12-getting-started.md)。
 
 ## 最小 C++ 示例
 
@@ -149,11 +192,13 @@ $env:PATH = "$(Resolve-Path .\build\msvc-bundled-static);$env:PATH"
 
 int main() {
     auto root = std::make_shared<oneui::Stack>(oneui::StackDirection::Column);
-    root->setGap(12.0f);
     root->setPadding(oneui::Insets{16.0f});
+    root->setGap(12.0f);
 
     auto title = std::make_shared<oneui::Label>(L"Hello, OneUI");
     auto button = std::make_shared<oneui::Button>(L"Continue");
+    button->setOnClick([] { /* application action */ });
+
     root->add(title);
     root->add(button);
 
@@ -164,109 +209,118 @@ int main() {
 }
 ```
 
-完整的窗口与控件组合方式请以
-[`examples/gallery`](examples/gallery)为准。
+`oneui/oneui.h` 汇总常用 API；未纳入总头文件的高级组件可直接包含其公开头文件，例如
+`<oneui/controls/virtual_list.h>`、`<oneui/controls/sparkline.h>` 或
+`<oneui/controls/window_title_bar.h>`。
 
-## SDK 与 CMake 接入
+## CMake / SDK 接入
 
-生成可分发 SDK：
+生成 SDK：
 
 ```powershell
 .\scripts\package-sdk.ps1 -Toolchain msvc-bundled-static
 ```
 
-输出位于：
-
-```text
-dist/OneUI-SDK-msvc-bundled-static.zip
-```
-
-应用侧 CMake：
+SDK 包输出到 `dist/OneUI-SDK-msvc-bundled-static.zip`。应用侧：
 
 ```cmake
 cmake_minimum_required(VERSION 3.16)
 project(my_oneui_app LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
-find_package(OneUI REQUIRED)
+find_package(OneUI REQUIRED CONFIG)
 
 add_executable(my_oneui_app main.cpp)
 target_link_libraries(my_oneui_app PRIVATE OneUI::oneui)
 ```
 
-配置时让 `CMAKE_PREFIX_PATH` 指向解压后的 SDK 根目录，并把 `bin/oneui.dll`
-放在应用可执行文件旁边。详见[入门指南](docs/12-getting-started.md)。
+配置时把 `CMAKE_PREFIX_PATH` 指向解压后的 SDK，运行时把 `bin/oneui.dll` 放在应用旁边。
+
+## C ABI
+
+[`include/oneui/oneui_c_api.h`](include/oneui/oneui_c_api.h) 是唯一权威 ABI 声明：
+
+- opaque handle + POD struct + 显式 destroy；
+- 新 API 使用带长度的 `OneUiUtf8String`；
+- 数组和字符串在调用期间被 OneUI 拷贝；
+- callback 使用函数指针和调用方 `user_data`；
+- ABI v16 在加载时可由 `oneui_utf8_abi_version()` 校验；
+- 旧 `wchar_t*` 入口仅为现有 Windows 调用方保留，不应继续扩展。
+
+生命周期、线程、回调和组件映射见 [C ABI 接入指南](docs/c-abi-integration.md)。
 
 ## Rust 绑定
 
-`bindings/rust/oneui-sys` 提供原始 UTF-8 C ABI，`bindings/rust/oneui` 提供所有权明确的
-安全包装层。先构建 C++ 库，再运行 Rust 测试：
+`bindings/rust/oneui-sys` 原样映射 C ABI；`bindings/rust/oneui` 提供所有权、回调清理、
+UI 线程 dispatcher、panic 捕获和线程安全 handle。
 
 ```powershell
 $env:ONEUI_LIB_DIR = (Resolve-Path .\build\msvc-bundled-static)
 $env:PATH = "$env:ONEUI_LIB_DIR;$env:PATH"
-
-OneUI 的 Rust 安全绑定还提供窗口归属的原生文件对话框：`FileDialogOptions::open`、
-`FileDialogOptions::save` 与 `FileDialogOptions::select_folder`。文件名、路径和过滤器始终
-通过 UTF-8 ABI 传递；产品代码不需要直接调用 Win32 对话框。
-窗口线程中的命令回调可直接调用 `UiDispatcher::confirm` 与 `UiDispatcher::prompt`；
-后台任务需要等待用户输入时使用对应的 `confirm_blocking` 与 `prompt_blocking`。两组 API
-都由窗口拥有，调用线程约束明确，产品无需自行创建平台消息循环。
-后台加载完整数据集时，`VirtualListHandle::set_items` 会将一次整表修订投递到所属窗口线程；
-单行实时状态仍使用 `update_item`，从而保留滚动与选择状态。
 cargo test --manifest-path .\bindings\rust\Cargo.toml
 ```
 
-新 Rust 代码应使用 UTF-8 API；旧 `wchar_t*` ABI 仅用于兼容已有 Windows 调用方。
+安全层目前覆盖窗口/dispatcher、样式表、布局容器、浮层、常用输入控件、Tabs、List、
+VirtualList、TreeView、Table、TerminalView、LogView、Sparkline 和文件对话框等产品主线。
+详见 [Rust bindings README](bindings/rust/README.md)。
 
-## 测试与质量检查
+## 测试与质量门禁
 
 ```powershell
+cmake --build .\build\msvc-bundled-static
 ctest --test-dir .\build\msvc-bundled-static --output-on-failure
 
+$env:ONEUI_LIB_DIR = (Resolve-Path .\build\msvc-bundled-static)
+$env:PATH = "$env:ONEUI_LIB_DIR;$env:PATH"
+cargo test --manifest-path .\bindings\rust\Cargo.toml
+
+.\scripts\check-ui-red-lines.ps1
 .\scripts\audit-runtime.ps1 `
   -Binary .\build\msvc-bundled-static\oneui.dll `
   -Mode product
-
-.\scripts\check-ui-red-lines.ps1
 .\scripts\test-sdk-consumer.ps1
 ```
 
-行为测试覆盖控件状态、布局、浮层、滚动、树、终端、实时画面、C ABI、DPI 和 Win32
-后端契约。新增或修复行为时必须同时增加相应测试。
+13 个 CTest 目标覆盖控件、选择模型、Overlay、ScrollView、Stack、实时画面、远程输入、
+TerminalView、TreeView、Panel、C ABI、显示器与 Win32 后端契约。Rust crate 另有 safe-wrapper
+和回调生命周期测试。
 
-## 当前限制
+## 文档导航
 
-- Linux 和 macOS 后端尚不可用。
-- 公开 API 和 ABI 仍处于 `0.x` 收敛阶段。
-- 复杂文本 shaping、完整 IME、平台可访问性桥接和视觉快照仍需完善。
-- 部分高级控件已具备基础能力，但交互和可访问性尚未达到稳定版承诺。
-- OneUI 不是浏览器 CSS 实现；StyleSheet 提供 CSS-like selector/state 和类型化适配器。
+从 [docs/README.md](docs/README.md) 开始。常用入口：
 
-## 路线图
+- [架构](docs/01-architecture.md)
+- [入门与构建](docs/12-getting-started.md)
+- [组件清单](docs/07-component-inventory.md)
+- [组件参考](docs/14-component-reference.md)
+- [样式表](docs/20-style-sheet.md)
+- [可访问性](docs/15-accessibility.md)
+- [C ABI 接入](docs/c-abi-integration.md)
+- [Rust 绑定](bindings/rust/README.md)
+- [平台后端契约](docs/28-platform-backend-contract.md)
+- [TerminalView](docs/33-terminal-view.md)
+- [TreeView](docs/34-tree-view.md)
 
-近期重点：
+## 已知限制
 
-1. 稳定 Win32 后端、文本输入、DPI、焦点、可访问性和 SDK 契约。
-2. 继续完善虚拟化数据组件与终端等高性能视图。
-3. 建立可运行的 Linux 后端并通过同一套平台契约测试。
-4. 在 ABI 和组件行为稳定后发布首个公开版本。
+- 只有 Win32 后端可运行；Linux/macOS 尚未实现。
+- `0.1.0` 仍在收敛期，公开 API 与 ABI 版本可能变化。
+- StyleSheet 是受控 CSS-like 子集，不是浏览器 CSS 引擎。
+- OneUI 已保存无障碍角色、名称、描述、值和状态，但 Win32 UI Automation 平台桥仍未完成。
+- 文本输入支持基础编辑、选择、撤销/重做、粘贴、密码和提交；复杂 shaping 与完整 IME 场景仍需持续验证。
+- Table 已支持虚拟化绘制和命令回调，但暂不内置排序、筛选、列 resize 或单元格编辑器。
+- Tabs/Table/Tree/ReorderableGrid 的重排回调只报告请求；产品数据成功更新后再提交新顺序。
+- RealtimeFrameView 当前绘制 BGRA/RGBA 像素；NV12 仅保留协议枚举，尚未实现转换。
+- 布局 JSON 快照用于几何/语义诊断，不等同于像素截图测试。
 
-完整规划见[路线图](docs/02-roadmap.md)。
+## 贡献原则
 
-## 参与贡献
-
-欢迎提交 Issue、设计讨论和 Pull Request。提交代码前请遵循以下原则：
-
-- 可复用能力进入 OneUI，不在框架中加入特定产品名称或特殊分支。
-- 样式通过 token、StyleSheet 和 typed adapter 表达，不在业务控件里堆写死常量。
-- 输入、DPI、焦点、IME、剪贴板等平台差异必须停留在平台边界。
-- C ABI 使用带长度的 UTF-8 字符串，并明确所有权、线程和回调生命周期。
-- 行为修改需要测试；性能关键列表和实时视图需要有可重复的性能验证。
-
-推荐先阅读[设计语言](docs/06-design-language.md)、
-[组件开发指南](docs/13-authoring-guide.md)和
-[下游产品接入规范](docs/17-downstream-product-integration-standard.md)。
+- 可复用能力进入 OneUI，不在框架层添加具体产品名或条件分支；
+- 平台差异停留在 `src/platform`，核心控件不直接依赖 Win32；
+- 新跨语言能力先定义 UTF-8 C ABI，再补齐安全 Rust 生命周期；
+- 输入、焦点、滚动、重排、浮层和线程行为必须有可重复测试；
+- 样式通过 token、StyleSheet 与 typed adapter 表达，避免产品侧 magic number；
+- 修改 ABI 时同步更新版本、`oneui-sys`、安全包装、测试和文档。
 
 ## 许可证
 

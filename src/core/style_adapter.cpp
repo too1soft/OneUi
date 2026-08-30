@@ -279,6 +279,30 @@ ListStyleOverride listStyleOverrideFromStyleSheet(const StyleSheet& sheet, Style
     return override;
 }
 
+TableStyleOverride tableStyleOverrideFromStyleSheet(const StyleSheet& sheet, StyleNode node) {
+    const StyleBox normal = resolveState(sheet, node, StyleStateNone);
+    const StyleBox hovered = resolveState(sheet, node, StyleStateHover);
+    const StyleBox pressed = resolveState(sheet, node, StyleStateActive);
+    const StyleBox selected = resolveState(sheet, std::move(node), StyleStateSelected);
+
+    TableStyleOverride style;
+    style.background = normal.background.color;
+    style.border = normal.borderColor;
+    style.headerBackground = normal.content.backgroundColor;
+    style.headerForeground = normal.placeholderColor;
+    style.cellForeground = normal.foreground;
+    style.gridLine = normal.borderColor;
+    style.rowHovered = hovered.background.color;
+    style.rowPressed = pressed.background.color;
+    style.rowSelected = selected.background.color;
+    style.scrollbarColor = normal.scrollbarColor;
+    style.borderWidth = normal.borderWidth;
+    style.radius = normal.radius;
+    style.scrollbarWidth = normal.scrollbarWidth;
+    style.cellPadding = normal.padding;
+    return style;
+}
+
 TreeViewStyleOverride treeViewStyleOverrideFromStyleSheet(const StyleSheet& sheet, StyleNode node) {
     return listStyleOverrideFromStyleSheet(sheet, std::move(node));
 }

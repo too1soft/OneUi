@@ -56,6 +56,7 @@ public:
     void clearStyleOverride();
     void bindText(State<std::wstring>& state);
     void setOnChanged(std::function<void(const std::wstring&)> callback);
+    void setOnSubmitted(std::function<void(const std::wstring&)> callback);
     void setDisabled(bool disabled) override;
     void setAnimationScheduler(std::function<void()> scheduler) override;
 
@@ -155,6 +156,7 @@ private:
     ColorTransition placeholderTransition_;
     ColorTransition borderTransition_;
     std::function<void(const std::wstring&)> onChanged_;
+    std::function<void(const std::wstring&)> onSubmitted_;
     std::vector<TextEditEntry> undoStack_;
     std::vector<TextEditEntry> redoStack_;
     mutable std::wstring measuredDisplayText_;

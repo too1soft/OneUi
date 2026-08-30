@@ -45,6 +45,7 @@ add_library(oneui_core OBJECT
     src/core/menu.cpp
     src/core/nav_item.cpp
     src/core/progress_bar.cpp
+    src/core/sparkline.cpp
     src/core/product_shell.cpp
     src/core/radio_group.cpp
     src/core/reorderable_grid.cpp

@@ -65,6 +65,17 @@ typedef struct OneUiListItemUtf8 {
     OneUiUtf8String detail;
 } OneUiListItemUtf8;
 
+/* Structured table data. OneUI copies all strings and arrays during calls. */
+typedef struct OneUiTableColumnUtf8 {
+    OneUiUtf8String header;
+    float width;
+} OneUiTableColumnUtf8;
+
+typedef struct OneUiTableRowUtf8 {
+    const OneUiUtf8String* cells;
+    size_t cell_count;
+} OneUiTableRowUtf8;
+
 /*
  * Structured tree data. `id` is a stable opaque identifier; an empty
  * parent_id denotes a root. OneUI copies every field before the call returns.
@@ -372,7 +383,7 @@ enum {
     OneUiTerminalCellOverline = 1u << 11
 };
 
-#define ONEUI_UTF8_ABI_VERSION 13u
+#define ONEUI_UTF8_ABI_VERSION 16u
 
 ONEUI_API const char* oneui_version(void);
 ONEUI_API unsigned int oneui_utf8_abi_version(void);
@@ -391,6 +402,7 @@ ONEUI_API int oneui_window_get_placement(OneUiWindow* window, OneUiWindowPlaceme
 ONEUI_API int oneui_window_set_placement(OneUiWindow* window, const OneUiWindowPlacement* placement);
 ONEUI_API void oneui_window_set_borderless(OneUiWindow* window, int borderless);
 ONEUI_API void oneui_window_set_title_bar_drag_metrics(OneUiWindow* window, float title_bar_height, float reserved_button_width);
+ONEUI_API void oneui_window_set_title_bar_interactive_insets(OneUiWindow* window, float leading_width, float trailing_width);
 ONEUI_API void oneui_window_set_corner_radius(OneUiWindow* window, float radius);
 ONEUI_API void oneui_window_set_close_to_tray(OneUiWindow* window, int close_to_tray);
 ONEUI_API void oneui_window_post(OneUiWindow* window, OneUiVoidCallback callback, void* user_data);
@@ -441,6 +453,18 @@ ONEUI_API int oneui_window_client_height(OneUiWindow* window);
 ONEUI_API int oneui_window_client_pixel_width(OneUiWindow* window);
 ONEUI_API int oneui_window_client_pixel_height(OneUiWindow* window);
 ONEUI_API float oneui_window_dpi_scale(OneUiWindow* window);
+/*
+ * Commits pending layout and serializes the mounted native widget tree. The snapshot is a
+ * flat JSON document containing parent IDs, actual/preferred bounds,
+ * accessibility text/state and the resolved CSS box for every mounted node.
+ * Returns 1 on success, -2 when the output buffer is missing or too small,
+ * and 0 for an invalid window. required_len includes the trailing NUL.
+ */
+ONEUI_API int oneui_window_layout_snapshot_utf8(
+    OneUiWindow* window,
+    char* buffer,
+    size_t buffer_len,
+    size_t* required_len);
 ONEUI_API void oneui_window_set_content(OneUiWindow* window, OneUiWidget* widget);
 ONEUI_API int oneui_window_request_focus(OneUiWindow* window, OneUiWidget* widget, int focus_visible);
 ONEUI_API void oneui_window_set_on_raw_key(
@@ -462,10 +486,13 @@ ONEUI_API int oneui_tray_show_notification(OneUiTray* tray, const wchar_t* title
 
 ONEUI_API void oneui_widget_destroy(OneUiWidget* widget);
 ONEUI_API void oneui_widget_set_preferred_size(OneUiWidget* widget, float width, float height);
+/* Returns the widget's committed logical layout rectangle. */
+ONEUI_API OneUiRect oneui_widget_frame(const OneUiWidget* widget);
 ONEUI_API void oneui_widget_set_disabled(OneUiWidget* widget, int disabled);
 ONEUI_API void oneui_widget_set_tab_stop(OneUiWidget* widget, int tab_stop);
 ONEUI_API void oneui_widget_set_visible(OneUiWidget* widget, int visible);
 ONEUI_API int oneui_widget_focused(const OneUiWidget* widget);
+ONEUI_API void oneui_widget_set_tooltip(OneUiWidget* widget, const wchar_t* tooltip);
 ONEUI_API void oneui_widget_set_classes(OneUiWidget* widget, const char* classes);
 ONEUI_API void oneui_widget_set_style_node(OneUiWidget* widget, const char* tag, const char* classes);
 ONEUI_API void oneui_widget_apply_style_sheet(OneUiWidget* widget, OneUiStyleSheet* style_sheet);
@@ -487,6 +514,8 @@ ONEUI_API void oneui_stack_add(OneUiWidget* stack, OneUiWidget* child);
 ONEUI_API void oneui_stack_set_gap(OneUiWidget* stack, float gap);
 ONEUI_API void oneui_stack_set_padding(OneUiWidget* stack, OneUiInsets insets);
 ONEUI_API void oneui_stack_set_align(OneUiWidget* stack, OneUiStackAlign align);
+ONEUI_API float oneui_stack_content_width(OneUiWidget* stack);
+ONEUI_API float oneui_stack_content_height(OneUiWidget* stack);
 
 /* Resizable two-pane layout with minimum pane constraints. */
 ONEUI_API OneUiWidget* oneui_split_view_create(OneUiSplitOrientation orientation);
@@ -505,6 +534,10 @@ ONEUI_API void oneui_split_view_set_minimum_pane_extent(
     float first,
     float second);
 ONEUI_API void oneui_split_view_set_on_ratio_changed(
+    OneUiWidget* split_view,
+    OneUiFloatCallback callback,
+    void* user_data);
+ONEUI_API void oneui_split_view_set_on_ratio_committed(
     OneUiWidget* split_view,
     OneUiFloatCallback callback,
     void* user_data);
@@ -637,6 +670,10 @@ ONEUI_API OneUiWidget* oneui_progress_bar_create(void);
 ONEUI_API void oneui_progress_bar_set_value(OneUiWidget* progress_bar, double value);
 ONEUI_API double oneui_progress_bar_value(OneUiWidget* progress_bar);
 
+/* Compact time-series visualization. Values are clamped to [0, 1]. */
+ONEUI_API OneUiWidget* oneui_sparkline_create(void);
+ONEUI_API void oneui_sparkline_set_values(OneUiWidget* sparkline, const double* values, size_t count);
+
 ONEUI_API OneUiWidget* oneui_icon_create(int symbol);
 ONEUI_API void oneui_icon_set_symbol(OneUiWidget* icon, int symbol);
 ONEUI_API void oneui_icon_set_color(OneUiWidget* icon, unsigned char r, unsigned char g, unsigned char b, unsigned char a);
@@ -653,11 +690,18 @@ ONEUI_API void oneui_switch_set_checked(OneUiWidget* switch_widget, int checked)
 ONEUI_API int oneui_switch_checked(OneUiWidget* switch_widget);
 ONEUI_API void oneui_switch_set_on_changed(OneUiWidget* switch_widget, OneUiBoolCallback callback, void* user_data);
 
+ONEUI_API OneUiWidget* oneui_checkbox_create(const wchar_t* text);
+ONEUI_API void oneui_checkbox_set_text(OneUiWidget* checkbox, const wchar_t* text);
+ONEUI_API void oneui_checkbox_set_checked(OneUiWidget* checkbox, int checked);
+ONEUI_API int oneui_checkbox_checked(OneUiWidget* checkbox);
+ONEUI_API void oneui_checkbox_set_on_changed(OneUiWidget* checkbox, OneUiBoolCallback callback, void* user_data);
+
 ONEUI_API OneUiWidget* oneui_title_bar_create(const wchar_t* title);
 ONEUI_API void oneui_title_bar_set_title(OneUiWidget* title_bar, const wchar_t* title);
 ONEUI_API void oneui_title_bar_set_icon_symbol(OneUiWidget* title_bar, int symbol);
 ONEUI_API void oneui_title_bar_set_maximized(OneUiWidget* title_bar, int maximized);
 ONEUI_API void oneui_title_bar_set_variant(OneUiWidget* title_bar, const char* variant);
+ONEUI_API void oneui_title_bar_set_accessory(OneUiWidget* title_bar, OneUiWidget* accessory);
 ONEUI_API void oneui_title_bar_set_on_minimize(OneUiWidget* title_bar, OneUiVoidCallback callback, void* user_data);
 ONEUI_API void oneui_title_bar_set_on_maximize(OneUiWidget* title_bar, OneUiVoidCallback callback, void* user_data);
 ONEUI_API void oneui_title_bar_set_on_close(OneUiWidget* title_bar, OneUiVoidCallback callback, void* user_data);
@@ -682,6 +726,7 @@ ONEUI_API void oneui_menu_add_header(OneUiWidget* menu, const wchar_t* title, co
 /* icon_symbol: IconSymbol ordinal, negative = no icon; returns item index */
 ONEUI_API int oneui_menu_add_item(OneUiWidget* menu, const wchar_t* text, int icon_symbol, int danger);
 ONEUI_API void oneui_menu_add_separator(OneUiWidget* menu);
+ONEUI_API void oneui_menu_clear_items(OneUiWidget* menu);
 ONEUI_API void oneui_menu_set_item_disabled(OneUiWidget* menu, int index, int disabled);
 ONEUI_API float oneui_menu_preferred_height(OneUiWidget* menu);
 ONEUI_API void oneui_menu_set_on_activated(OneUiWidget* menu, OneUiIntCallback callback, void* user_data);
@@ -708,11 +753,36 @@ ONEUI_API void oneui_tabs_set_items_utf8(
     OneUiWidget* tabs,
     const OneUiUtf8String* items,
     size_t count);
+/* symbols contains IconSymbol ordinals; negative values leave an item without an icon. */
+ONEUI_API void oneui_tabs_set_item_icons(
+    OneUiWidget* tabs,
+    const int* symbols,
+    size_t count);
 ONEUI_API void oneui_tabs_set_selected_index(OneUiWidget* tabs, int index);
 ONEUI_API int oneui_tabs_selected_index(OneUiWidget* tabs);
+ONEUI_API void oneui_tabs_set_compact(OneUiWidget* tabs, int compact);
+ONEUI_API void oneui_tabs_set_item_width_range(
+    OneUiWidget* tabs,
+    float minimum,
+    float maximum);
+ONEUI_API void oneui_tabs_set_closable(OneUiWidget* tabs, int closable);
+ONEUI_API void oneui_tabs_set_reorder_enabled(OneUiWidget* tabs, int enabled);
+ONEUI_API int oneui_tabs_reorder_enabled(OneUiWidget* tabs);
 ONEUI_API void oneui_tabs_set_on_changed(
     OneUiWidget* tabs,
     OneUiIntCallback callback,
+    void* user_data);
+ONEUI_API void oneui_tabs_set_on_close_requested(
+    OneUiWidget* tabs,
+    OneUiIntCallback callback,
+    void* user_data);
+ONEUI_API void oneui_tabs_set_on_context_menu_requested(
+    OneUiWidget* tabs,
+    OneUiIndexPointCallback callback,
+    void* user_data);
+ONEUI_API void oneui_tabs_set_on_reorder_requested(
+    OneUiWidget* tabs,
+    OneUiReorderRequestedCallback callback,
     void* user_data);
 
 /* Standard compact option selector with keyboard navigation and light dismiss. */
@@ -832,6 +902,73 @@ ONEUI_API size_t oneui_tree_view_external_drop_target_id_utf8(
 ONEUI_API OneUiWidget* oneui_table_create(void);
 ONEUI_API void oneui_table_set_columns(OneUiWidget* table, const wchar_t* columns);
 ONEUI_API void oneui_table_set_rows(OneUiWidget* table, const wchar_t* rows);
+ONEUI_API void oneui_table_set_columns_utf8(
+    OneUiWidget* table,
+    const OneUiTableColumnUtf8* columns,
+    size_t count);
+ONEUI_API void oneui_table_set_rows_utf8(
+    OneUiWidget* table,
+    const OneUiTableRowUtf8* rows,
+    size_t count);
+ONEUI_API int oneui_table_update_row_utf8(
+    OneUiWidget* table,
+    size_t index,
+    const OneUiTableRowUtf8* row);
+ONEUI_API void oneui_table_set_selection_mode(OneUiWidget* table, int mode);
+ONEUI_API void oneui_table_set_selected_index(OneUiWidget* table, int index);
+ONEUI_API int oneui_table_selected_index(OneUiWidget* table);
+ONEUI_API void oneui_table_set_selected_indices(
+    OneUiWidget* table,
+    const int* indices,
+    size_t count);
+ONEUI_API size_t oneui_table_selected_indices(
+    OneUiWidget* table,
+    int* buffer,
+    size_t buffer_len);
+ONEUI_API void oneui_table_set_row_height(OneUiWidget* table, float height);
+ONEUI_API void oneui_table_set_scroll_offset(OneUiWidget* table, float offset);
+ONEUI_API float oneui_table_scroll_offset(OneUiWidget* table);
+ONEUI_API float oneui_table_max_scroll_offset(OneUiWidget* table);
+ONEUI_API void oneui_table_set_on_changed(
+    OneUiWidget* table,
+    OneUiIntCallback callback,
+    void* user_data);
+ONEUI_API void oneui_table_set_on_selection_changed(
+    OneUiWidget* table,
+    OneUiIntArrayCallback callback,
+    void* user_data);
+ONEUI_API void oneui_table_set_on_activated(
+    OneUiWidget* table,
+    OneUiIntCallback callback,
+    void* user_data);
+ONEUI_API void oneui_table_set_on_edit_requested(
+    OneUiWidget* table,
+    OneUiIntCallback callback,
+    void* user_data);
+ONEUI_API void oneui_table_set_on_delete_requested(
+    OneUiWidget* table,
+    OneUiIntArrayCallback callback,
+    void* user_data);
+ONEUI_API void oneui_table_set_on_context_menu_requested(
+    OneUiWidget* table,
+    OneUiIndexPointCallback callback,
+    void* user_data);
+ONEUI_API void oneui_table_set_reorder_enabled(OneUiWidget* table, int enabled);
+ONEUI_API int oneui_table_reorder_enabled(OneUiWidget* table);
+ONEUI_API void oneui_table_set_on_reorder_requested(
+    OneUiWidget* table,
+    OneUiReorderRequestedCallback callback,
+    void* user_data);
+ONEUI_API int oneui_table_set_item_drag_ids_utf8(
+    OneUiWidget* table,
+    const OneUiUtf8String* ids,
+    size_t count);
+ONEUI_API void oneui_table_set_item_drag_enabled(OneUiWidget* table, int enabled);
+ONEUI_API int oneui_table_item_drag_enabled(OneUiWidget* table);
+ONEUI_API void oneui_table_set_on_item_drag_utf8(
+    OneUiWidget* table,
+    OneUiItemDragCallback callback,
+    void* user_data);
 
 ONEUI_API OneUiWidget* oneui_card_create();
 ONEUI_API void oneui_card_set_content(OneUiWidget* card, OneUiWidget* child);
@@ -874,6 +1011,14 @@ ONEUI_API void oneui_interactive_surface_set_on_click(OneUiWidget* surface, OneU
 ONEUI_API void oneui_interactive_surface_set_on_pointer_activated(
     OneUiWidget* surface,
     OneUiPointerCallback callback,
+    void* user_data);
+ONEUI_API void oneui_interactive_surface_set_on_pointer_moved(
+    OneUiWidget* surface,
+    OneUiPointerCallback callback,
+    void* user_data);
+ONEUI_API void oneui_interactive_surface_set_on_hover_changed(
+    OneUiWidget* surface,
+    OneUiBoolCallback callback,
     void* user_data);
 ONEUI_API void oneui_interactive_surface_set_on_context_menu_requested(
     OneUiWidget* surface,
@@ -1066,6 +1211,8 @@ ONEUI_API void oneui_text_field_set_suffix_icon(OneUiWidget* text_field, int sym
 ONEUI_API void oneui_text_field_clear_suffix_icon(OneUiWidget* text_field);
 ONEUI_API void oneui_text_field_set_on_changed(OneUiWidget* text_field, OneUiTextCallback callback, void* user_data);
 ONEUI_API void oneui_text_field_set_on_changed_utf8(OneUiWidget* text_field, OneUiUtf8TextCallback callback, void* user_data);
+ONEUI_API void oneui_text_field_set_on_submitted(OneUiWidget* text_field, OneUiTextCallback callback, void* user_data);
+ONEUI_API void oneui_text_field_set_on_submitted_utf8(OneUiWidget* text_field, OneUiUtf8TextCallback callback, void* user_data);
 ONEUI_API void oneui_text_field_set_style(OneUiWidget* text_field, const OneUiTextFieldStyle* style);
 ONEUI_API void oneui_text_field_clear_style(OneUiWidget* text_field);
 

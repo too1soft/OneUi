@@ -42,6 +42,7 @@ public:
     ~OverlayHost() override;
 
     void setContent(std::shared_ptr<Widget> child);
+    std::shared_ptr<Widget> content() const;
     void addOverlay(std::shared_ptr<Widget> child, int layer = 0);
     void addOverlay(std::shared_ptr<Widget> child, OverlayOptions options);
     void addAnchoredOverlay(
@@ -65,6 +66,8 @@ public:
     void setAnimationScheduler(std::function<void()> scheduler) override;
 
     void paint(Canvas& canvas) override;
+    bool hitTest(Point point) const override;
+    bool paintsAboveSiblings() const override;
     bool onMouseMove(const MouseEvent& event) override;
     bool onMouseDown(const MouseEvent& event) override;
     bool onMouseUp(const MouseEvent& event) override;

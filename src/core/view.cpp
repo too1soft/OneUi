@@ -356,6 +356,22 @@ CursorKind View::cursor(Point point) const {
     return Widget::cursor(point);
 }
 
+const std::wstring* View::tooltipAt(Point point) const {
+    if (!visible() || disabled() || !hitTest(point)) {
+        return nullptr;
+    }
+    for (auto it = children_.rbegin(); it != children_.rend(); ++it) {
+        const auto& child = *it;
+        if (!child || !child->visible() || !child->hitTest(point)) {
+            continue;
+        }
+        if (const auto* text = child->tooltipAt(point)) {
+            return text;
+        }
+    }
+    return Widget::tooltipAt(point);
+}
+
 void View::setFocusVisible(bool visible) {
     Widget::setFocusVisible(visible);
     if (focusedChild_) {
@@ -456,6 +472,25 @@ bool View::focusLastLeaf() {
     return true;
 }
 
+bool View::hitTest(Point point) const {
+    if (Widget::hitTest(point)) {
+        return true;
+    }
+
+    // Popup-like descendants may intentionally paint outside an intermediate
+    // container. Surface their hit region through every ancestor so pointer
+    // dispatch follows the same elevated subtree that painting uses.
+    return std::any_of(children_.begin(), children_.end(), [point](const auto& child) {
+        return child->visible() && child->paintsAboveSiblings() && child->hitTest(point);
+    });
+}
+
+bool View::paintsAboveSiblings() const {
+    return std::any_of(children_.begin(), children_.end(), [](const auto& child) {
+        return child->visible() && child->paintsAboveSiblings();
+    });
+}
+
 bool View::requestFocus(Widget* descendant, bool focusVisible) {
     if (!descendant || !descendant->visible() || descendant->disabled()) {
         return false;
@@ -512,6 +547,15 @@ bool View::clearHoveredChildExcept(Widget* child) {
     }
 
     if (isChildInteractive(hoveredChild_)) {
+        // An elevated subtree owns a popup/light-dismiss surface. Its anchor
+        // and popup can cross intermediate layout boundaries, which may make
+        // an ancestor's immediate hover child change while the pointer is
+        // still inside that same logical interaction. Let the elevated
+        // control process the move/outside click instead of force-resetting
+        // the subtree and closing it before mouse-down is dispatched.
+        if (hoveredChild_->paintsAboveSiblings()) {
+            return false;
+        }
         return hoveredChild_->clearInteractionState();
     }
 

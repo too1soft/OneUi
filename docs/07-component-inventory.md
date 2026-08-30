@@ -1,211 +1,195 @@
 # OneUI 组件清单
 
-本文档记录 OneUI 当前已有能力、重要缺口和后续组件目录。快照更新于 2026-07-01；条目如与代码不一致，一律以 `include/oneui/`、`src/core/` 的实际头文件/实现为准。
+本文是当前工作区的组件与语言覆盖总表。它回答三个问题：
 
-## 当前代码快照
+1. 组件现在是否真正实现；
+2. C++、C ABI 和安全 Rust 是否都能使用；
+3. 已知边界是什么。
 
-已实现核心：
+权威签名仍以 `include/oneui`、`oneui_c_api.h` 和 Rust crate 为准。
 
-- `Widget`：frame、preferred size、disabled/visible binding、焦点标记、invalidation、基础可访问性语义 API。
-- `View`：保留式子树、事件分发、焦点遍历、visible/disabled guard。
-- `State<T>` 和 `Binding<T>`：最小 MVVM 状态与 scoped subscription。
-- `Canvas`：clear、clip stack、圆角矩形 fill/stroke、ellipse、line、simple text。
-- `Theme`：基础颜色、圆角、字体大小，以及 disabled/hover/pressed/selected 的背景、前景、边框状态 token。
-- Style MVP：`ControlState`、`FocusRingStyle`、Button/TextField/Slider/ProgressBar/Select/Checkbox/RadioGroup/Tabs/Badge/Separator/List/Table/FormField/ValidationMessage/Popup style override。
-- Style adapter：`buttonStyleOverrideFromStyleSheet(...)`、`textFieldStyleOverrideFromStyleSheet(...)`、`cardStyleBoxFromStyleSheet(...)` 和 `productShellStyleFromStyleSheet(...)`，用于把 CSS-like selector/state 映射到内置控件和产品外壳区域样式，业务项目不得自行翻译基础控件状态样式。
-- Win32 后端：原生窗口、message loop、鼠标/键盘/文本分发、Skia raster canvas。
-- 产品打包：MSVC 静态运行时 `oneui.dll`、import library、headers、CMake package、SDK smoke test、runtime import audit。
+## 标记说明
 
-已实现布局：
+| 标记 | 含义 |
+| --- | --- |
+| 主线 | 有当前产品/示例和行为测试支撑，可用于 Win32 主线；不等同于稳定版 API 承诺 |
+| 可用 | 核心行为可用，有明确高级能力缺口 |
+| 实验 | API/测试已存在，但仍需要更多真实产品或平台验收 |
+| ✓ | 该语言层有公开入口 |
+| raw | 可从 `oneui-sys` 直接调用 C ABI，但安全 Rust 尚无同名包装 |
+| — | 当前没有公开入口 |
 
-- `Stack`：row/column、gap、padding、start/center/end/stretch alignment，跳过 invisible child。
-- `Grid`：固定列数、行列 gap、padding、auto rows，跳过 invisible child。
-- `ReorderableGrid`：面向产品卡片的响应式布局，使用稳定 item ID 报告鼠标拖拽重排；API 设置最大列数，`grid-min-column-width`、`gap`、`height`、`padding` 和插入指示线由 CSS-like 样式驱动，产品确认后再原位应用顺序。
-- `Wrap`：左到右换行骨架。
-- `DockView`：top/right/bottom/left/center app-shell 区域骨架。
-- `SplitView`：横向/纵向双栏、静态或可拖拽比例、双侧最小尺寸、调整光标和比例变更回调。
-- `ScrollView`：垂直滚动 viewport、鼠标滚轮、clipping、offset clamp、水平 content width / offset API、键盘滚动骨架、水平 thumb 绘制和水平 thumb 鼠标拖拽。
+## 基础运行时
 
-已实现控件：
+| 能力 | 公开头文件 | 成熟度 | C++ | C ABI | safe Rust | 当前说明 |
+| --- | --- | --- | --- | --- | --- | --- |
+| Geometry / Color | `geometry.h`, `color.h` | 主线 | ✓ | POD | ✓ | Point/Rect/Size/Insets/Color 与逻辑像素基础 |
+| Canvas | `canvas.h` | 主线 | ✓ | — | — | 图元、文字、渐变、阴影、clip、viewport、像素帧；主要由控件实现使用 |
+| Widget | `widget.h` | 主线 | ✓ | ✓ | ✓ | frame、preferred size、disabled、visible、focus、class/style node、tooltip、语义 |
+| View | `view.h` | 主线 | ✓ | 间接 | 间接 | 子树、深层命中、焦点链、tooltip 查询、elevated paint routing |
+| Animation | `animation.h`, `style_transition.h` | 可用 | ✓ | 间接 | 间接 | easing、数值/颜色/StyleBox 过渡与 animation frame |
+| State / Binding | `reactive.h` | 主线 | ✓ | — | Rust 自有状态 | 轻量订阅与绑定；C ABI 通过 setter/callback 表达 |
+| SelectionModel | `selection_model.h` | 主线 | ✓ | 通过控件 | `SelectionMode` | 单/多选、Ctrl/Shift range、active/anchor |
+| Icon | `icon.h` | 主线 | ✓ | ✓ | ✓ | 统一 IconSymbol 与 primitive；新增左右 Chevron |
+| Clipboard | `clipboard.h` | 主线 | ✓ | ✓ | ✓ | Win32 系统文本剪贴板，UTF-8 与 UTF-16 兼容入口 |
 
-- `Button`：primary/secondary、click、disabled、visible、`bindText`、typed style override。
-- `Label`：只读文本、颜色、尺寸、对齐、`bindText`。
-- `Card`：surface container，带边框，默认阴影已改为复用 `Canvas::drawBoxShadow(...)`，也可直接接收 `StyleBox` 以复用 StyleSheet 的背景、边框、阴影和 inset shadow。
-- `TextField`：文本绑定、placeholder、caret index、基础选择区、只读态、密码显示模式、横向滚动裁剪、typed style override、copy/cut/paste API、Ctrl+A/C/X/V、按 caret/选择区插入、Left/Right/Home/End/Delete/Backspace、`undo()` / `redo()` 历史入口。
-- `FormField`：label、required marker、helper/error text、invalid state、child layout、style override。
-- `ValidationMessage`：独立 helper/error message，支持 binding、tone 和 style override。
-- `Checkbox`、`Switch`：布尔输入。
-- `Slider`：数值输入，支持范围、步进、拖拽、键盘箭头和 typed style override；`ProgressBar`：数值展示，支持 typed style override。
-- `Tabs`、`RadioGroup`、`Select`：单选类控件；三者均支持 typed style override。
-- `Badge`、`Separator`、`List`、`ListItem`、`TreeView`、`Table`：基础展示控件；`Badge`、`Separator`、`List`、`TreeView` 和 `Table` 支持 typed style override。`VirtualList` 与 `TreeView` 支持指针拖拽和 `Alt+方向键` 重排请求，并保持选择状态不被框架擅自修改。
-- `OverlayHost`：浮层挂载、移除、层级、边界、基础事件转发、`OverlayOptions::trapsFocus` 键盘焦点边界、`OverlayOptions::blocksOutsidePointer` 外部指针阻断、`OverlayOptions::modal/modeless` 薄预设、overlay-to-overlay 焦点历史和普通 View 焦点恢复。
-- `PopupPlacement`：浮层几何定位 resolver，支持 Bottom/Top/Left/Right 的 start/end 或 start 侧向定位、主轴 flip、shift 和 clamp。
-- `Popup`：anchor/content 命中、鼠标焦点交接、键盘转发、`open/bindOpen`、`PopupOutsidePointerPolicy` 外部指针三态策略、`PopupInteractionMode` 交互模式预设、Escape 关闭和基础阴影。
+## 布局与容器
 
-## 重要缺口
+| 组件 | 头文件 | 成熟度 | C++ | C ABI | safe Rust | 关键能力/限制 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `Stack` | `layout/stack.h` | 主线 | ✓ | ✓ | ✓ | 行/列、gap、padding、align、flex child；可查询内容宽高；无完整 flexbox |
+| `Grid` | `layout/grid.h` | 可用 | ✓ | — | — | 固定列网格；无 span/fr/minmax |
+| `ReorderableGrid` | `layout/reorderable_grid.h` | 主线 | ✓ | ✓ | ✓ | 响应式列、稳定 ID、内部重排请求、外部拖拽；产品提交数据顺序 |
+| `Wrap` | `layout/wrap.h` | 可用 | ✓ | — | — | 自动换行排列；高级对齐策略有限 |
+| `Panel` | `layout/panel.h` | 主线 | ✓ | ✓ | ✓ | 单内容 surface、padding、背景、边框、圆角、阴影 |
+| `ScrollView` | `layout/scroll_view.h` | 主线 | ✓ | ✓ | ✓ | 横纵偏移、滚轮平滑过渡、thumb、键盘滚动、内容尺寸 |
+| `SplitView` | `layout/split_view.h` | 主线 | ✓ | ✓ | ✓ | 横/纵双栏、ratio、gap、最小范围、拖拽、changed/committed 回调 |
+| `OverlayHost` | `layout/overlay_host.h` | 主线 | ✓ | ✓ | ✓ | 普通/anchored/modal overlay、层级、焦点、外部 pointer、嵌套越界命中 |
+| `DockView` | `layout/dock_view.h` | 可用 | ✓ | — | — | 固定桌面区域组合；不是通用 docking system |
+| `TopBar` | `layout/top_bar.h` | 可用 | ✓ | ✓ | raw | leading/actions/padding/gap；safe Rust 无专用包装 |
+| `AppShell` | `layout/app_shell.h` | 主线 | ✓ | ✓ | raw | sidebar/header/content/footer 与响应式显示 |
+| `ProductShell` | `layout/product_shell.h` | 可用 | ✓ | ✓ | raw | 产品工作台几何 helper 与 sidebar/topbar/status slots |
+| `WindowTitleBar` | `controls/window_title_bar.h` | 主线 | ✓ | ✓ | ✓ | 自绘 caption 按钮、variant、interactive accessory、最大化状态 |
 
-- `Select`：已有最小内部 dropdown，内部 popup 状态清理和 light-dismiss 行为基线已经验收，下拉几何已通过内部 adapter 复用 `PopupPlacement`；仍缺真正挂载到共享 `OverlayHost` / `Popup`、长列表滚动、typeahead、可访问性和完整键盘 dropdown 行为。
-- 焦点样式：已有 focus-visible 路径，仍需更完整的主题级 outline token。
-- Gallery 焦点模型：自定义 sidebar/header target 与 `View` 子树焦点遍历仍未统一为应用级 focus scope。
-- 阴影：`Canvas` 已有 `BoxShadow` / `drawBoxShadow(...)` 原语，`Card` 和 `Popup` 已接入；Dialog、Menu、Tooltip 等层级控件仍待逐个接入。Win32 当前是稳定 offset/spread 绘制，完整 blur 仍待后续兼容。
-- 布局：缺 responsive grid span、draggable splitter、垂直 thumb 拖拽、滚动条样式化、触控板精细 delta 和窗口安全 popup placement 集成。
-- 文本输入：已有基础 selection、密码显示模式、横向滚动裁剪、剪贴板抽象、Win32 系统剪贴板 bridge、Ctrl+A/C/X/V 行为和 `undo()` / `redo()`；仍缺 Linux/macOS 剪贴板 bridge、IME composition、Ctrl+Z/Ctrl+Y 快捷键接入和精确 text measurement。
-- 文本渲染：`Canvas::drawText` 仍是 simple text，不足以支持复杂脚本、截断、换行和图文布局。
-- 可访问性：`Widget` 已有基础 role/name/description/value/state API；Button/TextField/Checkbox/Select/Slider/RadioGroup/Tabs/List/Table 已有默认语义；FormField 已能把 label/helper/error/required/invalid 同步到子控件；仍缺更多控件默认语义、语义树、keyboard command model 和平台 accessibility bridge。
-- 跨平台：只有 Win32 后端可用。Linux 和 macOS 有 skeleton，但不是已实现后端。
-- 文档与网站：需要继续保持中文优先，并在公开网站中提供必要英文内容；旧文档中的损坏双语文本应清理。
-- 测试：行为测试已覆盖一部分 `onChanged` 语义、TextField caret/选择区/插入/copy/cut/paste/Ctrl 快捷键、Select 内部 popup 清理、OverlayHost 挂载/移除/层级/边界/事件转发；仍缺视觉快照、可访问性测试、更广泛交互状态测试和跨平台 smoke test。
-- Binding 生命周期：`Binding<T>` 仍持有 `State<T>*`，ViewModel state 必须长于绑定控件。
+## 文本、按钮与表单
 
-## 设计系统原语
+| 组件 | 头文件 | 成熟度 | C++ | C ABI | safe Rust | 关键能力/限制 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `Label` | `controls/label.h` | 主线 | ✓ | ✓ | ✓ | UTF-8/UTF-16 文本、字体、颜色、对齐、绑定 |
+| `Button` | `controls/button.h` | 主线 | ✓ | ✓ | ✓ | variant、图标、trailing text、状态样式、鼠标/键盘激活 |
+| `IconButton` | `controls/icon_button.h` | 主线 | ✓ | ✓ | ✓ | 图标按钮、tooltip、focus、callback |
+| `InteractiveSurface` | `controls/interactive_surface.h` | 主线 | ✓ | ✓ | ✓ | 自定义内容 surface、click、pointer activated/moved、hover、context menu |
+| `TextField` | `controls/text_field.h` | 主线 | ✓ | ✓ | ✓ | 单行编辑、选择、撤销/重做、粘贴、只读、密码、前后图标、submit |
+| `TextArea` | `controls/text_field.h` | 可用 | C++ multiline | ✓ | ✓ | multiline 与行高；复杂 IME/富文本不在当前范围 |
+| SearchBox | C ABI 组合入口 | 可用 | 用 TextField 组合 | ✓ | 用 TextField 组合 | 搜索语义便捷构造，不是独立 C++ 类 |
+| `Checkbox` | `controls/checkbox.h` | 主线 | ✓ | ✓ | ✓ | checked 状态、绑定/回调、键盘与默认语义 |
+| `Switch` | `controls/switch.h` | 主线 | ✓ | ✓ | ✓ | 二元状态、绑定/回调 |
+| `RadioGroup` | `controls/radio_group.h` | 可用 | ✓ | ✓ | raw | 横/纵布局、selected index、callback |
+| `Slider` | `controls/slider.h` | 可用 | ✓ | — | — | min/max/step、drag、键盘、typed style；跨语言入口未补齐 |
+| `Select` | `controls/select.h` | 主线 | ✓ | ✓ | ✓ | 单选、键盘、light dismiss、稳定 viewport 内翻转；非多选 combobox |
+| `FormField` | `controls/form_field.h` | 可用 | ✓ | — | — | label、required、helper/error 与子控件语义传播 |
+| `ValidationMessage` | `controls/validation_message.h` | 可用 | ✓ | — | — | 表单错误/提示文本 surface |
+| `ButtonBridge` | `controls/button_bridge.h` | 可用 | ✓ | — | — | 产品自绘按钮几何/状态 helper，不是额外控件 |
+| `TextInputBridge` | `controls/text_input_bridge.h` | 可用 | ✓ | — | — | 产品输入框布局 helper，不替代 TextField |
 
-需要逐步补齐：
+## 导航与数据组件
 
-- 颜色 token：语义色、状态色、禁用色、焦点色、elevation 色。
-- 字体 token：family、size、line height、weight、fallback policy。
-- 间距 token：scale、density、component padding、layout gaps。
-- 圆角 token：尺寸级别和组件覆盖。
-- 边框 token：宽度、颜色、focus outline、validation outline。
-- 阴影/elevation token：card、popup、dialog、menu、tooltip。
-- motion token：duration、easing、reduced motion。
-- layer token：base、dropdown、tooltip、modal、toast。
-- 状态模型：hover、active、focus、focus-visible、disabled、selected、checked、invalid、loading。
+| 组件 | 头文件 | 成熟度 | C++ | C ABI | safe Rust | 关键能力/限制 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `Tabs` | `controls/tabs.h` | 主线 | ✓ | ✓ | ✓ | equal/compact、内容测量、图标、overflow wheel、Home/End、close/context/reorder 请求 |
+| SegmentedControl | C ABI 组合控件 | 可用 | 产品 helper | ✓ | ✓ | 少量互斥模式；不要代替工作区 Tabs |
+| `NavItem` | `controls/nav_item.h` | 主线 | ✓ | ✓ | ✓ | sidebar 图标/文本/selected/click |
+| `List` | `controls/list.h` | 主线 | ✓ | ✓ | ✓ | 小数据集、title/detail、单选与 frame 查询；非虚拟化 |
+| `VirtualList` | `controls/virtual_list.h` | 主线 | ✓ | ✓ | ✓ | 固定行高可见行绘制、平滑滚动、单/多选、命令、重排、外部稳定 ID 拖拽 |
+| `TreeView` | `controls/tree_view.h` | 主线 | ✓ | ✓ | ✓ | stable id/parent id、展开、选择、重排请求、外部 drop target |
+| `Table` | `controls/table.h` | 主线 | ✓ | ✓ | ✓ | 结构化行列、可见行绘制、滚动、选择、激活、F2/Delete、context、reorder、外部 drag |
+| `Menu` | `controls/menu.h` | 主线 | ✓ | ✓ | ✓ | header/item/separator/disabled/danger、动态 clear、activation |
+| `Popup` | `controls/popup.h` | 主线 | ✓ | ✓ | ✓ | anchor/rect、placement、modeless/light-dismiss/modal、Escape、viewport clamp |
+| `Dialog` | `controls/dialog.h` | 主线 | ✓ | ✓ | ✓ | 标题/副标题/图标/内容/操作/关闭，通常挂到 OverlayHost |
+| `Tile` | `controls/tile.h` | 可用 | ✓ | ✓ | raw | title/subtitle/leading/trailing symbol/click |
 
-## 控件目录
+### Table 当前没有内置的能力
 
-### Foundation
+- 排序和筛选模型；
+- 列宽拖拽与列重排；
+- 单元格 editor 或 data-binding adapter；
+- 可变行高；
+- 产品数据自动重排。
 
-- `Widget`
-- `View`
-- `ThemeProvider`
-- `OverlayHost`
-- `Portal`
-- `Icon`
-- `Text`
-- `Separator`
-- `Spacer`
-- `Box`
+`onEditRequested` / `onDeleteRequested` / `onReorderRequested` 是命令请求，产品仍是数据源。
 
-### Buttons And Commands
+## 反馈、状态与视觉组件
 
-- `Button`
-- `IconButton`
-- `SplitButton`
-- `ToggleButton`
-- `SegmentedControl`
-- `CommandBar`
-- `Toolbar`
-- `MenuButton`
-- `LinkButton`
+| 组件 | 头文件 | 成熟度 | C++ | C ABI | safe Rust | 关键能力/限制 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `Card` | `controls/card.h` | 主线 | ✓ | ✓ | raw | 内容 surface 与标准阴影 |
+| `Badge` | `controls/badge.h` | 主线 | ✓ | ✓ | raw | neutral/success/warning/danger/accent |
+| `IconBadge` | `controls/icon_badge.h` | 可用 | ✓ | ✓ | raw | 图标、accent、stroke width |
+| `ProgressBar` | `controls/progress_bar.h` | 主线 | ✓ | ✓ | ✓ | 0..1 进度与样式；当前为确定性进度 |
+| `Sparkline` | `controls/sparkline.h` | 主线 | ✓ | ✓ | ✓ | 0..1 sample、clamp、网格、折线、末端点；非交互图表 |
+| `Separator` | `controls/separator.h` | 主线 | ✓ | — | — | 横/纵分隔和样式 |
+| `StateView` | `controls/state_view.h` | 主线 | ✓ | ✓ | ✓ | 空/错/加载等状态的图标、标题、说明、操作 |
+| `StatusStrip` | `controls/status_strip.h` | 可用 | ✓ | ✓ | raw | title/message/主次操作 |
+| `Toast` | `controls/toast.h` | 可用 | ✓ | ✓ | raw | title/message/icon/actions/close；队列与自动超时由产品管理 |
 
-### Form Inputs
+## 专用视图
 
-- `TextField`
-- `TextArea`
-- `PasswordField`
-- `SearchField`
-- `NumberField`
-- `Select`
-- `ComboBox`
-- `Autocomplete`
-- `Checkbox`
-- `CheckboxGroup`
-- `RadioGroup`
-- `Switch`
-- `Slider`
-- `RangeSlider`
-- `Stepper`
-- `DatePicker`
-- `TimePicker`
-- `ColorPicker`
-- `FilePicker`
-- `Form`
-- `FormField`
-- `ValidationMessage`
+| 组件 | 头文件 | 成熟度 | C++ | C ABI | safe Rust | 关键能力/限制 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `TerminalView` | `controls/terminal_view.h` | 主线 | ✓ | ✓ | ✓ | 网格/cell diff、宽字符、样式、选择、复制粘贴、光标、viewport、鼠标协议、超链接、raw key、行号 |
+| `LogView` | `controls/log_view.h` | 主线 | ✓ | ✓ | ✓ | 结构化彩色行、append/replace/clear、等宽绘制、内容高度 |
+| `RealtimeFrameView` | `controls/realtime_frame_view.h` | 实验 | ✓ | ✓ | raw | 最新帧覆盖、BGRA/RGBA 真正 blit、Fit/Fill/Stretch/Actual；NV12 未实现 |
+| `RemoteInputRegion` | `controls/remote_input_region.h` | 实验 | ✓ | ✓ | raw | pointer/raw-key、坐标归一化、远端坐标、release-all；完整平台接线仍需产品验收 |
 
-### Navigation
+## 平台与系统能力
 
-- `Tabs`
-- `Breadcrumb`
-- `SidebarNav`
-- `TreeView`
-- `Menu`
-- `ContextMenu`
-- `NavigationRail`
-- `Pagination`
-- `StepperNavigation`
+| 能力 | C++ | C ABI | safe Rust | 当前状态 |
+| --- | --- | --- | --- | --- |
+| Window create/show/run/close | ✓ | ✓ | ✓ | Win32 主线 |
+| Borderless/fullscreen/topmost/resizable | ✓ | ✓ | ✓ | Win32 主线 |
+| Placement round trip | ✓ | ✓ | ✓ | 恢复时验证可见 work area |
+| Logical/pixel size + DPI | ✓ | ✓ | ✓ | 可查询，后端负责缩放 |
+| Raw key | ✓ | ✓ | ✓ | 窗口级优先 callback，焦点丢失重置 modifier |
+| Title-bar drag/interactive insets | ✓ | ✓ | ✓ | 用于标题栏中的 Tabs/Search 等可点击附件 |
+| Clipboard | ✓ | ✓ | ✓ | 文本 |
+| File/folder dialog | 平台方法 | ✓ | ✓ | owner-bound native dialog |
+| Confirm / prompt | 平台方法 | ✓ | ✓ | UI-thread 与 blocking worker 形式 |
+| Tray / notification | 平台实现 | ✓ | raw | show/hide/menu/notification |
+| Monitor enumeration | ✓ | 平台内部/产品使用 | — | bounds/work area/scale/primary/name |
+| Layout snapshot JSON | 平台诊断 | ✓ | ✓ | 同步 commit，脱敏，包含 overlays 和真实 frame |
+| Tooltip presentation | ✓ | setter | setter | 深层 visible/enabled child 优先 |
 
-### Data Display
+## 样式覆盖
 
-- `Label`
-- `Badge`
-- `Tag`
-- `Avatar`
-- `Card`
-- `List`
-- `ListItem`
-- `DescriptionList`
-- `Table`
-- `DataGrid`
-- `TreeGrid`
-- `CodeBlock`
-- `Timeline`
-- `Calendar`
-- `EmptyState`
+公开 StyleSheet 支持：
 
-### Feedback
+- tag、`.class`、组合 class 与伪状态；
+- `:hover`、`:active`、`:focus`、`:disabled`、`:selected`、`:read-only`；
+- custom property 和 `var(--token)`；
+- background/color/border/radius/padding/gap/width/height/font/outline/opacity/shadow；
+- scrollbar color/width、grid minimum column width、transition duration/easing；
+- Button、TextField、Select、ProgressBar、Popup、List、Table、TreeView、InteractiveSurface、Card 等 typed adapter。
 
-- `ProgressBar`
-- `Spinner`
-- `Skeleton`
-- `Alert`
-- `Toast`
-- `Tooltip`
-- `Popover`
-- `Dialog`
-- `Modal`
-- `Drawer`
-- `Banner`
-- `InlineStatus`
+不支持浏览器 DOM、cascade inheritance、flex/grid CSS 语法、媒体查询或任意 CSS 属性。
 
-### Surfaces And Layout
+## 可访问性状态
 
-- `Panel`
-- `Card`
-- `GroupBox`
-- `Accordion`
-- `Disclosure`
-- `Collapsible`
-- `ResizablePanel`
-- `ScrollView`
-- `SplitView`
-- `DockView`
-- `WindowFrame`
+已实现：
 
-## 迭代优先级
+- Widget role/name/description/value/state；
+- Button、TextField、Checkbox、Select、Slider、RadioGroup、Tabs、List、Table 等默认语义；
+- FormField 的 label/helper/error 传播；
+- 布局 JSON 中的脱敏语义摘要。
 
-P0：让现有模型更连贯。
+未完成：
 
-- 扩展 `onChanged`、interaction-state cleanup 和 focus-visible 行为测试。
-- 用共享 overlay/popup 基础设施替换 `Select` 内部 dropdown。
-- 补齐 theme-level focus outline token。
-- 给 `Canvas` 和 `Theme` 增加 shadow/elevation。
-- 扩展 `ScrollView` 到垂直 thumb 拖拽、触控板精细 delta、惯性滚动和可样式化滚动条。
-- 文本测量与更可靠布局 sizing。
-- `TextField` Linux/macOS 剪贴板 bridge、IME 和更完整文本编辑。
+- Win32 UI Automation provider/语义树桥；
+- 完整读屏、自动化客户端和平台 action pattern；
+- 所有复合控件的 child-level 平台节点。
 
-P1：让应用开发更实用。
+因此当前文档只声明“有可访问性语义元数据”，不声明“完整系统无障碍支持”。
 
-- （`Popup`、`Toast`、`IconButton` 已落地：见 `src/core/{popup,toast,icon_button}.cpp`。）
-- `Tooltip`、`Menu`、`Dialog`。
-- `SegmentedControl`、`ComboBox`。
-- 更完整表单组合与提交校验流程。
-- 更实用的 `Table` / `DataGrid`。
-- Linux/macOS 平台实现。
+## 测试覆盖
 
-P2：走向产品级。
+当前 13 个 CTest 目标覆盖：
 
-- IME、可访问性、DPI、视觉快照和行为测试。
-- 跨平台后端 parity。
-- motion token 和动画。
-- 虚拟化与高级数据控件。
+- 通用控件、Tabs、Table、Sparkline、TextField、tooltip；
+- SelectionModel；
+- OverlayHost、Popup、嵌套 overlay 与 Select；
+- ScrollView、Stack、Panel；
+- RealtimeFrameView、RemoteInputRegion；
+- TerminalView、TreeView；
+- C ABI、布局树快照、显示器与 Win32 backend contract。
+
+Rust workspace 另外覆盖 safe wrapper、结构化数组、handle 合并更新、回调 Drop、panic 捕获与
+窗口线程 dispatcher。
+
+## 采用建议
+
+- 新产品页面优先使用“主线”组件；
+- “可用”组件在采用前写清产品所需缺口并补行为测试；
+- “实验”组件需要真实运行环境压力/输入验证；
+- 大数据列表使用 VirtualList；多列数据使用 Table；层级数据使用 TreeView；
+- 任何重排 callback 都视为请求，数据层成功后再更新 UI；
+- 需要跨线程更新时使用 dispatcher/handle，不直接跨线程调用控件；
+- 需要像素级布局审计时使用布局 JSON + 同视口截图，两者不能互相替代。

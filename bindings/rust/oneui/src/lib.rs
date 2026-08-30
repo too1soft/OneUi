@@ -29,6 +29,7 @@ pub enum Error {
     WrongThread,
     UiThreadBlockingOperation,
     FileDialogFailed,
+    LayoutSnapshotFailed,
 }
 
 /// Describes a panic caught at the Rust-to-OneUI callback boundary.
@@ -42,6 +43,127 @@ pub struct CallbackPanic {
 }
 
 type CallbackPanicHandler = Arc<dyn Fn(CallbackPanic) + Send + Sync + 'static>;
+
+/// Identifies a product interaction callback at the point where it was bound.
+///
+/// OneUI does not assign product-specific identifiers to controls. Capturing
+/// the Rust call site gives end-to-end window tests a stable way to prove which
+/// callback was exercised without coupling those tests to widget addresses or
+/// implementation details.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct InteractionTrace {
+    pub control: &'static str,
+    pub interaction: &'static str,
+    pub source_file: &'static str,
+    pub source_line: u32,
+    pub source_column: u32,
+}
+
+impl InteractionTrace {
+    pub fn at(
+        control: &'static str,
+        interaction: &'static str,
+        location: &'static std::panic::Location<'static>,
+    ) -> Self {
+        Self {
+            control,
+            interaction,
+            source_file: location.file(),
+            source_line: location.line(),
+            source_column: location.column(),
+        }
+    }
+}
+
+type InteractionTraceHandler = Arc<dyn Fn(InteractionTrace) + Send + Sync + 'static>;
+
+fn interaction_trace_handler() -> &'static Mutex<Option<InteractionTraceHandler>> {
+    static HANDLER: OnceLock<Mutex<Option<InteractionTraceHandler>>> = OnceLock::new();
+    HANDLER.get_or_init(|| Mutex::new(None))
+}
+
+/// Installs a process-wide observer for native control callbacks.
+///
+/// This hook is intended for test and diagnostic instrumentation. It is inert
+/// until installed, and replacing or clearing it does not alter control
+/// behavior.
+pub fn set_interaction_trace_handler<F>(handler: F)
+where
+    F: Fn(InteractionTrace) + Send + Sync + 'static,
+{
+    *interaction_trace_handler()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(Arc::new(handler));
+}
+
+/// Removes the process-wide interaction observer.
+pub fn clear_interaction_trace_handler() {
+    *interaction_trace_handler()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
+}
+
+/// Emits an application-defined interaction through the process-wide observer.
+///
+/// Native applications can use this for interaction boundaries that live
+/// outside OneUI controls, such as single-instance or operating-system launch
+/// callbacks. The observer remains optional and panics are isolated from the
+/// application callback path, matching built-in control tracing behavior.
+pub fn emit_interaction_trace(trace: InteractionTrace) {
+    let handler = interaction_trace_handler()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clone();
+    if let Some(handler) = handler {
+        let _ = catch_unwind(AssertUnwindSafe(|| handler(trace)));
+    }
+}
+
+fn traced_callback<F>(trace: InteractionTrace, mut callback: F) -> impl FnMut() + 'static
+where
+    F: FnMut() + 'static,
+{
+    move || {
+        emit_interaction_trace(trace);
+        callback();
+    }
+}
+
+fn traced_value_callback<T, F>(trace: InteractionTrace, mut callback: F) -> impl FnMut(T) + 'static
+where
+    F: FnMut(T) + 'static,
+{
+    move |value| {
+        emit_interaction_trace(trace);
+        callback(value);
+    }
+}
+
+fn traced_values_callback<A, B, F>(
+    trace: InteractionTrace,
+    mut callback: F,
+) -> impl FnMut(A, B) + 'static
+where
+    F: FnMut(A, B) + 'static,
+{
+    move |first, second| {
+        emit_interaction_trace(trace);
+        callback(first, second);
+    }
+}
+
+fn traced_value_result_callback<T, R, F>(
+    trace: InteractionTrace,
+    mut callback: F,
+) -> impl FnMut(T) -> R + 'static
+where
+    F: FnMut(T) -> R + 'static,
+{
+    move |value| {
+        emit_interaction_trace(trace);
+        callback(value)
+    }
+}
 
 fn callback_panic_handler() -> &'static Mutex<Option<CallbackPanicHandler>> {
     static HANDLER: OnceLock<Mutex<Option<CallbackPanicHandler>>> = OnceLock::new();
@@ -337,8 +459,25 @@ unsafe impl Send for UiDispatcher {}
 unsafe impl Sync for UiDispatcher {}
 
 fn trace_ui_task(message: &str) {
-    if std::env::var_os("ONEUI_UI_TRACE").is_some() {
-        eprintln!("[oneui-ui] {message}");
+    if let Some(path) = std::env::var_os("ONEUI_UI_TRACE_FILE") {
+        use std::io::Write;
+
+        if let Ok(mut file) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+        {
+            let _ = writeln!(
+                file,
+                "[oneui-ui] [thread={:?}] {message}",
+                std::thread::current().id()
+            );
+        }
+    } else if std::env::var_os("ONEUI_UI_TRACE").is_some() {
+        eprintln!(
+            "[oneui-ui] [thread={:?}] {message}",
+            std::thread::current().id()
+        );
     }
 }
 
@@ -347,9 +486,48 @@ impl WindowState {
         *self.raw.lock().expect("OneUI window state lock poisoned")
     }
 
+    #[track_caller]
     fn with_raw<R>(&self, action: impl FnOnce(*mut sys::OneUiWindow) -> R) -> Option<R> {
-        let raw = self.raw.lock().expect("OneUI window state lock poisoned");
-        raw.as_ref().map(|raw| action(raw.as_ptr()))
+        let caller = std::panic::Location::caller();
+        let caller = format!("{}:{}:{}", caller.file(), caller.line(), caller.column());
+
+        // Native dialogs and other platform APIs may run a nested message loop.
+        // A callback reached through that loop is still on the owning UI thread
+        // and must be allowed to access the same window again. Copying the raw
+        // handle under the lock and releasing it before the native call keeps
+        // same-thread reentrancy safe. Destruction also belongs to this thread,
+        // so it cannot race between the copy and the call.
+        if std::thread::current().id() == self.ui_thread {
+            let raw = self.current_raw()?;
+            trace_ui_task(&format!("window raw copied on UI thread caller={caller}"));
+            trace_ui_task(&format!("window raw action entered caller={caller}"));
+            let result = action(raw.as_ptr());
+            trace_ui_task(&format!("window raw action completed caller={caller}"));
+            return Some(result);
+        }
+
+        // Worker-thread calls retain the mutex for the duration of the FFI
+        // operation so WindowState::destroy cannot free the native window while
+        // a cross-thread post is being submitted.
+        let raw = match self.raw.try_lock() {
+            Ok(raw) => {
+                trace_ui_task(&format!("window raw lock acquired caller={caller}"));
+                raw
+            }
+            Err(std::sync::TryLockError::WouldBlock) => {
+                trace_ui_task(&format!("window raw lock contended caller={caller}"));
+                let raw = self.raw.lock().expect("OneUI window state lock poisoned");
+                trace_ui_task(&format!(
+                    "window raw lock acquired after contention caller={caller}"
+                ));
+                raw
+            }
+            Err(std::sync::TryLockError::Poisoned(poisoned)) => poisoned.into_inner(),
+        };
+        trace_ui_task(&format!("window raw action entered caller={caller}"));
+        let result = raw.as_ref().map(|raw| action(raw.as_ptr()));
+        trace_ui_task(&format!("window raw action completed caller={caller}"));
+        result
     }
 
     fn destroy(&self) {
@@ -394,6 +572,44 @@ unsafe extern "C" fn run_animation_frame_task(now_ms: f64, user_data: *mut std::
 }
 
 impl UiDispatcher {
+    /// Serializes the mounted widget tree after layout for visual QA and
+    /// diagnostics. The snapshot contains geometry and resolved style data,
+    /// but deliberately never includes text-field contents.
+    pub fn layout_snapshot_json(&self) -> Result<String, Error> {
+        if std::thread::current().id() != self.state.ui_thread {
+            return Err(Error::WrongThread);
+        }
+
+        let mut required = 0_usize;
+        let query = self
+            .state
+            .with_raw(|raw| unsafe {
+                sys::oneui_window_layout_snapshot_utf8(raw, std::ptr::null_mut(), 0, &mut required)
+            })
+            .ok_or(Error::WindowClosed)?;
+        if query != -2 || required <= 1 {
+            return Err(Error::LayoutSnapshotFailed);
+        }
+
+        let mut bytes = vec![0_u8; required];
+        let result = self
+            .state
+            .with_raw(|raw| unsafe {
+                sys::oneui_window_layout_snapshot_utf8(
+                    raw,
+                    bytes.as_mut_ptr().cast(),
+                    bytes.len(),
+                    &mut required,
+                )
+            })
+            .ok_or(Error::WindowClosed)?;
+        if result != 1 || required == 0 || required > bytes.len() {
+            return Err(Error::LayoutSnapshotFailed);
+        }
+        bytes.truncate(required - 1);
+        String::from_utf8(bytes).map_err(|_| Error::LayoutSnapshotFailed)
+    }
+
     /// Re-resolves and reapplies the window style sheet after runtime CSS
     /// custom-property changes.
     pub fn refresh_style_sheet(&self) -> Result<(), Error> {
@@ -541,11 +757,13 @@ impl UiDispatcher {
         if std::thread::current().id() != self.state.ui_thread {
             return Err(Error::WrongThread);
         }
+        trace_ui_task("local dispatch started");
         let task = Box::new(LocalDispatchedTask {
             task: Some(Box::new(task)),
         });
         let user_data = Box::into_raw(task).cast();
         let accepted = self.state.with_raw(|raw| unsafe {
+            trace_ui_task("local dispatch entered window post");
             sys::oneui_window_post_owned(
                 raw,
                 Some(run_local_dispatched_task),
@@ -553,6 +771,7 @@ impl UiDispatcher {
                 Some(drop_local_dispatched_task),
             )
         });
+        trace_ui_task("local dispatch completed window post");
 
         match accepted {
             Some(1) => Ok(()),
@@ -737,10 +956,26 @@ impl UiDispatcher {
         });
     }
 
+    /// Creates a thread-safe adaptive-layout producer for a mounted widget.
+    pub fn widget_handle(&self, widget: &Widget) -> WidgetHandle {
+        WidgetHandle {
+            state: Arc::clone(&widget.state),
+            dispatcher: self.clone(),
+        }
+    }
+
     /// Creates a thread-safe text producer for a label mounted in this window.
     pub fn label_handle(&self, label: &Label) -> LabelHandle {
         LabelHandle {
             state: Arc::clone(&label.state),
+            dispatcher: self.clone(),
+        }
+    }
+
+    /// Creates a thread-safe text producer for a single-line field mounted in this window.
+    pub fn text_field_handle(&self, text_field: &TextField) -> TextFieldHandle {
+        TextFieldHandle {
+            state: Arc::clone(&text_field.state),
             dispatcher: self.clone(),
         }
     }
@@ -761,10 +996,26 @@ impl UiDispatcher {
         }
     }
 
+    /// Creates a thread-safe sample producer for a sparkline mounted in this window.
+    pub fn sparkline_handle(&self, sparkline: &Sparkline) -> SparklineHandle {
+        SparklineHandle {
+            state: Arc::clone(&sparkline.state),
+            dispatcher: self.clone(),
+        }
+    }
+
     /// Creates a thread-safe producer for in-place virtual-list row updates.
     pub fn virtual_list_handle(&self, list: &VirtualList) -> VirtualListHandle {
         VirtualListHandle {
             state: Arc::clone(&list.state),
+            dispatcher: self.clone(),
+        }
+    }
+
+    /// Creates a thread-safe producer for table data revisions and row updates.
+    pub fn table_handle(&self, table: &Table) -> TableHandle {
+        TableHandle {
+            state: Arc::clone(&table.state),
             dispatcher: self.clone(),
         }
     }
@@ -794,16 +1045,156 @@ impl UiDispatcher {
             sys::oneui_window_toggle_maximize(raw);
         });
     }
+
+    pub fn set_title_bar_interactive_insets(&self, leading_width: f32, trailing_width: f32) {
+        self.state.with_raw(|raw| unsafe {
+            sys::oneui_window_set_title_bar_interactive_insets(raw, leading_width, trailing_width);
+        });
+    }
+
+    pub fn clear_title_bar_interactive_insets(&self) {
+        self.set_title_bar_interactive_insets(-1.0, -1.0);
+    }
+}
+
+#[derive(Clone, Copy, Default)]
+struct WidgetLayoutUpdate {
+    visible: Option<bool>,
+    preferred_size: Option<(f32, f32)>,
+}
+
+struct WidgetState {
+    raw: AtomicPtr<sys::OneUiWidget>,
+    pending_layout: Mutex<WidgetLayoutUpdate>,
+    update_scheduled: AtomicBool,
+}
+
+/// Thread-safe producer for visibility and preferred-size changes on a mounted widget.
+///
+/// Product shells use this for data-dependent adaptive layouts (for example switching
+/// between a detailed low-cardinality view and a virtualized high-cardinality view).
+/// Changes are coalesced and always applied on the window's owning UI thread.
+#[derive(Clone)]
+pub struct WidgetHandle {
+    state: Arc<WidgetState>,
+    dispatcher: UiDispatcher,
+}
+
+impl WidgetHandle {
+    pub fn set_visible(&self, visible: bool) -> Result<(), Error> {
+        self.update_layout(Some(visible), None)
+    }
+
+    pub fn set_preferred_size(&self, width: f32, height: f32) -> Result<(), Error> {
+        self.update_layout(None, Some((width, height)))
+    }
+
+    pub fn set_visible_and_preferred_size(
+        &self,
+        visible: bool,
+        width: f32,
+        height: f32,
+    ) -> Result<(), Error> {
+        self.update_layout(Some(visible), Some((width, height)))
+    }
+
+    fn update_layout(
+        &self,
+        visible: Option<bool>,
+        preferred_size: Option<(f32, f32)>,
+    ) -> Result<(), Error> {
+        if self.state.raw.load(Ordering::Acquire).is_null() {
+            return Err(Error::WidgetDestroyed);
+        }
+        {
+            let mut pending = self
+                .state
+                .pending_layout
+                .lock()
+                .expect("widget pending layout lock poisoned");
+            if let Some(visible) = visible {
+                pending.visible = Some(visible);
+            }
+            if let Some(preferred_size) = preferred_size {
+                pending.preferred_size = Some(preferred_size);
+            }
+        }
+        if self.state.update_scheduled.swap(true, Ordering::AcqRel) {
+            return Ok(());
+        }
+
+        let state = Arc::clone(&self.state);
+        let dispatched_state = Arc::clone(&state);
+        if let Err(error) = self
+            .dispatcher
+            .dispatch(move || Self::drain_pending_layout(&dispatched_state))
+        {
+            state.update_scheduled.store(false, Ordering::Release);
+            *state
+                .pending_layout
+                .lock()
+                .expect("widget pending layout lock poisoned") = WidgetLayoutUpdate::default();
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    fn drain_pending_layout(state: &WidgetState) {
+        loop {
+            let update = {
+                let mut pending = state
+                    .pending_layout
+                    .lock()
+                    .expect("widget pending layout lock poisoned");
+                std::mem::take(&mut *pending)
+            };
+            let raw = state.raw.load(Ordering::Acquire);
+            if raw.is_null() {
+                state.update_scheduled.store(false, Ordering::Release);
+                return;
+            }
+            if let Some(visible) = update.visible {
+                unsafe { sys::oneui_widget_set_visible(raw, i32::from(visible)) };
+            }
+            if let Some((width, height)) = update.preferred_size {
+                unsafe { sys::oneui_widget_set_preferred_size(raw, width, height) };
+            }
+
+            state.update_scheduled.store(false, Ordering::Release);
+            let has_more = {
+                let pending = state
+                    .pending_layout
+                    .lock()
+                    .expect("widget pending layout lock poisoned");
+                pending.visible.is_some() || pending.preferred_size.is_some()
+            };
+            if !has_more {
+                return;
+            }
+            if !state.update_scheduled.swap(true, Ordering::AcqRel) {
+                continue;
+            }
+            return;
+        }
+    }
 }
 
 pub struct Widget {
     raw: NonNull<sys::OneUiWidget>,
+    state: Arc<WidgetState>,
 }
 
 impl Widget {
     fn from_raw(raw: *mut sys::OneUiWidget) -> Result<Self, Error> {
         let raw = NonNull::new(raw).ok_or(Error::WidgetCreationFailed)?;
-        Ok(Self { raw })
+        Ok(Self {
+            state: Arc::new(WidgetState {
+                raw: AtomicPtr::new(raw.as_ptr()),
+                pending_layout: Mutex::new(WidgetLayoutUpdate::default()),
+                update_scheduled: AtomicBool::new(false),
+            }),
+            raw,
+        })
     }
 
     fn as_raw(&self) -> *mut sys::OneUiWidget {
@@ -814,6 +1205,21 @@ impl Widget {
     /// flexible on that axis, matching OneUI's native layout contract.
     pub fn set_preferred_size(&self, width: f32, height: f32) {
         unsafe { sys::oneui_widget_set_preferred_size(self.as_raw(), width, height) };
+    }
+
+    /// Returns the widget's committed logical layout rectangle.
+    ///
+    /// Use this for geometry-dependent interactions such as anchoring an
+    /// overlay to an already mounted trigger. Product layout should continue
+    /// to be expressed through containers and CSS rather than manual frames.
+    pub fn frame(&self) -> Rect {
+        let frame = unsafe { sys::oneui_widget_frame(self.as_raw()) };
+        Rect {
+            x: frame.x,
+            y: frame.y,
+            width: frame.width,
+            height: frame.height,
+        }
     }
 
     pub fn set_disabled(&self, disabled: bool) {
@@ -833,6 +1239,12 @@ impl Widget {
 
     pub fn is_focused(&self) -> bool {
         unsafe { sys::oneui_widget_focused(self.as_raw()) != 0 }
+    }
+
+    /// Sets concise hover help for icon-only and unfamiliar controls.
+    pub fn set_tooltip(&self, tooltip: &str) {
+        let tooltip = wide_null_terminated(tooltip);
+        unsafe { sys::oneui_widget_set_tooltip(self.as_raw(), tooltip.as_ptr()) };
     }
 
     /// Assigns semantic CSS classes. The currently installed window style
@@ -859,6 +1271,15 @@ impl Widget {
 
 impl Drop for Widget {
     fn drop(&mut self) {
+        self.state
+            .raw
+            .store(std::ptr::null_mut(), Ordering::Release);
+        *self
+            .state
+            .pending_layout
+            .lock()
+            .expect("widget pending layout lock poisoned") = WidgetLayoutUpdate::default();
+        self.state.update_scheduled.store(false, Ordering::Release);
         unsafe { sys::oneui_widget_destroy(self.raw.as_ptr()) };
     }
 }
@@ -1121,6 +1542,8 @@ pub enum IconSymbol {
     Notebook = 42,
     Edit = 43,
     Trash = 44,
+    ChevronLeft = 45,
+    ChevronRight = 46,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1242,6 +1665,14 @@ impl Stack {
         unsafe { sys::oneui_stack_set_align(self.widget.as_raw(), align as i32) };
     }
 
+    pub fn content_width(&self) -> f32 {
+        unsafe { sys::oneui_stack_content_width(self.widget.as_raw()) }
+    }
+
+    pub fn content_height(&self) -> f32 {
+        unsafe { sys::oneui_stack_content_height(self.widget.as_raw()) }
+    }
+
     pub fn as_widget(&self) -> &Widget {
         &self.widget
     }
@@ -1266,6 +1697,7 @@ unsafe extern "C" fn run_float_changed_callback(value: f32, user_data: *mut std:
 pub struct SplitView {
     widget: Widget,
     ratio_changed_callback: Option<Box<FloatChangedCallback>>,
+    ratio_committed_callback: Option<Box<FloatChangedCallback>>,
 }
 
 impl SplitView {
@@ -1274,6 +1706,7 @@ impl SplitView {
         Ok(Self {
             widget,
             ratio_changed_callback: None,
+            ratio_committed_callback: None,
         })
     }
 
@@ -1315,13 +1748,16 @@ impl SplitView {
         };
     }
 
+    #[track_caller]
     pub fn set_on_ratio_changed<F>(&mut self, callback: F)
     where
         F: FnMut(f32) + 'static,
     {
+        let trace =
+            InteractionTrace::at("SplitView", "ratio_changed", std::panic::Location::caller());
         self.clear_on_ratio_changed();
         self.ratio_changed_callback = Some(Box::new(FloatChangedCallback {
-            handler: Box::new(callback),
+            handler: Box::new(traced_value_callback(trace, callback)),
         }));
         let user_data = (self
             .ratio_changed_callback
@@ -1349,6 +1785,46 @@ impl SplitView {
         self.ratio_changed_callback = None;
     }
 
+    #[track_caller]
+    pub fn set_on_ratio_committed<F>(&mut self, callback: F)
+    where
+        F: FnMut(f32) + 'static,
+    {
+        let trace = InteractionTrace::at(
+            "SplitView",
+            "ratio_committed",
+            std::panic::Location::caller(),
+        );
+        self.clear_on_ratio_committed();
+        self.ratio_committed_callback = Some(Box::new(FloatChangedCallback {
+            handler: Box::new(traced_value_callback(trace, callback)),
+        }));
+        let user_data = (self
+            .ratio_committed_callback
+            .as_deref_mut()
+            .expect("split ratio committed callback was just installed")
+            as *mut FloatChangedCallback)
+            .cast();
+        unsafe {
+            sys::oneui_split_view_set_on_ratio_committed(
+                self.widget.as_raw(),
+                Some(run_float_changed_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn clear_on_ratio_committed(&mut self) {
+        unsafe {
+            sys::oneui_split_view_set_on_ratio_committed(
+                self.widget.as_raw(),
+                None,
+                std::ptr::null_mut(),
+            )
+        };
+        self.ratio_committed_callback = None;
+    }
+
     pub fn as_widget(&self) -> &Widget {
         &self.widget
     }
@@ -1357,6 +1833,7 @@ impl SplitView {
 impl Drop for SplitView {
     fn drop(&mut self) {
         self.clear_on_ratio_changed();
+        self.clear_on_ratio_committed();
     }
 }
 
@@ -1564,6 +2041,10 @@ impl Menu {
         unsafe { sys::oneui_menu_add_separator(self.widget.as_raw()) };
     }
 
+    pub fn clear_items(&self) {
+        unsafe { sys::oneui_menu_clear_items(self.widget.as_raw()) };
+    }
+
     pub fn set_item_disabled(&self, index: i32, disabled: bool) {
         unsafe {
             sys::oneui_menu_set_item_disabled(self.widget.as_raw(), index, i32::from(disabled))
@@ -1574,13 +2055,15 @@ impl Menu {
         unsafe { sys::oneui_menu_preferred_height(self.widget.as_raw()) }
     }
 
+    #[track_caller]
     pub fn set_on_activated<F>(&mut self, callback: F)
     where
         F: FnMut(i32) + 'static,
     {
+        let trace = InteractionTrace::at("Menu", "activated", std::panic::Location::caller());
         self.clear_on_activated();
         self.activated_callback = Some(Box::new(MenuActivatedCallback {
-            handler: Box::new(callback),
+            handler: Box::new(traced_value_callback(trace, callback)),
         }));
         let user_data = (self
             .activated_callback
@@ -1663,13 +2146,15 @@ impl Dialog {
         unsafe { sys::oneui_dialog_set_actions(self.widget.as_raw(), child.as_raw()) };
     }
 
+    #[track_caller]
     pub fn set_on_close<F>(&mut self, callback: F)
     where
         F: FnMut() + 'static,
     {
+        let trace = InteractionTrace::at("Dialog", "close", std::panic::Location::caller());
         self.clear_on_close();
         self.close_callback = Some(Box::new(VoidCallback {
-            handler: Rc::new(RefCell::new(Box::new(callback))),
+            handler: Rc::new(RefCell::new(Box::new(traced_callback(trace, callback)))),
         }));
         let user_data = (self
             .close_callback
@@ -1736,13 +2221,15 @@ impl StateView {
         unsafe { sys::oneui_state_view_set_action(self.widget.as_raw(), text.as_ptr()) };
     }
 
+    #[track_caller]
     pub fn set_on_action<F>(&mut self, callback: F)
     where
         F: FnMut() + 'static,
     {
+        let trace = InteractionTrace::at("StateView", "action", std::panic::Location::caller());
         self.clear_on_action();
         self.action_callback = Some(Box::new(VoidCallback {
-            handler: Rc::new(RefCell::new(Box::new(callback))),
+            handler: Rc::new(RefCell::new(Box::new(traced_callback(trace, callback)))),
         }));
         let user_data = (self
             .action_callback
@@ -2152,6 +2639,129 @@ impl Drop for ProgressBar {
     }
 }
 
+struct SparklineState {
+    raw: AtomicPtr<sys::OneUiWidget>,
+    pending_values: Mutex<Option<Vec<f64>>>,
+    update_scheduled: AtomicBool,
+}
+
+/// Thread-safe producer for normalized sparkline samples owned by a window.
+///
+/// Bursts are coalesced to the latest complete sample set and applied on the
+/// owning UI thread, preserving a stable frame under frequent telemetry updates.
+#[derive(Clone)]
+pub struct SparklineHandle {
+    state: Arc<SparklineState>,
+    dispatcher: UiDispatcher,
+}
+
+impl SparklineHandle {
+    pub fn set_values(&self, values: impl Into<Vec<f64>>) -> Result<(), Error> {
+        if self.state.raw.load(Ordering::Acquire).is_null() {
+            return Err(Error::WidgetDestroyed);
+        }
+        *self
+            .state
+            .pending_values
+            .lock()
+            .expect("sparkline pending values lock poisoned") = Some(values.into());
+        if self.state.update_scheduled.swap(true, Ordering::AcqRel) {
+            return Ok(());
+        }
+
+        let state = Arc::clone(&self.state);
+        let dispatched_state = Arc::clone(&state);
+        if let Err(error) = self
+            .dispatcher
+            .dispatch(move || Self::drain_pending_values(&dispatched_state))
+        {
+            state.update_scheduled.store(false, Ordering::Release);
+            state
+                .pending_values
+                .lock()
+                .expect("sparkline pending values lock poisoned")
+                .take();
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    fn drain_pending_values(state: &SparklineState) {
+        loop {
+            let values = state
+                .pending_values
+                .lock()
+                .expect("sparkline pending values lock poisoned")
+                .take();
+            let raw = state.raw.load(Ordering::Acquire);
+            if raw.is_null() {
+                state.update_scheduled.store(false, Ordering::Release);
+                return;
+            }
+            if let Some(values) = values {
+                unsafe { sys::oneui_sparkline_set_values(raw, values.as_ptr(), values.len()) };
+            }
+            state.update_scheduled.store(false, Ordering::Release);
+            if state
+                .pending_values
+                .lock()
+                .expect("sparkline pending values lock poisoned")
+                .is_none()
+            {
+                return;
+            }
+            if !state.update_scheduled.swap(true, Ordering::AcqRel) {
+                continue;
+            }
+            return;
+        }
+    }
+}
+
+/// A compact native time-series visualization with normalized [0, 1] samples.
+pub struct Sparkline {
+    widget: Widget,
+    state: Arc<SparklineState>,
+}
+
+impl Sparkline {
+    pub fn new() -> Result<Self, Error> {
+        let widget = Widget::from_raw(unsafe { sys::oneui_sparkline_create() })?;
+        Ok(Self {
+            state: Arc::new(SparklineState {
+                raw: AtomicPtr::new(widget.as_raw()),
+                pending_values: Mutex::new(None),
+                update_scheduled: AtomicBool::new(false),
+            }),
+            widget,
+        })
+    }
+
+    pub fn set_values(&self, values: &[f64]) {
+        unsafe {
+            sys::oneui_sparkline_set_values(self.widget.as_raw(), values.as_ptr(), values.len())
+        };
+    }
+
+    pub fn as_widget(&self) -> &Widget {
+        &self.widget
+    }
+}
+
+impl Drop for Sparkline {
+    fn drop(&mut self) {
+        self.state
+            .raw
+            .store(std::ptr::null_mut(), Ordering::Release);
+        self.state
+            .pending_values
+            .lock()
+            .expect("sparkline pending values lock poisoned")
+            .take();
+        self.state.update_scheduled.store(false, Ordering::Release);
+    }
+}
+
 /// A standard command button with callback lifetime bound to the Rust wrapper.
 pub struct Button {
     widget: Widget,
@@ -2201,13 +2811,15 @@ impl Button {
         unsafe { sys::oneui_button_clear_style(self.widget.as_raw()) };
     }
 
+    #[track_caller]
     pub fn set_on_click<F>(&mut self, callback: F)
     where
         F: FnMut() + 'static,
     {
+        let trace = InteractionTrace::at("Button", "click", std::panic::Location::caller());
         self.clear_on_click();
         self.callback = Some(Box::new(VoidCallback {
-            handler: Rc::new(RefCell::new(Box::new(callback))),
+            handler: Rc::new(RefCell::new(Box::new(traced_callback(trace, callback)))),
         }));
         let user_data = (self
             .callback
@@ -2275,13 +2887,15 @@ impl Select {
         unsafe { sys::oneui_select_selected_index(self.widget.as_raw()) }
     }
 
+    #[track_caller]
     pub fn set_on_changed<F>(&mut self, callback: F)
     where
         F: FnMut(i32) + 'static,
     {
+        let trace = InteractionTrace::at("Select", "changed", std::panic::Location::caller());
         self.clear_on_changed();
         self.changed_callback = Some(Box::new(ListChangedCallback {
-            handler: Box::new(callback),
+            handler: Box::new(traced_value_callback(trace, callback)),
         }));
         let user_data = (self
             .changed_callback
@@ -2530,13 +3144,19 @@ impl ReorderableGrid {
         unsafe { sys::oneui_reorderable_grid_reorder_enabled(self.widget.as_raw()) != 0 }
     }
 
+    #[track_caller]
     pub fn set_on_reorder_requested<F>(&mut self, callback: F)
     where
         F: FnMut(GridReorderRequest) + 'static,
     {
+        let trace = InteractionTrace::at(
+            "ReorderableGrid",
+            "reorder_requested",
+            std::panic::Location::caller(),
+        );
         self.clear_on_reorder_requested();
         self.reorder_callback = Some(Box::new(GridReorderRequestedCallback {
-            handler: Box::new(callback),
+            handler: Box::new(traced_value_callback(trace, callback)),
         }));
         let user_data = (self
             .reorder_callback
@@ -2577,13 +3197,19 @@ impl ReorderableGrid {
         unsafe { sys::oneui_reorderable_grid_item_drag_enabled(self.widget.as_raw()) != 0 }
     }
 
+    #[track_caller]
     pub fn set_on_item_drag<F>(&mut self, callback: F)
     where
         F: FnMut(ItemDragEvent) + 'static,
     {
+        let trace = InteractionTrace::at(
+            "ReorderableGrid",
+            "item_drag",
+            std::panic::Location::caller(),
+        );
         self.clear_on_item_drag();
         self.item_drag_callback = Some(Box::new(ItemDragCallback {
-            handler: Box::new(callback),
+            handler: Box::new(traced_value_callback(trace, callback)),
         }));
         let user_data = (self
             .item_drag_callback
@@ -2628,6 +3254,8 @@ pub struct InteractiveSurface {
     widget: Widget,
     click_callback: Option<Box<VoidCallback>>,
     pointer_callback: Option<Box<PointerCallback>>,
+    pointer_moved_callback: Option<Box<PointerCallback>>,
+    hover_changed_callback: Option<Box<BoolChangedCallback>>,
     context_menu_callback: Option<Box<PointerCallback>>,
 }
 
@@ -2638,6 +3266,8 @@ impl InteractiveSurface {
             widget,
             click_callback: None,
             pointer_callback: None,
+            pointer_moved_callback: None,
+            hover_changed_callback: None,
             context_menu_callback: None,
         })
     }
@@ -2655,13 +3285,19 @@ impl InteractiveSurface {
         unsafe { sys::oneui_interactive_surface_set_style(self.widget.as_raw(), &style) };
     }
 
+    #[track_caller]
     pub fn set_on_click<F>(&mut self, callback: F)
     where
         F: FnMut() + 'static,
     {
+        let trace = InteractionTrace::at(
+            "InteractiveSurface",
+            "click",
+            std::panic::Location::caller(),
+        );
         self.clear_on_click();
         self.click_callback = Some(Box::new(VoidCallback {
-            handler: Rc::new(RefCell::new(Box::new(callback))),
+            handler: Rc::new(RefCell::new(Box::new(traced_callback(trace, callback)))),
         }));
         let user_data = (self
             .click_callback
@@ -2689,13 +3325,19 @@ impl InteractiveSurface {
         self.click_callback = None;
     }
 
+    #[track_caller]
     pub fn set_on_pointer_activated<F>(&mut self, callback: F)
     where
         F: FnMut(PointerEvent) + 'static,
     {
+        let trace = InteractionTrace::at(
+            "InteractiveSurface",
+            "pointer_activated",
+            std::panic::Location::caller(),
+        );
         self.clear_on_pointer_activated();
         self.pointer_callback = Some(Box::new(PointerCallback {
-            handler: Box::new(callback),
+            handler: Box::new(traced_value_callback(trace, callback)),
         }));
         let user_data = (self
             .pointer_callback
@@ -2723,13 +3365,99 @@ impl InteractiveSurface {
         self.pointer_callback = None;
     }
 
+    #[track_caller]
+    pub fn set_on_pointer_moved<F>(&mut self, callback: F)
+    where
+        F: FnMut(PointerEvent) + 'static,
+    {
+        let trace = InteractionTrace::at(
+            "InteractiveSurface",
+            "pointer_moved",
+            std::panic::Location::caller(),
+        );
+        self.clear_on_pointer_moved();
+        self.pointer_moved_callback = Some(Box::new(PointerCallback {
+            handler: Box::new(traced_value_callback(trace, callback)),
+        }));
+        let user_data = (self
+            .pointer_moved_callback
+            .as_deref_mut()
+            .expect("interactive surface pointer-moved callback was just installed")
+            as *mut PointerCallback)
+            .cast();
+        unsafe {
+            sys::oneui_interactive_surface_set_on_pointer_moved(
+                self.widget.as_raw(),
+                Some(run_pointer_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn clear_on_pointer_moved(&mut self) {
+        unsafe {
+            sys::oneui_interactive_surface_set_on_pointer_moved(
+                self.widget.as_raw(),
+                None,
+                std::ptr::null_mut(),
+            )
+        };
+        self.pointer_moved_callback = None;
+    }
+
+    #[track_caller]
+    pub fn set_on_hover_changed<F>(&mut self, callback: F)
+    where
+        F: FnMut(bool) + 'static,
+    {
+        let trace = InteractionTrace::at(
+            "InteractiveSurface",
+            "hover_changed",
+            std::panic::Location::caller(),
+        );
+        self.clear_on_hover_changed();
+        self.hover_changed_callback = Some(Box::new(BoolChangedCallback {
+            handler: Box::new(traced_value_callback(trace, callback)),
+        }));
+        let user_data = (self
+            .hover_changed_callback
+            .as_deref_mut()
+            .expect("interactive surface hover callback was just installed")
+            as *mut BoolChangedCallback)
+            .cast();
+        unsafe {
+            sys::oneui_interactive_surface_set_on_hover_changed(
+                self.widget.as_raw(),
+                Some(run_bool_changed_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn clear_on_hover_changed(&mut self) {
+        unsafe {
+            sys::oneui_interactive_surface_set_on_hover_changed(
+                self.widget.as_raw(),
+                None,
+                std::ptr::null_mut(),
+            )
+        };
+        self.hover_changed_callback = None;
+    }
+
+    #[track_caller]
     pub fn set_on_context_menu_requested<F>(&mut self, callback: F)
     where
         F: FnMut(PointerEvent) + 'static,
     {
+        let trace = InteractionTrace::at(
+            "InteractiveSurface",
+            "context_menu_requested",
+            std::panic::Location::caller(),
+        );
         self.clear_on_context_menu_requested();
         self.context_menu_callback = Some(Box::new(PointerCallback {
-            handler: Box::new(callback),
+            handler: Box::new(traced_value_callback(trace, callback)),
         }));
         let user_data = (self
             .context_menu_callback
@@ -2766,6 +3494,8 @@ impl Drop for InteractiveSurface {
     fn drop(&mut self) {
         self.clear_on_click();
         self.clear_on_pointer_activated();
+        self.clear_on_pointer_moved();
+        self.clear_on_hover_changed();
         self.clear_on_context_menu_requested();
     }
 }
@@ -2813,13 +3543,15 @@ impl IconButton {
         unsafe { sys::oneui_icon_button_set_symbol(self.widget.as_raw(), symbol as i32) };
     }
 
+    #[track_caller]
     pub fn set_on_click<F>(&mut self, callback: F)
     where
         F: FnMut() + 'static,
     {
+        let trace = InteractionTrace::at("IconButton", "click", std::panic::Location::caller());
         self.clear_on_click();
         self.callback = Some(Box::new(VoidCallback {
-            handler: Rc::new(RefCell::new(Box::new(callback))),
+            handler: Rc::new(RefCell::new(Box::new(traced_callback(trace, callback)))),
         }));
         let user_data = (self
             .callback
@@ -2890,13 +3622,21 @@ impl WindowTitleBar {
         unsafe { sys::oneui_title_bar_set_variant(self.widget.as_raw(), variant.as_ptr()) };
     }
 
+    /// Places application controls in the center of the native title bar.
+    pub fn set_accessory(&self, accessory: &Widget) {
+        unsafe { sys::oneui_title_bar_set_accessory(self.widget.as_raw(), accessory.as_raw()) };
+    }
+
+    #[track_caller]
     pub fn set_on_minimize<F>(&mut self, callback: F)
     where
         F: FnMut() + 'static,
     {
+        let trace =
+            InteractionTrace::at("WindowTitleBar", "minimize", std::panic::Location::caller());
         self.clear_on_minimize();
         self.minimize_callback = Some(Box::new(VoidCallback {
-            handler: Rc::new(RefCell::new(Box::new(callback))),
+            handler: Rc::new(RefCell::new(Box::new(traced_callback(trace, callback)))),
         }));
         let user_data = (self
             .minimize_callback
@@ -2913,13 +3653,16 @@ impl WindowTitleBar {
         };
     }
 
+    #[track_caller]
     pub fn set_on_maximize<F>(&mut self, callback: F)
     where
         F: FnMut() + 'static,
     {
+        let trace =
+            InteractionTrace::at("WindowTitleBar", "maximize", std::panic::Location::caller());
         self.clear_on_maximize();
         self.maximize_callback = Some(Box::new(VoidCallback {
-            handler: Rc::new(RefCell::new(Box::new(callback))),
+            handler: Rc::new(RefCell::new(Box::new(traced_callback(trace, callback)))),
         }));
         let user_data = (self
             .maximize_callback
@@ -2936,13 +3679,15 @@ impl WindowTitleBar {
         };
     }
 
+    #[track_caller]
     pub fn set_on_close<F>(&mut self, callback: F)
     where
         F: FnMut() + 'static,
     {
+        let trace = InteractionTrace::at("WindowTitleBar", "close", std::panic::Location::caller());
         self.clear_on_close();
         self.close_callback = Some(Box::new(VoidCallback {
-            handler: Rc::new(RefCell::new(Box::new(callback))),
+            handler: Rc::new(RefCell::new(Box::new(traced_callback(trace, callback)))),
         }));
         let user_data = (self
             .close_callback
@@ -3015,13 +3760,15 @@ impl NavItem {
         unsafe { sys::oneui_nav_item_set_selected(self.widget.as_raw(), i32::from(selected)) };
     }
 
+    #[track_caller]
     pub fn set_on_click<F>(&mut self, callback: F)
     where
         F: FnMut() + 'static,
     {
+        let trace = InteractionTrace::at("NavItem", "click", std::panic::Location::caller());
         self.clear_on_click();
         self.callback = Some(Box::new(VoidCallback {
-            handler: Rc::new(RefCell::new(Box::new(callback))),
+            handler: Rc::new(RefCell::new(Box::new(traced_callback(trace, callback)))),
         }));
         let user_data = (self
             .callback
@@ -3074,10 +3821,109 @@ unsafe extern "C" fn run_text_field_changed_callback(
     run_callback_guarded("text.changed", || (callback.handler)(value));
 }
 
+unsafe extern "C" fn run_text_field_submitted_callback(
+    text: *const std::ffi::c_char,
+    length: usize,
+    user_data: *mut std::ffi::c_void,
+) {
+    if text.is_null() || user_data.is_null() {
+        return;
+    }
+    let bytes = unsafe { std::slice::from_raw_parts(text.cast::<u8>(), length) };
+    let value = String::from_utf8_lossy(bytes).into_owned();
+    let callback = unsafe { &mut *user_data.cast::<TextFieldChangedCallback>() };
+    run_callback_guarded("text.submitted", || (callback.handler)(value));
+}
+
+struct TextFieldState {
+    raw: AtomicPtr<sys::OneUiWidget>,
+    pending_text: Mutex<Option<String>>,
+    update_scheduled: AtomicBool,
+}
+
+/// Thread-safe producer for single-line text field values owned by a window.
+///
+/// Worker updates are coalesced and applied on the owning UI thread.
+#[derive(Clone)]
+pub struct TextFieldHandle {
+    state: Arc<TextFieldState>,
+    dispatcher: UiDispatcher,
+}
+
+impl TextFieldHandle {
+    pub fn set_text(&self, text: impl Into<String>) -> Result<(), Error> {
+        if self.state.raw.load(Ordering::Acquire).is_null() {
+            return Err(Error::WidgetDestroyed);
+        }
+
+        *self
+            .state
+            .pending_text
+            .lock()
+            .expect("text field pending text lock poisoned") = Some(text.into());
+        if self.state.update_scheduled.swap(true, Ordering::AcqRel) {
+            return Ok(());
+        }
+
+        let state = Arc::clone(&self.state);
+        let dispatched_state = Arc::clone(&state);
+        if let Err(error) = self
+            .dispatcher
+            .dispatch(move || Self::drain_pending_text(&dispatched_state))
+        {
+            state.update_scheduled.store(false, Ordering::Release);
+            state
+                .pending_text
+                .lock()
+                .expect("text field pending text lock poisoned")
+                .take();
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    fn drain_pending_text(state: &TextFieldState) {
+        loop {
+            let text = state
+                .pending_text
+                .lock()
+                .expect("text field pending text lock poisoned")
+                .take();
+            let raw = state.raw.load(Ordering::Acquire);
+            if raw.is_null() {
+                state.update_scheduled.store(false, Ordering::Release);
+                return;
+            }
+            if let Some(text) = text {
+                let text = sys::OneUiUtf8String::from_str(&text);
+                trace_ui_task("text field update started");
+                unsafe { sys::oneui_text_field_set_text_utf8(raw, text) };
+                trace_ui_task("text field update completed");
+            }
+
+            state.update_scheduled.store(false, Ordering::Release);
+            if state
+                .pending_text
+                .lock()
+                .expect("text field pending text lock poisoned")
+                .is_none()
+            {
+                return;
+            }
+            if !state.update_scheduled.swap(true, Ordering::AcqRel) {
+                continue;
+            }
+            return;
+        }
+    }
+}
+
 /// A basic UTF-8 text field with an owned text-change callback.
 pub struct TextField {
     widget: Widget,
+    state: Arc<TextFieldState>,
     changed_callback: Option<Box<TextFieldChangedCallback>>,
+    submitted_callback: Option<Box<TextFieldChangedCallback>>,
 }
 
 impl TextField {
@@ -3085,8 +3931,14 @@ impl TextField {
         let placeholder = sys::OneUiUtf8String::from_str(placeholder);
         let widget = Widget::from_raw(unsafe { sys::oneui_text_field_create_utf8(placeholder) })?;
         Ok(Self {
+            state: Arc::new(TextFieldState {
+                raw: AtomicPtr::new(widget.as_raw()),
+                pending_text: Mutex::new(None),
+                update_scheduled: AtomicBool::new(false),
+            }),
             widget,
             changed_callback: None,
+            submitted_callback: None,
         })
     }
 
@@ -3117,13 +3969,31 @@ impl TextField {
         unsafe { sys::oneui_text_field_set_password_mask(self.widget.as_raw(), u32::from(mask)) };
     }
 
+    pub fn set_prefix_icon(&self, symbol: IconSymbol) {
+        unsafe { sys::oneui_text_field_set_prefix_icon(self.widget.as_raw(), symbol as i32) };
+    }
+
+    pub fn clear_prefix_icon(&self) {
+        unsafe { sys::oneui_text_field_clear_prefix_icon(self.widget.as_raw()) };
+    }
+
+    pub fn set_suffix_icon(&self, symbol: IconSymbol) {
+        unsafe { sys::oneui_text_field_set_suffix_icon(self.widget.as_raw(), symbol as i32) };
+    }
+
+    pub fn clear_suffix_icon(&self) {
+        unsafe { sys::oneui_text_field_clear_suffix_icon(self.widget.as_raw()) };
+    }
+
+    #[track_caller]
     pub fn set_on_changed<F>(&mut self, callback: F)
     where
         F: FnMut(String) + 'static,
     {
+        let trace = InteractionTrace::at("TextField", "changed", std::panic::Location::caller());
         self.clear_on_changed();
         self.changed_callback = Some(Box::new(TextFieldChangedCallback {
-            handler: Box::new(callback),
+            handler: Box::new(traced_value_callback(trace, callback)),
         }));
         let user_data = (self
             .changed_callback
@@ -3151,6 +4021,42 @@ impl TextField {
         self.changed_callback = None;
     }
 
+    #[track_caller]
+    pub fn set_on_submitted<F>(&mut self, callback: F)
+    where
+        F: FnMut(String) + 'static,
+    {
+        let trace = InteractionTrace::at("TextField", "submitted", std::panic::Location::caller());
+        self.clear_on_submitted();
+        self.submitted_callback = Some(Box::new(TextFieldChangedCallback {
+            handler: Box::new(traced_value_callback(trace, callback)),
+        }));
+        let user_data = (self
+            .submitted_callback
+            .as_deref_mut()
+            .expect("text field submit callback was just installed")
+            as *mut TextFieldChangedCallback)
+            .cast();
+        unsafe {
+            sys::oneui_text_field_set_on_submitted_utf8(
+                self.widget.as_raw(),
+                Some(run_text_field_submitted_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn clear_on_submitted(&mut self) {
+        unsafe {
+            sys::oneui_text_field_set_on_submitted_utf8(
+                self.widget.as_raw(),
+                None,
+                std::ptr::null_mut(),
+            )
+        };
+        self.submitted_callback = None;
+    }
+
     pub fn as_widget(&self) -> &Widget {
         &self.widget
     }
@@ -3159,6 +4065,16 @@ impl TextField {
 impl Drop for TextField {
     fn drop(&mut self) {
         self.clear_on_changed();
+        self.clear_on_submitted();
+        self.state
+            .raw
+            .store(std::ptr::null_mut(), Ordering::Release);
+        self.state
+            .pending_text
+            .lock()
+            .expect("text field pending text lock poisoned")
+            .take();
+        self.state.update_scheduled.store(false, Ordering::Release);
     }
 }
 
@@ -3290,13 +4206,15 @@ impl TextArea {
         unsafe { sys::oneui_text_field_set_line_height(self.widget.as_raw(), line_height) };
     }
 
+    #[track_caller]
     pub fn set_on_changed<F>(&mut self, callback: F)
     where
         F: FnMut(String) + 'static,
     {
+        let trace = InteractionTrace::at("TextArea", "changed", std::panic::Location::caller());
         self.clear_on_changed();
         self.changed_callback = Some(Box::new(TextFieldChangedCallback {
-            handler: Box::new(callback),
+            handler: Box::new(traced_value_callback(trace, callback)),
         }));
         let user_data = (self
             .changed_callback
@@ -3386,13 +4304,15 @@ impl Switch {
         unsafe { sys::oneui_switch_checked(self.widget.as_raw()) != 0 }
     }
 
+    #[track_caller]
     pub fn set_on_changed<F>(&mut self, callback: F)
     where
         F: FnMut(bool) + 'static,
     {
+        let trace = InteractionTrace::at("Switch", "changed", std::panic::Location::caller());
         self.clear_on_changed();
         self.changed_callback = Some(Box::new(BoolChangedCallback {
-            handler: Box::new(callback),
+            handler: Box::new(traced_value_callback(trace, callback)),
         }));
         let user_data = (self
             .changed_callback
@@ -3422,6 +4342,79 @@ impl Switch {
 }
 
 impl Drop for Switch {
+    fn drop(&mut self) {
+        self.clear_on_changed();
+    }
+}
+
+/// A native check box for independent option selection. It shares OneUI's
+/// focus, accessibility, keyboard, style-sheet and callback lifetime rules.
+pub struct Checkbox {
+    widget: Widget,
+    changed_callback: Option<Box<BoolChangedCallback>>,
+}
+
+impl Checkbox {
+    pub fn new(text: &str) -> Result<Self, Error> {
+        let text = wide_null_terminated(text);
+        let widget = Widget::from_raw(unsafe { sys::oneui_checkbox_create(text.as_ptr()) })?;
+        Ok(Self {
+            widget,
+            changed_callback: None,
+        })
+    }
+
+    pub fn set_text(&self, text: &str) {
+        let text = wide_null_terminated(text);
+        unsafe { sys::oneui_checkbox_set_text(self.widget.as_raw(), text.as_ptr()) };
+    }
+
+    pub fn set_checked(&self, checked: bool) {
+        unsafe { sys::oneui_checkbox_set_checked(self.widget.as_raw(), i32::from(checked)) };
+    }
+
+    pub fn checked(&self) -> bool {
+        unsafe { sys::oneui_checkbox_checked(self.widget.as_raw()) != 0 }
+    }
+
+    #[track_caller]
+    pub fn set_on_changed<F>(&mut self, callback: F)
+    where
+        F: FnMut(bool) + 'static,
+    {
+        let trace = InteractionTrace::at("Checkbox", "changed", std::panic::Location::caller());
+        self.clear_on_changed();
+        self.changed_callback = Some(Box::new(BoolChangedCallback {
+            handler: Box::new(traced_value_callback(trace, callback)),
+        }));
+        let user_data = (self
+            .changed_callback
+            .as_deref_mut()
+            .expect("checkbox callback was just installed")
+            as *mut BoolChangedCallback)
+            .cast();
+        unsafe {
+            sys::oneui_checkbox_set_on_changed(
+                self.widget.as_raw(),
+                Some(run_bool_changed_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn clear_on_changed(&mut self) {
+        unsafe {
+            sys::oneui_checkbox_set_on_changed(self.widget.as_raw(), None, std::ptr::null_mut())
+        };
+        self.changed_callback = None;
+    }
+
+    pub fn as_widget(&self) -> &Widget {
+        &self.widget
+    }
+}
+
+impl Drop for Checkbox {
     fn drop(&mut self) {
         self.clear_on_changed();
     }
@@ -3471,13 +4464,19 @@ impl SegmentedControl {
         unsafe { sys::oneui_segmented_control_selected_index(self.widget.as_raw()) }
     }
 
+    #[track_caller]
     pub fn set_on_changed<F>(&mut self, callback: F)
     where
         F: FnMut(i32) + 'static,
     {
+        let trace = InteractionTrace::at(
+            "SegmentedControl",
+            "changed",
+            std::panic::Location::caller(),
+        );
         self.clear_on_changed();
         self.changed_callback = Some(Box::new(IndexChangedCallback {
-            handler: Box::new(callback),
+            handler: Box::new(traced_value_callback(trace, callback)),
         }));
         let user_data = (self
             .changed_callback
@@ -3520,6 +4519,9 @@ impl Drop for SegmentedControl {
 pub struct Tabs {
     widget: Widget,
     changed_callback: Option<Box<IndexChangedCallback>>,
+    close_requested_callback: Option<Box<IndexChangedCallback>>,
+    context_menu_requested_callback: Option<Box<ContextMenuRequestedCallback>>,
+    reorder_requested_callback: Option<Box<ReorderRequestedCallback>>,
 }
 
 impl Tabs {
@@ -3528,6 +4530,9 @@ impl Tabs {
         let control = Self {
             widget,
             changed_callback: None,
+            close_requested_callback: None,
+            context_menu_requested_callback: None,
+            reorder_requested_callback: None,
         };
         control.set_items(items);
         Ok(control)
@@ -3543,6 +4548,18 @@ impl Tabs {
         };
     }
 
+    /// Sets an optional leading icon for each tab. Missing entries and `None`
+    /// keep the corresponding tab text-only.
+    pub fn set_item_icons(&self, icons: &[Option<IconSymbol>]) {
+        let symbols = icons
+            .iter()
+            .map(|icon| icon.map_or(-1, |symbol| symbol as i32))
+            .collect::<Vec<_>>();
+        unsafe {
+            sys::oneui_tabs_set_item_icons(self.widget.as_raw(), symbols.as_ptr(), symbols.len())
+        };
+    }
+
     pub fn set_selected_index(&self, index: i32) {
         unsafe { sys::oneui_tabs_set_selected_index(self.widget.as_raw(), index) };
     }
@@ -3551,13 +4568,36 @@ impl Tabs {
         unsafe { sys::oneui_tabs_selected_index(self.widget.as_raw()) }
     }
 
+    /// Uses content-oriented tab widths with bounded horizontal overflow.
+    pub fn set_compact(&self, compact: bool) {
+        unsafe { sys::oneui_tabs_set_compact(self.widget.as_raw(), i32::from(compact)) };
+    }
+
+    pub fn set_item_width_range(&self, minimum: f32, maximum: f32) {
+        unsafe { sys::oneui_tabs_set_item_width_range(self.widget.as_raw(), minimum, maximum) };
+    }
+
+    pub fn set_closable(&self, closable: bool) {
+        unsafe { sys::oneui_tabs_set_closable(self.widget.as_raw(), i32::from(closable)) };
+    }
+
+    pub fn set_reorder_enabled(&self, enabled: bool) {
+        unsafe { sys::oneui_tabs_set_reorder_enabled(self.widget.as_raw(), i32::from(enabled)) };
+    }
+
+    pub fn reorder_enabled(&self) -> bool {
+        unsafe { sys::oneui_tabs_reorder_enabled(self.widget.as_raw()) != 0 }
+    }
+
+    #[track_caller]
     pub fn set_on_changed<F>(&mut self, callback: F)
     where
         F: FnMut(i32) + 'static,
     {
+        let trace = InteractionTrace::at("Tabs", "changed", std::panic::Location::caller());
         self.clear_on_changed();
         self.changed_callback = Some(Box::new(IndexChangedCallback {
-            handler: Box::new(callback),
+            handler: Box::new(traced_value_callback(trace, callback)),
         }));
         let user_data = (self
             .changed_callback
@@ -3579,6 +4619,115 @@ impl Tabs {
         self.changed_callback = None;
     }
 
+    #[track_caller]
+    pub fn set_on_close_requested<F>(&mut self, callback: F)
+    where
+        F: FnMut(i32) + 'static,
+    {
+        let trace = InteractionTrace::at("Tabs", "close_requested", std::panic::Location::caller());
+        self.clear_on_close_requested();
+        self.close_requested_callback = Some(Box::new(IndexChangedCallback {
+            handler: Box::new(traced_value_callback(trace, callback)),
+        }));
+        let user_data = (self
+            .close_requested_callback
+            .as_deref_mut()
+            .expect("tabs close callback was just installed")
+            as *mut IndexChangedCallback)
+            .cast();
+        unsafe {
+            sys::oneui_tabs_set_on_close_requested(
+                self.widget.as_raw(),
+                Some(run_index_changed_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn clear_on_close_requested(&mut self) {
+        unsafe {
+            sys::oneui_tabs_set_on_close_requested(self.widget.as_raw(), None, std::ptr::null_mut())
+        };
+        self.close_requested_callback = None;
+    }
+
+    #[track_caller]
+    pub fn set_on_context_menu_requested<F>(&mut self, callback: F)
+    where
+        F: FnMut(ContextMenuRequest) + 'static,
+    {
+        let trace = InteractionTrace::at(
+            "Tabs",
+            "context_menu_requested",
+            std::panic::Location::caller(),
+        );
+        self.clear_on_context_menu_requested();
+        self.context_menu_requested_callback = Some(Box::new(ContextMenuRequestedCallback {
+            handler: Box::new(traced_value_callback(trace, callback)),
+        }));
+        let user_data = (self
+            .context_menu_requested_callback
+            .as_deref_mut()
+            .expect("tabs context menu callback was just installed")
+            as *mut ContextMenuRequestedCallback)
+            .cast();
+        unsafe {
+            sys::oneui_tabs_set_on_context_menu_requested(
+                self.widget.as_raw(),
+                Some(run_context_menu_requested_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn clear_on_context_menu_requested(&mut self) {
+        unsafe {
+            sys::oneui_tabs_set_on_context_menu_requested(
+                self.widget.as_raw(),
+                None,
+                std::ptr::null_mut(),
+            )
+        };
+        self.context_menu_requested_callback = None;
+    }
+
+    #[track_caller]
+    pub fn set_on_reorder_requested<F>(&mut self, callback: F)
+    where
+        F: FnMut(ReorderRequest) + 'static,
+    {
+        let trace =
+            InteractionTrace::at("Tabs", "reorder_requested", std::panic::Location::caller());
+        self.clear_on_reorder_requested();
+        self.reorder_requested_callback = Some(Box::new(ReorderRequestedCallback {
+            handler: Box::new(traced_value_callback(trace, callback)),
+        }));
+        let user_data = (self
+            .reorder_requested_callback
+            .as_deref_mut()
+            .expect("tabs reorder callback was just installed")
+            as *mut ReorderRequestedCallback)
+            .cast();
+        unsafe {
+            sys::oneui_tabs_set_on_reorder_requested(
+                self.widget.as_raw(),
+                Some(run_reorder_requested_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn clear_on_reorder_requested(&mut self) {
+        unsafe {
+            sys::oneui_tabs_set_on_reorder_requested(
+                self.widget.as_raw(),
+                None,
+                std::ptr::null_mut(),
+            )
+        };
+        self.reorder_requested_callback = None;
+    }
+
     pub fn as_widget(&self) -> &Widget {
         &self.widget
     }
@@ -3587,6 +4736,9 @@ impl Tabs {
 impl Drop for Tabs {
     fn drop(&mut self) {
         self.clear_on_changed();
+        self.clear_on_close_requested();
+        self.clear_on_context_menu_requested();
+        self.clear_on_reorder_requested();
     }
 }
 
@@ -3719,6 +4871,10 @@ pub struct TerminalFrame {
     pub cursor: TerminalCursor,
     pub cursor_style: TerminalCursorStyle,
     pub cursor_blinking: bool,
+    /// Applies frame cursor style and blinking only when the terminal
+    /// application explicitly requested them. Otherwise the view keeps its
+    /// user-configured defaults from `TerminalViewOptions`.
+    pub cursor_style_from_application: bool,
     /// Whether terminal applications currently own pointer input. Shift still
     /// bypasses reporting so users can select text locally.
     pub mouse_reporting: bool,
@@ -3794,6 +4950,10 @@ pub struct TerminalViewOptions {
     pub letter_spacing: f32,
     pub cursor_style: TerminalCursorStyle,
     pub cursor_blinking: bool,
+    /// Whether an application-originated DECSCUSR sequence may override the
+    /// user's configured cursor shape. Keeping this explicit prevents frame
+    /// updates from silently undoing a preference applied through settings.
+    pub honor_application_cursor_style: bool,
     pub copy_on_select: bool,
     pub right_button_action: TerminalAuxiliaryButtonAction,
     pub middle_button_action: TerminalAuxiliaryButtonAction,
@@ -3876,6 +5036,7 @@ struct TerminalViewState {
     pending_update: Mutex<Option<TerminalFrameUpdate>>,
     last_applied_frame: Mutex<Option<TerminalFrame>>,
     update_scheduled: AtomicBool,
+    honor_application_cursor_style: AtomicBool,
 }
 
 #[derive(Debug, Clone)]
@@ -3907,6 +5068,9 @@ impl TerminalViewHandle {
         if self.state.raw.load(Ordering::Acquire).is_null() {
             return Err(Error::WidgetDestroyed);
         }
+        self.state
+            .honor_application_cursor_style
+            .store(options.honor_application_cursor_style, Ordering::Release);
         let state = Arc::clone(&self.state);
         self.dispatcher.dispatch(move || {
             let raw = state.raw.load(Ordering::Acquire);
@@ -4050,7 +5214,12 @@ impl TerminalViewHandle {
                     .last_applied_frame
                     .lock()
                     .expect("terminal last applied frame lock poisoned");
-                apply_terminal_frame(raw, &update.frame, last_applied.as_ref());
+                apply_terminal_frame(
+                    raw,
+                    &update.frame,
+                    last_applied.as_ref(),
+                    state.honor_application_cursor_style.load(Ordering::Acquire),
+                );
                 match update.selection {
                     TerminalSelectionUpdate::Preserve => {}
                     TerminalSelectionUpdate::Set(selection) => unsafe {
@@ -4195,6 +5364,7 @@ impl TerminalView {
                 pending_update: Mutex::new(None),
                 last_applied_frame: Mutex::new(None),
                 update_scheduled: AtomicBool::new(false),
+                honor_application_cursor_style: AtomicBool::new(false),
             }),
             widget,
             text_input_callback: None,
@@ -4213,6 +5383,9 @@ impl TerminalView {
     }
 
     pub fn apply_options(&self, options: &TerminalViewOptions) {
+        self.state
+            .honor_application_cursor_style
+            .store(options.honor_application_cursor_style, Ordering::Release);
         apply_terminal_view_options(self.widget.as_raw(), options);
     }
 
@@ -4397,13 +5570,16 @@ impl TerminalView {
         String::from_utf8_lossy(&buffer).into_owned()
     }
 
+    #[track_caller]
     pub fn set_on_text_input<F>(&mut self, callback: F)
     where
         F: FnMut(String) + 'static,
     {
+        let trace =
+            InteractionTrace::at("TerminalView", "text_input", std::panic::Location::caller());
         self.clear_text_input_callback();
         self.text_input_callback = Some(Box::new(TerminalTextInputCallback {
-            handler: Box::new(callback),
+            handler: Box::new(traced_value_callback(trace, callback)),
         }));
         let user_data = (self
             .text_input_callback
@@ -4420,13 +5596,15 @@ impl TerminalView {
         };
     }
 
+    #[track_caller]
     pub fn set_on_paste<F>(&mut self, callback: F)
     where
         F: FnMut(String) + 'static,
     {
+        let trace = InteractionTrace::at("TerminalView", "paste", std::panic::Location::caller());
         self.clear_paste_callback();
         self.paste_callback = Some(Box::new(TerminalTextInputCallback {
-            handler: Box::new(callback),
+            handler: Box::new(traced_value_callback(trace, callback)),
         }));
         let user_data = (self
             .paste_callback
@@ -4443,13 +5621,15 @@ impl TerminalView {
         };
     }
 
+    #[track_caller]
     pub fn set_on_raw_key<F>(&mut self, callback: F)
     where
         F: FnMut(RawKeyEvent) + 'static,
     {
+        let trace = InteractionTrace::at("TerminalView", "raw_key", std::panic::Location::caller());
         self.clear_raw_key_callback();
         self.raw_key_callback = Some(Box::new(TerminalRawKeyCallback {
-            handler: Box::new(callback),
+            handler: Box::new(traced_value_callback(trace, callback)),
         }));
         let user_data = (self
             .raw_key_callback
@@ -4466,13 +5646,15 @@ impl TerminalView {
         };
     }
 
+    #[track_caller]
     pub fn set_on_scroll<F>(&mut self, callback: F)
     where
         F: FnMut(i32) + 'static,
     {
+        let trace = InteractionTrace::at("TerminalView", "scroll", std::panic::Location::caller());
         self.clear_scroll_callback();
         self.scroll_callback = Some(Box::new(TerminalScrollCallback {
-            handler: Box::new(callback),
+            handler: Box::new(traced_value_callback(trace, callback)),
         }));
         let user_data = (self
             .scroll_callback
@@ -4489,13 +5671,15 @@ impl TerminalView {
         };
     }
 
+    #[track_caller]
     pub fn set_on_pointer<F>(&mut self, callback: F)
     where
         F: FnMut(TerminalPointerEvent) + 'static,
     {
+        let trace = InteractionTrace::at("TerminalView", "pointer", std::panic::Location::caller());
         self.clear_pointer_callback();
         self.pointer_callback = Some(Box::new(TerminalPointerCallback {
-            handler: Box::new(callback),
+            handler: Box::new(traced_value_callback(trace, callback)),
         }));
         let user_data = (self
             .pointer_callback
@@ -4514,13 +5698,16 @@ impl TerminalView {
 
     /// Installs the activation callback for OSC 8 cells. OneUI emits this
     /// only after a completed Ctrl+left-click on the same hyperlink.
+    #[track_caller]
     pub fn set_on_hyperlink<F>(&mut self, callback: F)
     where
         F: FnMut(u32) + 'static,
     {
+        let trace =
+            InteractionTrace::at("TerminalView", "hyperlink", std::panic::Location::caller());
         self.clear_hyperlink_callback();
         self.hyperlink_callback = Some(Box::new(TerminalHyperlinkCallback {
-            handler: Box::new(callback),
+            handler: Box::new(traced_value_callback(trace, callback)),
         }));
         let user_data = (self
             .hyperlink_callback
@@ -4537,13 +5724,19 @@ impl TerminalView {
         };
     }
 
+    #[track_caller]
     pub fn set_on_viewport_changed<F>(&mut self, callback: F)
     where
         F: FnMut(TerminalViewport) + 'static,
     {
+        let trace = InteractionTrace::at(
+            "TerminalView",
+            "viewport_changed",
+            std::panic::Location::caller(),
+        );
         self.clear_viewport_callback();
         self.viewport_callback = Some(Box::new(TerminalViewportCallback {
-            handler: Box::new(callback),
+            handler: Box::new(traced_value_callback(trace, callback)),
         }));
         let user_data = (self
             .viewport_callback
@@ -4560,13 +5753,19 @@ impl TerminalView {
         };
     }
 
+    #[track_caller]
     pub fn set_on_focus_changed<F>(&mut self, callback: F)
     where
         F: FnMut(bool) + 'static,
     {
+        let trace = InteractionTrace::at(
+            "TerminalView",
+            "focus_changed",
+            std::panic::Location::caller(),
+        );
         self.clear_focus_callback();
         self.focus_callback = Some(Box::new(BoolChangedCallback {
-            handler: Box::new(callback),
+            handler: Box::new(traced_value_callback(trace, callback)),
         }));
         let user_data = (self
             .focus_callback
@@ -4703,6 +5902,7 @@ fn apply_terminal_frame(
     raw: *mut sys::OneUiWidget,
     frame: &TerminalFrame,
     previous: Option<&TerminalFrame>,
+    honor_application_cursor_style: bool,
 ) {
     unsafe {
         sys::oneui_terminal_view_set_first_visible_line_number(raw, frame.first_visible_line_number)
@@ -4721,8 +5921,13 @@ fn apply_terminal_frame(
     }
     unsafe {
         sys::oneui_terminal_view_set_mouse_reporting(raw, i32::from(frame.mouse_reporting));
-        sys::oneui_terminal_view_set_cursor_style(raw, frame.cursor_style as i32);
-        sys::oneui_terminal_view_set_cursor_blinking(raw, i32::from(frame.cursor_blinking));
+        if should_apply_application_cursor_style(
+            honor_application_cursor_style,
+            frame.cursor_style_from_application,
+        ) {
+            sys::oneui_terminal_view_set_cursor_style(raw, frame.cursor_style as i32);
+            sys::oneui_terminal_view_set_cursor_blinking(raw, i32::from(frame.cursor_blinking));
+        }
         sys::oneui_terminal_view_set_cursor(
             raw,
             frame.cursor.row,
@@ -4730,6 +5935,13 @@ fn apply_terminal_frame(
             i32::from(frame.cursor.visible),
         )
     };
+}
+
+fn should_apply_application_cursor_style(
+    honor_application_cursor_style: bool,
+    cursor_style_from_application: bool,
+) -> bool {
+    honor_application_cursor_style && cursor_style_from_application
 }
 
 fn terminal_dirty_ranges(
@@ -5071,13 +6283,15 @@ impl List {
         unsafe { sys::oneui_list_selected_index(self.widget.as_raw()) }
     }
 
+    #[track_caller]
     pub fn set_on_changed<F>(&mut self, callback: F)
     where
         F: FnMut(i32) + 'static,
     {
+        let trace = InteractionTrace::at("List", "changed", std::panic::Location::caller());
         self.clear_on_changed();
         self.changed_callback = Some(Box::new(ListChangedCallback {
-            handler: Box::new(callback),
+            handler: Box::new(traced_value_callback(trace, callback)),
         }));
         let user_data = (self
             .changed_callback
@@ -5395,13 +6609,15 @@ impl VirtualList {
         unsafe { sys::oneui_virtual_list_max_scroll_offset(self.widget.as_raw()) }
     }
 
+    #[track_caller]
     pub fn set_on_changed<F>(&mut self, callback: F)
     where
         F: FnMut(i32) + 'static,
     {
+        let trace = InteractionTrace::at("VirtualList", "changed", std::panic::Location::caller());
         self.clear_on_changed();
         self.changed_callback = Some(Box::new(ListChangedCallback {
-            handler: Box::new(callback),
+            handler: Box::new(traced_value_callback(trace, callback)),
         }));
         let user_data = (self
             .changed_callback
@@ -5425,13 +6641,19 @@ impl VirtualList {
         self.changed_callback = None;
     }
 
+    #[track_caller]
     pub fn set_on_selection_changed<F>(&mut self, callback: F)
     where
         F: FnMut(Vec<i32>) + 'static,
     {
+        let trace = InteractionTrace::at(
+            "VirtualList",
+            "selection_changed",
+            std::panic::Location::caller(),
+        );
         self.clear_on_selection_changed();
         self.selection_changed_callback = Some(Box::new(ListSelectionChangedCallback {
-            handler: Box::new(callback),
+            handler: Box::new(traced_value_callback(trace, callback)),
         }));
         let user_data = (self
             .selection_changed_callback
@@ -5459,13 +6681,16 @@ impl VirtualList {
         self.selection_changed_callback = None;
     }
 
+    #[track_caller]
     pub fn set_on_activated<F>(&mut self, callback: F)
     where
         F: FnMut(i32) + 'static,
     {
+        let trace =
+            InteractionTrace::at("VirtualList", "activated", std::panic::Location::caller());
         self.clear_on_activated();
         self.activated_callback = Some(Box::new(ListChangedCallback {
-            handler: Box::new(callback),
+            handler: Box::new(traced_value_callback(trace, callback)),
         }));
         let user_data = (self
             .activated_callback
@@ -5493,13 +6718,19 @@ impl VirtualList {
         self.activated_callback = None;
     }
 
+    #[track_caller]
     pub fn set_on_edit_requested<F>(&mut self, callback: F)
     where
         F: FnMut(i32) + 'static,
     {
+        let trace = InteractionTrace::at(
+            "VirtualList",
+            "edit_requested",
+            std::panic::Location::caller(),
+        );
         self.clear_on_edit_requested();
         self.edit_requested_callback = Some(Box::new(ListChangedCallback {
-            handler: Box::new(callback),
+            handler: Box::new(traced_value_callback(trace, callback)),
         }));
         let user_data = (self
             .edit_requested_callback
@@ -5528,13 +6759,19 @@ impl VirtualList {
     }
 
     /// Runs the standard Delete command with the complete current selection.
+    #[track_caller]
     pub fn set_on_delete_requested<F>(&mut self, callback: F)
     where
         F: FnMut(Vec<i32>) + 'static,
     {
+        let trace = InteractionTrace::at(
+            "VirtualList",
+            "delete_requested",
+            std::panic::Location::caller(),
+        );
         self.clear_on_delete_requested();
         self.delete_requested_callback = Some(Box::new(ListSelectionChangedCallback {
-            handler: Box::new(callback),
+            handler: Box::new(traced_value_callback(trace, callback)),
         }));
         let user_data = (self
             .delete_requested_callback
@@ -5562,13 +6799,19 @@ impl VirtualList {
         self.delete_requested_callback = None;
     }
 
+    #[track_caller]
     pub fn set_on_context_menu_requested<F>(&mut self, callback: F)
     where
         F: FnMut(ContextMenuRequest) + 'static,
     {
+        let trace = InteractionTrace::at(
+            "VirtualList",
+            "context_menu_requested",
+            std::panic::Location::caller(),
+        );
         self.clear_on_context_menu_requested();
         self.context_menu_requested_callback = Some(Box::new(ContextMenuRequestedCallback {
-            handler: Box::new(callback),
+            handler: Box::new(traced_value_callback(trace, callback)),
         }));
         let user_data = (self
             .context_menu_requested_callback
@@ -5607,13 +6850,19 @@ impl VirtualList {
         unsafe { sys::oneui_virtual_list_reorder_enabled(self.widget.as_raw()) != 0 }
     }
 
+    #[track_caller]
     pub fn set_on_reorder_requested<F>(&mut self, callback: F)
     where
         F: FnMut(ReorderRequest) + 'static,
     {
+        let trace = InteractionTrace::at(
+            "VirtualList",
+            "reorder_requested",
+            std::panic::Location::caller(),
+        );
         self.clear_on_reorder_requested();
         self.reorder_requested_callback = Some(Box::new(ReorderRequestedCallback {
-            handler: Box::new(callback),
+            handler: Box::new(traced_value_callback(trace, callback)),
         }));
         let user_data = (self
             .reorder_requested_callback
@@ -5669,13 +6918,16 @@ impl VirtualList {
         unsafe { sys::oneui_virtual_list_item_drag_enabled(self.widget.as_raw()) != 0 }
     }
 
+    #[track_caller]
     pub fn set_on_item_drag<F>(&mut self, callback: F)
     where
         F: FnMut(ItemDragEvent) + 'static,
     {
+        let trace =
+            InteractionTrace::at("VirtualList", "item_drag", std::panic::Location::caller());
         self.clear_on_item_drag();
         self.item_drag_callback = Some(Box::new(ItemDragCallback {
-            handler: Box::new(callback),
+            handler: Box::new(traced_value_callback(trace, callback)),
         }));
         let user_data = (self
             .item_drag_callback
@@ -5725,6 +6977,608 @@ impl Drop for VirtualList {
             .pending_items
             .lock()
             .expect("virtual list pending items lock poisoned")
+            .clear();
+        self.state.update_scheduled.store(false, Ordering::Release);
+    }
+}
+
+/// A column in a native table. A width of `0` consumes the remaining space.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct TableColumn {
+    pub header: String,
+    pub width: f32,
+}
+
+/// Structured UTF-8 data for one native table row.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TableRow {
+    pub cells: Vec<String>,
+}
+
+struct TableState {
+    raw: AtomicPtr<sys::OneUiWidget>,
+    pending_rows: Mutex<BTreeMap<usize, TableRow>>,
+    update_scheduled: AtomicBool,
+}
+
+/// Thread-safe producer for table data owned by a window thread.
+#[derive(Clone)]
+pub struct TableHandle {
+    state: Arc<TableState>,
+    dispatcher: UiDispatcher,
+}
+
+impl TableHandle {
+    pub fn set_rows(&self, rows: Vec<TableRow>) -> Result<(), Error> {
+        if self.state.raw.load(Ordering::Acquire).is_null() {
+            return Err(Error::WidgetDestroyed);
+        }
+        let state = Arc::clone(&self.state);
+        self.dispatcher.dispatch(move || {
+            state
+                .pending_rows
+                .lock()
+                .expect("table pending rows lock poisoned")
+                .clear();
+            let raw = state.raw.load(Ordering::Acquire);
+            if raw.is_null() {
+                return;
+            }
+            set_table_rows_raw(raw, &rows);
+        })
+    }
+
+    /// Replaces the current revision and clears index-based selection in the
+    /// same window-thread transaction. Use this when row identity changed so
+    /// commands cannot accidentally target a different row that inherited the
+    /// previous index.
+    pub fn set_rows_and_clear_selection(&self, rows: Vec<TableRow>) -> Result<(), Error> {
+        if self.state.raw.load(Ordering::Acquire).is_null() {
+            return Err(Error::WidgetDestroyed);
+        }
+        let state = Arc::clone(&self.state);
+        self.dispatcher.dispatch(move || {
+            state
+                .pending_rows
+                .lock()
+                .expect("table pending rows lock poisoned")
+                .clear();
+            let raw = state.raw.load(Ordering::Acquire);
+            if raw.is_null() {
+                return;
+            }
+            set_table_rows_raw(raw, &rows);
+            unsafe {
+                sys::oneui_table_set_selected_indices(raw, std::ptr::null(), 0);
+            }
+        })
+    }
+
+    pub fn update_row(&self, index: usize, row: TableRow) -> Result<(), Error> {
+        if self.state.raw.load(Ordering::Acquire).is_null() {
+            return Err(Error::WidgetDestroyed);
+        }
+        self.state
+            .pending_rows
+            .lock()
+            .expect("table pending rows lock poisoned")
+            .insert(index, row);
+        if self.state.update_scheduled.swap(true, Ordering::AcqRel) {
+            return Ok(());
+        }
+        let state = Arc::clone(&self.state);
+        let dispatched_state = Arc::clone(&state);
+        if let Err(error) = self
+            .dispatcher
+            .dispatch(move || Self::drain_pending_rows(&dispatched_state))
+        {
+            state.update_scheduled.store(false, Ordering::Release);
+            state
+                .pending_rows
+                .lock()
+                .expect("table pending rows lock poisoned")
+                .clear();
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    fn drain_pending_rows(state: &TableState) {
+        loop {
+            let rows = std::mem::take(
+                &mut *state
+                    .pending_rows
+                    .lock()
+                    .expect("table pending rows lock poisoned"),
+            );
+            let raw = state.raw.load(Ordering::Acquire);
+            if raw.is_null() {
+                state.update_scheduled.store(false, Ordering::Release);
+                return;
+            }
+            for (index, row) in rows {
+                update_table_row_raw(raw, index, &row);
+            }
+            state.update_scheduled.store(false, Ordering::Release);
+            if state
+                .pending_rows
+                .lock()
+                .expect("table pending rows lock poisoned")
+                .is_empty()
+            {
+                return;
+            }
+            if !state.update_scheduled.swap(true, Ordering::AcqRel) {
+                continue;
+            }
+            return;
+        }
+    }
+}
+
+fn set_table_rows_raw(raw: *mut sys::OneUiWidget, rows: &[TableRow]) {
+    let native_cells = rows
+        .iter()
+        .map(|row| {
+            row.cells
+                .iter()
+                .map(|cell| sys::OneUiUtf8String::from_str(cell))
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+    let native_rows = native_cells
+        .iter()
+        .map(|cells| sys::OneUiTableRowUtf8 {
+            cells: cells.as_ptr(),
+            cell_count: cells.len(),
+        })
+        .collect::<Vec<_>>();
+    unsafe { sys::oneui_table_set_rows_utf8(raw, native_rows.as_ptr(), native_rows.len()) };
+}
+
+fn update_table_row_raw(raw: *mut sys::OneUiWidget, index: usize, row: &TableRow) -> bool {
+    let cells = row
+        .cells
+        .iter()
+        .map(|cell| sys::OneUiUtf8String::from_str(cell))
+        .collect::<Vec<_>>();
+    let native_row = sys::OneUiTableRowUtf8 {
+        cells: cells.as_ptr(),
+        cell_count: cells.len(),
+    };
+    unsafe { sys::oneui_table_update_row_utf8(raw, index, &native_row) != 0 }
+}
+
+/// A fixed-row-height, viewport-virtualized native data table.
+pub struct Table {
+    widget: Widget,
+    state: Arc<TableState>,
+    changed_callback: Option<Box<ListChangedCallback>>,
+    selection_changed_callback: Option<Box<ListSelectionChangedCallback>>,
+    activated_callback: Option<Box<ListChangedCallback>>,
+    edit_requested_callback: Option<Box<ListChangedCallback>>,
+    delete_requested_callback: Option<Box<ListSelectionChangedCallback>>,
+    context_menu_requested_callback: Option<Box<ContextMenuRequestedCallback>>,
+    reorder_requested_callback: Option<Box<ReorderRequestedCallback>>,
+    item_drag_callback: Option<Box<ItemDragCallback>>,
+}
+
+impl Table {
+    pub fn new() -> Result<Self, Error> {
+        let widget = Widget::from_raw(unsafe { sys::oneui_table_create() })?;
+        Ok(Self {
+            state: Arc::new(TableState {
+                raw: AtomicPtr::new(widget.as_raw()),
+                pending_rows: Mutex::new(BTreeMap::new()),
+                update_scheduled: AtomicBool::new(false),
+            }),
+            widget,
+            changed_callback: None,
+            selection_changed_callback: None,
+            activated_callback: None,
+            edit_requested_callback: None,
+            delete_requested_callback: None,
+            context_menu_requested_callback: None,
+            reorder_requested_callback: None,
+            item_drag_callback: None,
+        })
+    }
+
+    pub fn set_columns(&self, columns: &[TableColumn]) {
+        let native_columns = columns
+            .iter()
+            .map(|column| sys::OneUiTableColumnUtf8 {
+                header: sys::OneUiUtf8String::from_str(&column.header),
+                width: column.width,
+            })
+            .collect::<Vec<_>>();
+        unsafe {
+            sys::oneui_table_set_columns_utf8(
+                self.widget.as_raw(),
+                native_columns.as_ptr(),
+                native_columns.len(),
+            )
+        };
+    }
+
+    pub fn set_rows(&self, rows: &[TableRow]) {
+        self.state
+            .pending_rows
+            .lock()
+            .expect("table pending rows lock poisoned")
+            .clear();
+        set_table_rows_raw(self.widget.as_raw(), rows);
+    }
+
+    pub fn update_row(&self, index: usize, row: &TableRow) -> bool {
+        update_table_row_raw(self.widget.as_raw(), index, row)
+    }
+
+    pub fn set_selection_mode(&self, mode: SelectionMode) {
+        let mode = match mode {
+            SelectionMode::Single => 0,
+            SelectionMode::Multiple => 1,
+        };
+        unsafe { sys::oneui_table_set_selection_mode(self.widget.as_raw(), mode) };
+    }
+
+    pub fn set_selected_index(&self, index: i32) {
+        unsafe { sys::oneui_table_set_selected_index(self.widget.as_raw(), index) };
+    }
+
+    pub fn selected_index(&self) -> i32 {
+        unsafe { sys::oneui_table_selected_index(self.widget.as_raw()) }
+    }
+
+    pub fn set_selected_indices(&self, indices: &[i32]) {
+        unsafe {
+            sys::oneui_table_set_selected_indices(
+                self.widget.as_raw(),
+                indices.as_ptr(),
+                indices.len(),
+            )
+        };
+    }
+
+    pub fn selected_indices(&self) -> Vec<i32> {
+        let count = unsafe {
+            sys::oneui_table_selected_indices(self.widget.as_raw(), std::ptr::null_mut(), 0)
+        };
+        let mut values = vec![0; count];
+        if count > 0 {
+            unsafe {
+                sys::oneui_table_selected_indices(
+                    self.widget.as_raw(),
+                    values.as_mut_ptr(),
+                    values.len(),
+                )
+            };
+        }
+        values
+    }
+
+    pub fn set_row_height(&self, height: f32) {
+        unsafe { sys::oneui_table_set_row_height(self.widget.as_raw(), height) };
+    }
+
+    pub fn set_scroll_offset(&self, offset: f32) {
+        unsafe { sys::oneui_table_set_scroll_offset(self.widget.as_raw(), offset) };
+    }
+
+    pub fn scroll_offset(&self) -> f32 {
+        unsafe { sys::oneui_table_scroll_offset(self.widget.as_raw()) }
+    }
+
+    pub fn max_scroll_offset(&self) -> f32 {
+        unsafe { sys::oneui_table_max_scroll_offset(self.widget.as_raw()) }
+    }
+
+    #[track_caller]
+    pub fn set_on_changed<F>(&mut self, callback: F)
+    where
+        F: FnMut(i32) + 'static,
+    {
+        let trace = InteractionTrace::at("Table", "changed", std::panic::Location::caller());
+        self.clear_on_changed();
+        self.changed_callback = Some(Box::new(ListChangedCallback {
+            handler: Box::new(traced_value_callback(trace, callback)),
+        }));
+        let user_data =
+            (self.changed_callback.as_deref_mut().unwrap() as *mut ListChangedCallback).cast();
+        unsafe {
+            sys::oneui_table_set_on_changed(
+                self.widget.as_raw(),
+                Some(run_list_changed_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn clear_on_changed(&mut self) {
+        unsafe {
+            sys::oneui_table_set_on_changed(self.widget.as_raw(), None, std::ptr::null_mut())
+        };
+        self.changed_callback = None;
+    }
+
+    #[track_caller]
+    pub fn set_on_selection_changed<F>(&mut self, callback: F)
+    where
+        F: FnMut(Vec<i32>) + 'static,
+    {
+        let trace =
+            InteractionTrace::at("Table", "selection_changed", std::panic::Location::caller());
+        self.clear_on_selection_changed();
+        self.selection_changed_callback = Some(Box::new(ListSelectionChangedCallback {
+            handler: Box::new(traced_value_callback(trace, callback)),
+        }));
+        let user_data = (self.selection_changed_callback.as_deref_mut().unwrap()
+            as *mut ListSelectionChangedCallback)
+            .cast();
+        unsafe {
+            sys::oneui_table_set_on_selection_changed(
+                self.widget.as_raw(),
+                Some(run_list_selection_changed_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn clear_on_selection_changed(&mut self) {
+        unsafe {
+            sys::oneui_table_set_on_selection_changed(
+                self.widget.as_raw(),
+                None,
+                std::ptr::null_mut(),
+            )
+        };
+        self.selection_changed_callback = None;
+    }
+
+    #[track_caller]
+    pub fn set_on_activated<F>(&mut self, callback: F)
+    where
+        F: FnMut(i32) + 'static,
+    {
+        let trace = InteractionTrace::at("Table", "activated", std::panic::Location::caller());
+        self.clear_on_activated();
+        self.activated_callback = Some(Box::new(ListChangedCallback {
+            handler: Box::new(traced_value_callback(trace, callback)),
+        }));
+        let user_data =
+            (self.activated_callback.as_deref_mut().unwrap() as *mut ListChangedCallback).cast();
+        unsafe {
+            sys::oneui_table_set_on_activated(
+                self.widget.as_raw(),
+                Some(run_list_changed_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn clear_on_activated(&mut self) {
+        unsafe {
+            sys::oneui_table_set_on_activated(self.widget.as_raw(), None, std::ptr::null_mut())
+        };
+        self.activated_callback = None;
+    }
+
+    #[track_caller]
+    pub fn set_on_edit_requested<F>(&mut self, callback: F)
+    where
+        F: FnMut(i32) + 'static,
+    {
+        let trace = InteractionTrace::at("Table", "edit_requested", std::panic::Location::caller());
+        self.clear_on_edit_requested();
+        self.edit_requested_callback = Some(Box::new(ListChangedCallback {
+            handler: Box::new(traced_value_callback(trace, callback)),
+        }));
+        let user_data = (self.edit_requested_callback.as_deref_mut().unwrap()
+            as *mut ListChangedCallback)
+            .cast();
+        unsafe {
+            sys::oneui_table_set_on_edit_requested(
+                self.widget.as_raw(),
+                Some(run_list_changed_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn clear_on_edit_requested(&mut self) {
+        unsafe {
+            sys::oneui_table_set_on_edit_requested(self.widget.as_raw(), None, std::ptr::null_mut())
+        };
+        self.edit_requested_callback = None;
+    }
+
+    #[track_caller]
+    pub fn set_on_delete_requested<F>(&mut self, callback: F)
+    where
+        F: FnMut(Vec<i32>) + 'static,
+    {
+        let trace =
+            InteractionTrace::at("Table", "delete_requested", std::panic::Location::caller());
+        self.clear_on_delete_requested();
+        self.delete_requested_callback = Some(Box::new(ListSelectionChangedCallback {
+            handler: Box::new(traced_value_callback(trace, callback)),
+        }));
+        let user_data = (self.delete_requested_callback.as_deref_mut().unwrap()
+            as *mut ListSelectionChangedCallback)
+            .cast();
+        unsafe {
+            sys::oneui_table_set_on_delete_requested(
+                self.widget.as_raw(),
+                Some(run_list_selection_changed_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn clear_on_delete_requested(&mut self) {
+        unsafe {
+            sys::oneui_table_set_on_delete_requested(
+                self.widget.as_raw(),
+                None,
+                std::ptr::null_mut(),
+            )
+        };
+        self.delete_requested_callback = None;
+    }
+
+    #[track_caller]
+    pub fn set_on_context_menu_requested<F>(&mut self, callback: F)
+    where
+        F: FnMut(ContextMenuRequest) + 'static,
+    {
+        let trace = InteractionTrace::at(
+            "Table",
+            "context_menu_requested",
+            std::panic::Location::caller(),
+        );
+        self.clear_on_context_menu_requested();
+        self.context_menu_requested_callback = Some(Box::new(ContextMenuRequestedCallback {
+            handler: Box::new(traced_value_callback(trace, callback)),
+        }));
+        let user_data = (self.context_menu_requested_callback.as_deref_mut().unwrap()
+            as *mut ContextMenuRequestedCallback)
+            .cast();
+        unsafe {
+            sys::oneui_table_set_on_context_menu_requested(
+                self.widget.as_raw(),
+                Some(run_context_menu_requested_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn clear_on_context_menu_requested(&mut self) {
+        unsafe {
+            sys::oneui_table_set_on_context_menu_requested(
+                self.widget.as_raw(),
+                None,
+                std::ptr::null_mut(),
+            )
+        };
+        self.context_menu_requested_callback = None;
+    }
+
+    /// Enables pointer and `Alt+Up`/`Alt+Down` row reorder requests.
+    pub fn set_reorder_enabled(&self, enabled: bool) {
+        unsafe { sys::oneui_table_set_reorder_enabled(self.widget.as_raw(), i32::from(enabled)) };
+    }
+
+    pub fn reorder_enabled(&self) -> bool {
+        unsafe { sys::oneui_table_reorder_enabled(self.widget.as_raw()) != 0 }
+    }
+
+    #[track_caller]
+    pub fn set_on_reorder_requested<F>(&mut self, callback: F)
+    where
+        F: FnMut(ReorderRequest) + 'static,
+    {
+        let trace =
+            InteractionTrace::at("Table", "reorder_requested", std::panic::Location::caller());
+        self.clear_on_reorder_requested();
+        self.reorder_requested_callback = Some(Box::new(ReorderRequestedCallback {
+            handler: Box::new(traced_value_callback(trace, callback)),
+        }));
+        let user_data = (self.reorder_requested_callback.as_deref_mut().unwrap()
+            as *mut ReorderRequestedCallback)
+            .cast();
+        unsafe {
+            sys::oneui_table_set_on_reorder_requested(
+                self.widget.as_raw(),
+                Some(run_reorder_requested_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn clear_on_reorder_requested(&mut self) {
+        unsafe {
+            sys::oneui_table_set_on_reorder_requested(
+                self.widget.as_raw(),
+                None,
+                std::ptr::null_mut(),
+            )
+        };
+        self.reorder_requested_callback = None;
+    }
+
+    /// Assigns stable domain identifiers to the current rows for external drag operations.
+    pub fn set_item_drag_ids(&self, ids: &[String]) -> bool {
+        let native_ids = ids
+            .iter()
+            .map(|id| sys::OneUiUtf8String::from_str(id))
+            .collect::<Vec<_>>();
+        unsafe {
+            sys::oneui_table_set_item_drag_ids_utf8(
+                self.widget.as_raw(),
+                native_ids.as_ptr(),
+                native_ids.len(),
+            ) != 0
+        }
+    }
+
+    pub fn set_item_drag_enabled(&self, enabled: bool) {
+        unsafe { sys::oneui_table_set_item_drag_enabled(self.widget.as_raw(), i32::from(enabled)) };
+    }
+
+    pub fn item_drag_enabled(&self) -> bool {
+        unsafe { sys::oneui_table_item_drag_enabled(self.widget.as_raw()) != 0 }
+    }
+
+    #[track_caller]
+    pub fn set_on_item_drag<F>(&mut self, callback: F)
+    where
+        F: FnMut(ItemDragEvent) + 'static,
+    {
+        let trace = InteractionTrace::at("Table", "item_drag", std::panic::Location::caller());
+        self.clear_on_item_drag();
+        self.item_drag_callback = Some(Box::new(ItemDragCallback {
+            handler: Box::new(traced_value_callback(trace, callback)),
+        }));
+        let user_data =
+            (self.item_drag_callback.as_deref_mut().unwrap() as *mut ItemDragCallback).cast();
+        unsafe {
+            sys::oneui_table_set_on_item_drag_utf8(
+                self.widget.as_raw(),
+                Some(run_item_drag_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn clear_on_item_drag(&mut self) {
+        unsafe {
+            sys::oneui_table_set_on_item_drag_utf8(self.widget.as_raw(), None, std::ptr::null_mut())
+        };
+        self.item_drag_callback = None;
+    }
+
+    pub fn as_widget(&self) -> &Widget {
+        &self.widget
+    }
+}
+
+impl Drop for Table {
+    fn drop(&mut self) {
+        self.clear_on_item_drag();
+        self.clear_on_reorder_requested();
+        self.clear_on_context_menu_requested();
+        self.clear_on_delete_requested();
+        self.clear_on_edit_requested();
+        self.clear_on_activated();
+        self.clear_on_selection_changed();
+        self.clear_on_changed();
+        self.state
+            .raw
+            .store(std::ptr::null_mut(), Ordering::Release);
+        self.state
+            .pending_rows
+            .lock()
+            .expect("table pending rows lock poisoned")
             .clear();
         self.state.update_scheduled.store(false, Ordering::Release);
     }
@@ -5919,13 +7773,19 @@ impl TreeView {
         String::from_utf8_lossy(&bytes).into_owned()
     }
 
+    #[track_caller]
     pub fn set_on_selection_changed<F>(&mut self, callback: F)
     where
         F: FnMut(String) + 'static,
     {
+        let trace = InteractionTrace::at(
+            "TreeView",
+            "selection_changed",
+            std::panic::Location::caller(),
+        );
         self.clear_selection_callback();
         self.selection_callback = Some(Box::new(TreeViewSelectionCallback {
-            handler: Box::new(callback),
+            handler: Box::new(traced_value_callback(trace, callback)),
         }));
         let user_data = (self
             .selection_callback
@@ -5953,13 +7813,19 @@ impl TreeView {
         self.selection_callback = None;
     }
 
+    #[track_caller]
     pub fn set_on_expansion_changed<F>(&mut self, callback: F)
     where
         F: FnMut(String, bool) + 'static,
     {
+        let trace = InteractionTrace::at(
+            "TreeView",
+            "expansion_changed",
+            std::panic::Location::caller(),
+        );
         self.clear_expansion_callback();
         self.expansion_callback = Some(Box::new(TreeViewExpansionCallback {
-            handler: Box::new(callback),
+            handler: Box::new(traced_values_callback(trace, callback)),
         }));
         let user_data = (self
             .expansion_callback
@@ -5998,13 +7864,19 @@ impl TreeView {
         unsafe { sys::oneui_tree_view_reorder_enabled(self.widget.as_raw()) != 0 }
     }
 
+    #[track_caller]
     pub fn set_on_reorder_requested<F>(&mut self, callback: F)
     where
         F: FnMut(TreeReorderRequest) + 'static,
     {
+        let trace = InteractionTrace::at(
+            "TreeView",
+            "reorder_requested",
+            std::panic::Location::caller(),
+        );
         self.clear_reorder_callback();
         self.reorder_callback = Some(Box::new(TreeViewReorderCallback {
-            handler: Box::new(callback),
+            handler: Box::new(traced_value_callback(trace, callback)),
         }));
         let user_data = (self
             .reorder_callback
@@ -6128,6 +8000,16 @@ impl Window {
         });
     }
 
+    pub fn set_title_bar_interactive_insets(&self, leading_width: f32, trailing_width: f32) {
+        self.state.with_raw(|raw| unsafe {
+            sys::oneui_window_set_title_bar_interactive_insets(raw, leading_width, trailing_width);
+        });
+    }
+
+    pub fn clear_title_bar_interactive_insets(&self) {
+        self.set_title_bar_interactive_insets(-1.0, -1.0);
+    }
+
     pub fn set_corner_radius(&self, radius: f32) {
         self.state.with_raw(|raw| unsafe {
             sys::oneui_window_set_corner_radius(raw, radius);
@@ -6151,13 +8033,15 @@ impl Window {
     /// Installs a window-level key handler that runs before focused widgets.
     /// Returning `true` consumes the event. Text composition remains routed
     /// through the normal IME/text-input path.
+    #[track_caller]
     pub fn set_on_raw_key<F>(&mut self, callback: F)
     where
         F: FnMut(RawKeyEvent) -> bool + 'static,
     {
+        let trace = InteractionTrace::at("Window", "raw_key", std::panic::Location::caller());
         self.clear_raw_key_callback();
         self.raw_key_callback = Some(Box::new(WindowRawKeyCallback {
-            handler: Box::new(callback),
+            handler: Box::new(traced_value_result_callback(trace, callback)),
         }));
         let user_data = (self
             .raw_key_callback
@@ -6227,6 +8111,10 @@ impl Window {
         }
     }
 
+    pub fn layout_snapshot_json(&self) -> Result<String, Error> {
+        self.dispatcher().layout_snapshot_json()
+    }
+
     pub fn file_dialog(&self, options: FileDialogOptions<'_>) -> Result<Option<PathBuf>, Error> {
         self.dispatcher().file_dialog(options)
     }
@@ -6250,10 +8138,20 @@ impl Window {
         self.dispatcher().terminal_view_handle(terminal)
     }
 
+    /// Returns a thread-safe adaptive-layout handle for a mounted widget.
+    pub fn widget_handle(&self, widget: &Widget) -> WidgetHandle {
+        self.dispatcher().widget_handle(widget)
+    }
+
     /// Returns the only thread-safe update path for a label mounted in this
     /// window. Bursts are coalesced to the latest text value.
     pub fn label_handle(&self, label: &Label) -> LabelHandle {
         self.dispatcher().label_handle(label)
+    }
+
+    /// Returns the thread-safe update path for a mounted single-line text field.
+    pub fn text_field_handle(&self, text_field: &TextField) -> TextFieldHandle {
+        self.dispatcher().text_field_handle(text_field)
     }
 
     /// Returns the thread-safe update path for a mounted multiline editor.
@@ -6266,9 +8164,18 @@ impl Window {
         self.dispatcher().progress_bar_handle(progress_bar)
     }
 
+    /// Returns the thread-safe update path for a mounted sparkline.
+    pub fn sparkline_handle(&self, sparkline: &Sparkline) -> SparklineHandle {
+        self.dispatcher().sparkline_handle(sparkline)
+    }
+
     /// Returns the thread-safe update path for rows in a mounted virtual list.
     pub fn virtual_list_handle(&self, list: &VirtualList) -> VirtualListHandle {
         self.dispatcher().virtual_list_handle(list)
+    }
+
+    pub fn table_handle(&self, table: &Table) -> TableHandle {
+        self.dispatcher().table_handle(table)
     }
 
     pub fn dispatch<F>(&self, task: F) -> Result<(), Error>
@@ -6290,19 +8197,23 @@ impl Drop for Window {
 mod tests {
     use super::sys;
     use super::{
-        callback_panic_handler, run_callback_guarded, run_void_handler,
-        run_window_raw_key_callback, set_callback_panic_handler, terminal_style, Button, Color,
-        Dialog, Error, FileDialogFilter, FileDialogMode, FileDialogOptions, IconSymbol, Insets,
-        InteractiveSurface, InteractiveSurfaceStateStyle, InteractiveSurfaceStyle, Label, List,
-        ListItem, LogLine, LogView, Menu, OverlayAlignment, OverlayHost, Panel, Popup,
-        PopupInteractionMode, PopupPreferredPlacement, ProgressBar, PromptOptions, RawKeyEvent,
-        ReorderableGrid, ScrollView, SegmentedControl, Select, SelectionMode, SplitOrientation,
-        SplitView, Stack, StackDirection, StyleSheet, Switch, Tabs, TerminalCell, TerminalColor,
-        TerminalCursor, TerminalCursorStyle, TerminalFrame, TerminalSelection,
+        callback_panic_handler, clear_interaction_trace_handler, emit_interaction_trace,
+        run_callback_guarded, run_void_handler, run_window_raw_key_callback,
+        set_callback_panic_handler, set_interaction_trace_handler,
+        should_apply_application_cursor_style, terminal_style, traced_callback,
+        traced_value_callback, Button, Color, Dialog, Error, FileDialogFilter, FileDialogMode,
+        FileDialogOptions, IconSymbol, Insets, InteractionTrace, InteractiveSurface,
+        InteractiveSurfaceStateStyle, InteractiveSurfaceStyle, Label, List, ListItem, LogLine,
+        LogView, Menu, OverlayAlignment, OverlayHost, Panel, Popup, PopupInteractionMode,
+        PopupPreferredPlacement, ProgressBar, PromptOptions, RawKeyEvent, ReorderableGrid,
+        ScrollView, SegmentedControl, Select, SelectionMode, SplitOrientation, SplitView, Stack,
+        StackDirection, StyleSheet, Switch, Table, TableColumn, TableRow, Tabs, TerminalCell,
+        TerminalColor, TerminalCursor, TerminalCursorStyle, TerminalFrame, TerminalSelection,
         TerminalUnderlineStyle, TerminalView, TextArea, TextField, TreeItem, TreeView, VirtualList,
-        Window, WindowOptions, WindowPlacement, WindowRawKeyCallback,
+        Window, WindowOptions, WindowPlacement, WindowRawKeyCallback, WindowState,
     };
     use std::cell::{Cell, RefCell};
+    use std::ptr::NonNull;
     use std::rc::Rc;
     use std::sync::{
         atomic::{AtomicBool, Ordering},
@@ -6313,6 +8224,14 @@ mod tests {
     fn window_test_lock() -> &'static Mutex<()> {
         static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
         LOCK.get_or_init(|| Mutex::new(()))
+    }
+
+    #[test]
+    fn application_cursor_style_requires_both_user_consent_and_an_application_frame() {
+        assert!(!should_apply_application_cursor_style(false, false));
+        assert!(!should_apply_application_cursor_style(false, true));
+        assert!(!should_apply_application_cursor_style(true, false));
+        assert!(should_apply_application_cursor_style(true, true));
     }
 
     #[test]
@@ -6351,6 +8270,93 @@ mod tests {
         *callback_panic_handler()
             .lock()
             .expect("callback panic handler lock") = None;
+    }
+
+    #[test]
+    fn interaction_trace_observer_reports_callbacks_without_changing_behavior() {
+        let _guard = window_test_lock().lock().expect("window test lock");
+        clear_interaction_trace_handler();
+        let reports = Arc::new(Mutex::new(Vec::new()));
+        let reports_for_handler = Arc::clone(&reports);
+        set_interaction_trace_handler(move |trace| {
+            reports_for_handler
+                .lock()
+                .expect("interaction trace reports lock")
+                .push(trace);
+        });
+
+        let invocations = Rc::new(Cell::new(0));
+        let invocations_for_callback = Rc::clone(&invocations);
+        let trace = InteractionTrace {
+            control: "Button",
+            interaction: "click",
+            source_file: "tests/interaction.rs",
+            source_line: 17,
+            source_column: 9,
+        };
+        let mut callback = traced_callback(trace, move || {
+            invocations_for_callback.set(invocations_for_callback.get() + 1);
+        });
+
+        callback();
+        clear_interaction_trace_handler();
+        callback();
+
+        assert_eq!(invocations.get(), 2);
+        let reports = reports.lock().expect("interaction trace reports lock");
+        assert_eq!(reports.as_slice(), &[trace]);
+    }
+
+    #[test]
+    fn application_interaction_trace_uses_the_same_isolated_observer() {
+        let _guard = window_test_lock().lock().expect("window test lock");
+        clear_interaction_trace_handler();
+        let reports = Arc::new(Mutex::new(Vec::new()));
+        let reports_for_handler = Arc::clone(&reports);
+        set_interaction_trace_handler(move |trace| {
+            reports_for_handler
+                .lock()
+                .expect("application interaction trace reports lock")
+                .push(trace);
+        });
+        let trace = InteractionTrace {
+            control: "NativeSingleInstance",
+            interaction: "arguments",
+            source_file: "tests/application_interaction.rs",
+            source_line: 41,
+            source_column: 5,
+        };
+
+        emit_interaction_trace(trace);
+        clear_interaction_trace_handler();
+        emit_interaction_trace(trace);
+
+        let reports = reports.lock().expect("application trace reports lock");
+        assert_eq!(reports.as_slice(), &[trace]);
+    }
+
+    #[test]
+    fn interaction_trace_observer_panics_are_isolated_from_value_callbacks() {
+        let _guard = window_test_lock().lock().expect("window test lock");
+        clear_interaction_trace_handler();
+        set_interaction_trace_handler(|_| panic!("trace observer failed"));
+        let observed = Rc::new(Cell::new(None));
+        let observed_for_callback = Rc::clone(&observed);
+        let trace = InteractionTrace {
+            control: "Tabs",
+            interaction: "changed",
+            source_file: "tests/interaction.rs",
+            source_line: 33,
+            source_column: 7,
+        };
+        let mut callback = traced_value_callback(trace, move |value| {
+            observed_for_callback.set(Some(value));
+        });
+
+        callback(4_i32);
+        clear_interaction_trace_handler();
+
+        assert_eq!(observed.get(), Some(4));
     }
 
     #[test]
@@ -6541,9 +8547,11 @@ mod tests {
         split.set_ratio(0.625);
         split.set_orientation(SplitOrientation::Vertical);
         split.set_on_ratio_changed(|_| {});
+        split.set_on_ratio_committed(|_| {});
 
         assert!((split.ratio() - 0.625).abs() < 0.001);
         split.clear_on_ratio_changed();
+        split.clear_on_ratio_committed();
     }
 
     #[test]
@@ -6643,6 +8651,30 @@ mod tests {
     }
 
     #[test]
+    fn reports_stack_content_extent_for_scroll_view_composition() {
+        let stack = Stack::new(StackDirection::Column).expect("stack should be created");
+        stack.set_gap(7.0);
+        stack.set_padding(Insets {
+            top: 2.0,
+            right: 3.0,
+            bottom: 4.0,
+            left: 5.0,
+        });
+        let first = Panel::new().expect("first panel should be created");
+        first.as_widget().set_preferred_size(140.0, 19.0);
+        let second = Panel::new().expect("second panel should be created");
+        second.as_widget().set_preferred_size(80.0, 32.0);
+        let third = Panel::new().expect("third panel should be created");
+        third.as_widget().set_preferred_size(120.0, 28.0);
+        stack.add(first.as_widget());
+        stack.add(second.as_widget());
+        stack.add(third.as_widget());
+
+        assert!((stack.content_width() - 148.0).abs() < 0.001);
+        assert!((stack.content_height() - 99.0).abs() < 0.001);
+    }
+
+    #[test]
     fn mounts_safe_inventory_controls_with_structured_utf8_list_items() {
         let _guard = window_test_lock().lock().expect("window test lock");
         let window = Window::new(&WindowOptions::default()).expect("window should be created");
@@ -6692,6 +8724,14 @@ mod tests {
         assert_eq!(
             observed.lock().expect("observed values lock").as_slice(),
             ["生产堡垒机"]
+        );
+
+        let long_value =
+            "rename 5a9c8e06-0977-4426-8e3f-b8518f6c6500 QA Snippet Group Renamed 中文值";
+        field.set_text(long_value);
+        assert_eq!(
+            observed.lock().expect("observed values lock").as_slice(),
+            ["生产堡垒机", long_value]
         );
     }
 
@@ -6991,6 +9031,7 @@ mod tests {
             },
             cursor_style: TerminalCursorStyle::Block,
             cursor_blinking: true,
+            cursor_style_from_application: false,
             mouse_reporting: false,
             first_visible_line_number: 1,
         };
@@ -7054,6 +9095,7 @@ mod tests {
             },
             cursor_style: TerminalCursorStyle::Block,
             cursor_blinking: true,
+            cursor_style_from_application: false,
             mouse_reporting: false,
             first_visible_line_number: 1,
         };
@@ -7166,6 +9208,7 @@ mod tests {
                     },
                     cursor_style: TerminalCursorStyle::Bar,
                     cursor_blinking: false,
+                    cursor_style_from_application: true,
                     mouse_reporting: true,
                     first_visible_line_number: 1,
                 })
@@ -7201,6 +9244,7 @@ mod tests {
                 },
                 cursor_style: TerminalCursorStyle::Block,
                 cursor_blinking: true,
+                cursor_style_from_application: false,
                 mouse_reporting: false,
                 first_visible_line_number: 1,
             }),
@@ -7324,6 +9368,24 @@ mod tests {
     }
 
     #[test]
+    fn widget_handle_rejects_layout_updates_after_widget_destruction() {
+        let _guard = window_test_lock().lock().expect("window test lock");
+        let window = Window::new(&WindowOptions::default()).expect("window should be created");
+        let handle = {
+            let panel = Panel::new().expect("panel should be created");
+            window.widget_handle(panel.as_widget())
+        };
+        assert!(matches!(
+            handle.set_visible(false),
+            Err(Error::WidgetDestroyed)
+        ));
+        assert!(matches!(
+            handle.set_preferred_size(240.0, 120.0),
+            Err(Error::WidgetDestroyed)
+        ));
+    }
+
+    #[test]
     fn virtual_list_handle_coalesces_row_updates_on_the_window_thread() {
         let _guard = window_test_lock().lock().expect("window test lock");
         let window = Window::new(&WindowOptions::default()).expect("window should be created");
@@ -7422,6 +9484,93 @@ mod tests {
     }
 
     #[test]
+    fn table_preserves_utf8_selection_and_coalesces_background_row_updates() {
+        let _guard = window_test_lock().lock().expect("window test lock");
+        let window = Window::new(&WindowOptions::default()).expect("window should be created");
+        let table = Table::new().expect("table should be created");
+        table.set_columns(&[
+            TableColumn {
+                header: "主机".to_owned(),
+                width: 0.0,
+            },
+            TableColumn {
+                header: "状态".to_owned(),
+                width: 84.0,
+            },
+        ]);
+        table.set_rows(&[
+            TableRow {
+                cells: vec!["生产节点".to_owned(), "在线".to_owned()],
+            },
+            TableRow {
+                cells: vec!["数据库 🚀".to_owned(), "检测中".to_owned()],
+            },
+        ]);
+        table.set_selection_mode(SelectionMode::Multiple);
+        table.set_selected_indices(&[0, 1]);
+        assert_eq!(table.selected_indices(), vec![0, 1]);
+        window.set_content(table.as_widget());
+        let handle = window.table_handle(&table);
+        let worker = thread::spawn(move || {
+            handle
+                .update_row(
+                    1,
+                    TableRow {
+                        cells: vec!["数据库 🚀".to_owned(), "在线".to_owned()],
+                    },
+                )
+                .expect("worker should submit a table row update");
+            handle
+                .update_row(
+                    1,
+                    TableRow {
+                        cells: vec!["数据库 🚀".to_owned(), "12 ms".to_owned()],
+                    },
+                )
+                .expect("worker should coalesce a table row update");
+        });
+        worker.join().expect("worker should finish");
+
+        let close_dispatcher = window.dispatcher();
+        window
+            .dispatch(move || close_dispatcher.request_close())
+            .expect("window should accept close request");
+        assert_eq!(window.run(), 0);
+    }
+
+    #[test]
+    fn table_handle_replaces_rows_and_clears_selection_atomically() {
+        let _guard = window_test_lock().lock().expect("window test lock");
+        let window = Window::new(&WindowOptions::default()).expect("window should be created");
+        let table = Table::new().expect("table should be created");
+        table.set_rows(&[
+            TableRow {
+                cells: vec!["旧目录".to_owned()],
+            },
+            TableRow {
+                cells: vec!["旧文件".to_owned()],
+            },
+        ]);
+        table.set_selection_mode(SelectionMode::Multiple);
+        table.set_selected_indices(&[1]);
+        window.set_content(table.as_widget());
+
+        let handle = window.table_handle(&table);
+        handle
+            .set_rows_and_clear_selection(vec![TableRow {
+                cells: vec!["新目录".to_owned()],
+            }])
+            .expect("table revision should be accepted");
+        let close_dispatcher = window.dispatcher();
+        window
+            .dispatch(move || close_dispatcher.request_close())
+            .expect("window should accept close request");
+
+        assert_eq!(window.run(), 0);
+        assert!(table.selected_indices().is_empty());
+    }
+
+    #[test]
     fn virtual_list_full_reset_discards_row_patches_from_the_previous_revision() {
         let _guard = window_test_lock().lock().expect("window test lock");
         let window = Window::new(&WindowOptions::default()).expect("window should be created");
@@ -7505,6 +9654,18 @@ mod tests {
         assert!(!observed.get());
         assert_eq!(window.run(), 0);
         assert!(observed.get());
+    }
+
+    #[test]
+    fn window_state_allows_reentrant_ui_thread_raw_access() {
+        let state = WindowState {
+            raw: Mutex::new(Some(NonNull::dangling())),
+            ui_thread: thread::current().id(),
+        };
+
+        let nested = state.with_raw(|outer| state.with_raw(|inner| std::ptr::eq(outer, inner)));
+
+        assert_eq!(nested, Some(Some(true)));
     }
 
     #[test]

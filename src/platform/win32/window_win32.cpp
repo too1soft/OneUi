@@ -42,6 +42,7 @@
 #include "include/ports/SkTypeface_win.h"
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <climits>
@@ -77,6 +78,8 @@ constexpr UINT kOneUiDeferredFullPaint = WM_APP + 3;
 constexpr UINT kOneUiDpiChanged = 0x02E0;
 constexpr UINT_PTR kOneUiAnimationTimer = 0x4f10;
 constexpr UINT_PTR kOneUiInteractivePaintTimer = 0x4f11;
+constexpr UINT_PTR kOneUiTooltipTimer = 0x4f12;
+constexpr UINT kOneUiTooltipDelayMs = 420;
 constexpr UINT kOneUiAnimationFrameIntervalMs = USER_TIMER_MINIMUM;
 constexpr UINT kOneUiInteractivePaintIntervalMs = 8;
 constexpr int kPaintSurfaceAlignment = 128;
@@ -399,8 +402,13 @@ private:
 
 class SkiaCanvas final : public Canvas {
 public:
-    explicit SkiaCanvas(SkCanvas& canvas, const std::wstring* defaultFontFamily = nullptr)
-        : canvas_(canvas), defaultFontFamily_(defaultFontFamily) {}
+    explicit SkiaCanvas(
+        SkCanvas& canvas,
+        const std::wstring* defaultFontFamily = nullptr,
+        std::optional<Rect> viewportBounds = std::nullopt)
+        : canvas_(canvas)
+        , defaultFontFamily_(defaultFontFamily)
+        , viewportBounds_(viewportBounds) {}
 
     void clear(Color color) override {
         canvas_.clear(toSkColor(color));
@@ -436,6 +444,10 @@ public:
 
     std::optional<Rect> clipBounds() const override {
         return clipBounds_;
+    }
+
+    std::optional<Rect> viewportBounds() const override {
+        return viewportBounds_;
     }
 
     void fillRect(Rect rect, Color color, float radius) override {
@@ -1130,6 +1142,7 @@ private:
 
     SkCanvas& canvas_;
     const std::wstring* defaultFontFamily_ = nullptr;
+    std::optional<Rect> viewportBounds_;
     std::optional<Rect> clipBounds_;
     std::vector<std::optional<Rect>> clipStack_;
 };
@@ -1329,6 +1342,29 @@ public:
         }
     }
 
+    void prepareLayoutSnapshot() override {
+        if (!hwnd_ || !content_ || !content_->visible()) {
+            return;
+        }
+        const Size logical = clientSize();
+        const Size physical = clientPixelSize();
+        const int width = std::max(1, static_cast<int>(std::ceil(physical.width)));
+        const int height = std::max(1, static_cast<int>(std::ceil(physical.height)));
+        auto surface = SkSurfaces::Raster(SkImageInfo::MakeN32Premul(width, height));
+        if (!surface) {
+            return;
+        }
+        SkCanvas* skCanvas = surface->getCanvas();
+        skCanvas->scale(normalizedDpiScale(), normalizedDpiScale());
+        SkiaCanvas canvas(
+            *skCanvas,
+            &defaultFontFamily_,
+            Rect{0.0f, 0.0f, logical.width, logical.height});
+        content_->setFrame(Rect{0.0f, 0.0f, logical.width, logical.height});
+        content_->paint(canvas);
+        paintTooltip(canvas);
+    }
+
     bool post(std::function<void()> callback) override {
         if (!callback || !acceptingPostedCallbacks_.load(std::memory_order_acquire)) {
             return false;
@@ -1452,6 +1488,16 @@ public:
         if (reservedButtonWidth >= 0.0f) {
             titleButtonReservedWidthLogical_ = reservedButtonWidth;
         }
+    }
+
+    void setTitleBarInteractiveInsets(float leadingWidth, float trailingWidth) override {
+        if (leadingWidth < 0.0f || trailingWidth < 0.0f) {
+            titleBarInteractiveLeadingWidthLogical_ = -1.0f;
+            titleBarInteractiveTrailingWidthLogical_ = -1.0f;
+            return;
+        }
+        titleBarInteractiveLeadingWidthLogical_ = leadingWidth;
+        titleBarInteractiveTrailingWidthLogical_ = trailingWidth;
     }
 
     void toggleMaximize() override {
@@ -1953,6 +1999,14 @@ private:
                 runInteractivePaintFrame();
                 return 0;
             }
+            if (wParam == kOneUiTooltipTimer) {
+                KillTimer(hwnd_, kOneUiTooltipTimer);
+                if (!hoveredTooltip_.empty()) {
+                    tooltipVisible_ = true;
+                    requestRedraw();
+                }
+                return 0;
+            }
             return DefWindowProcW(hwnd_, message, wParam, lParam);
         case WM_MOUSEMOVE:
         {
@@ -1977,6 +2031,7 @@ private:
             lastCursorKind_ = CursorKind::Default;
             hasLastCursorPoint_ = false;
             SetCursor(cursorForKind(CursorKind::Default));
+            clearTooltip();
             if (content_) {
                 if (content_->clearInteractionState()) {
                     requestInteractiveRedraw();
@@ -2097,6 +2152,7 @@ private:
             return 0;
         case WM_KILLFOCUS:
             pendingHighSurrogate_ = 0;
+            resetTrackedKeyState();
             dispatchFocusChanged(false);
             return 0;
         case WM_KEYDOWN:
@@ -2233,6 +2289,17 @@ private:
         }
 
         const bool inTitleBar = localY >= 0 && localY < titleBarHeight;
+        const bool hasInteractiveTitleBarRegion =
+            titleBarInteractiveLeadingWidthLogical_ >= 0.0f
+            && titleBarInteractiveTrailingWidthLogical_ >= 0.0f;
+        if (inTitleBar && hasInteractiveTitleBarRegion) {
+            const int interactiveLeft = logicalToPhysicalCeil(titleBarInteractiveLeadingWidthLogical_);
+            const int interactiveRight =
+                width - logicalToPhysicalCeil(titleBarInteractiveTrailingWidthLogical_);
+            if (localX >= interactiveLeft && localX < interactiveRight) {
+                return HTNOWHERE;
+            }
+        }
         const bool overWindowButtons = localX >= width - titleButtonReservedWidth;
         if (inTitleBar && !overWindowButtons) {
             return HTCAPTION;
@@ -2701,7 +2768,10 @@ private:
         }
 
         SkCanvas* skCanvas = paintSurface_->getCanvas();
-        SkiaCanvas rawCanvas(*skCanvas);
+        SkiaCanvas rawCanvas(
+            *skCanvas,
+            nullptr,
+            Rect{0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height)});
         const bool fullPaint = dirtyX == 0 && dirtyY == 0 && dirtyWidth == width && dirtyHeight == height;
         if (fullPaint) {
             rawCanvas.clear(colors::Surface);
@@ -2709,7 +2779,10 @@ private:
 
         skCanvas->save();
         skCanvas->scale(scale, scale);
-        SkiaCanvas canvas(*skCanvas, &defaultFontFamily_);
+        SkiaCanvas canvas(
+            *skCanvas,
+            &defaultFontFamily_,
+            Rect{0.0f, 0.0f, logicalWidth, logicalHeight});
         if (!fullPaint) {
             const Rect dirtyCanvasRect{
                 static_cast<float>(dirtyX) / scale,
@@ -2726,6 +2799,7 @@ private:
             g_primitivePaintTrace = PrimitivePaintTrace{};
             content_->setFrame(Rect{0.0f, 0.0f, logicalWidth, logicalHeight});
             content_->paint(canvas);
+            paintTooltip(canvas);
             recordContentPaint(currentTimeMs() - contentStartMs);
             recordPrimitivePaint(g_primitivePaintTrace);
         }
@@ -3087,14 +3161,82 @@ private:
     void dispatchMouseMove(Point point) {
         trackMouseLeave();
         if (!content_ || !content_->visible()) {
+            clearTooltip();
             return;
         }
+
+        updateTooltip(point);
 
         MouseEvent event{point};
         const bool changed = content_->onMouseMove(event);
         if (changed) {
             flushInteractivePaint();
         }
+    }
+
+    void updateTooltip(Point point) {
+        const std::wstring* next = content_ ? content_->tooltipAt(point) : nullptr;
+        const std::wstring nextText = next ? *next : std::wstring{};
+        tooltipPoint_ = point;
+        if (nextText == hoveredTooltip_) {
+            return;
+        }
+        if (hwnd_) {
+            KillTimer(hwnd_, kOneUiTooltipTimer);
+        }
+        hoveredTooltip_ = nextText;
+        tooltipVisible_ = false;
+        if (!hoveredTooltip_.empty() && hwnd_) {
+            SetTimer(hwnd_, kOneUiTooltipTimer, kOneUiTooltipDelayMs, nullptr);
+        }
+        requestRedraw();
+    }
+
+    void clearTooltip() {
+        if (hwnd_) {
+            KillTimer(hwnd_, kOneUiTooltipTimer);
+        }
+        if (hoveredTooltip_.empty() && !tooltipVisible_) {
+            return;
+        }
+        hoveredTooltip_.clear();
+        tooltipVisible_ = false;
+        requestRedraw();
+    }
+
+    void paintTooltip(Canvas& canvas) const {
+        if (!tooltipVisible_ || hoveredTooltip_.empty()) {
+            return;
+        }
+        const auto viewport = canvas.viewportBounds();
+        if (!viewport) {
+            return;
+        }
+        constexpr float fontSize = 12.0f;
+        constexpr float horizontalPadding = 10.0f;
+        constexpr float height = 30.0f;
+        const float width = std::clamp(
+            canvas.measureTextWidth(hoveredTooltip_, fontSize, 500) + horizontalPadding * 2.0f,
+            44.0f,
+            360.0f);
+        float x = tooltipPoint_.x + 12.0f;
+        float y = tooltipPoint_.y + 18.0f;
+        x = std::clamp(x, viewport->x + 6.0f, viewport->x + viewport->width - width - 6.0f);
+        if (y + height > viewport->y + viewport->height - 6.0f) {
+            y = tooltipPoint_.y - height - 10.0f;
+        }
+        y = std::max(viewport->y + 6.0f, y);
+        const Rect frame{x, y, width, height};
+        canvas.drawBoxShadow(frame, BoxShadow{Color{0, 0, 0, 92}, Point{0.0f, 4.0f}, 12.0f, 0.0f}, 5.0f);
+        canvas.fillRect(frame, Color{37, 39, 49}, 5.0f);
+        canvas.strokeRect(frame, Color{78, 82, 101}, 5.0f, 1.0f);
+        canvas.drawTextStyledEllipsized(
+            hoveredTooltip_,
+            Rect{x + horizontalPadding, y, width - horizontalPadding * 2.0f, height},
+            Color{235, 237, 245},
+            fontSize,
+            TextAlign::Left,
+            500);
     }
 
     void flushInteractivePaint() {
@@ -3141,13 +3283,13 @@ private:
         LPARAM lParam,
         MouseButton button = MouseButton::Left,
         int clickCount = 1) {
-        dispatchMouse(lParam, button, clickCount, [](Widget& widget, const MouseEvent& event) {
+        dispatchMouse(lParam, button, clickCount, "pointer_down", [](Widget& widget, const MouseEvent& event) {
             return widget.onMouseDown(event);
         });
     }
 
     void dispatchMouseUp(LPARAM lParam, MouseButton button = MouseButton::Left) {
-        dispatchMouse(lParam, button, 1, [](Widget& widget, const MouseEvent& event) {
+        dispatchMouse(lParam, button, 1, "pointer_up", [](Widget& widget, const MouseEvent& event) {
             return widget.onMouseUp(event);
         });
     }
@@ -3203,6 +3345,25 @@ private:
         }
     }
 
+    void updateTrackedKeyState(WPARAM virtualKey, bool pressed) {
+        if (virtualKey < trackedKeyState_.size()) {
+            trackedKeyState_[static_cast<std::size_t>(virtualKey)] = pressed;
+        }
+    }
+
+    bool trackedModifierDown(int genericKey, int leftKey, int rightKey) const {
+        const auto down = [this](int virtualKey) {
+            return virtualKey >= 0 &&
+                   static_cast<std::size_t>(virtualKey) < trackedKeyState_.size() &&
+                   trackedKeyState_[static_cast<std::size_t>(virtualKey)];
+        };
+        return down(genericKey) || down(leftKey) || down(rightKey);
+    }
+
+    void resetTrackedKeyState() {
+        trackedKeyState_.fill(false);
+    }
+
     KeyEvent makeKeyEvent(WPARAM wParam, LPARAM lParam, bool pressed) const {
         Key key = Key::Other;
         if (wParam == VK_TAB) {
@@ -3247,19 +3408,25 @@ private:
 
         KeyEvent event;
         event.key = key;
-        event.shift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
-        event.control = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
+        event.shift = trackedModifierDown(VK_SHIFT, VK_LSHIFT, VK_RSHIFT) ||
+                      (GetKeyState(VK_SHIFT) & 0x8000) != 0;
+        event.control = trackedModifierDown(VK_CONTROL, VK_LCONTROL, VK_RCONTROL) ||
+                        (GetKeyState(VK_CONTROL) & 0x8000) != 0;
         event.virtualKey = static_cast<unsigned int>(wParam);
         event.scanCode = static_cast<unsigned int>((lParam >> 16) & 0xff);
         event.pressed = pressed;
         event.repeat = pressed && ((lParam & (1LL << 30)) != 0);
         event.extended = (lParam & (1LL << 24)) != 0;
-        event.alt = (GetKeyState(VK_MENU) & 0x8000) != 0;
-        event.win = (GetKeyState(VK_LWIN) & 0x8000) != 0 || (GetKeyState(VK_RWIN) & 0x8000) != 0;
+        event.alt = trackedModifierDown(VK_MENU, VK_LMENU, VK_RMENU) ||
+                    (GetKeyState(VK_MENU) & 0x8000) != 0;
+        event.win = trackedModifierDown(VK_LWIN, VK_LWIN, VK_RWIN) ||
+                    (GetKeyState(VK_LWIN) & 0x8000) != 0 ||
+                    (GetKeyState(VK_RWIN) & 0x8000) != 0;
         return event;
     }
 
     bool dispatchKeyDown(WPARAM wParam, LPARAM lParam) {
+        updateTrackedKeyState(wParam, true);
         KeyEvent event = makeKeyEvent(wParam, lParam, true);
         if (rawKeyHandler_ && rawKeyHandler_(event)) {
             requestInteractiveRedraw();
@@ -3276,6 +3443,7 @@ private:
     }
 
     bool dispatchKeyUp(WPARAM wParam, LPARAM lParam) {
+        updateTrackedKeyState(wParam, false);
         KeyEvent event = makeKeyEvent(wParam, lParam, false);
         if (rawKeyHandler_ && rawKeyHandler_(event)) {
             requestInteractiveRedraw();
@@ -3379,18 +3547,44 @@ private:
     }
 
     template <typename Handler>
-    void dispatchMouse(LPARAM lParam, MouseButton button, int clickCount, Handler handler) {
+    void dispatchMouse(
+        LPARAM lParam,
+        MouseButton button,
+        int clickCount,
+        const char* phase,
+        Handler handler) {
         if (!content_ || !content_->visible()) {
             return;
         }
 
         MouseEvent event{logicalPointFromLParam(lParam)};
         event.button = button;
-        event.shift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
-        event.control = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
-        event.alt = (GetKeyState(VK_MENU) & 0x8000) != 0;
+        event.shift = trackedModifierDown(VK_SHIFT, VK_LSHIFT, VK_RSHIFT) ||
+                      (GetKeyState(VK_SHIFT) & 0x8000) != 0;
+        event.control = trackedModifierDown(VK_CONTROL, VK_LCONTROL, VK_RCONTROL) ||
+                        (GetKeyState(VK_CONTROL) & 0x8000) != 0;
+        event.alt = trackedModifierDown(VK_MENU, VK_LMENU, VK_RMENU) ||
+                    (GetKeyState(VK_MENU) & 0x8000) != 0;
         event.clickCount = clickCount;
-        if (handler(*content_, event)) {
+        if (internal::scrollTraceEnabled()) {
+            internal::writeScrollTrace(internal::ScrollTraceEvent{
+                "win32", phase, reinterpret_cast<std::uintptr_t>(hwnd_),
+                static_cast<double>(static_cast<int>(button)), 0.0,
+                static_cast<double>(clickCount), 0.0, 0.0, 0.0, 0.0,
+                static_cast<double>(event.position.x),
+                static_cast<double>(event.position.y)});
+        }
+        const bool handled = handler(*content_, event);
+        if (internal::scrollTraceEnabled()) {
+            internal::writeScrollTrace(internal::ScrollTraceEvent{
+                "win32", handled ? "pointer_handled" : "pointer_unhandled",
+                reinterpret_cast<std::uintptr_t>(hwnd_),
+                static_cast<double>(static_cast<int>(button)), 0.0,
+                static_cast<double>(clickCount), 0.0, 0.0, 0.0, 0.0,
+                static_cast<double>(event.position.x),
+                static_cast<double>(event.position.y)});
+        }
+        if (handled) {
             requestInteractiveRedraw();
         }
     }
@@ -3497,6 +3691,8 @@ private:
     // 客户端可按自身标题栏与窗口按钮/账号按钮的实际布局配置。
     float titleBarHeightLogical_ = 34.0f;
     float titleButtonReservedWidthLogical_ = 132.0f;
+    float titleBarInteractiveLeadingWidthLogical_ = -1.0f;
+    float titleBarInteractiveTrailingWidthLogical_ = -1.0f;
     HGLRC glContext_ = nullptr;
     HDC glDC_ = nullptr;
     sk_sp<GrDirectContext> grContext_;
@@ -3507,6 +3703,7 @@ private:
     RawKeyHandler rawKeyHandler_;
     std::wstring defaultFontFamily_;
     wchar_t pendingHighSurrogate_ = 0;
+    std::array<bool, 256> trackedKeyState_{};
     std::atomic_bool acceptingPostedCallbacks_{true};
     std::mutex postedCallbacksMutex_;
     std::queue<std::function<void()>> postedCallbacks_;
@@ -3552,6 +3749,9 @@ private:
     CursorKind lastCursorKind_ = CursorKind::Default;
     Point lastCursorPoint_{};
     bool hasLastCursorPoint_ = false;
+    std::wstring hoveredTooltip_;
+    Point tooltipPoint_{};
+    bool tooltipVisible_ = false;
     sk_sp<SkSurface> paintSurface_;
     sk_sp<SkSurface> windowSurface_;
     int paintSurfaceWidth_ = 0;

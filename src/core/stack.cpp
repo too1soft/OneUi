@@ -37,6 +37,48 @@ void Stack::clearStyleBox() {
     invalidate();
 }
 
+float Stack::contentWidth() const {
+    int visibleCount = 0;
+    float preferredWidth = 0.0f;
+    for (const auto& child : children()) {
+        if (!child->visible()) {
+            continue;
+        }
+        ++visibleCount;
+        const Size preferred = child->preferredSize();
+        if (direction_ == StackDirection::Row) {
+            preferredWidth += std::max(0.0f, preferred.width);
+        } else {
+            preferredWidth = std::max(preferredWidth, preferred.width);
+        }
+    }
+    if (direction_ == StackDirection::Row) {
+        preferredWidth += std::max(0, visibleCount - 1) * gap_;
+    }
+    return padding_.left + preferredWidth + padding_.right;
+}
+
+float Stack::contentHeight() const {
+    int visibleCount = 0;
+    float preferredHeight = 0.0f;
+    for (const auto& child : children()) {
+        if (!child->visible()) {
+            continue;
+        }
+        ++visibleCount;
+        const Size preferred = child->preferredSize();
+        if (direction_ == StackDirection::Column) {
+            preferredHeight += std::max(0.0f, preferred.height);
+        } else {
+            preferredHeight = std::max(preferredHeight, preferred.height);
+        }
+    }
+    if (direction_ == StackDirection::Column) {
+        preferredHeight += std::max(0, visibleCount - 1) * gap_;
+    }
+    return padding_.top + preferredHeight + padding_.bottom;
+}
+
 void Stack::paint(Canvas& canvas) {
     if (styleBox_) {
         paintStyleBox(canvas, frame(), *styleBox_);

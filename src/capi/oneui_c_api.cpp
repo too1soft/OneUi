@@ -3,6 +3,7 @@
 #include "oneui/controls/badge.h"
 #include "oneui/controls/button.h"
 #include "oneui/controls/card.h"
+#include "oneui/controls/checkbox.h"
 #include "oneui/controls/dialog.h"
 #include "oneui/controls/icon_badge.h"
 #include "oneui/controls/menu.h"
@@ -15,6 +16,7 @@
 #include "oneui/controls/nav_item.h"
 #include "oneui/controls/popup.h"
 #include "oneui/controls/progress_bar.h"
+#include "oneui/controls/sparkline.h"
 #include "oneui/controls/radio_group.h"
 #include "oneui/controls/realtime_frame_view.h"
 #include "oneui/controls/remote_input_region.h"
@@ -45,6 +47,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cmath>
 #include <climits>
 #include <cstring>
 #include <cstdint>
@@ -57,6 +60,8 @@
 #include <sstream>
 #include <string>
 #include <type_traits>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #ifdef _WIN32
@@ -69,6 +74,9 @@
 struct OneUiWindow {
     std::unique_ptr<oneui::Window> window;
     std::shared_ptr<oneui::StyleSheet> styleSheet;
+    std::shared_ptr<oneui::Widget> rootContent;
+    std::string pendingLayoutSnapshot;
+    bool hasPendingLayoutSnapshot = false;
 };
 
 struct OneUiWidgetStyleBinding {
@@ -796,6 +804,8 @@ oneui::StyleNode styleNodeFor(const OneUiWidget* widget) {
             tag = "select";
         } else if (dynamic_cast<oneui::ProgressBar*>(widget->widget.get())) {
             tag = "progress";
+        } else if (dynamic_cast<oneui::Sparkline*>(widget->widget.get())) {
+            tag = "sparkline";
         } else if (dynamic_cast<oneui::VirtualList*>(widget->widget.get())) {
             tag = "virtual-list";
         } else if (dynamic_cast<oneui::List*>(widget->widget.get())) {
@@ -849,6 +859,410 @@ oneui::StyleNode styleNodeFor(const OneUiWidget* widget) {
         }
     }
     return oneui::StyleNode{std::move(tag), widget->classes, oneui::StyleStateNone};
+}
+
+struct DebugStyleBinding {
+    std::string tag;
+    std::vector<std::string> classes;
+    std::shared_ptr<oneui::StyleSheet> styleSheet;
+};
+
+using DebugStyleMap = std::unordered_map<const oneui::Widget*, DebugStyleBinding>;
+
+DebugStyleMap debugStyleBindings() {
+    DebugStyleMap bindingsByWidget;
+    std::lock_guard<std::mutex> lock(gWidgetRegistryMutex);
+    bindingsByWidget.reserve(gWidgetRegistry.size());
+    for (const auto& binding : gWidgetRegistry) {
+        if (!binding) {
+            continue;
+        }
+        const auto mounted = binding->widget.lock();
+        if (mounted) {
+            bindingsByWidget[mounted.get()] = DebugStyleBinding{
+                binding->tag,
+                binding->classes,
+                binding->styleSheet.lock(),
+            };
+        }
+    }
+    return bindingsByWidget;
+}
+
+const char* accessibilityRoleName(oneui::AccessibilityRole role) {
+    using oneui::AccessibilityRole;
+    switch (role) {
+    case AccessibilityRole::Button: return "button";
+    case AccessibilityRole::Text: return "text";
+    case AccessibilityRole::TextBox: return "textbox";
+    case AccessibilityRole::CheckBox: return "checkbox";
+    case AccessibilityRole::RadioButton: return "radio";
+    case AccessibilityRole::RadioGroup: return "radiogroup";
+    case AccessibilityRole::ComboBox: return "combobox";
+    case AccessibilityRole::Slider: return "slider";
+    case AccessibilityRole::ProgressBar: return "progressbar";
+    case AccessibilityRole::Tab: return "tab";
+    case AccessibilityRole::TabList: return "tablist";
+    case AccessibilityRole::List: return "list";
+    case AccessibilityRole::ListItem: return "listitem";
+    case AccessibilityRole::Table: return "table";
+    case AccessibilityRole::Row: return "row";
+    case AccessibilityRole::Cell: return "cell";
+    case AccessibilityRole::Popup: return "popup";
+    case AccessibilityRole::Window: return "window";
+    case AccessibilityRole::Custom: return "custom";
+    default: return "none";
+    }
+}
+
+std::string debugTagFor(const oneui::Widget* widget, const DebugStyleBinding& binding) {
+    if (!binding.tag.empty()) {
+        return binding.tag;
+    }
+    if (dynamic_cast<const oneui::Button*>(widget) ||
+        dynamic_cast<const oneui::IconButton*>(widget) ||
+        dynamic_cast<const oneui::NavItem*>(widget)) return "button";
+    if (dynamic_cast<const oneui::TextField*>(widget)) return "input";
+    if (dynamic_cast<const oneui::Label*>(widget)) return "label";
+    if (dynamic_cast<const oneui::Select*>(widget)) return "select";
+    if (dynamic_cast<const oneui::Switch*>(widget)) return "switch";
+    if (dynamic_cast<const oneui::Dialog*>(widget)) return "dialog";
+    if (dynamic_cast<const oneui::Popup*>(widget)) return "popup";
+    if (dynamic_cast<const oneui::ScrollView*>(widget)) return "scroll-view";
+    if (dynamic_cast<const oneui::OverlayHost*>(widget)) return "overlay-host";
+    if (dynamic_cast<const oneui::Stack*>(widget)) return "stack";
+    if (dynamic_cast<const oneui::Card*>(widget)) return "card";
+    if (dynamic_cast<const oneui::Panel*>(widget)) return "panel";
+    if (dynamic_cast<const oneui::List*>(widget)) return "list";
+    if (dynamic_cast<const oneui::VirtualList*>(widget)) return "virtual-list";
+    if (dynamic_cast<const oneui::Table*>(widget)) return "table";
+    if (dynamic_cast<const oneui::TreeView*>(widget)) return "tree-view";
+    if (dynamic_cast<const oneui::TerminalView*>(widget)) return "terminal-view";
+    if (dynamic_cast<const oneui::View*>(widget)) return "view";
+    return "widget";
+}
+
+void appendJsonString(std::ostringstream& stream, const std::string& value) {
+    static constexpr char hex[] = "0123456789abcdef";
+    stream << '"';
+    for (const unsigned char character : value) {
+        switch (character) {
+        case '"': stream << "\\\""; break;
+        case '\\': stream << "\\\\"; break;
+        case '\b': stream << "\\b"; break;
+        case '\f': stream << "\\f"; break;
+        case '\n': stream << "\\n"; break;
+        case '\r': stream << "\\r"; break;
+        case '\t': stream << "\\t"; break;
+        default:
+            if (character < 0x20) {
+                stream << "\\u00" << hex[(character >> 4) & 0x0f] << hex[character & 0x0f];
+            } else {
+                stream << static_cast<char>(character);
+            }
+        }
+    }
+    stream << '"';
+}
+
+void appendJsonNumber(std::ostringstream& stream, float value) {
+    stream << (std::isfinite(value) ? value : 0.0f);
+}
+
+void appendJsonColor(std::ostringstream& stream, const std::optional<oneui::Color>& color) {
+    if (!color) {
+        stream << "null";
+        return;
+    }
+    stream << '[' << static_cast<unsigned int>(color->r) << ','
+           << static_cast<unsigned int>(color->g) << ','
+           << static_cast<unsigned int>(color->b) << ','
+           << static_cast<unsigned int>(color->a) << ']';
+}
+
+void appendJsonInsets(std::ostringstream& stream, const std::optional<oneui::Insets>& insets) {
+    if (!insets) {
+        stream << "null";
+        return;
+    }
+    stream << '{';
+    stream << "\"top\":"; appendJsonNumber(stream, insets->top);
+    stream << ",\"right\":"; appendJsonNumber(stream, insets->right);
+    stream << ",\"bottom\":"; appendJsonNumber(stream, insets->bottom);
+    stream << ",\"left\":"; appendJsonNumber(stream, insets->left);
+    stream << '}';
+}
+
+void appendDebugListItems(
+    std::ostringstream& stream,
+    const std::vector<oneui::ListItem>& items,
+    const std::function<oneui::Rect(int)>& frameForIndex,
+    const std::function<bool(int)>& selectedForIndex) {
+    stream << '[';
+    for (std::size_t index = 0; index < items.size(); ++index) {
+        if (index > 0) stream << ',';
+        const oneui::Rect frame = frameForIndex(static_cast<int>(index));
+        stream << "{\"index\":" << index << ",\"title\":";
+        appendJsonString(stream, utf8FromWide(items[index].title));
+        stream << ",\"detail\":";
+        appendJsonString(stream, utf8FromWide(items[index].detail));
+        stream << ",\"selected\":"
+               << (selectedForIndex(static_cast<int>(index)) ? "true" : "false");
+        stream << ",\"frame\":{\"x\":"; appendJsonNumber(stream, frame.x);
+        stream << ",\"y\":"; appendJsonNumber(stream, frame.y);
+        stream << ",\"width\":"; appendJsonNumber(stream, frame.width);
+        stream << ",\"height\":"; appendJsonNumber(stream, frame.height);
+        stream << "}}";
+    }
+    stream << ']';
+}
+
+void appendDebugTabItems(std::ostringstream& stream, const oneui::Tabs& tabs) {
+    const auto& items = tabs.items();
+    stream << '[';
+    for (std::size_t index = 0; index < items.size(); ++index) {
+        if (index > 0) stream << ',';
+        const oneui::Rect frame = tabs.itemFrame(static_cast<int>(index));
+        stream << "{\"index\":" << index << ",\"title\":";
+        appendJsonString(stream, utf8FromWide(items[index]));
+        stream << ",\"detail\":\"\",\"selected\":"
+               << (tabs.selectedIndex() == static_cast<int>(index) ? "true" : "false");
+        stream << ",\"frame\":{\"x\":"; appendJsonNumber(stream, frame.x);
+        stream << ",\"y\":"; appendJsonNumber(stream, frame.y);
+        stream << ",\"width\":"; appendJsonNumber(stream, frame.width);
+        stream << ",\"height\":"; appendJsonNumber(stream, frame.height);
+        stream << "}}";
+    }
+    stream << ']';
+}
+
+void appendDebugTableRows(std::ostringstream& stream, const oneui::Table& table) {
+    const auto& rows = table.rows();
+    const auto& selected = table.selectedIndices();
+    stream << '[';
+    for (std::size_t index = 0; index < rows.size(); ++index) {
+        if (index > 0) stream << ',';
+        const oneui::Rect frame = table.rowFrame(static_cast<int>(index));
+        stream << "{\"index\":" << index << ",\"cells\":[";
+        for (std::size_t cell = 0; cell < rows[index].size(); ++cell) {
+            if (cell > 0) stream << ',';
+            appendJsonString(stream, utf8FromWide(rows[index][cell]));
+        }
+        const bool isSelected = std::find(
+            selected.begin(), selected.end(), static_cast<int>(index)) != selected.end();
+        stream << "],\"selected\":" << (isSelected ? "true" : "false");
+        stream << ",\"frame\":{\"x\":"; appendJsonNumber(stream, frame.x);
+        stream << ",\"y\":"; appendJsonNumber(stream, frame.y);
+        stream << ",\"width\":"; appendJsonNumber(stream, frame.width);
+        stream << ",\"height\":"; appendJsonNumber(stream, frame.height);
+        stream << "}}";
+    }
+    stream << ']';
+}
+
+std::vector<std::pair<std::shared_ptr<oneui::Widget>, bool>> debugChildrenOf(
+    const oneui::Widget* widget,
+    bool effectiveVisible) {
+    std::vector<std::pair<std::shared_ptr<oneui::Widget>, bool>> children;
+    if (const auto* overlayHost = dynamic_cast<const oneui::OverlayHost*>(widget)) {
+        if (const auto content = overlayHost->content()) {
+            children.emplace_back(content, effectiveVisible && content->visible());
+        }
+        for (const auto& entry : overlayHost->overlays()) {
+            children.emplace_back(
+                entry.child,
+                effectiveVisible && entry.child && entry.child->visible());
+        }
+    }
+    if (const auto* view = dynamic_cast<const oneui::View*>(widget)) {
+        for (const auto& child : view->children()) {
+            children.emplace_back(
+                child,
+                effectiveVisible && child && child->visible());
+        }
+    }
+    if (const auto* popup = dynamic_cast<const oneui::Popup*>(widget)) {
+        if (const auto anchor = popup->anchor()) {
+            children.emplace_back(anchor, effectiveVisible && anchor->visible());
+        }
+        if (const auto content = popup->content()) {
+            children.emplace_back(
+                content,
+                effectiveVisible && popup->isOpen() && content->visible());
+        }
+    }
+    return children;
+}
+
+void appendDebugNode(
+    std::ostringstream& stream,
+    const oneui::Widget* widget,
+    std::size_t id,
+    std::optional<std::size_t> parentId,
+    std::size_t depth,
+    bool effectiveVisible,
+    const DebugStyleMap& styleBindings,
+    bool& firstNode) {
+    static const DebugStyleBinding emptyBinding;
+    const auto styleBinding = styleBindings.find(widget);
+    const DebugStyleBinding& binding = styleBinding == styleBindings.end()
+        ? emptyBinding
+        : styleBinding->second;
+    const oneui::AccessibilityInfo accessibility = widget->accessibilityInfo();
+    oneui::StylePseudoMask state = oneui::StyleStateNone;
+    if (accessibility.state.disabled) state |= oneui::StyleStateDisabled;
+    if (accessibility.state.focused) state |= oneui::StyleStateFocus;
+    if (accessibility.state.selected || accessibility.state.checked) state |= oneui::StyleStateSelected;
+    const std::string tag = debugTagFor(widget, binding);
+    const oneui::StyleBox style = binding.styleSheet
+        ? binding.styleSheet->resolve(oneui::StyleNode{tag, binding.classes, state})
+        : oneui::StyleBox{};
+    const oneui::Rect frame = widget->frame();
+    const oneui::Size preferred = widget->preferredSize();
+
+    if (!firstNode) stream << ',';
+    firstNode = false;
+    stream << '{';
+    stream << "\"id\":" << id << ",\"parentId\":";
+    if (parentId) stream << *parentId; else stream << "null";
+    stream << ",\"depth\":" << depth << ",\"tag\":";
+    appendJsonString(stream, tag);
+    stream << ",\"classes\":[";
+    for (std::size_t index = 0; index < binding.classes.size(); ++index) {
+        if (index > 0) stream << ',';
+        appendJsonString(stream, binding.classes[index]);
+    }
+    stream << "],\"role\":";
+    appendJsonString(stream, accessibilityRoleName(accessibility.role));
+    stream << ",\"name\":";
+    appendJsonString(stream, utf8FromWide(accessibility.name));
+    stream << ",\"description\":";
+    appendJsonString(stream, utf8FromWide(accessibility.description));
+    stream << ",\"valueLength\":" << accessibility.value.size();
+    stream << ",\"visible\":" << (widget->visible() ? "true" : "false");
+    stream << ",\"effectiveVisible\":" << (effectiveVisible ? "true" : "false");
+    stream << ",\"disabled\":" << (widget->disabled() ? "true" : "false");
+    stream << ",\"focused\":" << (widget->focused() ? "true" : "false");
+    stream << ",\"frame\":{\"x\":"; appendJsonNumber(stream, frame.x);
+    stream << ",\"y\":"; appendJsonNumber(stream, frame.y);
+    stream << ",\"width\":"; appendJsonNumber(stream, frame.width);
+    stream << ",\"height\":"; appendJsonNumber(stream, frame.height);
+    stream << "},\"preferred\":{\"width\":"; appendJsonNumber(stream, preferred.width);
+    stream << ",\"height\":"; appendJsonNumber(stream, preferred.height);
+    stream << "},\"style\":{\"foreground\":"; appendJsonColor(stream, style.foreground);
+    stream << ",\"background\":"; appendJsonColor(stream, style.background.color);
+    stream << ",\"placeholder\":"; appendJsonColor(stream, style.placeholderColor);
+    stream << ",\"border\":"; appendJsonColor(stream, style.borderColor);
+    stream << ",\"padding\":"; appendJsonInsets(stream, style.padding);
+    stream << ",\"width\":";
+    if (style.width) appendJsonNumber(stream, *style.width); else stream << "null";
+    stream << ",\"height\":";
+    if (style.height) appendJsonNumber(stream, *style.height); else stream << "null";
+    stream << ",\"fontSize\":";
+    if (style.fontSize) appendJsonNumber(stream, *style.fontSize); else stream << "null";
+    stream << ",\"detailFontSize\":";
+    if (style.detailFontSize) appendJsonNumber(stream, *style.detailFontSize); else stream << "null";
+    stream << ",\"textInset\":";
+    if (style.textInset) appendJsonNumber(stream, *style.textInset); else stream << "null";
+    stream << ",\"titleOffsetY\":";
+    if (style.titleOffsetY) appendJsonNumber(stream, *style.titleOffsetY); else stream << "null";
+    stream << ",\"detailOffsetY\":";
+    if (style.detailOffsetY) appendJsonNumber(stream, *style.detailOffsetY); else stream << "null";
+    stream << '}';
+    stream << ",\"text\":";
+    if (const auto* label = dynamic_cast<const oneui::Label*>(widget)) {
+        appendJsonString(stream, utf8FromWide(label->text()));
+    } else {
+        stream << "null";
+    }
+    stream << ",\"rowHeight\":";
+    if (const auto* list = dynamic_cast<const oneui::VirtualList*>(widget)) {
+        appendJsonNumber(stream, list->rowHeight());
+    } else if (const auto* table = dynamic_cast<const oneui::Table*>(widget)) {
+        appendJsonNumber(stream, table->rowHeight());
+    } else {
+        stream << "null";
+    }
+    stream << ",\"items\":";
+    if (const auto* list = dynamic_cast<const oneui::List*>(widget)) {
+        appendDebugListItems(
+            stream,
+            list->items(),
+            [list](int index) { return list->itemFrame(index); },
+            [list](int index) { return list->selectedIndex() == index; });
+    } else if (const auto* list = dynamic_cast<const oneui::VirtualList*>(widget)) {
+        const std::vector<int>& selected = list->selectedIndices();
+        appendDebugListItems(
+            stream,
+            list->items(),
+            [list](int index) { return list->itemFrame(index); },
+            [list, &selected](int index) {
+                return list->selectedIndex() == index ||
+                    std::find(selected.begin(), selected.end(), index) != selected.end();
+            });
+    } else if (const auto* table = dynamic_cast<const oneui::Table*>(widget)) {
+        appendDebugTableRows(stream, *table);
+    } else if (const auto* tabs = dynamic_cast<const oneui::Tabs*>(widget)) {
+        appendDebugTabItems(stream, *tabs);
+    } else {
+        stream << "null";
+    }
+    stream << '}';
+}
+
+std::string buildLayoutSnapshot(const OneUiWindow& window) {
+    std::ostringstream stream;
+    const oneui::Size client = window.window->clientSize();
+    stream << "{\"schemaVersion\":1,\"dpiScale\":";
+    appendJsonNumber(stream, window.window->dpiScale());
+    stream << ",\"client\":{\"width\":"; appendJsonNumber(stream, client.width);
+    stream << ",\"height\":"; appendJsonNumber(stream, client.height);
+    stream << "},\"nodes\":[";
+
+    struct PendingNode {
+        std::shared_ptr<oneui::Widget> widget;
+        std::optional<std::size_t> parentId;
+        std::size_t depth = 0;
+        bool effectiveVisible = false;
+    };
+    std::vector<PendingNode> pending;
+    if (window.rootContent) {
+        pending.push_back(PendingNode{
+            window.rootContent,
+            std::nullopt,
+            0,
+            window.rootContent->visible(),
+        });
+    }
+    std::unordered_set<const oneui::Widget*> visited;
+    const DebugStyleMap styleBindings = debugStyleBindings();
+    bool firstNode = true;
+    std::size_t cursor = 0;
+    while (cursor < pending.size()) {
+        const PendingNode current = pending[cursor];
+        const std::size_t nodeId = cursor + 1;
+        ++cursor;
+        if (!current.widget || !visited.insert(current.widget.get()).second) {
+            continue;
+        }
+        appendDebugNode(
+            stream,
+            current.widget.get(),
+            nodeId,
+            current.parentId,
+            current.depth,
+            current.effectiveVisible,
+            styleBindings,
+            firstNode);
+        for (const auto& [child, childVisible] :
+             debugChildrenOf(current.widget.get(), current.effectiveVisible)) {
+            if (child && visited.find(child.get()) == visited.end()) {
+                pending.push_back(PendingNode{child, nodeId, current.depth + 1, childVisible});
+            }
+        }
+    }
+    stream << "]}";
+    return stream.str();
 }
 
 void applyPreferredSizeFromStyle(oneui::Widget& widget, const oneui::StyleBox& box) {
@@ -1002,12 +1416,20 @@ void applyStyleSheet(OneUiWidget* wrapper, std::shared_ptr<oneui::StyleSheet> sh
             oneui::progressBarStyleOverrideFromStyleSheet(*wrapper->styleSheet, node));
         return;
     }
+    if (auto* sparkline = dynamic_cast<oneui::Sparkline*>(wrapper->widget.get())) {
+        sparkline->setStyleBox(wrapper->styleSheet->resolve(node));
+        return;
+    }
     if (auto* virtualList = dynamic_cast<oneui::VirtualList*>(wrapper->widget.get())) {
         virtualList->setStyleOverride(oneui::listStyleOverrideFromStyleSheet(*wrapper->styleSheet, node));
         return;
     }
     if (auto* list = dynamic_cast<oneui::List*>(wrapper->widget.get())) {
         list->setStyleOverride(oneui::listStyleOverrideFromStyleSheet(*wrapper->styleSheet, node));
+        return;
+    }
+    if (auto* table = dynamic_cast<oneui::Table*>(wrapper->widget.get())) {
+        table->setStyleOverride(oneui::tableStyleOverrideFromStyleSheet(*wrapper->styleSheet, node));
         return;
     }
     if (auto* tree = dynamic_cast<oneui::TreeView*>(wrapper->widget.get())) {
@@ -1325,6 +1747,13 @@ void oneui_window_set_title_bar_drag_metrics(OneUiWindow* window, float title_ba
     window->window->setTitleBarDragMetrics(title_bar_height, reserved_button_width);
 }
 
+void oneui_window_set_title_bar_interactive_insets(OneUiWindow* window, float leading_width, float trailing_width) {
+    if (!window || !window->window) {
+        return;
+    }
+    window->window->setTitleBarInteractiveInsets(leading_width, trailing_width);
+}
+
 void oneui_window_set_corner_radius(OneUiWindow* window, float radius) {
     if (!window || !window->window) {
         return;
@@ -1451,17 +1880,35 @@ int oneui_window_file_dialog_utf8(
             }
         } dialogRelease{dialog};
 
+        // Keep OneUI file-dialog state isolated from other shell clients. When
+        // the caller provides an explicit start directory, discard a stale
+        // filename/location from an earlier dialog before applying that path.
+        // Otherwise Windows can reopen directly into a persistent
+        // "Location is unavailable" error even though the requested folder is
+        // valid.
+        static constexpr GUID oneUiFileDialogClientGuid{
+            0x9fd06618,
+            0x7a7d,
+            0x49c7,
+            {0x9b, 0x76, 0xa1, 0xe4, 0xc4, 0xdd, 0xb8, 0x3a},
+        };
+        HRESULT configureResult = dialog->SetClientGuid(oneUiFileDialogClientGuid);
+
         DWORD flags = 0;
-        dialog->GetOptions(&flags);
-        flags |= FOS_FORCEFILESYSTEM | FOS_NOCHANGEDIR;
-        if (options->mode == OneUiFileDialogOpenFile) {
-            flags |= FOS_FILEMUSTEXIST | FOS_PATHMUSTEXIST;
-        } else if (options->mode == OneUiFileDialogSelectFolder) {
-            flags |= FOS_PICKFOLDERS | FOS_PATHMUSTEXIST;
-        } else if (options->confirm_overwrite) {
-            flags |= FOS_OVERWRITEPROMPT;
+        if (SUCCEEDED(configureResult)) {
+            configureResult = dialog->GetOptions(&flags);
         }
-        HRESULT configureResult = dialog->SetOptions(flags);
+        if (SUCCEEDED(configureResult)) {
+            flags |= FOS_FORCEFILESYSTEM | FOS_NOCHANGEDIR;
+            if (options->mode == OneUiFileDialogOpenFile) {
+                flags |= FOS_FILEMUSTEXIST | FOS_PATHMUSTEXIST;
+            } else if (options->mode == OneUiFileDialogSelectFolder) {
+                flags |= FOS_PICKFOLDERS | FOS_PATHMUSTEXIST;
+            } else if (options->confirm_overwrite) {
+                flags |= FOS_OVERWRITEPROMPT;
+            }
+            configureResult = dialog->SetOptions(flags);
+        }
 
         const std::wstring title = utf8OrEmpty(options->title);
         if (SUCCEEDED(configureResult) && !title.empty()) {
@@ -1470,6 +1917,10 @@ int oneui_window_file_dialog_utf8(
 
         const std::wstring initialDirectory = utf8OrEmpty(options->initial_directory);
         if (SUCCEEDED(configureResult) && !initialDirectory.empty()) {
+            // A missing persisted state is not an error for this operation on
+            // every supported Windows build. Clearing is intentionally
+            // best-effort; the explicit folder below remains authoritative.
+            dialog->ClearClientData();
             IShellItem* initialFolder = nullptr;
             const HRESULT folderResult = SHCreateItemFromParsingName(
                 initialDirectory.c_str(),
@@ -1611,6 +2062,37 @@ float oneui_window_dpi_scale(OneUiWindow* window) {
     return window->window->dpiScale();
 }
 
+int oneui_window_layout_snapshot_utf8(
+    OneUiWindow* window,
+    char* buffer,
+    size_t buffer_len,
+    size_t* required_len) {
+    if (!window || !window->window) {
+        if (required_len) {
+            *required_len = 0;
+        }
+        return 0;
+    }
+    if (!buffer || !window->hasPendingLayoutSnapshot) {
+        window->window->prepareLayoutSnapshot();
+        window->pendingLayoutSnapshot = buildLayoutSnapshot(*window);
+        window->hasPendingLayoutSnapshot = true;
+    }
+    const std::string& snapshot = window->pendingLayoutSnapshot;
+    const size_t required = snapshot.size() + 1;
+    if (required_len) {
+        *required_len = required;
+    }
+    if (!buffer || buffer_len < required) {
+        return -2;
+    }
+    std::memcpy(buffer, snapshot.data(), snapshot.size());
+    buffer[snapshot.size()] = '\0';
+    window->pendingLayoutSnapshot.clear();
+    window->hasPendingLayoutSnapshot = false;
+    return 1;
+}
+
 void oneui_window_set_content(OneUiWindow* window, OneUiWidget* widget) {
     if (!window || !window->window || !widget || !widget->widget) {
         return;
@@ -1618,6 +2100,7 @@ void oneui_window_set_content(OneUiWindow* window, OneUiWidget* widget) {
     if (window->styleSheet) {
         applyStyleSheet(widget, window->styleSheet);
     }
+    window->rootContent = widget->widget;
     window->window->setContent(widget->widget);
 }
 
@@ -2089,6 +2572,14 @@ void oneui_widget_set_preferred_size(OneUiWidget* widget, float width, float hei
     widget->widget->setPreferredSize(oneui::Size{width, height});
 }
 
+OneUiRect oneui_widget_frame(const OneUiWidget* widget) {
+    if (!widget || !widget->widget) {
+        return OneUiRect{};
+    }
+    const oneui::Rect frame = widget->widget->frame();
+    return OneUiRect{frame.x, frame.y, frame.width, frame.height};
+}
+
 void oneui_widget_set_disabled(OneUiWidget* widget, int disabled) {
     if (!widget || !widget->widget) {
         return;
@@ -2112,6 +2603,13 @@ void oneui_widget_set_visible(OneUiWidget* widget, int visible) {
 
 int oneui_widget_focused(const OneUiWidget* widget) {
     return widget && widget->widget && widget->widget->focused() ? 1 : 0;
+}
+
+void oneui_widget_set_tooltip(OneUiWidget* widget, const wchar_t* tooltip) {
+    if (!widget || !widget->widget) {
+        return;
+    }
+    widget->widget->setTooltip(wideOrEmpty(tooltip));
 }
 
 void oneui_widget_set_classes(OneUiWidget* widget, const char* classes) {
@@ -2298,6 +2796,16 @@ void oneui_stack_set_align(OneUiWidget* stack, OneUiStackAlign align) {
     }
 }
 
+float oneui_stack_content_width(OneUiWidget* stack) {
+    auto* nativeStack = asWidget<oneui::Stack>(stack);
+    return nativeStack ? nativeStack->contentWidth() : 0.0f;
+}
+
+float oneui_stack_content_height(OneUiWidget* stack) {
+    auto* nativeStack = asWidget<oneui::Stack>(stack);
+    return nativeStack ? nativeStack->contentHeight() : 0.0f;
+}
+
 OneUiWidget* oneui_split_view_create(OneUiSplitOrientation orientation) {
     const auto nativeOrientation = orientation == OneUiSplitOrientationVertical
         ? oneui::SplitOrientation::Vertical
@@ -2389,6 +2897,19 @@ void oneui_split_view_set_on_ratio_changed(
         return;
     }
     nativeSplit->setOnSplitRatioChanged(callback
+        ? [callback, user_data](float ratio) { callback(ratio, user_data); }
+        : std::function<void(float)>{});
+}
+
+void oneui_split_view_set_on_ratio_committed(
+    OneUiWidget* split_view,
+    OneUiFloatCallback callback,
+    void* user_data) {
+    auto* nativeSplit = asWidget<oneui::SplitView>(split_view);
+    if (!nativeSplit) {
+        return;
+    }
+    nativeSplit->setOnSplitRatioCommitted(callback
         ? [callback, user_data](float ratio) { callback(ratio, user_data); }
         : std::function<void(float)>{});
 }
@@ -2961,6 +3482,20 @@ double oneui_progress_bar_value(OneUiWidget* progress_bar) {
     return 0.0;
 }
 
+OneUiWidget* oneui_sparkline_create() {
+    return wrap(std::make_shared<oneui::Sparkline>());
+}
+
+void oneui_sparkline_set_values(OneUiWidget* sparkline, const double* values, size_t count) {
+    if (auto* nativeSparkline = asWidget<oneui::Sparkline>(sparkline)) {
+        if (!values || count == 0) {
+            nativeSparkline->setValues({});
+            return;
+        }
+        nativeSparkline->setValues(std::vector<double>(values, values + count));
+    }
+}
+
 OneUiWidget* oneui_icon_create(int symbol) {
     const auto clamped = std::clamp(symbol, 0, static_cast<int>(oneui::IconSymbol::Trash));
     return wrap(std::make_shared<oneui::IconView>(static_cast<oneui::IconSymbol>(clamped)));
@@ -3069,6 +3604,48 @@ void oneui_switch_set_on_changed(OneUiWidget* switch_widget, OneUiBoolCallback c
     });
 }
 
+OneUiWidget* oneui_checkbox_create(const wchar_t* text) {
+    return wrap(std::make_shared<oneui::Checkbox>(wideOrEmpty(text)));
+}
+
+void oneui_checkbox_set_text(OneUiWidget* checkbox, const wchar_t* text) {
+    auto* nativeCheckbox = asWidget<oneui::Checkbox>(checkbox);
+    if (!nativeCheckbox) {
+        return;
+    }
+    nativeCheckbox->setText(wideOrEmpty(text));
+}
+
+void oneui_checkbox_set_checked(OneUiWidget* checkbox, int checked) {
+    auto* nativeCheckbox = asWidget<oneui::Checkbox>(checkbox);
+    if (!nativeCheckbox) {
+        return;
+    }
+    nativeCheckbox->setChecked(checked != 0);
+}
+
+int oneui_checkbox_checked(OneUiWidget* checkbox) {
+    auto* nativeCheckbox = asWidget<oneui::Checkbox>(checkbox);
+    if (!nativeCheckbox) {
+        return 0;
+    }
+    return nativeCheckbox->checked() ? 1 : 0;
+}
+
+void oneui_checkbox_set_on_changed(OneUiWidget* checkbox, OneUiBoolCallback callback, void* user_data) {
+    auto* nativeCheckbox = asWidget<oneui::Checkbox>(checkbox);
+    if (!nativeCheckbox) {
+        return;
+    }
+    if (!callback) {
+        nativeCheckbox->setOnChanged(nullptr);
+        return;
+    }
+    nativeCheckbox->setOnChanged([callback, user_data](bool checked) {
+        callback(checked ? 1 : 0, user_data);
+    });
+}
+
 OneUiWidget* oneui_title_bar_create(const wchar_t* title) {
     return wrap(std::make_shared<oneui::WindowTitleBar>(wideOrEmpty(title)));
 }
@@ -3104,6 +3681,14 @@ void oneui_title_bar_set_variant(OneUiWidget* title_bar, const char* variant) {
         return;
     }
     nativeTitleBar->setVariant(variant ? std::string(variant) : std::string());
+}
+
+void oneui_title_bar_set_accessory(OneUiWidget* title_bar, OneUiWidget* accessory) {
+    auto* nativeTitleBar = asWidget<oneui::WindowTitleBar>(title_bar);
+    if (!nativeTitleBar) {
+        return;
+    }
+    nativeTitleBar->setAccessory(accessory ? accessory->widget : nullptr);
 }
 
 void oneui_title_bar_set_on_minimize(OneUiWidget* title_bar, OneUiVoidCallback callback, void* user_data) {
@@ -3279,6 +3864,14 @@ void oneui_menu_add_separator(OneUiWidget* menu) {
     nativeMenu->addSeparator();
 }
 
+void oneui_menu_clear_items(OneUiWidget* menu) {
+    auto* nativeMenu = asWidget<oneui::Menu>(menu);
+    if (!nativeMenu) {
+        return;
+    }
+    nativeMenu->clearItems();
+}
+
 void oneui_menu_set_item_disabled(OneUiWidget* menu, int index, int disabled) {
     auto* nativeMenu = asWidget<oneui::Menu>(menu);
     if (!nativeMenu) {
@@ -3435,6 +4028,26 @@ void oneui_tabs_set_items_utf8(
     nativeTabs->setItems(std::move(values));
 }
 
+void oneui_tabs_set_item_icons(OneUiWidget* tabs, const int* symbols, std::size_t count) {
+    auto* nativeTabs = asWidget<oneui::Tabs>(tabs);
+    if (!nativeTabs) {
+        return;
+    }
+    std::vector<std::optional<oneui::IconSymbol>> values;
+    if (symbols && count > 0) {
+        values.reserve(count);
+        for (std::size_t index = 0; index < count; ++index) {
+            const int symbol = symbols[index];
+            if (symbol < 0 || symbol > static_cast<int>(oneui::IconSymbol::Trash)) {
+                values.push_back(std::nullopt);
+            } else {
+                values.push_back(static_cast<oneui::IconSymbol>(symbol));
+            }
+        }
+    }
+    nativeTabs->setItemIcons(std::move(values));
+}
+
 void oneui_tabs_set_selected_index(OneUiWidget* tabs, int index) {
     if (auto* nativeTabs = asWidget<oneui::Tabs>(tabs)) {
         nativeTabs->setSelectedIndex(index);
@@ -3444,6 +4057,38 @@ void oneui_tabs_set_selected_index(OneUiWidget* tabs, int index) {
 int oneui_tabs_selected_index(OneUiWidget* tabs) {
     if (auto* nativeTabs = asWidget<oneui::Tabs>(tabs)) {
         return nativeTabs->selectedIndex();
+    }
+    return 0;
+}
+
+void oneui_tabs_set_compact(OneUiWidget* tabs, int compact) {
+    if (auto* nativeTabs = asWidget<oneui::Tabs>(tabs)) {
+        nativeTabs->setSizingMode(
+            compact != 0 ? oneui::TabsSizingMode::Compact : oneui::TabsSizingMode::Equal);
+    }
+}
+
+void oneui_tabs_set_item_width_range(OneUiWidget* tabs, float minimum, float maximum) {
+    if (auto* nativeTabs = asWidget<oneui::Tabs>(tabs)) {
+        nativeTabs->setItemWidthRange(minimum, maximum);
+    }
+}
+
+void oneui_tabs_set_closable(OneUiWidget* tabs, int closable) {
+    if (auto* nativeTabs = asWidget<oneui::Tabs>(tabs)) {
+        nativeTabs->setClosable(closable != 0);
+    }
+}
+
+void oneui_tabs_set_reorder_enabled(OneUiWidget* tabs, int enabled) {
+    if (auto* nativeTabs = asWidget<oneui::Tabs>(tabs)) {
+        nativeTabs->setReorderEnabled(enabled != 0);
+    }
+}
+
+int oneui_tabs_reorder_enabled(OneUiWidget* tabs) {
+    if (auto* nativeTabs = asWidget<oneui::Tabs>(tabs)) {
+        return nativeTabs->reorderEnabled() ? 1 : 0;
     }
     return 0;
 }
@@ -3460,6 +4105,51 @@ void oneui_tabs_set_on_changed(OneUiWidget* tabs, OneUiIntCallback callback, voi
     nativeTabs->setOnChanged([callback, user_data](int value) {
         callback(value, user_data);
     });
+}
+
+void oneui_tabs_set_on_close_requested(
+    OneUiWidget* tabs,
+    OneUiIntCallback callback,
+    void* user_data) {
+    auto* nativeTabs = asWidget<oneui::Tabs>(tabs);
+    if (!nativeTabs) {
+        return;
+    }
+    if (!callback) {
+        nativeTabs->setOnCloseRequested(nullptr);
+        return;
+    }
+    nativeTabs->setOnCloseRequested([callback, user_data](int value) {
+        callback(value, user_data);
+    });
+}
+
+void oneui_tabs_set_on_context_menu_requested(
+    OneUiWidget* tabs,
+    OneUiIndexPointCallback callback,
+    void* user_data) {
+    auto* nativeTabs = asWidget<oneui::Tabs>(tabs);
+    if (!nativeTabs) {
+        return;
+    }
+    nativeTabs->setOnContextMenuRequested(
+        callback ? std::function<void(int, oneui::Point)>{[callback, user_data](int index, oneui::Point point) {
+            callback(index, point.x, point.y, user_data);
+        }} : nullptr);
+}
+
+void oneui_tabs_set_on_reorder_requested(
+    OneUiWidget* tabs,
+    OneUiReorderRequestedCallback callback,
+    void* user_data) {
+    auto* nativeTabs = asWidget<oneui::Tabs>(tabs);
+    if (!nativeTabs) {
+        return;
+    }
+    nativeTabs->setOnReorderRequested(
+        callback ? std::function<void(int, int)>{[callback, user_data](int source, int target) {
+            callback(source, target, user_data);
+        }} : nullptr);
 }
 
 OneUiWidget* oneui_select_create() {
@@ -4000,6 +4690,256 @@ void oneui_table_set_rows(OneUiWidget* table, const wchar_t* rows) {
     nativeTable->setRows(splitWideTableRows(rows));
 }
 
+void oneui_table_set_columns_utf8(
+    OneUiWidget* table,
+    const OneUiTableColumnUtf8* columns,
+    std::size_t count) {
+    auto* nativeTable = asWidget<oneui::Table>(table);
+    if (!nativeTable) return;
+    std::vector<oneui::TableColumn> values;
+    values.reserve(count);
+    if (columns) {
+        for (std::size_t index = 0; index < count; ++index) {
+            values.push_back(oneui::TableColumn{
+                utf8OrEmpty(columns[index].header),
+                std::max(0.0f, columns[index].width)});
+        }
+    }
+    nativeTable->setColumns(std::move(values));
+}
+
+void oneui_table_set_rows_utf8(
+    OneUiWidget* table,
+    const OneUiTableRowUtf8* rows,
+    std::size_t count) {
+    auto* nativeTable = asWidget<oneui::Table>(table);
+    if (!nativeTable) return;
+    std::vector<std::vector<std::wstring>> values;
+    values.reserve(count);
+    if (rows) {
+        for (std::size_t rowIndex = 0; rowIndex < count; ++rowIndex) {
+            std::vector<std::wstring> cells;
+            const auto& row = rows[rowIndex];
+            cells.reserve(row.cell_count);
+            if (row.cells) {
+                for (std::size_t cellIndex = 0; cellIndex < row.cell_count; ++cellIndex) {
+                    cells.push_back(utf8OrEmpty(row.cells[cellIndex]));
+                }
+            }
+            values.push_back(std::move(cells));
+        }
+    }
+    nativeTable->setRows(std::move(values));
+}
+
+int oneui_table_update_row_utf8(
+    OneUiWidget* table,
+    std::size_t index,
+    const OneUiTableRowUtf8* row) {
+    auto* nativeTable = asWidget<oneui::Table>(table);
+    if (!nativeTable || !row) return 0;
+    std::vector<std::wstring> cells;
+    cells.reserve(row->cell_count);
+    if (row->cells) {
+        for (std::size_t cellIndex = 0; cellIndex < row->cell_count; ++cellIndex) {
+            cells.push_back(utf8OrEmpty(row->cells[cellIndex]));
+        }
+    }
+    return nativeTable->updateRow(index, std::move(cells)) ? 1 : 0;
+}
+
+void oneui_table_set_selection_mode(OneUiWidget* table, int mode) {
+    if (auto* nativeTable = asWidget<oneui::Table>(table)) {
+        nativeTable->setSelectionMode(
+            mode == 1 ? oneui::SelectionMode::Multiple : oneui::SelectionMode::Single);
+    }
+}
+
+void oneui_table_set_selected_index(OneUiWidget* table, int index) {
+    if (auto* nativeTable = asWidget<oneui::Table>(table)) nativeTable->setSelectedIndex(index);
+}
+
+int oneui_table_selected_index(OneUiWidget* table) {
+    const auto* nativeTable = asWidget<oneui::Table>(table);
+    return nativeTable ? nativeTable->selectedIndex() : -1;
+}
+
+void oneui_table_set_selected_indices(
+    OneUiWidget* table,
+    const int* indices,
+    std::size_t count) {
+    auto* nativeTable = asWidget<oneui::Table>(table);
+    if (!nativeTable) return;
+    std::vector<int> values;
+    if (indices && count > 0) values.assign(indices, indices + count);
+    nativeTable->setSelectedIndices(std::move(values));
+}
+
+std::size_t oneui_table_selected_indices(
+    OneUiWidget* table,
+    int* buffer,
+    std::size_t buffer_len) {
+    const auto* nativeTable = asWidget<oneui::Table>(table);
+    if (!nativeTable) return 0;
+    const auto& values = nativeTable->selectedIndices();
+    if (buffer && buffer_len > 0) {
+        std::copy_n(values.begin(), std::min(buffer_len, values.size()), buffer);
+    }
+    return values.size();
+}
+
+void oneui_table_set_row_height(OneUiWidget* table, float height) {
+    if (auto* nativeTable = asWidget<oneui::Table>(table)) nativeTable->setRowHeight(height);
+}
+
+void oneui_table_set_scroll_offset(OneUiWidget* table, float offset) {
+    if (auto* nativeTable = asWidget<oneui::Table>(table)) nativeTable->setScrollOffset(offset);
+}
+
+float oneui_table_scroll_offset(OneUiWidget* table) {
+    const auto* nativeTable = asWidget<oneui::Table>(table);
+    return nativeTable ? nativeTable->scrollOffset() : 0.0f;
+}
+
+float oneui_table_max_scroll_offset(OneUiWidget* table) {
+    const auto* nativeTable = asWidget<oneui::Table>(table);
+    return nativeTable ? nativeTable->maxScrollOffset() : 0.0f;
+}
+
+void oneui_table_set_on_changed(OneUiWidget* table, OneUiIntCallback callback, void* user_data) {
+    auto* nativeTable = asWidget<oneui::Table>(table);
+    if (!nativeTable) return;
+    nativeTable->setOnChanged(callback ? std::function<void(int)>{[callback, user_data](int index) {
+        callback(index, user_data);
+    }} : nullptr);
+}
+
+void oneui_table_set_on_selection_changed(
+    OneUiWidget* table,
+    OneUiIntArrayCallback callback,
+    void* user_data) {
+    auto* nativeTable = asWidget<oneui::Table>(table);
+    if (!nativeTable) return;
+    nativeTable->setOnSelectionChanged(
+        callback ? std::function<void(const std::vector<int>&)>{[callback, user_data](const std::vector<int>& values) {
+            callback(values.data(), values.size(), user_data);
+        }} : nullptr);
+}
+
+void oneui_table_set_on_activated(OneUiWidget* table, OneUiIntCallback callback, void* user_data) {
+    auto* nativeTable = asWidget<oneui::Table>(table);
+    if (!nativeTable) return;
+    nativeTable->setOnActivated(callback ? std::function<void(int)>{[callback, user_data](int index) {
+        callback(index, user_data);
+    }} : nullptr);
+}
+
+void oneui_table_set_on_edit_requested(OneUiWidget* table, OneUiIntCallback callback, void* user_data) {
+    auto* nativeTable = asWidget<oneui::Table>(table);
+    if (!nativeTable) return;
+    nativeTable->setOnEditRequested(callback ? std::function<void(int)>{[callback, user_data](int index) {
+        callback(index, user_data);
+    }} : nullptr);
+}
+
+void oneui_table_set_on_delete_requested(
+    OneUiWidget* table,
+    OneUiIntArrayCallback callback,
+    void* user_data) {
+    auto* nativeTable = asWidget<oneui::Table>(table);
+    if (!nativeTable) return;
+    nativeTable->setOnDeleteRequested(
+        callback ? std::function<void(const std::vector<int>&)>{[callback, user_data](const std::vector<int>& values) {
+            callback(values.data(), values.size(), user_data);
+        }} : nullptr);
+}
+
+void oneui_table_set_on_context_menu_requested(
+    OneUiWidget* table,
+    OneUiIndexPointCallback callback,
+    void* user_data) {
+    auto* nativeTable = asWidget<oneui::Table>(table);
+    if (!nativeTable) return;
+    nativeTable->setOnContextMenuRequested(
+        callback ? std::function<void(int, oneui::Point)>{[callback, user_data](int index, oneui::Point point) {
+            callback(index, point.x, point.y, user_data);
+        }} : nullptr);
+}
+
+void oneui_table_set_reorder_enabled(OneUiWidget* table, int enabled) {
+    if (auto* nativeTable = asWidget<oneui::Table>(table)) {
+        nativeTable->setReorderEnabled(enabled != 0);
+    }
+}
+
+int oneui_table_reorder_enabled(OneUiWidget* table) {
+    if (const auto* nativeTable = asWidget<oneui::Table>(table)) {
+        return nativeTable->reorderEnabled() ? 1 : 0;
+    }
+    return 0;
+}
+
+void oneui_table_set_on_reorder_requested(
+    OneUiWidget* table,
+    OneUiReorderRequestedCallback callback,
+    void* user_data) {
+    auto* nativeTable = asWidget<oneui::Table>(table);
+    if (!nativeTable) return;
+    nativeTable->setOnReorderRequested(
+        callback ? std::function<void(int, int)>{[callback, user_data](int source, int target) {
+            callback(source, target, user_data);
+        }} : nullptr);
+}
+
+int oneui_table_set_item_drag_ids_utf8(
+    OneUiWidget* table,
+    const OneUiUtf8String* ids,
+    std::size_t count) {
+    auto* nativeTable = asWidget<oneui::Table>(table);
+    if (!nativeTable || (count > 0 && !ids)) return 0;
+    std::vector<std::wstring> nativeIds;
+    nativeIds.reserve(count);
+    for (std::size_t index = 0; index < count; ++index) {
+        nativeIds.push_back(utf8OrEmpty(ids[index]));
+    }
+    return nativeTable->setItemDragIds(std::move(nativeIds)) ? 1 : 0;
+}
+
+void oneui_table_set_item_drag_enabled(OneUiWidget* table, int enabled) {
+    if (auto* nativeTable = asWidget<oneui::Table>(table)) {
+        nativeTable->setItemDragEnabled(enabled != 0);
+    }
+}
+
+int oneui_table_item_drag_enabled(OneUiWidget* table) {
+    if (const auto* nativeTable = asWidget<oneui::Table>(table)) {
+        return nativeTable->itemDragEnabled() ? 1 : 0;
+    }
+    return 0;
+}
+
+void oneui_table_set_on_item_drag_utf8(
+    OneUiWidget* table,
+    OneUiItemDragCallback callback,
+    void* user_data) {
+    auto* nativeTable = asWidget<oneui::Table>(table);
+    if (!nativeTable) return;
+    nativeTable->setOnItemDrag(
+        callback
+            ? std::function<void(const oneui::ItemDragEvent&)>{
+                [callback, user_data](const oneui::ItemDragEvent& event) {
+                    const std::string sourceUtf8 = utf8FromWide(event.sourceId);
+                    callback(
+                        sourceUtf8.data(),
+                        sourceUtf8.size(),
+                        static_cast<int>(event.phase),
+                        event.position.x,
+                        event.position.y,
+                        user_data);
+                }}
+            : nullptr);
+}
+
 OneUiWidget* oneui_card_create() {
     return wrap(std::make_shared<oneui::Card>());
 }
@@ -4211,6 +5151,49 @@ void oneui_interactive_surface_set_on_pointer_activated(
             event.alt ? 1 : 0,
         };
         callback(&value, user_data);
+    });
+}
+
+void oneui_interactive_surface_set_on_pointer_moved(
+    OneUiWidget* surface,
+    OneUiPointerCallback callback,
+    void* user_data) {
+    auto* nativeSurface = asWidget<oneui::InteractiveSurface>(surface);
+    if (!nativeSurface) {
+        return;
+    }
+    if (!callback) {
+        nativeSurface->setOnPointerMoved(nullptr);
+        return;
+    }
+    nativeSurface->setOnPointerMoved([callback, user_data](const oneui::MouseEvent& event) {
+        const OneUiPointerEvent value{
+            event.position.x,
+            event.position.y,
+            static_cast<int>(event.button),
+            event.clickCount,
+            event.shift ? 1 : 0,
+            event.control ? 1 : 0,
+            event.alt ? 1 : 0,
+        };
+        callback(&value, user_data);
+    });
+}
+
+void oneui_interactive_surface_set_on_hover_changed(
+    OneUiWidget* surface,
+    OneUiBoolCallback callback,
+    void* user_data) {
+    auto* nativeSurface = asWidget<oneui::InteractiveSurface>(surface);
+    if (!nativeSurface) {
+        return;
+    }
+    if (!callback) {
+        nativeSurface->setOnHoverChanged(nullptr);
+        return;
+    }
+    nativeSurface->setOnHoverChanged([callback, user_data](bool hovered) {
+        callback(hovered ? 1 : 0, user_data);
     });
 }
 
@@ -5044,15 +6027,21 @@ void oneui_radio_group_set_on_changed(OneUiWidget* radio_group, OneUiIntCallback
 }
 
 OneUiWidget* oneui_text_field_create(const wchar_t* placeholder) {
-    return wrap(std::make_shared<oneui::TextField>(wideOrEmpty(placeholder)));
+    auto field = std::make_shared<oneui::TextField>(wideOrEmpty(placeholder));
+    field->setClipboard(std::make_shared<oneui::SystemClipboard>());
+    return wrap(std::move(field));
 }
 
 OneUiWidget* oneui_text_field_create_utf8(OneUiUtf8String placeholder) {
-    return wrap(std::make_shared<oneui::TextField>(utf8OrEmpty(placeholder)));
+    auto field = std::make_shared<oneui::TextField>(utf8OrEmpty(placeholder));
+    field->setClipboard(std::make_shared<oneui::SystemClipboard>());
+    return wrap(std::move(field));
 }
 
 OneUiWidget* oneui_text_area_create_utf8(OneUiUtf8String placeholder) {
-    return wrap(std::make_shared<oneui::TextArea>(utf8OrEmpty(placeholder)));
+    auto field = std::make_shared<oneui::TextArea>(utf8OrEmpty(placeholder));
+    field->setClipboard(std::make_shared<oneui::SystemClipboard>());
+    return wrap(std::move(field));
 }
 
 void oneui_text_field_set_text(OneUiWidget* text_field, const wchar_t* text) {
@@ -5184,6 +6173,35 @@ void oneui_text_field_set_on_changed_utf8(OneUiWidget* text_field, OneUiUtf8Text
     });
 }
 
+void oneui_text_field_set_on_submitted(OneUiWidget* text_field, OneUiTextCallback callback, void* user_data) {
+    auto* nativeTextField = asWidget<oneui::TextField>(text_field);
+    if (!nativeTextField) {
+        return;
+    }
+    if (!callback) {
+        nativeTextField->setOnSubmitted(nullptr);
+        return;
+    }
+    nativeTextField->setOnSubmitted([callback, user_data](const std::wstring& text) {
+        callback(text.c_str(), user_data);
+    });
+}
+
+void oneui_text_field_set_on_submitted_utf8(OneUiWidget* text_field, OneUiUtf8TextCallback callback, void* user_data) {
+    auto* nativeTextField = asWidget<oneui::TextField>(text_field);
+    if (!nativeTextField) {
+        return;
+    }
+    if (!callback) {
+        nativeTextField->setOnSubmitted(nullptr);
+        return;
+    }
+    nativeTextField->setOnSubmitted([callback, user_data](const std::wstring& text) {
+        const std::string utf8 = utf8FromWide(text);
+        callback(utf8.data(), utf8.size(), user_data);
+    });
+}
+
 void oneui_text_field_set_style(OneUiWidget* text_field, const OneUiTextFieldStyle* style) {
     auto* nativeTextField = asWidget<oneui::TextField>(text_field);
     if (!nativeTextField || !style) {
@@ -5202,6 +6220,7 @@ void oneui_text_field_clear_style(OneUiWidget* text_field) {
 
 OneUiWidget* oneui_search_box_create(const wchar_t* placeholder) {
     auto field = std::make_shared<oneui::TextField>(wideOrEmpty(placeholder));
+    field->setClipboard(std::make_shared<oneui::SystemClipboard>());
     field->setPrefixIcon(oneui::IconSymbol::Search);
     field->setSuffixIcon(oneui::IconSymbol::ChevronDown);
     return wrap(std::move(field));
@@ -5209,6 +6228,7 @@ OneUiWidget* oneui_search_box_create(const wchar_t* placeholder) {
 
 OneUiWidget* oneui_search_box_create_utf8(OneUiUtf8String placeholder) {
     auto field = std::make_shared<oneui::TextField>(utf8OrEmpty(placeholder));
+    field->setClipboard(std::make_shared<oneui::SystemClipboard>());
     field->setPrefixIcon(oneui::IconSymbol::Search);
     field->setSuffixIcon(oneui::IconSymbol::ChevronDown);
     return wrap(std::move(field));
@@ -5247,7 +6267,7 @@ void oneui_button_set_icon(OneUiWidget* button, int symbol) {
         nativeButton->clearIcon();
         return;
     }
-    const auto clamped = std::clamp(symbol, 0, static_cast<int>(oneui::IconSymbol::Trash));
+    const auto clamped = std::clamp(symbol, 0, static_cast<int>(oneui::IconSymbol::ChevronRight));
     nativeButton->setIcon(static_cast<oneui::IconSymbol>(clamped));
 }
 

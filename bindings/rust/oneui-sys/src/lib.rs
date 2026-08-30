@@ -5,7 +5,7 @@
 
 use std::ffi::{c_char, c_float, c_int, c_uint, c_ushort, c_void};
 
-pub const UTF8_ABI_VERSION: c_uint = 13;
+pub const UTF8_ABI_VERSION: c_uint = 16;
 
 #[repr(C)]
 pub struct OneUiWindow {
@@ -34,6 +34,20 @@ pub struct OneUiUtf8String {
 pub struct OneUiListItemUtf8 {
     pub title: OneUiUtf8String,
     pub detail: OneUiUtf8String,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct OneUiTableColumnUtf8 {
+    pub header: OneUiUtf8String,
+    pub width: f32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct OneUiTableRowUtf8 {
+    pub cells: *const OneUiUtf8String,
+    pub cell_count: usize,
 }
 
 #[repr(C)]
@@ -340,9 +354,20 @@ extern "C" {
         title_bar_height: f32,
         reserved_button_width: f32,
     );
+    pub fn oneui_window_set_title_bar_interactive_insets(
+        window: *mut OneUiWindow,
+        leading_width: f32,
+        trailing_width: f32,
+    );
     pub fn oneui_window_set_corner_radius(window: *mut OneUiWindow, radius: f32);
     pub fn oneui_window_set_title_utf8(window: *mut OneUiWindow, title: OneUiUtf8String);
     pub fn oneui_window_set_content(window: *mut OneUiWindow, widget: *mut OneUiWidget);
+    pub fn oneui_window_layout_snapshot_utf8(
+        window: *mut OneUiWindow,
+        buffer: *mut c_char,
+        buffer_len: usize,
+        required_len: *mut usize,
+    ) -> c_int;
     pub fn oneui_window_request_focus(
         window: *mut OneUiWindow,
         widget: *mut OneUiWidget,
@@ -376,10 +401,12 @@ extern "C" {
 
     pub fn oneui_widget_destroy(widget: *mut OneUiWidget);
     pub fn oneui_widget_set_preferred_size(widget: *mut OneUiWidget, width: f32, height: f32);
+    pub fn oneui_widget_frame(widget: *const OneUiWidget) -> OneUiRect;
     pub fn oneui_widget_set_disabled(widget: *mut OneUiWidget, disabled: c_int);
     pub fn oneui_widget_set_tab_stop(widget: *mut OneUiWidget, tab_stop: c_int);
     pub fn oneui_widget_set_visible(widget: *mut OneUiWidget, visible: c_int);
     pub fn oneui_widget_focused(widget: *const OneUiWidget) -> c_int;
+    pub fn oneui_widget_set_tooltip(widget: *mut OneUiWidget, tooltip: *const u16);
     pub fn oneui_widget_set_classes(widget: *mut OneUiWidget, classes: *const c_char);
     pub fn oneui_widget_set_style_node(
         widget: *mut OneUiWidget,
@@ -410,6 +437,8 @@ extern "C" {
     pub fn oneui_stack_set_gap(stack: *mut OneUiWidget, gap: f32);
     pub fn oneui_stack_set_padding(stack: *mut OneUiWidget, insets: OneUiInsets);
     pub fn oneui_stack_set_align(stack: *mut OneUiWidget, align: c_int);
+    pub fn oneui_stack_content_width(stack: *mut OneUiWidget) -> f32;
+    pub fn oneui_stack_content_height(stack: *mut OneUiWidget) -> f32;
 
     // 0 = horizontal, 1 = vertical. These values are part of the stable C ABI.
     pub fn oneui_split_view_create(orientation: c_int) -> *mut OneUiWidget;
@@ -427,6 +456,11 @@ extern "C" {
         second: f32,
     );
     pub fn oneui_split_view_set_on_ratio_changed(
+        split_view: *mut OneUiWidget,
+        callback: OneUiFloatCallback,
+        user_data: *mut c_void,
+    );
+    pub fn oneui_split_view_set_on_ratio_committed(
         split_view: *mut OneUiWidget,
         callback: OneUiFloatCallback,
         user_data: *mut c_void,
@@ -563,6 +597,16 @@ extern "C" {
         callback: OneUiPointerCallback,
         user_data: *mut c_void,
     );
+    pub fn oneui_interactive_surface_set_on_pointer_moved(
+        surface: *mut OneUiWidget,
+        callback: OneUiPointerCallback,
+        user_data: *mut c_void,
+    );
+    pub fn oneui_interactive_surface_set_on_hover_changed(
+        surface: *mut OneUiWidget,
+        callback: OneUiBoolCallback,
+        user_data: *mut c_void,
+    );
     pub fn oneui_interactive_surface_set_on_context_menu_requested(
         surface: *mut OneUiWidget,
         callback: OneUiPointerCallback,
@@ -593,6 +637,13 @@ extern "C" {
     pub fn oneui_progress_bar_set_value(progress_bar: *mut OneUiWidget, value: f64);
     pub fn oneui_progress_bar_value(progress_bar: *mut OneUiWidget) -> f64;
 
+    pub fn oneui_sparkline_create() -> *mut OneUiWidget;
+    pub fn oneui_sparkline_set_values(
+        sparkline: *mut OneUiWidget,
+        values: *const f64,
+        count: usize,
+    );
+
     pub fn oneui_icon_create(symbol: c_int) -> *mut OneUiWidget;
     pub fn oneui_icon_set_symbol(icon: *mut OneUiWidget, symbol: c_int);
     pub fn oneui_icon_set_color(icon: *mut OneUiWidget, r: u8, g: u8, b: u8, a: u8);
@@ -611,6 +662,15 @@ extern "C" {
     pub fn oneui_switch_checked(switch_widget: *mut OneUiWidget) -> c_int;
     pub fn oneui_switch_set_on_changed(
         switch_widget: *mut OneUiWidget,
+        callback: OneUiBoolCallback,
+        user_data: *mut c_void,
+    );
+    pub fn oneui_checkbox_create(text: *const u16) -> *mut OneUiWidget;
+    pub fn oneui_checkbox_set_text(checkbox: *mut OneUiWidget, text: *const u16);
+    pub fn oneui_checkbox_set_checked(checkbox: *mut OneUiWidget, checked: c_int);
+    pub fn oneui_checkbox_checked(checkbox: *mut OneUiWidget) -> c_int;
+    pub fn oneui_checkbox_set_on_changed(
+        checkbox: *mut OneUiWidget,
         callback: OneUiBoolCallback,
         user_data: *mut c_void,
     );
@@ -637,11 +697,36 @@ extern "C" {
         items: *const OneUiUtf8String,
         count: usize,
     );
+    pub fn oneui_tabs_set_item_icons(tabs: *mut OneUiWidget, symbols: *const c_int, count: usize);
     pub fn oneui_tabs_set_selected_index(tabs: *mut OneUiWidget, index: c_int);
     pub fn oneui_tabs_selected_index(tabs: *mut OneUiWidget) -> c_int;
+    pub fn oneui_tabs_set_compact(tabs: *mut OneUiWidget, compact: c_int);
+    pub fn oneui_tabs_set_item_width_range(
+        tabs: *mut OneUiWidget,
+        minimum: c_float,
+        maximum: c_float,
+    );
+    pub fn oneui_tabs_set_closable(tabs: *mut OneUiWidget, closable: c_int);
+    pub fn oneui_tabs_set_reorder_enabled(tabs: *mut OneUiWidget, enabled: c_int);
+    pub fn oneui_tabs_reorder_enabled(tabs: *mut OneUiWidget) -> c_int;
     pub fn oneui_tabs_set_on_changed(
         tabs: *mut OneUiWidget,
         callback: OneUiIntCallback,
+        user_data: *mut c_void,
+    );
+    pub fn oneui_tabs_set_on_close_requested(
+        tabs: *mut OneUiWidget,
+        callback: OneUiIntCallback,
+        user_data: *mut c_void,
+    );
+    pub fn oneui_tabs_set_on_context_menu_requested(
+        tabs: *mut OneUiWidget,
+        callback: OneUiIndexPointCallback,
+        user_data: *mut c_void,
+    );
+    pub fn oneui_tabs_set_on_reorder_requested(
+        tabs: *mut OneUiWidget,
+        callback: OneUiReorderRequestedCallback,
         user_data: *mut c_void,
     );
 
@@ -649,6 +734,7 @@ extern "C" {
     pub fn oneui_title_bar_set_title(title_bar: *mut OneUiWidget, title: *const u16);
     pub fn oneui_title_bar_set_icon_symbol(title_bar: *mut OneUiWidget, symbol: c_int);
     pub fn oneui_title_bar_set_variant(title_bar: *mut OneUiWidget, variant: *const c_char);
+    pub fn oneui_title_bar_set_accessory(title_bar: *mut OneUiWidget, accessory: *mut OneUiWidget);
     pub fn oneui_title_bar_set_on_minimize(
         title_bar: *mut OneUiWidget,
         callback: OneUiVoidCallback,
@@ -702,6 +788,7 @@ extern "C" {
         danger: c_int,
     ) -> c_int;
     pub fn oneui_menu_add_separator(menu: *mut OneUiWidget);
+    pub fn oneui_menu_clear_items(menu: *mut OneUiWidget);
     pub fn oneui_menu_set_item_disabled(menu: *mut OneUiWidget, index: c_int, disabled: c_int);
     pub fn oneui_menu_preferred_height(menu: *mut OneUiWidget) -> f32;
     pub fn oneui_menu_set_on_activated(
@@ -731,8 +818,17 @@ extern "C" {
     pub fn oneui_text_field_set_password_mask(text_field: *mut OneUiWidget, codepoint: c_uint);
     pub fn oneui_text_field_set_multiline(text_field: *mut OneUiWidget, multiline: c_int);
     pub fn oneui_text_field_set_line_height(text_field: *mut OneUiWidget, line_height: f32);
+    pub fn oneui_text_field_set_prefix_icon(text_field: *mut OneUiWidget, symbol: c_int);
+    pub fn oneui_text_field_clear_prefix_icon(text_field: *mut OneUiWidget);
+    pub fn oneui_text_field_set_suffix_icon(text_field: *mut OneUiWidget, symbol: c_int);
+    pub fn oneui_text_field_clear_suffix_icon(text_field: *mut OneUiWidget);
     pub fn oneui_text_area_create_utf8(placeholder: OneUiUtf8String) -> *mut OneUiWidget;
     pub fn oneui_text_field_set_on_changed_utf8(
+        text_field: *mut OneUiWidget,
+        callback: OneUiUtf8TextCallback,
+        user_data: *mut c_void,
+    );
+    pub fn oneui_text_field_set_on_submitted_utf8(
         text_field: *mut OneUiWidget,
         callback: OneUiUtf8TextCallback,
         user_data: *mut c_void,
@@ -936,6 +1032,88 @@ extern "C" {
     pub fn oneui_virtual_list_item_drag_enabled(list: *mut OneUiWidget) -> c_int;
     pub fn oneui_virtual_list_set_on_item_drag_utf8(
         list: *mut OneUiWidget,
+        callback: OneUiItemDragCallback,
+        user_data: *mut c_void,
+    );
+    pub fn oneui_table_create() -> *mut OneUiWidget;
+    pub fn oneui_table_set_columns_utf8(
+        table: *mut OneUiWidget,
+        columns: *const OneUiTableColumnUtf8,
+        count: usize,
+    );
+    pub fn oneui_table_set_rows_utf8(
+        table: *mut OneUiWidget,
+        rows: *const OneUiTableRowUtf8,
+        count: usize,
+    );
+    pub fn oneui_table_update_row_utf8(
+        table: *mut OneUiWidget,
+        index: usize,
+        row: *const OneUiTableRowUtf8,
+    ) -> c_int;
+    pub fn oneui_table_set_selection_mode(table: *mut OneUiWidget, mode: c_int);
+    pub fn oneui_table_set_selected_index(table: *mut OneUiWidget, index: c_int);
+    pub fn oneui_table_selected_index(table: *mut OneUiWidget) -> c_int;
+    pub fn oneui_table_set_selected_indices(
+        table: *mut OneUiWidget,
+        indices: *const c_int,
+        count: usize,
+    );
+    pub fn oneui_table_selected_indices(
+        table: *mut OneUiWidget,
+        buffer: *mut c_int,
+        buffer_len: usize,
+    ) -> usize;
+    pub fn oneui_table_set_row_height(table: *mut OneUiWidget, height: f32);
+    pub fn oneui_table_set_scroll_offset(table: *mut OneUiWidget, offset: f32);
+    pub fn oneui_table_scroll_offset(table: *mut OneUiWidget) -> f32;
+    pub fn oneui_table_max_scroll_offset(table: *mut OneUiWidget) -> f32;
+    pub fn oneui_table_set_on_changed(
+        table: *mut OneUiWidget,
+        callback: OneUiIntCallback,
+        user_data: *mut c_void,
+    );
+    pub fn oneui_table_set_on_selection_changed(
+        table: *mut OneUiWidget,
+        callback: Option<unsafe extern "C" fn(*const c_int, usize, *mut c_void)>,
+        user_data: *mut c_void,
+    );
+    pub fn oneui_table_set_on_activated(
+        table: *mut OneUiWidget,
+        callback: OneUiIntCallback,
+        user_data: *mut c_void,
+    );
+    pub fn oneui_table_set_on_edit_requested(
+        table: *mut OneUiWidget,
+        callback: OneUiIntCallback,
+        user_data: *mut c_void,
+    );
+    pub fn oneui_table_set_on_delete_requested(
+        table: *mut OneUiWidget,
+        callback: Option<unsafe extern "C" fn(*const c_int, usize, *mut c_void)>,
+        user_data: *mut c_void,
+    );
+    pub fn oneui_table_set_on_context_menu_requested(
+        table: *mut OneUiWidget,
+        callback: OneUiIndexPointCallback,
+        user_data: *mut c_void,
+    );
+    pub fn oneui_table_set_reorder_enabled(table: *mut OneUiWidget, enabled: c_int);
+    pub fn oneui_table_reorder_enabled(table: *mut OneUiWidget) -> c_int;
+    pub fn oneui_table_set_on_reorder_requested(
+        table: *mut OneUiWidget,
+        callback: OneUiReorderRequestedCallback,
+        user_data: *mut c_void,
+    );
+    pub fn oneui_table_set_item_drag_ids_utf8(
+        table: *mut OneUiWidget,
+        ids: *const OneUiUtf8String,
+        count: usize,
+    ) -> c_int;
+    pub fn oneui_table_set_item_drag_enabled(table: *mut OneUiWidget, enabled: c_int);
+    pub fn oneui_table_item_drag_enabled(table: *mut OneUiWidget) -> c_int;
+    pub fn oneui_table_set_on_item_drag_utf8(
+        table: *mut OneUiWidget,
         callback: OneUiItemDragCallback,
         user_data: *mut c_void,
     );

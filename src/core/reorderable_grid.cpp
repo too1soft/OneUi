@@ -1,5 +1,6 @@
 #include "oneui/layout/reorderable_grid.h"
 
+#include "internal/scroll_trace.h"
 #include "reorder_internal.h"
 
 #include <algorithm>
@@ -253,6 +254,14 @@ bool ReorderableGrid::onMouseDown(const MouseEvent& event) {
         }
     }
     const bool handled = View::onMouseDown(event);
+    if (internal::scrollTraceEnabled()) {
+        internal::writeScrollTrace(internal::ScrollTraceEvent{
+            "reorderable_grid", handled ? "pointer_down_forwarded" : "pointer_down_unhandled",
+            reinterpret_cast<std::uintptr_t>(this),
+            static_cast<double>(static_cast<int>(event.button)),
+            static_cast<double>(reorderSourceIndex_), 0.0, 0.0, 0.0, 0.0, 0.0,
+            static_cast<double>(event.position.x), static_cast<double>(event.position.y)});
+    }
     return handled || reorderSourceIndex_ >= 0;
 }
 
@@ -294,7 +303,16 @@ bool ReorderableGrid::onMouseUp(const MouseEvent& event) {
     // A child activation may synchronously replace and destroy this grid.
     // Clear local gesture state before crossing that callback boundary.
     resetReorderState();
-    return View::onMouseUp(event);
+    const bool handled = View::onMouseUp(event);
+    if (internal::scrollTraceEnabled()) {
+        internal::writeScrollTrace(internal::ScrollTraceEvent{
+            "reorderable_grid", handled ? "pointer_up_forwarded" : "pointer_up_unhandled",
+            reinterpret_cast<std::uintptr_t>(this),
+            static_cast<double>(static_cast<int>(event.button)), 0.0, 0.0, 0.0,
+            0.0, 0.0, 0.0,
+            static_cast<double>(event.position.x), static_cast<double>(event.position.y)});
+    }
+    return handled;
 }
 
 void ReorderableGrid::layoutChildren() {

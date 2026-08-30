@@ -20,6 +20,7 @@
 #include "oneui/controls/select.h"
 #include "oneui/controls/separator.h"
 #include "oneui/controls/slider.h"
+#include "oneui/controls/sparkline.h"
 #include "oneui/controls/state_view.h"
 #include "oneui/controls/switch.h"
 #include "oneui/controls/tabs.h"

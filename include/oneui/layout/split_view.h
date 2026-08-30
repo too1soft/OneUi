@@ -30,6 +30,7 @@ public:
     bool resizable() const;
     void setMinimumPaneExtent(float first, float second);
     void setOnSplitRatioChanged(std::function<void(float)> callback);
+    void setOnSplitRatioCommitted(std::function<void(float)> callback);
 
     bool onMouseMove(const MouseEvent& event) override;
     bool onMouseDown(const MouseEvent& event) override;
@@ -45,6 +46,7 @@ private:
     float constrainedRatio(float ratio) const;
     Rect dividerHitRect() const;
     float axisPosition(Point point) const;
+    void finishDividerDrag();
     void updateSplitRatio(float ratio, bool notify);
     bool hasInteractionState() const override;
     void resetInteractionState() override;
@@ -62,6 +64,7 @@ private:
     bool dividerHovered_ = false;
     bool draggingDivider_ = false;
     std::function<void(float)> onSplitRatioChanged_;
+    std::function<void(float)> onSplitRatioCommitted_;
 };
 
 } // namespace oneui

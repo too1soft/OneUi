@@ -151,6 +151,18 @@ void WindowTitleBar::setStyleSheet(std::shared_ptr<StyleSheet> sheet) {
     invalidate();
 }
 
+void WindowTitleBar::setAccessory(std::shared_ptr<Widget> accessory) {
+    if (accessory_ == accessory) {
+        return;
+    }
+    accessory_ = std::move(accessory);
+    clearChildren();
+    if (accessory_) {
+        add(accessory_);
+    }
+    invalidate();
+}
+
 void WindowTitleBar::setOnMinimize(std::function<void()> callback) {
     onMinimize_ = std::move(callback);
 }
@@ -164,6 +176,9 @@ void WindowTitleBar::setOnClose(std::function<void()> callback) {
 }
 
 CursorKind WindowTitleBar::cursor(Point point) const {
+    if (accessory_ && accessory_->hitTest(point)) {
+        return View::cursor(point);
+    }
     if (!disabled() && hitTestTitleBarButton(titleBarLayout(), point) != TitleBarButtonId::None) {
         return CursorKind::Pointer;
     }
@@ -223,12 +238,40 @@ void WindowTitleBar::paint(Canvas& canvas) {
         const Color iconColor = style.foreground.value_or(button.iconColor);
         paintIcon(canvas, button.symbol, button.icon, iconColor, Color{0, 0, 0, 0}, 1.5f);
     }
+    View::paint(canvas);
+}
+
+void WindowTitleBar::layoutChildren() {
+    if (!accessory_) {
+        return;
+    }
+    const auto layout = titleBarLayout();
+    // Product workspaces place their command search immediately after the
+    // brand block. Keep a compact drag-safe gap instead of reserving a second
+    // title-width slot before the accessory.
+    const float start = std::max(layout.title.x + 88.0f, frame().x + 136.0f);
+    const float end = layout.buttons.empty()
+        ? frame().x + frame().width - 12.0f
+        : layout.buttons.front().visual.x - 10.0f;
+    accessory_->setFrame(Rect{
+        start,
+        frame().y + 3.0f,
+        std::max(0.0f, end - start),
+        std::max(0.0f, frame().height - 6.0f)});
 }
 
 bool WindowTitleBar::onMouseMove(const MouseEvent& event) {
+    layoutChildren();
+    const bool childStateChanged = View::onMouseMove(event);
+    if (accessory_ && accessory_->hitTest(event.position)) {
+        const auto previous = titleBarLayout();
+        hoveredButton_ = TitleBarButtonId::None;
+        beginButtonTransitions(previous, titleBarLayout());
+        return childStateChanged;
+    }
     const auto next = hitTestTitleBarButton(titleBarLayout(), event.position);
     if (next == hoveredButton_) {
-        return false;
+        return childStateChanged;
     }
     const auto previous = titleBarLayout();
     hoveredButton_ = next;
@@ -238,6 +281,10 @@ bool WindowTitleBar::onMouseMove(const MouseEvent& event) {
 }
 
 bool WindowTitleBar::onMouseDown(const MouseEvent& event) {
+    layoutChildren();
+    if (accessory_ && accessory_->hitTest(event.position) && View::onMouseDown(event)) {
+        return true;
+    }
     const auto button = hitTestTitleBarButton(titleBarLayout(), event.position);
     if (button == TitleBarButtonId::None) {
         return false;
@@ -251,7 +298,7 @@ bool WindowTitleBar::onMouseDown(const MouseEvent& event) {
 
 bool WindowTitleBar::onMouseUp(const MouseEvent& event) {
     if (pressedButton_ == TitleBarButtonId::None) {
-        return false;
+        return View::onMouseUp(event);
     }
     const auto previousLayout = titleBarLayout();
     const auto pressed = pressedButton_;

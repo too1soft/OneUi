@@ -202,6 +202,12 @@ public:
     const std::wstring& accessibleName() const;
     void setAccessibleDescription(std::wstring description);
     const std::wstring& accessibleDescription() const;
+    // Short, visible help shown while the pointer rests on this widget.
+    // Tooltip text is presentation metadata and intentionally remains
+    // independent from the longer accessibility description.
+    void setTooltip(std::wstring tooltip);
+    const std::wstring& tooltip() const;
+    virtual const std::wstring* tooltipAt(Point point) const;
     void setAccessibleValue(std::wstring value);
     const std::wstring& accessibleValue() const;
     void setAccessibilityState(AccessibilityState state);
@@ -236,6 +242,7 @@ private:
     AccessibilityRole accessibilityRole_ = AccessibilityRole::None;
     std::wstring accessibleName_;
     std::wstring accessibleDescription_;
+    std::wstring tooltip_;
     std::wstring accessibleValue_;
     AccessibilityState accessibilityState_;
     Binding<bool> disabledBinding_;

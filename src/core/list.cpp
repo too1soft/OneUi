@@ -39,6 +39,14 @@ int List::selectedIndex() const {
     return selectedBinding_.get(selectedIndex_);
 }
 
+const std::vector<ListItem>& List::items() const {
+    return items_;
+}
+
+Rect List::itemFrame(int index) const {
+    return itemRect(index);
+}
+
 void List::bindSelectedIndex(State<int>& state) {
     selectedBinding_ = Binding<int>(state, [this] {
         invalidate();
@@ -186,7 +194,7 @@ AccessibilityInfo List::accessibilityInfo() const {
         info.role = AccessibilityRole::List;
     }
     const int selected = effectiveSelectedIndex();
-    if (selected >= 0) {
+    if (selected >= 0 && selected < static_cast<int>(items_.size())) {
         const auto& item = items_[static_cast<std::size_t>(selected)];
         info.value = item.detail.empty() ? item.title : item.title + L" - " + item.detail;
         info.state.selected = true;
@@ -197,7 +205,7 @@ AccessibilityInfo List::accessibilityInfo() const {
 void List::assignSelectedIndex(int index) {
     if (items_.empty()) {
         const int previous = selectedIndex();
-        const int next = selectionRequired_ ? 0 : -1;
+        const int next = -1;
         selectedBinding_.set(next, selectedIndex_);
         if (previous != next && onChanged_) {
             onChanged_(next);
@@ -218,7 +226,7 @@ void List::assignSelectedIndex(int index) {
 
 int List::effectiveSelectedIndex() const {
     if (items_.empty()) {
-        return selectionRequired_ ? 0 : -1;
+        return -1;
     }
     const int minimum = selectionRequired_ ? 0 : -1;
     return std::clamp(selectedIndex(), minimum, static_cast<int>(items_.size()) - 1);

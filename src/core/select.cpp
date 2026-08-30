@@ -121,18 +121,22 @@ PopupOutsidePointerPolicy selectPopupOutsidePointerPolicy() {
     return PopupOutsidePointerPolicy::Close;
 }
 
-Rect selectPopupViewport(Rect anchor, Size preferredSize, float offset) {
+Rect unboundedSelectPopupViewport(Rect anchor, Size preferredSize, float offset) {
     const float extent = std::numeric_limits<float>::max() / 8.0f;
     const float minimumX = std::min(anchor.x, anchor.x + anchor.width - preferredSize.width) - offset - extent;
     const float minimumY = std::min(anchor.y, anchor.y - preferredSize.height - offset) - extent;
     return Rect{minimumX, minimumY, extent * 2.0f, extent * 2.0f};
 }
 
-PopupPlacementRequest selectPopupPlacementRequest(Rect anchor, Size preferredSize, float offset) {
+PopupPlacementRequest selectPopupPlacementRequest(
+    Rect anchor,
+    Size preferredSize,
+    float offset,
+    std::optional<Rect> viewport) {
     return PopupPlacementRequest{
         anchor,
         preferredSize,
-        selectPopupViewport(anchor, preferredSize, offset),
+        viewport.value_or(unboundedSelectPopupViewport(anchor, preferredSize, offset)),
         PopupPreferredPlacement::BottomStart,
         offset
     };
@@ -195,6 +199,10 @@ void Select::setOnChanged(std::function<void(int)> callback) {
 }
 
 void Select::paint(Canvas& canvas) {
+    if (const auto viewport = canvas.viewportBounds();
+        viewport && viewport->width > 0.0f && viewport->height > 0.0f) {
+        popupViewport_ = viewport;
+    }
     const Rect rect = frame();
     const SelectStyle fieldStyle = resolvedFieldStyle();
 
@@ -309,6 +317,7 @@ bool Select::onMouseUp(const MouseEvent& event) {
         closePopupSurface(PopupLightDismissReason::Unavailable);
         return false;
     }
+
     const bool wasPressed = popup_.fieldPressed;
     const int wasPressedIndex = popup_.pressedIndex;
     popup_.fieldPressed = false;
@@ -525,7 +534,8 @@ Rect Select::popupSurfaceRect() const {
     const float rowHeight = popupRowHeight();
     const SelectStyle style = resolvedFieldStyle();
     const Size popupSize{rect.width, rowHeight * static_cast<float>(items_.size())};
-    return PopupPlacement::resolve(selectPopupPlacementRequest(rect, popupSize, style.popupOffset)).rect;
+    return PopupPlacement::resolve(
+        selectPopupPlacementRequest(rect, popupSize, style.popupOffset, popupViewport_)).rect;
 }
 
 Rect Select::popupOptionRect(int index) const {

@@ -26,6 +26,8 @@ public:
     bool updateItem(std::size_t index, ListItem item);
     void setSelectedIndex(int index);
     int selectedIndex() const;
+    const std::vector<ListItem>& items() const;
+    Rect itemFrame(int index) const;
     void setSelectionMode(SelectionMode mode);
     SelectionMode selectionMode() const;
     void setSelectedIndices(std::vector<int> indices);

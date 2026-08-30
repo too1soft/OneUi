@@ -58,11 +58,23 @@ void ProgressBar::clearStyleOverride() {
 void ProgressBar::paint(Canvas& canvas) {
     const auto style = resolvedStyle();
     const Rect rect = frame();
-    const float fillWidth = rect.width * static_cast<float>(clampedValue());
+    const float progress = static_cast<float>(clampedValue());
 
     canvas.fillRect(rect, style.trackBackground, style.radius);
-    if (fillWidth > 0.0f) {
-        canvas.fillRect(Rect{rect.x, rect.y, fillWidth, rect.height}, disabled() ? style.disabledFill : style.fill, style.radius);
+    if (progress <= 0.0f) {
+        return;
+    }
+
+    const Color fill = disabled() ? style.disabledFill : style.fill;
+    if (rect.height > rect.width * 1.5f) {
+        const float fillHeight = rect.height * progress;
+        canvas.fillRect(
+            Rect{rect.x, rect.y + rect.height - fillHeight, rect.width, fillHeight},
+            fill,
+            style.radius);
+    } else {
+        const float fillWidth = rect.width * progress;
+        canvas.fillRect(Rect{rect.x, rect.y, fillWidth, rect.height}, fill, style.radius);
     }
 }
 

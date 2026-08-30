@@ -54,7 +54,9 @@ enum class IconSymbol {
     Cube,
     Notebook,
     Edit,
-    Trash
+    Trash,
+    ChevronLeft,
+    ChevronRight
 };
 
 enum class IconPrimitiveKind {

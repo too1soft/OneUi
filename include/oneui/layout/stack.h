@@ -31,6 +31,8 @@ public:
     void setAlign(StackAlign align);
     void setStyleBox(StyleBox style);
     void clearStyleBox();
+    float contentWidth() const;
+    float contentHeight() const;
 
     void paint(Canvas& canvas) override;
 

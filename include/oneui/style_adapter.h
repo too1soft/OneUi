@@ -24,6 +24,7 @@ ONEUI_API SelectStyleOverride selectStyleOverrideFromStyleSheet(const StyleSheet
 ONEUI_API ProgressBarStyleOverride progressBarStyleOverrideFromStyleSheet(const StyleSheet& sheet, StyleNode node);
 ONEUI_API PopupStyleOverride popupStyleOverrideFromStyleSheet(const StyleSheet& sheet, StyleNode node);
 ONEUI_API ListStyleOverride listStyleOverrideFromStyleSheet(const StyleSheet& sheet, StyleNode node);
+ONEUI_API TableStyleOverride tableStyleOverrideFromStyleSheet(const StyleSheet& sheet, StyleNode node);
 ONEUI_API TreeViewStyleOverride treeViewStyleOverrideFromStyleSheet(const StyleSheet& sheet, StyleNode node);
 ONEUI_API InteractiveSurfaceStyle interactiveSurfaceStyleFromStyleSheet(const StyleSheet& sheet, StyleNode node);
 ONEUI_API StyleBox cardStyleBoxFromStyleSheet(const StyleSheet& sheet, StyleNode node);

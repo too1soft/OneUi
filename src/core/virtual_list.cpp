@@ -85,6 +85,14 @@ int VirtualList::selectedIndex() const {
     return selection_.selectedIndices().empty() ? -1 : selection_.selectedIndices().back();
 }
 
+const std::vector<ListItem>& VirtualList::items() const {
+    return items_;
+}
+
+Rect VirtualList::itemFrame(int index) const {
+    return itemRect(index);
+}
+
 void VirtualList::setSelectionMode(SelectionMode mode) {
     const auto previousIndices = selection_.selectedIndices();
     const int previousSelectedIndex = selectedIndex();
@@ -273,6 +281,8 @@ void VirtualList::paint(Canvas& canvas) {
     const ListStyle normalItemStyle = resolvedItemStyle(-1);
     for (int index = first; index < last; ++index) {
         const Rect row = itemRect(index);
+        canvas.save();
+        canvas.clipRect(row);
         const bool hasRowState = selection_.contains(index) || index == hoveredIndex_ || index == pressedIndex_;
         std::optional<ListStyle> stateItemStyle;
         if (hasRowState) {
@@ -315,6 +325,7 @@ void VirtualList::paint(Canvas& canvas) {
                 TextAlign::Left,
                 itemStyle.detailFontWeight);
         }
+        canvas.restore();
     }
     if (reordering_ && reorderInsertionIndex_ >= 0) {
         const float rawY = rect.y

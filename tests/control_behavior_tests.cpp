@@ -6,10 +6,12 @@
 #include "oneui/controls/form_field.h"
 #include "oneui/controls/icon_view.h"
 #include "oneui/controls/list.h"
+#include "oneui/controls/menu.h"
 #include "oneui/controls/virtual_list.h"
 #include "oneui/controls/nav_item.h"
 #include "oneui/controls/popup.h"
 #include "oneui/controls/progress_bar.h"
+#include "oneui/controls/sparkline.h"
 #include "oneui/controls/radio_group.h"
 #include "oneui/controls/select.h"
 #include "oneui/controls/separator.h"
@@ -127,6 +129,10 @@ public:
         return clipOverride;
     }
 
+    std::optional<oneui::Rect> viewportBounds() const override {
+        return viewportOverride;
+    }
+
     void clear(oneui::Color) override {}
 
     void fillRect(oneui::Rect rect, oneui::Color color, float radius = 0.0f) override {
@@ -200,6 +206,7 @@ public:
     std::vector<BoxShadowCall> boxShadows;
     std::vector<oneui::Rect> clips;
     std::optional<oneui::Rect> clipOverride;
+    std::optional<oneui::Rect> viewportOverride;
     int saves = 0;
     int restores = 0;
     mutable std::size_t measureCalls = 0;
@@ -426,6 +433,15 @@ void testSelectionAndDataControlsExposeDefaultAccessibilityInfo() {
     expectWideEqual("List accessibility value", listInfo.value, L"Billing - Review");
     expectEqual("List accessibility selected state", listInfo.state.selected ? 1 : 0, 1);
 
+    oneui::List emptyList;
+    const auto emptyListInfo = emptyList.accessibilityInfo();
+    expectEqual(
+        "Empty list accessibility role",
+        static_cast<int>(emptyListInfo.role),
+        static_cast<int>(oneui::AccessibilityRole::List));
+    expectWideEqual("Empty list accessibility value", emptyListInfo.value, L"");
+    expectEqual("Empty list accessibility selected state", emptyListInfo.state.selected ? 1 : 0, 0);
+
     oneui::Table table;
     table.setColumns({oneui::TableColumn{L"Name"}, oneui::TableColumn{L"Status"}});
     table.setRows({{L"Acme", L"Live"}, {L"Billing", L"Review"}});
@@ -613,6 +629,134 @@ void testTabsNoopOnChanged() {
     tabs.setSelectedIndex(1);
 
     expectEqual("Tabs same-value setSelectedIndex", changes, 0);
+}
+
+void testTabsCompactSizingAndCloseInteraction() {
+    oneui::Tabs tabs;
+    tabs.setItems({L"SSH - production"});
+    tabs.setFrame(oneui::Rect{0.0f, 0.0f, 600.0f, 32.0f});
+    tabs.setSizingMode(oneui::TabsSizingMode::Compact);
+    tabs.setItemWidthRange(120.0f, 220.0f);
+    tabs.setClosable(true);
+    RecordingCanvas canvas;
+    tabs.paint(canvas);
+
+    int closed = -1;
+    tabs.setOnCloseRequested([&](int index) { closed = index; });
+
+    // Compact tabs leave unused toolbar space outside the bounded tab width.
+    expectEqual(
+        "Tabs compact unused toolbar space is not interactive",
+        tabs.onMouseDown(oneui::MouseEvent{oneui::Point{300.0f, 16.0f}}) ? 1 : 0,
+        0);
+
+    tabs.onMouseMove(oneui::MouseEvent{oneui::Point{112.0f, 16.0f}});
+    tabs.onMouseDown(oneui::MouseEvent{oneui::Point{112.0f, 16.0f}});
+    tabs.onMouseUp(oneui::MouseEvent{oneui::Point{112.0f, 16.0f}});
+    expectEqual("Tabs compact close callback", closed, 0);
+}
+
+void testTabsCompactUsesMeasuredContentWidths() {
+    oneui::Tabs tabs;
+    tabs.setItems({L"A", L"A much longer terminal title"});
+    tabs.setFrame(oneui::Rect{0.0f, 0.0f, 600.0f, 32.0f});
+    tabs.setSizingMode(oneui::TabsSizingMode::Compact);
+    tabs.setItemWidthRange(72.0f, 240.0f);
+
+    RecordingCanvas canvas;
+    tabs.paint(canvas);
+
+    expectEqual("Tabs compact measures every title", canvas.measureCalls >= 2 ? 1 : 0, 1);
+    expectEqual(
+        "Tabs compact first title leaves later toolbar space untouched",
+        tabs.onMouseDown(oneui::MouseEvent{oneui::Point{260.0f, 16.0f}}) ? 1 : 0,
+        0);
+    tabs.onMouseDown(oneui::MouseEvent{oneui::Point{100.0f, 16.0f}});
+    tabs.onMouseUp(oneui::MouseEvent{oneui::Point{100.0f, 16.0f}});
+    expectEqual("Tabs compact measured offsets select second title", tabs.selectedIndex(), 1);
+}
+
+void testTabsCompactOverflowWheelAndKeyboardNavigation() {
+    oneui::Tabs tabs;
+    tabs.setItems({L"One", L"Two", L"Three", L"Four", L"Five"});
+    tabs.setFrame(oneui::Rect{0.0f, 0.0f, 260.0f, 32.0f});
+    tabs.setSizingMode(oneui::TabsSizingMode::Compact);
+    tabs.setItemWidthRange(120.0f, 160.0f);
+
+    const bool wheelHandled = tabs.onMouseWheel(
+        oneui::MouseWheelEvent{oneui::Point{20.0f, 16.0f}, -3.0f});
+    expectEqual("Tabs compact overflow wheel handled", wheelHandled ? 1 : 0, 1);
+    tabs.onMouseDown(oneui::MouseEvent{oneui::Point{20.0f, 16.0f}});
+    tabs.onMouseUp(oneui::MouseEvent{oneui::Point{20.0f, 16.0f}});
+    expectEqual("Tabs compact scrolled hit testing", tabs.selectedIndex(), 1);
+
+    tabs.onKeyDown(oneui::KeyEvent{oneui::Key::End});
+    expectEqual("Tabs End selects final tab", tabs.selectedIndex(), 4);
+    tabs.onKeyDown(oneui::KeyEvent{oneui::Key::Home});
+    expectEqual("Tabs Home selects first tab", tabs.selectedIndex(), 0);
+}
+
+void testTabsContextMenuReportsStableTarget() {
+    oneui::Tabs tabs;
+    tabs.setItems({L"One", L"Two", L"Three"});
+    tabs.setFrame(oneui::Rect{0.0f, 0.0f, 300.0f, 32.0f});
+
+    int requested = -1;
+    oneui::Point requestedAt{};
+    tabs.setOnContextMenuRequested([&](int index, oneui::Point point) {
+        requested = index;
+        requestedAt = point;
+    });
+
+    tabs.onMouseDown(oneui::MouseEvent{oneui::Point{150.0f, 16.0f}, oneui::MouseButton::Right});
+    tabs.onMouseUp(oneui::MouseEvent{oneui::Point{150.0f, 16.0f}, oneui::MouseButton::Right});
+
+    expectEqual("Tabs context menu target", requested, 1);
+    expectEqual("Tabs context menu preserves pointer x", static_cast<int>(requestedAt.x), 150);
+}
+
+void testTabsReorderReportsRequestWithoutMutatingSelection() {
+    oneui::Tabs tabs;
+    tabs.setItems({L"One", L"Two", L"Three"});
+    tabs.setFrame(oneui::Rect{0.0f, 0.0f, 300.0f, 32.0f});
+    tabs.setSelectedIndex(1);
+    tabs.setReorderEnabled(true);
+
+    int source = -1;
+    int target = -1;
+    tabs.setOnReorderRequested([&](int nextSource, int nextTarget) {
+        source = nextSource;
+        target = nextTarget;
+    });
+
+    tabs.onMouseDown(oneui::MouseEvent{oneui::Point{50.0f, 16.0f}});
+    tabs.onMouseMove(oneui::MouseEvent{oneui::Point{250.0f, 16.0f}});
+    tabs.onMouseUp(oneui::MouseEvent{oneui::Point{250.0f, 16.0f}});
+
+    expectEqual("Tabs reorder source", source, 0);
+    expectEqual("Tabs reorder target", target, 2);
+    expectEqual("Tabs reorder keeps controlled selection", tabs.selectedIndex(), 1);
+}
+
+void testTabsPaintOptionalLeadingIconsWithoutCrowdingText() {
+    oneui::Tabs tabs;
+    tabs.setItems({L"SSH - production", L"Local shell"});
+    tabs.setItemIcons({oneui::IconSymbol::Terminal, std::nullopt});
+    tabs.setFrame(oneui::Rect{0.0f, 0.0f, 360.0f, 32.0f});
+    tabs.setSizingMode(oneui::TabsSizingMode::Compact);
+    tabs.setItemWidthRange(160.0f, 180.0f);
+
+    RecordingCanvas canvas;
+    tabs.paint(canvas);
+
+    expectEqual("Tabs leading icon paints native primitives", canvas.lines.empty() ? 0 : 1, 1);
+    expectEqual("Tabs leading icons keep both labels", static_cast<int>(canvas.texts.size()), 2);
+    if (canvas.texts.size() == 2) {
+        expectEqual(
+            "Tabs icon reserves leading label space",
+            canvas.texts[0].rect.x >= 28.0f ? 1 : 0,
+            1);
+    }
 }
 
 void testRadioGroupNoopOnChanged() {
@@ -1516,6 +1660,32 @@ void testViewCanRequestFocusForNestedDescendant() {
     expectEqual("View requestFocus keeps focus visible", field->focusVisible() ? 1 : 0, 1);
     expectEqual("View requestFocus routes text input", root->onTextInput(L'x') ? 1 : 0, 1);
     expectWideEqual("View requestFocus edits nested field", field->text(), L"x");
+}
+
+void testViewTooltipUsesDeepestVisibleEnabledChild() {
+    oneui::View root;
+    root.setFrame(oneui::Rect{0.0f, 0.0f, 240.0f, 120.0f});
+    root.setTooltip(L"Workspace");
+
+    auto branch = std::make_shared<oneui::View>();
+    branch->setFrame(oneui::Rect{12.0f, 12.0f, 180.0f, 72.0f});
+    branch->setTooltip(L"Toolbar");
+    auto action = std::make_shared<oneui::Button>(L"");
+    action->setFrame(oneui::Rect{20.0f, 20.0f, 36.0f, 32.0f});
+    action->setTooltip(L"Refresh remote directory");
+    branch->add(action);
+    root.add(branch);
+
+    const auto* deepest = root.tooltipAt(oneui::Point{28.0f, 28.0f});
+    expectWideEqual("View tooltip resolves deepest child", deepest ? *deepest : L"", L"Refresh remote directory");
+
+    action->setDisabled(true);
+    const auto* fallback = root.tooltipAt(oneui::Point{28.0f, 28.0f});
+    expectWideEqual("Disabled tooltip falls back to parent", fallback ? *fallback : L"", L"Toolbar");
+
+    branch->setVisible(false);
+    const auto* rootTooltip = root.tooltipAt(oneui::Point{28.0f, 28.0f});
+    expectWideEqual("Hidden branch tooltip falls back to root", rootTooltip ? *rootTooltip : L"", L"Workspace");
 }
 
 void testViewMouseMoveDoesNotInvalidateSiblingsWhenHoverUnchanged() {
@@ -2435,7 +2605,8 @@ void testVirtualListPaintsOnlyViewportRowsAndMaintainsScrollSelection() {
     RecordingCanvas canvas;
     list.paint(canvas);
 
-    expectEqual("VirtualList clips the viewport exactly once", static_cast<int>(canvas.clips.size()), 1);
+    expectEqual("VirtualList clips the viewport and each painted row", static_cast<int>(canvas.clips.size()), 9);
+    expectEqual("VirtualList balances viewport and row clip restores", canvas.saves, canvas.restores);
     expectEqual("VirtualList paints a bounded number of visible rows", static_cast<int>(canvas.texts.size()) <= 8 ? 1 : 0, 1);
     expectEqual("VirtualList paints the row at the scroll offset", countTextsWithText(canvas, L"Row 2500"), 1);
 
@@ -2496,6 +2667,29 @@ void testVirtualListPaintsOnlyViewportRowsAndMaintainsScrollSelection() {
         0);
     list.onKeyDown(oneui::KeyEvent{oneui::Key::Down});
     expectEqual("VirtualList keyboard navigation resumes from the first row", list.selectedIndex(), 0);
+}
+
+void testVirtualListClipsEveryVisibleRowWhenDetailsExceedRowHeight() {
+    oneui::VirtualList list;
+    list.setItems({
+        oneui::ListItem{L"Alpha", L"First detail"},
+        oneui::ListItem{L"Beta", L"Second detail"},
+        oneui::ListItem{L"Gamma", L"Third detail"},
+    });
+    list.setRowHeight(24.0f);
+    list.setFrame(oneui::Rect{4.0f, 8.0f, 180.0f, 72.0f});
+
+    RecordingCanvas canvas;
+    list.paint(canvas);
+
+    expectEqual("VirtualList clips viewport plus every visible row", static_cast<int>(canvas.clips.size()), 4);
+    expectEqual("VirtualList balances every nested row clip restore", canvas.saves, canvas.restores);
+    if (canvas.clips.size() == 4) {
+        expectRect("VirtualList viewport clip", canvas.clips[0], oneui::Rect{4.0f, 8.0f, 180.0f, 72.0f});
+        expectRect("VirtualList first row clip", canvas.clips[1], oneui::Rect{4.0f, 8.0f, 180.0f, 24.0f});
+        expectRect("VirtualList second row clip", canvas.clips[2], oneui::Rect{4.0f, 32.0f, 180.0f, 24.0f});
+        expectRect("VirtualList third row clip", canvas.clips[3], oneui::Rect{4.0f, 56.0f, 180.0f, 24.0f});
+    }
 }
 
 void testVirtualListUsesStandardMultipleSelectionSemantics() {
@@ -2760,6 +2954,78 @@ void testVirtualListEmitsStableExternalItemDragWithoutBreakingReorder() {
         1);
 }
 
+void testVirtualListExternalDragSurvivesNestedPageRouting() {
+    auto list = std::make_shared<oneui::VirtualList>();
+    list->setItems({
+        {L"Alpha", L""},
+        {L"Beta", L""},
+        {L"Gamma", L""},
+    });
+    list->setRowHeight(40.0f);
+    list->setFrame(oneui::Rect{220.0f, 0.0f, 580.0f, 120.0f});
+    expectEqual(
+        "Nested VirtualList accepts stable external drag IDs",
+        list->setItemDragIds({L"alpha", L"beta", L"gamma"}) ? 1 : 0,
+        1);
+    list->setItemDragEnabled(true);
+    list->setReorderEnabled(true);
+
+    std::vector<oneui::ItemDragEvent> events;
+    list->setOnItemDrag([&](const oneui::ItemDragEvent& event) {
+        events.push_back(event);
+    });
+
+    auto viewport = std::make_shared<oneui::Panel>();
+    viewport->setFrame(oneui::Rect{220.0f, 0.0f, 580.0f, 120.0f});
+    viewport->setContent(list);
+
+    auto navigation = std::make_shared<oneui::Panel>();
+    navigation->setFrame(oneui::Rect{0.0f, 0.0f, 200.0f, 120.0f});
+
+    auto page = std::make_shared<oneui::View>();
+    page->setFrame(oneui::Rect{0.0f, 0.0f, 800.0f, 120.0f});
+    page->add(navigation);
+    page->add(viewport);
+
+    oneui::OverlayHost host;
+    host.setFrame(oneui::Rect{0.0f, 0.0f, 800.0f, 120.0f});
+    host.setContent(page);
+
+    const oneui::MouseEvent rowDown{
+        oneui::Point{300.0f, 60.0f}, oneui::MouseButton::Left};
+    expectEqual(
+        "Nested VirtualList consumes row pointer down",
+        host.onMouseDown(rowDown) ? 1 : 0,
+        1);
+    host.onMouseMove(oneui::MouseEvent{oneui::Point{100.0f, 60.0f}});
+    host.onMouseMove(oneui::MouseEvent{oneui::Point{120.0f, 70.0f}});
+    host.onMouseUp(oneui::MouseEvent{
+        oneui::Point{120.0f, 70.0f}, oneui::MouseButton::Left});
+
+    expectEqual(
+        "Nested page routing preserves all external drag phases",
+        static_cast<int>(events.size()),
+        3);
+    if (events.size() == 3) {
+        expectEqual(
+            "Nested page routing starts the external drag",
+            events[0].phase == oneui::ItemDragPhase::Started ? 1 : 0,
+            1);
+        expectEqual(
+            "Nested page routing updates the external drag",
+            events[1].phase == oneui::ItemDragPhase::Updated ? 1 : 0,
+            1);
+        expectEqual(
+            "Nested page routing drops the external drag",
+            events[2].phase == oneui::ItemDragPhase::Dropped ? 1 : 0,
+            1);
+        expectEqual(
+            "Nested page routing retains the stable source ID",
+            events[2].sourceId == L"beta" ? 1 : 0,
+            1);
+    }
+}
+
 void testVirtualListReorderIndicatorUsesCssFocusStyle() {
     oneui::StyleSheet sheet;
     std::string error;
@@ -2961,6 +3227,26 @@ void testPointerActivationUsesSystemClickCountAndSeparateContextAction() {
     oneui::InteractiveSurface surface;
     surface.setFrame(oneui::Rect{0.0f, 0.0f, 240.0f, 80.0f});
 
+    int pointerMoveCount = 0;
+    std::vector<bool> hoverChanges;
+    oneui::Point pointerPoint{};
+    surface.setOnPointerMoved([&](const oneui::MouseEvent& event) {
+        ++pointerMoveCount;
+        pointerPoint = event.position;
+    });
+    surface.setOnHoverChanged([&](bool hovered) {
+        hoverChanges.push_back(hovered);
+    });
+    surface.onMouseMove(oneui::MouseEvent{oneui::Point{72.0f, 24.0f}});
+    surface.onMouseMove(oneui::MouseEvent{oneui::Point{300.0f, 120.0f}});
+    expectEqual("InteractiveSurface reports one in-bounds pointer move", pointerMoveCount, 1);
+    expectNear("InteractiveSurface pointer move retains x", pointerPoint.x, 72.0f);
+    expectEqual("InteractiveSurface reports hover entry and exit", static_cast<int>(hoverChanges.size()), 2);
+    if (hoverChanges.size() == 2) {
+        expectEqual("InteractiveSurface reports hover entry", hoverChanges[0] ? 1 : 0, 1);
+        expectEqual("InteractiveSurface reports hover exit", hoverChanges[1] ? 1 : 0, 0);
+    }
+
     int activationCount = 0;
     int activationClicks = 0;
     bool activationControl = false;
@@ -3041,6 +3327,48 @@ void testPointerActivationUsesSystemClickCountAndSeparateContextAction() {
     list.onMouseDown(rowDoubleClick);
     list.onMouseUp(rowDoubleClick);
     expectEqual("VirtualList double click activates the row", activated, 1);
+}
+
+void testInteractiveSurfaceKeepsSemanticAndNestedKeyboardTargetsDistinct() {
+    oneui::View root;
+    root.setFrame(oneui::Rect{0.0f, 0.0f, 260.0f, 100.0f});
+
+    auto surface = std::make_shared<oneui::InteractiveSurface>();
+    surface->setFrame(oneui::Rect{0.0f, 0.0f, 240.0f, 80.0f});
+    auto content = std::make_shared<oneui::View>();
+    content->setFrame(oneui::Rect{0.0f, 0.0f, 240.0f, 80.0f});
+    auto childButton = std::make_shared<oneui::Button>(L"Child action");
+    childButton->setFrame(oneui::Rect{8.0f, 8.0f, 88.0f, 32.0f});
+
+    int surfaceActivations = 0;
+    int childActivations = 0;
+    surface->setOnClick([&] { ++surfaceActivations; });
+    childButton->setOnClick([&] { ++childActivations; });
+    content->add(childButton);
+    surface->setContent(content);
+    root.add(surface);
+
+    const oneui::MouseEvent blankClick{
+        oneui::Point{180.0f, 60.0f}, oneui::MouseButton::Left};
+    root.onMouseDown(blankClick);
+    root.onMouseUp(blankClick);
+    expectEqual("InteractiveSurface blank click focuses surface", surface->focused() ? 1 : 0, 1);
+    expectEqual("InteractiveSurface blank click does not focus nested action", childButton->focused() ? 1 : 0, 0);
+
+    root.onKeyDown(oneui::KeyEvent{oneui::Key::Enter});
+    expectEqual("InteractiveSurface Enter activates semantic action", surfaceActivations, 2);
+    expectEqual("InteractiveSurface Enter does not activate nested action", childActivations, 0);
+
+    const oneui::MouseEvent childClick{
+        oneui::Point{20.0f, 20.0f}, oneui::MouseButton::Left};
+    root.onMouseDown(childClick);
+    root.onMouseUp(childClick);
+    expectEqual("InteractiveSurface child click focuses nested action", childButton->focused() ? 1 : 0, 1);
+    expectEqual("InteractiveSurface child pointer action fires once", childActivations, 1);
+
+    root.onKeyDown(oneui::KeyEvent{oneui::Key::Enter});
+    expectEqual("InteractiveSurface delegates Enter to focused nested action", childActivations, 2);
+    expectEqual("InteractiveSurface nested Enter does not duplicate semantic action", surfaceActivations, 2);
 }
 
 void testVirtualListCssControlsCompactTypographyAndScrollbar() {
@@ -3258,6 +3586,202 @@ void testTreeViewOwnsTransientExternalDropTargetState() {
         1);
 }
 
+void testTableVirtualizesRowsAndMaintainsScrollSelection() {
+    oneui::Table table;
+    table.setColumns({
+        oneui::TableColumn{L"Name", 120.0f},
+        oneui::TableColumn{L"Address", 0.0f},
+    });
+    std::vector<std::vector<std::wstring>> rows;
+    for (int index = 0; index < 1000; ++index) {
+        rows.push_back({L"Host " + std::to_wstring(index), L"10.0.0." + std::to_wstring(index)});
+    }
+    table.setRows(std::move(rows));
+    table.setRowHeight(28.0f);
+    table.setFrame(oneui::Rect{0.0f, 0.0f, 320.0f, 144.0f});
+
+    RecordingCanvas initial;
+    table.paint(initial);
+    expectEqual(
+        "Table paints a bounded visible row set",
+        static_cast<int>(initial.texts.size()) <= 14 ? 1 : 0,
+        1);
+    expectEqual(
+        "Table does not paint a far offscreen row",
+        countTextsWithTextAndColor(initial, L"Host 999", oneui::theme().text),
+        0);
+
+    table.setSelectedIndex(999);
+    expectEqual("Table keeps the final row selected", table.selectedIndex(), 999);
+    expectEqual(
+        "Table reveals a selected offscreen row",
+        table.scrollOffset() > 0.0f ? 1 : 0,
+        1);
+    expectNear("Table selected row scroll clamps to maximum", table.scrollOffset(), table.maxScrollOffset());
+
+    RecordingCanvas scrolled;
+    table.paint(scrolled);
+    expectEqual(
+        "Table paints the revealed final row",
+        countTextsWithTextAndColor(scrolled, L"Host 999", oneui::theme().text),
+        1);
+}
+
+void testTableUsesStandardSelectionAndRowCommands() {
+    oneui::Table table;
+    table.setColumns({oneui::TableColumn{L"Name", 0.0f}});
+    table.setRows({{L"Alpha"}, {L"Beta"}, {L"Gamma"}, {L"Delta"}});
+    table.setRowHeight(32.0f);
+    table.setFrame(oneui::Rect{20.0f, 40.0f, 240.0f, 160.0f});
+    table.setSelectionMode(oneui::SelectionMode::Multiple);
+    table.setSelectedIndex(0);
+
+    int activated = -1;
+    int editRequested = -1;
+    int contextIndex = -1;
+    std::vector<int> deleteRequested;
+    table.setOnActivated([&](int index) { activated = index; });
+    table.setOnEditRequested([&](int index) { editRequested = index; });
+    table.setOnDeleteRequested([&](const std::vector<int>& indices) {
+        deleteRequested = indices;
+    });
+    table.setOnContextMenuRequested([&](int index, oneui::Point) { contextIndex = index; });
+
+    const oneui::MouseEvent ctrlGamma{
+        oneui::Point{80.0f, 40.0f + 32.0f + 2.0f * 32.0f + 12.0f},
+        oneui::MouseButton::Left,
+        false,
+        true,
+        false};
+    table.onMouseDown(ctrlGamma);
+    table.onMouseUp(ctrlGamma);
+    expectEqual("Table Ctrl click keeps two selected rows", table.selectedIndices().size(), 2);
+
+    const oneui::MouseEvent contextBeta{
+        oneui::Point{80.0f, 40.0f + 32.0f + 1.0f * 32.0f + 12.0f},
+        oneui::MouseButton::Right};
+    table.onMouseDown(contextBeta);
+    table.onMouseUp(contextBeta);
+    expectEqual("Table context click selects its row", table.selectedIndex(), 1);
+    expectEqual("Table reports the context row", contextIndex, 1);
+
+    table.onKeyDown(oneui::KeyEvent{oneui::Key::Enter});
+    table.onKeyDown(oneui::KeyEvent{oneui::Key::F2});
+    table.onKeyDown(oneui::KeyEvent{oneui::Key::Delete});
+    expectEqual("Table Enter activates the active row", activated, 1);
+    expectEqual("Table F2 requests editing", editRequested, 1);
+    expectEqual("Table Delete reports one selected row", deleteRequested.size(), 1);
+    expectEqual("Table Delete reports the active row", deleteRequested.front(), 1);
+}
+
+void testTableSupportsInternalReorderAndStableExternalItemDrag() {
+    oneui::Table table;
+    table.setColumns({oneui::TableColumn{L"Name", 0.0f}});
+    table.setRows({{L"Alpha"}, {L"Beta"}, {L"Gamma"}, {L"Delta"}});
+    table.setRowHeight(32.0f);
+    table.setFrame(oneui::Rect{20.0f, 40.0f, 240.0f, 160.0f});
+    table.setReorderEnabled(true);
+    table.setItemDragEnabled(true);
+    expectEqual(
+        "Table rejects mismatched external drag IDs",
+        table.setItemDragIds({L"alpha", L"beta"}) ? 1 : 0,
+        0);
+    expectEqual(
+        "Table accepts stable external drag IDs",
+        table.setItemDragIds({L"alpha", L"beta", L"gamma", L"delta"}) ? 1 : 0,
+        1);
+
+    int reorderCount = 0;
+    int sourceIndex = -1;
+    int targetIndex = -1;
+    table.setOnReorderRequested([&](int source, int target) {
+        ++reorderCount;
+        sourceIndex = source;
+        targetIndex = target;
+    });
+    std::vector<oneui::ItemDragEvent> dragEvents;
+    table.setOnItemDrag([&](const oneui::ItemDragEvent& event) {
+        dragEvents.push_back(event);
+    });
+
+    const oneui::MouseEvent betaDown{
+        oneui::Point{80.0f, 40.0f + 32.0f + 32.0f + 16.0f},
+        oneui::MouseButton::Left};
+    table.onMouseDown(betaDown);
+    table.onMouseMove(oneui::MouseEvent{oneui::Point{80.0f, 184.0f}});
+    table.onMouseUp(oneui::MouseEvent{
+        oneui::Point{80.0f, 184.0f}, oneui::MouseButton::Left});
+    expectEqual("Table internal drag emits one reorder request", reorderCount, 1);
+    expectEqual("Table internal reorder reports source", sourceIndex, 1);
+    expectEqual("Table internal reorder reports target", targetIndex, 3);
+    expectEqual("Table internal reorder does not emit external drag", dragEvents.size(), 0);
+
+    table.onMouseDown(betaDown);
+    table.onMouseMove(oneui::MouseEvent{oneui::Point{280.0f, 120.0f}});
+    table.onMouseMove(oneui::MouseEvent{oneui::Point{300.0f, 126.0f}});
+    table.onMouseUp(oneui::MouseEvent{
+        oneui::Point{300.0f, 126.0f}, oneui::MouseButton::Left});
+    expectEqual("Table external drag emits three phases", dragEvents.size(), 3);
+    if (dragEvents.size() == 3) {
+        expectEqual(
+            "Table external drag starts once",
+            dragEvents[0].phase == oneui::ItemDragPhase::Started ? 1 : 0,
+            1);
+        expectEqual(
+            "Table external drag updates once",
+            dragEvents[1].phase == oneui::ItemDragPhase::Updated ? 1 : 0,
+            1);
+        expectEqual(
+            "Table external drag drops once",
+            dragEvents[2].phase == oneui::ItemDragPhase::Dropped ? 1 : 0,
+            1);
+        expectEqual(
+            "Table external drag keeps the stable source ID",
+            dragEvents[2].sourceId == L"beta" ? 1 : 0,
+            1);
+    }
+    expectEqual("Table external drag does not reorder", reorderCount, 1);
+}
+
+void testTableCssAdapterMapsNativeTableStates() {
+    oneui::StyleSheet sheet;
+    std::string error;
+    const bool parsed = sheet.addRulesFromCss(R"css(
+        table.host-table {
+            background: #111827;
+            color: #dbe4f0;
+            border-color: #334155;
+            border-width: 1px;
+            border-radius: 5px;
+            padding: 0 12px;
+            content-background: #172033;
+            placeholder-color: #94a3b8;
+            scrollbar-color: #64748b;
+            scrollbar-width: 5px;
+        }
+        table.host-table:hover { background: #182238; }
+        table.host-table:active { background: #202c46; }
+        table.host-table:selected { background: #29375f; }
+    )css", &error);
+    expectEqual("Table CSS parses", parsed ? 1 : 0, 1);
+
+    const auto style = oneui::tableStyleOverrideFromStyleSheet(
+        sheet,
+        oneui::StyleNode{"table", {"host-table"}, oneui::StyleStateNone});
+    const auto equalsColor = [](const std::optional<oneui::Color>& actual, oneui::Color expected) {
+        return actual && actual->r == expected.r && actual->g == expected.g &&
+            actual->b == expected.b && actual->a == expected.a;
+    };
+    expectEqual("Table CSS maps background", equalsColor(style.background, oneui::Color{17, 24, 39}) ? 1 : 0, 1);
+    expectEqual("Table CSS maps header background", equalsColor(style.headerBackground, oneui::Color{23, 32, 51}) ? 1 : 0, 1);
+    expectEqual("Table CSS maps header foreground", equalsColor(style.headerForeground, oneui::Color{148, 163, 184}) ? 1 : 0, 1);
+    expectEqual("Table CSS maps cell foreground", equalsColor(style.cellForeground, oneui::Color{219, 228, 240}) ? 1 : 0, 1);
+    expectEqual("Table CSS maps hover state", equalsColor(style.rowHovered, oneui::Color{24, 34, 56}) ? 1 : 0, 1);
+    expectEqual("Table CSS maps pressed state", equalsColor(style.rowPressed, oneui::Color{32, 44, 70}) ? 1 : 0, 1);
+    expectEqual("Table CSS maps selected state", equalsColor(style.rowSelected, oneui::Color{41, 55, 95}) ? 1 : 0, 1);
+    expectNear("Table CSS maps scrollbar width", style.scrollbarWidth.value_or(0.0f), 5.0f);
+}
+
 void testTableStyleOverridePaintsCustomColorsAndGeometry() {
     oneui::Table table;
     table.setColumns({
@@ -3304,9 +3828,15 @@ void testTableStyleOverridePaintsCustomColorsAndGeometry() {
         expectNear("Table style override radius reaches strokeRect", canvas.strokeRects[0].radius, 9.0f);
         expectNear("Table style override borderWidth reaches strokeRect", canvas.strokeRects[0].width, 2.0f);
     }
-    if (canvas.fillRects.size() >= 2 && canvas.texts.size() >= 2) {
+    if (canvas.fillRects.size() >= 2) {
         expectRect("Table header height follows style", canvas.fillRects[1].rect, oneui::Rect{0.0f, 0.0f, 180.0f, 34.0f});
-        expectRect("Table cell padding follows style", canvas.texts[1].rect, oneui::Rect{14.0f, 34.0f, 42.0f, 38.0f});
+        const auto cell = std::find_if(canvas.texts.begin(), canvas.texts.end(), [](const DrawTextCall& text) {
+            return text.text == L"Acme";
+        });
+        expectEqual("Table cell text exists for padding assertion", cell != canvas.texts.end() ? 1 : 0, 1);
+        if (cell != canvas.texts.end()) {
+            expectRect("Table cell padding follows style", cell->rect, oneui::Rect{14.0f, 34.0f, 42.0f, 38.0f});
+        }
     }
 }
 
@@ -3435,6 +3965,29 @@ void testProgressBarStyleOverridePaintsCustomColorsAndGeometry() {
         expectNear("ProgressBar style override track radius", canvas.fillRects[0].radius, 3.0f);
         expectRect("ProgressBar style override fill width", canvas.fillRects[1].rect, oneui::Rect{0.0f, 0.0f, 50.0f, 12.0f});
     }
+}
+
+void testSparklineClampsSamplesAndPaintsAStableSeries() {
+    oneui::Sparkline sparkline;
+    sparkline.setFrame(oneui::Rect{0.0f, 0.0f, 120.0f, 48.0f});
+    sparkline.setValues({-2.0, 0.25, 0.75, 4.0});
+
+    oneui::StyleBox style;
+    style.background.color = oneui::Color{17, 24, 39};
+    style.foreground = oneui::Color{96, 165, 250};
+    style.borderColor = oneui::Color{55, 65, 81};
+    style.borderWidth = 2.0f;
+    style.radius = 6.0f;
+    sparkline.setStyleBox(style);
+
+    RecordingCanvas canvas;
+    sparkline.paint(canvas);
+
+    expectEqual("Sparkline preserves sample count", static_cast<int>(sparkline.values().size()), 4);
+    expectEqual("Sparkline clamps lower sample", static_cast<int>(sparkline.values().front()), 0);
+    expectEqual("Sparkline clamps upper sample", static_cast<int>(sparkline.values().back()), 1);
+    expectEqual("Sparkline paints grid and series segments", static_cast<int>(canvas.lines.size()), 4);
+    expectEqual("Sparkline paints endpoint", static_cast<int>(canvas.fillEllipses.size()), 1);
 }
 
 void testProgressBarDisabledStyleAndClearRestoresDefault() {
@@ -3812,6 +4365,7 @@ void testSelectPopupGeometryUsesPopupPlacementAdapter() {
     select.onKeyDown(oneui::KeyEvent{oneui::Key::Space});
 
     RecordingCanvas canvas;
+    canvas.viewportOverride = oneui::Rect{-1000.0f, -1000.0f, 2000.0f, 2000.0f};
     select.paint(canvas);
 
     const auto expected = oneui::PopupPlacement::resolve(oneui::PopupPlacementRequest{
@@ -3830,6 +4384,45 @@ void testSelectPopupGeometryUsesPopupPlacementAdapter() {
         }
     }
     expectEqual("Select popup geometry paints popup background", found ? 1 : 0, 1);
+}
+
+void testSelectPopupFlipsInsideBottomViewportAndAcceptsPointerSelection() {
+    oneui::Select select;
+    select.setFrame(oneui::Rect{20.0f, 180.0f, 120.0f, 30.0f});
+    select.setItems({L"0.5x", L"1x", L"1.5x", L"2x", L"4x"});
+    select.setSelectedIndex(1);
+
+    RecordingCanvas canvas;
+    canvas.viewportOverride = oneui::Rect{0.0f, 0.0f, 300.0f, 220.0f};
+    select.paint(canvas);
+    const oneui::Point anchorPoint{30.0f, 190.0f};
+    select.onMouseDown(oneui::MouseEvent{anchorPoint});
+    select.onMouseUp(oneui::MouseEvent{anchorPoint});
+    select.paint(canvas);
+
+    const oneui::Rect expectedPopup{20.0f, 26.0f, 120.0f, 150.0f};
+    bool found = false;
+    for (const auto& fill : canvas.fillRects) {
+        if (sameColor(fill.color, oneui::theme().surface) &&
+            fill.rect.x == expectedPopup.x && fill.rect.y == expectedPopup.y &&
+            fill.rect.width == expectedPopup.width && fill.rect.height == expectedPopup.height) {
+            found = true;
+        }
+    }
+    expectEqual("Select bottom-edge popup flips above anchor", found ? 1 : 0, 1);
+
+    int changedIndex = -1;
+    int changedCount = 0;
+    select.setOnChanged([&](int index) {
+        changedIndex = index;
+        ++changedCount;
+    });
+    const oneui::Point thirdOption{40.0f, 101.0f};
+    expectEqual("Select flipped popup pointer down handled", select.onMouseDown(oneui::MouseEvent{thirdOption}) ? 1 : 0, 1);
+    expectEqual("Select flipped popup pointer up handled", select.onMouseUp(oneui::MouseEvent{thirdOption}) ? 1 : 0, 1);
+    expectEqual("Select flipped popup changes selected index", select.selectedIndex(), 2);
+    expectEqual("Select flipped popup reports selected index", changedIndex, 2);
+    expectEqual("Select flipped popup reports one change", changedCount, 1);
 }
 
 void testSelectEmptyStyleOverrideKeepsDefaultPaint() {
@@ -3977,6 +4570,25 @@ void testTextFieldCaretEditingKeys() {
     expectEqual("TextField Delete at end keeps change count", changes, 3);
 }
 
+void testTextFieldSingleLineEnterSubmitsWithoutEditing() {
+    oneui::TextField field(L"Remote path");
+    field.setText(L"/srv/releases");
+    int submissions = 0;
+    std::wstring submitted;
+    field.setOnSubmitted([&](const std::wstring& value) {
+        ++submissions;
+        submitted = value;
+    });
+
+    expectEqual(
+        "TextField single-line Enter is handled by submit callback",
+        field.onKeyDown(oneui::KeyEvent{oneui::Key::Enter}) ? 1 : 0,
+        1);
+    expectEqual("TextField single-line Enter submits once", submissions, 1);
+    expectWideEqual("TextField single-line Enter submits current value", submitted, L"/srv/releases");
+    expectWideEqual("TextField single-line Enter does not mutate text", field.text(), L"/srv/releases");
+}
+
 void testTextFieldSelectionEditingKeys() {
     oneui::TextField field(L"Name");
     field.setText(L"abcde");
@@ -4078,6 +4690,47 @@ void testTextFieldClipboardOperations() {
     expectWideEqual("TextField paste replacement text", field.text(), L"aeQf");
     expectEqual("TextField paste replacement caret", static_cast<int>(field.caretIndex()), 3);
     expectEqual("TextField paste replacement emits once", changes, 3);
+}
+
+void testTextFieldLongTextInputAndPastePreserveCompleteValue() {
+    const std::wstring payload =
+        L"rename 5a9c8e06-0977-4426-8e3f-b8518f6c6500 QA Snippet Group Renamed 中文值";
+    oneui::TextField typedField(L"Command");
+    int typedChanges = 0;
+    typedField.setOnChanged([&](const std::wstring&) {
+        ++typedChanges;
+    });
+
+    expectEqual(
+        "TextField long committed text handled",
+        typedField.onTextInputText(payload) ? 1 : 0,
+        1);
+    expectWideEqual("TextField long committed text preserved", typedField.text(), payload);
+    expectEqual(
+        "TextField long committed text emits every input unit",
+        typedChanges,
+        static_cast<int>(payload.size()));
+    expectEqual(
+        "TextField long committed text caret reaches end",
+        static_cast<int>(typedField.caretIndex()),
+        static_cast<int>(payload.size()));
+
+    oneui::TextField pastedField(L"Command");
+    pastedField.setText(L"replace me");
+    pastedField.selectAll();
+    oneui::MemoryClipboard clipboard;
+    clipboard.setText(payload);
+    int pasteChanges = 0;
+    pastedField.setOnChanged([&](const std::wstring&) {
+        ++pasteChanges;
+    });
+
+    expectEqual(
+        "TextField long clipboard paste handled",
+        pastedField.pasteFromClipboard(clipboard) ? 1 : 0,
+        1);
+    expectWideEqual("TextField long clipboard paste preserved", pastedField.text(), payload);
+    expectEqual("TextField long clipboard paste emits once", pasteChanges, 1);
 }
 
 void testTextFieldClipboardKeyboardShortcuts() {
@@ -6016,6 +6669,33 @@ void testWindowTitleBarPaintsAndDispatchesChromeActions() {
     expectEqual("WindowTitleBar maximize untouched", maximizeCount, 0);
 }
 
+void testWindowTitleBarAccessoryReceivesLayoutAndPointerInput() {
+    oneui::WindowTitleBar titleBar(L"Remote");
+    titleBar.setFrame(oneui::Rect{0.0f, 0.0f, 900.0f, 36.0f});
+    auto accessory = std::make_shared<oneui::Button>(L"Session");
+    accessory->setTooltip(L"Active terminal session");
+    int clicks = 0;
+    accessory->setOnClick([&] {
+        ++clicks;
+    });
+    titleBar.setAccessory(accessory);
+
+    RecordingCanvas canvas;
+    titleBar.paint(canvas);
+    const auto accessoryFrame = accessory->frame();
+    expectEqual("WindowTitleBar accessory has usable width", accessoryFrame.width > 120.0f ? 1 : 0, 1);
+    expectEqual("WindowTitleBar accessory is vertically inset", accessoryFrame.y > titleBar.frame().y ? 1 : 0, 1);
+
+    const oneui::Point center{
+        accessoryFrame.x + accessoryFrame.width * 0.5f,
+        accessoryFrame.y + accessoryFrame.height * 0.5f};
+    titleBar.onMouseDown(oneui::MouseEvent{center});
+    titleBar.onMouseUp(oneui::MouseEvent{center});
+    expectEqual("WindowTitleBar accessory receives click", clicks, 1);
+    const auto* tooltip = titleBar.tooltipAt(center);
+    expectWideEqual("WindowTitleBar accessory exposes tooltip", tooltip ? *tooltip : L"", L"Active terminal session");
+}
+
 void testNavItemPaintsSelectionAndDispatchesClick() {
     oneui::StyleSheet sheet;
     std::string error;
@@ -6260,10 +6940,16 @@ void testSplitViewResizableDividerHonorsMinimumExtents() {
     split.setSecond(second);
 
     int changeCount = 0;
+    int commitCount = 0;
     float changedRatio = 0.0f;
+    float committedRatio = 0.0f;
     split.setOnSplitRatioChanged([&](float ratio) {
         ++changeCount;
         changedRatio = ratio;
+    });
+    split.setOnSplitRatioCommitted([&](float ratio) {
+        ++commitCount;
+        committedRatio = ratio;
     });
 
     RecordingCanvas canvas;
@@ -6287,6 +6973,8 @@ void testSplitViewResizableDividerHonorsMinimumExtents() {
         "Split divider ends drag",
         split.onMouseUp(oneui::MouseEvent{oneui::Point{10.0f, 50.0f}, oneui::MouseButton::Left}) ? 1 : 0,
         1);
+    expectEqual("Split drag commits once on mouse up", commitCount, 1);
+    expectNear("Split drag commits final constrained ratio", committedRatio, 60.0f / 190.0f);
 
     split.setOrientation(oneui::SplitOrientation::Vertical);
     split.setSplitRatio(0.5f);
@@ -6295,6 +6983,12 @@ void testSplitViewResizableDividerHonorsMinimumExtents() {
         "Split divider exposes vertical resize cursor",
         split.cursor(oneui::Point{105.0f, 58.0f}) == oneui::CursorKind::ResizeVertical ? 1 : 0,
         1);
+    expectEqual(
+        "Split vertical divider starts drag before capture loss",
+        split.onMouseDown(oneui::MouseEvent{oneui::Point{105.0f, 58.0f}, oneui::MouseButton::Left}) ? 1 : 0,
+        1);
+    split.setResizable(false);
+    expectEqual("Split capture loss commits the visible ratio once", commitCount, 2);
 }
 
 void testScrollViewWheelClampsToContentBounds() {
@@ -6440,6 +7134,22 @@ void testPopupPlacementClampsOversizedPopup() {
     expectRect("PopupPlacement oversized clamped rect", result.rect, oneui::Rect{5.0f, 7.0f, 180.0f, 90.0f});
 }
 
+void testMenuClearItemsResetsDynamicContent() {
+    oneui::Menu menu;
+    menu.addHeader(L"Sessions", L"2 active");
+    expectEqual("Menu first item index starts at zero", menu.addItem(L"Alpha"), 0);
+    menu.addSeparator();
+    expectEqual("Menu second item index increments", menu.addItem(L"Beta"), 1);
+    const float populatedHeight = menu.preferredHeight();
+
+    menu.clearItems();
+    expectEqual("Menu item index resets after clear", menu.addItem(L"Gamma"), 0);
+    expectEqual(
+        "Menu clear removes headers and separators",
+        menu.preferredHeight() < populatedHeight ? 1 : 0,
+        1);
+}
+
 void testPopupDrawsBoxShadowWhenElevated() {
     oneui::Popup popup;
     popup.setFrame(oneui::Rect{0.0f, 0.0f, 240.0f, 180.0f});
@@ -6489,6 +7199,28 @@ void testPopupOutsideHitTestFollowsClosePolicy() {
 
     popup.setCloseOnOutsideClick(true);
     expectEqual("Popup closing outside hit-test captures outside", popup.hitTest(outsidePoint) ? 1 : 0, 1);
+}
+
+void testClosedPopupIgnoresHiddenSyntheticAnchor() {
+    oneui::Popup popup;
+    popup.setFrame(oneui::Rect{0.0f, 0.0f, 240.0f, 180.0f});
+    popup.setAnchorRect(oneui::Rect{20.0f, 20.0f, 1.0f, 1.0f});
+    auto anchor = std::make_shared<oneui::Panel>();
+    anchor->setVisible(false);
+    popup.setAnchor(anchor);
+    popup.setContent(std::make_shared<LayoutProbe>(oneui::Size{120.0f, 60.0f}));
+    popup.setOpen(false);
+
+    expectEqual(
+        "Closed Popup ignores a hidden synthetic anchor",
+        popup.hitTest(oneui::Point{20.0f, 20.0f}) ? 1 : 0,
+        0);
+
+    anchor->setVisible(true);
+    expectEqual(
+        "Closed Popup keeps a visible anchor interactive",
+        popup.hitTest(oneui::Point{20.0f, 20.0f}) ? 1 : 0,
+        1);
 }
 
 void testPopupOutsidePointerPolicyCanBlockWithoutClosing() {
@@ -6679,6 +7411,12 @@ int main() {
     testSwitchNoopOnChanged();
     testSliderNoopOnChanged();
     testTabsNoopOnChanged();
+    testTabsCompactSizingAndCloseInteraction();
+    testTabsCompactUsesMeasuredContentWidths();
+    testTabsCompactOverflowWheelAndKeyboardNavigation();
+    testTabsContextMenuReportsStableTarget();
+    testTabsReorderReportsRequestWithoutMutatingSelection();
+    testTabsPaintOptionalLeadingIconsWithoutCrowdingText();
     testRadioGroupNoopOnChanged();
     testSelectNoopOnChanged();
     testListNoopOnChanged();
@@ -6719,6 +7457,7 @@ int main() {
     testHiddenPressedChildDoesNotReceiveMouseUp();
     testViewClearChildrenClearsFocusedAndPressedChild();
     testViewCanRequestFocusForNestedDescendant();
+    testViewTooltipUsesDeepestVisibleEnabledChild();
     testViewMouseMoveDoesNotInvalidateSiblingsWhenHoverUnchanged();
     testViewMouseMoveKeepsSingleHoveredChild();
     testViewMouseMoveSweepInvalidatesOnlyExitAndEnter();
@@ -6754,19 +7493,26 @@ int main() {
     testListStyleOverrideCanHideFocusRingAndStylePressed();
     testListDisabledStyleOverrideWinsAndClearRestoresDefault();
     testVirtualListPaintsOnlyViewportRowsAndMaintainsScrollSelection();
+    testVirtualListClipsEveryVisibleRowWhenDetailsExceedRowHeight();
     testVirtualListUsesStandardMultipleSelectionSemantics();
     testVirtualListHitTestingUsesWindowCoordinatesForOffsetFrames();
     testVirtualListExposesStandardRowCommands();
     testVirtualListReportsReorderRequestsWithoutMutatingSelection();
     testVirtualListEmitsStableExternalItemDragWithoutBreakingReorder();
+    testVirtualListExternalDragSurvivesNestedPageRouting();
     testVirtualListReorderIndicatorUsesCssFocusStyle();
     testReorderableGridOwnsLayoutGestureAndCssIndicator();
     testReorderableGridEmitsExternalItemDragWithoutInternalReorder();
     testPointerActivationUsesSystemClickCountAndSeparateContextAction();
+    testInteractiveSurfaceKeepsSemanticAndNestedKeyboardTargetsDistinct();
     testVirtualListCssControlsCompactTypographyAndScrollbar();
     testTreeViewStyleAdapterSharesListContract();
     testTreeViewReportsStableReorderIdsAndPreservesToggleBehavior();
     testTreeViewOwnsTransientExternalDropTargetState();
+    testTableVirtualizesRowsAndMaintainsScrollSelection();
+    testTableUsesStandardSelectionAndRowCommands();
+    testTableSupportsInternalReorderAndStableExternalItemDrag();
+    testTableCssAdapterMapsNativeTableStates();
     testTableStyleOverridePaintsCustomColorsAndGeometry();
     testTableEmptyStyleOverrideKeepsDefaultPaint();
     testTableDisabledStyleAndClearRestoresDefault();
@@ -6774,6 +7520,7 @@ int main() {
     testBadgeEmptyStyleOverrideKeepsVariantPaintAndClearRestoresDefault();
     testProgressBarStyleOverridePaintsCustomColorsAndGeometry();
     testProgressBarDisabledStyleAndClearRestoresDefault();
+    testSparklineClampsSamplesAndPaintsAStableSeries();
     testSeparatorStyleOverridePaintsCustomColorAndThickness();
     testSeparatorEmptyStyleOverrideAndClearRestoresDefault();
     testSliderMouseFocusIsNotFocusVisible();
@@ -6787,14 +7534,17 @@ int main() {
     testFieldKeyboardFocusVisible();
     testSelectStyleOverridePaintsCustomColorsAndPopupGeometry();
     testSelectPopupGeometryUsesPopupPlacementAdapter();
+    testSelectPopupFlipsInsideBottomViewportAndAcceptsPointerSelection();
     testSelectEmptyStyleOverrideKeepsDefaultPaint();
     testSelectDefaultStatesUseSemanticThemeTokens();
     testSelectStyleOverrideCanHideFocusRingAndStylePressed();
     testSelectDisabledStyleOverrideWinsAndClearRestoresDefault();
     testTextFieldCaretEditingKeys();
+    testTextFieldSingleLineEnterSubmitsWithoutEditing();
     testTextFieldSelectionEditingKeys();
     testTextFieldMouseDragSelection();
     testTextFieldClipboardOperations();
+    testTextFieldLongTextInputAndPastePreserveCompleteValue();
     testTextFieldClipboardKeyboardShortcuts();
     testTextFieldUndoRedoEditingPaths();
     testTextFieldUndoRedoTextInputAndBinding();
@@ -6843,6 +7593,7 @@ int main() {
     testButtonSupportsLeadingContentAndTrailingMetadata();
     testIconViewPaintsRegistryPrimitives();
     testWindowTitleBarPaintsAndDispatchesChromeActions();
+    testWindowTitleBarAccessoryReceivesLayoutAndPointerInput();
     testNavItemPaintsSelectionAndDispatchesClick();
     testNavItemHoverKeepsSemanticForegroundFallback();
     testSwitchStyleSheetOverridePaintsCheckedState();
@@ -6860,8 +7611,10 @@ int main() {
     testPopupPlacementRightStartFlipsWhenRightOverflows();
     testPopupPlacementLeftStartFlipsWhenLeftOverflows();
     testPopupPlacementClampsOversizedPopup();
+    testMenuClearItemsResetsDynamicContent();
     testPopupDrawsBoxShadowWhenElevated();
     testPopupOutsideHitTestFollowsClosePolicy();
+    testClosedPopupIgnoresHiddenSyntheticAnchor();
     testPopupOutsidePointerPolicyCanBlockWithoutClosing();
     testPopupInteractionModesMapToPointerPolicyAndOverlayOptions();
     testPopupEscapeCloseFollowsClosePolicy();

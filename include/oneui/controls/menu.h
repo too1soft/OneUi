@@ -26,6 +26,7 @@ public:
     void addHeader(std::wstring title, std::wstring subtitle);
     int addItem(std::wstring text, std::optional<IconSymbol> icon = std::nullopt, bool danger = false);
     void addSeparator();
+    void clearItems();
     void setItemDisabled(int index, bool disabled);
     void setOnItemActivated(std::function<void(int)> callback);
     void setStyleSheet(std::shared_ptr<StyleSheet> sheet, StyleNode node);

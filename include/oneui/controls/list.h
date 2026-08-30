@@ -26,6 +26,8 @@ public:
     bool selectionRequired() const;
     void setSelectedIndex(int index);
     int selectedIndex() const;
+    const std::vector<ListItem>& items() const;
+    Rect itemFrame(int index) const;
     void bindSelectedIndex(State<int>& state);
     void setStyleOverride(ListStyleOverride style);
     void clearStyleOverride();

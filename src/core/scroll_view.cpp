@@ -171,6 +171,13 @@ bool ScrollView::onMouseMove(const MouseEvent& event) {
 
 bool ScrollView::onMouseDown(const MouseEvent& event) {
     if (!interactive() || !hitTest(event.position)) {
+        if (internal::scrollTraceEnabled()) {
+            internal::writeScrollTrace(internal::ScrollTraceEvent{
+                "scroll_view", "pointer_down_missed", reinterpret_cast<std::uintptr_t>(this),
+                static_cast<double>(static_cast<int>(event.button)), scrollOffset_, 0.0, 0.0,
+                0.0, maxScrollOffset(), 0.0,
+                static_cast<double>(event.position.x), static_cast<double>(event.position.y)});
+        }
         return false;
     }
 
@@ -181,7 +188,16 @@ bool ScrollView::onMouseDown(const MouseEvent& event) {
         return true;
     }
 
-    return View::onMouseDown(event);
+    const bool handled = View::onMouseDown(event);
+    if (internal::scrollTraceEnabled()) {
+        internal::writeScrollTrace(internal::ScrollTraceEvent{
+            "scroll_view", handled ? "pointer_down_forwarded" : "pointer_down_unhandled",
+            reinterpret_cast<std::uintptr_t>(this),
+            static_cast<double>(static_cast<int>(event.button)), scrollOffset_, 0.0, 0.0,
+            0.0, maxScrollOffset(), 0.0,
+            static_cast<double>(event.position.x), static_cast<double>(event.position.y)});
+    }
+    return handled;
 }
 
 bool ScrollView::onMouseUp(const MouseEvent& event) {
@@ -190,7 +206,16 @@ bool ScrollView::onMouseUp(const MouseEvent& event) {
         draggingHorizontalThumb_ = false;
         return true;
     }
-    return View::onMouseUp(event);
+    const bool handled = View::onMouseUp(event);
+    if (internal::scrollTraceEnabled()) {
+        internal::writeScrollTrace(internal::ScrollTraceEvent{
+            "scroll_view", handled ? "pointer_up_forwarded" : "pointer_up_unhandled",
+            reinterpret_cast<std::uintptr_t>(this),
+            static_cast<double>(static_cast<int>(event.button)), scrollOffset_, 0.0, 0.0,
+            0.0, maxScrollOffset(), 0.0,
+            static_cast<double>(event.position.x), static_cast<double>(event.position.y)});
+    }
+    return handled;
 }
 
 bool ScrollView::onMouseWheel(const MouseWheelEvent& event) {

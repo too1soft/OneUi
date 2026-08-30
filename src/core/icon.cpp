@@ -172,6 +172,12 @@ std::vector<IconPrimitive> buildIconPrimitives(
     case IconSymbol::ChevronUp:
         primitives.push_back(poly(rect, {Point{0.25f, 0.62f}, Point{0.50f, 0.38f}, Point{0.75f, 0.62f}}, color, sw));
         break;
+    case IconSymbol::ChevronLeft:
+        primitives.push_back(poly(rect, {Point{0.62f, 0.25f}, Point{0.38f, 0.50f}, Point{0.62f, 0.75f}}, color, sw));
+        break;
+    case IconSymbol::ChevronRight:
+        primitives.push_back(poly(rect, {Point{0.38f, 0.25f}, Point{0.62f, 0.50f}, Point{0.38f, 0.75f}}, color, sw));
+        break;
     case IconSymbol::Plus:
         primitives.push_back(line(rect, 0.50f, 0.20f, 0.50f, 0.80f, color, sw));
         primitives.push_back(line(rect, 0.20f, 0.50f, 0.80f, 0.50f, color, sw));

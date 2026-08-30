@@ -10,6 +10,13 @@
 #include <thread>
 #include <vector>
 
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
+
 namespace {
 
 int failures = 0;
@@ -39,6 +46,130 @@ struct OwnedCallbackState {
     int invoked = 0;
     int cleaned = 0;
 };
+
+#ifdef _WIN32
+struct WindowRawKeyState {
+    OneUiRawKeyEvent last{};
+    int calls = 0;
+};
+
+struct WindowHyperlinkState {
+    unsigned int lastId = 0;
+    int calls = 0;
+};
+
+void onWindowTerminalHyperlink(unsigned int hyperlinkId, void* userData) {
+    auto* state = static_cast<WindowHyperlinkState*>(userData);
+    if (state) {
+        state->lastId = hyperlinkId;
+        ++state->calls;
+    }
+}
+
+int onWindowRawKey(const OneUiRawKeyEvent* event, void* userData) {
+    auto* state = static_cast<WindowRawKeyState*>(userData);
+    if (state && event) {
+        state->last = *event;
+        ++state->calls;
+    }
+    return 1;
+}
+
+void testWindowRawKeyTracksMessageModifiersAndResetsOnFocusLoss() {
+    OneUiWindowOptions options{};
+    options.title = L"OneUI raw key modifier test";
+    options.width = 320;
+    options.height = 240;
+    options.visible = 0;
+    options.borderless = 1;
+    options.resizable = 1;
+
+    OneUiWindow* window = oneui_window_create(&options);
+    expectTrue("raw key window create", window != nullptr);
+    if (!window) {
+        return;
+    }
+
+    WindowRawKeyState state;
+    oneui_window_set_on_raw_key(window, onWindowRawKey, &state);
+    const OneUiTerminalCellUtf8 cells[] = {
+        {
+            {"A", 1},
+            {220, 226, 240, 255},
+            {20, 24, 36, 255},
+            0,
+            42,
+            0,
+            {0, 0, 0, 255},
+            0,
+        },
+    };
+    OneUiWidget* terminal = oneui_terminal_view_create();
+    WindowHyperlinkState hyperlinkState;
+    expectTrue("mouse modifier terminal create", terminal != nullptr);
+    if (terminal) {
+        oneui_terminal_view_set_font_size(terminal, 20.0f);
+        oneui_terminal_view_set_grid_utf8(terminal, 1, 2, cells, 1);
+        oneui_terminal_view_set_on_hyperlink(
+            terminal,
+            onWindowTerminalHyperlink,
+            &hyperlinkState);
+        oneui_window_set_content(window, terminal);
+    }
+
+    oneui_window_initialize(window);
+    auto hwnd = static_cast<HWND>(oneui_window_native_handle(window));
+    expectTrue("raw key native handle", hwnd != nullptr);
+    if (hwnd) {
+        SendMessageW(hwnd, WM_KEYDOWN, VK_CONTROL, 0);
+        SendMessageW(hwnd, WM_KEYDOWN, VK_SHIFT, 0);
+        SendMessageW(hwnd, WM_KEYDOWN, 'V', 0);
+        expectTrue("raw key callback receives V", state.calls >= 3 && state.last.virtual_key == 'V');
+        expectTrue("raw key tracks control message", state.last.ctrl != 0);
+        expectTrue("raw key tracks shift message", state.last.shift != 0);
+
+        SendMessageW(hwnd, WM_KEYUP, VK_SHIFT, 0);
+        SendMessageW(hwnd, WM_KEYUP, VK_CONTROL, 0);
+        SendMessageW(hwnd, WM_KEYDOWN, 'V', 0);
+        expectTrue("raw key releases control message", state.last.ctrl == 0);
+        expectTrue("raw key releases shift message", state.last.shift == 0);
+
+        SendMessageW(hwnd, WM_KEYDOWN, VK_CONTROL, 0);
+        SendMessageW(hwnd, WM_KILLFOCUS, 0, 0);
+        SendMessageW(hwnd, WM_KEYDOWN, 'V', 0);
+        expectTrue("raw key clears modifiers on focus loss", state.last.ctrl == 0);
+
+        if (terminal) {
+            SetWindowPos(
+                hwnd,
+                nullptr,
+                -32000,
+                -32000,
+                0,
+                0,
+                SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+            oneui_window_show(window);
+            // Complete the first layout/paint before coordinate-based input.
+            // Hiding immediately after ShowWindow leaves terminal metrics at
+            // their pre-paint defaults and makes the hyperlink hit test race.
+            UpdateWindow(hwnd);
+
+            const LPARAM point = MAKELPARAM(6, 10);
+            SendMessageW(hwnd, WM_KEYDOWN, VK_CONTROL, 0);
+            SendMessageW(hwnd, WM_LBUTTONDOWN, MK_CONTROL | MK_LBUTTON, point);
+            SendMessageW(hwnd, WM_LBUTTONUP, MK_CONTROL, point);
+            SendMessageW(hwnd, WM_KEYUP, VK_CONTROL, 0);
+            expectTrue(
+                "mouse event tracks control message",
+                hyperlinkState.calls == 1 && hyperlinkState.lastId == 42);
+            ShowWindow(hwnd, SW_HIDE);
+        }
+    }
+
+    oneui_widget_destroy(terminal);
+    oneui_window_destroy(window);
+}
+#endif
 
 void onOwnedCallback(void* userData) {
     auto* state = static_cast<OwnedCallbackState*>(userData);
@@ -369,6 +500,8 @@ void testAppShellAbiCreatesReusableSlots() {
     };
     IndexCallbackState tabsCallbackState;
     oneui_tabs_set_items_utf8(tabs, tabItems, 2);
+    const int tabIcons[] = {31, -1};
+    oneui_tabs_set_item_icons(tabs, tabIcons, 2);
     oneui_tabs_set_on_changed(tabs, onIndexChanged, &tabsCallbackState);
     oneui_tabs_set_selected_index(tabs, 1);
     expectTrue("tabs selected index", oneui_tabs_selected_index(tabs) == 1);
@@ -718,11 +851,296 @@ void testProgressBarAbiClampsValues() {
     oneui_widget_destroy(progress);
 }
 
+void testSparklineAbiAcceptsNormalizedSamples() {
+    OneUiWidget* sparkline = oneui_sparkline_create();
+    expectTrue("sparkline create", sparkline != nullptr);
+    if (!sparkline) {
+        return;
+    }
+    const double values[] = {-1.0, 0.25, 0.75, 2.0};
+    oneui_sparkline_set_values(sparkline, values, 4);
+    oneui_sparkline_set_values(sparkline, nullptr, 0);
+    oneui_widget_destroy(sparkline);
+}
+
+void testWindowLayoutSnapshotSerializesMountedTreeWithoutFieldValues() {
+    OneUiWindowOptionsUtf8 options{};
+    const std::string title = "OneUI layout snapshot test";
+    options.title = utf8View(title);
+    options.width = 420;
+    options.height = 280;
+    options.visible = 0;
+    options.borderless = 1;
+    options.resizable = 1;
+
+    OneUiWindow* window = oneui_window_create_utf8(&options);
+    expectTrue("layout snapshot window create", window != nullptr);
+    if (!window) {
+        return;
+    }
+    OneUiWidget* root = oneui_stack_create(OneUiStackDirectionColumn);
+    const std::string placeholder = "Secret placeholder";
+    OneUiWidget* field = oneui_text_field_create_utf8(utf8View(placeholder));
+    OneUiWidget* label = oneui_label_create(L"Visible field label");
+    OneUiWidget* list = oneui_list_create();
+    OneUiWidget* tabs = oneui_tabs_create();
+    expectTrue(
+        "layout snapshot widgets create",
+        root != nullptr && field != nullptr && label != nullptr && list != nullptr && tabs != nullptr);
+    if (root && field && label && list && tabs) {
+        const std::string secret = "must-not-appear-in-layout-snapshot";
+        const std::string productionTitle = "Production bastion";
+        const std::string productionDetail = "Primary route";
+        const std::string kylinTitle = "Kylin V10";
+        const std::string kylinDetail = "Offline client";
+        const OneUiListItemUtf8 items[] = {
+            {utf8View(productionTitle), utf8View(productionDetail)},
+            {utf8View(kylinTitle), utf8View(kylinDetail)},
+        };
+        oneui_text_field_set_text_utf8(field, utf8View(secret));
+        oneui_list_set_items_utf8(list, items, 2);
+        oneui_list_set_selected_index(list, 1);
+        const std::string sshTab = "SSH - production";
+        const std::string localTab = "Local terminal";
+        const OneUiUtf8String tabItems[] = {utf8View(sshTab), utf8View(localTab)};
+        oneui_tabs_set_items_utf8(tabs, tabItems, 2);
+        oneui_tabs_set_selected_index(tabs, 1);
+        oneui_widget_set_style_node(field, "input", "qa-field");
+        oneui_widget_set_preferred_size(field, 240.0f, 32.0f);
+        oneui_stack_add(root, label);
+        oneui_stack_add(root, field);
+        oneui_stack_add(root, tabs);
+        oneui_stack_add(root, list);
+        oneui_window_set_content(window, root);
+        oneui_window_initialize(window);
+
+        std::size_t required = 0;
+        expectTrue(
+            "layout snapshot size query",
+            oneui_window_layout_snapshot_utf8(window, nullptr, 0, &required) == -2 &&
+                required > 1);
+        std::vector<char> snapshot(required, '\0');
+        expectTrue(
+            "layout snapshot serialization",
+            oneui_window_layout_snapshot_utf8(
+                window,
+                snapshot.data(),
+                snapshot.size(),
+                &required) == 1);
+        const std::string json(snapshot.data());
+        expectTrue("layout snapshot schema", json.find("\"schemaVersion\":1") != std::string::npos);
+        expectTrue("layout snapshot semantic tag", json.find("\"tag\":\"input\"") != std::string::npos);
+        expectTrue("layout snapshot semantic class", json.find("qa-field") != std::string::npos);
+        expectTrue("layout snapshot value length", json.find("\"valueLength\":34") != std::string::npos);
+        expectTrue("layout snapshot excludes values", json.find(secret) == std::string::npos);
+        expectTrue(
+            "layout snapshot includes label text",
+            json.find("\"text\":\"Visible field label\"") != std::string::npos);
+        expectTrue(
+            "layout snapshot includes list title",
+            json.find("\"title\":\"Production bastion\"") != std::string::npos);
+        expectTrue(
+            "layout snapshot includes list detail",
+            json.find("\"detail\":\"Offline client\"") != std::string::npos);
+        expectTrue(
+            "layout snapshot includes selected list item",
+            json.find("\"selected\":true") != std::string::npos);
+        expectTrue(
+            "layout snapshot includes tab item",
+            json.find("\"title\":\"SSH - production\"") != std::string::npos);
+        expectTrue(
+            "layout snapshot includes selected tab item",
+            json.find("\"title\":\"Local terminal\",\"detail\":\"\",\"selected\":true") !=
+                std::string::npos);
+        expectTrue(
+            "layout snapshot commits visible geometry",
+            json.find("\"frame\":{\"x\":0,\"y\":0,\"width\":0,\"height\":0}") ==
+                std::string::npos);
+
+        OneUiWidget* replacement = oneui_stack_create(OneUiStackDirectionColumn);
+        OneUiWidget* replacementLabel = oneui_label_create(L"Replacement route content");
+        expectTrue(
+            "layout snapshot replacement widgets create",
+            replacement != nullptr && replacementLabel != nullptr);
+        if (replacement && replacementLabel) {
+            oneui_stack_add(replacement, replacementLabel);
+            oneui_window_set_content(window, replacement);
+            std::size_t replacementRequired = 0;
+            expectTrue(
+                "layout snapshot replacement size query",
+                oneui_window_layout_snapshot_utf8(
+                    window,
+                    nullptr,
+                    0,
+                    &replacementRequired) == -2 &&
+                    replacementRequired > 1);
+            std::vector<char> replacementSnapshot(replacementRequired, '\0');
+            expectTrue(
+                "layout snapshot replacement serialization",
+                oneui_window_layout_snapshot_utf8(
+                    window,
+                    replacementSnapshot.data(),
+                    replacementSnapshot.size(),
+                    &replacementRequired) == 1);
+            const std::string replacementJson(replacementSnapshot.data());
+            expectTrue(
+                "layout snapshot replacement route is current",
+                replacementJson.find("Replacement route content") != std::string::npos &&
+                    replacementJson.find("Visible field label") == std::string::npos);
+            expectTrue(
+                "layout snapshot replacement geometry is committed",
+                replacementJson.find(
+                    "\"frame\":{\"x\":0,\"y\":0,\"width\":0,\"height\":0}") ==
+                    std::string::npos);
+        }
+        oneui_widget_destroy(replacementLabel);
+        oneui_widget_destroy(replacement);
+    }
+
+    oneui_widget_destroy(list);
+    oneui_widget_destroy(label);
+    oneui_widget_destroy(field);
+    oneui_widget_destroy(root);
+    oneui_window_destroy(window);
+}
+
+void testWindowLayoutSnapshotRetainsModalOverlayTree() {
+    OneUiWindowOptionsUtf8 options{};
+    const std::string title = "OneUI modal snapshot lifetime test";
+    options.title = utf8View(title);
+    options.width = 640;
+    options.height = 480;
+    options.visible = 0;
+    options.borderless = 1;
+    options.resizable = 1;
+
+    OneUiWindow* window = oneui_window_create_utf8(&options);
+    OneUiWidget* host = oneui_overlay_host_create();
+    OneUiWidget* content = oneui_panel_create();
+    OneUiWidget* dialog = oneui_dialog_create(L"Snapshot dialog", L"Lifetime regression");
+    OneUiWidget* body = oneui_label_create(L"Snapshot dialog body");
+    expectTrue(
+        "modal snapshot widgets create",
+        window != nullptr && host != nullptr && content != nullptr && dialog != nullptr && body != nullptr);
+    if (!window || !host || !content || !dialog || !body) {
+        oneui_widget_destroy(body);
+        oneui_widget_destroy(dialog);
+        oneui_widget_destroy(content);
+        oneui_widget_destroy(host);
+        oneui_window_destroy(window);
+        return;
+    }
+
+    oneui_dialog_set_content(dialog, body);
+    oneui_overlay_host_set_content(host, content);
+    oneui_overlay_host_add_modal_anchored_overlay(
+        host,
+        dialog,
+        100,
+        420.0f,
+        280.0f,
+        OneUiInsets{0.0f, 0.0f, 0.0f, 0.0f},
+        1,
+        1);
+    oneui_window_set_content(window, host);
+
+    // Mounted widgets remain owned by the tree after their C handles are released.
+    oneui_widget_destroy(body);
+    oneui_widget_destroy(dialog);
+    oneui_widget_destroy(content);
+    oneui_widget_destroy(host);
+    oneui_window_initialize(window);
+
+    std::size_t required = 0;
+    expectTrue(
+        "modal snapshot size query",
+        oneui_window_layout_snapshot_utf8(window, nullptr, 0, &required) == -2 && required > 1);
+    std::vector<char> snapshot(required, '\0');
+    expectTrue(
+        "modal snapshot serialization",
+        oneui_window_layout_snapshot_utf8(
+            window,
+            snapshot.data(),
+            snapshot.size(),
+            &required) == 1);
+    const std::string json(snapshot.data());
+    expectTrue("modal snapshot contains dialog", json.find("\"tag\":\"dialog\"") != std::string::npos);
+    expectTrue(
+        "modal snapshot contains label text",
+        json.find("\"text\":\"Snapshot dialog body\"") != std::string::npos);
+
+    oneui_window_destroy(window);
+}
+
+void testWindowLayoutSnapshotKeepsSizeQueryAndReadAtomicForVirtualLists() {
+    OneUiWindowOptionsUtf8 options{};
+    const std::string title = "OneUI virtual-list snapshot transaction test";
+    options.title = utf8View(title);
+    options.width = 640;
+    options.height = 480;
+    options.visible = 0;
+    options.borderless = 1;
+    options.resizable = 1;
+
+    OneUiWindow* window = oneui_window_create_utf8(&options);
+    OneUiWidget* list = oneui_virtual_list_create();
+    expectTrue("virtual-list snapshot widgets create", window != nullptr && list != nullptr);
+    if (!window || !list) {
+        oneui_widget_destroy(list);
+        oneui_window_destroy(window);
+        return;
+    }
+
+    std::vector<std::string> titles;
+    std::vector<std::string> details;
+    std::vector<OneUiListItemUtf8> items;
+    titles.reserve(256);
+    details.reserve(256);
+    items.reserve(256);
+    for (int index = 0; index < 256; ++index) {
+        titles.push_back("Process " + std::to_string(index));
+        details.push_back("PID " + std::to_string(1000 + index) + " · CPU 12.5% · memory 64 MB");
+    }
+    for (std::size_t index = 0; index < titles.size(); ++index) {
+        items.push_back(OneUiListItemUtf8{utf8View(titles[index]), utf8View(details[index])});
+    }
+    oneui_virtual_list_set_items_utf8(list, items.data(), items.size());
+    oneui_virtual_list_set_row_height(list, 40.0f);
+    oneui_widget_set_preferred_size(list, 560.0f, 400.0f);
+    oneui_window_set_content(window, list);
+    oneui_window_initialize(window);
+
+    std::size_t required = 0;
+    expectTrue(
+        "virtual-list snapshot size query",
+        oneui_window_layout_snapshot_utf8(window, nullptr, 0, &required) == -2 && required > 1);
+    const std::size_t queriedSize = required;
+    std::vector<char> snapshot(queriedSize, '\0');
+    expectTrue(
+        "virtual-list snapshot exact-size read",
+        oneui_window_layout_snapshot_utf8(
+            window,
+            snapshot.data(),
+            snapshot.size(),
+            &required) == 1 &&
+            required == queriedSize);
+    const std::string json(snapshot.data());
+    expectTrue(
+        "virtual-list snapshot contains realized rows",
+        json.find("Process 0") != std::string::npos && json.find("PID 1000") != std::string::npos);
+
+    oneui_widget_destroy(list);
+    oneui_window_destroy(window);
+}
+
 } // namespace
 
 int main() {
     expectTrue("version exported", std::strcmp(oneui_version(), "0.1.0") == 0);
     testOwnedWindowPostCleansUpCancelledWork();
+#ifdef _WIN32
+    testWindowRawKeyTracksMessageModifiersAndResetsOnFocusLoss();
+#endif
     testUtf8AbiRoundTripsUnicodeText();
     testUtf8ListUsesStructuredItems();
     testUtf8TreeViewUsesStableIdsAndStructuredParents();
@@ -735,6 +1153,10 @@ int main() {
     testRemoteInputRegionAbiCreatesAndAcceptsCallbacks();
     testTerminalViewAbiUsesStructuredCells();
     testProgressBarAbiClampsValues();
+    testSparklineAbiAcceptsNormalizedSamples();
+    testWindowLayoutSnapshotSerializesMountedTreeWithoutFieldValues();
+    testWindowLayoutSnapshotRetainsModalOverlayTree();
+    testWindowLayoutSnapshotKeepsSizeQueryAndReadAtomicForVirtualLists();
     testPromptAbiRejectsInvalidOutput();
     testClipboardAbiRoundTripIfAvailable();
 
