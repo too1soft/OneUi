@@ -5400,6 +5400,22 @@ void oneui_remote_input_region_set_on_raw_key(
     }
 }
 
+void oneui_remote_input_region_set_on_text_input_utf8(
+    OneUiWidget* region,
+    OneUiUtf8TextCallback callback,
+    void* user_data) {
+    if (auto* nativeRegion = asWidget<oneui::RemoteInputRegion>(region)) {
+        if (!callback) {
+            nativeRegion->setOnTextInput(nullptr);
+            return;
+        }
+        nativeRegion->setOnTextInput([callback, user_data](const std::wstring& text) {
+            const std::string utf8 = utf8FromWide(text);
+            callback(utf8.data(), utf8.size(), user_data);
+        });
+    }
+}
+
 void oneui_remote_input_region_release_all_inputs(OneUiWidget* region) {
     if (auto* nativeRegion = asWidget<oneui::RemoteInputRegion>(region)) {
         nativeRegion->releaseAllInputs();

@@ -771,6 +771,7 @@ void testRealtimeFrameViewOwnedFramesReleaseExactlyOnce() {
 }
 
 int pointerCallbackCount = 0;
+int remoteTextCallbackCount = 0;
 
 void onRemotePointer(const OneUiRemotePointerEvent* event, void*) {
     if (!event) {
@@ -779,8 +780,15 @@ void onRemotePointer(const OneUiRemotePointerEvent* event, void*) {
     ++pointerCallbackCount;
 }
 
+void onRemoteTextInput(const char* text, size_t length, void*) {
+    if (text && length > 0) {
+        ++remoteTextCallbackCount;
+    }
+}
+
 void testRemoteInputRegionAbiCreatesAndAcceptsCallbacks() {
     pointerCallbackCount = 0;
+    remoteTextCallbackCount = 0;
     OneUiWidget* region = oneui_remote_input_region_create();
     expectTrue("remote input region create", region != nullptr);
     if (!region) {
@@ -790,6 +798,7 @@ void testRemoteInputRegionAbiCreatesAndAcceptsCallbacks() {
     oneui_remote_input_region_set_remote_size(region, 1920.0f, 1080.0f);
     oneui_remote_input_region_set_scale_mode(region, OneUiVideoScaleModeFit);
     oneui_remote_input_region_set_on_pointer(region, onRemotePointer, nullptr);
+    oneui_remote_input_region_set_on_text_input_utf8(region, onRemoteTextInput, nullptr);
     oneui_remote_input_region_release_all_inputs(region);
 
     oneui_widget_destroy(region);

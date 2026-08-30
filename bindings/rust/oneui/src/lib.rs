@@ -5312,6 +5312,10 @@ struct RemoteRawKeyCallback {
     handler: Box<dyn FnMut(RawKeyEvent) + 'static>,
 }
 
+struct RemoteTextInputCallback {
+    handler: Box<dyn FnMut(String) + 'static>,
+}
+
 unsafe extern "C" fn run_remote_pointer_callback(
     event: *const sys::OneUiRemotePointerEvent,
     user_data: *mut std::ffi::c_void,
@@ -5336,12 +5340,27 @@ unsafe extern "C" fn run_remote_raw_key_callback(
     run_callback_guarded("remote_input.raw_key", || (callback.handler)(event));
 }
 
+unsafe extern "C" fn run_remote_text_input_callback(
+    text: *const std::ffi::c_char,
+    length: usize,
+    user_data: *mut std::ffi::c_void,
+) {
+    if text.is_null() || user_data.is_null() {
+        return;
+    }
+    let bytes = unsafe { std::slice::from_raw_parts(text.cast::<u8>(), length) };
+    let value = String::from_utf8_lossy(bytes).into_owned();
+    let callback = unsafe { &mut *user_data.cast::<RemoteTextInputCallback>() };
+    run_callback_guarded("remote_input.text_input", || (callback.handler)(value));
+}
+
 /// Transparent input mapper for a remote framebuffer. It translates logical
 /// pointer coordinates into remote pixels and preserves raw keyboard details.
 pub struct RemoteInputRegion {
     widget: Widget,
     pointer_callback: Option<Box<RemotePointerCallback>>,
     raw_key_callback: Option<Box<RemoteRawKeyCallback>>,
+    text_input_callback: Option<Box<RemoteTextInputCallback>>,
 }
 
 impl RemoteInputRegion {
@@ -5351,6 +5370,7 @@ impl RemoteInputRegion {
             widget,
             pointer_callback: None,
             raw_key_callback: None,
+            text_input_callback: None,
         })
     }
 
@@ -5424,6 +5444,39 @@ impl RemoteInputRegion {
         };
     }
 
+    /// Receives committed UTF-8 text, including IME results. While this
+    /// callback is installed, ordinary printable keys are delivered here
+    /// instead of being duplicated through the raw-key callback. Modified and
+    /// non-text keys continue to use `set_on_raw_key`.
+    #[track_caller]
+    pub fn set_on_text_input<F>(&mut self, callback: F)
+    where
+        F: FnMut(String) + 'static,
+    {
+        let trace = InteractionTrace::at(
+            "RemoteInputRegion",
+            "text_input",
+            std::panic::Location::caller(),
+        );
+        self.clear_text_input_callback();
+        self.text_input_callback = Some(Box::new(RemoteTextInputCallback {
+            handler: Box::new(traced_value_callback(trace, callback)),
+        }));
+        let user_data = (self
+            .text_input_callback
+            .as_deref_mut()
+            .expect("remote text-input callback was just installed")
+            as *mut RemoteTextInputCallback)
+            .cast();
+        unsafe {
+            sys::oneui_remote_input_region_set_on_text_input_utf8(
+                self.widget.as_raw(),
+                Some(run_remote_text_input_callback),
+                user_data,
+            )
+        };
+    }
+
     pub fn release_all_inputs(&self) {
         unsafe { sys::oneui_remote_input_region_release_all_inputs(self.widget.as_raw()) };
     }
@@ -5450,6 +5503,17 @@ impl RemoteInputRegion {
         self.raw_key_callback = None;
     }
 
+    pub fn clear_text_input_callback(&mut self) {
+        unsafe {
+            sys::oneui_remote_input_region_set_on_text_input_utf8(
+                self.widget.as_raw(),
+                None,
+                std::ptr::null_mut(),
+            )
+        };
+        self.text_input_callback = None;
+    }
+
     pub fn as_widget(&self) -> &Widget {
         &self.widget
     }
@@ -5460,6 +5524,7 @@ impl Drop for RemoteInputRegion {
         self.release_all_inputs();
         self.clear_pointer_callback();
         self.clear_raw_key_callback();
+        self.clear_text_input_callback();
     }
 }
 
@@ -8806,21 +8871,22 @@ mod tests {
     use super::sys;
     use super::{
         callback_panic_handler, clear_interaction_trace_handler, emit_interaction_trace,
-        run_callback_guarded, run_void_handler, run_window_client_size_changed_callback,
-        run_window_raw_key_callback, set_callback_panic_handler, set_interaction_trace_handler,
+        run_callback_guarded, run_remote_text_input_callback, run_void_handler,
+        run_window_client_size_changed_callback, run_window_raw_key_callback,
+        set_callback_panic_handler, set_interaction_trace_handler,
         should_apply_application_cursor_style, terminal_style, traced_callback,
         traced_value_callback, Button, Color, Dialog, Error, FileDialogFilter, FileDialogMode,
         FileDialogOptions, IconSymbol, Insets, InteractionTrace, InteractiveSurface,
         InteractiveSurfaceStateStyle, InteractiveSurfaceStyle, Label, List, ListItem, LogLine,
         LogView, Menu, OverlayAlignment, OverlayHost, Panel, PixelFormat, Popup,
         PopupInteractionMode, PopupPreferredPlacement, ProgressBar, PromptOptions, RawKeyEvent,
-        RealtimeFrameView, RemoteFrame, ReorderableGrid, ScrollView, SegmentedControl, Select,
-        SelectionMode, SplitOrientation, SplitView, Stack, StackDirection, StyleSheet, Switch,
-        Table, TableColumn, TableRow, Tabs, TerminalCell, TerminalColor, TerminalCursor,
-        TerminalCursorStyle, TerminalFrame, TerminalSelection, TerminalUnderlineStyle,
-        TerminalView, TextArea, TextField, TreeItem, TreeView, VirtualList, Window,
-        WindowClientSizeChangedCallback, WindowOptions, WindowPlacement, WindowRawKeyCallback,
-        WindowState,
+        RealtimeFrameView, RemoteFrame, RemoteTextInputCallback, ReorderableGrid, ScrollView,
+        SegmentedControl, Select, SelectionMode, SplitOrientation, SplitView, Stack,
+        StackDirection, StyleSheet, Switch, Table, TableColumn, TableRow, Tabs, TerminalCell,
+        TerminalColor, TerminalCursor, TerminalCursorStyle, TerminalFrame, TerminalSelection,
+        TerminalUnderlineStyle, TerminalView, TextArea, TextField, TreeItem, TreeView, VirtualList,
+        Window, WindowClientSizeChangedCallback, WindowOptions, WindowPlacement,
+        WindowRawKeyCallback, WindowState,
     };
     use std::cell::{Cell, RefCell};
     use std::ptr::NonNull;
@@ -8863,6 +8929,26 @@ mod tests {
         }
 
         assert_eq!(*observed.borrow(), Some((1024.5, 720.25)));
+    }
+
+    #[test]
+    fn remote_text_input_callback_preserves_committed_utf8() {
+        let observed = Rc::new(RefCell::new(String::new()));
+        let observed_from_callback = Rc::clone(&observed);
+        let mut callback = RemoteTextInputCallback {
+            handler: Box::new(move |value| *observed_from_callback.borrow_mut() = value),
+        };
+        let value = "中文输入";
+
+        unsafe {
+            run_remote_text_input_callback(
+                value.as_ptr().cast(),
+                value.len(),
+                (&mut callback as *mut RemoteTextInputCallback).cast(),
+            );
+        }
+
+        assert_eq!(observed.borrow().as_str(), value);
     }
 
     #[test]

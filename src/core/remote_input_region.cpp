@@ -12,6 +12,19 @@ float clamp01(float value) {
     return std::max(0.0f, std::min(value, 1.0f));
 }
 
+bool prefersCommittedText(const KeyEvent& event) {
+    if (event.control || event.alt || event.win) {
+        return false;
+    }
+    const std::uint32_t key = event.virtualKey;
+    return key == 0x20
+        || (key >= 0x30 && key <= 0x5A)
+        || (key >= 0x60 && key <= 0x6F)
+        || (key >= 0xBA && key <= 0xE2)
+        || key == 0xE5
+        || key == 0xE7;
+}
+
 } // namespace
 
 bool RemoteInputRegion::RawKeyIdentity::operator<(const RawKeyIdentity& other) const {
@@ -84,6 +97,10 @@ void RemoteInputRegion::setOnRawKey(RawKeyCallback callback) {
     onRawKey_ = std::move(callback);
 }
 
+void RemoteInputRegion::setOnTextInput(TextInputCallback callback) {
+    onTextInput_ = std::move(callback);
+}
+
 bool RemoteInputRegion::dispatchPointer(Point windowPosition, PointerButton button, bool pressed, int wheelDeltaX, int wheelDeltaY) {
     if (!interactive()) {
         return false;
@@ -99,6 +116,8 @@ bool RemoteInputRegion::dispatchPointer(Point windowPosition, PointerButton butt
             pressedButtons_.erase(button);
         }
     }
+    lastPointerPosition_ = windowPosition;
+    hasPointerPosition_ = true;
 
     if (onPointer_) {
         onPointer_(makePointerEvent(windowPosition, button, pressed, wheelDeltaX, wheelDeltaY));
@@ -124,6 +143,14 @@ bool RemoteInputRegion::dispatchRawKey(RawKeyEvent event) {
     return true;
 }
 
+bool RemoteInputRegion::dispatchTextInput(const std::wstring& text) {
+    if (!interactive() || text.empty() || !onTextInput_) {
+        return false;
+    }
+    onTextInput_(text);
+    return true;
+}
+
 void RemoteInputRegion::releaseAllInputs() {
     if (onPointer_) {
         for (const PointerButton button : pressedButtons_) {
@@ -143,6 +170,7 @@ void RemoteInputRegion::releaseAllInputs() {
         }
     }
     pressedKeys_.clear();
+    textInputKeys_.clear();
 }
 
 void RemoteInputRegion::paint(Canvas& canvas) {
@@ -176,6 +204,10 @@ bool RemoteInputRegion::onMouseWheel(const MouseWheelEvent& event) {
 }
 
 bool RemoteInputRegion::onKeyDown(const KeyEvent& event) {
+    if (onTextInput_ && interactive() && prefersCommittedText(event)) {
+        textInputKeys_.insert(RawKeyIdentity{event.virtualKey, event.scanCode, event.extended});
+        return true;
+    }
     RawKeyEvent raw;
     raw.virtualKey = event.virtualKey;
     raw.scanCode = event.scanCode;
@@ -190,6 +222,10 @@ bool RemoteInputRegion::onKeyDown(const KeyEvent& event) {
 }
 
 bool RemoteInputRegion::onKeyUp(const KeyEvent& event) {
+    const RawKeyIdentity identity{event.virtualKey, event.scanCode, event.extended};
+    if (textInputKeys_.erase(identity) > 0) {
+        return true;
+    }
     RawKeyEvent raw;
     raw.virtualKey = event.virtualKey;
     raw.scanCode = event.scanCode;
@@ -203,9 +239,29 @@ bool RemoteInputRegion::onKeyUp(const KeyEvent& event) {
     return dispatchRawKey(raw);
 }
 
+bool RemoteInputRegion::onTextInputText(const std::wstring& text) {
+    return dispatchTextInput(text);
+}
+
+Rect RemoteInputRegion::textInputCaretRect() const {
+    const Rect content = contentRect();
+    if (content.width <= 0.0f || content.height <= 0.0f) {
+        return Rect{};
+    }
+    const float fallbackX = content.x + std::min(8.0f, content.width);
+    const float fallbackY = content.y + std::max(0.0f, content.height - 24.0f);
+    const float x = hasPointerPosition_
+        ? std::clamp(lastPointerPosition_.x, content.x, content.x + content.width)
+        : fallbackX;
+    const float y = hasPointerPosition_
+        ? std::clamp(lastPointerPosition_.y, content.y, content.y + content.height)
+        : fallbackY;
+    return Rect{x, y, 1.0f, std::min(20.0f, content.height)};
+}
+
 bool RemoteInputRegion::onFocusChanged(bool focused) {
     const bool changed = Widget::onFocusChanged(focused);
-    const bool hadPressedInputs = !pressedButtons_.empty() || !pressedKeys_.empty();
+    const bool hadPressedInputs = !pressedButtons_.empty() || !pressedKeys_.empty() || !textInputKeys_.empty();
     if (!focused) {
         releaseAllInputs();
     }

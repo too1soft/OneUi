@@ -163,6 +163,39 @@ void testFocusLossReleasesPressedInputs() {
     expectEqual("RemoteInputRegion second focus loss no extra pointer", static_cast<int>(pointers.size()), 2);
 }
 
+void testCommittedTextAvoidsPrintableRawKeyDuplication() {
+    oneui::RemoteInputRegion region;
+    region.setFrame(oneui::Rect{10.0f, 20.0f, 800.0f, 600.0f});
+    region.setRemoteSize(oneui::Size{1920.0f, 1080.0f});
+
+    std::vector<oneui::RawKeyEvent> keys;
+    std::vector<std::wstring> text;
+    region.setOnRawKey([&](const oneui::RawKeyEvent& event) {
+        keys.push_back(event);
+    });
+    region.setOnTextInput([&](const std::wstring& value) {
+        text.push_back(value);
+    });
+
+    oneui::KeyEvent printable;
+    printable.virtualKey = 0x41;
+    printable.scanCode = 0x1e;
+    expectEqual("RemoteInputRegion printable down handled", region.onKeyDown(printable) ? 1 : 0, 1);
+    expectEqual("RemoteInputRegion printable raw key suppressed", static_cast<int>(keys.size()), 0);
+    expectEqual("RemoteInputRegion committed text handled", region.onTextInputText(L"中文") ? 1 : 0, 1);
+    expectEqual("RemoteInputRegion committed text count", static_cast<int>(text.size()), 1);
+    expectEqual("RemoteInputRegion committed text length", static_cast<int>(text.front().size()), 2);
+    expectEqual("RemoteInputRegion printable up handled", region.onKeyUp(printable) ? 1 : 0, 1);
+    expectEqual("RemoteInputRegion printable raw key up suppressed", static_cast<int>(keys.size()), 0);
+
+    oneui::KeyEvent modified = printable;
+    modified.control = true;
+    expectEqual("RemoteInputRegion modified down handled", region.onKeyDown(modified) ? 1 : 0, 1);
+    expectEqual("RemoteInputRegion modified raw key forwarded", static_cast<int>(keys.size()), 1);
+    region.onKeyUp(modified);
+    expectEqual("RemoteInputRegion modified raw key up forwarded", static_cast<int>(keys.size()), 2);
+}
+
 } // namespace
 
 int main() {
@@ -171,6 +204,7 @@ int main() {
     testPointerIgnoredUntilRemoteSizeKnown();
     testRawKeyAndReleaseAllInputs();
     testFocusLossReleasesPressedInputs();
+    testCommittedTextAvoidsPrintableRawKeyDuplication();
 
     if (failures != 0) {
         std::cerr << failures << " remote input region behavior test(s) failed.\n";

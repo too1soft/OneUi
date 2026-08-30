@@ -385,7 +385,7 @@ enum {
     OneUiTerminalCellOverline = 1u << 11
 };
 
-#define ONEUI_UTF8_ABI_VERSION 18u
+#define ONEUI_UTF8_ABI_VERSION 19u
 
 ONEUI_API const char* oneui_version(void);
 ONEUI_API unsigned int oneui_utf8_abi_version(void);
@@ -1074,6 +1074,10 @@ ONEUI_API void oneui_remote_input_region_set_on_pointer(
 ONEUI_API void oneui_remote_input_region_set_on_raw_key(
     OneUiWidget* region,
     OneUiRawKeyCallback callback,
+    void* user_data);
+ONEUI_API void oneui_remote_input_region_set_on_text_input_utf8(
+    OneUiWidget* region,
+    OneUiUtf8TextCallback callback,
     void* user_data);
 ONEUI_API void oneui_remote_input_region_release_all_inputs(OneUiWidget* region);
 

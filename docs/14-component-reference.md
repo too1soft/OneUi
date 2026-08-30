@@ -405,11 +405,13 @@ OneUI 边界处的额外像素复制，但解码器是否直接产出目标像�
 
 ## RemoteInputRegion
 
-把本地 pointer/raw-key 映射为远程协议容易消费的事件：
+把本地 pointer/raw-key/committed text 映射为远程协议容易消费的事件：
 
 - window/content/normalized/remote position；
 - Left/Right/Middle/X1/X2；
 - virtual key/scan code/down-up/repeat/extended/modifier；
+- UTF-8 committed text 和 IME 结果；安装 text callback 后，普通可打印键只走 committed text，避免 raw-key 与字符重复，Ctrl/Alt/Win 组合键和非文本键继续走 raw-key；
+- IME 候选框锚定到最近一次远程指针位置，未产生指针事件时回退到远程内容区下沿；
 - `releaseAllInputs()`；
 - focus loss 自动释放，避免远端卡键。
 - safe Rust wrapper 会在 Drop 前清理回调，并保留 X1/X2、滚轮和 modifier 数据。

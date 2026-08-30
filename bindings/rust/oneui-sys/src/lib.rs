@@ -5,7 +5,7 @@
 
 use std::ffi::{c_char, c_float, c_int, c_uint, c_ushort, c_void};
 
-pub const UTF8_ABI_VERSION: c_uint = 18;
+pub const UTF8_ABI_VERSION: c_uint = 19;
 
 #[repr(C)]
 pub struct OneUiWindow {
@@ -690,6 +690,11 @@ extern "C" {
     pub fn oneui_remote_input_region_set_on_raw_key(
         region: *mut OneUiWidget,
         callback: OneUiRawKeyCallback,
+        user_data: *mut c_void,
+    );
+    pub fn oneui_remote_input_region_set_on_text_input_utf8(
+        region: *mut OneUiWidget,
+        callback: OneUiUtf8TextCallback,
         user_data: *mut c_void,
     );
     pub fn oneui_remote_input_region_release_all_inputs(region: *mut OneUiWidget);

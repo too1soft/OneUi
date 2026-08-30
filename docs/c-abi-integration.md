@@ -7,7 +7,7 @@ OneUI 使用版本化 C ABI 为 Rust、Go、C#、Python FFI 和不同 C++ ABI �
 ## 当前版本
 
 ```c
-#define ONEUI_UTF8_ABI_VERSION 18u
+#define ONEUI_UTF8_ABI_VERSION 19u
 ```
 
 运行时检查：
@@ -252,11 +252,11 @@ oneui_toast_*             oneui_log_view_*          oneui_terminal_view_*
 oneui_realtime_frame_view_*  oneui_remote_input_region_*
 ```
 
-当前 header 包含 461 个公开 `oneui_*` 函数声明。数量用于说明覆盖规模，不代替逐函数契约。
+当前 header 包含 462 个公开 `oneui_*` 函数声明。数量用于说明覆盖规模，不代替逐函数契约。
 
-## ABI v18 重点
+## ABI v19 重点
 
-相对 v13，本工作区把 ABI 推进到 v18，重点包含：
+相对 v13，本工作区把 ABI 推进到 v19，重点包含：
 
 - `OneUiTableColumnUtf8` / `OneUiTableRowUtf8`；
 - Table 结构化数据、滚动、选择、命令、重排和 drag；
@@ -270,6 +270,7 @@ oneui_realtime_frame_view_*  oneui_remote_input_region_*
 - client logical-size changed callback；
 - `oneui_realtime_frame_view_submit_frame_owned` 与恰好一次 release callback；
 - safe Rust `RealtimeFrameView` / `RealtimeFrameViewHandle` / `RemoteInputRegion`。
+- `oneui_remote_input_region_set_on_text_input_utf8` 与 safe Rust committed-text/IME 回调；
 - widget frame/tooltip；
 - Stack content extent；
 - SplitView ratio committed；

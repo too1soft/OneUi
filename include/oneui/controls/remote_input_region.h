@@ -52,6 +52,7 @@ class ONEUI_API RemoteInputRegion final : public Widget {
 public:
     using PointerCallback = std::function<void(const RemotePointerEvent&)>;
     using RawKeyCallback = std::function<void(const RawKeyEvent&)>;
+    using TextInputCallback = std::function<void(const std::wstring&)>;
 
     RemoteInputRegion();
 
@@ -63,8 +64,10 @@ public:
 
     void setOnPointer(PointerCallback callback);
     void setOnRawKey(RawKeyCallback callback);
+    void setOnTextInput(TextInputCallback callback);
     bool dispatchPointer(Point windowPosition, PointerButton button, bool pressed, int wheelDeltaX = 0, int wheelDeltaY = 0);
     bool dispatchRawKey(RawKeyEvent event);
+    bool dispatchTextInput(const std::wstring& text);
     void releaseAllInputs();
 
     void paint(Canvas& canvas) override;
@@ -74,6 +77,8 @@ public:
     bool onMouseWheel(const MouseWheelEvent& event) override;
     bool onKeyDown(const KeyEvent& event) override;
     bool onKeyUp(const KeyEvent& event) override;
+    bool onTextInputText(const std::wstring& text) override;
+    Rect textInputCaretRect() const override;
     bool onFocusChanged(bool focused) override;
     bool isFocusable() const override;
     AccessibilityInfo accessibilityInfo() const override;
@@ -94,8 +99,12 @@ private:
     RemoteInputScaleMode scaleMode_ = RemoteInputScaleMode::Fit;
     PointerCallback onPointer_;
     RawKeyCallback onRawKey_;
+    TextInputCallback onTextInput_;
     std::set<PointerButton> pressedButtons_;
     std::set<RawKeyIdentity> pressedKeys_;
+    std::set<RawKeyIdentity> textInputKeys_;
+    Point lastPointerPosition_{};
+    bool hasPointerPosition_ = false;
 };
 
 } // namespace oneui
