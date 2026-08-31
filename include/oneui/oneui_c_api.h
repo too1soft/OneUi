@@ -47,6 +47,7 @@ typedef void (*OneUiItemDragCallback)(
     void* user_data);
 typedef struct OneUiPointerEvent OneUiPointerEvent;
 typedef void (*OneUiPointerCallback)(const OneUiPointerEvent* event, void* user_data);
+typedef void (*OneUiTimeSeriesInspectionCallback)(int index, int pinned, void* user_data);
 
 /*
  * Cross-platform string ABI. The caller owns data and it is only read during
@@ -172,6 +173,19 @@ typedef struct OneUiColor {
     unsigned char b;
     unsigned char a;
 } OneUiColor;
+
+/* Multi-series chart data. OneUI copies names, values, and colors before return. */
+typedef struct OneUiTimeSeriesUtf8 {
+    OneUiUtf8String name;
+    OneUiColor color;
+    const double* values;
+    size_t value_count;
+} OneUiTimeSeriesUtf8;
+
+typedef struct OneUiTimeSeriesThreshold {
+    double value;
+    OneUiColor color;
+} OneUiTimeSeriesThreshold;
 
 typedef struct OneUiPointerEvent {
     float x;
@@ -705,6 +719,35 @@ ONEUI_API double oneui_progress_bar_value(OneUiWidget* progress_bar);
 /* Compact time-series visualization. Values are clamped to [0, 1]. */
 ONEUI_API OneUiWidget* oneui_sparkline_create(void);
 ONEUI_API void oneui_sparkline_set_values(OneUiWidget* sparkline, const double* values, size_t count);
+
+/* Operational multi-series chart. Values use caller-defined display units. */
+ONEUI_API OneUiWidget* oneui_time_series_chart_create(void);
+ONEUI_API void oneui_time_series_chart_set_series(
+    OneUiWidget* chart,
+    const OneUiTimeSeriesUtf8* series,
+    size_t count);
+ONEUI_API void oneui_time_series_chart_set_range(OneUiWidget* chart, double minimum, double maximum);
+ONEUI_API void oneui_time_series_chart_set_grid_lines(OneUiWidget* chart, int count);
+ONEUI_API void oneui_time_series_chart_set_visual_style(
+    OneUiWidget* chart,
+    int smooth_curves,
+    int area_fill,
+    int dashed_grid,
+    int axes_visible,
+    float line_width,
+    unsigned char fill_alpha);
+ONEUI_API void oneui_time_series_chart_set_plot_insets(OneUiWidget* chart, OneUiInsets insets);
+ONEUI_API void oneui_time_series_chart_set_thresholds(
+    OneUiWidget* chart,
+    const OneUiTimeSeriesThreshold* thresholds,
+    size_t count);
+ONEUI_API void oneui_time_series_chart_set_inspection(OneUiWidget* chart, int index, int pinned);
+ONEUI_API int oneui_time_series_chart_inspection_index(const OneUiWidget* chart);
+ONEUI_API int oneui_time_series_chart_inspection_pinned(const OneUiWidget* chart);
+ONEUI_API void oneui_time_series_chart_set_on_inspection_changed(
+    OneUiWidget* chart,
+    OneUiTimeSeriesInspectionCallback callback,
+    void* user_data);
 
 ONEUI_API OneUiWidget* oneui_icon_create(int symbol);
 ONEUI_API void oneui_icon_set_symbol(OneUiWidget* icon, int symbol);

@@ -30,6 +30,7 @@
 #include "include/core/SkImageInfo.h"
 #include "include/core/SkMaskFilter.h"
 #include "include/core/SkPaint.h"
+#include "include/core/SkPath.h"
 #include "include/core/SkRRect.h"
 #include "include/core/SkRect.h"
 #include "include/core/SkSamplingOptions.h"
@@ -37,7 +38,7 @@
 #include "include/core/SkSurface.h"
 #include "include/core/SkTextBlob.h"
 #include "include/core/SkTypeface.h"
-#include "include/effects/SkGradient.h"
+#include "include/effects/SkGradientShader.h"
 #include "include/effects/SkImageFilters.h"
 #include "include/ports/SkTypeface_win.h"
 
@@ -494,10 +495,16 @@ public:
         };
         SkPaint paint;
         paint.setAntiAlias(true);
-        const SkGradient gradient(
-            SkGradient::Colors(SkSpan<const SkColor4f>(colors, 2), SkTileMode::kClamp),
-            SkGradient::Interpolation{});
-        paint.setShader(SkShaders::RadialGradient(shaderCenter, shaderRadius, gradient));
+        paint.setShader(SkGradientShader::MakeRadial(
+            shaderCenter,
+            shaderRadius,
+            colors,
+            nullptr,
+            nullptr,
+            2,
+            SkTileMode::kClamp,
+            SkGradientShader::Interpolation{},
+            nullptr));
         canvas_.drawRRect(SkRRect::MakeRectXY(toSkRect(rect), radius, radius), paint);
         ++g_primitivePaintTrace.gradientCalls;
     }
@@ -534,6 +541,81 @@ public:
         paint.setStrokeWidth(width);
         paint.setStrokeCap(SkPaint::kRound_Cap);
         canvas_.drawLine(from.x, from.y, to.x, to.y, paint);
+    }
+
+    void strokePath(const CanvasPath& path, Color color, float width, bool rounded) override {
+        if (path.empty()) {
+            return;
+        }
+        SkPath native;
+        for (const auto& command : path.commands) {
+            switch (command.verb) {
+            case CanvasPathVerb::MoveTo:
+                native.moveTo(command.first.x, command.first.y);
+                break;
+            case CanvasPathVerb::LineTo:
+                native.lineTo(command.first.x, command.first.y);
+                break;
+            case CanvasPathVerb::CubicTo:
+                native.cubicTo(
+                    command.first.x,
+                    command.first.y,
+                    command.second.x,
+                    command.second.y,
+                    command.third.x,
+                    command.third.y);
+                break;
+            case CanvasPathVerb::Close:
+                native.close();
+                break;
+            }
+        }
+        SkPaint paint;
+        paint.setAntiAlias(true);
+        paint.setColor(toSkColor(color));
+        paint.setStyle(SkPaint::kStroke_Style);
+        paint.setStrokeWidth(width);
+        paint.setStrokeCap(rounded ? SkPaint::kRound_Cap : SkPaint::kButt_Cap);
+        paint.setStrokeJoin(rounded ? SkPaint::kRound_Join : SkPaint::kMiter_Join);
+        canvas_.drawPath(native, paint);
+    }
+
+    void fillPathLinearGradient(
+        const CanvasPath& path,
+        Rect bounds,
+        Color start,
+        Color end,
+        float angleDegrees) override {
+        if (path.empty() || bounds.width <= 0.0f || bounds.height <= 0.0f) {
+            return;
+        }
+        SkPath native;
+        for (const auto& command : path.commands) {
+            switch (command.verb) {
+            case CanvasPathVerb::MoveTo:
+                native.moveTo(command.first.x, command.first.y);
+                break;
+            case CanvasPathVerb::LineTo:
+                native.lineTo(command.first.x, command.first.y);
+                break;
+            case CanvasPathVerb::CubicTo:
+                native.cubicTo(
+                    command.first.x,
+                    command.first.y,
+                    command.second.x,
+                    command.second.y,
+                    command.third.x,
+                    command.third.y);
+                break;
+            case CanvasPathVerb::Close:
+                native.close();
+                break;
+            }
+        }
+        SkPaint paint;
+        paint.setAntiAlias(true);
+        paint.setShader(linearGradientShader(bounds, start, end, angleDegrees));
+        canvas_.drawPath(native, paint);
     }
 
     void drawBoxShadow(Rect rect, const BoxShadow& shadow, float radius) override {
@@ -1094,10 +1176,15 @@ private:
             SkColor4f::FromColor(toSkColor(start)),
             SkColor4f::FromColor(toSkColor(end)),
         };
-        const SkGradient gradient(
-            SkGradient::Colors(SkSpan<const SkColor4f>(colors, 2), SkTileMode::kClamp),
-            SkGradient::Interpolation{});
-        auto shader = SkShaders::LinearGradient(points, gradient);
+        auto shader = SkGradientShader::MakeLinear(
+            points,
+            colors,
+            nullptr,
+            nullptr,
+            2,
+            SkTileMode::kClamp,
+            SkGradientShader::Interpolation{},
+            nullptr);
         cache[key] = shader;
         return shader;
     }

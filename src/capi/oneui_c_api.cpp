@@ -25,6 +25,7 @@
 #include "oneui/controls/state_view.h"
 #include "oneui/controls/switch.h"
 #include "oneui/controls/table.h"
+#include "oneui/controls/time_series_chart.h"
 #include "oneui/controls/tabs.h"
 #include "oneui/controls/text_field.h"
 #include "oneui/controls/terminal_view.h"
@@ -807,6 +808,8 @@ oneui::StyleNode styleNodeFor(const OneUiWidget* widget) {
             tag = "progress";
         } else if (dynamic_cast<oneui::Sparkline*>(widget->widget.get())) {
             tag = "sparkline";
+        } else if (dynamic_cast<oneui::TimeSeriesChart*>(widget->widget.get())) {
+            tag = "time-series-chart";
         } else if (dynamic_cast<oneui::VirtualList*>(widget->widget.get())) {
             tag = "virtual-list";
         } else if (dynamic_cast<oneui::List*>(widget->widget.get())) {
@@ -3535,6 +3538,137 @@ void oneui_sparkline_set_values(OneUiWidget* sparkline, const double* values, si
         }
         nativeSparkline->setValues(std::vector<double>(values, values + count));
     }
+}
+
+OneUiWidget* oneui_time_series_chart_create() {
+    return wrap(std::make_shared<oneui::TimeSeriesChart>());
+}
+
+void oneui_time_series_chart_set_series(
+    OneUiWidget* chart,
+    const OneUiTimeSeriesUtf8* series,
+    size_t count) {
+    auto* nativeChart = asWidget<oneui::TimeSeriesChart>(chart);
+    if (!nativeChart) {
+        return;
+    }
+    std::vector<oneui::TimeSeriesChartSeries> copied;
+    if (series && count > 0) {
+        copied.reserve(count);
+        for (std::size_t index = 0; index < count; ++index) {
+            oneui::TimeSeriesChartSeries item;
+            item.name = utf8OrEmpty(series[index].name);
+            item.color = toNativeColor(series[index].color);
+            if (series[index].values && series[index].value_count > 0) {
+                item.values.assign(
+                    series[index].values,
+                    series[index].values + series[index].value_count);
+            }
+            copied.push_back(std::move(item));
+        }
+    }
+    nativeChart->setSeries(std::move(copied));
+}
+
+void oneui_time_series_chart_set_range(OneUiWidget* chart, double minimum, double maximum) {
+    if (auto* nativeChart = asWidget<oneui::TimeSeriesChart>(chart)) {
+        nativeChart->setRange(minimum, maximum);
+    }
+}
+
+void oneui_time_series_chart_set_grid_lines(OneUiWidget* chart, int count) {
+    if (auto* nativeChart = asWidget<oneui::TimeSeriesChart>(chart)) {
+        nativeChart->setGridLines(count);
+    }
+}
+
+void oneui_time_series_chart_set_visual_style(
+    OneUiWidget* chart,
+    int smooth_curves,
+    int area_fill,
+    int dashed_grid,
+    int axes_visible,
+    float line_width,
+    unsigned char fill_alpha) {
+    if (auto* nativeChart = asWidget<oneui::TimeSeriesChart>(chart)) {
+        nativeChart->setSmoothCurves(smooth_curves != 0);
+        nativeChart->setAreaFill(area_fill != 0);
+        nativeChart->setDashedGrid(dashed_grid != 0);
+        nativeChart->setAxesVisible(axes_visible != 0);
+        nativeChart->setLineWidth(line_width);
+        nativeChart->setFillAlpha(fill_alpha);
+    }
+}
+
+void oneui_time_series_chart_set_plot_insets(OneUiWidget* chart, OneUiInsets insets) {
+    if (auto* nativeChart = asWidget<oneui::TimeSeriesChart>(chart)) {
+        nativeChart->setPlotInsets(toNativeInsets(insets));
+    }
+}
+
+void oneui_time_series_chart_set_thresholds(
+    OneUiWidget* chart,
+    const OneUiTimeSeriesThreshold* thresholds,
+    size_t count) {
+    auto* nativeChart = asWidget<oneui::TimeSeriesChart>(chart);
+    if (!nativeChart) {
+        return;
+    }
+    std::vector<oneui::TimeSeriesChartThreshold> copied;
+    if (thresholds && count > 0) {
+        copied.reserve(count);
+        for (std::size_t index = 0; index < count; ++index) {
+            copied.push_back(oneui::TimeSeriesChartThreshold{
+                thresholds[index].value,
+                toNativeColor(thresholds[index].color)});
+        }
+    }
+    nativeChart->setThresholds(std::move(copied));
+}
+
+void oneui_time_series_chart_set_inspection(OneUiWidget* chart, int index, int pinned) {
+    if (auto* nativeChart = asWidget<oneui::TimeSeriesChart>(chart)) {
+        nativeChart->setInspectionIndex(index, pinned != 0);
+    }
+}
+
+int oneui_time_series_chart_inspection_index(const OneUiWidget* chart) {
+    if (chart && chart->widget) {
+        const auto* nativeChart = dynamic_cast<const oneui::TimeSeriesChart*>(chart->widget.get());
+        if (!nativeChart) {
+            return -1;
+        }
+        return nativeChart->inspectionIndex();
+    }
+    return -1;
+}
+
+int oneui_time_series_chart_inspection_pinned(const OneUiWidget* chart) {
+    if (chart && chart->widget) {
+        const auto* nativeChart = dynamic_cast<const oneui::TimeSeriesChart*>(chart->widget.get());
+        if (!nativeChart) {
+            return 0;
+        }
+        return nativeChart->inspectionPinned() ? 1 : 0;
+    }
+    return 0;
+}
+
+void oneui_time_series_chart_set_on_inspection_changed(
+    OneUiWidget* chart,
+    OneUiTimeSeriesInspectionCallback callback,
+    void* user_data) {
+    auto* nativeChart = asWidget<oneui::TimeSeriesChart>(chart);
+    if (!nativeChart) {
+        return;
+    }
+    if (!callback) {
+        nativeChart->setOnInspectionChanged(nullptr);
+        return;
+    }
+    nativeChart->setOnInspectionChanged([callback, user_data](int index, bool pinned) {
+        callback(index, pinned ? 1 : 0, user_data);
+    });
 }
 
 OneUiWidget* oneui_icon_create(int symbol) {

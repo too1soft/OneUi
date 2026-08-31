@@ -67,6 +67,7 @@ add_library(oneui_core OBJECT
     src/core/switch.cpp
     src/core/tabs.cpp
     src/core/table.cpp
+    src/core/time_series_chart.cpp
     src/core/text_field.cpp
     src/core/text_input_bridge.cpp
     src/core/terminal_view.cpp
@@ -116,6 +117,22 @@ if(BUILD_TESTING)
     )
 
     add_test(NAME oneui_control_behavior_tests COMMAND oneui_control_behavior_tests)
+
+    add_executable(oneui_time_series_chart_behavior_tests
+        tests/time_series_chart_behavior_tests.cpp
+    )
+
+    target_link_libraries(oneui_time_series_chart_behavior_tests
+        PRIVATE
+            oneui_core
+    )
+
+    target_compile_definitions(oneui_time_series_chart_behavior_tests
+        PRIVATE
+            ONEUI_BUILDING_DLL
+    )
+
+    add_test(NAME oneui_time_series_chart_behavior_tests COMMAND oneui_time_series_chart_behavior_tests)
 
     add_executable(oneui_selection_model_tests
         tests/selection_model_tests.cpp
@@ -387,6 +404,17 @@ if(WIN32 AND ONEUI_BUILD_PLATFORM_WIN32)
         )
 
         add_test(NAME oneui_c_api_behavior_tests COMMAND oneui_c_api_behavior_tests)
+
+        add_executable(oneui_time_series_chart_c_api_tests
+            tests/time_series_chart_c_api_tests.cpp
+        )
+
+        target_link_libraries(oneui_time_series_chart_c_api_tests
+            PRIVATE
+                oneui
+        )
+
+        add_test(NAME oneui_time_series_chart_c_api_tests COMMAND oneui_time_series_chart_c_api_tests)
 
         add_executable(oneui_monitor_behavior_tests
             tests/monitor_behavior_tests.cpp

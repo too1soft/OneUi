@@ -1011,6 +1011,14 @@ impl UiDispatcher {
         }
     }
 
+    /// Creates a thread-safe multi-series producer for an operational chart.
+    pub fn time_series_chart_handle(&self, chart: &TimeSeriesChart) -> TimeSeriesChartHandle {
+        TimeSeriesChartHandle {
+            state: Arc::clone(&chart.state),
+            dispatcher: self.clone(),
+        }
+    }
+
     /// Creates a thread-safe producer for in-place virtual-list row updates.
     pub fn virtual_list_handle(&self, list: &VirtualList) -> VirtualListHandle {
         VirtualListHandle {
@@ -2813,6 +2821,316 @@ impl Drop for Sparkline {
             .pending_values
             .lock()
             .expect("sparkline pending values lock poisoned")
+            .take();
+        self.state.update_scheduled.store(false, Ordering::Release);
+    }
+}
+
+/// One named series in an operational chart. `None` values are rendered as
+/// real gaps rather than being joined to adjacent samples.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TimeSeries {
+    pub name: String,
+    pub color: Color,
+    pub values: Vec<Option<f64>>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TimeSeriesThreshold {
+    pub value: f64,
+    pub color: Color,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct TimeSeriesInspection {
+    pub index: Option<usize>,
+    pub pinned: bool,
+}
+
+struct TimeSeriesInspectionCallback {
+    handler: Box<dyn FnMut(TimeSeriesInspection) + 'static>,
+}
+
+unsafe extern "C" fn run_time_series_inspection_callback(
+    index: std::ffi::c_int,
+    pinned: std::ffi::c_int,
+    user_data: *mut std::ffi::c_void,
+) {
+    if user_data.is_null() {
+        return;
+    }
+    let callback = unsafe { &mut *user_data.cast::<TimeSeriesInspectionCallback>() };
+    let event = TimeSeriesInspection {
+        index: usize::try_from(index).ok(),
+        pinned: pinned != 0,
+    };
+    run_callback_guarded("time_series.inspection", || (callback.handler)(event));
+}
+
+fn set_native_time_series(raw: *mut sys::OneUiWidget, series: &[TimeSeries]) {
+    let values = series
+        .iter()
+        .map(|item| {
+            item.values
+                .iter()
+                .map(|value| value.unwrap_or(f64::NAN))
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+    let native = series
+        .iter()
+        .zip(values.iter())
+        .map(|(item, values)| sys::OneUiTimeSeriesUtf8 {
+            name: sys::OneUiUtf8String::from_str(&item.name),
+            color: item.color.into(),
+            values: values.as_ptr(),
+            value_count: values.len(),
+        })
+        .collect::<Vec<_>>();
+    unsafe { sys::oneui_time_series_chart_set_series(raw, native.as_ptr(), native.len()) };
+}
+
+struct TimeSeriesChartState {
+    raw: AtomicPtr<sys::OneUiWidget>,
+    pending_series: Mutex<Option<Vec<TimeSeries>>>,
+    update_scheduled: AtomicBool,
+}
+
+/// Thread-safe producer for a mounted operational chart. Bursts collapse to
+/// the newest complete data revision before being applied on the UI thread.
+#[derive(Clone)]
+pub struct TimeSeriesChartHandle {
+    state: Arc<TimeSeriesChartState>,
+    dispatcher: UiDispatcher,
+}
+
+impl TimeSeriesChartHandle {
+    pub fn set_series(&self, series: Vec<TimeSeries>) -> Result<(), Error> {
+        if self.state.raw.load(Ordering::Acquire).is_null() {
+            return Err(Error::WidgetDestroyed);
+        }
+        *self
+            .state
+            .pending_series
+            .lock()
+            .expect("time-series pending data lock poisoned") = Some(series);
+        if self.state.update_scheduled.swap(true, Ordering::AcqRel) {
+            return Ok(());
+        }
+        let state = Arc::clone(&self.state);
+        let dispatched_state = Arc::clone(&state);
+        if let Err(error) = self
+            .dispatcher
+            .dispatch(move || Self::drain_pending_series(&dispatched_state))
+        {
+            state.update_scheduled.store(false, Ordering::Release);
+            state
+                .pending_series
+                .lock()
+                .expect("time-series pending data lock poisoned")
+                .take();
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    fn drain_pending_series(state: &TimeSeriesChartState) {
+        loop {
+            let series = state
+                .pending_series
+                .lock()
+                .expect("time-series pending data lock poisoned")
+                .take();
+            let raw = state.raw.load(Ordering::Acquire);
+            if raw.is_null() {
+                state.update_scheduled.store(false, Ordering::Release);
+                return;
+            }
+            if let Some(series) = series {
+                set_native_time_series(raw, &series);
+            }
+            state.update_scheduled.store(false, Ordering::Release);
+            if state
+                .pending_series
+                .lock()
+                .expect("time-series pending data lock poisoned")
+                .is_none()
+            {
+                return;
+            }
+            if !state.update_scheduled.swap(true, Ordering::AcqRel) {
+                continue;
+            }
+            return;
+        }
+    }
+}
+
+/// Native multi-series chart with gaps, thresholds and pointer/keyboard
+/// inspection for operational dashboards.
+pub struct TimeSeriesChart {
+    widget: Widget,
+    state: Arc<TimeSeriesChartState>,
+    inspection_callback: Option<Box<TimeSeriesInspectionCallback>>,
+}
+
+impl TimeSeriesChart {
+    pub fn new() -> Result<Self, Error> {
+        let widget = Widget::from_raw(unsafe { sys::oneui_time_series_chart_create() })?;
+        Ok(Self {
+            state: Arc::new(TimeSeriesChartState {
+                raw: AtomicPtr::new(widget.as_raw()),
+                pending_series: Mutex::new(None),
+                update_scheduled: AtomicBool::new(false),
+            }),
+            widget,
+            inspection_callback: None,
+        })
+    }
+
+    pub fn set_series(&self, series: &[TimeSeries]) {
+        self.state
+            .pending_series
+            .lock()
+            .expect("time-series pending data lock poisoned")
+            .take();
+        set_native_time_series(self.widget.as_raw(), series);
+    }
+
+    pub fn set_range(&self, minimum: f64, maximum: f64) {
+        unsafe { sys::oneui_time_series_chart_set_range(self.widget.as_raw(), minimum, maximum) };
+    }
+
+    pub fn set_grid_lines(&self, count: i32) {
+        unsafe { sys::oneui_time_series_chart_set_grid_lines(self.widget.as_raw(), count) };
+    }
+
+    pub fn set_visual_style(
+        &self,
+        smooth_curves: bool,
+        area_fill: bool,
+        dashed_grid: bool,
+        axes_visible: bool,
+        line_width: f32,
+        fill_alpha: u8,
+    ) {
+        unsafe {
+            sys::oneui_time_series_chart_set_visual_style(
+                self.widget.as_raw(),
+                i32::from(smooth_curves),
+                i32::from(area_fill),
+                i32::from(dashed_grid),
+                i32::from(axes_visible),
+                line_width,
+                fill_alpha,
+            )
+        };
+    }
+
+    pub fn set_plot_insets(&self, insets: Insets) {
+        unsafe {
+            sys::oneui_time_series_chart_set_plot_insets(
+                self.widget.as_raw(),
+                sys::OneUiInsets {
+                    top: insets.top,
+                    right: insets.right,
+                    bottom: insets.bottom,
+                    left: insets.left,
+                },
+            )
+        };
+    }
+
+    pub fn set_thresholds(&self, thresholds: &[TimeSeriesThreshold]) {
+        let native = thresholds
+            .iter()
+            .map(|threshold| sys::OneUiTimeSeriesThreshold {
+                value: threshold.value,
+                color: threshold.color.into(),
+            })
+            .collect::<Vec<_>>();
+        unsafe {
+            sys::oneui_time_series_chart_set_thresholds(
+                self.widget.as_raw(),
+                native.as_ptr(),
+                native.len(),
+            )
+        };
+    }
+
+    pub fn set_inspection(&self, inspection: TimeSeriesInspection) {
+        let index = inspection
+            .index
+            .and_then(|index| i32::try_from(index).ok())
+            .unwrap_or(-1);
+        unsafe {
+            sys::oneui_time_series_chart_set_inspection(
+                self.widget.as_raw(),
+                index,
+                i32::from(inspection.pinned),
+            )
+        };
+    }
+
+    pub fn inspection(&self) -> TimeSeriesInspection {
+        let index = unsafe { sys::oneui_time_series_chart_inspection_index(self.widget.as_raw()) };
+        TimeSeriesInspection {
+            index: usize::try_from(index).ok(),
+            pinned: unsafe {
+                sys::oneui_time_series_chart_inspection_pinned(self.widget.as_raw()) != 0
+            },
+        }
+    }
+
+    pub fn set_on_inspection_changed<F>(&mut self, callback: F)
+    where
+        F: FnMut(TimeSeriesInspection) + 'static,
+    {
+        self.clear_on_inspection_changed();
+        self.inspection_callback = Some(Box::new(TimeSeriesInspectionCallback {
+            handler: Box::new(callback),
+        }));
+        let user_data = (self
+            .inspection_callback
+            .as_deref_mut()
+            .expect("time-series callback was just installed")
+            as *mut TimeSeriesInspectionCallback)
+            .cast();
+        unsafe {
+            sys::oneui_time_series_chart_set_on_inspection_changed(
+                self.widget.as_raw(),
+                Some(run_time_series_inspection_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn clear_on_inspection_changed(&mut self) {
+        unsafe {
+            sys::oneui_time_series_chart_set_on_inspection_changed(
+                self.widget.as_raw(),
+                None,
+                std::ptr::null_mut(),
+            )
+        };
+        self.inspection_callback = None;
+    }
+
+    pub fn as_widget(&self) -> &Widget {
+        &self.widget
+    }
+}
+
+impl Drop for TimeSeriesChart {
+    fn drop(&mut self) {
+        self.clear_on_inspection_changed();
+        self.state
+            .raw
+            .store(std::ptr::null_mut(), Ordering::Release);
+        self.state
+            .pending_series
+            .lock()
+            .expect("time-series pending data lock poisoned")
             .take();
         self.state.update_scheduled.store(false, Ordering::Release);
     }
@@ -9428,6 +9746,11 @@ impl Window {
         self.dispatcher().sparkline_handle(sparkline)
     }
 
+    /// Returns the thread-safe update path for a mounted operational chart.
+    pub fn time_series_chart_handle(&self, chart: &TimeSeriesChart) -> TimeSeriesChartHandle {
+        self.dispatcher().time_series_chart_handle(chart)
+    }
+
     /// Returns the thread-safe update path for rows in a mounted virtual list.
     pub fn virtual_list_handle(&self, list: &VirtualList) -> VirtualListHandle {
         self.dispatcher().virtual_list_handle(list)
@@ -9458,8 +9781,8 @@ mod tests {
     use super::sys;
     use super::{
         callback_panic_handler, clear_interaction_trace_handler, emit_interaction_trace,
-        run_callback_guarded, run_remote_text_input_callback, run_void_handler,
-        run_window_client_size_changed_callback, run_window_raw_key_callback,
+        run_callback_guarded, run_remote_text_input_callback, run_time_series_inspection_callback,
+        run_void_handler, run_window_client_size_changed_callback, run_window_raw_key_callback,
         set_callback_panic_handler, set_interaction_trace_handler,
         should_apply_application_cursor_style, terminal_style, traced_callback,
         traced_value_callback, Button, Color, Dialog, Error, FileDialogFilter, FileDialogMode,
@@ -9472,9 +9795,10 @@ mod tests {
         Select, SelectionMode, SplitOrientation, SplitView, Stack, StackDirection, StyleSheet,
         Switch, Table, TableColumn, TableRow, Tabs, TerminalCell, TerminalColor, TerminalCursor,
         TerminalCursorStyle, TerminalFrame, TerminalSelection, TerminalUnderlineStyle,
-        TerminalView, TextArea, TextField, TreeItem, TreeView, VirtualList, Window,
-        WindowClientSizeChangedCallback, WindowOptions, WindowPlacement, WindowRawKeyCallback,
-        WindowState,
+        TerminalView, TextArea, TextField, TimeSeries, TimeSeriesChart, TimeSeriesChartHandle,
+        TimeSeriesInspection, TimeSeriesInspectionCallback, TimeSeriesThreshold, TreeItem,
+        TreeView, VirtualList, Window, WindowClientSizeChangedCallback, WindowOptions,
+        WindowPlacement, WindowRawKeyCallback, WindowState,
     };
     use std::cell::{Cell, RefCell};
     use std::ptr::NonNull;
@@ -9517,6 +9841,80 @@ mod tests {
         }
 
         assert_eq!(*observed.borrow(), Some((1024.5, 720.25)));
+    }
+
+    #[test]
+    fn time_series_inspection_callback_preserves_index_and_pin_state() {
+        let observed = Rc::new(Cell::new(None));
+        let observed_from_callback = Rc::clone(&observed);
+        let mut callback = TimeSeriesInspectionCallback {
+            handler: Box::new(move |event| observed_from_callback.set(Some(event))),
+        };
+
+        unsafe {
+            run_time_series_inspection_callback(
+                17,
+                1,
+                (&mut callback as *mut TimeSeriesInspectionCallback).cast(),
+            );
+        }
+
+        assert_eq!(
+            observed.get(),
+            Some(TimeSeriesInspection {
+                index: Some(17),
+                pinned: true,
+            })
+        );
+    }
+
+    #[test]
+    fn time_series_chart_safe_binding_keeps_gaps_thresholds_and_handle_lifetime_safe() {
+        let _guard = window_test_lock().lock().expect("window test lock");
+        let window = Window::new(&WindowOptions::default()).expect("window should be created");
+        let chart = TimeSeriesChart::new().expect("time-series chart should be created");
+        chart.set_range(0.0, 100.0);
+        chart.set_grid_lines(4);
+        chart.set_visual_style(false, true, true, false, 1.0, 18);
+        chart.set_plot_insets(Insets {
+            top: 4.0,
+            right: 4.0,
+            bottom: 4.0,
+            left: 4.0,
+        });
+        chart.set_thresholds(&[TimeSeriesThreshold {
+            value: 80.0,
+            color: Color::rgba(245, 158, 11, 128),
+        }]);
+        chart.set_series(&[TimeSeries {
+            name: "CPU".to_string(),
+            color: Color::rgb(77, 163, 255),
+            values: vec![Some(20.0), None, Some(42.0)],
+        }]);
+        chart.set_inspection(TimeSeriesInspection {
+            index: Some(2),
+            pinned: true,
+        });
+        assert_eq!(
+            chart.inspection(),
+            TimeSeriesInspection {
+                index: Some(2),
+                pinned: true,
+            }
+        );
+
+        let handle: TimeSeriesChartHandle = window.time_series_chart_handle(&chart);
+        handle
+            .set_series(vec![TimeSeries {
+                name: "内存".to_string(),
+                color: Color::rgb(161, 111, 255),
+                values: vec![Some(35.0), Some(36.0)],
+            }])
+            .expect("mounted chart handle should accept a coalesced update");
+        window.set_content(chart.as_widget());
+        drop(chart);
+        assert_eq!(handle.set_series(Vec::new()), Err(Error::WidgetDestroyed));
+        window.close();
     }
 
     #[test]

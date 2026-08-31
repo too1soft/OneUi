@@ -37,6 +37,42 @@ enum class CanvasPixelFormat {
     Rgba8888
 };
 
+enum class CanvasPathVerb {
+    MoveTo,
+    LineTo,
+    CubicTo,
+    Close
+};
+
+struct CanvasPathCommand {
+    CanvasPathVerb verb = CanvasPathVerb::MoveTo;
+    Point first{};
+    Point second{};
+    Point third{};
+};
+
+/// Backend-neutral vector path used by charts and other data visualizations.
+/// Page code never depends on a renderer-specific path type.
+struct CanvasPath {
+    std::vector<CanvasPathCommand> commands;
+
+    void moveTo(Point point) {
+        commands.push_back(CanvasPathCommand{CanvasPathVerb::MoveTo, point, {}, {}});
+    }
+    void lineTo(Point point) {
+        commands.push_back(CanvasPathCommand{CanvasPathVerb::LineTo, point, {}, {}});
+    }
+    void cubicTo(Point control1, Point control2, Point end) {
+        commands.push_back(CanvasPathCommand{CanvasPathVerb::CubicTo, control1, control2, end});
+    }
+    void close() {
+        commands.push_back(CanvasPathCommand{CanvasPathVerb::Close, {}, {}, {}});
+    }
+    bool empty() const {
+        return commands.empty();
+    }
+};
+
 class ONEUI_API Canvas {
 public:
     virtual ~Canvas() = default;
@@ -72,6 +108,68 @@ public:
     virtual void fillEllipse(Rect rect, Color color) = 0;
     virtual void strokeEllipse(Rect rect, Color color, float width = 1.0f) = 0;
     virtual void drawLine(Point from, Point to, Color color, float width = 1.0f) = 0;
+    virtual void strokePath(const CanvasPath& path, Color color, float width = 1.0f, bool rounded = true) {
+        (void)rounded;
+        Point current{};
+        Point start{};
+        bool hasCurrent = false;
+        for (const auto& command : path.commands) {
+            switch (command.verb) {
+            case CanvasPathVerb::MoveTo:
+                current = command.first;
+                start = current;
+                hasCurrent = true;
+                break;
+            case CanvasPathVerb::LineTo:
+                if (hasCurrent) {
+                    drawLine(current, command.first, color, width);
+                }
+                current = command.first;
+                hasCurrent = true;
+                break;
+            case CanvasPathVerb::CubicTo: {
+                if (!hasCurrent) {
+                    current = command.third;
+                    hasCurrent = true;
+                    break;
+                }
+                const Point from = current;
+                Point previous = from;
+                for (int step = 1; step <= 16; ++step) {
+                    const float t = static_cast<float>(step) / 16.0f;
+                    const float u = 1.0f - t;
+                    const Point next{
+                        u * u * u * from.x + 3.0f * u * u * t * command.first.x +
+                            3.0f * u * t * t * command.second.x + t * t * t * command.third.x,
+                        u * u * u * from.y + 3.0f * u * u * t * command.first.y +
+                            3.0f * u * t * t * command.second.y + t * t * t * command.third.y};
+                    drawLine(previous, next, color, width);
+                    previous = next;
+                }
+                current = command.third;
+                break;
+            }
+            case CanvasPathVerb::Close:
+                if (hasCurrent) {
+                    drawLine(current, start, color, width);
+                    current = start;
+                }
+                break;
+            }
+        }
+    }
+    virtual void fillPathLinearGradient(
+        const CanvasPath& path,
+        Rect bounds,
+        Color start,
+        Color end,
+        float angleDegrees = 90.0f) {
+        (void)path;
+        (void)bounds;
+        (void)start;
+        (void)end;
+        (void)angleDegrees;
+    }
     virtual void drawText(const std::wstring& text, Rect rect, Color color, float size, TextAlign align = TextAlign::Center) = 0;
     virtual void drawTextStyled(const std::wstring& text, Rect rect, Color color, float size, TextAlign align = TextAlign::Center, int weight = 400) {
         (void)weight;

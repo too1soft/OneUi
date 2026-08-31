@@ -70,6 +70,22 @@ pub struct OneUiColor {
 }
 
 #[repr(C)]
+#[derive(Clone, Copy)]
+pub struct OneUiTimeSeriesUtf8 {
+    pub name: OneUiUtf8String,
+    pub color: OneUiColor,
+    pub values: *const f64,
+    pub value_count: usize,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct OneUiTimeSeriesThreshold {
+    pub value: f64,
+    pub color: OneUiColor,
+}
+
+#[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct OneUiRect {
     pub x: f32,
@@ -773,6 +789,41 @@ extern "C" {
         sparkline: *mut OneUiWidget,
         values: *const f64,
         count: usize,
+    );
+    pub fn oneui_time_series_chart_create() -> *mut OneUiWidget;
+    pub fn oneui_time_series_chart_set_series(
+        chart: *mut OneUiWidget,
+        series: *const OneUiTimeSeriesUtf8,
+        count: usize,
+    );
+    pub fn oneui_time_series_chart_set_range(chart: *mut OneUiWidget, minimum: f64, maximum: f64);
+    pub fn oneui_time_series_chart_set_grid_lines(chart: *mut OneUiWidget, count: c_int);
+    pub fn oneui_time_series_chart_set_visual_style(
+        chart: *mut OneUiWidget,
+        smooth_curves: c_int,
+        area_fill: c_int,
+        dashed_grid: c_int,
+        axes_visible: c_int,
+        line_width: c_float,
+        fill_alpha: u8,
+    );
+    pub fn oneui_time_series_chart_set_plot_insets(chart: *mut OneUiWidget, insets: OneUiInsets);
+    pub fn oneui_time_series_chart_set_thresholds(
+        chart: *mut OneUiWidget,
+        thresholds: *const OneUiTimeSeriesThreshold,
+        count: usize,
+    );
+    pub fn oneui_time_series_chart_set_inspection(
+        chart: *mut OneUiWidget,
+        index: c_int,
+        pinned: c_int,
+    );
+    pub fn oneui_time_series_chart_inspection_index(chart: *const OneUiWidget) -> c_int;
+    pub fn oneui_time_series_chart_inspection_pinned(chart: *const OneUiWidget) -> c_int;
+    pub fn oneui_time_series_chart_set_on_inspection_changed(
+        chart: *mut OneUiWidget,
+        callback: Option<unsafe extern "C" fn(c_int, c_int, *mut c_void)>,
+        user_data: *mut c_void,
     );
 
     pub fn oneui_icon_create(symbol: c_int) -> *mut OneUiWidget;
