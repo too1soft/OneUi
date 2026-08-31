@@ -45,6 +45,19 @@ struct VideoFrameSnapshot {
     std::uint64_t timestampUs = 0;
 };
 
+// A tightly scoped update to the current frame. Patch coordinates are in
+// remote-frame pixels and the source buffer starts at the patch's top-left
+// pixel. OneUI copies patch bytes before submitDamage returns.
+struct VideoFramePatch {
+    const void* data = nullptr;
+    std::size_t pixelBytes = 0;
+    int x = 0;
+    int y = 0;
+    int width = 0;
+    int height = 0;
+    int stride = 0;
+};
+
 class ONEUI_API RealtimeFrameView final : public Widget {
 public:
     RealtimeFrameView();
@@ -58,6 +71,17 @@ public:
         const VideoFrame& frame,
         std::size_t pixelBytes,
         std::shared_ptr<const void> owner);
+    // Applies up to 64 dirty rectangles to the current frame without replacing
+    // the full backing allocation. Returns false when there is no compatible
+    // base frame or any patch metadata is invalid.
+    bool submitDamage(
+        int frameWidth,
+        int frameHeight,
+        PixelFormat format,
+        const VideoFramePatch* patches,
+        std::size_t patchCount,
+        std::uint64_t frameId,
+        std::uint64_t timestampUs);
     void setScaleMode(ScaleMode mode);
     ScaleMode scaleMode() const;
     // setBackgroundColor 设背景/信箱底色（默认黑，适合视频信箱）。设 alpha=0 则不铺底，
@@ -72,6 +96,7 @@ public:
 private:
     struct StoredVideoFrame {
         std::shared_ptr<const void> owner;
+        std::shared_ptr<std::vector<std::uint8_t>> mutablePixels;
         const std::uint8_t* pixels = nullptr;
         std::size_t pixelBytes = 0;
         int width = 0;
@@ -87,7 +112,7 @@ private:
     mutable std::mutex mutex_;
     ScaleMode scaleMode_ = ScaleMode::Fit;
     Color backgroundColor_{0, 0, 0, 255};
-    std::shared_ptr<const StoredVideoFrame> latestFrame_;
+    std::shared_ptr<StoredVideoFrame> latestFrame_;
 };
 
 } // namespace oneui

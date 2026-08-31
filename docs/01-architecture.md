@@ -17,7 +17,7 @@ OneUI 是一个原生、自绘、保留式桌面 UI 框架，当前专注 Win32�
 
 ```text
 Product application
-  C++ API | UTF-8 C ABI v20 | safe Rust API
+  C++ API | UTF-8 C ABI v21 | safe Rust API
                          |
 Interop and ownership boundary
   opaque handles | copied UTF-8 data | callbacks | dispatcher
@@ -118,7 +118,7 @@ Linux/macOS 文件是未接线骨架；调用窗口/剪贴板会明确失败，�
 - 句柄由显式 destroy 释放调用方引用；
 - 控件树/overlay 在挂载后持有共享生命周期，销毁外部 wrapper 不会提前删除已挂载节点；
 - callback 由函数指针 + `user_data` 表示；清除 callback 后不再触碰调用方数据；
-- ABI 版本必须在加载时检查，目前为 v20。
+- ABI 版本必须在加载时检查，目前为 v21。
 
 ### Rust
 

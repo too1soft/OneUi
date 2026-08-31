@@ -307,6 +307,16 @@ typedef enum OneUiVideoScaleMode {
     OneUiVideoScaleModeStretch = 3
 } OneUiVideoScaleMode;
 
+typedef struct OneUiVideoFramePatch {
+    const void* pixels;
+    size_t pixel_bytes;
+    int x;
+    int y;
+    int width;
+    int height;
+    int stride;
+} OneUiVideoFramePatch;
+
 typedef enum OneUiRemoteCursorMode {
     OneUiRemoteCursorModeDefault = 0,
     OneUiRemoteCursorModeHidden = 1,
@@ -391,7 +401,7 @@ enum {
     OneUiTerminalCellOverline = 1u << 11
 };
 
-#define ONEUI_UTF8_ABI_VERSION 20u
+#define ONEUI_UTF8_ABI_VERSION 21u
 
 ONEUI_API const char* oneui_version(void);
 ONEUI_API unsigned int oneui_utf8_abi_version(void);
@@ -406,6 +416,8 @@ ONEUI_API void oneui_window_close(OneUiWindow* window);
 ONEUI_API void oneui_window_request_close(OneUiWindow* window);
 ONEUI_API void oneui_window_minimize(OneUiWindow* window);
 ONEUI_API void oneui_window_toggle_maximize(OneUiWindow* window);
+ONEUI_API void oneui_window_set_fullscreen(OneUiWindow* window, int fullscreen);
+ONEUI_API int oneui_window_is_fullscreen(OneUiWindow* window);
 ONEUI_API int oneui_window_get_placement(OneUiWindow* window, OneUiWindowPlacement* placement);
 ONEUI_API int oneui_window_set_placement(OneUiWindow* window, const OneUiWindowPlacement* placement);
 ONEUI_API void oneui_window_set_borderless(OneUiWindow* window, int borderless);
@@ -419,6 +431,10 @@ ONEUI_API void oneui_window_set_on_client_size_changed(
     OneUiWindow* window,
     OneUiClientSizeChangedCallback callback,
     void* user_data);
+ONEUI_API void oneui_window_set_minimum_client_size(
+    OneUiWindow* window,
+    float width,
+    float height);
 ONEUI_API void oneui_window_set_corner_radius(OneUiWindow* window, float radius);
 ONEUI_API void oneui_window_set_close_to_tray(OneUiWindow* window, int close_to_tray);
 ONEUI_API void oneui_window_post(OneUiWindow* window, OneUiVoidCallback callback, void* user_data);
@@ -1069,6 +1085,18 @@ ONEUI_API int oneui_realtime_frame_view_submit_frame_owned(
     unsigned long long timestamp_us,
     OneUiFrameReleaseCallback release_callback,
     void* user_data);
+// Applies up to 64 copied dirty rectangles to the current compatible frame.
+// Returns 1 on success. Invalid or out-of-bounds batches are rejected without
+// modifying the current frame.
+ONEUI_API int oneui_realtime_frame_view_submit_damage(
+    OneUiWidget* frame_view,
+    int frame_width,
+    int frame_height,
+    OneUiPixelFormat pixel_format,
+    const OneUiVideoFramePatch* patches,
+    size_t patch_count,
+    unsigned long long frame_id,
+    unsigned long long timestamp_us);
 
 ONEUI_API OneUiWidget* oneui_remote_input_region_create(void);
 ONEUI_API void oneui_remote_input_region_set_remote_size(OneUiWidget* region, float width, float height);

@@ -4,7 +4,7 @@ OneUI 的 Rust workspace 包含两层：
 
 | crate | 作用 |
 | --- | --- |
-| `oneui-sys` | ABI v20 原始 FFI；不增加所有权或线程策略 |
+| `oneui-sys` | ABI v21 原始 FFI；不增加所有权或线程策略 |
 | `oneui` | 安全包装；RAII、UTF-8、callback 清理、panic 边界、dispatcher 和线程安全 handle |
 
 产品代码应优先使用 `oneui`。只有 safe 层尚未覆盖且生命周期能被明确封装时，才在一个局部模块
@@ -42,7 +42,7 @@ oneui.dll
 
 ## ABI 检查
 
-`oneui-sys::UTF8_ABI_VERSION` 当前为 20。`Window::new` 创建窗口前调用
+`oneui-sys::UTF8_ABI_VERSION` 当前为 21。`Window::new` 创建窗口前调用
 `oneui_utf8_abi_version()`，不匹配时返回：
 
 ```rust
@@ -100,6 +100,7 @@ Rust wrapper Drop 立即消失，但 callback wrapper 被 Drop 时会清除 call
 - 该线程是 owning UI thread；
 - `show` / `run` / 普通控件 setter 在该线程使用；
 - `Window::set_on_client_size_changed` 在 UI 线程按帧合并派发逻辑像素宽高，适合事件驱动响应式布局；
+- `Window`/`UiDispatcher` 可在运行时设置和查询沉浸全屏；`Window::set_minimum_client_size` 使用逻辑客户端尺寸；
 - 普通控件 wrapper 不应从 worker 随意调用。
 
 ### UiDispatcher
@@ -141,7 +142,7 @@ Handle 用于后台服务向 UI 线程投递受控更新，而不是把完整 UI
 | `VirtualListHandle` | 整表 revision、清选择、单行更新 |
 | `TableHandle` | 整表 revision、清选择、单行更新 |
 | `TerminalViewHandle` | grid/frame/viewport/选择等高频终端状态 |
-| `RealtimeFrameViewHandle` | 免复制远程画面所有权移交、突发帧合并为最新帧 |
+| `RealtimeFrameViewHandle` | 完整帧所有权移交、脏矩形批次提交和单一待处理 UI 批次 |
 
 示例：
 

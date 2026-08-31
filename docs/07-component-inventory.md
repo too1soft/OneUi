@@ -118,7 +118,7 @@
 | --- | --- | --- | --- | --- | --- | --- |
 | `TerminalView` | `controls/terminal_view.h` | 主线 | ✓ | ✓ | ✓ | 网格/cell diff、宽字符、样式、选择、复制粘贴、光标、viewport、鼠标协议、超链接、raw key、行号 |
 | `LogView` | `controls/log_view.h` | 主线 | ✓ | ✓ | ✓ | 结构化彩色行、append/replace/clear、等宽绘制、内容高度 |
-| `RealtimeFrameView` | `controls/realtime_frame_view.h` | 可用 | ✓ | ✓ | ✓ | 最新帧覆盖、所有权移交免复制提交、Rust worker 合并、BGRA/RGBA blit、Fit/Fill/Stretch/Actual；NV12 未实现 |
+| `RealtimeFrameView` | `controls/realtime_frame_view.h` | 可用 | ✓ | ✓ | ✓ | 最新帧覆盖、所有权移交完整帧、最多 64 个批量脏矩形、Rust worker 合并、BGRA/RGBA blit、Fit/Fill/Stretch/Actual；NV12 未实现 |
 | `RemoteInputRegion` | `controls/remote_input_region.h` | 可用 | ✓ | ✓ | ✓ | pointer/raw-key、IME/Unicode committed text、可打印键去重、坐标归一化、远端坐标、release-all；远程协议注入与安全策略由产品负责 |
 
 ## 平台与系统能力

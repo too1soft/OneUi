@@ -1075,6 +1075,33 @@ impl UiDispatcher {
         });
     }
 
+    /// Changes immersive presentation at runtime. Worker-thread callers are
+    /// marshalled to the owning UI thread.
+    pub fn set_fullscreen(&self, fullscreen: bool) -> Result<(), Error> {
+        if std::thread::current().id() == self.state.ui_thread {
+            return self
+                .state
+                .with_raw(|raw| unsafe {
+                    sys::oneui_window_set_fullscreen(raw, i32::from(fullscreen));
+                })
+                .ok_or(Error::WindowClosed);
+        }
+        let dispatcher = self.clone();
+        self.dispatch(move || {
+            let _ = dispatcher.set_fullscreen(fullscreen);
+        })
+    }
+
+    /// Reads immersive presentation state on the owning UI thread.
+    pub fn is_fullscreen(&self) -> Result<bool, Error> {
+        if std::thread::current().id() != self.state.ui_thread {
+            return Err(Error::WrongThread);
+        }
+        self.state
+            .with_raw(|raw| unsafe { sys::oneui_window_is_fullscreen(raw) != 0 })
+            .ok_or(Error::WindowClosed)
+    }
+
     pub fn set_title_bar_interactive_insets(&self, leading_width: f32, trailing_width: f32) {
         self.state.with_raw(|raw| unsafe {
             sys::oneui_window_set_title_bar_interactive_insets(raw, leading_width, trailing_width);
@@ -4977,6 +5004,121 @@ pub struct RemoteFrame {
     pub timestamp_us: u64,
 }
 
+/// Copied dirty rectangle for a [`RemoteFrameDamage`] update.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteFramePatch {
+    pub pixels: Arc<[u8]>,
+    pub x: i32,
+    pub y: i32,
+    pub width: i32,
+    pub height: i32,
+    pub stride: i32,
+}
+
+impl RemoteFramePatch {
+    pub fn new(
+        pixels: impl Into<Arc<[u8]>>,
+        x: i32,
+        y: i32,
+        width: i32,
+        height: i32,
+        stride: i32,
+    ) -> Self {
+        Self {
+            pixels: pixels.into(),
+            x,
+            y,
+            width,
+            height,
+            stride,
+        }
+    }
+}
+
+/// A batch of dirty rectangles applied to the current compatible remote frame.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteFrameDamage {
+    pub width: i32,
+    pub height: i32,
+    pub format: PixelFormat,
+    pub patches: Vec<RemoteFramePatch>,
+    pub frame_id: u64,
+    pub timestamp_us: u64,
+}
+
+impl RemoteFrameDamage {
+    pub fn new(
+        width: i32,
+        height: i32,
+        format: PixelFormat,
+        patches: Vec<RemoteFramePatch>,
+        frame_id: u64,
+        timestamp_us: u64,
+    ) -> Result<Self, Error> {
+        let mut damage = Self {
+            width,
+            height,
+            format,
+            patches,
+            frame_id,
+            timestamp_us,
+        };
+        damage.normalize_and_validate()?;
+        Ok(damage)
+    }
+
+    fn normalize_and_validate(&mut self) -> Result<(), Error> {
+        const MAX_PATCHES: usize = 64;
+        if self.width <= 0 || self.height <= 0 {
+            return Err(Error::InvalidVideoFrame {
+                reason: "damage frame dimensions must be positive",
+            });
+        }
+        if self.patches.is_empty() || self.patches.len() > MAX_PATCHES {
+            return Err(Error::InvalidVideoFrame {
+                reason: "damage must contain between 1 and 64 patches",
+            });
+        }
+        for patch in &mut self.patches {
+            if patch.width <= 0
+                || patch.height <= 0
+                || patch.x < 0
+                || patch.y < 0
+                || patch.x > self.width - patch.width
+                || patch.y > self.height - patch.height
+            {
+                return Err(Error::InvalidVideoFrame {
+                    reason: "damage patch is outside the remote frame",
+                });
+            }
+            let row_bytes = patch.width.checked_mul(4).ok_or(Error::InvalidVideoFrame {
+                reason: "damage row byte count overflowed",
+            })?;
+            if patch.stride == 0 {
+                patch.stride = row_bytes;
+            }
+            if patch.stride < row_bytes {
+                return Err(Error::InvalidVideoFrame {
+                    reason: "damage stride is smaller than a pixel row",
+                });
+            }
+            let required_bytes = usize::try_from(patch.height - 1)
+                .ok()
+                .and_then(|height| height.checked_mul(patch.stride as usize))
+                .and_then(|prefix| prefix.checked_add(row_bytes as usize))
+                .ok_or(Error::InvalidVideoFrame {
+                    reason: "damage byte count overflowed",
+                })?;
+            if patch.pixels.len() < required_bytes {
+                return Err(Error::InvalidVideoFrame {
+                    reason: "damage pixel buffer is shorter than its metadata requires",
+                });
+            }
+        }
+        Ok(())
+    }
+}
+
 impl RemoteFrame {
     pub fn new(
         pixels: impl Into<Arc<[u8]>>,
@@ -5186,9 +5328,15 @@ impl From<sys::OneUiRemotePointerEvent> for RemotePointerEvent {
     }
 }
 
+#[derive(Default)]
+struct PendingRemoteFrameBatch {
+    full: Option<RemoteFrame>,
+    damages: Vec<RemoteFrameDamage>,
+}
+
 struct RealtimeFrameViewState {
     raw: AtomicPtr<sys::OneUiWidget>,
-    pending_frame: Mutex<Option<RemoteFrame>>,
+    pending_batch: Mutex<PendingRemoteFrameBatch>,
     update_scheduled: AtomicBool,
 }
 
@@ -5208,11 +5356,33 @@ impl RealtimeFrameViewHandle {
         if self.state.raw.load(Ordering::Acquire).is_null() {
             return Err(Error::WidgetDestroyed);
         }
-        *self
-            .state
-            .pending_frame
+        {
+            let mut pending = self
+                .state
+                .pending_batch
+                .lock()
+                .expect("realtime frame pending lock poisoned");
+            pending.full = Some(frame);
+            pending.damages.clear();
+        }
+        self.schedule_pending_update()
+    }
+
+    pub fn submit_damage(&self, mut damage: RemoteFrameDamage) -> Result<(), Error> {
+        damage.normalize_and_validate()?;
+        if self.state.raw.load(Ordering::Acquire).is_null() {
+            return Err(Error::WidgetDestroyed);
+        }
+        self.state
+            .pending_batch
             .lock()
-            .expect("realtime frame pending lock poisoned") = Some(frame);
+            .expect("realtime frame pending lock poisoned")
+            .damages
+            .push(damage);
+        self.schedule_pending_update()
+    }
+
+    fn schedule_pending_update(&self) -> Result<(), Error> {
         if self.state.update_scheduled.swap(true, Ordering::AcqRel) {
             return Ok(());
         }
@@ -5224,11 +5394,11 @@ impl RealtimeFrameViewHandle {
             .dispatch(move || Self::drain_pending_frame(&dispatched_state))
         {
             state.update_scheduled.store(false, Ordering::Release);
-            state
-                .pending_frame
+            *state
+                .pending_batch
                 .lock()
-                .expect("realtime frame pending lock poisoned")
-                .take();
+                .expect("realtime frame pending lock poisoned") =
+                PendingRemoteFrameBatch::default();
             return Err(error);
         }
         Ok(())
@@ -5266,28 +5436,39 @@ impl RealtimeFrameViewHandle {
 
     fn drain_pending_frame(state: &RealtimeFrameViewState) {
         loop {
-            let frame = state
-                .pending_frame
-                .lock()
-                .expect("realtime frame pending lock poisoned")
-                .take();
+            let batch = {
+                let mut pending = state
+                    .pending_batch
+                    .lock()
+                    .expect("realtime frame pending lock poisoned");
+                std::mem::take(&mut *pending)
+            };
             let raw = state.raw.load(Ordering::Acquire);
             if raw.is_null() {
                 state.update_scheduled.store(false, Ordering::Release);
                 return;
             }
-            if let Some(frame) = frame {
+            if let Some(frame) = batch.full {
                 let accepted = apply_remote_frame(raw, frame);
                 debug_assert!(accepted, "validated remote frame was rejected by OneUI");
             }
+            for damage in batch.damages {
+                let accepted = apply_remote_frame_damage(raw, &damage);
+                debug_assert!(
+                    accepted,
+                    "validated remote frame damage was rejected by OneUI"
+                );
+            }
 
             state.update_scheduled.store(false, Ordering::Release);
-            if state
-                .pending_frame
-                .lock()
-                .expect("realtime frame pending lock poisoned")
-                .is_none()
-            {
+            let pending_is_empty = {
+                let pending = state
+                    .pending_batch
+                    .lock()
+                    .expect("realtime frame pending lock poisoned");
+                pending.full.is_none() && pending.damages.is_empty()
+            };
+            if pending_is_empty {
                 return;
             }
             if !state.update_scheduled.swap(true, Ordering::AcqRel) {
@@ -5338,6 +5519,34 @@ fn apply_remote_frame(raw: *mut sys::OneUiWidget, frame: RemoteFrame) -> bool {
     }
 }
 
+fn apply_remote_frame_damage(raw: *mut sys::OneUiWidget, damage: &RemoteFrameDamage) -> bool {
+    let patches = damage
+        .patches
+        .iter()
+        .map(|patch| sys::OneUiVideoFramePatch {
+            pixels: patch.pixels.as_ptr().cast(),
+            pixel_bytes: patch.pixels.len(),
+            x: patch.x,
+            y: patch.y,
+            width: patch.width,
+            height: patch.height,
+            stride: patch.stride,
+        })
+        .collect::<Vec<_>>();
+    unsafe {
+        sys::oneui_realtime_frame_view_submit_damage(
+            raw,
+            damage.width,
+            damage.height,
+            damage.format as i32,
+            patches.as_ptr(),
+            patches.len(),
+            damage.frame_id,
+            damage.timestamp_us,
+        ) != 0
+    }
+}
+
 /// Native video surface. Mutating methods are UI-thread bound; decoders should
 /// obtain a [`RealtimeFrameViewHandle`] from the owning window or dispatcher.
 pub struct RealtimeFrameView {
@@ -5351,7 +5560,7 @@ impl RealtimeFrameView {
         Ok(Self {
             state: Arc::new(RealtimeFrameViewState {
                 raw: AtomicPtr::new(widget.as_raw()),
-                pending_frame: Mutex::new(None),
+                pending_batch: Mutex::new(PendingRemoteFrameBatch::default()),
                 update_scheduled: AtomicBool::new(false),
             }),
             widget,
@@ -5387,6 +5596,17 @@ impl RealtimeFrameView {
         }
     }
 
+    pub fn submit_damage(&self, mut damage: RemoteFrameDamage) -> Result<(), Error> {
+        damage.normalize_and_validate()?;
+        if apply_remote_frame_damage(self.widget.as_raw(), &damage) {
+            Ok(())
+        } else {
+            Err(Error::InvalidVideoFrame {
+                reason: "native frame view rejected the damage batch",
+            })
+        }
+    }
+
     pub fn as_widget(&self) -> &Widget {
         &self.widget
     }
@@ -5398,10 +5618,16 @@ impl Drop for RealtimeFrameView {
             .raw
             .store(std::ptr::null_mut(), Ordering::Release);
         self.state
-            .pending_frame
+            .pending_batch
             .lock()
             .expect("realtime frame pending lock poisoned")
-            .take();
+            .full = None;
+        self.state
+            .pending_batch
+            .lock()
+            .expect("realtime frame pending lock poisoned")
+            .damages
+            .clear();
         self.state.update_scheduled.store(false, Ordering::Release);
     }
 }
@@ -8928,6 +9154,24 @@ impl Window {
         });
     }
 
+    pub fn set_fullscreen(&self, fullscreen: bool) {
+        self.state.with_raw(|raw| unsafe {
+            sys::oneui_window_set_fullscreen(raw, i32::from(fullscreen));
+        });
+    }
+
+    pub fn is_fullscreen(&self) -> bool {
+        self.state
+            .with_raw(|raw| unsafe { sys::oneui_window_is_fullscreen(raw) != 0 })
+            .unwrap_or(false)
+    }
+
+    pub fn set_minimum_client_size(&self, width: f32, height: f32) {
+        self.state.with_raw(|raw| unsafe {
+            sys::oneui_window_set_minimum_client_size(raw, width.max(0.0), height.max(0.0));
+        });
+    }
+
     pub fn placement(&self) -> Option<WindowPlacement> {
         self.state.with_raw(|raw| {
             let mut native = sys::OneUiWindowPlacement::default();
@@ -9223,10 +9467,10 @@ mod tests {
         InteractiveSurfaceStateStyle, InteractiveSurfaceStyle, Label, List, ListItem, LogLine,
         LogView, Menu, OverlayAlignment, OverlayHost, Panel, PixelFormat, Popup,
         PopupInteractionMode, PopupPreferredPlacement, ProgressBar, PromptOptions, RawKeyEvent,
-        RealtimeFrameView, RemoteCursorImage, RemoteFrame, RemoteInputRegion,
-        RemoteTextInputCallback, ReorderableGrid, ScrollView, SegmentedControl, Select,
-        SelectionMode, SplitOrientation, SplitView, Stack, StackDirection, StyleSheet, Switch,
-        Table, TableColumn, TableRow, Tabs, TerminalCell, TerminalColor, TerminalCursor,
+        RealtimeFrameView, RemoteCursorImage, RemoteFrame, RemoteFrameDamage, RemoteFramePatch,
+        RemoteInputRegion, RemoteTextInputCallback, ReorderableGrid, ScrollView, SegmentedControl,
+        Select, SelectionMode, SplitOrientation, SplitView, Stack, StackDirection, StyleSheet,
+        Switch, Table, TableColumn, TableRow, Tabs, TerminalCell, TerminalColor, TerminalCursor,
         TerminalCursorStyle, TerminalFrame, TerminalSelection, TerminalUnderlineStyle,
         TerminalView, TextArea, TextField, TreeItem, TreeView, VirtualList, Window,
         WindowClientSizeChangedCallback, WindowOptions, WindowPlacement, WindowRawKeyCallback,
@@ -9521,6 +9765,18 @@ mod tests {
         })
         .expect("OneUI window should be created through the UTF-8 ABI");
         window.set_title("兴业银行股份有限公司");
+    }
+
+    #[test]
+    fn runtime_fullscreen_and_minimum_client_size_round_trip_through_v21() {
+        let _guard = window_test_lock().lock().expect("window test lock");
+        let window = Window::new(&WindowOptions::default()).expect("window should be created");
+        window.set_minimum_client_size(510.0, 700.0);
+        assert!(!window.is_fullscreen());
+        window.set_fullscreen(true);
+        assert!(window.is_fullscreen());
+        window.set_fullscreen(false);
+        assert!(!window.is_fullscreen());
     }
 
     #[test]
@@ -10330,6 +10586,36 @@ mod tests {
     }
 
     #[test]
+    fn remote_frame_damage_normalizes_patches_and_rejects_invalid_batches() {
+        let damage = RemoteFrameDamage::new(
+            2,
+            2,
+            PixelFormat::Bgra8888,
+            vec![RemoteFramePatch::new(vec![1_u8; 4], 1, 1, 1, 1, 0)],
+            8,
+            800,
+        )
+        .expect("valid damage should be accepted");
+        assert_eq!(damage.patches[0].stride, 4);
+
+        assert!(matches!(
+            RemoteFrameDamage::new(
+                2,
+                2,
+                PixelFormat::Bgra8888,
+                vec![RemoteFramePatch::new(vec![1_u8; 4], 2, 1, 1, 1, 4)],
+                9,
+                900,
+            ),
+            Err(Error::InvalidVideoFrame { .. })
+        ));
+        assert!(matches!(
+            RemoteFrameDamage::new(2, 2, PixelFormat::Bgra8888, Vec::new(), 10, 1000),
+            Err(Error::InvalidVideoFrame { .. })
+        ));
+    }
+
+    #[test]
     fn remote_cursor_image_normalizes_stride_and_rejects_invalid_metadata() {
         let image = RemoteCursorImage::new(vec![0_u8; 16], 2, 2, 0, 1, 1)
             .expect("tightly packed cursor should be valid");
@@ -10434,6 +10720,19 @@ mod tests {
                     )
                     .expect("worker should submit a realtime frame");
             }
+            handle
+                .submit_damage(
+                    RemoteFrameDamage::new(
+                        2,
+                        2,
+                        PixelFormat::Bgra8888,
+                        vec![RemoteFramePatch::new(vec![9_u8; 4], 1, 1, 1, 1, 0)],
+                        4,
+                        400,
+                    )
+                    .expect("worker damage should be valid"),
+                )
+                .expect("worker should submit realtime damage");
         });
         worker.join().expect("worker should finish");
 

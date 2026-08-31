@@ -5,7 +5,7 @@
 
 use std::ffi::{c_char, c_float, c_int, c_uint, c_ushort, c_void};
 
-pub const UTF8_ABI_VERSION: c_uint = 20;
+pub const UTF8_ABI_VERSION: c_uint = 21;
 
 #[repr(C)]
 pub struct OneUiWindow {
@@ -76,6 +76,18 @@ pub struct OneUiRect {
     pub y: f32,
     pub width: f32,
     pub height: f32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct OneUiVideoFramePatch {
+    pub pixels: *const c_void,
+    pub pixel_bytes: usize,
+    pub x: c_int,
+    pub y: c_int,
+    pub width: c_int,
+    pub height: c_int,
+    pub stride: c_int,
 }
 
 #[repr(C)]
@@ -363,6 +375,8 @@ extern "C" {
     pub fn oneui_window_request_close(window: *mut OneUiWindow);
     pub fn oneui_window_minimize(window: *mut OneUiWindow);
     pub fn oneui_window_toggle_maximize(window: *mut OneUiWindow);
+    pub fn oneui_window_set_fullscreen(window: *mut OneUiWindow, fullscreen: c_int);
+    pub fn oneui_window_is_fullscreen(window: *mut OneUiWindow) -> c_int;
     pub fn oneui_window_get_placement(
         window: *mut OneUiWindow,
         placement: *mut OneUiWindowPlacement,
@@ -386,6 +400,11 @@ extern "C" {
         window: *mut OneUiWindow,
         callback: OneUiClientSizeChangedCallback,
         user_data: *mut c_void,
+    );
+    pub fn oneui_window_set_minimum_client_size(
+        window: *mut OneUiWindow,
+        width: c_float,
+        height: c_float,
     );
     pub fn oneui_window_set_corner_radius(window: *mut OneUiWindow, radius: f32);
     pub fn oneui_window_set_title_utf8(window: *mut OneUiWindow, title: OneUiUtf8String);
@@ -674,6 +693,16 @@ extern "C" {
         timestamp_us: u64,
         release_callback: OneUiFrameReleaseCallback,
         user_data: *mut c_void,
+    ) -> c_int;
+    pub fn oneui_realtime_frame_view_submit_damage(
+        frame_view: *mut OneUiWidget,
+        frame_width: c_int,
+        frame_height: c_int,
+        pixel_format: c_int,
+        patches: *const OneUiVideoFramePatch,
+        patch_count: usize,
+        frame_id: u64,
+        timestamp_us: u64,
     ) -> c_int;
     pub fn oneui_remote_input_region_create() -> *mut OneUiWidget;
     pub fn oneui_remote_input_region_set_remote_size(

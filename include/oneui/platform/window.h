@@ -64,6 +64,9 @@ public:
     virtual void setClientSizeChangedHandler(ClientSizeChangedHandler handler) {
         (void)handler;
     }
+    // Constrains the logical client area while preserving native resize and DPI
+    // behavior. A non-positive axis removes that axis constraint.
+    virtual void setMinimumClientSize(Size size) { (void)size; }
     // Sets the application font used whenever controls request the default
     // UI family. An empty value restores the platform default. The value is
     // owned by the window and takes effect on the next paint.
@@ -94,6 +97,7 @@ public:
     virtual float dpiScale() const = 0;
     virtual void setTitle(std::wstring title) = 0;
     virtual void setFullscreen(bool enabled) = 0;
+    virtual bool isFullscreen() const = 0;
     virtual void setBorderless(bool enabled) = 0;
     virtual void toggleMaximize() = 0;
     virtual bool getWindowPlacement(WindowPlacement& placement) const {

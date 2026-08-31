@@ -170,6 +170,49 @@ void testOwnedFrameRetainsAllocationWithoutCopyingOnSubmit() {
     expectEqual("RealtimeFrameView replacement releases owned allocation", lifetime.expired() ? 1 : 0, 1);
 }
 
+void testDamageUpdatesOnlyRequestedPixelsAndReleasesImmutableOwner() {
+    oneui::RealtimeFrameView view;
+    auto pixels = std::make_shared<std::vector<std::uint8_t>>(16U, 1U);
+    std::weak_ptr<std::vector<std::uint8_t>> lifetime = pixels;
+    std::shared_ptr<const void> owner(pixels, static_cast<const void*>(pixels->data()));
+    expectEqual(
+        "RealtimeFrameView damage base frame accepted",
+        view.submitOwnedFrame(
+            oneui::VideoFrame{pixels->data(), 2, 2, 8, oneui::PixelFormat::Bgra8888, 1, 100},
+            pixels->size(),
+            std::move(owner)) ? 1 : 0,
+        1);
+    pixels.reset();
+
+    const std::vector<std::uint8_t> patchPixels{9, 8, 7, 6};
+    const oneui::VideoFramePatch patch{
+        patchPixels.data(), patchPixels.size(), 1, 1, 1, 1, 4};
+    expectEqual(
+        "RealtimeFrameView accepts compatible damage",
+        view.submitDamage(2, 2, oneui::PixelFormat::Bgra8888, &patch, 1, 2, 200) ? 1 : 0,
+        1);
+    expectEqual(
+        "RealtimeFrameView releases immutable owner after creating mutable backing",
+        lifetime.expired() ? 1 : 0,
+        1);
+
+    const auto snapshot = view.latestFrame();
+    expectEqual("RealtimeFrameView damage snapshot exists", snapshot.has_value() ? 1 : 0, 1);
+    if (snapshot) {
+        expectEqual("RealtimeFrameView damage leaves first pixel intact", snapshot->pixels[0], 1);
+        expectEqual("RealtimeFrameView damage replaces selected pixel", snapshot->pixels[12], 9);
+        expectUInt64Equal("RealtimeFrameView damage updates frame id", snapshot->frameId, 2);
+        expectUInt64Equal("RealtimeFrameView damage updates timestamp", snapshot->timestampUs, 200);
+    }
+
+    const oneui::VideoFramePatch invalid{
+        patchPixels.data(), patchPixels.size(), 2, 1, 1, 1, 4};
+    expectEqual(
+        "RealtimeFrameView rejects out of bounds damage",
+        view.submitDamage(2, 2, oneui::PixelFormat::Bgra8888, &invalid, 1, 3, 300) ? 1 : 0,
+        0);
+}
+
 void testEmptyFrameDoesNotCrash() {
     oneui::RealtimeFrameView view;
     view.setFrame(oneui::Rect{0.0f, 0.0f, 320.0f, 180.0f});
@@ -205,6 +248,7 @@ int main() {
     testContentRectScaleModes();
     testSubmitFrameKeepsOnlyLatestSnapshot();
     testOwnedFrameRetainsAllocationWithoutCopyingOnSubmit();
+    testDamageUpdatesOnlyRequestedPixelsAndReleasesImmutableOwner();
     testEmptyFrameDoesNotCrash();
     testPaintDrawsLatestFramePixelsIntoContentRect();
 

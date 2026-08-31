@@ -1819,6 +1819,29 @@ void oneui_window_request_animation_frame(OneUiWindow* window, OneUiFrameCallbac
     });
 }
 
+void oneui_window_set_minimum_client_size(OneUiWindow* window, float width, float height) {
+    if (!window || !window->window) {
+        return;
+    }
+    window->window->setMinimumClientSize(oneui::Size{
+        std::max(0.0f, width),
+        std::max(0.0f, height)});
+}
+
+void oneui_window_set_fullscreen(OneUiWindow* window, int fullscreen) {
+    if (!window || !window->window) {
+        return;
+    }
+    window->window->setFullscreen(fullscreen != 0);
+}
+
+int oneui_window_is_fullscreen(OneUiWindow* window) {
+    if (!window || !window->window) {
+        return 0;
+    }
+    return window->window->isFullscreen() ? 1 : 0;
+}
+
 void oneui_window_set_title(OneUiWindow* window, const wchar_t* title) {
     if (!window || !window->window) {
         return;
@@ -5324,6 +5347,42 @@ int oneui_realtime_frame_view_submit_frame_owned(
     frame.frameId = static_cast<std::uint64_t>(frame_id);
     frame.timestampUs = static_cast<std::uint64_t>(timestamp_us);
     return nativeFrameView->submitOwnedFrame(frame, pixel_bytes, std::move(owner)) ? 1 : 0;
+}
+
+int oneui_realtime_frame_view_submit_damage(
+    OneUiWidget* frame_view,
+    int frame_width,
+    int frame_height,
+    OneUiPixelFormat pixel_format,
+    const OneUiVideoFramePatch* patches,
+    size_t patch_count,
+    unsigned long long frame_id,
+    unsigned long long timestamp_us) {
+    auto* nativeFrameView = asWidget<oneui::RealtimeFrameView>(frame_view);
+    if (!nativeFrameView || !patches || patch_count == 0 || patch_count > 64) {
+        return 0;
+    }
+    std::vector<oneui::VideoFramePatch> nativePatches;
+    nativePatches.reserve(patch_count);
+    for (size_t index = 0; index < patch_count; ++index) {
+        const auto& patch = patches[index];
+        nativePatches.push_back(oneui::VideoFramePatch{
+            patch.pixels,
+            patch.pixel_bytes,
+            patch.x,
+            patch.y,
+            patch.width,
+            patch.height,
+            patch.stride});
+    }
+    return nativeFrameView->submitDamage(
+        frame_width,
+        frame_height,
+        toPixelFormat(pixel_format),
+        nativePatches.data(),
+        nativePatches.size(),
+        static_cast<std::uint64_t>(frame_id),
+        static_cast<std::uint64_t>(timestamp_us)) ? 1 : 0;
 }
 
 OneUiWidget* oneui_remote_input_region_create(void) {

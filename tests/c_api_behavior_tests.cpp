@@ -250,6 +250,12 @@ void testUtf8AbiRoundTripsUnicodeText() {
     expectTrue("utf8 window create", window != nullptr);
     if (window) {
         oneui_window_set_title_utf8(window, utf8View(text));
+        oneui_window_set_minimum_client_size(window, 510.0f, 700.0f);
+        expectTrue("runtime fullscreen starts disabled", oneui_window_is_fullscreen(window) == 0);
+        oneui_window_set_fullscreen(window, 1);
+        expectTrue("runtime fullscreen enables", oneui_window_is_fullscreen(window) == 1);
+        oneui_window_set_fullscreen(window, 0);
+        expectTrue("runtime fullscreen disables", oneui_window_is_fullscreen(window) == 0);
     }
 
     OneUiWidget* label = oneui_label_create_utf8(utf8View(title));
@@ -673,6 +679,49 @@ void testRealtimeFrameViewAbiAcceptsBgraFrames() {
         OneUiPixelFormatBgra8888,
         42,
         123456);
+
+    unsigned char patchPixels[4] = {255, 0, 0, 255};
+    const OneUiVideoFramePatch patch{
+        patchPixels,
+        sizeof(patchPixels),
+        1,
+        1,
+        1,
+        1,
+        4,
+    };
+    expectTrue(
+        "realtime frame damage accepted",
+        oneui_realtime_frame_view_submit_damage(
+            frameView,
+            2,
+            2,
+            OneUiPixelFormatBgra8888,
+            &patch,
+            1,
+            43,
+            123500) == 1);
+
+    const OneUiVideoFramePatch invalidPatch{
+        patchPixels,
+        sizeof(patchPixels),
+        2,
+        1,
+        1,
+        1,
+        4,
+    };
+    expectTrue(
+        "realtime frame invalid damage rejected",
+        oneui_realtime_frame_view_submit_damage(
+            frameView,
+            2,
+            2,
+            OneUiPixelFormatBgra8888,
+            &invalidPatch,
+            1,
+            44,
+            123600) == 0);
 
     oneui_widget_destroy(frameView);
 }

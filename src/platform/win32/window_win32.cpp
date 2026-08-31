@@ -492,9 +492,11 @@ public:
             SkColor4f::FromColor(toSkColor(center)),
             SkColor4f::FromColor(toSkColor(edge)),
         };
-        const SkGradient gradient(SkGradient::Colors(colors, SkTileMode::kClamp), {});
         SkPaint paint;
         paint.setAntiAlias(true);
+        const SkGradient gradient(
+            SkGradient::Colors(SkSpan<const SkColor4f>(colors, 2), SkTileMode::kClamp),
+            SkGradient::Interpolation{});
         paint.setShader(SkShaders::RadialGradient(shaderCenter, shaderRadius, gradient));
         canvas_.drawRRect(SkRRect::MakeRectXY(toSkRect(rect), radius, radius), paint);
         ++g_primitivePaintTrace.gradientCalls;
@@ -1092,7 +1094,9 @@ private:
             SkColor4f::FromColor(toSkColor(start)),
             SkColor4f::FromColor(toSkColor(end)),
         };
-        const SkGradient gradient(SkGradient::Colors(colors, SkTileMode::kClamp), {});
+        const SkGradient gradient(
+            SkGradient::Colors(SkSpan<const SkColor4f>(colors, 2), SkTileMode::kClamp),
+            SkGradient::Interpolation{});
         auto shader = SkShaders::LinearGradient(points, gradient);
         cache[key] = shader;
         return shader;
@@ -1230,6 +1234,11 @@ public:
     void setClientSizeChangedHandler(ClientSizeChangedHandler handler) override {
         clientSizeChangedHandler_ = std::move(handler);
         scheduleClientSizeChanged();
+    }
+
+    void setMinimumClientSize(Size size) override {
+        minimumClientSize_.width = std::max(0.0f, size.width);
+        minimumClientSize_.height = std::max(0.0f, size.height);
     }
 
     void setDefaultFontFamily(std::wstring family) override {
@@ -1473,6 +1482,10 @@ public:
         ensureCreated();
         options_.fullscreen = enabled;
         applyWindowState();
+    }
+
+    bool isFullscreen() const override {
+        return options_.fullscreen;
     }
 
     void setBorderless(bool enabled) override {
@@ -2099,6 +2112,35 @@ private:
         case WM_SHOWWINDOW:
             updateShadowWindow(); // 显隐（含托盘还原/隐藏）时同步投影窗显隐
             return DefWindowProcW(hwnd_, message, wParam, lParam);
+        case WM_GETMINMAXINFO:
+        {
+            auto* info = reinterpret_cast<MINMAXINFO*>(lParam);
+            if (info) {
+                LONG nonClientWidth = 0;
+                LONG nonClientHeight = 0;
+                RECT windowRect{};
+                RECT clientRect{};
+                if (GetWindowRect(hwnd_, &windowRect) && GetClientRect(hwnd_, &clientRect)) {
+                    nonClientWidth = std::max<LONG>(
+                        0,
+                        (windowRect.right - windowRect.left) - (clientRect.right - clientRect.left));
+                    nonClientHeight = std::max<LONG>(
+                        0,
+                        (windowRect.bottom - windowRect.top) - (clientRect.bottom - clientRect.top));
+                }
+                if (minimumClientSize_.width > 0.0f) {
+                    info->ptMinTrackSize.x = std::max<LONG>(
+                        info->ptMinTrackSize.x,
+                        static_cast<LONG>(std::ceil(minimumClientSize_.width * dpiScale_)) + nonClientWidth);
+                }
+                if (minimumClientSize_.height > 0.0f) {
+                    info->ptMinTrackSize.y = std::max<LONG>(
+                        info->ptMinTrackSize.y,
+                        static_cast<LONG>(std::ceil(minimumClientSize_.height * dpiScale_)) + nonClientHeight);
+                }
+            }
+            return 0;
+        }
         case WM_SIZE:
             recordResizeMessage(wParam);
             if (wParam == SIZE_MAXIMIZED) {
@@ -3724,6 +3766,7 @@ private:
     float titleBarInteractiveLeadingWidthLogical_ = -1.0f;
     float titleBarInteractiveTrailingWidthLogical_ = -1.0f;
     ClientSizeChangedHandler clientSizeChangedHandler_;
+    Size minimumClientSize_{};
     bool clientSizeChangedFramePending_ = false;
     HGLRC glContext_ = nullptr;
     HDC glDC_ = nullptr;
