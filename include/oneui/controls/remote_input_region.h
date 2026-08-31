@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <functional>
 #include <set>
+#include <vector>
 
 namespace oneui {
 
@@ -23,6 +24,12 @@ enum class RemoteInputScaleMode {
     Fit,
     Fill,
     Stretch
+};
+
+enum class RemoteCursorMode {
+    Default,
+    Hidden,
+    Bitmap
 };
 
 struct RemotePointerEvent {
@@ -62,6 +69,19 @@ public:
     RemoteInputScaleMode scaleMode() const;
     Rect contentRect() const;
 
+    void setRemoteCursorMode(RemoteCursorMode mode);
+    RemoteCursorMode remoteCursorMode() const;
+    void setRemoteCursorPosition(Point position);
+    Point remoteCursorPosition() const;
+    bool setRemoteCursorBitmap(
+        const std::uint8_t* pixels,
+        std::size_t pixelBytes,
+        int width,
+        int height,
+        int stride,
+        int hotspotX,
+        int hotspotY);
+
     void setOnPointer(PointerCallback callback);
     void setOnRawKey(RawKeyCallback callback);
     void setOnTextInput(TextInputCallback callback);
@@ -81,6 +101,7 @@ public:
     Rect textInputCaretRect() const override;
     bool onFocusChanged(bool focused) override;
     bool isFocusable() const override;
+    CursorKind cursor(Point point) const override;
     AccessibilityInfo accessibilityInfo() const override;
 
 private:
@@ -93,7 +114,18 @@ private:
     };
 
     RemotePointerEvent makePointerEvent(Point windowPosition, PointerButton button, bool pressed, int wheelDeltaX, int wheelDeltaY) const;
+    Rect remoteCursorRect() const;
+    void invalidateCursorTransition(Rect previousRect);
     void resetInteractionState() override;
+
+    struct RemoteCursorBitmap {
+        std::vector<std::uint8_t> pixels;
+        int width = 0;
+        int height = 0;
+        int stride = 0;
+        int hotspotX = 0;
+        int hotspotY = 0;
+    };
 
     Size remoteSize_{0.0f, 0.0f};
     RemoteInputScaleMode scaleMode_ = RemoteInputScaleMode::Fit;
@@ -105,6 +137,10 @@ private:
     std::set<RawKeyIdentity> textInputKeys_;
     Point lastPointerPosition_{};
     bool hasPointerPosition_ = false;
+    RemoteCursorMode remoteCursorMode_ = RemoteCursorMode::Default;
+    Point remoteCursorPosition_{};
+    bool hasRemoteCursorPosition_ = false;
+    RemoteCursorBitmap remoteCursorBitmap_;
 };
 
 } // namespace oneui

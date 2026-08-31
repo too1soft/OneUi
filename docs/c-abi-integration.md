@@ -1,13 +1,13 @@
 # OneUI C ABI 接入
 
 OneUI 使用版本化 C ABI 为 Rust、Go、C#、Python FFI 和不同 C++ ABI 的产品提供边界。本文说明
-当前 ABI v16 的形状、所有权、线程和迁移规则；完整函数签名只以
+当前 ABI v20 的形状、所有权、线程和迁移规则；完整函数签名只以
 `include/oneui/oneui_c_api.h` 为准。
 
 ## 当前版本
 
 ```c
-#define ONEUI_UTF8_ABI_VERSION 19u
+#define ONEUI_UTF8_ABI_VERSION 20u
 ```
 
 运行时检查：
@@ -252,11 +252,11 @@ oneui_toast_*             oneui_log_view_*          oneui_terminal_view_*
 oneui_realtime_frame_view_*  oneui_remote_input_region_*
 ```
 
-当前 header 包含 462 个公开 `oneui_*` 函数声明。数量用于说明覆盖规模，不代替逐函数契约。
+当前 header 包含 465 个公开 `oneui_*` 函数声明。数量用于说明覆盖规模，不代替逐函数契约。
 
-## ABI v19 重点
+## ABI v20 重点
 
-相对 v13，本工作区把 ABI 推进到 v19，重点包含：
+相对 v13，本工作区把 ABI 推进到 v20，重点包含：
 
 - `OneUiTableColumnUtf8` / `OneUiTableRowUtf8`；
 - Table 结构化数据、滚动、选择、命令、重排和 drag；
@@ -271,6 +271,7 @@ oneui_realtime_frame_view_*  oneui_remote_input_region_*
 - `oneui_realtime_frame_view_submit_frame_owned` 与恰好一次 release callback；
 - safe Rust `RealtimeFrameView` / `RealtimeFrameViewHandle` / `RemoteInputRegion`。
 - `oneui_remote_input_region_set_on_text_input_utf8` 与 safe Rust committed-text/IME 回调；
+- 远端光标默认/隐藏/预乘 RGBA 位图、远端坐标和线程安全 `RemoteInputRegionHandle`；
 - widget frame/tooltip；
 - Stack content extent；
 - SplitView ratio committed；

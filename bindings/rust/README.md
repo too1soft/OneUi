@@ -4,7 +4,7 @@ OneUI 的 Rust workspace 包含两层：
 
 | crate | 作用 |
 | --- | --- |
-| `oneui-sys` | ABI v16 原始 FFI；不增加所有权或线程策略 |
+| `oneui-sys` | ABI v20 原始 FFI；不增加所有权或线程策略 |
 | `oneui` | 安全包装；RAII、UTF-8、callback 清理、panic 边界、dispatcher 和线程安全 handle |
 
 产品代码应优先使用 `oneui`。只有 safe 层尚未覆盖且生命周期能被明确封装时，才在一个局部模块
@@ -42,7 +42,7 @@ oneui.dll
 
 ## ABI 检查
 
-`oneui-sys::UTF8_ABI_VERSION` 当前为 19。`Window::new` 创建窗口前调用
+`oneui-sys::UTF8_ABI_VERSION` 当前为 20。`Window::new` 创建窗口前调用
 `oneui_utf8_abi_version()`，不匹配时返回：
 
 ```rust

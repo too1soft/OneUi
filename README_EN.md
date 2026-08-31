@@ -5,7 +5,7 @@ English | [简体中文](README.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-2ea44f.svg)](LICENSE)
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-00599c.svg)](CMakeLists.txt)
 [![Platform](https://img.shields.io/badge/backend-Win32-0078d4.svg)](#platform-and-maturity)
-[![UTF-8 ABI](https://img.shields.io/badge/UTF--8%20ABI-v16-6f42c1.svg)](include/oneui/oneui_c_api.h)
+[![UTF-8 ABI](https://img.shields.io/badge/UTF--8%20ABI-v20-6f42c1.svg)](include/oneui/oneui_c_api.h)
 [![Version](https://img.shields.io/badge/version-0.1.0-f59e0b.svg)](CMakeLists.txt)
 
 OneUI is a **Windows-first, native, self-drawn, retained-mode** desktop UI framework. It is
@@ -50,7 +50,7 @@ OneUI targets dense native tools and workspaces, including:
 | Specialized views | TerminalView, LogView, RealtimeFrameView, RemoteInputRegion, WindowTitleBar |
 | Platform services | Win32 Window, placement persistence, DPI/monitor, clipboard, file/folder pickers, confirm/prompt, tray, global raw-key |
 | Diagnostics | committed widget frames, Stack content extent, interaction traces, privacy-safe widget-tree JSON snapshots |
-| Interop | C++ API, 459 public C ABI function declarations, UTF-8 ABI v16, safe Rust wrappers, callback panic boundary |
+| Interop | C++ API, 465 public C ABI function declarations, UTF-8 ABI v20, safe Rust wrappers, callback panic boundary |
 
 See the [component inventory](docs/07-component-inventory.md) and
 [component reference](docs/14-component-reference.md) for per-component coverage and limits.
@@ -90,7 +90,7 @@ describes current Win32 behavior, not a long-term stability guarantee.
 Application (C++ / Rust / another FFI language)
         |
         +-- public C++ API
-        +-- UTF-8 C ABI v16
+        +-- UTF-8 C ABI v20
         +-- oneui-sys + safe oneui Rust wrappers
         |
 OneUI retained widget tree
@@ -241,7 +241,7 @@ Point `CMAKE_PREFIX_PATH` at the extracted SDK and deploy `bin/oneui.dll` next t
 - length-aware `OneUiUtf8String` for new APIs;
 - copied string/array inputs during calls;
 - function-pointer callbacks with caller-owned `user_data`;
-- runtime ABI v16 verification through `oneui_utf8_abi_version()`;
+- runtime ABI v20 verification through `oneui_utf8_abi_version()`;
 - legacy `wchar_t*` entry points retained only for existing Windows consumers.
 
 See the [C ABI integration guide](docs/c-abi-integration.md) for lifetime, threading, callbacks, and

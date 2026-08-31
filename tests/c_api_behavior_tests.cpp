@@ -797,6 +797,32 @@ void testRemoteInputRegionAbiCreatesAndAcceptsCallbacks() {
 
     oneui_remote_input_region_set_remote_size(region, 1920.0f, 1080.0f);
     oneui_remote_input_region_set_scale_mode(region, OneUiVideoScaleModeFit);
+    oneui_remote_input_region_set_cursor_position(region, 960.0f, 540.0f);
+    std::vector<unsigned char> cursorPixels(4 * 4 * 4, 0xff);
+    expectTrue(
+        "remote input region accepts cursor bitmap",
+        oneui_remote_input_region_set_cursor_bitmap_rgba(
+            region,
+            cursorPixels.data(),
+            cursorPixels.size(),
+            4,
+            4,
+            16,
+            1,
+            1) != 0);
+    expectTrue(
+        "remote input region rejects short cursor bitmap",
+        oneui_remote_input_region_set_cursor_bitmap_rgba(
+            region,
+            cursorPixels.data(),
+            4,
+            4,
+            4,
+            16,
+            1,
+            1) == 0);
+    oneui_remote_input_region_set_cursor_mode(region, OneUiRemoteCursorModeHidden);
+    oneui_remote_input_region_set_cursor_mode(region, OneUiRemoteCursorModeDefault);
     oneui_remote_input_region_set_on_pointer(region, onRemotePointer, nullptr);
     oneui_remote_input_region_set_on_text_input_utf8(region, onRemoteTextInput, nullptr);
     oneui_remote_input_region_release_all_inputs(region);

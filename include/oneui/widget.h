@@ -60,6 +60,7 @@ enum class Key {
 
 enum class CursorKind {
     Default,
+    Hidden,
     Pointer,
     Text,
     Crosshair,

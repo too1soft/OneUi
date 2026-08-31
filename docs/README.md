@@ -19,7 +19,7 @@ roadmap 或差距分析当成现状。
 | 4 | [组件参考](14-component-reference.md) | 分组 API、交互契约和使用建议 |
 | 5 | [架构](01-architecture.md) | 模块边界、线程、所有权、渲染与互操作层次 |
 | 6 | [样式表](20-style-sheet.md) | CSS-like 选择器、属性、状态和 typed adapter |
-| 7 | [C ABI 接入](c-abi-integration.md) | UTF-8 ABI v16、句柄、数组、回调、线程与版本检查 |
+| 7 | [C ABI 接入](c-abi-integration.md) | UTF-8 ABI v20、句柄、数组、回调、线程与版本检查 |
 | 8 | [Rust 绑定](../bindings/rust/README.md) | `oneui-sys`、安全层、dispatcher、handle 和回调生命周期 |
 
 ## 当前规范

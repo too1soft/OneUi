@@ -3,6 +3,8 @@
 #include "oneui/color.h"
 
 #include <algorithm>
+#include <cmath>
+#include <limits>
 #include <utility>
 
 namespace oneui {
@@ -10,6 +12,20 @@ namespace {
 
 float clamp01(float value) {
     return std::max(0.0f, std::min(value, 1.0f));
+}
+
+Rect unionRects(Rect left, Rect right) {
+    if (left.width <= 0.0f || left.height <= 0.0f) {
+        return right;
+    }
+    if (right.width <= 0.0f || right.height <= 0.0f) {
+        return left;
+    }
+    const float x = std::min(left.x, right.x);
+    const float y = std::min(left.y, right.y);
+    const float rightEdge = std::max(left.x + left.width, right.x + right.width);
+    const float bottomEdge = std::max(left.y + left.height, right.y + right.height);
+    return Rect{x, y, rightEdge - x, bottomEdge - y};
 }
 
 bool prefersCommittedText(const KeyEvent& event) {
@@ -89,6 +105,78 @@ Rect RemoteInputRegion::contentRect() const {
     return Rect{bounds.x + (bounds.width - width) / 2.0f, bounds.y + (bounds.height - height) / 2.0f, width, height};
 }
 
+void RemoteInputRegion::setRemoteCursorMode(RemoteCursorMode mode) {
+    if (mode == RemoteCursorMode::Bitmap && remoteCursorBitmap_.pixels.empty()) {
+        mode = RemoteCursorMode::Default;
+    }
+    if (remoteCursorMode_ == mode) {
+        return;
+    }
+    const Rect previousRect = remoteCursorRect();
+    remoteCursorMode_ = mode;
+    invalidateCursorTransition(previousRect);
+}
+
+RemoteCursorMode RemoteInputRegion::remoteCursorMode() const {
+    return remoteCursorMode_;
+}
+
+void RemoteInputRegion::setRemoteCursorPosition(Point position) {
+    if (!std::isfinite(position.x) || !std::isfinite(position.y)) {
+        return;
+    }
+    const Rect previousRect = remoteCursorRect();
+    remoteCursorPosition_.x = std::clamp(position.x, 0.0f, remoteSize_.width);
+    remoteCursorPosition_.y = std::clamp(position.y, 0.0f, remoteSize_.height);
+    hasRemoteCursorPosition_ = true;
+    invalidateCursorTransition(previousRect);
+}
+
+Point RemoteInputRegion::remoteCursorPosition() const {
+    return remoteCursorPosition_;
+}
+
+bool RemoteInputRegion::setRemoteCursorBitmap(
+    const std::uint8_t* pixels,
+    std::size_t pixelBytes,
+    int width,
+    int height,
+    int stride,
+    int hotspotX,
+    int hotspotY) {
+    constexpr int maxCursorDimension = 512;
+    if (!pixels || width <= 0 || height <= 0 || width > maxCursorDimension || height > maxCursorDimension) {
+        return false;
+    }
+    if (width > std::numeric_limits<int>::max() / 4) {
+        return false;
+    }
+    const int rowBytes = width * 4;
+    if (stride < rowBytes || hotspotX < 0 || hotspotX >= width || hotspotY < 0 || hotspotY >= height) {
+        return false;
+    }
+    const std::size_t rowsBeforeLast = static_cast<std::size_t>(height - 1);
+    const std::size_t strideBytes = static_cast<std::size_t>(stride);
+    if (rowsBeforeLast > 0 && strideBytes > (std::numeric_limits<std::size_t>::max() - static_cast<std::size_t>(rowBytes)) / rowsBeforeLast) {
+        return false;
+    }
+    const std::size_t requiredBytes = rowsBeforeLast * strideBytes + static_cast<std::size_t>(rowBytes);
+    if (pixelBytes < requiredBytes) {
+        return false;
+    }
+
+    const Rect previousRect = remoteCursorRect();
+    remoteCursorBitmap_.pixels.assign(pixels, pixels + requiredBytes);
+    remoteCursorBitmap_.width = width;
+    remoteCursorBitmap_.height = height;
+    remoteCursorBitmap_.stride = stride;
+    remoteCursorBitmap_.hotspotX = hotspotX;
+    remoteCursorBitmap_.hotspotY = hotspotY;
+    remoteCursorMode_ = RemoteCursorMode::Bitmap;
+    invalidateCursorTransition(previousRect);
+    return true;
+}
+
 void RemoteInputRegion::setOnPointer(PointerCallback callback) {
     onPointer_ = std::move(callback);
 }
@@ -116,11 +204,16 @@ bool RemoteInputRegion::dispatchPointer(Point windowPosition, PointerButton butt
             pressedButtons_.erase(button);
         }
     }
+    const RemotePointerEvent remoteEvent = makePointerEvent(windowPosition, button, pressed, wheelDeltaX, wheelDeltaY);
+    const Rect previousCursorRect = remoteCursorRect();
     lastPointerPosition_ = windowPosition;
     hasPointerPosition_ = true;
+    remoteCursorPosition_ = remoteEvent.remotePosition;
+    hasRemoteCursorPosition_ = true;
+    invalidateCursorTransition(previousCursorRect);
 
     if (onPointer_) {
-        onPointer_(makePointerEvent(windowPosition, button, pressed, wheelDeltaX, wheelDeltaY));
+        onPointer_(remoteEvent);
     }
     return true;
 }
@@ -174,7 +267,23 @@ void RemoteInputRegion::releaseAllInputs() {
 }
 
 void RemoteInputRegion::paint(Canvas& canvas) {
-    (void)canvas;
+    if (remoteCursorMode_ != RemoteCursorMode::Bitmap || remoteCursorBitmap_.pixels.empty() || !hasRemoteCursorPosition_) {
+        return;
+    }
+    const Rect cursorRect = remoteCursorRect();
+    if (cursorRect.width <= 0.0f || cursorRect.height <= 0.0f) {
+        return;
+    }
+    canvas.save();
+    canvas.clipRect(contentRect());
+    canvas.drawPixels(
+        cursorRect,
+        remoteCursorBitmap_.pixels.data(),
+        remoteCursorBitmap_.width,
+        remoteCursorBitmap_.height,
+        remoteCursorBitmap_.stride,
+        CanvasPixelFormat::Rgba8888);
+    canvas.restore();
 }
 
 bool RemoteInputRegion::onMouseMove(const MouseEvent& event) {
@@ -270,6 +379,38 @@ bool RemoteInputRegion::onFocusChanged(bool focused) {
 
 bool RemoteInputRegion::isFocusable() const {
     return interactive();
+}
+
+CursorKind RemoteInputRegion::cursor(Point point) const {
+    if (contains(point) && (remoteCursorMode_ == RemoteCursorMode::Hidden || remoteCursorMode_ == RemoteCursorMode::Bitmap)) {
+        return CursorKind::Hidden;
+    }
+    return Widget::cursor(point);
+}
+
+Rect RemoteInputRegion::remoteCursorRect() const {
+    if (remoteCursorMode_ != RemoteCursorMode::Bitmap || remoteCursorBitmap_.pixels.empty() || !hasRemoteCursorPosition_ ||
+        remoteSize_.width <= 0.0f || remoteSize_.height <= 0.0f) {
+        return Rect{};
+    }
+    const Rect content = contentRect();
+    if (content.width <= 0.0f || content.height <= 0.0f) {
+        return Rect{};
+    }
+    const float scaleX = content.width / remoteSize_.width;
+    const float scaleY = content.height / remoteSize_.height;
+    return Rect{
+        content.x + remoteCursorPosition_.x * scaleX - static_cast<float>(remoteCursorBitmap_.hotspotX) * scaleX,
+        content.y + remoteCursorPosition_.y * scaleY - static_cast<float>(remoteCursorBitmap_.hotspotY) * scaleY,
+        static_cast<float>(remoteCursorBitmap_.width) * scaleX,
+        static_cast<float>(remoteCursorBitmap_.height) * scaleY};
+}
+
+void RemoteInputRegion::invalidateCursorTransition(Rect previousRect) {
+    const Rect dirty = unionRects(previousRect, remoteCursorRect());
+    if (dirty.width > 0.0f && dirty.height > 0.0f) {
+        invalidateRect(Rect{dirty.x - 1.0f, dirty.y - 1.0f, dirty.width + 2.0f, dirty.height + 2.0f});
+    }
 }
 
 AccessibilityInfo RemoteInputRegion::accessibilityInfo() const {

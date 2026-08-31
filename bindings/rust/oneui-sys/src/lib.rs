@@ -5,7 +5,7 @@
 
 use std::ffi::{c_char, c_float, c_int, c_uint, c_ushort, c_void};
 
-pub const UTF8_ABI_VERSION: c_uint = 19;
+pub const UTF8_ABI_VERSION: c_uint = 20;
 
 #[repr(C)]
 pub struct OneUiWindow {
@@ -682,6 +682,22 @@ extern "C" {
         height: c_float,
     );
     pub fn oneui_remote_input_region_set_scale_mode(region: *mut OneUiWidget, scale_mode: c_int);
+    pub fn oneui_remote_input_region_set_cursor_mode(region: *mut OneUiWidget, cursor_mode: c_int);
+    pub fn oneui_remote_input_region_set_cursor_position(
+        region: *mut OneUiWidget,
+        remote_x: f32,
+        remote_y: f32,
+    );
+    pub fn oneui_remote_input_region_set_cursor_bitmap_rgba(
+        region: *mut OneUiWidget,
+        pixels: *const c_void,
+        pixel_bytes: usize,
+        width: c_int,
+        height: c_int,
+        stride: c_int,
+        hotspot_x: c_int,
+        hotspot_y: c_int,
+    ) -> c_int;
     pub fn oneui_remote_input_region_set_on_pointer(
         region: *mut OneUiWidget,
         callback: OneUiRemotePointerCallback,

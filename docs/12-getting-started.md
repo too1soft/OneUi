@@ -5,7 +5,7 @@
 ## 1. 当前支持范围
 
 - 可运行平台：Windows / Win32；
-- 语言：C++17、UTF-8 C ABI v16、Rust 2021；
+- 语言：C++17、UTF-8 C ABI v20、Rust 2021；
 - 渲染：Skia raster；
 - 推荐产品构建：MSVC + vendored static Skia + static MSVC runtime；
 - 开发预设：MSYS2 MINGW64/UCRT64；

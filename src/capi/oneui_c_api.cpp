@@ -5347,6 +5347,46 @@ void oneui_remote_input_region_set_scale_mode(OneUiWidget* region, OneUiVideoSca
     }
 }
 
+void oneui_remote_input_region_set_cursor_mode(OneUiWidget* region, OneUiRemoteCursorMode cursor_mode) {
+    if (auto* nativeRegion = asWidget<oneui::RemoteInputRegion>(region)) {
+        oneui::RemoteCursorMode mode = oneui::RemoteCursorMode::Default;
+        if (cursor_mode == OneUiRemoteCursorModeHidden) {
+            mode = oneui::RemoteCursorMode::Hidden;
+        } else if (cursor_mode == OneUiRemoteCursorModeBitmap) {
+            mode = oneui::RemoteCursorMode::Bitmap;
+        }
+        nativeRegion->setRemoteCursorMode(mode);
+    }
+}
+
+void oneui_remote_input_region_set_cursor_position(OneUiWidget* region, float remote_x, float remote_y) {
+    if (auto* nativeRegion = asWidget<oneui::RemoteInputRegion>(region)) {
+        nativeRegion->setRemoteCursorPosition(oneui::Point{remote_x, remote_y});
+    }
+}
+
+int oneui_remote_input_region_set_cursor_bitmap_rgba(
+    OneUiWidget* region,
+    const void* pixels,
+    size_t pixel_bytes,
+    int width,
+    int height,
+    int stride,
+    int hotspot_x,
+    int hotspot_y) {
+    if (auto* nativeRegion = asWidget<oneui::RemoteInputRegion>(region)) {
+        return nativeRegion->setRemoteCursorBitmap(
+            static_cast<const std::uint8_t*>(pixels),
+            pixel_bytes,
+            width,
+            height,
+            stride,
+            hotspot_x,
+            hotspot_y) ? 1 : 0;
+    }
+    return 0;
+}
+
 void oneui_remote_input_region_set_on_pointer(
     OneUiWidget* region,
     OneUiRemotePointerCallback callback,

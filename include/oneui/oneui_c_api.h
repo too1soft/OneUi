@@ -307,6 +307,12 @@ typedef enum OneUiVideoScaleMode {
     OneUiVideoScaleModeStretch = 3
 } OneUiVideoScaleMode;
 
+typedef enum OneUiRemoteCursorMode {
+    OneUiRemoteCursorModeDefault = 0,
+    OneUiRemoteCursorModeHidden = 1,
+    OneUiRemoteCursorModeBitmap = 2
+} OneUiRemoteCursorMode;
+
 typedef enum OneUiPointerButton {
     OneUiPointerButtonNone = 0,
     OneUiPointerButtonLeft = 1,
@@ -385,7 +391,7 @@ enum {
     OneUiTerminalCellOverline = 1u << 11
 };
 
-#define ONEUI_UTF8_ABI_VERSION 19u
+#define ONEUI_UTF8_ABI_VERSION 20u
 
 ONEUI_API const char* oneui_version(void);
 ONEUI_API unsigned int oneui_utf8_abi_version(void);
@@ -1067,6 +1073,17 @@ ONEUI_API int oneui_realtime_frame_view_submit_frame_owned(
 ONEUI_API OneUiWidget* oneui_remote_input_region_create(void);
 ONEUI_API void oneui_remote_input_region_set_remote_size(OneUiWidget* region, float width, float height);
 ONEUI_API void oneui_remote_input_region_set_scale_mode(OneUiWidget* region, OneUiVideoScaleMode scale_mode);
+ONEUI_API void oneui_remote_input_region_set_cursor_mode(OneUiWidget* region, OneUiRemoteCursorMode cursor_mode);
+ONEUI_API void oneui_remote_input_region_set_cursor_position(OneUiWidget* region, float remote_x, float remote_y);
+ONEUI_API int oneui_remote_input_region_set_cursor_bitmap_rgba(
+    OneUiWidget* region,
+    const void* pixels,
+    size_t pixel_bytes,
+    int width,
+    int height,
+    int stride,
+    int hotspot_x,
+    int hotspot_y);
 ONEUI_API void oneui_remote_input_region_set_on_pointer(
     OneUiWidget* region,
     OneUiRemotePointerCallback callback,

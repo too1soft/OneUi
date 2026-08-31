@@ -315,6 +315,8 @@ HCURSOR cursorForKind(CursorKind kind) {
     static HCURSOR resizeVertical = LoadCursor(nullptr, IDC_SIZENS);
 
     switch (kind) {
+    case CursorKind::Hidden:
+        return nullptr;
     case CursorKind::Pointer:
         return hand;
     case CursorKind::Text:

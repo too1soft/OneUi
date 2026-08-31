@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-2ea44f.svg)](LICENSE)
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-00599c.svg)](CMakeLists.txt)
 [![Platform](https://img.shields.io/badge/backend-Win32-0078d4.svg)](#平台与成熟度)
-[![UTF-8 ABI](https://img.shields.io/badge/UTF--8%20ABI-v16-6f42c1.svg)](include/oneui/oneui_c_api.h)
+[![UTF-8 ABI](https://img.shields.io/badge/UTF--8%20ABI-v20-6f42c1.svg)](include/oneui/oneui_c_api.h)
 [![Version](https://img.shields.io/badge/version-0.1.0-f59e0b.svg)](CMakeLists.txt)
 
 OneUI 是一个 **Windows 优先、原生、自绘、保留式** 的桌面 UI 框架。它以 C++17
@@ -15,7 +15,7 @@ CSS-like 样式表构建界面，不依赖浏览器、HTML 或 WebView。
 当前仓库同时提供：
 
 - 公开 C++ API；
-- 版本化的 UTF-8 C ABI（当前 `ONEUI_UTF8_ABI_VERSION = 19`）；
+- 版本化的 UTF-8 C ABI（当前 `ONEUI_UTF8_ABI_VERSION = 20`）；
 - `oneui-sys` 原始 Rust FFI 和 `oneui` 安全 Rust 包装层；
 - Win32 窗口、输入、DPI、剪贴板、文件对话框、托盘和 Skia 呈现后端；
 - Gallery、远程组件 Gallery、SDK 打包脚本和 13 个 CTest 行为/契约测试目标。
@@ -49,7 +49,7 @@ OneUI 重点服务高信息密度的原生工具界面，例如：
 | 专用视图 | TerminalView、LogView、RealtimeFrameView、RemoteInputRegion、WindowTitleBar |
 | 平台服务 | Win32 Window、窗口状态持久化、DPI/显示器、剪贴板、文件/目录选择、confirm/prompt、托盘、全局 raw-key |
 | 可观测性 | 真实控件 frame、Stack 内容尺寸、交互 trace、隐私安全的 OneUI 布局树 JSON 快照 |
-| 互操作 | C++ API、462 个公开 C ABI 函数声明、UTF-8 ABI v19、safe Rust wrappers、回调 panic 边界 |
+| 互操作 | C++ API、465 个公开 C ABI 函数声明、UTF-8 ABI v20、safe Rust wrappers、回调 panic 边界 |
 
 完整逐组件状态、语言覆盖和限制见
 [组件清单](docs/07-component-inventory.md)与
@@ -66,6 +66,7 @@ OneUI 重点服务高信息密度的原生工具界面，例如：
 - 标题栏：可插入交互附件，并可显式划分可拖拽区与可点击区；
 - 通用交互：tooltip、`InteractiveSurface` pointer move/hover、`TextField` submit、`SplitView` ratio committed；
 - 远程输入：`RemoteInputRegion` 支持 IME/Unicode committed text，普通可打印键与 raw-key 去重，组合键继续保留扫描码；
+- 远程光标：`RemoteInputRegion` 支持默认、隐藏和预乘 RGBA 位图光标，按远端尺寸、缩放模式与热点映射，并提供后台合并更新的线程安全句柄；
 - 浮层与命中：嵌套 OverlayHost、越界 popup、滚动容器内 Select 的路由与 viewport 翻转；
 - Rust：新增 `WidgetHandle`、`TextFieldHandle`、`SparklineHandle`、`TableHandle`、布局快照和交互 trace 等产品集成能力。
 
@@ -92,7 +93,7 @@ OneUI 重点服务高信息密度的原生工具界面，例如：
 Application (C++ / Rust / another FFI language)
         |
         +-- public C++ API
-        +-- UTF-8 C ABI v16
+        +-- UTF-8 C ABI v20
         +-- oneui-sys + safe oneui Rust wrappers
         |
 OneUI retained widget tree
@@ -245,7 +246,7 @@ target_link_libraries(my_oneui_app PRIVATE OneUI::oneui)
 - 新 API 使用带长度的 `OneUiUtf8String`；
 - 数组和字符串在调用期间被 OneUI 拷贝；
 - callback 使用函数指针和调用方 `user_data`；
-- ABI v16 在加载时可由 `oneui_utf8_abi_version()` 校验；
+- ABI v20 在加载时可由 `oneui_utf8_abi_version()` 校验；
 - 旧 `wchar_t*` 入口仅为现有 Windows 调用方保留，不应继续扩展。
 
 生命周期、线程、回调和组件映射见 [C ABI 接入指南](docs/c-abi-integration.md)。

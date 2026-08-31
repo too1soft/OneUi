@@ -31,6 +31,7 @@ pub enum Error {
     FileDialogFailed,
     LayoutSnapshotFailed,
     InvalidVideoFrame { reason: &'static str },
+    InvalidRemoteCursor { reason: &'static str },
 }
 
 /// Describes a panic caught at the Rust-to-OneUI callback boundary.
@@ -1041,6 +1042,17 @@ impl UiDispatcher {
     ) -> RealtimeFrameViewHandle {
         RealtimeFrameViewHandle {
             state: Arc::clone(&frame_view.state),
+            dispatcher: self.clone(),
+        }
+    }
+
+    /// Creates a thread-safe state producer for a remote input region.
+    pub fn remote_input_region_handle(
+        &self,
+        input_region: &RemoteInputRegion,
+    ) -> RemoteInputRegionHandle {
+        RemoteInputRegionHandle {
+            state: Arc::clone(&input_region.state),
             dispatcher: self.clone(),
         }
     }
@@ -5032,6 +5044,96 @@ impl RemoteFrame {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(i32)]
+pub enum RemoteCursorMode {
+    Default = 0,
+    Hidden = 1,
+    Bitmap = 2,
+}
+
+/// Premultiplied RGBA bitmap used for a server-rendered remote cursor.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteCursorImage {
+    pub pixels: Arc<[u8]>,
+    pub width: i32,
+    pub height: i32,
+    pub stride: i32,
+    pub hotspot_x: i32,
+    pub hotspot_y: i32,
+}
+
+impl RemoteCursorImage {
+    pub fn new(
+        pixels: impl Into<Arc<[u8]>>,
+        width: i32,
+        height: i32,
+        stride: i32,
+        hotspot_x: i32,
+        hotspot_y: i32,
+    ) -> Result<Self, Error> {
+        let mut image = Self {
+            pixels: pixels.into(),
+            width,
+            height,
+            stride,
+            hotspot_x,
+            hotspot_y,
+        };
+        image.normalize_and_validate()?;
+        Ok(image)
+    }
+
+    fn normalize_and_validate(&mut self) -> Result<(), Error> {
+        const MAX_CURSOR_DIMENSION: i32 = 512;
+        if self.width <= 0
+            || self.height <= 0
+            || self.width > MAX_CURSOR_DIMENSION
+            || self.height > MAX_CURSOR_DIMENSION
+        {
+            return Err(Error::InvalidRemoteCursor {
+                reason: "cursor dimensions must be between 1 and 512 pixels",
+            });
+        }
+        let row_bytes = self
+            .width
+            .checked_mul(4)
+            .ok_or(Error::InvalidRemoteCursor {
+                reason: "cursor row byte count overflowed",
+            })?;
+        if self.stride == 0 {
+            self.stride = row_bytes;
+        }
+        if self.stride < row_bytes {
+            return Err(Error::InvalidRemoteCursor {
+                reason: "cursor stride is smaller than a pixel row",
+            });
+        }
+        if self.hotspot_x < 0
+            || self.hotspot_x >= self.width
+            || self.hotspot_y < 0
+            || self.hotspot_y >= self.height
+        {
+            return Err(Error::InvalidRemoteCursor {
+                reason: "cursor hotspot is outside the bitmap",
+            });
+        }
+        let required_bytes = usize::try_from(self.height - 1)
+            .ok()
+            .and_then(|height| height.checked_mul(self.stride as usize))
+            .and_then(|prefix| prefix.checked_add(row_bytes as usize))
+            .ok_or(Error::InvalidRemoteCursor {
+                reason: "cursor byte count overflowed",
+            })?;
+        if self.pixels.len() < required_bytes {
+            return Err(Error::InvalidRemoteCursor {
+                reason: "cursor pixel buffer is shorter than its metadata requires",
+            });
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RemotePointerButton {
     None,
     Left,
@@ -5316,6 +5418,172 @@ struct RemoteTextInputCallback {
     handler: Box<dyn FnMut(String) + 'static>,
 }
 
+#[derive(Default)]
+struct PendingRemoteInputUpdate {
+    remote_size: Option<(f32, f32)>,
+    cursor_mode: Option<RemoteCursorMode>,
+    cursor_position: Option<(f32, f32)>,
+    cursor_image: Option<RemoteCursorImage>,
+    release_all_inputs: bool,
+}
+
+impl PendingRemoteInputUpdate {
+    fn is_empty(&self) -> bool {
+        self.remote_size.is_none()
+            && self.cursor_mode.is_none()
+            && self.cursor_position.is_none()
+            && self.cursor_image.is_none()
+            && !self.release_all_inputs
+    }
+}
+
+struct RemoteInputRegionState {
+    raw: AtomicPtr<sys::OneUiWidget>,
+    pending: Mutex<PendingRemoteInputUpdate>,
+    update_scheduled: AtomicBool,
+}
+
+/// Thread-safe coalescing producer for remote size and server cursor updates.
+#[derive(Clone)]
+pub struct RemoteInputRegionHandle {
+    state: Arc<RemoteInputRegionState>,
+    dispatcher: UiDispatcher,
+}
+
+impl RemoteInputRegionHandle {
+    pub fn set_remote_size(&self, width: f32, height: f32) -> Result<(), Error> {
+        if !width.is_finite() || !height.is_finite() || width < 0.0 || height < 0.0 {
+            return Err(Error::InvalidRemoteCursor {
+                reason: "remote dimensions must be finite and non-negative",
+            });
+        }
+        self.queue_update(|pending| pending.remote_size = Some((width, height)))
+    }
+
+    pub fn set_cursor_default(&self) -> Result<(), Error> {
+        self.queue_update(|pending| pending.cursor_mode = Some(RemoteCursorMode::Default))
+    }
+
+    pub fn set_cursor_hidden(&self) -> Result<(), Error> {
+        self.queue_update(|pending| pending.cursor_mode = Some(RemoteCursorMode::Hidden))
+    }
+
+    pub fn set_cursor_position(&self, remote_x: f32, remote_y: f32) -> Result<(), Error> {
+        if !remote_x.is_finite() || !remote_y.is_finite() {
+            return Err(Error::InvalidRemoteCursor {
+                reason: "cursor position must be finite",
+            });
+        }
+        self.queue_update(|pending| pending.cursor_position = Some((remote_x, remote_y)))
+    }
+
+    pub fn submit_cursor_image(&self, mut image: RemoteCursorImage) -> Result<(), Error> {
+        image.normalize_and_validate()?;
+        self.queue_update(move |pending| {
+            pending.cursor_image = Some(image);
+            pending.cursor_mode = Some(RemoteCursorMode::Bitmap);
+        })
+    }
+
+    /// Releases every pressed key and pointer button on the UI thread. This is
+    /// safe to call from a network worker during disconnect or reconnect.
+    pub fn release_all_inputs(&self) -> Result<(), Error> {
+        self.queue_update(|pending| pending.release_all_inputs = true)
+    }
+
+    fn queue_update(
+        &self,
+        update: impl FnOnce(&mut PendingRemoteInputUpdate),
+    ) -> Result<(), Error> {
+        if self.state.raw.load(Ordering::Acquire).is_null() {
+            return Err(Error::WidgetDestroyed);
+        }
+        update(
+            &mut self
+                .state
+                .pending
+                .lock()
+                .expect("remote input pending lock poisoned"),
+        );
+        if self.state.update_scheduled.swap(true, Ordering::AcqRel) {
+            return Ok(());
+        }
+        let state = Arc::clone(&self.state);
+        let dispatched_state = Arc::clone(&state);
+        if let Err(error) = self
+            .dispatcher
+            .dispatch(move || Self::drain_pending(&dispatched_state))
+        {
+            state.update_scheduled.store(false, Ordering::Release);
+            *state
+                .pending
+                .lock()
+                .expect("remote input pending lock poisoned") = PendingRemoteInputUpdate::default();
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    fn drain_pending(state: &RemoteInputRegionState) {
+        loop {
+            let pending = std::mem::take(
+                &mut *state
+                    .pending
+                    .lock()
+                    .expect("remote input pending lock poisoned"),
+            );
+            let raw = state.raw.load(Ordering::Acquire);
+            if raw.is_null() {
+                state.update_scheduled.store(false, Ordering::Release);
+                return;
+            }
+            if let Some((width, height)) = pending.remote_size {
+                unsafe { sys::oneui_remote_input_region_set_remote_size(raw, width, height) };
+            }
+            if let Some(image) = pending.cursor_image {
+                let accepted = unsafe {
+                    sys::oneui_remote_input_region_set_cursor_bitmap_rgba(
+                        raw,
+                        image.pixels.as_ptr().cast(),
+                        image.pixels.len(),
+                        image.width,
+                        image.height,
+                        image.stride,
+                        image.hotspot_x,
+                        image.hotspot_y,
+                    )
+                };
+                debug_assert_ne!(accepted, 0, "validated remote cursor was rejected by OneUI");
+            }
+            if let Some((remote_x, remote_y)) = pending.cursor_position {
+                unsafe {
+                    sys::oneui_remote_input_region_set_cursor_position(raw, remote_x, remote_y)
+                };
+            }
+            if let Some(mode) = pending.cursor_mode {
+                unsafe { sys::oneui_remote_input_region_set_cursor_mode(raw, mode as i32) };
+            }
+            if pending.release_all_inputs {
+                unsafe { sys::oneui_remote_input_region_release_all_inputs(raw) };
+            }
+
+            state.update_scheduled.store(false, Ordering::Release);
+            if state
+                .pending
+                .lock()
+                .expect("remote input pending lock poisoned")
+                .is_empty()
+            {
+                return;
+            }
+            if !state.update_scheduled.swap(true, Ordering::AcqRel) {
+                continue;
+            }
+            return;
+        }
+    }
+}
+
 unsafe extern "C" fn run_remote_pointer_callback(
     event: *const sys::OneUiRemotePointerEvent,
     user_data: *mut std::ffi::c_void,
@@ -5358,6 +5626,7 @@ unsafe extern "C" fn run_remote_text_input_callback(
 /// pointer coordinates into remote pixels and preserves raw keyboard details.
 pub struct RemoteInputRegion {
     widget: Widget,
+    state: Arc<RemoteInputRegionState>,
     pointer_callback: Option<Box<RemotePointerCallback>>,
     raw_key_callback: Option<Box<RemoteRawKeyCallback>>,
     text_input_callback: Option<Box<RemoteTextInputCallback>>,
@@ -5367,6 +5636,11 @@ impl RemoteInputRegion {
     pub fn new() -> Result<Self, Error> {
         let widget = Widget::from_raw(unsafe { sys::oneui_remote_input_region_create() })?;
         Ok(Self {
+            state: Arc::new(RemoteInputRegionState {
+                raw: AtomicPtr::new(widget.as_raw()),
+                pending: Mutex::new(PendingRemoteInputUpdate::default()),
+                update_scheduled: AtomicBool::new(false),
+            }),
             widget,
             pointer_callback: None,
             raw_key_callback: None,
@@ -5384,6 +5658,57 @@ impl RemoteInputRegion {
         unsafe {
             sys::oneui_remote_input_region_set_scale_mode(self.widget.as_raw(), scale_mode as i32)
         };
+    }
+
+    pub fn set_cursor_default(&self) {
+        unsafe {
+            sys::oneui_remote_input_region_set_cursor_mode(
+                self.widget.as_raw(),
+                RemoteCursorMode::Default as i32,
+            )
+        };
+    }
+
+    pub fn set_cursor_hidden(&self) {
+        unsafe {
+            sys::oneui_remote_input_region_set_cursor_mode(
+                self.widget.as_raw(),
+                RemoteCursorMode::Hidden as i32,
+            )
+        };
+    }
+
+    pub fn set_cursor_position(&self, remote_x: f32, remote_y: f32) {
+        unsafe {
+            sys::oneui_remote_input_region_set_cursor_position(
+                self.widget.as_raw(),
+                remote_x,
+                remote_y,
+            )
+        };
+    }
+
+    pub fn set_cursor_image(&self, mut image: RemoteCursorImage) -> Result<(), Error> {
+        image.normalize_and_validate()?;
+        let accepted = unsafe {
+            sys::oneui_remote_input_region_set_cursor_bitmap_rgba(
+                self.widget.as_raw(),
+                image.pixels.as_ptr().cast(),
+                image.pixels.len(),
+                image.width,
+                image.height,
+                image.stride,
+                image.hotspot_x,
+                image.hotspot_y,
+            )
+        };
+        if accepted != 0 {
+            Ok(())
+        } else {
+            Err(Error::InvalidRemoteCursor {
+                reason: "native remote input region rejected the cursor",
+            })
+        }
     }
 
     #[track_caller]
@@ -5521,6 +5846,15 @@ impl RemoteInputRegion {
 
 impl Drop for RemoteInputRegion {
     fn drop(&mut self) {
+        self.state
+            .raw
+            .store(std::ptr::null_mut(), Ordering::Release);
+        *self
+            .state
+            .pending
+            .lock()
+            .expect("remote input pending lock poisoned") = PendingRemoteInputUpdate::default();
+        self.state.update_scheduled.store(false, Ordering::Release);
         self.release_all_inputs();
         self.clear_pointer_callback();
         self.clear_raw_key_callback();
@@ -8810,6 +9144,15 @@ impl Window {
         self.dispatcher().realtime_frame_view_handle(frame_view)
     }
 
+    /// Returns a thread-safe coalescing producer for remote dimensions and
+    /// server cursor presentation. The input region remains UI-thread bound.
+    pub fn remote_input_region_handle(
+        &self,
+        input_region: &RemoteInputRegion,
+    ) -> RemoteInputRegionHandle {
+        self.dispatcher().remote_input_region_handle(input_region)
+    }
+
     /// Returns a thread-safe adaptive-layout handle for a mounted widget.
     pub fn widget_handle(&self, widget: &Widget) -> WidgetHandle {
         self.dispatcher().widget_handle(widget)
@@ -8880,13 +9223,14 @@ mod tests {
         InteractiveSurfaceStateStyle, InteractiveSurfaceStyle, Label, List, ListItem, LogLine,
         LogView, Menu, OverlayAlignment, OverlayHost, Panel, PixelFormat, Popup,
         PopupInteractionMode, PopupPreferredPlacement, ProgressBar, PromptOptions, RawKeyEvent,
-        RealtimeFrameView, RemoteFrame, RemoteTextInputCallback, ReorderableGrid, ScrollView,
-        SegmentedControl, Select, SelectionMode, SplitOrientation, SplitView, Stack,
-        StackDirection, StyleSheet, Switch, Table, TableColumn, TableRow, Tabs, TerminalCell,
-        TerminalColor, TerminalCursor, TerminalCursorStyle, TerminalFrame, TerminalSelection,
-        TerminalUnderlineStyle, TerminalView, TextArea, TextField, TreeItem, TreeView, VirtualList,
-        Window, WindowClientSizeChangedCallback, WindowOptions, WindowPlacement,
-        WindowRawKeyCallback, WindowState,
+        RealtimeFrameView, RemoteCursorImage, RemoteFrame, RemoteInputRegion,
+        RemoteTextInputCallback, ReorderableGrid, ScrollView, SegmentedControl, Select,
+        SelectionMode, SplitOrientation, SplitView, Stack, StackDirection, StyleSheet, Switch,
+        Table, TableColumn, TableRow, Tabs, TerminalCell, TerminalColor, TerminalCursor,
+        TerminalCursorStyle, TerminalFrame, TerminalSelection, TerminalUnderlineStyle,
+        TerminalView, TextArea, TextField, TreeItem, TreeView, VirtualList, Window,
+        WindowClientSizeChangedCallback, WindowOptions, WindowPlacement, WindowRawKeyCallback,
+        WindowState,
     };
     use std::cell::{Cell, RefCell};
     use std::ptr::NonNull;
@@ -9982,6 +10326,87 @@ mod tests {
         assert!(matches!(
             RemoteFrame::new(vec![0_u8; 16], 2, 2, 7, PixelFormat::Bgra8888, 9, 900,),
             Err(Error::InvalidVideoFrame { .. })
+        ));
+    }
+
+    #[test]
+    fn remote_cursor_image_normalizes_stride_and_rejects_invalid_metadata() {
+        let image = RemoteCursorImage::new(vec![0_u8; 16], 2, 2, 0, 1, 1)
+            .expect("tightly packed cursor should be valid");
+        assert_eq!(image.stride, 8);
+
+        assert!(matches!(
+            RemoteCursorImage::new(vec![0_u8; 15], 2, 2, 8, 1, 1),
+            Err(Error::InvalidRemoteCursor { .. })
+        ));
+        assert!(matches!(
+            RemoteCursorImage::new(vec![0_u8; 16], 2, 2, 8, 2, 1),
+            Err(Error::InvalidRemoteCursor { .. })
+        ));
+        assert!(matches!(
+            RemoteCursorImage::new(vec![0_u8; 513 * 4], 513, 1, 0, 0, 0),
+            Err(Error::InvalidRemoteCursor { .. })
+        ));
+    }
+
+    #[test]
+    fn remote_input_handle_submits_worker_cursor_updates_on_the_window_thread() {
+        let _guard = window_test_lock().lock().expect("window test lock");
+        let window = Window::new(&WindowOptions::default()).expect("window should be created");
+        let input = RemoteInputRegion::new().expect("remote input should be created");
+        window.set_content(input.as_widget());
+        let handle = window.remote_input_region_handle(&input);
+        let worker = thread::spawn(move || {
+            handle
+                .set_remote_size(1920.0, 1080.0)
+                .expect("worker should update the remote size");
+            handle
+                .submit_cursor_image(
+                    RemoteCursorImage::new(vec![255_u8; 16], 2, 2, 0, 1, 1)
+                        .expect("cursor should be valid"),
+                )
+                .expect("worker should submit a cursor image");
+            handle
+                .set_cursor_position(960.0, 540.0)
+                .expect("worker should update the cursor position");
+            handle
+                .set_cursor_hidden()
+                .expect("worker should hide the cursor");
+            handle
+                .set_cursor_default()
+                .expect("worker should restore the cursor");
+            handle
+                .release_all_inputs()
+                .expect("worker should release captured input state");
+        });
+        worker.join().expect("worker should finish");
+
+        let close_dispatcher = window.dispatcher();
+        window
+            .dispatch(move || close_dispatcher.request_close())
+            .expect("window should accept close request");
+        assert_eq!(window.run(), 0);
+    }
+
+    #[test]
+    fn remote_input_handle_rejects_updates_after_region_destruction() {
+        let _guard = window_test_lock().lock().expect("window test lock");
+        let window = Window::new(&WindowOptions::default()).expect("window should be created");
+        let handle = {
+            let input = RemoteInputRegion::new().expect("remote input should be created");
+            window.remote_input_region_handle(&input)
+        };
+        assert!(matches!(
+            handle.set_remote_size(1920.0, 1080.0),
+            Err(Error::WidgetDestroyed)
+        ));
+        assert!(matches!(
+            handle.set_cursor_default(),
+            Err(Error::WidgetDestroyed)
+        ));
+        assert!(matches!(
+            handle.release_all_inputs(),
+            Err(Error::WidgetDestroyed)
         ));
     }
 
