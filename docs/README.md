@@ -19,7 +19,7 @@ roadmap 或差距分析当成现状。
 | 4 | [组件参考](14-component-reference.md) | 分组 API、交互契约和使用建议 |
 | 5 | [架构](01-architecture.md) | 模块边界、线程、所有权、渲染与互操作层次 |
 | 6 | [样式表](20-style-sheet.md) | CSS-like 选择器、属性、状态和 typed adapter |
-| 7 | [C ABI 接入](c-abi-integration.md) | UTF-8 ABI v21、句柄、数组、回调、线程与版本检查 |
+| 7 | [C ABI 接入](c-abi-integration.md) | UTF-8 ABI、句柄、数组、回调、线程与版本检查 |
 | 8 | [Rust 绑定](../bindings/rust/README.md) | `oneui-sys`、安全层、dispatcher、handle 和回调生命周期 |
 
 ## 当前规范
@@ -38,7 +38,7 @@ roadmap 或差距分析当成现状。
 
 ### 产品接入与红线
 
-- [下游产品接入规范](17-downstream-product-integration-standard.md)
+- [下游产品接入规范](21-downstream-product-integration-standard.md)
 - [AppShell](18-app-shell.md)
 - [ProductShell](19-product-shell.md)
 - [OneUI-first 原则](23-oneui-first-pivot.md)
@@ -59,7 +59,7 @@ roadmap 或差距分析当成现状。
 ### C ABI 与远程/产品能力
 
 - [C ABI 接入](c-abi-integration.md)
-- [UTF-8 CSS/ABI 实现说明](25-remote-oneui-css-abi-implementation.md)
+- [UTF-8 CSS/ABI 实现说明](36-remote-oneui-css-abi-implementation.md)
 - [远程渲染性能案例](27-performance-case-remote-rendering.md)
 - [Overlay fill/input E2E 案例](30-overlay-fill-and-input-e2e-case.md)
 - [iShellPro 原生就绪性](32-ishellpro-native-readiness.md)

@@ -4,7 +4,7 @@ OneUI 的 Rust workspace 包含两层：
 
 | crate | 作用 |
 | --- | --- |
-| `oneui-sys` | ABI v21 原始 FFI；不增加所有权或线程策略 |
+| `oneui-sys` | 便携 UTF-8 ABI 子集的原始 FFI；不增加所有权或线程策略 |
 | `oneui` | 安全包装；RAII、UTF-8、callback 清理、panic 边界、dispatcher 和线程安全 handle |
 
 产品代码应优先使用 `oneui`。只有 safe 层尚未覆盖且生命周期能被明确封装时，才在一个局部模块
@@ -42,7 +42,7 @@ oneui.dll
 
 ## ABI 检查
 
-`oneui-sys::UTF8_ABI_VERSION` 当前为 21。`Window::new` 创建窗口前调用
+`oneui-sys::UTF8_ABI_VERSION` 与公开 C 头同步。`Window::new` 创建窗口前调用
 `oneui_utf8_abi_version()`，不匹配时返回：
 
 ```rust
@@ -50,6 +50,10 @@ Error::AbiVersionMismatch { expected, actual }
 ```
 
 不要绕过该检查。header/import library 和 runtime DLL 必须来自同一次 OneUI 构建。
+
+`oneui-sys` 有意只声明 Rust 可直接消费的便携 UTF-8/POD 接口，不承诺与公开 C 头中的
+Windows 宽字符兼容入口逐函数对应。`scripts/check-abi-sync.ps1` 会验证版本常量一致，并确保
+每个已声明的 Rust FFI 符号仍存在于兼容总头中。
 
 ## 最小应用
 
@@ -139,7 +143,7 @@ Handle 用于后台服务向 UI 线程投递受控更新，而不是把完整 UI
 | `TextFieldHandle` | 投递文本值 |
 | `ProgressBarHandle` | 投递进度 |
 | `SparklineHandle` | 投递 sample vector |
-| `VirtualListHandle` | 整表 revision、清选择、单行更新 |
+| `VirtualListHandle` | 普通/富整表 revision、清选择、普通/富单行更新 |
 | `TableHandle` | 整表 revision、清选择、单行更新 |
 | `TerminalViewHandle` | grid/frame/viewport/选择等高频终端状态 |
 | `RealtimeFrameViewHandle` | 完整帧所有权移交、脏矩形批次提交和单一待处理 UI 批次 |

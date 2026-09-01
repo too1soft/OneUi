@@ -17,7 +17,7 @@ OneUI 是一个原生、自绘、保留式桌面 UI 框架，当前专注 Win32�
 
 ```text
 Product application
-  C++ API | UTF-8 C ABI v21 | safe Rust API
+  C++ API | versioned UTF-8 C ABI | safe Rust API
                          |
 Interop and ownership boundary
   opaque handles | copied UTF-8 data | callbacks | dispatcher
@@ -111,18 +111,20 @@ Linux/macOS 文件是未接线骨架；调用窗口/剪贴板会明确失败，�
 
 ### C ABI
 
-`src/capi/oneui_c_api.cpp` 把 C++ 类型包装成 opaque handles。边界规则：
+`src/capi/` 按 runtime/window、layout/shell、controls、data 和 remote 领域把 C++ 类型包装成
+opaque handles；`oneui_c_api_internal.*` 保存共享转换与注册逻辑。边界规则：
 
 - 新字符串使用带长度的 UTF-8 view；
 - 结构化数组在函数返回前被拷贝；
 - 句柄由显式 destroy 释放调用方引用；
 - 控件树/overlay 在挂载后持有共享生命周期，销毁外部 wrapper 不会提前删除已挂载节点；
 - callback 由函数指针 + `user_data` 表示；清除 callback 后不再触碰调用方数据；
-- ABI 版本必须在加载时检查，目前为 v21。
+- ABI 版本必须在加载时检查。
 
 ### Rust
 
-`oneui-sys` 与 C ABI 一一对应。安全 `oneui` crate 负责：
+`oneui-sys` 覆盖便携 UTF-8/POD FFI 子集；Windows 宽字符兼容入口仍仅属于 C 头。安全
+`oneui` crate 负责：
 
 - RAII 句柄和 callback drop 清理；
 - UTF-8 字符串与结构化数组转换；

@@ -1,13 +1,13 @@
 # OneUI C ABI 接入
 
 OneUI 使用版本化 C ABI 为 Rust、Go、C#、Python FFI 和不同 C++ ABI 的产品提供边界。本文说明
-当前 ABI v21 的形状、所有权、线程和迁移规则；完整函数签名只以
+当前 ABI v24 的形状、所有权、线程和迁移规则；完整函数签名只以
 `include/oneui/oneui_c_api.h` 为准。
 
 ## 当前版本
 
 ```c
-#define ONEUI_UTF8_ABI_VERSION 21u
+#define ONEUI_UTF8_ABI_VERSION 24u
 ```
 
 运行时检查：
@@ -252,11 +252,12 @@ oneui_toast_*             oneui_log_view_*          oneui_terminal_view_*
 oneui_realtime_frame_view_*  oneui_remote_input_region_*
 ```
 
-当前 header 包含 469 个公开 `oneui_*` 函数声明。数量用于说明覆盖规模，不代替逐函数契约。
+兼容总头继续导出完整公开接口；`include/oneui/capi/` 下的 `base`、`window`、`layout`、
+`controls`、`data` 和 `remote` 入口用于按领域阅读和逐步接入。不要把声明数量当成兼容契约。
 
-## ABI v21 重点
+## ABI v24 重点
 
-相对 v13，本工作区把 ABI 推进到 v21，重点包含：
+相对早期 ABI，本工作区重点包含：
 
 - `OneUiTableColumnUtf8` / `OneUiTableRowUtf8`；
 - Table 结构化数据、滚动、选择、命令、重排和 drag；
@@ -265,7 +266,7 @@ oneui_realtime_frame_view_*  oneui_remote_input_region_*
 - Checkbox；
 - TextField prefix/suffix icon 与 submit；
 - InteractiveSurface pointer move/hover；
-- WindowTitleBar accessory；
+- WindowTitleBar leading / accessory；
 - title-bar interactive insets；
 - client logical-size changed callback；
 - `oneui_realtime_frame_view_submit_frame_owned` 与恰好一次 release callback；
@@ -279,6 +280,15 @@ oneui_realtime_frame_view_*  oneui_remote_input_region_*
 - SplitView ratio committed；
 - Menu clear；
 - window layout snapshot JSON。
+- `OneUiRichListItemUtf8`、富 VirtualList 批量/单条更新和指标读取；
+- AppShell 跨 sidebar footer、StatusStrip trailing icon/link 和新增系统图标语义。
+
+## Rust FFI 覆盖
+
+`oneui-sys` 提供显式维护的便携 UTF-8/POD 子集，不逐函数声明 Windows 宽字符兼容接口。
+安全 `oneui` crate 在此基础上增加所有权、线程调度和 callback panic 边界。运行
+`scripts/check-abi-sync.ps1` 可验证 C/Rust 版本常量一致，并检查每个 Rust FFI 函数仍由
+公开 C 头声明。
 
 ## 布局快照
 
@@ -333,7 +343,7 @@ C ABI 没有统一 `errno` 对象；每个函数使用下列之一：
 每次新增/修改公开能力必须同时完成：
 
 - [ ] 更新 `include/oneui/oneui_c_api.h`；
-- [ ] 实现 `src/capi/oneui_c_api.cpp`；
+- [ ] 在 `src/capi/` 对应领域模块实现，并复用内部 handle/转换层；
 - [ ] 必要时提升 `ONEUI_UTF8_ABI_VERSION`；
 - [ ] 同步 `oneui-sys::UTF8_ABI_VERSION` 与 extern/POD；
 - [ ] 增加 safe Rust wrapper 与 Drop 清理；

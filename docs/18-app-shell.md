@@ -17,6 +17,7 @@ The component is layout-only. It does not paint a theme background and does not 
 - If a fixed dimension is set to `0`, the child preferred size is used.
 - `setPadding` reserves outer chrome spacing.
 - `setGap` controls the spacing between sidebar/main and between header/content/footer.
+- `setFooterSpanSidebar(true)` lets footer status span the entire shell width; otherwise it stays in the main column.
 - `setSidebarVisible(false)` collapses the sidebar and lets the main region fill the available width while preserving the sidebar child and its last frame.
 
 ## Remote Client Usage

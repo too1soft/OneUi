@@ -5,7 +5,7 @@ English | [简体中文](README.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-2ea44f.svg)](LICENSE)
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-00599c.svg)](CMakeLists.txt)
 [![Platform](https://img.shields.io/badge/backend-Win32-0078d4.svg)](#platform-and-maturity)
-[![UTF-8 ABI](https://img.shields.io/badge/UTF--8%20ABI-v20-6f42c1.svg)](include/oneui/oneui_c_api.h)
+[![UTF-8 ABI](https://img.shields.io/badge/UTF--8%20ABI-versioned-6f42c1.svg)](docs/c-abi-integration.md)
 [![Version](https://img.shields.io/badge/version-0.1.0-f59e0b.svg)](CMakeLists.txt)
 
 OneUI is a **Windows-first, native, self-drawn, retained-mode** desktop UI framework. It is
@@ -16,10 +16,10 @@ browser process, or WebView.
 The repository currently ships:
 
 - a public C++ API;
-- a versioned UTF-8 C ABI (`ONEUI_UTF8_ABI_VERSION = 18`);
+- a versioned UTF-8 C ABI;
 - raw `oneui-sys` Rust FFI and the safe `oneui` Rust crate;
 - a Win32 window, input, DPI, clipboard, file-dialog, tray, and Skia presentation backend;
-- a Gallery, a remote-component Gallery, SDK tooling, and 13 CTest behavior/contract targets.
+- a Gallery, a remote-component Gallery, SDK tooling, and domain-focused behavior/contract tests.
 
 > **Current version: 0.1.0 development release.** The Win32 path already supports real desktop
 > products, but public APIs, the C ABI, and component contracts may still change during `0.x`.
@@ -50,7 +50,7 @@ OneUI targets dense native tools and workspaces, including:
 | Specialized views | TerminalView, LogView, RealtimeFrameView, RemoteInputRegion, WindowTitleBar |
 | Platform services | Win32 Window, placement persistence, DPI/monitor, clipboard, file/folder pickers, confirm/prompt, tray, global raw-key |
 | Diagnostics | committed widget frames, Stack content extent, interaction traces, privacy-safe widget-tree JSON snapshots |
-| Interop | C++ API, 465 public C ABI function declarations, UTF-8 ABI v20, safe Rust wrappers, callback panic boundary |
+| Interop | C++ API, versioned UTF-8 C ABI, portable Rust FFI subset, safe Rust wrappers, callback panic boundary |
 
 See the [component inventory](docs/07-component-inventory.md) and
 [component reference](docs/14-component-reference.md) for per-component coverage and limits.
@@ -66,6 +66,8 @@ The current workspace adds or substantially extends:
 - synchronized layout-tree JSON snapshots with parent IDs, actual/preferred frames, resolved style
   boxes, and value-safe semantic metadata;
 - title-bar accessories and explicit interactive insets that avoid drag/click conflicts;
+- operational workspace primitives: rich `VirtualList` rows with badges, trailing status, indicators,
+  in-place updates, configurable metrics, and title-bar leading content;
 - tooltips, `InteractiveSurface` pointer-move/hover callbacks, `TextField` submission, and a
   committed `SplitView` ratio callback;
 - corrected nested-overlay, out-of-bounds popup, and scrolled-Select routing;
@@ -90,7 +92,7 @@ describes current Win32 behavior, not a long-term stability guarantee.
 Application (C++ / Rust / another FFI language)
         |
         +-- public C++ API
-        +-- UTF-8 C ABI v20
+        +-- versioned UTF-8 C ABI
         +-- oneui-sys + safe oneui Rust wrappers
         |
 OneUI retained widget tree
@@ -241,7 +243,7 @@ Point `CMAKE_PREFIX_PATH` at the extracted SDK and deploy `bin/oneui.dll` next t
 - length-aware `OneUiUtf8String` for new APIs;
 - copied string/array inputs during calls;
 - function-pointer callbacks with caller-owned `user_data`;
-- runtime ABI v20 verification through `oneui_utf8_abi_version()`;
+- runtime ABI verification through `oneui_utf8_abi_version()`;
 - legacy `wchar_t*` entry points retained only for existing Windows consumers.
 
 See the [C ABI integration guide](docs/c-abi-integration.md) for lifetime, threading, callbacks, and
@@ -249,7 +251,7 @@ component mapping.
 
 ## Rust Bindings
 
-`bindings/rust/oneui-sys` mirrors the C ABI. `bindings/rust/oneui` adds ownership, callback cleanup,
+`bindings/rust/oneui-sys` maps the portable UTF-8 product subset of the public C ABI. `bindings/rust/oneui` adds ownership, callback cleanup,
 UI-thread dispatch, panic containment, and thread-safe handles.
 
 ```powershell
@@ -279,8 +281,9 @@ cargo test --manifest-path .\bindings\rust\Cargo.toml
 .\scripts\test-sdk-consumer.ps1
 ```
 
-The 13 CTest targets cover controls, selection, overlays, scrolling, Stack, realtime frames, remote
-input, terminal rendering, trees, Panel, the C ABI, monitor behavior, and the Win32 backend contract.
+CTest is organized by controls, selection, overlays, scrolling/layout, realtime frames, remote
+input, terminal rendering, trees, the C ABI, monitor behavior, and the Win32 backend contract.
+Use the current `ctest -N` output as the authoritative target list.
 
 ## Documentation
 

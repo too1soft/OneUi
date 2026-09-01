@@ -27,6 +27,7 @@ endfunction()
 
 function(oneui_register_native_tests)
     oneui_add_native_test(oneui_c_api_behavior_tests tests/c_api_behavior_tests.cpp)
+    oneui_add_native_test(oneui_c_api_workspace_tests tests/c_api_workspace_tests.cpp)
     oneui_add_native_test(oneui_time_series_chart_c_api_tests tests/time_series_chart_c_api_tests.cpp)
     oneui_add_native_test(oneui_monitor_behavior_tests tests/monitor_behavior_tests.cpp)
     target_compile_definitions(oneui_monitor_behavior_tests PRIVATE ONEUI_BUILDING_DLL)

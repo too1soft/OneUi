@@ -5,7 +5,7 @@
 ## 1. 当前支持范围
 
 - 可运行平台：Windows / Win32；
-- 语言：C++17、UTF-8 C ABI v21、Rust 2021；
+- 语言：C++17、版本化 UTF-8 C ABI、Rust 2021；
 - 渲染：Skia raster；
 - 推荐产品构建：MSVC + vendored static Skia + static MSVC runtime；
 - 开发预设：MSYS2 MINGW64/UCRT64；
@@ -130,23 +130,8 @@ Gallery 是控件组合和视觉行为的参考；行为契约仍以 `tests/` �
 ctest --test-dir .\build\msvc-bundled-static --output-on-failure
 ```
 
-当前应发现 13 个测试目标：
-
-```text
-oneui_control_behavior_tests
-oneui_selection_model_tests
-oneui_overlay_host_behavior_tests
-oneui_scroll_view_behavior_tests
-oneui_stack_behavior_tests
-oneui_realtime_frame_view_behavior_tests
-oneui_remote_input_region_behavior_tests
-oneui_terminal_view_behavior_tests
-oneui_tree_view_behavior_tests
-oneui_panel_behavior_tests
-oneui_c_api_behavior_tests
-oneui_monitor_behavior_tests
-oneui_backend_contract_tests
-```
+使用 `ctest --test-dir .\build\msvc-bundled-static -N` 查看当前目标。测试按控件、布局、
+数据视图、C ABI、平台契约和 ABI 同步等领域维护，不在文档中复制易漂移的完整清单。
 
 只运行某类测试：
 
@@ -154,7 +139,8 @@ oneui_backend_contract_tests
 ctest --test-dir .\build\msvc-bundled-static -R "table|control|c_api" --output-on-failure
 ```
 
-CTest target 名不一定包含单个组件名；Table/Tabs/Sparkline 等主要位于 control behavior tests。
+CTest target 名不一定包含单个组件名；共享 fixture 位于 `tests/support/`，大型场景会逐步拆到
+独立领域目标。
 
 ## 9. 最小 C++ 应用
 
@@ -215,6 +201,9 @@ cmake/OneUIConfig.cmake
 examples/gallery/**
 docs/**
 ```
+
+常规 SDK 以 `OneUI::oneui` 动态库入口为主。`OneUI::oneui_static` 在源码/本地开发构建中保持
+MSVC 与 MinGW 一致可用，但大型静态 OneUI/Skia 归档及其传递依赖不进入常规小型 SDK 包。
 
 Consumer CMake：
 

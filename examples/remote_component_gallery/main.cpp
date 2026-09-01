@@ -1,5 +1,6 @@
 #include "oneui/oneui_c_api.h"
 
+#include <cstring>
 #include <cstdio>
 #include <cstdlib>
 #include <vector>
@@ -19,9 +20,13 @@ constexpr int IconToolbox = 5;
 constexpr int IconCompass = 6;
 constexpr int IconSettings = 7;
 constexpr int IconBell = 8;
-constexpr int IconHeart = 13;
-constexpr int IconDesktop = 14;
 constexpr int IconKeyDots = 20;
+constexpr int IconFolder = 47;
+constexpr int IconOpenInNew = 49;
+
+OneUiUtf8String utf8(const char* value) {
+    return OneUiUtf8String{value, std::strlen(value)};
+}
 
 const char* kCss = R"CSS(
 :root {
@@ -345,25 +350,24 @@ const char* kCss = R"CSS(
     content-background: #2e83ff;
 }
 
-.recent-card {
-    background: linear-gradient(135deg, #6257f2, #5831d8);
-    border-color: #7169ff66;
+.recent-list {
+    background: #1b1b21;
+    border-color: #3b3b46;
     border-width: 1px;
     border-radius: 7px;
-    padding: 12px 14px 12px 14px;
+    color: #f3f3f7;
+    content-background: #282831;
+    padding: 2px 4px 2px 4px;
     box-shadow: 0px 8px 18px 0px #00000050;
-    font-weight: 500;
     height: 88px;
 }
 
-.recent-card:hover {
-    background: #6b61ff;
-    border-color: #827bff80;
+.recent-list:hover {
+    content-background: #30303a;
 }
 
-.recent-card:active {
-    background: #4d2bc7;
-    border-color: #5f54ef80;
+.recent-list:selected {
+    content-background: #34305b;
 }
 
 .status-card {
@@ -467,16 +471,6 @@ OneUiWidget* navItem(const wchar_t* text, int symbol, int selected) {
     OneUiWidget* widget = oneui_nav_item_create(text, symbol, selected);
     setNode(widget, "button", selected ? "nav-item selected" : "nav-item");
     size(widget, 0.0f, 38.0f);
-    keep(widget);
-    return widget;
-}
-
-OneUiWidget* recentTile(const wchar_t* title, const wchar_t* subtitle) {
-    OneUiWidget* widget = oneui_tile_create(title, subtitle);
-    oneui_tile_set_leading_symbol(widget, IconDesktop);
-    oneui_tile_set_trailing_symbol(widget, IconHeart);
-    setNode(widget, "tile", "recent-card");
-    size(widget, 190.0f, 88.0f);
     keep(widget);
     return widget;
 }
@@ -623,15 +617,24 @@ OneUiWidget* buildContent() {
     oneui_stack_add(content, radio);
 
     oneui_stack_add(content, label(L"Recent connections", "field-label", 0.0f, 26.0f));
-    OneUiWidget* recents = stack(StackRow, "recent-row", 12.0f, AlignStretch);
+    OneUiWidget* recents = oneui_virtual_list_create();
+    const OneUiRichListItemUtf8 recentItems[] = {
+        {utf8("Office gateway"), utf8("169 510 1007"), utf8("RDP"), utf8("Online"),
+         {34, 197, 94, 255}, {74, 222, 128, 255}, 1},
+        {utf8("Build workstation"), utf8("164 709 2397"), utf8("SSH"), utf8("Busy"),
+         {245, 158, 11, 255}, {251, 191, 36, 255}, 1},
+    };
+    oneui_virtual_list_set_rich_items_utf8(recents, recentItems, 2);
+    oneui_virtual_list_set_row_height(recents, 44.0f);
+    setNode(recents, "virtual-list", "recent-list");
     size(recents, 0.0f, 88.0f);
-    oneui_stack_add(recents, recentTile(L"Recent assist", L"169 510 1007"));
-    oneui_stack_add(recents, recentTile(L"Remote desktop", L"164 709 2397"));
-    oneui_stack_add(recents, recentTile(L"Remote desktop", L"162 621 794"));
+    keep(recents);
     oneui_stack_add(content, recents);
 
     OneUiWidget* status = oneui_status_strip_create(L"Status", L"OneUI component gallery is ready for visual review.");
     oneui_status_strip_set_primary_action(status, L"Copy");
+    oneui_status_strip_set_primary_action_presentation(status, 1);
+    oneui_status_strip_set_primary_action_trailing_icon(status, IconOpenInNew);
     oneui_status_strip_set_secondary_action(status, L"Details");
     setNode(status, "status-strip", "status-card");
     size(status, 0.0f, 62.0f);
@@ -645,6 +648,11 @@ OneUiWidget* buildRoot(AppContext* ctx) {
 
     OneUiWidget* titlebar = oneui_title_bar_create(L"OneUI Remote Component Gallery");
     oneui_title_bar_set_icon_symbol(titlebar, IconBrandBloom);
+    OneUiWidget* workspace = oneui_icon_button_create(IconFolder);
+    setNode(workspace, "button", "icon-button");
+    size(workspace, 28.0f, 28.0f);
+    keep(workspace);
+    oneui_title_bar_set_leading(titlebar, workspace);
     oneui_title_bar_set_on_minimize(titlebar, onMinimize, ctx);
     oneui_title_bar_set_on_maximize(titlebar, onMaximize, ctx);
     oneui_title_bar_set_on_close(titlebar, onClose, ctx);
@@ -658,6 +666,7 @@ OneUiWidget* buildRoot(AppContext* ctx) {
     oneui_app_shell_set_sidebar_width(shell, 184.0f);
     oneui_app_shell_set_header_height(shell, 54.0f);
     oneui_app_shell_set_footer_height(shell, 28.0f);
+    oneui_app_shell_set_footer_span_sidebar(shell, 1);
     oneui_app_shell_set_gap(shell, 0.0f);
     keep(shell);
 

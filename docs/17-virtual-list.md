@@ -1,14 +1,15 @@
 # VirtualList
 
 `VirtualList` is the standard OneUI control for a large, fixed-height list of
-simple `ListItem` records. It owns structured data and renders only the rows
+simple `ListItem` records or operational `VirtualListItem` records. It owns structured data and renders only the rows
 that intersect its viewport. It is intentionally not a container for arbitrary
 child widgets.
 
 ## Use it when
 
 - the list has a stable row height;
-- each row is a title with an optional detail line;
+- each row is a title with an optional detail line, or a rich operational row
+  with badge, trailing status, and an optional colored indicator;
 - data volume can grow beyond the small, always-visible lists used in settings;
 - selection, keyboard navigation, and wheel scrolling are required.
 
@@ -31,6 +32,13 @@ each row needs controls, menus, editable fields, or a variable height.
   on animation timing.
 - Rows use the established `ListStyleOverride` contract, so CSS uses the same
   semantic properties and states as `List`.
+- Rich metrics are clamped to non-negative geometry. Narrow rows compress or
+  clip badge/trailing regions before they can overlap title/detail text.
+- Batch and single-row updates preserve the current scroll offset and valid
+  selection. Worker handles coalesce pending row updates on the UI thread.
+
+`ListItem` intentionally remains the shared title/detail model used by `List`.
+Use `VirtualListItem` only when the row needs the additional operational fields.
 
 ## CSS
 
@@ -60,18 +68,27 @@ virtual-list.host-inventory:selected {
 ## Rust
 
 ```rust
-use oneui::{ListItem, VirtualList};
+use oneui::{Color, VirtualList, VirtualListItem};
 
 let list = VirtualList::new()?;
 list.set_row_height(52.0);
-list.set_items(&items);
+list.set_rich_items(&[
+    VirtualListItem {
+        title: "ERP management".into(),
+        detail: "erp-demo.example".into(),
+        badge: "HTTP".into(),
+        trailing: "Running".into(),
+        indicator_color: Some(Color::rgba(34, 197, 94, 255)),
+        trailing_color: Some(Color::rgba(22, 163, 74, 255)),
+    },
+]);
 list.set_selected_index(0);
 parent.set_content(list.as_widget());
 ```
 
 ## Verification
 
-The C++ behavior suite exercises a 5,000-item list and asserts a bounded paint
-set. The Rust binding suite mounts the same scale of structured data through
-the UTF-8 ABI. Keep both checks when changing scrolling, painting, or ABI
-ownership.
+The C++ behavior suite exercises large-list bounded painting, rich-row updates,
+narrow geometry, and state preservation. C ABI and Rust tests cover rich batch,
+single-row, worker-handle, and metric paths. Keep all layers synchronized when
+changing scrolling, painting, or ABI ownership.

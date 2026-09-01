@@ -1,6 +1,6 @@
 param(
     [string]$Header = "include/oneui/oneui_c_api.h",
-    [string]$RustBindings = "bindings/rust/oneui-sys/src/lib.rs"
+    [string]$RustBindings = "bindings/rust/oneui-sys/src"
 )
 
 $ErrorActionPreference = "Stop"
@@ -9,7 +9,12 @@ $headerPath = Join-Path $root $Header
 $rustPath = Join-Path $root $RustBindings
 
 $headerText = Get-Content -LiteralPath $headerPath -Raw
-$rustText = Get-Content -LiteralPath $rustPath -Raw
+$rustFiles = if (Test-Path -LiteralPath $rustPath -PathType Container) {
+    Get-ChildItem -LiteralPath $rustPath -Filter *.rs -File -Recurse | Sort-Object FullName
+} else {
+    Get-Item -LiteralPath $rustPath
+}
+$rustText = ($rustFiles | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join "`n"
 $headerVersionMatch = [regex]::Match($headerText, '#define\s+ONEUI_UTF8_ABI_VERSION\s+(\d+)u')
 $rustVersionMatch = [regex]::Match($rustText, 'pub const UTF8_ABI_VERSION:\s*c_uint\s*=\s*(\d+);')
 if (!$headerVersionMatch.Success -or !$rustVersionMatch.Success) {

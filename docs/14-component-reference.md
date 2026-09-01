@@ -144,7 +144,8 @@ split->setOnSplitRatioCommitted([](float ratio) {
 
 ### AppShell
 
-提供 sidebar/header/content/footer 四区、尺寸、padding/gap 和 sidebar visible。适合通用桌面壳。
+提供 sidebar/header/content/footer 四区、尺寸、padding/gap 和 sidebar visible。footer 可选择跨过
+sidebar，适合承载全窗口状态与传输信息。
 
 ### ProductShell
 
@@ -152,10 +153,11 @@ split->setOnSplitRatioCommitted([](float ratio) {
 
 ### WindowTitleBar
 
-自绘标题栏支持 icon、caption、minimize/maximize/close、variant 与 accessory：
+自绘标题栏支持 icon、caption、minimize/maximize/close、variant、leading 与 accessory：
 
 ```cpp
 auto titleBar = std::make_shared<oneui::WindowTitleBar>(L"OneUI App");
+titleBar->setLeading(workspaceSwitcher);
 titleBar->setAccessory(sessionTabs);
 titleBar->setOnMinimize([&] { window->minimize(); });
 titleBar->setOnMaximize([&] { window->toggleMaximize(); });
@@ -276,8 +278,10 @@ tabs->setOnContextMenuRequested([](int index, oneui::Point at) { openTabMenu(ind
 - 单选/多选与 Ctrl/Shift；
 - changed/selection/activated/edit/delete/context callbacks；
 - internal reorder 与 external stable-ID drag；
-- 单行 `updateItem` 保持滚动和选择；
-- Rust `VirtualListHandle::set_items` 可在线程间投递整表 revision 并合并更新。
+- `ListItem` 只表达 title/detail；`VirtualListItem` 独立表达 badge、trailing、状态指示与颜色；
+- `setRichItems` / `updateRichItem` 更新数据时保持滚动和选择；
+- `VirtualListRichMetrics` 统一富行几何，窄宽度会压缩/裁剪 badge 与 trailing 以避免文字覆盖；
+- Rust `VirtualListHandle` 可在线程间投递普通/富整表 revision 与合并后的单行更新。
 
 详细内容见 [VirtualList](17-virtual-list.md)。
 
@@ -361,7 +365,7 @@ Sparkline clamp 非 finite/超界值，绘制中线、series 和末端点。复�
 ## StateView / StatusStrip / Toast
 
 - **StateView**：页面级空/错/加载/无结果，包含一个可选行动；
-- **StatusStrip**：持续状态与主次操作；
+- **StatusStrip**：持续状态与主次操作；主操作可显示为 link 并追加受枚举约束的 trailing icon；
 - **Toast**：短时消息 surface；当前 toast queue、自动超时和堆叠策略由产品层管理。
 
 ## TerminalView
@@ -392,7 +396,7 @@ TerminalView 是渲染/输入视图，不负责 SSH/PTTY 协议。当前支持�
 保留最新一帧，不累计队列：
 
 - 借用式 C/C++ 提交会复制 BGRA8888/RGBA8888，适合低频调用；
-- ABI v18 的 owned submit 移交不可变像素所有权，替换、拒绝或销毁时恰好回调释放一次；
+- owned submit 移交不可变像素所有权，替换、拒绝或销毁时恰好回调释放一次；
 - C++ paint 共享最新不可变帧，不再为每次绘制深拷贝整张画面；
 - Rust `RealtimeFrameViewHandle` 从 worker 提交完整帧或脏矩形批次，并合并为单一待处理 UI 批次；
 - ActualSize/Fit/Fill/Stretch；

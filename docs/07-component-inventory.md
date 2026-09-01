@@ -47,9 +47,9 @@
 | `OverlayHost` | `layout/overlay_host.h` | 主线 | ✓ | ✓ | ✓ | 普通/anchored/modal overlay、层级、焦点、外部 pointer、嵌套越界命中 |
 | `DockView` | `layout/dock_view.h` | 可用 | ✓ | — | — | 固定桌面区域组合；不是通用 docking system |
 | `TopBar` | `layout/top_bar.h` | 可用 | ✓ | ✓ | raw | leading/actions/padding/gap；safe Rust 无专用包装 |
-| `AppShell` | `layout/app_shell.h` | 主线 | ✓ | ✓ | raw | sidebar/header/content/footer 与响应式显示 |
+| `AppShell` | `layout/app_shell.h` | 主线 | ✓ | ✓ | raw | sidebar/header/content/footer、footer 跨 sidebar 与响应式显示 |
 | `ProductShell` | `layout/product_shell.h` | 可用 | ✓ | ✓ | raw | 产品工作台几何 helper 与 sidebar/topbar/status slots |
-| `WindowTitleBar` | `controls/window_title_bar.h` | 主线 | ✓ | ✓ | ✓ | 自绘 caption 按钮、variant、interactive accessory、最大化状态 |
+| `WindowTitleBar` | `controls/window_title_bar.h` | 主线 | ✓ | ✓ | ✓ | 自绘 caption 按钮、leading/accessory、variant、最大化状态 |
 
 ## 文本、按钮与表单
 
@@ -80,7 +80,7 @@
 | SegmentedControl | C ABI 组合控件 | 可用 | 产品 helper | ✓ | ✓ | 少量互斥模式；不要代替工作区 Tabs |
 | `NavItem` | `controls/nav_item.h` | 主线 | ✓ | ✓ | ✓ | sidebar 图标/文本/selected/click |
 | `List` | `controls/list.h` | 主线 | ✓ | ✓ | ✓ | 小数据集、title/detail、单选与 frame 查询；非虚拟化 |
-| `VirtualList` | `controls/virtual_list.h` | 主线 | ✓ | ✓ | ✓ | 固定行高可见行绘制、平滑滚动、单/多选、命令、重排、外部稳定 ID 拖拽 |
+| `VirtualList` | `controls/virtual_list.h` | 主线 | ✓ | ✓ | ✓ | 普通 title/detail 与富 badge/trailing/indicator 行、原位/worker 更新、固定行高虚拟化、选择与重排 |
 | `TreeView` | `controls/tree_view.h` | 主线 | ✓ | ✓ | ✓ | stable id/parent id、展开、选择、重排请求、外部 drop target |
 | `Table` | `controls/table.h` | 主线 | ✓ | ✓ | ✓ | 结构化行列、可见行绘制、滚动、选择、激活、F2/Delete、context、reorder、外部 drag |
 | `Menu` | `controls/menu.h` | 主线 | ✓ | ✓ | ✓ | header/item/separator/disabled/danger、动态 clear、activation |
@@ -109,7 +109,7 @@
 | `Sparkline` | `controls/sparkline.h` | 主线 | ✓ | ✓ | ✓ | 0..1 sample、clamp、网格、折线、末端点；非交互图表 |
 | `Separator` | `controls/separator.h` | 主线 | ✓ | — | — | 横/纵分隔和样式 |
 | `StateView` | `controls/state_view.h` | 主线 | ✓ | ✓ | ✓ | 空/错/加载等状态的图标、标题、说明、操作 |
-| `StatusStrip` | `controls/status_strip.h` | 可用 | ✓ | ✓ | raw | title/message/主次操作 |
+| `StatusStrip` | `controls/status_strip.h` | 可用 | ✓ | ✓ | raw | title/message/主次操作、主操作 link 展示与 trailing icon |
 | `Toast` | `controls/toast.h` | 可用 | ✓ | ✓ | raw | title/message/icon/actions/close；队列与自动超时由产品管理 |
 
 ## 专用视图
@@ -171,7 +171,7 @@
 
 ## 测试覆盖
 
-当前 13 个 CTest 目标覆盖：
+当前按领域拆分的 CTest 目标覆盖：
 
 - 通用控件、Tabs、Table、Sparkline、TextField、tooltip；
 - SelectionModel；
@@ -179,7 +179,9 @@
 - ScrollView、Stack、Panel；
 - RealtimeFrameView、RemoteInputRegion；
 - TerminalView、TreeView；
-- C ABI、布局树快照、显示器与 Win32 backend contract。
+- C ABI（含独立工作区原语场景）、ABI 同步、布局树快照、显示器与 Win32 backend contract。
+
+共享 `RecordingCanvas` 与 fixture 位于 `tests/support/`；实际目标清单以 `ctest -N` 为准。
 
 Rust workspace 另外覆盖 safe wrapper、结构化数组、handle 合并更新、回调 Drop、panic 捕获与
 窗口线程 dispatcher。
