@@ -4,6 +4,7 @@
 #include "oneui/color.h"
 #include "oneui/view.h"
 #include "internal/scroll_trace.h"
+#include "skia_canvas_win32.h"
 
 #include <windows.h>
 #include <windowsx.h>
@@ -338,73 +339,6 @@ HCURSOR cursorForKind(CursorKind kind) {
     }
 }
 
-LRESULT CALLBACK clipboardOwnerProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
-    return DefWindowProcW(hwnd, message, wParam, lParam);
-}
-
-HWND clipboardOwnerWindow() {
-    static std::once_flag once;
-    static HWND owner = nullptr;
-    std::call_once(once, [] {
-        HINSTANCE instance = GetModuleHandleW(nullptr);
-        const wchar_t* className = L"OneUIClipboardOwner";
-
-        WNDCLASSW windowClass{};
-        windowClass.lpfnWndProc = &clipboardOwnerProc;
-        windowClass.hInstance = instance;
-        windowClass.lpszClassName = className;
-        RegisterClassW(&windowClass);
-
-        owner = CreateWindowExW(
-            0,
-            className,
-            L"",
-            WS_OVERLAPPED,
-            0,
-            0,
-            0,
-            0,
-            nullptr,
-            nullptr,
-            instance,
-            nullptr);
-    });
-    return owner;
-}
-
-class ClipboardGuard {
-public:
-    ClipboardGuard() {
-        constexpr int kMaxAttempts = 8;
-        constexpr DWORD kRetryDelayMs = 5;
-        const HWND owner = clipboardOwnerWindow();
-
-        // Clipboard ownership is process-global, so brief contention is expected.
-        for (int attempt = 0; attempt < kMaxAttempts; ++attempt) {
-            if (OpenClipboard(owner) != FALSE) {
-                open_ = true;
-                return;
-            }
-            if (attempt + 1 < kMaxAttempts) {
-                Sleep(kRetryDelayMs);
-            }
-        }
-    }
-
-    ~ClipboardGuard() {
-        if (open_) {
-            CloseClipboard();
-        }
-    }
-
-    bool isOpen() const {
-        return open_;
-    }
-
-private:
-    bool open_ = false;
-};
-
 class SkiaCanvas final : public Canvas {
 public:
     explicit SkiaCanvas(
@@ -549,52 +483,7 @@ public:
         if (path.empty()) {
             return;
         }
-#if SK_MILESTONE >= 150
-        SkPathBuilder nativeBuilder;
-#else
-        SkPath native;
-#endif
-        for (const auto& command : path.commands) {
-            switch (command.verb) {
-            case CanvasPathVerb::MoveTo:
-#if SK_MILESTONE >= 150
-                nativeBuilder.moveTo(command.first.x, command.first.y);
-#else
-                native.moveTo(command.first.x, command.first.y);
-#endif
-                break;
-            case CanvasPathVerb::LineTo:
-#if SK_MILESTONE >= 150
-                nativeBuilder.lineTo(command.first.x, command.first.y);
-#else
-                native.lineTo(command.first.x, command.first.y);
-#endif
-                break;
-            case CanvasPathVerb::CubicTo:
-#if SK_MILESTONE >= 150
-                nativeBuilder.cubicTo(
-#else
-                native.cubicTo(
-#endif
-                    command.first.x,
-                    command.first.y,
-                    command.second.x,
-                    command.second.y,
-                    command.third.x,
-                    command.third.y);
-                break;
-            case CanvasPathVerb::Close:
-#if SK_MILESTONE >= 150
-                nativeBuilder.close();
-#else
-                native.close();
-#endif
-                break;
-            }
-        }
-#if SK_MILESTONE >= 150
-        SkPath native = nativeBuilder.detach();
-#endif
+        SkPath native = win32::toSkPath(path);
         SkPaint paint;
         paint.setAntiAlias(true);
         paint.setColor(toSkColor(color));
@@ -614,52 +503,7 @@ public:
         if (path.empty() || bounds.width <= 0.0f || bounds.height <= 0.0f) {
             return;
         }
-#if SK_MILESTONE >= 150
-        SkPathBuilder nativeBuilder;
-#else
-        SkPath native;
-#endif
-        for (const auto& command : path.commands) {
-            switch (command.verb) {
-            case CanvasPathVerb::MoveTo:
-#if SK_MILESTONE >= 150
-                nativeBuilder.moveTo(command.first.x, command.first.y);
-#else
-                native.moveTo(command.first.x, command.first.y);
-#endif
-                break;
-            case CanvasPathVerb::LineTo:
-#if SK_MILESTONE >= 150
-                nativeBuilder.lineTo(command.first.x, command.first.y);
-#else
-                native.lineTo(command.first.x, command.first.y);
-#endif
-                break;
-            case CanvasPathVerb::CubicTo:
-#if SK_MILESTONE >= 150
-                nativeBuilder.cubicTo(
-#else
-                native.cubicTo(
-#endif
-                    command.first.x,
-                    command.first.y,
-                    command.second.x,
-                    command.second.y,
-                    command.third.x,
-                    command.third.y);
-                break;
-            case CanvasPathVerb::Close:
-#if SK_MILESTONE >= 150
-                nativeBuilder.close();
-#else
-                native.close();
-#endif
-                break;
-            }
-        }
-#if SK_MILESTONE >= 150
-        SkPath native = nativeBuilder.detach();
-#endif
+        SkPath native = win32::toSkPath(path);
         SkPaint paint;
         paint.setAntiAlias(true);
         paint.setShader(linearGradientShader(bounds, start, end, angleDegrees));
@@ -779,18 +623,33 @@ public:
     }
 
     bool supportsNamedFont(const std::wstring& familyName) const override {
+        static std::mutex cacheMutex;
+        static std::map<std::wstring, bool> cache;
+        {
+            std::lock_guard<std::mutex> lock(cacheMutex);
+            if (const auto found = cache.find(familyName); found != cache.end()) {
+                return found->second;
+            }
+        }
         const auto manager = fontManager();
         const std::string requested = utf8FontFamily(familyName);
-        if (!manager || requested.empty()) {
-            return false;
+        bool available = false;
+        if (manager && !requested.empty()) {
+            const auto face = manager->matchFamilyStyle(requested.c_str(), SkFontStyle());
+            if (face) {
+                SkString actual;
+                face->getFamilyName(&actual);
+                available = actual.equals(requested.c_str());
+            }
         }
-        const auto face = manager->matchFamilyStyle(requested.c_str(), SkFontStyle());
-        if (!face) {
-            return false;
+        {
+            std::lock_guard<std::mutex> lock(cacheMutex);
+            if (cache.size() > 128) {
+                cache.clear();
+            }
+            cache.emplace(familyName, available);
         }
-        SkString actual;
-        face->getFamilyName(&actual);
-        return actual.equals(requested.c_str());
+        return available;
     }
 
     float measureTextWidth(const std::wstring& text, float size, int weight = 400) const override {
@@ -4013,58 +3872,6 @@ private:
 };
 
 } // namespace
-
-void SystemClipboard::setText(std::wstring text) {
-    ClipboardGuard guard;
-    if (!guard.isOpen()) {
-        return;
-    }
-
-    if (!EmptyClipboard()) {
-        return;
-    }
-
-    const SIZE_T byteCount = (text.size() + 1) * sizeof(wchar_t);
-    HGLOBAL memory = GlobalAlloc(GMEM_MOVEABLE, byteCount);
-    if (!memory) {
-        return;
-    }
-
-    void* locked = GlobalLock(memory);
-    if (!locked) {
-        GlobalFree(memory);
-        return;
-    }
-
-    std::memcpy(locked, text.c_str(), byteCount);
-    GlobalUnlock(memory);
-
-    if (!SetClipboardData(CF_UNICODETEXT, memory)) {
-        GlobalFree(memory);
-        return;
-    }
-}
-
-std::wstring SystemClipboard::text() const {
-    ClipboardGuard guard;
-    if (!guard.isOpen()) {
-        return {};
-    }
-
-    HANDLE handle = GetClipboardData(CF_UNICODETEXT);
-    if (!handle) {
-        return {};
-    }
-
-    const wchar_t* locked = static_cast<const wchar_t*>(GlobalLock(handle));
-    if (!locked) {
-        return {};
-    }
-
-    std::wstring result(locked);
-    GlobalUnlock(handle);
-    return result;
-}
 
 std::unique_ptr<Window> Window::create(std::wstring title, int width, int height) {
     WindowOptions options;

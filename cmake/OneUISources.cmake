@@ -68,9 +68,13 @@ set(ONEUI_CORE_SOURCES
 
 set(ONEUI_C_API_SOURCES
     src/capi/oneui_c_api.cpp
+    src/capi/oneui_c_api_internal.cpp
+    src/capi/oneui_c_api_runtime.cpp
 )
 
 set(ONEUI_WIN32_SOURCES
+    src/platform/win32/clipboard_win32.cpp
     src/platform/win32/monitor_win32.cpp
+    src/platform/win32/skia_canvas_win32.cpp
     src/platform/win32/window_win32.cpp
 )

@@ -39,4 +39,9 @@ function(oneui_register_native_tests)
         target_compile_definitions(oneui_c_api_static_link_tests PRIVATE ONEUI_STATIC)
         add_test(NAME oneui_c_api_static_link_tests COMMAND oneui_c_api_static_link_tests)
     endif()
+
+    add_test(
+        NAME oneui_abi_sync
+        COMMAND powershell -NoProfile -ExecutionPolicy Bypass
+            -File ${CMAKE_CURRENT_SOURCE_DIR}/scripts/check-abi-sync.ps1)
 endfunction()
