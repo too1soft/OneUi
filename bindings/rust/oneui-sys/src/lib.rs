@@ -5,6 +5,12 @@
 
 use std::ffi::{c_char, c_float, c_int, c_uint, c_ushort, c_void};
 
+pub mod ffi;
+mod types;
+
+pub use ffi::*;
+pub use types::*;
+
 pub const UTF8_ABI_VERSION: c_uint = 24;
 
 #[repr(C)]
@@ -67,31 +73,6 @@ pub struct OneUiColor {
     pub g: u8,
     pub b: u8,
     pub a: u8,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct OneUiRichListItemUtf8 {
-    pub title: OneUiUtf8String,
-    pub detail: OneUiUtf8String,
-    pub badge: OneUiUtf8String,
-    pub trailing: OneUiUtf8String,
-    pub indicator_color: OneUiColor,
-    pub trailing_color: OneUiColor,
-    pub indicator_visible: c_int,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Default)]
-pub struct OneUiVirtualListRichMetrics {
-    pub indicator_space: f32,
-    pub indicator_diameter: f32,
-    pub badge_height: f32,
-    pub badge_radius: f32,
-    pub badge_horizontal_padding: f32,
-    pub title_badge_gap: f32,
-    pub trailing_width: f32,
-    pub trailing_gap: f32,
 }
 
 #[repr(C)]
@@ -1168,20 +1149,10 @@ extern "C" {
         items: *const OneUiListItemUtf8,
         count: usize,
     );
-    pub fn oneui_virtual_list_set_rich_items_utf8(
-        list: *mut OneUiWidget,
-        items: *const OneUiRichListItemUtf8,
-        count: usize,
-    );
     pub fn oneui_virtual_list_update_item_utf8(
         list: *mut OneUiWidget,
         index: usize,
         item: *const OneUiListItemUtf8,
-    ) -> c_int;
-    pub fn oneui_virtual_list_update_rich_item_utf8(
-        list: *mut OneUiWidget,
-        index: usize,
-        item: *const OneUiRichListItemUtf8,
     ) -> c_int;
     pub fn oneui_virtual_list_set_selected_index(list: *mut OneUiWidget, index: c_int);
     pub fn oneui_virtual_list_selected_index(list: *mut OneUiWidget) -> c_int;
@@ -1197,21 +1168,6 @@ extern "C" {
         buffer_len: usize,
     ) -> usize;
     pub fn oneui_virtual_list_set_row_height(list: *mut OneUiWidget, height: f32);
-    pub fn oneui_virtual_list_set_rich_metrics(
-        list: *mut OneUiWidget,
-        indicator_space: f32,
-        indicator_diameter: f32,
-        badge_height: f32,
-        badge_radius: f32,
-        badge_horizontal_padding: f32,
-        title_badge_gap: f32,
-        trailing_width: f32,
-        trailing_gap: f32,
-    );
-    pub fn oneui_virtual_list_rich_metrics(
-        list: *mut OneUiWidget,
-        out_metrics: *mut OneUiVirtualListRichMetrics,
-    ) -> c_int;
     pub fn oneui_virtual_list_set_scroll_offset(list: *mut OneUiWidget, offset: f32);
     pub fn oneui_virtual_list_scroll_offset(list: *mut OneUiWidget) -> f32;
     pub fn oneui_virtual_list_max_scroll_offset(list: *mut OneUiWidget) -> f32;

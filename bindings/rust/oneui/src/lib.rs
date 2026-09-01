@@ -19,6 +19,13 @@ use std::sync::{
 
 pub use oneui_sys as sys;
 
+pub mod controls;
+pub mod handles;
+pub mod layout;
+mod types;
+
+pub use types::{IconSymbol, ListItem, SelectionMode, VirtualListItem, VirtualListRichMetrics};
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Error {
     AbiVersionMismatch { expected: u32, actual: u32 },
@@ -385,6 +392,11 @@ struct WindowState {
     ui_thread: std::thread::ThreadId,
 }
 
+// WindowState synchronizes every raw-handle access and native destruction is
+// constrained to the recorded UI thread. The dispatcher only posts work.
+unsafe impl Send for WindowState {}
+unsafe impl Sync for WindowState {}
+
 #[derive(Clone)]
 pub struct UiDispatcher {
     state: Arc<WindowState>,
@@ -461,9 +473,6 @@ struct LocalDispatchedTask {
 struct AnimationFrameTask {
     task: Option<Box<dyn FnOnce(f64) + 'static>>,
 }
-
-unsafe impl Send for UiDispatcher {}
-unsafe impl Sync for UiDispatcher {}
 
 fn trace_ui_task(message: &str) {
     if let Some(path) = std::env::var_os("ONEUI_UI_TRACE_FILE") {
@@ -1560,57 +1569,6 @@ impl From<InteractiveSurfaceStyle> for sys::OneUiInteractiveSurfaceStyle {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum IconSymbol {
-    BrandBloom = 0,
-    Search = 1,
-    RemoteAssist = 2,
-    Monitor = 3,
-    Device = 4,
-    Toolbox = 5,
-    Compass = 6,
-    Settings = 7,
-    Bell = 8,
-    Minimize = 9,
-    Maximize = 10,
-    Restore = 11,
-    Close = 12,
-    Heart = 13,
-    Desktop = 14,
-    File = 15,
-    Sparkle = 16,
-    RadioOn = 17,
-    RadioOff = 18,
-    ToggleOn = 19,
-    KeyDots = 20,
-    Copy = 21,
-    ChevronDown = 22,
-    ChevronUp = 23,
-    Plus = 24,
-    User = 25,
-    Globe = 26,
-    Play = 27,
-    Check = 28,
-    BrandMark = 29,
-    CheckCircle = 30,
-    Terminal = 31,
-    Server = 32,
-    LayoutGrid = 33,
-    List = 34,
-    Refresh = 35,
-    Upload = 36,
-    Download = 37,
-    Sliders = 38,
-    Code = 39,
-    Database = 40,
-    Cube = 41,
-    Notebook = 42,
-    Edit = 43,
-    Trash = 44,
-    ChevronLeft = 45,
-    ChevronRight = 46,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ButtonContentAlign {
     Start = 0,
     Center = 1,
@@ -1651,7 +1609,7 @@ fn run_void_handler(context: &'static str, handler: &Rc<RefCell<Box<dyn FnMut() 
     let Ok(mut handler) = handler.try_borrow_mut() else {
         return;
     };
-    run_callback_guarded(context, || (handler)());
+    run_callback_guarded(context, &mut **handler);
 }
 
 unsafe extern "C" fn run_void_callback(user_data: *mut std::ffi::c_void) {
@@ -1932,6 +1890,7 @@ impl OverlayHost {
         unsafe { sys::oneui_overlay_host_add_overlay(self.widget.as_raw(), child.as_raw(), layer) };
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn add_anchored_overlay(
         &self,
         child: &Widget,
@@ -1956,6 +1915,7 @@ impl OverlayHost {
         };
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn add_modal_anchored_overlay(
         &self,
         child: &Widget,
@@ -3987,6 +3947,11 @@ impl WindowTitleBar {
 
     pub fn set_icon(&self, symbol: IconSymbol) {
         unsafe { sys::oneui_title_bar_set_icon_symbol(self.widget.as_raw(), symbol as i32) };
+    }
+
+    /// Places application controls before the title and center accessory.
+    pub fn set_leading(&self, leading: &Widget) {
+        unsafe { sys::oneui_title_bar_set_leading(self.widget.as_raw(), leading.as_raw()) };
     }
 
     /// Selects a named built-in chrome variant, such as `dark`.
@@ -7489,7 +7454,10 @@ fn terminal_dirty_ranges(
     }
 
     if collapsed {
-        vec![first_changed.expect("collapsed ranges require a changed cell")..last_changed + 1]
+        std::iter::once(
+            first_changed.expect("collapsed ranges require a changed cell")..last_changed + 1,
+        )
+        .collect()
     } else {
         ranges
     }
@@ -7640,18 +7608,22 @@ impl LogView {
     }
 }
 
-/// Structured list data. Every field is UTF-8 and may contain punctuation,
-/// tabs, or newlines without relying on a delimiter encoding.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct ListItem {
-    pub title: String,
-    pub detail: String,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SelectionMode {
-    Single,
-    Multiple,
+fn native_virtual_list_item(item: &VirtualListItem) -> sys::OneUiRichListItemUtf8 {
+    sys::OneUiRichListItemUtf8 {
+        title: sys::OneUiUtf8String::from_str(&item.title),
+        detail: sys::OneUiUtf8String::from_str(&item.detail),
+        badge: sys::OneUiUtf8String::from_str(&item.badge),
+        trailing: sys::OneUiUtf8String::from_str(&item.trailing),
+        indicator_color: item
+            .indicator_color
+            .unwrap_or(Color::rgba(0, 0, 0, 0))
+            .into(),
+        trailing_color: item
+            .trailing_color
+            .unwrap_or(Color::rgba(0, 0, 0, 0))
+            .into(),
+        indicator_visible: i32::from(item.indicator_color.is_some()),
+    }
 }
 
 struct ListChangedCallback {
@@ -7836,9 +7808,14 @@ impl Drop for List {
 ///
 /// Unlike [`List`], this control retains all data but only paints rows visible
 /// in its viewport. Keep row content to a title and optional detail line.
+enum PendingVirtualListItem {
+    Basic(ListItem),
+    Rich(VirtualListItem),
+}
+
 struct VirtualListState {
     raw: AtomicPtr<sys::OneUiWidget>,
-    pending_items: Mutex<BTreeMap<usize, ListItem>>,
+    pending_items: Mutex<BTreeMap<usize, PendingVirtualListItem>>,
     update_scheduled: AtomicBool,
 }
 
@@ -7861,6 +7838,36 @@ impl VirtualListHandle {
     /// scrolling and selection are preserved.
     pub fn set_items(&self, items: Vec<ListItem>) -> Result<(), Error> {
         self.replace_items(items, false)
+    }
+
+    /// Replaces the complete data revision with structured operational rows.
+    pub fn set_rich_items(&self, items: Vec<VirtualListItem>) -> Result<(), Error> {
+        if self.state.raw.load(Ordering::Acquire).is_null() {
+            return Err(Error::WidgetDestroyed);
+        }
+        let state = Arc::clone(&self.state);
+        self.dispatcher.dispatch(move || {
+            state
+                .pending_items
+                .lock()
+                .expect("virtual list pending items lock poisoned")
+                .clear();
+            let raw = state.raw.load(Ordering::Acquire);
+            if raw.is_null() {
+                return;
+            }
+            let native_items = items
+                .iter()
+                .map(native_virtual_list_item)
+                .collect::<Vec<_>>();
+            unsafe {
+                sys::oneui_virtual_list_set_rich_items_utf8(
+                    raw,
+                    native_items.as_ptr(),
+                    native_items.len(),
+                );
+            }
+        })
     }
 
     /// Replaces the complete data revision and clears the selection in the
@@ -7920,7 +7927,24 @@ impl VirtualListHandle {
             .pending_items
             .lock()
             .expect("virtual list pending items lock poisoned")
-            .insert(index, item);
+            .insert(index, PendingVirtualListItem::Basic(item));
+        self.schedule_pending_items()
+    }
+
+    /// Coalesces one operational-row update onto the owning window thread.
+    pub fn update_rich_item(&self, index: usize, item: VirtualListItem) -> Result<(), Error> {
+        if self.state.raw.load(Ordering::Acquire).is_null() {
+            return Err(Error::WidgetDestroyed);
+        }
+        self.state
+            .pending_items
+            .lock()
+            .expect("virtual list pending items lock poisoned")
+            .insert(index, PendingVirtualListItem::Rich(item));
+        self.schedule_pending_items()
+    }
+
+    fn schedule_pending_items(&self) -> Result<(), Error> {
         if self.state.update_scheduled.swap(true, Ordering::AcqRel) {
             return Ok(());
         }
@@ -7957,12 +7981,22 @@ impl VirtualListHandle {
             }
 
             for (index, item) in items {
-                let native_item = sys::OneUiListItemUtf8 {
-                    title: sys::OneUiUtf8String::from_str(&item.title),
-                    detail: sys::OneUiUtf8String::from_str(&item.detail),
-                };
-                unsafe {
-                    sys::oneui_virtual_list_update_item_utf8(raw, index, &native_item);
+                match item {
+                    PendingVirtualListItem::Basic(item) => {
+                        let native_item = sys::OneUiListItemUtf8 {
+                            title: sys::OneUiUtf8String::from_str(&item.title),
+                            detail: sys::OneUiUtf8String::from_str(&item.detail),
+                        };
+                        unsafe {
+                            sys::oneui_virtual_list_update_item_utf8(raw, index, &native_item);
+                        }
+                    }
+                    PendingVirtualListItem::Rich(item) => {
+                        let native_item = native_virtual_list_item(&item);
+                        unsafe {
+                            sys::oneui_virtual_list_update_rich_item_utf8(raw, index, &native_item);
+                        }
+                    }
                 }
             }
 
@@ -8042,6 +8076,25 @@ impl VirtualList {
         };
     }
 
+    pub fn set_rich_items(&self, items: &[VirtualListItem]) {
+        self.state
+            .pending_items
+            .lock()
+            .expect("virtual list pending items lock poisoned")
+            .clear();
+        let native_items = items
+            .iter()
+            .map(native_virtual_list_item)
+            .collect::<Vec<_>>();
+        unsafe {
+            sys::oneui_virtual_list_set_rich_items_utf8(
+                self.widget.as_raw(),
+                native_items.as_ptr(),
+                native_items.len(),
+            )
+        };
+    }
+
     /// Replaces one row without resetting selection, scrolling, or motion.
     pub fn update_item(&self, index: usize, item: &ListItem) -> bool {
         let native_item = sys::OneUiListItemUtf8 {
@@ -8050,6 +8103,15 @@ impl VirtualList {
         };
         unsafe {
             sys::oneui_virtual_list_update_item_utf8(self.widget.as_raw(), index, &native_item) != 0
+        }
+    }
+
+    /// Replaces one operational row without resetting selection or scrolling.
+    pub fn update_rich_item(&self, index: usize, item: &VirtualListItem) -> bool {
+        let native_item = native_virtual_list_item(item);
+        unsafe {
+            sys::oneui_virtual_list_update_rich_item_utf8(self.widget.as_raw(), index, &native_item)
+                != 0
         }
     }
 
@@ -8103,6 +8165,41 @@ impl VirtualList {
 
     pub fn set_row_height(&self, height: f32) {
         unsafe { sys::oneui_virtual_list_set_row_height(self.widget.as_raw(), height) };
+    }
+
+    pub fn set_rich_metrics(&self, metrics: VirtualListRichMetrics) {
+        unsafe {
+            sys::oneui_virtual_list_set_rich_metrics(
+                self.widget.as_raw(),
+                metrics.indicator_space,
+                metrics.indicator_diameter,
+                metrics.badge_height,
+                metrics.badge_radius,
+                metrics.badge_horizontal_padding,
+                metrics.title_badge_gap,
+                metrics.trailing_width,
+                metrics.trailing_gap,
+            )
+        };
+    }
+
+    pub fn rich_metrics(&self) -> VirtualListRichMetrics {
+        let mut metrics = sys::OneUiVirtualListRichMetrics::default();
+        let read =
+            unsafe { sys::oneui_virtual_list_rich_metrics(self.widget.as_raw(), &mut metrics) };
+        if read == 0 {
+            return VirtualListRichMetrics::default();
+        }
+        VirtualListRichMetrics {
+            indicator_space: metrics.indicator_space,
+            indicator_diameter: metrics.indicator_diameter,
+            badge_height: metrics.badge_height,
+            badge_radius: metrics.badge_radius,
+            badge_horizontal_padding: metrics.badge_horizontal_padding,
+            title_badge_gap: metrics.title_badge_gap,
+            trailing_width: metrics.trailing_width,
+            trailing_gap: metrics.trailing_gap,
+        }
     }
 
     pub fn set_scroll_offset(&self, offset: f32) {
@@ -9797,8 +9894,9 @@ mod tests {
         TerminalCursorStyle, TerminalFrame, TerminalSelection, TerminalUnderlineStyle,
         TerminalView, TextArea, TextField, TimeSeries, TimeSeriesChart, TimeSeriesChartHandle,
         TimeSeriesInspection, TimeSeriesInspectionCallback, TimeSeriesThreshold, TreeItem,
-        TreeView, VirtualList, Window, WindowClientSizeChangedCallback, WindowOptions,
-        WindowPlacement, WindowRawKeyCallback, WindowState,
+        TreeView, VirtualList, VirtualListItem, VirtualListRichMetrics, Window,
+        WindowClientSizeChangedCallback, WindowOptions, WindowPlacement, WindowRawKeyCallback,
+        WindowState, WindowTitleBar,
     };
     use std::cell::{Cell, RefCell};
     use std::ptr::NonNull;
@@ -10602,6 +10700,35 @@ mod tests {
     }
 
     #[test]
+    fn mounts_rich_virtual_list_rows_and_title_bar_leading_content() {
+        let _guard = window_test_lock().lock().expect("window test lock");
+        let window = Window::new(&WindowOptions::default()).expect("window should be created");
+        let list = VirtualList::new().expect("virtual list should be created");
+        let row = VirtualListItem {
+            title: "ERP management".to_owned(),
+            detail: "erp-demo.wangyunchuan.cn".to_owned(),
+            badge: "HTTP".to_owned(),
+            trailing: "Running".to_owned(),
+            indicator_color: Some(Color::rgb(34, 197, 94)),
+            trailing_color: Some(Color::rgb(22, 163, 74)),
+        };
+        list.set_rich_items(std::slice::from_ref(&row));
+        assert!(list.update_rich_item(0, &row));
+        let metrics = VirtualListRichMetrics {
+            trailing_width: 54.0,
+            ..VirtualListRichMetrics::default()
+        };
+        list.set_rich_metrics(metrics);
+        assert!((list.rich_metrics().trailing_width - 54.0).abs() < 0.001);
+
+        let title_bar = WindowTitleBar::new("Workspace").expect("title bar should be created");
+        let leading = Panel::new().expect("leading panel should be created");
+        title_bar.set_leading(leading.as_widget());
+        title_bar.set_icon(IconSymbol::Folder);
+        window.set_content(list.as_widget());
+    }
+
+    #[test]
     fn mounts_multiline_log_view_with_structured_colored_lines() {
         let _guard = window_test_lock().lock().expect("window test lock");
         let window = Window::new(&WindowOptions::default()).expect("window should be created");
@@ -11326,6 +11453,19 @@ mod tests {
                     },
                 )
                 .expect("worker should replace the pending row update");
+            handle
+                .update_rich_item(
+                    0,
+                    VirtualListItem {
+                        title: "Alpha".to_owned(),
+                        detail: "Online".to_owned(),
+                        badge: "HTTPS".to_owned(),
+                        trailing: "Ready".to_owned(),
+                        indicator_color: Some(Color::rgb(34, 197, 94)),
+                        trailing_color: None,
+                    },
+                )
+                .expect("worker should submit a rich row update");
         });
         worker.join().expect("worker should finish");
 
