@@ -5,6 +5,13 @@ export default defineNuxtConfig({
 
   devtools: { enabled: false },
 
+  fonts: {
+    providers: {
+      google: false,
+      googleicons: false
+    }
+  },
+
   future: {
     compatibilityVersion: 4
   },

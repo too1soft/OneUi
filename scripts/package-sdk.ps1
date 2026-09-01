@@ -5,6 +5,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+. (Join-Path $PSScriptRoot "runtime-dependencies.ps1")
+
 $root = Split-Path -Parent $PSScriptRoot
 $toolchainBin = if ($Toolchain.StartsWith("msvc-bundled-static")) { "C:\msys64\mingw64\bin" } else { "C:\msys64\$Toolchain\bin" }
 $objdump = Join-Path $toolchainBin "objdump.exe"
@@ -45,83 +47,31 @@ New-Item -ItemType Directory -Force -Path `
 Copy-Item -LiteralPath $oneuiDll -Destination (Join-Path $sdkRoot "bin")
 Copy-Item -LiteralPath $oneuiImportLib -Destination (Join-Path $sdkRoot "lib")
 Copy-Item -LiteralPath $galleryExe -Destination (Join-Path $sdkRoot "examples\gallery")
-Copy-Item -LiteralPath $oneuiDll -Destination (Join-Path $sdkRoot "examples\gallery")
 Copy-Item -Path (Join-Path $root "include\*") -Destination (Join-Path $sdkRoot "include") -Recurse
 Copy-Item -Path (Join-Path $root "cmake\*") -Destination (Join-Path $sdkRoot "cmake") -Recurse
 Copy-Item -Path (Join-Path $root "docs\*.md") -Destination (Join-Path $sdkRoot "docs")
 if (Test-Path (Join-Path $root "website")) {
-    Copy-Item -Path (Join-Path $root "website\*") -Destination (Join-Path $sdkRoot "website") -Recurse
-}
-
-$systemDlls = @(
-    "advapi32.dll",
-    "comctl32.dll",
-    "comdlg32.dll",
-    "dwrite.dll",
-    "gdi32.dll",
-    "kernel32.dll",
-    "msvcrt.dll",
-    "ole32.dll",
-    "oleaut32.dll",
-    "opengl32.dll",
-    "rpcrt4.dll",
-    "shell32.dll",
-    "shlwapi.dll",
-    "user32.dll",
-    "usp10.dll",
-    "uuid.dll",
-    "winmm.dll",
-    "winspool.drv",
-    "ws2_32.dll"
-)
-
-function Get-ImportedDlls($binary) {
-    & $objdump -p $binary |
-        Select-String "DLL Name:\s*(.+)$" |
-        ForEach-Object { $_.Matches[0].Groups[1].Value.Trim() }
-}
-
-function Is-SystemDll($name) {
-    $lower = $name.ToLowerInvariant()
-    return $systemDlls -contains $lower -or $lower.StartsWith("api-ms-win-") -or $lower.StartsWith("ext-ms-win-")
-}
-
-$seen = @{}
-$missing = New-Object System.Collections.Generic.List[string]
-$missingDetails = New-Object System.Collections.Generic.List[string]
-$queue = New-Object System.Collections.Generic.Queue[string]
-$queue.Enqueue((Join-Path $sdkRoot "bin\oneui.dll"))
-$queue.Enqueue((Join-Path $sdkRoot "examples\gallery\oneui_gallery.exe"))
-
-while ($queue.Count -gt 0) {
-    $current = $queue.Dequeue()
-    foreach ($dll in Get-ImportedDlls $current) {
-        $key = $dll.ToLowerInvariant()
-        if ($seen.ContainsKey($key) -or (Is-SystemDll $dll) -or $key -eq "oneui.dll") {
-            continue
-        }
-
-        $seen[$key] = $true
-        $target = Join-Path $sdkRoot "bin\$dll"
-        if (Test-Path $target) {
-            continue
-        }
-
-        $source = Join-Path $toolchainBin $dll
-        if (!(Test-Path $source)) {
-            $missing.Add($dll)
-            $missingDetails.Add("$dll imported by $current")
-            continue
-        }
-
-        Copy-Item -LiteralPath $source -Destination $target
-        $queue.Enqueue($target)
+    $trackedWebsiteFiles = @(& git -C $root ls-files -- "website")
+    if ($LASTEXITCODE -ne 0) {
+        throw "git ls-files failed while enumerating website sources"
+    }
+    foreach ($relativePath in $trackedWebsiteFiles) {
+        $websiteRelativePath = $relativePath.Substring("website/".Length).Replace('/', [IO.Path]::DirectorySeparatorChar)
+        $destination = Join-Path (Join-Path $sdkRoot "website") $websiteRelativePath
+        $destinationDirectory = Split-Path -Parent $destination
+        New-Item -ItemType Directory -Force -Path $destinationDirectory | Out-Null
+        Copy-Item -LiteralPath (Join-Path $root $relativePath) -Destination $destination
     }
 }
-
-$missingDlls = $missing | Sort-Object -Unique
+$runtime = Copy-OneUIRuntimeDependencies `
+    -SeedBinaries @((Join-Path $sdkRoot "bin\oneui.dll"), (Join-Path $sdkRoot "examples\gallery\oneui_gallery.exe")) `
+    -DestinationDirectory (Join-Path $sdkRoot "bin") `
+    -SearchDirectory $toolchainBin `
+    -Objdump $objdump `
+    -IgnoredDlls @("oneui.dll")
+$missingDlls = $runtime.MissingDlls
 if ($missingDlls.Count -ne 0) {
-    $detail = ($missingDetails | Sort-Object -Unique) -join "; "
+    $detail = $runtime.MissingDetails -join "; "
     throw "Missing runtime DLLs for SDK package: $($missingDlls -join ', '). Imports: $detail"
 }
 
@@ -156,9 +106,8 @@ Contents:
   include/oneui/**/*.h
   cmake/OneUIConfig.cmake
   examples/gallery/oneui_gallery.exe
-  examples/gallery/oneui.dll
   docs/*.md
-  website/index.html
+  website/ source tree (generated output and dependencies are excluded)
 
 CMake usage:
   set(CMAKE_PREFIX_PATH <path-to-this-sdk>)

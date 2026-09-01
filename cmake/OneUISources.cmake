@@ -1,0 +1,76 @@
+set(ONEUI_CORE_SOURCES
+    src/core/animation.cpp
+    src/core/app_shell.cpp
+    src/core/badge.cpp
+    src/core/button.cpp
+    src/core/button_bridge.cpp
+    src/core/card.cpp
+    src/core/checkbox.cpp
+    src/core/dialog.cpp
+    src/core/clipboard.cpp
+    src/core/dock_view.cpp
+    src/core/form_field.cpp
+    src/core/grid.cpp
+    src/core/icon.cpp
+    src/core/icon_badge.cpp
+    src/core/icon_button.cpp
+    src/core/interactive_surface.cpp
+    src/core/icon_view.cpp
+    src/core/label.cpp
+    src/core/list.cpp
+    src/core/log_view.cpp
+    src/core/material3_tokens.cpp
+    src/core/menu.cpp
+    src/core/nav_item.cpp
+    src/core/overlay_host.cpp
+    src/core/panel.cpp
+    src/core/popup.cpp
+    src/core/product_shell.cpp
+    src/core/progress_bar.cpp
+    src/core/radio_group.cpp
+    src/core/realtime_frame_view.cpp
+    src/core/remote_input_region.cpp
+    src/core/reorderable_grid.cpp
+    src/core/scroll_trace.cpp
+    src/core/scroll_view.cpp
+    src/core/selection_model.cpp
+    src/core/select.cpp
+    src/core/separator.cpp
+    src/core/sidebar_nav_bridge.cpp
+    src/core/slider.cpp
+    src/core/sparkline.cpp
+    src/core/split_view.cpp
+    src/core/stack.cpp
+    src/core/state_view.cpp
+    src/core/status_strip.cpp
+    src/core/style_adapter.cpp
+    src/core/style_sheet.cpp
+    src/core/style_transition.cpp
+    src/core/switch.cpp
+    src/core/table.cpp
+    src/core/tabs.cpp
+    src/core/terminal_view.cpp
+    src/core/text_field.cpp
+    src/core/text_input_bridge.cpp
+    src/core/tile.cpp
+    src/core/time_series_chart.cpp
+    src/core/title_bar_bridge.cpp
+    src/core/toast.cpp
+    src/core/top_bar.cpp
+    src/core/tree_view.cpp
+    src/core/validation_message.cpp
+    src/core/view.cpp
+    src/core/virtual_list.cpp
+    src/core/widget.cpp
+    src/core/window_title_bar.cpp
+    src/core/wrap.cpp
+)
+
+set(ONEUI_C_API_SOURCES
+    src/capi/oneui_c_api.cpp
+)
+
+set(ONEUI_WIN32_SOURCES
+    src/platform/win32/monitor_win32.cpp
+    src/platform/win32/window_win32.cpp
+)

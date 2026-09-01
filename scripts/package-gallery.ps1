@@ -5,6 +5,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+. (Join-Path $PSScriptRoot "runtime-dependencies.ps1")
+
 $root = Split-Path -Parent $PSScriptRoot
 $toolchainRoot = "C:\msys64\$Toolchain"
 $toolchainBin = Join-Path $toolchainRoot "bin"
@@ -34,68 +36,15 @@ New-Item -ItemType Directory -Force -Path $dist | Out-Null
 Copy-Item -LiteralPath $exe -Destination $dist
 Copy-Item -LiteralPath $oneuiDll -Destination $dist
 
-$systemDlls = @(
-    "advapi32.dll",
-    "comctl32.dll",
-    "comdlg32.dll",
-    "dwrite.dll",
-    "gdi32.dll",
-    "kernel32.dll",
-    "msvcrt.dll",
-    "ole32.dll",
-    "oleaut32.dll",
-    "opengl32.dll",
-    "rpcrt4.dll",
-    "shell32.dll",
-    "shlwapi.dll",
-    "user32.dll",
-    "usp10.dll",
-    "uuid.dll",
-    "winmm.dll",
-    "winspool.drv",
-    "ws2_32.dll"
-)
+$runtime = Copy-OneUIRuntimeDependencies `
+    -SeedBinaries @((Join-Path $dist "oneui_gallery.exe"), (Join-Path $dist "oneui.dll")) `
+    -DestinationDirectory $dist `
+    -SearchDirectory $toolchainBin `
+    -Objdump $objdump
 
-$seen = @{}
-$missing = New-Object System.Collections.Generic.List[string]
-$queue = New-Object System.Collections.Generic.Queue[string]
-$queue.Enqueue((Join-Path $dist "oneui_gallery.exe"))
-$queue.Enqueue((Join-Path $dist "oneui.dll"))
-
-function Get-ImportedDlls($binary) {
-    & $objdump -p $binary |
-        Select-String "DLL Name:\s*(.+)$" |
-        ForEach-Object { $_.Matches[0].Groups[1].Value.Trim() }
-}
-
-function Is-SystemDll($name) {
-    $lower = $name.ToLowerInvariant()
-    return $systemDlls -contains $lower -or $lower.StartsWith("api-ms-win-") -or $lower.StartsWith("ext-ms-win-")
-}
-
-while ($queue.Count -gt 0) {
-    $current = $queue.Dequeue()
-    foreach ($dll in Get-ImportedDlls $current) {
-        $key = $dll.ToLowerInvariant()
-        if ($seen.ContainsKey($key) -or (Is-SystemDll $dll)) {
-            continue
-        }
-
-        $seen[$key] = $true
-        $target = Join-Path $dist $dll
-        if (Test-Path $target) {
-            continue
-        }
-
-        $source = Join-Path $toolchainBin $dll
-        if (!(Test-Path $source)) {
-            $missing.Add($dll)
-            continue
-        }
-
-        Copy-Item -LiteralPath $source -Destination $target
-        $queue.Enqueue($target)
-    }
+if ($runtime.MissingDlls.Count -ne 0) {
+    $detail = $runtime.MissingDetails -join "; "
+    throw "Missing runtime DLLs for Gallery package: $($runtime.MissingDlls -join ', '). Imports: $detail"
 }
 
 $readme = @"
@@ -129,5 +78,5 @@ $zipSize = (Get-Item -LiteralPath $zip).Length
     Files = (Get-ChildItem -LiteralPath $dist -File).Count
     UncompressedBytes = $distSize
     ZipBytes = $zipSize
-    MissingDlls = ($missing | Sort-Object -Unique) -join ", "
+    MissingDlls = ($runtime.MissingDlls -join ", ")
 }

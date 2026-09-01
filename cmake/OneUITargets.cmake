@@ -14,6 +14,7 @@ set_target_properties(OneUI::oneui PROPERTIES
     IMPORTED_LOCATION "${_oneui_sdk_root}/bin/oneui.dll"
     IMPORTED_IMPLIB "${_oneui_import_lib}"
     INTERFACE_INCLUDE_DIRECTORIES "${_oneui_sdk_root}/include"
+    INTERFACE_COMPILE_OPTIONS "$<$<CXX_COMPILER_ID:MSVC>:/utf-8>"
 )
 
 unset(_oneui_sdk_root)

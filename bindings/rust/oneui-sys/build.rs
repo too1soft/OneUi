@@ -1,9 +1,11 @@
 use std::env;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 fn main() {
     println!("cargo:rerun-if-env-changed=ONEUI_LIB_DIR");
+    println!("cargo:rerun-if-env-changed=ONEUI_SKIA_LIB_DIR");
+    println!("cargo:rerun-if-env-changed=ONEUI_STATIC_LIBS");
 
     let lib_dir = env::var_os("ONEUI_LIB_DIR").map(PathBuf::from).unwrap_or_else(|| {
         panic!(
@@ -12,6 +14,12 @@ fn main() {
     });
 
     println!("cargo:rustc-link-search=native={}", lib_dir.display());
+
+    if cfg!(feature = "static-link") {
+        link_static(&lib_dir);
+        return;
+    }
+
     println!("cargo:rustc-link-lib=dylib=oneui");
 
     if env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
@@ -40,4 +48,37 @@ fn main() {
             }
         }
     }
+}
+
+fn link_static(lib_dir: &Path) {
+    println!("cargo:rustc-link-lib=static=oneui_static");
+    if let Some(skia_dir) = env::var_os("ONEUI_SKIA_LIB_DIR") {
+        println!(
+            "cargo:rustc-link-search=native={}",
+            PathBuf::from(skia_dir).display()
+        );
+    }
+
+    let static_libs = env::var("ONEUI_STATIC_LIBS").unwrap_or_else(|_| "skia".to_owned());
+    for name in static_libs
+        .split([',', ';'])
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+    {
+        println!("cargo:rustc-link-lib=static={name}");
+    }
+
+    if env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
+        for name in [
+            "user32", "gdi32", "shell32", "dwmapi", "imm32", "dwrite", "opengl32", "ole32",
+            "oleaut32", "uuid", "fontsub", "usp10",
+        ] {
+            println!("cargo:rustc-link-lib={name}");
+        }
+    }
+
+    println!(
+        "cargo:rerun-if-changed={}",
+        lib_dir.join("oneui_static.lib").display()
+    );
 }

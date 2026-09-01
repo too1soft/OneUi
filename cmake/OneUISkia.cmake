@@ -18,6 +18,12 @@ if(ONEUI_SKIA_MODE STREQUAL "msys2-dynamic")
             skia
     )
 elseif(ONEUI_SKIA_MODE STREQUAL "bundled-static")
+    if(MSVC)
+        # The bundled Skia archives are built with the static MSVC runtime.
+        # Match it for every OneUI target in this build to avoid CRT mixing.
+        set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif()
+
     set(ONEUI_BUNDLED_SKIA_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/third_party/skia" CACHE PATH "Path to vendored Skia source")
     set(ONEUI_BUNDLED_SKIA_OUT "${ONEUI_BUNDLED_SKIA_ROOT}/out/oneui-win-x64-release" CACHE PATH "Path to vendored Skia build output")
     set(ONEUI_BUNDLED_SKIA_LIB "" CACHE FILEPATH "Path to static Skia library")
@@ -51,6 +57,15 @@ elseif(ONEUI_SKIA_MODE STREQUAL "bundled-static")
         IMPORTED_LOCATION "${ONEUI_BUNDLED_SKIA_LIB}"
         INTERFACE_INCLUDE_DIRECTORIES "${ONEUI_BUNDLED_SKIA_ROOT}"
     )
+
+    # Newer Skia exposes gradients through SkGradient/SkShaders. Keep OneUI's
+    # source compatible with both API generations without affecting the
+    # existing MSYS2 dynamic build.
+    if(NOT EXISTS "${ONEUI_BUNDLED_SKIA_ROOT}/include/effects/SkGradientShader.h")
+        target_include_directories(oneui_skia BEFORE INTERFACE
+            "${CMAKE_CURRENT_SOURCE_DIR}/cmake/skia_compat"
+        )
+    endif()
 
     file(GLOB _oneui_skia_static_libs
         "${ONEUI_BUNDLED_SKIA_OUT}/*.lib"

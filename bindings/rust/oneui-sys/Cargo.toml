@@ -10,3 +10,7 @@ build = "build.rs"
 
 [lib]
 path = "src/lib.rs"
+
+[features]
+default = []
+static-link = []

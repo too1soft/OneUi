@@ -8,3 +8,7 @@ repository = "https://github.com/too1soft/OneUi"
 
 [dependencies]
 oneui-sys = { path = "../oneui-sys" }
+
+[features]
+default = []
+static-link = ["oneui-sys/static-link"]
