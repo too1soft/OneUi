@@ -96,6 +96,7 @@ struct DrawTextCall {
     oneui::Color color;
     float size = 0.0f;
     int weight = 400;
+    oneui::TextAlign align = oneui::TextAlign::Center;
 };
 
 struct DrawLineCall {
@@ -155,17 +156,17 @@ public:
     void drawBoxShadow(oneui::Rect rect, const oneui::BoxShadow& shadow, float radius = 0.0f) override {
         boxShadows.push_back(BoxShadowCall{rect, shadow, radius});
     }
-    void drawText(const std::wstring& text, oneui::Rect rect, oneui::Color color, float size, oneui::TextAlign = oneui::TextAlign::Center) override {
-        texts.push_back(DrawTextCall{text, rect, color, size, 400});
+    void drawText(const std::wstring& text, oneui::Rect rect, oneui::Color color, float size, oneui::TextAlign align = oneui::TextAlign::Center) override {
+        texts.push_back(DrawTextCall{text, rect, color, size, 400, align});
     }
     void drawTextStyled(
         const std::wstring& text,
         oneui::Rect rect,
         oneui::Color color,
         float size,
-        oneui::TextAlign = oneui::TextAlign::Center,
+        oneui::TextAlign align = oneui::TextAlign::Center,
         int weight = 400) override {
-        texts.push_back(DrawTextCall{text, rect, color, size, weight});
+        texts.push_back(DrawTextCall{text, rect, color, size, weight, align});
     }
     float measureTextWidth(const std::wstring& text, float size, int weight = 400) const override {
         (void)weight;
@@ -2298,6 +2299,8 @@ void testTabsStyleOverridePaintsCustomColorsAndGeometry() {
     normal.border = border;
     normal.itemForeground = normalText;
     normal.itemInset = oneui::Insets{4.0f};
+    normal.fontSize = 12.0f;
+    normal.fontWeight = 600;
     style.normal = normal;
     oneui::TabsStateStyleOverride hovered;
     hovered.itemBackground = hoverBackground;
@@ -2321,9 +2324,28 @@ void testTabsStyleOverridePaintsCustomColorsAndGeometry() {
     expectEqual("Tabs style override selected border", countStrokeRectsWithColor(canvas, selectedBorder), 1);
     expectEqual("Tabs style override normal text", countTextsWithTextAndColor(canvas, L"Props", normalText), 1);
     expectEqual("Tabs style override selected text", countTextsWithTextAndColor(canvas, L"State", selectedForeground), 1);
+    for (const auto& text : canvas.texts) {
+        expectNear("Tabs style override font size", text.size, 12.0f);
+        expectEqual("Tabs style override font weight", text.weight, 600);
+        expectEqual("Equal tabs center text", text.align == oneui::TextAlign::Center ? 1 : 0, 1);
+    }
+    expectNear("Equal tabs text frame centered", tabs.itemTextFrame(0).x + tabs.itemTextFrame(0).width * 0.5f, 50.0f);
     if (canvas.fillRects.size() >= 3) {
         expectRect("Tabs selected item geometry follows itemInset", canvas.fillRects[2].rect, oneui::Rect{104.0f, 4.0f, 92.0f, 22.0f});
     }
+}
+
+void testCompactTabsKeepLeadingTextAlignment() {
+    oneui::Tabs tabs;
+    tabs.setItems({L"Session one", L"Session two"});
+    tabs.setSizingMode(oneui::TabsSizingMode::Compact);
+    tabs.setFrame(oneui::Rect{0.0f, 0.0f, 260.0f, 30.0f});
+
+    RecordingCanvas canvas;
+    tabs.paint(canvas);
+
+    expectEqual("Compact tabs keep left text alignment", canvas.texts.front().align == oneui::TextAlign::Left ? 1 : 0, 1);
+    expectEqual("Compact tab debug alignment is left", tabs.itemTextAlign(0) == oneui::TextAlign::Left ? 1 : 0, 1);
 }
 
 void testTabsEmptyStyleOverrideKeepsDefaultPaint() {
@@ -7484,6 +7506,7 @@ int main() {
     testRadioGroupStyleOverrideCanHideFocusRingAndStylePressed();
     testRadioGroupDisabledStyleOverrideWinsAndClearRestoresDefault();
     testTabsStyleOverridePaintsCustomColorsAndGeometry();
+    testCompactTabsKeepLeadingTextAlignment();
     testTabsEmptyStyleOverrideKeepsDefaultPaint();
     testTabsStyleOverrideCanHideFocusRingAndStylePressed();
     testTabsDisabledStyleOverrideWinsAndClearRestoresDefault();

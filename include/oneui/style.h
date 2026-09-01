@@ -314,6 +314,8 @@ struct TabsStyle {
     float radius = 6.0f;
     float itemRadius = 6.0f;
     float itemBorderWidth = 1.0f;
+    float fontSize = 14.0f;
+    int fontWeight = 400;
     Insets itemInset{2.0f};
     FocusRingStyle focusRing{};
 };
@@ -330,6 +332,8 @@ struct TabsStateStyleOverride {
     std::optional<float> radius;
     std::optional<float> itemRadius;
     std::optional<float> itemBorderWidth;
+    std::optional<float> fontSize;
+    std::optional<int> fontWeight;
     std::optional<Insets> itemInset;
     std::optional<FocusRingStyleOverride> focusRing;
 };

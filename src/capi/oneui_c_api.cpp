@@ -1035,7 +1035,19 @@ void appendDebugTabItems(std::ostringstream& stream, const oneui::Tabs& tabs) {
         stream << ",\"y\":"; appendJsonNumber(stream, frame.y);
         stream << ",\"width\":"; appendJsonNumber(stream, frame.width);
         stream << ",\"height\":"; appendJsonNumber(stream, frame.height);
-        stream << "}}";
+        const oneui::Rect textFrame = tabs.itemTextFrame(static_cast<int>(index));
+        stream << "},\"textFrame\":{\"x\":"; appendJsonNumber(stream, textFrame.x);
+        stream << ",\"y\":"; appendJsonNumber(stream, textFrame.y);
+        stream << ",\"width\":"; appendJsonNumber(stream, textFrame.width);
+        stream << ",\"height\":"; appendJsonNumber(stream, textFrame.height);
+        stream << "},\"paintFontSize\":";
+        appendJsonNumber(stream, tabs.itemPaintFontSize(static_cast<int>(index)));
+        stream << ",\"paintFontWeight\":" << tabs.itemPaintFontWeight(static_cast<int>(index));
+        stream << ",\"textAlign\":\""
+               << (tabs.itemTextAlign(static_cast<int>(index)) == oneui::TextAlign::Center
+                       ? "center"
+                       : "left")
+               << "\"}";
     }
     stream << ']';
 }
@@ -1386,6 +1398,8 @@ void applyStyleSheet(OneUiWidget* wrapper, std::shared_ptr<oneui::StyleSheet> sh
             state.radius = box.radius;
             state.itemRadius = box.content.radius ? box.content.radius : box.radius;
             state.itemBorderWidth = box.borderWidth;
+            state.fontSize = box.fontSize;
+            state.fontWeight = box.fontWeight;
             if (box.padding) {
                 state.itemInset = *box.padding;
             }

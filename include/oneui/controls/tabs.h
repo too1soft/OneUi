@@ -25,6 +25,10 @@ public:
     void setItems(std::vector<std::wstring> items);
     const std::vector<std::wstring>& items() const;
     Rect itemFrame(int index) const;
+    Rect itemTextFrame(int index) const;
+    float itemPaintFontSize(int index) const;
+    int itemPaintFontWeight(int index) const;
+    TextAlign itemTextAlign(int index) const;
     void setItemIcons(std::vector<std::optional<IconSymbol>> icons);
     void setSelectedIndex(int index);
     int selectedIndex() const;
@@ -59,6 +63,7 @@ private:
     float contentWidth() const;
     float maximumScrollOffset() const;
     Rect itemRect(int index) const;
+    Rect textRect(int index) const;
     Rect closeRect(int index) const;
     int hitIndex(Point point) const;
     int hitCloseIndex(Point point) const;

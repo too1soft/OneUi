@@ -62,6 +62,12 @@ void applyTabsStateOverride(TabsStyle& style, const TabsStateStyleOverride& over
     if (override.itemBorderWidth) {
         style.itemBorderWidth = *override.itemBorderWidth;
     }
+    if (override.fontSize) {
+        style.fontSize = *override.fontSize;
+    }
+    if (override.fontWeight) {
+        style.fontWeight = *override.fontWeight;
+    }
     if (override.itemInset) {
         style.itemInset = *override.itemInset;
     }
@@ -84,6 +90,8 @@ TabsStyle baseTabsStyle(bool selected, bool disabled, bool hovered, bool pressed
     style.radius = t.radiusMd;
     style.itemRadius = t.radiusMd;
     style.itemBorderWidth = 1.0f;
+    style.fontSize = t.fontMd;
+    style.fontWeight = 400;
     style.itemInset = Insets{2.0f};
     style.focusRing = FocusRingStyle{t.focusOutline, t.focusOutlineWidth, t.focusOutlineOffset, t.radiusLg, true};
 
@@ -122,6 +130,23 @@ const std::vector<std::wstring>& Tabs::items() const {
 
 Rect Tabs::itemFrame(int index) const {
     return itemRect(index);
+}
+
+Rect Tabs::itemTextFrame(int index) const {
+    return textRect(index);
+}
+
+float Tabs::itemPaintFontSize(int index) const {
+    return resolvedItemStyle(index).fontSize;
+}
+
+int Tabs::itemPaintFontWeight(int index) const {
+    return resolvedItemStyle(index).fontWeight;
+}
+
+TextAlign Tabs::itemTextAlign(int index) const {
+    (void)index;
+    return sizingMode_ == TabsSizingMode::Equal ? TextAlign::Center : TextAlign::Left;
 }
 
 void Tabs::setItemIcons(std::vector<std::optional<IconSymbol>> icons) {
@@ -272,13 +297,7 @@ void Tabs::paint(Canvas& canvas) {
         const auto icon = static_cast<std::size_t>(i) < itemIcons_.size()
             ? itemIcons_[static_cast<std::size_t>(i)]
             : std::nullopt;
-        const float leadingInset = icon.has_value() ? 28.0f : 8.0f;
-        const float textRightInset = showClose ? 27.0f : 8.0f;
-        const Rect textRect{
-            itemRect.x + leadingInset,
-            itemRect.y,
-            std::max(0.0f, itemRect.width - leadingInset - textRightInset),
-            itemRect.height};
+        const Rect textFrame = textRect(i);
         if (icon.has_value()) {
             const float iconSize = std::min(16.0f, std::max(0.0f, itemRect.height - 8.0f));
             const Rect iconRect{
@@ -294,12 +313,13 @@ void Tabs::paint(Canvas& canvas) {
                 Color{0, 0, 0, 0},
                 1.35f);
         }
-        canvas.drawTextEllipsized(
+        canvas.drawTextStyledEllipsized(
             items_[static_cast<std::size_t>(i)],
-            textRect,
+            textFrame,
             itemStyle.itemForeground,
-            theme().fontMd,
-            TextAlign::Left);
+            itemStyle.fontSize,
+            itemTextAlign(i),
+            itemStyle.fontWeight);
         if (showClose) {
             const Rect iconRect = closeRect(i);
             if (i == hoveredCloseIndex_ || i == pressedCloseIndex_) {
@@ -562,7 +582,7 @@ void Tabs::updateCompactMetrics(Canvas& canvas) {
         const bool hasIcon = index < itemIcons_.size() && itemIcons_[index].has_value();
         const float leadingInset = hasIcon ? 28.0f : 8.0f;
         const float trailingInset = closable_ ? 27.0f : 8.0f;
-        const float measured = canvas.measureTextWidth(items_[index], theme().fontMd);
+        const float measured = canvas.measureTextWidth(items_[index], style.fontSize, style.fontWeight);
         const float desired = style.itemInset.left + style.itemInset.right
             + leadingInset + measured + trailingInset;
         const float width = std::clamp(desired, minimumItemWidth_, maximumItemWidth_);
@@ -626,6 +646,26 @@ Rect Tabs::itemRect(int index) const {
         rect.y,
         width,
         rect.height};
+}
+
+Rect Tabs::textRect(int index) const {
+    if (index < 0 || index >= static_cast<int>(items_.size())) {
+        return Rect{};
+    }
+    const TabsStyle style = resolvedItemStyle(index);
+    const Rect item = itemRect(index).inset(style.itemInset);
+    const bool active = index == std::clamp(selectedIndex(), 0, static_cast<int>(items_.size()) - 1);
+    const bool showClose = closable_ &&
+        (active || index == hoveredIndex_ || index == hoveredCloseIndex_);
+    const bool hasIcon = static_cast<std::size_t>(index) < itemIcons_.size() &&
+        itemIcons_[static_cast<std::size_t>(index)].has_value();
+    const float leadingInset = hasIcon ? 28.0f : 8.0f;
+    const float trailingInset = showClose ? 27.0f : 8.0f;
+    return Rect{
+        item.x + leadingInset,
+        item.y,
+        std::max(0.0f, item.width - leadingInset - trailingInset),
+        item.height};
 }
 
 Rect Tabs::closeRect(int index) const {
