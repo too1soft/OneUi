@@ -25,6 +25,7 @@ public:
     // 供样式表按类换肤（如登录页深色标题栏）；空则保持默认皮肤。
     void setVariant(std::string variant);
     void setStyleSheet(std::shared_ptr<StyleSheet> sheet);
+    void setLeading(std::shared_ptr<Widget> leading);
     void setAccessory(std::shared_ptr<Widget> accessory);
     void setOnMinimize(std::function<void()> callback);
     void setOnMaximize(std::function<void()> callback);
@@ -50,6 +51,7 @@ private:
     std::string variant_;
     IconSymbol iconSymbol_ = IconSymbol::BrandBloom;
     std::shared_ptr<StyleSheet> styleSheet_;
+    std::shared_ptr<Widget> leading_;
     std::shared_ptr<Widget> accessory_;
     bool maximized_ = false;
     TitleBarButtonId hoveredButton_ = TitleBarButtonId::None;

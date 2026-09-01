@@ -37,6 +37,7 @@
 #include "oneui/layout/scroll_view.h"
 #include "oneui/layout/sidebar_nav_bridge.h"
 #include "oneui/layout/split_view.h"
+#include "oneui/platform/dpi.h"
 #include "oneui/layout/stack.h"
 #include "oneui/layout/title_bar_bridge.h"
 #include "oneui/layout/wrap.h"
@@ -283,6 +284,10 @@ void expectEqual(const char* name, int actual, int expected) {
         std::cerr << name << ": expected " << expected << ", got " << actual << '\n';
         ++failures;
     }
+}
+
+void expectTrue(const char* name, bool value) {
+    expectEqual(name, value ? 1 : 0, 1);
 }
 
 void expectWideEqual(const char* name, const std::wstring& actual, const std::wstring& expected) {
@@ -4012,6 +4017,72 @@ void testSparklineClampsSamplesAndPaintsAStableSeries() {
     expectEqual("Sparkline paints endpoint", static_cast<int>(canvas.fillEllipses.size()), 1);
 }
 
+void testDpiScaleContractCoversCommonWindowsSettings() {
+    expectNear("DPI 100 percent scale", oneui::scaleFromDpiValue(96), 1.0f);
+    expectNear("DPI 125 percent scale", oneui::scaleFromDpiValue(120), 1.25f);
+    expectNear("DPI 150 percent scale", oneui::scaleFromDpiValue(144), 1.5f);
+    expectNear("DPI zero falls back to one", oneui::scaleFromDpiValue(0), 1.0f);
+}
+
+void testVirtualListPaintsRichOperationalRows() {
+    oneui::VirtualList list;
+    list.setFrame(oneui::Rect{0.0f, 0.0f, 320.0f, 72.0f});
+    oneui::VirtualListItem item;
+    item.title = L"ERP management";
+    item.detail = L"erp-demo.wangyunchuan.cn";
+    item.badge = L"HTTP";
+    item.trailing = L"Running";
+    item.indicatorVisible = true;
+    item.indicatorColor = oneui::Color{34, 197, 94};
+    item.trailingColor = oneui::Color{22, 163, 74};
+    list.setRichItems({item});
+    list.setRowHeight(72.0f);
+    list.setRichMetrics(oneui::VirtualListRichMetrics{
+        18.0f,
+        8.0f,
+        18.0f,
+        4.0f,
+        12.0f,
+        6.0f,
+        54.0f,
+        6.0f});
+
+    RecordingCanvas canvas;
+    list.paint(canvas);
+
+    expectEqual("VirtualList rich row paints status dot", static_cast<int>(canvas.fillEllipses.size()), 1);
+    expectEqual("VirtualList rich row paints title badge detail and trailing", static_cast<int>(canvas.texts.size()), 4);
+    expectNear("VirtualList rich row configurable status dot", canvas.fillEllipses.front().rect.width, 8.0f);
+    expectNear("VirtualList rich row keeps trailing width metric", list.richMetrics().trailingWidth, 54.0f);
+
+    const float previousOffset = list.scrollOffset();
+    const int previousSelection = list.selectedIndex();
+    item.trailing = L"Stopped";
+    expectEqual("VirtualList rich row update succeeds", list.updateRichItem(0, item) ? 1 : 0, 1);
+    expectNear("VirtualList rich row update preserves scroll", list.scrollOffset(), previousOffset);
+    expectEqual("VirtualList rich row update preserves selection", list.selectedIndex(), previousSelection);
+
+    list.setFrame(oneui::Rect{0.0f, 0.0f, 116.0f, 72.0f});
+    RecordingCanvas narrowCanvas;
+    list.paint(narrowCanvas);
+    const auto trailingCall = std::find_if(
+        narrowCanvas.texts.begin(),
+        narrowCanvas.texts.end(),
+        [](const DrawTextCall& call) { return call.align == oneui::TextAlign::Right; });
+    const auto badgeCall = std::find_if(
+        narrowCanvas.texts.begin(),
+        narrowCanvas.texts.end(),
+        [](const DrawTextCall& call) { return call.align == oneui::TextAlign::Center; });
+    expectEqual("VirtualList narrow row still paints trailing", trailingCall != narrowCanvas.texts.end() ? 1 : 0, 1);
+    expectEqual("VirtualList narrow row still paints badge", badgeCall != narrowCanvas.texts.end() ? 1 : 0, 1);
+    if (trailingCall != narrowCanvas.texts.end() && badgeCall != narrowCanvas.texts.end()) {
+        expectEqual(
+            "VirtualList narrow row keeps badge before trailing",
+            badgeCall->rect.x + badgeCall->rect.width <= trailingCall->rect.x + 0.001f ? 1 : 0,
+            1);
+    }
+}
+
 void testProgressBarDisabledStyleAndClearRestoresDefault() {
     oneui::ProgressBar progress;
     progress.setValue(0.5);
@@ -5560,6 +5631,15 @@ void testAppShellLaysOutProductRegionsAndCollapsibleSidebar() {
     expectRect("AppShell header expands with hidden sidebar", header->frame(), oneui::Rect{10.0f, 10.0f, 980.0f, 60.0f});
     expectRect("AppShell content expands with hidden sidebar", content->frame(), oneui::Rect{10.0f, 74.0f, 980.0f, 582.0f});
     expectRect("AppShell footer expands with hidden sidebar", footer->frame(), oneui::Rect{10.0f, 660.0f, 980.0f, 30.0f});
+
+    shell.setSidebarVisible(true);
+    shell.setFooterSpanSidebar(true);
+    shell.paint(canvas);
+
+    expectTrue("AppShell footer span flag", shell.footerSpansSidebar());
+    expectRect("AppShell spanning footer", footer->frame(), oneui::Rect{10.0f, 660.0f, 980.0f, 30.0f});
+    expectRect("AppShell spanning footer shortens sidebar", sidebar->frame(), oneui::Rect{10.0f, 10.0f, 200.0f, 646.0f});
+    expectRect("AppShell spanning footer keeps content above status", content->frame(), oneui::Rect{214.0f, 74.0f, 776.0f, 582.0f});
 }
 
 void testProductShellComputesReusableRemoteClientLayout() {
@@ -6483,6 +6563,11 @@ void testStatusStripActionStyleComesFromCss() {
             background: #292932;
             border-color: #535362;
         }
+        .status-strip-action.link {
+            background: #00000000;
+            border-width: 0px;
+            color: #3158d4;
+        }
     )css", &error);
     strip.setStyleSheet(std::make_shared<oneui::StyleSheet>(sheet), oneui::StyleNode{"status-strip", {"status-strip"}, oneui::StyleStateNone});
 
@@ -6494,6 +6579,14 @@ void testStatusStripActionStyleComesFromCss() {
     RecordingCanvas hoverCanvas;
     strip.paint(hoverCanvas);
     expectEqual("StatusStrip hover action background comes from CSS", countFillRectsWithColor(hoverCanvas, oneui::Color{41, 41, 50}), 1);
+
+    strip.onMouseMove(oneui::MouseEvent{oneui::Point{-1.0f, -1.0f}});
+    strip.setPrimaryActionPresentation(oneui::StatusStripActionPresentation::Link);
+    strip.setPrimaryActionTrailingIcon(oneui::IconSymbol::ChevronRight);
+    RecordingCanvas linkCanvas;
+    strip.paint(linkCanvas);
+    expectEqual("StatusStrip link action removes button surface", countFillRectsWithColor(linkCanvas, oneui::Color{21, 21, 27}), 1);
+    expectTrue("StatusStrip link action paints trailing icon", !linkCanvas.lines.empty());
 }
 
 void testStateViewPaintsSemanticContentAndDispatchesAction() {
@@ -6694,17 +6787,23 @@ void testWindowTitleBarPaintsAndDispatchesChromeActions() {
 void testWindowTitleBarAccessoryReceivesLayoutAndPointerInput() {
     oneui::WindowTitleBar titleBar(L"Remote");
     titleBar.setFrame(oneui::Rect{0.0f, 0.0f, 900.0f, 36.0f});
+    auto leading = std::make_shared<oneui::Panel>();
+    leading->setPreferredSize(oneui::Size{286.0f, 30.0f});
     auto accessory = std::make_shared<oneui::Button>(L"Session");
     accessory->setTooltip(L"Active terminal session");
     int clicks = 0;
     accessory->setOnClick([&] {
         ++clicks;
     });
+    titleBar.setLeading(leading);
     titleBar.setAccessory(accessory);
 
     RecordingCanvas canvas;
     titleBar.paint(canvas);
     const auto accessoryFrame = accessory->frame();
+    expectNear("WindowTitleBar leading starts at standard inset", leading->frame().x, 16.0f);
+    expectNear("WindowTitleBar leading keeps preferred width", leading->frame().width, 286.0f);
+    expectEqual("WindowTitleBar custom leading suppresses built-in title", static_cast<int>(canvas.texts.size()), 1);
     expectEqual("WindowTitleBar accessory has usable width", accessoryFrame.width > 120.0f ? 1 : 0, 1);
     expectEqual("WindowTitleBar accessory is vertically inset", accessoryFrame.y > titleBar.frame().y ? 1 : 0, 1);
 
@@ -7529,6 +7628,7 @@ int main() {
     testPointerActivationUsesSystemClickCountAndSeparateContextAction();
     testInteractiveSurfaceKeepsSemanticAndNestedKeyboardTargetsDistinct();
     testVirtualListCssControlsCompactTypographyAndScrollbar();
+    testVirtualListPaintsRichOperationalRows();
     testTreeViewStyleAdapterSharesListContract();
     testTreeViewReportsStableReorderIdsAndPreservesToggleBehavior();
     testTreeViewOwnsTransientExternalDropTargetState();
@@ -7544,6 +7644,7 @@ int main() {
     testProgressBarStyleOverridePaintsCustomColorsAndGeometry();
     testProgressBarDisabledStyleAndClearRestoresDefault();
     testSparklineClampsSamplesAndPaintsAStableSeries();
+    testDpiScaleContractCoversCommonWindowsSettings();
     testSeparatorStyleOverridePaintsCustomColorAndThickness();
     testSeparatorEmptyStyleOverrideAndClearRestoresDefault();
     testSliderMouseFocusIsNotFocusVisible();

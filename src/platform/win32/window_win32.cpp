@@ -1,4 +1,5 @@
 #include "oneui/platform/window.h"
+#include "oneui/platform/dpi.h"
 
 #include "oneui/color.h"
 #include "oneui/view.h"
@@ -29,8 +30,12 @@
 #include "include/core/SkImage.h"
 #include "include/core/SkImageInfo.h"
 #include "include/core/SkMaskFilter.h"
+#include "include/core/SkMilestone.h"
 #include "include/core/SkPaint.h"
 #include "include/core/SkPath.h"
+#if SK_MILESTONE >= 150
+#include "include/core/SkPathBuilder.h"
+#endif
 #include "include/core/SkRRect.h"
 #include "include/core/SkRect.h"
 #include "include/core/SkSamplingOptions.h"
@@ -107,10 +112,7 @@ using GetDpiForWindowFn = UINT(WINAPI*)(HWND);
 using GetDpiForMonitorFn = HRESULT(WINAPI*)(HMONITOR, int, UINT*, UINT*);
 
 float scaleFromDpi(UINT dpi) {
-    if (dpi == 0) {
-        return 1.0f;
-    }
-    return std::max(0.25f, static_cast<float>(dpi) / kDefaultDpi);
+    return oneui::scaleFromDpiValue(dpi);
 }
 
 UINT systemDpi() {
@@ -547,17 +549,33 @@ public:
         if (path.empty()) {
             return;
         }
+#if SK_MILESTONE >= 150
+        SkPathBuilder nativeBuilder;
+#else
         SkPath native;
+#endif
         for (const auto& command : path.commands) {
             switch (command.verb) {
             case CanvasPathVerb::MoveTo:
+#if SK_MILESTONE >= 150
+                nativeBuilder.moveTo(command.first.x, command.first.y);
+#else
                 native.moveTo(command.first.x, command.first.y);
+#endif
                 break;
             case CanvasPathVerb::LineTo:
+#if SK_MILESTONE >= 150
+                nativeBuilder.lineTo(command.first.x, command.first.y);
+#else
                 native.lineTo(command.first.x, command.first.y);
+#endif
                 break;
             case CanvasPathVerb::CubicTo:
+#if SK_MILESTONE >= 150
+                nativeBuilder.cubicTo(
+#else
                 native.cubicTo(
+#endif
                     command.first.x,
                     command.first.y,
                     command.second.x,
@@ -566,10 +584,17 @@ public:
                     command.third.y);
                 break;
             case CanvasPathVerb::Close:
+#if SK_MILESTONE >= 150
+                nativeBuilder.close();
+#else
                 native.close();
+#endif
                 break;
             }
         }
+#if SK_MILESTONE >= 150
+        SkPath native = nativeBuilder.detach();
+#endif
         SkPaint paint;
         paint.setAntiAlias(true);
         paint.setColor(toSkColor(color));
@@ -589,17 +614,33 @@ public:
         if (path.empty() || bounds.width <= 0.0f || bounds.height <= 0.0f) {
             return;
         }
+#if SK_MILESTONE >= 150
+        SkPathBuilder nativeBuilder;
+#else
         SkPath native;
+#endif
         for (const auto& command : path.commands) {
             switch (command.verb) {
             case CanvasPathVerb::MoveTo:
+#if SK_MILESTONE >= 150
+                nativeBuilder.moveTo(command.first.x, command.first.y);
+#else
                 native.moveTo(command.first.x, command.first.y);
+#endif
                 break;
             case CanvasPathVerb::LineTo:
+#if SK_MILESTONE >= 150
+                nativeBuilder.lineTo(command.first.x, command.first.y);
+#else
                 native.lineTo(command.first.x, command.first.y);
+#endif
                 break;
             case CanvasPathVerb::CubicTo:
+#if SK_MILESTONE >= 150
+                nativeBuilder.cubicTo(
+#else
                 native.cubicTo(
+#endif
                     command.first.x,
                     command.first.y,
                     command.second.x,
@@ -608,10 +649,17 @@ public:
                     command.third.y);
                 break;
             case CanvasPathVerb::Close:
+#if SK_MILESTONE >= 150
+                nativeBuilder.close();
+#else
                 native.close();
+#endif
                 break;
             }
         }
+#if SK_MILESTONE >= 150
+        SkPath native = nativeBuilder.detach();
+#endif
         SkPaint paint;
         paint.setAntiAlias(true);
         paint.setShader(linearGradientShader(bounds, start, end, angleDegrees));
@@ -728,6 +776,21 @@ public:
         canvas_.restore();
         ++g_primitivePaintTrace.textCalls;
         g_primitivePaintTrace.textMs += currentTimeMs() - traceStartMs;
+    }
+
+    bool supportsNamedFont(const std::wstring& familyName) const override {
+        const auto manager = fontManager();
+        const std::string requested = utf8FontFamily(familyName);
+        if (!manager || requested.empty()) {
+            return false;
+        }
+        const auto face = manager->matchFamilyStyle(requested.c_str(), SkFontStyle());
+        if (!face) {
+            return false;
+        }
+        SkString actual;
+        face->getFamilyName(&actual);
+        return actual.equals(requested.c_str());
     }
 
     float measureTextWidth(const std::wstring& text, float size, int weight = 400) const override {

@@ -151,12 +151,30 @@ void WindowTitleBar::setStyleSheet(std::shared_ptr<StyleSheet> sheet) {
     invalidate();
 }
 
+void WindowTitleBar::setLeading(std::shared_ptr<Widget> leading) {
+    if (leading_ == leading) {
+        return;
+    }
+    leading_ = std::move(leading);
+    clearChildren();
+    if (leading_) {
+        add(leading_);
+    }
+    if (accessory_) {
+        add(accessory_);
+    }
+    invalidate();
+}
+
 void WindowTitleBar::setAccessory(std::shared_ptr<Widget> accessory) {
     if (accessory_ == accessory) {
         return;
     }
     accessory_ = std::move(accessory);
     clearChildren();
+    if (leading_) {
+        add(leading_);
+    }
     if (accessory_) {
         add(accessory_);
     }
@@ -224,13 +242,15 @@ TitleBarBridgeLayout WindowTitleBar::titleBarLayout() const {
 void WindowTitleBar::paint(Canvas& canvas) {
     const auto layout = titleBarLayout();
     paintStyleBox(canvas, frame(), layout.titleBarStyle);
-    paintStyleBox(canvas, layout.logo, layout.logoStyle);
+    if (!leading_) {
+        paintStyleBox(canvas, layout.logo, layout.logoStyle);
 
-    const Color logoColor = layout.logoStyle.foreground.value_or(Color{17, 17, 20});
-    const Color logoAccent = layout.logoStyle.background.color.value_or(Color{123, 212, 198});
-    paintIcon(canvas, iconSymbol_, layout.logoIcon, logoColor, logoAccent, layout.logoStyle.borderWidth.value_or(1.5f));
-    const Color titleColor = layout.titleBarStyle.foreground.value_or(Color{32, 33, 36});
-    canvas.drawTextEllipsized(title_, layout.title, titleColor, 12.0f, TextAlign::Left);
+        const Color logoColor = layout.logoStyle.foreground.value_or(Color{17, 17, 20});
+        const Color logoAccent = layout.logoStyle.background.color.value_or(Color{123, 212, 198});
+        paintIcon(canvas, iconSymbol_, layout.logoIcon, logoColor, logoAccent, layout.logoStyle.borderWidth.value_or(1.5f));
+        const Color titleColor = layout.titleBarStyle.foreground.value_or(Color{32, 33, 36});
+        canvas.drawTextEllipsized(title_, layout.title, titleColor, 12.0f, TextAlign::Left);
+    }
 
     for (const auto& button : layout.buttons) {
         const StyleBox style = visualButtonStyle(button.id, button.style);
@@ -242,21 +262,33 @@ void WindowTitleBar::paint(Canvas& canvas) {
 }
 
 void WindowTitleBar::layoutChildren() {
+    const auto layout = titleBarLayout();
+    const float rightEdge = layout.buttons.empty()
+        ? frame().x + frame().width - 12.0f
+        : layout.buttons.front().visual.x - 10.0f;
+    float accessoryStart = std::max(layout.title.x + 88.0f, frame().x + 136.0f);
+    if (leading_) {
+        const Size preferred = leading_->preferredSize();
+        const float leadingWidth = std::min(
+            std::max(0.0f, preferred.width),
+            std::max(0.0f, rightEdge - frame().x - 24.0f));
+        leading_->setFrame(Rect{
+            frame().x + 16.0f,
+            frame().y + 3.0f,
+            leadingWidth,
+            std::max(0.0f, frame().height - 6.0f)});
+        accessoryStart = leading_->frame().x + leading_->frame().width + 16.0f;
+    }
     if (!accessory_) {
         return;
     }
-    const auto layout = titleBarLayout();
     // Product workspaces place their command search immediately after the
     // brand block. Keep a compact drag-safe gap instead of reserving a second
     // title-width slot before the accessory.
-    const float start = std::max(layout.title.x + 88.0f, frame().x + 136.0f);
-    const float end = layout.buttons.empty()
-        ? frame().x + frame().width - 12.0f
-        : layout.buttons.front().visual.x - 10.0f;
     accessory_->setFrame(Rect{
-        start,
+        accessoryStart,
         frame().y + 3.0f,
-        std::max(0.0f, end - start),
+        std::max(0.0f, rightEdge - accessoryStart),
         std::max(0.0f, frame().height - 6.0f)});
 }
 

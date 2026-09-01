@@ -56,7 +56,10 @@ enum class IconSymbol {
     Edit,
     Trash,
     ChevronLeft,
-    ChevronRight
+    ChevronRight,
+    Folder,
+    Headset,
+    OpenInNew
 };
 
 enum class IconPrimitiveKind {
@@ -91,8 +94,8 @@ ONEUI_API std::vector<IconPrimitive> buildIconPrimitives(
 
 class Canvas;
 
-// paintIcon 在给定矩形内绘制一枚矢量图标（buildIconPrimitives 的标准绘制端）。
-// 组件应统一调用它，而不是各自复制 primitive 遍历循环。
+// Paints one vector icon into the supplied rectangle. Components should use
+// this shared renderer instead of duplicating the primitive traversal loop.
 ONEUI_API void paintIcon(
     Canvas& canvas,
     IconSymbol symbol,

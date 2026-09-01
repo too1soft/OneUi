@@ -37,6 +37,11 @@ StyleSheet defaultStatusStripSheet() {
             background: #23232a;
             border-color: #3f414c;
         }
+        .status-strip-action.link {
+            background: #00000000;
+            border-width: 0px;
+            color: #3158d4;
+        }
     )css", &error);
     return sheet;
 }
@@ -65,6 +70,14 @@ void StatusStrip::setMessage(std::wstring message) {
     invalidate();
 }
 
+void StatusStrip::setIconSymbol(IconSymbol symbol) {
+    if (iconSymbol_ == symbol) {
+        return;
+    }
+    iconSymbol_ = symbol;
+    invalidate();
+}
+
 void StatusStrip::setPrimaryAction(std::wstring text) {
     primaryAction_ = std::move(text);
     invalidate();
@@ -72,6 +85,22 @@ void StatusStrip::setPrimaryAction(std::wstring text) {
 
 void StatusStrip::setSecondaryAction(std::wstring text) {
     secondaryAction_ = std::move(text);
+    invalidate();
+}
+
+void StatusStrip::setPrimaryActionPresentation(StatusStripActionPresentation presentation) {
+    if (primaryActionPresentation_ == presentation) {
+        return;
+    }
+    primaryActionPresentation_ = presentation;
+    invalidate();
+}
+
+void StatusStrip::setPrimaryActionTrailingIcon(std::optional<IconSymbol> symbol) {
+    if (primaryActionTrailingIcon_ == symbol) {
+        return;
+    }
+    primaryActionTrailingIcon_ = symbol;
     invalidate();
 }
 
@@ -96,7 +125,7 @@ void StatusStrip::paint(Canvas& canvas) {
     paintStyleBox(canvas, frame(), box);
 
     const Layout l = layout();
-    paintIcon(canvas, IconSymbol::Bell, l.icon, Color{174, 177, 188}, Color{0, 0, 0, 0}, 1.4f);
+    paintIcon(canvas, iconSymbol_, l.icon, Color{49, 88, 212}, Color{0, 0, 0, 0}, 1.4f);
     canvas.drawTextStyledEllipsized(title_, l.title, foreground, 13.0f, TextAlign::Left, std::max(500, fontWeight));
     canvas.drawTextEllipsized(message_, l.message, Color{190, 193, 203}, 12.0f, TextAlign::Left);
 
@@ -106,9 +135,20 @@ void StatusStrip::paint(Canvas& canvas) {
         }
         const StyleBox actionStyle = resolvedActionStyle(action);
         paintStyleBox(canvas, rect, actionStyle);
+        Rect textRect = rect;
+        if (action == Action::Primary && primaryActionTrailingIcon_) {
+            textRect.width = std::max(0.0f, rect.width - 18.0f);
+            paintIcon(
+                canvas,
+                *primaryActionTrailingIcon_,
+                Rect{rect.x + rect.width - 16.0f, rect.y + (rect.height - 14.0f) / 2.0f, 14.0f, 14.0f},
+                actionStyle.foreground.value_or(foreground),
+                Color{0, 0, 0, 0},
+                1.2f);
+        }
         canvas.drawTextStyledEllipsized(
             text,
-            rect,
+            textRect,
             actionStyle.foreground.value_or(foreground),
             actionStyle.fontSize.value_or(12.0f),
             TextAlign::Center,
@@ -177,8 +217,20 @@ StatusStrip::Layout StatusStrip::layout() const {
     const Insets padding = box.padding.value_or(Insets{12.0f, 18.0f, 12.0f, 18.0f});
     const Rect content = rect.inset(padding);
     const float actionHeight = std::min(28.0f, std::max(22.0f, content.height));
-    const float secondaryWidth = secondaryAction_.empty() ? 0.0f : 56.0f;
-    const float primaryWidth = primaryAction_.empty() ? 0.0f : 56.0f;
+    const auto actionWidth = [](const std::wstring& text, bool link, bool hasIcon) {
+        if (text.empty()) {
+            return 0.0f;
+        }
+        const float chrome = link ? 8.0f : 24.0f;
+        const float icon = hasIcon ? 18.0f : 0.0f;
+        // CJK link actions need roughly one em per code point.  The previous
+        // seven-pixel estimate was tuned for Latin labels and clipped actions
+        // such as "查看历史监控" before the trailing chevron.
+        return std::clamp(chrome + icon + static_cast<float>(text.size()) * (link ? 12.0f : 10.0f), 40.0f, 148.0f);
+    };
+    const float secondaryWidth = actionWidth(secondaryAction_, false, false);
+    const bool primaryLink = primaryActionPresentation_ == StatusStripActionPresentation::Link;
+    const float primaryWidth = actionWidth(primaryAction_, primaryLink, primaryActionTrailingIcon_.has_value());
     const float secondaryX = content.x + content.width - secondaryWidth;
     const float primaryX = secondaryX - (secondaryWidth > 0.0f && primaryWidth > 0.0f ? 8.0f : 0.0f) - primaryWidth;
     const float textRight = std::max(content.x, primaryX - 14.0f);
@@ -212,6 +264,10 @@ StyleBox StatusStrip::resolvedActionStyle(Action action) const {
 
     switch (action) {
     case Action::Primary:
+        if (primaryActionPresentation_ == StatusStripActionPresentation::Link) {
+            return (styleSheet_ ? *styleSheet_ : fallbackSheet())
+                .resolve(childStyleNode({"status-strip-action", "primary", "link"}, state));
+        }
         return (styleSheet_ ? *styleSheet_ : fallbackSheet())
             .resolve(childStyleNode({"status-strip-action", "primary"}, state));
     case Action::Secondary:

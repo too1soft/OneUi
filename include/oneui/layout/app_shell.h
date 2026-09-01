@@ -22,6 +22,10 @@ public:
     void setSidebarWidth(float width);
     void setHeaderHeight(float height);
     void setFooterHeight(float height);
+    /// When enabled, the footer reserves the full shell width before the
+    /// sidebar is laid out. This is useful for desktop status bars whose
+    /// top separator must not be interrupted by navigation.
+    void setFooterSpanSidebar(bool span);
     void setSidebarVisible(bool visible);
     void setStyleBox(StyleBox style);
     void clearStyleBox();
@@ -30,6 +34,7 @@ public:
     float sidebarWidth() const;
     float headerHeight() const;
     float footerHeight() const;
+    bool footerSpansSidebar() const;
 
     void paint(Canvas& canvas) override;
 
@@ -46,6 +51,7 @@ private:
     float sidebarWidth_ = 248.0f;
     float headerHeight_ = 64.0f;
     float footerHeight_ = 28.0f;
+    bool footerSpansSidebar_ = false;
     bool sidebarVisible_ = true;
     std::optional<StyleBox> styleBox_;
 };

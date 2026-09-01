@@ -1,15 +1,22 @@
 #pragma once
 
 #include "oneui/export.h"
+#include "oneui/icon.h"
 #include "oneui/style_sheet.h"
 #include "oneui/widget.h"
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
 namespace oneui {
+
+enum class StatusStripActionPresentation {
+    Button,
+    Link
+};
 
 class ONEUI_API StatusStrip final : public Widget {
 public:
@@ -17,8 +24,11 @@ public:
 
     void setTitle(std::wstring title);
     void setMessage(std::wstring message);
+    void setIconSymbol(IconSymbol symbol);
     void setPrimaryAction(std::wstring text);
     void setSecondaryAction(std::wstring text);
+    void setPrimaryActionPresentation(StatusStripActionPresentation presentation);
+    void setPrimaryActionTrailingIcon(std::optional<IconSymbol> symbol);
     void setOnPrimaryAction(std::function<void()> callback);
     void setOnSecondaryAction(std::function<void()> callback);
     void setStyleSheet(std::shared_ptr<StyleSheet> sheet, StyleNode node);
@@ -51,8 +61,11 @@ private:
 
     std::wstring title_;
     std::wstring message_;
+    IconSymbol iconSymbol_ = IconSymbol::Bell;
     std::wstring primaryAction_;
     std::wstring secondaryAction_;
+    StatusStripActionPresentation primaryActionPresentation_ = StatusStripActionPresentation::Button;
+    std::optional<IconSymbol> primaryActionTrailingIcon_;
     std::function<void()> onPrimaryAction_;
     std::function<void()> onSecondaryAction_;
     std::shared_ptr<StyleSheet> styleSheet_;

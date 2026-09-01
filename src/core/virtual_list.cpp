@@ -19,6 +19,10 @@ double currentTimeMs() {
     return std::chrono::duration<double, std::milli>(now).count();
 }
 
+bool sameColor(Color left, Color right) {
+    return left.r == right.r && left.g == right.g && left.b == right.b && left.a == right.a;
+}
+
 } // namespace
 
 VirtualList::VirtualList() {
@@ -26,6 +30,15 @@ VirtualList::VirtualList() {
 }
 
 void VirtualList::setItems(std::vector<ListItem> items) {
+    std::vector<VirtualListItem> richItems;
+    richItems.reserve(items.size());
+    for (auto& item : items) {
+        richItems.push_back(VirtualListItem{std::move(item.title), std::move(item.detail)});
+    }
+    setRichItems(std::move(richItems));
+}
+
+void VirtualList::setRichItems(std::vector<VirtualListItem> items) {
     const int dragSource = reorderSourceIndex_;
     const bool notifyCancellation = externalDragging_ && itemDragEnabled_ && onItemDrag_
         && dragSource >= 0 && dragSource < static_cast<int>(itemDragIds_.size());
@@ -62,10 +75,21 @@ void VirtualList::setItems(std::vector<ListItem> items) {
 }
 
 bool VirtualList::updateItem(std::size_t index, ListItem item) {
+    return updateRichItem(index, VirtualListItem{std::move(item.title), std::move(item.detail)});
+}
+
+bool VirtualList::updateRichItem(std::size_t index, VirtualListItem item) {
     if (index >= items_.size()) {
         return false;
     }
-    if (items_[index].title == item.title && items_[index].detail == item.detail) {
+    const auto& current = items_[index];
+    if (current.title == item.title
+        && current.detail == item.detail
+        && current.badge == item.badge
+        && current.trailing == item.trailing
+        && sameColor(current.indicatorColor, item.indicatorColor)
+        && sameColor(current.trailingColor, item.trailingColor)
+        && current.indicatorVisible == item.indicatorVisible) {
         return true;
     }
     items_[index] = std::move(item);
@@ -85,7 +109,7 @@ int VirtualList::selectedIndex() const {
     return selection_.selectedIndices().empty() ? -1 : selection_.selectedIndices().back();
 }
 
-const std::vector<ListItem>& VirtualList::items() const {
+const std::vector<VirtualListItem>& VirtualList::items() const {
     return items_;
 }
 
@@ -133,6 +157,25 @@ void VirtualList::setRowHeight(float height) {
 
 float VirtualList::rowHeight() const {
     return rowHeight_;
+}
+
+void VirtualList::setRichMetrics(VirtualListRichMetrics metrics) {
+    richMetrics_.indicatorSpace = std::clamp(metrics.indicatorSpace, 0.0f, 48.0f);
+    richMetrics_.indicatorDiameter = std::clamp(
+        metrics.indicatorDiameter,
+        0.0f,
+        std::min(20.0f, richMetrics_.indicatorSpace));
+    richMetrics_.badgeHeight = std::clamp(metrics.badgeHeight, 14.0f, 32.0f);
+    richMetrics_.badgeRadius = std::clamp(metrics.badgeRadius, 0.0f, richMetrics_.badgeHeight / 2.0f);
+    richMetrics_.badgeHorizontalPadding = std::clamp(metrics.badgeHorizontalPadding, 4.0f, 28.0f);
+    richMetrics_.titleBadgeGap = std::clamp(metrics.titleBadgeGap, 0.0f, 20.0f);
+    richMetrics_.trailingWidth = std::clamp(metrics.trailingWidth, 32.0f, 120.0f);
+    richMetrics_.trailingGap = std::clamp(metrics.trailingGap, 0.0f, 24.0f);
+    invalidate();
+}
+
+const VirtualListRichMetrics& VirtualList::richMetrics() const {
+    return richMetrics_;
 }
 
 void VirtualList::setWheelStep(float step) {
@@ -301,7 +344,8 @@ void VirtualList::paint(Canvas& canvas) {
         }
 
         const auto& item = items_[static_cast<std::size_t>(index)];
-        if (item.detail.empty()) {
+        const bool rich = item.indicatorVisible || !item.badge.empty() || !item.trailing.empty();
+        if (item.detail.empty() && !rich) {
             canvas.drawTextStyledEllipsized(
                 item.title,
                 Rect{row.x + itemStyle.textInset, row.y, row.width - itemStyle.textInset * 2.0f, row.height},
@@ -309,7 +353,7 @@ void VirtualList::paint(Canvas& canvas) {
                 itemStyle.titleFontSize,
                 TextAlign::Left,
                 itemStyle.titleFontWeight);
-        } else {
+        } else if (!rich) {
             canvas.drawTextStyledEllipsized(
                 item.title,
                 Rect{row.x + itemStyle.textInset, row.y + itemStyle.titleOffsetY, row.width - itemStyle.textInset * 2.0f, 18.0f},
@@ -320,6 +364,90 @@ void VirtualList::paint(Canvas& canvas) {
             canvas.drawTextStyledEllipsized(
                 item.detail,
                 Rect{row.x + itemStyle.textInset, row.y + itemStyle.detailOffsetY, row.width - itemStyle.textInset * 2.0f, 16.0f},
+                itemStyle.detailColor,
+                itemStyle.detailFontSize,
+                TextAlign::Left,
+                itemStyle.detailFontWeight);
+        } else {
+            const float indicatorSpace = item.indicatorVisible ? richMetrics_.indicatorSpace : 0.0f;
+            const float contentX = row.x + itemStyle.textInset + indicatorSpace;
+            const float right = row.x + row.width - itemStyle.textInset;
+            const float contentWidth = std::max(0.0f, right - contentX);
+            const float trailingWidth = item.trailing.empty()
+                ? 0.0f
+                : std::min(richMetrics_.trailingWidth, contentWidth * 0.45f);
+            const float trailingGap = trailingWidth > 0.0f
+                ? std::min(richMetrics_.trailingGap, std::max(0.0f, contentWidth - trailingWidth))
+                : 0.0f;
+            const float availableTitle = std::max(0.0f, contentWidth - trailingWidth - trailingGap);
+
+            if (item.indicatorVisible) {
+                const Color dot = item.indicatorColor.a == 0
+                    ? Color{148, 163, 184, 255}
+                    : item.indicatorColor;
+                canvas.fillEllipse(Rect{
+                    row.x + itemStyle.textInset + (richMetrics_.indicatorSpace - richMetrics_.indicatorDiameter) / 2.0f,
+                    row.y + itemStyle.titleOffsetY + (20.0f - richMetrics_.indicatorDiameter) / 2.0f,
+                    richMetrics_.indicatorDiameter,
+                    richMetrics_.indicatorDiameter}, dot);
+            }
+
+            float badgeWidth = 0.0f;
+            if (!item.badge.empty()) {
+                badgeWidth = std::min(
+                    std::min(56.0f, availableTitle * 0.45f),
+                    std::max(30.0f, canvas.measureTextWidth(item.badge, 11.0f, 500) + richMetrics_.badgeHorizontalPadding));
+            }
+            const float titleMeasured = canvas.measureTextWidth(
+                item.title,
+                itemStyle.titleFontSize,
+                itemStyle.titleFontWeight);
+            const float titleWidth = std::max(
+                0.0f,
+                std::min(titleMeasured + 2.0f, availableTitle - (badgeWidth > 0.0f ? badgeWidth + std::min(richMetrics_.titleBadgeGap, availableTitle - badgeWidth) : 0.0f)));
+            canvas.drawTextStyledEllipsized(
+                item.title,
+                Rect{contentX, row.y + itemStyle.titleOffsetY, titleWidth, 20.0f},
+                itemStyle.titleColor,
+                itemStyle.titleFontSize,
+                TextAlign::Left,
+                std::max(600, itemStyle.titleFontWeight));
+
+            if (badgeWidth > 0.0f) {
+                const Rect badge{
+                    contentX + titleWidth + std::min(richMetrics_.titleBadgeGap, std::max(0.0f, availableTitle - badgeWidth - titleWidth)),
+                    row.y + itemStyle.titleOffsetY + (20.0f - richMetrics_.badgeHeight) / 2.0f,
+                    badgeWidth,
+                    richMetrics_.badgeHeight};
+                const Color badgeBackground = selection_.contains(index)
+                    ? Color{226, 232, 240, 255}
+                    : Color{241, 244, 248, 255};
+                canvas.fillRect(badge, badgeBackground, richMetrics_.badgeRadius);
+                canvas.drawTextStyledEllipsized(
+                    item.badge,
+                    badge,
+                    Color{90, 100, 114, 255},
+                    11.0f,
+                    TextAlign::Center,
+                    500);
+            }
+
+            if (!item.trailing.empty()) {
+                const Color trailing = item.trailingColor.a == 0
+                    ? itemStyle.detailColor
+                    : item.trailingColor;
+                canvas.drawTextStyledEllipsized(
+                    item.trailing,
+                    Rect{right - trailingWidth, row.y + itemStyle.titleOffsetY, trailingWidth, 20.0f},
+                    trailing,
+                    itemStyle.detailFontSize,
+                    TextAlign::Right,
+                    500);
+            }
+
+            canvas.drawTextStyledEllipsized(
+                item.detail,
+                Rect{contentX, row.y + itemStyle.detailOffsetY, availableTitle, 18.0f},
                 itemStyle.detailColor,
                 itemStyle.detailFontSize,
                 TextAlign::Left,

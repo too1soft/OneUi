@@ -96,8 +96,8 @@ public:
         (void)angleDegrees;
         fillRect(rect, start, radius);
     }
-    // 径向渐变：centerNorm 为相对 rect 的归一化圆心（0-1），radiusNorm 为相对 max(宽,高) 的半径比例。
-    // 默认降级为中心色纯色填充（与线性渐变的降级策略一致）。
+    // Radial gradient center is normalized within rect; radiusNorm is relative
+    // to the larger rect dimension. Backends may fall back to the center color.
     virtual void fillRadialGradient(Rect rect, Color center, Color edge, Point centerNorm, float radiusNorm, float radius = 0.0f) {
         (void)edge;
         (void)centerNorm;
@@ -197,6 +197,13 @@ public:
         int weight = 400) {
         (void)familyName;
         drawTextStyledWithFont(text, rect, color, size, align, fallbackFamily, weight);
+    }
+    /// Reports whether a backend can resolve an exact named family without
+    /// silently substituting a text face. Icon rendering uses this to prefer
+    /// official Windows symbol fonts while retaining a portable fallback.
+    virtual bool supportsNamedFont(const std::wstring& familyName) const {
+        (void)familyName;
+        return false;
     }
     virtual float measureTextWidth(const std::wstring& text, float size, int weight = 400) const {
         (void)weight;

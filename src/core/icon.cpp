@@ -4,9 +4,60 @@
 
 #include <algorithm>
 #include <cmath>
+#include <optional>
 
 namespace oneui {
 namespace {
+
+std::optional<wchar_t> fluentGlyph(IconSymbol symbol) {
+    switch (symbol) {
+    case IconSymbol::Search: return L'\uE721';
+    case IconSymbol::RemoteAssist: return L'\uE8AF';
+    case IconSymbol::Monitor:
+    case IconSymbol::Desktop: return L'\uE7F4';
+    case IconSymbol::Device: return L'\uE8CC';
+    case IconSymbol::Toolbox: return L'\uE90F';
+    case IconSymbol::Compass: return L'\uE707';
+    case IconSymbol::Settings: return L'\uE713';
+    case IconSymbol::Bell: return L'\uE7ED';
+    case IconSymbol::Heart: return L'\uEB51';
+    case IconSymbol::File: return L'\uE8A5';
+    case IconSymbol::Copy: return L'\uE8C8';
+    case IconSymbol::ChevronDown: return L'\uE70D';
+    case IconSymbol::ChevronUp: return L'\uE70E';
+    case IconSymbol::ChevronLeft: return L'\uE76B';
+    case IconSymbol::ChevronRight: return L'\uE76C';
+    case IconSymbol::Plus: return L'\uE710';
+    case IconSymbol::User: return L'\uE77B';
+    case IconSymbol::Globe: return L'\uE774';
+    case IconSymbol::Play: return L'\uE768';
+    case IconSymbol::Check: return L'\uE73E';
+    case IconSymbol::CheckCircle: return L'\uE930';
+    case IconSymbol::Terminal: return L'\uE756';
+    case IconSymbol::Server: return L'\uE968';
+    case IconSymbol::List: return L'\uE8FD';
+    case IconSymbol::Refresh: return L'\uE72C';
+    case IconSymbol::Upload: return L'\uE898';
+    case IconSymbol::Download: return L'\uE896';
+    case IconSymbol::Edit: return L'\uE70F';
+    case IconSymbol::Trash: return L'\uE74D';
+    case IconSymbol::Folder: return L'\uE8B7';
+    case IconSymbol::Headset: return L'\uE95B';
+    case IconSymbol::OpenInNew: return L'\uE8A7';
+    default: return std::nullopt;
+    }
+}
+
+float fluentOpticalSize(Rect rect) {
+    const float extent = std::max(0.0f, std::min(rect.width, rect.height));
+    if (extent <= 18.0f) return 16.0f;
+    if (extent <= 22.0f) return 20.0f;
+    if (extent <= 28.0f) return 24.0f;
+    if (extent <= 36.0f) return 32.0f;
+    if (extent <= 44.0f) return 40.0f;
+    if (extent <= 56.0f) return 48.0f;
+    return 64.0f;
+}
 
 Point p(Rect rect, float x, float y) {
     return Point{rect.x + rect.width * x, rect.y + rect.height * y};
@@ -289,12 +340,49 @@ std::vector<IconPrimitive> buildIconPrimitives(
         primitives.push_back(line(rect, 0.42f, 0.40f, 0.42f, 0.72f, color, sw));
         primitives.push_back(line(rect, 0.58f, 0.40f, 0.58f, 0.72f, color, sw));
         break;
+    case IconSymbol::Folder:
+        primitives.push_back(shape(IconPrimitiveKind::RoundRect, r(rect, 0.12f, 0.27f, 0.76f, 0.56f), color, sw, false, rect.width * 0.06f));
+        primitives.push_back(poly(rect, {Point{0.14f, 0.31f}, Point{0.14f, 0.20f}, Point{0.42f, 0.20f}, Point{0.52f, 0.31f}}, color, sw));
+        break;
+    case IconSymbol::Headset:
+        primitives.push_back(shape(IconPrimitiveKind::Circle, r(rect, 0.14f, 0.12f, 0.72f, 0.72f), color, sw));
+        primitives.push_back(shape(IconPrimitiveKind::RoundRect, r(rect, 0.10f, 0.48f, 0.18f, 0.28f), color, sw, true, rect.width * 0.05f));
+        primitives.push_back(shape(IconPrimitiveKind::RoundRect, r(rect, 0.72f, 0.48f, 0.18f, 0.28f), color, sw, true, rect.width * 0.05f));
+        break;
+    case IconSymbol::OpenInNew:
+        primitives.push_back(shape(IconPrimitiveKind::RoundRect, r(rect, 0.16f, 0.28f, 0.54f, 0.56f), color, sw, false, rect.width * 0.04f));
+        primitives.push_back(line(rect, 0.48f, 0.18f, 0.84f, 0.18f, color, sw));
+        primitives.push_back(line(rect, 0.84f, 0.18f, 0.84f, 0.54f, color, sw));
+        primitives.push_back(line(rect, 0.46f, 0.56f, 0.84f, 0.18f, accentColor, sw));
+        break;
     }
 
     return primitives;
 }
 
 void paintIcon(Canvas& canvas, IconSymbol symbol, Rect rect, Color color, Color accent, float strokeWidth) {
+    if (const auto glyph = fluentGlyph(symbol)) {
+        const std::wstring fluentFamily = L"Segoe Fluent Icons";
+        const std::wstring mdlFamily = L"Segoe MDL2 Assets";
+        const std::wstring* family = nullptr;
+        if (canvas.supportsNamedFont(fluentFamily)) {
+            family = &fluentFamily;
+        } else if (canvas.supportsNamedFont(mdlFamily)) {
+            family = &mdlFamily;
+        }
+        if (family) {
+            canvas.drawTextStyledWithNamedFont(
+                std::wstring(1, *glyph),
+                rect,
+                color,
+                fluentOpticalSize(rect),
+                TextAlign::Center,
+                *family,
+                TextFontFamily::Default,
+                400);
+            return;
+        }
+    }
     for (const auto& primitive : buildIconPrimitives(symbol, rect, color, accent, strokeWidth)) {
         switch (primitive.kind) {
         case IconPrimitiveKind::Line:

@@ -174,6 +174,28 @@ typedef struct OneUiColor {
     unsigned char a;
 } OneUiColor;
 
+/* Rich virtual-list rows. OneUI copies every string and color before return. */
+typedef struct OneUiRichListItemUtf8 {
+    OneUiUtf8String title;
+    OneUiUtf8String detail;
+    OneUiUtf8String badge;
+    OneUiUtf8String trailing;
+    OneUiColor indicator_color;
+    OneUiColor trailing_color;
+    int indicator_visible;
+} OneUiRichListItemUtf8;
+
+typedef struct OneUiVirtualListRichMetrics {
+    float indicator_space;
+    float indicator_diameter;
+    float badge_height;
+    float badge_radius;
+    float badge_horizontal_padding;
+    float title_badge_gap;
+    float trailing_width;
+    float trailing_gap;
+} OneUiVirtualListRichMetrics;
+
 /* Multi-series chart data. OneUI copies names, values, and colors before return. */
 typedef struct OneUiTimeSeriesUtf8 {
     OneUiUtf8String name;
@@ -415,7 +437,7 @@ enum {
     OneUiTerminalCellOverline = 1u << 11
 };
 
-#define ONEUI_UTF8_ABI_VERSION 21u
+#define ONEUI_UTF8_ABI_VERSION 24u
 
 ONEUI_API const char* oneui_version(void);
 ONEUI_API unsigned int oneui_utf8_abi_version(void);
@@ -604,6 +626,7 @@ ONEUI_API void oneui_app_shell_set_footer(OneUiWidget* shell, OneUiWidget* child
 ONEUI_API void oneui_app_shell_set_sidebar_width(OneUiWidget* shell, float width);
 ONEUI_API void oneui_app_shell_set_header_height(OneUiWidget* shell, float height);
 ONEUI_API void oneui_app_shell_set_footer_height(OneUiWidget* shell, float height);
+ONEUI_API void oneui_app_shell_set_footer_span_sidebar(OneUiWidget* shell, int span);
 ONEUI_API void oneui_app_shell_set_gap(OneUiWidget* shell, float gap);
 ONEUI_API void oneui_app_shell_set_padding(OneUiWidget* shell, OneUiInsets insets);
 ONEUI_API void oneui_app_shell_set_sidebar_visible(OneUiWidget* shell, int visible);
@@ -776,6 +799,7 @@ ONEUI_API void oneui_title_bar_set_title(OneUiWidget* title_bar, const wchar_t* 
 ONEUI_API void oneui_title_bar_set_icon_symbol(OneUiWidget* title_bar, int symbol);
 ONEUI_API void oneui_title_bar_set_maximized(OneUiWidget* title_bar, int maximized);
 ONEUI_API void oneui_title_bar_set_variant(OneUiWidget* title_bar, const char* variant);
+ONEUI_API void oneui_title_bar_set_leading(OneUiWidget* title_bar, OneUiWidget* leading);
 ONEUI_API void oneui_title_bar_set_accessory(OneUiWidget* title_bar, OneUiWidget* accessory);
 ONEUI_API void oneui_title_bar_set_on_minimize(OneUiWidget* title_bar, OneUiVoidCallback callback, void* user_data);
 ONEUI_API void oneui_title_bar_set_on_maximize(OneUiWidget* title_bar, OneUiVoidCallback callback, void* user_data);
@@ -887,7 +911,15 @@ ONEUI_API void oneui_list_set_on_changed(OneUiWidget* list, OneUiIntCallback cal
  */
 ONEUI_API OneUiWidget* oneui_virtual_list_create(void);
 ONEUI_API void oneui_virtual_list_set_items_utf8(OneUiWidget* list, const OneUiListItemUtf8* items, size_t count);
+ONEUI_API void oneui_virtual_list_set_rich_items_utf8(
+    OneUiWidget* list,
+    const OneUiRichListItemUtf8* items,
+    size_t count);
 ONEUI_API int oneui_virtual_list_update_item_utf8(OneUiWidget* list, size_t index, const OneUiListItemUtf8* item);
+ONEUI_API int oneui_virtual_list_update_rich_item_utf8(
+    OneUiWidget* list,
+    size_t index,
+    const OneUiRichListItemUtf8* item);
 ONEUI_API void oneui_virtual_list_set_selected_index(OneUiWidget* list, int index);
 ONEUI_API int oneui_virtual_list_selected_index(OneUiWidget* list);
 /* mode: 0 = single, 1 = multiple */
@@ -902,6 +934,19 @@ ONEUI_API size_t oneui_virtual_list_selected_indices(
     int* buffer,
     size_t buffer_len);
 ONEUI_API void oneui_virtual_list_set_row_height(OneUiWidget* list, float height);
+ONEUI_API void oneui_virtual_list_set_rich_metrics(
+    OneUiWidget* list,
+    float indicator_space,
+    float indicator_diameter,
+    float badge_height,
+    float badge_radius,
+    float badge_horizontal_padding,
+    float title_badge_gap,
+    float trailing_width,
+    float trailing_gap);
+ONEUI_API int oneui_virtual_list_rich_metrics(
+    OneUiWidget* list,
+    OneUiVirtualListRichMetrics* out_metrics);
 ONEUI_API void oneui_virtual_list_set_scroll_offset(OneUiWidget* list, float offset);
 ONEUI_API float oneui_virtual_list_scroll_offset(OneUiWidget* list);
 ONEUI_API float oneui_virtual_list_max_scroll_offset(OneUiWidget* list);
@@ -1280,7 +1325,12 @@ ONEUI_API void oneui_tile_set_on_click(OneUiWidget* tile, OneUiVoidCallback call
 ONEUI_API OneUiWidget* oneui_status_strip_create(const wchar_t* title, const wchar_t* message);
 ONEUI_API void oneui_status_strip_set_title(OneUiWidget* status_strip, const wchar_t* title);
 ONEUI_API void oneui_status_strip_set_message(OneUiWidget* status_strip, const wchar_t* message);
+ONEUI_API void oneui_status_strip_set_icon(OneUiWidget* status_strip, int symbol);
 ONEUI_API void oneui_status_strip_set_primary_action(OneUiWidget* status_strip, const wchar_t* text);
+/* presentation: 0 = button, 1 = link */
+ONEUI_API void oneui_status_strip_set_primary_action_presentation(OneUiWidget* status_strip, int presentation);
+/* symbol < 0 clears the trailing icon. */
+ONEUI_API void oneui_status_strip_set_primary_action_trailing_icon(OneUiWidget* status_strip, int symbol);
 ONEUI_API void oneui_status_strip_set_secondary_action(OneUiWidget* status_strip, const wchar_t* text);
 ONEUI_API void oneui_status_strip_set_on_primary_action(OneUiWidget* status_strip, OneUiVoidCallback callback, void* user_data);
 ONEUI_API void oneui_status_strip_set_on_secondary_action(OneUiWidget* status_strip, OneUiVoidCallback callback, void* user_data);

@@ -13,6 +13,27 @@
 
 namespace oneui {
 
+struct VirtualListItem {
+    std::wstring title;
+    std::wstring detail;
+    std::wstring badge;
+    std::wstring trailing;
+    Color indicatorColor{0, 0, 0, 0};
+    Color trailingColor{0, 0, 0, 0};
+    bool indicatorVisible = false;
+};
+
+struct VirtualListRichMetrics {
+    float indicatorSpace = 20.0f;
+    float indicatorDiameter = 9.0f;
+    float badgeHeight = 20.0f;
+    float badgeRadius = 10.0f;
+    float badgeHorizontalPadding = 14.0f;
+    float titleBadgeGap = 7.0f;
+    float trailingWidth = 58.0f;
+    float trailingGap = 8.0f;
+};
+
 /// Fixed-height, viewport-virtualized list for large simple data sets.
 ///
 /// It owns data items rather than child widgets, so scrolling cost is bounded
@@ -23,10 +44,12 @@ public:
     VirtualList();
 
     void setItems(std::vector<ListItem> items);
+    void setRichItems(std::vector<VirtualListItem> items);
     bool updateItem(std::size_t index, ListItem item);
+    bool updateRichItem(std::size_t index, VirtualListItem item);
     void setSelectedIndex(int index);
     int selectedIndex() const;
-    const std::vector<ListItem>& items() const;
+    const std::vector<VirtualListItem>& items() const;
     Rect itemFrame(int index) const;
     void setSelectionMode(SelectionMode mode);
     SelectionMode selectionMode() const;
@@ -34,6 +57,8 @@ public:
     const std::vector<int>& selectedIndices() const;
     void setRowHeight(float height);
     float rowHeight() const;
+    void setRichMetrics(VirtualListRichMetrics metrics);
+    const VirtualListRichMetrics& richMetrics() const;
     void setWheelStep(float step);
     void setScrollOffset(float offset);
     float scrollOffset() const;
@@ -82,7 +107,7 @@ private:
     bool hasInteractionState() const override;
     void resetInteractionState() override;
 
-    std::vector<ListItem> items_;
+    std::vector<VirtualListItem> items_;
     SelectionModel selection_;
     int hoveredIndex_ = -1;
     int pressedIndex_ = -1;
@@ -97,6 +122,7 @@ private:
     int reorderTargetIndex_ = -1;
     int reorderInsertionIndex_ = -1;
     float rowHeight_ = 48.0f;
+    VirtualListRichMetrics richMetrics_;
     float wheelStep_ = 48.0f;
     float scrollOffset_ = 0.0f;
     SmoothScrollMotion scrollMotion_;

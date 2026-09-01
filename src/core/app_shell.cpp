@@ -61,6 +61,14 @@ void AppShell::setFooterHeight(float height) {
     invalidate();
 }
 
+void AppShell::setFooterSpanSidebar(bool span) {
+    if (footerSpansSidebar_ == span) {
+        return;
+    }
+    footerSpansSidebar_ = span;
+    invalidate();
+}
+
 void AppShell::setSidebarVisible(bool visible) {
     if (sidebarVisible_ == visible) {
         return;
@@ -95,6 +103,10 @@ float AppShell::footerHeight() const {
     return footerHeight_;
 }
 
+bool AppShell::footerSpansSidebar() const {
+    return footerSpansSidebar_;
+}
+
 void AppShell::paint(Canvas& canvas) {
     if (styleBox_) {
         paintStyleBox(canvas, frame(), *styleBox_);
@@ -108,6 +120,13 @@ void AppShell::layoutChildren() {
     available.height = std::max(0.0f, available.height);
 
     Rect main = available;
+    if (footerSpansSidebar_ && footer_ && footer_->visible()) {
+        const float footerHeight = std::min(fixedExtent(footerHeight_, footer_->preferredSize().height), main.height);
+        footer_->setFrame(Rect{available.x, available.y + available.height - footerHeight, available.width, footerHeight});
+        const float used = std::min(main.height, footerHeight + gap_);
+        main.height -= used;
+    }
+
     if (sidebar_ && sidebar_->visible() && sidebarVisible_) {
         const float sidebarWidth = std::min(fixedExtent(sidebarWidth_, sidebar_->preferredSize().width), main.width);
         sidebar_->setFrame(Rect{main.x, main.y, sidebarWidth, main.height});
@@ -124,7 +143,7 @@ void AppShell::layoutChildren() {
         main.height -= used;
     }
 
-    if (footer_ && footer_->visible()) {
+    if (!footerSpansSidebar_ && footer_ && footer_->visible()) {
         const float footerHeight = std::min(fixedExtent(footerHeight_, footer_->preferredSize().height), main.height);
         footer_->setFrame(Rect{main.x, main.y + main.height - footerHeight, main.width, footerHeight});
         const float used = std::min(main.height, footerHeight + gap_);
