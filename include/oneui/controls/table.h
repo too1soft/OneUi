@@ -3,6 +3,7 @@
 #include "oneui/export.h"
 #include "oneui/animation.h"
 #include "oneui/input/item_drag.h"
+#include "oneui/icon.h"
 #include "oneui/selection_model.h"
 #include "oneui/style.h"
 #include "oneui/widget.h"
@@ -19,15 +20,33 @@ struct TableColumn {
     float width = 0.0f;
 };
 
+// Optional visual metadata for product tables. Plain string rows remain fully
+// supported; rich rows add the common icon/status treatments without forcing
+// applications to rebuild table interaction and virtualization themselves.
+struct TableCell {
+    std::wstring text;
+    std::optional<IconSymbol> leadingIcon;
+    std::optional<IconSymbol> trailingIcon;
+    std::optional<Color> foreground;
+    std::optional<Color> indicator;
+    TextAlign alignment = TextAlign::Left;
+    int fontWeight = 400;
+    float fontSize = 0.0f;
+    float iconSize = 20.0f;
+};
+
 class ONEUI_API Table final : public Widget {
 public:
     Table();
 
     void setColumns(std::vector<TableColumn> columns);
     void setRows(std::vector<std::vector<std::wstring>> rows);
+    void setRichRows(std::vector<std::vector<TableCell>> rows);
     bool updateRow(std::size_t index, std::vector<std::wstring> row);
+    bool updateRichRow(std::size_t index, std::vector<TableCell> row);
     const std::vector<TableColumn>& columns() const;
     const std::vector<std::vector<std::wstring>>& rows() const;
+    const std::vector<std::vector<TableCell>>& richRows() const;
     Rect rowFrame(int index) const;
     void setSelectionMode(SelectionMode mode);
     void setSelectedIndex(int index);
@@ -37,6 +56,8 @@ public:
     void setRowHeight(float height);
     float rowHeight() const;
     void setWheelStep(float step);
+    void setColumnDividersVisible(bool visible);
+    bool columnDividersVisible() const;
     void setScrollOffset(float offset);
     float scrollOffset() const;
     float maxScrollOffset() const;
@@ -85,6 +106,7 @@ private:
 
     std::vector<TableColumn> columns_;
     std::vector<std::vector<std::wstring>> rows_;
+    std::vector<std::vector<TableCell>> richRows_;
     SelectionModel selection_;
     int hoveredIndex_ = -1;
     int pressedIndex_ = -1;
@@ -100,6 +122,7 @@ private:
     int reorderInsertionIndex_ = -1;
     float rowHeight_ = 0.0f;
     float wheelStep_ = 36.0f;
+    bool columnDividersVisible_ = true;
     float scrollOffset_ = 0.0f;
     SmoothScrollMotion scrollMotion_;
     std::optional<TableStyleOverride> styleOverride_;

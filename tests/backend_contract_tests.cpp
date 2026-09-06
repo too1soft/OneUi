@@ -138,18 +138,89 @@ void testSystemClipboardRoundTrip() {
         std::this_thread::sleep_for(std::chrono::milliseconds(20));
     }
     if (!roundTrip) {
-        std::cerr << "System clipboard round trip skipped: clipboard is unavailable or owned by another process.\n";
+        expectTrue("Advertised system clipboard round trip", false);
         return;
     }
     clipboard.setText(previous);
 }
 
+void testIndependentWindowLifetimes() {
+    oneui::WindowOptions options;
+    options.visible = false;
+    auto first = oneui::Window::create(options);
+    auto second = oneui::Window::create(options);
+    first->initialize(); second->initialize();
+    expectTrue("Backend identity is explicit", first->backend() != oneui::WindowBackend::Unknown);
+    first->close();
+    expectTrue("Closed window rejects posts", !first->post([] {}));
+    bool cancelled = false, workerRan = false, frameRan = false;
+    first->requestAnimationFrame([&](double) { cancelled = true; });
+    std::thread worker([&] { second->post([&] { workerRan = true; }); });
+    worker.join();
+    second->requestAnimationFrame([&](double) { frameRan = true; second->close(); });
+    second->run();
+    expectTrue("Closing one window preserves another's queue", workerRan);
+    expectTrue("Closing one window preserves another's animation", frameRan);
+    expectTrue("Closed window never invokes queued frame", !cancelled);
+}
+
+void testRepeatedCreationAndCancellation() {
+    for (int iteration = 0; iteration < 24; ++iteration) {
+        oneui::WindowOptions options;
+        options.visible = false;
+        auto window = oneui::Window::create(options);
+        window->initialize();
+        bool cancelled = false;
+        window->post([&] { window->close(); });
+        window->post([&] { cancelled = true; });
+        window->run();
+        expectTrue("Closing cancels the remainder of a queued batch", !cancelled);
+    }
+}
+
+void testCancelledCaptureCanReenterPost() {
+    oneui::WindowOptions options;
+    options.visible = false;
+    auto window = oneui::Window::create(options);
+    window->initialize();
+    struct ReentrantCapture {
+        oneui::Window* window;
+        bool* released;
+        ~ReentrantCapture() {
+            *released = true;
+            expectTrue("Capture destructor observes a closed queue", !window->post([] {}));
+            window->requestAnimationFrame([](double) {});
+        }
+    };
+    bool released = false;
+    auto capture = std::make_shared<ReentrantCapture>();
+    capture->window = window.get();
+    capture->released = &released;
+    window->post([capture] {});
+    window->requestAnimationFrame([capture](double) {});
+    capture.reset();
+    window->close();
+    expectTrue("Closing releases captured objects without holding the queue lock", released);
+}
+
 } // namespace
 
-int main() {
+int main(int argc, char**) {
+    if (argc > 1) {
+        auto probe = oneui::Window::create(L"Clipboard capability probe", 320, 200);
+        probe->initialize();
+        if (!(probe->capabilities() & oneui::WindowCapabilityClipboard)) {
+            std::cerr << "SKIP: clipboard requires an interactive seat/user-input serial; native acceptance remains pending.\n";
+            return 77;
+        }
+        testSystemClipboardRoundTrip();
+        return failures == 0 ? 0 : 1;
+    }
     testHiddenWindowLifecycleAndStateContract();
     testAnimationFrameContract();
-    testSystemClipboardRoundTrip();
+    testIndependentWindowLifetimes();
+    testRepeatedCreationAndCancellation();
+    testCancelledCaptureCanReenterPost();
 
     if (failures != 0) {
         std::cerr << failures << " backend contract smoke test(s) failed.\n";

@@ -4,6 +4,7 @@
 #include "oneui/export.h"
 #include "oneui/geometry.h"
 #include "oneui/reactive.h"
+#include "oneui/command.h"
 
 #include <functional>
 #include <string>
@@ -80,6 +81,26 @@ struct KeyEvent {
     bool extended = false;
     bool alt = false;
     bool win = false;
+    // The legacy 'win' field carries the physical Meta/Command modifier on
+    // non-Windows backends. Raw Control remains independent.
+    bool editShortcut() const {
+#ifdef __APPLE__
+        return win;
+#else
+        return control;
+#endif
+    }
+};
+
+struct TextInputState {
+    std::wstring text;
+    std::size_t anchor = 0;
+    std::size_t caret = 0;
+    bool editable = false;
+    bool sensitive = false;
+    const void* identity = nullptr; // Changes when focus moves between editors.
+    bool drawsPreedit = false; // Otherwise the backend draws a caret-anchored overlay.
+    std::uint64_t session = 0; // Changes on focus transitions, including returning to the same editor.
 };
 
 enum class AccessibilityRole {
@@ -128,7 +149,8 @@ struct AccessibilityInfo {
 
 class ONEUI_API Widget {
 public:
-    virtual ~Widget() = default;
+    Widget();
+    virtual ~Widget() { lifetime_.reset(); }
 
     void setFrame(Rect frame);
     Rect frame() const;
@@ -172,10 +194,25 @@ public:
     virtual bool onMouseWheel(const MouseWheelEvent& event);
     virtual bool onKeyDown(const KeyEvent& event);
     virtual bool onKeyUp(const KeyEvent& event);
+    CommandScope& commands() { return commands_; }
+    virtual std::shared_ptr<Widget> activeFocusChild() const { return {}; }
+    virtual bool isCommandBoundary() const { return false; }
+    virtual bool hasTextComposition() const { return false; }
+    virtual CommandResult queryBuiltinCommand(const std::string&) const { return CommandResult::NotFound; }
+    virtual CommandResult executeBuiltinCommand(const std::string&) { return CommandResult::NotFound; }
+    virtual CommandResult dispatchBuiltinCommandKey(const KeyEvent&, const std::string&) { return CommandResult::NotFound; }
     virtual bool onTextInput(wchar_t character);
     /// Delivers one committed Unicode text unit. The default implementation
-    /// preserves legacy character handlers by dispatching each UTF-16 code unit.
+    /// preserves legacy character handlers by dispatching each native wchar_t.
     virtual bool onTextInputText(const std::wstring& text);
+    // Atomic native IME commit. Legacy onTextInputText retains per-unit callbacks.
+    virtual bool onTextCommitted(const std::wstring& text) { return onTextInputText(text); }
+    virtual TextInputState textInputState() const { return {}; }
+    // Preedit is presentation state, not committed text and not an undo entry.
+    virtual void setTextComposition(std::wstring text, std::size_t caret) { (void)text; (void)caret; }
+    virtual bool replaceTextRange(std::size_t start, std::size_t end, const std::wstring& text) {
+        (void)start; (void)end; (void)text; return false;
+    }
     /// Returns the logical client-space rectangle where an IME should place
     /// its composition and candidate UI. Containers forward this to their
     /// focused descendant.
@@ -214,8 +251,14 @@ public:
     void setAccessibilityState(AccessibilityState state);
     AccessibilityState accessibilityState() const;
     virtual AccessibilityInfo accessibilityInfo() const;
+    // Inherited presentation context, installed by the owning native window.
+    virtual void setTextEnvironment(std::wstring family, float scale);
+    const std::wstring& textFontFamily() const { return textFontFamily_; }
+    float textDpiScale() const { return textDpiScale_; }
 
 protected:
+    std::uint64_t textInputSession() const { return textInputSession_; }
+    std::weak_ptr<int> lifetimeToken() const { return lifetime_; }
     void invalidate();
     void invalidateRect(Rect rect);
     void requestAnimationFrame();
@@ -227,6 +270,9 @@ protected:
     virtual void resetInteractionState();
 
 private:
+    CommandScope commands_;
+    std::wstring textFontFamily_;
+    float textDpiScale_ = 1.0f;
     Rect frame_;
     Size preferredSize_;
     std::function<void()> invalidator_;
@@ -235,6 +281,8 @@ private:
     const void* invalidatorOwner_ = nullptr;
     const void* rectInvalidatorOwner_ = nullptr;
     const void* animationSchedulerOwner_ = nullptr;
+    std::shared_ptr<int> lifetime_ = std::make_shared<int>(0);
+    std::uint64_t textInputSession_ = 0;
     bool focused_ = false;
     bool focusVisible_ = false;
     bool disabled_ = false;

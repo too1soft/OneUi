@@ -8,7 +8,7 @@ param(
     [string]$TargetCpu = "x64",
     [string]$WinSdk = "D:/Windows Kits/10",
     [string]$WinVc = "D:/Program Files/Microsoft Visual Studio/18/Community/VC",
-    [string]$Revision = "",
+    [string]$Revision = "1f26101197bff9fcd939a791beb3094297436d59",
     [int]$Depth = 1,
     [string]$Proxy = "",
     [switch]$Fetch,
@@ -81,12 +81,20 @@ if ($Fetch) {
 
 $env:PATH = "$depotToolsPath;$env:PATH"
 $env:DEPOT_TOOLS_WIN_TOOLCHAIN = "0"
+if (($Generate -or $Build) -and (& $git -C $skiaPath rev-parse HEAD) -ne $Revision) {
+    throw "Skia revision does not match the reviewed text-engine dependency pin: $Revision"
+}
 
 if ($SyncDeps) {
     if (!(Test-Path $skiaPath)) {
         throw "Skia source not found: $skiaPath. Run with -Fetch first."
     }
     Run $python "tools/git-sync-deps" $skiaPath
+}
+
+if ($SyncDeps -or $Generate -or $Build) {
+    $cmake = Require-Command "cmake"
+    Run $cmake "`"-DONEUI_ICU_ROOT=$skiaPath/third_party/externals/icu`" -P `"$root/scripts/apply-skia-patches.cmake`""
 }
 
 $gnArgs = @"
@@ -100,6 +108,11 @@ extra_cflags_cc=["/DNTDDI_VERSION=0x06010000", "/DWINVER=0x0601", "/D_WIN32_WINN
 skia_use_system_expat=false
 skia_use_system_harfbuzz=false
 skia_use_system_icu=false
+skia_use_icu=true
+skia_use_harfbuzz=true
+skia_enable_skparagraph=true
+skia_enable_skshaper=true
+skia_enable_skunicode=true
 skia_use_system_libjpeg_turbo=false
 skia_use_system_libpng=false
 skia_use_system_libwebp=false
@@ -133,7 +146,8 @@ if ($Build) {
         throw "ninja was not found. Install it or put it on PATH."
     }
 
-    Run "ninja" "-C `"$outPath`" skia"
+    $env:VSLANG = "1033"
+    Run "ninja" "-C `"$outPath`" skia skparagraph skunicode_icu"
 }
 
 $candidateLibs = @(

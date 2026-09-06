@@ -1,13 +1,13 @@
 # OneUI C ABI 接入
 
 OneUI 使用版本化 C ABI 为 Rust、Go、C#、Python FFI 和不同 C++ ABI 的产品提供边界。本文说明
-当前 ABI v24 的形状、所有权、线程和迁移规则；完整函数签名只以
+当前 ABI v25 的形状、所有权、线程和迁移规则；完整函数签名只以
 `include/oneui/oneui_c_api.h` 为准。
 
 ## 当前版本
 
 ```c
-#define ONEUI_UTF8_ABI_VERSION 24u
+#define ONEUI_UTF8_ABI_VERSION 25u
 ```
 
 运行时检查：
@@ -21,7 +21,43 @@ if (oneui_utf8_abi_version() != ONEUI_UTF8_ABI_VERSION) {
 
 safe Rust `Window::new` 自动执行同一检查并返回 `AbiVersionMismatch`。
 
+## 进程内字体
+
+`oneui_font_register_memory` 会在调用期间复制字体字节，并用调用方给出的 UTF-8 family alias
+注册到 OneUI 的进程内字体提供器。它不会安装或写入操作系统字体目录。应在创建第一个窗口前调用，
+使 SkParagraph、Canvas 和各线程的文字缓存看到同一套字体。无效字体、空 alias 或非法 UTF-8 返回 0；
+重复注册同一 alias 是幂等操作。
+
+可变字体会注册 100–900 的常用字重实例。应用随后通过
+`oneui_window_set_default_font_family_utf8` 选择同一个 alias；缺字仍由平台字体管理器回退。
+
+## 原生后端和运行时能力
+
+跨平台增量接口为 `oneui_window_backend`、`oneui_window_capabilities` 和
+`oneui_window_initialize_checked`，既有 POD 字段布局和 Windows 符号保留。
+后端枚举为 Unknown、Win32、Cocoa、X11、Wayland；能力位覆盖 Clipboard、Ime、Placement、
+Activation、Topmost、Tray、NativeDialogs。能力查询必须在初始化后进行，并可随会话变化。
+`oneui_window_create_utf8` 初始化连接失败返回 null；checked 初始化失败返回 0。
+
+Linux/macOS 推荐 UTF-8 接口；遗留 `wchar_t*` 接口按目标系统宽度解释，Windows 是 UTF-16，
+Linux/macOS 是 UTF-32。`oneui-sys::WChar` 与此一致。原始 Rust FFI 仅承诺
+`bindings/rust/oneui-sys/supported-symbols.txt` 中显式列出的子集，使用
+`cmake -P scripts/check-abi-sync.cmake` 检查，不能把全部 C 导出当成全部 Rust 绑定。
+
+动态库分别为 `oneui.dll`、`liboneui.so`、`liboneui.dylib`。平台支持和原生验收状态见
+[后端指南](37-native-desktop-backends.md)，Wayland 不声明绝对位置、topmost 和主动激活能力。
+
 ## 边界红线
+
+### 本轮增量文字与命令接口（未完成发布验收）
+
+新增 `OneUiCommandRegistration`、`OneUiKeyChordUtf8`、`OneUiTextOptionsUtf8`、
+`OneUiTextPositionUtf8`，未向旧结构追加字段。文字位置采用 UTF-8 字节偏移与亲和方向；
+旧宽字符下标接口仍按目标平台的 `wchar_t` 单元解释。新增符号、注册上下文销毁约定、
+默认换行行为、依赖补丁与验收状态见[文字与交互契约](38-text-and-interaction-engine.md)。
+ABI 版本一致只代表同一接口代际，不代表旧 DLL 已包含本轮新符号；使用新增函数必须一起更新库与头。
+
+### 所有公开边界
 
 C ABI 不能暴露：
 

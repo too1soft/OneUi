@@ -9,6 +9,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 
 namespace oneui {
@@ -21,6 +22,11 @@ public:
     void setSymbol(IconSymbol symbol);
     void setSelected(bool selected);
     bool selected() const;
+    void setSelectionIndicatorVisible(bool visible);
+    bool selectionIndicatorVisible() const;
+    void setSelectionIndicatorColor(std::optional<Color> color);
+    const std::optional<Color>& selectionIndicatorColor() const;
+    void setContentInsets(float iconInset, float labelInset);
     void setStyleSheet(std::shared_ptr<StyleSheet> sheet);
     void setOnClick(std::function<void()> callback);
 
@@ -51,6 +57,10 @@ private:
     std::shared_ptr<StyleSheet> styleSheet_;
     std::function<void()> onClick_;
     bool selected_ = false;
+    bool selectionIndicatorVisible_ = false;
+    std::optional<Color> selectionIndicatorColor_;
+    float iconInset_ = 15.0f;
+    float labelInset_ = 39.0f;
     bool hovered_ = false;
     bool pressed_ = false;
     StyleBoxTransition visualTransition_;

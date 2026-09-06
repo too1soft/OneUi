@@ -1,7 +1,7 @@
 #include "oneui/controls/terminal_view.h"
 
 #include <algorithm>
-#include <chrono>
+#include "internal/ui_clock.h"
 #include <cmath>
 #include <cwctype>
 #include <limits>
@@ -51,13 +51,21 @@ bool sameTerminalCell(const TerminalCell& left, const TerminalCell& right) {
 }
 
 bool isCopyShortcut(const KeyEvent& event) {
+#ifdef __APPLE__
+    return event.editShortcut() && event.key == Key::C;
+#else
     return (event.control && event.shift && event.key == Key::C) ||
            (event.control && !event.shift && event.virtualKey == kVirtualKeyInsert);
+#endif
 }
 
 bool isPasteShortcut(const KeyEvent& event) {
+#ifdef __APPLE__
+    return event.editShortcut() && event.key == Key::V;
+#else
     return (event.control && event.shift && event.key == Key::V) ||
            (!event.control && event.shift && event.virtualKey == kVirtualKeyInsert);
+#endif
 }
 
 bool isModifierKey(const KeyEvent& event) {
@@ -67,8 +75,7 @@ bool isModifierKey(const KeyEvent& event) {
 }
 
 double currentTimeMs() {
-    const auto now = std::chrono::steady_clock::now().time_since_epoch();
-    return std::chrono::duration<double, std::milli>(now).count();
+    return internal::uiTimeMs();
 }
 
 void drawTerminalUnderline(
@@ -596,7 +603,7 @@ bool TerminalView::copySelectionToClipboard() {
     if (!clipboard_ || !hasSelection()) {
         return false;
     }
-    clipboard_->setText(selectedText());
+    try { clipboard_->setText(selectedText()); } catch (...) { return false; }
     return true;
 }
 
@@ -604,7 +611,8 @@ bool TerminalView::pasteFromClipboard() {
     if (!clipboard_) {
         return false;
     }
-    const std::wstring text = clipboard_->text();
+    std::wstring text;
+    try { text = clipboard_->text(); } catch (...) { return false; }
     if (text.empty()) {
         return false;
     }
@@ -730,7 +738,7 @@ void TerminalView::paint(Canvas& canvas) {
         const float numberSize = std::max(8.0f, fontSize_ * 0.78f);
         for (std::uint16_t row = firstRow; row < lastRow; ++row) {
             const auto number = std::to_wstring(firstVisibleLineNumber_ + row);
-            canvas.drawTextStyledWithNamedFont(
+            canvas.drawTextCells(
                 number,
                 Rect{
                     bounds.x,
@@ -826,7 +834,7 @@ void TerminalView::paint(Canvas& canvas) {
             canvas.fillRect(runRect, style.background);
         }
         if (style.textVisible && !text.empty()) {
-            canvas.drawTextStyledWithNamedFont(
+            canvas.drawTextCells(
                 text,
                 runRect,
                 style.foreground,

@@ -1,21 +1,35 @@
+if(TARGET OneUI::oneui)
+    return()
+endif()
 add_library(OneUI::oneui SHARED IMPORTED)
 
 get_filename_component(_oneui_sdk_root "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
 
-if(EXISTS "${_oneui_sdk_root}/lib/oneui.lib")
+if(APPLE)
+    set(_oneui_runtime "${_oneui_sdk_root}/lib/liboneui.dylib")
+elseif(UNIX)
+    set(_oneui_runtime "${_oneui_sdk_root}/lib/liboneui.so")
+elseif(EXISTS "${_oneui_sdk_root}/lib/oneui.lib")
     set(_oneui_import_lib "${_oneui_sdk_root}/lib/oneui.lib")
 elseif(EXISTS "${_oneui_sdk_root}/lib/liboneui.dll.a")
     set(_oneui_import_lib "${_oneui_sdk_root}/lib/liboneui.dll.a")
 else()
     message(FATAL_ERROR "OneUI import library was not found under ${_oneui_sdk_root}/lib")
 endif()
+if(WIN32)
+    set(_oneui_runtime "${_oneui_sdk_root}/bin/oneui.dll")
+    set_property(TARGET OneUI::oneui PROPERTY IMPORTED_IMPLIB "${_oneui_import_lib}")
+endif()
+if(NOT EXISTS "${_oneui_runtime}")
+    message(FATAL_ERROR "OneUI runtime was not found: ${_oneui_runtime}")
+endif()
 
 set_target_properties(OneUI::oneui PROPERTIES
-    IMPORTED_LOCATION "${_oneui_sdk_root}/bin/oneui.dll"
-    IMPORTED_IMPLIB "${_oneui_import_lib}"
+    IMPORTED_LOCATION "${_oneui_runtime}"
     INTERFACE_INCLUDE_DIRECTORIES "${_oneui_sdk_root}/include"
     INTERFACE_COMPILE_OPTIONS "$<$<CXX_COMPILER_ID:MSVC>:/utf-8>"
 )
 
 unset(_oneui_sdk_root)
 unset(_oneui_import_lib)
+unset(_oneui_runtime)

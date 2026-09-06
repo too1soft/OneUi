@@ -3,6 +3,7 @@
 #include "oneui/color.h"
 #include "oneui/export.h"
 #include "oneui/geometry.h"
+#include "oneui/text.h"
 
 #include <cstdint>
 #include <optional>
@@ -23,6 +24,20 @@ enum class TextAlign {
 enum class TextFontFamily {
     Default,
     Monospace
+};
+
+struct TextBlockStyle {
+    float dpiScale = 1.0f;
+    TextOptions options;
+    std::wstring fontFamily;
+    TextFontFamily fallbackFamily = TextFontFamily::Default;
+    float fontSize = 14.0f;
+    float lineHeight = 0.0f;
+    int fontWeight = 400;
+    TextAlign align = TextAlign::Left;
+    std::size_t maxLines = 0;
+    bool ellipsis = false;
+    bool sensitive = false;
 };
 
 struct BoxShadow {
@@ -205,6 +220,19 @@ public:
         (void)familyName;
         return false;
     }
+    virtual std::wstring defaultFontFamily() const { return {}; }
+    // Top-left paragraph placement; the caller owns clipping. Unlike drawText,
+    // this does not vertically center or independently measure each line.
+    virtual void drawTextBlock(const std::wstring& text, Rect rect, Color color, const TextBlockStyle& style) {
+        drawTextStyledWithNamedFont(text, rect, color, style.fontSize, style.align,
+                                   style.fontFamily, style.fallbackFamily, style.fontWeight);
+    }
+    // Terminal cells deliberately retain logical order and fixed-grid metrics.
+    virtual void drawTextCells(const std::wstring& text, Rect rect, Color color, float size,
+                              TextAlign align, const std::wstring& familyName,
+                              TextFontFamily fallbackFamily, int weight = 400) {
+        drawTextStyledWithNamedFont(text, rect, color, size, align, familyName, fallbackFamily, weight);
+    }
     virtual float measureTextWidth(const std::wstring& text, float size, int weight = 400) const {
         (void)weight;
         return static_cast<float>(text.size()) * size * 0.5f;
@@ -256,58 +284,10 @@ public:
         return measureTextWidthWithFont(text, size, fallbackFamily, weight);
     }
 
-    /// Returns a single-line rendering string that fits the requested width.
-    /// The returned prefix never splits a UTF-16 surrogate pair on Windows.
+    /// Returns a single-line rendering string ending at a grapheme boundary.
     std::wstring ellipsizeText(
-        const std::wstring& text,
-        float maxWidth,
-        float size,
-        int weight = 400,
-        TextFontFamily family = TextFontFamily::Default) const {
-        if (text.empty() || maxWidth <= 0.0f) {
-            return {};
-        }
-        if (measureTextWidthWithFont(text, size, family, weight) <= maxWidth) {
-            return text;
-        }
-
-        const std::wstring ellipsis = L"\u2026";
-        if (measureTextWidthWithFont(ellipsis, size, family, weight) > maxWidth) {
-            return {};
-        }
-
-        std::vector<std::size_t> boundaries;
-        boundaries.reserve(text.size() + 1);
-        boundaries.push_back(0);
-        for (std::size_t index = 0; index < text.size();) {
-            if constexpr (sizeof(wchar_t) == 2) {
-                const auto current = static_cast<unsigned int>(text[index]);
-                if (current >= 0xD800U && current <= 0xDBFFU && index + 1 < text.size()) {
-                    const auto next = static_cast<unsigned int>(text[index + 1]);
-                    if (next >= 0xDC00U && next <= 0xDFFFU) {
-                        index += 2;
-                        boundaries.push_back(index);
-                        continue;
-                    }
-                }
-            }
-            ++index;
-            boundaries.push_back(index);
-        }
-
-        std::size_t low = 0;
-        std::size_t high = boundaries.size() - 1;
-        while (low < high) {
-            const std::size_t middle = low + (high - low + 1) / 2;
-            const std::wstring candidate = text.substr(0, boundaries[middle]) + ellipsis;
-            if (measureTextWidthWithFont(candidate, size, family, weight) <= maxWidth) {
-                low = middle;
-            } else {
-                high = middle - 1;
-            }
-        }
-        return text.substr(0, boundaries[low]) + ellipsis;
-    }
+        const std::wstring& text, float maxWidth, float size, int weight = 400,
+        TextFontFamily family = TextFontFamily::Default) const;
 
     /// Draws a single line with a measured ellipsis instead of clipping glyphs.
     void drawTextStyledEllipsized(

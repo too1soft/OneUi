@@ -1,8 +1,19 @@
 #include "oneui/widget.h"
 
 #include <utility>
+#include <atomic>
 
 namespace oneui {
+namespace { std::atomic<std::uint64_t> nextInputSession{1}; }
+Widget::Widget() : textInputSession_(nextInputSession.fetch_add(1, std::memory_order_relaxed)) {}
+
+void Widget::setTextEnvironment(std::wstring family, float scale) {
+    if (!(scale > 0.0f)) scale = 1.0f;
+    if (textFontFamily_ == family && textDpiScale_ == scale) return;
+    textFontFamily_ = std::move(family);
+    textDpiScale_ = scale;
+    invalidate();
+}
 
 void Widget::setFrame(Rect frame) {
     if (frame_.x == frame.x && frame_.y == frame.y && frame_.width == frame.width && frame_.height == frame.height) {
@@ -16,6 +27,7 @@ Rect Widget::frame() const {
 }
 
 void Widget::setPreferredSize(Size size) {
+    if (preferredSize_.width == size.width && preferredSize_.height == size.height) return;
     preferredSize_ = size;
     invalidate();
 }
@@ -28,7 +40,9 @@ void Widget::setDisabled(bool disabled) {
     if (this->disabled() == disabled) {
         return;
     }
+    const auto alive = lifetimeToken();
     disabledBinding_.set(disabled, disabled_);
+    if (alive.expired()) return;
     if (disabled) {
         clearInteractionState();
         setFocused(false);
@@ -59,7 +73,9 @@ void Widget::setVisible(bool visible) {
     if (this->visible() == visible) {
         return;
     }
+    const auto alive = lifetimeToken();
     visibleBinding_.set(visible, visible_);
+    if (alive.expired()) return;
     if (!visible) {
         clearInteractionState();
         setFocused(false);
@@ -362,6 +378,7 @@ void Widget::setFocused(bool focused) {
         return;
     }
     focused_ = focused;
+    textInputSession_ = nextInputSession.fetch_add(1, std::memory_order_relaxed);
     if (!focused) {
         focusVisible_ = false;
     }

@@ -11,7 +11,13 @@ mod types;
 pub use ffi::*;
 pub use types::*;
 
-pub const UTF8_ABI_VERSION: c_uint = 24;
+pub const UTF8_ABI_VERSION: c_uint = 25;
+
+/// Native C wchar_t, not a fixed-width UTF-16 buffer. Prefer UTF-8 entrypoints.
+#[cfg(windows)]
+pub type WChar = u16;
+#[cfg(not(windows))]
+pub type WChar = u32;
 
 #[repr(C)]
 pub struct OneUiWindow {
@@ -364,6 +370,11 @@ pub type OneUiTerminalViewportCallback =
 
 extern "C" {
     pub fn oneui_utf8_abi_version() -> c_uint;
+    pub fn oneui_font_register_memory(
+        data: *const u8,
+        size: usize,
+        family_alias: OneUiUtf8String,
+    ) -> c_int;
 
     pub fn oneui_window_create_utf8(options: *const OneUiWindowOptionsUtf8) -> *mut OneUiWindow;
     pub fn oneui_window_destroy(window: *mut OneUiWindow);
@@ -379,17 +390,17 @@ extern "C" {
     ) -> c_int;
     pub fn oneui_window_confirm(
         window: *mut OneUiWindow,
-        title: *const u16,
-        message: *const u16,
+        title: *const WChar,
+        message: *const WChar,
     ) -> c_int;
     pub fn oneui_window_prompt_text(
         window: *mut OneUiWindow,
-        title: *const u16,
-        message: *const u16,
-        initial_value: *const u16,
-        placeholder: *const u16,
+        title: *const WChar,
+        message: *const WChar,
+        initial_value: *const WChar,
+        placeholder: *const WChar,
         password: c_int,
-        out: *mut u16,
+        out: *mut WChar,
         out_len: c_int,
     ) -> c_int;
     pub fn oneui_window_run(window: *mut OneUiWindow) -> c_int;
@@ -475,7 +486,7 @@ extern "C" {
     pub fn oneui_widget_set_tab_stop(widget: *mut OneUiWidget, tab_stop: c_int);
     pub fn oneui_widget_set_visible(widget: *mut OneUiWidget, visible: c_int);
     pub fn oneui_widget_focused(widget: *const OneUiWidget) -> c_int;
-    pub fn oneui_widget_set_tooltip(widget: *mut OneUiWidget, tooltip: *const u16);
+    pub fn oneui_widget_set_tooltip(widget: *mut OneUiWidget, tooltip: *const WChar);
     pub fn oneui_widget_set_classes(widget: *mut OneUiWidget, classes: *const c_char);
     pub fn oneui_widget_set_style_node(
         widget: *mut OneUiWidget,
@@ -583,9 +594,9 @@ extern "C" {
     pub fn oneui_popup_set_preferred_placement(popup: *mut OneUiWidget, placement: c_int);
     pub fn oneui_popup_set_interaction_mode(popup: *mut OneUiWidget, mode: c_int);
 
-    pub fn oneui_dialog_create(title: *const u16, subtitle: *const u16) -> *mut OneUiWidget;
-    pub fn oneui_dialog_set_title(dialog: *mut OneUiWidget, title: *const u16);
-    pub fn oneui_dialog_set_subtitle(dialog: *mut OneUiWidget, subtitle: *const u16);
+    pub fn oneui_dialog_create(title: *const WChar, subtitle: *const WChar) -> *mut OneUiWidget;
+    pub fn oneui_dialog_set_title(dialog: *mut OneUiWidget, title: *const WChar);
+    pub fn oneui_dialog_set_subtitle(dialog: *mut OneUiWidget, subtitle: *const WChar);
     pub fn oneui_dialog_set_icon(dialog: *mut OneUiWidget, symbol: c_int);
     pub fn oneui_dialog_set_close_visible(dialog: *mut OneUiWidget, visible: c_int);
     pub fn oneui_dialog_set_on_close(
@@ -599,7 +610,7 @@ extern "C" {
     pub fn oneui_log_view_create() -> *mut OneUiWidget;
     pub fn oneui_log_view_append_line(
         view: *mut OneUiWidget,
-        text: *const u16,
+        text: *const WChar,
         r: u8,
         g: u8,
         b: u8,
@@ -785,6 +796,9 @@ extern "C" {
     pub fn oneui_label_set_font_size(label: *mut OneUiWidget, font_size: f32);
     pub fn oneui_label_set_font_weight(label: *mut OneUiWidget, font_weight: c_int);
     pub fn oneui_label_set_align(label: *mut OneUiWidget, align: c_int);
+    pub fn oneui_label_set_text_wrapping(label: *mut OneUiWidget, enabled: c_int);
+    pub fn oneui_label_set_max_lines(label: *mut OneUiWidget, max_lines: c_int);
+    pub fn oneui_label_set_line_height(label: *mut OneUiWidget, line_height: f32);
 
     pub fn oneui_progress_bar_create() -> *mut OneUiWidget;
     pub fn oneui_progress_bar_set_value(progress_bar: *mut OneUiWidget, value: f64);
@@ -844,8 +858,8 @@ extern "C" {
         user_data: *mut c_void,
     );
 
-    pub fn oneui_switch_create(text: *const u16) -> *mut OneUiWidget;
-    pub fn oneui_switch_set_text(switch_widget: *mut OneUiWidget, text: *const u16);
+    pub fn oneui_switch_create(text: *const WChar) -> *mut OneUiWidget;
+    pub fn oneui_switch_set_text(switch_widget: *mut OneUiWidget, text: *const WChar);
     pub fn oneui_switch_set_checked(switch_widget: *mut OneUiWidget, checked: c_int);
     pub fn oneui_switch_checked(switch_widget: *mut OneUiWidget) -> c_int;
     pub fn oneui_switch_set_on_changed(
@@ -853,8 +867,8 @@ extern "C" {
         callback: OneUiBoolCallback,
         user_data: *mut c_void,
     );
-    pub fn oneui_checkbox_create(text: *const u16) -> *mut OneUiWidget;
-    pub fn oneui_checkbox_set_text(checkbox: *mut OneUiWidget, text: *const u16);
+    pub fn oneui_checkbox_create(text: *const WChar) -> *mut OneUiWidget;
+    pub fn oneui_checkbox_set_text(checkbox: *mut OneUiWidget, text: *const WChar);
     pub fn oneui_checkbox_set_checked(checkbox: *mut OneUiWidget, checked: c_int);
     pub fn oneui_checkbox_checked(checkbox: *mut OneUiWidget) -> c_int;
     pub fn oneui_checkbox_set_on_changed(
@@ -866,7 +880,7 @@ extern "C" {
     pub fn oneui_segmented_control_create() -> *mut OneUiWidget;
     pub fn oneui_segmented_control_set_items(
         segmented_control: *mut OneUiWidget,
-        items: *const u16,
+        items: *const WChar,
     );
     pub fn oneui_segmented_control_set_selected_index(
         segmented_control: *mut OneUiWidget,
@@ -918,8 +932,8 @@ extern "C" {
         user_data: *mut c_void,
     );
 
-    pub fn oneui_title_bar_create(title: *const u16) -> *mut OneUiWidget;
-    pub fn oneui_title_bar_set_title(title_bar: *mut OneUiWidget, title: *const u16);
+    pub fn oneui_title_bar_create(title: *const WChar) -> *mut OneUiWidget;
+    pub fn oneui_title_bar_set_title(title_bar: *mut OneUiWidget, title: *const WChar);
     pub fn oneui_title_bar_set_icon_symbol(title_bar: *mut OneUiWidget, symbol: c_int);
     pub fn oneui_title_bar_set_variant(title_bar: *mut OneUiWidget, variant: *const c_char);
     pub fn oneui_title_bar_set_leading(title_bar: *mut OneUiWidget, leading: *mut OneUiWidget);
@@ -941,7 +955,7 @@ extern "C" {
     );
 
     pub fn oneui_nav_item_create(
-        text: *const u16,
+        text: *const WChar,
         symbol: c_int,
         selected: c_int,
     ) -> *mut OneUiWidget;
@@ -967,12 +981,12 @@ extern "C" {
     pub fn oneui_menu_create() -> *mut OneUiWidget;
     pub fn oneui_menu_add_header(
         menu: *mut OneUiWidget,
-        title: *const c_ushort,
-        subtitle: *const c_ushort,
+        title: *const WChar,
+        subtitle: *const WChar,
     );
     pub fn oneui_menu_add_item(
         menu: *mut OneUiWidget,
-        text: *const c_ushort,
+        text: *const WChar,
         icon_symbol: c_int,
         danger: c_int,
     ) -> c_int;
@@ -1007,6 +1021,7 @@ extern "C" {
     pub fn oneui_text_field_set_password_mask(text_field: *mut OneUiWidget, codepoint: c_uint);
     pub fn oneui_text_field_set_multiline(text_field: *mut OneUiWidget, multiline: c_int);
     pub fn oneui_text_field_set_line_height(text_field: *mut OneUiWidget, line_height: f32);
+    pub fn oneui_text_field_set_font_size(text_field: *mut OneUiWidget, font_size: f32);
     pub fn oneui_text_field_set_prefix_icon(text_field: *mut OneUiWidget, symbol: c_int);
     pub fn oneui_text_field_clear_prefix_icon(text_field: *mut OneUiWidget);
     pub fn oneui_text_field_set_suffix_icon(text_field: *mut OneUiWidget, symbol: c_int);
@@ -1306,14 +1321,11 @@ extern "C" {
         callback: OneUiItemDragCallback,
         user_data: *mut c_void,
     );
-    pub fn oneui_state_view_create(
-        title: *const c_ushort,
-        message: *const c_ushort,
-    ) -> *mut OneUiWidget;
-    pub fn oneui_state_view_set_title(state_view: *mut OneUiWidget, title: *const c_ushort);
-    pub fn oneui_state_view_set_message(state_view: *mut OneUiWidget, message: *const c_ushort);
+    pub fn oneui_state_view_create(title: *const WChar, message: *const WChar) -> *mut OneUiWidget;
+    pub fn oneui_state_view_set_title(state_view: *mut OneUiWidget, title: *const WChar);
+    pub fn oneui_state_view_set_message(state_view: *mut OneUiWidget, message: *const WChar);
     pub fn oneui_state_view_set_icon(state_view: *mut OneUiWidget, symbol: c_int);
-    pub fn oneui_state_view_set_action(state_view: *mut OneUiWidget, text: *const c_ushort);
+    pub fn oneui_state_view_set_action(state_view: *mut OneUiWidget, text: *const WChar);
     pub fn oneui_state_view_set_on_action(
         state_view: *mut OneUiWidget,
         callback: Option<unsafe extern "C" fn(user_data: *mut c_void)>,

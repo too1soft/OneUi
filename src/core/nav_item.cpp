@@ -1,7 +1,7 @@
 #include "oneui/controls/nav_item.h"
 
 #include <algorithm>
-#include <chrono>
+#include "internal/ui_clock.h"
 
 namespace oneui {
 namespace {
@@ -40,8 +40,7 @@ const StyleSheet& fallbackSheet() {
 }
 
 double currentTimeMs() {
-    const auto now = std::chrono::steady_clock::now().time_since_epoch();
-    return std::chrono::duration<double, std::milli>(now).count();
+    return internal::uiTimeMs();
 }
 
 void prewarmNavItemStyles(const StyleSheet& sheet) {
@@ -88,6 +87,29 @@ bool NavItem::selected() const {
     return selected_;
 }
 
+void NavItem::setSelectionIndicatorVisible(bool visible) {
+    if (selectionIndicatorVisible_ == visible) return;
+    selectionIndicatorVisible_ = visible;
+    invalidate();
+}
+
+bool NavItem::selectionIndicatorVisible() const { return selectionIndicatorVisible_; }
+
+void NavItem::setSelectionIndicatorColor(std::optional<Color> color) {
+    selectionIndicatorColor_ = color;
+    invalidate();
+}
+
+const std::optional<Color>& NavItem::selectionIndicatorColor() const {
+    return selectionIndicatorColor_;
+}
+
+void NavItem::setContentInsets(float iconInset, float labelInset) {
+    iconInset_ = std::max(0.0f, iconInset);
+    labelInset_ = std::max(iconInset_ + 20.0f, labelInset);
+    invalidate();
+}
+
 void NavItem::setStyleSheet(std::shared_ptr<StyleSheet> sheet) {
     const StyleBox previous = resolvedItemStyle();
     styleSheet_ = std::move(sheet);
@@ -113,13 +135,13 @@ SidebarNavItemBridgeLayout NavItem::layout() const {
     const StyleBox targetStyle = resolvedItemStyle();
     SidebarNavItemBridgeLayout item;
     item.frame = bounds;
-    item.icon = Rect{bounds.x + 15.0f, bounds.y + 11.0f, 16.0f, 16.0f};
+    item.icon = Rect{bounds.x + iconInset_, bounds.y + 11.0f, 16.0f, 16.0f};
     item.symbol = symbol_;
     item.style = visualItemStyle(targetStyle);
     item.label = Rect{
-        bounds.x + 39.0f,
+        bounds.x + labelInset_,
         bounds.y,
-        std::max(0.0f, bounds.width - 48.0f),
+        std::max(0.0f, bounds.width - labelInset_ - 9.0f),
         bounds.height};
     const Color fallback = disabled() ? Color{139, 145, 158} :
         selected_ ? Color{255, 47, 105} : Color{202, 205, 214};
@@ -135,6 +157,12 @@ SidebarNavItemBridgeLayout NavItem::layout() const {
 void NavItem::paint(Canvas& canvas) {
     const auto item = layout();
     paintStyleBox(canvas, item.frame, item.style);
+    if (selected_ && selectionIndicatorVisible_) {
+        canvas.fillRect(
+            Rect{item.frame.x, item.frame.y + 6.0f, 4.0f, std::max(0.0f, item.frame.height - 12.0f)},
+            selectionIndicatorColor_.value_or(item.foreground),
+            2.0f);
+    }
     paintIcon(canvas, item.symbol, item.icon, item.foreground);
     canvas.drawTextEllipsized(text_, item.label, item.foreground, 13.0f, TextAlign::Left);
 }

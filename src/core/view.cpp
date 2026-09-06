@@ -3,6 +3,23 @@
 #include <algorithm>
 
 namespace oneui {
+
+std::shared_ptr<Widget> View::activeFocusChild() const {
+    if (!interactive()) return {};
+    for (const auto& child : children_)
+        if (child.get() == focusedChild_ && isChildInteractive(child.get()) && child->focused()) return child;
+    return {};
+}
+bool View::hasTextComposition() const {
+    auto child = activeFocusChild();
+    return child && child->hasTextComposition();
+}
+
+void View::setTextEnvironment(std::wstring family, float scale) {
+    Widget::setTextEnvironment(family, scale);
+    const auto children = children_;
+    for (const auto& child : children) child->setTextEnvironment(family, scale);
+}
 namespace {
 
 bool intersects(Rect lhs, Rect rhs) {
@@ -80,6 +97,7 @@ void View::setAnimationScheduler(std::function<void()> scheduler) {
 }
 
 void View::installChildCallbacks(Widget& child) {
+    child.setTextEnvironment(textFontFamily(), textDpiScale());
     child.attachToOwner(
         this,
         [this] { invalidate(); },
@@ -237,18 +255,21 @@ bool View::onKeyDown(const KeyEvent& event) {
         return false;
     }
 
+    const auto child = activeFocusChild();
     if (event.key == Key::Tab) {
         // 深度优先：先让当前聚焦子树在更深层推进（表单里逐个字段切换）；
         // 到本层边界（focusNext 返回 false，不回绕）再冒泡给上层——回绕由焦点作用域
         // （模态 overlay 或窗口内容，见 OverlayHost::onKeyDown）统一负责。
         // 键盘导航即使已经抵达当前作用域的边界，也必须让当前焦点显示焦点环。
         // 这样首次通过 Tab 进入窗口时不会保留鼠标焦点样式。
-        if (focusedChild_ && isChildInteractive(focusedChild_)) {
-            focusedChild_->setFocusVisible(true);
+        if (child) {
+            child->setFocusVisible(true);
         }
-        if (focusedChild_ && isChildInteractive(focusedChild_) && focusedChild_->onKeyDown(event)) {
+        const auto life = lifetimeToken();
+        if (child && child->onKeyDown(event)) {
             return true;
         }
+        if (life.expired()) return true;
         return focusNext(event.shift);
     }
 
@@ -256,7 +277,7 @@ bool View::onKeyDown(const KeyEvent& event) {
         focusChild(nullptr);
     }
 
-    if (focusedChild_ && focusedChild_->onKeyDown(event)) {
+    if (child && child->onKeyDown(event)) {
         return true;
     }
 
@@ -272,7 +293,8 @@ bool View::onKeyUp(const KeyEvent& event) {
         focusChild(nullptr);
     }
 
-    return focusedChild_ ? focusedChild_->onKeyUp(event) : false;
+    const auto child = activeFocusChild();
+    return child && child->onKeyUp(event);
 }
 
 bool View::onTextInput(wchar_t character) {
@@ -283,7 +305,8 @@ bool View::onTextInput(wchar_t character) {
     if (focusedChild_ && !isChildInteractive(focusedChild_)) {
         focusChild(nullptr);
     }
-    return focusedChild_ ? focusedChild_->onTextInput(character) : false;
+    const auto child = activeFocusChild();
+    return child && child->onTextInput(character);
 }
 
 bool View::onTextInputText(const std::wstring& text) {
@@ -293,14 +316,16 @@ bool View::onTextInputText(const std::wstring& text) {
     if (focusedChild_ && !isChildInteractive(focusedChild_)) {
         focusChild(nullptr);
     }
-    return focusedChild_ ? focusedChild_->onTextInputText(text) : false;
+    const auto child = activeFocusChild();
+    return child && child->onTextInputText(text);
 }
 
-Rect View::textInputCaretRect() const {
-    return focusedChild_ && isChildInteractive(focusedChild_)
-        ? focusedChild_->textInputCaretRect()
-        : frame();
-}
+Rect View::textInputCaretRect() const { auto child = activeFocusChild(); return child ? child->textInputCaretRect() : frame(); }
+
+TextInputState View::textInputState() const { auto child = activeFocusChild(); return child ? child->textInputState() : TextInputState{}; }
+bool View::onTextCommitted(const std::wstring& text) { auto child = activeFocusChild(); return child && child->onTextCommitted(text); }
+void View::setTextComposition(std::wstring text, std::size_t caret) { if (auto child = activeFocusChild()) child->setTextComposition(std::move(text), caret); }
+bool View::replaceTextRange(std::size_t start, std::size_t end, const std::wstring& text) { auto child = activeFocusChild(); return child && child->replaceTextRange(start, end, text); }
 
 bool View::onFocusChanged(bool focused) {
     setFocused(focused);

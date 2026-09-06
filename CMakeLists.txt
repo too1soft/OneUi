@@ -18,13 +18,16 @@ include(CTest)
 include(cmake/OneUISources.cmake)
 include(cmake/OneUITests.cmake)
 option(ONEUI_BUILD_PLATFORM_WIN32 "Build the Win32 platform renderer and gallery integration" ON)
+option(ONEUI_BUILD_PLATFORM_DESKTOP "Build native Linux/macOS backends" ON)
 option(ONEUI_BUILD_STATIC "Build the OneUI static library alongside the DLL" ON)
+option(ONEUI_ENABLE_TEST_FRAME_CAPTURE "Enable test-only native frame PNG capture" OFF)
 
-if(WIN32 AND ONEUI_BUILD_PLATFORM_WIN32)
-    include(cmake/OneUISkia.cmake)
-endif()
+include(cmake/OneUISkia.cmake)
+include(cmake/OneUIText.cmake)
 
 add_library(oneui_core OBJECT ${ONEUI_CORE_SOURCES})
+target_link_libraries(oneui_core PUBLIC oneui_text)
+set_target_properties(oneui_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 target_include_directories(oneui_core
     PUBLIC
@@ -59,6 +62,7 @@ if(WIN32 AND ONEUI_BUILD_PLATFORM_WIN32)
             ole32
             oleaut32
             uuid
+            windowscodecs
             fontsub
             usp10
     )
@@ -86,6 +90,9 @@ if(WIN32 AND ONEUI_BUILD_PLATFORM_WIN32)
             _WIN32_WINNT=0x0601
             ONEUI_BUILDING_DLL
     )
+    if(ONEUI_ENABLE_TEST_FRAME_CAPTURE)
+        target_compile_definitions(oneui_platform_win32 PRIVATE ONEUI_ENABLE_TEST_FRAME_CAPTURE=1)
+    endif()
 
     add_library(oneui SHARED
         ${ONEUI_C_API_SOURCES}
@@ -159,6 +166,7 @@ if(WIN32 AND ONEUI_BUILD_PLATFORM_WIN32)
 
         target_link_libraries(oneui_static
             PUBLIC
+                oneui_text
                 oneui_skia
                 user32
                 gdi32
@@ -170,6 +178,7 @@ if(WIN32 AND ONEUI_BUILD_PLATFORM_WIN32)
                 ole32
                 oleaut32
                 uuid
+                windowscodecs
                 fontsub
                 usp10
         )
@@ -190,6 +199,9 @@ if(WIN32 AND ONEUI_BUILD_PLATFORM_WIN32)
                 WINVER=0x0601
                 _WIN32_WINNT=0x0601
         )
+        if(ONEUI_ENABLE_TEST_FRAME_CAPTURE)
+            target_compile_definitions(oneui_static PUBLIC ONEUI_ENABLE_TEST_FRAME_CAPTURE=1)
+        endif()
 
         set_target_properties(oneui_static PROPERTIES
             OUTPUT_NAME "oneui_static"
@@ -204,6 +216,8 @@ if(WIN32 AND ONEUI_BUILD_PLATFORM_WIN32)
     if(BUILD_TESTING)
         oneui_register_native_tests()
     endif()
+elseif(UNIX AND ONEUI_BUILD_PLATFORM_DESKTOP)
+    include(cmake/OneUIDesktop.cmake)
 elseif(WIN32)
     add_library(oneui SHARED
         $<TARGET_OBJECTS:oneui_core>

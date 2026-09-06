@@ -64,6 +64,9 @@ public:
     void setInvalidator(std::function<void()> invalidator) override;
     void setRectInvalidator(std::function<void(Rect)> invalidator) override;
     void setAnimationScheduler(std::function<void()> scheduler) override;
+    void setTextEnvironment(std::wstring family, float scale) override;
+    std::shared_ptr<Widget> activeFocusChild() const override;
+    bool isCommandBoundary() const override { return hasActiveFocusTrap(); }
 
     void paint(Canvas& canvas) override;
     bool hitTest(Point point) const override;

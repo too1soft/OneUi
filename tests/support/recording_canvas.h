@@ -48,6 +48,8 @@ struct DrawLineCall {
     float width;
 };
 
+struct DrawTextBlockCall { std::wstring text; Rect rect; Color color; TextBlockStyle style; };
+
 struct BoxShadowCall {
     Rect rect;
     BoxShadow shadow;
@@ -56,6 +58,10 @@ struct BoxShadowCall {
 
 class RecordingCanvas final : public Canvas {
 public:
+    void drawTextBlock(const std::wstring& text, Rect rect, Color color, const TextBlockStyle& style) override {
+        textBlocks.push_back({text, rect, color, style});
+        texts.push_back({text, rect, color, style.fontSize, style.fontWeight, style.align});
+    }
     void save() override {
         ++saves;
     }
@@ -156,6 +162,7 @@ public:
     std::vector<StrokeRectCall> strokeRects;
     std::vector<StrokeEllipseCall> strokeEllipses;
     std::vector<DrawTextCall> texts;
+    std::vector<DrawTextBlockCall> textBlocks;
     std::vector<DrawLineCall> lines;
     std::vector<BoxShadowCall> boxShadows;
     std::vector<Rect> clips;

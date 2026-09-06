@@ -1,4 +1,5 @@
 #include "oneui/controls/button.h"
+#include "text/text_layout.h"
 #include "oneui/controls/button_bridge.h"
 #include "oneui/controls/badge.h"
 #include "oneui/controls/card.h"
@@ -180,7 +181,33 @@ void testSingleLineTextEllipsizesByMeasuredWidth() {
     label.setFrame(oneui::Rect{0.0f, 0.0f, 72.0f, 22.0f});
     label.paint(canvas);
     expectEqual("Label paints exactly one fitted line", static_cast<int>(canvas.texts.size()), 1);
-    expectEqual("Label delegates overflow to the shared ellipsis contract", canvas.texts.back().text.back() == L'\u2026' ? 1 : 0, 1);
+    expectTrue("Label delegates overflow to the paragraph engine", canvas.textBlocks.size() == 1 && canvas.textBlocks.back().style.ellipsis && canvas.textBlocks.back().style.maxLines == 1);
+}
+
+void testWrappedLabelRespectsWidthHeightAndMaxLines() {
+    RecordingCanvas canvas;
+    oneui::Label label(L"alpha beta gamma delta epsilon");
+    label.setTextWrapping(true);
+    label.setMaxLines(2);
+    label.setLineHeight(18.0f);
+    label.setFrame(oneui::Rect{4.0f, 6.0f, 58.0f, 50.0f});
+    label.paint(canvas);
+
+    expectTrue("Wrapped Label exposes enabled state", label.textWrapping());
+    expectEqual("Wrapped Label exposes max lines", label.maxLines(), 2);
+    expectNear("Wrapped Label exposes line height", label.lineHeight(), 18.0f);
+    expectEqual("Wrapped Label paints one shared paragraph", static_cast<int>(canvas.texts.size()), 1);
+    expectNear("Wrapped Label first line starts at frame top", canvas.texts[0].rect.y, 6.0f);
+    const auto& style = canvas.textBlocks.at(0).style;
+    expectTrue("Wrapped Label requests word wrapping and ellipsis", style.options.wrap == oneui::TextWrapMode::WordWrap && style.ellipsis && style.maxLines == 2);
+    oneui::text::LayoutOptions options;
+    options.size = style.fontSize; options.lineHeight = style.lineHeight;
+    options.width = 58; options.text = style.options; options.maxLines = 2; options.ellipsis = true;
+    const auto layout = oneui::text::Layout::make(label.text(), options);
+    expectEqual("Wrapped Label layout has two visible lines", static_cast<int>(layout->lines().size()), 2);
+    expectNear("Wrapped Label advances by line height", layout->lines().at(1).top - layout->lines().at(0).top, 18);
+    expectTrue("Wrapped Label layout respects width", layout->width() <= 58.1f);
+    expectEqual("Wrapped Label clips once", static_cast<int>(canvas.clips.size()), 1);
 }
 
 void testWidgetAccessibilityInfoReflectsSemanticAndDynamicState() {
@@ -3722,6 +3749,47 @@ void testTableStyleOverridePaintsCustomColorsAndGeometry() {
     }
 }
 
+void testTableRichCellsAndColumnDividerVisibility() {
+    oneui::Table table;
+    table.setColumns({
+        oneui::TableColumn{L"Device", 120.0f},
+        oneui::TableColumn{L"Status", 0.0f},
+    });
+    oneui::TableCell device;
+    device.text = L"Gaming PC";
+    device.leadingIcon = oneui::IconSymbol::Gamepad;
+    device.foreground = oneui::Color{18, 20, 23};
+    device.fontSize = 15.0f;
+    device.fontWeight = 600;
+    device.iconSize = 28.0f;
+    oneui::TableCell status;
+    status.text = L"Direct";
+    status.indicator = oneui::Color{25, 185, 76};
+    status.foreground = oneui::Color{25, 185, 76};
+    table.setRichRows({{device, status}, {device, status}});
+    table.setColumnDividersVisible(false);
+    table.setFrame(oneui::Rect{0.0f, 0.0f, 260.0f, 120.0f});
+
+    RecordingCanvas canvas;
+    table.paint(canvas);
+
+    expectEqual("Table stores rich rows", static_cast<int>(table.richRows().size()), 2);
+    expectEqual("Table exposes hidden column dividers", table.columnDividersVisible() ? 1 : 0, 0);
+    const auto deviceText = std::find_if(canvas.texts.begin(), canvas.texts.end(), [](const DrawTextCall& call) {
+        return call.text == L"Gaming PC";
+    });
+    expectEqual("Table rich cell text paints", deviceText != canvas.texts.end() ? 1 : 0, 1);
+    if (deviceText != canvas.texts.end()) {
+        expectNear("Table rich cell font size", deviceText->size, 15.0f);
+        expectEqual("Table rich cell font weight", deviceText->weight, 600);
+    }
+    expectEqual(
+        "Table without column dividers only paints horizontal grid lines",
+        countLinesWithColor(canvas, oneui::theme().border),
+        2);
+    expectEqual("Table rich status paints indicator", countFillEllipsesWithColor(canvas, oneui::Color{25, 185, 76}), 2);
+}
+
 void testTableEmptyStyleOverrideKeepsDefaultPaint() {
     oneui::Table table;
     table.setColumns({oneui::TableColumn{L"Name", 0.0f}});
@@ -4839,13 +4907,13 @@ void testTextAreaSupportsMultilineEditingAndLineNavigation() {
     area.setFrame(oneui::Rect{0.0f, 0.0f, 320.0f, 160.0f});
     RecordingCanvas canvas;
     area.paint(canvas);
-    expectEqual("TextArea paints one draw call per line", static_cast<int>(canvas.texts.size()), 3);
-    if (canvas.texts.size() == 3) {
-        expectWideEqual("TextArea first painted line", canvas.texts[0].text, L"alpha");
-        expectWideEqual("TextArea second painted line", canvas.texts[1].text, L"beta");
-        expectWideEqual("TextArea third painted line", canvas.texts[2].text, L"gamma");
-        expectNear("TextArea line spacing", canvas.texts[1].rect.y - canvas.texts[0].rect.y, area.lineHeight());
-    }
+    expectEqual("TextArea paints one shared text block", static_cast<int>(canvas.textBlocks.size()), 1);
+    expectWideEqual("TextArea keeps logical text in shared layout", canvas.textBlocks.at(0).text, area.text());
+    oneui::text::LayoutOptions options;
+    options.size = oneui::theme().fontMd; options.lineHeight = area.lineHeight();
+    const auto layout = oneui::text::Layout::make(area.text(), options);
+    expectEqual("TextArea layout has three lines", static_cast<int>(layout->lines().size()), 3);
+    expectNear("TextArea line spacing", layout->lines().at(1).top - layout->lines().at(0).top, area.lineHeight());
     int changes = 0;
     area.setOnChanged([&](const std::wstring&) {
         ++changes;
@@ -4853,7 +4921,8 @@ void testTextAreaSupportsMultilineEditingAndLineNavigation() {
     area.setCaretIndex(8);
 
     expectEqual("TextArea Up moves to matching column", area.onKeyDown(oneui::KeyEvent{oneui::Key::Up}) ? 1 : 0, 1);
-    expectEqual("TextArea Up caret", static_cast<int>(area.caretIndex()), 2);
+    const auto target = layout->moveVertical({8}, -1, layout->caret({8}).x);
+    expectEqual("TextArea Up preserves target x", static_cast<int>(area.caretIndex()), static_cast<int>(target.offset));
     expectEqual("TextArea Down moves to matching column", area.onKeyDown(oneui::KeyEvent{oneui::Key::Down}) ? 1 : 0, 1);
     expectEqual("TextArea Down caret", static_cast<int>(area.caretIndex()), 8);
     expectEqual("TextArea End moves to current line end", area.onKeyDown(oneui::KeyEvent{oneui::Key::End}) ? 1 : 0, 1);
@@ -4962,7 +5031,7 @@ void testTextFieldReadOnlyAllowsSelectionCopyAndNavigationButNotMutation() {
 
     field.selectAll();
     expectEqual("TextField readOnly Ctrl+A handled", field.onKeyDown(oneui::KeyEvent{oneui::Key::A, false, true}) ? 1 : 0, 1);
-    expectEqual("TextField readOnly Ctrl+X ignored", field.onKeyDown(oneui::KeyEvent{oneui::Key::X, false, true}) ? 1 : 0, 0);
+    expectEqual("TextField readOnly Ctrl+X consumed by disabled command", field.onKeyDown(oneui::KeyEvent{oneui::Key::X, false, true}) ? 1 : 0, 1);
     expectWideEqual("TextField readOnly Ctrl+X keeps text", field.text(), L"abcdef");
     expectEqual("TextField readOnly emits no changes", changes, 0);
 }
@@ -4994,8 +5063,8 @@ void testTextFieldPasswordModeMasksDisplayOnly() {
 
     field.setSelectionRange(0, 6);
     oneui::MemoryClipboard clipboard;
-    expectEqual("TextField password copy still uses real value", field.copySelectionToClipboard(clipboard) ? 1 : 0, 1);
-    expectWideEqual("TextField password copy writes real value", clipboard.text(), L"secret");
+    expectEqual("TextField password copy is disabled", field.copySelectionToClipboard(clipboard) ? 1 : 0, 0);
+    expectWideEqual("TextField password copy does not reveal value", clipboard.text(), L"");
 
     const auto info = field.accessibilityInfo();
     expectWideEqual("TextField password accessibility value is masked", info.value, L"######");
@@ -5019,7 +5088,13 @@ void testTextFieldHorizontalScrollClipsAndFollowsCaret() {
     expectEqual("TextField horizontal scroll paints text", scrolledCanvas.texts.empty() ? 0 : 1, 1);
     if (!scrolledCanvas.texts.empty()) {
         expectWideEqual("TextField horizontal scroll keeps real drawn text", scrolledCanvas.texts.back().text, L"abcdefghijkl");
-        expectNear("TextField horizontal scroll shifts text left", scrolledCanvas.texts.back().rect.x, -7.5f);
+        oneui::text::LayoutOptions options;
+        options.size = field.fontSize();
+        options.family = field.textFontFamily();
+        options.scale = field.textDpiScale();
+        options.text = field.textOptions();
+        const auto layout = oneui::text::Layout::make(field.text(), options);
+        expectNear("TextField horizontal scroll follows shaped caret", scrolledCanvas.texts.back().rect.x + layout->caret({field.text().size()}).x, 65.0f);
     }
     expectEqual("TextField horizontal scroll paints caret", countFillRectsWithColor(scrolledCanvas, oneui::theme().primary), 1);
     if (!scrolledCanvas.fillRects.empty()) {
@@ -5027,7 +5102,14 @@ void testTextFieldHorizontalScrollClipsAndFollowsCaret() {
     }
 
     field.onMouseDown(oneui::MouseEvent{oneui::Point{19.0f, 18.0f}});
-    expectEqual("TextField horizontal scroll click maps through offset", static_cast<int>(field.caretIndex()), 4);
+    oneui::text::LayoutOptions options;
+    options.size = field.fontSize();
+    options.family = field.textFontFamily();
+    options.scale = field.textDpiScale();
+    options.text = field.textOptions();
+    const auto layout = oneui::text::Layout::make(field.text(), options);
+    const auto expected = layout->hitTest({19.0f - scrolledCanvas.texts.back().rect.x, layout->height() / 2});
+    expectEqual("TextField horizontal scroll click maps through shaped offset", static_cast<int>(field.caretIndex()), static_cast<int>(expected.offset));
 
     field.setCaretIndex(0);
     RecordingCanvas resetCanvas;
@@ -5108,7 +5190,13 @@ void testTextFieldPasswordHorizontalScrollMasksAndClips() {
     expectEqual("TextField password horizontal scroll paints text", canvas.texts.empty() ? 0 : 1, 1);
     if (!canvas.texts.empty()) {
         expectWideEqual("TextField password horizontal scroll masks full display", canvas.texts.back().text, L"***********");
-        expectNear("TextField password horizontal scroll shifts mask left", canvas.texts.back().rect.x, -7.5f);
+        oneui::text::LayoutOptions options;
+        options.size = field.fontSize();
+        options.family = field.textFontFamily();
+        options.scale = field.textDpiScale();
+        options.text = field.textOptions();
+        const auto layout = oneui::text::Layout::make(L"***********", options);
+        expectNear("TextField password scroll follows shaped mask", canvas.texts.back().rect.x + layout->caret({11}).x, 65.0f);
     }
     expectEqual("TextField password horizontal scroll keeps real value", field.text() == L"supersecret" ? 1 : 0, 1);
 }
@@ -5129,7 +5217,13 @@ void testTextFieldUsesMeasuredTextWidthsForCaretHitTesting() {
     field.paint(selectionCanvas);
     expectEqual("TextField proportional selection adds overlay fill", static_cast<int>(selectionCanvas.fillRects.size()) >= 2 ? 1 : 0, 1);
     if (selectionCanvas.fillRects.size() >= 2) {
-        expectNear("TextField proportional selection width follows measured glyph", selectionCanvas.fillRects[1].rect.width, 9.28571f);
+        oneui::text::LayoutOptions options;
+        options.size = field.fontSize();
+        options.family = field.textFontFamily();
+        options.scale = field.textDpiScale();
+        options.text = field.textOptions();
+        const auto layout = oneui::text::Layout::make(L"WiWi", options);
+        expectNear("TextField selection width follows shaped glyph", selectionCanvas.fillRects[1].rect.width, layout->selection(0, 1).at(0).width);
     }
 }
 
@@ -6490,6 +6584,21 @@ void testStateViewPaintsSemanticContentAndDispatchesAction() {
     state.onMouseDown(oneui::MouseEvent{oneui::Point{200.0f, 178.0f}});
     state.onMouseUp(oneui::MouseEvent{oneui::Point{200.0f, 178.0f}});
     expectEqual("StateView action click", actionClicks, 1);
+
+    oneui::StateView positioned(L"No devices", L"Connect another computer.");
+    positioned.setFrame(oneui::Rect{0.0f, 0.0f, 400.0f, 400.0f});
+    positioned.setAction(L"Refresh");
+    positioned.setIconSize(oneui::Size{96.0f, 64.0f});
+    positioned.setContentOffsetY(-40.0f);
+    RecordingCanvas positionedCanvas;
+    positioned.paint(positionedCanvas);
+    const auto positionedTitle = std::find_if(positionedCanvas.texts.begin(), positionedCanvas.texts.end(), [](const DrawTextCall& call) {
+        return call.text == L"No devices";
+    });
+    expectEqual("StateView positioned title paints", positionedTitle != positionedCanvas.texts.end() ? 1 : 0, 1);
+    if (positionedTitle != positionedCanvas.texts.end()) {
+        expectNear("StateView content offset and icon size affect layout", positionedTitle->rect.y, 138.0f);
+    }
 }
 
 void testCardLaysOutContentWithPadding() {
@@ -6607,6 +6716,25 @@ void testButtonSupportsLeadingContentAndTrailingMetadata() {
     expectEqual("Button trailing metadata stays right", static_cast<int>(canvas.texts[1].rect.x), 181);
 }
 
+void testButtonSupportsLeadingAndTrailingIcons() {
+    oneui::Button button(L"Network");
+    button.setFrame(oneui::Rect{0.0f, 0.0f, 220.0f, 40.0f});
+    button.setContentAlign(oneui::TextAlign::Left);
+    button.setIcon(oneui::IconSymbol::Globe);
+    button.setTrailingIcon(oneui::IconSymbol::ChevronDown);
+
+    RecordingCanvas canvas;
+    button.paint(canvas);
+
+    expectEqual("Button with two icons still paints one label", countTextsWithText(canvas, L"Network"), 1);
+    expectTrue("Button with two icons paints icon primitives", !canvas.lines.empty() || !canvas.strokeEllipses.empty());
+
+    button.clearTrailingIcon();
+    RecordingCanvas withoutTrailing;
+    button.paint(withoutTrailing);
+    expectEqual("Button trailing icon can be cleared", countTextsWithText(withoutTrailing, L"Network"), 1);
+}
+
 void testWindowTitleBarPaintsAndDispatchesChromeActions() {
     oneui::WindowTitleBar titleBar(L"Remote");
     titleBar.setFrame(oneui::Rect{0.0f, 0.0f, 980.0f, 34.0f});
@@ -6709,6 +6837,22 @@ void testNavItemPaintsSelectionAndDispatchesClick() {
     item.onMouseDown(oneui::MouseEvent{oneui::Point{12.0f, 12.0f}});
     item.onMouseUp(oneui::MouseEvent{oneui::Point{12.0f, 12.0f}});
     expectEqual("NavItem click callback", clickCount, 1);
+}
+
+void testNavItemSupportsExplicitSelectionIndicatorColor() {
+    oneui::NavItem item(L"Overview", oneui::IconSymbol::RemoteAssist);
+    item.setFrame(oneui::Rect{0.0f, 0.0f, 180.0f, 44.0f});
+    item.setSelected(true);
+    item.setSelectionIndicatorVisible(true);
+    item.setSelectionIndicatorColor(oneui::Color{9, 105, 247});
+    item.setContentInsets(15.0f, 54.0f);
+
+    RecordingCanvas canvas;
+    item.paint(canvas);
+
+    expectEqual("NavItem explicit selection indicator paints blue", countFillRectsWithColor(canvas, oneui::Color{9, 105, 247}), 1);
+    expectEqual("NavItem exposes selection indicator", item.selectionIndicatorVisible() ? 1 : 0, 1);
+    expectEqual("NavItem stores explicit indicator color", item.selectionIndicatorColor().has_value() ? 1 : 0, 1);
 }
 
 void testNavItemHoverKeepsSemanticForegroundFallback() {
@@ -7354,10 +7498,14 @@ void testLogViewSelectionAndCopy() {
     expectEqual("LogView Ctrl+C handled", view.onKeyDown(oneui::KeyEvent{oneui::Key::C, false, true}) ? 1 : 0, 1);
     expectWideEqual("LogView Ctrl+C copies selection", clipboard->text(), L"alpha\r\nbeta\r\ngamma");
 
-    // 第 1 行内部分选：近似字宽 12*0.6=7.2，x=18→列1、x=32→列3，选中 "et"。
-    view.onMouseDown(oneui::MouseEvent{oneui::Point{18.0f, 36.0f}});
-    view.onMouseMove(oneui::MouseEvent{oneui::Point{32.0f, 36.0f}});
-    view.onMouseUp(oneui::MouseEvent{oneui::Point{32.0f, 36.0f}});
+    // Use the same shaped caret positions before the first paint, not guessed widths.
+    oneui::text::LayoutOptions logOptions;
+    logOptions.size = 12; logOptions.lineHeight = 20;
+    const auto beta = oneui::text::Layout::make(L"beta", logOptions);
+    const float fromX = 10 + beta->caret({1}).x, toX = 10 + beta->caret({3}).x;
+    view.onMouseDown(oneui::MouseEvent{oneui::Point{fromX, 36.0f}});
+    view.onMouseMove(oneui::MouseEvent{oneui::Point{toX, 36.0f}});
+    view.onMouseUp(oneui::MouseEvent{oneui::Point{toX, 36.0f}});
     expectWideEqual("LogView partial line selection", view.selectedText(), L"et");
 
     expectEqual("LogView Ctrl+A handled", view.onKeyDown(oneui::KeyEvent{oneui::Key::A, false, true}) ? 1 : 0, 1);
@@ -7379,6 +7527,7 @@ void testLogViewSelectionAndCopy() {
 
 int main() {
     testSingleLineTextEllipsizesByMeasuredWidth();
+    testWrappedLabelRespectsWidthHeightAndMaxLines();
     testWidgetAccessibilityInfoReflectsSemanticAndDynamicState();
     testCommonControlsExposeDefaultAccessibilityInfo();
     testSelectionAndDataControlsExposeDefaultAccessibilityInfo();
@@ -7492,6 +7641,7 @@ int main() {
     testTableSupportsInternalReorderAndStableExternalItemDrag();
     testTableCssAdapterMapsNativeTableStates();
     testTableStyleOverridePaintsCustomColorsAndGeometry();
+    testTableRichCellsAndColumnDividerVisibility();
     testTableEmptyStyleOverrideKeepsDefaultPaint();
     testTableDisabledStyleAndClearRestoresDefault();
     testBadgeStyleOverridePaintsCustomColorsAndGeometry();
@@ -7570,10 +7720,12 @@ int main() {
     testCardLaysOutContentWithPadding();
     testIconPrimitivesProvideReusableNativeShapes();
     testButtonSupportsLeadingContentAndTrailingMetadata();
+    testButtonSupportsLeadingAndTrailingIcons();
     testIconViewPaintsRegistryPrimitives();
     testWindowTitleBarPaintsAndDispatchesChromeActions();
     testWindowTitleBarAccessoryReceivesLayoutAndPointerInput();
     testNavItemPaintsSelectionAndDispatchesClick();
+    testNavItemSupportsExplicitSelectionIndicatorColor();
     testNavItemHoverKeepsSemanticForegroundFallback();
     testSwitchStyleSheetOverridePaintsCheckedState();
     testTextFieldAffixIconsPaintAndOffsetText();

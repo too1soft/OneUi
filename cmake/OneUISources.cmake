@@ -8,6 +8,7 @@ set(ONEUI_CORE_SOURCES
     src/core/checkbox.cpp
     src/core/dialog.cpp
     src/core/clipboard.cpp
+    src/core/command.cpp
     src/core/dock_view.cpp
     src/core/form_field.cpp
     src/core/grid.cpp
@@ -67,14 +68,17 @@ set(ONEUI_CORE_SOURCES
 )
 
 set(ONEUI_C_API_SOURCES
+    src/platform/native_services.cpp
     src/capi/oneui_c_api.cpp
     src/capi/oneui_c_api_internal.cpp
+    src/capi/oneui_c_api_interaction.cpp
     src/capi/oneui_c_api_runtime.cpp
 )
 
 set(ONEUI_WIN32_SOURCES
     src/platform/win32/clipboard_win32.cpp
     src/platform/win32/monitor_win32.cpp
-    src/platform/win32/skia_canvas_win32.cpp
+    src/platform/shared/skia_canvas.cpp
+    src/platform/shared/skia_path.cpp
     src/platform/win32/window_win32.cpp
 )

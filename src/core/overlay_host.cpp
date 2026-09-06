@@ -5,6 +5,24 @@
 
 namespace oneui {
 
+std::shared_ptr<Widget> OverlayHost::activeFocusChild() const {
+    if (!interactive()) return {};
+    for (const auto& entry : overlays_)
+        if (entry.child.get() == focusedOverlay_ && isInteractive(entry.child.get()) &&
+            entry.child->focused() && isFocusAllowed(entry.child.get())) return entry.child;
+    if (hasActiveFocusTrap()) return {};
+    if (isInteractive(content_.get()) && content_->focused()) return content_;
+    return View::activeFocusChild();
+}
+
+void OverlayHost::setTextEnvironment(std::wstring family, float scale) {
+    View::setTextEnvironment(family, scale);
+    auto content = content_;
+    const auto overlays = overlays_;
+    if (content) content->setTextEnvironment(family, scale);
+    for (const auto& entry : overlays) entry.child->setTextEnvironment(family, scale);
+}
+
 OverlayHost::~OverlayHost() {
     if (content_) {
         content_->detachFromOwner(this);
@@ -451,6 +469,7 @@ bool OverlayHost::onKeyDown(const KeyEvent& event) {
     if (focusedOverlay_ && focusedOverlay_->onKeyDown(event)) {
         return true;
     }
+    if (hasActiveFocusTrap()) return true;
     if (content_ && content_->visible() && !content_->disabled() && content_->onKeyDown(event)) {
         return true;
     }
@@ -458,7 +477,7 @@ bool OverlayHost::onKeyDown(const KeyEvent& event) {
 }
 
 bool OverlayHost::focusFirstLeaf() {
-    if (content_ && content_->visible() && !content_->disabled() && content_->focusFirstLeaf()) {
+    if (!hasActiveFocusTrap() && content_ && content_->visible() && !content_->disabled() && content_->focusFirstLeaf()) {
         focusOverlay(nullptr);
         return true;
     }
@@ -478,7 +497,7 @@ bool OverlayHost::focusLastLeaf() {
         overlays.back()->focusLastLeaf();
         return true;
     }
-    if (content_ && content_->visible() && !content_->disabled() && content_->focusLastLeaf()) {
+    if (!hasActiveFocusTrap() && content_ && content_->visible() && !content_->disabled() && content_->focusLastLeaf()) {
         focusOverlay(nullptr);
         return true;
     }
@@ -528,56 +547,11 @@ bool OverlayHost::requestFocus(Widget* descendant, bool focusVisible) {
     return true;
 }
 
-bool OverlayHost::onKeyUp(const KeyEvent& event) {
-    if (!interactive()) {
-        return false;
-    }
+bool OverlayHost::onKeyUp(const KeyEvent& event) { auto child = activeFocusChild(); return child && child->onKeyUp(event); }
 
-    if (focusedOverlay_ && !isInteractive(focusedOverlay_)) {
-        focusOverlay(nullptr);
-    }
-    if (focusedOverlay_ && focusedOverlay_->onKeyUp(event)) {
-        return true;
-    }
-    if (content_ && content_->visible() && !content_->disabled() && content_->onKeyUp(event)) {
-        return true;
-    }
-    return View::onKeyUp(event);
-}
+bool OverlayHost::onTextInput(wchar_t character) { auto child = activeFocusChild(); return child && child->onTextInput(character); }
 
-bool OverlayHost::onTextInput(wchar_t character) {
-    if (!interactive()) {
-        return false;
-    }
-
-    if (focusedOverlay_ && !isInteractive(focusedOverlay_)) {
-        focusOverlay(nullptr);
-    }
-    if (focusedOverlay_ && focusedOverlay_->onTextInput(character)) {
-        return true;
-    }
-    if (content_ && content_->visible() && !content_->disabled() && content_->onTextInput(character)) {
-        return true;
-    }
-    return View::onTextInput(character);
-}
-
-bool OverlayHost::onTextInputText(const std::wstring& text) {
-    if (!interactive() || text.empty()) {
-        return false;
-    }
-
-    if (focusedOverlay_ && !isInteractive(focusedOverlay_)) {
-        focusOverlay(nullptr);
-    }
-    if (focusedOverlay_ && focusedOverlay_->onTextInputText(text)) {
-        return true;
-    }
-    if (content_ && content_->visible() && !content_->disabled() && content_->onTextInputText(text)) {
-        return true;
-    }
-    return View::onTextInputText(text);
-}
+bool OverlayHost::onTextInputText(const std::wstring& text) { auto child = activeFocusChild(); return child && child->onTextInputText(text); }
 
 bool OverlayHost::onFocusChanged(bool focused) {
     if (!focused) {
@@ -897,6 +871,7 @@ void OverlayHost::clearOverlayReferences(Widget* child, bool restorePreviousFocu
 }
 
 void OverlayHost::installOverlayHostCallbacks(Widget& child) {
+    child.setTextEnvironment(textFontFamily(), textDpiScale());
     child.attachToOwner(
         this,
         [this] { invalidate(); },

@@ -12,6 +12,40 @@ OneUI 的 Rust workspace 包含两层：
 
 ## 前置构建
 
+本轮新增命令、文字选项与 UTF-8 位置接口；固定 ICU 加可复现补丁已通过完整 Unicode 双向文本用例，
+MinGW 匹配文字依赖、SDK 审计与原生交互验收仍待完成，
+见[当前实施状态](../../docs/38-text-and-interaction-engine.md)。下面的旧跨平台记录不代表本轮全部验收。
+
+Linux/macOS 构建与真实支持状态见 [原生桌面后端指南](../../docs/37-native-desktop-backends.md)。
+Linux X11/Wayland 已在 WSLg 验证；Cocoa 尚待 Mac 构建，不等于完整平台验收。
+`Window::backend()` 返回实际后端，`Window::capabilities()` 查询受限服务；不应根据操作系统名字猜测能力。
+macOS 必须在进程主线程创建/运行窗口，Command 快捷键不会被伪装为 Control。
+安全层的全部原有测试通过 `oneui-main-thread-tests` 在进程主线程串行执行，入口同时用于
+Windows/Linux/macOS，不依赖 Rust 默认测试工作线程。可用 `-- --list` 列出用例，
+或 `--test oneui-main-thread-tests -- 用例名 --exact` 定位单个用例；Mac 仍需真实运行验证。
+
+POSIX 动态链接示例（从仓库根目录运行）：
+
+```sh
+export ONEUI_LIB_DIR="$PWD/build/native"
+export LD_LIBRARY_PATH="$ONEUI_LIB_DIR${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" # Linux
+cd bindings/rust
+cargo fmt --all --check
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo test --workspace --all-targets
+```
+
+静态测试还需 `ONEUI_SKIA_LIB_DIR` 指向同工具链构建的完整 Skia 归档目录，然后使用 `--all-features`。
+`oneui-sys/build.rs` 已列出固定文字依赖闭包；只有自定义构建才覆盖 `ONEUI_STATIC_LIBS`，不得省略文字模块。
+MSVC bundled-static 使用 `/MT`，静态 Rust 消费者必须设置 `RUSTFLAGS=-C target-feature=+crt-static`，
+并使用对应的 release CRT 归档，避免混用 CRT。默认动态链接不需要这个标志。
+macOS 动态消费者自行设置 `@rpath`，开发时可用 `DYLD_LIBRARY_PATH`；正式 `.app` 应携带 dylib。
+`oneui-sys::WChar` 在 Windows 是 `u16`，其余桌面平台是 `u32`；safe 层负责转换，
+不要把 Windows 的 `Vec<u16>` 直接传入 Linux/macOS。支持符号清单在
+`oneui-sys/supported-symbols.txt`，并由跨平台 CMake 检查脚本核对。
+
+以下保留 Windows 构建步骤。
+
 先构建 C++ DLL/import library：
 
 ```powershell
@@ -39,6 +73,21 @@ oneui.dll
 
 `oneui-sys/build.rs` 会把匹配 DLL 复制到 Cargo 当前 profile/test executable 目录，避免旧 DLL
 比 PATH 更早被 Windows loader 选中。
+
+## 可选内置字体
+
+`oneui` crate 的 `bundled-fonts` feature 内置未修改的 Noto Sans SC 可变字体（100–900）。字体依据
+SIL Open Font License 1.1 分发，原始许可证位于 `oneui/assets/fonts/OFL.txt`。启用后须在创建窗口前
+注册并设置默认 family：
+
+```rust
+oneui::register_bundled_fonts()?;
+let window = oneui::Window::new(&options)?;
+window.set_default_font_family(oneui::BUNDLED_UI_FONT_FAMILY);
+```
+
+不启用该 feature 时，OneUI 不携带字体二进制，继续使用调用方指定字体和系统回退。也可通过
+`register_font_from_memory(bytes, alias)` 注册产品自带的其他授权字体；字体只在当前进程生效。
 
 ## ABI 检查
 

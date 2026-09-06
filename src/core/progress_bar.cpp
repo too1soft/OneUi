@@ -30,7 +30,9 @@ ProgressBar::ProgressBar() {
 }
 
 void ProgressBar::setValue(double value) {
-    valueBinding_.set(std::clamp(value, 0.0, 1.0), value_);
+    const auto next = std::clamp(value, 0.0, 1.0);
+    if (valueBinding_.get(value_) == next) return;
+    valueBinding_.set(next, value_);
     invalidate();
 }
 

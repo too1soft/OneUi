@@ -8,7 +8,7 @@ English | [简体中文](README.md)
 [![UTF-8 ABI](https://img.shields.io/badge/UTF--8%20ABI-versioned-6f42c1.svg)](docs/c-abi-integration.md)
 [![Version](https://img.shields.io/badge/version-0.1.0-f59e0b.svg)](CMakeLists.txt)
 
-OneUI is a **Windows-first, native, self-drawn, retained-mode** desktop UI framework. It is
+OneUI is a **native, self-drawn, retained-mode** desktop UI framework, with Windows as its current product baseline. It is
 implemented in C++17, renders through Skia raster, and composes applications from a `Widget` / `View`
 tree, layout containers, reactive state, and CSS-like style sheets. It does not depend on HTML, a
 browser process, or WebView.
@@ -23,7 +23,8 @@ The repository currently ships:
 
 > **Current version: 0.1.0 development release.** The Win32 path already supports real desktop
 > products, but public APIs, the C ABI, and component contracts may still change during `0.x`.
-> Linux and macOS contain explicit non-operational skeletons only.
+> X11/Wayland now build and run under WSLg. Cocoa source is wired but has not been built on a Mac.
+> This is not full native acceptance; see the [platform matrix](docs/37-native-desktop-backends.md).
 
 ## Intended Use
 
@@ -36,6 +37,13 @@ OneUI targets dense native tools and workspaces, including:
 - products that need consistent, testable UI without a browser runtime.
 
 ## Capability Overview
+
+The text/interaction upgrade is still in progress: shared SkParagraph layouts, grapheme editing,
+scoped commands/subscriptions and additive C/Rust APIs are implemented in the workspace. The pinned
+ICU base is unchanged, with a reproducible OneUI patch passing the full Unicode 15.1 Bidi fixtures;
+matching MinGW text dependencies, SDK audits and native interaction acceptance are pending.
+See the [implementation and acceptance record](docs/38-text-and-interaction-engine.md).
+Earlier baseline passes are not full acceptance of this upgrade.
 
 | Area | Implemented capabilities |
 | --- | --- |
@@ -78,10 +86,10 @@ The current workspace adds or substantially extends:
 
 | Platform | Status | Notes |
 | --- | --- | --- |
-| Windows / Win32 | Only operational backend | Development, Gallery, tests, SDK, and Rust product integration all target this path |
+| Windows / Win32 | Current product baseline | Earlier MSVC/MinGW baseline passed; the full-text upgrade has conformance and MinGW dependency blockers |
 | Windows 7 API level | Source compatibility target | CMake defines `_WIN32_WINNT=0x0601`; final OS support still depends on the selected MSVC/Skia artifacts |
-| Linux | Not implemented | `Window::create` and clipboard operations throw explicit not-implemented errors |
-| macOS | Not implemented | `Window::create` and clipboard operations throw explicit not-implemented errors |
+| Linux X11 / Wayland | Implemented; built under WSLg | Native Ubuntu, Kylin/UOS and ARM64 acceptance pending; runtime capabilities vary |
+| macOS Cocoa | Source integrated; not built | Intel / Apple Silicon Mac builds and native acceptance pending |
 
 Component maturity is documented as **primary**, **usable**, or **experimental**. This classification
 describes current Win32 behavior, not a long-term stability guarantee.
@@ -105,7 +113,7 @@ Canvas abstraction
         |
 Skia raster renderer
         |
-Win32 backend
+Win32 / X11 / Wayland / Cocoa backend (see maturity matrix)
         +-- window/message loop/raw key/IME path
         +-- DPI/monitor/clipboard/file dialogs/tray
         +-- logical-to-physical presentation
@@ -121,8 +129,9 @@ Reusable behavior belongs in OneUI, not in product-specific branches. See the
 include/oneui/        Public C++ headers and oneui_c_api.h
 src/core/             Platform-neutral controls, layout, style, state, and painting
 src/platform/win32/   Operational Win32 backend
-src/platform/linux/   Non-wired platform skeleton
-src/platform/macos/   Non-wired platform skeleton
+src/platform/shared/  Private Skia Canvas, text caches and desktop scheduling
+src/platform/linux/   Native X11 / Wayland backends
+src/platform/macos/   Cocoa Objective-C++ backend (Mac build pending)
 src/capi/             C ABI and cross-boundary lifetime implementation
 bindings/rust/        oneui-sys and safe oneui crate
 examples/gallery/     C++ component Gallery
@@ -298,18 +307,19 @@ Start at [docs/README.md](docs/README.md). Frequently used references:
 - [C ABI Integration](docs/c-abi-integration.md)
 - [Rust Bindings](bindings/rust/README.md)
 - [Platform Backend Contract](docs/28-platform-backend-contract.md)
+- [Linux/macOS Build, SDK and Acceptance Matrix](docs/37-native-desktop-backends.md)
 - [TerminalView](docs/33-terminal-view.md)
 - [TreeView](docs/34-tree-view.md)
 
 ## Known Limitations
 
-- Win32 is the only operational backend.
+- Linux/macOS native acceptance is incomplete; WSLg tests and source integration are not a production support claim.
 - Version 0.1.0 is still converging; public APIs and ABI versions may change.
 - StyleSheet is a controlled CSS-like subset, not a browser CSS engine.
 - OneUI stores accessibility roles, names, descriptions, values, and states, but the Win32 UI
   Automation bridge is not complete.
-- Text editing covers selection, undo/redo, paste, password, and submit; complex shaping and full IME
-  scenarios still require continued validation.
+- Text uses shared SkParagraph/ICU layouts and grapheme editing; the Unicode conformance fixes pass,
+  while native IME acceptance remains incomplete. See the text-engine acceptance record.
 - Table does not yet include built-in sorting, filtering, column resize, or an in-cell editor.
 - Tabs/Table/Tree/ReorderableGrid reorder callbacks report requests; product state remains authoritative.
 - RealtimeFrameView paints BGRA/RGBA pixels and supports ownership-transfer submission plus a coalescing Rust worker handle; NV12 conversion is not implemented.

@@ -20,6 +20,11 @@ namespace oneui {
 class ONEUI_API TextField : public Widget {
 public:
     explicit TextField(std::wstring placeholder = {});
+    ~TextField() override;
+    void setTextOptions(TextOptions options);
+    const TextOptions& textOptions() const { return textOptions_; }
+    TextPosition textPosition() const;
+    bool setTextPosition(TextPosition position);
 
     void setPlaceholder(std::wstring placeholder);
     void setText(std::wstring text);
@@ -44,6 +49,8 @@ public:
     bool multiline() const;
     void setLineHeight(float lineHeight);
     float lineHeight() const;
+    void setFontSize(float fontSize);
+    float fontSize() const;
     void setClipboard(std::shared_ptr<Clipboard> clipboard);
     std::shared_ptr<Clipboard> clipboard() const;
     void setPasswordMode(bool enabled);
@@ -65,7 +72,16 @@ public:
     bool onMouseDown(const MouseEvent& event) override;
     bool onMouseUp(const MouseEvent& event) override;
     bool onKeyDown(const KeyEvent& event) override;
+    bool hasTextComposition() const override { return !composition_.empty(); }
+    CommandResult queryBuiltinCommand(const std::string& id) const override;
+    CommandResult executeBuiltinCommand(const std::string& id) override;
+    CommandResult dispatchBuiltinCommandKey(const KeyEvent& event, const std::string& logicalKey) override;
     bool onTextInput(wchar_t character) override;
+    bool onTextCommitted(const std::wstring& text) override;
+    TextInputState textInputState() const override;
+    void setTextComposition(std::wstring text, std::size_t caret) override;
+    bool replaceTextRange(std::size_t start, std::size_t end, const std::wstring& text) override;
+    Rect textInputCaretRect() const override;
     bool onFocusChanged(bool focused) override;
     CursorKind cursor(Point point) const override;
     bool isFocusable() const override;
@@ -74,6 +90,19 @@ public:
     AccessibilityInfo accessibilityInfo() const override;
 
 private:
+    struct TextLayoutState;
+    void ensureTextLayout() const;
+    std::size_t toDisplayOffset(std::size_t offset) const;
+    std::size_t fromDisplayOffset(std::size_t offset) const;
+    std::size_t displayCaretOffset() const;
+    Point textOrigin(Rect content) const;
+    void paintTextContent(Canvas& canvas, Rect content, const TextFieldStyle& style, bool placeholder);
+    mutable std::unique_ptr<TextLayoutState> textLayout_;
+    TextOptions textOptions_;
+    TextAffinity caretAffinity_ = TextAffinity::Downstream;
+    mutable TextAffinity hitAffinity_ = TextAffinity::Downstream;
+    std::optional<float> verticalCaretX_;
+    float verticalScrollOffset_ = 0;
     struct TextEditSnapshot {
         std::wstring text;
         std::size_t caretIndex = 0;
@@ -86,10 +115,6 @@ private:
         TextEditSnapshot after;
     };
 
-    struct TextLine {
-        std::size_t start = 0;
-        std::size_t end = 0;
-    };
 
     bool assignText(std::wstring text, std::size_t nextCaretIndex, bool recordUndo = false);
     bool editable() const;
@@ -107,37 +132,25 @@ private:
     void beginVisualTransition(TextFieldStyle from, TextFieldStyle target);
     void restartCaretBlink();
     std::size_t caretIndexFromPoint(Point point) const;
-    std::size_t multilineCaretIndexFromPoint(Point point) const;
     bool moveCaretVertically(int direction, bool extendSelection);
     void ensureCaretVisible();
-    void ensureMultilineCaretVisible();
     float contentWidthForText() const;
     void invalidateTextMetrics();
-    void updateTextMetrics(const Canvas* canvas = nullptr) const;
-    void updateMultilineTextMetrics(const Canvas* canvas = nullptr) const;
-    float textWidthAt(std::size_t index) const;
-    float multilineTextWidthAt(std::size_t lineIndex, std::size_t index) const;
-    std::size_t multilineLineIndexForCaret(std::size_t index) const;
-    void paintMultilineContent(
-        Canvas& canvas,
-        Rect contentRect,
-        const TextFieldStyle& style,
-        bool hasText,
-        bool shouldPaintPlaceholder);
     bool hasInteractionState() const override;
     void resetInteractionState() override;
 
     std::wstring placeholder_;
     std::wstring text_;
+    std::wstring composition_;
+    std::size_t compositionCaret_ = 0;
     std::size_t caretIndex_ = 0;
     std::size_t selectionAnchor_ = 0;
-    std::size_t textScrollOffset_ = 0;
     bool hasSelection_ = false;
     bool passwordMode_ = false;
     bool readOnly_ = false;
     bool multiline_ = false;
     float lineHeight_ = 20.0f;
-    std::size_t verticalScrollLine_ = 0;
+    float fontSize_ = 14.0f;
     float horizontalScrollOffset_ = 0.0f;
     wchar_t passwordMask_ = L'*';
     bool hovered_ = false;
@@ -159,12 +172,6 @@ private:
     std::function<void(const std::wstring&)> onSubmitted_;
     std::vector<TextEditEntry> undoStack_;
     std::vector<TextEditEntry> redoStack_;
-    mutable std::wstring measuredDisplayText_;
-    mutable std::vector<float> measuredPrefixWidths_;
-    mutable bool measuredTextMetricsExact_ = false;
-    mutable std::vector<TextLine> measuredLines_;
-    mutable std::vector<std::vector<float>> measuredLinePrefixWidths_;
-    mutable bool measuredMultilineMetricsExact_ = false;
 };
 
 /// A native multiline text editor using the same style contract as TextField.

@@ -1,12 +1,34 @@
-#include "oneui/platform/window.h"
+#include "linux_runtime.h"
+#include <cstdlib>
+#include <iostream>
 
 #include <stdexcept>
 #include <utility>
 
+namespace oneui::linux_platform {
+std::shared_ptr<Connection> connection() {
+    static std::shared_ptr<Connection> instance = [] {
+        const char* value = std::getenv("ONEUI_LINUX_BACKEND");
+        const std::string requested = value ? value : "auto";
+        if (requested != "auto" && requested != "x11" && requested != "wayland")
+            throw std::runtime_error("ONEUI_LINUX_BACKEND must be auto, x11 or wayland");
+        if (requested == "wayland") return waylandConnection();
+        if (requested == "x11") return x11Connection();
+        if (std::getenv("WAYLAND_DISPLAY")) {
+            try { return waylandConnection(); }
+            catch (const std::exception& e) {
+                if (!std::getenv("DISPLAY")) throw;
+                std::cerr << "OneUI: Wayland initialization failed; trying X11: " << e.what() << '\n';
+            }
+        }
+        return x11Connection();
+    }();
+    instance->assertUiThread();
+    return instance;
+}
+}
 namespace oneui {
 
-// Linux skeleton entry point. Keep this backend unwired until the X11/Wayland
-// window, event, input, DPI, font, clipboard, and Skia presentation paths exist.
 std::unique_ptr<Window> Window::create(std::wstring title, int width, int height) {
     WindowOptions options;
     options.title = std::move(title);
@@ -16,17 +38,17 @@ std::unique_ptr<Window> Window::create(std::wstring title, int width, int height
 }
 
 std::unique_ptr<Window> Window::create(WindowOptions options) {
-    (void)options;
-    throw std::logic_error("OneUI Linux window backend is not implemented yet; Win32 is the only supported backend.");
+    return linux_platform::connection()->create(std::move(options));
 }
 
 void SystemClipboard::setText(std::wstring text) {
-    (void)text;
-    throw std::logic_error("OneUI Linux clipboard backend is not implemented yet.");
+    linux_platform::connection()->setClipboard(text);
 }
 
 std::wstring SystemClipboard::text() const {
-    throw std::logic_error("OneUI Linux clipboard backend is not implemented yet.");
+    return linux_platform::connection()->clipboard();
 }
+
+std::vector<MonitorInfo> enumerateMonitors() { return linux_platform::connection()->monitors(); }
 
 } // namespace oneui

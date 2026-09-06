@@ -5,7 +5,7 @@
 #include "reorder_internal.h"
 
 #include <algorithm>
-#include <chrono>
+#include "internal/ui_clock.h"
 #include <cmath>
 #include <optional>
 #include <unordered_set>
@@ -15,8 +15,7 @@ namespace oneui {
 namespace {
 
 double currentTimeMs() {
-    const auto now = std::chrono::steady_clock::now().time_since_epoch();
-    return std::chrono::duration<double, std::milli>(now).count();
+    return internal::uiTimeMs();
 }
 
 bool sameColor(Color left, Color right) {

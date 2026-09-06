@@ -8,7 +8,7 @@
 [![UTF-8 ABI](https://img.shields.io/badge/UTF--8%20ABI-versioned-6f42c1.svg)](docs/c-abi-integration.md)
 [![Version](https://img.shields.io/badge/version-0.1.0-f59e0b.svg)](CMakeLists.txt)
 
-OneUI 是一个 **Windows 优先、原生、自绘、保留式** 的桌面 UI 框架。它以 C++17
+OneUI 是一个 **原生、自绘、保留式** 的桌面 UI 框架，Windows 为当前产品主线。它以 C++17
 实现，使用 Skia raster 渲染，通过 `Widget` / `View` 树、布局容器、响应式状态和
 CSS-like 样式表构建界面，不依赖浏览器、HTML 或 WebView。
 
@@ -21,8 +21,8 @@ CSS-like 样式表构建界面，不依赖浏览器、HTML 或 WebView。
 - Gallery、远程组件 Gallery、SDK 打包脚本和按领域组织的行为/契约测试。
 
 > **当前版本是 0.1.0 开发版。** Win32 主线已经可以承载真实桌面产品，但公开 API、
-> C ABI 和组件细节仍可能在 `0.x` 阶段调整。Linux 与 macOS 目录目前只是明确报错的
-> 平台骨架，不是可运行后端。
+> C ABI 和组件细节仍可能在 `0.x` 阶段调整。Linux X11/Wayland 已在 WSLg 构建运行；
+> Cocoa 源码已接入但尚待 Mac 构建。完整原生验收仍未完成，见[支持矩阵](docs/37-native-desktop-backends.md)。
 
 ## 适用场景
 
@@ -35,6 +35,11 @@ OneUI 重点服务高信息密度的原生工具界面，例如：
 - 不希望引入浏览器运行时，同时需要统一视觉和可测试交互的桌面产品。
 
 ## 当前能力总览
+
+本轮文字/交互升级仍在工作区收尾：SkParagraph 共享布局、字素编辑、作用域命令、
+生命周期订阅和 C/Rust 增量接口已实现；固定 ICU 加可复现补丁已通过完整 Unicode 双向排版用例，
+MinGW 匹配文字依赖构建及 SDK 审计尚未完成。详见
+[实现与验收状态](docs/38-text-and-interaction-engine.md)，不能将旧验证记录视为本轮全部通过。
 
 | 范围 | 已实现能力 |
 | --- | --- |
@@ -75,10 +80,10 @@ OneUI 重点服务高信息密度的原生工具界面，例如：
 
 | 平台 | 状态 | 说明 |
 | --- | --- | --- |
-| Windows / Win32 | 当前唯一可运行后端 | 开发、Gallery、测试、SDK 和 Rust 产品接入均以此为主线 |
+| Windows / Win32 | 当前产品主线 | 本轮 MSVC 与 Unicode 一致性回归通过；MinGW 匹配文字依赖、SDK 审计及原生交互验收仍待完成 |
 | Windows 7 API 级别 | 源码兼容目标 | CMake 定义 `_WIN32_WINNT=0x0601`；最终系统兼容性仍取决于所选 MSVC/Skia 构建产物 |
-| Linux | 未实现 | `Window::create` 与剪贴板明确抛出未实现错误 |
-| macOS | 未实现 | `Window::create` 与剪贴板明确抛出未实现错误 |
+| Linux X11 / Wayland | 已实现，WSLg 已构建运行 | Ubuntu 原生桌面、麒麟/UOS、ARM64 仍待验收；运行时能力有差异 |
+| macOS Cocoa | 源码已接入，未构建 | 待 Intel / Apple Silicon Mac，不提前宣称可用 |
 
 组件成熟度分为三层：
 
@@ -107,7 +112,7 @@ Canvas abstraction
         |
 Skia raster renderer
         |
-Win32 backend
+Win32 / X11 / Wayland / Cocoa backend（成熟度见支持矩阵）
         +-- window/message loop/raw key/IME path
         +-- DPI/monitor/clipboard/file dialogs/tray
         +-- logical-to-physical presentation
@@ -123,8 +128,9 @@ Win32 backend
 include/oneui/        公开 C++ 头文件与 oneui_c_api.h
 src/core/             跨平台控件、布局、样式、状态和绘制逻辑
 src/platform/win32/   当前可运行的 Win32 后端
-src/platform/linux/   未接线的平台骨架
-src/platform/macos/   未接线的平台骨架
+src/platform/shared/  私有 Skia Canvas、文字缓存和桌面调度
+src/platform/linux/   X11 / Wayland 原生后端
+src/platform/macos/   Cocoa Objective-C++ 后端（待 Mac 构建）
 src/capi/             C ABI 实现与跨边界生命周期管理
 bindings/rust/        oneui-sys 与安全 oneui crate
 examples/gallery/     C++ 组件 Gallery
@@ -301,16 +307,17 @@ Win32 后端契约分域运行；Rust crate 另有 safe-wrapper 和回调生命�
 - [C ABI 接入](docs/c-abi-integration.md)
 - [Rust 绑定](bindings/rust/README.md)
 - [平台后端契约](docs/28-platform-backend-contract.md)
+- [Linux/macOS 构建、SDK 和验收矩阵](docs/37-native-desktop-backends.md)
 - [TerminalView](docs/33-terminal-view.md)
 - [TreeView](docs/34-tree-view.md)
 
 ## 已知限制
 
-- 只有 Win32 后端可运行；Linux/macOS 尚未实现。
+- Linux/macOS 本期尚未全部原生验收；不能把 WSLg 或源码接入当成正式平台支持。
 - `0.1.0` 仍在收敛期，公开 API 与 ABI 版本可能变化。
 - StyleSheet 是受控 CSS-like 子集，不是浏览器 CSS 引擎。
 - OneUI 已保存无障碍角色、名称、描述、值和状态，但 Win32 UI Automation 平台桥仍未完成。
-- 文本输入支持基础编辑、选择、撤销/重做、粘贴、密码和提交；复杂 shaping 与完整 IME 场景仍需持续验证。
+- 文本使用 SkParagraph/ICU 共享布局与字素编辑；Unicode 一致性修复已通过，各平台 IME 原生验收仍待完成，见文字引擎状态文档。
 - Table 已支持虚拟化绘制和命令回调，但暂不内置排序、筛选、列 resize 或单元格编辑器。
 - Tabs/Table/Tree/ReorderableGrid 的重排回调只报告请求；产品数据成功更新后再提交新顺序。
 - RealtimeFrameView 当前绘制 BGRA/RGBA 像素，支持完整帧所有权移交、最多 64 个脏矩形的批量后备画面更新和 Rust 后台线程批次合并；NV12 仅保留协议枚举，尚未实现转换。

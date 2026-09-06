@@ -4,12 +4,16 @@
 #include "oneui/color.h"
 #include "oneui/view.h"
 #include "internal/scroll_trace.h"
-#include "skia_canvas_win32.h"
+#include "platform/shared/skia_canvas.h"
 
 #include <windows.h>
 #include <windowsx.h>
 #include <dwmapi.h>
 #include <imm.h>
+#include <shellapi.h>
+#ifdef ONEUI_ENABLE_TEST_FRAME_CAPTURE
+#include <wincodec.h>
+#endif
 
 #include <GL/gl.h>
 #include "include/gpu/ganesh/GrDirectContext.h"
@@ -54,6 +58,7 @@
 #include <chrono>
 #include <climits>
 #include <cstdio>
+#include <cstdlib>
 #include <cstdint>
 #include <cmath>
 #include <cstring>
@@ -71,13 +76,8 @@
 namespace oneui {
 namespace {
 
-SkColor toSkColor(Color color) {
-    return SkColorSetARGB(color.a, color.r, color.g, color.b);
-}
-
-SkRect toSkRect(Rect rect) {
-    return SkRect::MakeXYWH(rect.x, rect.y, rect.width, rect.height);
-}
+using rendering::PrimitivePaintTrace;
+using rendering::g_primitivePaintTrace;
 
 constexpr UINT kOneUiRunPostedCallbacks = WM_APP + 1;
 constexpr UINT kOneUiFinishWindowStatePaint = WM_APP + 2;
@@ -142,6 +142,18 @@ UINT dpiForMonitor(HMONITOR monitor) {
 }
 
 float dpiScaleForWindowHandle(HWND hwnd) {
+#ifdef ONEUI_ENABLE_TEST_FRAME_CAPTURE
+    // Test builds may render an application at deterministic DPI without
+    // changing the developer machine's display settings. Production builds do
+    // not compile this override.
+    if (const char* value = std::getenv("ONEUI_TEST_DPI_SCALE")) {
+        char* end = nullptr;
+        const float forced = std::strtof(value, &end);
+        if (end != value && *end == '\0' && forced >= 0.5f && forced <= 4.0f) {
+            return forced;
+        }
+    }
+#endif
     if (hwnd) {
         HMODULE user32 = GetModuleHandleW(L"user32.dll");
         auto getDpiForWindow = user32
@@ -202,92 +214,6 @@ double currentTimeMs() {
     return std::chrono::duration<double, std::milli>(now).count();
 }
 
-struct PrimitivePaintTrace {
-    std::uint64_t textCalls = 0;
-    std::uint64_t textMeasureCalls = 0;
-    std::uint64_t shadowCalls = 0;
-    std::uint64_t gradientCalls = 0;
-    double textMs = 0.0;
-    double textMeasureMs = 0.0;
-    double shadowMs = 0.0;
-    double gradientMs = 0.0;
-};
-
-thread_local PrimitivePaintTrace g_primitivePaintTrace;
-
-struct GradientShaderKey {
-    int x = 0;
-    int y = 0;
-    int width = 0;
-    int height = 0;
-    int angle = 0;
-    SkColor start = SK_ColorTRANSPARENT;
-    SkColor end = SK_ColorTRANSPARENT;
-
-    bool operator<(const GradientShaderKey& other) const {
-        return std::tie(x, y, width, height, angle, start, end) <
-            std::tie(other.x, other.y, other.width, other.height, other.angle, other.start, other.end);
-    }
-};
-
-struct GradientImageKey {
-    int width = 0;
-    int height = 0;
-    int radius = 0;
-    int angle = 0;
-    SkColor start = SK_ColorTRANSPARENT;
-    SkColor end = SK_ColorTRANSPARENT;
-
-    bool operator<(const GradientImageKey& other) const {
-        return std::tie(width, height, radius, angle, start, end) <
-            std::tie(other.width, other.height, other.radius, other.angle, other.start, other.end);
-    }
-};
-
-struct ShadowImageKey {
-    int width = 0;
-    int height = 0;
-    int radius = 0;
-    int blur = 0;
-    int spread = 0;
-    SkColor color = SK_ColorTRANSPARENT;
-
-    bool operator<(const ShadowImageKey& other) const {
-        return std::tie(width, height, radius, blur, spread, color) <
-            std::tie(other.width, other.height, other.radius, other.blur, other.spread, other.color);
-    }
-};
-
-struct ShadowImageEntry {
-    sk_sp<SkImage> image;
-    int pad = 0;
-};
-
-struct TextBlobKey {
-    std::wstring text;
-    int size = 0;
-    int weight = 0;
-    TextFontFamily family = TextFontFamily::Default;
-    std::wstring familyName;
-
-    bool operator<(const TextBlobKey& other) const {
-        return std::tie(text, size, weight, family, familyName) <
-            std::tie(other.text, other.size, other.weight, other.family, other.familyName);
-    }
-};
-
-struct TextBlobRun {
-    sk_sp<SkTextBlob> blob;
-    float x = 0.0f;
-};
-
-struct TextBlobEntry {
-    std::vector<TextBlobRun> runs;
-    SkRect bounds = SkRect::MakeEmpty();
-    SkFontMetrics metrics{};
-    float advanceWidth = 0.0f;
-};
-
 bool renderTraceEnabled() {
     wchar_t value[8]{};
     const DWORD length = GetEnvironmentVariableW(L"ONEUI_RENDER_TRACE", value, static_cast<DWORD>(std::size(value)));
@@ -339,836 +265,20 @@ HCURSOR cursorForKind(CursorKind kind) {
     }
 }
 
-class SkiaCanvas final : public Canvas {
-public:
-    explicit SkiaCanvas(
-        SkCanvas& canvas,
-        const std::wstring* defaultFontFamily = nullptr,
-        std::optional<Rect> viewportBounds = std::nullopt)
-        : canvas_(canvas)
-        , defaultFontFamily_(defaultFontFamily)
-        , viewportBounds_(viewportBounds) {}
-
-    void clear(Color color) override {
-        canvas_.clear(toSkColor(color));
-    }
-
-    void save() override {
-        clipStack_.push_back(clipBounds_);
-        canvas_.save();
-    }
-
-    void restore() override {
-        canvas_.restore();
-        if (!clipStack_.empty()) {
-            clipBounds_ = clipStack_.back();
-            clipStack_.pop_back();
-        } else {
-            clipBounds_.reset();
-        }
-    }
-
-    void clipRect(Rect rect) override {
-        canvas_.clipRect(toSkRect(rect), true);
-        if (clipBounds_) {
-            const float left = std::max(clipBounds_->x, rect.x);
-            const float top = std::max(clipBounds_->y, rect.y);
-            const float right = std::min(clipBounds_->x + clipBounds_->width, rect.x + rect.width);
-            const float bottom = std::min(clipBounds_->y + clipBounds_->height, rect.y + rect.height);
-            clipBounds_ = Rect{left, top, std::max(0.0f, right - left), std::max(0.0f, bottom - top)};
-        } else {
-            clipBounds_ = rect;
-        }
-    }
-
-    std::optional<Rect> clipBounds() const override {
-        return clipBounds_;
-    }
-
-    std::optional<Rect> viewportBounds() const override {
-        return viewportBounds_;
-    }
-
-    void fillRect(Rect rect, Color color, float radius) override {
-        SkPaint paint;
-        paint.setAntiAlias(true);
-        paint.setColor(toSkColor(color));
-        canvas_.drawRRect(SkRRect::MakeRectXY(toSkRect(rect), radius, radius), paint);
-    }
-
-    void fillLinearGradient(Rect rect, Color start, Color end, float angleDegrees, float radius) override {
-        if (rect.width <= 0.0f || rect.height <= 0.0f) {
-            return;
-        }
-
-        const double traceStartMs = currentTimeMs();
-        if (auto cached = gradientImage(rect.width, rect.height, radius, start, end, angleDegrees)) {
-            canvas_.drawImage(cached, rect.x, rect.y);
-            ++g_primitivePaintTrace.gradientCalls;
-            g_primitivePaintTrace.gradientMs += currentTimeMs() - traceStartMs;
-            return;
-        }
-
-        SkPaint paint;
-        paint.setAntiAlias(true);
-        paint.setShader(linearGradientShader(rect, start, end, angleDegrees));
-        canvas_.drawRRect(SkRRect::MakeRectXY(toSkRect(rect), radius, radius), paint);
-        ++g_primitivePaintTrace.gradientCalls;
-        g_primitivePaintTrace.gradientMs += currentTimeMs() - traceStartMs;
-    }
-
-    void fillRadialGradient(Rect rect, Color center, Color edge, Point centerNorm, float radiusNorm, float radius) override {
-        if (rect.width <= 0.0f || rect.height <= 0.0f) {
-            return;
-        }
-        const float shaderRadius = std::max(rect.width, rect.height) * std::max(0.01f, radiusNorm);
-        const SkPoint shaderCenter = SkPoint::Make(
-            rect.x + rect.width * centerNorm.x,
-            rect.y + rect.height * centerNorm.y);
-        const SkColor4f colors[2] = {
-            SkColor4f::FromColor(toSkColor(center)),
-            SkColor4f::FromColor(toSkColor(edge)),
-        };
-        SkPaint paint;
-        paint.setAntiAlias(true);
-        paint.setShader(SkGradientShader::MakeRadial(
-            shaderCenter,
-            shaderRadius,
-            colors,
-            nullptr,
-            nullptr,
-            2,
-            SkTileMode::kClamp,
-            SkGradientShader::Interpolation{},
-            nullptr));
-        canvas_.drawRRect(SkRRect::MakeRectXY(toSkRect(rect), radius, radius), paint);
-        ++g_primitivePaintTrace.gradientCalls;
-    }
-
-    void strokeRect(Rect rect, Color color, float radius, float width) override {
-        SkPaint paint;
-        paint.setAntiAlias(true);
-        paint.setColor(toSkColor(color));
-        paint.setStyle(SkPaint::kStroke_Style);
-        paint.setStrokeWidth(width);
-        canvas_.drawRRect(SkRRect::MakeRectXY(toSkRect(rect), radius, radius), paint);
-    }
-
-    void fillEllipse(Rect rect, Color color) override {
-        SkPaint paint;
-        paint.setAntiAlias(true);
-        paint.setColor(toSkColor(color));
-        canvas_.drawOval(toSkRect(rect), paint);
-    }
-
-    void strokeEllipse(Rect rect, Color color, float width) override {
-        SkPaint paint;
-        paint.setAntiAlias(true);
-        paint.setColor(toSkColor(color));
-        paint.setStyle(SkPaint::kStroke_Style);
-        paint.setStrokeWidth(width);
-        canvas_.drawOval(toSkRect(rect), paint);
-    }
-
-    void drawLine(Point from, Point to, Color color, float width) override {
-        SkPaint paint;
-        paint.setAntiAlias(true);
-        paint.setColor(toSkColor(color));
-        paint.setStrokeWidth(width);
-        paint.setStrokeCap(SkPaint::kRound_Cap);
-        canvas_.drawLine(from.x, from.y, to.x, to.y, paint);
-    }
-
-    void strokePath(const CanvasPath& path, Color color, float width, bool rounded) override {
-        if (path.empty()) {
-            return;
-        }
-        SkPath native = win32::toSkPath(path);
-        SkPaint paint;
-        paint.setAntiAlias(true);
-        paint.setColor(toSkColor(color));
-        paint.setStyle(SkPaint::kStroke_Style);
-        paint.setStrokeWidth(width);
-        paint.setStrokeCap(rounded ? SkPaint::kRound_Cap : SkPaint::kButt_Cap);
-        paint.setStrokeJoin(rounded ? SkPaint::kRound_Join : SkPaint::kMiter_Join);
-        canvas_.drawPath(native, paint);
-    }
-
-    void fillPathLinearGradient(
-        const CanvasPath& path,
-        Rect bounds,
-        Color start,
-        Color end,
-        float angleDegrees) override {
-        if (path.empty() || bounds.width <= 0.0f || bounds.height <= 0.0f) {
-            return;
-        }
-        SkPath native = win32::toSkPath(path);
-        SkPaint paint;
-        paint.setAntiAlias(true);
-        paint.setShader(linearGradientShader(bounds, start, end, angleDegrees));
-        canvas_.drawPath(native, paint);
-    }
-
-    void drawBoxShadow(Rect rect, const BoxShadow& shadow, float radius) override {
-        if (shadow.color.a == 0 || rect.width <= 0.0f || rect.height <= 0.0f) {
-            return;
-        }
-
-        const double traceStartMs = currentTimeMs();
-        const float spread = shadow.spreadRadius;
-        const Rect shadowRect{
-            rect.x + shadow.offset.x - spread,
-            rect.y + shadow.offset.y - spread,
-            rect.width + spread * 2.0f,
-            rect.height + spread * 2.0f};
-        if (shadowRect.width <= 0.0f || shadowRect.height <= 0.0f) {
-            return;
-        }
-
-        SkPaint paint;
-        paint.setAntiAlias(true);
-        paint.setColor(toSkColor(shadow.color));
-        const float shadowRadius = std::max(0.0f, radius + spread);
-        if (shadow.blurRadius > 0.0f) {
-            const auto cached = shadowImage(shadowRect.width, shadowRect.height, shadowRadius, shadow.blurRadius, shadow.spreadRadius, shadow.color);
-            if (cached.image) {
-                canvas_.drawImage(cached.image, shadowRect.x - static_cast<float>(cached.pad), shadowRect.y - static_cast<float>(cached.pad));
-                ++g_primitivePaintTrace.shadowCalls;
-                g_primitivePaintTrace.shadowMs += currentTimeMs() - traceStartMs;
-                return;
-            }
-            paint.setMaskFilter(shadowMaskFilter(shadow.blurRadius));
-        }
-
-        canvas_.save();
-        canvas_.clipRect(toSkRect(Rect{
-            shadowRect.x - shadow.blurRadius * 2.0f,
-            shadowRect.y - shadow.blurRadius * 2.0f,
-            shadowRect.width + shadow.blurRadius * 4.0f,
-            shadowRect.height + shadow.blurRadius * 4.0f}));
-        canvas_.drawRRect(SkRRect::MakeRectXY(toSkRect(shadowRect), shadowRadius, shadowRadius), paint);
-        canvas_.restore();
-        ++g_primitivePaintTrace.shadowCalls;
-        g_primitivePaintTrace.shadowMs += currentTimeMs() - traceStartMs;
-    }
-
-    void drawText(const std::wstring& text, Rect rect, Color color, float size, TextAlign align = TextAlign::Center) override {
-        drawTextStyled(text, rect, color, size, align, 400);
-    }
-
-    void drawTextStyled(const std::wstring& text, Rect rect, Color color, float size, TextAlign align = TextAlign::Center, int weight = 400) override {
-        drawTextStyledWithFont(text, rect, color, size, align, TextFontFamily::Default, weight);
-    }
-
-    void drawTextStyledWithFont(
-        const std::wstring& text,
-        Rect rect,
-        Color color,
-        float size,
-        TextAlign align,
-        TextFontFamily family,
-        int weight = 400) override {
-        drawTextStyledWithNamedFont(
-            text, rect, color, size, align, {}, family, weight);
-    }
-
-    void drawTextStyledWithNamedFont(
-        const std::wstring& text,
-        Rect rect,
-        Color color,
-        float size,
-        TextAlign align,
-        const std::wstring& familyName,
-        TextFontFamily fallbackFamily,
-        int weight = 400) override {
-        if (text.empty() || rect.width <= 0.0f || rect.height <= 0.0f) {
-            return;
-        }
-
-        const double traceStartMs = currentTimeMs();
-        SkPaint paint;
-        paint.setAntiAlias(true);
-        paint.setColor(toSkColor(color));
-
-        const std::wstring& resolvedFamily =
-            familyName.empty() && fallbackFamily == TextFontFamily::Default &&
-                    defaultFontFamily_ && !defaultFontFamily_->empty()
-                ? *defaultFontFamily_
-                : familyName;
-        const TextBlobEntry& textBlob =
-            cachedTextBlob(text, size, fallbackFamily, resolvedFamily, weight);
-        if (textBlob.runs.empty()) {
-            return;
-        }
-
-        float x = rect.x;
-        if (align == TextAlign::Center) {
-            x = rect.x + (rect.width - textBlob.advanceWidth) / 2.0f - textBlob.bounds.left();
-        } else if (align == TextAlign::Right) {
-            x = rect.x + rect.width - textBlob.advanceWidth - textBlob.bounds.left();
-        }
-
-        const float baseline = rect.y + (rect.height - textBlob.metrics.fDescent - textBlob.metrics.fAscent) / 2.0f;
-        canvas_.save();
-        canvas_.clipRect(toSkRect(rect));
-        for (const auto& run : textBlob.runs) {
-            if (run.blob) {
-                canvas_.drawTextBlob(run.blob, x + run.x, baseline, paint);
-            }
-        }
-        canvas_.restore();
-        ++g_primitivePaintTrace.textCalls;
-        g_primitivePaintTrace.textMs += currentTimeMs() - traceStartMs;
-    }
-
-    bool supportsNamedFont(const std::wstring& familyName) const override {
-        static std::mutex cacheMutex;
-        static std::map<std::wstring, bool> cache;
-        {
-            std::lock_guard<std::mutex> lock(cacheMutex);
-            if (const auto found = cache.find(familyName); found != cache.end()) {
-                return found->second;
-            }
-        }
-        const auto manager = fontManager();
-        const std::string requested = utf8FontFamily(familyName);
-        bool available = false;
-        if (manager && !requested.empty()) {
-            const auto face = manager->matchFamilyStyle(requested.c_str(), SkFontStyle());
-            if (face) {
-                SkString actual;
-                face->getFamilyName(&actual);
-                available = actual.equals(requested.c_str());
-            }
-        }
-        {
-            std::lock_guard<std::mutex> lock(cacheMutex);
-            if (cache.size() > 128) {
-                cache.clear();
-            }
-            cache.emplace(familyName, available);
-        }
-        return available;
-    }
-
-    float measureTextWidth(const std::wstring& text, float size, int weight = 400) const override {
-        return measureTextWidthWithFont(text, size, TextFontFamily::Default, weight);
-    }
-
-    std::vector<float> measureTextPrefixWidths(
-        const std::wstring& text,
-        float size,
-        int weight = 400) const override {
-        std::vector<float> widths(text.size() + 1, 0.0f);
-        if (text.empty()) {
-            return widths;
-        }
-
-        const std::wstring familyName = defaultFontFamily_ ? *defaultFontFamily_ : std::wstring{};
-        const auto primary = typeface(TextFontFamily::Default, weight, familyName);
-        float advance = 0.0f;
-        for (std::size_t offset = 0; offset < text.size();) {
-            const CodepointSpan span = codepointAt(text, offset);
-            const std::size_t length = std::max<std::size_t>(span.length, 1);
-            const auto face = typefaceForCodepoint(
-                TextFontFamily::Default, weight, familyName, span.codepoint, primary);
-            SkFont font(face ? face : primary, size);
-            font.setSubpixel(true);
-            font.setEdging(SkFont::Edging::kAntiAlias);
-            advance += font.measureText(
-                text.data() + offset,
-                length * sizeof(wchar_t),
-                SkTextEncoding::kUTF16);
-            for (std::size_t index = 1; index <= length; ++index) {
-                widths[offset + index] = index == length ? advance : widths[offset];
-            }
-            offset += length;
-        }
-        return widths;
-    }
-
-    float measureTextWidthWithFont(
-        const std::wstring& text,
-        float size,
-        TextFontFamily family,
-        int weight = 400) const override {
-        return measureTextWidthWithNamedFont(text, size, {}, family, weight);
-    }
-
-    float measureTextWidthWithNamedFont(
-        const std::wstring& text,
-        float size,
-        const std::wstring& familyName,
-        TextFontFamily fallbackFamily,
-        int weight = 400) const override {
-        if (text.empty()) {
-            return 0.0f;
-        }
-        const double traceStartMs = currentTimeMs();
-        const std::wstring& resolvedFamily =
-            familyName.empty() && fallbackFamily == TextFontFamily::Default &&
-                    defaultFontFamily_ && !defaultFontFamily_->empty()
-                ? *defaultFontFamily_
-                : familyName;
-        const TextBlobEntry& textBlob =
-            cachedTextBlob(text, size, fallbackFamily, resolvedFamily, weight);
-        ++g_primitivePaintTrace.textMeasureCalls;
-        g_primitivePaintTrace.textMeasureMs += currentTimeMs() - traceStartMs;
-        return textBlob.advanceWidth;
-    }
-
-    void drawPixels(Rect rect, const std::uint8_t* pixels, int width, int height, int stride, CanvasPixelFormat format) override {
-        if (!pixels || width <= 0 || height <= 0 || stride <= 0 || rect.width <= 0.0f || rect.height <= 0.0f) {
-            return;
-        }
-
-        SkColorType colorType = kBGRA_8888_SkColorType;
-        if (format == CanvasPixelFormat::Rgba8888) {
-            colorType = kRGBA_8888_SkColorType;
-        }
-
-        const SkImageInfo imageInfo = SkImageInfo::Make(width, height, colorType, kPremul_SkAlphaType);
-        const SkPixmap pixmap(imageInfo, pixels, static_cast<size_t>(stride));
-        sk_sp<SkImage> image = SkImages::RasterFromPixmapCopy(pixmap);
-        if (!image) {
-            return;
-        }
-
-        SkPaint paint;
-        paint.setAntiAlias(true);
-        // 高质量采样：缩放（尤其缩小，如把大 logo 缩到小尺寸）时用三次 Mitchell 滤波，
-        // 避免最近邻的糊边与锯齿。视频按 1:1/放大提交时同样清晰。
-        canvas_.drawImageRect(image, toSkRect(rect), SkSamplingOptions(SkCubicResampler::Mitchell()), &paint);
-    }
-
-private:
-    static sk_sp<SkFontMgr> fontManager() {
-        static sk_sp<SkFontMgr> fontMgr = [] {
-            auto mgr = SkFontMgr_New_DirectWrite();
-            if (!mgr) {
-                mgr = SkFontMgr_New_GDI();
-            }
-            return mgr;
-        }();
-        return fontMgr;
-    }
-
-    static std::string utf8FontFamily(const std::wstring& familyName) {
-        if (familyName.empty()) {
-            return {};
-        }
-        const int length = WideCharToMultiByte(
-            CP_UTF8,
-            WC_ERR_INVALID_CHARS,
-            familyName.data(),
-            static_cast<int>(familyName.size()),
-            nullptr,
-            0,
-            nullptr,
-            nullptr);
-        if (length <= 0) {
-            return {};
-        }
-        std::string result(static_cast<std::size_t>(length), '\0');
-        if (WideCharToMultiByte(
-                CP_UTF8,
-                WC_ERR_INVALID_CHARS,
-                familyName.data(),
-                static_cast<int>(familyName.size()),
-                result.data(),
-                length,
-                nullptr,
-                nullptr) != length) {
-            return {};
-        }
-        return result;
-    }
-
-    static sk_sp<SkTypeface> typeface(
-        TextFontFamily family,
-        int weight,
-        const std::wstring& familyName = {}) {
-        const auto fontMgr = fontManager();
-        if (!fontMgr) {
-            return {};
-        }
-
-        const int clampedWeight = std::clamp(weight, 100, 900);
-        using TypefaceKey = std::tuple<TextFontFamily, int, std::wstring>;
-        static std::map<TypefaceKey, sk_sp<SkTypeface>> cache;
-        const TypefaceKey cacheKey{family, clampedWeight, familyName};
-        if (auto cached = cache.find(cacheKey); cached != cache.end()) {
-            return cached->second;
-        }
-
-        const SkFontStyle style(clampedWeight, SkFontStyle::kNormal_Width, SkFontStyle::kUpright_Slant);
-        if (const std::string requested = utf8FontFamily(familyName); !requested.empty()) {
-            if (auto face = fontMgr->matchFamilyStyle(requested.c_str(), style);
-                face && (family != TextFontFamily::Monospace || face->isFixedPitch())) {
-                cache[cacheKey] = face;
-                return face;
-            }
-        }
-        if (family == TextFontFamily::Monospace) {
-            // legacyMakeTypeface may silently substitute the system UI font when
-            // a requested family is missing.  That turns terminal text
-            // proportional while the grid is still measured from "M", causing
-            // cumulative cursor drift.  matchFamilyStyle is strict, and the
-            // fixed-pitch check keeps the terminal grid contract explicit.
-            for (const char* candidate : {
-                     "JetBrains Mono",
-                     "Cascadia Mono",
-                     "Cascadia Code",
-                     "Consolas",
-                     "Courier New",
-                     "NSimSun"}) {
-                if (auto face = fontMgr->matchFamilyStyle(candidate, style);
-                    face && face->isFixedPitch()) {
-                    cache[cacheKey] = face;
-                    return face;
-                }
-            }
-        }
-        if (auto face = fontMgr->matchFamilyStyle("Microsoft YaHei", style)) {
-            cache[cacheKey] = face;
-            return face;
-        }
-        if (auto face = fontMgr->matchFamilyStyle("SimSun", style)) {
-            cache[cacheKey] = face;
-            return face;
-        }
-        auto face = fontMgr->matchFamilyStyle("Segoe UI", style);
-        if (!face) {
-            face = fontMgr->legacyMakeTypeface(nullptr, style);
-        }
-        cache[cacheKey] = face;
-        return face;
-    }
-
-    struct CodepointSpan {
-        SkUnichar codepoint = 0;
-        std::size_t offset = 0;
-        std::size_t length = 0;
-    };
-
-    static CodepointSpan codepointAt(const std::wstring& text, std::size_t offset) {
-        if (offset >= text.size()) {
-            return {};
-        }
-#if WCHAR_MAX <= 0xFFFF
-        const auto first = static_cast<std::uint16_t>(text[offset]);
-        if (first >= 0xD800 && first <= 0xDBFF && offset + 1 < text.size()) {
-            const auto second = static_cast<std::uint16_t>(text[offset + 1]);
-            if (second >= 0xDC00 && second <= 0xDFFF) {
-                return {
-                    static_cast<SkUnichar>(
-                        0x10000 + ((first - 0xD800) << 10) + (second - 0xDC00)),
-                    offset,
-                    2};
-            }
-        }
-#endif
-        return {static_cast<SkUnichar>(text[offset]), offset, 1};
-    }
-
-    static sk_sp<SkTypeface> typefaceForCodepoint(
-        TextFontFamily family,
-        int weight,
-        const std::wstring& familyName,
-        SkUnichar codepoint,
-        const sk_sp<SkTypeface>& primary) {
-        if (codepoint == 0 || (primary && primary->unicharToGlyph(codepoint) != 0)) {
-            return primary;
-        }
-
-        const auto fontMgr = fontManager();
-        if (!fontMgr) {
-            return primary;
-        }
-        const int clampedWeight = std::clamp(weight, 100, 900);
-        const SkFontStyle style(clampedWeight, SkFontStyle::kNormal_Width, SkFontStyle::kUpright_Slant);
-        if (family == TextFontFamily::Monospace) {
-            for (const char* candidate : {"NSimSun", "Microsoft YaHei Mono"}) {
-                if (auto face = fontMgr->matchFamilyStyle(candidate, style);
-                    face && face->isFixedPitch() && face->unicharToGlyph(codepoint) != 0) {
-                    return face;
-                }
-            }
-        }
-        const char* locales[] = {"zh-CN", "en-US"};
-        auto fallback = fontMgr->matchFamilyStyleCharacter(
-            nullptr,
-            style,
-            locales,
-            static_cast<int>(std::size(locales)),
-            codepoint);
-        return fallback ? fallback : primary;
-    }
-
-    static const TextBlobEntry& cachedTextBlob(
-        const std::wstring& text,
-        float size,
-        TextFontFamily family,
-        const std::wstring& familyName,
-        int weight) {
-        static TextBlobEntry empty;
-        if (text.empty()) {
-            return empty;
-        }
-
-        const TextBlobKey key{
-            text,
-            static_cast<int>(std::round(size * 10.0f)),
-            std::clamp(weight, 100, 900),
-            family,
-            familyName};
-        static std::map<TextBlobKey, TextBlobEntry> cache;
-        if (auto cached = cache.find(key); cached != cache.end()) {
-            return cached->second;
-        }
-        if (cache.size() > 2048) {
-            cache.clear();
-        }
-
-        TextBlobEntry entry;
-        const auto primary = typeface(family, weight, familyName);
-        std::size_t runStart = 0;
-        sk_sp<SkTypeface> runTypeface;
-        bool hasBounds = false;
-        bool hasMetrics = false;
-
-        auto appendRun = [&](std::size_t start, std::size_t end, const sk_sp<SkTypeface>& face) {
-            if (end <= start || !face) {
-                return;
-            }
-            SkFont font(face, size);
-            font.setSubpixel(true);
-            font.setEdging(SkFont::Edging::kAntiAlias);
-
-            const auto byteLength = (end - start) * sizeof(wchar_t);
-            SkRect runBounds = SkRect::MakeEmpty();
-            const float runAdvance = font.measureText(
-                text.data() + start, byteLength, SkTextEncoding::kUTF16, &runBounds);
-            runBounds.offset(entry.advanceWidth, 0.0f);
-            if (!runBounds.isEmpty()) {
-                if (hasBounds) {
-                    entry.bounds.join(runBounds);
-                } else {
-                    entry.bounds = runBounds;
-                    hasBounds = true;
-                }
-            }
-
-            SkFontMetrics runMetrics{};
-            font.getMetrics(&runMetrics);
-            if (!hasMetrics) {
-                entry.metrics = runMetrics;
-                hasMetrics = true;
-            } else {
-                entry.metrics.fTop = std::min(entry.metrics.fTop, runMetrics.fTop);
-                entry.metrics.fAscent = std::min(entry.metrics.fAscent, runMetrics.fAscent);
-                entry.metrics.fDescent = std::max(entry.metrics.fDescent, runMetrics.fDescent);
-                entry.metrics.fBottom = std::max(entry.metrics.fBottom, runMetrics.fBottom);
-                entry.metrics.fLeading = std::max(entry.metrics.fLeading, runMetrics.fLeading);
-            }
-
-            entry.runs.push_back({
-                SkTextBlob::MakeFromText(
-                    text.data() + start, byteLength, font, SkTextEncoding::kUTF16),
-                entry.advanceWidth});
-            entry.advanceWidth += runAdvance;
-        };
-
-        for (std::size_t offset = 0; offset < text.size();) {
-            const CodepointSpan span = codepointAt(text, offset);
-            const auto face = typefaceForCodepoint(
-                family, weight, familyName, span.codepoint, primary);
-            if (!runTypeface) {
-                runTypeface = face;
-                runStart = offset;
-            } else if (!face || face->uniqueID() != runTypeface->uniqueID()) {
-                appendRun(runStart, offset, runTypeface);
-                runStart = offset;
-                runTypeface = face ? face : primary;
-            }
-            offset += std::max<std::size_t>(span.length, 1);
-        }
-        appendRun(runStart, text.size(), runTypeface ? runTypeface : primary);
-
-        const auto [it, _] = cache.emplace(key, std::move(entry));
-        return it->second;
-    }
-
-    static sk_sp<SkMaskFilter> shadowMaskFilter(float blurRadius) {
-        const float sigma = std::max(0.0f, blurRadius * 0.5f);
-        if (sigma <= 0.0f) {
-            return nullptr;
-        }
-
-        const int key = static_cast<int>(std::round(sigma * 100.0f));
-        static std::map<int, sk_sp<SkMaskFilter>> cache;
-        if (auto cached = cache.find(key); cached != cache.end()) {
-            return cached->second;
-        }
-
-        auto filter = SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, sigma, false);
-        cache[key] = filter;
-        return filter;
-    }
-
-    static ShadowImageEntry shadowImage(float width, float height, float radius, float blurRadius, float spreadRadius, Color color) {
-        if (width <= 0.0f || height <= 0.0f || blurRadius <= 0.0f || color.a == 0) {
-            return {};
-        }
-
-        const ShadowImageKey key{
-            static_cast<int>(std::ceil(width)),
-            static_cast<int>(std::ceil(height)),
-            static_cast<int>(std::round(radius * 10.0f)),
-            static_cast<int>(std::round(blurRadius * 10.0f)),
-            static_cast<int>(std::round(spreadRadius * 10.0f)),
-            toSkColor(color)};
-
-        static std::map<ShadowImageKey, ShadowImageEntry> cache;
-        if (auto cached = cache.find(key); cached != cache.end()) {
-            return cached->second;
-        }
-        if (cache.size() > 512) {
-            cache.clear();
-        }
-
-        const int pad = std::max(1, static_cast<int>(std::ceil(blurRadius * 2.0f)));
-        const int imageWidth = key.width + pad * 2;
-        const int imageHeight = key.height + pad * 2;
-        if (imageWidth <= 0 || imageHeight <= 0 || imageWidth > 8192 || imageHeight > 8192) {
-            return {};
-        }
-
-        auto surface = SkSurfaces::Raster(SkImageInfo::MakeN32Premul(imageWidth, imageHeight));
-        if (!surface) {
-            return {};
-        }
-
-        SkCanvas* shadowCanvas = surface->getCanvas();
-        shadowCanvas->clear(SK_ColorTRANSPARENT);
-
-        SkPaint paint;
-        paint.setAntiAlias(true);
-        paint.setColor(toSkColor(color));
-        paint.setMaskFilter(shadowMaskFilter(blurRadius));
-        const float shadowRadius = std::max(0.0f, radius);
-        shadowCanvas->drawRRect(
-            SkRRect::MakeRectXY(SkRect::MakeXYWH(static_cast<float>(pad), static_cast<float>(pad), width, height), shadowRadius, shadowRadius),
-            paint);
-
-        ShadowImageEntry entry{surface->makeImageSnapshot(), pad};
-        cache[key] = entry;
-        return entry;
-    }
-
-    static sk_sp<SkShader> linearGradientShader(Rect rect, Color start, Color end, float angleDegrees) {
-        const GradientShaderKey key{
-            static_cast<int>(std::round(rect.x * 10.0f)),
-            static_cast<int>(std::round(rect.y * 10.0f)),
-            static_cast<int>(std::round(rect.width * 10.0f)),
-            static_cast<int>(std::round(rect.height * 10.0f)),
-            static_cast<int>(std::round(angleDegrees * 10.0f)),
-            toSkColor(start),
-            toSkColor(end)};
-
-        static std::map<GradientShaderKey, sk_sp<SkShader>> cache;
-        if (auto cached = cache.find(key); cached != cache.end()) {
-            return cached->second;
-        }
-        if (cache.size() > 512) {
-            cache.clear();
-        }
-
-        constexpr float pi = 3.14159265358979323846f;
-        const float radians = (angleDegrees - 90.0f) * pi / 180.0f;
-        const float dx = std::cos(radians);
-        const float dy = std::sin(radians);
-        const float half = std::sqrt(rect.width * rect.width + rect.height * rect.height) * 0.5f;
-        const SkPoint points[2] = {
-            SkPoint::Make(rect.x + rect.width * 0.5f - dx * half, rect.y + rect.height * 0.5f - dy * half),
-            SkPoint::Make(rect.x + rect.width * 0.5f + dx * half, rect.y + rect.height * 0.5f + dy * half),
-        };
-        const SkColor4f colors[2] = {
-            SkColor4f::FromColor(toSkColor(start)),
-            SkColor4f::FromColor(toSkColor(end)),
-        };
-        auto shader = SkGradientShader::MakeLinear(
-            points,
-            colors,
-            nullptr,
-            nullptr,
-            2,
-            SkTileMode::kClamp,
-            SkGradientShader::Interpolation{},
-            nullptr);
-        cache[key] = shader;
-        return shader;
-    }
-
-    static sk_sp<SkImage> gradientImage(float width, float height, float radius, Color start, Color end, float angleDegrees) {
-        if (width <= 0.0f || height <= 0.0f) {
-            return nullptr;
-        }
-
-        const GradientImageKey key{
-            static_cast<int>(std::ceil(width)),
-            static_cast<int>(std::ceil(height)),
-            static_cast<int>(std::round(radius * 10.0f)),
-            static_cast<int>(std::round(angleDegrees * 10.0f)),
-            toSkColor(start),
-            toSkColor(end)};
-
-        static std::map<GradientImageKey, sk_sp<SkImage>> cache;
-        if (auto cached = cache.find(key); cached != cache.end()) {
-            return cached->second;
-        }
-        if (cache.size() > 512) {
-            cache.clear();
-        }
-        if (key.width <= 0 || key.height <= 0 || key.width > 8192 || key.height > 8192) {
-            return nullptr;
-        }
-
-        auto surface = SkSurfaces::Raster(SkImageInfo::MakeN32Premul(key.width, key.height));
-        if (!surface) {
-            return nullptr;
-        }
-
-        SkCanvas* gradientCanvas = surface->getCanvas();
-        gradientCanvas->clear(SK_ColorTRANSPARENT);
-
-        SkPaint paint;
-        paint.setAntiAlias(true);
-        paint.setShader(linearGradientShader(Rect{0.0f, 0.0f, width, height}, start, end, angleDegrees));
-        gradientCanvas->drawRRect(
-            SkRRect::MakeRectXY(SkRect::MakeXYWH(0.0f, 0.0f, width, height), radius, radius),
-            paint);
-
-        auto image = surface->makeImageSnapshot();
-        cache[key] = image;
-        return image;
-    }
-
-    SkCanvas& canvas_;
-    const std::wstring* defaultFontFamily_ = nullptr;
-    std::optional<Rect> viewportBounds_;
-    std::optional<Rect> clipBounds_;
-    std::vector<std::optional<Rect>> clipStack_;
-};
-
 class Win32Window final : public Window {
 public:
+    WindowBackend backend() const override { return WindowBackend::Win32; }
+    unsigned int capabilities() const override {
+        return WindowCapabilityClipboard | WindowCapabilityIme | WindowCapabilityPlacement |
+            WindowCapabilityActivation | WindowCapabilityTopmost | WindowCapabilityTray |
+            WindowCapabilityNativeDialogs;
+    }
     explicit Win32Window(WindowOptions options)
         : options_(std::move(options))
         , dpiScale_(dpiScaleForWindowHandle(nullptr))
         , renderTraceEnabled_(renderTraceEnabled())
-        , renderTraceFilePath_(renderTraceFilePath()) {
+        , renderTraceFilePath_(renderTraceFilePath())
+        , taskbarCreatedMessage_(RegisterWindowMessageW(L"TaskbarCreated")) {
         animationFrameTimer_ = CreateWaitableTimerExW(
             nullptr,
             nullptr,
@@ -1180,11 +290,13 @@ public:
     }
 
     ~Win32Window() override {
+        callbackWindowAlive_->store(false, std::memory_order_release);
         acceptingPostedCallbacks_.store(false, std::memory_order_release);
         discardPostedCallbacks();
         if (content_) {
             content_->detachFromOwner(this);
         }
+        hideInternalTrayIcon();
         if (hwnd_) {
             DestroyWindow(hwnd_);
         }
@@ -1200,7 +312,9 @@ public:
             content_->detachFromOwner(this);
         }
         content_ = std::move(widget);
+        setCommandRoot(content_);
         if (content_) {
+            content_->setTextEnvironment(defaultFontFamily_, dpiScale());
             content_->attachToOwner(
                 this,
                 [this] { requestRedraw(); },
@@ -1252,6 +366,7 @@ public:
 
     void setDefaultFontFamily(std::wstring family) override {
         defaultFontFamily_ = std::move(family);
+        if (content_) content_->setTextEnvironment(defaultFontFamily_, dpiScale());
         requestRedraw();
     }
 
@@ -1315,7 +430,7 @@ public:
             return;
         }
         // 开启“关闭到托盘”时，点击关闭仅隐藏窗口，程序继续在托盘后台运行。
-        if (closeToTray_) {
+        if (closeToTray_ && internalTrayVisible_) {
             ShowWindow(hwnd_, SW_HIDE);
             return;
         }
@@ -1324,6 +439,59 @@ public:
 
     void setCloseToTray(bool closeToTray) override {
         closeToTray_ = closeToTray;
+        if (!closeToTray_) {
+            hideInternalTrayIcon();
+            return;
+        }
+        ensureCreated();
+        showInternalTrayIcon();
+    }
+
+    bool trayIconVisible() const override {
+        return internalTrayVisible_;
+    }
+
+    bool showInternalTrayIcon() {
+        if (!hwnd_) {
+            return false;
+        }
+        NOTIFYICONDATAW data{};
+        data.cbSize = sizeof(data);
+        data.hWnd = hwnd_;
+        data.uID = kInternalTrayIconId;
+        data.uFlags = NIF_ICON | NIF_TIP | NIF_MESSAGE;
+        data.uCallbackMessage = oneui::kTrayCallbackMessage;
+        data.hIcon = reinterpret_cast<HICON>(SendMessageW(hwnd_, WM_GETICON, ICON_SMALL, 0));
+        if (!data.hIcon) {
+            data.hIcon = reinterpret_cast<HICON>(GetClassLongPtrW(hwnd_, GCLP_HICONSM));
+        }
+        if (!data.hIcon) {
+            data.hIcon = LoadIconW(nullptr, IDI_APPLICATION);
+        }
+        wcsncpy_s(data.szTip, options_.title.c_str(), _TRUNCATE);
+
+        if (internalTrayVisible_) {
+            return Shell_NotifyIconW(NIM_MODIFY, &data) != FALSE;
+        }
+        if (!Shell_NotifyIconW(NIM_ADD, &data)) {
+            return false;
+        }
+        data.uVersion = NOTIFYICON_VERSION_4;
+        Shell_NotifyIconW(NIM_SETVERSION, &data);
+        internalTrayVisible_ = true;
+        return true;
+    }
+
+    void hideInternalTrayIcon() {
+        if (!hwnd_ || !internalTrayVisible_) {
+            return;
+        }
+        NOTIFYICONDATAW data{};
+        data.cbSize = sizeof(data);
+        data.hWnd = hwnd_;
+        data.uID = kInternalTrayIconId;
+        Shell_NotifyIconW(NIM_DELETE, &data);
+        internalTrayVisible_ = false;
     }
 
     void restoreFromTray() {
@@ -1381,14 +549,82 @@ public:
         }
         SkCanvas* skCanvas = surface->getCanvas();
         skCanvas->scale(normalizedDpiScale(), normalizedDpiScale());
-        SkiaCanvas canvas(
+        auto canvasOwner = rendering::makeSkiaCanvas(
             *skCanvas,
             &defaultFontFamily_,
             Rect{0.0f, 0.0f, logical.width, logical.height});
+        auto& canvas = *canvasOwner;
         content_->setFrame(Rect{0.0f, 0.0f, logical.width, logical.height});
         content_->paint(canvas);
         paintTooltip(canvas);
     }
+
+#ifdef ONEUI_ENABLE_TEST_FRAME_CAPTURE
+    bool captureFramePng(const std::wstring& path) override {
+        if (!hwnd_ || !content_ || !content_->visible() || path.empty()) {
+            return false;
+        }
+        const Size logical = clientSize();
+        const Size physical = clientPixelSize();
+        const int width = std::max(1, static_cast<int>(std::ceil(physical.width)));
+        const int height = std::max(1, static_cast<int>(std::ceil(physical.height)));
+        auto surface = SkSurfaces::Raster(SkImageInfo::MakeN32Premul(width, height));
+        if (!surface) return false;
+
+        SkCanvas* skCanvas = surface->getCanvas();
+        skCanvas->clear(SK_ColorTRANSPARENT);
+        skCanvas->scale(normalizedDpiScale(), normalizedDpiScale());
+        auto canvasOwner = rendering::makeSkiaCanvas(
+            *skCanvas,
+            &defaultFontFamily_,
+            Rect{0.0f, 0.0f, logical.width, logical.height});
+        auto& canvas = *canvasOwner;
+        content_->setFrame(Rect{0.0f, 0.0f, logical.width, logical.height});
+        content_->paint(canvas);
+        paintTooltip(canvas);
+        SkPixmap pixels;
+        if (!surface->peekPixels(&pixels)) return false;
+
+        const HRESULT initialized = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+        IWICImagingFactory* factory = nullptr;
+        IWICBitmapEncoder* encoder = nullptr;
+        IWICStream* stream = nullptr;
+        IWICBitmapFrameEncode* frame = nullptr;
+        IPropertyBag2* properties = nullptr;
+        HRESULT result = CoCreateInstance(
+            CLSID_WICImagingFactory,
+            nullptr,
+            CLSCTX_INPROC_SERVER,
+            IID_PPV_ARGS(&factory));
+        if (SUCCEEDED(result)) result = factory->CreateStream(&stream);
+        if (SUCCEEDED(result)) result = stream->InitializeFromFilename(path.c_str(), GENERIC_WRITE);
+        if (SUCCEEDED(result)) result = factory->CreateEncoder(GUID_ContainerFormatPng, nullptr, &encoder);
+        if (SUCCEEDED(result)) result = encoder->Initialize(stream, WICBitmapEncoderNoCache);
+        if (SUCCEEDED(result)) result = encoder->CreateNewFrame(&frame, &properties);
+        if (SUCCEEDED(result)) result = frame->Initialize(properties);
+        if (SUCCEEDED(result)) result = frame->SetSize(static_cast<UINT>(width), static_cast<UINT>(height));
+        WICPixelFormatGUID format = GUID_WICPixelFormat32bppPBGRA;
+        if (SUCCEEDED(result)) result = frame->SetPixelFormat(&format);
+        const auto stride = static_cast<UINT>(pixels.rowBytes());
+        const auto byteCount = static_cast<UINT>(pixels.rowBytes() * static_cast<std::size_t>(height));
+        if (SUCCEEDED(result)) {
+            result = frame->WritePixels(
+                static_cast<UINT>(height),
+                stride,
+                byteCount,
+                static_cast<BYTE*>(pixels.writable_addr()));
+        }
+        if (SUCCEEDED(result)) result = frame->Commit();
+        if (SUCCEEDED(result)) result = encoder->Commit();
+        if (properties) properties->Release();
+        if (frame) frame->Release();
+        if (encoder) encoder->Release();
+        if (stream) stream->Release();
+        if (factory) factory->Release();
+        if (SUCCEEDED(initialized)) CoUninitialize();
+        return SUCCEEDED(result);
+    }
+#endif
 
     bool post(std::function<void()> callback) override {
         if (!callback || !acceptingPostedCallbacks_.load(std::memory_order_acquire)) {
@@ -1977,6 +1213,13 @@ private:
     }
 
     LRESULT handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
+        if (taskbarCreatedMessage_ != 0 && message == taskbarCreatedMessage_) {
+            internalTrayVisible_ = false;
+            if (closeToTray_) {
+                showInternalTrayIcon();
+            }
+            return 0;
+        }
         switch (message) {
         case WM_ERASEBKGND:
             return 1;
@@ -2003,6 +1246,7 @@ private:
                     return 0;
                 case oneui::kTrayCommandExit:
                     closeToTray_ = false; // 强制真正退出，绕过“关闭到托盘”
+                    hideInternalTrayIcon();
                     if (hwnd_) {
                         DestroyWindow(hwnd_);
                     }
@@ -2249,14 +1493,25 @@ private:
             dispatchUnicodeScalar(static_cast<std::uint32_t>(wParam));
             return 0;
         case WM_IME_STARTCOMPOSITION:
+            beginImeComposition();
+            updateImePosition();
+            return content_ && content_->textInputState().drawsPreedit ? 0 : DefWindowProcW(hwnd_, message, wParam, lParam);
         case WM_IME_COMPOSITION:
+            return dispatchImeComposition(wParam, lParam);
+        case WM_IME_ENDCOMPOSITION:
+            endImeComposition();
+            return 0;
+        case WM_IME_SETCONTEXT:
+            if (content_ && content_->textInputState().drawsPreedit) lParam &= ~ISC_SHOWUICOMPOSITIONWINDOW;
             updateImePosition();
             return DefWindowProcW(hwnd_, message, wParam, lParam);
         case WM_DESTROY:
             return 0;
         case WM_NCDESTROY:
         {
+            callbackWindowAlive_->store(false, std::memory_order_release);
             captureNormalPlacement();
+            hideInternalTrayIcon();
             acceptingPostedCallbacks_.store(false, std::memory_order_release);
             discardPostedCallbacks();
             if (animationFrameTimer_) {
@@ -2571,6 +1826,7 @@ private:
 
         const bool changed = std::abs(nextScale - dpiScale_) > 0.001f;
         dpiScale_ = nextScale;
+        if (content_) content_->setTextEnvironment(defaultFontFamily_, dpiScale());
         if (changed) {
             paintSurface_.reset();
             paintSurfaceWidth_ = 0;
@@ -2593,6 +1849,7 @@ private:
     }
 
     void runPostedCallbacks() {
+        const auto alive = callbackWindowAlive_;
         std::queue<std::function<void()>> callbacks;
         {
             std::lock_guard<std::mutex> lock(postedCallbacksMutex_);
@@ -2600,6 +1857,7 @@ private:
         }
 
         while (!callbacks.empty()) {
+            if (!alive->load(std::memory_order_acquire)) return;
             auto callback = std::move(callbacks.front());
             callbacks.pop();
             callback();
@@ -2607,6 +1865,7 @@ private:
     }
 
     void runAnimationFrameCallbacks() {
+        const auto alive = callbackWindowAlive_;
         const bool traceScroll = internal::scrollTraceEnabled();
         const double frameStartMs = traceScroll ? internal::scrollTraceNowMs() : 0.0;
         const double frameIntervalMs = traceScroll && scrollTraceLastAnimationFrameMs_ > 0.0
@@ -2637,10 +1896,12 @@ private:
         const double nowMs = std::chrono::duration<double, std::milli>(now).count();
         lastAnimationFrameMs_ = nowMs;
         while (!callbacks.empty()) {
+            if (!alive->load(std::memory_order_acquire)) return;
             auto callback = std::move(callbacks.front());
             callbacks.pop();
             callback(nowMs);
         }
+        if (!alive->load(std::memory_order_acquire)) return;
         flushPendingPaint();
         if (traceScroll) {
             internal::writeScrollTrace(internal::ScrollTraceEvent{
@@ -2716,8 +1977,15 @@ private:
 
     void discardPostedCallbacks() {
         std::queue<std::function<void()>> callbacks;
-        std::lock_guard<std::mutex> lock(postedCallbacksMutex_);
-        callbacks.swap(postedCallbacks_);
+        std::queue<std::function<void(double)>> frames;
+        {
+            std::lock_guard<std::mutex> lock(postedCallbacksMutex_);
+            callbacks.swap(postedCallbacks_);
+        }
+        {
+            std::lock_guard<std::mutex> lock(animationCallbacksMutex_);
+            frames.swap(animationCallbacks_);
+        }
     }
 
     void runInteractivePaintFrame() {
@@ -2836,10 +2104,11 @@ private:
         }
 
         SkCanvas* skCanvas = paintSurface_->getCanvas();
-        SkiaCanvas rawCanvas(
+        auto rawCanvasOwner = rendering::makeSkiaCanvas(
             *skCanvas,
             nullptr,
             Rect{0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height)});
+        auto& rawCanvas = *rawCanvasOwner;
         const bool fullPaint = dirtyX == 0 && dirtyY == 0 && dirtyWidth == width && dirtyHeight == height;
         if (fullPaint) {
             rawCanvas.clear(colors::Surface);
@@ -2847,10 +2116,11 @@ private:
 
         skCanvas->save();
         skCanvas->scale(scale, scale);
-        SkiaCanvas canvas(
+        auto canvasOwner = rendering::makeSkiaCanvas(
             *skCanvas,
             &defaultFontFamily_,
             Rect{0.0f, 0.0f, logicalWidth, logicalHeight});
+        auto& canvas = *canvasOwner;
         if (!fullPaint) {
             const Rect dirtyCanvasRect{
                 static_cast<float>(dirtyX) / scale,
@@ -3421,7 +2691,11 @@ private:
     }
 
     void dispatchFocusChanged(bool focused) {
-        if (content_ && content_->onFocusChanged(focused)) {
+        const auto alive = callbackWindowAlive_;
+        if (!focused) cancelImeComposition();
+        if (!alive->load(std::memory_order_acquire)) return;
+        const auto content = content_;
+        if (content && content->onFocusChanged(focused) && alive->load(std::memory_order_acquire)) {
             requestRedraw();
         }
     }
@@ -3507,33 +2781,56 @@ private:
     }
 
     bool dispatchKeyDown(WPARAM wParam, LPARAM lParam) {
+        suppressKeyText_ = false;
+        const auto alive = callbackWindowAlive_;
         updateTrackedKeyState(wParam, true);
         KeyEvent event = makeKeyEvent(wParam, lParam, true);
-        if (rawKeyHandler_ && rawKeyHandler_(event)) {
+        const auto raw = rawKeyHandler_;
+        const bool consumed = raw && raw(event);
+        if (!alive->load(std::memory_order_acquire)) return true;
+        if (consumed) {
+            suppressKeyText_ = true;
             requestInteractiveRedraw();
             return true;
         }
+        if (dispatchCommandKey(event)) {
+            if (alive->load(std::memory_order_acquire)) {
+                suppressKeyText_ = true;
+                updateImePosition();
+            }
+            return true;
+        }
+        if (!alive->load(std::memory_order_acquire)) return true;
         if (!content_ || !content_->visible()) {
             return false;
         }
-        if (content_->onKeyDown(event)) {
+        const auto content = content_;
+        if (content->onKeyDown(event)) {
+            if (!alive->load(std::memory_order_acquire)) return true;
             requestInteractiveRedraw();
+            updateImePosition();
             return true;
         }
         return false;
     }
 
     bool dispatchKeyUp(WPARAM wParam, LPARAM lParam) {
+        const auto alive = callbackWindowAlive_;
         updateTrackedKeyState(wParam, false);
         KeyEvent event = makeKeyEvent(wParam, lParam, false);
-        if (rawKeyHandler_ && rawKeyHandler_(event)) {
+        const auto raw = rawKeyHandler_;
+        const bool consumed = raw && raw(event);
+        if (!alive->load(std::memory_order_acquire)) return true;
+        if (consumed) {
             requestInteractiveRedraw();
             return true;
         }
         if (!content_ || !content_->visible()) {
             return false;
         }
-        if (content_->onKeyUp(event)) {
+        const auto content = content_;
+        if (content->onKeyUp(event)) {
+            if (!alive->load(std::memory_order_acquire)) return true;
             requestInteractiveRedraw();
             return true;
         }
@@ -3541,6 +2838,7 @@ private:
     }
 
     void dispatchTextInput(WPARAM wParam) {
+        if (suppressKeyText_) return;
         if (!content_ || !content_->visible()) {
             return;
         }
@@ -3591,12 +2889,78 @@ private:
         if (text.empty() || !content_ || !content_->visible()) {
             return;
         }
-        if (content_->onTextInputText(text)) {
+        const auto alive = callbackWindowAlive_;
+        const auto content = content_;
+        if (content->onTextCommitted(text) && alive->load(std::memory_order_acquire)) {
             requestInteractiveRedraw();
         }
     }
 
+    bool imeTargetCurrent() const {
+        const auto state = content_ ? content_->textInputState() : TextInputState{};
+        return imeActive_ && state.editable && state.identity == imeIdentity_ && state.session == imeSession_;
+    }
+    void beginImeComposition() {
+        const auto state = content_ ? content_->textInputState() : TextInputState{};
+        imeActive_ = state.editable;
+        imeIdentity_ = state.identity;
+        imeSession_ = state.session;
+        pendingHighSurrogate_ = 0;
+    }
+    void endImeComposition() {
+        const bool clear = imeTargetCurrent();
+        imeActive_ = false;
+        const auto content = content_;
+        if (clear && content) content->setTextComposition({}, 0);
+    }
+    void cancelImeComposition() {
+        if (!imeActive_) return;
+        const auto alive = callbackWindowAlive_;
+        endImeComposition();
+        if (!alive->load(std::memory_order_acquire)) return;
+        if (hwnd_) {
+            const auto window = hwnd_;
+            const auto context = ImmGetContext(window);
+            if (context) {
+                ImmNotifyIME(context, NI_COMPOSITIONSTR, CPS_CANCEL, 0);
+                ImmReleaseContext(window, context);
+            }
+        }
+    }
+    LRESULT dispatchImeComposition(WPARAM wParam, LPARAM flags) {
+        if (!imeTargetCurrent()) { cancelImeComposition(); return 0; }
+        const auto window = hwnd_;
+        const auto context = ImmGetContext(window);
+        if (!context) return 0;
+        const auto read = [&](DWORD kind) {
+            const LONG bytes = ImmGetCompositionStringW(context, kind, nullptr, 0);
+            if (bytes <= 0 || bytes % sizeof(wchar_t) || bytes > 1024 * 1024) return std::wstring{};
+            std::wstring result(static_cast<std::size_t>(bytes) / sizeof(wchar_t), L'\0');
+            const LONG copied = ImmGetCompositionStringW(context, kind, result.data(), bytes);
+            return copied == bytes ? result : std::wstring{};
+        };
+        const auto committed = flags & GCS_RESULTSTR ? read(GCS_RESULTSTR) : std::wstring{};
+        const auto preedit = flags & GCS_COMPSTR ? read(GCS_COMPSTR) : std::wstring{};
+        const LONG caret = ImmGetCompositionStringW(context, GCS_CURSORPOS, nullptr, 0);
+        ImmReleaseContext(window, context);
+        const auto alive = callbackWindowAlive_;
+        const auto content = content_;
+        const bool clientPreedit = content->textInputState().drawsPreedit;
+        if (flags & GCS_RESULTSTR) content->onTextCommitted(committed);
+        if (!alive->load(std::memory_order_acquire)) return 0;
+        if ((flags & GCS_COMPSTR) && imeTargetCurrent()) content->setTextComposition(preedit, static_cast<std::size_t>(std::max<LONG>(0, caret)));
+        if (!alive->load(std::memory_order_acquire)) return 0;
+        updateImePosition();
+        if (!alive->load(std::memory_order_acquire)) return 0;
+        requestRedraw();
+        // RESULTSTR is already one atomic commit; DefWindowProc would emit duplicate WM_CHARs.
+        return clientPreedit || (flags & GCS_RESULTSTR) ? 0 : DefWindowProcW(window, WM_IME_COMPOSITION, wParam, flags);
+    }
+
     void updateImePosition() {
+        const auto alive = callbackWindowAlive_;
+        if (imeActive_ && !imeTargetCurrent()) cancelImeComposition();
+        if (!alive->load(std::memory_order_acquire)) return;
         if (!hwnd_ || !content_ || !content_->visible()) {
             return;
         }
@@ -3655,7 +3019,10 @@ private:
                 static_cast<double>(event.position.x),
                 static_cast<double>(event.position.y)});
         }
-        const bool handled = handler(*content_, event);
+        const auto alive = callbackWindowAlive_;
+        const auto content = content_;
+        const bool handled = handler(*content, event);
+        if (!alive->load(std::memory_order_acquire)) return;
         if (internal::scrollTraceEnabled()) {
             internal::writeScrollTrace(internal::ScrollTraceEvent{
                 "win32", handled ? "pointer_handled" : "pointer_unhandled",
@@ -3668,6 +3035,7 @@ private:
         if (handled) {
             requestInteractiveRedraw();
         }
+        updateImePosition();
     }
 
     void trackMouseLeave() {
@@ -3765,6 +3133,10 @@ private:
     }
 
     HWND hwnd_ = nullptr;
+    const void* imeIdentity_ = nullptr;
+    std::uint64_t imeSession_ = 0;
+    bool imeActive_ = false;
+    bool suppressKeyText_ = false;
     HANDLE animationFrameTimer_ = nullptr;
     WindowOptions options_;
     float dpiScale_ = 1.0f;
@@ -3789,6 +3161,7 @@ private:
     wchar_t pendingHighSurrogate_ = 0;
     std::array<bool, 256> trackedKeyState_{};
     std::atomic_bool acceptingPostedCallbacks_{true};
+    std::shared_ptr<std::atomic_bool> callbackWindowAlive_ = std::make_shared<std::atomic_bool>(true);
     std::mutex postedCallbacksMutex_;
     std::queue<std::function<void()>> postedCallbacks_;
     std::mutex animationCallbacksMutex_;
@@ -3807,6 +3180,9 @@ private:
     bool pendingMaximized_ = false;
     float cornerRadiusLogical_ = 0.0f;
     bool closeToTray_ = false;
+    bool internalTrayVisible_ = false;
+    UINT taskbarCreatedMessage_ = 0;
+    static constexpr UINT kInternalTrayIconId = 0x4F56504E;
     // Win10 圆角回退（SetWindowRgn）会丢掉 DWM 柔和投影，用一个分层伴随窗口在主窗
     // 圆角轮廓外画一圈抗锯齿柔光投影补回来。Win11 走 DWM 圆角自带投影，不用它。
     HWND shadowHwnd_ = nullptr;

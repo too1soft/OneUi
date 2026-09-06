@@ -52,6 +52,18 @@ pub enum IconSymbol {
     Folder = 47,
     Headset = 48,
     OpenInNew = 49,
+    NetworkHex = 50,
+    Gamepad = 51,
+    Router = 52,
+    Cloud = 53,
+    Connection = 54,
+    HelpCircle = 55,
+    WarningTriangle = 56,
+    InfoCircle = 57,
+    Link = 58,
+    Share = 59,
+    Key = 60,
+    ErrorCircle = 61,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

@@ -3,6 +3,7 @@
 #include "oneui/export.h"
 
 #include <stddef.h>
+#include <stdint.h>
 #include <wchar.h>
 
 #ifdef __cplusplus
@@ -57,6 +58,53 @@ typedef struct OneUiUtf8String {
     const char* data;
     size_t length;
 } OneUiUtf8String;
+
+/* Additive ABI 25 interaction/text interfaces. All calls are UI-thread-only. */
+typedef struct OneUiCommandRegistration OneUiCommandRegistration;
+typedef int (*OneUiCommandEnabledCallback)(void* user_data);
+typedef enum OneUiCommandResult {
+    OneUiCommandNotFound = 0, OneUiCommandDisabled = 1,
+    OneUiCommandExecuted = 2, OneUiCommandEnabled = 3
+} OneUiCommandResult;
+typedef enum OneUiKeyModifier {
+    OneUiKeyModifierShift = 1, OneUiKeyModifierControl = 2, OneUiKeyModifierAlt = 4,
+    OneUiKeyModifierMeta = 8, OneUiKeyModifierPrimary = 16
+} OneUiKeyModifier;
+typedef struct OneUiKeyChordUtf8 {
+    OneUiUtf8String key;
+    unsigned int modifiers;
+} OneUiKeyChordUtf8;
+typedef struct OneUiTextOptionsUtf8 {
+    unsigned int direction; /* 0 auto, 1 LTR, 2 RTL */
+    unsigned int wrap;      /* 0 no wrap, 1 word wrap */
+    OneUiUtf8String locale; /* empty selects und */
+} OneUiTextOptionsUtf8;
+typedef struct OneUiTextPositionUtf8 {
+    size_t utf8_offset;
+    unsigned int affinity; /* 0 upstream, 1 downstream */
+} OneUiTextPositionUtf8;
+
+/* Registration takes ownership of user_data on entry. destroy is called once,
+ * including failure, or after unregister/owner destruction and any active callback.
+ * A null shortcut means programmatic-only. Null enabled means always enabled.
+ * Null return reports invalid/duplicate registration; no C++ exceptions escape. */
+ONEUI_API OneUiCommandRegistration* oneui_widget_register_command_utf8(OneUiWidget* widget,
+    OneUiUtf8String id, const OneUiKeyChordUtf8* shortcut, OneUiVoidCallback execute,
+    OneUiCommandEnabledCallback enabled, void* user_data, OneUiDestroyCallback destroy);
+ONEUI_API OneUiCommandRegistration* oneui_window_register_command_utf8(OneUiWindow* window,
+    OneUiUtf8String id, const OneUiKeyChordUtf8* shortcut, OneUiVoidCallback execute,
+    OneUiCommandEnabledCallback enabled, void* user_data, OneUiDestroyCallback destroy);
+ONEUI_API void oneui_command_registration_destroy(OneUiCommandRegistration* registration);
+/* Queries never execute the command. Enabled differs from Executed. */
+ONEUI_API OneUiCommandResult oneui_widget_query_command_utf8(OneUiWidget* widget, OneUiUtf8String id);
+ONEUI_API OneUiCommandResult oneui_widget_execute_command_utf8(OneUiWidget* widget, OneUiUtf8String id);
+ONEUI_API OneUiCommandResult oneui_window_query_command_utf8(OneUiWindow* window, OneUiUtf8String id);
+ONEUI_API OneUiCommandResult oneui_window_execute_command_utf8(OneUiWindow* window, OneUiUtf8String id);
+/* Label/TextField/TextArea only; returns zero for invalid options or wrong type. */
+ONEUI_API int oneui_widget_set_text_options_utf8(OneUiWidget* widget, const OneUiTextOptionsUtf8* options);
+ONEUI_API int oneui_text_field_get_position_utf8(OneUiWidget* widget, OneUiTextPositionUtf8* position);
+/* Rejects offsets inside UTF-8 sequences or graphemes; old index APIs keep their units. */
+ONEUI_API int oneui_text_field_set_position_utf8(OneUiWidget* widget, OneUiTextPositionUtf8 position);
 
 /*
  * Structured UTF-8 list data. The caller owns both string buffers and the
@@ -437,7 +485,36 @@ enum {
     OneUiTerminalCellOverline = 1u << 11
 };
 
-#define ONEUI_UTF8_ABI_VERSION 24u
+#define ONEUI_UTF8_ABI_VERSION 25u
+
+/*
+ * Copies and registers a process-local font under family_alias. Call before
+ * creating the first window. The font is not installed into the OS. Returns
+ * one on success; zero for invalid UTF-8, invalid font data, or an empty alias.
+ */
+ONEUI_API int oneui_font_register_memory(
+    const uint8_t* data,
+    size_t size,
+    OneUiUtf8String family_alias);
+
+typedef enum OneUiWindowBackend {
+    OneUiWindowBackendUnknown = 0,
+    OneUiWindowBackendWin32 = 1,
+    OneUiWindowBackendCocoa = 2,
+    OneUiWindowBackendX11 = 3,
+    OneUiWindowBackendWayland = 4
+} OneUiWindowBackend;
+enum OneUiWindowCapability {
+    OneUiWindowCapabilityClipboard = 1u << 0,
+    OneUiWindowCapabilityIme = 1u << 1,
+    OneUiWindowCapabilityPlacement = 1u << 2,
+    OneUiWindowCapabilityActivation = 1u << 3,
+    OneUiWindowCapabilityTopmost = 1u << 4,
+    OneUiWindowCapabilityTray = 1u << 5,
+    OneUiWindowCapabilityNativeDialogs = 1u << 6
+};
+ONEUI_API unsigned int oneui_window_backend(OneUiWindow* window);
+ONEUI_API unsigned int oneui_window_capabilities(OneUiWindow* window);
 
 ONEUI_API const char* oneui_version(void);
 ONEUI_API unsigned int oneui_utf8_abi_version(void);
@@ -445,6 +522,8 @@ ONEUI_API OneUiWindow* oneui_window_create(const OneUiWindowOptions* options);
 ONEUI_API OneUiWindow* oneui_window_create_utf8(const OneUiWindowOptionsUtf8* options);
 ONEUI_API void oneui_window_destroy(OneUiWindow* window);
 ONEUI_API void oneui_window_initialize(OneUiWindow* window);
+/* 1 on success, 0 on invalid handle or native initialization failure. */
+ONEUI_API int oneui_window_initialize_checked(OneUiWindow* window);
 ONEUI_API void oneui_window_show(OneUiWindow* window);
 ONEUI_API void oneui_window_activate(OneUiWindow* window);
 ONEUI_API int oneui_window_run(OneUiWindow* window);
@@ -457,7 +536,18 @@ ONEUI_API int oneui_window_is_fullscreen(OneUiWindow* window);
 ONEUI_API int oneui_window_get_placement(OneUiWindow* window, OneUiWindowPlacement* placement);
 ONEUI_API int oneui_window_set_placement(OneUiWindow* window, const OneUiWindowPlacement* placement);
 ONEUI_API void oneui_window_set_borderless(OneUiWindow* window, int borderless);
+/*
+ * Defines the logical height that returns native caption hit tests and the
+ * trailing width reserved for custom window buttons. Points inside the
+ * reserved button strip remain client-area hits.
+ */
 ONEUI_API void oneui_window_set_title_bar_drag_metrics(OneUiWindow* window, float title_bar_height, float reserved_button_width);
+/*
+ * Marks a client-interactive span inside the logical title bar. Non-negative
+ * values reserve [leading_width, window_width - trailing_width) as HTCLIENT;
+ * pass a negative value for either inset to clear the span and restore caption
+ * dragging outside the window-button strip.
+ */
 ONEUI_API void oneui_window_set_title_bar_interactive_insets(OneUiWindow* window, float leading_width, float trailing_width);
 /*
  * Receives coalesced logical client dimensions on the owning UI thread. Pass
@@ -733,6 +823,9 @@ ONEUI_API void oneui_label_set_font_size(OneUiWidget* label, float font_size);
 ONEUI_API void oneui_label_set_font_weight(OneUiWidget* label, int font_weight);
 /* align: 0 = left, 1 = center, 2 = right */
 ONEUI_API void oneui_label_set_align(OneUiWidget* label, int align);
+ONEUI_API void oneui_label_set_text_wrapping(OneUiWidget* label, int enabled);
+ONEUI_API void oneui_label_set_max_lines(OneUiWidget* label, int max_lines);
+ONEUI_API void oneui_label_set_line_height(OneUiWidget* label, float line_height);
 
 /* Standard determinate progress indicator. Values are clamped to [0, 1]. */
 ONEUI_API OneUiWidget* oneui_progress_bar_create(void);
@@ -1372,6 +1465,7 @@ ONEUI_API void oneui_text_field_set_password_mode(OneUiWidget* text_field, int e
 ONEUI_API void oneui_text_field_set_password_mask(OneUiWidget* text_field, unsigned int codepoint);
 ONEUI_API void oneui_text_field_set_multiline(OneUiWidget* text_field, int multiline);
 ONEUI_API void oneui_text_field_set_line_height(OneUiWidget* text_field, float line_height);
+ONEUI_API void oneui_text_field_set_font_size(OneUiWidget* text_field, float font_size);
 ONEUI_API OneUiWidget* oneui_text_area_create_utf8(OneUiUtf8String placeholder);
 ONEUI_API void oneui_text_field_set_prefix_icon(OneUiWidget* text_field, int symbol);
 ONEUI_API void oneui_text_field_clear_prefix_icon(OneUiWidget* text_field);

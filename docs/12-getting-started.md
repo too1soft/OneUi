@@ -1,6 +1,7 @@
 # OneUI 入门指南
 
-本文覆盖当前 Win32 主线的源码构建、Gallery、测试、C++ SDK、C ABI 与 Rust 接入。
+本文介绍 Win32 主线构建；Linux/macOS 的依赖、构建命令、SDK 和待验收边界见
+[原生桌面后端指南](37-native-desktop-backends.md)。C++ 控件、C ABI 和 Rust API 复用同一底座。
 
 ## 1. 当前支持范围
 
@@ -9,7 +10,7 @@
 - 渲染：Skia raster；
 - 推荐产品构建：MSVC + vendored static Skia + static MSVC runtime；
 - 开发预设：MSYS2 MINGW64/UCRT64；
-- Linux/macOS 当前不可运行。
+- Linux X11/Wayland 已在 WSLg 构建运行，仍待目标桌面原生验收；Cocoa 源码已接入，尚待 Mac 构建。
 
 ## 2. 获取源码
 
@@ -406,7 +407,8 @@ if (status == -2 && required > 1) {
   -Binary .\build\msvc-bundled-static\oneui.dll `
   -Mode product
 
-.\scripts\check-package-size.ps1
+.\scripts\check-package-size.ps1 -AuditOnly
+# 发布前按已审计的完整文字 SDK 预算另传 -MaxBytes；AuditOnly 不等于发布审批。
 .\scripts\test-remote-component-gallery-smoke.ps1
 ```
 

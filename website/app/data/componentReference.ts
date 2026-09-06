@@ -1,5 +1,6 @@
 export const navItems = [
   { label: '总览', to: '#overview' },
+  { label: '平台与验收', to: '#platforms' },
   { label: '快速开始', to: '#quick-start' },
   { label: '代码审查', to: '#review' },
   { label: '架构模型', to: '#architecture' },
@@ -16,61 +17,65 @@ export const navItems = [
 
 export const stats = [
   { label: '定位', value: 'C++17 自绘桌面 UI 框架' },
-  { label: '当前可运行后端', value: 'Windows / Win32 / Skia' },
+  { label: '后端状态', value: 'Win32 主线 · Linux WSLg 已运行 · Cocoa 待构建' },
   { label: '公开入口', value: '<oneui/oneui.h>、单组件头文件、oneui_c_api.h' },
   { label: '文档站', value: 'Nuxt 4 + Nuxt UI，独立位于 website/' }
 ]
 
+export const platformRows = [
+  ['Windows / Win32', '本轮 MSVC 与 Unicode 一致性回归通过；MinGW 匹配文字依赖、SDK 审计与完整原生交互验收仍待完成。'],
+  ['Ubuntu 24.04 x86_64 X11', '已实现并在 WSLg 构建/自动测试；真实 Ubuntu 桌面待验收，XWayland 不算原生 Wayland。'],
+  ['Ubuntu 24.04 x86_64 Wayland', '原生 Wayland 连接、Gallery、C/C++/Rust 已运行；中文 IME 和有真实输入序号的剪贴板仍待验收。'],
+  ['麒麟 V10 / UOS 20 / Linux ARM64', '共享 Linux 源码，尚未在对应系统和架构构建；不能复用 Ubuntu 产物宣称兼容。'],
+  ['macOS 13+ Intel / Apple Silicon', 'Cocoa 源码已接入，尚无 Mac 构建和原生验收证据。']
+]
+
 export const reviewFindings = [
   {
-    level: 'P1',
-    color: 'error',
-    title: '测试运行时依赖还没有完全收口',
-    body: '本地旧构建中的 oneui_monitor_behavior_tests 以 0xc0000135 退出，这在 Windows 上通常表示测试进程找不到某个 DLL。建议在 CTest preset 或测试启动脚本中统一设置 PATH，或者把测试所需 DLL 复制到测试可执行文件旁边。'
-  },
-  {
-    level: 'P1',
-    color: 'error',
-    title: '平台支持需要明确标注为 Windows 优先',
-    body: '仓库里有 Linux/macOS skeleton 文件，但真正可运行、可审查的窗口后端是 Win32。官网、README 和 SDK 包说明都应该明确当前阶段是 Windows 可用，跨平台是后续目标。'
-  },
-  {
-    level: 'P2',
+    level: '文字',
     color: 'warning',
-    title: '聚合头 oneui.h 没有包含所有已公开组件',
-    body: 'IconButton、Tile、Toast、StatusStrip、TopBar、animation.h、style_transition.h 等头文件存在，CMake 也编译了实现，C ABI 也暴露了部分能力，但 <oneui/oneui.h> 还没有聚合这些头。使用这些新组件时需要直接 include 对应头文件，这会影响新手发现 API。'
+    title: '文字与通用交互升级进行中',
+    body: '共享 SkParagraph 布局、字素编辑、作用域命令、生命周期订阅和 C/Rust 接口已接入。固定 ICU 加可复现补丁已通过完整 Unicode 15.1 Bidi 用例；分词显式采用 ICU root locale 的冒号定制规则。MinGW 匹配依赖、SDK 审计与原生交互验收仍待完成。状态见 docs/38-text-and-interaction-engine.md。'
   },
   {
-    level: 'P2',
+    level: '验收',
     color: 'warning',
-    title: 'C++ API 与 C ABI 覆盖范围不完全一致',
-    body: 'C ABI 已覆盖窗口、样式、Stack、TopBar、AppShell、ProductShell、OverlayHost、Panel、Label、Icon、IconButton、Switch、TitleBar、NavItem、Badge、Card、Tile、StatusStrip、Toast、RadioGroup、TextField、Button 等，但 Select、Tabs、List、Table、Slider、Popup、远程输入等仍主要通过 C++ API 使用。'
+    title: '跨平台实现不等于全部原生验收',
+    body: 'Linux 已在 WSLg 编译运行，Cocoa 已接入源码。Mac、国产发行版、ARM64、真实中文输入法和多屏缩放仍需对应机器验证。具体矩阵与构建命令见仓库 docs/37-native-desktop-backends.md。'
   },
   {
-    level: 'P2',
-    color: 'warning',
-    title: '既有中文文档和示例存在编码风险',
-    body: '当前终端读取部分中文文件时出现明显乱码。建议统一源码和文档为 UTF-8，补充 editorconfig、CI 编码检查，并避免不同 shell 默认编码导致文档站或 Gallery 文案损坏。'
-  },
-  {
-    level: 'P3',
+    level: '能力',
     color: 'info',
-    title: '远程视频控件仍是基础能力，不是最终高性能视频面',
-    body: 'RealtimeFrameView 已有帧提交、缩放和快照能力，但文档应提醒使用方不要把它误认为最终视频热路径。远程桌面场景后续仍需要更明确的帧队列、丢帧策略、GPU 上传和性能指标。'
+    title: '先查运行时能力，再调用平台服务',
+    body: 'Window::backend/capabilities 及对应 C/Rust API 报告实际后端与限制。Wayland 不支持绝对窗口位置、任意 topmost 或主动激活；剪贴板写入需要输入序号，输入法依赖 text-input-v3。'
+  },
+  {
+    level: '边界',
+    color: 'info',
+    title: 'C++、C ABI 与 Rust 的覆盖范围独立核对',
+    body: '常用控件、数据视图、富 VirtualList、终端与远程能力已有 C ABI 和安全 Rust 入口。oneui-sys 使用显式支持符号清单，不声称每个 C 导出都已绑定；原生对话框与托盘仍为 Windows 能力。'
+  },
+  {
+    level: '渲染',
+    color: 'info',
+    title: '共享 Skia 栅格渲染，GPU 升级不在本期范围',
+    body: '完整 Canvas、路径转换和文字缓存由各后端共享。RealtimeFrameView 支持 BGRA/RGBA、脏区域与后台合并更新；NV12 转换、通用 GPU 视频热路径和系统无障碍桥仍未完成。'
   }
 ]
 
 export const architectureRows = [
+  ['TextLayout / CommandScope', '私有共享文字布局提供塑形、光标、命中与选区；控件/窗口作用域命令使用稳定 UTF-8 ID 和 RAII 注册，Primary 映射平台逻辑编辑修饰键。'],
+  ['State / Subscription', 'subscribeScoped 返回生命周期订阅，Binding 弱引用 State。注销即时生效，嵌套更新按稳定快照排队；仅 UI 线程使用。'],
   ['Widget', '所有控件的基础类。负责 frame、preferredSize、visible、disabled、focusable、mouse/key/text input、accessibility 和 paint 入口。'],
   ['View', '可容纳子控件的 Widget。负责 add/remove child、子控件布局、绘制顺序、命中测试、焦点转发和 Tab 导航。'],
   ['Layout', 'Stack、Grid、Wrap、DockView、SplitView、ScrollView、AppShell 等容器根据 preferredSize 与自身规则给子控件设置 frame。'],
   ['StyleSheet', 'CSS-like 小型样式系统。支持 tag、class、伪状态和有限属性，最终转换为 typed style override 或 StyleBox。'],
-  ['Platform', 'Window、Clipboard、Monitor 等平台能力。当前真正落地的是 Win32，Linux/macOS 文件还属于规划骨架。'],
+  ['Platform', 'Window、Clipboard、Monitor 等平台能力。Win32 为产品主线，X11/Wayland 在 WSLg 已构建运行，Cocoa 待 Mac 构建；能力与验收状态分开查询。'],
   ['C ABI', '面向 C、Rust、Go、C#、Python、Node、Java 等语言的稳定边界。它不是完整 C++ API 的逐项镜像。']
 ]
 
 export const quickStartSteps = [
-  ['1. 引入头文件', '常规 C++ 应用先 include <oneui/oneui.h>。如果使用新组件，比如 Toast、Tile、TopBar、IconButton，当前还需要直接 include 对应头文件。'],
+  ['1. 引入头文件', '常规 C++ 应用 include <oneui/oneui.h>，也可按需引用单组件头文件；聚合入口现已补齐常用数据/远程/反馈控件。'],
   ['2. 创建窗口', '准备 WindowOptions，设置 title、width、height、visible、resizable 等字段，然后调用 Window::create。'],
   ['3. 组织控件树', '用 Stack、AppShell、Panel、FormField 等容器组合 Button、TextField、List 等控件。避免一开始就写绝对坐标。'],
   ['4. 绑定状态和事件', '用 State<T> 做简单响应式绑定，用 setOnClick、setOnChanged 等回调处理用户操作。'],
@@ -93,7 +98,9 @@ export const componentGroups = [
           ['setColor(Color)', '设置文字颜色。'],
           ['setFontSize(float)', '设置字号。'],
           ['setFontWeight(int)', '设置字体粗细。'],
-          ['setAlign(TextAlign)', '设置文本对齐方式。']
+          ['setAlign(TextAlign)', '设置文本对齐方式。'],
+          ['setTextOptions(TextOptions)', 'Auto/LTR/RTL、语言标签 und 默认值、NoWrap/WordWrap。共享段落布局的完整发布验收仍在进行。'],
+          ['setMaxLines(int)', '限制可见行数，保留每个硬段落的自动文字方向。']
         ],
         usage: 'auto title = std::make_shared<oneui::Label>(L"设备列表");\ntitle->setFontSize(18.0f);\ntitle->setFontWeight(600);',
         notes: ['Label 不处理输入事件。', '需要可点击文本时应组合 Button 或自定义控件。']
@@ -222,7 +229,7 @@ export const componentGroups = [
           ['setDisabled(bool)', '继承 Widget 禁用能力。']
         ],
         usage: 'auto refresh = std::make_shared<oneui::IconButton>(oneui::IconSymbol::Refresh);\nrefresh->setOnClick(reloadDevices);',
-        notes: ['当前未被 <oneui/oneui.h> 聚合，需要直接 include。', '只显示图标时，业务层应同时考虑可访问名称。']
+        notes: ['已由 <oneui/oneui.h> 聚合，也可按需 include。', '只显示图标时，业务层应同时考虑可访问名称。']
       },
       {
         name: 'Checkbox',
@@ -282,6 +289,8 @@ export const componentGroups = [
           ['setText(std::wstring) / text()', '设置或读取文本。'],
           ['bindText(State<std::wstring>&)', '绑定文本状态。'],
           ['setCaretIndex(size_t) / caretIndex()', '设置或读取光标位置。'],
+          ['textPosition() / setTextPosition(TextPosition)', '新增 UTF-8 字节偏移与亲和方向接口；旧 caretIndex 仍使用本机宽字符下标。'],
+          ['setTextOptions(TextOptions)', '方向 Auto/LTR/RTL、语言标签、换行模式；TextArea 默认不软换行，显式启用 WordWrap。'],
           ['setSelectionRange(size_t start, size_t end)', '设置选择范围。'],
           ['selectionStart() / selectionEnd() / hasSelection()', '读取选择区状态。'],
           ['selectedText() / selectAll() / clearSelection()', '读取、全选或清空选择区。'],
@@ -295,7 +304,7 @@ export const componentGroups = [
           ['setStyleOverride(TextFieldStyleOverride)', '覆盖 normal、hovered、disabled、readOnly、focusVisible 样式。']
         ],
         usage: 'auto name = std::make_shared<oneui::TextField>(L"请输入项目名称");\nname->setPrefixIcon(oneui::IconSymbol::Search);\nname->setOnChanged([](const std::wstring& value) { validate(value); });',
-        notes: ['TextField 是单行输入。', '跨语言调用时文本参数使用 wchar_t*。']
+        notes: ['TextField 是单行输入；TextArea 继承文字选项与编辑能力，普通段落按字素编辑，终端保持固定单元格。', '密码按字素遮罩，不向 surrounding-text 或 Canvas 暴露明文；复制和剪切禁用。', '跨语言优先使用带长度 UTF-8 C API；legacy wchar_t 随平台为 UTF-16 或 UTF-32。', 'Unicode 一致性修复已通过；原生 IME 验收仍待完成，不能等同于全平台发布支持。']
       },
       {
         name: 'Select',
@@ -310,7 +319,7 @@ export const componentGroups = [
           ['setStyleOverride(SelectStyleOverride)', '覆盖 normal、hovered、pressed、disabled、selected、focusVisible 样式。']
         ],
         usage: 'auto mode = std::make_shared<oneui::Select>();\nmode->setItems({L"自动", L"手动", L"只读"});\nmode->setSelectedIndex(0);',
-        notes: ['当前 popup 行为仍偏轻量，完整 Overlay 迁移需要继续演进。', 'C ABI 暂未暴露 Select。']
+        notes: ['Popup 在 OverlayHost 内路由与裁剪，模态输入和原生 IME 仍需对应平台验收。', 'C ABI 已有 oneui_select_create/set_items_utf8/set_selected_index/selected_index/set_on_changed。']
       },
       {
         name: 'RadioGroup',
@@ -407,7 +416,7 @@ export const componentGroups = [
           ['setStyleSheet(std::shared_ptr<StyleSheet>, StyleNode)', '应用 CSS-like 样式。']
         ],
         usage: 'auto tile = std::make_shared<oneui::Tile>(L"远程协助", L"连接到一台设备");\ntile->setLeadingSymbol(oneui::IconSymbol::RemoteAssist);',
-        notes: ['当前未被 <oneui/oneui.h> 聚合，需要直接 include。', 'C ABI 已提供 oneui_tile_*。']
+        notes: ['已由 <oneui/oneui.h> 聚合，也可按需 include。', 'C ABI 已提供 oneui_tile_*。']
       },
       {
         name: 'StatusStrip',
@@ -421,10 +430,11 @@ export const componentGroups = [
           ['setSecondaryAction(std::wstring)', '设置次操作按钮文本。'],
           ['setOnPrimaryAction(std::function<void()>)', '主操作回调。'],
           ['setOnSecondaryAction(std::function<void()>)', '次操作回调。'],
+          ['setPrimaryActionPresentation / setPrimaryActionTrailingIcon', '主操作可以链接形式呈现，并附 trailing 图标。'],
           ['setStyleSheet(std::shared_ptr<StyleSheet>, StyleNode)', '应用 CSS-like 样式。']
         ],
         usage: 'auto strip = std::make_shared<oneui::StatusStrip>(L"已连接", L"延迟 24ms");\nstrip->setPrimaryAction(L"断开");',
-        notes: ['当前未被 <oneui/oneui.h> 聚合。', 'C ABI 已提供 oneui_status_strip_*。']
+        notes: ['已由 <oneui/oneui.h> 聚合。', 'C ABI 已提供 oneui_status_strip_*。']
       },
       {
         name: 'Toast',
@@ -442,17 +452,18 @@ export const componentGroups = [
           ['setStyleSheet(std::shared_ptr<StyleSheet>, StyleNode)', '应用 CSS-like 样式。']
         ],
         usage: 'auto toast = std::make_shared<oneui::Toast>(L"保存成功", L"配置已写入本机");\ntoast->setCloseVisible(true);',
-        notes: ['当前未被 <oneui/oneui.h> 聚合。', '通常应放进 OverlayHost。']
+        notes: ['已由 <oneui/oneui.h> 聚合。', '通常应放进 OverlayHost。']
       },
       {
         name: 'WindowTitleBar',
         include: '#include <oneui/controls/window_title_bar.h>',
-        purpose: '自绘窗口标题栏，适合 borderless Win32 窗口。',
+        purpose: '自绘窗口标题栏，支持 borderless 窗口；Wayland 标准窗口也复用此组件绘制客户端装饰。',
         constructor: 'WindowTitleBar(std::wstring title = L"")',
         api: [
           ['setTitle(std::wstring)', '设置标题。'],
           ['setIconSymbol(IconSymbol)', '设置窗口图标。'],
           ['setMaximized(bool)', '设置最大化视觉状态。'],
+          ['setLeading(widget) / setAccessory(widget)', '在标题栏挂载 leading 和交互附件；拖拽边界由窗口管理。'],
           ['setOnMinimize / setOnMaximize / setOnClose', '设置窗口控制按钮回调。'],
           ['setStyleSheet(std::shared_ptr<StyleSheet>, StyleNode)', '应用标题栏样式。']
         ],
@@ -542,7 +553,7 @@ export const componentGroups = [
         purpose: '显示远程画面最新帧，并按 ActualSize、Fit、Fill、Stretch 计算内容矩形。',
         constructor: 'RealtimeFrameView()',
         api: [
-          ['submitFrame(VideoFrame)', '提交一帧 BGRA/RGBA/NV12 数据。'],
+          ['submitFrame(VideoFrame)', '提交 BGRA/RGBA 帧；NV12 仅保留枚举，未实现转换。'],
           ['setScaleMode(ScaleMode) / scaleMode()', '设置或读取缩放模式。'],
           ['contentRect()', '读取当前帧在控件中的实际显示矩形。'],
           ['latestFrame()', '读取最新帧快照。']
@@ -560,13 +571,56 @@ export const componentGroups = [
           ['setScaleMode(RemoteInputScaleMode) / scaleMode()', '设置坐标映射缩放模式。'],
           ['contentRect()', '读取远端画面在本地控件中的内容矩形。'],
           ['setOnPointer(PointerCallback)', '设置指针事件回调，包含本地、内容、归一化、远端坐标。'],
-          ['setOnRawKey(RawKeyCallback)', '设置原始键盘事件回调。'],
+          ['setOnRawKey(RawKeyCallback)', '设置原始键盘事件回调；Control 和 Meta 保留物理含义。'],
+          ['setOnTextInput(TextInputCallback)', '接收 IME/Unicode 提交文本，与可打印原始按键去重。'],
+          ['setRemoteCursorMode / setRemoteCursorBitmap', '默认、隐藏或位图远程光标；支持线程安全更新句柄。'],
           ['dispatchPointer(RemotePointerEvent)', '手动派发指针事件。'],
           ['dispatchRawKey(RawKeyEvent)', '手动派发键盘事件。'],
           ['releaseAllInputs()', '释放所有已按下输入，适合连接断开或焦点丢失。']
         ],
         usage: 'region->setRemoteSize(oneui::Size{1920, 1080});\nregion->setOnPointer([](const oneui::RemotePointerEvent& e) {\n  sendPointer(e.remotePosition, e.button, e.pressed);\n});',
         notes: ['坐标映射必须和 RealtimeFrameView 使用同一种 scale mode。']
+      }
+    ]
+  },
+  {
+    title: '数据、终端与工作区原语',
+    description: '这些控件复用共享 Canvas 和输入路由，并具有 C ABI 与安全 Rust 入口；平台服务的可用性需独立查询。',
+    items: [
+      {
+        name: 'VirtualList', include: '#include <oneui/controls/virtual_list.h>',
+        purpose: '固定行高的虚拟列表；普通 ListItem 与富 VirtualListItem 分离。', constructor: 'VirtualList()',
+        api: [
+          ['setRichItems / updateRichItem', '批量与原位更新 title、detail、badge、trailing、状态指示和颜色。'],
+          ['setRichMetrics / richMetrics', '配置和读取富行指标；窄行压缩或裁剪，不覆盖文字。'],
+          ['setScrollOffset / setSelectedIndices', '管理滚动及选择；worker handle 合并后台数据更新。']
+        ],
+        usage: 'auto list = std::make_shared<oneui::VirtualList>();',
+        notes: ['C ABI 的 OneUiRichListItemUtf8 和 Rust VirtualListItem 对应富条目。', '原位更新保留滚动和选择。']
+      },
+      {
+        name: 'TreeView', include: '#include <oneui/controls/tree_view.h>',
+        purpose: '使用稳定 ID 的层级树。', constructor: 'TreeView()',
+        api: [['setItems / setSelectedId', '提交层级数据、按 ID 选择。'], ['setExpanded / setOnExpansionChanged', '展开与变化回调。'], ['setOnReorderRequested', '报告重排请求，由产品更新数据。']],
+        usage: 'auto tree = std::make_shared<oneui::TreeView>();', notes: ['C ABI、safe Rust 共享 ID 和选择契约。']
+      },
+      {
+        name: 'TerminalView', include: '#include <oneui/controls/terminal_view.h>',
+        purpose: '终端网格、宽字符单元格、光标、选区与输入回调。', constructor: 'TerminalView()',
+        api: [['setGrid / setCursor', '更新单元格和光标。'], ['textInputCaretRect', '提供输入法候选位置。'], ['setOnTextInput', '接收完整 Unicode 提交文本。']],
+        usage: 'auto terminal = std::make_shared<oneui::TerminalView>();', notes: ['剪贴板需平台能力支持。', '后台更新使用 TerminalHandle。']
+      },
+      {
+        name: 'LogView', include: '#include <oneui/controls/log_view.h>',
+        purpose: '带逐行颜色和选择复制的只读日志。', constructor: 'LogView()',
+        api: [['appendLine / clearLines', '追加和清空日志。'], ['contentHeight', '供 ScrollView 计算内容高度。'], ['selectAll / selectedText', '读取选区文本。']],
+        usage: 'auto log = std::make_shared<oneui::LogView>();', notes: ['内容滚动由外层 ScrollView 承担。']
+      },
+      {
+        name: 'TimeSeriesChart', include: '#include <oneui/controls/time_series_chart.h>',
+        purpose: '带空洞、阈值、曲线与 inspection 的时间序列图。', constructor: 'TimeSeriesChart()',
+        api: [['setSeries / setRange', '设置序列与范围。'], ['setThresholds', '配置阈值线。'], ['setInspectionIndex / setOnInspectionChanged', '查看数据点与固定检查状态。']],
+        usage: 'auto chart = std::make_shared<oneui::TimeSeriesChart>();', notes: ['提供结构化 C ABI 与 safe Rust；静态/动态链接共用同一绘制实现。']
       }
     ]
   },
@@ -635,7 +689,7 @@ export const componentGroups = [
           ['StyleBoxTransition::applyTo(StyleBox&)', '把过渡值写入样式盒。']
         ],
         usage: 'oneui::FloatTransition opacity;\nopacity.reset(0.0f);\nopacity.animateTo(1.0f, oneui::TransitionSpec{160, oneui::EasingCurve::EaseOutCubic});',
-        notes: ['当前未被 <oneui/oneui.h> 聚合，需要直接 include。']
+        notes: ['已由 <oneui/oneui.h> 聚合，也可按需 include。']
       }
     ]
   }
@@ -646,10 +700,10 @@ export const layoutComponents = [
   ['Grid', '固定列数网格。setColumns、setGap、setColumnGap、setRowGap、setPadding、setAutoRows。适合仪表盘卡片和入口矩阵。不是浏览器 CSS Grid。'],
   ['Wrap', '自动换行布局。setGap、setRowGap、setPadding。适合标签、筛选项、快捷操作按钮。'],
   ['DockView', '五区布局。setTop、setRight、setBottom、setLeft、setCenter，外加 gap 和 padding。适合传统桌面应用外壳。'],
-  ['SplitView', '水平或垂直分栏。setFirst、setSecond、setOrientation、setSplitRatio、setGap、setPadding。当前偏静态比例，不是完整可拖拽 splitter。'],
+  ['SplitView', '水平或垂直分栏。setFirst、setSecond、setOrientation、setSplitRatio、setGap、setPadding。支持拖拽 splitter、最小尺寸、比例变化和 committed 回调。'],
   ['ScrollView', '滚动容器。setContent、setContentWidth、setContentHeight、setWheelStep、setHorizontalScrollOffset、setScrollOffset，并提供最大滚动偏移读取。'],
-  ['AppShell', '应用壳。setSidebar、setHeader、setContent、setFooter，可设置 sidebarWidth、headerHeight、footerHeight、gap、padding、sidebarVisible。'],
-  ['TopBar', '顶部工具栏。setLeading、addAction、clearActions、setPadding、setGap、setLeadingWidth。当前未被 oneui.h 聚合。'],
+  ['AppShell', '应用壳。setSidebar、setHeader、setContent、setFooter，可设置 sidebarWidth、headerHeight、footerHeight、gap、padding、sidebarVisible，以及跨侧栏 footer。'],
+  ['TopBar', '顶部工具栏。setLeading、addAction、clearActions、setPadding、setGap、setLeadingWidth。已由 oneui.h 聚合。'],
   ['ProductShell', '产品壳控件。setSidebar、setTopbar、setContent、setStatus，并可设置宽高、gap、padding、sidebarVisible。']
 ]
 
@@ -694,23 +748,25 @@ export const cApiGroups = [
   ['Display', 'oneui_label_*、oneui_icon_*、oneui_badge_*、oneui_card_*、oneui_tile_*、oneui_status_strip_*、oneui_toast_*'],
   ['Input', 'oneui_button_*、oneui_icon_button_*、oneui_switch_*、oneui_radio_group_*、oneui_text_field_*、oneui_search_box_create'],
   ['Chrome / Nav', 'oneui_title_bar_*、oneui_nav_item_*'],
-  ['未覆盖提醒', 'Select、Tabs、List、Table、Slider、Popup、RealtimeFrameView、RemoteInputRegion 等目前主要通过 C++ API 使用。']
+  ['Data / Remote', 'oneui_select_*、oneui_tabs_*、oneui_list_*、oneui_virtual_list_*、oneui_table_*、oneui_tree_view_*、oneui_slider_*、oneui_popup_*、oneui_terminal_view_*、oneui_realtime_frame_view_*、oneui_remote_input_region_*；对应安全 Rust 类型和 worker handle。'],
+  ['Backend capabilities', 'oneui_window_backend、oneui_window_capabilities、oneui_window_initialize_checked；返回后端、受限能力与初始化结果。']
 ]
 
 export const bindingRows = [
-  ['C', '直接 include oneui_c_api.h，链接 oneui.lib 或动态加载 oneui.dll。'],
+  ['新增交互接口', 'C/C++/Rust 同步提供作用域命令注册、查询/执行，文字方向/语言/换行及 UTF-8 位置。C 显式释放注册，C++/Rust 对象释放即注销；标准 SDK 包含完整文字依赖，不再沿用历史 5 MB 硬上限。'],
+  ['C', 'include oneui_c_api.h，通过 OneUI::oneui 链接 DLL / .so / .dylib；平台状态见支持矩阵。'],
   ['C++', '优先使用完整 C++ API；在插件边界、脚本边界或二进制边界可使用 C ABI。'],
-  ['Rust', '使用 bindgen 或手写 extern "C"。注意 wchar_t*、回调生命周期和 UI 线程。'],
+  ['Rust', '使用仓库 oneui-sys 与安全 oneui crate；RAII、UTF-8、panic 边界、dispatcher 和 worker handle 已封装。'],
   ['Go', '可通过 cgo 或 syscall/windows 调用 DLL。复杂回调场景建议先封装一层 C。'],
-  ['C#', '使用 DllImport/PInvoke 声明结构体和函数。字符串按 UTF-16 宽字符处理。'],
+  ['C#', '使用 DllImport/PInvoke 声明结构体和函数。优先使用带长度 UTF-8 结构；仅 legacy Windows 宽字符接口按 UTF-16 处理。'],
   ['Python', '使用 ctypes/cffi 加载 oneui.dll。必须保存 callback 对象引用，避免被 GC 回收。'],
   ['Node.js', '通过 ffi-napi、N-API addon 或自定义 native addon 包装 C ABI。'],
   ['Java/Kotlin', '通过 JNI/JNA 调用 C ABI。复杂 UI 生命周期建议封装成更小的 Java API。'],
-  ['其他 FFI 语言', '只要能加载 DLL、按 C 调用约定传参，并处理宽字符和回调，就可以接入。']
+  ['其他 FFI 语言', '只要能加载目标平台动态库、按 C 调用约定传参，并处理 UTF-8/所有权和回调，就可以接入已暴露的子集。']
 ]
 
 export const cAbiRules = [
-  ['字符串', '公开 C ABI 的文本多使用 const wchar_t*，在 Windows 上通常按 UTF-16 宽字符传递。'],
+  ['字符串', '跨平台优先使用带长度 UTF-8 view。legacy wchar_t 在 Windows 为 UTF-16，Linux/macOS 为 UTF-32，不能混用。'],
   ['生命周期', 'window、widget、style_sheet 都有 destroy 函数。谁创建，谁负责在合适时机释放。'],
   ['回调', '函数指针和 user_data 必须在控件可能触发事件期间保持有效。托管语言要防止回调被 GC。'],
   ['线程', 'UI 对象应在 UI 线程访问。后台线程更新 UI 时使用 oneui_window_post。'],
@@ -719,23 +775,29 @@ export const cAbiRules = [
 ]
 
 export const testRows = [
+  ['oneui_text_layout_tests / oneui_interaction_tests', '已接入', '固定许可字体、字素/连字/Bidi 几何、确定性时钟与回放、模态命令、密码、回调销毁；不代替真机 IME。'],
+  ['oneui_unicode_conformance_tests', '回归通过', '固定 Unicode 15.1 分段和 Bidi 全量数据通过；分词显式校验 ICU 冒号定制规则。包含括号容量、隔离和回退回归，不替代原生 IME 验收。'],
+  ['oneui_reactive_lifetime_tests / oneui_interaction_c_api_tests', '已接入', 'State/Binding 销毁顺序、立即注销、重入通知、注册上下文与跨语言位置边界。'],
   ['oneui_control_behavior_tests', '已覆盖', '控件状态、样式覆盖、可访问性、Popup 几何等基础行为。'],
   ['oneui_overlay_host_behavior_tests', '已覆盖', 'Overlay 层级、焦点和外部指针边界。'],
   ['oneui_scroll_view_behavior_tests', '已覆盖', '滚动偏移、越界 clamp、水平滚动等。'],
-  ['oneui_stack_behavior_tests', 'CMake 已列出', '本地旧 build 可能未重新 configure，需要重新生成后确认。'],
-  ['oneui_panel_behavior_tests', 'CMake 已列出', '本地旧 build 可能未重新 configure，需要重新生成后确认。'],
-  ['oneui_c_api_behavior_tests', 'CMake 已列出', '用于验证 C ABI 基础行为。'],
-  ['oneui_monitor_behavior_tests', '旧构建失败', '旧构建中退出码 0xc0000135，疑似 DLL 查找问题。']
+  ['oneui_stack_behavior_tests', '已覆盖', 'Stack 约束、内容范围与布局行为。'],
+  ['oneui_panel_behavior_tests', '已覆盖', 'Panel 布局与边界。'],
+  ['oneui_c_api_behavior_tests', '已覆盖', 'C ABI 行为；另有工作区、图表与静态链接测试。'],
+  ['oneui_monitor_behavior_tests', '已覆盖', '显示器结构与平台能力；目标机器多屏仍需原生验收。'],
+  ['oneui_portable_text_tests', '已覆盖', 'UTF-8/native wchar、emoji scalar 编辑、组合取消、原子提交和快捷键。'],
+  ['oneui_backend_contract_tests / oneui_system_clipboard_tests', '分开验证', '窗口调度/多窗口退出；缺少 Wayland 输入序号的剪贴板用例明确跳过，不计验收通过。'],
+  ['oneui_abi_sync', '自动检查', 'C/Rust ABI 常量与显式 FFI 支持符号清单。']
 ]
 
 export const faqItems = [
   {
     label: 'OneUI 现在是否任何语言都能调用？',
-    content: '准确说：任何能调用 Windows DLL 的语言，理论上都能通过 oneui_c_api.h 暴露的 C ABI 调用 OneUI 的一部分能力。但 C ABI 不是完整 C++ API 镜像，部分控件仍只能直接用 C++。'
+    content: '任何能调用目标平台 C 动态库的语言都可接入已暴露的 ABI 子集。安全 Rust 已随仓库提供，其他语言仍需自行处理回调与所有权；C ABI 不是完整 C++ API 的逐项镜像。'
   },
   {
     label: '为什么有些组件头文件没有出现在 <oneui/oneui.h>？',
-    content: '这是当前审查发现的 API 聚合问题。组件实现和单独头文件已经存在，但聚合头还没更新。现在使用这些组件时直接 include 对应头文件即可，后续应在项目源码中修复聚合头。'
+    content: '当前聚合头已补齐常用公开控件，包括 VirtualList、TerminalView、TimeSeriesChart、IconButton、Toast、StatusStrip 等；按需包含单组件头文件仍然有效。'
   },
   {
     label: 'StyleSheet 是完整 CSS 吗？',
@@ -743,6 +805,6 @@ export const faqItems = [
   },
   {
     label: 'Linux 和 macOS 当前能用吗？',
-    content: '当前不能当成可用后端。仓库里有 skeleton 和规划痕迹，但真正可运行实现是 Windows Win32。'
+    content: 'X11/Wayland 已在 WSLg 构建运行，Cocoa 源码已接入但未在 Mac 构建。Ubuntu 真机、国产发行版、ARM64、Mac 和完整 IME/多屏验收均未完成，不能提前宣称全面支持。'
   }
 ]

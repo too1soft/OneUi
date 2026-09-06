@@ -1,15 +1,18 @@
 # OneUI Platform Backend Contract
 
-日期：2026-05-28
+更新：2026-09-03
 
 本文定义 OneUI 的跨平台后端契约。目标是让 `core`、`controls`、`layout`、`style`、`animation` 等组件层保持平台无关；Windows、macOS、Linux 只实现自己的 platform backend。下游产品，例如 Remote、网云穿、iShell，只能通过 OneUI C ABI 和通用组件组合界面，不能绕过 OneUI 直接写平台 GUI。
 
 ## 当前状态
 
-- 已实现：Win32 backend。
-- 未实现：macOS Cocoa backend、Linux X11/Wayland backend。
-- 已具备跨平台结构：组件层、布局层、样式层、C ABI 与 `Window` 抽象已经分离。
-- 尚未完成跨平台运行：macOS/Linux 目前仍是 skeleton，必须补齐窗口、事件、输入、渲染、DPI、剪贴板等后端能力。
+- Win32 保留既有行为，完整 Skia Canvas/文字缓存已移入私有共享模块。
+- X11/Wayland 源码已接入并在 WSLg 构建运行；Cocoa 源码已接入，尚无 Mac 构建证据。
+- 是否已构建与是否已原生验收分开记录，完整矩阵见 [原生桌面后端指南](37-native-desktop-backends.md)。
+- 绝对位置、主动激活、输入法协议和剪贴板等差异必须通过 `Window::capabilities()` 表达。
+- 本轮私有 `src/text/` 统一排版、测量、命中和选区；后端传递输入法会话与候选窗几何，
+  不重新估算字符宽度。逻辑 Primary 与原始 Control/Meta 分离，焦点离开必须取消旧组合会话。
+  Unicode 一致性修复及其余构建/原生验收条件见[当前状态](38-text-and-interaction-engine.md)，不沿用旧基线通过结论。
 
 这意味着以后支持 macOS/Linux 时，不应该重写 `Button`、`TextField`、`ProductShell`、`NavItem`、`Tile` 等组件；应该补齐平台后端，让这些组件继续复用。
 
@@ -17,7 +20,7 @@
 
 1. `include/oneui/controls` 和 `src/core` 不得包含 Win32、Cocoa、X11、Wayland 头文件。
 2. `src/capi` 不得调用 Win32/Cocoa/X11/Wayland API；C ABI 只能调用 OneUI 抽象。
-3. 平台后端实现只允许放在 `src/platform/<platform>`。
+3. 平台后端实现只允许放在 `src/platform/`；私有共享 Canvas/调度器放在 `shared/`，平台服务放在内部服务层。
 4. 组件层只能使用 OneUI 抽象：`Window`、`Canvas`、`Clipboard`、`Widget`、`CursorKind`、`MouseEvent`、`KeyEvent`、`TextInput`、`StyleSheet`。
 5. 下游产品不得直接依赖平台窗口句柄实现通用 GUI 行为。
 
@@ -47,6 +50,7 @@
 - `nativeHandle` 只用于高级集成和诊断，普通控件不得依赖它。
 - 最大化、还原、全屏、退出全屏必须尽量使用平台原子操作，避免白屏、旧帧闪烁和可见中间态。
 - `WindowPlacement` 只用于窗口状态往返持久化；边界是正常还原状态下的窗口外框，平台后端必须在恢复时校正到可见工作区。
+- Wayland 不支持绝对位置持久化，未声明 Placement 能力时必须返回失败，不能伪造成功。
 - 下游产品不得轮询窗口位置，也不得在移动或缩放热路径中写数据库；推荐在首次显示前恢复、在消息循环退出后保存一次。
 
 ### 2. Event Loop And Scheduling
@@ -219,6 +223,6 @@
 
 1. 继续保持 Win32 backend 稳定。
 2. 补充 backend smoke：窗口状态、输入、resize、clipboard、cursor。
-3. macOS 优先实现 Cocoa window skeleton：窗口生命周期、Skia surface、事件循环、鼠标/键盘、clipboard。
-4. Linux 再按实际发行目标选择 X11 first 或 Wayland first。
+3. Cocoa 源码已接入；补齐 Intel/Apple Silicon 原生构建和主线程输入验收。
+4. X11 与原生 Wayland 分别验收；国产发行版与 ARM64 独立构建，不混用 Ubuntu 产物。
 5. 每补一个平台能力，都先落入 OneUI 抽象和测试，再给 Remote 使用。

@@ -80,6 +80,17 @@ void StateView::setIcon(IconSymbol symbol) {
     invalidate();
 }
 
+void StateView::setIconSize(Size size) {
+    iconSize_.width = std::max(1.0f, size.width);
+    iconSize_.height = std::max(1.0f, size.height);
+    invalidate();
+}
+
+void StateView::setContentOffsetY(float offset) {
+    contentOffsetY_ = offset;
+    invalidate();
+}
+
 void StateView::setAction(std::wstring text) {
     action_ = std::move(text);
     if (action_.empty()) {
@@ -197,14 +208,18 @@ StateView::Layout StateView::layout() const {
     const Rect content = frame().inset(resolvedStyle().padding.value_or(Insets{24.0f, 24.0f, 24.0f, 24.0f}));
     const float width = std::min(520.0f, std::max(0.0f, content.width));
     const float x = content.x + (content.width - width) * 0.5f;
-    const float groupHeight = action_.empty() ? 122.0f : 172.0f;
-    const float y = content.y + std::max(0.0f, (content.height - groupHeight) * 0.5f);
+    const float groupHeight = iconSize_.height + (action_.empty() ? 82.0f : 132.0f);
+    const float centeredY = content.y + std::max(0.0f, (content.height - groupHeight) * 0.5f);
+    const float y = std::clamp(
+        centeredY + contentOffsetY_,
+        content.y,
+        content.y + std::max(0.0f, content.height - groupHeight));
 
     Layout result;
-    result.icon = Rect{content.x + (content.width - 40.0f) * 0.5f, y, 40.0f, 40.0f};
-    result.title = Rect{x, y + 52.0f, width, 28.0f};
-    result.message = Rect{x, y + 84.0f, width, 34.0f};
-    result.action = Rect{content.x + (content.width - 120.0f) * 0.5f, y + 136.0f, 120.0f, 36.0f};
+    result.icon = Rect{content.x + (content.width - iconSize_.width) * 0.5f, y, iconSize_.width, iconSize_.height};
+    result.title = Rect{x, y + iconSize_.height + 12.0f, width, 28.0f};
+    result.message = Rect{x, y + iconSize_.height + 44.0f, width, 34.0f};
+    result.action = Rect{content.x + (content.width - 120.0f) * 0.5f, y + iconSize_.height + 96.0f, 120.0f, 36.0f};
     return result;
 }
 

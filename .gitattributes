@@ -1,4 +1,7 @@
 * text=auto eol=lf
+# Unified patches use a single space to encode blank context lines. Their
+# added source lines are checked by git apply --whitespace=error instead.
+third_party/patches/*.patch whitespace=-blank-at-eol
 *.png binary
 *.zip binary
 *.ico binary

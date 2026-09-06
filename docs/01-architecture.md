@@ -5,7 +5,7 @@
 
 ## 设计目标
 
-OneUI 是一个原生、自绘、保留式桌面 UI 框架，当前专注 Win32。核心目标是：
+OneUI 是一个原生、自绘、保留式桌面 UI 框架，Windows 产品主线与 Linux/macOS 开发路径共享组件。核心目标是：
 
 - 在没有浏览器/WebView 的前提下提供一致的桌面控件与产品外壳；
 - 把平台窗口、输入、DPI、剪贴板、文件对话框与跨平台控件逻辑分离；
@@ -30,7 +30,7 @@ Style and rendering
   StyleSheet | typed adapters | Canvas | Skia raster
                          |
 Platform backend
-  Win32 window/messages/DPI/IME path/clipboard/dialogs/tray/presentation
+  Win32 | Cocoa | X11 | Wayland window/input/DPI/clipboard/presentation
 ```
 
 ### 1. 公开 C++ 层
@@ -105,7 +105,9 @@ Win32 后端当前使用 Skia raster。Core 不直接包含 Win32 HWND/GDI 消�
 - 显示器、窗口 placement、剪贴板、文件/目录选择、confirm/prompt 和托盘；
 - tooltip 窗口与布局树同步快照。
 
-Linux/macOS 文件是未接线骨架；调用窗口/剪贴板会明确失败，避免静默退化。
+Linux 使用 Xlib/XIM 或 Wayland 协议，macOS 使用 Cocoa Objective-C++。完整 Canvas、路径转换、
+文字缓存放在 `src/platform/shared`；字体发现由 DirectWrite/GDI、Fontconfig/FreeType、CoreText 提供。
+C API 原生服务已隔离到 `src/platform/native_services.cpp`。构建/验收状态见 [后端矩阵](37-native-desktop-backends.md)。
 
 ## 互操作层
 
@@ -235,7 +237,7 @@ Rust workspace另行验证 safe wrapper、dispatcher、callback 生命周期、p
 
 - Win32 UI Automation bridge 尚未完成；现阶段是内部语义元数据，不应宣称系统读屏完整支持；
 - StyleSheet 不是完整 CSS；
-- Linux/macOS 没有消息循环、输入、DPI、字体、剪贴板和呈现实现；
+- Linux/macOS 已接入后端源码，但 Mac 构建、国产发行版、ARM64 及完整原生交互验收尚未完成；
 - ABI 仍处于 0.x 版本收敛期；
 - 布局 JSON 是结构/几何证据，不替代像素视觉测试；
 - 产品仍负责异步业务、数据持久化、路由和错误恢复，OneUI 不接管业务状态机。

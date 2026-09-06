@@ -1,6 +1,14 @@
 #include "oneui/platform/monitor.h"
+#include "oneui/platform/window.h"
 
 #include <iostream>
+
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
 
 namespace {
 
@@ -32,10 +40,31 @@ void testMonitorEnumerationHasStableShape() {
     expectTrue("Monitor enumeration has a primary monitor", hasPrimary);
 }
 
+#ifdef _WIN32
+void testCloseToTrayOwnsARecoverableTrayEntry() {
+    auto window = oneui::Window::create(oneui::WindowOptions{L"OneUI tray test", 320, 180, false});
+    expectTrue("Tray test window creates", window != nullptr);
+    if (!window) {
+        return;
+    }
+    window->initialize();
+    window->setCloseToTray(true);
+    if (GetShellWindow() != nullptr) {
+        expectTrue("Close-to-tray creates a tray icon", window->trayIconVisible());
+    }
+    window->setCloseToTray(false);
+    expectTrue("Disabling close-to-tray removes the tray icon", !window->trayIconVisible());
+    window->close();
+}
+#endif
+
 } // namespace
 
 int main() {
     testMonitorEnumerationHasStableShape();
+#ifdef _WIN32
+    testCloseToTrayOwnsARecoverableTrayEntry();
+#endif
 
     if (failures != 0) {
         std::cerr << failures << " monitor behavior test(s) failed.\n";

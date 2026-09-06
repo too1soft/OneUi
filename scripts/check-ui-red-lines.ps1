@@ -23,7 +23,9 @@ $scanRoots = @(
 $rules = @(
     @{
         Id = "NO_DIRTY_RECT_SIDEBAR_X_MAGIC";
-        Pattern = "(requestRedrawRect|requestRedraw|invalidate|dirty|repaint).*(rect\.x|sidebar)|(rect\.x|sidebar).*(requestRedrawRect|requestRedraw|invalidate|dirty|repaint)";
+        # Numeric x thresholds/offsets and sidebar branches are product magic.
+        # Generic rectangle unions (std::min/max of two bounds) are not.
+        Pattern = "(requestRedrawRect|requestRedraw|invalidate|dirty|repaint).*(rect\.x\s*(?:[<>!=]=?|[+-])\s*-?\d|sidebar)|(rect\.x\s*(?:[<>!=]=?|[+-])\s*-?\d|sidebar).*(requestRedrawRect|requestRedraw|invalidate|dirty|repaint)";
         Scope = "all";
         Message = "Do not special-case sidebar or rect.x in dirty rect, repaint, or invalidate paths. Fix generic invalidation, clipping, and painting instead.";
     },
@@ -39,7 +41,7 @@ $violations = New-Object System.Collections.Generic.List[string]
 
 foreach ($root in $scanRoots) {
     $files = Get-ChildItem -LiteralPath $root -Recurse -File |
-        Where-Object { $_.Extension -in @(".cpp", ".cc", ".cxx", ".h", ".hpp", ".rs") }
+        Where-Object { $_.Extension -in @(".cpp", ".cc", ".cxx", ".mm", ".h", ".hpp", ".rs") }
 
     foreach ($file in $files) {
         $isOneUiFile = $file.FullName.StartsWith((Join-Path $OneUiRoot ""), [System.StringComparison]::OrdinalIgnoreCase)

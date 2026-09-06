@@ -1,0 +1,241 @@
+diff --git a/source/common/ubidi.cpp b/source/common/ubidi.cpp
+index fcf82fa..63f9ef2 100644
+--- a/source/common/ubidi.cpp
++++ b/source/common/ubidi.cpp
+@@ -673,6 +673,8 @@ bracketInit(UBiDi *pBiDi, BracketData *bd) {
+     bd->isoRunLast=0;
+     bd->isoRuns[0].start=0;
+     bd->isoRuns[0].limit=0;
++    bd->isoRuns[0].textStart=0;
++    bd->isoRuns[0].bracketOverflow=false;
+     bd->isoRuns[0].level=GET_PARALEVEL(pBiDi, 0);
+     UBiDiLevel t = GET_PARALEVEL(pBiDi, 0) & 1;
+     bd->isoRuns[0].lastStrong = bd->isoRuns[0].lastBase = t;
+@@ -691,9 +693,11 @@ bracketInit(UBiDi *pBiDi, BracketData *bd) {
+ 
+ /* paragraph boundary */
+ static void
+-bracketProcessB(BracketData *bd, UBiDiLevel level) {
++bracketProcessB(BracketData *bd, UBiDiLevel level, int32_t position) {
+     bd->isoRunLast=0;
+     bd->isoRuns[0].limit=0;
++    bd->isoRuns[0].textStart=position+1;
++    bd->isoRuns[0].bracketOverflow=false;
+     bd->isoRuns[0].level=level;
+     bd->isoRuns[0].lastStrong=bd->isoRuns[0].lastBase=level&1;
+     bd->isoRuns[0].contextDir=(UBiDiDirection)(level&1);
+@@ -711,6 +715,8 @@ bracketProcessBoundary(BracketData *bd, int32_t lastCcPos,
+     if(NO_OVERRIDE(embeddingLevel)>NO_OVERRIDE(contextLevel))   /* not a PDF */
+         contextLevel=embeddingLevel;
+     pLastIsoRun->limit=pLastIsoRun->start;
++    pLastIsoRun->textStart=lastCcPos+1;
++    pLastIsoRun->bracketOverflow=false;
+     pLastIsoRun->level=embeddingLevel;
+     pLastIsoRun->lastStrong=pLastIsoRun->lastBase=contextLevel&1;
+     pLastIsoRun->contextDir=(UBiDiDirection)(contextLevel&1);
+@@ -719,7 +725,7 @@ bracketProcessBoundary(BracketData *bd, int32_t lastCcPos,
+ 
+ /* LRI or RLI */
+ static void
+-bracketProcessLRI_RLI(BracketData *bd, UBiDiLevel level) {
++bracketProcessLRI_RLI(BracketData *bd, UBiDiLevel level, int32_t position) {
+     IsoRun *pLastIsoRun=&bd->isoRuns[bd->isoRunLast];
+     int16_t lastLimit;
+     pLastIsoRun->lastBase=ON;
+@@ -727,6 +733,8 @@ bracketProcessLRI_RLI(BracketData *bd, UBiDiLevel level) {
+     bd->isoRunLast++;
+     pLastIsoRun++;
+     pLastIsoRun->start=pLastIsoRun->limit=lastLimit;
++    pLastIsoRun->textStart=position+1;
++    pLastIsoRun->bracketOverflow=false;
+     pLastIsoRun->level=level;
+     pLastIsoRun->lastStrong=pLastIsoRun->lastBase=level&1;
+     pLastIsoRun->contextDir=(UBiDiDirection)(level&1);
+@@ -872,6 +880,35 @@ bracketProcessClosing(BracketData *bd, int32_t openIdx, int32_t position) {
+     return newProp;
+ }
+ 
++// OneUI: BD16 has a 63-element stack, counting canonical aliases only once.
++// Closed N0c pairs retained by ICU for context correction are not stack entries.
++static UBool
++bracketHasRoom(BracketData *bd, int32_t position) {
++    IsoRun *run=&bd->isoRuns[bd->isoRunLast];
++    int32_t count=0, previous=-1;
++    for(int32_t i=run->start; i<run->limit; ++i) {
++        const Opening &opening=bd->openings[i];
++        if(opening.match>0 && opening.position!=previous) {
++            ++count;
++            previous=opening.position;
++        }
++    }
++    if(count<63) return true;
++    // Overflow invalidates ALL pairs in this sequence, including pairs already
++    // resolved inline. Nested isolates have higher explicit levels; other level
++    // runs reset textStart. NSMs have not yet inherited N0 results at this point.
++    UBiDi *bidi=bd->pBiDi;
++    for(int32_t i=run->textStart; i<position; ++i) {
++        if(bidi->levels[i]==bidi->levels[position] && bidi->dirProps[i]<=R &&
++           ubidi_getPairedBracketType(bidi->text[i])!=U_BPT_NONE &&
++           ubidi_getCustomizedClass(bidi, bidi->text[i])==U_OTHER_NEUTRAL)
++            bidi->dirProps[i]=ON;
++    }
++    run->limit=run->start;
++    run->bracketOverflow=true;
++    return false;
++}
++
+ /* handle strong characters, digits and candidates for closing brackets */
+ static UBool                            /* return true if success */
+ bracketProcessChar(BracketData *bd, int32_t position) {
+@@ -880,7 +917,10 @@ bracketProcessChar(BracketData *bd, int32_t position) {
+     UBiDiLevel level;
+     dirProps=bd->pBiDi->dirProps;
+     dirProp=dirProps[position];
+-    if(dirProp==ON) {
++    // OneUI: X6 precedes N0. Overridden brackets are L/R, not candidates
++    // for bracket pairing (Unicode 8+ clarification of BD16 and N0).
++    if(dirProp==ON && !pLastIsoRun->bracketOverflow &&
++       !(bd->pBiDi->levels[position]&UBIDI_LEVEL_OVERRIDE)) {
+         char16_t c, match;
+         int32_t idx;
+         /* First see if it is a matching closing bracket. Hopefully, this is
+@@ -898,20 +938,6 @@ bracketProcessChar(BracketData *bd, int32_t position) {
+             pLastIsoRun->lastBase=ON;
+             pLastIsoRun->contextDir=(UBiDiDirection)newProp;
+             pLastIsoRun->contextPos=position;
+-            level=bd->pBiDi->levels[position];
+-            if(level&UBIDI_LEVEL_OVERRIDE) {    /* X4, X5 */
+-                uint16_t flag;
+-                int32_t i;
+-                newProp=level&1;
+-                pLastIsoRun->lastStrong=newProp;
+-                flag=DIRPROP_FLAG(newProp);
+-                for(i=pLastIsoRun->start; i<idx; i++)
+-                    bd->openings[i].flags|=flag;
+-                /* matching brackets are not overridden by LRO/RLO */
+-                bd->pBiDi->levels[position]&=~UBIDI_LEVEL_OVERRIDE;
+-            }
+-            /* matching brackets are not overridden by LRO/RLO */
+-            bd->pBiDi->levels[bd->openings[idx].position]&=~UBIDI_LEVEL_OVERRIDE;
+             return true;
+         }
+         /* We get here only if the ON character is not a matching closing
+@@ -922,7 +948,8 @@ bracketProcessChar(BracketData *bd, int32_t position) {
+         else
+             match=0;
+         if(match!=c &&                  /* has a matching char */
+-           ubidi_getPairedBracketType(c)==U_BPT_OPEN) { /* opening bracket */
++           ubidi_getPairedBracketType(c)==U_BPT_OPEN && /* opening bracket */
++           bracketHasRoom(bd, position)) {
+             /* special case: process synonyms
+                create an opening entry for each synonym */
+             if(match==0x232A) {     /* RIGHT-POINTING ANGLE BRACKET */
+@@ -1001,6 +1028,32 @@ bracketProcessChar(BracketData *bd, int32_t position) {
+     return true;
+ }
+ 
++// OneUI: N0 also assigns the resolved bracket type to following original
++// NSMs which W1 changed to ON. Do this after bracket resolution (including
++// fixN0c), without changing the lastStrong state used by W2/W7 above.
++static void
++resolveBracketNSMs(UBiDi *pBiDi) {
++    const char16_t *text=pBiDi->text;
++    DirProp *props=pBiDi->dirProps;
++    const UBiDiLevel *levels=pBiDi->levels;
++    const int32_t length=pBiDi->length;
++    for(int32_t i=0; i<length; ++i) {
++        if(props[i]>R || (levels[i]&UBIDI_LEVEL_OVERRIDE) ||
++           ubidi_getPairedBracketType(text[i])==U_BPT_NONE ||
++           ubidi_getCustomizedClass(pBiDi, text[i])!=U_OTHER_NEUTRAL)
++            continue;
++        for(int32_t j=i+1; j<length;) {
++            UChar32 c;
++            U16_NEXT(text, j, length, c);
++            const auto original=static_cast<DirProp>(ubidi_getCustomizedClass(pBiDi, c));
++            if(DIRPROP_FLAG(original)&MASK_BN_EXPLICIT) continue; // X9
++            const int32_t position=j-1; // trailing surrogate carries the property
++            if(original!=NSM || props[position]!=ON || levels[position]!=levels[i]) break;
++            props[position]=props[i];
++        }
++    }
++}
++
+ /* perform (X1)..(X9) ------------------------------------------------------- */
+ 
+ /* determine if the text is mixed-directional or single-directional */
+@@ -1129,7 +1182,7 @@ resolveExplicitLevels(UBiDi *pBiDi, UErrorCode *pErrorCode) {
+                     if((i+1)<length) {
+                         if(text[i]==CR && text[i+1]==LF)
+                             continue;   /* skip CR when followed by LF */
+-                        bracketProcessB(&bracketData, level);
++                        bracketProcessB(&bracketData, level, i);
+                     }
+                     continue;
+                 }
+@@ -1139,6 +1192,7 @@ resolveExplicitLevels(UBiDi *pBiDi, UErrorCode *pErrorCode) {
+                 }
+             }
+         }
++        resolveBracketNSMs(pBiDi);
+         return direction;
+     }
+     {
+@@ -1219,7 +1273,8 @@ resolveExplicitLevels(UBiDi *pBiDi, UErrorCode *pErrorCode) {
+             case LRI:
+             case RLI:
+                 flags|=(DIRPROP_FLAG(ON)|DIRPROP_FLAG_LR(embeddingLevel));
+-                levels[i]=NO_OVERRIDE(embeddingLevel);
++                // X5a/X5b: preserve the outer override on the initiator itself.
++                levels[i]=embeddingLevel;
+                 if(NO_OVERRIDE(embeddingLevel)!=NO_OVERRIDE(previousLevel)) {
+                     bracketProcessBoundary(&bracketData, lastCcPos,
+                                            previousLevel, embeddingLevel);
+@@ -1245,7 +1300,7 @@ resolveExplicitLevels(UBiDi *pBiDi, UErrorCode *pErrorCode) {
+                        will exceed UBIDI_MAX_EXPLICIT_LEVEL before stackLast overflows */
+                     stackLast++;
+                     stack[stackLast]=embeddingLevel+ISOLATE;
+-                    bracketProcessLRI_RLI(&bracketData, embeddingLevel);
++                    bracketProcessLRI_RLI(&bracketData, embeddingLevel, i);
+                 } else {
+                     /* make it WS so that it is handled by adjustWSLevels() */
+                     dirProps[i]=WS;
+@@ -1279,7 +1334,8 @@ resolveExplicitLevels(UBiDi *pBiDi, UErrorCode *pErrorCode) {
+                 embeddingLevel=(UBiDiLevel)stack[stackLast]&~ISOLATE;
+                 flags|=(DIRPROP_FLAG(ON)|DIRPROP_FLAG_LR(embeddingLevel));
+                 previousLevel=embeddingLevel;
+-                levels[i]=NO_OVERRIDE(embeddingLevel);
++                // X6a: the matching PDI inherits the restored outer override.
++                levels[i]=embeddingLevel;
+                 break;
+             case B:
+                 flags|=DIRPROP_FLAG(B);
+@@ -1292,7 +1348,7 @@ resolveExplicitLevels(UBiDi *pBiDi, UErrorCode *pErrorCode) {
+                     stackLast=0;
+                     previousLevel=embeddingLevel=GET_PARALEVEL(pBiDi, i+1);
+                     stack[0]=embeddingLevel; /* initialize base entry to para level, no override, no isolate */
+-                    bracketProcessB(&bracketData, embeddingLevel);
++                    bracketProcessB(&bracketData, embeddingLevel, i);
+                 }
+                 break;
+             case BN:
+@@ -1329,6 +1385,7 @@ resolveExplicitLevels(UBiDi *pBiDi, UErrorCode *pErrorCode) {
+         pBiDi->flags=flags;
+         direction=directionFromFlags(pBiDi);
+     }
++    resolveBracketNSMs(pBiDi);
+     return direction;
+ }
+ 
+diff --git a/source/common/ubidiimp.h b/source/common/ubidiimp.h
+index e48fc6f..bdaf8a3 100644
+--- a/source/common/ubidiimp.h
++++ b/source/common/ubidiimp.h
+@@ -167,6 +167,8 @@ typedef struct Opening {
+ } Opening;
+ 
+ typedef struct IsoRun {
++    int32_t textStart;                  /* OneUI: first text position in this sequence */
++    UBool bracketOverflow;             /* OneUI: BD16 returned an empty pair list */
+     int32_t  contextPos;                /* position of char determining context */
+     uint16_t start;                     /* index of first opening entry for this run */
+     uint16_t limit;                     /* index after last opening entry for this run */

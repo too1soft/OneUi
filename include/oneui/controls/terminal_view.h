@@ -183,6 +183,7 @@ public:
     bool onKeyDown(const KeyEvent& event) override;
     bool onKeyUp(const KeyEvent& event) override;
     bool onTextInput(wchar_t character) override;
+    TextInputState textInputState() const override { return {{}, 0, 0, !disabled() && visible(), false, this}; }
     bool onTextInputText(const std::wstring& text) override;
     Rect textInputCaretRect() const override;
     bool onFocusChanged(bool focused) override;

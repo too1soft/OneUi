@@ -1,7 +1,7 @@
 #include "oneui/controls/icon_button.h"
 
 #include <algorithm>
-#include <chrono>
+#include "internal/ui_clock.h"
 #include <utility>
 
 namespace oneui {
@@ -89,8 +89,7 @@ void paintIconPrimitive(Canvas& canvas, const IconPrimitive& primitive) {
 }
 
 double currentTimeMs() {
-    const auto now = std::chrono::steady_clock::now().time_since_epoch();
-    return std::chrono::duration<double, std::milli>(now).count();
+    return internal::uiTimeMs();
 }
 
 void prewarmIconButtonStyles(const StyleSheet& sheet, const StyleNode& node) {
@@ -144,7 +143,10 @@ void IconButton::paint(Canvas& canvas) {
     const StyleBox box = visualStyle(resolvedStyle());
     paintStyleBox(canvas, rect, box);
 
-    const float iconSize = std::max(12.0f, std::min(rect.width, rect.height) - 14.0f);
+    const Insets iconPadding = box.padding.value_or(Insets{7.0f});
+    const float contentWidth = std::max(0.0f, rect.width - iconPadding.horizontal());
+    const float contentHeight = std::max(0.0f, rect.height - iconPadding.vertical());
+    const float iconSize = std::max(8.0f, std::min(contentWidth, contentHeight));
     const Rect iconRect{
         rect.x + (rect.width - iconSize) * 0.5f,
         rect.y + (rect.height - iconSize) * 0.5f,

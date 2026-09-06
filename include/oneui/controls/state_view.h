@@ -20,6 +20,10 @@ public:
     void setTitle(std::wstring title);
     void setMessage(std::wstring message);
     void setIcon(IconSymbol symbol);
+    /// Sets the visual icon slot while preserving StateView's semantic layout.
+    void setIconSize(Size size);
+    /// Offsets the centered content group on the vertical axis, clamped to content bounds.
+    void setContentOffsetY(float offset);
     void setAction(std::wstring text);
     void setOnAction(std::function<void()> callback);
     void setStyleSheet(std::shared_ptr<StyleSheet> sheet, StyleNode node);
@@ -50,6 +54,8 @@ private:
     std::wstring title_;
     std::wstring message_;
     IconSymbol icon_ = IconSymbol::Server;
+    Size iconSize_{40.0f, 40.0f};
+    float contentOffsetY_ = 0.0f;
     std::wstring action_;
     std::function<void()> onAction_;
     std::shared_ptr<StyleSheet> styleSheet_;

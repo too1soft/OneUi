@@ -4,9 +4,10 @@ out/
 dist/
 
 # 第三方源码 checkout（skia/depot_tools 为独立 git checkout，由脚本重新拉取）
-# 仅保留源码政策文档 README.md
+# 保留源码政策文档和可重复应用的依赖补丁
 third_party/*
 !third_party/README.md
+!third_party/patches/
 
 # IDE / 编辑器
 .vs/

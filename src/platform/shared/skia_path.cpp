@@ -1,4 +1,4 @@
-#include "skia_canvas_win32.h"
+#include "skia_path.h"
 
 #include "include/core/SkMilestone.h"
 #include "include/core/SkPath.h"
@@ -6,15 +6,15 @@
 #include "include/core/SkPathBuilder.h"
 #endif
 
-namespace oneui::win32 {
+namespace oneui::rendering {
 
-SkPath toSkPath(const CanvasPath& path) {
+SkPath toSkPath(const CanvasPath &path) {
 #if SK_MILESTONE >= 150
     SkPathBuilder builder;
 #else
     SkPath native;
 #endif
-    for (const auto& command : path.commands) {
+    for (const auto &command : path.commands) {
         switch (command.verb) {
         case CanvasPathVerb::MoveTo:
 #if SK_MILESTONE >= 150
@@ -36,11 +36,7 @@ SkPath toSkPath(const CanvasPath& path) {
 #else
             native.cubicTo(
 #endif
-                command.first.x,
-                command.first.y,
-                command.second.x,
-                command.second.y,
-                command.third.x,
+                command.first.x, command.first.y, command.second.x, command.second.y, command.third.x,
                 command.third.y);
             break;
         case CanvasPathVerb::Close:
@@ -59,4 +55,4 @@ SkPath toSkPath(const CanvasPath& path) {
 #endif
 }
 
-} // namespace oneui::win32
+} // namespace oneui::rendering

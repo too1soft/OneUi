@@ -1,11 +1,12 @@
 #include "oneui/controls/table.h"
 
+#include "oneui/icon.h"
 #include "oneui/style.h"
 
 #include "reorder_internal.h"
 
 #include <algorithm>
-#include <chrono>
+#include "internal/ui_clock.h"
 #include <cmath>
 #include <string>
 #include <unordered_set>
@@ -15,8 +16,7 @@ namespace oneui {
 namespace {
 
 double currentTimeMs() {
-    const auto now = std::chrono::steady_clock::now().time_since_epoch();
-    return std::chrono::duration<double, std::milli>(now).count();
+    return internal::uiTimeMs();
 }
 
 void applyTableStyleOverride(TableStyle& style, const TableStyleOverride& override) {
@@ -49,6 +49,16 @@ void Table::setColumns(std::vector<TableColumn> columns) {
 }
 
 void Table::setRows(std::vector<std::vector<std::wstring>> rows) {
+    std::vector<std::vector<TableCell>> richRows;
+    richRows.reserve(rows.size());
+    for (const auto& row : rows) {
+        std::vector<TableCell> richRow;
+        richRow.reserve(row.size());
+        for (const auto& text : row) richRow.push_back(TableCell{text});
+        richRows.push_back(std::move(richRow));
+    }
+    rows_ = std::move(rows);
+    richRows_ = std::move(richRows);
     const int dragSource = reorderSourceIndex_;
     const bool notifyCancellation = externalDragging_ && itemDragEnabled_ && onItemDrag_
         && dragSource >= 0 && dragSource < static_cast<int>(itemDragIds_.size());
@@ -62,7 +72,45 @@ void Table::setRows(std::vector<std::vector<std::wstring>> rows) {
     const bool wasUninitialized = selection_.itemCount() == 0
         && previousIndices.empty()
         && selection_.activeIndex() < 0;
-    rows_ = std::move(rows);
+    itemDragIds_.clear();
+    selection_.setItemCount(static_cast<int>(rows_.size()));
+    if (wasUninitialized && !rows_.empty()) selection_.selectOnly(0);
+    hoveredIndex_ = -1;
+    pressedIndex_ = -1;
+    pressedClickCount_ = 1;
+    resetReorderState();
+    scrollOffset_ = std::clamp(scrollOffset_, 0.0f, maxScrollOffset());
+    resetScrollMotion(scrollOffset_);
+    ensureSelectionVisible();
+    notifySelectionChanged(previousIndices, previousSelectedIndex);
+    invalidate();
+    if (notifyCancellation) dragCallback(cancellation);
+}
+
+void Table::setRichRows(std::vector<std::vector<TableCell>> rows) {
+    std::vector<std::vector<std::wstring>> plainRows;
+    plainRows.reserve(rows.size());
+    for (const auto& row : rows) {
+        std::vector<std::wstring> plainRow;
+        plainRow.reserve(row.size());
+        for (const auto& cell : row) plainRow.push_back(cell.text);
+        plainRows.push_back(std::move(plainRow));
+    }
+    const int dragSource = reorderSourceIndex_;
+    const bool notifyCancellation = externalDragging_ && itemDragEnabled_ && onItemDrag_
+        && dragSource >= 0 && dragSource < static_cast<int>(itemDragIds_.size());
+    const ItemDragEvent cancellation{
+        notifyCancellation ? itemDragIds_[static_cast<std::size_t>(dragSource)] : std::wstring{},
+        ItemDragPhase::Cancelled,
+        reorderCurrentPoint_};
+    const auto dragCallback = onItemDrag_;
+    const auto previousIndices = selection_.selectedIndices();
+    const int previousSelectedIndex = selectedIndex();
+    const bool wasUninitialized = selection_.itemCount() == 0
+        && previousIndices.empty()
+        && selection_.activeIndex() < 0;
+    rows_ = std::move(plainRows);
+    richRows_ = std::move(rows);
     itemDragIds_.clear();
     selection_.setItemCount(static_cast<int>(rows_.size()));
     if (wasUninitialized && !rows_.empty()) selection_.selectOnly(0);
@@ -81,13 +129,29 @@ void Table::setRows(std::vector<std::vector<std::wstring>> rows) {
 bool Table::updateRow(std::size_t index, std::vector<std::wstring> row) {
     if (index >= rows_.size()) return false;
     if (rows_[index] == row) return true;
-    rows_[index] = std::move(row);
+    rows_[index] = row;
+    std::vector<TableCell> richRow;
+    richRow.reserve(row.size());
+    for (auto& text : row) richRow.push_back(TableCell{std::move(text)});
+    richRows_[index] = std::move(richRow);
+    invalidate();
+    return true;
+}
+
+bool Table::updateRichRow(std::size_t index, std::vector<TableCell> row) {
+    if (index >= richRows_.size()) return false;
+    std::vector<std::wstring> plainRow;
+    plainRow.reserve(row.size());
+    for (const auto& cell : row) plainRow.push_back(cell.text);
+    rows_[index] = std::move(plainRow);
+    richRows_[index] = std::move(row);
     invalidate();
     return true;
 }
 
 const std::vector<TableColumn>& Table::columns() const { return columns_; }
 const std::vector<std::vector<std::wstring>>& Table::rows() const { return rows_; }
+const std::vector<std::vector<TableCell>>& Table::richRows() const { return richRows_; }
 
 Rect Table::rowFrame(int index) const {
     const TableStyle style = resolvedStyle();
@@ -141,6 +205,14 @@ void Table::setRowHeight(float height) {
 
 float Table::rowHeight() const { return rowHeight_; }
 void Table::setWheelStep(float step) { wheelStep_ = std::max(1.0f, step); }
+
+void Table::setColumnDividersVisible(bool visible) {
+    if (columnDividersVisible_ == visible) return;
+    columnDividersVisible_ = visible;
+    invalidate();
+}
+
+bool Table::columnDividersVisible() const { return columnDividersVisible_; }
 
 void Table::setScrollOffset(float offset) {
     const float next = std::clamp(offset, 0.0f, maxScrollOffset());
@@ -253,7 +325,7 @@ void Table::paint(Canvas& canvas) {
     float x = rect.x;
     for (int columnIndex = 0; columnIndex < static_cast<int>(columns_.size()); ++columnIndex) {
         const float width = columnWidth(columnIndex, remainingWidth, flexibleCount);
-        if (columnIndex > 0) {
+        if (columnDividersVisible_ && columnIndex > 0) {
             canvas.drawLine(Point{x, rect.y}, Point{x, rect.y + rect.height}, style.gridLine, 1.0f);
         }
         canvas.drawTextEllipsized(
@@ -280,12 +352,13 @@ void Table::paint(Canvas& canvas) {
         }
 
         x = rect.x;
-        const auto& values = rows_[static_cast<std::size_t>(rowIndex)];
+        const auto& values = richRows_[static_cast<std::size_t>(rowIndex)];
         for (int columnIndex = 0; columnIndex < static_cast<int>(columns_.size()); ++columnIndex) {
             const float width = columnWidth(columnIndex, remainingWidth, flexibleCount);
-            const std::wstring empty;
-            const auto& text = columnIndex < static_cast<int>(values.size())
+            const TableCell empty;
+            const auto& cell = columnIndex < static_cast<int>(values.size())
                 ? values[static_cast<std::size_t>(columnIndex)] : empty;
+            const auto& text = cell.text;
             const bool usageColumn = columns_[static_cast<std::size_t>(columnIndex)].header == L"使用率"
                 && !text.empty() && text.back() == L'%';
             if (usageColumn) {
@@ -312,9 +385,49 @@ void Table::paint(Canvas& canvas) {
                 x += width;
                 continue;
             }
-            canvas.drawTextEllipsized(
-                text, Rect{x, row.y, width, row.height}.inset(style.cellPadding),
-                style.cellForeground, theme().fontMd, TextAlign::Left);
+            Rect cellRect = Rect{x, row.y, width, row.height}.inset(style.cellPadding);
+            const Color foreground = cell.foreground.value_or(style.cellForeground);
+            float leading = cellRect.x;
+            const float iconSize = std::clamp(cell.iconSize, 12.0f, std::max(12.0f, row.height - 12.0f));
+            if (cell.leadingIcon) {
+                paintIcon(
+                    canvas,
+                    *cell.leadingIcon,
+                    Rect{leading, row.y + (row.height - iconSize) * 0.5f, iconSize, iconSize},
+                    foreground);
+                leading += iconSize + 18.0f;
+            }
+            if (cell.indicator) {
+                constexpr float diameter = 7.0f;
+                canvas.fillEllipse(
+                    Rect{leading, row.y + (row.height - diameter) * 0.5f, diameter, diameter},
+                    *cell.indicator);
+                leading += diameter + 8.0f;
+            }
+            float trailingReserve = 0.0f;
+            if (cell.trailingIcon) trailingReserve = iconSize + 6.0f;
+            Rect textRect{
+                leading,
+                cellRect.y,
+                std::max(0.0f, cellRect.x + cellRect.width - leading - trailingReserve),
+                cellRect.height};
+            canvas.drawTextStyled(
+                text,
+                textRect,
+                foreground,
+                cell.fontSize > 0.0f ? cell.fontSize : theme().fontMd,
+                cell.alignment,
+                cell.fontWeight);
+            if (cell.trailingIcon) {
+                paintIcon(
+                    canvas,
+                    *cell.trailingIcon,
+                    Rect{cellRect.x + cellRect.width - iconSize,
+                         row.y + (row.height - iconSize) * 0.5f,
+                         iconSize,
+                         iconSize},
+                    foreground);
+            }
             x += width;
         }
     }

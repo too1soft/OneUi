@@ -8,6 +8,7 @@ import {
   faqItems,
   layoutComponents,
   navItems,
+  platformRows,
   quickStartSteps,
   reviewFindings,
   stats,
@@ -80,7 +81,7 @@ useSeoMeta({
                 OneUI 官方文档
               </h1>
               <p class="mt-5 max-w-3xl text-lg leading-8 text-slate-600">
-                OneUI 是一个 C++17 自绘桌面 UI 框架，当前重点是 Windows Win32 后端、Skia 绘制、组件化控件、CSS-like 样式系统、C ABI 接入，以及面向远程控制产品的基础界面能力。这份文档会同时说明怎么用、有哪些组件、每个组件有哪些参数和 API，以及当前代码审查发现的风险。
+                OneUI 是一个 C++17 原生自绘桌面 UI 框架，复用 Skia、控件和布局，经 Win32、X11、Wayland 或 Cocoa 接入系统。Windows 为产品主线；Linux 已在 WSLg 构建运行，Cocoa 尚待 Mac 构建。下面明确区分实现、构建和原生验收，不提前承诺全面平台支持。
               </p>
               <div class="mt-7 flex flex-wrap gap-3">
                 <UButton label="快速开始" to="#quick-start" icon="i-lucide-rocket" />
@@ -107,6 +108,14 @@ useSeoMeta({
               </div>
             </UCard>
           </div>
+        </section>
+
+        <section id="platforms" class="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+          <h2 class="text-2xl font-semibold">平台实现与验收矩阵</h2>
+          <UTable class="mt-5" :data="rows(platformRows)" :columns="pairColumns" />
+          <p class="mt-3 text-sm text-slate-600">
+            Linux 使用 ONEUI_LINUX_BACKEND=auto|x11|wayland。Wayland 的位置、激活、输入法和剪贴板权限有明确限制；调用前通过 C++、C 或 Rust 的窗口能力接口查询。托盘、原生文件对话框、系统无障碍桥和签名公证不属于本轮新增平台能力。
+          </p>
         </section>
 
         <section id="quick-start" class="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
@@ -367,7 +376,7 @@ oneui_window_destroy(window);</code></pre>
             跨语言调用
           </h2>
           <p class="mt-3 text-slate-600">
-            用户问“任何语言都可以调用吗”，答案是：只要语言能加载 Windows DLL 并按 C 调用约定传递结构体、指针、宽字符串和回调，就可以调用 C ABI 已暴露的部分能力。完整组件面仍以 C++ API 为准。
+            能加载目标平台 DLL、.so 或 .dylib，并正确处理 C 结构、UTF-8、所有权和回调的语言，都可接入已暴露的 ABI 子集。仓库提供 oneui-sys 和安全 Rust crate；完整签名以公开头和支持符号清单为准。
           </p>
           <UTable class="mt-5" :data="rows(bindingRows)" :columns="pairColumns" />
         </section>
@@ -380,7 +389,7 @@ oneui_window_destroy(window);</code></pre>
             <UCard>
               <h3 class="font-semibold">RealtimeFrameView</h3>
               <p class="mt-2 text-sm leading-6 text-slate-600">
-                接收远端最新帧，支持 BGRA/RGBA/NV12 和 ActualSize、Fit、Fill、Stretch 缩放模式。
+                接收 BGRA/RGBA 最新帧，支持 ActualSize、Fit、Fill、Stretch 和脏区域更新；NV12 转换尚未实现。
               </p>
             </UCard>
             <UCard>
@@ -403,13 +412,14 @@ oneui_window_destroy(window);</code></pre>
             构建与测试
           </h2>
           <p class="mt-3 text-slate-600">
-            文档站是独立 Nuxt 项目，位于 <code>website/</code>。OneUI 主项目使用 CMake preset 构建。由于本地旧构建的 CTest 清单可能不是最新，建议修改主工程后重新 configure 再跑完整测试。
+            文档站是独立 Nuxt 项目，位于 <code>website/</code>。OneUI 使用 CMake 构建并按功能域运行 CTest；Windows 预设保留，POSIX 构建与验收步骤见仓库 docs/37-native-desktop-backends.md。缺失环境的验收不能用静默跳过替代。
           </p>
           <pre class="mt-4 rounded-lg bg-slate-950 p-4 text-sm text-slate-100"><code>cmake --preset ucrt64
 cmake --build --preset ucrt64
 ctest --test-dir build/ucrt64 --output-on-failure
 
 cd website
+npm ci
 npm run build</code></pre>
           <UTable class="mt-5" :data="testRows.map(([name, result, detail]) => ({ name, result, detail }))" :columns="[
             { accessorKey: 'name', header: '测试' },

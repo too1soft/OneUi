@@ -17,6 +17,9 @@ public:
     void setInvalidator(std::function<void()> invalidator) override;
     void setRectInvalidator(std::function<void(Rect)> invalidator) override;
     void setAnimationScheduler(std::function<void()> scheduler) override;
+    void setTextEnvironment(std::wstring family, float scale) override;
+    std::shared_ptr<Widget> activeFocusChild() const override;
+    bool hasTextComposition() const override;
 
     void paint(Canvas& canvas) override;
     bool onMouseMove(const MouseEvent& event) override;
@@ -27,6 +30,10 @@ public:
     bool onKeyUp(const KeyEvent& event) override;
     bool onTextInput(wchar_t character) override;
     bool onTextInputText(const std::wstring& text) override;
+    bool onTextCommitted(const std::wstring& text) override;
+    TextInputState textInputState() const override;
+    void setTextComposition(std::wstring text, std::size_t caret) override;
+    bool replaceTextRange(std::size_t start, std::size_t end, const std::wstring& text) override;
     Rect textInputCaretRect() const override;
     bool onFocusChanged(bool focused) override;
     bool isFocusable() const override;

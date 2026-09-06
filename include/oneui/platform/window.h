@@ -13,6 +13,17 @@ namespace oneui {
 
 using NativeWindowHandle = void*;
 
+enum class WindowBackend : unsigned int { Unknown = 0, Win32 = 1, Cocoa = 2, X11 = 3, Wayland = 4 };
+enum WindowCapability : unsigned int {
+    WindowCapabilityClipboard = 1u << 0,
+    WindowCapabilityIme = 1u << 1,
+    WindowCapabilityPlacement = 1u << 2,
+    WindowCapabilityActivation = 1u << 3,
+    WindowCapabilityTopmost = 1u << 4,
+    WindowCapabilityTray = 1u << 5,
+    WindowCapabilityNativeDialogs = 1u << 6
+};
+
 struct WindowOptions {
     std::wstring title;
     int width = 1280;
@@ -42,6 +53,20 @@ public:
     using ClientSizeChangedHandler = std::function<void(Size)>;
 
     virtual ~Window() = default;
+    CommandScope& commands() { return commands_; }
+    CommandResult queryCommand(const std::string& id) const {
+        return oneui::queryCommand(commandRoot_.lock(), const_cast<CommandScope*>(&commands_), id);
+    }
+    CommandResult executeCommand(const std::string& id) {
+        return oneui::executeCommand(commandRoot_.lock(), &commands_, id);
+    }
+    bool dispatchCommandKey(const KeyEvent& event, const std::string& logicalKey = {}) {
+        return oneui::dispatchCommandKey(commandRoot_.lock(), &commands_, event, logicalKey);
+    }
+
+    virtual WindowBackend backend() const { return WindowBackend::Unknown; }
+    // Runtime capabilities, including compositor/input-method availability.
+    virtual unsigned int capabilities() const { return 0; }
 
     static std::unique_ptr<Window> create(std::wstring title, int width, int height);
     static std::unique_ptr<Window> create(WindowOptions options);
@@ -85,6 +110,12 @@ public:
     // Backends should perform the same synchronous layout/paint pass used by
     // presentation so snapshots never expose stale frames after tree changes.
     virtual void prepareLayoutSnapshot() { requestRedraw(); }
+    // Implemented in test/preview builds only; otherwise returns false. Keep the
+    // declaration unconditional so build options never change the C++ vtable.
+    virtual bool captureFramePng(const std::wstring& path) {
+        (void)path;
+        return false;
+    }
     // Returns false when the window no longer accepts UI work.
     virtual bool post(std::function<void()> callback) = 0;
     virtual void requestAnimationFrame(std::function<void(double nowMs)> callback) = 0;
@@ -122,8 +153,15 @@ public:
     }
     // 设置窗口整体圆角半径（逻辑像素，0 = 直角）。默认空实现，Win32 覆盖。
     virtual void setCornerRadius(float radiusLogical) { (void)radiusLogical; }
-    // 开启后，点击关闭改为隐藏到托盘（而非退出）。默认空实现，Win32 覆盖。
+    // 开启后，点击关闭改为隐藏到托盘（而非退出）。Win32 会同步创建可恢复窗口的
+    // 托盘入口；若系统无法创建入口，关闭动作会正常退出，避免产生不可恢复的隐藏窗口。
     virtual void setCloseToTray(bool closeToTray) { (void)closeToTray; }
+    virtual bool trayIconVisible() const { return false; }
+protected:
+    void setCommandRoot(const std::shared_ptr<Widget>& root) { commandRoot_ = root; }
+private:
+    CommandScope commands_;
+    std::weak_ptr<Widget> commandRoot_;
 };
 
 // 托盘图标回调消息（Shell_NotifyIcon 的 uCallbackMessage）：托盘在窗口 HWND 上注册，

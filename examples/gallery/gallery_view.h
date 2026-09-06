@@ -94,6 +94,7 @@ private:
     std::shared_ptr<SplitView> inspectorSplit_;
     std::shared_ptr<ScrollView> scrollDemo_;
     std::shared_ptr<Stack> scrollContent_;
+    std::shared_ptr<Label> wrappedLabelDemo_;
     std::shared_ptr<Tabs> modeTabs_;
     std::shared_ptr<TextField> projectNameField_;
     std::shared_ptr<TextField> projectKeyField_;

@@ -3,7 +3,7 @@
 #include "oneui/icon.h"
 
 #include <algorithm>
-#include <chrono>
+#include "internal/ui_clock.h"
 #include <utility>
 
 namespace oneui {
@@ -88,8 +88,7 @@ Color styleColorOr(std::optional<Color> color, Color fallback) {
 }
 
 double currentTimeMs() {
-    const auto now = std::chrono::steady_clock::now().time_since_epoch();
-    return std::chrono::duration<double, std::milli>(now).count();
+    return internal::uiTimeMs();
 }
 
 TransitionSpec transitionSpecFrom(const StyleBox& box) {

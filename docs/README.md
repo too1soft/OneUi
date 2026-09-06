@@ -34,6 +34,8 @@ roadmap 或差距分析当成现状。
 - [组件开发指南](13-authoring-guide.md)
 - [可访问性](15-accessibility.md)
 - [平台后端契约](28-platform-backend-contract.md)
+- [Linux/macOS 实现、构建和原生验收矩阵](37-native-desktop-backends.md)
+- [文字引擎、命令、订阅与本轮发布阻塞](38-text-and-interaction-engine.md)
 - [DPI 与 GDI 缩放契约](29-dpi-and-gdi-scaling-contract.md)
 
 ### 产品接入与红线

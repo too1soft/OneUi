@@ -6,7 +6,9 @@
 #include <functional>
 #include <initializer_list>
 #include <memory>
+#include <optional>
 #include <string>
+#include <utility>
 
 namespace oneui::gallery {
 namespace {
@@ -569,7 +571,7 @@ GalleryView::GalleryView() {
     statGrid_->setAutoRows(88.0f);
     statGrid_->add(std::make_shared<StatCard>(L"Components", L"24", L"+6", Accent, AccentSoft));
     statGrid_->add(std::make_shared<StatCard>(L"Tokens", L"42", L"Live", Violet, VioletSoft));
-    statGrid_->add(std::make_shared<StatCard>(L"Backends", L"3", L"Plan", Amber, AmberSoft));
+    statGrid_->add(std::make_shared<StatCard>(L"Platforms", L"3", L"WIP", Amber, AmberSoft));
 
     projectNameField_ = std::make_shared<TextField>(L"Project name");
     projectNameField_->bindText(projectName_);
@@ -625,6 +627,7 @@ GalleryView::GalleryView() {
 
     selectDispatchButton_ = std::make_shared<Button>(L"Check / 派发");
     selectDispatchButton_->setVariant(ButtonVariant::Secondary);
+    selectDispatchButton_->setTrailingIcon(IconSymbol::ChevronRight);
     selectDispatchButton_->setPreferredSize(Size{150.0f, 30.0f});
     selectDispatchButton_->setOnClick([this] {
         const int next = selectDispatchCount_.get() + 1;
@@ -758,6 +761,16 @@ GalleryView::GalleryView() {
     scrollDemo_->setContentHeight(648.0f);
     scrollDemo_->setHorizontalScrollOffset(72.0f);
 
+    wrappedLabelDemo_ = std::make_shared<Label>(
+        L"Wrapped Label / 多行标签会按可用宽度换行，并在超过最大行数时显示省略号。"
+        L"默认 Label 仍保持单行行为。" );
+    wrappedLabelDemo_->setTextWrapping(true);
+    wrappedLabelDemo_->setMaxLines(3);
+    wrappedLabelDemo_->setLineHeight(18.0f);
+    wrappedLabelDemo_->setColor(Muted);
+    wrappedLabelDemo_->setFontSize(12.0f);
+    wrappedLabelDemo_->setPreferredSize(Size{302.0f, 58.0f});
+
     basicPopup_ = std::make_shared<Popup>();
     auto basicAnchor = std::make_shared<Button>(L"Modeless");
     basicAnchor->setPreferredSize(Size{168.0f, 30.0f});
@@ -811,6 +824,7 @@ GalleryView::GalleryView() {
     chipWrap_->setVisible(false);
     inspectorSplit_->setVisible(false);
     scrollDemo_->setVisible(false);
+    wrappedLabelDemo_->setVisible(false);
     basicPopup_->setVisible(false);
     menuPopup_->setVisible(false);
     controlledPopup_->setVisible(false);
@@ -876,11 +890,27 @@ GalleryView::GalleryView() {
         TableColumn{L"Status", 54.0f},
         TableColumn{L"Owner", 0.0f},
     });
-    compactTable_->setRows({
-        {L"Acme", L"Live", L"Rina"},
-        {L"Billing", L"Review", L"Max"},
-        {L"Ops", L"Ready", L"Chen"},
+    const auto galleryCell = [](std::wstring value,
+                                std::optional<IconSymbol> icon = std::nullopt,
+                                std::optional<Color> color = std::nullopt,
+                                std::optional<Color> indicator = std::nullopt,
+                                int weight = 400) {
+        TableCell cell;
+        cell.text = std::move(value);
+        cell.leadingIcon = icon;
+        cell.foreground = color;
+        cell.indicator = indicator;
+        cell.fontWeight = weight;
+        cell.fontSize = 12.0f;
+        cell.iconSize = 18.0f;
+        return cell;
+    };
+    compactTable_->setRichRows({
+        {galleryCell(L"Acme", IconSymbol::Device, Ink, std::nullopt, 600), galleryCell(L"Live", std::nullopt, Green, Green), galleryCell(L"Rina")},
+        {galleryCell(L"Billing", IconSymbol::File, Ink, std::nullopt, 600), galleryCell(L"Review", std::nullopt, Amber, Amber), galleryCell(L"Max")},
+        {galleryCell(L"Ops", IconSymbol::Server, Ink, std::nullopt, 600), galleryCell(L"Ready", std::nullopt, Green, Green), galleryCell(L"Chen")},
     });
+    compactTable_->setColumnDividersVisible(false);
     TableStyleOverride compactTableStyle;
     compactTableStyle.background = colors::White;
     compactTableStyle.border = Line;
@@ -921,6 +951,7 @@ GalleryView::GalleryView() {
     add(chipWrap_);
     add(inspectorSplit_);
     add(scrollDemo_);
+    add(wrappedLabelDemo_);
     add(statusBadges_);
     add(dataSeparator_);
     add(recordList_);
@@ -951,6 +982,7 @@ void GalleryView::layoutChildren() {
     chipWrap_->setFrame(Rect{672.0f, 310.0f, 302.0f, 50.0f});
     inspectorSplit_->setFrame(Rect{672.0f, 386.0f, 302.0f, 54.0f});
     scrollDemo_->setFrame(Rect{264.0f, 220.0f, 330.0f, 240.0f});
+    wrappedLabelDemo_->setFrame(Rect{672.0f, 462.0f, 302.0f, 58.0f});
     releaseProgress_->setFrame(Rect{264.0f, 360.0f, 520.0f, 10.0f});
     statusBadges_->setFrame(Rect{672.0f, 204.0f, 302.0f, 24.0f});
     dataSeparator_->setFrame(Rect{672.0f, 240.0f, 302.0f, 1.0f});
@@ -1000,6 +1032,7 @@ void GalleryView::updateSectionVisibility() {
     chipWrap_->setVisible(layouts);
     inspectorSplit_->setVisible(layouts);
     scrollDemo_->setVisible(layouts);
+    wrappedLabelDemo_->setVisible(layouts);
     statusBadges_->setVisible(tokens);
     dataSeparator_->setVisible(tokens);
     recordList_->setVisible(tokens);
@@ -1048,7 +1081,7 @@ void GalleryView::paint(Canvas& canvas) {
         card(canvas, Rect{20.0f, root.height - 116.0f, 172.0f, 80.0f});
     label(canvas, chinese ? L"渲染器" : L"Renderer", Rect{36.0f, root.height - 100.0f, 96.0f, 18.0f}, Muted, 12.0f);
     label(canvas, L"Skia Raster", Rect{36.0f, root.height - 76.0f, 118.0f, 22.0f}, Ink, 15.0f);
-        chip(canvas, L"Win7 path", Rect{36.0f, root.height - 48.0f, 82.0f, 22.0f}, GreenSoft, Green);
+        chip(canvas, L"Native", Rect{36.0f, root.height - 48.0f, 82.0f, 22.0f}, GreenSoft, Green);
     }
 
     canvas.fillRect(Rect{212.0f, 0.0f, root.width - 212.0f, 86.0f}, colors::Panel, 0.0f);

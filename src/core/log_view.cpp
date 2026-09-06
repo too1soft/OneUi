@@ -1,32 +1,19 @@
 #include "oneui/controls/log_view.h"
 
 #include "oneui/canvas.h"
+#include "text/text_layout.h"
 
 #include <algorithm>
 #include <cmath>
 
 namespace oneui {
-namespace {
-
-// 未经真实测量时的近似字宽（与 text_field.cpp 同一策略：CJK 全角按字号、
-// 半角按 0.6 倍字号估算），保证首帧前的命中测试也有合理结果。
-float approximateGlyphWidth(wchar_t character, float fontSize) {
-    if (character >= 0x2E80) {
-        return fontSize;
-    }
-    return fontSize * 0.6f;
-}
-
-} // namespace
-
 LogView::LogView() {
     setPreferredSize(Size{480.0f, 40.0f});
 }
 
 void LogView::appendLine(std::wstring text, Color color) {
     lines_.push_back(LogLine{std::move(text), color});
-    prefixWidths_.emplace_back();
-    metricsExact_.push_back(false);
+    layouts_.emplace_back();
     syncPreferredHeight();
     invalidate();
 }
@@ -54,6 +41,7 @@ void LogView::setFontSize(float size) {
 void LogView::setLineHeight(float height) {
     if (height > 0.0f) {
         lineHeight_ = height;
+        invalidateMetrics();
         syncPreferredHeight();
         invalidate();
     }
@@ -122,8 +110,8 @@ bool LogView::copySelectionToClipboard(Clipboard& clipboard) const {
     if (!hasSelection()) {
         return false;
     }
-    clipboard.setText(selectedText());
-    return true;
+    try { clipboard.setText(selectedText()); return true; }
+    catch (...) { return false; }
 }
 
 void LogView::paint(Canvas& canvas) {
@@ -138,25 +126,33 @@ void LogView::paint(Canvas& canvas) {
         if (lineTop + lineHeight_ < rect.y || lineTop > rect.y + rect.height) {
             continue;
         }
-        updateLineMetrics(line, &canvas);
+        const auto layout = lineLayout(line);
         const Rect lineRect{rect.x + padding_.left, lineTop, rect.width - padding_.left - padding_.right, lineHeight_};
+        const float textTop = lineTop + (lineHeight_ - layout->height()) / 2.0f;
+        canvas.save();
+        canvas.clipRect(lineRect);
 
         if (selectionActive && line >= start.line && line <= end.line) {
             const std::wstring& text = lines_[line].text;
             const std::size_t from = line == start.line ? std::min(start.column, text.size()) : 0;
-            std::size_t to = line == end.line ? std::min(end.column, text.size()) : text.size();
-            float fromX = columnOffset(line, from);
-            float toX = columnOffset(line, to);
-            // 中间整行选中时，行尾额外亮出半个字宽，直观表示“换行也被选中”。
-            if (line != end.line) {
-                toX += fontSize_ * 0.4f;
+            const std::size_t to = line == end.line ? std::min(end.column, text.size()) : text.size();
+            for (auto box : layout->selection(from, to)) {
+                box.x += lineRect.x; box.y += textTop;
+                canvas.fillRect(box, selectionBackground_, 3.0f);
             }
-            if (toX > fromX) {
-                canvas.fillRect(Rect{lineRect.x + fromX, lineTop + 1.0f, toX - fromX, lineHeight_ - 2.0f}, selectionBackground_, 3.0f);
+            // Mark the selected line separator separately, also in RTL text.
+            if (line != end.line) {
+                auto box = layout->caret({text.size(), TextAffinity::Upstream});
+                box.x += lineRect.x; box.y += textTop; box.width = fontSize_ * 0.4f;
+                canvas.fillRect(box, selectionBackground_, 3.0f);
             }
         }
 
-        canvas.drawTextStyled(lines_[line].text, lineRect, lines_[line].color, fontSize_, TextAlign::Left);
+        TextBlockStyle style;
+        style.fontSize = fontSize_; style.lineHeight = lineHeight_;
+        style.fontFamily = textFontFamily(); style.dpiScale = textDpiScale();
+        canvas.drawTextBlock(lines_[line].text, {lineRect.x, textTop, lineRect.width, layout->height()}, lines_[line].color, style);
+        canvas.restore();
     }
 }
 
@@ -202,7 +198,7 @@ bool LogView::onKeyDown(const KeyEvent& event) {
     if (!interactive()) {
         return false;
     }
-    if (event.control) {
+    if (event.editShortcut()) {
         if (event.key == Key::A) {
             selectAll();
             return true;
@@ -244,61 +240,26 @@ LogView::TextPos LogView::positionFromPoint(Point point) const {
     const auto lineIndex = static_cast<std::ptrdiff_t>(std::floor(localY / lineHeight_));
     const std::size_t line = static_cast<std::size_t>(std::clamp<std::ptrdiff_t>(lineIndex, 0, static_cast<std::ptrdiff_t>(lines_.size()) - 1));
 
-    updateLineMetrics(line, nullptr);
-    const std::vector<float>& widths = prefixWidths_[line];
-    const float localX = std::max(0.0f, point.x - rect.x - padding_.left);
-    auto it = std::lower_bound(widths.begin(), widths.end(), localX);
-    if (it == widths.begin()) {
-        return TextPos{line, 0};
-    }
-    if (it == widths.end()) {
-        return TextPos{line, lines_[line].text.size()};
-    }
-    const std::size_t upper = static_cast<std::size_t>(it - widths.begin());
-    const std::size_t lower = upper - 1;
-    const bool nearLower = std::fabs(localX - widths[lower]) <= std::fabs(widths[upper] - localX);
-    return TextPos{line, nearLower ? lower : upper};
+    const auto layout = lineLayout(line);
+    return {line, layout->hitTest({point.x - rect.x - padding_.left, layout->height() / 2.0f}).offset};
 }
 
-float LogView::columnOffset(std::size_t line, std::size_t column) const {
-    if (line >= lines_.size()) {
-        return 0.0f;
+std::shared_ptr<text::Layout> LogView::lineLayout(std::size_t line) const {
+    if (layoutFamily_ != textFontFamily() || layoutScale_ != textDpiScale()) {
+        layouts_.clear(); layoutFamily_ = textFontFamily(); layoutScale_ = textDpiScale();
     }
-    updateLineMetrics(line, nullptr);
-    const std::vector<float>& widths = prefixWidths_[line];
-    return widths[std::min(column, widths.size() - 1)];
-}
-
-void LogView::updateLineMetrics(std::size_t line, const Canvas* canvas) const {
-    if (line >= lines_.size()) {
-        return;
+    layouts_.resize(lines_.size());
+    if (!layouts_.at(line)) {
+        text::LayoutOptions options;
+        options.family = layoutFamily_; options.scale = layoutScale_;
+        options.size = fontSize_; options.lineHeight = lineHeight_;
+        layouts_[line] = text::Layout::make(lines_[line].text, options);
     }
-    if (prefixWidths_.size() != lines_.size()) {
-        prefixWidths_.resize(lines_.size());
-        metricsExact_.resize(lines_.size(), false);
-    }
-    const std::wstring& text = lines_[line].text;
-    std::vector<float>& widths = prefixWidths_[line];
-    const bool sized = widths.size() == text.size() + 1;
-    if (sized && (metricsExact_[line] || canvas == nullptr)) {
-        return;
-    }
-
-    widths.assign(text.size() + 1, 0.0f);
-    if (canvas) {
-        widths = canvas->measureTextPrefixWidths(text, fontSize_);
-        metricsExact_[line] = true;
-        return;
-    }
-    for (std::size_t index = 0; index < text.size(); ++index) {
-        widths[index + 1] = widths[index] + approximateGlyphWidth(text[index], fontSize_);
-    }
-    metricsExact_[line] = false;
+    return layouts_[line];
 }
 
 void LogView::invalidateMetrics() {
-    prefixWidths_.clear();
-    metricsExact_.clear();
+    layouts_.clear();
 }
 
 void LogView::syncPreferredHeight() {

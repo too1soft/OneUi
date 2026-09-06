@@ -15,6 +15,7 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
+#include "support/win32_input_fixture.h"
 #endif
 
 namespace {
@@ -121,6 +122,7 @@ void testWindowRawKeyTracksMessageModifiersAndResetsOnFocusLoss() {
     auto hwnd = static_cast<HWND>(oneui_window_native_handle(window));
     expectTrue("raw key native handle", hwnd != nullptr);
     if (hwnd) {
+        oneui::test_support::ScopedKeyboardState keyboardState;
         SendMessageW(hwnd, WM_KEYDOWN, VK_CONTROL, 0);
         SendMessageW(hwnd, WM_KEYDOWN, VK_SHIFT, 0);
         SendMessageW(hwnd, WM_KEYDOWN, 'V', 0);
@@ -167,6 +169,48 @@ void testWindowRawKeyTracksMessageModifiersAndResetsOnFocusLoss() {
     }
 
     oneui_widget_destroy(terminal);
+    oneui_window_destroy(window);
+}
+
+void testBorderlessTitleBarHitRegions() {
+    OneUiWindowOptions options{};
+    options.title = L"OneUI borderless title hit-test";
+    options.width = 1000;
+    options.height = 680;
+    options.visible = 0;
+    options.borderless = 1;
+    options.resizable = 0;
+
+    OneUiWindow* window = oneui_window_create(&options);
+    expectTrue("borderless hit-test window create", window != nullptr);
+    if (!window) {
+        return;
+    }
+
+    oneui_window_set_title_bar_drag_metrics(window, 44.0f, 96.0f);
+    oneui_window_initialize(window);
+    auto hwnd = static_cast<HWND>(oneui_window_native_handle(window));
+    expectTrue("borderless hit-test native handle", hwnd != nullptr);
+    if (hwnd) {
+        RECT rect{};
+        expectTrue("borderless hit-test window rect", GetWindowRect(hwnd, &rect) != 0);
+        const auto hitAt = [hwnd, &rect](int x, int y) {
+            return SendMessageW(
+                hwnd,
+                WM_NCHITTEST,
+                0,
+                MAKELPARAM(rect.left + x, rect.top + y));
+        };
+
+        oneui_window_set_title_bar_interactive_insets(window, 0.0f, 96.0f);
+        expectTrue("interactive title span stays client", hitAt(300, 20) == HTCLIENT);
+
+        oneui_window_set_title_bar_interactive_insets(window, -1.0f, -1.0f);
+        expectTrue("cleared title span becomes caption", hitAt(300, 20) == HTCAPTION);
+        expectTrue("title window buttons stay client", hitAt(952, 20) == HTCLIENT);
+        expectTrue("content below title stays client", hitAt(300, 80) == HTCLIENT);
+    }
+
     oneui_window_destroy(window);
 }
 #endif
@@ -239,6 +283,15 @@ void testUtf8AbiRoundTripsUnicodeText() {
     const std::string text = "\xE5\x85\xB4\xE4\xB8\x9A\xE9\x93\xB6\xE8\xA1\x8C SSH \xF0\x9F\x94\x90";
 
     expectTrue("utf8 abi version", oneui_utf8_abi_version() == ONEUI_UTF8_ABI_VERSION);
+    expectTrue("font registration rejects null data",
+               oneui_font_register_memory(nullptr, 0, utf8View("Noto Sans SC")) == 0);
+    const uint8_t invalidFont[] = {0x00, 0x01, 0x02, 0x03};
+    expectTrue("font registration rejects invalid data",
+               oneui_font_register_memory(invalidFont, sizeof(invalidFont), utf8View("Broken Font")) == 0);
+    const char invalidAlias[] = {'B', static_cast<char>(0xff)};
+    expectTrue("font registration rejects invalid UTF-8 alias",
+               oneui_font_register_memory(invalidFont, sizeof(invalidFont),
+                                          OneUiUtf8String{invalidAlias, sizeof(invalidAlias)}) == 0);
 
     OneUiWindowOptionsUtf8 options{};
     options.title = utf8View(title);
@@ -393,6 +446,13 @@ void testWindowPlacementAbiRoundTripsRestoredBounds() {
 
     oneui_window_initialize(window);
     OneUiWindowPlacement requested{120, 140, 720, 520, 0};
+    if (!(oneui_window_capabilities(window) & OneUiWindowCapabilityPlacement)) {
+        OneUiWindowPlacement unavailable{};
+        expectTrue("unsupported placement restore is rejected", oneui_window_set_placement(window, &requested) == 0);
+        expectTrue("unsupported placement query is rejected", oneui_window_get_placement(window, &unavailable) == 0);
+        oneui_window_destroy(window);
+        return;
+    }
     expectTrue("placement restore accepted", oneui_window_set_placement(window, &requested) == 1);
 
     OneUiWindowPlacement actual{};
@@ -942,7 +1002,11 @@ void testTerminalViewAbiUsesStructuredCells() {
         oneui_terminal_view_text_input_caret_rect(view, nullptr) == 0);
     oneui_terminal_view_select_all(view);
     expectTrue("terminal view selection", oneui_terminal_view_has_selection(view) != 0);
-    expectTrue("terminal view copy selection", oneui_terminal_view_copy_selection(view) != 0);
+    OneUiWindow* clipboardProbe = oneui_window_create(nullptr);
+    oneui_window_initialize(clipboardProbe);
+    const bool canCopy = (oneui_window_capabilities(clipboardProbe) & OneUiWindowCapabilityClipboard) != 0;
+    expectTrue("terminal copy reports clipboard availability", (oneui_terminal_view_copy_selection(view) != 0) == canCopy);
+    oneui_window_destroy(clipboardProbe);
     char selected[32]{};
     const size_t selectedRequired =
         oneui_terminal_view_get_selected_text_utf8(view, selected, sizeof(selected));
@@ -1314,6 +1378,49 @@ void testWindowLayoutSnapshotKeepsSizeQueryAndReadAtomicForVirtualLists() {
     oneui_window_destroy(window);
 }
 
+void testLabelWrappingAbiIsNullSafeAndMountable() {
+    oneui_label_set_text_wrapping(nullptr, 1);
+    oneui_label_set_max_lines(nullptr, 2);
+    oneui_label_set_line_height(nullptr, 20.0f);
+
+    OneUiWindowOptions options{};
+    options.title = L"OneUI wrapped label ABI test";
+    options.width = 240;
+    options.height = 120;
+    options.visible = 0;
+    options.borderless = 1;
+    options.resizable = 1;
+
+    OneUiWindow* window = oneui_window_create(&options);
+    OneUiWidget* label = oneui_label_create(L"A long label that should wrap through the public C ABI.");
+    expectTrue("wrapped label ABI widgets create", window != nullptr && label != nullptr);
+    if (!window || !label) {
+        oneui_widget_destroy(label);
+        oneui_window_destroy(window);
+        return;
+    }
+
+    oneui_label_set_text_wrapping(label, 1);
+    oneui_label_set_max_lines(label, 2);
+    oneui_label_set_line_height(label, 20.0f);
+    oneui_widget_set_preferred_size(label, 160.0f, 40.0f);
+    oneui_window_set_content(window, label);
+    oneui_window_initialize(window);
+
+    std::size_t required = 0;
+    expectTrue(
+        "wrapped label ABI snapshot size",
+        oneui_window_layout_snapshot_utf8(window, nullptr, 0, &required) == -2 && required > 1);
+    std::vector<char> snapshot(required, '\0');
+    expectTrue(
+        "wrapped label ABI snapshot",
+        oneui_window_layout_snapshot_utf8(window, snapshot.data(), snapshot.size(), &required) == 1 &&
+            std::string(snapshot.data()).find("A long label") != std::string::npos);
+
+    oneui_widget_destroy(label);
+    oneui_window_destroy(window);
+}
+
 } // namespace
 
 int main() {
@@ -1321,6 +1428,7 @@ int main() {
     testOwnedWindowPostCleansUpCancelledWork();
 #ifdef _WIN32
     testWindowRawKeyTracksMessageModifiersAndResetsOnFocusLoss();
+    testBorderlessTitleBarHitRegions();
 #endif
     testUtf8AbiRoundTripsUnicodeText();
     testUtf8ListUsesStructuredItems();
@@ -1339,6 +1447,7 @@ int main() {
     testWindowLayoutSnapshotSerializesMountedTreeWithoutFieldValues();
     testWindowLayoutSnapshotRetainsModalOverlayTree();
     testWindowLayoutSnapshotKeepsSizeQueryAndReadAtomicForVirtualLists();
+    testLabelWrappingAbiIsNullSafeAndMountable();
     testPromptAbiRejectsInvalidOutput();
     testClipboardAbiRoundTripIfAvailable();
 

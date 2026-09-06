@@ -44,6 +44,7 @@ std::optional<wchar_t> fluentGlyph(IconSymbol symbol) {
     case IconSymbol::Folder: return L'\uE8B7';
     case IconSymbol::Headset: return L'\uE95B';
     case IconSymbol::OpenInNew: return L'\uE8A7';
+    case IconSymbol::Link: return L'\uE71B';
     default: return std::nullopt;
     }
 }
@@ -254,6 +255,75 @@ std::vector<IconPrimitive> buildIconPrimitives(
     case IconSymbol::BrandMark:
         // 品牌 W 标记：五点折线（双 V），配深色底/渐变方块作 logo。
         primitives.push_back(poly(rect, {Point{0.12f, 0.22f}, Point{0.32f, 0.80f}, Point{0.50f, 0.40f}, Point{0.68f, 0.80f}, Point{0.88f, 0.22f}}, color, sw));
+        break;
+    case IconSymbol::NetworkHex:
+        primitives.push_back(poly(rect, {
+            Point{0.50f, 0.08f}, Point{0.84f, 0.28f}, Point{0.84f, 0.70f},
+            Point{0.50f, 0.90f}, Point{0.16f, 0.70f}, Point{0.16f, 0.28f}}, color, sw, true, false));
+        primitives.push_back(line(rect, 0.34f, 0.39f, 0.66f, 0.61f, color, sw));
+        primitives.push_back(shape(IconPrimitiveKind::Circle, r(rect, 0.25f, 0.30f, 0.18f, 0.18f), Color{95, 190, 255}, sw, true));
+        primitives.push_back(shape(IconPrimitiveKind::Circle, r(rect, 0.57f, 0.52f, 0.18f, 0.18f), Color{36, 203, 141}, sw, true));
+        break;
+    case IconSymbol::Gamepad:
+        primitives.push_back(shape(IconPrimitiveKind::RoundRect, r(rect, 0.10f, 0.28f, 0.80f, 0.48f), color, sw, false, rect.width * 0.16f));
+        primitives.push_back(line(rect, 0.27f, 0.43f, 0.27f, 0.61f, color, sw));
+        primitives.push_back(line(rect, 0.18f, 0.52f, 0.36f, 0.52f, color, sw));
+        primitives.push_back(shape(IconPrimitiveKind::Circle, r(rect, 0.64f, 0.42f, 0.09f, 0.09f), color, sw, true));
+        primitives.push_back(shape(IconPrimitiveKind::Circle, r(rect, 0.74f, 0.55f, 0.09f, 0.09f), color, sw, true));
+        break;
+    case IconSymbol::Router:
+        primitives.push_back(shape(IconPrimitiveKind::RoundRect, r(rect, 0.12f, 0.48f, 0.76f, 0.28f), color, sw, false, rect.width * 0.06f));
+        primitives.push_back(line(rect, 0.28f, 0.48f, 0.20f, 0.22f, color, sw));
+        primitives.push_back(line(rect, 0.72f, 0.48f, 0.80f, 0.22f, color, sw));
+        primitives.push_back(shape(IconPrimitiveKind::Circle, r(rect, 0.26f, 0.59f, 0.06f, 0.06f), accentColor.a ? accentColor : color, sw, true));
+        primitives.push_back(shape(IconPrimitiveKind::Circle, r(rect, 0.39f, 0.59f, 0.06f, 0.06f), accentColor.a ? accentColor : color, sw, true));
+        break;
+    case IconSymbol::Cloud:
+        primitives.push_back(shape(IconPrimitiveKind::Circle, r(rect, 0.18f, 0.42f, 0.30f, 0.30f), color, sw));
+        primitives.push_back(shape(IconPrimitiveKind::Circle, r(rect, 0.36f, 0.24f, 0.36f, 0.40f), color, sw));
+        primitives.push_back(shape(IconPrimitiveKind::Circle, r(rect, 0.61f, 0.42f, 0.24f, 0.28f), color, sw));
+        primitives.push_back(line(rect, 0.27f, 0.71f, 0.76f, 0.71f, color, sw));
+        break;
+    case IconSymbol::Connection:
+        primitives.push_back(shape(IconPrimitiveKind::Circle, r(rect, 0.12f, 0.34f, 0.32f, 0.32f), color, sw));
+        primitives.push_back(shape(IconPrimitiveKind::Circle, r(rect, 0.56f, 0.34f, 0.32f, 0.32f), color, sw));
+        primitives.push_back(line(rect, 0.40f, 0.50f, 0.60f, 0.50f, color, sw));
+        primitives.push_back(shape(IconPrimitiveKind::Circle, r(rect, 0.42f, 0.42f, 0.16f, 0.16f), accentColor.a ? accentColor : color, sw, true));
+        break;
+    case IconSymbol::HelpCircle:
+        primitives.push_back(shape(IconPrimitiveKind::Circle, r(rect, 0.08f, 0.08f, 0.84f, 0.84f), color, sw));
+        primitives.push_back(poly(rect, {Point{0.38f, 0.36f}, Point{0.50f, 0.26f}, Point{0.63f, 0.34f}, Point{0.50f, 0.52f}, Point{0.50f, 0.62f}}, color, sw));
+        primitives.push_back(shape(IconPrimitiveKind::Circle, r(rect, 0.47f, 0.72f, 0.06f, 0.06f), color, sw, true));
+        break;
+    case IconSymbol::WarningTriangle:
+        primitives.push_back(poly(rect, {Point{0.50f, 0.08f}, Point{0.91f, 0.84f}, Point{0.09f, 0.84f}}, color, sw, true, false));
+        primitives.push_back(line(rect, 0.50f, 0.34f, 0.50f, 0.60f, color, sw));
+        primitives.push_back(shape(IconPrimitiveKind::Circle, r(rect, 0.47f, 0.69f, 0.06f, 0.06f), color, sw, true));
+        break;
+    case IconSymbol::InfoCircle:
+        primitives.push_back(shape(IconPrimitiveKind::Circle, r(rect, 0.08f, 0.08f, 0.84f, 0.84f), color, sw));
+        primitives.push_back(line(rect, 0.50f, 0.42f, 0.50f, 0.70f, color, sw));
+        primitives.push_back(shape(IconPrimitiveKind::Circle, r(rect, 0.47f, 0.26f, 0.06f, 0.06f), color, sw, true));
+        break;
+    case IconSymbol::Link:
+        break;
+    case IconSymbol::Share:
+        primitives.push_back(shape(IconPrimitiveKind::Circle, r(rect, 0.08f, 0.39f, 0.18f, 0.18f), color, sw));
+        primitives.push_back(shape(IconPrimitiveKind::Circle, r(rect, 0.70f, 0.10f, 0.18f, 0.18f), color, sw));
+        primitives.push_back(shape(IconPrimitiveKind::Circle, r(rect, 0.70f, 0.70f, 0.18f, 0.18f), color, sw));
+        primitives.push_back(line(rect, 0.25f, 0.43f, 0.71f, 0.25f, color, sw));
+        primitives.push_back(line(rect, 0.25f, 0.55f, 0.71f, 0.73f, color, sw));
+        break;
+    case IconSymbol::Key:
+        primitives.push_back(shape(IconPrimitiveKind::Circle, r(rect, 0.10f, 0.12f, 0.42f, 0.42f), color, sw));
+        primitives.push_back(line(rect, 0.42f, 0.45f, 0.86f, 0.84f, color, sw));
+        primitives.push_back(line(rect, 0.67f, 0.66f, 0.77f, 0.56f, color, sw));
+        primitives.push_back(line(rect, 0.76f, 0.75f, 0.86f, 0.65f, color, sw));
+        break;
+    case IconSymbol::ErrorCircle:
+        primitives.push_back(shape(IconPrimitiveKind::Circle, r(rect, 0.08f, 0.08f, 0.84f, 0.84f), color, sw));
+        primitives.push_back(line(rect, 0.50f, 0.28f, 0.50f, 0.60f, color, sw));
+        primitives.push_back(shape(IconPrimitiveKind::Circle, r(rect, 0.47f, 0.70f, 0.06f, 0.06f), color, sw, true));
         break;
     case IconSymbol::CheckCircle:
         // 圆圈对勾：外圈 + 内部折线，用于卖点/成功态清单。

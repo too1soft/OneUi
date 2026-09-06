@@ -59,7 +59,19 @@ enum class IconSymbol {
     ChevronRight,
     Folder,
     Headset,
-    OpenInNew
+    OpenInNew,
+    NetworkHex,
+    Gamepad,
+    Router,
+    Cloud,
+    Connection,
+    HelpCircle,
+    WarningTriangle,
+    InfoCircle,
+    Link,
+    Share,
+    Key,
+    ErrorCircle
 };
 
 enum class IconPrimitiveKind {

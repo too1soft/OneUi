@@ -8,7 +8,7 @@
 ### 坐标与尺寸
 
 - 所有控件 frame 和 preferred size 使用 OneUI 逻辑像素；
-- Win32 后端负责 DPI 到物理像素的转换；
+- 平台后端负责逻辑坐标到物理像素的转换；Linux/macOS 的实现与待验收边界见 [后端指南](37-native-desktop-backends.md)；
 - `Widget::frame()` 是布局提交后的实际矩形；
 - C ABI `oneui_widget_frame` 和 Rust `WidgetHandle::frame` 返回同一几何；
 - 不要从截图反推布局，自动化诊断应使用 frame/布局 JSON，再用截图确认像素视觉。
@@ -167,11 +167,18 @@ titleBar->setOnClose([&] { window->close(); });
 无边框窗口若把 Tabs/Search 放入标题栏，还要配置窗口 interactive insets，使附件区域优先按
 client 处理，其余区域仍可拖动窗口。
 
+常驻型客户端可调用 `window->setCloseToTray(true)`。Win32 后端会创建带“显示主界面 / 退出”
+菜单的托盘入口，在 Explorer 重启后自动恢复，并在窗口销毁时清理。若托盘入口创建失败，关闭
+窗口会正常退出，不会留下无法重新打开的隐藏进程。该自动入口与 C ABI 的手动 `oneui_tray_*`
+生命周期是两种模式，不应在同一窗口重复启用。
+
 ## Label / Button / IconButton
 
 ### Label
 
-只读文本，支持文本绑定、字体、字重、颜色和对齐。长文本不会自动变成富文本或链接。
+只读文本，支持文本绑定、字体、字重、颜色和对齐。默认保持单行省略；产品说明等长文本可显式
+启用 `setTextWrapping(true)`，再用 `setMaxLines(...)` 和 `setLineHeight(...)` 约束多行布局。达到
+行数或高度上限时末行显示省略号。它不会自动变成富文本或链接。
 
 ### Button
 
@@ -213,8 +220,12 @@ path->setOnSubmitted([](const std::wstring& value) {
 });
 ```
 
-单行 Enter 只提交，不插入换行。TextArea 使用 multiline 模式和行高。富文本、语法高亮、
-复杂 shaping 和完整 IME 产品矩阵不在当前承诺中。
+单行 Enter 只提交，不插入换行。TextArea 使用 multiline 模式和行高，默认不软换行；
+使用 `setTextOptions` 显式启用 WordWrap，并设置 Auto/LTR/RTL 与语言标签。
+新 `textPosition` / `setTextPosition` 使用 UTF-8 字节偏移和亲和方向；旧下标仍按宽字符单元。
+共享 SkParagraph 布局、字素删除、视觉方向移动、密码按字素遮罩已接入，
+Unicode 一致性修复已通过；完整 IME 产品矩阵、MinGW 匹配依赖与 SDK 审计仍待完成，见[文字引擎状态](38-text-and-interaction-engine.md)。
+富文档和语法高亮不在本轮范围内。
 
 ## Checkbox / Switch / RadioGroup / Slider / Select
 

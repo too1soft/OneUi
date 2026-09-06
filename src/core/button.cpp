@@ -4,7 +4,7 @@
 #include "oneui/style.h"
 
 #include <algorithm>
-#include <chrono>
+#include "internal/ui_clock.h"
 #include <utility>
 
 namespace oneui {
@@ -117,8 +117,7 @@ ButtonStyle resolveButtonStyle(
 }
 
 double currentTimeMs() {
-    const auto now = std::chrono::steady_clock::now().time_since_epoch();
-    return std::chrono::duration<double, std::milli>(now).count();
+    return internal::uiTimeMs();
 }
 
 } // namespace
@@ -157,6 +156,16 @@ void Button::setIcon(IconSymbol symbol) {
 
 void Button::clearIcon() {
     icon_.reset();
+    invalidate();
+}
+
+void Button::setTrailingIcon(IconSymbol symbol) {
+    trailingIcon_ = symbol;
+    invalidate();
+}
+
+void Button::clearTrailingIcon() {
+    trailingIcon_.reset();
     invalidate();
 }
 
@@ -227,7 +236,7 @@ void Button::paint(Canvas& canvas) {
         }
     }
     const std::wstring& label = this->text();
-    if (!icon_) {
+    if (!icon_ && !trailingIcon_) {
         if (!trailingText_.empty()) {
             const float inset = std::min(12.0f, std::max(0.0f, rect.width / 4.0f));
             const float gap = 8.0f;
@@ -250,20 +259,41 @@ void Button::paint(Canvas& canvas) {
         return;
     }
 
+    if (!icon_ && trailingIcon_) {
+        const float inset = std::min(12.0f, std::max(0.0f, rect.width / 4.0f));
+        const float iconSide = style.fontSize + 2.0f;
+        const float gap = label.empty() ? 0.0f : 8.0f;
+        const Rect iconRect{
+            rect.x + std::max(0.0f, rect.width - inset - iconSide),
+            rect.y + (rect.height - iconSide) / 2.0f,
+            iconSide,
+            iconSide};
+        const Rect labelRect{
+            rect.x + inset,
+            rect.y,
+            std::max(0.0f, iconRect.x - gap - (rect.x + inset)),
+            rect.height};
+        canvas.drawTextStyled(label, labelRect, style.foreground, style.fontSize, contentAlign_, style.fontWeight);
+        paintIcon(canvas, *trailingIcon_, iconRect, style.foreground, Color{0, 0, 0, 0}, 1.6f);
+        return;
+    }
+
     // 图标 + 文字作为整体水平居中：图标为字号等大的正方形，随前景色着色。
     const float iconSide = style.fontSize + 2.0f;
     const float gap = label.empty() ? 0.0f : 6.0f;
+    const float trailingGap = trailingIcon_ ? 8.0f : 0.0f;
+    const float trailingWidth = trailingIcon_ ? iconSide : 0.0f;
     const float inset = std::min(12.0f, std::max(0.0f, rect.width / 4.0f));
     const float edgeReserve = contentAlign_ == TextAlign::Center ? 0.0f : inset * 2.0f;
     const float availableTextWidth = std::max(
-        0.0f, rect.width - edgeReserve - iconSide - gap);
+        0.0f, rect.width - edgeReserve - iconSide - gap - trailingGap - trailingWidth);
     const std::wstring fittedLabel = label.empty()
         ? std::wstring{}
         : canvas.ellipsizeText(label, availableTextWidth, style.fontSize, style.fontWeight);
     const float textWidth = fittedLabel.empty()
         ? 0.0f
         : canvas.measureTextWidth(fittedLabel, style.fontSize, style.fontWeight);
-    const float total = iconSide + gap + textWidth;
+    const float total = iconSide + gap + textWidth + trailingGap + trailingWidth;
     const float startX = contentAlign_ == TextAlign::Left
         ? rect.x + inset
         : contentAlign_ == TextAlign::Right
@@ -278,6 +308,14 @@ void Button::paint(Canvas& canvas) {
             std::max(0.0f, rect.x + rect.width - (iconRect.x + iconSide + gap)),
             rect.height};
         canvas.drawTextStyled(fittedLabel, textRect, style.foreground, style.fontSize, TextAlign::Left, style.fontWeight);
+    }
+    if (trailingIcon_) {
+        const Rect trailingRect{
+            iconRect.x + iconSide + gap + textWidth + trailingGap,
+            rect.y + (rect.height - iconSide) / 2.0f,
+            iconSide,
+            iconSide};
+        paintIcon(canvas, *trailingIcon_, trailingRect, style.foreground, Color{0, 0, 0, 0}, 1.6f);
     }
 }
 

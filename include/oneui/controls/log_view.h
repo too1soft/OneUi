@@ -10,6 +10,7 @@
 #include <vector>
 
 namespace oneui {
+namespace text { class Layout; }
 
 // LogView 是只读多行日志查看器：逐行文本 + 每行独立颜色（按日志等级着色），
 // 支持鼠标框选（跨行）、Ctrl+A 全选、Ctrl+C 复制到剪贴板。自身不滚动——
@@ -64,8 +65,7 @@ private:
     TextPos selectionStart() const;
     TextPos selectionEnd() const;
     TextPos positionFromPoint(Point point) const;
-    float columnOffset(std::size_t line, std::size_t column) const;
-    void updateLineMetrics(std::size_t line, const Canvas* canvas) const;
+    std::shared_ptr<text::Layout> lineLayout(std::size_t line) const;
     void invalidateMetrics();
     void syncPreferredHeight();
     bool hasInteractionState() const override;
@@ -83,9 +83,10 @@ private:
     bool selecting_ = false;
     std::shared_ptr<Clipboard> clipboard_;
 
-    // 每行前缀宽度缓存（paint 时用真实测量填充；未测量前用近似宽度兜底做命中测试）。
-    mutable std::vector<std::vector<float>> prefixWidths_;
-    mutable std::vector<bool> metricsExact_;
+    // Shared shaping results are usable before paint; offsets remain native wide indices.
+    mutable std::vector<std::shared_ptr<text::Layout>> layouts_;
+    mutable std::wstring layoutFamily_;
+    mutable float layoutScale_ = 0;
 };
 
 } // namespace oneui
