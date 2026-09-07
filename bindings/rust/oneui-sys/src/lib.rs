@@ -849,6 +849,19 @@ extern "C" {
     pub fn oneui_icon_create(symbol: c_int) -> *mut OneUiWidget;
     pub fn oneui_icon_set_symbol(icon: *mut OneUiWidget, symbol: c_int);
     pub fn oneui_icon_set_color(icon: *mut OneUiWidget, r: u8, g: u8, b: u8, a: u8);
+    pub fn oneui_image_view_create() -> *mut OneUiWidget;
+    pub fn oneui_image_view_set_rgba(
+        image: *mut OneUiWidget,
+        pixels: *const u8,
+        length: usize,
+        width: c_int,
+        height: c_int,
+        stride: c_int,
+    ) -> c_int;
+    pub fn oneui_image_view_clear(image: *mut OneUiWidget);
+    pub fn oneui_image_view_set_content_mode(image: *mut OneUiWidget, content_mode: c_int);
+    pub fn oneui_image_view_set_corner_radius(image: *mut OneUiWidget, radius: f32);
+    pub fn oneui_image_view_set_background(image: *mut OneUiWidget, r: u8, g: u8, b: u8, a: u8);
 
     pub fn oneui_icon_button_create(symbol: c_int) -> *mut OneUiWidget;
     pub fn oneui_icon_button_set_symbol(icon_button: *mut OneUiWidget, symbol: c_int);
@@ -1027,6 +1040,10 @@ extern "C" {
     pub fn oneui_text_field_set_suffix_icon(text_field: *mut OneUiWidget, symbol: c_int);
     pub fn oneui_text_field_clear_suffix_icon(text_field: *mut OneUiWidget);
     pub fn oneui_text_area_create_utf8(placeholder: OneUiUtf8String) -> *mut OneUiWidget;
+    pub fn oneui_text_area_set_vertical_scroll_offset(text_area: *mut OneUiWidget, offset: f32);
+    pub fn oneui_text_area_vertical_scroll_offset(text_area: *mut OneUiWidget) -> f32;
+    pub fn oneui_text_area_max_vertical_scroll_offset(text_area: *mut OneUiWidget) -> f32;
+    pub fn oneui_text_area_scroll_to_top(text_area: *mut OneUiWidget);
     pub fn oneui_text_field_set_on_changed_utf8(
         text_field: *mut OneUiWidget,
         callback: OneUiUtf8TextCallback,

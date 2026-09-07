@@ -12,6 +12,7 @@
 #include "oneui/controls/menu.h"
 #include "oneui/controls/icon_button.h"
 #include "oneui/controls/icon_view.h"
+#include "oneui/controls/image_view.h"
 #include "oneui/controls/interactive_surface.h"
 #include "oneui/controls/label.h"
 #include "oneui/controls/list.h"
@@ -2879,6 +2880,59 @@ void oneui_icon_set_stroke_width(OneUiWidget* icon, float width) {
     nativeIcon->setStrokeWidth(width);
 }
 
+OneUiWidget* oneui_image_view_create() {
+    return wrap(std::make_shared<oneui::ImageView>());
+}
+
+int oneui_image_view_set_rgba(
+    OneUiWidget* image,
+    const unsigned char* pixels,
+    size_t length,
+    int width,
+    int height,
+    int stride) {
+    auto* nativeImage = asWidget<oneui::ImageView>(image);
+    if (!nativeImage) {
+        return 0;
+    }
+    return nativeImage->setRgbaPixels(pixels, length, width, height, stride) ? 1 : 0;
+}
+
+void oneui_image_view_clear(OneUiWidget* image) {
+    auto* nativeImage = asWidget<oneui::ImageView>(image);
+    if (nativeImage) {
+        nativeImage->clearImage();
+    }
+}
+
+void oneui_image_view_set_content_mode(OneUiWidget* image, int content_mode) {
+    auto* nativeImage = asWidget<oneui::ImageView>(image);
+    if (!nativeImage) {
+        return;
+    }
+    const int clamped = std::clamp(content_mode, 0, 2);
+    nativeImage->setContentMode(static_cast<oneui::ImageContentMode>(clamped));
+}
+
+void oneui_image_view_set_corner_radius(OneUiWidget* image, float radius) {
+    auto* nativeImage = asWidget<oneui::ImageView>(image);
+    if (nativeImage) {
+        nativeImage->setCornerRadius(radius);
+    }
+}
+
+void oneui_image_view_set_background(
+    OneUiWidget* image,
+    unsigned char r,
+    unsigned char g,
+    unsigned char b,
+    unsigned char a) {
+    auto* nativeImage = asWidget<oneui::ImageView>(image);
+    if (nativeImage) {
+        nativeImage->setBackground(oneui::Color{r, g, b, a});
+    }
+}
+
 OneUiWidget* oneui_icon_button_create(int symbol) {
     const auto clamped = clampIconSymbol(symbol);
     return wrap(std::make_shared<oneui::IconButton>(static_cast<oneui::IconSymbol>(clamped)));
@@ -5613,6 +5667,30 @@ OneUiWidget* oneui_text_area_create_utf8(OneUiUtf8String placeholder) {
     auto field = std::make_shared<oneui::TextArea>(utf8OrEmpty(placeholder));
     field->setClipboard(std::make_shared<oneui::SystemClipboard>());
     return wrap(std::move(field));
+}
+
+void oneui_text_area_set_vertical_scroll_offset(OneUiWidget* text_area, float offset) {
+    auto* nativeTextArea = asWidget<oneui::TextArea>(text_area);
+    if (nativeTextArea) {
+        nativeTextArea->setVerticalScrollOffset(offset);
+    }
+}
+
+float oneui_text_area_vertical_scroll_offset(OneUiWidget* text_area) {
+    auto* nativeTextArea = asWidget<oneui::TextArea>(text_area);
+    return nativeTextArea ? nativeTextArea->verticalScrollOffset() : 0.0f;
+}
+
+float oneui_text_area_max_vertical_scroll_offset(OneUiWidget* text_area) {
+    auto* nativeTextArea = asWidget<oneui::TextArea>(text_area);
+    return nativeTextArea ? nativeTextArea->maxVerticalScrollOffset() : 0.0f;
+}
+
+void oneui_text_area_scroll_to_top(OneUiWidget* text_area) {
+    auto* nativeTextArea = asWidget<oneui::TextArea>(text_area);
+    if (nativeTextArea) {
+        nativeTextArea->scrollToTop();
+    }
 }
 
 void oneui_text_field_set_text(OneUiWidget* text_field, const wchar_t* text) {

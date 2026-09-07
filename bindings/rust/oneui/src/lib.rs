@@ -49,6 +49,7 @@ pub enum Error {
     LayoutSnapshotFailed,
     InvalidVideoFrame { reason: &'static str },
     InvalidRemoteCursor { reason: &'static str },
+    InvalidImagePixels { reason: &'static str },
     FontRegistrationFailed,
 }
 
@@ -3929,6 +3930,80 @@ pub struct Icon {
     widget: Widget,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ImageContentMode {
+    Contain = 0,
+    Cover = 1,
+    Stretch = 2,
+}
+
+/// Renderer-neutral RGBA image widget. OneUI copies the supplied pixels.
+pub struct ImageView {
+    widget: Widget,
+}
+
+impl ImageView {
+    pub fn new() -> Result<Self, Error> {
+        let widget = Widget::from_raw(unsafe { sys::oneui_image_view_create() })?;
+        Ok(Self { widget })
+    }
+
+    pub fn set_rgba(&self, pixels: &[u8], width: u32, height: u32) -> Result<(), Error> {
+        let row_bytes = width
+            .checked_mul(4)
+            .ok_or(Error::InvalidImagePixels { reason: "image row is too wide" })?;
+        let required = row_bytes
+            .checked_mul(height)
+            .ok_or(Error::InvalidImagePixels { reason: "image is too large" })? as usize;
+        if width == 0 || height == 0 || pixels.len() < required || width > i32::MAX as u32 || height > i32::MAX as u32 {
+            return Err(Error::InvalidImagePixels { reason: "invalid RGBA dimensions or buffer length" });
+        }
+        let accepted = unsafe {
+            sys::oneui_image_view_set_rgba(
+                self.widget.as_raw(),
+                pixels.as_ptr(),
+                pixels.len(),
+                width as i32,
+                height as i32,
+                row_bytes as i32,
+            )
+        };
+        if accepted == 1 {
+            Ok(())
+        } else {
+            Err(Error::InvalidImagePixels { reason: "OneUI rejected the RGBA pixels" })
+        }
+    }
+
+    pub fn clear(&self) {
+        unsafe { sys::oneui_image_view_clear(self.widget.as_raw()) };
+    }
+
+    pub fn set_content_mode(&self, mode: ImageContentMode) {
+        unsafe { sys::oneui_image_view_set_content_mode(self.widget.as_raw(), mode as i32) };
+    }
+
+    pub fn set_corner_radius(&self, radius: f32) {
+        unsafe { sys::oneui_image_view_set_corner_radius(self.widget.as_raw(), radius) };
+    }
+
+    pub fn set_background(&self, color: Color) {
+        unsafe {
+            sys::oneui_image_view_set_background(
+                self.widget.as_raw(),
+                color.r,
+                color.g,
+                color.b,
+                color.a,
+            )
+        };
+    }
+
+    pub fn as_widget(&self) -> &Widget {
+        &self.widget
+    }
+}
+
 impl Icon {
     pub fn new(symbol: IconSymbol) -> Result<Self, Error> {
         let widget = Widget::from_raw(unsafe { sys::oneui_icon_create(symbol as i32) })?;
@@ -4560,6 +4635,20 @@ impl TextAreaHandle {
         Ok(())
     }
 
+    /// Returns the view to the first line on the owning UI thread.
+    pub fn scroll_to_top(&self) -> Result<(), Error> {
+        if self.state.raw.load(Ordering::Acquire).is_null() {
+            return Err(Error::WidgetDestroyed);
+        }
+        let state = Arc::clone(&self.state);
+        self.dispatcher.dispatch(move || {
+            let raw = state.raw.load(Ordering::Acquire);
+            if !raw.is_null() {
+                unsafe { sys::oneui_text_area_scroll_to_top(raw) };
+            }
+        })
+    }
+
     fn drain_pending_text(state: &TextAreaState) {
         loop {
             let text = state
@@ -4638,6 +4727,22 @@ impl TextArea {
 
     pub fn set_line_height(&self, line_height: f32) {
         unsafe { sys::oneui_text_field_set_line_height(self.widget.as_raw(), line_height) };
+    }
+
+    pub fn set_vertical_scroll_offset(&self, offset: f32) {
+        unsafe { sys::oneui_text_area_set_vertical_scroll_offset(self.widget.as_raw(), offset) };
+    }
+
+    pub fn vertical_scroll_offset(&self) -> f32 {
+        unsafe { sys::oneui_text_area_vertical_scroll_offset(self.widget.as_raw()) }
+    }
+
+    pub fn max_vertical_scroll_offset(&self) -> f32 {
+        unsafe { sys::oneui_text_area_max_vertical_scroll_offset(self.widget.as_raw()) }
+    }
+
+    pub fn scroll_to_top(&self) {
+        unsafe { sys::oneui_text_area_scroll_to_top(self.widget.as_raw()) };
     }
 
     #[track_caller]

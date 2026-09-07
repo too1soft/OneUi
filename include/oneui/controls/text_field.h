@@ -51,6 +51,10 @@ public:
     float lineHeight() const;
     void setFontSize(float fontSize);
     float fontSize() const;
+    void setVerticalScrollOffset(float offset);
+    float verticalScrollOffset() const;
+    float maxVerticalScrollOffset() const;
+    void scrollToTop();
     void setClipboard(std::shared_ptr<Clipboard> clipboard);
     std::shared_ptr<Clipboard> clipboard() const;
     void setPasswordMode(bool enabled);
@@ -71,6 +75,7 @@ public:
     bool onMouseMove(const MouseEvent& event) override;
     bool onMouseDown(const MouseEvent& event) override;
     bool onMouseUp(const MouseEvent& event) override;
+    bool onMouseWheel(const MouseWheelEvent& event) override;
     bool onKeyDown(const KeyEvent& event) override;
     bool hasTextComposition() const override { return !composition_.empty(); }
     CommandResult queryBuiltinCommand(const std::string& id) const override;
@@ -135,6 +140,9 @@ private:
     bool moveCaretVertically(int direction, bool extendSelection);
     void ensureCaretVisible();
     float contentWidthForText() const;
+    float viewportHeightForText() const;
+    Rect verticalScrollbarTrack() const;
+    Rect verticalScrollbarThumb() const;
     void invalidateTextMetrics();
     bool hasInteractionState() const override;
     void resetInteractionState() override;
@@ -152,6 +160,9 @@ private:
     float lineHeight_ = 20.0f;
     float fontSize_ = 14.0f;
     float horizontalScrollOffset_ = 0.0f;
+    bool scrollbarDragging_ = false;
+    float scrollbarDragStartY_ = 0.0f;
+    float scrollbarDragStartOffset_ = 0.0f;
     wchar_t passwordMask_ = L'*';
     bool hovered_ = false;
     bool selecting_ = false;

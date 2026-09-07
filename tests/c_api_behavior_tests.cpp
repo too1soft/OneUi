@@ -1421,6 +1421,38 @@ void testLabelWrappingAbiIsNullSafeAndMountable() {
     oneui_window_destroy(window);
 }
 
+void testImageViewAndTextAreaScrollAbiAreAdditiveAndNullSafe() {
+    oneui_image_view_clear(nullptr);
+    oneui_image_view_set_content_mode(nullptr, 0);
+    oneui_image_view_set_corner_radius(nullptr, 8.0f);
+    oneui_text_area_scroll_to_top(nullptr);
+    expectTrue("null text area scroll offset is zero", oneui_text_area_vertical_scroll_offset(nullptr) == 0.0f);
+
+    OneUiWidget* image = oneui_image_view_create();
+    const unsigned char pixels[16]{
+        255, 0, 0, 255, 0, 255, 0, 255,
+        0, 0, 255, 255, 255, 255, 255, 255};
+    expectTrue("image view ABI creates", image != nullptr);
+    expectTrue("image view ABI rejects short buffer", oneui_image_view_set_rgba(image, pixels, 4, 2, 2, 8) == 0);
+    expectTrue("image view ABI accepts copied RGBA", oneui_image_view_set_rgba(image, pixels, sizeof(pixels), 2, 2, 8) == 1);
+    oneui_image_view_set_content_mode(image, 1);
+    oneui_image_view_set_corner_radius(image, 8.0f);
+    oneui_image_view_set_background(image, 10, 20, 30, 255);
+    oneui_widget_destroy(image);
+
+    OneUiWidget* area = oneui_text_area_create_utf8(utf8View("Agreement"));
+    expectTrue("text area ABI creates", area != nullptr);
+    oneui_text_field_set_text_utf8(area, utf8View("Line 1\nLine 2\nLine 3\nLine 4\nLine 5\nLine 6\nLine 7\nLine 8"));
+    oneui_widget_set_preferred_size(area, 240.0f, 72.0f);
+    oneui_text_area_set_vertical_scroll_offset(area, 100000.0f);
+    expectTrue(
+        "text area ABI clamps scroll offset",
+        oneui_text_area_vertical_scroll_offset(area) <= oneui_text_area_max_vertical_scroll_offset(area));
+    oneui_text_area_scroll_to_top(area);
+    expectTrue("text area ABI returns to top", oneui_text_area_vertical_scroll_offset(area) == 0.0f);
+    oneui_widget_destroy(area);
+}
+
 } // namespace
 
 int main() {
@@ -1448,6 +1480,7 @@ int main() {
     testWindowLayoutSnapshotRetainsModalOverlayTree();
     testWindowLayoutSnapshotKeepsSizeQueryAndReadAtomicForVirtualLists();
     testLabelWrappingAbiIsNullSafeAndMountable();
+    testImageViewAndTextAreaScrollAbiAreAdditiveAndNullSafe();
     testPromptAbiRejectsInvalidOutput();
     testClipboardAbiRoundTripIfAvailable();
 

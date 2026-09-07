@@ -6,6 +6,7 @@
 #include "oneui/controls/checkbox.h"
 #include "oneui/controls/form_field.h"
 #include "oneui/controls/icon_view.h"
+#include "oneui/controls/image_view.h"
 #include "oneui/controls/list.h"
 #include "oneui/controls/menu.h"
 #include "oneui/controls/virtual_list.h"
@@ -4938,6 +4939,39 @@ void testTextAreaSupportsMultilineEditingAndLineNavigation() {
     expectEqual("TextArea text input emits", changes, 2);
 }
 
+void testTextAreaReadOnlyDocumentScrollsWithWheelAndKeyboard() {
+    oneui::TextArea area;
+    area.setFrame(oneui::Rect{0.0f, 0.0f, 320.0f, 96.0f});
+    area.setReadOnly(true);
+    area.setText(L"Line 1\nLine 2\nLine 3\nLine 4\nLine 5\nLine 6\nLine 7\nLine 8\nLine 9\nLine 10");
+
+    expectTrue("text area long document has vertical overflow", area.maxVerticalScrollOffset() > 0.0f);
+    expectTrue(
+        "text area wheel scroll is accepted",
+        area.onMouseWheel(oneui::MouseWheelEvent{{20.0f, 20.0f}, -1.0f}));
+    expectTrue("text area wheel advances offset", area.verticalScrollOffset() > 0.0f);
+
+    area.onKeyDown(oneui::KeyEvent{oneui::Key::End});
+    expectNear(
+        "text area End reaches document bottom",
+        area.verticalScrollOffset(),
+        area.maxVerticalScrollOffset());
+    area.onKeyDown(oneui::KeyEvent{oneui::Key::Home});
+    expectNear("text area Home returns to top", area.verticalScrollOffset(), 0.0f);
+}
+
+void testImageViewOwnsValidatedRgbaPixels() {
+    oneui::ImageView image;
+    const std::vector<std::uint8_t> rgba{
+        255, 0, 0, 255, 0, 255, 0, 255,
+        0, 0, 255, 255, 255, 255, 255, 255};
+    expectTrue("image view rejects short RGBA buffer", !image.setRgbaPixels(rgba.data(), 4, 2, 2, 8));
+    expectTrue("image view copies valid RGBA buffer", image.setRgbaPixels(rgba.data(), rgba.size(), 2, 2, 8));
+    expectTrue("image view reports owned image", image.hasImage() && image.imageWidth() == 2 && image.imageHeight() == 2);
+    image.clearImage();
+    expectTrue("image view clears owned pixels", !image.hasImage());
+}
+
 void testTextAreaLongDocumentMeasurementIsLinearAndCached() {
     oneui::TextArea area(L"Long note");
     std::wstring document;
@@ -7678,6 +7712,8 @@ int main() {
     testTextFieldUndoRedoEditingPaths();
     testTextFieldUndoRedoTextInputAndBinding();
     testTextAreaSupportsMultilineEditingAndLineNavigation();
+    testTextAreaReadOnlyDocumentScrollsWithWheelAndKeyboard();
+    testImageViewOwnsValidatedRgbaPixels();
     testTextAreaLongDocumentMeasurementIsLinearAndCached();
     testTextFieldDisabledDoesNotEditOrCut();
     testTextFieldReadOnlyAllowsSelectionCopyAndNavigationButNotMutation();

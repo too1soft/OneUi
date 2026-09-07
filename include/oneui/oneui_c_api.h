@@ -871,6 +871,25 @@ ONEUI_API void oneui_icon_set_color(OneUiWidget* icon, unsigned char r, unsigned
 ONEUI_API void oneui_icon_set_accent(OneUiWidget* icon, unsigned char r, unsigned char g, unsigned char b, unsigned char a);
 ONEUI_API void oneui_icon_set_stroke_width(OneUiWidget* icon, float width);
 
+/* ImageView copies the RGBA buffer before returning. content_mode: 0=contain, 1=cover, 2=stretch. */
+ONEUI_API OneUiWidget* oneui_image_view_create();
+ONEUI_API int oneui_image_view_set_rgba(
+    OneUiWidget* image,
+    const unsigned char* pixels,
+    size_t length,
+    int width,
+    int height,
+    int stride);
+ONEUI_API void oneui_image_view_clear(OneUiWidget* image);
+ONEUI_API void oneui_image_view_set_content_mode(OneUiWidget* image, int content_mode);
+ONEUI_API void oneui_image_view_set_corner_radius(OneUiWidget* image, float radius);
+ONEUI_API void oneui_image_view_set_background(
+    OneUiWidget* image,
+    unsigned char r,
+    unsigned char g,
+    unsigned char b,
+    unsigned char a);
+
 ONEUI_API OneUiWidget* oneui_icon_button_create(int symbol);
 ONEUI_API void oneui_icon_button_set_symbol(OneUiWidget* icon_button, int symbol);
 ONEUI_API void oneui_icon_button_set_on_click(OneUiWidget* icon_button, OneUiVoidCallback callback, void* user_data);
@@ -1467,6 +1486,10 @@ ONEUI_API void oneui_text_field_set_multiline(OneUiWidget* text_field, int multi
 ONEUI_API void oneui_text_field_set_line_height(OneUiWidget* text_field, float line_height);
 ONEUI_API void oneui_text_field_set_font_size(OneUiWidget* text_field, float font_size);
 ONEUI_API OneUiWidget* oneui_text_area_create_utf8(OneUiUtf8String placeholder);
+ONEUI_API void oneui_text_area_set_vertical_scroll_offset(OneUiWidget* text_area, float offset);
+ONEUI_API float oneui_text_area_vertical_scroll_offset(OneUiWidget* text_area);
+ONEUI_API float oneui_text_area_max_vertical_scroll_offset(OneUiWidget* text_area);
+ONEUI_API void oneui_text_area_scroll_to_top(OneUiWidget* text_area);
 ONEUI_API void oneui_text_field_set_prefix_icon(OneUiWidget* text_field, int symbol);
 ONEUI_API void oneui_text_field_clear_prefix_icon(OneUiWidget* text_field);
 ONEUI_API void oneui_text_field_set_suffix_icon(OneUiWidget* text_field, int symbol);

@@ -15,6 +15,7 @@
 #include "oneui/controls/interactive_surface.h"
 #include "oneui/controls/icon_button.h"
 #include "oneui/controls/icon_view.h"
+#include "oneui/controls/image_view.h"
 #include "oneui/controls/log_view.h"
 #include "oneui/controls/menu.h"
 #include "oneui/controls/status_strip.h"

@@ -20,6 +20,10 @@ constexpr float CaretWidth = 1.0f;
 constexpr float CaretMinHeight = 11.0f;
 constexpr float CaretMaxHeight = 14.0f;
 constexpr float CaretVisualInset = 1.0f;
+constexpr float ScrollbarGutter = 12.0f;
+constexpr float ScrollbarWidth = 4.0f;
+constexpr float ScrollbarMinThumb = 28.0f;
+constexpr float MouseWheelLines = 3.0f;
 constexpr double CaretBlinkPeriodMs = 1060.0;
 constexpr double CaretBlinkOnMs = 530.0;
 
@@ -518,6 +522,31 @@ float TextField::fontSize() const {
     return fontSize_;
 }
 
+void TextField::setVerticalScrollOffset(float offset) {
+    const float next = std::clamp(offset, 0.0f, maxVerticalScrollOffset());
+    if (std::fabs(verticalScrollOffset_ - next) < 0.01f) {
+        return;
+    }
+    verticalScrollOffset_ = next;
+    invalidate();
+}
+
+float TextField::verticalScrollOffset() const {
+    return verticalScrollOffset_;
+}
+
+float TextField::maxVerticalScrollOffset() const {
+    if (!multiline_) {
+        return 0.0f;
+    }
+    ensureTextLayout();
+    return std::max(0.0f, textLayout_->display->height() - viewportHeightForText());
+}
+
+void TextField::scrollToTop() {
+    setVerticalScrollOffset(0.0f);
+}
+
 void TextField::setClipboard(std::shared_ptr<Clipboard> clipboard) {
     clipboard_ = std::move(clipboard);
 }
@@ -658,13 +687,32 @@ void TextField::paint(Canvas& canvas) {
         paintAffixIcon(canvas, *suffixIcon_, iconRect, style.placeholderForeground);
         insetRect.width = std::max(0.0f, insetRect.width - affixSpace);
     }
+    if (multiline_) {
+        insetRect.width = std::max(0.0f, insetRect.width - ScrollbarGutter);
+    }
+    setVerticalScrollOffset(verticalScrollOffset_);
     const Rect contentRect{insetRect.x, insetRect.y, std::max(0.0f, insetRect.width), std::max(0.0f, insetRect.height)};
     paintTextContent(canvas, contentRect, style, shouldPaintPlaceholder);
+    if (maxVerticalScrollOffset() > 0.0f) {
+        const auto track = verticalScrollbarTrack();
+        const auto thumb = verticalScrollbarThumb();
+        canvas.fillRect(track, Color{15, 23, 42, 20}, ScrollbarWidth / 2.0f);
+        canvas.fillRect(thumb, hovered_ || scrollbarDragging_ ? Color{100, 116, 139, 190} : Color{148, 163, 184, 150}, ScrollbarWidth / 2.0f);
+    }
 }
 
 bool TextField::onMouseMove(const MouseEvent& event) {
     if (!interactive()) {
         return false;
+    }
+
+    if (scrollbarDragging_) {
+        const auto track = verticalScrollbarTrack();
+        const auto thumb = verticalScrollbarThumb();
+        const float travel = std::max(1.0f, track.height - thumb.height);
+        const float delta = event.position.y - scrollbarDragStartY_;
+        setVerticalScrollOffset(scrollbarDragStartOffset_ + delta * maxVerticalScrollOffset() / travel);
+        return true;
     }
 
     if (selecting_) {
@@ -689,6 +737,17 @@ bool TextField::onMouseDown(const MouseEvent& event) {
     if (!interactive() || !contains(event.position)) {
         return false;
     }
+    if (multiline_ && maxVerticalScrollOffset() > 0.0f && verticalScrollbarTrack().contains(event.position)) {
+        const auto thumb = verticalScrollbarThumb();
+        if (!thumb.contains(event.position)) {
+            const float page = std::max(lineHeight_, viewportHeightForText() - lineHeight_);
+            setVerticalScrollOffset(verticalScrollOffset_ + (event.position.y < thumb.y ? -page : page));
+        }
+        scrollbarDragging_ = true;
+        scrollbarDragStartY_ = event.position.y;
+        scrollbarDragStartOffset_ = verticalScrollOffset_;
+        return true;
+    }
     setTextComposition({}, 0);
     selecting_ = true;
     const auto index = caretIndexFromPoint(event.position);
@@ -704,12 +763,26 @@ bool TextField::onMouseDown(const MouseEvent& event) {
 }
 
 bool TextField::onMouseUp(const MouseEvent&) {
+    if (scrollbarDragging_) {
+        scrollbarDragging_ = false;
+        invalidate();
+        return true;
+    }
     if (!selecting_) {
         return false;
     }
     selecting_ = false;
     invalidate();
     return true;
+}
+
+bool TextField::onMouseWheel(const MouseWheelEvent& event) {
+    if (!interactive() || !multiline_ || !contains(event.position) || maxVerticalScrollOffset() <= 0.0f) {
+        return false;
+    }
+    const float previous = verticalScrollOffset_;
+    setVerticalScrollOffset(verticalScrollOffset_ - event.deltaY * lineHeight_ * MouseWheelLines);
+    return std::fabs(previous - verticalScrollOffset_) >= 0.01f;
 }
 
 bool TextField::onKeyDown(const KeyEvent& event) {
@@ -720,6 +793,23 @@ bool TextField::onKeyDown(const KeyEvent& event) {
     if (dispatchBuiltinCommandKey(event, {}) != CommandResult::NotFound) return true;
     if (event.editShortcut()) return false;
     if (hasTextComposition()) return false;
+
+    if (multiline_ && readOnly_) {
+        const float previous = verticalScrollOffset_;
+        const float page = std::max(lineHeight_, viewportHeightForText() - lineHeight_);
+        switch (event.key) {
+        case Key::Up: setVerticalScrollOffset(verticalScrollOffset_ - lineHeight_); break;
+        case Key::Down: setVerticalScrollOffset(verticalScrollOffset_ + lineHeight_); break;
+        case Key::PageUp: setVerticalScrollOffset(verticalScrollOffset_ - page); break;
+        case Key::PageDown: setVerticalScrollOffset(verticalScrollOffset_ + page); break;
+        case Key::Home: setVerticalScrollOffset(0.0f); break;
+        case Key::End: setVerticalScrollOffset(maxVerticalScrollOffset()); break;
+        default: break;
+        }
+        if (std::fabs(previous - verticalScrollOffset_) >= 0.01f) {
+            return true;
+        }
+    }
 
     ensureTextLayout();
     if (event.key == Key::Left || event.key == Key::Right) {
@@ -1210,7 +1300,11 @@ bool TextField::moveCaretVertically(int direction, bool extendSelection) {
 
 void TextField::ensureCaretVisible() {
     ensureTextLayout();
-    if (!focused() && !selecting_) { horizontalScrollOffset_ = 0; verticalScrollOffset_ = 0; return; }
+    if (!focused() && !selecting_) {
+        horizontalScrollOffset_ = 0;
+        verticalScrollOffset_ = std::clamp(verticalScrollOffset_, 0.0f, maxVerticalScrollOffset());
+        return;
+    }
     const auto caret = textLayout_->display->caret({displayCaretOffset(), caretAffinity_});
     const float width = contentWidthForText();
     const float height = std::max(0.0f, frame().height - resolvedStyle().padding.vertical());
@@ -1230,7 +1324,35 @@ float TextField::contentWidthForText() const {
     const TextFieldStyle style = resolvedStyle();
     const float affixWidth = (prefixIcon_ ? AffixIconSize + AffixIconGap : 0.0f) +
         (suffixIcon_ ? AffixIconSize + AffixIconGap : 0.0f);
-    return std::max(0.0f, frame().width - style.padding.horizontal() - affixWidth);
+    const float scrollbar = multiline_ ? ScrollbarGutter : 0.0f;
+    return std::max(0.0f, frame().width - style.padding.horizontal() - affixWidth - scrollbar);
+}
+
+float TextField::viewportHeightForText() const {
+    return std::max(0.0f, frame().height - resolvedStyle().padding.vertical());
+}
+
+Rect TextField::verticalScrollbarTrack() const {
+    const auto style = resolvedStyle();
+    const auto rect = frame();
+    return Rect{
+        rect.x + rect.width - style.padding.right - ScrollbarWidth,
+        rect.y + style.padding.top,
+        ScrollbarWidth,
+        std::max(0.0f, rect.height - style.padding.vertical())};
+}
+
+Rect TextField::verticalScrollbarThumb() const {
+    const auto track = verticalScrollbarTrack();
+    const float contentHeight = viewportHeightForText() + maxVerticalScrollOffset();
+    if (track.height <= 0.0f || contentHeight <= 0.0f) {
+        return track;
+    }
+    const float height = std::min(track.height, std::max(ScrollbarMinThumb, track.height * viewportHeightForText() / contentHeight));
+    const float travel = std::max(0.0f, track.height - height);
+    const float maximum = maxVerticalScrollOffset();
+    const float y = maximum > 0.0f ? track.y + travel * verticalScrollOffset_ / maximum : track.y;
+    return Rect{track.x, y, track.width, height};
 }
 
 
@@ -1257,6 +1379,7 @@ void TextField::resetInteractionState() {
     invalidateTextMetrics();
     hovered_ = false;
     selecting_ = false;
+    scrollbarDragging_ = false;
     const TextFieldStyle target = resolvedStyle();
     backgroundTransition_.reset(target.background);
     foregroundTransition_.reset(target.foreground);
