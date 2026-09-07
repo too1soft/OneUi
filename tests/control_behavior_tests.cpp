@@ -4958,6 +4958,17 @@ void testTextAreaReadOnlyDocumentScrollsWithWheelAndKeyboard() {
         area.maxVerticalScrollOffset());
     area.onKeyDown(oneui::KeyEvent{oneui::Key::Home});
     expectNear("text area Home returns to top", area.verticalScrollOffset(), 0.0f);
+
+    expectTrue(
+        "text area scrollbar thumb accepts mouse down",
+        area.onMouseDown(oneui::MouseEvent{oneui::Point{304.0f, 18.0f}}));
+    expectTrue(
+        "text area scrollbar thumb drag is handled",
+        area.onMouseMove(oneui::MouseEvent{oneui::Point{304.0f, 78.0f}}));
+    expectTrue("text area scrollbar drag advances offset", area.verticalScrollOffset() > 0.0f);
+    expectTrue(
+        "text area scrollbar thumb accepts mouse up",
+        area.onMouseUp(oneui::MouseEvent{oneui::Point{304.0f, 78.0f}}));
 }
 
 void testImageViewOwnsValidatedRgbaPixels() {
