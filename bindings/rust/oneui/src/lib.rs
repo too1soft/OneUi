@@ -3949,14 +3949,23 @@ impl ImageView {
     }
 
     pub fn set_rgba(&self, pixels: &[u8], width: u32, height: u32) -> Result<(), Error> {
-        let row_bytes = width
-            .checked_mul(4)
-            .ok_or(Error::InvalidImagePixels { reason: "image row is too wide" })?;
+        let row_bytes = width.checked_mul(4).ok_or(Error::InvalidImagePixels {
+            reason: "image row is too wide",
+        })?;
         let required = row_bytes
             .checked_mul(height)
-            .ok_or(Error::InvalidImagePixels { reason: "image is too large" })? as usize;
-        if width == 0 || height == 0 || pixels.len() < required || width > i32::MAX as u32 || height > i32::MAX as u32 {
-            return Err(Error::InvalidImagePixels { reason: "invalid RGBA dimensions or buffer length" });
+            .ok_or(Error::InvalidImagePixels {
+                reason: "image is too large",
+            })? as usize;
+        if width == 0
+            || height == 0
+            || pixels.len() < required
+            || width > i32::MAX as u32
+            || height > i32::MAX as u32
+        {
+            return Err(Error::InvalidImagePixels {
+                reason: "invalid RGBA dimensions or buffer length",
+            });
         }
         let accepted = unsafe {
             sys::oneui_image_view_set_rgba(
@@ -3971,7 +3980,9 @@ impl ImageView {
         if accepted == 1 {
             Ok(())
         } else {
-            Err(Error::InvalidImagePixels { reason: "OneUI rejected the RGBA pixels" })
+            Err(Error::InvalidImagePixels {
+                reason: "OneUI rejected the RGBA pixels",
+            })
         }
     }
 
