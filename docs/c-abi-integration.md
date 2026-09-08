@@ -7,7 +7,7 @@ OneUI 使用版本化 C ABI 为 Rust、Go、C#、Python FFI 和不同 C++ ABI �
 ## 当前版本
 
 ```c
-#define ONEUI_UTF8_ABI_VERSION 25u
+#define ONEUI_UTF8_ABI_VERSION 26u
 ```
 
 运行时检查：

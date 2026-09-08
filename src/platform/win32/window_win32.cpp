@@ -382,6 +382,89 @@ public:
         UpdateWindow(hwnd_);
     }
 
+    bool centerOnActiveMonitor() override {
+        ensureCreated();
+        if (!hwnd_) {
+            return false;
+        }
+
+        HMONITOR monitor = nullptr;
+        if (const HWND foreground = GetForegroundWindow()) {
+            monitor = MonitorFromWindow(foreground, MONITOR_DEFAULTTONULL);
+        }
+        if (!monitor) {
+            POINT cursor{};
+            if (GetCursorPos(&cursor)) {
+                monitor = MonitorFromPoint(cursor, MONITOR_DEFAULTTONULL);
+            }
+        }
+        if (!monitor) {
+            POINT origin{};
+            monitor = MonitorFromPoint(origin, MONITOR_DEFAULTTOPRIMARY);
+        }
+
+        MONITORINFO monitorInfo{};
+        monitorInfo.cbSize = sizeof(monitorInfo);
+        RECT windowRect{};
+        if (!monitor || !GetMonitorInfoW(monitor, &monitorInfo) || !GetWindowRect(hwnd_, &windowRect)) {
+            return false;
+        }
+        const RECT& work = monitorInfo.rcWork;
+        const int workWidth = std::max(1L, work.right - work.left);
+        const int workHeight = std::max(1L, work.bottom - work.top);
+        const int width = std::min(
+            static_cast<int>(std::max(1L, windowRect.right - windowRect.left)),
+            workWidth);
+        const int height = std::min(
+            static_cast<int>(std::max(1L, windowRect.bottom - windowRect.top)),
+            workHeight);
+        const int x = static_cast<int>(work.left) + (workWidth - width) / 2;
+        const int y = static_cast<int>(work.top) + (workHeight - height) / 2;
+        if (!SetWindowPos(
+                hwnd_,
+                options_.topmost ? HWND_TOPMOST : HWND_NOTOPMOST,
+                x,
+                y,
+                width,
+                height,
+                SWP_NOACTIVATE | SWP_NOOWNERZORDER)) {
+            return false;
+        }
+        lastNormalRect_ = RECT{x, y, x + width, y + height};
+        hasNormalPlacement_ = true;
+        return true;
+    }
+
+    bool clientAreaAnimationsEnabled() const override {
+        BOOL enabled = TRUE;
+        return !SystemParametersInfoW(
+                   SPI_GETCLIENTAREAANIMATION,
+                   0,
+                   &enabled,
+                   0)
+            || enabled != FALSE;
+    }
+
+    void showWithFade(unsigned int durationMs) override {
+        ensureCreated();
+        if (!hwnd_) {
+            return;
+        }
+        initGPU();
+        if (durationMs == 0 || !clientAreaAnimationsEnabled() || IsWindowVisible(hwnd_)) {
+            show();
+            return;
+        }
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        if (!AnimateWindow(hwnd_, durationMs, AW_ACTIVATE | AW_BLEND)) {
+            showWithPlacementState(false);
+        } else {
+            placementStatePending_ = false;
+        }
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        UpdateWindow(hwnd_);
+    }
+
     void activate() override {
         ensureCreated();
         if (!hwnd_) {
@@ -430,8 +513,9 @@ public:
             return;
         }
         // 开启“关闭到托盘”时，点击关闭仅隐藏窗口，程序继续在托盘后台运行。
-        if (closeToTray_ && internalTrayVisible_) {
-            ShowWindow(hwnd_, SW_HIDE);
+        if (closeToTray_) {
+            if (showInternalTrayIcon()) ShowWindow(hwnd_, SW_HIDE);
+            else restoreFromTray(); // Never leave a window without a recovery path.
             return;
         }
         DestroyWindow(hwnd_);
@@ -439,7 +523,7 @@ public:
 
     void setCloseToTray(bool closeToTray) override {
         closeToTray_ = closeToTray;
-        if (!closeToTray_) {
+        if (!closeToTray_ && !trayEnabled_) {
             hideInternalTrayIcon();
             return;
         }
@@ -451,6 +535,27 @@ public:
         return internalTrayVisible_;
     }
 
+    bool setTrayEnabled(bool enabled) override {
+        trayEnabled_ = enabled;
+        if (!enabled) { hideInternalTrayIcon(); return true; }
+        ensureCreated();
+        return showInternalTrayIcon();
+    }
+
+    void setOnCloseRequested(std::function<void(bool)> callback) override {
+        onCloseRequested_ = std::move(callback);
+    }
+
+    bool notifyTray(const std::wstring& title, const std::wstring& message) override {
+        if (!internalTrayVisible_) return false;
+        NOTIFYICONDATAW data{};
+        data.cbSize = sizeof(data); data.hWnd = hwnd_; data.uID = kInternalTrayIconId;
+        data.uFlags = NIF_INFO; data.dwInfoFlags = NIIF_INFO;
+        wcsncpy_s(data.szInfoTitle, title.c_str(), _TRUNCATE);
+        wcsncpy_s(data.szInfo, message.c_str(), _TRUNCATE);
+        return Shell_NotifyIconW(NIM_MODIFY, &data) != FALSE;
+    }
+
     bool showInternalTrayIcon() {
         if (!hwnd_) {
             return false;
@@ -459,9 +564,10 @@ public:
         data.cbSize = sizeof(data);
         data.hWnd = hwnd_;
         data.uID = kInternalTrayIconId;
-        data.uFlags = NIF_ICON | NIF_TIP | NIF_MESSAGE;
+        data.uFlags = NIF_ICON | NIF_TIP | NIF_MESSAGE | NIF_SHOWTIP;
         data.uCallbackMessage = oneui::kTrayCallbackMessage;
         data.hIcon = reinterpret_cast<HICON>(SendMessageW(hwnd_, WM_GETICON, ICON_SMALL, 0));
+        if (!data.hIcon) data.hIcon = LoadIconW(GetModuleHandleW(nullptr), MAKEINTRESOURCEW(1));
         if (!data.hIcon) {
             data.hIcon = reinterpret_cast<HICON>(GetClassLongPtrW(hwnd_, GCLP_HICONSM));
         }
@@ -471,7 +577,8 @@ public:
         wcsncpy_s(data.szTip, options_.title.c_str(), _TRUNCATE);
 
         if (internalTrayVisible_) {
-            return Shell_NotifyIconW(NIM_MODIFY, &data) != FALSE;
+            if (Shell_NotifyIconW(NIM_MODIFY, &data)) return true;
+            internalTrayVisible_ = false;
         }
         if (!Shell_NotifyIconW(NIM_ADD, &data)) {
             return false;
@@ -512,7 +619,8 @@ public:
         }
         AppendMenuW(menu, MF_STRING, oneui::kTrayCommandShow, L"显示主界面");
         AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-        AppendMenuW(menu, MF_STRING, oneui::kTrayCommandExit, L"退出");
+        AppendMenuW(menu, MF_STRING, oneui::kTrayCommandExit, L"退出程序");
+        SetMenuDefaultItem(menu, oneui::kTrayCommandShow, FALSE);
         POINT pt{};
         GetCursorPos(&pt);
         // 经典托盘菜单收尾：置前台并在弹出后补一条空消息，避免菜单不消失。
@@ -1215,12 +1323,25 @@ private:
     LRESULT handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         if (taskbarCreatedMessage_ != 0 && message == taskbarCreatedMessage_) {
             internalTrayVisible_ = false;
-            if (closeToTray_) {
-                showInternalTrayIcon();
+            if (closeToTray_ || trayEnabled_) {
+                if (!showInternalTrayIcon()) restoreFromTray();
             }
             return 0;
         }
         switch (message) {
+        case WM_CLOSE:
+            if (onCloseRequested_) { auto callback = onCloseRequested_; callback(false); }
+            else close();
+            return 0;
+        case WM_QUERYENDSESSION:
+            return TRUE;
+        case WM_ENDSESSION:
+            if (wParam) {
+                closeToTray_ = false;
+                if (onCloseRequested_) { auto callback = onCloseRequested_; callback(true); }
+                else close();
+            }
+            return 0;
         case WM_ERASEBKGND:
             return 1;
         case WM_PAINT:
@@ -1230,6 +1351,8 @@ private:
             switch (LOWORD(lParam)) {
             case WM_LBUTTONUP:
             case WM_LBUTTONDBLCLK:
+            case NIN_SELECT:
+            case NIN_KEYSELECT:
                 restoreFromTray();
                 break;
             case WM_RBUTTONUP:
@@ -1245,6 +1368,7 @@ private:
                     restoreFromTray();
                     return 0;
                 case oneui::kTrayCommandExit:
+                    if (onCloseRequested_) { auto callback = onCloseRequested_; callback(true); return 0; }
                     closeToTray_ = false; // 强制真正退出，绕过“关闭到托盘”
                     hideInternalTrayIcon();
                     if (hwnd_) {
@@ -3180,9 +3304,11 @@ private:
     bool pendingMaximized_ = false;
     float cornerRadiusLogical_ = 0.0f;
     bool closeToTray_ = false;
+    bool trayEnabled_ = false;
+    std::function<void(bool)> onCloseRequested_;
     bool internalTrayVisible_ = false;
     UINT taskbarCreatedMessage_ = 0;
-    static constexpr UINT kInternalTrayIconId = 0x4F56504E;
+    static constexpr UINT kInternalTrayIconId = 0x5743; // Version-4 shell callbacks carry a 16-bit ID.
     // Win10 圆角回退（SetWindowRgn）会丢掉 DWM 柔和投影，用一个分层伴随窗口在主窗
     // 圆角轮廓外画一圈抗锯齿柔光投影补回来。Win11 走 DWM 圆角自带投影，不用它。
     HWND shadowHwnd_ = nullptr;

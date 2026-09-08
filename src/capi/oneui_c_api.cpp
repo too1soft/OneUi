@@ -418,6 +418,15 @@ OneUiWidget* wrap(std::shared_ptr<oneui::Widget> widget) {
     OneUiWidget* raw = wrapper.release();
     {
         std::lock_guard<std::mutex> lock(gWidgetRegistryMutex);
+        // Dynamic clients rebuild views without reloading their stylesheet.
+        // Pruning only on stylesheet refresh retained every dead binding for
+        // the entire process lifetime. Amortize cleanup during allocation.
+        static unsigned allocationsSincePrune = 0;
+        if (++allocationsSincePrune >= 128) {
+            allocationsSincePrune = 0;
+            gWidgetRegistry.erase(std::remove_if(gWidgetRegistry.begin(), gWidgetRegistry.end(),
+                [](const auto& binding) { return !binding || binding->widget.expired(); }), gWidgetRegistry.end());
+        }
         gWidgetRegistry.push_back(raw->styleBinding);
     }
     if (raw->styleSheet) {
@@ -1348,6 +1357,21 @@ void oneui_window_show(OneUiWindow* window) {
     window->window->show();
 }
 
+int oneui_window_center_on_active_monitor(OneUiWindow* window) {
+    return window && window->window && window->window->centerOnActiveMonitor() ? 1 : 0;
+}
+
+void oneui_window_show_with_fade(OneUiWindow* window, unsigned int duration_ms) {
+    if (!window || !window->window) {
+        return;
+    }
+    window->window->showWithFade(duration_ms);
+}
+
+int oneui_window_client_area_animations_enabled(OneUiWindow* window) {
+    return window && window->window && window->window->clientAreaAnimationsEnabled() ? 1 : 0;
+}
+
 void oneui_window_activate(OneUiWindow* window) {
     if (!window || !window->window) {
         return;
@@ -1478,6 +1502,21 @@ void oneui_window_set_close_to_tray(OneUiWindow* window, int close_to_tray) {
         return;
     }
     window->window->setCloseToTray(close_to_tray != 0);
+}
+
+int oneui_window_set_tray_enabled(OneUiWindow* window, int enabled) {
+    return window && window->window && window->window->setTrayEnabled(enabled != 0);
+}
+int oneui_window_tray_icon_visible(OneUiWindow* window) {
+    return window && window->window && window->window->trayIconVisible();
+}
+int oneui_window_notify_tray(OneUiWindow* window, const wchar_t* title, const wchar_t* message) {
+    return window && window->window && window->window->notifyTray(title ? title : L"", message ? message : L"");
+}
+void oneui_window_set_on_close_requested(OneUiWindow* window, OneUiIntCallback callback, void* user_data) {
+    if (!window || !window->window) return;
+    if (!callback) { window->window->setOnCloseRequested({}); return; }
+    window->window->setOnCloseRequested([callback, user_data](bool force) { callback(force ? 1 : 0, user_data); });
 }
 
 void oneui_window_post(OneUiWindow* window, OneUiVoidCallback callback, void* user_data) {
@@ -1629,6 +1668,11 @@ int oneui_window_layout_snapshot_utf8(
     window->pendingLayoutSnapshot.clear();
     window->hasPendingLayoutSnapshot = false;
     return 1;
+}
+
+int oneui_window_capture_frame_png_utf8(OneUiWindow* window, const char* path_utf8) {
+    if (!window || !window->window || !path_utf8 || !*path_utf8) return 0;
+    return window->window->captureFramePng(utf8OrEmpty({path_utf8, std::strlen(path_utf8)})) ? 1 : 0;
 }
 
 void oneui_window_set_content(OneUiWindow* window, OneUiWidget* widget) {
@@ -2383,6 +2427,13 @@ void oneui_popup_set_content(OneUiWidget* popup, OneUiWidget* content) {
     }
 }
 
+void oneui_popup_set_on_closed(OneUiWidget* popup, OneUiVoidCallback callback, void* user_data) {
+    auto nativePopup = asWidget<oneui::Popup>(popup);
+    if (!nativePopup) return;
+    if (!callback) { nativePopup->setOnClosed({}); return; }
+    nativePopup->setOnClosed([callback, user_data] { callback(user_data); });
+}
+
 void oneui_popup_set_open(OneUiWidget* popup, int open) {
     if (auto* nativePopup = asWidget<oneui::Popup>(popup)) {
         nativePopup->setOpen(open != 0);
@@ -2695,6 +2746,51 @@ double oneui_progress_bar_value(OneUiWidget* progress_bar) {
         return nativeProgressBar->value();
     }
     return 0.0;
+}
+
+void oneui_progress_bar_set_smooth(OneUiWidget* progress_bar, int enabled, double duration_ms) {
+    if (auto* nativeProgressBar = asWidget<oneui::ProgressBar>(progress_bar)) {
+        nativeProgressBar->setSmooth(enabled != 0, duration_ms);
+    }
+}
+
+void oneui_progress_bar_set_indeterminate(OneUiWidget* progress_bar, int indeterminate) {
+    if (auto* nativeProgressBar = asWidget<oneui::ProgressBar>(progress_bar)) {
+        nativeProgressBar->setIndeterminate(indeterminate != 0);
+    }
+}
+
+int oneui_progress_bar_is_indeterminate(OneUiWidget* progress_bar) {
+    if (auto* nativeProgressBar = asWidget<oneui::ProgressBar>(progress_bar)) {
+        return nativeProgressBar->indeterminate() ? 1 : 0;
+    }
+    return 0;
+}
+
+void oneui_progress_bar_set_animations_enabled(OneUiWidget* progress_bar, int enabled) {
+    if (auto* nativeProgressBar = asWidget<oneui::ProgressBar>(progress_bar)) {
+        nativeProgressBar->setAnimationsEnabled(enabled != 0);
+    }
+}
+
+void oneui_progress_bar_set_colors(
+    OneUiWidget* progress_bar,
+    uint8_t track_r,
+    uint8_t track_g,
+    uint8_t track_b,
+    uint8_t track_a,
+    uint8_t fill_r,
+    uint8_t fill_g,
+    uint8_t fill_b,
+    uint8_t fill_a,
+    float radius) {
+    auto* nativeProgress = asWidget<oneui::ProgressBar>(progress_bar);
+    if (!nativeProgress) return;
+    oneui::ProgressBarStyleOverride style;
+    style.trackBackground = oneui::Color{track_r, track_g, track_b, track_a};
+    style.fill = oneui::Color{fill_r, fill_g, fill_b, fill_a};
+    style.radius = std::clamp(radius, 0.0f, 100.0f);
+    nativeProgress->setStyleOverride(std::move(style));
 }
 
 OneUiWidget* oneui_sparkline_create() {

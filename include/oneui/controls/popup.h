@@ -81,6 +81,7 @@ public:
     void clearStyleOverride();
     PopupStyle resolvedStyle() const;
     Rect resolvedContentRect() const;
+    void setOnClosed(std::function<void()> callback) { onClosed_ = std::move(callback); }
 
     void setInvalidator(std::function<void()> invalidator) override;
     void paint(Canvas& canvas) override;
@@ -112,6 +113,7 @@ private:
     std::shared_ptr<Widget> anchor_;
     std::shared_ptr<Widget> content_;
     bool open_ = false;
+    std::function<void()> onClosed_;
     Binding<bool> openBinding_;
     PopupPreferredPlacement preferredPlacement_ = PopupPreferredPlacement::BottomStart;
     std::optional<Rect> viewport_;

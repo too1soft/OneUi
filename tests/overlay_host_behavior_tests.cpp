@@ -819,7 +819,8 @@ void testFillOverlayGivesPopupAViewportForMenuLayout() {
     expectEqual("Fill popup overlay height", static_cast<int>(popup->frame().height), 1000);
     expectEqual("Popup menu x includes surface padding", static_cast<int>(menu->frame().x), 708);
     expectEqual("Popup menu y includes offset and padding", static_cast<int>(menu->frame().y), 285);
-    expectEqual("Popup menu width excludes surface padding", static_cast<int>(menu->frame().width), 208);
+    expectEqual("Popup preserves requested menu content width", static_cast<int>(menu->frame().width), 224);
+    expectEqual("Popup preserves all menu rows", static_cast<int>(menu->frame().height), static_cast<int>(menu->preferredSize().height));
     expectEqual(
         "Popup menu keeps non-zero natural height",
         menu->frame().height > 0.0f ? 1 : 0,
@@ -1114,6 +1115,18 @@ void testNestedOverlayHostPropagatesElevatedSelectToAncestors() {
 } // namespace
 
 int main() {
+
+    {
+        oneui::OverlayHost host;
+        host.setFrame({0,0,800,600});
+        auto dialog=std::make_shared<oneui::Dialog>(L"连接诊断",L"等待结果");
+        int closed=0;
+        dialog->setOnClose([&] { ++closed; });
+        host.addOverlay(dialog,oneui::OverlayOptions::modal(10));
+        expectEqual("modal diagnostic Escape handled without preceding click",host.onKeyDown(oneui::KeyEvent{oneui::Key::Escape})?1:0,1);
+        expectEqual("modal diagnostic Escape cancels once",closed,1);
+    }
+
     testAddOverlayPreservesEntryOrderAndLayerValues();
     testPaintOrdersByLayerWithStableEqualLayers();
     testModalOverlayPaintsTheStandardBackdrop();

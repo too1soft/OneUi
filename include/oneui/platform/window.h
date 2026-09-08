@@ -99,6 +99,15 @@ public:
     // Creates the native handle on the calling UI thread without showing it.
     virtual void initialize() = 0;
     virtual void show() = 0;
+    // Positions the existing native window in the work area of the monitor the
+    // user is currently interacting with. Backends without this concept return
+    // false and leave placement unchanged.
+    virtual bool centerOnActiveMonitor() { return false; }
+    // Shows the window with a short platform-native opacity transition. The
+    // default preserves ordinary show semantics.
+    virtual void showWithFade(unsigned int durationMs) { (void)durationMs; show(); }
+    // Mirrors the operating system's client-area animation preference.
+    virtual bool clientAreaAnimationsEnabled() const { return true; }
     // Restores a minimized window when needed and requests foreground attention.
     // Platforms without a foreground concept retain the regular show behavior.
     virtual void activate() { show(); }
@@ -154,9 +163,16 @@ public:
     // 设置窗口整体圆角半径（逻辑像素，0 = 直角）。默认空实现，Win32 覆盖。
     virtual void setCornerRadius(float radiusLogical) { (void)radiusLogical; }
     // 开启后，点击关闭改为隐藏到托盘（而非退出）。Win32 会同步创建可恢复窗口的
-    // 托盘入口；若系统无法创建入口，关闭动作会正常退出，避免产生不可恢复的隐藏窗口。
+    // 托盘入口；若系统无法创建入口则保留可见窗口，避免产生不可恢复的隐藏窗口。
     virtual void setCloseToTray(bool closeToTray) { (void)closeToTray; }
     virtual bool trayIconVisible() const { return false; }
+    // Explicit window-owned tray; independent of the close preference. Legacy
+    // setCloseToTray callers retain their implicit tray behaviour.
+    virtual bool setTrayEnabled(bool enabled) { (void)enabled; return false; }
+    virtual bool notifyTray(const std::wstring& title, const std::wstring& message) {
+        (void)title; (void)message; return false;
+    }
+    virtual void setOnCloseRequested(std::function<void(bool)> callback) { (void)callback; }
 protected:
     void setCommandRoot(const std::shared_ptr<Widget>& root) { commandRoot_ = root; }
 private:

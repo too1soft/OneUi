@@ -92,7 +92,13 @@ void applySwitchOverride(SwitchStyle& style, const std::optional<SwitchStateStyl
 void Switch::paint(Canvas& canvas) {
     const auto& t = theme();
     const Rect rect = frame();
-    const Rect track{rect.x, rect.y + (rect.height - 24.0f) / 2.0f, 46.0f, 24.0f};
+    // Compact switches must paint and hit-test the same bounds. Fixed 46x24
+    // geometry used to paint beyond a host's 40x22 slot and clip the thumb.
+    const float trackWidth = std::max(0.0f, std::min(46.0f, rect.width));
+    const float trackHeight = std::max(0.0f, std::min(24.0f, rect.height));
+    const Rect track{rect.x, rect.y + (rect.height - trackHeight) / 2.0f, trackWidth, trackHeight};
+    const float thumbInset = trackHeight / 6.0f;
+    const float thumbSize = std::max(0.0f, std::min(trackHeight - 2.0f * thumbInset, trackWidth - 2.0f * thumbInset));
     const bool active = checked();
 
     SwitchStyle style;
@@ -137,8 +143,10 @@ void Switch::paint(Canvas& canvas) {
     if (style.borderWidth > 0.0f && style.border.a != 0) {
         canvas.strokeRect(track, style.border, style.radius, style.borderWidth);
     }
-    canvas.fillRect(Rect{track.x + (active ? 24.0f : 4.0f), track.y + 4.0f, 16.0f, 16.0f}, style.thumbBackground, 8.0f);
-    canvas.drawTextEllipsized(text_, Rect{rect.x + 58.0f, rect.y, rect.width - 58.0f, rect.height}, style.labelColor, t.fontMd, TextAlign::Left);
+    canvas.fillRect(Rect{track.x + (active ? trackWidth - thumbInset - thumbSize : thumbInset), track.y + thumbInset, thumbSize, thumbSize}, style.thumbBackground, thumbSize / 2.0f);
+    if (!text_.empty() && rect.width > 58.0f) {
+        canvas.drawTextEllipsized(text_, Rect{rect.x + 58.0f, rect.y, rect.width - 58.0f, rect.height}, style.labelColor, t.fontMd, TextAlign::Left);
+    }
 }
 
 bool Switch::onMouseMove(const MouseEvent& event) {

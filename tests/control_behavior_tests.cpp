@@ -3918,6 +3918,36 @@ void testProgressBarStyleOverridePaintsCustomColorsAndGeometry() {
     }
 }
 
+void testProgressBarSupportsSmoothAndIndeterminateModes() {
+    oneui::ProgressBar progress;
+    progress.setFrame(oneui::Rect{0.0f, 0.0f, 200.0f, 10.0f});
+    progress.setSmooth(true, 180.0);
+    progress.setAnimationsEnabled(false);
+    progress.setValue(0.5);
+
+    RecordingCanvas determinateCanvas;
+    progress.paint(determinateCanvas);
+    expectEqual("ProgressBar static smooth mode paints fill", static_cast<int>(determinateCanvas.fillRects.size()), 2);
+    if (determinateCanvas.fillRects.size() >= 2) {
+        expectRect(
+            "ProgressBar static smooth mode preserves semantic value",
+            determinateCanvas.fillRects[1].rect,
+            oneui::Rect{0.0f, 0.0f, 100.0f, 10.0f});
+    }
+
+    progress.setIndeterminate(true);
+    expectEqual("ProgressBar exposes indeterminate state", progress.indeterminate() ? 1 : 0, 1);
+    RecordingCanvas indeterminateCanvas;
+    progress.paint(indeterminateCanvas);
+    expectEqual("ProgressBar indeterminate paints one restrained segment", static_cast<int>(indeterminateCanvas.fillRects.size()), 2);
+    if (indeterminateCanvas.fillRects.size() >= 2) {
+        expectNear("ProgressBar indeterminate segment width", indeterminateCanvas.fillRects[1].rect.width, 56.0f);
+    }
+
+    progress.setIndeterminate(false);
+    expectEqual("ProgressBar returns to determinate state", progress.indeterminate() ? 1 : 0, 0);
+}
+
 void testSparklineClampsSamplesAndPaintsAStableSeries() {
     oneui::Sparkline sparkline;
     sparkline.setFrame(oneui::Rect{0.0f, 0.0f, 120.0f, 48.0f});
@@ -6529,6 +6559,33 @@ void testToastPaintsAndDispatchesActions() {
     expectEqual("Toast secondary action click", closeClicks, 1);
 }
 
+void testToastMissingGlobalRuleRetainsOpaqueSurfaceAndReadableMessage() {
+    oneui::Toast toast(L"诊断完成", L"本机服务与平台连接检查已结束");
+    toast.setFrame(oneui::Rect{0.0f, 0.0f, 420.0f, 76.0f});
+    auto sheet = std::make_shared<oneui::StyleSheet>();
+    std::string error;
+    sheet->addRulesFromCss("button { color: #454c59; }", &error);
+    toast.setStyleSheet(sheet, oneui::StyleNode{"toast", {"client-toast"}, oneui::StyleStateNone});
+    RecordingCanvas fallback;
+    toast.paint(fallback);
+    expectEqual("Toast missing rule keeps opaque fallback", countFillRectsWithColor(fallback, oneui::Color{43,43,49}), 1);
+    expectTrue("Toast ignores unrelated button foreground for message", fallback.texts.size() >= 2 && fallback.texts[1].color.r > 150);
+    sheet->addRulesFromCss("toast.client-toast { background: #ffffff; color: #172338; } .client-toast.toast-message { color: #536279; }", &error);
+    RecordingCanvas themed;
+    toast.paint(themed);
+    expectEqual("Toast light theme has opaque white surface", countFillRectsWithColor(themed,oneui::Color{255,255,255}),1);
+    expectTrue("Toast preserves message content", themed.texts.size() >= 2);
+    if (themed.texts.size() >= 2) {
+        expectTrue("Toast message uses selected theme foreground", themed.texts[1].color.r == 83 && themed.texts[1].color.g == 98 && themed.texts[1].color.b == 121);
+        expectTrue("Toast title reserves close affordance", themed.texts[0].rect.x + themed.texts[0].rect.width <= 374.0f);
+        expectTrue("Toast message reserves close affordance", themed.texts[1].rect.x + themed.texts[1].rect.width <= 374.0f);
+    }
+    int closed = 0;
+    toast.setOnClose([&] { ++closed; });
+    expectTrue("Toast Escape handles dismissal", toast.onKeyDown(oneui::KeyEvent{oneui::Key::Escape}));
+    expectEqual("Toast Escape closes once", closed, 1);
+}
+
 void testStatusStripActionStyleComesFromCss() {
     oneui::StatusStrip strip(L"Status", L"Reusable status text");
     strip.setFrame(oneui::Rect{0.0f, 0.0f, 360.0f, 62.0f});
@@ -7336,7 +7393,7 @@ void testPopupDrawsBoxShadowWhenElevated() {
 
     expectEqual("Popup paints one box shadow", static_cast<int>(canvas.boxShadows.size()), 1);
     if (!canvas.boxShadows.empty()) {
-        expectRect("Popup shadow uses resolved content rect", canvas.boxShadows[0].rect, oneui::Rect{20.0f, 56.0f, 120.0f, 60.0f});
+        expectRect("Popup shadow includes surface padding", canvas.boxShadows[0].rect, oneui::Rect{20.0f, 56.0f, 136.0f, 76.0f});
         expectNear("Popup shadow offset follows elevation", canvas.boxShadows[0].shadow.offset.y, 4.0f);
         expectNear("Popup shadow blur follows elevation", canvas.boxShadows[0].shadow.blurRadius, 20.0f);
         expectNear("Popup shadow radius uses style", canvas.boxShadows[0].radius, 10.0f);
@@ -7570,7 +7627,51 @@ void testLogViewSelectionAndCopy() {
 
 } // namespace
 
+void testCompactSwitchPaintStaysInsideHitTarget() {
+    oneui::Switch control;
+    control.setFrame(oneui::Rect{10, 20, 40, 22});
+    for (bool checked : {false, true}) {
+        control.setChecked(checked);
+        RecordingCanvas canvas;
+        control.paint(canvas);
+        for (const auto& fill : canvas.fillRects) {
+            const auto& r = fill.rect;
+            expectEqual("Compact switch paints within its hit target",
+                r.x >= 10 && r.y >= 20 && r.x + r.width <= 50.01f && r.y + r.height <= 42.01f ? 1 : 0, 1);
+        }
+    }
+}
+
+void testPopupMenuPaddingKeyboardAndDismissal() {
+    auto menu = std::make_shared<oneui::Menu>();
+    menu->addHeader(L"Account", L"Test");
+    menu->addItem(L"First");
+    menu->addSeparator();
+    menu->addItem(L"Disabled"); menu->setItemDisabled(1, true);
+    menu->addItem(L"Last");
+    menu->setPreferredSize({200.0f, menu->preferredHeight()});
+    int selected = -1, dismissed = 0;
+    menu->setOnItemActivated([&](int index) { selected = index; });
+    oneui::Popup popup;
+    popup.setFrame({0, 0, 600, 500});
+    popup.setAnchorRect(oneui::Rect{20, 20, 80, 32});
+    auto anchor = std::make_shared<oneui::Button>(L""); anchor->setVisible(false); popup.setAnchor(anchor);
+    popup.setContent(menu); popup.setOnClosed([&] { ++dismissed; }); popup.setOpen(true);
+    RecordingCanvas canvas; popup.paint(canvas);
+    expectNear("Menu preferred height survives decorated popup", menu->frame().height, menu->preferredHeight());
+    popup.onKeyDown({oneui::Key::Down}); popup.onKeyDown({oneui::Key::Down});
+    popup.onKeyDown({oneui::Key::Enter});
+    expectEqual("Keyboard skips header separator and disabled item", selected, 2);
+    popup.onKeyDown({oneui::Key::Home}); popup.onKeyDown({oneui::Key::Enter});
+    expectEqual("Home selects first menu action", selected, 0);
+    popup.onKeyDown({oneui::Key::Escape}); popup.setOpen(false);
+    expectEqual("Close callback fires once", dismissed, 1);
+    expectEqual("Closed synthetic popup cannot intercept sidebar", popup.hitTest({22,22}) ? 1 : 0, 0);
+}
+
 int main() {
+    testPopupMenuPaddingKeyboardAndDismissal();
+    testCompactSwitchPaintStaysInsideHitTarget();
     testSingleLineTextEllipsizesByMeasuredWidth();
     testWrappedLabelRespectsWidthHeightAndMaxLines();
     testWidgetAccessibilityInfoReflectsSemanticAndDynamicState();
@@ -7692,6 +7793,7 @@ int main() {
     testBadgeStyleOverridePaintsCustomColorsAndGeometry();
     testBadgeEmptyStyleOverrideKeepsVariantPaintAndClearRestoresDefault();
     testProgressBarStyleOverridePaintsCustomColorsAndGeometry();
+    testProgressBarSupportsSmoothAndIndeterminateModes();
     testProgressBarDisabledStyleAndClearRestoresDefault();
     testSparklineClampsSamplesAndPaintsAStableSeries();
     testDpiScaleContractCoversCommonWindowsSettings();
@@ -7762,6 +7864,7 @@ int main() {
     testStyleBoxTransitionInterpolatesCommonVisualProperties();
     testCardCanPaintStyleBox();
     testToastPaintsAndDispatchesActions();
+    testToastMissingGlobalRuleRetainsOpaqueSurfaceAndReadableMessage();
     testStatusStripActionStyleComesFromCss();
     testStateViewPaintsSemanticContentAndDispatchesAction();
     testCardLaysOutContentWithPadding();

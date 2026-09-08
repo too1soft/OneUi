@@ -35,12 +35,17 @@ if(ONEUI_SKIA_MODE STREQUAL "bundled-static")
         set(_oneui_icu_data "${ONEUI_BUNDLED_SKIA_ROOT}/third_party/externals/icu/common/icudtl.dat")
         set(_oneui_icu_source "${CMAKE_CURRENT_BINARY_DIR}/generated/icu_data.cpp")
         file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/generated")
+        find_package(Python3 COMPONENTS Interpreter REQUIRED)
         add_custom_command(OUTPUT "${_oneui_icu_source}"
-            COMMAND ${CMAKE_COMMAND} "-DINPUT=${_oneui_icu_data}" "-DOUTPUT=${_oneui_icu_source}"
-                -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/EmbedIcuData.cmake"
-            DEPENDS "${_oneui_icu_data}" "${CMAKE_CURRENT_SOURCE_DIR}/cmake/EmbedIcuData.cmake" VERBATIM)
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/scripts/embed-compressed-binary.py"
+                --input "${_oneui_icu_data}"
+                --output "${_oneui_icu_source}"
+                --symbol oneuiEmbeddedIcuData
+            DEPENDS "${_oneui_icu_data}" "${CMAKE_CURRENT_SOURCE_DIR}/scripts/embed-compressed-binary.py" VERBATIM)
         target_sources(oneui_text PRIVATE src/text/icu_data_win32.cpp "${_oneui_icu_source}")
         target_compile_definitions(oneui_text PRIVATE ONEUI_EMBEDDED_ICU=1)
+        target_include_directories(oneui_text PRIVATE "${ONEUI_BUNDLED_SKIA_ROOT}/third_party/externals/zlib")
+        target_link_libraries(oneui_text PUBLIC bcrypt)
     endif()
 endif()
 if(WIN32)

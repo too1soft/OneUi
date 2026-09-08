@@ -289,6 +289,34 @@ bool Menu::isFocusable() const {
     return !disabled();
 }
 
+bool Menu::onKeyDown(const KeyEvent& event) {
+    if (!interactive() || entries_.empty()) return false;
+    if (event.key == Key::Down || event.key == Key::Up || event.key == Key::Home || event.key == Key::End) {
+        const int count = static_cast<int>(entries_.size());
+        const int step = event.key == Key::Up || event.key == Key::End ? -1 : 1;
+        int index = hoveredEntry_;
+        if (event.key == Key::Home || event.key == Key::End || index < 0) index = step > 0 ? -1 : 0;
+        for (int i = 0; i < count; ++i) {
+            index = (index + step + count) % count;
+            const auto& entry = entries_[static_cast<std::size_t>(index)];
+            if (entry.kind == Entry::Kind::Item && !entry.disabled) {
+                hoveredEntry_ = index; pressedEntry_ = -1; invalidate(); break;
+            }
+        }
+        return true;
+    }
+    if (event.key == Key::Enter || event.key == Key::Space) {
+        if (hoveredEntry_ < 0) return true;
+        const auto& entry = entries_[static_cast<std::size_t>(hoveredEntry_)];
+        if (!entry.disabled && entry.kind == Entry::Kind::Item && onItemActivated_) {
+            auto callback = onItemActivated_; const int index = entry.itemIndex;
+            callback(index);
+        }
+        return true;
+    }
+    return false;
+}
+
 bool Menu::hasInteractionState() const {
     return hoveredEntry_ >= 0 || pressedEntry_ >= 0;
 }

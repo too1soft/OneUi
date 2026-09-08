@@ -11,7 +11,7 @@ mod types;
 pub use ffi::*;
 pub use types::*;
 
-pub const UTF8_ABI_VERSION: c_uint = 25;
+pub const UTF8_ABI_VERSION: c_uint = 26;
 
 /// Native C wchar_t, not a fixed-width UTF-16 buffer. Prefer UTF-8 entrypoints.
 #[cfg(windows)]
@@ -380,6 +380,9 @@ extern "C" {
     pub fn oneui_window_destroy(window: *mut OneUiWindow);
     pub fn oneui_window_initialize(window: *mut OneUiWindow);
     pub fn oneui_window_show(window: *mut OneUiWindow);
+    pub fn oneui_window_center_on_active_monitor(window: *mut OneUiWindow) -> c_int;
+    pub fn oneui_window_show_with_fade(window: *mut OneUiWindow, duration_ms: c_uint);
+    pub fn oneui_window_client_area_animations_enabled(window: *mut OneUiWindow) -> c_int;
     pub fn oneui_window_activate(window: *mut OneUiWindow);
     pub fn oneui_window_file_dialog_utf8(
         window: *mut OneUiWindow,
@@ -447,6 +450,10 @@ extern "C" {
         buffer: *mut c_char,
         buffer_len: usize,
         required_len: *mut usize,
+    ) -> c_int;
+    pub fn oneui_window_capture_frame_png_utf8(
+        window: *mut OneUiWindow,
+        path_utf8: *const c_char,
     ) -> c_int;
     pub fn oneui_window_request_focus(
         window: *mut OneUiWindow,
@@ -803,6 +810,32 @@ extern "C" {
     pub fn oneui_progress_bar_create() -> *mut OneUiWidget;
     pub fn oneui_progress_bar_set_value(progress_bar: *mut OneUiWidget, value: f64);
     pub fn oneui_progress_bar_value(progress_bar: *mut OneUiWidget) -> f64;
+    pub fn oneui_progress_bar_set_smooth(
+        progress_bar: *mut OneUiWidget,
+        enabled: c_int,
+        duration_ms: f64,
+    );
+    pub fn oneui_progress_bar_set_indeterminate(
+        progress_bar: *mut OneUiWidget,
+        indeterminate: c_int,
+    );
+    pub fn oneui_progress_bar_is_indeterminate(progress_bar: *mut OneUiWidget) -> c_int;
+    pub fn oneui_progress_bar_set_animations_enabled(
+        progress_bar: *mut OneUiWidget,
+        enabled: c_int,
+    );
+    pub fn oneui_progress_bar_set_colors(
+        progress_bar: *mut OneUiWidget,
+        track_r: u8,
+        track_g: u8,
+        track_b: u8,
+        track_a: u8,
+        fill_r: u8,
+        fill_g: u8,
+        fill_b: u8,
+        fill_a: u8,
+        radius: c_float,
+    );
 
     pub fn oneui_sparkline_create() -> *mut OneUiWidget;
     pub fn oneui_sparkline_set_values(

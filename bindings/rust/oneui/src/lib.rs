@@ -677,6 +677,19 @@ impl UiDispatcher {
         String::from_utf8(bytes).map_err(|_| Error::LayoutSnapshotFailed)
     }
 
+    /// Captures the composed client frame in opt-in QA builds. Production
+    /// builds return false and never invoke operating-system screen capture.
+    pub fn capture_frame_png(&self, path: &Path) -> bool {
+        let Ok(path) = CString::new(path.to_string_lossy().as_bytes()) else {
+            return false;
+        };
+        self.state
+            .with_raw(|raw| unsafe {
+                sys::oneui_window_capture_frame_png_utf8(raw, path.as_ptr()) != 0
+            })
+            .unwrap_or(false)
+    }
+
     /// Re-resolves and reapplies the window style sheet after runtime CSS
     /// custom-property changes.
     pub fn refresh_style_sheet(&self) -> Result<(), Error> {
@@ -2677,6 +2690,21 @@ impl ProgressBarHandle {
         Ok(())
     }
 
+    pub fn set_indeterminate(&self, indeterminate: bool) -> Result<(), Error> {
+        if self.state.raw.load(Ordering::Acquire).is_null() {
+            return Err(Error::WidgetDestroyed);
+        }
+        let state = Arc::clone(&self.state);
+        self.dispatcher.dispatch(move || {
+            let raw = state.raw.load(Ordering::Acquire);
+            if !raw.is_null() {
+                unsafe {
+                    sys::oneui_progress_bar_set_indeterminate(raw, i32::from(indeterminate));
+                }
+            }
+        })
+    }
+
     fn drain_pending_value(state: &ProgressBarState) {
         loop {
             let value = state
@@ -2734,6 +2762,52 @@ impl ProgressBar {
 
     pub fn value(&self) -> f64 {
         unsafe { sys::oneui_progress_bar_value(self.widget.as_raw()) }
+    }
+
+    pub fn set_smooth(&self, enabled: bool, duration_ms: f64) {
+        unsafe {
+            sys::oneui_progress_bar_set_smooth(
+                self.widget.as_raw(),
+                i32::from(enabled),
+                duration_ms.clamp(0.0, 2000.0),
+            )
+        };
+    }
+
+    pub fn set_indeterminate(&self, indeterminate: bool) {
+        unsafe {
+            sys::oneui_progress_bar_set_indeterminate(
+                self.widget.as_raw(),
+                i32::from(indeterminate),
+            )
+        };
+    }
+
+    pub fn is_indeterminate(&self) -> bool {
+        unsafe { sys::oneui_progress_bar_is_indeterminate(self.widget.as_raw()) != 0 }
+    }
+
+    pub fn set_animations_enabled(&self, enabled: bool) {
+        unsafe {
+            sys::oneui_progress_bar_set_animations_enabled(self.widget.as_raw(), i32::from(enabled))
+        };
+    }
+
+    pub fn set_colors(&self, track: Color, fill: Color, radius: f32) {
+        unsafe {
+            sys::oneui_progress_bar_set_colors(
+                self.widget.as_raw(),
+                track.r,
+                track.g,
+                track.b,
+                track.a,
+                fill.r,
+                fill.g,
+                fill.b,
+                fill.a,
+                radius,
+            )
+        };
     }
 
     pub fn as_widget(&self) -> &Widget {
@@ -9968,6 +10042,24 @@ impl Window {
         });
     }
 
+    pub fn center_on_active_monitor(&self) -> bool {
+        self.state
+            .with_raw(|raw| unsafe { sys::oneui_window_center_on_active_monitor(raw) != 0 })
+            .unwrap_or(false)
+    }
+
+    pub fn show_with_fade(&self, duration_ms: u32) {
+        self.state.with_raw(|raw| unsafe {
+            sys::oneui_window_show_with_fade(raw, duration_ms);
+        });
+    }
+
+    pub fn client_area_animations_enabled(&self) -> bool {
+        self.state
+            .with_raw(|raw| unsafe { sys::oneui_window_client_area_animations_enabled(raw) != 0 })
+            .unwrap_or(true)
+    }
+
     pub fn activate(&self) {
         self.state.with_raw(|raw| unsafe {
             sys::oneui_window_activate(raw);
@@ -9995,6 +10087,11 @@ impl Window {
 
     pub fn layout_snapshot_json(&self) -> Result<String, Error> {
         self.dispatcher().layout_snapshot_json()
+    }
+
+    /// Captures the composed client frame in opt-in QA builds.
+    pub fn capture_frame_png(&self, path: &Path) -> bool {
+        self.dispatcher().capture_frame_png(path)
     }
 
     pub fn file_dialog(&self, options: FileDialogOptions<'_>) -> Result<Option<PathBuf>, Error> {

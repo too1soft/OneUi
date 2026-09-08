@@ -109,7 +109,7 @@ Cocoa 已接入源码但未构建；运行时服务和原生验收状态见 [后
 | `Card` | `controls/card.h` | 主线 | ✓ | ✓ | raw | 内容 surface 与标准阴影 |
 | `Badge` | `controls/badge.h` | 主线 | ✓ | ✓ | raw | neutral/success/warning/danger/accent |
 | `IconBadge` | `controls/icon_badge.h` | 可用 | ✓ | ✓ | raw | 图标、accent、stroke width |
-| `ProgressBar` | `controls/progress_bar.h` | 主线 | ✓ | ✓ | ✓ | 0..1 进度与样式；当前为确定性进度 |
+| `ProgressBar` | `controls/progress_bar.h` | 主线 | ✓ | ✓ | ✓ | 0..1 确定进度、180ms 平滑追随与低干扰未知进度模式 |
 | `Sparkline` | `controls/sparkline.h` | 主线 | ✓ | ✓ | ✓ | 0..1 sample、clamp、网格、折线、末端点；非交互图表 |
 | `Separator` | `controls/separator.h` | 主线 | ✓ | — | — | 横/纵分隔和样式 |
 | `StateView` | `controls/state_view.h` | 主线 | ✓ | ✓ | ✓ | 空/错/加载等状态的图标、标题、说明、操作 |

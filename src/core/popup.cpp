@@ -188,6 +188,7 @@ void Popup::setOpen(bool open) {
         return;
     }
     openBinding_.set(open, open_);
+    if (open && content_ && content_->isFocusable()) focusChild(content_.get(), true);
     if (!open) {
         pressedChild_ = nullptr;
         if (focusedChild_ == content_.get()) {
@@ -195,6 +196,7 @@ void Popup::setOpen(bool open) {
         }
     }
     invalidate();
+    if (!open && onClosed_) { auto callback = onClosed_; callback(); }
 }
 
 bool Popup::isOpen() const {
@@ -306,7 +308,10 @@ PopupStyle Popup::resolvedStyle() const {
 
 Rect Popup::resolvedContentRect() const {
     const PopupStyle style = resolvedStyle();
-    const Size preferred = content_ ? content_->preferredSize() : Size{};
+    Size preferred = content_ ? content_->preferredSize() : Size{};
+    // Child preference is its content size, not the decorated popup size.
+    preferred.width += style.padding.horizontal();
+    preferred.height += style.padding.vertical();
     return PopupPlacement::resolve(PopupPlacementRequest{resolvedAnchorRect(), preferred, resolvedViewport(), preferredPlacement_, style.offset}).rect;
 }
 

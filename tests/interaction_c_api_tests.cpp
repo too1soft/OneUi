@@ -17,7 +17,7 @@ static void release(void* data) { auto* c = static_cast<Context*>(data); ++*c->d
 static int disabled(void*) { return 0; }
 int main() {
     try {
-        require(ONEUI_UTF8_ABI_VERSION == 25, "ABI is 25");
+        require(ONEUI_UTF8_ABI_VERSION == 26, "ABI is 26");
         auto* field = oneui_text_field_create_utf8(str("placeholder"));
         require(field != nullptr, "create editor");
         int calls = 0, drops = 0;

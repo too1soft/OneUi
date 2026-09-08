@@ -1,4 +1,5 @@
 #include "text_layout.h"
+#include "foreground_painter.h"
 #include "internal/unicode.h"
 #include "platform/shared/skia_canvas.h"
 #include "include/core/SkCanvas.h"
@@ -435,9 +436,8 @@ std::pair<std::size_t, std::size_t> Layout::word(std::size_t offset) const {
 void Layout::paint(SkCanvas& canvas, Point origin, Color color) const {
     for (const auto& part : impl_->parts) part.layout->paint(canvas, {origin.x, origin.y + part.y}, color);
     if (!impl_->paragraph) return;
-    SkPaint paint; paint.setAntiAlias(true); paint.setColor(SkColorSetARGB(color.a, color.r, color.g, color.b));
-    impl_->paragraph->updateForegroundPaint(0, impl_->utf8.size(), paint);
-    impl_->paragraph->paint(&canvas, origin.x, origin.y);
+    ForegroundPainter painter(canvas, SkColorSetARGB(color.a, color.r, color.g, color.b));
+    impl_->paragraph->paint(&painter, origin.x, origin.y);
 }
 LayoutStats Layout::stats() { auto result = counters; result.cachedEntries = cache.size(); return result; }
 void Layout::clearCache() { cache.clear(); counters = {}; }

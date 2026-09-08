@@ -302,6 +302,9 @@ void testUtf8AbiRoundTripsUnicodeText() {
     OneUiWindow* window = oneui_window_create_utf8(&options);
     expectTrue("utf8 window create", window != nullptr);
     if (window) {
+        expectTrue("hidden window centers on active monitor", oneui_window_center_on_active_monitor(window) == 1);
+        const int animationsEnabled = oneui_window_client_area_animations_enabled(window);
+        expectTrue("client animation preference is boolean", animationsEnabled == 0 || animationsEnabled == 1);
         oneui_window_set_title_utf8(window, utf8View(text));
         oneui_window_set_minimum_client_size(window, 510.0f, 700.0f);
         expectTrue("runtime fullscreen starts disabled", oneui_window_is_fullscreen(window) == 0);
@@ -1092,7 +1095,15 @@ void testProgressBarAbiClampsValues() {
     expectTrue("progress bar upper clamp", oneui_progress_bar_value(progress) == 1.0);
     oneui_progress_bar_set_value(progress, -1.0);
     expectTrue("progress bar lower clamp", oneui_progress_bar_value(progress) == 0.0);
+    oneui_progress_bar_set_smooth(progress, 1, 180.0);
+    oneui_progress_bar_set_colors(progress, 238, 241, 246, 255, 50, 92, 246, 255, 100.0f);
+    oneui_progress_bar_set_indeterminate(progress, 1);
+    expectTrue("progress bar indeterminate round trip", oneui_progress_bar_is_indeterminate(progress) == 1);
+    oneui_progress_bar_set_animations_enabled(progress, 0);
+    oneui_progress_bar_set_indeterminate(progress, 0);
+    expectTrue("progress bar determinate round trip", oneui_progress_bar_is_indeterminate(progress) == 0);
     expectTrue("progress bar null query", oneui_progress_bar_value(nullptr) == 0.0);
+    expectTrue("progress bar null indeterminate query", oneui_progress_bar_is_indeterminate(nullptr) == 0);
     oneui_widget_destroy(progress);
 }
 

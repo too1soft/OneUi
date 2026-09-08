@@ -130,6 +130,7 @@ fn link_static(lib_dir: &Path) {
             "usp10",
             "windowscodecs",
             "advapi32",
+            "bcrypt",
         ] {
             println!("cargo:rustc-link-lib={name}");
         }

@@ -485,7 +485,7 @@ enum {
     OneUiTerminalCellOverline = 1u << 11
 };
 
-#define ONEUI_UTF8_ABI_VERSION 25u
+#define ONEUI_UTF8_ABI_VERSION 26u
 
 /*
  * Copies and registers a process-local font under family_alias. Call before
@@ -525,6 +525,9 @@ ONEUI_API void oneui_window_initialize(OneUiWindow* window);
 /* 1 on success, 0 on invalid handle or native initialization failure. */
 ONEUI_API int oneui_window_initialize_checked(OneUiWindow* window);
 ONEUI_API void oneui_window_show(OneUiWindow* window);
+ONEUI_API int oneui_window_center_on_active_monitor(OneUiWindow* window);
+ONEUI_API void oneui_window_show_with_fade(OneUiWindow* window, unsigned int duration_ms);
+ONEUI_API int oneui_window_client_area_animations_enabled(OneUiWindow* window);
 ONEUI_API void oneui_window_activate(OneUiWindow* window);
 ONEUI_API int oneui_window_run(OneUiWindow* window);
 ONEUI_API void oneui_window_close(OneUiWindow* window);
@@ -563,6 +566,11 @@ ONEUI_API void oneui_window_set_minimum_client_size(
     float height);
 ONEUI_API void oneui_window_set_corner_radius(OneUiWindow* window, float radius);
 ONEUI_API void oneui_window_set_close_to_tray(OneUiWindow* window, int close_to_tray);
+ONEUI_API int oneui_window_set_tray_enabled(OneUiWindow* window, int enabled);
+ONEUI_API int oneui_window_tray_icon_visible(OneUiWindow* window);
+ONEUI_API int oneui_window_notify_tray(OneUiWindow* window, const wchar_t* title, const wchar_t* message);
+// force_exit is 1 for tray Exit / system session ending, 0 for window close.
+ONEUI_API void oneui_window_set_on_close_requested(OneUiWindow* window, OneUiIntCallback callback, void* user_data);
 ONEUI_API void oneui_window_post(OneUiWindow* window, OneUiVoidCallback callback, void* user_data);
 /*
  * Queues callback on the window UI thread. Returns 1 when accepted. When the
@@ -624,6 +632,9 @@ ONEUI_API int oneui_window_layout_snapshot_utf8(
     size_t buffer_len,
     size_t* required_len);
 ONEUI_API void oneui_window_set_content(OneUiWindow* window, OneUiWidget* widget);
+/* Explicit renderer capture for opt-in QA builds. Call on the UI thread.
+ * Returns 0 when ONEUI_ENABLE_TEST_FRAME_CAPTURE is disabled. No screen capture. */
+ONEUI_API int oneui_window_capture_frame_png_utf8(OneUiWindow* window, const char* path_utf8);
 ONEUI_API int oneui_window_request_focus(OneUiWindow* window, OneUiWidget* widget, int focus_visible);
 ONEUI_API void oneui_window_set_on_raw_key(
     OneUiWindow* window,
@@ -769,6 +780,7 @@ ONEUI_API OneUiWidget* oneui_popup_create(void);
 ONEUI_API void oneui_popup_set_anchor(OneUiWidget* popup, OneUiWidget* anchor);
 ONEUI_API void oneui_popup_set_content(OneUiWidget* popup, OneUiWidget* content);
 ONEUI_API void oneui_popup_set_open(OneUiWidget* popup, int open);
+ONEUI_API void oneui_popup_set_on_closed(OneUiWidget* popup, OneUiVoidCallback callback, void* user_data);
 ONEUI_API int oneui_popup_is_open(OneUiWidget* popup);
 ONEUI_API void oneui_popup_set_anchor_rect(
     OneUiWidget* popup,
@@ -831,6 +843,15 @@ ONEUI_API void oneui_label_set_line_height(OneUiWidget* label, float line_height
 ONEUI_API OneUiWidget* oneui_progress_bar_create(void);
 ONEUI_API void oneui_progress_bar_set_value(OneUiWidget* progress_bar, double value);
 ONEUI_API double oneui_progress_bar_value(OneUiWidget* progress_bar);
+ONEUI_API void oneui_progress_bar_set_smooth(OneUiWidget* progress_bar, int enabled, double duration_ms);
+ONEUI_API void oneui_progress_bar_set_indeterminate(OneUiWidget* progress_bar, int indeterminate);
+ONEUI_API int oneui_progress_bar_is_indeterminate(OneUiWidget* progress_bar);
+ONEUI_API void oneui_progress_bar_set_animations_enabled(OneUiWidget* progress_bar, int enabled);
+ONEUI_API void oneui_progress_bar_set_colors(
+    OneUiWidget* progress_bar,
+    uint8_t track_r, uint8_t track_g, uint8_t track_b, uint8_t track_a,
+    uint8_t fill_r, uint8_t fill_g, uint8_t fill_b, uint8_t fill_a,
+    float radius);
 
 /* Compact time-series visualization. Values are clamped to [0, 1]. */
 ONEUI_API OneUiWidget* oneui_sparkline_create(void);

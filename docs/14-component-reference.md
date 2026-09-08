@@ -362,7 +362,7 @@ header、item、separator、disabled、danger、activation，支持 `clearItems(
 
 - **Card**：标准 surface 容器；
 - **Badge/IconBadge**：紧凑状态；
-- **ProgressBar**：确定性 0..1 进度；
+- **ProgressBar**：确定性 0..1 进度，可开启平滑追随或未知进度模式，并可统一关闭动画；
 - **Sparkline**：非交互小型趋势线。
 
 ```cpp

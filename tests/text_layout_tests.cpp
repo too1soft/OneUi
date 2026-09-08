@@ -73,7 +73,18 @@ int main() {
         auto surface = SkSurfaces::Raster(SkImageInfo::MakeN32Premul(200, 80));
         const auto shapes = Layout::stats().layouts;
         second->paint(*surface->getCanvas(), {0, 0}, {255, 0, 0, 255});
+        surface->getCanvas()->clear(SK_ColorTRANSPARENT);
         second->paint(*surface->getCanvas(), {0, 0}, {0, 255, 0, 255});
+        SkPixmap pixels;
+        require(surface->peekPixels(&pixels), "text color pixels available");
+        int greenPixels = 0, redPixels = 0;
+        for (int y = 0; y < pixels.height(); ++y) for (int x = 0; x < pixels.width(); ++x) {
+            const auto c = pixels.getColor(x, y);
+            if (SkColorGetA(c) < 16) continue;
+            if (SkColorGetG(c) > SkColorGetR(c)) ++greenPixels;
+            if (SkColorGetR(c) > SkColorGetG(c)) ++redPixels;
+        }
+        require(greenPixels > 0 && redPixels == 0, "cached text must use this draw's color, not its first paint color");
         require(Layout::stats().layouts == shapes, "color changes must not re-shape");
         LayoutOptions sensitive; sensitive.sensitive = true;
         const auto cacheBefore = Layout::stats().cachedTextBytes;

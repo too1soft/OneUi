@@ -129,7 +129,12 @@ void Toast::paint(Canvas& canvas) {
     const StyleBox box = resolvedStyle();
     const Color foreground = box.foreground.value_or(Color{244, 245, 248});
     const int fontWeight = box.fontWeight.value_or(600);
-    const Color muted{186, 188, 198};
+    auto messageNode = childStyleNode({"toast-message"}, StyleStateNone);
+    // Message copy is not a button. A global light button style must not turn
+    // fallback dark-toast text into a low-contrast dark label.
+    messageNode.tag = "toast-message";
+    const Color muted = styleSheet_ ? styleSheet_->resolve(messageNode).foreground.value_or(foreground)
+                                   : Color{186, 188, 198};
     const Layout l = layout();
 
     paintStyleBox(canvas, frame(), box);
@@ -217,6 +222,20 @@ bool Toast::isFocusable() const {
     return !disabled();
 }
 
+bool Toast::onKeyDown(const KeyEvent& event) {
+    if (!interactive()) return false;
+    if (event.key == Key::Escape && closeVisible_ && onClose_) {
+        const auto callback = onClose_;
+        callback();
+        return true;
+    }
+    if (event.key == Key::Enter || event.key == Key::Space) {
+        const auto callback = !primaryAction_.empty() ? onPrimaryAction_ : onClose_;
+        if (callback) { callback(); return true; }
+    }
+    return false;
+}
+
 bool Toast::onFocusChanged(bool focused) {
     Widget::onFocusChanged(focused);
     invalidate();
@@ -241,7 +260,7 @@ Toast::Layout Toast::layout() const {
     const float actionsX = content.x + content.width - actionsWidth;
     const float textRight = stackActions
         ? content.x + content.width - closeWidth - (closeVisible_ ? 6.0f : 0.0f)
-        : std::max(textLeft, actionsX - 12.0f);
+        : std::max(textLeft, std::min(actionsX - 12.0f, content.x + content.width - closeWidth - 6.0f));
 
     Layout result;
     result.icon = Rect{content.x, content.y + 4.0f, 18.0f, 18.0f};
@@ -257,14 +276,15 @@ Toast::Layout Toast::layout() const {
 }
 
 StyleBox Toast::resolvedStyle() const {
-    const StyleSheet& sheet = styleSheet_ ? *styleSheet_ : fallbackSheet();
     StylePseudoMask state = disabled() ? StyleStateDisabled : StyleStateNone;
     if (focused() && focusVisible()) {
         state |= StyleStateFocus;
     }
     StyleNode node = styleNode_;
     node.state = state;
-    return sheet.resolve(node);
+    StyleNode baseNode{"toast", {"toast"}, state};
+    auto base = fallbackSheet().resolve(baseNode);
+    return styleSheet_ ? mergeStyleBox(std::move(base), styleSheet_->resolve(node)) : base;
 }
 
 StyleBox Toast::resolvedActionStyle(Action action) const {

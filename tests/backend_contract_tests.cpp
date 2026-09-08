@@ -8,6 +8,10 @@
 #include <memory>
 #include <string>
 #include <thread>
+#if defined(_WIN32)
+#include <windows.h>
+#include <shellapi.h>
+#endif
 
 namespace {
 
@@ -205,6 +209,40 @@ void testCancelledCaptureCanReenterPost() {
 
 } // namespace
 
+void testWindowOwnedTrayLifecycle() {
+#if defined(_WIN32)
+    oneui::WindowOptions options; options.visible = false; options.title = L"OneUI isolated tray QA";
+    auto window = oneui::Window::create(options); window->initialize();
+    HWND hwnd = static_cast<HWND>(window->nativeHandle());
+    if (!window->setTrayEnabled(true)) {
+        std::cerr << "Tray unavailable on this Windows desktop; native tray acceptance NOT passed.\n";
+        ++failures; return;
+    }
+    window->setCloseToTray(true);
+    int closes = 0, exits = 0;
+    window->setOnCloseRequested([&](bool force) {
+        if (force) { ++exits; window->setCloseToTray(false); window->setTrayEnabled(false); window->close(); }
+        else { ++closes; window->close(); }
+    });
+    for (int i = 0; i < 100; ++i) {
+        SendMessageW(hwnd, WM_CLOSE, 0, 0);
+        expectTrue("Closing retains live window and tray", IsWindow(hwnd) && !IsWindowVisible(hwnd) && window->trayIconVisible());
+        SendMessageW(hwnd, oneui::kTrayCallbackMessage, 0, MAKELPARAM(NIN_KEYSELECT, 0x5743));
+        expectTrue("Keyboard tray selection restores window", IsWindowVisible(hwnd) != FALSE);
+    }
+    window->setCloseToTray(false);
+    expectTrue("Explicit tray survives changing close preference", window->trayIconVisible());
+    // Simulate the shell notification, NOT an actual user Explorer restart.
+    // Remove this fixture's icon so NIM_ADD sees the same state as a restarted shell.
+    NOTIFYICONDATAW data{}; data.cbSize = sizeof(data); data.hWnd = hwnd; data.uID = 0x5743;
+    Shell_NotifyIconW(NIM_DELETE, &data);
+    SendMessageW(hwnd, RegisterWindowMessageW(L"TaskbarCreated"), 0, 0);
+    expectTrue("Tray re-registers after shell restart notification", window->trayIconVisible());
+    SendMessageW(hwnd, WM_COMMAND, oneui::kTrayCommandExit, 0);
+    expectTrue("Exit uses application callback exactly once", exits == 1 && closes == 100 && !IsWindow(hwnd));
+#endif
+}
+
 int main(int argc, char**) {
     if (argc > 1) {
         auto probe = oneui::Window::create(L"Clipboard capability probe", 320, 200);
@@ -221,6 +259,7 @@ int main(int argc, char**) {
     testIndependentWindowLifetimes();
     testRepeatedCreationAndCancellation();
     testCancelledCaptureCanReenterPost();
+    testWindowOwnedTrayLifecycle();
 
     if (failures != 0) {
         std::cerr << failures << " backend contract smoke test(s) failed.\n";

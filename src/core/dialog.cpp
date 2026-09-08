@@ -264,6 +264,19 @@ bool Dialog::onMouseUp(const MouseEvent& event) {
     return View::onMouseUp(event);
 }
 
+bool Dialog::onKeyDown(const KeyEvent& event) {
+    // An open Select or other child popup consumes Escape before the dialog.
+    if (View::onKeyDown(event)) {
+        return true;
+    }
+    if (event.key == Key::Escape && interactive() && closeVisible_ && onClose_) {
+        const auto callback = onClose_;
+        callback();
+        return true;
+    }
+    return false;
+}
+
 CursorKind Dialog::cursor(Point point) const {
     if (interactive() && closeVisible_ && headerLayout().close.contains(point)) {
         return CursorKind::Pointer;

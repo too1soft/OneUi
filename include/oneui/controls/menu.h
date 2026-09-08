@@ -40,6 +40,7 @@ public:
     bool onMouseUp(const MouseEvent& event) override;
     CursorKind cursor(Point point) const override;
     bool isFocusable() const override;
+    bool onKeyDown(const KeyEvent& event) override;
 
 protected:
     bool hasInteractionState() const override;

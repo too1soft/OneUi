@@ -5,7 +5,8 @@ param(
     [ValidateSet("Debug", "Release", "RelWithDebInfo")]
     [string]$Configuration = "RelWithDebInfo",
     [string]$BuildDir = "",
-    [string]$SkiaOut = ""
+    [string]$SkiaOut = "",
+    [switch]$TestFrameCapture
 )
 
 $ErrorActionPreference = "Stop"
@@ -40,6 +41,8 @@ if (!(Test-Path $skiaOutPath)) {
 
 $configure = "`"$vcvars`" $Arch && `"$cmake`" -S `"$root`" -B `"$buildPath`" -G Ninja -DCMAKE_BUILD_TYPE=$Configuration -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded -DCMAKE_MAKE_PROGRAM=`"$ninja`" -DONEUI_SKIA_MODE=bundled-static -DONEUI_BUNDLED_SKIA_ROOT=`"$root/third_party/skia`" -DONEUI_BUNDLED_SKIA_OUT=`"$skiaOutPath`""
 $build = "`"$vcvars`" $Arch && `"$cmake`" --build `"$buildPath`""
+$captureOption = if ($TestFrameCapture) { 'ON' } else { 'OFF' }
+$configure += " -DONEUI_ENABLE_TEST_FRAME_CAPTURE=$captureOption"
 
 cmd.exe /c $configure
 if ($LASTEXITCODE -ne 0) {

@@ -431,6 +431,20 @@ bool OverlayHost::onKeyDown(const KeyEvent& event) {
         return false;
     }
 
+    // A modal may be added while a native window retains its previous focus.
+    // Route the first key (especially Escape) to the modal without requiring a
+    // mouse click first; lower overlays must not keep receiving input.
+    if (hasActiveFocusTrap() && (!focusedOverlay_ || !isInteractive(focusedOverlay_) || !isFocusAllowed(focusedOverlay_))) {
+        for (const auto index : hitOrder()) {
+            const auto& entry = overlays_[index];
+            if (entry.trapsFocus && isInteractive(entry.child.get())) {
+                focusOverlay(entry.child.get(), true);
+                entry.child->focusFirstLeaf();
+                break;
+            }
+        }
+    }
+
     if (event.key == Key::Tab) {
         // 模态 overlay 在自身内部回绕；非模态 overlay 按层级参与 Tab 序。
         // 若没有可聚焦 overlay，则内容层内部回绕。窗口 chrome 以 tabStop=false
