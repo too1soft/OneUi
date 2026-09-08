@@ -427,6 +427,7 @@ pub struct Window {
     state: Arc<WindowState>,
     raw_key_callback: Option<Box<WindowRawKeyCallback>>,
     client_size_changed_callback: Option<Box<WindowClientSizeChangedCallback>>,
+    close_requested_callback: Option<Box<WindowCloseRequestedCallback>>,
     _ui_thread: PhantomData<Rc<()>>,
 }
 
@@ -436,6 +437,10 @@ struct WindowRawKeyCallback {
 
 struct WindowClientSizeChangedCallback {
     handler: Box<dyn FnMut(f32, f32) + 'static>,
+}
+
+struct WindowCloseRequestedCallback {
+    handler: Box<dyn FnMut(bool) + 'static>,
 }
 
 struct WindowState {
@@ -1034,6 +1039,20 @@ impl UiDispatcher {
         self.state.with_raw(|raw| unsafe {
             sys::oneui_window_request_close(raw);
         });
+    }
+
+    /// Closes the native window immediately on its owning UI thread.
+    ///
+    /// This is primarily used from a window close-policy callback after the
+    /// application has decided that it is safe to exit. Calling
+    /// [`Self::request_close`] there would emit the policy callback again.
+    pub fn close(&self) -> Result<(), Error> {
+        if std::thread::current().id() != self.state.ui_thread {
+            return Err(Error::WrongThread);
+        }
+        self.state
+            .with_raw(|raw| unsafe { sys::oneui_window_close(raw) })
+            .ok_or(Error::WindowClosed)
     }
 
     /// Creates a thread-safe adaptive-layout producer for a mounted widget.
@@ -7056,6 +7075,19 @@ unsafe extern "C" fn run_window_client_size_changed_callback(
     });
 }
 
+unsafe extern "C" fn run_window_close_requested_callback(
+    force_exit: std::ffi::c_int,
+    user_data: *mut std::ffi::c_void,
+) {
+    if user_data.is_null() {
+        return;
+    }
+    let callback = unsafe { &mut *user_data.cast::<WindowCloseRequestedCallback>() };
+    run_callback_guarded("window.close_requested", || {
+        (callback.handler)(force_exit != 0)
+    });
+}
+
 unsafe extern "C" fn run_terminal_scroll_callback(rows: i32, user_data: *mut std::ffi::c_void) {
     if user_data.is_null() {
         return;
@@ -9845,6 +9877,7 @@ impl Window {
             }),
             raw_key_callback: None,
             client_size_changed_callback: None,
+            close_requested_callback: None,
             _ui_thread: PhantomData,
         })
     }
@@ -10015,6 +10048,43 @@ impl Window {
             sys::oneui_window_set_on_client_size_changed(raw, None, std::ptr::null_mut());
         });
         self.client_size_changed_callback = None;
+    }
+
+    /// Installs the policy callback for native close requests such as Alt+F4,
+    /// the taskbar close command, and operating-system session shutdown.
+    ///
+    /// Installing this callback replaces OneUI's default immediate-close
+    /// behavior. The application must call [`UiDispatcher::close`] when it has
+    /// decided that closing is safe. `force_exit` is true for system shutdown
+    /// and explicit tray Exit requests.
+    pub fn set_on_close_requested<F>(&mut self, callback: F)
+    where
+        F: FnMut(bool) + 'static,
+    {
+        self.clear_close_requested_callback();
+        self.close_requested_callback = Some(Box::new(WindowCloseRequestedCallback {
+            handler: Box::new(callback),
+        }));
+        let user_data = (self
+            .close_requested_callback
+            .as_deref_mut()
+            .expect("window close callback was just installed")
+            as *mut WindowCloseRequestedCallback)
+            .cast();
+        self.state.with_raw(|raw| unsafe {
+            sys::oneui_window_set_on_close_requested(
+                raw,
+                Some(run_window_close_requested_callback),
+                user_data,
+            );
+        });
+    }
+
+    pub fn clear_close_requested_callback(&mut self) {
+        self.state.with_raw(|raw| unsafe {
+            sys::oneui_window_set_on_close_requested(raw, None, std::ptr::null_mut());
+        });
+        self.close_requested_callback = None;
     }
 
     /// Installs the application theme before composing the window tree.
@@ -10189,6 +10259,7 @@ impl Window {
 
 impl Drop for Window {
     fn drop(&mut self) {
+        self.clear_close_requested_callback();
         self.clear_client_size_changed_callback();
         self.clear_raw_key_callback();
         self.state.destroy();

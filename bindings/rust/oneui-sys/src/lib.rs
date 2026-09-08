@@ -437,6 +437,11 @@ extern "C" {
         callback: OneUiClientSizeChangedCallback,
         user_data: *mut c_void,
     );
+    pub fn oneui_window_set_on_close_requested(
+        window: *mut OneUiWindow,
+        callback: OneUiIntCallback,
+        user_data: *mut c_void,
+    );
     pub fn oneui_window_set_minimum_client_size(
         window: *mut OneUiWindow,
         width: c_float,
