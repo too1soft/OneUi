@@ -3,26 +3,36 @@ param(
     [string]$DepotTools = "third_party/depot_tools",
     [string]$DepotToolsUrl = "https://chromium.googlesource.com/chromium/tools/depot_tools.git",
     [string]$SkiaUrl = "https://skia.googlesource.com/skia.git",
-    [string]$OutDir = "third_party/skia/out/oneui-win-x64-release",
+    [string]$OutDir = "",
     [ValidateSet("x64", "x86")]
     [string]$TargetCpu = "x64",
     [string]$WinSdk = "D:/Windows Kits/10",
     [string]$WinVc = "D:/Program Files/Microsoft Visual Studio/18/Community/VC",
+    [ValidateSet("win7", "win10")]
+    [string]$MinimumWindows = "win10",
     [string]$Revision = "1f26101197bff9fcd939a791beb3094297436d59",
     [int]$Depth = 1,
     [string]$Proxy = "",
     [switch]$Fetch,
     [switch]$SyncDeps,
     [switch]$Generate,
-    [switch]$Build
+    [switch]$Build,
+    [ValidateRange(1, 32)]
+    [int]$Jobs = 6
 )
 
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot "windows-build-profile.ps1")
+$windowsBuildProfile = Get-OneUIWindowsBuildProfile -MinimumWindows $MinimumWindows
 
 $root = Split-Path -Parent $PSScriptRoot
-$skiaPath = Join-Path $root $SkiaSource
-$depotToolsPath = Join-Path $root $DepotTools
-$outPath = Join-Path $root $OutDir
+$skiaPath = Resolve-OneUIBuildPath $SkiaSource
+$depotToolsPath = Resolve-OneUIBuildPath $DepotTools
+if (!$OutDir) {
+    $OutDir = "third_party/skia/out/oneui-win-$TargetCpu-release"
+    if ($MinimumWindows -eq 'win7') { $OutDir += '-win7' }
+}
+$outPath = Resolve-OneUIBuildPath $OutDir
 
 function Run($File, $Arguments, $WorkingDirectory = $root) {
     Write-Host ">> $File $Arguments"
@@ -95,16 +105,43 @@ if ($SyncDeps) {
 if ($SyncDeps -or $Generate -or $Build) {
     $cmake = Require-Command "cmake"
     Run $cmake "`"-DONEUI_ICU_ROOT=$skiaPath/third_party/externals/icu`" -P `"$root/scripts/apply-skia-patches.cmake`""
+    if ($MinimumWindows -eq 'win7') {
+        Run $cmake "`"-DONEUI_SKIA_ROOT=$skiaPath`" -P `"$root/scripts/apply-skia-win7-patches.cmake`""
+    }
 }
 
+$winver = if ($MinimumWindows -eq 'win7') { '0x0601' } else { '0x0A00' }
+$ntddi = if ($MinimumWindows -eq 'win7') { '0x06010000' } else { '0x0A000000' }
+$portableFonts = if ($MinimumWindows -eq 'win7') { 'skia_use_freetype=true' + "`nskia_use_system_freetype2=false`nskia_enable_fontmgr_custom_empty=true`nskia_enable_fontmgr_custom_directory=false`nskia_enable_fontmgr_custom_embedded=false`nskia_enable_fontmgr_android=false" } else { '' }
+$wrapperArgs = ''
+if ($Generate -or $Build) {
+    $env:VSLANG = "1033"
+    New-Item -ItemType Directory -Force -Path $outPath | Out-Null
+    $toolset = $windowsBuildProfile.toolsetVersion
+    if (!$toolset) {
+        $toolset = (Get-ChildItem -LiteralPath (Join-Path $WinVc 'Tools/MSVC') -Directory | Sort-Object Name -Descending | Select-Object -First 1).Name
+    }
+    $compiler = Join-Path $WinVc "Tools/MSVC/$toolset/bin/HostX64/$TargetCpu/cl.exe"
+    $prefixFile = Join-Path $outPath 'oneui-msvc-includes.json'
+    $wrapper = Join-Path $PSScriptRoot 'msvc-includes-wrapper.py'
+    & $python $wrapper --probe $compiler --prefix-file $prefixFile
+    if ($LASTEXITCODE -ne 0) { throw 'MSVC header dependency probe failed' }
+    # Use the actual Python executable, not a shell shim, in Ninja commands.
+    $pythonExe = (& $python -c 'import sys; print(sys.executable)').Trim().Replace('\', '/')
+    $wrapperArgs = 'cc_wrapper="\"' + $pythonExe + '\" \"' + $wrapper.Replace('\', '/') + '\" --prefix-file \"' + $prefixFile.Replace('\', '/') + '\" --"'
+}
 $gnArgs = @"
 is_debug=false
 is_official_build=true
 target_cpu="$TargetCpu"
 win_sdk="$WinSdk"
 win_vc="$WinVc"
-extra_cflags=["/DNTDDI_VERSION=0x06010000", "/DWINVER=0x0601", "/D_WIN32_WINNT=0x0601"]
-extra_cflags_cc=["/DNTDDI_VERSION=0x06010000", "/DWINVER=0x0601", "/D_WIN32_WINNT=0x0601"]
+win_toolchain_version="$($windowsBuildProfile.toolsetVersion)"
+win_sdk_version="$($windowsBuildProfile.windowsSdkVersion)"
+$wrapperArgs
+$portableFonts
+extra_cflags=["/DNTDDI_VERSION=$ntddi", "/DWINVER=$winver", "/D_WIN32_WINNT=$winver"]
+extra_cflags_cc=["/DNTDDI_VERSION=$ntddi", "/DWINVER=$winver", "/D_WIN32_WINNT=$winver"]
 skia_use_system_expat=false
 skia_use_system_harfbuzz=false
 skia_use_system_icu=false
@@ -147,7 +184,20 @@ if ($Build) {
     }
 
     $env:VSLANG = "1033"
-    Run "ninja" "-C `"$outPath`" skia skparagraph skunicode_icu"
+    if (!(Select-String -LiteralPath (Join-Path $outPath 'args.gn') -Pattern 'msvc-includes-wrapper.py' -Quiet)) {
+        throw 'Regenerate this Skia output with -Generate before building; header tracking wrapper is missing.'
+    }
+    # Native Start-Process stdout otherwise bypasses the caller's redirection.
+    # Keep full diagnostics on disk without flooding the terminal with MSVC
+    # /showIncludes output on localized compiler installations.
+    $stdout = Join-Path $outPath "oneui-build.stdout.log"
+    $stderr = Join-Path $outPath "oneui-build.stderr.log"
+    $process = Start-Process -FilePath $ninja.Source -ArgumentList "-C `"$outPath`" -j $Jobs skia skparagraph skunicode_icu" -WindowStyle Hidden -Wait -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+    Get-Content -LiteralPath $stdout -Tail 8
+    if ($process.ExitCode -ne 0) {
+        Get-Content -LiteralPath $stderr -Tail 20
+        throw "Skia build failed; see $stdout and $stderr"
+    }
 }
 
 $candidateLibs = @(
@@ -160,7 +210,7 @@ $found = $candidateLibs | Where-Object { Test-Path $_ } | Select-Object -First 1
 if ($found) {
     Write-Host "Static Skia candidate found: $found"
     Write-Host "Configure OneUI with:"
-    Write-Host "  C:\msys64\mingw64\bin\cmake.exe --preset mingw64-bundled-static"
+    Write-Host "  .\scripts\build-oneui-msvc-bundled.ps1 -Arch $TargetCpu -MinimumWindows $MinimumWindows -SkiaOut `"$outPath`""
 } else {
     Write-Host "Static Skia library was not found yet."
     Write-Host "Expected one of:"

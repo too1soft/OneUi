@@ -27,6 +27,7 @@ public:
     bool setTextPosition(TextPosition position);
 
     void setPlaceholder(std::wstring placeholder);
+    void setPlaceholderVisibleWhenFocused(bool visible) { placeholderVisibleWhenFocused_ = visible; invalidate(); }
     void setText(std::wstring text);
     const std::wstring& text() const;
     void setCaretIndex(std::size_t index);
@@ -47,6 +48,8 @@ public:
     bool readOnly() const;
     void setMultiline(bool multiline);
     bool multiline() const;
+    void setSubmitOnEnter(bool submitOnEnter);
+    bool submitOnEnter() const;
     void setLineHeight(float lineHeight);
     float lineHeight() const;
     void setFontSize(float fontSize);
@@ -148,6 +151,7 @@ private:
     void resetInteractionState() override;
 
     std::wstring placeholder_;
+    bool placeholderVisibleWhenFocused_ = false;
     std::wstring text_;
     std::wstring composition_;
     std::size_t compositionCaret_ = 0;
@@ -157,6 +161,7 @@ private:
     bool passwordMode_ = false;
     bool readOnly_ = false;
     bool multiline_ = false;
+    bool submitOnEnter_ = false;
     float lineHeight_ = 20.0f;
     float fontSize_ = 14.0f;
     float horizontalScrollOffset_ = 0.0f;

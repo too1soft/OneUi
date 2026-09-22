@@ -1,6 +1,7 @@
 #pragma once
 
 #include "oneui/export.h"
+#include "oneui/controls/image_view.h"
 #include "oneui/widget.h"
 
 #include <cstddef>
@@ -84,6 +85,7 @@ public:
         std::uint64_t timestampUs);
     void setScaleMode(ScaleMode mode);
     ScaleMode scaleMode() const;
+    void setContentAlignment(ImageContentAlignment horizontal, ImageContentAlignment vertical);
     // setBackgroundColor 设背景/信箱底色（默认黑，适合视频信箱）。设 alpha=0 则不铺底，
     // 让透明像素与身后内容合成——用于显示带透明通道的图（如登录页品牌 logo）。
     void setBackgroundColor(Color color);
@@ -111,6 +113,8 @@ private:
 
     mutable std::mutex mutex_;
     ScaleMode scaleMode_ = ScaleMode::Fit;
+    ImageContentAlignment horizontalAlignment_ = ImageContentAlignment::Center;
+    ImageContentAlignment verticalAlignment_ = ImageContentAlignment::Center;
     Color backgroundColor_{0, 0, 0, 255};
     std::shared_ptr<StoredVideoFrame> latestFrame_;
 };

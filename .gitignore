@@ -39,3 +39,5 @@ uerr.txt
 *.log
 .codebase-memory/
 bindings/rust/target/
+__pycache__/
+*.pyc

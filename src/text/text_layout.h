@@ -32,6 +32,7 @@ struct LayoutOptions {
     std::size_t maxLines = 0;
     bool ellipsis = false;
     bool sensitive = false;
+    std::vector<TextStyleSpan> spans;
 };
 
 struct Line {

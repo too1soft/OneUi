@@ -203,6 +203,16 @@ bool Popup::isOpen() const {
     return openBinding_.get(open_);
 }
 
+bool Popup::requestFocus(Widget* descendant, bool focusVisible) {
+    if (!isOpen() || !isInteractive(content_.get()) || !isInteractive(descendant)) return false;
+    bool found = content_.get() == descendant && descendant->isFocusable();
+    if (!found) if (auto* view = dynamic_cast<View*>(content_.get())) found = view->requestFocus(descendant, focusVisible);
+    if (!found) return false;
+    focusChild(content_.get(), focusVisible);
+    invalidate();
+    return true;
+}
+
 void Popup::bindOpen(State<bool>& state) {
     openBinding_ = Binding<bool>(state, [this] {
         if (!isOpen()) {

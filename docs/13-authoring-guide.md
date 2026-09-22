@@ -256,16 +256,16 @@ my-app/
 | 模块 | 状态 | 说明 |
 | --- | --- | --- |
 | Win32 窗口 | 已完成 MVP | 可创建窗口、处理基础输入和消息循环 |
-| Skia raster 渲染 | 已完成 MVP | 当前 Win32 后端使用 Skia raster surface |
-| MSVC 产品 SDK | 已完成 MVP | `oneui.dll`、`oneui.lib`、headers、CMake package、Gallery |
+| Skia 渲染 | 已实现双路径 | Win32 默认尝试 OpenGL/Ganesh，保留 raster/GDI 回退；见[渲染说明](39-rendering-and-validation.md) |
+| MSVC 产品 SDK | 打包工具已实现 | DLL、导入库、headers、CMake package、Gallery；当前完整文字依赖的发布审计仍待完成 |
 | `Widget` / `View` | 已完成 MVP | 子树、事件分发、焦点遍历、可见/禁用状态 |
-| `State<T>` / `Binding<T>` | 已完成 MVP | 可用，但绑定生命周期模型仍需增强 |
+| `State<T>` / `Binding<T>` | 已实现 | 轻量状态与绑定；作用域订阅见[文字与交互升级](38-text-and-interaction-engine.md) |
 | 布局容器 | 已完成 MVP | `Stack`、`Grid`、`Wrap`、`DockView`、`SplitView`、`ScrollView`；`ScrollView` 已有水平 content width/offset API 和键盘骨架 |
-| 基础表单控件 | 部分完成 | `TextField` 已有 caret、选择区、copy/cut/paste、Win32 剪贴板 bridge 和 `undo()` / `redo()`；`Select` 内置 popup 状态清理和 light-dismiss 行为基线已验收，但仍缺共享 overlay、长列表/typeahead/完整键盘行为 |
-| 样式系统 | 部分完成 | 多个控件已有 typed override，统一 CSS-like DSL 未完成 |
+| 基础表单控件 | 主线/可用分层 | TextField 有共享文字布局与字素编辑；Select 有键盘、light-dismiss 和 viewport 翻转；高级能力见组件清单 |
+| 样式系统 | 已实现受控子集 | StyleSheet 解析 CSS-like selector、伪状态、custom properties 和 typed adapter；不是浏览器 CSS |
 | `PopupPlacement` | 已验收窄切片 | 只负责几何定位 |
 | `Popup` | 进行中 | 有基础 API 和交互预设，完整弹层行为仍需完善 |
 | `OverlayHost` | 进行中 | 挂载、移除、层级、事件转发、焦点边界和外部指针阻断已有行为测试 |
 | Accessibility | 部分完成 | 基础语义 API 和常用控件默认语义已有，语义树和平台 bridge 未完成 |
-| Linux / macOS | 骨架存在，未实现 | 尚不是可运行后端 |
+| Linux / macOS | 实现与验收分开 | X11/Wayland 已在 WSLg 构建运行，Cocoa 源码已接入、待 Mac 构建；见[平台矩阵](37-native-desktop-backends.md) |
 | 文档 / 网站 | 进行中 | 中文入门、作者指南、组件参考和静态入口持续补齐 |

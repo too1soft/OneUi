@@ -63,6 +63,7 @@ public:
 
     void setOpen(bool open);
     bool isOpen() const;
+    bool requestFocus(Widget* descendant, bool focusVisible = true);
     void bindOpen(State<bool>& state);
     void setPreferredPlacement(PopupPreferredPlacement placement);
     PopupPreferredPlacement preferredPlacement() const;

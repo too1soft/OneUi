@@ -13,11 +13,31 @@ constexpr float kRatioEpsilon = 0.0001f;
 
 } // namespace
 
+// A real leaf in the focus tree: Tab can reach a divider without stealing
+// arrow keys from a text field or terminal in either pane.
+class SplitView::Divider final : public Widget {
+public:
+    explicit Divider(SplitView* owner) : owner_(owner) {
+        setAccessibleRole(AccessibilityRole::Custom);
+        setAccessibleName(L"Split view divider");
+        setAccessibleDescription(L"Arrow keys resize; Home/End reach limits; double click resets; Escape cancels drag.");
+    }
+    void detach() { owner_ = nullptr; }
+    bool isFocusable() const override { return interactive() && owner_ && owner_->hasResizableDivider(); }
+    bool onKeyDown(const KeyEvent& event) override { return owner_ && owner_->handleDividerKey(event); }
+    void paint(Canvas& canvas) override { if (owner_) owner_->paintDivider(canvas); }
+private:
+    SplitView* owner_;
+};
+
 SplitView::SplitView(SplitOrientation orientation) : orientation_(orientation) {
+    divider_ = std::make_shared<Divider>(this);
     setAccessibleRole(AccessibilityRole::Custom);
     setAccessibleName(L"Split view divider");
     setAccessibleValue(L"50%");
 }
+
+SplitView::~SplitView() { divider_->detach(); }
 
 void SplitView::setFirst(std::shared_ptr<Widget> child) {
     first_ = std::move(child);
@@ -51,7 +71,14 @@ float SplitView::splitRatio() const {
 }
 
 void SplitView::setGap(float gap) {
+    if (!std::isfinite(gap)) return;
     gap_ = std::max(0.0f, gap);
+    invalidate();
+}
+
+void SplitView::setDividerColors(Color normal, Color active) {
+    dividerColor_ = normal;
+    dividerActiveColor_ = active;
     invalidate();
 }
 
@@ -76,6 +103,7 @@ bool SplitView::resizable() const {
 }
 
 void SplitView::setMinimumPaneExtent(float first, float second) {
+    if (!std::isfinite(first) || !std::isfinite(second)) return;
     firstMinimumExtent_ = std::max(0.0f, first);
     secondMinimumExtent_ = std::max(0.0f, second);
     updateSplitRatio(splitRatio_, false);
@@ -118,9 +146,60 @@ bool SplitView::onMouseMove(const MouseEvent& event) {
     return View::onMouseMove(event);
 }
 
+bool SplitView::onKeyDown(const KeyEvent& event) {
+    if (interactive() && event.pressed && event.key == Key::Escape && draggingDivider_) {
+        cancelDividerDrag();
+        return true;
+    }
+    return View::onKeyDown(event);
+}
+
+bool SplitView::handleDividerKey(const KeyEvent& event) {
+    if (!interactive() || !event.pressed || !hasResizableDivider() || event.control || event.alt || event.win) return false;
+    if (draggingDivider_) return false;
+    float next = splitRatio_;
+    if (event.key == Key::Home) next = 0.0f;
+    else if (event.key == Key::End) next = 1.0f;
+    else if ((orientation_ == SplitOrientation::Horizontal && event.key == Key::Left) ||
+             (orientation_ == SplitOrientation::Vertical && event.key == Key::Up)) next -= 0.025f;
+    else if ((orientation_ == SplitOrientation::Horizontal && event.key == Key::Right) ||
+             (orientation_ == SplitOrientation::Vertical && event.key == Key::Down)) next += 0.025f;
+    else return false;
+    const auto life = lifetimeToken();
+    updateSplitRatio(next, true);
+    if (life.expired()) return true;
+    if (onSplitRatioCommitted_) { auto callback = onSplitRatioCommitted_; callback(splitRatio_); }
+    return true;
+}
+
+void SplitView::paintDivider(Canvas& canvas) {
+    if (!hasResizableDivider()) return;
+    const auto content = contentRect();
+    const auto hit = dividerHitRect();
+    const bool active = dividerHovered_ || draggingDivider_ || divider_->focusVisible();
+    const auto color = active ? dividerActiveColor_ : dividerColor_;
+    const float thickness = std::max(1.0f, gap_);
+    if (orientation_ == SplitOrientation::Horizontal) {
+        const float x = hit.x + hit.width * 0.5f;
+        canvas.drawLine({x, content.y}, {x, content.y + content.height}, color, thickness);
+    } else {
+        const float y = hit.y + hit.height * 0.5f;
+        canvas.drawLine({content.x, y}, {content.x + content.width, y}, color, thickness);
+    }
+}
+
 bool SplitView::onMouseDown(const MouseEvent& event) {
+    if (!interactive()) return false;
     if (event.button == MouseButton::Left && hasResizableDivider()
         && dividerHitRect().contains(event.position)) {
+        focusChild(divider_.get(), false);
+        if (event.clickCount == 2) {
+            const auto life = lifetimeToken();
+            updateSplitRatio(0.5f, true);
+            if (!life.expired() && onSplitRatioCommitted_) { auto callback = onSplitRatioCommitted_; callback(splitRatio_); }
+            return true;
+        }
+        dragBeginRatio_ = splitRatio_;
         const Rect divider = dividerHitRect();
         const float center = orientation_ == SplitOrientation::Horizontal
             ? divider.x + divider.width * 0.5f
@@ -156,6 +235,10 @@ CursorKind SplitView::cursor(Point point) const {
 void SplitView::layoutChildren() {
     const Rect content = contentRect();
 
+    divider_->setAccessibleName(accessibleName());
+    divider_->setVisible(hasResizableDivider());
+    divider_->setFrame(dividerHitRect());
+    divider_->setAccessibleValue(std::to_wstring(static_cast<int>(constrainedRatio(splitRatio_) * 100.0f)) + L"%");
     const bool hasFirst = first_ && first_->visible();
     const bool hasSecond = second_ && second_->visible();
     const float effectiveGap = hasFirst && hasSecond ? gap_ : 0.0f;
@@ -207,6 +290,7 @@ float SplitView::availableExtent() const {
 }
 
 float SplitView::constrainedRatio(float ratio) const {
+    if (!std::isfinite(ratio)) return splitRatio_;
     ratio = std::clamp(ratio, 0.0f, 1.0f);
     const float available = availableExtent();
     if (available <= 0.0f) {
@@ -251,8 +335,16 @@ void SplitView::finishDividerDrag() {
     draggingDivider_ = false;
     dragOffset_ = 0.0f;
     if (onSplitRatioCommitted_) {
-        onSplitRatioCommitted_(splitRatio_);
+        auto callback = onSplitRatioCommitted_;
+        callback(splitRatio_);
     }
+}
+
+void SplitView::cancelDividerDrag() {
+    if (!draggingDivider_) return;
+    draggingDivider_ = false;
+    dragOffset_ = 0.0f;
+    updateSplitRatio(dragBeginRatio_, true);
 }
 
 void SplitView::updateSplitRatio(float ratio, bool notify) {
@@ -264,7 +356,8 @@ void SplitView::updateSplitRatio(float ratio, bool notify) {
     setAccessibleValue(std::to_wstring(static_cast<int>(splitRatio_ * 100.0f)) + L"%");
     invalidate();
     if (notify && onSplitRatioChanged_) {
-        onSplitRatioChanged_(splitRatio_);
+        auto callback = onSplitRatioChanged_;
+        callback(splitRatio_);
     }
 }
 
@@ -283,6 +376,7 @@ void SplitView::rebuildChildren() {
     if (first_) {
         add(first_);
     }
+    add(divider_);
     if (second_) {
         add(second_);
     }

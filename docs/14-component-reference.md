@@ -117,6 +117,10 @@ split->setOnSplitRatioCommitted([](float ratio) {
 `changed` 可能连续触发；`committed` 表示本次拖拽结束。命中区会保证可操作宽度，不要求产品
 通过扩大可见 gap 来改善拖拽。
 
+分隔条支持键盘方向键、Home/End、双击平衡与 Escape 撤销拖动；捕获丢失保留提交当前比例的
+既有行为。Rust `DockWorkspace` / `DockSurface` 在该原语上组合停靠树、浮动面板和焦点恢复，
+不是对 `DockView` 的更名，详见[工作区组合](workspace-docking.md)。
+
 ## Grid / Wrap / ReorderableGrid
 
 ### Grid
@@ -176,9 +180,11 @@ client 处理，其余区域仍可拖动窗口。
 
 ### Label
 
-只读文本，支持文本绑定、字体、字重、颜色和对齐。默认保持单行省略；产品说明等长文本可显式
+只读文本，支持文本绑定、字体、字重、颜色和对齐。`setRichText` 可在同一段落内设置字号、字重、
+斜体、等宽字体、下划线、删除线以及前景/背景色；样式范围必须有序、互不重叠并落在字符边界。
+默认保持单行省略；产品说明等长文本可显式
 启用 `setTextWrapping(true)`，再用 `setMaxLines(...)` 和 `setLineHeight(...)` 约束多行布局。达到
-行数或高度上限时末行显示省略号。它不会自动变成富文本或链接。
+行数或高度上限时末行显示省略号。富文本 span 只负责呈现，不会自动获得链接点击语义。
 
 ### Button
 
@@ -237,6 +243,17 @@ Unicode 一致性修复已通过；完整 IME 产品矩阵、MinGW 匹配依赖�
 
 Select 的 popup 能从嵌套 ScrollView/Dialog/OverlayHost 正确接收输入，并使用稳定 paint viewport，
 不会因为 dirty clip 变小而错误放置。当前不支持多选、搜索或自定义 option widget。
+
+Slider 已提供 C ABI 与安全 Rust `Slider` / `SliderHandle`。输入专用回调区分
+Begin/Update/Commit/Cancel，程序设值不触发该回调；Escape、隐藏、禁用和捕获丢失取消并恢复
+开始值。卸载前若需撤销产品副作用，应显式取消交互。旧 C++ `onChanged` 设值语义保持兼容。
+
+## ImageView
+
+`setRgbaPixels` 复制调用方 RGBA 缓冲；图片控件不接管应用的解码任务。
+`ImageContentMode` 支持 Contain、Cover、Stretch、ActualSize；水平和垂直对齐分别支持
+Start、Center、End。背景与圆角由控件处理，C ABI 和安全 Rust 提供对应入口。
+高频远程画面使用 RealtimeFrameView 的帧提交与合并更新接口。
 
 ## FormField / ValidationMessage
 
@@ -462,6 +479,16 @@ TextField 明文不会进入 JSON，只记录长度等脱敏信息。size query 
 
 布局快照验证结构和几何；像素对齐仍需同视口截图比较。
 
+## Tabs 内联编辑
+
+`Tabs::beginEdit(index)` / Rust `Tabs::begin_edit(index)` 在原标签文字区域启用原生单行编辑，自动选择全部原文字，不立即修改`items`。调用方需通过窗口/dispatcher将焦点给予Tabs。编辑复用TextField的IME、选区、剪贴板、撤销和原子Unicode提交；选择文字不触发标签排序。
+
+`setOnEditFinished` / `set_on_edit_finished`返回索引、UTF-8名称及`Submitted`、`Cancelled`或`FocusLost`原因。业务层负责名称校验、稳定ID映射和最终更新items；在Rust回调中应延迟修改/销毁控件，避免FFI回调重入。Enter提交，Esc取消；IME组合中的Enter不提交标签，Esc先清除组合文字。失焦提交但不由控件抢回焦点。修改items会取消旧编辑，相同items刷新保留编辑。
+
+C ABI增量入口为`oneui_tabs_begin_edit`、`oneui_tabs_cancel_edit`、`oneui_tabs_editing_index`及`oneui_tabs_set_on_edit_finished`，旧入口签名不变；使用新增入口需匹配含这些导出的SDK，不可混用旧DLL。布局快照每个item增加`editing`，活动编辑项增加实际`editorFrame`，不导出输入草稿。
+
+移动鼠标离开控件不取消编辑；禁用、隐藏、替换列表取消。关闭后不继续编辑器光标动画，绘制自身不调度循环重绘。核心行为、C ABI空指针/UTF-8及Rust回调释放有自动测试；跨DPI实际像素和平台原生IME交互仍需应用端验收。
+
 ## Rust handle 模式
 
 Rust UI wrapper 是窗口线程对象。后台服务使用 handle：
@@ -470,8 +497,37 @@ Rust UI wrapper 是窗口线程对象。后台服务使用 handle：
 - `LabelHandle`：合并文本更新；
 - `TextFieldHandle`：投递文本；
 - `ProgressBarHandle` / `SparklineHandle`：投递数值/样本；
+- `SliderHandle`：合并位置、时长与启用状态；拖动期间后台更新不移动滑块；
 - `VirtualListHandle` / `TableHandle`：整表 revision 与单行 patch；
 - `TerminalViewHandle`：grid/frame/viewport 等高频更新。
 - `RealtimeFrameViewHandle`：完整远程画面所有权移交、批量脏矩形更新与单一待处理 UI 批次。
 
 不要把 UI wrapper 当作任意线程可变对象；通过 dispatcher/handle 保持窗口线程约束。
+
+
+### TimeSeriesChart：稠密监控图的绘制与时间域
+
+- `setGridStyle(verticalLines, lineWidth)` / Rust `set_grid_style` 控制内部纵向网格数量和网格线宽；设置 0 可仅绘制横向网格，默认仍保留旧图表的 5 条纵线。
+- `setAxisLabels` / `set_axis_labels` 按从上到下的网格线顺序设置纵轴标签；调用方负责单位与格式，空数组不绘制标签。需通过 `setPlotInsets` 为左侧文字留出空间。
+- `setSamplePositions` / `set_sample_positions` 接收递增的归一化 `[0,1]` 位置，控制折线、最新点、十字线及鼠标最近样本命中。空数组或与某条序列长度不匹配时，该序列退回等距布局。NaN、越界和乱序被拒绝并保持旧映射；数据由控件复制。调用方负责将时间戳转换为可见时间窗中的位置。
+- `setLatestPointVisible` / `set_latest_point_visible` 显示每条序列最后一个有效末尾值的小点；末尾缺失时不把旧值冒充最新值。
+- CSS `border-color` 映射网格色，`placeholder-color`（无此值时使用 `color`）映射刻度色，`font-size` 映射刻度字号。经样式表刷新即可响应主题变化。
+- 上述能力同时提供 C++、C ABI 与 Rust。数值范围、趋势数据、单位、时间窗和业务提示仍由应用维护。
+
+Tabs / SegmentedControl 的 CSS `text-inset` 可调整标签文本的水平内边距（默认 8px），`padding` 仍表示每个标签块的外侧留白。普通、悬停、选中状态的 `content-background` 应分别指定，不能把选中色写在普通态并期望它只作用于选中标签或列表行。
+
+Skia Canvas 的矩形描边对非正或非有限线宽不绘制；CSS `border-width: 0` 不再映射为 Skia 的设备细线。真实 raster 测试覆盖 100%/150%/200%，同时确认正线宽仍绘制。
+
+### Table：双行单元格与行内动作
+
+`TableRichCell` 的 `text/detail/badge` 在固定行高中绘制标题、第二行和紧凑状态；默认字体可通过 `font-size/detail-font-size/placeholder-color` 配置。文本按列裁剪和省略。Rust `TableRichRow`、`set_rich_rows/update_rich_row` 对应 C++ `TableCell/setRichRows/updateRichRow`，UTF-8 缓冲在 C ABI 内复制。普通字符串行接口保持不变。
+
+`set_column_presentation(column, LabelAlign, action)` 分开配置列标题对齐和动作列；单元格通过自身 `alignment` 控制数值对齐。动作列里的纯图标居中，并裁剪在自己的单元格内。`set_on_cell_action` 仅在同一行、同一动作列按下并释放时调用；键盘 Space 激活选中行的第一个动作列。禁用表格不触发。业务必须按稳定 ID 解析行、校验权限、确认破坏性操作，不应把刷新后的索引直接当作业务身份。
+
+`set_header_height`、`set_column_dividers_visible` 允许紧凑无竖线表头。CSS 普通 `content-background` 为表头底色，`:selected/:hover/:active` 的 `background` 为相应行底色。无障碍语义和应用快捷键说明不能替代尚未完成的 Win32 UIA 桥接。
+
+### ProgressBar：分段容量
+
+`set_segments(&[ProgressSegment { fraction, color, label }])` 表示总容量的非重叠占比；每段复制标签，负数、NaN 或无穷拒绝并保持旧状态。各段按剩余容量截断，绘制、总 `value`、可访问文字保持相同口径。空数组归零；`set_value/bind_value` 恢复原单色模式。公共控件保留横向、纵向、平滑更新及禁用态；业务负责提供真实口径和主题可辨识颜色，不得将有交集的统计值直接叠加。
+
+Rust `Stack::set_direction` 对应 C++ `setDirection`，切换横纵排列且保留原子控件及状态；调用方需同时调整容器首选高度，保证正文滚动范围与折行后的内容一致。

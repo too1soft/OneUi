@@ -1,8 +1,19 @@
+use sha2::{Digest, Sha256};
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
 fn main() {
+    println!("cargo:rerun-if-env-changed=ONEUI_SDK_DIR");
+    if let Some(sdk) = env::var_os("ONEUI_SDK_DIR").map(PathBuf::from) {
+        if cfg!(feature = "static-link") {
+            link_sdk(&sdk);
+            return;
+        }
+    }
+    if env::var("TARGET").unwrap_or_default().contains("-win7-") && cfg!(feature = "static-link") {
+        panic!("Win7 static consumers require a locked ONEUI_SDK_DIR; guessed archive lists are not allowed");
+    }
     println!("cargo:rerun-if-env-changed=ONEUI_LIB_DIR");
     println!("cargo:rerun-if-env-changed=ONEUI_SKIA_LIB_DIR");
     println!("cargo:rerun-if-env-changed=ONEUI_STATIC_LIBS");
@@ -58,6 +69,107 @@ fn main() {
                     )
                 });
             }
+        }
+    }
+}
+
+fn link_sdk(sdk: &Path) {
+    let target = env::var("TARGET").unwrap_or_default();
+    assert!(
+        target.ends_with("windows-msvc"),
+        "This SDK is an MSVC Windows SDK"
+    );
+    println!("cargo:rerun-if-env-changed=ONEUI_SDK_MANIFEST_SHA256");
+    let manifest_path = sdk.join("sdk-manifest.json");
+    let bytes = fs::read(&manifest_path).expect("SDK manifest missing");
+    let expected = env::var("ONEUI_SDK_MANIFEST_SHA256")
+        .expect("Pass the SDK manifest hash from compat.lock.json");
+    assert_eq!(
+        format!("{:x}", Sha256::digest(&bytes)),
+        expected,
+        "SDK manifest differs from locked input"
+    );
+    let manifest: serde_json::Value = serde_json::from_slice(&bytes).expect("Invalid SDK manifest");
+    let arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
+    assert_eq!(
+        manifest["architecture"].as_str(),
+        Some(arch.as_str()),
+        "SDK architecture mismatch"
+    );
+    assert_eq!(
+        manifest["configuration"].as_str(),
+        Some("Release"),
+        "SDK must be Release"
+    );
+    assert_eq!(
+        manifest["crt"].as_str(),
+        Some("static"),
+        "SDK must use static CRT"
+    );
+    if target.contains("-win7-") {
+        assert_eq!(
+            manifest["profile"].as_str(),
+            Some("legacy"),
+            "Win7 requires legacy SDK"
+        );
+    }
+    let root = sdk.canonicalize().expect("SDK root missing");
+    for entry in manifest["files"]
+        .as_array()
+        .expect("SDK file inventory missing")
+    {
+        let name = entry["path"].as_str().expect("SDK file name missing");
+        assert!(
+            !name.contains('\\')
+                && !name.contains(':')
+                && !name.starts_with('/')
+                && name
+                    .split('/')
+                    .all(|p| !p.is_empty() && p != "." && p != ".."),
+            "Unsafe SDK path"
+        );
+        let path = root.join(name).canonicalize().expect("SDK file missing");
+        assert!(path.starts_with(&root), "SDK file escapes root");
+        let content = fs::read(&path).expect("Cannot read SDK input");
+        assert_eq!(
+            entry["size"].as_u64(),
+            Some(content.len() as u64),
+            "SDK size mismatch"
+        );
+        assert_eq!(
+            entry["sha256"].as_str(),
+            Some(format!("{:x}", Sha256::digest(&content)).as_str()),
+            "SDK hash mismatch"
+        );
+        println!("cargo:rerun-if-changed={}", path.display());
+    }
+    let lib = sdk.join("lib");
+    println!("cargo:rustc-link-search=native={}", lib.display());
+    println!(
+        "cargo:rerun-if-changed={}",
+        sdk.join("sdk-manifest.json").display()
+    );
+    for (file, kind) in [
+        ("static-libraries.txt", "static="),
+        ("system-libraries.txt", ""),
+    ] {
+        let path = sdk.join(file);
+        println!("cargo:rerun-if-changed={}", path.display());
+        let text = fs::read_to_string(&path).expect("SDK link closure is missing");
+        assert!(!text.trim().is_empty(), "SDK link closure is empty");
+        for name in text.lines().map(str::trim).filter(|s| !s.is_empty()) {
+            assert!(
+                name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_'),
+                "Invalid library name in SDK"
+            );
+            if !kind.is_empty() {
+                assert!(
+                    lib.join(format!("{name}.lib")).is_file(),
+                    "SDK archive missing: {name}"
+                );
+                track_archive(&lib, name, "msvc");
+            }
+            println!("cargo:rustc-link-lib={kind}{name}");
         }
     }
 }

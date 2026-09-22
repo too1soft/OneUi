@@ -9,6 +9,13 @@
 
 namespace oneui {
 
+enum class PointerDragPhase { Started, Updated, Dropped, Cancelled };
+struct PointerDragEvent {
+    PointerDragPhase phase;
+    Point origin;
+    MouseEvent pointer;
+};
+
 struct InteractiveSurfaceStateStyle {
     Color background{255, 255, 255, 255};
     Color border{226, 229, 234, 255};
@@ -47,6 +54,10 @@ public:
     /// native geometry or duplicating hover-state bookkeeping.
     void setOnHoverChanged(std::function<void(bool)> callback);
     void setOnContextMenuRequested(std::function<void(const MouseEvent&)> callback);
+    /// Pointer drag in window coordinates. A sub-threshold gesture remains a
+    /// click; a completed/cancelled drag never also activates the surface.
+    void setOnDrag(std::function<void(const PointerDragEvent&)> callback, float threshold = 7.0f);
+    void setPointerCursor(CursorKind cursor);
     void setDisabled(bool disabled) override;
 
     void paint(Canvas& canvas) override;
@@ -77,6 +88,14 @@ private:
     bool pressed_ = false;
     MouseButton pressedButton_ = MouseButton::None;
     int pressedClickCount_ = 1;
+    bool dragArmed_ = false;
+    bool dragging_ = false;
+    float dragThreshold_ = 7.0f;
+    Point dragOrigin_;
+    MouseEvent dragPointer_;
+    CursorKind pointerCursor_ = CursorKind::Pointer;
+    std::function<void(const PointerDragEvent&)> onDrag_;
+    void finishDrag(PointerDragPhase phase, const MouseEvent& event);
     bool visualInitialized_ = false;
     ColorTransition backgroundTransition_;
     ColorTransition borderTransition_;

@@ -1,4 +1,5 @@
 #include "oneui/layout/overlay_host.h"
+#include "oneui/controls/popup.h"
 
 #include <algorithm>
 #include <utility>
@@ -533,6 +534,8 @@ bool OverlayHost::requestFocus(Widget* descendant, bool focusVisible) {
             found = descendant->isFocusable();
         } else if (auto* view = dynamic_cast<View*>(overlay)) {
             found = view->requestFocus(descendant, focusVisible);
+        } else if (auto* popup = dynamic_cast<Popup*>(overlay)) {
+            found = popup->requestFocus(descendant, focusVisible);
         }
         if (found) {
             focusOverlay(overlay, focusVisible);
@@ -705,12 +708,18 @@ void OverlayHost::layoutAnchoredOverlays() {
         const float bottom = host.y + std::max(0.0f, host.height - entry.margin.bottom);
         const float availableWidth = std::max(0.0f, right - left);
         const float availableHeight = std::max(0.0f, bottom - top);
-        const float width = entry.size.width < 0.0f ? availableWidth
+        float width = entry.size.width < 0.0f ? availableWidth
                           : entry.size.width > 0.0f ? entry.size.width
                                                      : std::max(0.0f, preferred.width);
-        const float height = entry.size.height < 0.0f ? availableHeight
+        float height = entry.size.height < 0.0f ? availableHeight
                            : entry.size.height > 0.0f ? entry.size.height
                                                        : std::max(0.0f, preferred.height);
+        // Modal dialogs must keep their body and fixed action bar inside the viewport.
+        // Modeless overlays retain their explicitly requested geometry.
+        if (entry.trapsFocus && entry.blocksOutsidePointer) {
+            width = std::min(width, std::max(0.0f, availableWidth - 32.0f));
+            height = std::min(height, std::max(0.0f, availableHeight - 32.0f));
+        }
         float x = left;
         if (entry.horizontalAlignment == 1) {
             x = left + std::max(0.0f, right - left - width) / 2.0f;

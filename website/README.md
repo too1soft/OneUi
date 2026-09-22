@@ -30,6 +30,11 @@ http://localhost:3000
 
 ## 平台状态维护
 
+Win32 当前默认尝试 OpenGL + Skia Ganesh，并保留 raster/GDI 软件回退；不要继续描述为
+纯 CPU 框架。配置与验收边界见[渲染说明](../docs/39-rendering-and-validation.md)。
+组件资料还应包含 ABI v33 Slider、Tabs 原位编辑和 Rust 工作区停靠组合，
+以[组件清单](../docs/07-component-inventory.md)为准。
+
 文字/命令/订阅升级尚未通过完整发布验收。内容与
 [文字引擎状态](../docs/38-text-and-interaction-engine.md) 同步：Unicode 一致性补丁已回归通过，
 MinGW 匹配文字依赖、SDK 审计和原生交互验收仍待完成，不把源码接入写成完整平台支持。

@@ -32,6 +32,10 @@ void applyTableStyleOverride(TableStyle& style, const TableStyleOverride& overri
     if (override.scrollbarColor) style.scrollbarColor = *override.scrollbarColor;
     if (override.borderWidth) style.borderWidth = *override.borderWidth;
     if (override.radius) style.radius = *override.radius;
+    if (override.fontSize) style.fontSize = *override.fontSize;
+    if (override.headerFontSize) style.headerFontSize = *override.headerFontSize;
+    if (override.detailFontSize) style.detailFontSize = *override.detailFontSize;
+    if (override.detailForeground) style.detailForeground = *override.detailForeground;
     if (override.headerHeight) style.headerHeight = *override.headerHeight;
     if (override.scrollbarWidth) style.scrollbarWidth = *override.scrollbarWidth;
     if (override.cellPadding) style.cellPadding = *override.cellPadding;
@@ -46,6 +50,30 @@ Table::Table() {
 void Table::setColumns(std::vector<TableColumn> columns) {
     columns_ = std::move(columns);
     invalidate();
+}
+
+void Table::setColumnPresentation(int column, TextAlign alignment, bool action) {
+    if (column < 0 || column >= static_cast<int>(columns_.size())) return;
+    columns_[column].alignment = alignment;
+    columns_[column].action = action;
+    invalidate();
+}
+void Table::setHeaderHeight(float height) {
+    headerHeight_ = std::isfinite(height) ? std::clamp(height, 1.0f, 96.0f) : 30.0f;
+    invalidate();
+}
+void Table::setOnCellAction(std::function<void(int, int)> callback) { onCellAction_ = std::move(callback); }
+int Table::hitColumnIndex(Point point) const {
+    if (!frame().contains(point)) return -1;
+    float fixed = 0.0f; int flexible = 0;
+    for (const auto& column : columns_) { if (column.width > 0) fixed += column.width; else ++flexible; }
+    float x = frame().x;
+    for (int i = 0; i < static_cast<int>(columns_.size()); ++i) {
+        const float width = columnWidth(i, std::max(0.0f, frame().width - fixed), flexible);
+        if (point.x >= x && point.x < x + width) return i;
+        x += width;
+    }
+    return -1;
 }
 
 void Table::setRows(std::vector<std::vector<std::wstring>> rows) {
@@ -331,7 +359,7 @@ void Table::paint(Canvas& canvas) {
         canvas.drawTextEllipsized(
             columns_[static_cast<std::size_t>(columnIndex)].header,
             Rect{x, rect.y, width, headerHeight}.inset(style.cellPadding),
-            style.headerForeground, theme().fontSm, TextAlign::Left);
+            style.headerForeground, style.headerFontSize, columns_[columnIndex].alignment);
         x += width;
     }
 
@@ -389,6 +417,15 @@ void Table::paint(Canvas& canvas) {
             const Color foreground = cell.foreground.value_or(style.cellForeground);
             float leading = cellRect.x;
             const float iconSize = std::clamp(cell.iconSize, 12.0f, std::max(12.0f, row.height - 12.0f));
+            canvas.save();
+            canvas.clipRect(Rect{x, row.y, std::max(0.0f, width), row.height});
+            if (columns_[columnIndex].action && cell.leadingIcon && text.empty()) {
+                paintIcon(canvas, *cell.leadingIcon,
+                    Rect{x + (width - iconSize) * 0.5f, row.y + (row.height - iconSize) * 0.5f, iconSize, iconSize}, foreground);
+                canvas.restore();
+                x += width;
+                continue;
+            }
             if (cell.leadingIcon) {
                 paintIcon(
                     canvas,
@@ -411,13 +448,23 @@ void Table::paint(Canvas& canvas) {
                 cellRect.y,
                 std::max(0.0f, cellRect.x + cellRect.width - leading - trailingReserve),
                 cellRect.height};
-            canvas.drawTextStyled(
-                text,
-                textRect,
-                foreground,
-                cell.fontSize > 0.0f ? cell.fontSize : theme().fontMd,
-                cell.alignment,
-                cell.fontWeight);
+            const float fontSize = cell.fontSize > 0.0f ? cell.fontSize : style.fontSize;
+            const bool twoLines = !cell.detail.empty();
+            if (twoLines) { textRect.y = row.y + (row.height - 34.0f) * 0.5f; textRect.height = 18.0f; }
+            if (!cell.badge.empty()) {
+                const float badgeWidth = std::min(textRect.width * 0.35f, std::max(18.0f, canvas.measureTextWidth(cell.badge, 11.0f, 400) + 8.0f));
+                const float titleWidth = std::min(canvas.measureTextWidth(text, fontSize, cell.fontWeight) + 2.0f, std::max(0.0f, textRect.width - badgeWidth - 6.0f));
+                const Rect badge{textRect.x + titleWidth + 6.0f, textRect.y + (textRect.height - 16.0f) / 2.0f, badgeWidth, 16.0f};
+                canvas.fillRect(badge, Color{foreground.r, foreground.g, foreground.b, 18}, 3.0f);
+                canvas.drawTextEllipsized(cell.badge, badge, style.detailForeground, 11.0f, TextAlign::Center);
+                textRect.width = titleWidth;
+            }
+            canvas.drawTextStyledEllipsized(text, textRect, foreground, fontSize, cell.alignment, cell.fontWeight);
+            if (twoLines) {
+                canvas.drawTextStyledEllipsized(cell.detail,
+                    Rect{leading, textRect.y + 18.0f, std::max(0.0f, cellRect.x + cellRect.width - leading), 16.0f},
+                    style.detailForeground, style.detailFontSize, TextAlign::Left, 400);
+            }
             if (cell.trailingIcon) {
                 paintIcon(
                     canvas,
@@ -428,6 +475,7 @@ void Table::paint(Canvas& canvas) {
                          iconSize},
                     foreground);
             }
+            canvas.restore();
             x += width;
         }
     }
@@ -506,6 +554,7 @@ bool Table::onMouseMove(const MouseEvent& event) {
 bool Table::onMouseDown(const MouseEvent& event) {
     if (!interactive() || (event.button != MouseButton::Left && event.button != MouseButton::Right)) return false;
     resetReorderState();
+    pressedColumn_ = hitColumnIndex(event.position);
     pressedIndex_ = hitRowIndex(event.position);
     pressedClickCount_ = event.clickCount;
     if (pressedIndex_ < 0) return false;
@@ -551,6 +600,8 @@ bool Table::onMouseUp(const MouseEvent& event) {
         return true;
     }
     const int pressed = pressedIndex_;
+    const int pressedColumn = pressedColumn_;
+    pressedColumn_ = -1;
     const int clickCount = pressedClickCount_;
     pressedIndex_ = -1;
     pressedClickCount_ = 1;
@@ -568,6 +619,9 @@ bool Table::onMouseUp(const MouseEvent& event) {
         notifySelectionChanged(previousIndices, previousSelectedIndex);
         if (event.button == MouseButton::Right && onContextMenuRequested_) {
             onContextMenuRequested_(pressed, event.position);
+        } else if (event.button == MouseButton::Left && pressedColumn >= 0 && pressedColumn == hitColumnIndex(event.position)
+                   && pressedColumn < static_cast<int>(columns_.size()) && columns_[pressedColumn].action && onCellAction_) {
+            onCellAction_(pressed, pressedColumn);
         } else if (event.button == MouseButton::Left && clickCount == 2 && onActivated_) {
             onActivated_(pressed);
         }
@@ -605,6 +659,11 @@ bool Table::onKeyDown(const KeyEvent& event) {
         const auto callback = onReorderRequested_;
         if (target != active && callback) callback(active, target);
         return true;
+    }
+    if (active >= 0 && event.key == Key::Space && onCellAction_) {
+        for (int column = 0; column < static_cast<int>(columns_.size()); ++column) {
+            if (columns_[column].action) { onCellAction_(active, column); return true; }
+        }
     }
     if (active >= 0 && event.key == Key::Enter && onActivated_) { onActivated_(active); return true; }
     if (active >= 0 && event.key == Key::F2 && onEditRequested_) { onEditRequested_(active); return true; }
@@ -658,6 +717,7 @@ TableStyle Table::resolvedStyle() const {
     style.headerBackground = t.surfaceMuted;
     style.headerForeground = disabled() ? t.textSubtle : t.textMuted;
     style.cellForeground = disabled() ? t.textSubtle : t.text;
+    style.detailForeground = t.textMuted;
     style.gridLine = t.border;
     style.rowHovered = t.surfaceMuted;
     style.rowPressed = t.pressedBackground;
@@ -669,6 +729,7 @@ TableStyle Table::resolvedStyle() const {
     style.scrollbarWidth = 4.0f;
     style.cellPadding = Insets{0.0f, 10.0f};
     if (styleOverride_) applyTableStyleOverride(style, *styleOverride_);
+    if (headerHeight_) style.headerHeight = *headerHeight_;
     return style;
 }
 

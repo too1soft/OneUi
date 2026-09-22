@@ -493,6 +493,14 @@ bool TextField::multiline() const {
     return multiline_;
 }
 
+void TextField::setSubmitOnEnter(bool submitOnEnter) {
+    submitOnEnter_ = submitOnEnter;
+}
+
+bool TextField::submitOnEnter() const {
+    return submitOnEnter_;
+}
+
 void TextField::setLineHeight(float lineHeight) {
     const float next = std::max(12.0f, lineHeight);
     if (std::fabs(lineHeight_ - next) < 0.01f) {
@@ -649,7 +657,7 @@ void TextField::setAnimationScheduler(std::function<void()> scheduler) {
 void TextField::paint(Canvas& canvas) {
     const Rect rect = frame();
     const bool hasText = !value().empty();
-    const bool shouldPaintPlaceholder = !hasText && !(focused() && editable());
+    const bool shouldPaintPlaceholder = !hasText && (placeholderVisibleWhenFocused_ || !(focused() && editable()));
     const TextFieldStyle style = visualStyle(resolvedStyle());
 
     if (focusVisible() && !disabled() && style.focusRing.visible) {
@@ -788,6 +796,21 @@ bool TextField::onMouseWheel(const MouseWheelEvent& event) {
 bool TextField::onKeyDown(const KeyEvent& event) {
     if (!interactive()) {
         return false;
+    }
+
+    const bool multilineSubmit = multiline_ &&
+                                 event.key == Key::Enter &&
+                                 !event.alt &&
+                                 !event.shift &&
+                                 (event.control || submitOnEnter_);
+    if (multilineSubmit) {
+        if (hasTextComposition() || !onSubmitted_) {
+            return false;
+        }
+        const auto callback = onSubmitted_;
+        const auto submitted = value();
+        callback(submitted);
+        return true;
     }
 
     if (dispatchBuiltinCommandKey(event, {}) != CommandResult::NotFound) return true;

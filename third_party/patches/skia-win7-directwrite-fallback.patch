@@ -1,0 +1,35 @@
+diff --git a/src/ports/SkFontMgr_win_dw.cpp b/src/ports/SkFontMgr_win_dw.cpp
+--- a/src/ports/SkFontMgr_win_dw.cpp
++++ b/src/ports/SkFontMgr_win_dw.cpp
+@@ -1012,6 +1012,8 @@
+             (dwStyle.fWeight == DWRITE_FONT_WEIGHT_REGULAR &&
+              dwStyle.fSlant == DWRITE_FONT_STYLE_NORMAL))
+         {
++            // OneUI: preserve the legacy DirectWrite fallback result on Win7.
++            returnTypeface = fontFallbackRenderer->ConsumeFallbackTypeface();
+             break;
+         }
+ 
+diff --git a/src/utils/win/SkDWrite.cpp b/src/utils/win/SkDWrite.cpp
+--- a/src/utils/win/SkDWrite.cpp
++++ b/src/utils/win/SkDWrite.cpp
+@@ -36,7 +36,18 @@
+             "DWriteCoreCreateFactory"));
+ 
+     if (!dWriteCreateFactoryProc) {
++        HMODULE systemDWrite = LoadLibraryExW(L"dwrite.dll", NULL, LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
++        if (!systemDWrite) {
++            // OneUI: unpatched Win7 SP1 does not support the search flags.
++            // Use an absolute system path; never search the working directory.
++            WCHAR path[MAX_PATH];
++            const UINT length = GetSystemDirectoryW(path, MAX_PATH);
++            if (length > 0 && length + 12 < MAX_PATH) {
++                wcscpy_s(path + length, MAX_PATH - length, L"\\dwrite.dll");
++                systemDWrite = LoadLibraryW(path);
++            }
++        }
+         dWriteCreateFactoryProc = reinterpret_cast<DWriteCreateFactoryProc>(GetProcAddress(
+-                LoadLibraryExW(L"dwrite.dll", NULL, LOAD_LIBRARY_SEARCH_DEFAULT_DIRS),
++                systemDWrite,
+                 "DWriteCreateFactory"));
+     }

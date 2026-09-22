@@ -164,6 +164,7 @@ public:
     std::wstring selectedText() const;
     bool copySelectionToClipboard();
     bool pasteFromClipboard();
+    bool pasteText(const std::wstring& text);
 
     void setOnTextInput(TextInputCallback callback);
     void setOnPaste(PasteCallback callback);

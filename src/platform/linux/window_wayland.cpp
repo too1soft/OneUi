@@ -741,6 +741,8 @@ void WaylandConnection::pointerCursor() {
     case CursorKind::ResizeVertical:
         name = "sb_v_double_arrow";
         break;
+    case CursorKind::ResizeNorthWestSouthEast: name = "nwse-resize"; break;
+    case CursorKind::ResizeNorthEastSouthWest: name = "nesw-resize"; break;
     default:
         break;
     }

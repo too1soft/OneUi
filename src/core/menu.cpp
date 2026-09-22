@@ -43,6 +43,7 @@ StyleSheet defaultMenuSheet() {
         .menu-item.danger { color: #c8353b; }
         .menu-item.danger:hover { background: #fcebec; color: #c8353b; }
         .menu-item.danger:active { background: #f9dbdc; color: #b02a30; }
+        .menu-item.danger:disabled { color: #b6bcc7; background: #00000000; }
         .menu-separator { background: #eef0f4; }
     )css", &error);
     return sheet;
@@ -194,7 +195,7 @@ void Menu::paint(Canvas& canvas) {
     paintStyleBox(canvas, frame(), surface);
 
     const Color headerTitle = surface.foreground.value_or(Color{32, 33, 36});
-    const Color headerSubtitle{152, 162, 179};
+    const Color headerSubtitle = surface.placeholderColor.value_or(theme().textMuted);
 
     for (int i = 0; i < static_cast<int>(entries_.size()); ++i) {
         const Entry& entry = entries_[static_cast<std::size_t>(i)];

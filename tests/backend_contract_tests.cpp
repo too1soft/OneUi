@@ -124,6 +124,47 @@ void testAnimationFrameContract() {
     expectTrue("Animation frame run exits cleanly", runResult == 0);
 }
 
+#if defined(_WIN32)
+struct MessageFlood {
+    WNDPROC previous;
+    ULONGLONG deadline;
+};
+LRESULT CALLBACK floodWindowProc(HWND hwnd, UINT message, WPARAM wp, LPARAM lp) {
+    auto* flood = static_cast<MessageFlood*>(GetPropW(hwnd, L"OneUI.Test.MessageFlood"));
+    if (message == WM_APP + 211) {
+        if (GetTickCount64() >= flood->deadline) {
+            return CallWindowProcW(flood->previous, hwnd, WM_CLOSE, 0, 0);
+        }
+        PostMessageW(hwnd, message, 0, 0);
+        return 0;
+    }
+    return CallWindowProcW(flood->previous, hwnd, message, wp, lp);
+}
+#endif
+
+void testAnimationUnderContinuousMessages() {
+#if defined(_WIN32)
+    oneui::WindowOptions options;
+    options.visible = false;
+    auto window = oneui::Window::create(options);
+    window->initialize();
+    const auto hwnd = static_cast<HWND>(window->nativeHandle());
+    MessageFlood flood{reinterpret_cast<WNDPROC>(GetWindowLongPtrW(hwnd, GWLP_WNDPROC)), GetTickCount64() + 2000};
+    SetPropW(hwnd, L"OneUI.Test.MessageFlood", &flood);
+    SetWindowLongPtrW(hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(floodWindowProc));
+    bool frameRan = false;
+    window->requestAnimationFrame([&](double) {
+        frameRan = true;
+        SetWindowLongPtrW(hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(flood.previous));
+        RemovePropW(hwnd, L"OneUI.Test.MessageFlood");
+        window->close();
+    });
+    PostMessageW(hwnd, WM_APP + 211, 0, 0);
+    window->run();
+    expectTrue("Continuous messages cannot starve animation timers", frameRan);
+#endif
+}
+
 void testSystemClipboardRoundTrip() {
     oneui::SystemClipboard clipboard;
     const std::wstring previous = clipboard.text();
@@ -256,6 +297,7 @@ int main(int argc, char**) {
     }
     testHiddenWindowLifecycleAndStateContract();
     testAnimationFrameContract();
+    testAnimationUnderContinuousMessages();
     testIndependentWindowLifetimes();
     testRepeatedCreationAndCancellation();
     testCancelledCaptureCanReenterPost();

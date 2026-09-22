@@ -1,5 +1,10 @@
 #include "text/text_layout.h"
 #include "internal/unicode.h"
+#include "test_asset_path.h"
+#include "platform/shared/skia_canvas.h"
+#include "include/core/SkFontMgr.h"
+#include "include/core/SkTypeface.h"
+#include "include/core/SkData.h"
 #include "include/core/SkCanvas.h"
 #include "include/core/SkImageInfo.h"
 #include "include/core/SkSurface.h"
@@ -15,9 +20,31 @@ static void require(bool condition, const char* message) {
 
 int main() {
     try {
-        Layout::installTestFonts({ONEUI_TEXT_ASSETS "/NotoSans-Regular.ttf", ONEUI_TEXT_ASSETS "/NotoNaskhArabic-Regular.ttf",
-            ONEUI_TEXT_ASSETS "/NotoSansDevanagari-Regular.ttf", ONEUI_TEXT_ASSETS "/NotoSansHebrew-Regular.ttf",
-            ONEUI_TEXT_ASSETS "/NotoSansCJKsc-Regular.otf", ONEUI_TEXT_ASSETS "/NotoColorEmoji.ttf"});
+#if defined(_WIN32)
+        // Exercise the real system fallback BEFORE installing test fonts.
+        // A Chinese Windows 7 installation contains Microsoft YaHei/SimSun;
+        // Segoe UI alone must not turn these characters into empty boxes.
+        auto systemChinese = Layout::make(L"\u4e2d\u6587", LayoutOptions{});
+        if (systemChinese->unresolvedGlyphs() != 0) {
+            auto manager = oneui::rendering::makePlatformFontManager();
+            std::cerr << "System font families: " << manager->countFamilies() << '\n';
+            for (const char* locale : {"", "und", "zh-CN"}) {
+                auto face = manager->matchFamilyStyleCharacter("Segoe UI", SkFontStyle{}, &locale, *locale ? 1 : 0, 0x4E2D);
+                std::cerr << "Fallback locale '" << locale << "': " << (face ? face->unicharToGlyph(0x4E2D) : 0) << '\n';
+            }
+        }
+        require(systemChinese->unresolvedGlyphs() == 0, "system font fallback must resolve Chinese glyphs");
+#endif
+        auto emojiData = SkData::MakeFromFileName(oneuiTestAsset("NotoColorEmoji.ttf").c_str());
+        require(emojiData && oneui::rendering::registerFontFromMemory(emojiData->data(), emojiData->size(), "OneUI Acceptance Emoji"),
+                "application color font registration must work without OS font installation");
+        LayoutOptions emojiOptions;
+        emojiOptions.family = L"OneUI Acceptance Emoji";
+        require(Layout::make(oneui::unicode::fromUtf8(u8"😀"), emojiOptions)->unresolvedGlyphs() == 0,
+                "registered application emoji font must resolve glyphs");
+        Layout::installTestFonts({oneuiTestAsset("NotoSans-Regular.ttf"), oneuiTestAsset("NotoNaskhArabic-Regular.ttf"),
+            oneuiTestAsset("NotoSansDevanagari-Regular.ttf"), oneuiTestAsset("NotoSansHebrew-Regular.ttf"),
+            oneuiTestAsset("NotoSansCJKsc-Regular.otf"), oneuiTestAsset("NotoColorEmoji.ttf")});
         const auto family = oneui::unicode::fromUtf8("a\xF0\x9F\x91\xA8\xE2\x80\x8D\xF0\x9F\x91\xA9\xE2\x80\x8D\xF0\x9F\x91\xA7\xE2\x80\x8D\xF0\x9F\x91\xA6" "b");
         auto clusters = Layout::make(family);
         require(clusters->graphemes().size() == 4, "family emoji must form one grapheme");
@@ -62,6 +89,39 @@ int main() {
         wrapped.maxLines = 2; wrapped.ellipsis = true;
         auto ellipsized = Layout::make(L"abc\n\u05d0\u05d1\u05d2\nhidden", wrapped);
         require(ellipsized->lines().size() == 2 && ellipsized->width() <= wrapped.width + 1, "narrow paragraph ellipsis obeys max lines");
+
+        LayoutOptions richOptions;
+        richOptions.width = 180;
+        richOptions.text.wrap = oneui::TextWrapMode::WordWrap;
+        oneui::TextStyleSpan accent;
+        accent.start = 5;
+        accent.end = 9;
+        accent.fontWeight = 700;
+        accent.italic = true;
+        accent.foreground = oneui::Color{0, 220, 96, 255};
+        accent.background = oneui::Color{20, 80, 220, 180};
+        richOptions.spans = {accent};
+        auto rich = Layout::make(L"base rich next", richOptions);
+        require(rich->lines().size() == 1 && rich->width() > 0, "rich spans shape in one paragraph");
+        auto richSurface = SkSurfaces::Raster(SkImageInfo::MakeN32Premul(220, 48));
+        rich->paint(*richSurface->getCanvas(), {0, 0}, {230, 32, 32, 255});
+        SkPixmap richPixels;
+        require(richSurface->peekPixels(&richPixels), "rich text pixels available");
+        int richRed = 0, richGreen = 0, richBlue = 0;
+        for (int y = 0; y < richPixels.height(); ++y) for (int x = 0; x < richPixels.width(); ++x) {
+            const auto c = richPixels.getColor(x, y);
+            if (SkColorGetA(c) < 16) continue;
+            if (SkColorGetR(c) > SkColorGetG(c) * 2) ++richRed;
+            if (SkColorGetG(c) > SkColorGetR(c) && SkColorGetG(c) > SkColorGetB(c)) ++richGreen;
+            if (SkColorGetB(c) > SkColorGetR(c) && SkColorGetB(c) > SkColorGetG(c)) ++richBlue;
+        }
+        require(richRed > 0 && richGreen > 0 && richBlue > 0,
+                "rich paint keeps base color, inline foreground, and inline background");
+        LayoutOptions richMultiline = richOptions;
+        richMultiline.spans.front().start = 0;
+        richMultiline.spans.front().end = 4;
+        auto richLines = Layout::make(L"bold\nnext", richMultiline);
+        require(richLines->lines().size() == 2, "rich spans preserve hard line breaks");
 
         Layout::clearCache();
         auto first = Layout::make(L"unchanged\nfirst");

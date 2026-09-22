@@ -52,6 +52,17 @@ void ImageView::setContentMode(ImageContentMode mode) {
     invalidate();
 }
 
+void ImageView::setContentAlignment(
+    ImageContentAlignment horizontal,
+    ImageContentAlignment vertical) {
+    if (horizontalAlignment_ == horizontal && verticalAlignment_ == vertical) {
+        return;
+    }
+    horizontalAlignment_ = horizontal;
+    verticalAlignment_ = vertical;
+    invalidate();
+}
+
 void ImageView::setCornerRadius(float radius) {
     const float next = std::max(0.0f, radius);
     if (std::fabs(cornerRadius_ - next) < 0.01f) {
@@ -83,13 +94,24 @@ void ImageView::paint(Canvas& canvas) {
     if (contentMode_ != ImageContentMode::Stretch) {
         const float scaleX = bounds.width / static_cast<float>(width_);
         const float scaleY = bounds.height / static_cast<float>(height_);
-        const float scale = contentMode_ == ImageContentMode::Cover
-            ? std::max(scaleX, scaleY)
-            : std::min(scaleX, scaleY);
+        float scale = 1.0f;
+        if (contentMode_ != ImageContentMode::ActualSize) {
+            scale = contentMode_ == ImageContentMode::Cover
+                ? std::max(scaleX, scaleY)
+                : std::min(scaleX, scaleY);
+        }
         target.width = static_cast<float>(width_) * scale;
         target.height = static_cast<float>(height_) * scale;
-        target.x += (bounds.width - target.width) * 0.5f;
-        target.y += (bounds.height - target.height) * 0.5f;
+        const auto alignedOffset = [](float available, ImageContentAlignment alignment) {
+            switch (alignment) {
+                case ImageContentAlignment::Start: return 0.0f;
+                case ImageContentAlignment::End: return available;
+                case ImageContentAlignment::Center: return available * 0.5f;
+            }
+            return available * 0.5f;
+        };
+        target.x += alignedOffset(bounds.width - target.width, horizontalAlignment_);
+        target.y += alignedOffset(bounds.height - target.height, verticalAlignment_);
     }
 
     canvas.save();

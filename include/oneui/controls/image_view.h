@@ -12,6 +12,13 @@ enum class ImageContentMode {
     Contain = 0,
     Cover = 1,
     Stretch = 2,
+    ActualSize = 3,
+};
+
+enum class ImageContentAlignment {
+    Start = 0,
+    Center = 1,
+    End = 2,
 };
 
 /// Displays an owned RGBA image without exposing a renderer-specific image type.
@@ -29,6 +36,9 @@ public:
 
     void setContentMode(ImageContentMode mode);
     ImageContentMode contentMode() const { return contentMode_; }
+    void setContentAlignment(ImageContentAlignment horizontal, ImageContentAlignment vertical);
+    ImageContentAlignment horizontalContentAlignment() const { return horizontalAlignment_; }
+    ImageContentAlignment verticalContentAlignment() const { return verticalAlignment_; }
     void setCornerRadius(float radius);
     float cornerRadius() const { return cornerRadius_; }
     void setBackground(Color color);
@@ -42,6 +52,8 @@ private:
     int height_ = 0;
     int stride_ = 0;
     ImageContentMode contentMode_ = ImageContentMode::Contain;
+    ImageContentAlignment horizontalAlignment_ = ImageContentAlignment::Center;
+    ImageContentAlignment verticalAlignment_ = ImageContentAlignment::Center;
     float cornerRadius_ = 0.0f;
     Color background_{0, 0, 0, 0};
 };

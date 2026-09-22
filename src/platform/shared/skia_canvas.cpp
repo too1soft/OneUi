@@ -214,6 +214,8 @@ class SkiaCanvasImpl final : public Canvas {
     }
 
     void strokeRect(Rect rect, Color color, float radius, float width) override {
+        // CSS border-width: 0 means no border, not Skia's device hairline.
+        if (!(width > 0.0f) || !std::isfinite(width) || color.a == 0) return;
         SkPaint paint;
         paint.setAntiAlias(true);
         paint.setColor(toSkColor(color));
@@ -363,6 +365,7 @@ class SkiaCanvasImpl final : public Canvas {
         options.align = style.align; options.maxLines = style.maxLines;
         options.ellipsis = style.ellipsis; options.sensitive = style.sensitive;
         options.scale = style.dpiScale;
+        options.spans = style.spans;
         const double started = currentTimeMs();
         text::Layout::make(value, options)->paint(canvas_, {bounds.x, bounds.y}, color);
         ++g_primitivePaintTrace.textCalls;
@@ -410,6 +413,19 @@ class SkiaCanvasImpl final : public Canvas {
         canvas_.restore();
         ++g_primitivePaintTrace.textCalls;
         g_primitivePaintTrace.textMs += currentTimeMs() - traceStartMs;
+    }
+
+    float measureTextCellsWidth(const std::wstring& value, float size,
+                                const std::wstring& familyName, TextFontFamily fallback,
+                                int weight = 400) const override {
+        const std::wstring& family = familyName.empty() && fallback == TextFontFamily::Default &&
+                                            defaultFontFamily_ && !defaultFontFamily_->empty()
+                                        ? *defaultFontFamily_ : familyName;
+        const double started = currentTimeMs();
+        const float width = cachedTextBlob(value, size, fallback, family, weight).advanceWidth;
+        ++g_primitivePaintTrace.textMeasureCalls;
+        g_primitivePaintTrace.textMeasureMs += currentTimeMs() - started;
+        return width;
     }
 
     bool supportsNamedFont(const std::wstring &familyName) const override {

@@ -169,18 +169,22 @@ NOTIFYICONDATAW trayData(const OneUiTray* tray) {
 
 } // namespace
 
-int oneui_window_file_dialog_utf8(
+static int windowFileDialogUtf8Impl(
     OneUiWindow* window,
     const OneUiFileDialogOptionsUtf8* options,
     char* buffer,
     std::size_t bufferLength,
-    std::size_t* requiredLength) {
+    std::size_t* requiredLength,
+    bool allowMultiple) {
 #ifdef _WIN32
     if (requiredLength) {
         *requiredLength = 0;
     }
     if (!options || options->filter_count > 64 ||
         (options->filter_count > 0 && !options->filters)) {
+        return -1;
+    }
+    if (allowMultiple && options->mode != OneUiFileDialogOpenFile) {
         return -1;
     }
 
@@ -249,6 +253,9 @@ int oneui_window_file_dialog_utf8(
             flags |= FOS_FORCEFILESYSTEM | FOS_NOCHANGEDIR;
             if (options->mode == OneUiFileDialogOpenFile) {
                 flags |= FOS_FILEMUSTEXIST | FOS_PATHMUSTEXIST;
+                if (allowMultiple) {
+                    flags |= FOS_ALLOWMULTISELECT;
+                }
             } else if (options->mode == OneUiFileDialogSelectFolder) {
                 flags |= FOS_PICKFOLDERS | FOS_PATHMUSTEXIST;
             } else if (options->confirm_overwrite) {
@@ -333,6 +340,71 @@ int oneui_window_file_dialog_utf8(
             const HRESULT showResult = dialog->Show(owner);
             if (showResult == HRESULT_FROM_WIN32(ERROR_CANCELLED)) {
                 result = 0;
+            } else if (SUCCEEDED(showResult) && allowMultiple) {
+                IFileOpenDialog* openDialog = nullptr;
+                if (SUCCEEDED(dialog->QueryInterface(IID_PPV_ARGS(&openDialog))) && openDialog) {
+                    struct OpenDialogRelease final {
+                        IFileOpenDialog* value = nullptr;
+                        ~OpenDialogRelease() {
+                            if (value) {
+                                value->Release();
+                            }
+                        }
+                    } openDialogRelease{openDialog};
+                    IShellItemArray* selectedItems = nullptr;
+                    if (SUCCEEDED(openDialog->GetResults(&selectedItems)) && selectedItems) {
+                        struct ItemArrayRelease final {
+                            IShellItemArray* value = nullptr;
+                            ~ItemArrayRelease() {
+                                if (value) {
+                                    value->Release();
+                                }
+                            }
+                        } itemArrayRelease{selectedItems};
+                        DWORD count = 0;
+                        if (SUCCEEDED(selectedItems->GetCount(&count)) && count > 0) {
+                            std::string selectedBytes;
+                            for (DWORD index = 0; index < count; ++index) {
+                                IShellItem* selectedItem = nullptr;
+                                if (FAILED(selectedItems->GetItemAt(index, &selectedItem)) ||
+                                    !selectedItem) {
+                                    selectedBytes.clear();
+                                    break;
+                                }
+                                PWSTR selectedPath = nullptr;
+                                const HRESULT pathResult = selectedItem->GetDisplayName(
+                                    SIGDN_FILESYSPATH,
+                                    &selectedPath);
+                                selectedItem->Release();
+                                if (FAILED(pathResult) || !selectedPath) {
+                                    selectedBytes.clear();
+                                    break;
+                                }
+                                const std::string selectedUtf8 = utf8FromWide(selectedPath);
+                                CoTaskMemFree(selectedPath);
+                                if (selectedUtf8.empty()) {
+                                    selectedBytes.clear();
+                                    break;
+                                }
+                                selectedBytes.append(selectedUtf8);
+                                selectedBytes.push_back('\0');
+                            }
+                            if (!selectedBytes.empty()) {
+                                selectedBytes.push_back('\0');
+                                const std::size_t required = selectedBytes.size();
+                                if (requiredLength) {
+                                    *requiredLength = required;
+                                }
+                                if (!buffer || bufferLength < required) {
+                                    result = -2;
+                                } else {
+                                    std::memcpy(buffer, selectedBytes.data(), required);
+                                    result = 1;
+                                }
+                            }
+                        }
+                    }
+                }
             } else if (SUCCEEDED(showResult)) {
                 IShellItem* selectedItem = nullptr;
                 if (SUCCEEDED(dialog->GetResult(&selectedItem)) && selectedItem) {
@@ -367,11 +439,42 @@ int oneui_window_file_dialog_utf8(
     (void)options;
     (void)buffer;
     (void)bufferLength;
+    (void)allowMultiple;
     if (requiredLength) {
         *requiredLength = 0;
     }
     return -1;
 #endif
+}
+
+int oneui_window_file_dialog_utf8(
+    OneUiWindow* window,
+    const OneUiFileDialogOptionsUtf8* options,
+    char* buffer,
+    std::size_t bufferLength,
+    std::size_t* requiredLength) {
+    return windowFileDialogUtf8Impl(
+        window,
+        options,
+        buffer,
+        bufferLength,
+        requiredLength,
+        false);
+}
+
+int oneui_window_file_dialog_multiple_utf8(
+    OneUiWindow* window,
+    const OneUiFileDialogOptionsUtf8* options,
+    char* buffer,
+    std::size_t bufferLength,
+    std::size_t* requiredLength) {
+    return windowFileDialogUtf8Impl(
+        window,
+        options,
+        buffer,
+        bufferLength,
+        requiredLength,
+        true);
 }
 
 int oneui_window_pick_folder(OneUiWindow* window, const wchar_t* title, wchar_t* out, int outLen) {

@@ -14,3 +14,7 @@ path = "src/lib.rs"
 [features]
 default = []
 static-link = []
+
+[build-dependencies]
+serde_json = "1"
+sha2 = "0.10"

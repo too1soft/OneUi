@@ -77,6 +77,7 @@ set(ONEUI_C_API_SOURCES
 )
 
 set(ONEUI_WIN32_SOURCES
+    src/platform/win32/compat_win32.cpp
     src/platform/win32/clipboard_win32.cpp
     src/platform/win32/monitor_win32.cpp
     src/platform/shared/skia_canvas.cpp

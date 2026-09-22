@@ -10,7 +10,35 @@ OneUI 的 Rust workspace 包含两层：
 产品代码应优先使用 `oneui`。只有 safe 层尚未覆盖且生命周期能被明确封装时，才在一个局部模块
 中直接使用 `oneui-sys`。
 
+ABI v33 提供安全 `Slider` 和 `SliderInteraction`，区分预览更新与提交/取消。
+`set_on_interaction` 使用可重入的 `Fn` 回调并隔离panic；程序设值不触发该回调。
+销毁包装器会先断开C回调，不调用业务代码；卸载前若需撤销拖动开始时的暂停等副作用，
+应显式调用 `cancel_interaction()`。包装器仅供UI线程使用；`Slider::handle` 提供线程安全的
+`SliderHandle::set_progress`，合并位置、时长与启用状态。位置为None时保留滑块位置；
+拖动期间后台更新不移动滑块。控件销毁后返回WidgetDestroyed，暂停时不要求轮询。
+
 ## 前置构建
+
+原生核心当前在 Win32 默认尝试 OpenGL + Skia Ganesh，保留软件 raster/GDI 回退；
+Rust 不需要引入另一套渲染运行时。配置与排查见[渲染说明](../../docs/39-rendering-and-validation.md)。
+
+## 工作区与原生交互扩展
+
+- `layout::workspace::DockWorkspace` 管理递归停靠树、浮动面板、隐藏恢复和快照。
+- `layout::workspace_surface::DockSurface` 用原生 SplitView/Panel/OverlayHost 挂载已注册内容；
+  拓扑更新保留控件身份，浮动移动/缩放通过 `update_floating` 更新位置。
+- `workspace_gesture` 提供停靠引导、叶节点放置命中测试和拖拽快照；`FloatingFrame`
+  提供八方向缩放目标、键盘缩放及停靠/浮动背景样式切换，保留内容实例。
+- `InteractiveSurface::set_on_drag` 提供拖拽开始、更新、放下和取消事件；重挂载应延后到输入回调返回后。
+- `FocusBookmark` 保存弱焦点引用，恢复限于仍挂载且可见、可用的控件，不激活操作系统窗口。
+- `Tabs` 原位标题编辑提供提交、取消和失焦原因；应用负责名称校验与最终更新。
+- `ImageView` 支持原始尺寸与双轴对齐；窗口提供激活状态回调与多文件选择。
+
+工作区层目前通过 Rust 组合基础控件，尚无同名 C++ 工作区对象。通用拖拽、停靠和浮动窗口控制
+属于 OneUI 底座能力，完整控制器仍待整合；应用提供内容、样式、业务策略及持久化存储接入。
+当前实现和测试入口见[工作区组合](../../docs/workspace-docking.md)。
+
+## 构建与验证前提
 
 本轮新增命令、文字选项与 UTF-8 位置接口；固定 ICU 加可复现补丁已通过完整 Unicode 双向文本用例，
 MinGW 匹配文字依赖、SDK 审计与原生交互验收仍待完成，
@@ -31,7 +59,7 @@ export ONEUI_LIB_DIR="$PWD/build/native"
 export LD_LIBRARY_PATH="$ONEUI_LIB_DIR${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" # Linux
 cd bindings/rust
 cargo fmt --all --check
-cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace --all-targets
 ```
 
@@ -99,6 +127,8 @@ Error::AbiVersionMismatch { expected, actual }
 ```
 
 不要绕过该检查。header/import library 和 runtime DLL 必须来自同一次 OneUI 构建。
+开发阶段同一 ABI 版本内可能增加符号；版本号相等不能替代构建产物匹配。
+使用 Tabs 编辑、焦点书签等新增入口时，必须使用包含对应导出的同批 DLL/导入库。
 
 `oneui-sys` 有意只声明 Rust 可直接消费的便携 UTF-8/POD 接口，不承诺与公开 C 头中的
 Windows 宽字符兼容入口逐函数对应。`scripts/check-abi-sync.ps1` 会验证版本常量一致，并确保
@@ -395,10 +425,15 @@ let selected = window.file_dialog(oneui::FileDialogOptions {
     filters: &filters,
     ..oneui::FileDialogOptions::open("Open config")
 })?;
+
+let uploads = window.file_dialog_multiple(oneui::FileDialogOptions {
+    filters: &filters,
+    ..oneui::FileDialogOptions::open("Select uploads")
+})?;
 ```
 
-还支持 save/select-folder。路径和过滤器通过 UTF-8 ABI；对话框由 window owner 绑定，产品不需要直接
-调用 Win32 API。
+单路径接口还支持 save/select-folder，多路径接口只接受 open-file。路径和过滤器通过 UTF-8 ABI；
+对话框由 window owner 绑定，产品不需要直接调用 Win32 API。
 
 ## 生命周期规则
 

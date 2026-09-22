@@ -8,10 +8,24 @@ param(
     [ValidateSet("mingw64", "ucrt64")]
     [string]$Toolchain = "mingw64",
 
-    [switch]$AllowOneUI
+    [switch]$AllowOneUI,
+    [ValidateSet('win7','win10')][string]$MinimumWindows = 'win10',
+    [string]$WindowsReference = "",
+    [string[]]$RuntimeDirectory = @()
 )
 
 $ErrorActionPreference = "Stop"
+
+if ($WindowsReference) {
+    $auditArgs = @((Join-Path $PSScriptRoot 'audit-windows-runtime.py'), '--binary', $Binary, '--reference', $WindowsReference)
+    foreach ($directory in $RuntimeDirectory) { $auditArgs += @('--runtime-dir', $directory) }
+    & python @auditArgs
+    if ($LASTEXITCODE -ne 0) { throw "Windows baseline import audit failed" }
+    return
+}
+if ($Mode -eq 'product' -and $MinimumWindows -eq 'win7') {
+    throw "Product audit requires -WindowsReference from the target Windows baseline. DLL names alone cannot prove compatibility. Use -Mode development only for development dependency collection."
+}
 
 . (Join-Path $PSScriptRoot "runtime-dependencies.ps1")
 
@@ -58,6 +72,7 @@ $result = [PSCustomObject]@{
     Imports = ($imports -join ", ")
     ExternalDependencies = (($external | Sort-Object -Unique) -join ", ")
     Pass = $external.Count -eq 0
+    WindowsCompatibilityVerified = $false
 }
 
 $result

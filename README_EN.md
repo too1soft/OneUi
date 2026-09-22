@@ -9,7 +9,7 @@ English | [简体中文](README.md)
 [![Version](https://img.shields.io/badge/version-0.1.0-f59e0b.svg)](CMakeLists.txt)
 
 OneUI is a **native, self-drawn, retained-mode** desktop UI framework, with Windows as its current product baseline. It is
-implemented in C++17, renders through Skia raster, and composes applications from a `Widget` / `View`
+implemented in C++17, renders through Skia (Win32 attempts OpenGL + Ganesh by default, with software raster fallback), and composes applications from a `Widget` / `View`
 tree, layout containers, reactive state, and CSS-like style sheets. It does not depend on HTML, a
 browser process, or WebView.
 
@@ -49,26 +49,39 @@ Earlier baseline passes are not full acceptance of this upgrade.
 | --- | --- |
 | Runtime | `Widget`, `View`, logical/physical pixels, focus chains, hit testing, keyboard/mouse/wheel input, animation frames, tooltips, accessibility metadata |
 | Reactive state | `State<T>`, `Binding<T>`, window-thread dispatcher, background posting, thread-safe widget handles |
-| Rendering | `Canvas`, Skia raster, text/primitives/gradients/shadows/pixel frames, clip bounds and stable viewport bounds |
+| Rendering | `Canvas`, Win32 Skia Ganesh GPU / raster fallback, partial repaint, paragraphs and inline rich text, primitives/gradients/shadows/pixel frames |
 | Styling | CSS-like selectors, classes, pseudo states, custom properties, typed adapters, color/opacity transitions |
-| Layout | Stack, Grid, Wrap, Panel, ScrollView, SplitView, OverlayHost, ReorderableGrid, AppShell, ProductShell |
+| Layout | Stack, Grid, Wrap, Panel, ScrollView, SplitView, OverlayHost, ReorderableGrid, AppShell, ProductShell; Rust DockWorkspace / DockSurface |
 | Forms | Button, IconButton, TextField/TextArea, Checkbox, Switch, RadioGroup, Slider, Select, FormField |
 | Navigation/data | Tabs, List, VirtualList, TreeView, Table, Menu, NavItem; selection, activation, context menus, reorder requests, stable drag IDs |
 | Feedback/surfaces | Card, Badge, IconBadge, ProgressBar, Sparkline, Dialog, Popup, Toast, StateView, StatusStrip |
-| Specialized views | TerminalView, LogView, RealtimeFrameView, RemoteInputRegion, WindowTitleBar |
-| Platform services | Win32 Window, placement persistence, DPI/monitor, clipboard, file/folder pickers, confirm/prompt, tray, global raw-key |
+| Specialized views | ImageView, TerminalView, LogView, RealtimeFrameView, RemoteInputRegion, WindowTitleBar |
+| Platform services | Win32 Window, placement persistence, DPI/monitor, clipboard, file drop, file/folder pickers, confirm/prompt, tray, global raw-key |
 | Diagnostics | committed widget frames, Stack content extent, interaction traces, privacy-safe widget-tree JSON snapshots |
 | Interop | C++ API, versioned UTF-8 C ABI, portable Rust FFI subset, safe Rust wrappers, callback panic boundary |
 
 See the [component inventory](docs/07-component-inventory.md) and
 [component reference](docs/14-component-reference.md) for per-component coverage and limits.
 
-## Current Workspace Additions
+## Current Implementation Highlights
 
-The current workspace adds or substantially extends:
+The development version includes the following capabilities. Implemented APIs and release acceptance are tracked separately:
+
+- Win32 OpenGL + Skia Ganesh rendering with raster / GDI fallback; set `ONEUI_ENABLE_GPU=0`
+  to investigate the software path. See [rendering and validation](docs/39-rendering-and-validation.md).
+- ABI v33 `Slider` C/Rust APIs, Begin/Update/Commit/Cancel interaction events and a coalescing
+  background progress handle. New symbols require matching headers, bindings and DLLs from the same build.
+- Rust `DockWorkspace` / `DockSurface` for recursive splits, floating panes, hide/restore, maximization,
+  snapshots and focus retention, with gesture hit tests and `FloatingFrame` resize helpers.
+  Integration into a complete general-purpose drag/drop controller remains pending within OneUI;
+  see [workspace composition](docs/workspace-docking.md).
+- `SplitView` keyboard adjustment, Home/End, double-click balancing and Escape drag cancellation;
+- RGBA `ImageView` with contain/cover/stretch/actual-size modes and two-axis alignment;
+- window activation callbacks, multiple-file selection and weak focus bookmarks;
+- `Label` inline rich text with font, decoration and foreground/background spans;
 
 - `Sparkline`, including C ABI and safe Rust support;
-- compact, measured, icon-capable, scrollable, closable, context-aware, reorder-requesting `Tabs`;
+- compact, measured, icon-capable, scrollable, closable, context-aware, reorder-requesting `Tabs` with inline title editing;
 - a structured UTF-8 `Table` with visible-row painting, smooth scrolling, single/multiple selection,
   keyboard commands, edit/delete requests, internal reorder, and external stable-ID drag;
 - synchronized layout-tree JSON snapshots with parent IDs, actual/preferred frames, resolved style
@@ -79,6 +92,8 @@ The current workspace adds or substantially extends:
 - tooltips, `InteractiveSurface` pointer-move/hover callbacks, `TextField` submission, and a
   committed `SplitView` ratio callback;
 - corrected nested-overlay, out-of-bounds popup, and scrolled-Select routing;
+- remote committed IME/Unicode text with printable-key deduplication, plus default/hidden/custom
+  premultiplied RGBA cursors and coalescing worker updates;
 - Rust `WidgetHandle`, `TextFieldHandle`, `SparklineHandle`, `TableHandle`, layout snapshots, and
   interaction tracing for product integration.
 
@@ -86,8 +101,8 @@ The current workspace adds or substantially extends:
 
 | Platform | Status | Notes |
 | --- | --- | --- |
-| Windows / Win32 | Current product baseline | Earlier MSVC/MinGW baseline passed; the full-text upgrade has conformance and MinGW dependency blockers |
-| Windows 7 API level | Source compatibility target | CMake defines `_WIN32_WINNT=0x0601`; final OS support still depends on the selected MSVC/Skia artifacts |
+| Windows / Win32 | Current product baseline | MSVC and Unicode conformance regression passes are recorded; matching MinGW text dependencies, complete SDK audits and native interaction acceptance remain pending |
+| Windows 7 SP1 | Separate compatibility build; acceptance in progress | x86 tested on an original SP1 guest; x64 compiled, native Win7 x64 acceptance pending. The modern default is unchanged. See the [compatibility guide](docs/24-windows7-compatibility.md). |
 | Linux X11 / Wayland | Implemented; built under WSLg | Native Ubuntu, Kylin/UOS and ARM64 acceptance pending; runtime capabilities vary |
 | macOS Cocoa | Source integrated; not built | Intel / Apple Silicon Mac builds and native acceptance pending |
 
@@ -111,7 +126,7 @@ OneUI retained widget tree
         |
 Canvas abstraction
         |
-Skia raster renderer
+Skia renderer (Win32: OpenGL/Ganesh + raster fallback)
         |
 Win32 / X11 / Wayland / Cocoa backend (see maturity matrix)
         +-- window/message loop/raw key/IME path
@@ -128,6 +143,7 @@ Reusable behavior belongs in OneUI, not in product-specific branches. See the
 ```text
 include/oneui/        Public C++ headers and oneui_c_api.h
 src/core/             Platform-neutral controls, layout, style, state, and painting
+src/text/             Private SkParagraph / SkShaper / ICU text layout
 src/platform/win32/   Operational Win32 backend
 src/platform/shared/  Private Skia Canvas, text caches and desktop scheduling
 src/platform/linux/   Native X11 / Wayland backends
@@ -310,6 +326,9 @@ Start at [docs/README.md](docs/README.md). Frequently used references:
 - [Linux/macOS Build, SDK and Acceptance Matrix](docs/37-native-desktop-backends.md)
 - [TerminalView](docs/33-terminal-view.md)
 - [TreeView](docs/34-tree-view.md)
+- [GPU/Software Rendering And Validation](docs/39-rendering-and-validation.md)
+- [Workspace Docking Composition](docs/workspace-docking.md)
+- [Separate Windows 7 Compatibility Build](docs/24-windows7-compatibility.md)
 
 ## Known Limitations
 
@@ -322,8 +341,10 @@ Start at [docs/README.md](docs/README.md). Frequently used references:
   while native IME acceptance remains incomplete. See the text-engine acceptance record.
 - Table does not yet include built-in sorting, filtering, column resize, or an in-cell editor.
 - Tabs/Table/Tree/ReorderableGrid reorder callbacks report requests; product state remains authoritative.
-- RealtimeFrameView paints BGRA/RGBA pixels and supports ownership-transfer submission plus a coalescing Rust worker handle; NV12 conversion is not implemented.
+- RealtimeFrameView paints BGRA/RGBA pixels and supports ownership-transfer submission, backing-frame updates in batches of up to 64 damage rectangles, and coalescing Rust worker updates; NV12 conversion is not implemented.
 - Layout JSON snapshots validate geometry/semantics but are not pixel screenshot tests.
+- GPU integration is not acceptance across all drivers and platforms; Linux/macOS currently use software presentation.
+- The general-purpose workspace drag/drop controller still needs integration within OneUI; consult the inventory for language coverage.
 
 ## Contribution Rules
 

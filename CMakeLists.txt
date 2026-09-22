@@ -15,6 +15,7 @@ if(MSVC)
 endif()
 
 include(CTest)
+include(cmake/OneUIWindows.cmake)
 include(cmake/OneUISources.cmake)
 include(cmake/OneUITests.cmake)
 option(ONEUI_BUILD_PLATFORM_WIN32 "Build the Win32 platform renderer and gallery integration" ON)
@@ -86,8 +87,6 @@ if(WIN32 AND ONEUI_BUILD_PLATFORM_WIN32)
             _UNICODE
             WIN32_LEAN_AND_MEAN
             NOMINMAX
-            WINVER=0x0601
-            _WIN32_WINNT=0x0601
             ONEUI_BUILDING_DLL
     )
     if(ONEUI_ENABLE_TEST_FRAME_CAPTURE)
@@ -147,8 +146,6 @@ if(WIN32 AND ONEUI_BUILD_PLATFORM_WIN32)
             _UNICODE
             WIN32_LEAN_AND_MEAN
             NOMINMAX
-            WINVER=0x0601
-            _WIN32_WINNT=0x0601
             ONEUI_BUILDING_DLL
     )
 
@@ -196,8 +193,6 @@ if(WIN32 AND ONEUI_BUILD_PLATFORM_WIN32)
                 _UNICODE
                 WIN32_LEAN_AND_MEAN
                 NOMINMAX
-                WINVER=0x0601
-                _WIN32_WINNT=0x0601
         )
         if(ONEUI_ENABLE_TEST_FRAME_CAPTURE)
             target_compile_definitions(oneui_static PUBLIC ONEUI_ENABLE_TEST_FRAME_CAPTURE=1)
@@ -208,6 +203,7 @@ if(WIN32 AND ONEUI_BUILD_PLATFORM_WIN32)
         )
 
         add_library(OneUI::oneui_static ALIAS oneui_static)
+        include(cmake/OneUISDKManifest.cmake)
     endif()
 
     add_subdirectory(examples/gallery)
@@ -257,8 +253,6 @@ elseif(WIN32)
             _UNICODE
             WIN32_LEAN_AND_MEAN
             NOMINMAX
-            WINVER=0x0601
-            _WIN32_WINNT=0x0601
             ONEUI_BUILDING_DLL
     )
 

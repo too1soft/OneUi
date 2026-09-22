@@ -616,6 +616,13 @@ bool TerminalView::pasteFromClipboard() {
     if (text.empty()) {
         return false;
     }
+    return pasteText(text);
+}
+
+bool TerminalView::pasteText(const std::wstring& text) {
+    if (text.empty()) {
+        return false;
+    }
     clearSelection();
     if (onPaste_) {
         onPaste_(text);
@@ -1310,7 +1317,7 @@ AccessibilityInfo TerminalView::accessibilityInfo() const {
 }
 
 TerminalView::GridMetrics TerminalView::gridMetrics(const Canvas& canvas) const {
-    const float measured = canvas.measureTextWidthWithNamedFont(
+    const float measured = canvas.measureTextCellsWidth(
         L"M", fontSize_, fontFamily_, TextFontFamily::Monospace, 400);
     return GridMetrics{
         std::max(1.0f, measured + letterSpacing_),

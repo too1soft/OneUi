@@ -1,5 +1,6 @@
 #include "text/text_layout.h"
 #include "internal/unicode.h"
+#include "test_asset_path.h"
 #include "modules/skunicode/include/SkUnicode_icu.h"
 #include "unicode/ubidi.h"
 #include "unicode/uchar.h"
@@ -27,7 +28,7 @@ void check(bool good, const char* file, int line) {
     if (++failures <= 50) std::cerr << file << ':' << line << " conformance mismatch\n";
 }
 std::ifstream input(const char* name) {
-    std::ifstream stream(std::string(ONEUI_TEXT_ASSETS) + '/' + name);
+    std::ifstream stream(oneuiTestAsset(name));
     if (!stream) throw std::runtime_error(std::string("Missing required test data: ") + name);
     return stream;
 }

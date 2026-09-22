@@ -10,6 +10,15 @@ Switch::Switch(std::wstring text) : text_(std::move(text)) {
     setPreferredSize(Size{132.0f, 32.0f});
 }
 
+AccessibilityInfo Switch::accessibilityInfo() const {
+    auto info = Widget::accessibilityInfo();
+    if (info.role == AccessibilityRole::None) info.role = AccessibilityRole::CheckBox;
+    if (info.name.empty()) info.name = text_;
+    info.state.checked = checked();
+    info.value = checked() ? L"on" : L"off";
+    return info;
+}
+
 void Switch::setText(std::wstring text) {
     text_ = std::move(text);
     invalidate();

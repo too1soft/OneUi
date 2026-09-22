@@ -20,21 +20,23 @@ Platform backends own all conversion between logical coordinates and physical pi
 
 Remote and other downstream products must not calculate DPI scale, GDI scale, monitor scale, or physical backing size.
 
-## Win32/GDI Contract
+## Win32 Presentation Contract
 
-The Win32 backend uses a physical-pixel Skia raster backing surface and presents that surface through GDI.
+The Win32 backend attempts OpenGL + Skia Ganesh by default and retains a software raster / GDI
+fallback. Both paths use physical-pixel backing surfaces and the same logical-pixel widget contract.
+See [rendering and validation](39-rendering-and-validation.md) for runtime selection and acceptance limits.
 
 The correct pipeline is:
 
 1. The app requests a logical window size, for example `980 x 720`.
 2. Win32 resolves the current DPI scale, for example `1.25`.
 3. The backend creates a native client area of `1225 x 900` physical pixels.
-4. The backend creates or reuses a Skia raster surface large enough for physical pixels.
+4. The backend creates or reuses a GPU surface at the current physical size, or a raster surface with sufficient capacity.
 5. Before painting widgets, the backend applies `canvas.scale(dpiScale, dpiScale)`.
 6. Widgets still receive logical `Rect`, `Size`, and `Point` values.
 7. Dirty rects are converted from logical pixels to physical pixels before `InvalidateRect`.
 8. Mouse coordinates are converted from physical client pixels to logical points before dispatch.
-9. GDI blits the physical surface to the physical client area without low-resolution stretching.
+9. The GPU path submits the window surface and swaps buffers; the software path blits physical pixels through GDI without low-resolution stretching.
 
 This means GDI is not allowed to stretch a low-DPI frame to a high-DPI window. The backing surface itself must be high-DPI.
 
@@ -115,4 +117,3 @@ Minimum checks for this contract:
 - `ctest --test-dir build/msvc-bundled-static --output-on-failure` must pass.
 - Remote shell screenshot smoke must still render correctly with the bundled OneUI DLL.
 - Manual high-DPI checks should include 100%, 125%, 150%, fullscreen, restore, and resize.
-

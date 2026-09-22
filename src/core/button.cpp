@@ -236,6 +236,18 @@ void Button::paint(Canvas& canvas) {
         }
     }
     const std::wstring& label = this->text();
+    if (icon_ && !trailingText_.empty()) {
+        const float inset = std::min(12.0f, rect.width / 4.0f);
+        const float side = style.fontSize + 2.0f;
+        const float countWidth = canvas.measureTextWidth(trailingText_, style.fontSize, style.fontWeight);
+        const Rect iconRect{rect.x + inset, rect.y + (rect.height-side)/2, side, side};
+        paintIcon(canvas, *icon_, iconRect, style.foreground, Color{0,0,0,0}, 1.6f);
+        const Rect countRect{rect.x+rect.width-inset-countWidth,rect.y,countWidth,rect.height};
+        const Rect textRect{iconRect.x+side+8,rect.y,std::max(0.0f,countRect.x-8-iconRect.x-side-8),rect.height};
+        canvas.drawTextStyledEllipsized(label,textRect,style.foreground,style.fontSize,TextAlign::Left,style.fontWeight);
+        canvas.drawTextStyledEllipsized(trailingText_,countRect,style.foreground,style.fontSize,TextAlign::Right,style.fontWeight);
+        return;
+    }
     if (!icon_ && !trailingIcon_) {
         if (!trailingText_.empty()) {
             const float inset = std::min(12.0f, std::max(0.0f, rect.width / 4.0f));
@@ -410,7 +422,7 @@ AccessibilityInfo Button::accessibilityInfo() const {
         info.role = AccessibilityRole::Button;
     }
     if (info.name.empty()) {
-        info.name = text();
+        info.name = text().empty() ? tooltip() : text();
     }
     info.state.pressed = pressed_;
     return info;

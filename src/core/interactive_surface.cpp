@@ -4,6 +4,7 @@
 
 #include "internal/ui_clock.h"
 #include <utility>
+#include <cmath>
 
 namespace oneui {
 namespace {
@@ -84,6 +85,23 @@ void InteractiveSurface::setDisabled(bool disabled) {
     beginVisualTransition(previous, resolvedStyle());
 }
 
+void InteractiveSurface::setOnDrag(std::function<void(const PointerDragEvent&)> callback, float threshold) {
+    // Disconnect silently: the callback owner may already be disposing.
+    dragArmed_ = dragging_ = false;
+    onDrag_ = std::move(callback);
+    dragThreshold_ = std::isfinite(threshold) ? std::max(0.0f, threshold) : 7.0f;
+}
+void InteractiveSurface::setPointerCursor(CursorKind cursor) { pointerCursor_ = cursor; }
+void InteractiveSurface::finishDrag(PointerDragPhase phase, const MouseEvent& event) {
+    const bool notify = dragging_;
+    const auto callback = onDrag_;
+    const auto origin = dragOrigin_;
+    dragArmed_ = dragging_ = pressed_ = false;
+    pressedButton_ = MouseButton::None;
+    if (notify && callback) callback(PointerDragEvent{phase, origin, event});
+    invalidate();
+}
+
 void InteractiveSurface::paint(Canvas& canvas) {
     const auto style = visualStyle(resolvedStyle());
     const auto rect = frame();
@@ -101,6 +119,16 @@ void InteractiveSurface::paint(Canvas& canvas) {
 }
 
 bool InteractiveSurface::onMouseMove(const MouseEvent& event) {
+    if (dragArmed_ && interactive() && onDrag_) {
+        dragPointer_ = event;
+        const bool starting = !dragging_ && std::hypot(event.position.x-dragOrigin_.x, event.position.y-dragOrigin_.y) >= dragThreshold_;
+        if (starting || dragging_) {
+            dragging_ = true;
+            const auto callback = onDrag_;
+            callback(PointerDragEvent{starting ? PointerDragPhase::Started : PointerDragPhase::Updated, dragOrigin_, event});
+            return true;
+        }
+    }
     const bool childHandled = View::onMouseMove(event);
     const bool nextHovered = interactive() && contains(event.position);
     if (nextHovered && onPointerMoved_) {
@@ -149,6 +177,10 @@ bool InteractiveSurface::onMouseDown(const MouseEvent& event) {
     pressed_ = event.button == MouseButton::Left;
     pressedButton_ = event.button;
     pressedClickCount_ = event.clickCount;
+    dragArmed_ = event.button == MouseButton::Left && static_cast<bool>(onDrag_);
+    dragging_ = false;
+    dragOrigin_ = event.position;
+    dragPointer_ = event;
     beginVisualTransition(previous, resolvedStyle());
     invalidate();
     if (internal::scrollTraceEnabled()) {
@@ -163,6 +195,10 @@ bool InteractiveSurface::onMouseDown(const MouseEvent& event) {
 }
 
 bool InteractiveSurface::onMouseUp(const MouseEvent& event) {
+    if (dragArmed_ && event.button == MouseButton::Left) {
+        if (dragging_) { finishDrag(PointerDragPhase::Dropped, event); return true; }
+        dragArmed_ = false;
+    }
     const bool childHandled = View::onMouseUp(event);
     if (pressedButton_ == MouseButton::None) {
         return childHandled;
@@ -203,6 +239,10 @@ bool InteractiveSurface::onMouseUp(const MouseEvent& event) {
 }
 
 bool InteractiveSurface::onKeyDown(const KeyEvent& event) {
+    if (dragArmed_ && event.pressed && event.key == Key::Escape) {
+        finishDrag(PointerDragPhase::Cancelled, dragPointer_);
+        return true;
+    }
     if (!interactive()) {
         return false;
     }
@@ -263,11 +303,11 @@ CursorKind InteractiveSurface::cursor(Point point) const {
     if (childCursor != CursorKind::Default) {
         return childCursor;
     }
-    return interactive() && contains(point) ? CursorKind::Pointer : CursorKind::Default;
+    return interactive() && (contains(point) || dragging_) ? pointerCursor_ : CursorKind::Default;
 }
 
 bool InteractiveSurface::isFocusable() const {
-    return static_cast<bool>(onClick_ || onPointerActivated_) && interactive();
+    return static_cast<bool>(onClick_ || onPointerActivated_ || onDrag_) && interactive();
 }
 
 bool InteractiveSurface::tickAnimations(double nowMs) {
@@ -290,10 +330,11 @@ void InteractiveSurface::layoutChildren() {
 }
 
 bool InteractiveSurface::hasInteractionState() const {
-    return hovered_ || pressed_ || View::hasInteractionState();
+    return hovered_ || pressed_ || dragArmed_ || View::hasInteractionState();
 }
 
 void InteractiveSurface::resetInteractionState() {
+    if (dragArmed_) finishDrag(PointerDragPhase::Cancelled, dragPointer_);
     const bool wasHovered = hovered_;
     hovered_ = false;
     pressed_ = false;

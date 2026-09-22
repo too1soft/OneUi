@@ -1,83 +1,47 @@
 # OneUI 路线图
 
-## 当前状态
+本页按当前实现和后续工作组织，不把早期 v0.2/v0.3 等功能分组当作已发布版本。
+项目当前仍为 `0.1.0` 开发版，C ABI 当前为 v33；具体签名以公开头和绑定为准。
 
-OneUI 已经不是只有第一个按钮的原型。当前核心方向是原生 C++ 桌面框架，Win32 后端可运行，Skia raster 负责绘制，核心控件通过 `Widget`、`View`、`Canvas`、`State<T>`、类型化 style override 和主题 token 逐步成形。
+## 已进入当前实现
 
-Linux 和 macOS 仍处于后端骨架阶段，不应在文档中描述为已完成。
+- C++ 保留式 Widget/View、布局容器、响应式状态、CSS-like 样式和浮层输入路由。
+- Win32 OpenGL + Skia Ganesh GPU 路径、raster / GDI 回退和局部重绘。
+- SkParagraph 共享布局、字素编辑、行内富文本、作用域命令与生命周期订阅。
+- C ABI 和安全 Rust 控件、dispatcher、线程安全 handle、交互 trace 与布局快照。
+- 列表、树、表格、终端、日志、实时画面和远程输入等产品组件。
+- Slider 输入生命周期、Tabs 原位编辑、SplitView 键盘调整及 Rust 工作区停靠组合。
+- Linux X11/Wayland 后端及 WSLg 构建运行；Cocoa 源码接入。
+- 独立 Win7 SP1 构建、导入审计与 x86 原版虚拟机自动验收记录。
 
-## v0.1: First Light
+这份列表描述实现范围，不代表全部能力完成发布验收。逐项边界见
+[组件清单](07-component-inventory.md)、[平台矩阵](37-native-desktop-backends.md)、
+[文字引擎状态](38-text-and-interaction-engine.md)和[工作区组合](workspace-docking.md)。
 
-目标：证明 OneUI 能打开原生桌面窗口并绘制自绘控件。
+## 优先完成：构建、发布与原生验收
 
-已覆盖范围：
+- 完成与固定 Skia 修订匹配的 MinGW 文字依赖构建。
+- 完成当前 SDK 许可、体积、符号隔离、宿主 ICU/HarfBuzz 共存及干净消费者验证。
+- 验证 GPU/软件路径的真实驱动、resize、跨屏 DPI、IME 和长时间运行。
+- 补 Linux 原生桌面、ARM64、麒麟/UOS、Intel/Apple Silicon Mac 的构建与验收。
+- 补 Win7 x64 同架构原版系统参考及运行验收；继续明确自动测试与人工验收的边界。
 
-- CMake 项目。
-- 公开头文件。
-- Win32 平台窗口。
-- Skia-backed `Canvas`。
-- `Widget` 基类。
-- Button 控件。
-- Gallery 可执行程序。
+## 下一阶段的工程方向
 
-## v0.2: Core Model
+以下是待设计、度量和实现的方向，不是当前已具备的功能承诺：
 
-目标：把控件树、布局、状态和基础样式模型打稳。
+1. 在现有失效/调度机制上明确布局、绘制和语义更新契约，先通过 trace 定位重复工作。
+2. 完善作用域订阅、后台任务取消与对象销毁后的结果处理，复用现有 dispatcher/handle。
+3. 扩展统一命令和可复用交互行为；多段快捷键仍未实现。
+4. 设计受控的 Rust 自定义元素与绘制扩展接口，保持 ABI 生命周期和批量调用边界。
+5. 在 OneUI 内完善表格高级交互和通用工作区拖放控制器；应用只接入内容、样式和业务策略。
+6. 将已有无障碍元数据连接到系统辅助技术，并完成平台测试。
 
-范围：
+更新策略、异步生命周期和测试基础设施可以参考其他成熟桌面框架；当前不引入 GPUI
+运行时，也不因对标而替换现有 Skia 后端。性能收益必须通过同条件实测确认。
 
-- `View` 子树与事件分发。
-- `Stack`、`Grid`、`Wrap`、`DockView`、`SplitView`、`ScrollView` 等布局骨架。
-- `State<T>` / `Binding<T>` 的 MVVM 绑定方向。
-- 主题 token：颜色、圆角、间距、字体大小。
-- 控件状态：hover、pressed、disabled、selected、focus-visible。
-- 类型化 style override，作为 CSS-like 样式能力的第一步。
+## 稳定版门槛
 
-## v0.3: Forms And Input
-
-目标：让常见表单和输入场景可用。
-
-范围：
-
-- `Label`、`TextField`、`Checkbox`、`Switch`、`RadioGroup`、`Slider`、`Select`。
-- `FormField` 与 `ValidationMessage`。
-- TextField 光标移动、基础文本输入和退格。
-- 后续补齐选择、剪贴板、IME、密码模式和文本测量。
-
-## v0.4: Floating UI
-
-目标：建立浮层系统，让 Select、Menu、Tooltip、Dialog、Toast 等共享基础设施。
-
-范围：
-
-- `OverlayHost` 基础挂载、层级、边界和事件转发。
-- `PopupPlacement` 纯几何定位。
-- Popup 打开/关闭状态、外部点击关闭、Escape 关闭和焦点交接。
-- Select 迁移到共享 Overlay/Popup 基础设施。
-
-## v0.5: Renderer And Packaging Hardening
-
-目标：让 SDK 走向可分发。
-
-范围：
-
-- vendored static Skia。
-- MSVC `/MT` 静态运行时产品构建。
-- 运行时导入审计。
-- SDK 包含 headers、import lib、CMake package、docs、website 和 examples。
-- 视觉快照测试和更强文本渲染路径。
-
-## v1.0 最小承诺
-
-v1.0 不追求巨大，但必须可信：
-
-- 稳定核心 API。
-- Windows 7+ 支持。
-- Win32 后端成熟。
-- Linux 和 macOS 后端达到可用状态。
-- DPI-aware rendering。
-- 可用 IME 和剪贴板。
-- 键盘导航。
-- 基础可访问性模型。
-- 小而完整的高质量控件集。
-
+稳定版需要明确的 API/ABI 兼容政策、可重复构建和 SDK 审计，以及逐平台公布的原生验收结果。
+Windows 7 使用独立配置；其他平台不因存在源码而自动进入支持承诺。
+测试目标数和旧二进制体积不作为固定发布指标，使用对应提交、配置和产物的验证记录。

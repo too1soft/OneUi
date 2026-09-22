@@ -1,4 +1,5 @@
 #include "oneui/platform/monitor.h"
+#include "platform/win32/compat_win32.h"
 
 #include <windows.h>
 
@@ -7,9 +8,6 @@
 namespace oneui {
 namespace {
 
-using GetDpiForMonitorFn = HRESULT(WINAPI*)(HMONITOR, int, UINT*, UINT*);
-
-constexpr int kMdtEffectiveDpi = 0;
 constexpr float kDefaultDpi = 96.0f;
 
 Rect rectFromWinRect(const RECT& rect) {
@@ -22,21 +20,7 @@ Rect rectFromWinRect(const RECT& rect) {
 }
 
 float scaleForMonitor(HMONITOR monitor) {
-    HMODULE shcore = LoadLibraryW(L"Shcore.dll");
-    if (!shcore) {
-        return 1.0f;
-    }
-
-    auto getDpiForMonitor = reinterpret_cast<GetDpiForMonitorFn>(GetProcAddress(shcore, "GetDpiForMonitor"));
-    UINT dpiX = static_cast<UINT>(kDefaultDpi);
-    UINT dpiY = static_cast<UINT>(kDefaultDpi);
-    const bool ok = getDpiForMonitor && SUCCEEDED(getDpiForMonitor(monitor, kMdtEffectiveDpi, &dpiX, &dpiY));
-    FreeLibrary(shcore);
-
-    if (!ok || dpiX == 0) {
-        return 1.0f;
-    }
-    return std::max(0.25f, static_cast<float>(dpiX) / kDefaultDpi);
+    return std::max(0.25f, static_cast<float>(win32::monitorDpi(monitor)) / kDefaultDpi);
 }
 
 MonitorInfo monitorFromHandle(HMONITOR monitor, int index) {
@@ -68,7 +52,7 @@ MonitorInfo virtualScreenFallback() {
     MonitorInfo fallback;
     fallback.index = 0;
     fallback.primary = true;
-    fallback.scale = 1.0f;
+    fallback.scale = static_cast<float>(win32::systemDpi()) / kDefaultDpi;
     fallback.name = L"Virtual screen";
     fallback.bounds = Rect{
         static_cast<float>(GetSystemMetrics(SM_XVIRTUALSCREEN)),

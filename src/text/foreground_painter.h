@@ -5,6 +5,8 @@
 #include "include/core/SkMaskFilter.h"
 #include "modules/skparagraph/include/ParagraphPainter.h"
 
+#include <vector>
+
 namespace oneui::text {
 
 // SkParagraph caches the paint together with text blobs on its first draw.
@@ -13,11 +15,17 @@ namespace oneui::text {
 // glyph caches, and color-font rendering (no monochrome layer/filter).
 class ForegroundPainter final : public skia::textlayout::ParagraphPainter {
 public:
-    ForegroundPainter(SkCanvas& canvas, SkColor color) : canvas_(canvas), color_(color) {}
+    ForegroundPainter(SkCanvas& canvas, SkColor color, const std::vector<SkColor>& inlineColors)
+        : canvas_(canvas), color_(color), inlineColors_(inlineColors) {}
     void drawTextBlob(const sk_sp<SkTextBlob>& blob, SkScalar x, SkScalar y, const SkPaintOrID& source) override {
         SkPaint paint = std::holds_alternative<SkPaint>(source) ? std::get<SkPaint>(source) : SkPaint{};
         paint.setAntiAlias(true);
-        paint.setColor(color_);
+        SkColor resolved = color_;
+        if (const auto* paintId = std::get_if<PaintID>(&source);
+            paintId && *paintId > 0 && static_cast<std::size_t>(*paintId) <= inlineColors_.size()) {
+            resolved = inlineColors_[static_cast<std::size_t>(*paintId) - 1];
+        }
+        paint.setColor(resolved);
         canvas_.drawTextBlob(blob, x, y, paint);
     }
     void drawTextShadow(const sk_sp<SkTextBlob>& blob, SkScalar x, SkScalar y, SkColor color, SkScalar blur) override {
@@ -42,6 +50,7 @@ public:
 private:
     SkCanvas& canvas_;
     SkColor color_;
+    const std::vector<SkColor>& inlineColors_;
 };
 
 } // namespace oneui::text

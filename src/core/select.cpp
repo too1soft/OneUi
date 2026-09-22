@@ -4,6 +4,7 @@
 #include "oneui/style.h"
 
 #include <algorithm>
+#include <cmath>
 #include <limits>
 #include <utility>
 
@@ -243,7 +244,10 @@ void Select::paint(Canvas& canvas) {
     canvas.strokeRect(popup, fieldStyle.popupBorder, fieldStyle.popupRadius, fieldStyle.borderWidth);
 
     const int selected = effectiveSelectedIndex();
-    for (int i = 0; i < static_cast<int>(items_.size()); ++i) {
+    canvas.save();
+    canvas.clipRect(popup);
+    const int end = std::min(static_cast<int>(items_.size()), popup_.firstVisibleIndex + popupVisibleRows());
+    for (int i = popup_.firstVisibleIndex; i < end; ++i) {
         const Rect row = popupOptionRect(i);
         const SelectStyle optionStyle = resolvedOptionStyle(i);
         if (optionStyle.optionBackground.a > 0) {
@@ -256,6 +260,14 @@ void Select::paint(Canvas& canvas) {
             theme().fontMd,
             TextAlign::Left);
     }
+    if (popupVisibleRows() < static_cast<int>(items_.size())) {
+        const float total = static_cast<float>(items_.size());
+        const float thumbHeight = std::max(12.0f, popup.height * popupVisibleRows() / total);
+        const float travel = popup.height - thumbHeight;
+        const float position = travel * popup_.firstVisibleIndex / std::max(1, static_cast<int>(items_.size()) - popupVisibleRows());
+        canvas.fillRect(Rect{popup.x + popup.width - 4.0f, popup.y + position, 2.0f, thumbHeight}, fieldStyle.arrowColor, 1.0f);
+    }
+    canvas.restore();
 }
 
 bool Select::onMouseMove(const MouseEvent& event) {
@@ -347,6 +359,18 @@ bool Select::onMouseUp(const MouseEvent& event) {
     return wasPressed;
 }
 
+bool Select::onMouseWheel(const MouseWheelEvent& event) {
+    if (!interactive() || !popup_.open || !popupSurfaceRect().contains(event.position)) { return false; }
+    if (!std::isfinite(event.deltaY)) { return false; }
+    const int delta = static_cast<int>(std::round(-event.deltaY * 3.0f));
+    popup_.firstVisibleIndex = std::clamp(popup_.firstVisibleIndex + delta, 0,
+        std::max(0, static_cast<int>(items_.size()) - popupVisibleRows()));
+    popup_.hoveredIndex = hitPopupOptionIndex(event.position);
+    popup_.pressedIndex = -1;
+    invalidate();
+    return true;
+}
+
 bool Select::onKeyDown(const KeyEvent& event) {
     if (!interactive() || items_.empty()) {
         closePopupSurface(PopupLightDismissReason::Unavailable);
@@ -363,16 +387,26 @@ bool Select::onKeyDown(const KeyEvent& event) {
 
     if (event.key == Key::Down) {
         popup_.hoveredIndex = std::min(static_cast<int>(items_.size()) - 1, std::max(0, popup_.hoveredIndex) + 1);
+        revealPopupIndex(popup_.hoveredIndex);
         invalidate();
         return true;
     }
 
     if (event.key == Key::Up) {
         popup_.hoveredIndex = std::max(0, (popup_.hoveredIndex < 0 ? effectiveSelectedIndex() : popup_.hoveredIndex) - 1);
+        revealPopupIndex(popup_.hoveredIndex);
         invalidate();
         return true;
     }
 
+    if (event.key == Key::Home || event.key == Key::End || event.key == Key::PageUp || event.key == Key::PageDown) {
+        const int current = std::max(0, popup_.hoveredIndex);
+        popup_.hoveredIndex = event.key == Key::Home ? 0 : event.key == Key::End ? static_cast<int>(items_.size()) - 1
+            : std::clamp(current + (event.key == Key::PageDown ? popupVisibleRows() : -popupVisibleRows()), 0, static_cast<int>(items_.size()) - 1);
+        revealPopupIndex(popup_.hoveredIndex);
+        invalidate();
+        return true;
+    }
     if (event.key == Key::Escape) {
         closePopupSurface(PopupLightDismissReason::EscapeKey);
         invalidate();
@@ -529,11 +563,30 @@ float Select::popupRowHeight() const {
     return std::max(28.0f, rect.height);
 }
 
+int Select::popupVisibleRows() const {
+    float available = popupRowHeight() * 8.0f;
+    if (popupViewport_) {
+        const auto viewport = *popupViewport_;
+        const auto rect = frame();
+        const float above = rect.y - viewport.y - 8.0f;
+        const float below = viewport.y + viewport.height - rect.y - rect.height - 8.0f;
+        available = std::min(available, std::max(above, below));
+    }
+    return std::max(1, std::min(static_cast<int>(items_.size()), static_cast<int>(available / popupRowHeight())));
+}
+
+void Select::revealPopupIndex(int index) {
+    const int rows = popupVisibleRows();
+    if (index < popup_.firstVisibleIndex) { popup_.firstVisibleIndex = index; }
+    if (index >= popup_.firstVisibleIndex + rows) { popup_.firstVisibleIndex = index - rows + 1; }
+    popup_.firstVisibleIndex = std::clamp(popup_.firstVisibleIndex, 0, std::max(0, static_cast<int>(items_.size()) - rows));
+}
+
 Rect Select::popupSurfaceRect() const {
     const Rect rect = frame();
     const float rowHeight = popupRowHeight();
     const SelectStyle style = resolvedFieldStyle();
-    const Size popupSize{rect.width, rowHeight * static_cast<float>(items_.size())};
+    const Size popupSize{rect.width, rowHeight * static_cast<float>(popupVisibleRows())};
     return PopupPlacement::resolve(
         selectPopupPlacementRequest(rect, popupSize, style.popupOffset, popupViewport_)).rect;
 }
@@ -541,7 +594,7 @@ Rect Select::popupSurfaceRect() const {
 Rect Select::popupOptionRect(int index) const {
     const Rect popup = popupSurfaceRect();
     const float rowHeight = popupRowHeight();
-    return Rect{popup.x, popup.y + rowHeight * static_cast<float>(index), popup.width, rowHeight};
+    return Rect{popup.x, popup.y + rowHeight * static_cast<float>(index - popup_.firstVisibleIndex), popup.width, rowHeight};
 }
 
 int Select::hitPopupOptionIndex(Point point) const {
@@ -572,6 +625,7 @@ void Select::openPopupSurface() {
     const bool changed = !popup_.open || popup_.hoveredIndex != effectiveSelectedIndex() || popup_.pressedIndex != -1 || popup_.fieldPressed;
     popup_.open = true;
     popup_.hoveredIndex = effectiveSelectedIndex();
+    revealPopupIndex(popup_.hoveredIndex);
     popup_.pressedIndex = -1;
     popup_.fieldPressed = false;
     if (changed) {

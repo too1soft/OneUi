@@ -9,6 +9,8 @@
 
 class SkCanvas;
 class SkFontMgr;
+class SkTypeface;
+class SkData;
 
 namespace oneui::rendering {
 struct PrimitivePaintTrace {
@@ -28,6 +30,7 @@ extern thread_local PrimitivePaintTrace g_primitivePaintTrace;
 std::unique_ptr<Canvas> makeSkiaCanvas(SkCanvas &canvas, const std::wstring *defaultFontFamily = nullptr,
                                        std::optional<Rect> viewport = std::nullopt);
 sk_sp<SkFontMgr> makePlatformFontManager();
+sk_sp<SkTypeface> makeTypefaceFromData(sk_sp<SkData> data);
 // Process-local provider populated by registerFontFromMemory(). Application
 // fonts should be registered before the first window is created.
 sk_sp<SkFontMgr> makeEmbeddedFontManager();

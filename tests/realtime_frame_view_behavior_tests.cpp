@@ -106,6 +106,14 @@ void testContentRectScaleModes() {
 
     view.setScaleMode(oneui::ScaleMode::ActualSize);
     expectRect("RealtimeFrameView actual size content rect", view.contentRect(), oneui::Rect{-550.0f, -220.0f, 1920.0f, 1080.0f});
+
+    view.setContentAlignment(
+        oneui::ImageContentAlignment::End,
+        oneui::ImageContentAlignment::Start);
+    expectRect(
+        "RealtimeFrameView aligned actual size content rect",
+        view.contentRect(),
+        oneui::Rect{-1110.0f, 20.0f, 1920.0f, 1080.0f});
 }
 
 void testSubmitFrameKeepsOnlyLatestSnapshot() {

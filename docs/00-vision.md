@@ -2,7 +2,9 @@
 
 ## 目标
 
-OneUI 是一个原生 C++ 桌面 UI 框架。它面向 Windows、Linux 和 macOS 的应用开发，但当前已实现的后端是 Win32；Linux 和 macOS 仍是后续骨架方向，不是可用后端。
+OneUI 是一个原生 C++ 桌面 UI 框架，提供 C ABI 和安全 Rust 包装。Windows 是当前产品主线；
+Linux X11/Wayland 已在 WSLg 构建运行，macOS Cocoa 源码已接入但尚待 Mac 构建。
+真实支持等级以[平台验收矩阵](37-native-desktop-backends.md)为准。
 
 框架的第一目标是把桌面应用的基础体验做稳：窗口可靠打开，控件自绘清晰，鼠标和键盘事件可预期，DPI 与输入法路径可持续演进，打包后不要求终端用户额外安装运行时依赖。
 
@@ -12,7 +14,7 @@ OneUI 是一个原生 C++ 桌面 UI 框架。它面向 Windows、Linux 和 macOS
 - 不做移动端目标。
 - 不包装系统原生控件作为主要控件实现。
 - 不在早期追求庞大的设计系统目录。
-- 不自研渲染引擎；渲染基础是 Skia raster。
+- 不自研渲染引擎；渲染基础是 Skia，Win32 使用 Ganesh GPU 路径并保留 raster 回退。
 
 ## 产品原则
 
@@ -21,7 +23,7 @@ OneUI 应该先小而准。
 早期版本必须把这些事情做好：
 
 - 打开一个原生桌面窗口。
-- 使用 Skia raster 绘制现代、克制的控件。
+- 使用 Skia 绘制现代、克制的控件。
 - 通过 `Widget`、`View`、`Canvas` 组织控件树、事件和绘制。
 - 在 Win32 上保持稳定，并兼顾 Windows 7 打包约束。
 - API 足够清楚，让小团队可以长期维护。
@@ -40,10 +42,11 @@ OneUI 控件不是系统控件，而是在原生桌面窗口中的自绘控件�
 
 ## 兼容性立场
 
-Windows 7 兼容性会影响早期设计：
+Windows 10/11 使用默认现代构建；Windows 7 SP1 使用独立兼容配置、工具链和输出。
+x86 已有原版 SP1 自动验收记录，x64 及真实硬件交互仍有待验项，见[兼容说明](24-windows7-compatibility.md)。
+兼容路线遵循以下原则：
 
 - 避免 Acrylic、Mica、系统模糊等现代合成特效。
 - Win32 后端采用保守的窗口与像素呈现路径。
 - DPI、字体、IME、剪贴板和可访问性属于核心基础设施。
 - 最终产品包不应要求终端用户安装 Skia、MSYS2、Visual C++ Runtime 或字体包。
-

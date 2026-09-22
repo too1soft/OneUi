@@ -365,7 +365,7 @@ OneUI 适合作为我们后续统一 UI 库的方向，但当前还处在“能�
 
 - 已新增 `include/oneui/platform/monitor.h` 和 Win32 `enumerateMonitors()`。
 - `MonitorInfo` 包含 `index`、`bounds`、`workArea`、`scale`、`primary`、`name`，其中 bounds/workArea 使用 `Rect`，保留负坐标副屏信息。
-- Win32 后端使用 `EnumDisplayMonitors` / `GetMonitorInfoW`，并动态加载 `Shcore.dll` 的 `GetDpiForMonitor`；旧系统或 API 缺失时回退到 1.0 scale，保持 Win7 兼容。
+- Win32 后端使用 `EnumDisplayMonitors` / `GetMonitorInfoW`，并从系统目录动态加载 `Shcore.dll` 的 `GetDpiForMonitor`；2026-09-08 修正旧系统回退为实际系统 DPI，不再固定 1.0 scale。Win7 使用系统级 DPI，新系统仍优先使用每屏 DPI，详见[兼容说明](24-windows7-compatibility.md)。
 - 当前仍缺 DPI 变化事件、窗口跨屏移动后的自动通知，以及与 `Window` / `RealtimeFrameView` 的联动。
 
 ### 2026-05-25 本轮验收记录

@@ -26,6 +26,33 @@ enum class TextFontFamily {
     Monospace
 };
 
+/// A non-overlapping inline style range expressed in native wide-string
+/// offsets. Text producers normally use the UTF-8 C/Rust API, which validates
+/// scalar boundaries before converting into this renderer-neutral form.
+struct TextStyleSpan {
+    std::size_t start = 0;
+    std::size_t end = 0;
+    float fontSize = 0.0f; // Non-positive inherits the surrounding block.
+    int fontWeight = 0;    // Zero inherits the surrounding block.
+    bool italic = false;
+    bool monospace = false;
+    bool underline = false;
+    bool strikethrough = false;
+    Color foreground{0, 0, 0, 0}; // Transparent inherits the paint-time color.
+    Color background{0, 0, 0, 0};
+
+    bool operator==(const TextStyleSpan& other) const {
+        return start == other.start && end == other.end &&
+            fontSize == other.fontSize && fontWeight == other.fontWeight &&
+            italic == other.italic && monospace == other.monospace &&
+            underline == other.underline && strikethrough == other.strikethrough &&
+            foreground.r == other.foreground.r && foreground.g == other.foreground.g &&
+            foreground.b == other.foreground.b && foreground.a == other.foreground.a &&
+            background.r == other.background.r && background.g == other.background.g &&
+            background.b == other.background.b && background.a == other.background.a;
+    }
+};
+
 struct TextBlockStyle {
     float dpiScale = 1.0f;
     TextOptions options;
@@ -38,6 +65,7 @@ struct TextBlockStyle {
     std::size_t maxLines = 0;
     bool ellipsis = false;
     bool sensitive = false;
+    std::vector<TextStyleSpan> spans;
 };
 
 struct BoxShadow {
@@ -328,6 +356,15 @@ public:
         (void)rect;
         (void)shadow;
         (void)radius;
+    }
+
+    /// Measures the unshaped cell renderer, with the same font fallback as
+    /// drawTextCells. Paragraph shaping may resolve a missing/proportional
+    /// family differently and must not determine a terminal's fixed grid.
+    virtual float measureTextCellsWidth(
+        const std::wstring& text, float size, const std::wstring& familyName,
+        TextFontFamily fallbackFamily, int weight = 400) const {
+        return measureTextWidthWithNamedFont(text, size, familyName, fallbackFamily, weight);
     }
 };
 

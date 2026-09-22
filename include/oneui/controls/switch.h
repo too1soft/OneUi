@@ -30,6 +30,7 @@ public:
     CursorKind cursor(Point point) const override;
     bool onKeyDown(const KeyEvent& event) override;
     bool isFocusable() const override;
+    AccessibilityInfo accessibilityInfo() const override;
 
 private:
     void toggle();

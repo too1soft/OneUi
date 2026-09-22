@@ -632,6 +632,8 @@ class X11Window final : public platform::DesktopWindow {
             case CursorKind::ResizeVertical:
                 shape = XC_sb_v_double_arrow;
                 break;
+            case CursorKind::ResizeNorthWestSouthEast: shape = XC_bottom_right_corner; break;
+            case CursorKind::ResizeNorthEastSouthWest: shape = XC_bottom_left_corner; break;
             default:
                 break;
             }

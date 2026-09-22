@@ -5,6 +5,7 @@
 #include "oneui/view.h"
 #include "internal/scroll_trace.h"
 #include "platform/shared/skia_canvas.h"
+#include "platform/win32/compat_win32.h"
 
 #include <windows.h>
 #include <windowsx.h>
@@ -110,35 +111,17 @@ using SetProcessDpiAwarenessContextFn = BOOL(WINAPI*)(HANDLE);
 using SetProcessDpiAwarenessFn = HRESULT(WINAPI*)(int);
 using SetProcessDPIAwareFn = BOOL(WINAPI*)();
 using GetDpiForWindowFn = UINT(WINAPI*)(HWND);
-using GetDpiForMonitorFn = HRESULT(WINAPI*)(HMONITOR, int, UINT*, UINT*);
 
 float scaleFromDpi(UINT dpi) {
     return oneui::scaleFromDpiValue(dpi);
 }
 
 UINT systemDpi() {
-    HDC dc = GetDC(nullptr);
-    if (!dc) {
-        return static_cast<UINT>(kDefaultDpi);
-    }
-    const int dpi = GetDeviceCaps(dc, LOGPIXELSX);
-    ReleaseDC(nullptr, dc);
-    return dpi > 0 ? static_cast<UINT>(dpi) : static_cast<UINT>(kDefaultDpi);
+    return win32::systemDpi();
 }
 
 UINT dpiForMonitor(HMONITOR monitor) {
-    HMODULE shcore = LoadLibraryW(L"Shcore.dll");
-    if (shcore) {
-        auto getDpiForMonitor = reinterpret_cast<GetDpiForMonitorFn>(GetProcAddress(shcore, "GetDpiForMonitor"));
-        UINT dpiX = static_cast<UINT>(kDefaultDpi);
-        UINT dpiY = static_cast<UINT>(kDefaultDpi);
-        const bool ok = getDpiForMonitor && SUCCEEDED(getDpiForMonitor(monitor, 0, &dpiX, &dpiY));
-        FreeLibrary(shcore);
-        if (ok && dpiX != 0) {
-            return dpiX;
-        }
-    }
-    return systemDpi();
+    return win32::monitorDpi(monitor);
 }
 
 float dpiScaleForWindowHandle(HWND hwnd) {
@@ -187,7 +170,7 @@ void ensureProcessDpiAwareness() {
             }
         }
 
-        HMODULE shcore = LoadLibraryW(L"Shcore.dll");
+        HMODULE shcore = win32::loadSystemLibrary(L"Shcore.dll");
         if (shcore) {
             auto setProcessDpiAwareness = reinterpret_cast<SetProcessDpiAwarenessFn>(
                 GetProcAddress(shcore, "SetProcessDpiAwareness"));
@@ -259,6 +242,10 @@ HCURSOR cursorForKind(CursorKind kind) {
         return resizeHorizontal;
     case CursorKind::ResizeVertical:
         return resizeVertical;
+    case CursorKind::ResizeNorthWestSouthEast:
+        return LoadCursor(nullptr, IDC_SIZENWSE);
+    case CursorKind::ResizeNorthEastSouthWest:
+        return LoadCursor(nullptr, IDC_SIZENESW);
     case CursorKind::Default:
     default:
         return arrow;
@@ -271,7 +258,7 @@ public:
     unsigned int capabilities() const override {
         return WindowCapabilityClipboard | WindowCapabilityIme | WindowCapabilityPlacement |
             WindowCapabilityActivation | WindowCapabilityTopmost | WindowCapabilityTray |
-            WindowCapabilityNativeDialogs;
+            WindowCapabilityNativeDialogs | WindowCapabilityFileDrop;
     }
     explicit Win32Window(WindowOptions options)
         : options_(std::move(options))
@@ -324,6 +311,19 @@ public:
         requestRedraw();
     }
 
+    void setContentScale(float scale) override {
+        if (!std::isfinite(scale)) return;
+        scale = std::clamp(scale, 1.0f, 2.25f);
+        if (std::abs(scale - contentScale_) < 0.001f) return;
+        // Create at the physical monitor DPI; changing text preferences must
+        // not resize the user's window or multiply the native minimum bounds.
+        ensureCreated();
+        contentScale_ = scale;
+        if (content_) content_->setTextEnvironment(defaultFontFamily_, dpiScale());
+        scheduleClientSizeChanged();
+        requestRedraw();
+    }
+
     bool requestFocus(Widget* widget, bool focusVisible) override {
         if (!content_ || !widget) {
             return false;
@@ -357,6 +357,17 @@ public:
     void setClientSizeChangedHandler(ClientSizeChangedHandler handler) override {
         clientSizeChangedHandler_ = std::move(handler);
         scheduleClientSizeChanged();
+    }
+
+    void setActivationChangedHandler(ActivationChangedHandler handler) override {
+        activationChangedHandler_ = std::move(handler);
+    }
+
+    void setFileDropHandler(FileDropHandler handler) override {
+        fileDropHandler_ = std::move(handler);
+        if (hwnd_) {
+            DragAcceptFiles(hwnd_, fileDropHandler_ ? TRUE : FALSE);
+        }
     }
 
     void setMinimumClientSize(Size size) override {
@@ -481,16 +492,29 @@ public:
         ensureCreated();
         MSG message{};
         while (true) {
+            // Win7's non-composited paint path can continuously enqueue paint
+            // messages. Draining until empty starves the waitable frame timer,
+            // freezing animations despite an otherwise responsive message loop.
+            // Bound each batch so input and animation handles both get service.
+            const ULONGLONG batchStarted = GetTickCount64();
+            unsigned int dispatched = 0;
             while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE)) {
                 if (message.message == WM_QUIT) {
                     return static_cast<int>(message.wParam);
                 }
                 TranslateMessage(&message);
                 DispatchMessageW(&message);
+                if (++dispatched >= 64 || GetTickCount64() - batchStarted >= 8) break;
             }
 
             const DWORD handleCount = animationFrameTimer_ ? 1u : 0u;
             HANDLE handles[1]{animationFrameTimer_};
+            // The message queue may already be signaled. Check a ready frame
+            // explicitly before a combined message wait to prevent starvation.
+            if (animationFrameTimer_ && WaitForSingleObject(animationFrameTimer_, 0) == WAIT_OBJECT_0) {
+                runAnimationFrameCallbacks();
+                continue;
+            }
             const DWORD waitResult = MsgWaitForMultipleObjectsEx(
                 handleCount,
                 handleCount > 0 ? handles : nullptr,
@@ -519,6 +543,12 @@ public:
             return;
         }
         DestroyWindow(hwnd_);
+    }
+
+    void requestClose() override {
+        if (hwnd_) {
+            PostMessageW(hwnd_, WM_CLOSE, 0, 0);
+        }
     }
 
     void setCloseToTray(bool closeToTray) override {
@@ -1009,7 +1039,7 @@ private:
     // 无边框(WS_POPUP)窗口默认没有 DWM 投影，会像一张贴在桌面上的平面图。
     // 向客户区扩 1px glass 边即可启用系统标准窗口阴影（内容不透出、不影响命中）。
     // GetSystemMetricsForDpi 在 Win10 运行时存在，但 mingw-w64 头文件未声明，动态解析；
-    // 解析不到(理论上不会)退回 GetSystemMetrics(仅系统 DPI 值)。
+    // Win7 等旧系统没有该接口，退回 GetSystemMetrics（系统 DPI 值）。
     static int frameMetricForDpi(int index, UINT dpi) {
         using Fn = int(WINAPI*)(int, UINT);
         static Fn fn = reinterpret_cast<Fn>(reinterpret_cast<void*>(
@@ -1228,7 +1258,7 @@ private:
     }
 
     float normalizedDpiScale() const {
-        return dpiScale_ > 0.0f ? dpiScale_ : 1.0f;
+        return (dpiScale_ > 0.0f ? dpiScale_ : 1.0f) * contentScale_;
     }
 
     int logicalToPhysicalCeil(float value) const {
@@ -1289,6 +1319,19 @@ private:
 
         if (hwnd_) {
             dpiScale_ = dpiScaleForWindowHandle(hwnd_);
+#ifdef ONEUI_ENABLE_TEST_FRAME_CAPTURE
+            // CreateWindow may query size limits before WM_NCCREATE installs
+            // our instance. Reapply the requested test canvas with our handler active.
+            if (std::getenv("ONEUI_TEST_DPI_SCALE")) {
+                RECT captureRect{0, 0, logicalToPhysicalCeil(static_cast<float>(options_.width)),
+                                      logicalToPhysicalCeil(static_cast<float>(options_.height))};
+                if (!options_.borderless) AdjustWindowRectEx(&captureRect, style, FALSE, exStyle);
+                SetWindowPos(hwnd_, nullptr, 0, 0, captureRect.right - captureRect.left,
+                             captureRect.bottom - captureRect.top,
+                             SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+            }
+#endif
+            DragAcceptFiles(hwnd_, fileDropHandler_ ? TRUE : FALSE);
             applyBorderlessShadow();
             applyRoundedCorners();
             captureNormalPlacement();
@@ -1329,6 +1372,65 @@ private:
             return 0;
         }
         switch (message) {
+        case WM_DROPFILES:
+        {
+            const HDROP drop = reinterpret_cast<HDROP>(wParam);
+            if (!drop) {
+                return 0;
+            }
+            struct DropGuard {
+                HDROP value;
+                ~DropGuard() { DragFinish(value); }
+            } guard{drop};
+
+            if (!fileDropHandler_) {
+                return 0;
+            }
+            try {
+                POINT dropPoint{};
+                // DragQueryPoint still fills pt when fNC is true. Borderless
+                // windows can report that form near resize margins, so keep
+                // the coordinate instead of redirecting the drop to (0, 0).
+                DragQueryPoint(drop, &dropPoint);
+                constexpr UINT kMaxDroppedPaths = 512;
+                const UINT count = std::min(
+                    DragQueryFileW(drop, 0xFFFFFFFFu, nullptr, 0),
+                    kMaxDroppedPaths);
+                std::vector<std::wstring> paths;
+                paths.reserve(count);
+                for (UINT index = 0; index < count; ++index) {
+                    const UINT required = DragQueryFileW(drop, index, nullptr, 0);
+                    if (required == 0) {
+                        continue;
+                    }
+                    std::wstring path(static_cast<std::size_t>(required) + 1, L'\0');
+                    const UINT copied = DragQueryFileW(
+                        drop,
+                        index,
+                        path.data(),
+                        static_cast<UINT>(path.size()));
+                    if (copied == 0) {
+                        continue;
+                    }
+                    path.resize(copied);
+                    paths.push_back(std::move(path));
+                }
+                if (!paths.empty()) {
+                    const auto alive = callbackWindowAlive_;
+                    const auto handler = fileDropHandler_;
+                    handler(
+                        std::move(paths),
+                        logicalPointFromClientPixels(dropPoint.x, dropPoint.y));
+                    if (!alive->load(std::memory_order_acquire)) {
+                        return 0;
+                    }
+                }
+            } catch (...) {
+                // A malformed shell payload or application callback must not
+                // escape the Win32 window procedure.
+            }
+            return 0;
+        }
         case WM_CLOSE:
             if (onCloseRequested_) { auto callback = onCloseRequested_; callback(false); }
             else close();
@@ -1447,6 +1549,22 @@ private:
             dispatchMouseWheel(wParam, lParam);
             return 0;
         case WM_LBUTTONDOWN:
+            // Depending on DWM/window activation state, Windows can deliver a
+            // real press over a maximized WS_POPUP caption lane as a client
+            // message even though WM_NCHITTEST classifies the same point as
+            // HTCAPTION. Convert that fallback path before widget dispatch so
+            // title-bar accessory content cannot swallow restore-and-drag.
+            if (options_.borderless && borderlessMaximized_ && !options_.fullscreen) {
+                POINT screenPoint{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+                if (ClientToScreen(hwnd_, &screenPoint)) {
+                    const LPARAM screenPosition = MAKELPARAM(screenPoint.x, screenPoint.y);
+                    if (hitTestBorderlessWindow(screenPosition) == HTCAPTION
+                        && restoreBorderlessForCaptionDrag(screenPoint.x, screenPoint.y)) {
+                        return DefWindowProcW(
+                            hwnd_, WM_NCLBUTTONDOWN, HTCAPTION, screenPosition);
+                    }
+                }
+            }
             SetFocus(hwnd_);
             SetCapture(hwnd_);
             dispatchMouseDown(lParam, MouseButton::Left);
@@ -1505,6 +1623,17 @@ private:
                         0,
                         (windowRect.bottom - windowRect.top) - (clientRect.bottom - clientRect.top));
                 }
+#ifdef ONEUI_ENABLE_TEST_FRAME_CAPTURE
+                // A capture fixture may require a logical viewport larger than the
+                // developer's physical desktop at forced DPI. Do not silently clamp
+                // that test canvas to the monitor's default maximum tracking size.
+                if (std::getenv("ONEUI_TEST_DPI_SCALE")) {
+                    info->ptMaxTrackSize.x = std::max<LONG>(info->ptMaxTrackSize.x,
+                        static_cast<LONG>(std::ceil(options_.width * dpiScale_)) + nonClientWidth + 32);
+                    info->ptMaxTrackSize.y = std::max<LONG>(info->ptMaxTrackSize.y,
+                        static_cast<LONG>(std::ceil(options_.height * dpiScale_)) + nonClientHeight + 32);
+                }
+#endif
                 if (minimumClientSize_.width > 0.0f) {
                     info->ptMinTrackSize.x = std::max<LONG>(
                         info->ptMinTrackSize.x,
@@ -1574,6 +1703,25 @@ private:
                 return hit;
             }
             return DefWindowProcW(hwnd_, message, wParam, lParam);
+        case WM_NCLBUTTONDOWN:
+            // WS_POPUP windows do not get the shell's usual "drag a maximized
+            // caption move loop from WM_NCLBUTTONDOWN alone. Restore beneath
+            // the pointer when needed, then explicitly enter SC_MOVE while the
+            // physical button is still down. This keeps accessory controls
+            // interactive and makes every HTCAPTION lane actually draggable.
+            if (options_.borderless && wParam == HTCAPTION && !options_.fullscreen) {
+                // A persisted normal placement can exactly fill the monitor
+                // work area even though it is not marked maximized.  The shell
+                // move loop clamps that rectangle back to the work area and
+                // makes the caption appear non-draggable.  Treat that boundary
+                // state like maximized chrome and restore it beneath the pointer
+                // before entering the native move loop.
+                restoreBorderlessForCaptionDrag(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
+                ReleaseCapture();
+                return DefWindowProcW(
+                    hwnd_, WM_SYSCOMMAND, SC_MOVE | HTCAPTION, lParam);
+            }
+            return DefWindowProcW(hwnd_, message, wParam, lParam);
         case WM_NCLBUTTONDBLCLK:
             // A borderless window has no native caption style for DefWindowProc
             // to maximize. Preserve the standard title-bar contract explicitly
@@ -1582,6 +1730,9 @@ private:
                 toggleMaximize();
                 return 0;
             }
+            return DefWindowProcW(hwnd_, message, wParam, lParam);
+        case WM_ACTIVATE:
+            dispatchActivationChanged(LOWORD(wParam) != WA_INACTIVE);
             return DefWindowProcW(hwnd_, message, wParam, lParam);
         case WM_SETFOCUS:
             dispatchFocusChanged(true);
@@ -1753,6 +1904,108 @@ private:
         }
 
         return HTNOWHERE;
+    }
+
+    bool restoreBorderlessForCaptionDrag(int screenX, int screenY) {
+        if (!hwnd_) {
+            return false;
+        }
+
+        RECT maximizedRect{};
+        if (!GetWindowRect(hwnd_, &maximizedRect)) {
+            return false;
+        }
+        RECT restoreRect = savedBorderlessRect_;
+        if (restoreRect.right <= restoreRect.left || restoreRect.bottom <= restoreRect.top) {
+            if (!hasNormalPlacement_ || lastNormalRect_.right <= lastNormalRect_.left
+                || lastNormalRect_.bottom <= lastNormalRect_.top) {
+                return false;
+            }
+            restoreRect = lastNormalRect_;
+        }
+
+        POINT pointer{screenX, screenY};
+        const HMONITOR monitor = MonitorFromPoint(pointer, MONITOR_DEFAULTTONEAREST);
+        MONITORINFO monitorInfo{};
+        monitorInfo.cbSize = sizeof(monitorInfo);
+        if (!monitor || !GetMonitorInfoW(monitor, &monitorInfo)) {
+            return false;
+        }
+
+        const RECT& work = monitorInfo.rcWork;
+        const int workWidth = std::max(1L, work.right - work.left);
+        const int workHeight = std::max(1L, work.bottom - work.top);
+        constexpr int kWorkAreaMatchTolerance = 2;
+        const bool fillsWorkArea =
+            std::abs(maximizedRect.left - work.left) <= kWorkAreaMatchTolerance
+            && std::abs(maximizedRect.top - work.top) <= kWorkAreaMatchTolerance
+            && std::abs(maximizedRect.right - work.right) <= kWorkAreaMatchTolerance
+            && std::abs(maximizedRect.bottom - work.bottom) <= kWorkAreaMatchTolerance;
+        const bool wasBorderlessMaximized = borderlessMaximized_;
+        if (!wasBorderlessMaximized && !fillsWorkArea) {
+            return false;
+        }
+
+        int restoreWidth = std::clamp(
+            static_cast<int>(restoreRect.right - restoreRect.left),
+            1,
+            workWidth);
+        int restoreHeight = std::clamp(
+            static_cast<int>(restoreRect.bottom - restoreRect.top),
+            1,
+            workHeight);
+        // A normal placement persisted at the exact work-area dimensions is
+        // not a useful restore target.  Match the familiar restore-from-
+        // maximized gesture while retaining enough room for dense workspaces.
+        if (restoreWidth >= workWidth - kWorkAreaMatchTolerance
+            && restoreHeight >= workHeight - kWorkAreaMatchTolerance) {
+            restoreWidth = std::max(1, static_cast<int>(std::lround(workWidth * 0.78)));
+            restoreHeight = std::max(1, static_cast<int>(std::lround(workHeight * 0.80)));
+        }
+        const int maximizedWidth = std::max(
+            1,
+            static_cast<int>(maximizedRect.right - maximizedRect.left));
+        const float horizontalRatio = std::clamp(
+            static_cast<float>(screenX - static_cast<int>(maximizedRect.left))
+                / static_cast<float>(maximizedWidth),
+            0.0f,
+            1.0f);
+        const int grabOffsetY = std::clamp(
+            screenY - static_cast<int>(maximizedRect.top),
+            0,
+            std::max(0, logicalToPhysicalCeil(titleBarHeightLogical_) - 1));
+        const int targetLeft = std::clamp(
+            screenX - static_cast<int>(std::lround(horizontalRatio * restoreWidth)),
+            static_cast<int>(work.left),
+            static_cast<int>(work.right) - restoreWidth);
+        const int targetTop = std::clamp(
+            screenY - grabOffsetY,
+            static_cast<int>(work.top),
+            static_cast<int>(work.bottom) - restoreHeight);
+
+        beginWindowStateChange();
+        borderlessMaximized_ = false;
+        if (!SetWindowPos(
+                hwnd_,
+                options_.topmost ? HWND_TOPMOST : HWND_NOTOPMOST,
+                targetLeft,
+                targetTop,
+                restoreWidth,
+                restoreHeight,
+                SWP_NOOWNERZORDER | SWP_NOACTIVATE)) {
+            borderlessMaximized_ = wasBorderlessMaximized;
+            applyingWindowState_ = false;
+            windowStatePaintPending_ = false;
+            return false;
+        }
+        lastNormalRect_ = RECT{
+            targetLeft,
+            targetTop,
+            targetLeft + restoreWidth,
+            targetTop + restoreHeight};
+        hasNormalPlacement_ = true;
+        finishWindowStateChange();
+        return true;
     }
 
     void applyWindowState() {
@@ -2824,6 +3077,18 @@ private:
         }
     }
 
+    void dispatchActivationChanged(bool active) {
+        if (windowActive_ == active) {
+            return;
+        }
+        windowActive_ = active;
+        const auto alive = callbackWindowAlive_;
+        const auto handler = activationChangedHandler_;
+        if (handler && alive->load(std::memory_order_acquire)) {
+            handler(active);
+        }
+    }
+
     void updateTrackedKeyState(WPARAM virtualKey, bool pressed) {
         if (virtualKey < trackedKeyState_.size()) {
             trackedKeyState_[static_cast<std::size_t>(virtualKey)] = pressed;
@@ -3264,6 +3529,7 @@ private:
     HANDLE animationFrameTimer_ = nullptr;
     WindowOptions options_;
     float dpiScale_ = 1.0f;
+    float contentScale_ = 1.0f;
     // 无边框窗口的拖拽命中区（逻辑像素）：标题栏高度内、且不在右侧预留区，视为可拖拽 caption。
     // 客户端可按自身标题栏与窗口按钮/账号按钮的实际布局配置。
     float titleBarHeightLogical_ = 34.0f;
@@ -3271,8 +3537,11 @@ private:
     float titleBarInteractiveLeadingWidthLogical_ = -1.0f;
     float titleBarInteractiveTrailingWidthLogical_ = -1.0f;
     ClientSizeChangedHandler clientSizeChangedHandler_;
+    ActivationChangedHandler activationChangedHandler_;
+    FileDropHandler fileDropHandler_;
     Size minimumClientSize_{};
     bool clientSizeChangedFramePending_ = false;
+    bool windowActive_ = false;
     HGLRC glContext_ = nullptr;
     HDC glDC_ = nullptr;
     sk_sp<GrDirectContext> grContext_;

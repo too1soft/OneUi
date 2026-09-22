@@ -430,7 +430,10 @@ std::vector<IconPrimitive> buildIconPrimitives(
     return primitives;
 }
 
+#include "outline_icons.inc"
+
 void paintIcon(Canvas& canvas, IconSymbol symbol, Rect rect, Color color, Color accent, float strokeWidth) {
+    if (paintOutlineIcon(canvas,symbol,rect,color)) return;
     if (const auto glyph = fluentGlyph(symbol)) {
         const std::wstring fluentFamily = L"Segoe Fluent Icons";
         const std::wstring mdlFamily = L"Segoe MDL2 Assets";

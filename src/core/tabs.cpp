@@ -68,6 +68,7 @@ void applyTabsStateOverride(TabsStyle& style, const TabsStateStyleOverride& over
     if (override.fontWeight) {
         style.fontWeight = *override.fontWeight;
     }
+    if (override.textInset) style.textInset = std::max(0.0f, *override.textInset);
     if (override.itemInset) {
         style.itemInset = *override.itemInset;
     }
@@ -116,6 +117,9 @@ Tabs::Tabs() {
 }
 
 void Tabs::setItems(std::vector<std::wstring> items) {
+    if (items != items_) {
+        cancelEdit();
+    }
     items_ = std::move(items);
     compactItemOffsets_.clear();
     assignSelectedIndex(selectedIndex());
@@ -255,6 +259,101 @@ void Tabs::setOnReorderRequested(std::function<void(int, int)> callback) {
     onReorderRequested_ = std::move(callback);
 }
 
+bool Tabs::beginEdit(int index) {
+    if (!interactive() || index < 0 || index >= static_cast<int>(items_.size())) {
+        return false;
+    }
+    cancelEdit();
+    if (!editor_) {
+        editor_ = std::make_shared<TextField>();
+        editor_->attachToOwner(this, [this] { invalidate(); },
+            [this](Rect rect) { invalidateRect(rect); }, [this] { requestAnimationFrame(); });
+        editor_->setOnSubmitted([this](const std::wstring&) { finishEdit(TabEditReason::Submitted); });
+    }
+    pressedIndex_ = pressedCloseIndex_ = contextPressedIndex_ = -1;
+    dragSourceIndex_ = dragTargetIndex_ = -1;
+    dragging_ = false;
+    editingIndex_ = index;
+    ensureIndexVisible(index);
+    editor_->setText(items_[static_cast<std::size_t>(index)]);
+    const auto style = resolvedItemStyle(index);
+    editor_->setFontSize(style.fontSize);
+    TextFieldStateStyleOverride normal;
+    normal.background = Color{0, 0, 0, 0};
+    normal.foreground = style.itemForeground;
+    normal.borderWidth = 0.0f;
+    normal.padding = Insets{0.0f};
+    TextFieldStyleOverride fieldStyle;
+    fieldStyle.normal = normal;
+    editor_->setStyleOverride(fieldStyle);
+    editor_->selectAll();
+    editor_->onFocusChanged(true);
+    updateEditorFrame();
+    invalidate();
+    return true;
+}
+
+void Tabs::cancelEdit() { finishEdit(TabEditReason::Cancelled); }
+int Tabs::editingIndex() const { return editingIndex_; }
+Rect Tabs::editorFrame() const { return editingIndex_ >= 0 ? editor_->frame() : Rect{}; }
+void Tabs::setOnEditFinished(std::function<void(int, const std::wstring&, TabEditReason)> callback) {
+    onEditFinished_ = std::move(callback);
+}
+void Tabs::finishEdit(TabEditReason reason) {
+    if (editingIndex_ < 0) { return; }
+    const int index = editingIndex_;
+    const std::wstring value = editor_->text();
+    editingIndex_ = -1;
+    editor_->onFocusChanged(false);
+    invalidate();
+    // Clear the edit state before notifying; consumers may replace the items.
+    const auto callback = onEditFinished_;
+    if (callback) { callback(index, value, reason); }
+}
+void Tabs::updateEditorFrame() {
+    if (editingIndex_ < 0) { return; }
+    Rect rect = textRect(editingIndex_);
+    const float right = std::min(rect.x + rect.width, frame().x + frame().width);
+    rect.x = std::max(rect.x, frame().x);
+    rect.width = std::max(0.0f, right - rect.x);
+    editor_->setFrame(rect);
+    editor_->setTextEnvironment(textFontFamily(), textDpiScale());
+}
+bool Tabs::onFocusChanged(bool focused) {
+    const bool changed = Widget::onFocusChanged(focused);
+    if (editingIndex_ >= 0 && !focused) { finishEdit(TabEditReason::FocusLost); }
+    return changed;
+}
+bool Tabs::onTextInput(wchar_t character) {
+    return editingIndex_ >= 0 && editor_->onTextInput(character);
+}
+bool Tabs::onTextCommitted(const std::wstring& text) {
+    return editingIndex_ >= 0 && editor_->onTextCommitted(text);
+}
+TextInputState Tabs::textInputState() const {
+    return editingIndex_ >= 0 ? editor_->textInputState() : TextInputState{};
+}
+bool Tabs::hasTextComposition() const { return editingIndex_ >= 0 && editor_->hasTextComposition(); }
+void Tabs::setTextComposition(std::wstring text, std::size_t caret) {
+    if (editingIndex_ >= 0) { editor_->setTextComposition(std::move(text), caret); }
+}
+bool Tabs::replaceTextRange(std::size_t start, std::size_t end, const std::wstring& text) {
+    return editingIndex_ >= 0 && editor_->replaceTextRange(start, end, text);
+}
+Rect Tabs::textInputCaretRect() const {
+    return editingIndex_ >= 0 ? editor_->textInputCaretRect() : Widget::textInputCaretRect();
+}
+std::shared_ptr<Widget> Tabs::activeFocusChild() const {
+    return editingIndex_ >= 0 ? editor_ : nullptr;
+}
+bool Tabs::tickAnimations(double nowMs) {
+    return editingIndex_ >= 0 && editor_->tickAnimations(nowMs);
+}
+CursorKind Tabs::cursor(Point point) const {
+    return editingIndex_ >= 0 && editor_->frame().contains(point)
+        ? CursorKind::Text : Widget::cursor(point);
+}
+
 void Tabs::paint(Canvas& canvas) {
     const Rect rect = frame();
     const int count = static_cast<int>(items_.size());
@@ -278,7 +377,7 @@ void Tabs::paint(Canvas& canvas) {
 
     updateCompactMetrics(canvas);
     const int selected = std::clamp(selectedIndex(), 0, count - 1);
-    ensureIndexVisible(selected);
+    ensureIndexVisible(editingIndex_ >= 0 ? editingIndex_ : selected);
 
     canvas.save();
     canvas.clipRect(rect);
@@ -313,13 +412,13 @@ void Tabs::paint(Canvas& canvas) {
                 Color{0, 0, 0, 0},
                 1.35f);
         }
-        canvas.drawTextStyledEllipsized(
+        if (i != editingIndex_) { canvas.drawTextStyledEllipsized(
             items_[static_cast<std::size_t>(i)],
             textFrame,
             itemStyle.itemForeground,
             itemStyle.fontSize,
             itemTextAlign(i),
-            itemStyle.fontWeight);
+            itemStyle.fontWeight); }
         if (showClose) {
             const Rect iconRect = closeRect(i);
             if (i == hoveredCloseIndex_ || i == pressedCloseIndex_) {
@@ -339,6 +438,10 @@ void Tabs::paint(Canvas& canvas) {
                 1.35f);
         }
     }
+    if (editingIndex_ >= 0) {
+        updateEditorFrame();
+        editor_->paint(canvas);
+    }
     if (dragging_ && dragSourceIndex_ >= 0 && dragTargetIndex_ >= 0
         && dragSourceIndex_ != dragTargetIndex_) {
         const Rect target = itemRect(dragTargetIndex_);
@@ -357,6 +460,7 @@ bool Tabs::onMouseMove(const MouseEvent& event) {
     if (!interactive()) {
         return false;
     }
+    if (editingIndex_ >= 0) { return editor_->onMouseMove(event); }
     const int next = hitIndex(event.position);
     const int nextClose = hitCloseIndex(event.position);
     bool interactionChanged = next != hoveredIndex_ || nextClose != hoveredCloseIndex_;
@@ -385,6 +489,11 @@ bool Tabs::onMouseMove(const MouseEvent& event) {
 bool Tabs::onMouseDown(const MouseEvent& event) {
     if (!interactive()) {
         return false;
+    }
+    if (editingIndex_ >= 0) {
+        updateEditorFrame();
+        if (editor_->frame().contains(event.position)) { return editor_->onMouseDown(event); }
+        finishEdit(TabEditReason::FocusLost);
     }
     if (event.button == MouseButton::Middle) {
         pressedCloseIndex_ = hitIndex(event.position);
@@ -421,6 +530,7 @@ bool Tabs::onMouseUp(const MouseEvent& event) {
     if (!interactive()) {
         return false;
     }
+    if (editingIndex_ >= 0) { return editor_->onMouseUp(event); }
     const int wasClosePressed = pressedCloseIndex_;
     pressedCloseIndex_ = -1;
     const int closeIndex = event.button == MouseButton::Middle
@@ -476,6 +586,7 @@ bool Tabs::onMouseUp(const MouseEvent& event) {
 }
 
 bool Tabs::onMouseWheel(const MouseWheelEvent& event) {
+    if (editingIndex_ >= 0) { return true; }
     if (!interactive() || sizingMode_ != TabsSizingMode::Compact
         || !frame().contains(event.position) || maximumScrollOffset() <= 0.0f
         || std::abs(event.deltaY) < 0.001f) {
@@ -496,6 +607,15 @@ bool Tabs::onMouseWheel(const MouseWheelEvent& event) {
 bool Tabs::onKeyDown(const KeyEvent& event) {
     if (!interactive() || items_.empty()) {
         return false;
+    }
+    if (editingIndex_ >= 0) {
+        if (event.key == Key::Escape) {
+            if (hasTextComposition()) { editor_->setTextComposition({}, 0); }
+            else { cancelEdit(); }
+            return true;
+        }
+        if (event.key == Key::Tab) { finishEdit(TabEditReason::FocusLost); return false; }
+        return editor_->onKeyDown(event);
     }
 
     if (event.key == Key::Left || event.key == Key::Up) {
@@ -580,7 +700,7 @@ void Tabs::updateCompactMetrics(Canvas& canvas) {
     for (std::size_t index = 0; index < items_.size(); ++index) {
         const TabsStyle style = resolvedItemStyle(static_cast<int>(index));
         const bool hasIcon = index < itemIcons_.size() && itemIcons_[index].has_value();
-        const float leadingInset = hasIcon ? 28.0f : 8.0f;
+        const float leadingInset = style.textInset + (hasIcon ? 20.0f : 0.0f);
         const float trailingInset = closable_ ? 27.0f : 8.0f;
         const float measured = canvas.measureTextWidth(items_[index], style.fontSize, style.fontWeight);
         const float desired = style.itemInset.left + style.itemInset.right
@@ -659,8 +779,8 @@ Rect Tabs::textRect(int index) const {
         (active || index == hoveredIndex_ || index == hoveredCloseIndex_);
     const bool hasIcon = static_cast<std::size_t>(index) < itemIcons_.size() &&
         itemIcons_[static_cast<std::size_t>(index)].has_value();
-    const float leadingInset = hasIcon ? 28.0f : 8.0f;
-    const float trailingInset = showClose ? 27.0f : 8.0f;
+    const float leadingInset = style.textInset + (hasIcon ? 20.0f : 0.0f);
+    const float trailingInset = showClose ? 27.0f : style.textInset;
     return Rect{
         item.x + leadingInset,
         item.y,
@@ -781,11 +901,15 @@ void Tabs::assignSelectedIndex(int index) {
 }
 
 bool Tabs::hasInteractionState() const {
-    return hoveredIndex_ >= 0 || pressedIndex_ >= 0 || hoveredCloseIndex_ >= 0
+    return editingIndex_ >= 0 || hoveredIndex_ >= 0 || pressedIndex_ >= 0 || hoveredCloseIndex_ >= 0
         || pressedCloseIndex_ >= 0 || contextPressedIndex_ >= 0 || dragging_;
 }
 
 void Tabs::resetInteractionState() {
+    // Views also reset pointer state when the mouse leaves a child. That is
+    // not keyboard focus loss and must not discard an in-progress label.
+    if (!interactive()) { cancelEdit(); }
+    if (editingIndex_ >= 0) { editor_->clearInteractionState(); }
     hoveredIndex_ = -1;
     pressedIndex_ = -1;
     hoveredCloseIndex_ = -1;

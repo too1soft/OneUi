@@ -3,14 +3,17 @@
 这是当前跨平台实现的状态记录，不是全部平台已经支持的发布声明。Windows 保持既有主线；
 Linux 与 macOS 属于同一期开发，只有完成各自原生验收后才能提升支持等级。
 
-下面的构建记录是文字升级前的跨平台阶段基线。本轮新增的强制文字依赖、Unicode 一致性
-失败和 MinGW 依赖阻塞见[文字引擎状态](38-text-and-interaction-engine.md)；不能沿用旧包的通过结论。
+下面的构建记录是跨平台阶段基线。后续完整文字依赖与 Unicode 修复的验证记录见
+[文字引擎状态](38-text-and-interaction-engine.md)：Unicode Bidi 已通过，MinGW 匹配依赖仍待完成。
+旧构建通过不代表当前全部增量已在各平台重新验证。
+Win32 GPU/raster 路径见[渲染说明](39-rendering-and-validation.md)，Win7 独立配置见[兼容记录](24-windows7-compatibility.md)。
 
 ## 支持矩阵
 
 | 目标 | 已实现 | 已构建 / 自动测试 | 已原生验收 |
 | --- | --- | --- | --- |
-| Windows x64，MSVC bundled-static / MinGW | Win32，共享 Skia Canvas | 本机回归通过 | 本轮未重做完整人工输入/多屏验收 |
+| Windows x64，MSVC bundled-static | Win32，Skia Ganesh GPU / raster 回退 | 已有本机回归记录；按对应构建核对 | 完整人工输入/多屏/驱动验收仍待完成 |
+| Windows，MinGW | 同一 Win32 源码 | 旧基线通过；当前匹配文字依赖阻塞 | 不沿用旧产物宣称当前版本验收 |
 | Ubuntu 24.04 x86_64 X11 | Xlib / XIM / RandR / selection / XImage | Ubuntu 24.04.4 WSLg 已构建、CTest/Rust 通过 | 待真实 Ubuntu 桌面；WSLg 的 X11 可能由 XWayland 提供 |
 | Ubuntu 24.04 x86_64 Wayland | xdg-shell / shm / xkbcommon / data-device / text-input-v3 | WSLg 原生 Wayland 连接、Gallery、CTest/Rust 已运行 | 待真实桌面与 IME；无交互序号的剪贴板测试明确跳过，不计通过 |
 | Ubuntu 24.04 ARM64 | 同一 Linux 源码路径 | 未构建 | 待 ARM64 机器 |

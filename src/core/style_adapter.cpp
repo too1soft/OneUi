@@ -300,6 +300,10 @@ TableStyleOverride tableStyleOverrideFromStyleSheet(const StyleSheet& sheet, Sty
     style.radius = normal.radius;
     style.scrollbarWidth = normal.scrollbarWidth;
     style.cellPadding = normal.padding;
+    style.fontSize = normal.fontSize;
+    style.headerFontSize = normal.detailFontSize;
+    style.detailFontSize = normal.detailFontSize;
+    style.detailForeground = normal.placeholderColor;
     return style;
 }
 

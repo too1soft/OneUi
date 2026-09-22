@@ -8,6 +8,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace oneui {
 
@@ -21,7 +22,8 @@ enum WindowCapability : unsigned int {
     WindowCapabilityActivation = 1u << 3,
     WindowCapabilityTopmost = 1u << 4,
     WindowCapabilityTray = 1u << 5,
-    WindowCapabilityNativeDialogs = 1u << 6
+    WindowCapabilityNativeDialogs = 1u << 6,
+    WindowCapabilityFileDrop = 1u << 7
 };
 
 struct WindowOptions {
@@ -51,6 +53,8 @@ class ONEUI_API Window {
 public:
     using RawKeyHandler = std::function<bool(const KeyEvent&)>;
     using ClientSizeChangedHandler = std::function<void(Size)>;
+    using ActivationChangedHandler = std::function<void(bool)>;
+    using FileDropHandler = std::function<void(std::vector<std::wstring>, Point)>;
 
     virtual ~Window() = default;
     CommandScope& commands() { return commands_; }
@@ -72,6 +76,8 @@ public:
     static std::unique_ptr<Window> create(WindowOptions options);
 
     virtual void setContent(std::shared_ptr<Widget> widget) = 0;
+    // Additional application content zoom, independent of monitor DPI.
+    virtual void setContentScale(float scale) { (void)scale; }
     // Establishes the focus path from the window root to a descendant widget.
     // Returns false when the widget is not part of the active tree.
     virtual bool requestFocus(Widget* widget, bool focusVisible = true) {
@@ -89,6 +95,17 @@ public:
     virtual void setClientSizeChangedHandler(ClientSizeChangedHandler handler) {
         (void)handler;
     }
+    // Reports native top-level activation changes on the owning UI thread.
+    // This is intentionally separate from widget focus: opening a modal window,
+    // minimizing, or switching applications deactivates the window even when the
+    // focused widget remains unchanged.
+    virtual void setActivationChangedHandler(ActivationChangedHandler handler) {
+        (void)handler;
+    }
+    // Delivers an owned list of native filesystem paths and the logical
+    // client-space drop point on the UI thread. Backends that expose this
+    // capability must stop accepting drops when the handler is cleared.
+    virtual void setFileDropHandler(FileDropHandler handler) { (void)handler; }
     // Constrains the logical client area while preserving native resize and DPI
     // behavior. A non-positive axis removes that axis constraint.
     virtual void setMinimumClientSize(Size size) { (void)size; }
@@ -113,6 +130,10 @@ public:
     virtual void activate() { show(); }
     virtual int run() = 0;
     virtual void close() = 0;
+    // Requests application policy handling before the window is closed. The
+    // default is immediate close for backends without a policy-capable native
+    // window message; desktop backends should override this entry point.
+    virtual void requestClose() { close(); }
     virtual void minimize() = 0;
     virtual void requestRedraw() = 0;
     // Commits pending layout before diagnostics inspect widget geometry.

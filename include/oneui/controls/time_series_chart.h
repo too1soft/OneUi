@@ -2,6 +2,8 @@
 
 #include "oneui/export.h"
 #include "oneui/style.h"
+#include "oneui/style_sheet.h"
+#include <optional>
 #include "oneui/widget.h"
 
 #include <string>
@@ -36,6 +38,13 @@ public:
     double maximum() const;
     void setGridLines(int count);
     int gridLines() const;
+    void setGridStyle(int verticalLines, float lineWidth);
+    void setStyleBox(const StyleBox& style);
+    void setAxisLabels(std::vector<std::wstring> labels);
+    // Ordered normalized positions [0,1], shared by every series. Empty restores
+    // evenly-spaced samples. Invalid input preserves the previous positions.
+    bool setSamplePositions(std::vector<double> positions);
+    void setLatestPointVisible(bool visible);
     void setSmoothCurves(bool enabled);
     void setAreaFill(bool enabled);
     void setDashedGrid(bool enabled);
@@ -65,6 +74,7 @@ protected:
 
 private:
     Rect plotRect() const;
+    float sampleProgress(std::size_t index, std::size_t count) const;
     std::size_t maximumSampleCount() const;
     int inspectionIndexAt(Point point) const;
     void updateInspection(int index, bool pinned, bool notify);
@@ -76,6 +86,14 @@ private:
     double minimum_ = 0.0;
     double maximum_ = 1.0;
     int gridLines_ = 4;
+    int verticalGridLines_ = 5;
+    float gridLineWidth_ = 1.0f;
+    std::optional<Color> gridColor_;
+    std::vector<std::wstring> axisLabels_;
+    std::optional<Color> axisLabelColor_;
+    float axisLabelSize_ = 11.0f;
+    std::vector<double> samplePositions_;
+    bool latestPointVisible_ = false;
     bool smoothCurves_ = true;
     bool areaFill_ = true;
     bool dashedGrid_ = true;

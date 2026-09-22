@@ -9,7 +9,7 @@
 [![Version](https://img.shields.io/badge/version-0.1.0-f59e0b.svg)](CMakeLists.txt)
 
 OneUI 是一个 **原生、自绘、保留式** 的桌面 UI 框架，Windows 为当前产品主线。它以 C++17
-实现，使用 Skia raster 渲染，通过 `Widget` / `View` 树、布局容器、响应式状态和
+实现，使用 Skia 渲染（Win32 默认尝试 OpenGL + Ganesh，失败后回退软件光栅化），通过 `Widget` / `View` 树、布局容器、响应式状态和
 CSS-like 样式表构建界面，不依赖浏览器、HTML 或 WebView。
 
 当前仓库同时提供：
@@ -45,14 +45,14 @@ MinGW 匹配文字依赖构建及 SDK 审计尚未完成。详见
 | --- | --- |
 | 基础运行时 | `Widget`、`View`、逻辑/物理像素、焦点链、命中测试、键盘/鼠标/滚轮、动画帧、tooltip、无障碍语义元数据 |
 | 响应式状态 | `State<T>`、`Binding<T>`、窗口线程 dispatcher、后台任务投递、控件线程安全 handle |
-| 渲染 | `Canvas`、Skia raster、文字/图元/渐变/阴影/像素帧、clip 与稳定 viewport bounds |
+| 渲染 | `Canvas`、Win32 Skia Ganesh GPU / raster 回退、局部重绘、段落与行内富文本、图元/渐变/阴影/像素帧 |
 | 样式 | CSS-like selector、class、伪状态、custom properties、typed style adapter、颜色/透明度过渡 |
-| 布局 | Stack、Grid、Wrap、Panel、ScrollView、SplitView、OverlayHost、ReorderableGrid、AppShell、ProductShell |
+| 布局 | Stack、Grid、Wrap、Panel、ScrollView、SplitView、OverlayHost、ReorderableGrid、AppShell、ProductShell；Rust DockWorkspace / DockSurface |
 | 表单 | Button、IconButton、TextField/TextArea、Checkbox、Switch、RadioGroup、Slider、Select、FormField |
 | 导航与数据 | Tabs、List、VirtualList、TreeView、Table、Menu、NavItem；选择、激活、上下文菜单、重排和稳定拖拽 ID |
 | 反馈与容器 | Card、Badge、IconBadge、ProgressBar、Sparkline、Dialog、Popup、Toast、StateView、StatusStrip |
-| 专用视图 | TerminalView、LogView、RealtimeFrameView、RemoteInputRegion、WindowTitleBar |
-| 平台服务 | Win32 Window、窗口状态持久化、DPI/显示器、剪贴板、文件/目录选择、confirm/prompt、托盘、全局 raw-key |
+| 专用视图 | ImageView、TerminalView、LogView、RealtimeFrameView、RemoteInputRegion、WindowTitleBar |
+| 平台服务 | Win32 Window、窗口状态持久化、DPI/显示器、剪贴板、文件投递、文件/目录选择、confirm/prompt、托盘、全局 raw-key |
 | 可观测性 | 真实控件 frame、Stack 内容尺寸、交互 trace、隐私安全的 OneUI 布局树 JSON 快照 |
 | 互操作 | C++ API、版本化 UTF-8 C ABI、便携 Rust FFI 子集、safe Rust wrappers、回调 panic 边界 |
 
@@ -60,12 +60,20 @@ MinGW 匹配文字依赖构建及 SDK 审计尚未完成。详见
 [组件清单](docs/07-component-inventory.md)与
 [组件参考](docs/14-component-reference.md)。
 
-## 本次工作区新增/增强能力
+## 当前实现重点
 
-当前代码相对上一基线重点增加：
+当前开发版包含以下能力；发布验收状态与已实现 API 分开记录：
+
+- 渲染：Win32 默认尝试 OpenGL + Skia Ganesh，保留 raster / GDI 回退；`ONEUI_ENABLE_GPU=0` 可用于软件路径排查，详见[渲染说明](docs/39-rendering-and-validation.md)；
+- ABI v33：`Slider` 的 C/Rust 接口、Begin/Update/Commit/Cancel 交互生命周期及后台进度 handle；新增符号须使用同一构建的头文件、绑定和 DLL；
+- 工作区：Rust `DockWorkspace` / `DockSurface` 提供递归分栏、浮动、隐藏恢复、最大化、快照与焦点保留，配有拖拽命中测试与 `FloatingFrame` 缩放辅助；通用拖放控制器的整合仍待完善，见[工作区组合](docs/workspace-docking.md)；
+- `SplitView`：分隔条键盘调整、Home/End、双击平衡和 Escape 撤销拖动；
+- `ImageView`：RGBA 图片、contain/cover/stretch/原始尺寸及双轴对齐；
+- 窗口服务：激活状态回调、多文件选择和弱焦点书签；
 
 - `Sparkline`：归一化时间序列绘制，并提供 C ABI 与 Rust 安全包装；
-- `Tabs`：紧凑宽度、按文本测量、图标、滚轮溢出、关闭、上下文菜单与受控重排请求；
+- `Label`：同一段落内支持字重、斜体、等宽字体、装饰线和前景/背景色 span，并提供 C ABI 与 Rust 安全包装；
+- `Tabs`：紧凑宽度、按文本测量、图标、滚轮溢出、关闭、上下文菜单、受控重排请求与原位标题编辑；
 - `Table`：结构化 UTF-8 行列、可见行绘制、平滑滚动、单选/多选、键盘命令、编辑/删除请求、内部重排与外部稳定 ID 拖拽；
 - 布局诊断：窗口同步提交布局后导出 JSON；包含节点关系、实际/首选 frame、样式盒和脱敏语义信息；
 - 标题栏：可插入交互附件，并可显式划分可拖拽区与可点击区；
@@ -81,7 +89,7 @@ MinGW 匹配文字依赖构建及 SDK 审计尚未完成。详见
 | 平台 | 状态 | 说明 |
 | --- | --- | --- |
 | Windows / Win32 | 当前产品主线 | 本轮 MSVC 与 Unicode 一致性回归通过；MinGW 匹配文字依赖、SDK 审计及原生交互验收仍待完成 |
-| Windows 7 API 级别 | 源码兼容目标 | CMake 定义 `_WIN32_WINNT=0x0601`；最终系统兼容性仍取决于所选 MSVC/Skia 构建产物 |
+| Windows 7 SP1 | 独立兼容构建，验收中 | x86 已在原版 SP1 虚拟机运行；x64 已编译，Win7 x64 原生验收待完成；不覆盖默认现代构建，见[兼容说明](docs/24-windows7-compatibility.md) |
 | Linux X11 / Wayland | 已实现，WSLg 已构建运行 | Ubuntu 原生桌面、麒麟/UOS、ARM64 仍待验收；运行时能力有差异 |
 | macOS Cocoa | 源码已接入，未构建 | 待 Intel / Apple Silicon Mac，不提前宣称可用 |
 
@@ -110,7 +118,7 @@ OneUI retained widget tree
         |
 Canvas abstraction
         |
-Skia raster renderer
+Skia renderer (Win32: OpenGL/Ganesh + raster fallback)
         |
 Win32 / X11 / Wayland / Cocoa backend（成熟度见支持矩阵）
         +-- window/message loop/raw key/IME path
@@ -127,6 +135,7 @@ Win32 / X11 / Wayland / Cocoa backend（成熟度见支持矩阵）
 ```text
 include/oneui/        公开 C++ 头文件与 oneui_c_api.h
 src/core/             跨平台控件、布局、样式、状态和绘制逻辑
+src/text/             私有 SkParagraph / SkShaper / ICU 文字布局
 src/platform/win32/   当前可运行的 Win32 后端
 src/platform/shared/  私有 Skia Canvas、文字缓存和桌面调度
 src/platform/linux/   X11 / Wayland 原生后端
@@ -310,6 +319,9 @@ Win32 后端契约分域运行；Rust crate 另有 safe-wrapper 和回调生命�
 - [Linux/macOS 构建、SDK 和验收矩阵](docs/37-native-desktop-backends.md)
 - [TerminalView](docs/33-terminal-view.md)
 - [TreeView](docs/34-tree-view.md)
+- [GPU/软件渲染与验证边界](docs/39-rendering-and-validation.md)
+- [工作区停靠组合](docs/workspace-docking.md)
+- [Windows 7 独立兼容构建](docs/24-windows7-compatibility.md)
 
 ## 已知限制
 
@@ -322,6 +334,8 @@ Win32 后端契约分域运行；Rust crate 另有 safe-wrapper 和回调生命�
 - Tabs/Table/Tree/ReorderableGrid 的重排回调只报告请求；产品数据成功更新后再提交新顺序。
 - RealtimeFrameView 当前绘制 BGRA/RGBA 像素，支持完整帧所有权移交、最多 64 个脏矩形的批量后备画面更新和 Rust 后台线程批次合并；NV12 仅保留协议枚举，尚未实现转换。
 - 布局 JSON 快照用于几何/语义诊断，不等同于像素截图测试。
+- GPU 已接入不代表所有驱动和平台已经验收；Linux/macOS 目前使用软件呈现路径。
+- 工作区通用拖放控制器尚待在 OneUI 内整合；跨语言控件覆盖仍以组件清单为准。
 
 ## 贡献原则
 

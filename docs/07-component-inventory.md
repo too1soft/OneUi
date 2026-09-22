@@ -50,6 +50,7 @@ Cocoa 已接入源码但未构建；运行时服务和原生验收状态见 [后
 | `SplitView` | `layout/split_view.h` | 主线 | ✓ | ✓ | ✓ | 横/纵双栏、ratio、gap、最小范围、拖拽、changed/committed 回调 |
 | `OverlayHost` | `layout/overlay_host.h` | 主线 | ✓ | ✓ | ✓ | 普通/anchored/modal overlay、层级、焦点、外部 pointer、嵌套越界命中 |
 | `DockView` | `layout/dock_view.h` | 可用 | ✓ | — | — | 固定桌面区域组合；不是通用 docking system |
+| `DockWorkspace` / `DockSurface` / `FloatingFrame` | Rust `layout/workspace*.rs`、`layout/floating_frame.rs` | 可用 | — | 通过基础控件 | ✓ | 递归分栏、浮动、隐藏恢复、快照、焦点保留、拖拽命中测试与缩放辅助；通用拖放控制器尚待在 OneUI 内整合，见[专题](workspace-docking.md) |
 | `TopBar` | `layout/top_bar.h` | 可用 | ✓ | ✓ | raw | leading/actions/padding/gap；safe Rust 无专用包装 |
 | `AppShell` | `layout/app_shell.h` | 主线 | ✓ | ✓ | raw | sidebar/header/content/footer、footer 跨 sidebar 与响应式显示 |
 | `ProductShell` | `layout/product_shell.h` | 可用 | ✓ | ✓ | raw | 产品工作台几何 helper 与 sidebar/topbar/status slots |
@@ -59,17 +60,18 @@ Cocoa 已接入源码但未构建；运行时服务和原生验收状态见 [后
 
 | 组件 | 头文件 | 成熟度 | C++ | C ABI | safe Rust | 关键能力/限制 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `Label` | `controls/label.h` | 主线 | ✓ | ✓ | ✓ | UTF-8/UTF-16 文本、字体、颜色、对齐、绑定 |
+| `Label` | `controls/label.h` | 主线 | ✓ | ✓ | ✓ | UTF-8/UTF-16 文本、共享段落布局、字体、对齐、绑定、行内富文本 span |
+| `ImageView` | `controls/image_view.h` | 可用 | ✓ | ✓ | ✓ | 复制 RGBA 图片；contain/cover/stretch/原始尺寸、双轴对齐、圆角和背景 |
 | `Button` | `controls/button.h` | 主线 | ✓ | ✓ | ✓ | variant、图标、trailing text、状态样式、鼠标/键盘激活 |
 | `IconButton` | `controls/icon_button.h` | 主线 | ✓ | ✓ | ✓ | 图标按钮、tooltip、focus、callback |
 | `InteractiveSurface` | `controls/interactive_surface.h` | 主线 | ✓ | ✓ | ✓ | 自定义内容 surface、click、pointer activated/moved、hover、context menu |
 | `TextField` | `controls/text_field.h` | 主线 | ✓ | ✓ | ✓ | 单行编辑、选择、撤销/重做、粘贴、只读、密码、前后图标、submit |
-| `TextArea` | `controls/text_field.h` | 可用 | C++ multiline | ✓ | ✓ | multiline 与行高；复杂 IME/富文本不在当前范围 |
+| `TextArea` | `controls/text_field.h` | 可用 | C++ multiline | ✓ | ✓ | 多行、可选软换行、共享字素编辑；复杂 IME 待原生验收，富文档编辑不在当前范围 |
 | SearchBox | C ABI 组合入口 | 可用 | 用 TextField 组合 | ✓ | 用 TextField 组合 | 搜索语义便捷构造，不是独立 C++ 类 |
 | `Checkbox` | `controls/checkbox.h` | 主线 | ✓ | ✓ | ✓ | checked 状态、绑定/回调、键盘与默认语义 |
 | `Switch` | `controls/switch.h` | 主线 | ✓ | ✓ | ✓ | 二元状态、绑定/回调 |
 | `RadioGroup` | `controls/radio_group.h` | 可用 | ✓ | ✓ | raw | 横/纵布局、selected index、callback |
-| `Slider` | `controls/slider.h` | 可用 | ✓ | — | — | min/max/step、drag、键盘、typed style；跨语言入口未补齐 |
+| `Slider` | `controls/slider.h` | 可用 | ✓ | ✓ | ✓ | min/max/step、键盘/拖动、Begin/Update/Commit/Cancel；Rust SliderHandle 合并后台进度 |
 | `Select` | `controls/select.h` | 主线 | ✓ | ✓ | ✓ | 单选、键盘、light dismiss、稳定 viewport 内翻转；非多选 combobox |
 | `FormField` | `controls/form_field.h` | 可用 | ✓ | — | — | label、required、helper/error 与子控件语义传播 |
 | `ValidationMessage` | `controls/validation_message.h` | 可用 | ✓ | — | — | 表单错误/提示文本 surface |
@@ -80,7 +82,7 @@ Cocoa 已接入源码但未构建；运行时服务和原生验收状态见 [后
 
 | 组件 | 头文件 | 成熟度 | C++ | C ABI | safe Rust | 关键能力/限制 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `Tabs` | `controls/tabs.h` | 主线 | ✓ | ✓ | ✓ | equal/compact、内容测量、图标、overflow wheel、Home/End、close/context/reorder 请求 |
+| `Tabs` | `controls/tabs.h` | 主线 | ✓ | ✓ | ✓ | equal/compact、内容测量、图标、overflow wheel、Home/End、close/context/reorder 请求、原位标题编辑 |
 | SegmentedControl | C ABI 组合控件 | 可用 | 产品 helper | ✓ | ✓ | 少量互斥模式；不要代替工作区 Tabs |
 | `NavItem` | `controls/nav_item.h` | 主线 | ✓ | ✓ | ✓ | sidebar 图标/文本/selected/click |
 | `List` | `controls/list.h` | 主线 | ✓ | ✓ | ✓ | 小数据集、title/detail、单选与 frame 查询；非虚拟化 |
@@ -111,6 +113,7 @@ Cocoa 已接入源码但未构建；运行时服务和原生验收状态见 [后
 | `IconBadge` | `controls/icon_badge.h` | 可用 | ✓ | ✓ | raw | 图标、accent、stroke width |
 | `ProgressBar` | `controls/progress_bar.h` | 主线 | ✓ | ✓ | ✓ | 0..1 确定进度、180ms 平滑追随与低干扰未知进度模式 |
 | `Sparkline` | `controls/sparkline.h` | 主线 | ✓ | ✓ | ✓ | 0..1 sample、clamp、网格、折线、末端点；非交互图表 |
+| `TimeSeriesChart` | `controls/time_series_chart.h` | 可用 | ✓ | ✓ | ✓ | 多序列、显式数值范围、阈值、折线/面积、指针与键盘检查；数据采集和时间标签由产品负责 |
 | `Separator` | `controls/separator.h` | 主线 | ✓ | — | — | 横/纵分隔和样式 |
 | `StateView` | `controls/state_view.h` | 主线 | ✓ | ✓ | ✓ | 空/错/加载等状态的图标、标题、说明、操作 |
 | `StatusStrip` | `controls/status_strip.h` | 可用 | ✓ | ✓ | raw | title/message/主次操作、主操作 link 展示与 trailing icon |
@@ -130,13 +133,15 @@ Cocoa 已接入源码但未构建；运行时服务和原生验收状态见 [后
 | 能力 | C++ | C ABI | safe Rust | 当前状态 |
 | --- | --- | --- | --- | --- |
 | Window create/show/run/close | ✓ | ✓ | ✓ | Win32 主线 |
+| Window activation callback | ✓ | ✓ | ✓ | 顶层窗口激活变化，可用于暂停/恢复产品动态内容 |
+| Weak focus bookmark | — | ✓ | ✓ | UI 线程弱引用，恢复已挂载可见控件，不主动激活 OS 窗口 |
 | Borderless/fullscreen/topmost/resizable | ✓ | ✓ | ✓ | Win32 主线 |
 | Placement round trip | ✓ | ✓ | ✓ | 恢复时验证可见 work area |
 | Logical/pixel size + DPI | ✓ | ✓ | ✓ | 可查询，后端负责缩放 |
 | Raw key | ✓ | ✓ | ✓ | 窗口级优先 callback，焦点丢失重置 modifier |
 | Title-bar drag/interactive insets | ✓ | ✓ | ✓ | 用于标题栏中的 Tabs/Search 等可点击附件 |
 | Clipboard | ✓ | ✓ | ✓ | 文本 |
-| File/folder dialog | 平台方法 | ✓ | ✓ | owner-bound native dialog |
+| File/folder dialog | 平台方法 | ✓ | ✓ | Win32 owner-bound native dialog，含多文件选择 |
 | Confirm / prompt | 平台方法 | ✓ | ✓ | UI-thread 与 blocking worker 形式 |
 | Tray / notification | 平台实现 | ✓ | raw | show/hide/menu/notification |
 | Monitor enumeration | ✓ | 平台内部/产品使用 | — | bounds/work area/scale/primary/name |

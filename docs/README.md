@@ -30,6 +30,8 @@ roadmap 或差距分析当成现状。
 - [架构](01-architecture.md)
 - [依赖策略](04-dependency-policy.md)
 - [静态 Skia](05-static-skia.md)
+- [GPU/软件渲染与验证边界](39-rendering-and-validation.md)
+- [Windows 7 SP1 独立兼容构建与验收](24-windows7-compatibility.md)
 - [设计语言](06-design-language.md)
 - [组件开发指南](13-authoring-guide.md)
 - [可访问性](15-accessibility.md)
@@ -56,6 +58,7 @@ roadmap 或差距分析当成现状。
 - [重排契约](25-reorder-contract.md)
 - [TerminalView](33-terminal-view.md)
 - [TreeView](34-tree-view.md)
+- [Rust 工作区停靠模型与原生组合](workspace-docking.md)
 - [Win32 滚轮复盘](35-win32-wheel-scrolling-retrospective.md)
 
 ### C ABI 与远程/产品能力
@@ -83,8 +86,8 @@ roadmap 或差距分析当成现状。
 
 1. `include/oneui/oneui_c_api.h`：C ABI 版本与函数签名；
 2. `include/oneui/**/*.h`：公开 C++ API；
-3. `bindings/rust/oneui-sys/src/lib.rs`：Rust FFI 映射；
-4. `bindings/rust/oneui/src/lib.rs`：安全 Rust API 与生命周期；
+3. `bindings/rust/oneui-sys/src/` 与 `supported-symbols.txt`：Rust FFI 映射；
+4. `bindings/rust/oneui/src/`：安全 Rust API、工作区组合与生命周期；
 5. `tests/`：已被自动验证的行为契约；
 6. 本目录中的当前使用文档；
 7. 设计与演进记录。

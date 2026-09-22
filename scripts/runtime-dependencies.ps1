@@ -1,5 +1,7 @@
 $script:OneUISystemDlls = @(
     "advapi32.dll",
+    "bcrypt.dll",
+    "bcryptprimitives.dll",
     "comctl32.dll",
     "comdlg32.dll",
     "dwmapi.dll",
@@ -7,7 +9,9 @@ $script:OneUISystemDlls = @(
     "gdi32.dll",
     "imm32.dll",
     "kernel32.dll",
+    "kernelbase.dll",
     "msvcrt.dll",
+    "ntdll.dll",
     "ole32.dll",
     "oleaut32.dll",
     "opengl32.dll",
@@ -17,6 +21,8 @@ $script:OneUISystemDlls = @(
     "user32.dll",
     "usp10.dll",
     "uuid.dll",
+    "windowscodecs.dll",
+    "fontsub.dll",
     "winmm.dll",
     "winspool.drv",
     "ws2_32.dll"
@@ -48,9 +54,12 @@ function Test-OneUISystemDll {
     )
 
     $lower = $Name.ToLowerInvariant()
-    return $script:OneUISystemDlls -contains $lower -or
-        $lower.StartsWith("api-ms-win-") -or
-        $lower.StartsWith("ext-ms-win-")
+    # This list is for dependency COLLECTION only. Product compatibility is
+    # proved by audit-windows-runtime.py against actual baseline exports.
+    # Preserve modern development collection. API-set prefixes do not imply
+    # Windows 7 availability; the strict Win7 auditor never uses this list.
+    if ($lower.StartsWith('api-ms-win-') -or $lower.StartsWith('ext-ms-win-')) { return $true }
+    return $script:OneUISystemDlls -contains $lower
 }
 
 function Copy-OneUIRuntimeDependencies {

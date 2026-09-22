@@ -5,6 +5,7 @@
 #include "oneui/reactive.h"
 #include "oneui/style.h"
 #include "oneui/widget.h"
+#include "oneui/controls/text_field.h"
 
 #include <functional>
 #include <optional>
@@ -17,6 +18,8 @@ enum class TabsSizingMode {
     Equal,
     Compact
 };
+
+enum class TabEditReason { Submitted = 0, Cancelled = 1, FocusLost = 2 };
 
 class ONEUI_API Tabs final : public Widget {
 public:
@@ -46,6 +49,22 @@ public:
     void setOnCloseRequested(std::function<void(int)> callback);
     void setOnContextMenuRequested(std::function<void(int, Point)> callback);
     void setOnReorderRequested(std::function<void(int, int)> callback);
+    bool beginEdit(int index);
+    void cancelEdit();
+    int editingIndex() const;
+    Rect editorFrame() const;
+    void setOnEditFinished(std::function<void(int, const std::wstring&, TabEditReason)> callback);
+    bool onFocusChanged(bool focused) override;
+    bool onTextInput(wchar_t character) override;
+    bool onTextCommitted(const std::wstring& text) override;
+    TextInputState textInputState() const override;
+    bool hasTextComposition() const override;
+    void setTextComposition(std::wstring text, std::size_t caret) override;
+    bool replaceTextRange(std::size_t start, std::size_t end, const std::wstring& text) override;
+    Rect textInputCaretRect() const override;
+    std::shared_ptr<Widget> activeFocusChild() const override;
+    bool tickAnimations(double nowMs) override;
+    CursorKind cursor(Point point) const override;
 
     void paint(Canvas& canvas) override;
     bool onMouseMove(const MouseEvent& event) override;
@@ -73,6 +92,12 @@ private:
     void assignSelectedIndex(int index);
     bool hasInteractionState() const override;
     void resetInteractionState() override;
+    void finishEdit(TabEditReason reason);
+    void updateEditorFrame();
+
+    int editingIndex_ = -1;
+    std::shared_ptr<TextField> editor_;
+    std::function<void(int, const std::wstring&, TabEditReason)> onEditFinished_;
 
     std::vector<std::wstring> items_;
     std::vector<std::optional<IconSymbol>> itemIcons_;

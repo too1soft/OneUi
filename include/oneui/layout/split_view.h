@@ -17,6 +17,7 @@ enum class SplitOrientation {
 class ONEUI_API SplitView final : public View {
 public:
     explicit SplitView(SplitOrientation orientation = SplitOrientation::Horizontal);
+    ~SplitView() override;
 
     void setFirst(std::shared_ptr<Widget> child);
     void setSecond(std::shared_ptr<Widget> child);
@@ -25,6 +26,7 @@ public:
     void setSplitRatio(float ratio);
     float splitRatio() const;
     void setGap(float gap);
+    void setDividerColors(Color normal, Color active);
     void setPadding(Insets padding);
     void setResizable(bool resizable);
     bool resizable() const;
@@ -32,6 +34,7 @@ public:
     void setOnSplitRatioChanged(std::function<void(float)> callback);
     void setOnSplitRatioCommitted(std::function<void(float)> callback);
 
+    bool onKeyDown(const KeyEvent& event) override;
     bool onMouseMove(const MouseEvent& event) override;
     bool onMouseDown(const MouseEvent& event) override;
     bool onMouseUp(const MouseEvent& event) override;
@@ -47,6 +50,11 @@ private:
     Rect dividerHitRect() const;
     float axisPosition(Point point) const;
     void finishDividerDrag();
+    void cancelDividerDrag();
+    bool handleDividerKey(const KeyEvent& event);
+    void paintDivider(Canvas& canvas);
+    class Divider;
+    std::shared_ptr<Divider> divider_;
     void updateSplitRatio(float ratio, bool notify);
     bool hasInteractionState() const override;
     void resetInteractionState() override;
@@ -60,6 +68,9 @@ private:
     float firstMinimumExtent_ = 0.0f;
     float secondMinimumExtent_ = 0.0f;
     float dragOffset_ = 0.0f;
+    float dragBeginRatio_ = 0.5f;
+    Color dividerColor_{0, 0, 0, 0};
+    Color dividerActiveColor_ = colors::Primary;
     bool resizable_ = false;
     bool dividerHovered_ = false;
     bool draggingDivider_ = false;

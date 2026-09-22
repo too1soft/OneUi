@@ -82,7 +82,7 @@ elseif(ONEUI_SKIA_MODE STREQUAL "bundled-static")
     # arbitrary archives left in an output directory by another build.
     set(_oneui_skia_dependencies skparagraph skshaper skunicode_icu skunicode_core
         harfbuzz icu expat libjpeg libjpeg12 libjpeg16 libpng libwebp skcms zlib)
-    if(NOT WIN32 AND NOT APPLE)
+    if((WIN32 AND ONEUI_WINDOWS_BASELINE STREQUAL "win7") OR (NOT WIN32 AND NOT APPLE))
         list(APPEND _oneui_skia_dependencies freetype2)
     endif()
     if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(AMD64|amd64|x86_64|x64|i.86)$" OR (WIN32 AND CMAKE_SIZEOF_VOID_P EQUAL 8))

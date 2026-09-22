@@ -7,7 +7,7 @@
 
 - 可运行平台：Windows / Win32；
 - 语言：C++17、版本化 UTF-8 C ABI、Rust 2021；
-- 渲染：Skia raster；
+- 渲染：Skia；Win32 默认尝试 OpenGL + Ganesh，失败后回退 raster / GDI；
 - 推荐产品构建：MSVC + vendored static Skia + static MSVC runtime；
 - 开发预设：MSYS2 MINGW64/UCRT64；
 - Linux X11/Wayland 已在 WSLg 构建运行，仍待目标桌面原生验收；Cocoa 源码已接入，尚待 Mac 构建。
@@ -124,6 +124,14 @@ $env:PATH = "$oneuiBuild;$env:PATH"
 ```
 
 Gallery 是控件组合和视觉行为的参考；行为契约仍以 `tests/` 为准。
+
+默认启动会尝试 GPU 路径。排查时可在启动进程前设置 `$env:ONEUI_ENABLE_GPU = "0"`
+强制软件渲染，恢复默认用 `Remove-Item Env:ONEUI_ENABLE_GPU -ErrorAction SilentlyContinue`。
+跟踪方法和验证边界见[渲染说明](39-rendering-and-validation.md)。
+
+上述构建默认面向 Windows 10/11。Windows 7 SP1 必须使用[独立兼容配置](24-windows7-compatibility.md)，
+不能通过修改版本宏将现代构建视为 Win7 包。审计工具还需锁定的 `windows-compat` 基础库，
+获取路径和校验要求见[静态 Skia 与审计](05-static-skia.md)。
 
 ## 8. 运行 C++ / C ABI 测试
 

@@ -106,7 +106,12 @@ Rect intersectRects(Rect first, Rect second) {
     return Rect{left, top, right - left, bottom - top};
 }
 
-Rect scaledContentRect(Rect bounds, Size videoSize, ScaleMode mode) {
+Rect scaledContentRect(
+    Rect bounds,
+    Size videoSize,
+    ScaleMode mode,
+    ImageContentAlignment horizontalAlignment,
+    ImageContentAlignment verticalAlignment) {
     if (bounds.width <= 0.0f || bounds.height <= 0.0f || videoSize.width <= 0.0f || videoSize.height <= 0.0f) {
         return bounds;
     }
@@ -124,7 +129,19 @@ Rect scaledContentRect(Rect bounds, Size videoSize, ScaleMode mode) {
 
     const float width = videoSize.width * scale;
     const float height = videoSize.height * scale;
-    return Rect{bounds.x + (bounds.width - width) / 2.0f, bounds.y + (bounds.height - height) / 2.0f, width, height};
+    const auto alignedOffset = [](float available, ImageContentAlignment alignment) {
+        switch (alignment) {
+            case ImageContentAlignment::Start: return 0.0f;
+            case ImageContentAlignment::End: return available;
+            case ImageContentAlignment::Center: return available * 0.5f;
+        }
+        return available * 0.5f;
+    };
+    return Rect{
+        bounds.x + alignedOffset(bounds.width - width, horizontalAlignment),
+        bounds.y + alignedOffset(bounds.height - height, verticalAlignment),
+        width,
+        height};
 }
 
 } // namespace
@@ -246,6 +263,8 @@ bool RealtimeFrameView::submitDamage(
 
     std::shared_ptr<const void> releasedOwner;
     ScaleMode mode = ScaleMode::Fit;
+    ImageContentAlignment horizontalAlignment = ImageContentAlignment::Center;
+    ImageContentAlignment verticalAlignment = ImageContentAlignment::Center;
     {
         std::lock_guard<std::mutex> lock(mutex_);
         if (!latestFrame_ || latestFrame_->width != frameWidth || latestFrame_->height != frameHeight ||
@@ -286,6 +305,8 @@ bool RealtimeFrameView::submitDamage(
         latestFrame_->frameId = frameId;
         latestFrame_->timestampUs = timestampUs;
         mode = scaleMode_;
+        horizontalAlignment = horizontalAlignment_;
+        verticalAlignment = verticalAlignment_;
     }
     // The old full-frame owner may call application code while being released.
     // Keep that callback outside the view lock.
@@ -295,7 +316,9 @@ bool RealtimeFrameView::submitDamage(
     const Rect content = scaledContentRect(
         bounds,
         Size{static_cast<float>(frameWidth), static_cast<float>(frameHeight)},
-        mode);
+        mode,
+        horizontalAlignment,
+        verticalAlignment);
     const float scaleX = content.width / static_cast<float>(frameWidth);
     const float scaleY = content.height / static_cast<float>(frameHeight);
     Rect dirty{
@@ -326,6 +349,20 @@ ScaleMode RealtimeFrameView::scaleMode() const {
     return scaleMode_;
 }
 
+void RealtimeFrameView::setContentAlignment(
+    ImageContentAlignment horizontal,
+    ImageContentAlignment vertical) {
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (horizontalAlignment_ == horizontal && verticalAlignment_ == vertical) {
+            return;
+        }
+        horizontalAlignment_ = horizontal;
+        verticalAlignment_ = vertical;
+    }
+    invalidate();
+}
+
 void RealtimeFrameView::setBackgroundColor(Color color) {
     {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -339,13 +376,17 @@ Rect RealtimeFrameView::contentRect() const {
 
     ScaleMode mode = ScaleMode::Fit;
     Size videoSize;
+    ImageContentAlignment horizontalAlignment = ImageContentAlignment::Center;
+    ImageContentAlignment verticalAlignment = ImageContentAlignment::Center;
     {
         std::lock_guard<std::mutex> lock(mutex_);
         mode = scaleMode_;
         videoSize = videoSizeLocked();
+        horizontalAlignment = horizontalAlignment_;
+        verticalAlignment = verticalAlignment_;
     }
 
-    return scaledContentRect(bounds, videoSize, mode);
+    return scaledContentRect(bounds, videoSize, mode, horizontalAlignment, verticalAlignment);
 }
 
 std::optional<VideoFrameSnapshot> RealtimeFrameView::latestFrame() const {
@@ -382,6 +423,8 @@ void RealtimeFrameView::paint(Canvas& canvas) {
     std::lock_guard<std::mutex> lock(mutex_);
     const Color background = backgroundColor_;
     const ScaleMode mode = scaleMode_;
+    const ImageContentAlignment horizontalAlignment = horizontalAlignment_;
+    const ImageContentAlignment verticalAlignment = verticalAlignment_;
     const auto& snapshot = latestFrame_;
 
     const Rect bounds = frame();
@@ -391,7 +434,8 @@ void RealtimeFrameView::paint(Canvas& canvas) {
     const Size videoSize = snapshot
         ? Size{static_cast<float>(snapshot->width), static_cast<float>(snapshot->height)}
         : Size{};
-    const Rect content = scaledContentRect(bounds, videoSize, mode);
+    const Rect content = scaledContentRect(
+        bounds, videoSize, mode, horizontalAlignment, verticalAlignment);
 
     CanvasPixelFormat canvasFormat = CanvasPixelFormat::Bgra8888;
     if (snapshot && snapshot->pixels && toCanvasPixelFormat(snapshot->format, canvasFormat)) {

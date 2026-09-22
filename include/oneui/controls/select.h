@@ -28,6 +28,7 @@ public:
     bool onMouseMove(const MouseEvent& event) override;
     bool onMouseDown(const MouseEvent& event) override;
     bool onMouseUp(const MouseEvent& event) override;
+    bool onMouseWheel(const MouseWheelEvent& event) override;
     bool onKeyDown(const KeyEvent& event) override;
     bool onFocusChanged(bool focused) override;
     bool isFocusable() const override;
@@ -44,6 +45,8 @@ private:
     void resetInteractionState() override;
     // Local inline popup geometry resolved against the stable paint viewport.
     float popupRowHeight() const;
+    int popupVisibleRows() const;
+    void revealPopupIndex(int index);
     Rect popupSurfaceRect() const;
     Rect popupOptionRect(int index) const;
     int hitPopupOptionIndex(Point point) const;
@@ -56,6 +59,7 @@ private:
         Reset
     };
     struct LightDismissModel {
+        int firstVisibleIndex = 0;
         bool open = false;
         bool fieldPressed = false;
         int hoveredIndex = -1;

@@ -209,7 +209,8 @@ void Dialog::paint(Canvas& canvas) {
         TextAlign::Left,
         surface.fontWeight.value_or(600));
     if (!subtitle_.empty()) {
-        canvas.drawTextEllipsized(subtitle_, header.subtitle, Color{90, 100, 114}, 13.0f, TextAlign::Left);
+        const auto subtitleStyle = sheet.resolve(StyleNode{"label", {"dialog-subtitle"}, StyleStateNone});
+        canvas.drawTextEllipsized(subtitle_, header.subtitle, subtitleStyle.foreground.value_or(Color{90, 100, 114}), subtitleStyle.fontSize.value_or(13.0f), TextAlign::Left);
     }
 
     if (closeVisible_) {

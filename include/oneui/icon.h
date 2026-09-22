@@ -71,7 +71,30 @@ enum class IconSymbol {
     Link,
     Share,
     Key,
-    ErrorCircle
+    ErrorCircle,
+    OutlineServer,
+    OutlineTerminal,
+    OutlineFolder,
+    OutlineCode,
+    OutlineNote,
+    OutlineSettings,
+    OutlineSearch,
+    OutlineTag,
+    OutlinePlus,
+    OutlineClose,
+    OutlineChevron,
+    OutlineLeft,
+    OutlineDown,
+    OutlineUp,
+    OutlineKey,
+    OutlineSidebar,
+    OutlineInspector,
+    OutlineRefresh,
+    OutlineImport,
+    OutlinePin,
+    OutlineMore,
+    OutlineCopy,
+    Pause
 };
 
 enum class IconPrimitiveKind {

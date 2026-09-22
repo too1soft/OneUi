@@ -67,7 +67,9 @@ enum class CursorKind {
     Crosshair,
     Grab,
     ResizeHorizontal,
-    ResizeVertical
+    ResizeVertical,
+    ResizeNorthWestSouthEast,
+    ResizeNorthEastSouthWest
 };
 
 struct KeyEvent {
@@ -153,6 +155,9 @@ public:
     virtual ~Widget() { lifetime_.reset(); }
 
     void setFrame(Rect frame);
+    /// Notifies after committing changed dimensions, before children are laid out.
+    /// Updating child layout hints is safe; do not directly resize this widget here.
+    void setOnSizeChanged(std::function<void(Size)> callback);
     Rect frame() const;
     void setPreferredSize(Size size);
     Size preferredSize() const;
@@ -274,6 +279,7 @@ private:
     std::wstring textFontFamily_;
     float textDpiScale_ = 1.0f;
     Rect frame_;
+    std::function<void(Size)> onSizeChanged_;
     Size preferredSize_;
     std::function<void()> invalidator_;
     std::function<void(Rect)> rectInvalidator_;

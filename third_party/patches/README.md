@@ -1,5 +1,19 @@
 # Reviewed dependency patches
 
+## Skia — Windows 7 DirectWrite fallback
+
+`skia-win7-directwrite-fallback.patch` contains two OneUI-maintained fixes for
+the pinned Skia revision. The legacy `layoutFallback` branch found a matching
+font but returned an empty pointer. In addition, unpatched Win7 SP1 rejects
+`LOAD_LIBRARY_SEARCH_DEFAULT_DIRS`, so the system DirectWrite loader needs an
+absolute System32 fallback. It never searches the current working directory.
+Modern DirectWrite fallback and normal library loading paths are unchanged.
+Both problems were reproduced as missing Chinese glyphs on a real Win7 SP1 guest.
+`scripts/apply-skia-win7-patches.cmake` verifies the base commit and complete
+LF-normalized pre/post file hashes, accepts reapplication, and rejects unknown
+changes. The Win7 build applies it before compiling, and CMake checks it
+read-only. Skia's BSD license continues to apply.
+
 ## ICU 74.2 — Unicode 15.1 Bidi conformance
 
 `icu-74.2-bidi-unicode-15.1.patch` is authored and maintained by OneUI, **not an

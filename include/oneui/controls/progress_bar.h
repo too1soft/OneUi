@@ -7,8 +7,16 @@
 #include "oneui/widget.h"
 
 #include <optional>
+#include <vector>
+#include <string>
 
 namespace oneui {
+
+struct ProgressSegment {
+    double fraction = 0.0;
+    Color color{0, 0, 0, 0};
+    std::wstring label;
+};
 
 class ONEUI_API ProgressBar final : public Widget {
 public:
@@ -16,6 +24,9 @@ public:
 
     void setValue(double value);
     double value() const;
+    // Absolute fractions of the whole track, not weights. Invalid input leaves
+    // the previous reading intact; totals above one are clipped at the track end.
+    bool setSegments(std::vector<ProgressSegment> segments);
     void bindValue(State<double>& state);
     // Smoothly follows determinate values without changing the semantic value.
     void setSmooth(bool enabled, double durationMs = 180.0);
@@ -38,6 +49,7 @@ private:
     ProgressBarStyle resolvedStyle() const;
 
     double value_ = 0.0;
+    std::vector<ProgressSegment> segments_;
     Binding<double> valueBinding_;
     FloatTransition visualValue_{0.0f};
     double smoothDurationMs_ = 180.0;

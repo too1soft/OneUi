@@ -61,6 +61,7 @@
 #include <cmath>
 #include <functional>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <string>
@@ -211,6 +212,34 @@ void testWrappedLabelRespectsWidthHeightAndMaxLines() {
     expectEqual("Wrapped Label clips once", static_cast<int>(canvas.clips.size()), 1);
 }
 
+void testRichLabelPreservesInlineStylesAsOneParagraph() {
+    RecordingCanvas canvas;
+    oneui::Label label(L"normal strong code");
+    oneui::TextStyleSpan strong;
+    strong.start = 7;
+    strong.end = 13;
+    strong.fontWeight = 650;
+    strong.italic = true;
+    oneui::TextStyleSpan code;
+    code.start = 14;
+    code.end = 18;
+    code.monospace = true;
+    code.background = oneui::Color{59, 130, 246, 32};
+    label.setRichText(label.text(), {strong, code});
+    label.setFrame(oneui::Rect{0.0f, 0.0f, 220.0f, 28.0f});
+    label.paint(canvas);
+
+    expectEqual("Rich Label paints one paragraph", static_cast<int>(canvas.textBlocks.size()), 1);
+    expectEqual("Rich Label forwards two inline spans", static_cast<int>(canvas.textBlocks.at(0).style.spans.size()), 2);
+    expectEqual("Rich Label forwards strong weight", canvas.textBlocks.at(0).style.spans.at(0).fontWeight, 650);
+    expectTrue("Rich Label forwards monospace code background",
+               canvas.textBlocks.at(0).style.spans.at(1).monospace &&
+               canvas.textBlocks.at(0).style.spans.at(1).background.a == 32);
+    label.setText(L"plain");
+    label.paint(canvas);
+    expectTrue("Plain Label update clears stale rich ranges", canvas.textBlocks.back().style.spans.empty());
+}
+
 void testWidgetAccessibilityInfoReflectsSemanticAndDynamicState() {
     LayoutProbe widget(oneui::Size{100.0f, 30.0f});
     widget.setAccessibleRole(oneui::AccessibilityRole::TextBox);
@@ -253,6 +282,9 @@ void testCommonControlsExposeDefaultAccessibilityInfo() {
     expectEqual("Button accessibility role", static_cast<int>(buttonInfo.role), static_cast<int>(oneui::AccessibilityRole::Button));
     expectWideEqual("Button accessibility default name", buttonInfo.name, L"Save");
 
+    oneui::Button iconOnly(L"");
+    iconOnly.setTooltip(L"Cloud sync settings");
+    expectWideEqual("Icon button uses its complete tooltip as accessible name", iconOnly.accessibilityInfo().name, L"Cloud sync settings");
     button.setAccessibleName(L"Save project");
     button.onMouseDown(oneui::MouseEvent{oneui::Point{10.0f, 10.0f}});
     buttonInfo = button.accessibilityInfo();
@@ -520,6 +552,110 @@ void testTabsNoopOnChanged() {
     expectEqual("Tabs same-value setSelectedIndex", changes, 0);
 }
 
+void testTabsInlineEditingUsesNativeTextAndStableLifecycle() {
+    oneui::Tabs tabs;
+    tabs.setItems({L"Source", L"Other"});
+    tabs.setFrame({0, 0, 340, 32});
+    tabs.setSizingMode(oneui::TabsSizingMode::Compact);
+    tabs.setReorderEnabled(true);
+    tabs.setClosable(true);
+    tabs.onFocusChanged(true);
+    int events = 0, edited = -1, reordered = 0;
+    std::wstring result;
+    oneui::TabEditReason reason{};
+    tabs.setOnEditFinished([&](int index, const std::wstring& value, oneui::TabEditReason why) {
+        ++events; edited = index; result = value; reason = why;
+    });
+    tabs.setOnReorderRequested([&](int, int) { ++reordered; });
+    RecordingCanvas canvas;
+    tabs.paint(canvas);
+    expectEqual("Inline edit rejects invalid index", tabs.beginEdit(99), false);
+    expectEqual("Inline edit starts", tabs.beginEdit(0), true);
+    const auto input = tabs.textInputState();
+    expectEqual("Inline edit selects all", input.anchor == 0 && input.caret == 6, true);
+    tabs.onTextCommitted(L"中文 🙂");
+    tabs.onKeyDown({oneui::Key::Enter});
+    expectEqual("Inline edit submit once", events, 1);
+    expectEqual("Inline edit index", edited, 0);
+    expectWideEqual("Inline edit atomic Unicode", result, L"中文 🙂");
+    expectEqual("Inline edit reason", static_cast<int>(reason), 0);
+    expectWideEqual("Inline edit keeps model owned by caller", tabs.items()[0], L"Source");
+    expectEqual("Inline edit relinquishes text input", tabs.textInputState().editable, false);
+    tabs.beginEdit(1);
+    tabs.onTextCommitted(L"Discard");
+    tabs.onKeyDown({oneui::Key::Escape});
+    expectEqual("Inline edit cancel", static_cast<int>(reason), 1);
+    tabs.onFocusChanged(false);
+    expectEqual("Cancelled edit does not submit on blur", events, 2);
+    tabs.onFocusChanged(true);
+    tabs.beginEdit(0);
+    tabs.onTextCommitted(L"Blur");
+    tabs.onFocusChanged(false);
+    expectEqual("Inline edit blur reason", static_cast<int>(reason), 2);
+    expectWideEqual("Inline edit blur value", result, L"Blur");
+    tabs.onFocusChanged(true);
+    tabs.beginEdit(0);
+    tabs.setTextComposition(L"拼", 1);
+    tabs.onKeyDown({oneui::Key::Enter});
+    expectEqual("IME Enter does not commit the label", tabs.editingIndex(), 0);
+    tabs.onKeyDown({oneui::Key::Escape});
+    expectEqual("IME Escape only clears preedit", tabs.editingIndex(), 0);
+    expectEqual("IME preedit cleared", tabs.hasTextComposition(), false);
+    tabs.clearInteractionState();
+    expectEqual("Pointer leaving tab does not cancel text edit", tabs.editingIndex(), 0);
+    tabs.setItems({L"Replacement", L"Other"});
+    expectEqual("Replacing items cancels old edit", tabs.editingIndex(), -1);
+    expectEqual("Replacing items reports cancellation", static_cast<int>(reason), 1);
+    tabs.beginEdit(0);
+    tabs.paint(canvas);
+    const auto editor = tabs.activeFocusChild();
+    const auto rect = editor->frame();
+    tabs.onMouseDown({{rect.x + 1, rect.y + 4}, oneui::MouseButton::Left});
+    tabs.onMouseMove({{rect.x + 80, rect.y + 4}, oneui::MouseButton::Left});
+    tabs.onMouseUp({{rect.x + 80, rect.y + 4}, oneui::MouseButton::Left});
+    expectEqual("Selecting label text never reorders tabs", reordered, 0);
+    expectEqual("Editor stays inside tab", rect.x >= 0 && rect.x + rect.width <= 340, true);
+    int invalidations = 0;
+    tabs.setInvalidator([&] { ++invalidations; });
+    tabs.paint(canvas);
+    invalidations = 0;
+    tabs.paint(canvas);
+    expectEqual("Painting inline edit does not schedule continuous layout", invalidations, 0);
+    tabs.setDisabled(true);
+    expectEqual("Disabled tab cancels edit", tabs.editingIndex(), -1);
+}
+
+void testTitleBarRoutesInlineEditorFocusAndTextThroughTheRealViewTree() {
+    oneui::View root;
+    auto title = std::make_shared<oneui::WindowTitleBar>(L"iShell Pro");
+    auto tabs = std::make_shared<oneui::Tabs>();
+    auto other = std::make_shared<oneui::Button>(L"Other");
+    tabs->setItems({L"Original"});
+    title->setAccessory(tabs);
+    title->setFrame({0, 0, 800, 39});
+    other->setFrame({10, 80, 100, 32});
+    root.setFrame({0, 0, 800, 400});
+    root.add(title);
+    root.add(other);
+    RecordingCanvas canvas;
+    root.paint(canvas);
+    expectEqual("Titlebar tab accepts native focus path", root.requestFocus(tabs.get(), true), true);
+    expectEqual("Titlebar inline edit starts", tabs->beginEdit(0), true);
+    std::wstring value;
+    auto reason = oneui::TabEditReason::Cancelled;
+    tabs->setOnEditFinished([&](int, const std::wstring& text, oneui::TabEditReason why) { value = text; reason = why; });
+    root.onTextCommitted(L"真实焦点路径");
+    root.onKeyDown({oneui::Key::Enter});
+    expectWideEqual("Root text reaches titlebar editor", value, L"真实焦点路径");
+    expectEqual("Root Enter submits editor", static_cast<int>(reason), 0);
+    tabs->beginEdit(0);
+    root.onTextCommitted(L"Blur target");
+    expectEqual("Other control gets focus", root.requestFocus(other.get(), true), true);
+    expectWideEqual("Root focus handoff commits editor", value, L"Blur target");
+    expectEqual("Root focus handoff keeps blur reason", static_cast<int>(reason), 2);
+    expectEqual("Focus is not reclaimed by tabs", other->focused(), true);
+}
+
 void testTabsCompactSizingAndCloseInteraction() {
     oneui::Tabs tabs;
     tabs.setItems({L"SSH - production"});
@@ -661,6 +797,38 @@ void testRadioGroupNoopOnChanged() {
     group.setSelectedIndex(2);
 
     expectEqual("RadioGroup same-value setSelectedIndex", changes, 0);
+}
+
+void testLongSelectScrollsWithinViewportAndRevealsKeyboardSelection() {
+    oneui::Select select;
+    select.setFrame({20.0f, 20.0f, 200.0f, 32.0f});
+    std::vector<std::wstring> items;
+    for (int i = 0; i < 100; ++i) { items.push_back(L"Option " + std::to_wstring(i)); }
+    select.setItems(items);
+    RecordingCanvas canvas;
+    canvas.viewportOverride = oneui::Rect{0.0f,0.0f,800.0f,700.0f};
+    select.paint(canvas);
+    select.onKeyDown(oneui::KeyEvent{oneui::Key::Enter});
+    RecordingCanvas opened;
+    opened.viewportOverride = canvas.viewportOverride;
+    select.paint(opened);
+    expectTrue("Long select limits rendered rows", opened.texts.size() <= 9);
+    expectTrue("Long select handles wheel", select.onMouseWheel({{30.0f,65.0f},-2.0f}));
+    select.onMouseDown({{30.0f,65.0f}});
+    select.onMouseUp({{30.0f,65.0f}});
+    expectEqual("Wheel exposes later options", select.selectedIndex(),6);
+    select.onKeyDown(oneui::KeyEvent{oneui::Key::Enter});
+    select.onKeyDown(oneui::KeyEvent{oneui::Key::End});
+    RecordingCanvas atEnd;
+    atEnd.viewportOverride = canvas.viewportOverride;
+    select.paint(atEnd);
+    expectTrue("End option is painted", std::any_of(atEnd.texts.begin(),atEnd.texts.end(),[](const auto& call){return call.text==L"Option 99";}));
+    select.onKeyDown(oneui::KeyEvent{oneui::Key::Enter});
+    expectEqual("End commits last option",select.selectedIndex(),99);
+    select.onKeyDown(oneui::KeyEvent{oneui::Key::Enter});
+    select.onKeyDown(oneui::KeyEvent{oneui::Key::Home});
+    select.onKeyDown(oneui::KeyEvent{oneui::Key::Escape});
+    expectEqual("Escape preserves long select value",select.selectedIndex(),99);
 }
 
 void testSelectNoopOnChanged() {
@@ -1549,6 +1717,38 @@ void testViewCanRequestFocusForNestedDescendant() {
     expectEqual("View requestFocus keeps focus visible", field->focusVisible() ? 1 : 0, 1);
     expectEqual("View requestFocus routes text input", root->onTextInput(L'x') ? 1 : 0, 1);
     expectWideEqual("View requestFocus edits nested field", field->text(), L"x");
+}
+
+void testModalOverlayFitsSmallViewport() {
+    oneui::OverlayHost host;
+    host.setFrame(oneui::Rect{0, 0, 800, 700});
+    auto dialog = std::make_shared<oneui::View>();
+    host.addAnchoredOverlay(dialog, oneui::OverlayOptions::modal(),
+                            oneui::Size{820, 760}, oneui::Insets{}, 1, 1);
+    RecordingCanvas canvas;
+    host.paint(canvas);
+    const auto frame = dialog->frame();
+    expectEqual("modal width fits viewport with edge breathing room", static_cast<int>(frame.width), 768);
+    expectEqual("modal height fits viewport with edge breathing room", static_cast<int>(frame.height), 668);
+    expectEqual("modal centered horizontally", static_cast<int>(frame.x), 16);
+    expectEqual("modal centered vertically", static_cast<int>(frame.y), 16);
+}
+
+void testOverlayRequestsFocusInsidePopup() {
+    oneui::OverlayHost root;
+    auto popup = std::make_shared<oneui::Popup>();
+    auto content = std::make_shared<oneui::View>();
+    auto close = std::make_shared<oneui::Button>(L"Close");
+    auto search = std::make_shared<oneui::TextField>(L"Search tags");
+    content->add(close); content->add(search);
+    popup->setContent(content); root.addOverlay(popup, 1); popup->setOpen(true);
+    expectEqual("popup search can receive explicit focus", root.requestFocus(search.get(), true) ? 1 : 0, 1);
+    expectEqual("popup search owns focus", search->focused() ? 1 : 0, 1);
+    expectEqual("popup close no longer owns focus", close->focused() ? 1 : 0, 0);
+    expectEqual("popup search receives typing", root.onTextInput(L'x') ? 1 : 0, 1);
+    expectWideEqual("popup search contains typed text", search->text(), L"x");
+    popup->setOpen(false);
+    expectEqual("closed popup rejects focus", root.requestFocus(search.get(), true) ? 1 : 0, 0);
 }
 
 void testViewTooltipUsesDeepestVisibleEnabledChild() {
@@ -3239,6 +3439,43 @@ void testPointerActivationUsesSystemClickCountAndSeparateContextAction() {
     expectEqual("VirtualList double click activates the row", activated, 1);
 }
 
+void testInteractiveSurfaceDragLifecycle() {
+    oneui::View root;
+    root.setFrame({0,0,600,400});
+    auto handle = std::make_shared<oneui::InteractiveSurface>();
+    handle->setFrame({20,20,120,36});
+    root.add(handle);
+    int clicks=0;
+    std::vector<oneui::PointerDragEvent> events;
+    handle->setOnClick([&]{++clicks;});
+    handle->setOnDrag([&](const oneui::PointerDragEvent& event){events.push_back(event);},7);
+    auto down=oneui::MouseEvent{{30,30},oneui::MouseButton::Left};
+    root.onMouseDown(down);
+    root.onMouseMove(oneui::MouseEvent{{34,32}});
+    root.onMouseUp(down);
+    expectEqual("subthreshold gesture clicks",clicks,1);
+    expectEqual("subthreshold gesture no drag",static_cast<int>(events.size()),0);
+    root.onMouseDown(down);
+    root.onMouseMove(oneui::MouseEvent{{40,30}});
+    root.onMouseMove(oneui::MouseEvent{{300,200}});
+    root.onMouseUp(oneui::MouseEvent{{300,200},oneui::MouseButton::Left});
+    expectEqual("drag lifecycle has start update drop",static_cast<int>(events.size()),3);
+    expectEqual("drag origin stays at press",static_cast<int>(events[1].origin.x),30);
+    expectEqual("drag continues outside handle",static_cast<int>(events[1].pointer.position.x),300);
+    expectEqual("drag ends as drop",static_cast<int>(events.back().phase),2);
+    expectEqual("drag suppresses click",clicks,1);
+    root.onMouseDown(down);
+    root.onMouseMove(oneui::MouseEvent{{45,30}});
+    root.onKeyDown(oneui::KeyEvent{oneui::Key::Escape});
+    expectEqual("escape cancels drag",static_cast<int>(events.back().phase),3);
+    root.onMouseUp(down);
+    expectEqual("escape suppresses release click",clicks,1);
+    root.onMouseDown(down);
+    root.onMouseMove(oneui::MouseEvent{{45,30}});
+    handle->setDisabled(true);
+    expectEqual("disable cancels active drag",static_cast<int>(events.back().phase),3);
+}
+
 void testInteractiveSurfaceKeepsSemanticAndNestedKeyboardTargetsDistinct() {
     oneui::View root;
     root.setFrame(oneui::Rect{0.0f, 0.0f, 260.0f, 100.0f});
@@ -3753,7 +3990,7 @@ void testTableStyleOverridePaintsCustomColorsAndGeometry() {
 void testTableRichCellsAndColumnDividerVisibility() {
     oneui::Table table;
     table.setColumns({
-        oneui::TableColumn{L"Device", 120.0f},
+        oneui::TableColumn{L"Device", 160.0f},
         oneui::TableColumn{L"Status", 0.0f},
     });
     oneui::TableCell device;
@@ -3789,6 +4026,96 @@ void testTableRichCellsAndColumnDividerVisibility() {
         countLinesWithColor(canvas, oneui::theme().border),
         2);
     expectEqual("Table rich status paints indicator", countFillEllipsesWithColor(canvas, oneui::Color{25, 185, 76}), 2);
+}
+
+void testWidgetSizeObserverUsesCommittedGeometryAndStableChildren() {
+    auto first = std::make_shared<LayoutProbe>(oneui::Size{0, 46});
+    auto second = std::make_shared<LayoutProbe>(oneui::Size{0, 46});
+    oneui::Stack stack;
+    stack.add(first); stack.add(second); stack.setGap(8);
+    int calls = 0;
+    stack.setOnSizeChanged([&](oneui::Size size) {
+        ++calls;
+        expectNear("Size observer sees committed width",stack.frame().width,size.width);
+        stack.setDirection(size.width < 340 ? oneui::StackDirection::Column : oneui::StackDirection::Row);
+    });
+    stack.setFrame({0,0,240,100}); RecordingCanvas narrow; stack.paint(narrow);
+    expectNear("Narrow second item is on next row",second->frame().y,54);
+    stack.setFrame({0,0,700,100}); RecordingCanvas wide; stack.paint(wide);
+    expectNear("Widening immediately restores columns",second->frame().y,0);
+    expectNear("Wide second item has equal column",second->frame().x,354);
+    expectTrue("Responsive layout preserves first object",stack.children().front().get() == first.get());
+    stack.setFrame({10,20,700,100});
+    expectEqual("Position-only moves do not notify size",calls,2);
+    stack.setOnSizeChanged([&](oneui::Size) { ++calls; stack.setOnSizeChanged({}); });
+    stack.setFrame({10,20,701,100}); stack.setFrame({10,20,702,100});
+    expectEqual("Observer may clear itself safely",calls,3);
+}
+
+void testTableRichDetailsAndCellActions() {
+    oneui::Table table;
+    table.setColumns({{L"Process", 0.0f}, {L"CPU", 50.0f}, {L"", 28.0f}});
+    table.setColumnPresentation(1, oneui::TextAlign::Right, false);
+    table.setColumnPresentation(2, oneui::TextAlign::Center, true);
+    table.setHeaderHeight(26.0f);
+    oneui::TableStyleOverride presentation; presentation.cellPadding = oneui::Insets{0,4,0,4};
+    table.setStyleOverride(presentation);
+    table.setRowHeight(46.0f);
+    table.setColumnDividersVisible(false);
+    table.setFrame({0, 0, 240, 120});
+    oneui::TableCell name; name.text = L"api"; name.detail = L"3124 deploy"; name.badge = L"S";
+    oneui::TableCell cpu; cpu.text = L"12.8%"; cpu.alignment = oneui::TextAlign::Right;
+    oneui::TableCell action; action.leadingIcon = oneui::IconSymbol::OutlineMore; action.iconSize = 14;
+    table.setRichRows({{name, cpu, action}, {name, cpu, action}});
+    RecordingCanvas canvas; table.paint(canvas);
+    const auto detail = std::find_if(canvas.texts.begin(),canvas.texts.end(),[](const auto& c){return c.text == L"3124 deploy";});
+    expectTrue("Table paints second line", detail != canvas.texts.end());
+    if (detail != canvas.texts.end()) expectNear("Table detail uses second baseline", detail->rect.y, 50.0f);
+    const auto cpuText = std::find_if(canvas.texts.begin(),canvas.texts.end(),[](const auto& c){return c.text == L"12.8%";});
+    expectTrue("Table preserves numeric alignment", cpuText != canvas.texts.end() && cpuText->align == oneui::TextAlign::Right);
+    expectEqual("Table balances per-cell clipping", canvas.saves, canvas.restores);
+    int calls = 0, row = -1, column = -1;
+    table.setOnCellAction([&](int r,int c){++calls;row=r;column=c;});
+    const oneui::MouseEvent click{{226,49},oneui::MouseButton::Left};
+    table.onMouseDown(click); table.onMouseUp(click);
+    expectEqual("Table action pointer count",calls,1); expectEqual("Table action row",row,0); expectEqual("Table action column",column,2);
+    table.onMouseDown(click); table.onMouseUp({{180,49},oneui::MouseButton::Left});
+    expectEqual("Table release in different column does not act",calls,1);
+    table.setSelectedIndex(1); table.onKeyDown({oneui::Key::Space});
+    expectEqual("Table keyboard action count",calls,2); expectEqual("Table keyboard selected row",row,1);
+    table.setDisabled(true); table.onKeyDown({oneui::Key::Space});
+    expectEqual("Table disabled action does not run",calls,2);
+}
+
+void testProgressBarSegmentBoundsAndValidation() {
+    oneui::ProgressBar bar;
+    bar.setFrame({0,0,200,4});
+    const oneui::Color blue{30,130,230}, green{20,180,120};
+    expectTrue("Progress segments accepted",bar.setSegments({{0.4,blue,L"Used"},{0.3,green,L"Cache"}}));
+    expectNear("Progress aggregate value",static_cast<float>(bar.value()),0.7f);
+    RecordingCanvas canvas; bar.paint(canvas);
+    expectEqual("Progress segment clips",static_cast<int>(canvas.clips.size()),2);
+    if (canvas.clips.size()==2) {
+        expectRect("Progress first fraction",canvas.clips[0],{0,0,80,4});
+        expectRect("Progress second fraction",canvas.clips[1],{80,0,60,4});
+    }
+    expectTrue("Progress rejects negative fraction",!bar.setSegments({{-0.1,blue,L"Invalid"}}));
+    expectTrue("Progress rejects nonfinite fraction",!bar.setSegments({{std::numeric_limits<double>::infinity(),blue,L"Invalid"}}));
+    expectNear("Progress invalid keeps previous value",static_cast<float>(bar.value()),0.7f);
+    bar.setSegments({{0.8,blue,L"A"},{0.8,green,L"B"}});
+    RecordingCanvas overflow; bar.paint(overflow);
+    expectNear("Progress total saturates",static_cast<float>(bar.value()),1.0f);
+    if (overflow.clips.size()==2) expectRect("Progress overflow ends at edge",overflow.clips[1],{160,0,40,4});
+    expectTrue("Progress accessible total matches clipping", bar.accessibilityInfo().value.find(L"20.0%") != std::wstring::npos);
+    bar.setFrame({0,0,4,200}); bar.setSegments({{0.4,blue,L"Used"},{0.3,green,L"Cache"}});
+    RecordingCanvas vertical; bar.paint(vertical);
+    if (vertical.clips.size()==2) {
+        expectRect("Progress vertical first fraction",vertical.clips[0],{0,120,4,80});
+        expectRect("Progress vertical second fraction",vertical.clips[1],{0,60,4,60});
+    }
+    bar.setValue(0.5); RecordingCanvas plain; bar.paint(plain);
+    expectEqual("Progress scalar clears segment clips",static_cast<int>(plain.clips.size()),0);
+    bar.setSegments({}); expectNear("Progress empty resets value",static_cast<float>(bar.value()),0.0f);
 }
 
 void testTableEmptyStyleOverrideKeepsDefaultPaint() {
@@ -4969,6 +5296,72 @@ void testTextAreaSupportsMultilineEditingAndLineNavigation() {
     expectEqual("TextArea text input emits", changes, 2);
 }
 
+void testTextAreaControlEnterSubmitsWithoutEditing() {
+    oneui::TextArea area(L"Ask a question");
+    area.setFrame(oneui::Rect{0.0f, 0.0f, 320.0f, 120.0f});
+    area.onFocusChanged(true);
+    area.setText(L"explain this output");
+    int submissions = 0;
+    std::wstring submitted;
+    area.setOnSubmitted([&](const std::wstring& value) {
+        ++submissions;
+        submitted = value;
+    });
+
+    oneui::KeyEvent submit{oneui::Key::Enter};
+    submit.control = true;
+    expectEqual(
+        "TextArea Control+Enter is handled by submit callback",
+        area.onKeyDown(submit) ? 1 : 0,
+        1);
+    expectEqual("TextArea Control+Enter submits once", submissions, 1);
+    expectWideEqual(
+        "TextArea Control+Enter submits current value",
+        submitted,
+        L"explain this output");
+    expectWideEqual(
+        "TextArea Control+Enter does not mutate text",
+        area.text(),
+        L"explain this output");
+
+    oneui::KeyEvent plain{oneui::Key::Enter};
+    expectEqual(
+        "TextArea plain Enter keeps multiline editing",
+        area.onKeyDown(plain) ? 1 : 0,
+        1);
+    expectEqual("TextArea plain Enter does not submit", submissions, 1);
+    expectWideEqual(
+        "TextArea plain Enter inserts a newline",
+        area.text(),
+        L"explain this output\n");
+}
+
+void testTextAreaOptionalEnterSubmitPreservesShiftEnterEditing() {
+    oneui::TextArea area(L"Ask a question");
+    area.setFrame(oneui::Rect{0.0f, 0.0f, 320.0f, 120.0f});
+    area.onFocusChanged(true);
+    area.setText(L"first line");
+    area.setSubmitOnEnter(true);
+    int submissions = 0;
+    std::wstring submitted;
+    area.setOnSubmitted([&](const std::wstring& value) {
+        ++submissions;
+        submitted = value;
+    });
+
+    oneui::KeyEvent plain{oneui::Key::Enter};
+    expectEqual("TextArea optional Enter submit is handled", area.onKeyDown(plain) ? 1 : 0, 1);
+    expectEqual("TextArea optional Enter submits once", submissions, 1);
+    expectWideEqual("TextArea optional Enter submits current value", submitted, L"first line");
+    expectWideEqual("TextArea optional Enter does not edit", area.text(), L"first line");
+
+    oneui::KeyEvent shifted{oneui::Key::Enter};
+    shifted.shift = true;
+    expectEqual("TextArea Shift+Enter keeps editing", area.onKeyDown(shifted) ? 1 : 0, 1);
+    expectEqual("TextArea Shift+Enter does not submit", submissions, 1);
+    expectWideEqual("TextArea Shift+Enter inserts newline", area.text(), L"first line\n");
+}
+
 void testTextAreaReadOnlyDocumentScrollsWithWheelAndKeyboard() {
     oneui::TextArea area;
     area.setFrame(oneui::Rect{0.0f, 0.0f, 320.0f, 96.0f});
@@ -5011,6 +5404,22 @@ void testImageViewOwnsValidatedRgbaPixels() {
     expectTrue("image view reports owned image", image.hasImage() && image.imageWidth() == 2 && image.imageHeight() == 2);
     image.clearImage();
     expectTrue("image view clears owned pixels", !image.hasImage());
+}
+
+void testImageViewSupportsActualSizeAndContentAlignment() {
+    oneui::ImageView image;
+    image.setContentMode(oneui::ImageContentMode::ActualSize);
+    image.setContentAlignment(
+        oneui::ImageContentAlignment::End,
+        oneui::ImageContentAlignment::Start);
+
+    expectTrue("image view keeps actual-size mode", image.contentMode() == oneui::ImageContentMode::ActualSize);
+    expectTrue(
+        "image view keeps horizontal content alignment",
+        image.horizontalContentAlignment() == oneui::ImageContentAlignment::End);
+    expectTrue(
+        "image view keeps vertical content alignment",
+        image.verticalContentAlignment() == oneui::ImageContentAlignment::Start);
 }
 
 void testTextAreaLongDocumentMeasurementIsLinearAndCached() {
@@ -5229,6 +5638,10 @@ void testTextFieldFocusedEmptyHidesPlaceholderAndOffsetsCaret() {
     RecordingCanvas focusedCanvas;
     field.paint(focusedCanvas);
     expectEqual("TextField focused empty hides placeholder", countTextsWithText(focusedCanvas, L"Enter code"), 0);
+    field.setPlaceholderVisibleWhenFocused(true);
+    RecordingCanvas optInCanvas;
+    field.paint(optInCanvas);
+    expectEqual("TextField can retain focused placeholder", countTextsWithText(optInCanvas, L"Enter code"), 1);
     expectEqual("TextField focused empty paints caret", countCaretRects(focusedCanvas), 1);
     if (!focusedCanvas.fillRects.empty()) {
         const auto caret = focusedCanvas.fillRects.back().rect;
@@ -7213,6 +7626,77 @@ void testSplitViewResizableDividerHonorsMinimumExtents() {
     expectEqual("Split capture loss commits the visible ratio once", commitCount, 2);
 }
 
+void testSplitViewKeyboardCancellationAndDoubleClick() {
+    auto split = std::make_shared<oneui::SplitView>();
+    split->setFrame({0, 0, 805, 400});
+    split->setGap(5);
+    split->setMinimumPaneExtent(220, 220);
+    split->setResizable(true);
+    auto first = std::make_shared<oneui::Button>(L"First");
+    auto second = std::make_shared<oneui::Button>(L"Second");
+    split->setFirst(first);
+    split->setSecond(second);
+    oneui::View root;
+    root.setFrame({0, 0, 805, 400});
+    root.add(split);
+    RecordingCanvas canvas;
+    root.paint(canvas);
+    int commits = 0;
+    float observed = 0.5f;
+    split->setOnSplitRatioChanged([&](float value) { observed = value; });
+    split->setOnSplitRatioCommitted([&](float) { ++commits; });
+    root.focusFirstLeaf();
+    expectEqual("Split first pane receives focus first", first->focused(), true);
+    root.onKeyDown(oneui::KeyEvent{oneui::Key::Right});
+    expectNear("Pane arrows cannot resize enclosing split", split->splitRatio(), 0.5f);
+    root.onKeyDown(oneui::KeyEvent{oneui::Key::Tab});
+    auto divider = split->activeFocusChild();
+    expectEqual("Tab exposes divider between panes", divider && divider.get() != first.get() && divider.get() != second.get(), true);
+    root.onKeyDown(oneui::KeyEvent{oneui::Key::Right});
+    expectNear("Divider arrow step is 2.5 percent", split->splitRatio(), 0.525f);
+    expectEqual("Keyboard resize commits once", commits, 1);
+    root.onKeyDown(oneui::KeyEvent{oneui::Key::Home});
+    expectNear("Home respects first minimum", split->splitRatio(), 220.0f / 800.0f);
+    root.onKeyDown(oneui::KeyEvent{oneui::Key::End});
+    expectNear("End respects second minimum", split->splitRatio(), 580.0f / 800.0f);
+    root.onKeyDown(oneui::KeyEvent{oneui::Key::Tab});
+    expectEqual("Tab leaves divider for second pane", second->focused(), true);
+    split->setSplitRatio(0.5f);
+    root.paint(canvas);
+    root.onMouseDown({{402.5f, 100}});
+    root.onMouseMove({{550, 100}});
+    expectEqual("Drag previews changed ratio", split->splitRatio() > 0.6f, true);
+    const int beforeCancel = commits;
+    root.onKeyDown(oneui::KeyEvent{oneui::Key::Escape});
+    expectNear("Escape restores start ratio", split->splitRatio(), 0.5f);
+    expectNear("Rollback notifies bound ratio", observed, 0.5f);
+    root.onMouseUp({{550, 100}});
+    expectEqual("Cancelled gesture cannot commit on release", commits, beforeCancel);
+    split->setSplitRatio(0.65f);
+    root.paint(canvas);
+    oneui::MouseEvent doubleClick{{522.5f, 100}};
+    doubleClick.clickCount = 2;
+    root.onMouseDown(doubleClick);
+    root.onMouseUp(doubleClick);
+    expectNear("Double click equalizes", split->splitRatio(), 0.5f);
+    expectEqual("Double click commits once", commits, beforeCancel + 1);
+    split->setOrientation(oneui::SplitOrientation::Vertical);
+    split->setMinimumPaneExtent(100, 100);
+    root.paint(canvas);
+    root.onMouseDown({{100, 200}});
+    root.onMouseUp({{100, 200}});
+    root.onKeyDown(oneui::KeyEvent{oneui::Key::Down});
+    expectNear("Vertical divider down increases first pane", split->splitRatio(), 0.525f);
+    root.onKeyDown(oneui::KeyEvent{oneui::Key::Right});
+    expectNear("Orthogonal arrow does not resize", split->splitRatio(), 0.525f);
+    second->setVisible(false);
+    root.paint(canvas);
+    expectEqual("Single pane has no focusable divider", divider->isFocusable(), false);
+    split.reset(); // root still owns it; a retained divider is safe after both owners release.
+    root.clearChildren();
+    expectEqual("Retained divider after parent disposal is inert", divider->onKeyDown(oneui::KeyEvent{oneui::Key::Down}), false);
+}
+
 void testScrollViewWheelClampsToContentBounds() {
     auto content = std::make_shared<LayoutProbe>(oneui::Size{0.0f, 300.0f});
     oneui::ScrollView scroll;
@@ -7354,6 +7838,24 @@ void testPopupPlacementClampsOversizedPopup() {
     });
 
     expectRect("PopupPlacement oversized clamped rect", result.rect, oneui::Rect{5.0f, 7.0f, 180.0f, 90.0f});
+}
+
+void testDisabledDangerMenuUsesDisabledPresentationAndCannotActivate() {
+    oneui::Menu menu;
+    menu.addHeader(L"Process", L"Actions");
+    menu.addItem(L"Copy");
+    const int danger = menu.addItem(L"Terminate", std::nullopt, true);
+    menu.setItemDisabled(danger, true);
+    menu.setFrame({0,0,196,menu.preferredHeight()});
+    int action = -1; menu.setOnItemActivated([&](int i) { action = i; });
+    const oneui::MouseEvent pointer{{30,106},oneui::MouseButton::Left};
+    menu.onMouseDown(pointer); menu.onMouseUp(pointer);
+    expectEqual("Disabled danger action ignores pointer",action,-1);
+    menu.onKeyDown({oneui::Key::Down}); menu.onKeyDown({oneui::Key::Down}); menu.onKeyDown({oneui::Key::Enter});
+    expectEqual("Menu navigation skips disabled danger",action,0);
+    RecordingCanvas canvas; menu.paint(canvas);
+    expectEqual("Disabled danger gets disabled text",countTextsWithTextAndColor(canvas,L"Terminate",oneui::Color{182,188,199}),1);
+    expectEqual("Menu subtitle inherits neutral theme",countTextsWithTextAndColor(canvas,L"Actions",oneui::theme().textMuted),1);
 }
 
 void testMenuClearItemsResetsDynamicContent() {
@@ -7674,6 +8176,7 @@ int main() {
     testCompactSwitchPaintStaysInsideHitTarget();
     testSingleLineTextEllipsizesByMeasuredWidth();
     testWrappedLabelRespectsWidthHeightAndMaxLines();
+    testRichLabelPreservesInlineStylesAsOneParagraph();
     testWidgetAccessibilityInfoReflectsSemanticAndDynamicState();
     testCommonControlsExposeDefaultAccessibilityInfo();
     testSelectionAndDataControlsExposeDefaultAccessibilityInfo();
@@ -7682,6 +8185,8 @@ int main() {
     testSwitchNoopOnChanged();
     testSliderNoopOnChanged();
     testTabsNoopOnChanged();
+    testTabsInlineEditingUsesNativeTextAndStableLifecycle();
+    testTitleBarRoutesInlineEditorFocusAndTextThroughTheRealViewTree();
     testTabsCompactSizingAndCloseInteraction();
     testTabsCompactUsesMeasuredContentWidths();
     testTabsCompactOverflowWheelAndKeyboardNavigation();
@@ -7689,6 +8194,7 @@ int main() {
     testTabsReorderReportsRequestWithoutMutatingSelection();
     testTabsPaintOptionalLeadingIconsWithoutCrowdingText();
     testRadioGroupNoopOnChanged();
+    testLongSelectScrollsWithinViewportAndRevealsKeyboardSelection();
     testSelectNoopOnChanged();
     testListNoopOnChanged();
     testListSupportsOptionalSelection();
@@ -7728,6 +8234,8 @@ int main() {
     testHiddenPressedChildDoesNotReceiveMouseUp();
     testViewClearChildrenClearsFocusedAndPressedChild();
     testViewCanRequestFocusForNestedDescendant();
+    testModalOverlayFitsSmallViewport();
+    testOverlayRequestsFocusInsidePopup();
     testViewTooltipUsesDeepestVisibleEnabledChild();
     testViewMouseMoveDoesNotInvalidateSiblingsWhenHoverUnchanged();
     testViewMouseMoveKeepsSingleHoveredChild();
@@ -7777,6 +8285,7 @@ int main() {
     testReorderableGridEmitsExternalItemDragWithoutInternalReorder();
     testPointerActivationUsesSystemClickCountAndSeparateContextAction();
     testInteractiveSurfaceKeepsSemanticAndNestedKeyboardTargetsDistinct();
+    testInteractiveSurfaceDragLifecycle();
     testVirtualListCssControlsCompactTypographyAndScrollbar();
     testVirtualListPaintsRichOperationalRows();
     testTreeViewStyleAdapterSharesListContract();
@@ -7788,6 +8297,9 @@ int main() {
     testTableCssAdapterMapsNativeTableStates();
     testTableStyleOverridePaintsCustomColorsAndGeometry();
     testTableRichCellsAndColumnDividerVisibility();
+    testWidgetSizeObserverUsesCommittedGeometryAndStableChildren();
+    testTableRichDetailsAndCellActions();
+    testProgressBarSegmentBoundsAndValidation();
     testTableEmptyStyleOverrideKeepsDefaultPaint();
     testTableDisabledStyleAndClearRestoresDefault();
     testBadgeStyleOverridePaintsCustomColorsAndGeometry();
@@ -7825,8 +8337,11 @@ int main() {
     testTextFieldUndoRedoEditingPaths();
     testTextFieldUndoRedoTextInputAndBinding();
     testTextAreaSupportsMultilineEditingAndLineNavigation();
+    testTextAreaControlEnterSubmitsWithoutEditing();
+    testTextAreaOptionalEnterSubmitPreservesShiftEnterEditing();
     testTextAreaReadOnlyDocumentScrollsWithWheelAndKeyboard();
     testImageViewOwnsValidatedRgbaPixels();
+    testImageViewSupportsActualSizeAndContentAlignment();
     testTextAreaLongDocumentMeasurementIsLinearAndCached();
     testTextFieldDisabledDoesNotEditOrCut();
     testTextFieldReadOnlyAllowsSelectionCopyAndNavigationButNotMutation();
@@ -7882,6 +8397,7 @@ int main() {
     testSidebarNavItemsRemainVisibleAfterHoverSweep();
     testSplitViewRatioGapPaddingAndHiddenChild();
     testSplitViewResizableDividerHonorsMinimumExtents();
+    testSplitViewKeyboardCancellationAndDoubleClick();
     testScrollViewWheelClampsToContentBounds();
     testScrollViewNoOverflowDoesNotScrollOrPaintThumb();
     testScrollViewIgnoresWheelOutsideBounds();
@@ -7892,6 +8408,7 @@ int main() {
     testPopupPlacementRightStartFlipsWhenRightOverflows();
     testPopupPlacementLeftStartFlipsWhenLeftOverflows();
     testPopupPlacementClampsOversizedPopup();
+    testDisabledDangerMenuUsesDisabledPresentationAndCannotActivate();
     testMenuClearItemsResetsDynamicContent();
     testPopupDrawsBoxShadowWhenElevated();
     testPopupOutsideHitTestFollowsClosePolicy();

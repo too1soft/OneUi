@@ -14,16 +14,17 @@
 
 ## 内容契约
 
-网站和文档必须准确反映已接受的 runtime API。不要把尚未实现的 Linux/macOS 后端、完整 Popup 行为或完整文本系统写成已完成。
+网站和文档必须准确反映当前 runtime API，并区分源码实现、自动测试和原生验收。
+平台以[支持矩阵](37-native-desktop-backends.md)为准，文字以[升级状态](38-text-and-interaction-engine.md)为准。
 
 当前文档应明确：
 
 - OneUI 是原生 C++ 桌面 UI 框架。
 - Win32 后端已实现。
-- Linux/macOS 仍是后端 skeleton。
-- 渲染基础是 Skia raster。
+- Linux X11/Wayland 已在 WSLg 构建运行；Cocoa 源码已接入，待 Mac 构建。
+- 渲染基础是 Skia；Win32 默认尝试 OpenGL/Ganesh，保留 raster/GDI 回退。
 - 核心模型是 `Widget`、`View`、`Canvas`、`OverlayHost`。
-- 样式方向是 typed CSS-like style，而不是运行时 CSS parser。
+- 样式由运行时 CSS-like 子集解析器与 typed adapter 共同提供，不承诺浏览器 CSS 兼容。
 - 作者体验方向是 HTML/Vue3/MVVM。
 
 ## 已接受 API 摘要
@@ -82,4 +83,3 @@ npm run generate   # 产出静态站点用于发布
 ## SDK 打包
 
 `scripts/package-sdk.ps1` 会复制 `docs/*.md`，并在 `website/` 存在时把它纳入 SDK 的 `website/` 目录。
-

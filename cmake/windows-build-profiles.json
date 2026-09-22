@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "win7": {
+    "minimumOS": "Windows 7 SP1",
+    "minimumVersion": "6.1.7601",
+    "toolsetVersion": "14.44.35207",
+    "windowsSdkVersion": "10.0.22621.0",
+    "runtimeLibrary": "MultiThreaded",
+    "architectures": ["x86", "x64"]
+  },
+  "win10": {
+    "minimumOS": "Windows 10",
+    "minimumVersion": "10.0",
+    "toolsetVersion": "",
+    "windowsSdkVersion": "",
+    "runtimeLibrary": "MultiThreaded",
+    "architectures": ["x86", "x64"]
+  }
+}

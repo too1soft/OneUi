@@ -1,0 +1,340 @@
+{
+  "schemaVersion": 1,
+  "foundation": {
+    "files": [
+      {
+        "path": ".gitignore",
+        "size": 32,
+        "sha256": "2bb8a54125cdc0d427ace753a77125a8ebcf2fcd64d7e1c4411128f66a4cd562"
+      },
+      {
+        "path": "audit_windows.py",
+        "size": 7195,
+        "sha256": "b4faef7ea15ecf03ad7a7a2e65d3f5bb5fb4c321e3fb3ccf87604fe571fd7b24"
+      },
+      {
+        "path": "compat-policy.json",
+        "size": 1068,
+        "sha256": "78925580cb07cd7740cac0a44b8873bd166ed498f6883a1c7b87e7a62e3e0a62"
+      },
+      {
+        "path": "compat.py",
+        "size": 2531,
+        "sha256": "5b0b25afa12e1174fa11466447a98f0f85fb878cdae452c11239d1e2074a5433"
+      },
+      {
+        "path": "compatlib.py",
+        "size": 12726,
+        "sha256": "46c9fb30f941ce67de39d90999fc74bd33f8e173ffb76e8971602c1e84006007"
+      },
+      {
+        "path": "distribution.py",
+        "size": 5339,
+        "sha256": "592f1959bfb9dc874ff61707c928c520a7afbf2af10e1c5167812ebf25f1f5ef"
+      },
+      {
+        "path": "docs/architecture.md",
+        "size": 2887,
+        "sha256": "604d36ecff2d5b155d68c3bc029768237bb7b8ab2a7dd8f4ee441534c945d47b"
+      },
+      {
+        "path": "docs/builds.md",
+        "size": 4141,
+        "sha256": "be78341ec40422e2f26c7ec7cf0dd06fbcafb8cd09751a9e00934eb3c8368abe"
+      },
+      {
+        "path": "docs/distribution-v2.md",
+        "size": 4116,
+        "sha256": "02cfb9523b2e94e4e1233b7d2dcfa983bdbe4fcb0981dd3ae1fcab7fa28fc0ae"
+      },
+      {
+        "path": "docs/native-acceptance.md",
+        "size": 2802,
+        "sha256": "6a9240b03388824d2b2a688e92790078b37971e451a4508c29e6a2093ae0575a"
+      },
+      {
+        "path": "docs/progress-20260908.md",
+        "size": 6360,
+        "sha256": "8d62639035919d44a3ff3fa235a49cb8542a08f7cb567a5fcc7d136d01830d3c"
+      },
+      {
+        "path": "docs/progress-20260909.md",
+        "size": 8292,
+        "sha256": "560720599c7b060f422df4e4e42be285c8617d3f5cc9436561528ab5299bf4e8"
+      },
+      {
+        "path": "docs/release-rollback.md",
+        "size": 3235,
+        "sha256": "ea5ef319fd49fa1a80bc8412f817f8174db52bdc28a8f1604213d85056047cb8"
+      },
+      {
+        "path": "examples/c/identity.c",
+        "size": 391,
+        "sha256": "6a1852ac62200609199a8010f9e4e1247c206699daf0a3c2bb890e8140e929a2"
+      },
+      {
+        "path": "examples/go-public-tls/main.go",
+        "size": 1089,
+        "sha256": "c42dc81d8e90047cd069fe5d25427e0e365a9778639be89f1bd5dfbc482f9c26"
+      },
+      {
+        "path": "examples/go/go.mod",
+        "size": 40,
+        "sha256": "38cad89f5966abb43b63ef62c58cbb472dd578377106d7c647c7ecfbfafeb532"
+      },
+      {
+        "path": "examples/go/main.go",
+        "size": 5361,
+        "sha256": "817ae5a08c2346a9cde3478a0544331ef83badd8d6a234f069264c8b525b4195"
+      },
+      {
+        "path": "examples/go/system_other.go",
+        "size": 219,
+        "sha256": "d8c06d7ff86ddfe45ece308dee3c0a639221a0ec7c1bf0076c23dcd931723817"
+      },
+      {
+        "path": "examples/go/system_windows.go",
+        "size": 1492,
+        "sha256": "5eb9b1f8fa27ad32a1c2e89c44ec1c790ba9b24810d9b925c95c865a2e6ba289"
+      },
+      {
+        "path": "go-source.lock.json",
+        "size": 1178,
+        "sha256": "6234b776d6e3ed7757092909b20d754525fc74b01f4cff701c03f72acf572c5c"
+      },
+      {
+        "path": "include/windows_compat.h",
+        "size": 2006,
+        "sha256": "73304a3231f41277b07151015c3d1bcd0a37e511f73f5857153c26a9453e0a90"
+      },
+      {
+        "path": "patches/go1.25.14-core.patch",
+        "size": 13404,
+        "sha256": "16758c38727ccdf48443cd387643ab54882a4b4efeb7832ffb4fb299234d2e21"
+      },
+      {
+        "path": "patches/go1.25.14-readdir-sp1.patch",
+        "size": 2702,
+        "sha256": "247324b657caacef5699e3d23289cee3fa278601b9e03b9d04093906e00f0d34"
+      },
+      {
+        "path": "patches/go1.25.14-root-sp1.patch",
+        "size": 1751,
+        "sha256": "9c89783f8ca4e03128fb1c265b0c28cbaf271e834e3052bde0f4683caf0fb655"
+      },
+      {
+        "path": "patches/go1.25.14-sp1.patch",
+        "size": 12026,
+        "sha256": "4c090fd16536de543075ad5923948580ce091b073897b4fddd0d70435dedc5ed"
+      },
+      {
+        "path": "patches/LICENSE-go-win7.txt",
+        "size": 1493,
+        "sha256": "9c8d20126a6d20ffcb5613a006a912e0782cccffb0d2ef44856e4d3a6d05c5f7"
+      },
+      {
+        "path": "README.md",
+        "size": 2191,
+        "sha256": "f2eb94c9307226f11a8fc32fa551b4d746ff7fa80079e886eef02d9ea06e4623"
+      },
+      {
+        "path": "runtime/go/cmd/authenticode-probe/main_windows_test.go",
+        "size": 633,
+        "sha256": "e312f23f2935f763f5d01cc59ab9497e04ef7827725f5edcff23f3fcd5c0b027"
+      },
+      {
+        "path": "runtime/go/cmd/authenticode-probe/main_windows.go",
+        "size": 4277,
+        "sha256": "89a3d395dac376e8318e9ebd3222a40e193974b8798a4db2adccf0fec069ae65"
+      },
+      {
+        "path": "runtime/go/go.mod",
+        "size": 57,
+        "sha256": "497fc4e0ad49463e097ddfe9203881673bc3b3e237444ae959dedacbbc4d20fe"
+      },
+      {
+        "path": "runtime/go/identity_other.go",
+        "size": 167,
+        "sha256": "a593c8f4b23b017c9b63fb16519e70a239ec7a78a9941bc7a73bc5ad3458b64d"
+      },
+      {
+        "path": "runtime/go/identity_test.go",
+        "size": 532,
+        "sha256": "3fdeb591a55637d97aafeda188761a7945d720a2b39ef06dda9789d90aa66210"
+      },
+      {
+        "path": "runtime/go/identity_windows_test.go",
+        "size": 521,
+        "sha256": "a1eec4f887bbc3f0439da3202577edb94e9d0ba2732fb6399a028a87b77e7bb9"
+      },
+      {
+        "path": "runtime/go/identity_windows.go",
+        "size": 1810,
+        "sha256": "1a564141298b831842b694aebcc1ec84452ce8054c6dbbf786a47218dd0a8620"
+      },
+      {
+        "path": "runtime/go/identity.go",
+        "size": 1489,
+        "sha256": "24d8a5d8a41b0798358e26d3328438865fc75dd241b75c5c709d7d3e22ff24fc"
+      },
+      {
+        "path": "runtime/go/reparse_other.go",
+        "size": 105,
+        "sha256": "1ee5a379f2dd1fbf47f3ff298cdab748f97ebb709e8dd718bd480564b7ce65f9"
+      },
+      {
+        "path": "runtime/go/reparse_windows.go",
+        "size": 193,
+        "sha256": "f3ac58a549e5e11952f762dcfeef4a38ccc437ceb83903ca5c7ca856cf7f405f"
+      },
+      {
+        "path": "runtime/go/signed_manifest_test.go",
+        "size": 3605,
+        "sha256": "65a8a881360b13168d0aa2a43f44d78864110a5a3a7857075241757b84ef3eae"
+      },
+      {
+        "path": "runtime/go/signed_manifest.go",
+        "size": 8227,
+        "sha256": "914547a6a1a4d0360222ad2f463f933efe20a6e4943fda92cf02ceaa10bd9c7d"
+      },
+      {
+        "path": "runtime/native/trust/certificates/certum-trusted-network-ca-2.der",
+        "size": 1494,
+        "sha256": "b676f2eddae8775cd36cb0f63cd1d4603961f49e6265ba013a2f0307b6d0b804"
+      },
+      {
+        "path": "runtime/native/trust/certificates/digicert-trusted-root-g4.der",
+        "size": 1428,
+        "sha256": "552f7bdcf1a7af9e6ce672017f4f12abf77240c78e761ac203d1d9d20ac89988"
+      },
+      {
+        "path": "runtime/native/trust/certificates/sources.json",
+        "size": 789,
+        "sha256": "6c0616ac090cfd4dcbb5cbe2b91ef3b9e95440b14dc68a772c0560602213d66b"
+      },
+      {
+        "path": "runtime/native/trust/probe.c",
+        "size": 4138,
+        "sha256": "7850650da4fdbe09b0a4c33ee86eedc261f230528a54a557c294a839335acdef"
+      },
+      {
+        "path": "runtime/native/trust/README.md",
+        "size": 3829,
+        "sha256": "0d62ee5764d1025c44fd74ffa5092aada0aeeb8057c172b516d4508a406686c9"
+      },
+      {
+        "path": "runtime/native/trust/trust.c",
+        "size": 7493,
+        "sha256": "1e033dfa7b48f1723b03c6180ac8187a2412464c2b1c76faf27340562336125a"
+      },
+      {
+        "path": "runtime/native/trust/trust.h",
+        "size": 587,
+        "sha256": "b5bc3da15a2c650bfba51666cd05e435f081363c9c13c3d10f09a1856c6c36b4"
+      },
+      {
+        "path": "runtime/rust/Cargo.toml",
+        "size": 395,
+        "sha256": "735c577522730822c934430a104971580f74182ab0a3c5e9a1c8194a565c7f03"
+      },
+      {
+        "path": "runtime/rust/src/canonical.rs",
+        "size": 2026,
+        "sha256": "142e5cab652f1eec8887228a7de440765211aacf83fe58bc8e26a64bd8e4e61e"
+      },
+      {
+        "path": "runtime/rust/src/lib.rs",
+        "size": 4841,
+        "sha256": "29c6a6ef306e2a0db83741ab64cff7dc30a2e41dc503d1072b52fe02714dc555"
+      },
+      {
+        "path": "scripts/build-go.ps1",
+        "size": 2123,
+        "sha256": "0aaa347ea5736996327d3080e34416d9469ec65b90d7331a298327bff9f204c0"
+      },
+      {
+        "path": "scripts/build-process-trust-probe.ps1",
+        "size": 5305,
+        "sha256": "d3610aff7733b37256c95098531efc040d0f3048ce4ee5291e229ec681be04d7"
+      },
+      {
+        "path": "scripts/build-wyc-windows.py",
+        "size": 11840,
+        "sha256": "7df9875cb86ec526f44982b218cad30a6548a24a2edcd1a8f4bf78e0d5c5f373"
+      },
+      {
+        "path": "scripts/package-oneui-sdk.py",
+        "size": 4534,
+        "sha256": "aa8a7586d001ac24931b9c4754a321d07389a2923bad081c953ccbf35569689c"
+      },
+      {
+        "path": "scripts/prepare-go.py",
+        "size": 2172,
+        "sha256": "b353cfee4bd3f9327df7bbaa03c280bd1d8bf4cf78eea3d0fa240f8296b94fee"
+      },
+      {
+        "path": "scripts/probe-authenticode-vm.py",
+        "size": 3049,
+        "sha256": "7dc17798a6ea0f4269ccf9ab2ffe382c34ea9c465c5d77313c25ab5a6b7209ee"
+      },
+      {
+        "path": "scripts/refresh-source-lock.ps1",
+        "size": 2314,
+        "sha256": "8949575986b457f3387dd763ea4c174181c043ba8b33b67e3af277b93a4e7c83"
+      },
+      {
+        "path": "scripts/run-vm-probe.py",
+        "size": 3769,
+        "sha256": "8ceefb3eee32b260a6705c8b9f92e719d207286eb39e5bc894939e9dfc2ff1f1"
+      },
+      {
+        "path": "scripts/seal-go-toolchain.py",
+        "size": 3179,
+        "sha256": "3020303ae2b85cc4ca5bb91763c0f5b51742fd6e5c81e0e7086fb38c894658c3"
+      },
+      {
+        "path": "scripts/seal-native-input.py",
+        "size": 1744,
+        "sha256": "9e600c81a0a3f33cc8f0bd6f92050f17972d3a44b36cfd2959380ffc067440ee"
+      },
+      {
+        "path": "scripts/stage-msys-compiler.py",
+        "size": 1786,
+        "sha256": "88ea6edecb232c0da8e3a8092f654a303e7003f023b7d74ed31391221fefd7c1"
+      },
+      {
+        "path": "scripts/stage-updater-inputs.py",
+        "size": 2331,
+        "sha256": "4dbaf7f282e10e948df31ae9b7c454780c5c0c5d30e0ef519b9e87d03f04b393"
+      },
+      {
+        "path": "scripts/test-process-trust.py",
+        "size": 6218,
+        "sha256": "f05a57f59e22ffd947191dc795d7ce21a186993d7cb27d6267a1073dc205f745"
+      },
+      {
+        "path": "tests/test_contracts.py",
+        "size": 3314,
+        "sha256": "95520a605281bce270961f05f6cf93ec3f5fcea5161c2b80280465815e11ef8b"
+      },
+      {
+        "path": "tests/test_distribution.py",
+        "size": 3238,
+        "sha256": "5e56d536475da681cd31b1b26390dba8ca630dee37354d0c9271b3f9523fe539"
+      },
+      {
+        "path": "tests/test_native_exceptions.py",
+        "size": 1718,
+        "sha256": "d047e924e0b27f8d08d42343c0830e3579fcb15c249a8fde14bfd6355512895c"
+      },
+      {
+        "path": "windows_pe.py",
+        "size": 6676,
+        "sha256": "ede22ca38005610714021ee044a6f1a251b33b89ca32772436093f46105bcee6"
+      }
+    ],
+    "policyVersion": "0.1.0"
+  },
+  "inputs": {},
+  "product": "oneui"
+}

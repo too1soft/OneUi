@@ -6,6 +6,8 @@
 #include <chrono>
 #include <cmath>
 #include <utility>
+#include <sstream>
+#include <iomanip>
 
 namespace oneui {
 namespace {
@@ -34,14 +36,41 @@ double currentTimeMs() {
 
 ProgressBar::ProgressBar() {
     setPreferredSize(Size{220.0f, 10.0f});
+    setAccessibleRole(AccessibilityRole::ProgressBar);
 }
 
 void ProgressBar::setValue(double value) {
-    const auto next = std::clamp(value, 0.0, 1.0);
-    if (valueBinding_.get(value_) == next) return;
+    const auto next = std::isfinite(value) ? std::clamp(value, 0.0, 1.0) : 0.0;
+    const bool hadSegments = !segments_.empty();
+    segments_.clear();
+    if (valueBinding_.get(value_) == next && !hadSegments) return;
     valueBinding_.set(next, value_);
     updateVisualValue(next);
+    setAccessibleValue(std::to_wstring(static_cast<int>(next * 100.0)) + L"%");
     invalidate();
+}
+
+bool ProgressBar::setSegments(std::vector<ProgressSegment> segments) {
+    // Validate the whole update before changing either semantic or painted state.
+    for (const auto& segment : segments) {
+        if (!std::isfinite(segment.fraction) || segment.fraction < 0.0) return false;
+    }
+    double next = 0.0;
+    for (auto& segment : segments) {
+        segment.fraction = std::min(segment.fraction, 1.0 - next);
+        next += segment.fraction;
+    }
+    valueBinding_.set(next, value_);
+    segments_ = std::move(segments);
+    updateVisualValue(next);
+    std::wostringstream label;
+    for (const auto& segment : segments_) {
+        if (label.tellp() > 0) label << L", ";
+        label << segment.label << L" " << std::fixed << std::setprecision(1) << segment.fraction * 100.0 << L"%";
+    }
+    setAccessibleValue(segments_.empty() ? L"0%" : label.str());
+    invalidate();
+    return true;
 }
 
 double ProgressBar::value() const {
@@ -49,6 +78,7 @@ double ProgressBar::value() const {
 }
 
 void ProgressBar::bindValue(State<double>& state) {
+    segments_.clear();
     valueBinding_ = Binding<double>(state, [this] {
         updateVisualValue(valueBinding_.get(value_));
         invalidate();
@@ -143,6 +173,30 @@ void ProgressBar::paint(Canvas& canvas) {
         return;
     }
     if (progress <= 0.0f) {
+        return;
+    }
+
+    if (!segments_.empty()) {
+        const bool vertical = rect.height > rect.width * 1.5f;
+        const Rect filled = vertical
+            ? Rect{rect.x, rect.y + rect.height * (1.0f - progress), rect.width, rect.height * progress}
+            : Rect{rect.x, rect.y, rect.width * progress, rect.height};
+        const double scale = value() > 0.0 ? progress / value() : 0.0;
+        double start = 0.0;
+        for (const auto& segment : segments_) {
+            const double end = std::min(1.0, start + segment.fraction);
+            if (end > start) {
+                const Rect clip = vertical
+                    ? Rect{rect.x, rect.y + rect.height * static_cast<float>(1.0 - end * scale), rect.width, rect.height * static_cast<float>((end - start) * scale)}
+                    : Rect{rect.x + rect.width * static_cast<float>(start * scale), rect.y, rect.width * static_cast<float>((end - start) * scale), rect.height};
+                canvas.save();
+                canvas.clipRect(clip);
+                canvas.fillRect(filled, disabled() ? style.disabledFill : segment.color, style.radius);
+                canvas.restore();
+            }
+            start = end;
+            if (start >= 1.0) break;
+        }
         return;
     }
 

@@ -2,6 +2,10 @@
 
 日期：2026-05-26
 
+维护说明：本文产品/框架边界继续有效；后文可行性分析中的阶段性组件状态是历史背景。
+当前能力以[组件清单](07-component-inventory.md)为准；Win32 已有 GPU/raster 双路径，
+见[渲染说明](39-rendering-and-validation.md)，不能将早期软件默认路线当作当前运行时选择。
+
 ## 你的要求，必须逐条执行
 
 以下内容是下游产品接入 OneUI 的硬性要求，不是建议：
@@ -196,7 +200,7 @@ Win7 限制较多，尤其是 DirectComposition、现代透明窗口、部分字
 
 应对方式：
 
-- Win32 + Skia raster 作为保守默认后端。
+- Win32 保留 Skia raster/GDI 兼容回退；当前默认尝试 OpenGL/Ganesh，失败时回退。
 - 高性能视频画面单独做 `RealtimeFrameView`，后续按平台优化。
 - UI 控件优先稳定，不依赖 WebView。
 

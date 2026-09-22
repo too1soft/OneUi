@@ -15,6 +15,8 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
+#include <shellapi.h>
+#include <shlobj_core.h>
 #include "support/win32_input_fixture.h"
 #endif
 
@@ -27,6 +29,49 @@ void expectTrue(const char* name, bool value) {
         std::cerr << name << " failed\n";
         ++failures;
     }
+}
+
+void testSliderAbiIsNullSafeAndSeparatesInputFromSetters() {
+    oneui_slider_set_range(nullptr, 0, 60);
+    oneui_slider_set_step(nullptr, 0.1);
+    oneui_slider_set_value(nullptr, 3);
+    oneui_slider_set_on_interaction(nullptr, nullptr, nullptr);
+    oneui_slider_cancel_interaction(nullptr);
+    expectTrue("null slider value", oneui_slider_value(nullptr) == 0);
+    expectTrue("null slider capture", oneui_slider_is_dragging(nullptr) == 0);
+    auto* slider = oneui_slider_create();
+    int sliderCalls = 0;
+    oneui_slider_set_on_interaction(slider, [](int, double, void* state) { ++*static_cast<int*>(state); }, &sliderCalls);
+    oneui_slider_set_range(slider, 0, 60);
+    oneui_slider_set_step(slider, 0.5);
+    oneui_slider_set_value(slider, 12.3);
+    expectTrue("slider stepped value through ABI", oneui_slider_value(slider) == 12.5);
+    expectTrue("slider setters are not gestures", sliderCalls == 0);
+    oneui_slider_set_on_interaction(slider, nullptr, nullptr);
+    oneui_widget_destroy(slider);
+}
+
+void testTabInlineEditAbiIsNullSafeAndReportsUtf8() {
+    expectTrue("null tabs cannot edit", oneui_tabs_begin_edit(nullptr, 0) == 0);
+    expectTrue("null tabs are not editing", oneui_tabs_editing_index(nullptr) == -1);
+    oneui_tabs_cancel_edit(nullptr);
+    oneui_tabs_set_on_edit_finished(nullptr, nullptr, nullptr);
+    auto* tabs = oneui_tabs_create();
+    const std::string name = "生产🚀";
+    const OneUiUtf8String item{name.data(), name.size()};
+    oneui_tabs_set_items_utf8(tabs, &item, 1);
+    struct Result { int calls = 0; int reason = -1; std::string value; } result;
+    oneui_tabs_set_on_edit_finished(tabs, [](int index, const char* text, size_t length, int reason, void* data) {
+        auto& result = *static_cast<Result*>(data);
+        result.calls += index == 0 ? 1 : 100;
+        result.reason = reason;
+        result.value.assign(text, length);
+    }, &result);
+    expectTrue("tabs valid begin edit", oneui_tabs_begin_edit(tabs, 0) == 1);
+    oneui_tabs_cancel_edit(tabs);
+    expectTrue("tabs edit callback UTF8", result.calls == 1 && result.reason == 1 && result.value == name);
+    oneui_tabs_set_on_edit_finished(tabs, nullptr, nullptr);
+    oneui_widget_destroy(tabs);
 }
 
 OneUiUtf8String utf8View(const std::string& value) {
@@ -54,10 +99,167 @@ struct WindowRawKeyState {
     int calls = 0;
 };
 
+struct WindowActivationState {
+    std::vector<int> values;
+};
+
+struct WindowCloseRequestState {
+    OneUiWindow* window = nullptr;
+    int calls = 0;
+    int forceExit = -1;
+};
+
+void onWindowCloseRequested(int forceExit, void* userData) {
+    auto* state = static_cast<WindowCloseRequestState*>(userData);
+    if (!state || !state->window) {
+        return;
+    }
+    ++state->calls;
+    state->forceExit = forceExit;
+    oneui_window_set_close_to_tray(state->window, 0);
+    oneui_window_close(state->window);
+}
+
+void onWindowActivationChanged(int active, void* userData) {
+    auto* state = static_cast<WindowActivationState*>(userData);
+    if (state) {
+        state->values.push_back(active);
+    }
+}
+
 struct WindowHyperlinkState {
     unsigned int lastId = 0;
     int calls = 0;
 };
+
+struct WindowFileDropState {
+    std::vector<std::string> paths;
+    float x = 0.0f;
+    float y = 0.0f;
+    int calls = 0;
+};
+
+void onWindowFileDrop(
+    const OneUiUtf8String* paths,
+    std::size_t count,
+    float x,
+    float y,
+    void* userData) {
+    auto* state = static_cast<WindowFileDropState*>(userData);
+    if (!state) {
+        return;
+    }
+    state->paths.clear();
+    for (std::size_t index = 0; index < count; ++index) {
+        state->paths.emplace_back(paths[index].data, paths[index].length);
+    }
+    state->x = x;
+    state->y = y;
+    ++state->calls;
+}
+
+HDROP createWideFileDrop(const std::vector<std::wstring>& paths, POINT point) {
+    std::size_t characters = 1;
+    for (const auto& path : paths) {
+        characters += path.size() + 1;
+    }
+    const std::size_t bytes = sizeof(DROPFILES) + characters * sizeof(wchar_t);
+    HGLOBAL memory = GlobalAlloc(GMEM_MOVEABLE | GMEM_ZEROINIT, bytes);
+    if (!memory) {
+        return nullptr;
+    }
+    auto* drop = static_cast<DROPFILES*>(GlobalLock(memory));
+    if (!drop) {
+        GlobalFree(memory);
+        return nullptr;
+    }
+    drop->pFiles = sizeof(DROPFILES);
+    drop->pt = point;
+    drop->fNC = FALSE;
+    drop->fWide = TRUE;
+    auto* output = reinterpret_cast<wchar_t*>(
+        reinterpret_cast<unsigned char*>(drop) + sizeof(DROPFILES));
+    for (const auto& path : paths) {
+        std::copy(path.begin(), path.end(), output);
+        output += path.size();
+        *output++ = L'\0';
+    }
+    *output = L'\0';
+    GlobalUnlock(memory);
+    return static_cast<HDROP>(memory);
+}
+
+void testWindowFileDropCopiesUnicodePathsAndPoint() {
+    OneUiWindowOptions options{};
+    options.title = L"OneUI file drop test";
+    options.width = 640;
+    options.height = 480;
+    options.visible = 0;
+    options.borderless = 1;
+    options.resizable = 1;
+
+    OneUiWindow* window = oneui_window_create(&options);
+    expectTrue("file drop window create", window != nullptr);
+    if (!window) {
+        return;
+    }
+    WindowFileDropState state;
+    oneui_window_set_on_file_drop(window, onWindowFileDrop, &state);
+    oneui_window_initialize(window);
+    expectTrue(
+        "file drop capability exposed",
+        (oneui_window_capabilities(window) & OneUiWindowCapabilityFileDrop) != 0);
+    auto hwnd = static_cast<HWND>(oneui_window_native_handle(window));
+    expectTrue("file drop native handle", hwnd != nullptr);
+    if (hwnd) {
+        const auto first = createWideFileDrop(
+            {L"C:\\工作目录\\my file.txt", L"D:\\logs"},
+            POINT{96, 72});
+        expectTrue("file drop payload allocated", first != nullptr);
+        if (first) {
+            SendMessageW(hwnd, WM_DROPFILES, reinterpret_cast<WPARAM>(first), 0);
+            expectTrue("file drop callback invoked once", state.calls == 1);
+            expectTrue(
+                "file drop callback preserves paths",
+                state.paths == std::vector<std::string>{u8"C:\\工作目录\\my file.txt", "D:\\logs"});
+            const float scale = std::max(1.0f, oneui_window_dpi_scale(window));
+            expectTrue("file drop x uses logical pixels", std::fabs(state.x - 96.0f / scale) < 0.01f);
+            expectTrue("file drop y uses logical pixels", std::fabs(state.y - 72.0f / scale) < 0.01f);
+        }
+
+        oneui_window_set_on_file_drop(window, nullptr, nullptr);
+        const auto second = createWideFileDrop({L"C:\\ignored.txt"}, POINT{12, 12});
+        if (second) {
+            SendMessageW(hwnd, WM_DROPFILES, reinterpret_cast<WPARAM>(second), 0);
+        }
+        expectTrue("cleared file drop callback is not invoked", state.calls == 1);
+    }
+    oneui_window_destroy(window);
+}
+
+void testWindowRequestCloseRunsPolicyBeforeCloseToTray() {
+    OneUiWindowOptions options{};
+    options.title = L"OneUI close policy test";
+    options.width = 320;
+    options.height = 180;
+    options.visible = 0;
+    options.resizable = 1;
+
+    OneUiWindow* window = oneui_window_create(&options);
+    expectTrue("close policy window create", window != nullptr);
+    if (!window) {
+        return;
+    }
+    oneui_window_initialize(window);
+    oneui_window_set_close_to_tray(window, 1);
+    WindowCloseRequestState state{window};
+    oneui_window_set_on_close_requested(window, onWindowCloseRequested, &state);
+    oneui_window_request_close(window);
+    expectTrue("close policy message loop exits", oneui_window_run(window) == 0);
+    expectTrue("close policy callback called once", state.calls == 1);
+    expectTrue("normal close request is not force exit", state.forceExit == 0);
+    oneui_window_destroy(window);
+}
 
 void onWindowTerminalHyperlink(unsigned int hyperlinkId, void* userData) {
     auto* state = static_cast<WindowHyperlinkState*>(userData);
@@ -145,12 +347,15 @@ void testWindowRawKeyTracksMessageModifiersAndResetsOnFocusLoss() {
             SetWindowPos(
                 hwnd,
                 nullptr,
-                -32000,
-                -32000,
+                40,
+                40,
                 0,
                 0,
                 SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
             oneui_window_show(window);
+            // Win7 can clip an entirely off-screen window without painting
+            // its contents. Use an on-screen test window (without activation)
+            // so this native hit test exercises real, initialized font metrics.
             // Complete the first layout/paint before coordinate-based input.
             // Hiding immediately after ShowWindow leaves terminal metrics at
             // their pre-paint defaults and makes the hyperlink hit test race.
@@ -169,6 +374,42 @@ void testWindowRawKeyTracksMessageModifiersAndResetsOnFocusLoss() {
     }
 
     oneui_widget_destroy(terminal);
+    oneui_window_destroy(window);
+}
+
+void testWindowActivationCallbackIsEdgeTriggeredAndClearable() {
+    OneUiWindowOptions options{};
+    options.title = L"OneUI activation callback test";
+    options.width = 320;
+    options.height = 240;
+    options.visible = 0;
+    options.borderless = 1;
+    options.resizable = 1;
+
+    OneUiWindow* window = oneui_window_create(&options);
+    expectTrue("activation window create", window != nullptr);
+    if (!window) {
+        return;
+    }
+    WindowActivationState state;
+    oneui_window_set_on_activation_changed(window, onWindowActivationChanged, &state);
+    oneui_window_initialize(window);
+    auto hwnd = static_cast<HWND>(oneui_window_native_handle(window));
+    expectTrue("activation native handle", hwnd != nullptr);
+    if (hwnd) {
+        SendMessageW(hwnd, WM_ACTIVATE, WA_ACTIVE, 0);
+        SendMessageW(hwnd, WM_ACTIVATE, WA_ACTIVE, 0);
+        SendMessageW(hwnd, WM_ACTIVATE, WA_INACTIVE, 0);
+        expectTrue(
+            "activation callback is edge triggered",
+            state.values == std::vector<int>{1, 0});
+
+        oneui_window_set_on_activation_changed(window, nullptr, nullptr);
+        SendMessageW(hwnd, WM_ACTIVATE, WA_ACTIVE, 0);
+        expectTrue(
+            "cleared activation callback is not invoked",
+            state.values == std::vector<int>{1, 0});
+    }
     oneui_window_destroy(window);
 }
 
@@ -333,6 +574,22 @@ void testUtf8AbiRoundTripsUnicodeText() {
     oneui_text_field_set_on_changed_utf8(field, onUtf8TextChanged, &callbackState);
     oneui_text_field_set_text_utf8(field, utf8View(text));
     oneui_label_set_text_utf8(label, utf8View(text));
+    OneUiLabelTextSpanUtf8 richSpan{};
+    richSpan.start_utf8_offset = 0;
+    richSpan.end_utf8_offset = 3;
+    richSpan.font_weight = 650;
+    richSpan.italic = 1;
+    richSpan.foreground = OneUiColor{96, 165, 250, 255};
+    richSpan.background = OneUiColor{59, 130, 246, 32};
+    expectTrue("UTF-8 rich label accepts scalar-aligned span",
+               oneui_label_set_rich_text_utf8(label, utf8View(text), &richSpan, 1) == 1);
+    richSpan.start_utf8_offset = 1;
+    expectTrue("UTF-8 rich label rejects offset inside multibyte scalar",
+               oneui_label_set_rich_text_utf8(label, utf8View(text), &richSpan, 1) == 0);
+    expectTrue("UTF-8 rich label rejects missing span storage",
+               oneui_label_set_rich_text_utf8(label, utf8View(text), nullptr, 1) == 0);
+    expectTrue("UTF-8 rich label rejects wrong widget type",
+               oneui_label_set_rich_text_utf8(button, utf8View(text), nullptr, 0) == 0);
     oneui_button_set_text_utf8(button, utf8View(title));
     expectTrue("utf8 text callback invoked", callbackState.calls == 1);
     expectTrue("utf8 text callback round trip", callbackState.text == text);
@@ -470,6 +727,47 @@ void testWindowPlacementAbiRoundTripsRestoredBounds() {
         "placement rejects invalid size",
         oneui_window_set_placement(window, &invalid) == 0);
     oneui_window_destroy(window);
+}
+
+void testStyleSheetReplacementPreservesMountedBindingsAndRejectsInvalidCss() {
+    OneUiWindowOptionsUtf8 options{};
+    options.width = 320; options.height = 240; options.visible = 0;
+    options.borderless = 1;
+    auto* window = oneui_window_create_utf8(&options);
+    auto* sheet = oneui_style_sheet_create();
+    expectTrue("material replacement window and sheet", window && sheet);
+    if (!window || !sheet) return;
+    char error[256]{};
+    expectTrue("initial material CSS", oneui_style_sheet_add_css(sheet,
+        ".material-test { gap: 6px; }", error, sizeof(error)) == 1);
+    oneui_window_set_style_sheet(window, sheet);
+    auto* root = oneui_stack_create(OneUiStackDirectionColumn);
+    auto* first = oneui_panel_create();
+    auto* second = oneui_panel_create();
+    oneui_widget_set_style_node(root, "stack", "material-test");
+    oneui_widget_apply_style_sheet(root, sheet);
+    oneui_widget_set_preferred_size(first, 0, 20);
+    oneui_widget_set_preferred_size(second, 0, 20);
+    oneui_stack_add(root, first); oneui_stack_add(root, second);
+    oneui_window_set_content(window, root); oneui_window_initialize(window);
+    auto actualGap = [&]() {
+        std::size_t required = 0;
+        oneui_window_layout_snapshot_utf8(window, nullptr, 0, &required);
+        const auto a = oneui_widget_frame(first), b = oneui_widget_frame(second);
+        return b.y - a.y - a.height;
+    };
+    expectTrue("initial material gap", std::abs(actualGap() - 6.0f) < 0.1f);
+    expectTrue("replace CSS", oneui_style_sheet_replace_css(sheet,
+        ".material-test { gap: 14px; }", error, sizeof(error)) == 1);
+    oneui_window_refresh_style_sheet(window);
+    expectTrue("mounted binding uses replaced CSS", std::abs(actualGap() - 14.0f) < 0.1f);
+    expectTrue("invalid replacement rejected", oneui_style_sheet_replace_css(sheet,
+        ".material-test { gap: var(--missing); }", error, sizeof(error)) == 0);
+    oneui_window_refresh_style_sheet(window);
+    expectTrue("invalid replacement preserves prior CSS", std::abs(actualGap() - 14.0f) < 0.1f);
+    oneui_window_set_content(window, nullptr);
+    oneui_widget_destroy(second); oneui_widget_destroy(first); oneui_widget_destroy(root);
+    oneui_window_destroy(window); oneui_style_sheet_destroy(sheet);
 }
 
 void testAppShellAbiCreatesReusableSlots() {
@@ -737,6 +1035,7 @@ void testRealtimeFrameViewAbiAcceptsBgraFrames() {
         255, 255, 255, 255
     };
     oneui_realtime_frame_view_set_scale_mode(frameView, OneUiVideoScaleModeFit);
+    oneui_realtime_frame_view_set_content_alignment(frameView, 2, 0);
     oneui_realtime_frame_view_submit_frame(
         frameView,
         pixels,
@@ -1185,6 +1484,10 @@ void testWindowLayoutSnapshotSerializesMountedTreeWithoutFieldValues() {
                 &required) == 1);
         const std::string json(snapshot.data());
         expectTrue("layout snapshot schema", json.find("\"schemaVersion\":1") != std::string::npos);
+        expectTrue("layout snapshot includes intrinsic label size",
+            json.find("\"naturalTextSize\":{\"width\":") != std::string::npos);
+        expectTrue("layout snapshot includes label paint alignment",
+            json.find("\"textAlign\":\"left\"") != std::string::npos);
         expectTrue("layout snapshot semantic tag", json.find("\"tag\":\"input\"") != std::string::npos);
         expectTrue("layout snapshot semantic class", json.find("qa-field") != std::string::npos);
         expectTrue("layout snapshot value length", json.find("\"valueLength\":34") != std::string::npos);
@@ -1435,6 +1738,7 @@ void testLabelWrappingAbiIsNullSafeAndMountable() {
 void testImageViewAndTextAreaScrollAbiAreAdditiveAndNullSafe() {
     oneui_image_view_clear(nullptr);
     oneui_image_view_set_content_mode(nullptr, 0);
+    oneui_image_view_set_content_alignment(nullptr, 1, 1);
     oneui_image_view_set_corner_radius(nullptr, 8.0f);
     oneui_text_area_scroll_to_top(nullptr);
     expectTrue("null text area scroll offset is zero", oneui_text_area_vertical_scroll_offset(nullptr) == 0.0f);
@@ -1447,6 +1751,7 @@ void testImageViewAndTextAreaScrollAbiAreAdditiveAndNullSafe() {
     expectTrue("image view ABI rejects short buffer", oneui_image_view_set_rgba(image, pixels, 4, 2, 2, 8) == 0);
     expectTrue("image view ABI accepts copied RGBA", oneui_image_view_set_rgba(image, pixels, sizeof(pixels), 2, 2, 8) == 1);
     oneui_image_view_set_content_mode(image, 1);
+    oneui_image_view_set_content_alignment(image, 2, 0);
     oneui_image_view_set_corner_radius(image, 8.0f);
     oneui_image_view_set_background(image, 10, 20, 30, 255);
     oneui_widget_destroy(image);
@@ -1464,14 +1769,37 @@ void testImageViewAndTextAreaScrollAbiAreAdditiveAndNullSafe() {
     oneui_widget_destroy(area);
 }
 
+void testScrollViewOffsetAbiIsAdditiveAndNullSafe() {
+    oneui_scroll_view_set_scroll_offset(nullptr, 42.0f);
+    expectTrue("null scroll view offset is zero", oneui_scroll_view_scroll_offset(nullptr) == 0.0f);
+    expectTrue("null scroll view max offset is zero", oneui_scroll_view_max_scroll_offset(nullptr) == 0.0f);
+
+    OneUiWidget* view = oneui_scroll_view_create();
+    expectTrue("scroll view ABI creates", view != nullptr);
+    oneui_scroll_view_set_content_height(view, 480.0f);
+    oneui_scroll_view_set_scroll_offset(view, 176.0f);
+    expectTrue("scroll view ABI stores offset", std::fabs(oneui_scroll_view_scroll_offset(view) - 176.0f) < 0.001f);
+    expectTrue("scroll view ABI exposes max offset", oneui_scroll_view_max_scroll_offset(view) >= 176.0f);
+    oneui_scroll_view_set_scroll_offset(view, 100000.0f);
+    expectTrue(
+        "scroll view ABI clamps offset",
+        oneui_scroll_view_scroll_offset(view) <= oneui_scroll_view_max_scroll_offset(view));
+    oneui_widget_destroy(view);
+}
+
 } // namespace
 
 int main() {
+    testSliderAbiIsNullSafeAndSeparatesInputFromSetters();
+    testTabInlineEditAbiIsNullSafeAndReportsUtf8();
     expectTrue("version exported", std::strcmp(oneui_version(), "0.1.0") == 0);
     testOwnedWindowPostCleansUpCancelledWork();
 #ifdef _WIN32
     testWindowRawKeyTracksMessageModifiersAndResetsOnFocusLoss();
+    testWindowActivationCallbackIsEdgeTriggeredAndClearable();
     testBorderlessTitleBarHitRegions();
+    testWindowFileDropCopiesUnicodePathsAndPoint();
+    testWindowRequestCloseRunsPolicyBeforeCloseToTray();
 #endif
     testUtf8AbiRoundTripsUnicodeText();
     testUtf8ListUsesStructuredItems();
@@ -1479,6 +1807,7 @@ int main() {
     testWindowDpiMetricsAbiUsesLogicalAndPhysicalSizes();
     testWindowPlacementAbiRoundTripsRestoredBounds();
     testAppShellAbiCreatesReusableSlots();
+    testStyleSheetReplacementPreservesMountedBindingsAndRejectsInvalidCss();
     testProductShellAbiIsPublicProductFrame();
     testOverlayToastAbiSupportsAnchoredNotice();
     testRealtimeFrameViewAbiAcceptsBgraFrames();
@@ -1492,6 +1821,7 @@ int main() {
     testWindowLayoutSnapshotKeepsSizeQueryAndReadAtomicForVirtualLists();
     testLabelWrappingAbiIsNullSafeAndMountable();
     testImageViewAndTextAreaScrollAbiAreAdditiveAndNullSafe();
+    testScrollViewOffsetAbiIsAdditiveAndNullSafe();
     testPromptAbiRejectsInvalidOutput();
     testClipboardAbiRoundTripIfAvailable();
 

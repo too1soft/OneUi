@@ -37,6 +37,9 @@ impl WindowCapabilities {
     pub fn native_dialogs(self) -> bool {
         self.0 & sys::WINDOW_CAPABILITY_NATIVE_DIALOGS != 0
     }
+    pub fn file_drop(self) -> bool {
+        self.0 & sys::WINDOW_CAPABILITY_FILE_DROP != 0
+    }
 }
 
 impl Window {

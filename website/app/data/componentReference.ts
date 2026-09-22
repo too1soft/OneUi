@@ -24,6 +24,7 @@ export const stats = [
 
 export const platformRows = [
   ['Windows / Win32', '本轮 MSVC 与 Unicode 一致性回归通过；MinGW 匹配文字依赖、SDK 审计与完整原生交互验收仍待完成。'],
+  ['Windows 7 SP1', '独立兼容构建；x86 有原版 SP1 虚拟机自动验收记录，x64 已编译、原生验收待完成。默认现代构建不因此兼容 Win7。'],
   ['Ubuntu 24.04 x86_64 X11', '已实现并在 WSLg 构建/自动测试；真实 Ubuntu 桌面待验收，XWayland 不算原生 Wayland。'],
   ['Ubuntu 24.04 x86_64 Wayland', '原生 Wayland 连接、Gallery、C/C++/Rust 已运行；中文 IME 和有真实输入序号的剪贴板仍待验收。'],
   ['麒麟 V10 / UOS 20 / Linux ARM64', '共享 Linux 源码，尚未在对应系统和架构构建；不能复用 Ubuntu 产物宣称兼容。'],
@@ -58,8 +59,8 @@ export const reviewFindings = [
   {
     level: '渲染',
     color: 'info',
-    title: '共享 Skia 栅格渲染，GPU 升级不在本期范围',
-    body: '完整 Canvas、路径转换和文字缓存由各后端共享。RealtimeFrameView 支持 BGRA/RGBA、脏区域与后台合并更新；NV12 转换、通用 GPU 视频热路径和系统无障碍桥仍未完成。'
+    title: 'Win32 默认尝试 GPU，保留软件渲染回退',
+    body: 'Win32 使用 OpenGL + Skia Ganesh，失败后回退 raster/GDI；ONEUI_ENABLE_GPU=0 可强制软件路径。Linux/macOS 目前使用软件呈现。RealtimeFrameView 有 BGRA/RGBA、脏区域与后台合并更新；GPU 后端不代表已有零复制视频、NV12 转换或完整驱动验收。'
   }
 ]
 
@@ -69,6 +70,7 @@ export const architectureRows = [
   ['Widget', '所有控件的基础类。负责 frame、preferredSize、visible、disabled、focusable、mouse/key/text input、accessibility 和 paint 入口。'],
   ['View', '可容纳子控件的 Widget。负责 add/remove child、子控件布局、绘制顺序、命中测试、焦点转发和 Tab 导航。'],
   ['Layout', 'Stack、Grid、Wrap、DockView、SplitView、ScrollView、AppShell 等容器根据 preferredSize 与自身规则给子控件设置 frame。'],
+  ['Rust workspace', 'DockWorkspace 管理递归停靠树与浮动状态，DockSurface 复用原生容器和弱焦点书签保留内容身份；应用负责拖放控制器、标题和持久化序列化。'],
   ['StyleSheet', 'CSS-like 小型样式系统。支持 tag、class、伪状态和有限属性，最终转换为 typed style override 或 StyleBox。'],
   ['Platform', 'Window、Clipboard、Monitor 等平台能力。Win32 为产品主线，X11/Wayland 在 WSLg 已构建运行，Cocoa 待 Mac 构建；能力与验收状态分开查询。'],
   ['C ABI', '面向 C、Rust、Go、C#、Python、Node、Java 等语言的稳定边界。它不是完整 C++ API 的逐项镜像。']
@@ -277,7 +279,7 @@ export const componentGroups = [
           ['setStyleOverride(SliderStyleOverride)', '覆盖轨道、填充、thumb 和焦点样式。']
         ],
         usage: 'auto volume = std::make_shared<oneui::Slider>();\nvolume->setRange(0.0, 100.0);\nvolume->setStep(5.0);\nvolume->setValue(60.0);',
-        notes: ['当前 C ABI 尚未暴露 Slider。']
+        notes: ['ABI v33 已提供 C/Rust Slider 及 Begin/Update/Commit/Cancel 输入回调；程序设值不触发输入回调。', 'Rust SliderHandle 合并后台进度；拖动期间后台更新不移动滑块。']
       },
       {
         name: 'TextField',

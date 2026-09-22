@@ -144,7 +144,8 @@ void Checkbox::setOnChanged(std::function<void(bool)> callback) {
 
 void Checkbox::paint(Canvas& canvas) {
     const Rect rect = frame();
-    const Rect box{rect.x, rect.y + (rect.height - 16.0f) / 2.0f, 16.0f, 16.0f};
+    const float side=std::min(16.0f,std::min(rect.width,rect.height));
+    const Rect box{rect.x, rect.y + (rect.height - side) / 2.0f, side, side};
     const bool active = checked();
     const CheckboxStyle style = resolveCheckboxStyle(active, disabled(), hovered_, pressed_, focusVisible(), styleOverride_);
 

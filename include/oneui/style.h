@@ -317,6 +317,7 @@ struct TabsStyle {
     float fontSize = 14.0f;
     int fontWeight = 400;
     Insets itemInset{2.0f};
+    float textInset = 8.0f;
     FocusRingStyle focusRing{};
 };
 
@@ -335,6 +336,7 @@ struct TabsStateStyleOverride {
     std::optional<float> fontSize;
     std::optional<int> fontWeight;
     std::optional<Insets> itemInset;
+    std::optional<float> textInset;
     std::optional<FocusRingStyleOverride> focusRing;
 };
 
@@ -427,6 +429,10 @@ struct TableStyle {
     Color scrollbarColor{148, 163, 184};
     float borderWidth = 1.0f;
     float radius = 6.0f;
+    float fontSize = 14.0f;
+    float headerFontSize = 12.0f;
+    float detailFontSize = 11.0f;
+    Color detailForeground{97, 103, 114, 255};
     float headerHeight = 30.0f;
     float scrollbarWidth = 4.0f;
     Insets cellPadding{0.0f, 10.0f};
@@ -445,6 +451,10 @@ struct TableStyleOverride {
     std::optional<Color> scrollbarColor;
     std::optional<float> borderWidth;
     std::optional<float> radius;
+    std::optional<float> fontSize;
+    std::optional<float> headerFontSize;
+    std::optional<float> detailFontSize;
+    std::optional<Color> detailForeground;
     std::optional<float> headerHeight;
     std::optional<float> scrollbarWidth;
     std::optional<Insets> cellPadding;

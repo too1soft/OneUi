@@ -2,7 +2,10 @@
 
 #include <algorithm>
 #include "text/text_layout.h"
+#include "internal/unicode.h"
+#include <cmath>
 #include <cwctype>
+#include <stdexcept>
 #include <vector>
 #include <utility>
 
@@ -12,10 +15,32 @@ Label::Label(std::wstring text) : text_(std::move(text)) {
 }
 
 void Label::setText(std::wstring text) {
-    if (textBinding_.get(text_) == text) return;
+    if (textBinding_.get(text_) == text && textSpans_.empty()) return;
     const auto alive = lifetimeToken();
     textBinding_.set(std::move(text), text_);
     if (alive.expired()) return;
+    textSpans_.clear();
+    invalidate();
+}
+
+void Label::setRichText(std::wstring text, std::vector<TextStyleSpan> spans) {
+    std::size_t previousEnd = 0;
+    for (const auto& span : spans) {
+        const bool validMetrics = std::isfinite(span.fontSize) && span.fontSize >= 0.0f &&
+            span.fontWeight >= 0 && span.fontWeight <= 1000;
+        const bool validRange = span.start < span.end && span.end <= text.size() &&
+            span.start >= previousEnd && unicode::boundary(text, span.start) == span.start &&
+            unicode::boundary(text, span.end) == span.end;
+        if (!validMetrics || !validRange) {
+            throw std::invalid_argument("Invalid OneUI rich label span");
+        }
+        previousEnd = span.end;
+    }
+    if (textBinding_.get(text_) == text && textSpans_ == spans) return;
+    const auto alive = lifetimeToken();
+    textBinding_.set(std::move(text), text_);
+    if (alive.expired()) return;
+    textSpans_ = std::move(spans);
     invalidate();
 }
 
@@ -24,6 +49,7 @@ const std::wstring& Label::text() const {
 }
 
 void Label::bindText(State<std::wstring>& state) {
+    textSpans_.clear();
     textBinding_ = Binding<std::wstring>(state, [this] {
         invalidate();
     });
@@ -96,6 +122,19 @@ void Label::setTextOptions(TextOptions options) {
     invalidate();
 }
 
+Size Label::naturalTextSize() const {
+    text::LayoutOptions options;
+    options.text = textOptions_;
+    options.text.wrap = TextWrapMode::NoWrap;
+    options.family = textFontFamily();
+    options.size = fontSize_;
+    options.weight = fontWeight_;
+    options.scale = textDpiScale();
+    options.spans = textSpans_;
+    const auto layout = text::Layout::make(text(), options);
+    return {layout->width(), layout->height()};
+}
+
 void Label::paint(Canvas& canvas) {
     const Rect bounds = frame();
     if (bounds.width <= 0 || bounds.height <= 0 || fontSize_ <= 0) return;
@@ -105,6 +144,7 @@ void Label::paint(Canvas& canvas) {
     style.fontSize = fontSize_; style.fontWeight = fontWeight_;
     style.fontFamily = textFontFamily(); style.align = align_;
     style.ellipsis = true;
+    style.spans = textSpans_;
     if (textWrapping_) {
         style.lineHeight = lineHeight_ > 0 ? lineHeight_ : std::max(1.0f, fontSize_ * 1.4f);
         const auto heightLimit = std::max(1, static_cast<int>(bounds.height / style.lineHeight));
@@ -116,6 +156,7 @@ void Label::paint(Canvas& canvas) {
     options.width = bounds.width; options.lineHeight = style.lineHeight;
     options.scale = textDpiScale(); options.align = align_;
     options.maxLines = style.maxLines; options.ellipsis = true;
+    options.spans = style.spans;
     const auto layout = text::Layout::make(text(), options);
     auto area = bounds;
     if (!textWrapping_) area.y += (bounds.height - layout->height()) / 2;

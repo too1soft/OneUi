@@ -18,6 +18,8 @@ namespace oneui {
 struct TableColumn {
     std::wstring header;
     float width = 0.0f;
+    TextAlign alignment = TextAlign::Left;
+    bool action = false;
 };
 
 // Optional visual metadata for product tables. Plain string rows remain fully
@@ -33,6 +35,8 @@ struct TableCell {
     int fontWeight = 400;
     float fontSize = 0.0f;
     float iconSize = 20.0f;
+    std::wstring detail;
+    std::wstring badge;
 };
 
 class ONEUI_API Table final : public Widget {
@@ -40,6 +44,9 @@ public:
     Table();
 
     void setColumns(std::vector<TableColumn> columns);
+    void setColumnPresentation(int column, TextAlign alignment, bool action);
+    void setHeaderHeight(float height);
+    void setOnCellAction(std::function<void(int, int)> callback);
     void setRows(std::vector<std::vector<std::wstring>> rows);
     void setRichRows(std::vector<std::vector<TableCell>> rows);
     bool updateRow(std::size_t index, std::vector<std::wstring> row);
@@ -92,6 +99,7 @@ private:
     float columnWidth(int index, float remainingWidth, int flexibleCount) const;
     float effectiveRowHeight(float contentHeight) const;
     int hitRowIndex(Point point) const;
+    int hitColumnIndex(Point point) const;
     Rect rowRect(int index, float height) const;
     Rect verticalThumbRect(float width, float contentHeight) const;
     void ensureSelectionVisible();
@@ -110,6 +118,9 @@ private:
     SelectionModel selection_;
     int hoveredIndex_ = -1;
     int pressedIndex_ = -1;
+    int pressedColumn_ = -1;
+    std::optional<float> headerHeight_;
+    std::function<void(int, int)> onCellAction_;
     int pressedClickCount_ = 1;
     bool reorderEnabled_ = false;
     bool reordering_ = false;

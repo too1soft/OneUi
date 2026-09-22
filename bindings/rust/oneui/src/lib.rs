@@ -8,6 +8,7 @@ use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::ffi::{CStr, CString};
 use std::marker::PhantomData;
+use std::ops::Range;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::{Path, PathBuf};
 use std::ptr::NonNull;
@@ -22,14 +23,18 @@ pub use oneui_sys as sys;
 pub mod controls;
 pub mod handles;
 pub mod interaction;
+mod latest_signal;
 pub mod layout;
+pub use latest_signal::{LatestSignal, LocalSignalSubscription};
 pub mod platform;
 pub use interaction::{
     CommandRegistration, CommandResult, KeyChord, KeyModifiers, TextAffinity, TextDirection,
     TextOptions, TextPosition, TextWrapMode,
 };
 pub use platform::{WindowBackend, WindowCapabilities};
+mod slider;
 mod types;
+pub use slider::{Slider, SliderHandle, SliderInteraction};
 
 pub use types::{IconSymbol, ListItem, SelectionMode, VirtualListItem, VirtualListRichMetrics};
 
@@ -41,6 +46,7 @@ pub enum Error {
     WidgetDestroyed,
     CommandRegistrationFailed,
     InvalidTextOptions,
+    InvalidLayout,
     InvalidTextPosition,
     WindowClosed,
     WrongThread,
@@ -358,6 +364,28 @@ impl StyleSheet {
         self.add_css(&css)
     }
 
+    /// Atomically replaces CSS while keeping mounted widget bindings valid.
+    /// Refresh the owning window after applying any custom properties.
+    pub fn replace_css(&mut self, css: &str) -> Result<(), StyleSheetError> {
+        let css = CString::new(css).map_err(|_| StyleSheetError::InteriorNul)?;
+        let mut error = [0i8; 1024];
+        let applied = unsafe {
+            sys::oneui_style_sheet_replace_css(
+                self.raw.as_ptr(),
+                css.as_ptr(),
+                error.as_mut_ptr(),
+                error.len() as i32,
+            )
+        };
+        if applied != 0 {
+            return Ok(());
+        }
+        let message = unsafe { CStr::from_ptr(error.as_ptr()) }
+            .to_string_lossy()
+            .into_owned();
+        Err(StyleSheetError::ParseFailed(message))
+    }
+
     pub fn set_custom_property(&mut self, name: &str, value: &str) -> Result<(), StyleSheetError> {
         let name = CString::new(name).map_err(|_| StyleSheetError::InteriorNul)?;
         let value = CString::new(value).map_err(|_| StyleSheetError::InteriorNul)?;
@@ -423,10 +451,20 @@ pub struct WindowPlacement {
     pub maximized: bool,
 }
 
+/// Owned native filesystem paths and their logical client-space drop point.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct FileDropEvent {
+    pub paths: Vec<String>,
+    pub x: f32,
+    pub y: f32,
+}
+
 pub struct Window {
     state: Arc<WindowState>,
     raw_key_callback: Option<Box<WindowRawKeyCallback>>,
     client_size_changed_callback: Option<Box<WindowClientSizeChangedCallback>>,
+    activation_changed_callback: Option<Box<WindowActivationChangedCallback>>,
+    file_drop_callback: Option<Box<WindowFileDropCallback>>,
     close_requested_callback: Option<Box<WindowCloseRequestedCallback>>,
     _ui_thread: PhantomData<Rc<()>>,
 }
@@ -437,6 +475,14 @@ struct WindowRawKeyCallback {
 
 struct WindowClientSizeChangedCallback {
     handler: Box<dyn FnMut(f32, f32) + 'static>,
+}
+
+struct WindowActivationChangedCallback {
+    handler: Box<dyn FnMut(bool) + 'static>,
+}
+
+struct WindowFileDropCallback {
+    handler: Box<dyn FnMut(FileDropEvent) + 'static>,
 }
 
 struct WindowCloseRequestedCallback {
@@ -515,6 +561,28 @@ impl<'a> FileDialogOptions<'a> {
             mode: FileDialogMode::SelectFolder,
             ..Self::open(title)
         }
+    }
+}
+
+fn parse_multiple_file_dialog_output(
+    output: &[u8],
+    required: usize,
+) -> Result<Vec<PathBuf>, Error> {
+    if required < 2 || required > output.len() || output[required - 2..required] != [0, 0] {
+        return Err(Error::FileDialogFailed);
+    }
+    let mut paths = Vec::new();
+    for bytes in output[..required - 1].split(|byte| *byte == 0) {
+        if bytes.is_empty() {
+            break;
+        }
+        let path = std::str::from_utf8(bytes).map_err(|_| Error::FileDialogFailed)?;
+        paths.push(PathBuf::from(path));
+    }
+    if paths.is_empty() {
+        Err(Error::FileDialogFailed)
+    } else {
+        Ok(paths)
     }
 }
 
@@ -803,6 +871,70 @@ impl UiDispatcher {
         }
     }
 
+    /// Shows an owner-bound multi-file picker on the window thread.
+    ///
+    /// The result preserves the native selection order. A canceled dialog
+    /// returns an empty vector; folders and save dialogs are intentionally not
+    /// accepted by this API.
+    pub fn file_dialog_multiple(
+        &self,
+        options: FileDialogOptions<'_>,
+    ) -> Result<Vec<PathBuf>, Error> {
+        if std::thread::current().id() != self.state.ui_thread {
+            return Err(Error::WrongThread);
+        }
+        if options.mode != FileDialogMode::OpenFile || options.filters.len() > 64 {
+            return Err(Error::FileDialogFailed);
+        }
+
+        let initial_directory = options.initial_directory.to_string_lossy();
+        let filters = options
+            .filters
+            .iter()
+            .map(|filter| sys::OneUiFileDialogFilterUtf8 {
+                name: sys::OneUiUtf8String::from_str(filter.name),
+                pattern: sys::OneUiUtf8String::from_str(filter.pattern),
+            })
+            .collect::<Vec<_>>();
+        let native = sys::OneUiFileDialogOptionsUtf8 {
+            mode: sys::FILE_DIALOG_OPEN_FILE,
+            title: sys::OneUiUtf8String::from_str(options.title),
+            initial_directory: sys::OneUiUtf8String::from_str(&initial_directory),
+            default_name: sys::OneUiUtf8String::from_str(options.default_name),
+            default_extension: sys::OneUiUtf8String::from_str(options.default_extension),
+            filters: filters.as_ptr(),
+            filter_count: filters.len(),
+            confirm_overwrite: i32::from(options.confirm_overwrite),
+        };
+
+        // A single call must retain the shell selection while copying it out.
+        // 16 MiB covers over one hundred maximum-length Windows paths without
+        // reopening the modal dialog or holding native COM objects afterward.
+        const MAX_MULTI_FILE_DIALOG_UTF8_BYTES: usize = 16 * 1024 * 1024;
+        let mut output = vec![0_u8; MAX_MULTI_FILE_DIALOG_UTF8_BYTES];
+        let mut required = 0_usize;
+        let result = self
+            .state
+            .with_raw(|raw| unsafe {
+                sys::oneui_window_file_dialog_multiple_utf8(
+                    raw,
+                    &native,
+                    output.as_mut_ptr().cast(),
+                    output.len(),
+                    &mut required,
+                )
+            })
+            .ok_or(Error::WindowClosed)?;
+        match result {
+            0 => Ok(Vec::new()),
+            1 if required >= 2 && required <= output.len() => {
+                output.truncate(required);
+                parse_multiple_file_dialog_output(&output, required)
+            }
+            _ => Err(Error::FileDialogFailed),
+        }
+    }
+
     pub fn dispatch<F>(&self, task: F) -> Result<(), Error>
     where
         F: FnOnce() + Send + 'static,
@@ -1041,6 +1173,53 @@ impl UiDispatcher {
         });
     }
 
+    /// Updates the close-to-tray policy on the owning UI thread.
+    pub fn set_close_to_tray(&self, close_to_tray: bool) -> Result<(), Error> {
+        if std::thread::current().id() != self.state.ui_thread {
+            return Err(Error::WrongThread);
+        }
+        self.state
+            .with_raw(|raw| unsafe {
+                sys::oneui_window_set_close_to_tray(raw, i32::from(close_to_tray));
+            })
+            .ok_or(Error::WindowClosed)
+    }
+
+    /// Shows or removes the window-owned tray entry on the owning UI thread.
+    pub fn set_tray_enabled(&self, enabled: bool) -> Result<bool, Error> {
+        if std::thread::current().id() != self.state.ui_thread {
+            return Err(Error::WrongThread);
+        }
+        self.state
+            .with_raw(|raw| unsafe {
+                sys::oneui_window_set_tray_enabled(raw, i32::from(enabled)) != 0
+            })
+            .ok_or(Error::WindowClosed)
+    }
+
+    pub fn tray_icon_visible(&self) -> Result<bool, Error> {
+        if std::thread::current().id() != self.state.ui_thread {
+            return Err(Error::WrongThread);
+        }
+        self.state
+            .with_raw(|raw| unsafe { sys::oneui_window_tray_icon_visible(raw) != 0 })
+            .ok_or(Error::WindowClosed)
+    }
+
+    /// Emits a non-sensitive informational tray notification.
+    pub fn notify_tray(&self, title: &str, message: &str) -> Result<bool, Error> {
+        if std::thread::current().id() != self.state.ui_thread {
+            return Err(Error::WrongThread);
+        }
+        let title = wide_null_terminated(title);
+        let message = wide_null_terminated(message);
+        self.state
+            .with_raw(|raw| unsafe {
+                sys::oneui_window_notify_tray(raw, title.as_ptr(), message.as_ptr()) != 0
+            })
+            .ok_or(Error::WindowClosed)
+    }
+
     /// Closes the native window immediately on its owning UI thread.
     ///
     /// This is primarily used from a window close-policy callback after the
@@ -1068,6 +1247,9 @@ impl UiDispatcher {
         LabelHandle {
             state: Arc::clone(&label.state),
             dispatcher: self.clone(),
+            guard: None,
+            retention_guard: None,
+            retained: None,
         }
     }
 
@@ -1083,6 +1265,22 @@ impl UiDispatcher {
     pub fn text_area_handle(&self, text_area: &TextArea) -> TextAreaHandle {
         TextAreaHandle {
             state: Arc::clone(&text_area.state),
+            dispatcher: self.clone(),
+        }
+    }
+
+    /// Creates a thread-safe item producer for a select mounted in this window.
+    pub fn select_handle(&self, select: &Select) -> SelectHandle {
+        SelectHandle {
+            state: Arc::clone(&select.state),
+            dispatcher: self.clone(),
+        }
+    }
+
+    /// Creates a thread-safe scroll producer for a mounted scroll view.
+    pub fn scroll_view_handle(&self, scroll_view: &ScrollView) -> ScrollViewHandle {
+        ScrollViewHandle {
+            state: Arc::clone(&scroll_view.state),
             dispatcher: self.clone(),
         }
     }
@@ -1217,10 +1415,11 @@ impl UiDispatcher {
     }
 }
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Default)]
 struct WidgetLayoutUpdate {
     visible: Option<bool>,
     preferred_size: Option<(f32, f32)>,
+    classes: Option<String>,
 }
 
 struct WidgetState {
@@ -1242,11 +1441,11 @@ pub struct WidgetHandle {
 
 impl WidgetHandle {
     pub fn set_visible(&self, visible: bool) -> Result<(), Error> {
-        self.update_layout(Some(visible), None)
+        self.update_layout(Some(visible), None, None)
     }
 
     pub fn set_preferred_size(&self, width: f32, height: f32) -> Result<(), Error> {
-        self.update_layout(None, Some((width, height)))
+        self.update_layout(None, Some((width, height)), None)
     }
 
     pub fn set_visible_and_preferred_size(
@@ -1255,13 +1454,25 @@ impl WidgetHandle {
         width: f32,
         height: f32,
     ) -> Result<(), Error> {
-        self.update_layout(Some(visible), Some((width, height)))
+        self.update_layout(Some(visible), Some((width, height)), None)
+    }
+
+    /// Replaces semantic CSS classes on the owning UI thread. Updates are
+    /// coalesced with pending visibility and size changes so a data-driven
+    /// component can change presentation without posting redundant work.
+    pub fn set_classes(&self, classes: impl Into<String>) -> Result<(), Error> {
+        let classes = classes.into();
+        if classes.contains('\0') {
+            return Err(Error::InvalidTextOptions);
+        }
+        self.update_layout(None, None, Some(classes))
     }
 
     fn update_layout(
         &self,
         visible: Option<bool>,
         preferred_size: Option<(f32, f32)>,
+        classes: Option<String>,
     ) -> Result<(), Error> {
         if self.state.raw.load(Ordering::Acquire).is_null() {
             return Err(Error::WidgetDestroyed);
@@ -1277,6 +1488,9 @@ impl WidgetHandle {
             }
             if let Some(preferred_size) = preferred_size {
                 pending.preferred_size = Some(preferred_size);
+            }
+            if let Some(classes) = classes {
+                pending.classes = Some(classes);
             }
         }
         if self.state.update_scheduled.swap(true, Ordering::AcqRel) {
@@ -1319,6 +1533,11 @@ impl WidgetHandle {
             if let Some((width, height)) = update.preferred_size {
                 unsafe { sys::oneui_widget_set_preferred_size(raw, width, height) };
             }
+            if let Some(classes) = update.classes {
+                if let Ok(classes) = CString::new(classes) {
+                    unsafe { sys::oneui_widget_set_classes(raw, classes.as_ptr()) };
+                }
+            }
 
             state.update_scheduled.store(false, Ordering::Release);
             let has_more = {
@@ -1326,7 +1545,9 @@ impl WidgetHandle {
                     .pending_layout
                     .lock()
                     .expect("widget pending layout lock poisoned");
-                pending.visible.is_some() || pending.preferred_size.is_some()
+                pending.visible.is_some()
+                    || pending.preferred_size.is_some()
+                    || pending.classes.is_some()
             };
             if !has_more {
                 return;
@@ -1339,7 +1560,43 @@ impl WidgetHandle {
     }
 }
 
+/// A weak, UI-thread-only focus checkpoint. Restoring only searches the supplied
+/// subtree; it never activates an operating-system window or revives a widget.
+pub struct FocusBookmark {
+    raw: NonNull<sys::OneUiFocusBookmark>,
+    _ui_thread: std::marker::PhantomData<Rc<()>>,
+}
+impl FocusBookmark {
+    pub fn restore(&self, root: &Widget) -> bool {
+        unsafe { sys::oneui_focus_bookmark_restore(self.raw.as_ptr(), root.as_raw()) != 0 }
+    }
+}
+impl Drop for FocusBookmark {
+    fn drop(&mut self) {
+        unsafe { sys::oneui_focus_bookmark_destroy(self.raw.as_ptr()) };
+    }
+}
+
+type WidgetSizeHandler = std::rc::Rc<std::cell::RefCell<Box<dyn FnMut(f32, f32)>>>;
+struct WidgetSizeCallback {
+    handler: WidgetSizeHandler,
+}
+unsafe extern "C" fn run_widget_size_callback(
+    width: f32,
+    height: f32,
+    data: *mut std::ffi::c_void,
+) {
+    if data.is_null() {
+        return;
+    }
+    // Keep the handler alive when it clears its own registration or drops its wrapper.
+    let handler = unsafe { std::rc::Rc::clone(&(*data.cast::<WidgetSizeCallback>()).handler) };
+    run_callback_guarded("widget.size_changed", || {
+        (handler.borrow_mut())(width, height)
+    });
+}
 pub struct Widget {
+    size_callback: std::cell::RefCell<Option<Box<WidgetSizeCallback>>>,
     raw: NonNull<sys::OneUiWidget>,
     state: Arc<WidgetState>,
 }
@@ -1354,7 +1611,31 @@ impl Widget {
                 update_scheduled: AtomicBool::new(false),
             }),
             raw,
+            size_callback: std::cell::RefCell::new(None),
         })
+    }
+
+    /// Observe actual dimensions committed by native layout. Position-only moves
+    /// do not notify. Child layout hints can be updated synchronously; schedule
+    /// mutations that replace the surrounding composition tree through a dispatcher.
+    pub fn set_on_size_changed<F: FnMut(f32, f32) + 'static>(&self, callback: F) {
+        self.clear_on_size_changed();
+        let mut slot = self.size_callback.borrow_mut();
+        *slot = Some(Box::new(WidgetSizeCallback {
+            handler: std::rc::Rc::new(std::cell::RefCell::new(Box::new(callback))),
+        }));
+        let data = (slot.as_deref_mut().unwrap() as *mut WidgetSizeCallback).cast();
+        unsafe {
+            sys::oneui_widget_set_on_size_changed(
+                self.as_raw(),
+                Some(run_widget_size_callback),
+                data,
+            )
+        };
+    }
+    pub fn clear_on_size_changed(&self) {
+        unsafe { sys::oneui_widget_set_on_size_changed(self.as_raw(), None, std::ptr::null_mut()) };
+        self.size_callback.borrow_mut().take();
     }
 
     fn as_raw(&self) -> *mut sys::OneUiWidget {
@@ -1401,10 +1682,34 @@ impl Widget {
         unsafe { sys::oneui_widget_focused(self.as_raw()) != 0 }
     }
 
+    /// Weak checkpoint of the focused descendant, for moving existing content
+    /// between containers without changing the user's keyboard target.
+    pub fn capture_focus(&self) -> Option<FocusBookmark> {
+        NonNull::new(unsafe { sys::oneui_widget_capture_focus(self.as_raw()) }).map(|raw| {
+            FocusBookmark {
+                raw,
+                _ui_thread: std::marker::PhantomData,
+            }
+        })
+    }
+
     /// Sets concise hover help for icon-only and unfamiliar controls.
     pub fn set_tooltip(&self, tooltip: &str) {
         let tooltip = wide_null_terminated(tooltip);
         unsafe { sys::oneui_widget_set_tooltip(self.as_raw(), tooltip.as_ptr()) };
+    }
+
+    /// Gives an icon-only or custom control its accessible action name.
+    pub fn set_accessible_name(&self, name: &str) {
+        let name = wide_null_terminated(name);
+        unsafe { sys::oneui_widget_set_accessible_name(self.as_raw(), name.as_ptr()) };
+    }
+
+    pub fn set_accessible_description(&self, description: &str) {
+        let description = wide_null_terminated(description);
+        unsafe {
+            sys::oneui_widget_set_accessible_description(self.as_raw(), description.as_ptr())
+        };
     }
 
     /// Assigns semantic CSS classes. The currently installed window style
@@ -1431,6 +1736,7 @@ impl Widget {
 
 impl Drop for Widget {
     fn drop(&mut self) {
+        self.clear_on_size_changed();
         self.state
             .raw
             .store(std::ptr::null_mut(), Ordering::Release);
@@ -1488,6 +1794,41 @@ impl Color {
 
     pub const fn rgba(r: u8, g: u8, b: u8, a: u8) -> Self {
         Self { r, g, b, a }
+    }
+}
+
+/// A non-overlapping inline style range for [`Label`] text.
+///
+/// `range` uses UTF-8 byte offsets so callers can style slices without
+/// converting to platform-specific UTF-16 indices. Zero/`None` metrics inherit
+/// the label's block style; absent or transparent foreground inherits the
+/// label's paint-time color.
+#[derive(Clone, Debug, PartialEq)]
+pub struct LabelTextSpan {
+    pub range: Range<usize>,
+    pub font_size: Option<f32>,
+    pub font_weight: Option<i32>,
+    pub italic: bool,
+    pub monospace: bool,
+    pub underline: bool,
+    pub strikethrough: bool,
+    pub foreground: Option<Color>,
+    pub background: Option<Color>,
+}
+
+impl LabelTextSpan {
+    pub fn new(range: Range<usize>) -> Self {
+        Self {
+            range,
+            font_size: None,
+            font_weight: None,
+            italic: false,
+            monospace: false,
+            underline: false,
+            strikethrough: false,
+            foreground: None,
+            background: None,
+        }
     }
 }
 
@@ -1787,6 +2128,15 @@ impl Stack {
         unsafe { sys::oneui_stack_add(self.widget.as_raw(), child.as_raw()) };
     }
 
+    /// Change flow without replacing children or their state.
+    pub fn set_direction(&self, direction: StackDirection) {
+        let direction = match direction {
+            StackDirection::Column => 0,
+            StackDirection::Row => 1,
+        };
+        unsafe { sys::oneui_stack_set_direction(self.widget.as_raw(), direction) };
+    }
+
     pub fn set_gap(&self, gap: f32) {
         unsafe { sys::oneui_stack_set_gap(self.widget.as_raw(), gap) };
     }
@@ -1866,6 +2216,17 @@ impl SplitView {
 
     pub fn set_gap(&self, gap: f32) {
         unsafe { sys::oneui_split_view_set_gap(self.widget.as_raw(), gap) };
+    }
+
+    /// Colors of the divider at rest and while hovered, dragged or keyboard-focused.
+    pub fn set_divider_colors(&self, normal: Color, active: Color) {
+        unsafe {
+            sys::oneui_split_view_set_divider_colors(
+                self.widget.as_raw(),
+                normal.into(),
+                active.into(),
+            )
+        };
     }
 
     pub fn set_padding(&self, padding: Insets) {
@@ -2052,6 +2413,30 @@ impl OverlayHost {
         };
     }
 
+    /// Update bounds in place without removing a floating widget or losing its focus.
+    #[allow(clippy::too_many_arguments)]
+    pub fn update_anchored_overlay(
+        &self,
+        child: &Widget,
+        width: f32,
+        height: f32,
+        margin: Insets,
+        horizontal_alignment: OverlayAlignment,
+        vertical_alignment: OverlayAlignment,
+    ) -> bool {
+        unsafe {
+            sys::oneui_overlay_host_update_anchored_overlay(
+                self.widget.as_raw(),
+                child.as_raw(),
+                width,
+                height,
+                margin.into(),
+                horizontal_alignment as i32,
+                vertical_alignment as i32,
+            ) != 0
+        }
+    }
+
     pub fn remove_overlay(&self, child: &Widget) -> bool {
         unsafe { sys::oneui_overlay_host_remove_overlay(self.widget.as_raw(), child.as_raw()) != 0 }
     }
@@ -2081,12 +2466,16 @@ pub enum PopupInteractionMode {
 /// A native popup surface with viewport-aware placement and light-dismiss behavior.
 pub struct Popup {
     widget: Widget,
+    closed_callback: RefCell<Option<Box<VoidCallback>>>,
 }
 
 impl Popup {
     pub fn new() -> Result<Self, Error> {
         let widget = Widget::from_raw(unsafe { sys::oneui_popup_create() })?;
-        Ok(Self { widget })
+        Ok(Self {
+            widget,
+            closed_callback: RefCell::new(None),
+        })
     }
 
     pub fn set_anchor(&self, anchor: &Widget) {
@@ -2095,6 +2484,23 @@ impl Popup {
 
     pub fn set_content(&self, content: &Widget) {
         unsafe { sys::oneui_popup_set_content(self.widget.as_raw(), content.as_raw()) };
+    }
+
+    /// Called after a real open -> closed transition (Escape, outside click or API).
+    pub fn set_on_closed<F: FnMut() + 'static>(&self, callback: F) {
+        self.clear_on_closed();
+        let mut slot = self.closed_callback.borrow_mut();
+        *slot = Some(Box::new(VoidCallback {
+            handler: Rc::new(RefCell::new(Box::new(callback))),
+        }));
+        let data = (slot.as_deref_mut().unwrap() as *mut VoidCallback).cast();
+        unsafe {
+            sys::oneui_popup_set_on_closed(self.widget.as_raw(), Some(run_void_callback), data)
+        };
+    }
+    pub fn clear_on_closed(&self) {
+        unsafe { sys::oneui_popup_set_on_closed(self.widget.as_raw(), None, std::ptr::null_mut()) };
+        self.closed_callback.borrow_mut().take();
     }
 
     pub fn set_open(&self, open: bool) {
@@ -2123,6 +2529,12 @@ impl Popup {
 
     pub fn as_widget(&self) -> &Widget {
         &self.widget
+    }
+}
+
+impl Drop for Popup {
+    fn drop(&mut self) {
+        self.clear_on_closed();
     }
 }
 
@@ -2456,16 +2868,65 @@ impl Panel {
 /// A scroll container whose child remains owned by the Rust composition tree.
 pub struct ScrollView {
     widget: Widget,
+    state: Arc<ScrollViewState>,
+}
+
+struct ScrollViewState {
+    raw: AtomicPtr<sys::OneUiWidget>,
+}
+
+/// Thread-safe producer for scroll position changes on a mounted scroll view.
+#[derive(Clone)]
+pub struct ScrollViewHandle {
+    state: Arc<ScrollViewState>,
+    dispatcher: UiDispatcher,
+}
+
+impl ScrollViewHandle {
+    pub fn set_scroll_offset(&self, offset: f32) -> Result<(), Error> {
+        if self.state.raw.load(Ordering::Acquire).is_null() {
+            return Err(Error::WidgetDestroyed);
+        }
+        let state = Arc::clone(&self.state);
+        self.dispatcher.dispatch(move || {
+            let raw = state.raw.load(Ordering::Acquire);
+            if !raw.is_null() {
+                unsafe { sys::oneui_scroll_view_set_scroll_offset(raw, offset) };
+            }
+        })
+    }
+
+    pub fn scroll_to_bottom(&self) -> Result<(), Error> {
+        if self.state.raw.load(Ordering::Acquire).is_null() {
+            return Err(Error::WidgetDestroyed);
+        }
+        let state = Arc::clone(&self.state);
+        self.dispatcher.dispatch(move || {
+            let raw = state.raw.load(Ordering::Acquire);
+            if !raw.is_null() {
+                unsafe { sys::oneui_scroll_view_scroll_to_bottom(raw) };
+            }
+        })
+    }
 }
 
 impl ScrollView {
     pub fn new() -> Result<Self, Error> {
         let widget = Widget::from_raw(unsafe { sys::oneui_scroll_view_create() })?;
-        Ok(Self { widget })
+        Ok(Self {
+            state: Arc::new(ScrollViewState {
+                raw: AtomicPtr::new(widget.as_raw()),
+            }),
+            widget,
+        })
     }
 
     pub fn set_content(&self, child: &Widget) {
         unsafe { sys::oneui_scroll_view_set_content(self.widget.as_raw(), child.as_raw()) };
+    }
+
+    pub fn set_content_width(&self, width: f32) {
+        unsafe { sys::oneui_scroll_view_set_content_width(self.widget.as_raw(), width) };
     }
 
     pub fn set_content_height(&self, height: f32) {
@@ -2495,6 +2956,18 @@ impl ScrollView {
         };
     }
 
+    pub fn set_scroll_offset(&self, offset: f32) {
+        unsafe { sys::oneui_scroll_view_set_scroll_offset(self.widget.as_raw(), offset) };
+    }
+
+    pub fn scroll_offset(&self) -> f32 {
+        unsafe { sys::oneui_scroll_view_scroll_offset(self.widget.as_raw()) }
+    }
+
+    pub fn max_scroll_offset(&self) -> f32 {
+        unsafe { sys::oneui_scroll_view_max_scroll_offset(self.widget.as_raw()) }
+    }
+
     pub fn scroll_to_bottom(&self) {
         unsafe { sys::oneui_scroll_view_scroll_to_bottom(self.widget.as_raw()) };
     }
@@ -2504,9 +2977,84 @@ impl ScrollView {
     }
 }
 
+impl Drop for ScrollView {
+    fn drop(&mut self) {
+        self.state
+            .raw
+            .store(std::ptr::null_mut(), Ordering::Release);
+    }
+}
+
+fn validate_label_text_spans(text: &str, spans: &[LabelTextSpan]) -> Result<(), Error> {
+    let mut previous_end = 0usize;
+    for span in spans {
+        let metrics_valid = span
+            .font_size
+            .is_none_or(|size| size.is_finite() && size > 0.0)
+            && span
+                .font_weight
+                .is_none_or(|weight| (1..=1000).contains(&weight));
+        let range_valid = span.range.start < span.range.end
+            && span.range.end <= text.len()
+            && span.range.start >= previous_end
+            && text.is_char_boundary(span.range.start)
+            && text.is_char_boundary(span.range.end);
+        if !metrics_valid || !range_valid {
+            return Err(Error::InvalidTextOptions);
+        }
+        previous_end = span.range.end;
+    }
+    Ok(())
+}
+
+fn apply_label_content(
+    raw: *mut sys::OneUiWidget,
+    text: &str,
+    spans: &[LabelTextSpan],
+) -> Result<(), Error> {
+    validate_label_text_spans(text, spans)?;
+    let native = spans
+        .iter()
+        .map(|span| sys::OneUiLabelTextSpanUtf8 {
+            start_utf8_offset: span.range.start,
+            end_utf8_offset: span.range.end,
+            font_size: span.font_size.unwrap_or(0.0),
+            font_weight: span.font_weight.unwrap_or(0),
+            italic: i32::from(span.italic),
+            monospace: i32::from(span.monospace),
+            underline: i32::from(span.underline),
+            strikethrough: i32::from(span.strikethrough),
+            foreground: span.foreground.map(Into::into).unwrap_or_default(),
+            background: span.background.map(Into::into).unwrap_or_default(),
+        })
+        .collect::<Vec<_>>();
+    let text = sys::OneUiUtf8String::from_str(text);
+    let applied =
+        unsafe { sys::oneui_label_set_rich_text_utf8(raw, text, native.as_ptr(), native.len()) };
+    if applied == 0 {
+        Err(Error::InvalidTextOptions)
+    } else {
+        Ok(())
+    }
+}
+
+#[derive(Clone)]
+struct LabelContentUpdate {
+    text: String,
+    spans: Vec<LabelTextSpan>,
+    guard: Option<Arc<dyn Fn() -> bool + Send + Sync>>,
+    retention_guard: Option<Arc<dyn Fn() -> bool + Send + Sync>>,
+}
+
+impl LabelContentUpdate {
+    fn is_current(&self) -> bool {
+        self.guard.as_ref().is_none_or(|guard| guard())
+    }
+}
+
 struct LabelState {
     raw: AtomicPtr<sys::OneUiWidget>,
-    pending_text: Mutex<Option<String>>,
+    pending_content: Mutex<Option<LabelContentUpdate>>,
     update_scheduled: AtomicBool,
 }
 
@@ -2519,19 +3067,112 @@ struct LabelState {
 pub struct LabelHandle {
     state: Arc<LabelState>,
     dispatcher: UiDispatcher,
+    guard: Option<Arc<dyn Fn() -> bool + Send + Sync>>,
+    retention_guard: Option<Arc<dyn Fn() -> bool + Send + Sync>>,
+    retained: Option<Arc<Mutex<Option<LabelContentUpdate>>>>,
 }
 
 impl LabelHandle {
+    /// Scopes this producer without changing other producers of the same label.
+    /// Checked under the submission lock and again immediately before painting.
+    /// Guards must be fast, non-blocking, and must not call back into this handle.
+    /// Additional guards compose with the existing scope (for example session
+    /// identity followed by connection generation). The first guard controls
+    /// visibility; additional guards also reject stale retained values.
+    /// One latest value is retained, even while its visibility guard is false.
+    pub fn with_update_guard<F>(&self, guard: F) -> Self
+    where
+        F: Fn() -> bool + Send + Sync + 'static,
+    {
+        let previous = self.guard.clone();
+        let guard: Arc<dyn Fn() -> bool + Send + Sync> = Arc::new(guard);
+        let retain_check = guard.clone();
+        let previous_retention = self.retention_guard.clone();
+        let retention_guard = self.retained.as_ref().map(|_| {
+            Arc::new(move || {
+                previous_retention.as_ref().is_none_or(|check| check()) && retain_check()
+            }) as Arc<dyn Fn() -> bool + Send + Sync>
+        });
+        Self {
+            state: self.state.clone(),
+            dispatcher: self.dispatcher.clone(),
+            guard: Some(Arc::new(move || {
+                previous.as_ref().is_none_or(|check| check()) && guard()
+            })),
+            retention_guard,
+            retained: Some(
+                self.retained
+                    .clone()
+                    .unwrap_or_else(|| Arc::new(Mutex::new(None))),
+            ),
+        }
+    }
+
+    /// Resubmits this scoped producer's latest value, retaining its original
+    /// guards. Returns false when it has no currently applicable value.
+    pub fn reapply_latest(&self) -> Result<bool, Error> {
+        let latest = self
+            .retained
+            .as_ref()
+            .and_then(|value| value.lock().expect("label retained lock poisoned").clone());
+        let Some(update) = latest.filter(|update| update.is_current()) else {
+            return Ok(false);
+        };
+        self.set_content(update)?;
+        Ok(true)
+    }
+
     pub fn set_text(&self, text: impl Into<String>) -> Result<(), Error> {
+        self.set_content(LabelContentUpdate {
+            text: text.into(),
+            spans: Vec::new(),
+            guard: self.guard.clone(),
+            retention_guard: self.retention_guard.clone(),
+        })
+    }
+
+    /// Atomically submits text and inline ranges to the owning UI thread.
+    /// Bursts are coalesced to the newest complete revision.
+    pub fn set_rich_text(
+        &self,
+        text: impl Into<String>,
+        spans: Vec<LabelTextSpan>,
+    ) -> Result<(), Error> {
+        let text = text.into();
+        validate_label_text_spans(&text, &spans)?;
+        self.set_content(LabelContentUpdate {
+            text,
+            spans,
+            guard: self.guard.clone(),
+            retention_guard: self.retention_guard.clone(),
+        })
+    }
+
+    fn set_content(&self, update: LabelContentUpdate) -> Result<(), Error> {
         if self.state.raw.load(Ordering::Acquire).is_null() {
             return Err(Error::WidgetDestroyed);
         }
 
-        *self
-            .state
-            .pending_text
-            .lock()
-            .expect("label pending text lock poisoned") = Some(text.into());
+        if let Some(retained) = &self.retained {
+            let mut retained = retained.lock().expect("label retained lock poisoned");
+            if !update.retention_guard.as_ref().is_none_or(|check| check()) {
+                return Ok(());
+            }
+            *retained = Some(update.clone());
+        }
+        {
+            let mut pending = self
+                .state
+                .pending_content
+                .lock()
+                .expect("label pending content lock poisoned");
+            // A now-background producer cannot replace the active producer's
+            // pending value with a stale update that would later be discarded.
+            if !update.is_current() {
+                return Ok(());
+            }
+            *pending = Some(update);
+        }
         if self.state.update_scheduled.swap(true, Ordering::AcqRel) {
             return Ok(());
         }
@@ -2544,9 +3185,9 @@ impl LabelHandle {
         {
             state.update_scheduled.store(false, Ordering::Release);
             state
-                .pending_text
+                .pending_content
                 .lock()
-                .expect("label pending text lock poisoned")
+                .expect("label pending content lock poisoned")
                 .take();
             return Err(error);
         }
@@ -2555,28 +3196,27 @@ impl LabelHandle {
 
     fn drain_pending_text(state: &LabelState) {
         loop {
-            let text = state
-                .pending_text
+            let content = state
+                .pending_content
                 .lock()
-                .expect("label pending text lock poisoned")
+                .expect("label pending content lock poisoned")
                 .take();
             let raw = state.raw.load(Ordering::Acquire);
             if raw.is_null() {
                 state.update_scheduled.store(false, Ordering::Release);
                 return;
             }
-            if let Some(text) = text {
-                let text = sys::OneUiUtf8String::from_str(&text);
+            if let Some(content) = content.filter(|content| content.is_current()) {
                 trace_ui_task("label update started");
-                unsafe { sys::oneui_label_set_text_utf8(raw, text) };
+                let _ = apply_label_content(raw, &content.text, &content.spans);
                 trace_ui_task("label update completed");
             }
 
             state.update_scheduled.store(false, Ordering::Release);
             if state
-                .pending_text
+                .pending_content
                 .lock()
-                .expect("label pending text lock poisoned")
+                .expect("label pending content lock poisoned")
                 .is_none()
             {
                 return;
@@ -2601,7 +3241,7 @@ impl Label {
         Ok(Self {
             state: Arc::new(LabelState {
                 raw: AtomicPtr::new(widget.as_raw()),
-                pending_text: Mutex::new(None),
+                pending_content: Mutex::new(None),
                 update_scheduled: AtomicBool::new(false),
             }),
             widget,
@@ -2613,8 +3253,17 @@ impl Label {
         unsafe { sys::oneui_label_set_text_utf8(self.widget.as_raw(), text) };
     }
 
+    pub fn set_rich_text(&self, text: &str, spans: &[LabelTextSpan]) -> Result<(), Error> {
+        apply_label_content(self.widget.as_raw(), text, spans)
+    }
+
     pub fn set_font_size(&self, font_size: f32) {
         unsafe { sys::oneui_label_set_font_size(self.widget.as_raw(), font_size) };
+    }
+
+    /// The shaped width in logical pixels, using the widget's font context.
+    pub fn natural_text_width(&self) -> f32 {
+        unsafe { sys::oneui_label_natural_text_width(self.widget.as_raw()) }
     }
 
     pub fn set_color(&self, color: Color) {
@@ -2654,9 +3303,9 @@ impl Drop for Label {
             .raw
             .store(std::ptr::null_mut(), Ordering::Release);
         self.state
-            .pending_text
+            .pending_content
             .lock()
-            .expect("label pending text lock poisoned")
+            .expect("label pending content lock poisoned")
             .take();
         self.state.update_scheduled.store(false, Ordering::Release);
     }
@@ -2757,6 +3406,13 @@ impl ProgressBarHandle {
 }
 
 /// A standard determinate progress indicator with values in the [0, 1] range.
+#[derive(Clone, Debug)]
+pub struct ProgressSegment {
+    pub fraction: f64,
+    pub color: Color,
+    pub label: String,
+}
+
 pub struct ProgressBar {
     widget: Widget,
     state: Arc<ProgressBarState>,
@@ -2777,6 +3433,25 @@ impl ProgressBar {
 
     pub fn set_value(&self, value: f64) {
         unsafe { sys::oneui_progress_bar_set_value(self.widget.as_raw(), value) };
+    }
+
+    /// Replace absolute portions of the track. Fractions must be finite and nonnegative.
+    pub fn set_segments(&self, segments: &[ProgressSegment]) -> bool {
+        let values = segments
+            .iter()
+            .map(|s| sys::OneUiProgressSegmentUtf8 {
+                fraction: s.fraction,
+                color: s.color.into(),
+                label: sys::OneUiUtf8String::from_str(&s.label),
+            })
+            .collect::<Vec<_>>();
+        unsafe {
+            sys::oneui_progress_bar_set_segments_utf8(
+                self.widget.as_raw(),
+                values.as_ptr(),
+                values.len(),
+            ) != 0
+        }
     }
 
     pub fn value(&self) -> f64 {
@@ -3186,6 +3861,50 @@ impl TimeSeriesChart {
         };
     }
 
+    /// Set the number of interior vertical grid lines (0 hides them) and grid stroke width.
+    pub fn set_grid_style(&self, vertical_lines: i32, line_width: f32) {
+        unsafe {
+            sys::oneui_time_series_chart_set_grid_style(
+                self.widget.as_raw(),
+                vertical_lines,
+                line_width,
+            )
+        };
+    }
+    /// Labels ordered from the top horizontal grid line to the bottom. Colors/font follow CSS.
+    pub fn set_axis_labels(&self, labels: &[String]) {
+        let values = labels
+            .iter()
+            .map(|s| sys::OneUiUtf8String::from_str(s))
+            .collect::<Vec<_>>();
+        unsafe {
+            sys::oneui_time_series_chart_set_axis_labels_utf8(
+                self.widget.as_raw(),
+                values.as_ptr(),
+                values.len(),
+            )
+        };
+    }
+    /// Ordered positions in [0, 1] shared by series. Empty restores equal spacing.
+    /// Returns false for invalid input, leaving previous positions unchanged.
+    pub fn set_sample_positions(&self, positions: &[f64]) -> bool {
+        unsafe {
+            sys::oneui_time_series_chart_set_sample_positions(
+                self.widget.as_raw(),
+                positions.as_ptr(),
+                positions.len(),
+            ) != 0
+        }
+    }
+    pub fn set_latest_point_visible(&self, visible: bool) {
+        unsafe {
+            sys::oneui_time_series_chart_set_latest_point_visible(
+                self.widget.as_raw(),
+                i32::from(visible),
+            )
+        };
+    }
+
     pub fn set_thresholds(&self, thresholds: &[TimeSeriesThreshold]) {
         let native = thresholds
             .iter()
@@ -3315,6 +4034,10 @@ impl Button {
         unsafe { sys::oneui_button_set_trailing_text_utf8(self.widget.as_raw(), text) };
     }
 
+    pub fn set_trailing_icon(&self, symbol: IconSymbol) {
+        unsafe { sys::oneui_button_set_trailing_icon(self.widget.as_raw(), symbol as i32) };
+    }
+
     pub fn set_variant(&self, variant: ButtonVariant) {
         unsafe { sys::oneui_button_set_variant(self.widget.as_raw(), variant as i32) };
     }
@@ -3370,13 +4093,64 @@ impl Drop for Button {
 /// A compact native option selector with keyboard navigation and light dismiss.
 pub struct Select {
     widget: Widget,
+    state: Arc<SelectState>,
     changed_callback: Option<Box<ListChangedCallback>>,
+}
+
+struct SelectState {
+    raw: AtomicPtr<sys::OneUiWidget>,
+}
+
+/// Thread-safe producer for replacing the choices and selection of a mounted select.
+#[derive(Clone)]
+pub struct SelectHandle {
+    state: Arc<SelectState>,
+    dispatcher: UiDispatcher,
+}
+
+impl SelectHandle {
+    pub fn set_items(&self, items: Vec<String>, selected_index: i32) -> Result<(), Error> {
+        if self.state.raw.load(Ordering::Acquire).is_null() {
+            return Err(Error::WidgetDestroyed);
+        }
+        let state = Arc::clone(&self.state);
+        self.dispatcher.dispatch(move || {
+            let raw = state.raw.load(Ordering::Acquire);
+            if raw.is_null() {
+                return;
+            }
+            let native_items = items
+                .iter()
+                .map(|item| sys::OneUiUtf8String::from_str(item))
+                .collect::<Vec<_>>();
+            unsafe {
+                sys::oneui_select_set_items_utf8(raw, native_items.as_ptr(), native_items.len());
+                sys::oneui_select_set_selected_index(raw, selected_index);
+            }
+        })
+    }
+
+    pub fn set_selected_index(&self, index: i32) -> Result<(), Error> {
+        if self.state.raw.load(Ordering::Acquire).is_null() {
+            return Err(Error::WidgetDestroyed);
+        }
+        let state = Arc::clone(&self.state);
+        self.dispatcher.dispatch(move || {
+            let raw = state.raw.load(Ordering::Acquire);
+            if !raw.is_null() {
+                unsafe { sys::oneui_select_set_selected_index(raw, index) };
+            }
+        })
+    }
 }
 
 impl Select {
     pub fn new(items: &[String]) -> Result<Self, Error> {
         let widget = Widget::from_raw(unsafe { sys::oneui_select_create() })?;
         let select = Self {
+            state: Arc::new(SelectState {
+                raw: AtomicPtr::new(widget.as_raw()),
+            }),
             widget,
             changed_callback: None,
         };
@@ -3446,6 +4220,9 @@ impl Select {
 impl Drop for Select {
     fn drop(&mut self) {
         self.clear_on_changed();
+        self.state
+            .raw
+            .store(std::ptr::null_mut(), Ordering::Release);
     }
 }
 
@@ -3516,6 +4293,50 @@ pub enum ItemDragPhase {
     Updated,
     Dropped,
     Cancelled,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct PointerDragEvent {
+    pub phase: ItemDragPhase,
+    pub origin_x: f32,
+    pub origin_y: f32,
+    pub pointer: PointerEvent,
+}
+#[derive(Clone, Copy, Debug)]
+#[repr(i32)]
+pub enum PointerCursor {
+    Default = 0,
+    Hidden = 1,
+    Pointer = 2,
+    Text = 3,
+    Crosshair = 4,
+    Grab = 5,
+    ResizeHorizontal = 6,
+    ResizeVertical = 7,
+    ResizeNorthWestSouthEast = 8,
+    ResizeNorthEastSouthWest = 9,
+}
+struct PointerDragCallback {
+    handler: Box<dyn FnMut(PointerDragEvent)>,
+}
+unsafe extern "C" fn run_pointer_drag_callback(
+    phase: i32,
+    origin_x: f32,
+    origin_y: f32,
+    event: *const sys::OneUiPointerEvent,
+    user_data: *mut std::ffi::c_void,
+) {
+    if event.is_null() || user_data.is_null() {
+        return;
+    }
+    let event = PointerDragEvent {
+        phase: ItemDragPhase::from_raw(phase),
+        origin_x,
+        origin_y,
+        pointer: PointerEvent::from(unsafe { *event }),
+    };
+    let callback = unsafe { &mut *user_data.cast::<PointerDragCallback>() };
+    run_callback_guarded("pointer.drag", || (callback.handler)(event));
 }
 
 impl ItemDragPhase {
@@ -3776,6 +4597,7 @@ pub struct InteractiveSurface {
     pointer_moved_callback: Option<Box<PointerCallback>>,
     hover_changed_callback: Option<Box<BoolChangedCallback>>,
     context_menu_callback: Option<Box<PointerCallback>>,
+    drag_callback: Option<Box<PointerDragCallback>>,
 }
 
 impl InteractiveSurface {
@@ -3788,11 +4610,48 @@ impl InteractiveSurface {
             pointer_moved_callback: None,
             hover_changed_callback: None,
             context_menu_callback: None,
+            drag_callback: None,
         })
     }
 
     pub fn set_content(&self, child: &Widget) {
         unsafe { sys::oneui_interactive_surface_set_content(self.widget.as_raw(), child.as_raw()) };
+    }
+
+    pub fn set_pointer_cursor(&self, cursor: PointerCursor) {
+        unsafe {
+            sys::oneui_interactive_surface_set_pointer_cursor(self.widget.as_raw(), cursor as i32)
+        };
+    }
+    pub fn set_on_drag(
+        &mut self,
+        threshold: f32,
+        callback: impl FnMut(PointerDragEvent) + 'static,
+    ) {
+        self.clear_on_drag();
+        self.drag_callback = Some(Box::new(PointerDragCallback {
+            handler: Box::new(callback),
+        }));
+        let data = (self.drag_callback.as_deref_mut().unwrap() as *mut PointerDragCallback).cast();
+        unsafe {
+            sys::oneui_interactive_surface_set_on_drag(
+                self.widget.as_raw(),
+                Some(run_pointer_drag_callback),
+                threshold,
+                data,
+            )
+        };
+    }
+    pub fn clear_on_drag(&mut self) {
+        unsafe {
+            sys::oneui_interactive_surface_set_on_drag(
+                self.widget.as_raw(),
+                None,
+                7.0,
+                std::ptr::null_mut(),
+            )
+        };
+        self.drag_callback = None;
     }
 
     pub fn set_padding(&self, padding: Insets) {
@@ -4011,6 +4870,7 @@ impl InteractiveSurface {
 
 impl Drop for InteractiveSurface {
     fn drop(&mut self) {
+        self.clear_on_drag();
         self.clear_on_click();
         self.clear_on_pointer_activated();
         self.clear_on_pointer_moved();
@@ -4028,6 +4888,14 @@ pub enum ImageContentMode {
     Contain = 0,
     Cover = 1,
     Stretch = 2,
+    ActualSize = 3,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ImageContentAlignment {
+    Start = 0,
+    Center = 1,
+    End = 2,
 }
 
 /// Renderer-neutral RGBA image widget. OneUI copies the supplied pixels.
@@ -4085,6 +4953,20 @@ impl ImageView {
 
     pub fn set_content_mode(&self, mode: ImageContentMode) {
         unsafe { sys::oneui_image_view_set_content_mode(self.widget.as_raw(), mode as i32) };
+    }
+
+    pub fn set_content_alignment(
+        &self,
+        horizontal: ImageContentAlignment,
+        vertical: ImageContentAlignment,
+    ) {
+        unsafe {
+            sys::oneui_image_view_set_content_alignment(
+                self.widget.as_raw(),
+                horizontal as i32,
+                vertical as i32,
+            )
+        };
     }
 
     pub fn set_corner_radius(&self, radius: f32) {
@@ -4586,6 +5468,12 @@ impl TextField {
         unsafe { sys::oneui_text_field_set_prefix_icon(self.widget.as_raw(), symbol as i32) };
     }
 
+    pub fn set_placeholder_visible_when_focused(&self, visible: bool) {
+        unsafe {
+            sys::oneui_text_field_set_focused_placeholder(self.widget.as_raw(), visible as i32)
+        };
+    }
+
     pub fn clear_prefix_icon(&self) {
         unsafe { sys::oneui_text_field_clear_prefix_icon(self.widget.as_raw()) };
     }
@@ -4794,6 +5682,7 @@ pub struct TextArea {
     widget: Widget,
     state: Arc<TextAreaState>,
     changed_callback: Option<Box<TextFieldChangedCallback>>,
+    submitted_callback: Option<Box<TextFieldChangedCallback>>,
 }
 
 impl TextArea {
@@ -4809,6 +5698,7 @@ impl TextArea {
             }),
             widget,
             changed_callback: None,
+            submitted_callback: None,
         })
     }
 
@@ -4849,6 +5739,18 @@ impl TextArea {
         unsafe { sys::oneui_text_area_scroll_to_top(self.widget.as_raw()) };
     }
 
+    /// Chooses the chat-style multiline contract for this editor: Enter
+    /// submits, while Shift+Enter continues to insert a newline. Ctrl+Enter
+    /// remains available as an explicit submit chord in either mode.
+    pub fn set_submit_on_enter(&self, submit_on_enter: bool) {
+        unsafe {
+            sys::oneui_text_field_set_submit_on_enter(
+                self.widget.as_raw(),
+                i32::from(submit_on_enter),
+            )
+        };
+    }
+
     #[track_caller]
     pub fn set_on_changed<F>(&mut self, callback: F)
     where
@@ -4885,6 +5787,45 @@ impl TextArea {
         self.changed_callback = None;
     }
 
+    /// Invokes `callback` for Ctrl+Enter, and also for plain Enter when
+    /// `set_submit_on_enter(true)` is active. Shift+Enter remains a multiline
+    /// edit. Active IME composition is never submitted through either path.
+    #[track_caller]
+    pub fn set_on_submitted<F>(&mut self, callback: F)
+    where
+        F: FnMut(String) + 'static,
+    {
+        let trace = InteractionTrace::at("TextArea", "submitted", std::panic::Location::caller());
+        self.clear_on_submitted();
+        self.submitted_callback = Some(Box::new(TextFieldChangedCallback {
+            handler: Box::new(traced_value_callback(trace, callback)),
+        }));
+        let user_data = (self
+            .submitted_callback
+            .as_deref_mut()
+            .expect("text area submit callback was just installed")
+            as *mut TextFieldChangedCallback)
+            .cast();
+        unsafe {
+            sys::oneui_text_field_set_on_submitted_utf8(
+                self.widget.as_raw(),
+                Some(run_text_field_submitted_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn clear_on_submitted(&mut self) {
+        unsafe {
+            sys::oneui_text_field_set_on_submitted_utf8(
+                self.widget.as_raw(),
+                None,
+                std::ptr::null_mut(),
+            )
+        };
+        self.submitted_callback = None;
+    }
+
     pub fn as_widget(&self) -> &Widget {
         &self.widget
     }
@@ -4902,6 +5843,7 @@ impl Drop for TextArea {
             .take();
         self.state.update_scheduled.store(false, Ordering::Release);
         self.clear_on_changed();
+        self.clear_on_submitted();
     }
 }
 
@@ -5163,6 +6105,40 @@ impl Drop for SegmentedControl {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TabEditReason {
+    Submitted,
+    Cancelled,
+    FocusLost,
+}
+
+struct TabEditCallback {
+    handler: Box<dyn FnMut(i32, String, TabEditReason) + 'static>,
+}
+unsafe extern "C" fn run_tab_edit_callback(
+    index: i32,
+    text: *const std::ffi::c_char,
+    length: usize,
+    reason: i32,
+    user_data: *mut std::ffi::c_void,
+) {
+    if text.is_null() || user_data.is_null() {
+        return;
+    }
+    let reason = match reason {
+        0 => TabEditReason::Submitted,
+        1 => TabEditReason::Cancelled,
+        2 => TabEditReason::FocusLost,
+        _ => return,
+    };
+    let bytes = unsafe { std::slice::from_raw_parts(text.cast::<u8>(), length) };
+    let value = String::from_utf8_lossy(bytes).into_owned();
+    let callback = unsafe { &mut *user_data.cast::<TabEditCallback>() };
+    run_callback_guarded("tabs.edit_finished", || {
+        (callback.handler)(index, value, reason)
+    });
+}
+
 /// Keyboard-accessible tab strip for switching between peer workspace views.
 pub struct Tabs {
     widget: Widget,
@@ -5170,6 +6146,7 @@ pub struct Tabs {
     close_requested_callback: Option<Box<IndexChangedCallback>>,
     context_menu_requested_callback: Option<Box<ContextMenuRequestedCallback>>,
     reorder_requested_callback: Option<Box<ReorderRequestedCallback>>,
+    edit_callback: Option<Box<TabEditCallback>>,
 }
 
 impl Tabs {
@@ -5181,9 +6158,45 @@ impl Tabs {
             close_requested_callback: None,
             context_menu_requested_callback: None,
             reorder_requested_callback: None,
+            edit_callback: None,
         };
         control.set_items(items);
         Ok(control)
+    }
+
+    /// Start editing the visible label. Focus the Tabs widget through Window or
+    /// UiDispatcher after this call. Changed items cancel an outstanding edit.
+    pub fn begin_edit(&self, index: i32) -> bool {
+        unsafe { sys::oneui_tabs_begin_edit(self.widget.as_raw(), index) != 0 }
+    }
+    pub fn cancel_edit(&self) {
+        unsafe { sys::oneui_tabs_cancel_edit(self.widget.as_raw()) };
+    }
+    pub fn editing_index(&self) -> Option<usize> {
+        usize::try_from(unsafe { sys::oneui_tabs_editing_index(self.widget.as_raw()) }).ok()
+    }
+    pub fn set_on_edit_finished<F>(&mut self, callback: F)
+    where
+        F: FnMut(i32, String, TabEditReason) + 'static,
+    {
+        self.clear_on_edit_finished();
+        self.edit_callback = Some(Box::new(TabEditCallback {
+            handler: Box::new(callback),
+        }));
+        let data = (self.edit_callback.as_deref_mut().unwrap() as *mut TabEditCallback).cast();
+        unsafe {
+            sys::oneui_tabs_set_on_edit_finished(
+                self.widget.as_raw(),
+                Some(run_tab_edit_callback),
+                data,
+            )
+        };
+    }
+    pub fn clear_on_edit_finished(&mut self) {
+        unsafe {
+            sys::oneui_tabs_set_on_edit_finished(self.widget.as_raw(), None, std::ptr::null_mut())
+        };
+        self.edit_callback = None;
     }
 
     pub fn set_items(&self, items: &[String]) {
@@ -5383,6 +6396,7 @@ impl Tabs {
 
 impl Drop for Tabs {
     fn drop(&mut self) {
+        self.clear_on_edit_finished();
         self.clear_on_changed();
         self.clear_on_close_requested();
         self.clear_on_context_menu_requested();
@@ -6162,6 +7176,20 @@ impl RealtimeFrameView {
     pub fn set_scale_mode(&self, scale_mode: VideoScaleMode) {
         unsafe {
             sys::oneui_realtime_frame_view_set_scale_mode(self.widget.as_raw(), scale_mode as i32)
+        };
+    }
+
+    pub fn set_content_alignment(
+        &self,
+        horizontal: ImageContentAlignment,
+        vertical: ImageContentAlignment,
+    ) {
+        unsafe {
+            sys::oneui_realtime_frame_view_set_content_alignment(
+                self.widget.as_raw(),
+                horizontal as i32,
+                vertical as i32,
+            )
         };
     }
 
@@ -7075,6 +8103,54 @@ unsafe extern "C" fn run_window_client_size_changed_callback(
     });
 }
 
+unsafe extern "C" fn run_window_activation_changed_callback(
+    active: std::ffi::c_int,
+    user_data: *mut std::ffi::c_void,
+) {
+    if user_data.is_null() {
+        return;
+    }
+    let callback = unsafe { &mut *user_data.cast::<WindowActivationChangedCallback>() };
+    run_callback_guarded("window.activation_changed", || {
+        (callback.handler)(active != 0)
+    });
+}
+
+unsafe extern "C" fn run_window_file_drop_callback(
+    paths: *const sys::OneUiUtf8String,
+    count: usize,
+    x: f32,
+    y: f32,
+    user_data: *mut std::ffi::c_void,
+) {
+    if user_data.is_null() || (count > 0 && paths.is_null()) {
+        return;
+    }
+    let views = if count == 0 {
+        &[][..]
+    } else {
+        unsafe { std::slice::from_raw_parts(paths, count) }
+    };
+    let paths = views
+        .iter()
+        .filter_map(|path| {
+            if path.length > 0 && path.data.is_null() {
+                return None;
+            }
+            let bytes = if path.length == 0 {
+                &[][..]
+            } else {
+                unsafe { std::slice::from_raw_parts(path.data.cast::<u8>(), path.length) }
+            };
+            Some(String::from_utf8_lossy(bytes).into_owned())
+        })
+        .collect();
+    let callback = unsafe { &mut *user_data.cast::<WindowFileDropCallback>() };
+    run_callback_guarded("window.file_drop", || {
+        (callback.handler)(FileDropEvent { paths, x, y })
+    });
+}
+
 unsafe extern "C" fn run_window_close_requested_callback(
     force_exit: std::ffi::c_int,
     user_data: *mut std::ffi::c_void,
@@ -7315,6 +8391,17 @@ impl TerminalView {
 
     pub fn paste_clipboard(&self) -> bool {
         unsafe { sys::oneui_terminal_view_paste_clipboard(self.widget.as_raw()) != 0 }
+    }
+
+    /// Routes programmatic paste text through the same callback used by the
+    /// native clipboard command, preserving application paste policy.
+    pub fn paste_text(&self, text: &str) -> bool {
+        unsafe {
+            sys::oneui_terminal_view_paste_utf8(
+                self.widget.as_raw(),
+                sys::OneUiUtf8String::from_str(text),
+            ) != 0
+        }
     }
 
     pub fn set_selection(&self, selection: TerminalSelection) {
@@ -8936,6 +10023,22 @@ pub struct TableHandle {
 }
 
 impl TableHandle {
+    /// Replaces the column model on the window thread. This is useful for
+    /// result grids whose schema is produced by a background query.
+    pub fn set_columns(&self, columns: Vec<TableColumn>) -> Result<(), Error> {
+        if self.state.raw.load(Ordering::Acquire).is_null() {
+            return Err(Error::WidgetDestroyed);
+        }
+        let state = Arc::clone(&self.state);
+        self.dispatcher.dispatch(move || {
+            let raw = state.raw.load(Ordering::Acquire);
+            if raw.is_null() {
+                return;
+            }
+            set_table_columns_raw(raw, &columns);
+        })
+    }
+
     pub fn set_rows(&self, rows: Vec<TableRow>) -> Result<(), Error> {
         if self.state.raw.load(Ordering::Acquire).is_null() {
             return Err(Error::WidgetDestroyed);
@@ -8977,6 +10080,35 @@ impl TableHandle {
             set_table_rows_raw(raw, &rows);
             unsafe {
                 sys::oneui_table_set_selected_indices(raw, std::ptr::null(), 0);
+            }
+        })
+    }
+
+    /// Replaces the current revision and selects one row in the same
+    /// window-thread transaction. This prevents a queued row refresh from
+    /// clearing a newer logical selection made by the producer.
+    pub fn set_rows_and_selected_index(
+        &self,
+        rows: Vec<TableRow>,
+        index: i32,
+    ) -> Result<(), Error> {
+        if self.state.raw.load(Ordering::Acquire).is_null() {
+            return Err(Error::WidgetDestroyed);
+        }
+        let state = Arc::clone(&self.state);
+        self.dispatcher.dispatch(move || {
+            state
+                .pending_rows
+                .lock()
+                .expect("table pending rows lock poisoned")
+                .clear();
+            let raw = state.raw.load(Ordering::Acquire);
+            if raw.is_null() {
+                return;
+            }
+            set_table_rows_raw(raw, &rows);
+            unsafe {
+                sys::oneui_table_set_selected_index(raw, index);
             }
         })
     }
@@ -9043,6 +10175,19 @@ impl TableHandle {
     }
 }
 
+fn set_table_columns_raw(raw: *mut sys::OneUiWidget, columns: &[TableColumn]) {
+    let native_columns = columns
+        .iter()
+        .map(|column| sys::OneUiTableColumnUtf8 {
+            header: sys::OneUiUtf8String::from_str(&column.header),
+            width: column.width,
+        })
+        .collect::<Vec<_>>();
+    unsafe {
+        sys::oneui_table_set_columns_utf8(raw, native_columns.as_ptr(), native_columns.len())
+    };
+}
+
 fn set_table_rows_raw(raw: *mut sys::OneUiWidget, rows: &[TableRow]) {
     let native_cells = rows
         .iter()
@@ -9076,9 +10221,77 @@ fn update_table_row_raw(raw: *mut sys::OneUiWidget, index: usize, row: &TableRow
     unsafe { sys::oneui_table_update_row_utf8(raw, index, &native_row) != 0 }
 }
 
+#[derive(Clone, Debug)]
+pub struct TableRichCell {
+    pub text: String,
+    pub detail: String,
+    pub badge: String,
+    pub alignment: LabelAlign,
+    pub icon: Option<IconSymbol>,
+    pub foreground: Option<Color>,
+    pub font_size: f32,
+    pub font_weight: i32,
+}
+impl Default for TableRichCell {
+    fn default() -> Self {
+        Self {
+            text: String::new(),
+            detail: String::new(),
+            badge: String::new(),
+            alignment: LabelAlign::Start,
+            icon: None,
+            foreground: None,
+            font_size: 0.0,
+            font_weight: 400,
+        }
+    }
+}
+#[derive(Clone, Debug, Default)]
+pub struct TableRichRow {
+    pub cells: Vec<TableRichCell>,
+}
+fn rich_table_row_cells(row: &TableRichRow) -> Vec<sys::OneUiTableRichCellUtf8> {
+    row.cells
+        .iter()
+        .map(|c| sys::OneUiTableRichCellUtf8 {
+            text: sys::OneUiUtf8String::from_str(&c.text),
+            detail: sys::OneUiUtf8String::from_str(&c.detail),
+            badge: sys::OneUiUtf8String::from_str(&c.badge),
+            alignment: match c.alignment {
+                LabelAlign::Start => 0,
+                LabelAlign::Center => 1,
+                LabelAlign::End => 2,
+            },
+            icon: c.icon.map(|s| s as i32).unwrap_or(-1),
+            font_size: c.font_size,
+            font_weight: c.font_weight,
+            foreground: c
+                .foreground
+                .unwrap_or(Color {
+                    r: 0,
+                    g: 0,
+                    b: 0,
+                    a: 0,
+                })
+                .into(),
+        })
+        .collect()
+}
+struct TableCellActionCallback {
+    handler: Box<dyn FnMut(i32, i32)>,
+}
+unsafe extern "C" fn run_table_cell_action(row: i32, column: i32, data: *mut std::ffi::c_void) {
+    if data.is_null() {
+        return;
+    }
+    let callback = unsafe { &mut *data.cast::<TableCellActionCallback>() };
+    run_callback_guarded("table.cell_action", || (callback.handler)(row, column));
+}
+
 /// A fixed-row-height, viewport-virtualized native data table.
 pub struct Table {
     widget: Widget,
+    cell_action_callback: Option<Box<TableCellActionCallback>>,
     state: Arc<TableState>,
     changed_callback: Option<Box<ListChangedCallback>>,
     selection_changed_callback: Option<Box<ListSelectionChangedCallback>>,
@@ -9100,6 +10313,7 @@ impl Table {
                 update_scheduled: AtomicBool::new(false),
             }),
             widget,
+            cell_action_callback: None,
             changed_callback: None,
             selection_changed_callback: None,
             activated_callback: None,
@@ -9111,21 +10325,81 @@ impl Table {
         })
     }
 
-    pub fn set_columns(&self, columns: &[TableColumn]) {
-        let native_columns = columns
+    pub fn set_rich_rows(&self, rows: &[TableRichRow]) {
+        self.state
+            .pending_rows
+            .lock()
+            .expect("table pending rows lock poisoned")
+            .clear();
+        let cells = rows.iter().map(rich_table_row_cells).collect::<Vec<_>>();
+        let values = cells
             .iter()
-            .map(|column| sys::OneUiTableColumnUtf8 {
-                header: sys::OneUiUtf8String::from_str(&column.header),
-                width: column.width,
+            .map(|c| sys::OneUiTableRichRowUtf8 {
+                cells: c.as_ptr(),
+                count: c.len(),
             })
             .collect::<Vec<_>>();
         unsafe {
-            sys::oneui_table_set_columns_utf8(
+            sys::oneui_table_set_rich_rows_utf8(self.widget.as_raw(), values.as_ptr(), values.len())
+        };
+    }
+    pub fn update_rich_row(&self, index: usize, row: &TableRichRow) -> bool {
+        let cells = rich_table_row_cells(row);
+        let native = sys::OneUiTableRichRowUtf8 {
+            cells: cells.as_ptr(),
+            count: cells.len(),
+        };
+        unsafe { sys::oneui_table_update_rich_row_utf8(self.widget.as_raw(), index, &native) != 0 }
+    }
+    pub fn set_column_presentation(&self, column: i32, alignment: LabelAlign, action: bool) {
+        let align = match alignment {
+            LabelAlign::Start => 0,
+            LabelAlign::Center => 1,
+            LabelAlign::End => 2,
+        };
+        unsafe {
+            sys::oneui_table_set_column_presentation(
                 self.widget.as_raw(),
-                native_columns.as_ptr(),
-                native_columns.len(),
+                column,
+                align,
+                i32::from(action),
             )
         };
+    }
+    pub fn set_column_dividers_visible(&self, visible: bool) {
+        unsafe {
+            sys::oneui_table_set_column_dividers_visible(self.widget.as_raw(), i32::from(visible))
+        };
+    }
+    pub fn set_header_height(&self, height: f32) {
+        unsafe { sys::oneui_table_set_header_height(self.widget.as_raw(), height) };
+    }
+    /// Pointer release inside an action cell, or Space on the selected row.
+    pub fn set_on_cell_action<F: FnMut(i32, i32) + 'static>(&mut self, callback: F) {
+        self.clear_on_cell_action();
+        self.cell_action_callback = Some(Box::new(TableCellActionCallback {
+            handler: Box::new(callback),
+        }));
+        let data = (self.cell_action_callback.as_deref_mut().unwrap()
+            as *mut TableCellActionCallback)
+            .cast();
+        unsafe {
+            sys::oneui_table_set_on_cell_action(
+                self.widget.as_raw(),
+                Some(run_table_cell_action),
+                data,
+            )
+        };
+    }
+    pub fn clear_on_cell_action(&mut self) {
+        unsafe {
+            sys::oneui_table_set_on_cell_action(self.widget.as_raw(), None, std::ptr::null_mut())
+        };
+        self.cell_action_callback = None;
+    }
+
+    pub fn set_columns(&self, columns: &[TableColumn]) {
+        set_table_columns_raw(self.widget.as_raw(), columns);
     }
 
     pub fn set_rows(&self, rows: &[TableRow]) {
@@ -9491,6 +10765,7 @@ impl Table {
 
 impl Drop for Table {
     fn drop(&mut self) {
+        self.clear_on_cell_action();
         self.clear_on_item_drag();
         self.clear_on_reorder_requested();
         self.clear_on_context_menu_requested();
@@ -9877,6 +11152,8 @@ impl Window {
             }),
             raw_key_callback: None,
             client_size_changed_callback: None,
+            activation_changed_callback: None,
+            file_drop_callback: None,
             close_requested_callback: None,
             _ui_thread: PhantomData,
         })
@@ -9972,6 +11249,41 @@ impl Window {
         });
     }
 
+    /// Chooses whether a normal close request hides this window to its tray
+    /// entry instead of destroying it.
+    pub fn set_close_to_tray(&self, close_to_tray: bool) {
+        self.state.with_raw(|raw| unsafe {
+            sys::oneui_window_set_close_to_tray(raw, i32::from(close_to_tray));
+        });
+    }
+
+    /// Shows or removes the window-owned system tray entry.
+    pub fn set_tray_enabled(&self, enabled: bool) -> bool {
+        self.state
+            .with_raw(|raw| unsafe {
+                sys::oneui_window_set_tray_enabled(raw, i32::from(enabled)) != 0
+            })
+            .unwrap_or(false)
+    }
+
+    pub fn tray_icon_visible(&self) -> bool {
+        self.state
+            .with_raw(|raw| unsafe { sys::oneui_window_tray_icon_visible(raw) != 0 })
+            .unwrap_or(false)
+    }
+
+    /// Shows a non-sensitive informational notification through the current
+    /// tray entry.
+    pub fn notify_tray(&self, title: &str, message: &str) -> bool {
+        let title = wide_null_terminated(title);
+        let message = wide_null_terminated(message);
+        self.state
+            .with_raw(|raw| unsafe {
+                sys::oneui_window_notify_tray(raw, title.as_ptr(), message.as_ptr()) != 0
+            })
+            .unwrap_or(false)
+    }
+
     pub fn set_content(&self, content: &Widget) {
         self.state.with_raw(|raw| unsafe {
             sys::oneui_window_set_content(raw, content.as_raw());
@@ -10048,6 +11360,68 @@ impl Window {
             sys::oneui_window_set_on_client_size_changed(raw, None, std::ptr::null_mut());
         });
         self.client_size_changed_callback = None;
+    }
+
+    /// Installs a top-level activation callback. The callback runs on the
+    /// owning UI thread when the native window becomes active or inactive,
+    /// including application switches and minimization.
+    pub fn set_on_activation_changed<F>(&mut self, callback: F)
+    where
+        F: FnMut(bool) + 'static,
+    {
+        self.clear_activation_changed_callback();
+        self.activation_changed_callback = Some(Box::new(WindowActivationChangedCallback {
+            handler: Box::new(callback),
+        }));
+        let user_data = (self
+            .activation_changed_callback
+            .as_deref_mut()
+            .expect("window activation callback was just installed")
+            as *mut WindowActivationChangedCallback)
+            .cast();
+        self.state.with_raw(|raw| unsafe {
+            sys::oneui_window_set_on_activation_changed(
+                raw,
+                Some(run_window_activation_changed_callback),
+                user_data,
+            );
+        });
+    }
+
+    pub fn clear_activation_changed_callback(&mut self) {
+        self.state.with_raw(|raw| unsafe {
+            sys::oneui_window_set_on_activation_changed(raw, None, std::ptr::null_mut());
+        });
+        self.activation_changed_callback = None;
+    }
+
+    /// Installs a native filesystem-drop callback. The event owns every path
+    /// and reports its position in logical window coordinates.
+    #[track_caller]
+    pub fn set_on_file_drop<F>(&mut self, callback: F)
+    where
+        F: FnMut(FileDropEvent) + 'static,
+    {
+        self.clear_file_drop_callback();
+        self.file_drop_callback = Some(Box::new(WindowFileDropCallback {
+            handler: Box::new(callback),
+        }));
+        let user_data = (self
+            .file_drop_callback
+            .as_deref_mut()
+            .expect("window file-drop callback was just installed")
+            as *mut WindowFileDropCallback)
+            .cast();
+        self.state.with_raw(|raw| unsafe {
+            sys::oneui_window_set_on_file_drop(raw, Some(run_window_file_drop_callback), user_data);
+        });
+    }
+
+    pub fn clear_file_drop_callback(&mut self) {
+        self.state.with_raw(|raw| unsafe {
+            sys::oneui_window_set_on_file_drop(raw, None, std::ptr::null_mut());
+        });
+        self.file_drop_callback = None;
     }
 
     /// Installs the policy callback for native close requests such as Alt+F4,
@@ -10168,6 +11542,13 @@ impl Window {
         self.dispatcher().file_dialog(options)
     }
 
+    pub fn file_dialog_multiple(
+        &self,
+        options: FileDialogOptions<'_>,
+    ) -> Result<Vec<PathBuf>, Error> {
+        self.dispatcher().file_dialog_multiple(options)
+    }
+
     pub fn confirm(&self, title: &str, message: &str) -> Result<bool, Error> {
         self.dispatcher().confirm(title, message)
     }
@@ -10225,6 +11606,16 @@ impl Window {
         self.dispatcher().text_area_handle(text_area)
     }
 
+    /// Returns the thread-safe item producer for a mounted select.
+    pub fn select_handle(&self, select: &Select) -> SelectHandle {
+        self.dispatcher().select_handle(select)
+    }
+
+    /// Returns the thread-safe scroll producer for a mounted scroll view.
+    pub fn scroll_view_handle(&self, scroll_view: &ScrollView) -> ScrollViewHandle {
+        self.dispatcher().scroll_view_handle(scroll_view)
+    }
+
     /// Returns the only thread-safe update path for a mounted progress bar.
     pub fn progress_bar_handle(&self, progress_bar: &ProgressBar) -> ProgressBarHandle {
         self.dispatcher().progress_bar_handle(progress_bar)
@@ -10260,6 +11651,8 @@ impl Window {
 impl Drop for Window {
     fn drop(&mut self) {
         self.clear_close_requested_callback();
+        self.clear_file_drop_callback();
+        self.clear_activation_changed_callback();
         self.clear_client_size_changed_callback();
         self.clear_raw_key_callback();
         self.state.destroy();

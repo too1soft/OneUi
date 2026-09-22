@@ -10,6 +10,8 @@
 
 namespace oneui {
 
+enum class SliderInteraction { Begin = 0, Update = 1, Commit = 2, Cancel = 3 };
+
 class ONEUI_API Slider final : public Widget {
 public:
     Slider();
@@ -22,6 +24,11 @@ public:
     void setStyleOverride(SliderStyleOverride style);
     void clearStyleOverride();
     void setOnChanged(std::function<void(double)> callback);
+    // Input-only lifecycle. Programmatic setValue retains onChanged semantics
+    // but never generates interaction events. Cancel restores the begin value.
+    void setOnInteraction(std::function<void(SliderInteraction, double)> callback);
+    void cancelInteraction();
+    bool dragging() const;
 
     void paint(Canvas& canvas) override;
     bool onMouseMove(const MouseEvent& event) override;
@@ -34,6 +41,7 @@ public:
 private:
     void assignValue(double value);
     void assignFromPoint(Point point);
+    void notifyInteraction(SliderInteraction phase);
     double normalizedValue() const;
     SliderStyle resolvedStyle() const;
     bool hasInteractionState() const override;
@@ -45,9 +53,11 @@ private:
     double value_ = 0.0;
     bool hovered_ = false;
     bool pressed_ = false;
+    double beginValue_ = 0.0;
     std::optional<SliderStyleOverride> styleOverride_;
     Binding<double> valueBinding_;
     std::function<void(double)> onChanged_;
+    std::function<void(SliderInteraction, double)> onInteraction_;
 };
 
 } // namespace oneui

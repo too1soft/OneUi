@@ -6,6 +6,7 @@
 #include "oneui/widget.h"
 
 #include <string>
+#include <vector>
 
 namespace oneui {
 
@@ -14,12 +15,22 @@ public:
     explicit Label(std::wstring text = {});
 
     void setText(std::wstring text);
+    /// Replaces the text and its non-overlapping inline style ranges as one
+    /// invalidation, preventing streaming producers from exposing stale spans.
+    void setRichText(std::wstring text, std::vector<TextStyleSpan> spans);
     const std::wstring& text() const;
+    const std::vector<TextStyleSpan>& textSpans() const { return textSpans_; }
     void bindText(State<std::wstring>& state);
     void setColor(Color color);
     void setFontSize(float size);
     void setFontWeight(int weight);
     void setAlign(TextAlign align);
+    TextAlign textAlign() const { return align_; }
+    float fontSize() const { return fontSize_; }
+    int fontWeight() const { return fontWeight_; }
+    /// Intrinsic text dimensions before clipping/ellipsis, using the same
+    /// family, spans, weight and DPI as paint(). Intended for layout audits.
+    Size naturalTextSize() const;
     void setTextOptions(TextOptions options);
     const TextOptions& textOptions() const { return textOptions_; }
     /// Enables width-aware multi-line layout. Disabled by default so existing
@@ -48,6 +59,7 @@ private:
     int maxLines_ = 0;
     float lineHeight_ = 0.0f;
     TextOptions textOptions_;
+    std::vector<TextStyleSpan> textSpans_;
 };
 
 } // namespace oneui

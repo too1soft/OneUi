@@ -12,6 +12,7 @@ extern "C" {
 
 typedef struct OneUiWindow OneUiWindow;
 typedef struct OneUiWidget OneUiWidget;
+typedef struct OneUiFocusBookmark OneUiFocusBookmark;
 typedef struct OneUiStyleSheet OneUiStyleSheet;
 typedef struct OneUiTray OneUiTray;
 
@@ -19,6 +20,7 @@ typedef void (*OneUiVoidCallback)(void* user_data);
 typedef void (*OneUiDestroyCallback)(void* user_data);
 typedef void (*OneUiFrameCallback)(double now_ms, void* user_data);
 typedef void (*OneUiClientSizeChangedCallback)(float width, float height, void* user_data);
+typedef void (*OneUiWindowActivationChangedCallback)(int active, void* user_data);
 typedef void (*OneUiTextCallback)(const wchar_t* text, void* user_data);
 typedef void (*OneUiUtf8TextCallback)(const char* text, size_t length, void* user_data);
 typedef void (*OneUiTreeExpansionCallback)(const char* id, size_t length, int expanded, void* user_data);
@@ -28,6 +30,8 @@ typedef void (*OneUiFloatCallback)(float value, void* user_data);
 typedef void (*OneUiIntArrayCallback)(const int* values, size_t count, void* user_data);
 typedef void (*OneUiIndexPointCallback)(int index, float x, float y, void* user_data);
 typedef void (*OneUiReorderRequestedCallback)(int source_index, int target_index, void* user_data);
+// reason: 0=Enter submission, 1=cancellation, 2=focus lost. Text is borrowed for the call.
+typedef void (*OneUiTabEditCallback)(int index, const char* text, size_t length, int reason, void* user_data);
 typedef void (*OneUiTreeReorderRequestedCallback)(
     const char* source_id,
     size_t source_length,
@@ -48,6 +52,8 @@ typedef void (*OneUiItemDragCallback)(
     void* user_data);
 typedef struct OneUiPointerEvent OneUiPointerEvent;
 typedef void (*OneUiPointerCallback)(const OneUiPointerEvent* event, void* user_data);
+/* phase: 0 started, 1 updated, 2 dropped, 3 cancelled; window coordinates. */
+typedef void (*OneUiPointerDragCallback)(int phase, float origin_x, float origin_y, const OneUiPointerEvent* event, void* user_data);
 typedef void (*OneUiTimeSeriesInspectionCallback)(int index, int pinned, void* user_data);
 
 /*
@@ -58,6 +64,13 @@ typedef struct OneUiUtf8String {
     const char* data;
     size_t length;
 } OneUiUtf8String;
+
+typedef void (*OneUiFileDropCallback)(
+    const OneUiUtf8String* paths,
+    size_t count,
+    float x,
+    float y,
+    void* user_data);
 
 /* Additive ABI 25 interaction/text interfaces. All calls are UI-thread-only. */
 typedef struct OneUiCommandRegistration OneUiCommandRegistration;
@@ -221,6 +234,25 @@ typedef struct OneUiColor {
     unsigned char b;
     unsigned char a;
 } OneUiColor;
+
+/*
+ * Inline label style ranges use UTF-8 byte offsets into the text supplied to
+ * oneui_label_set_rich_text_utf8. Ranges must be ordered, non-overlapping and
+ * aligned to UTF-8 scalar boundaries. Zero font metrics inherit the label.
+ * A transparent foreground inherits the label's paint-time color.
+ */
+typedef struct OneUiLabelTextSpanUtf8 {
+    size_t start_utf8_offset;
+    size_t end_utf8_offset;
+    float font_size;
+    int font_weight;
+    int italic;
+    int monospace;
+    int underline;
+    int strikethrough;
+    OneUiColor foreground;
+    OneUiColor background;
+} OneUiLabelTextSpanUtf8;
 
 /* Rich virtual-list rows. OneUI copies every string and color before return. */
 typedef struct OneUiRichListItemUtf8 {
@@ -485,7 +517,7 @@ enum {
     OneUiTerminalCellOverline = 1u << 11
 };
 
-#define ONEUI_UTF8_ABI_VERSION 26u
+#define ONEUI_UTF8_ABI_VERSION 33u
 
 /*
  * Copies and registers a process-local font under family_alias. Call before
@@ -511,7 +543,8 @@ enum OneUiWindowCapability {
     OneUiWindowCapabilityActivation = 1u << 3,
     OneUiWindowCapabilityTopmost = 1u << 4,
     OneUiWindowCapabilityTray = 1u << 5,
-    OneUiWindowCapabilityNativeDialogs = 1u << 6
+    OneUiWindowCapabilityNativeDialogs = 1u << 6,
+    OneUiWindowCapabilityFileDrop = 1u << 7
 };
 ONEUI_API unsigned int oneui_window_backend(OneUiWindow* window);
 ONEUI_API unsigned int oneui_window_capabilities(OneUiWindow* window);
@@ -560,6 +593,24 @@ ONEUI_API void oneui_window_set_on_client_size_changed(
     OneUiWindow* window,
     OneUiClientSizeChangedCallback callback,
     void* user_data);
+/*
+ * Receives top-level native window activation changes on the owning UI thread.
+ * `active` is one when the window is active and zero after deactivation or
+ * minimization. Pass NULL before releasing user_data.
+ */
+ONEUI_API void oneui_window_set_on_activation_changed(
+    OneUiWindow* window,
+    OneUiWindowActivationChangedCallback callback,
+    void* user_data);
+/*
+ * Receives copied filesystem paths and a logical client-space drop point on
+ * the owning UI thread. The path views remain valid only for the callback.
+ * Pass NULL before releasing user_data.
+ */
+ONEUI_API void oneui_window_set_on_file_drop(
+    OneUiWindow* window,
+    OneUiFileDropCallback callback,
+    void* user_data);
 ONEUI_API void oneui_window_set_minimum_client_size(
     OneUiWindow* window,
     float width,
@@ -597,6 +648,18 @@ ONEUI_API int oneui_window_file_dialog_utf8(
     char* buffer,
     size_t buffer_len,
     size_t* required_len);
+/*
+ * Shows an owner-bound multi-file open dialog. The selected UTF-8 paths are
+ * returned as a double-NUL-terminated sequence. This entry point only accepts
+ * OneUiFileDialogOpenFile; all other modes fail with -1. Return codes and
+ * required_len semantics match oneui_window_file_dialog_utf8.
+ */
+ONEUI_API int oneui_window_file_dialog_multiple_utf8(
+    OneUiWindow* window,
+    const OneUiFileDialogOptionsUtf8* options,
+    char* buffer,
+    size_t buffer_len,
+    size_t* required_len);
 ONEUI_API int oneui_window_confirm(OneUiWindow* window, const wchar_t* title, const wchar_t* message);
 /*
  * Displays a platform-native modal text prompt owned by window. Returns 1 and
@@ -619,6 +682,7 @@ ONEUI_API int oneui_window_client_height(OneUiWindow* window);
 ONEUI_API int oneui_window_client_pixel_width(OneUiWindow* window);
 ONEUI_API int oneui_window_client_pixel_height(OneUiWindow* window);
 ONEUI_API float oneui_window_dpi_scale(OneUiWindow* window);
+ONEUI_API void oneui_window_set_content_scale(OneUiWindow* window, float scale);
 /*
  * Commits pending layout and serializes the mounted native widget tree. The snapshot is a
  * flat JSON document containing parent IDs, actual/preferred bounds,
@@ -654,6 +718,7 @@ ONEUI_API void oneui_tray_set_tooltip(OneUiTray* tray, const wchar_t* tooltip);
 ONEUI_API int oneui_tray_show_notification(OneUiTray* tray, const wchar_t* title, const wchar_t* message);
 
 ONEUI_API void oneui_widget_destroy(OneUiWidget* widget);
+ONEUI_API void oneui_widget_set_on_size_changed(OneUiWidget* widget, OneUiClientSizeChangedCallback callback, void* user_data);
 ONEUI_API void oneui_widget_set_preferred_size(OneUiWidget* widget, float width, float height);
 /* Returns the widget's committed logical layout rectangle. */
 ONEUI_API OneUiRect oneui_widget_frame(const OneUiWidget* widget);
@@ -661,7 +726,15 @@ ONEUI_API void oneui_widget_set_disabled(OneUiWidget* widget, int disabled);
 ONEUI_API void oneui_widget_set_tab_stop(OneUiWidget* widget, int tab_stop);
 ONEUI_API void oneui_widget_set_visible(OneUiWidget* widget, int visible);
 ONEUI_API int oneui_widget_focused(const OneUiWidget* widget);
+/* Weak focus checkpoint for reparenting. Does not keep content alive, activate
+   an OS window or restore focus to a hidden/disabled/unmounted descendant. */
+ONEUI_API OneUiFocusBookmark* oneui_widget_capture_focus(const OneUiWidget* root);
+ONEUI_API int oneui_focus_bookmark_restore(const OneUiFocusBookmark* bookmark, OneUiWidget* root);
+ONEUI_API void oneui_focus_bookmark_destroy(OneUiFocusBookmark* bookmark);
 ONEUI_API void oneui_widget_set_tooltip(OneUiWidget* widget, const wchar_t* tooltip);
+ONEUI_API void oneui_widget_set_accessible_name(OneUiWidget* widget, const wchar_t* name);
+ONEUI_API void oneui_widget_set_accessible_description(OneUiWidget* widget, const wchar_t* description);
+ONEUI_API void oneui_widget_set_accessible_selected(OneUiWidget* widget, int selected);
 ONEUI_API void oneui_widget_set_classes(OneUiWidget* widget, const char* classes);
 ONEUI_API void oneui_widget_set_style_node(OneUiWidget* widget, const char* tag, const char* classes);
 ONEUI_API void oneui_widget_apply_style_sheet(OneUiWidget* widget, OneUiStyleSheet* style_sheet);
@@ -670,6 +743,8 @@ ONEUI_API OneUiStyleSheet* oneui_style_sheet_create(void);
 ONEUI_API void oneui_style_sheet_destroy(OneUiStyleSheet* style_sheet);
 ONEUI_API void oneui_style_sheet_set_custom_property(OneUiStyleSheet* style_sheet, const char* name, const char* value);
 ONEUI_API int oneui_style_sheet_add_css(OneUiStyleSheet* style_sheet, const char* css, char* error_buffer, int error_buffer_len);
+/* Atomically replace rules while preserving the shared sheet identity. */
+ONEUI_API int oneui_style_sheet_replace_css(OneUiStyleSheet* style_sheet, const char* css, char* error_buffer, int error_buffer_len);
 ONEUI_API int oneui_style_sheet_load_file(OneUiStyleSheet* style_sheet, const wchar_t* path, char* error_buffer, int error_buffer_len);
 
 ONEUI_API int oneui_clipboard_set_text(const wchar_t* text);
@@ -680,6 +755,7 @@ ONEUI_API size_t oneui_clipboard_get_text_utf8(char* buffer, size_t buffer_len);
 
 ONEUI_API OneUiWidget* oneui_stack_create(OneUiStackDirection direction);
 ONEUI_API void oneui_stack_add(OneUiWidget* stack, OneUiWidget* child);
+ONEUI_API void oneui_stack_set_direction(OneUiWidget* stack, int direction);
 ONEUI_API void oneui_stack_set_gap(OneUiWidget* stack, float gap);
 ONEUI_API void oneui_stack_set_padding(OneUiWidget* stack, OneUiInsets insets);
 ONEUI_API void oneui_stack_set_align(OneUiWidget* stack, OneUiStackAlign align);
@@ -696,6 +772,7 @@ ONEUI_API void oneui_split_view_set_orientation(
 ONEUI_API void oneui_split_view_set_ratio(OneUiWidget* split_view, float ratio);
 ONEUI_API float oneui_split_view_ratio(OneUiWidget* split_view);
 ONEUI_API void oneui_split_view_set_gap(OneUiWidget* split_view, float gap);
+ONEUI_API void oneui_split_view_set_divider_colors(OneUiWidget* split_view, OneUiColor normal, OneUiColor active);
 ONEUI_API void oneui_split_view_set_padding(OneUiWidget* split_view, OneUiInsets insets);
 ONEUI_API void oneui_split_view_set_resizable(OneUiWidget* split_view, int resizable);
 ONEUI_API void oneui_split_view_set_minimum_pane_extent(
@@ -804,9 +881,13 @@ ONEUI_API void oneui_log_view_set_line_height(OneUiWidget* view, float height);
 ONEUI_API OneUiWidget* oneui_scroll_view_create(void);
 ONEUI_API void oneui_scroll_view_set_content(OneUiWidget* view, OneUiWidget* child);
 ONEUI_API void oneui_scroll_view_set_content_height(OneUiWidget* view, float height);
+ONEUI_API void oneui_scroll_view_set_content_width(OneUiWidget* view, float width);
 ONEUI_API void oneui_scroll_view_set_wheel_step(OneUiWidget* view, float step);
 ONEUI_API void oneui_scroll_view_set_chrome_visible(OneUiWidget* view, int visible);
 ONEUI_API void oneui_scroll_view_set_scrollbar_style(OneUiWidget* view, unsigned char r, unsigned char g, unsigned char b, unsigned char a, float thickness);
+ONEUI_API void oneui_scroll_view_set_scroll_offset(OneUiWidget* view, float offset);
+ONEUI_API float oneui_scroll_view_scroll_offset(OneUiWidget* view);
+ONEUI_API float oneui_scroll_view_max_scroll_offset(OneUiWidget* view);
 ONEUI_API void oneui_scroll_view_scroll_to_bottom(OneUiWidget* view);
 
 ONEUI_API OneUiWidget* oneui_panel_create(void);
@@ -830,8 +911,17 @@ ONEUI_API OneUiWidget* oneui_label_create(const wchar_t* text);
 ONEUI_API void oneui_label_set_text(OneUiWidget* label, const wchar_t* text);
 ONEUI_API OneUiWidget* oneui_label_create_utf8(OneUiUtf8String text);
 ONEUI_API void oneui_label_set_text_utf8(OneUiWidget* label, OneUiUtf8String text);
+/* Atomically replaces label text and copied inline styles; returns one on success. */
+ONEUI_API int oneui_label_set_rich_text_utf8(
+    OneUiWidget* label,
+    OneUiUtf8String text,
+    const OneUiLabelTextSpanUtf8* spans,
+    size_t span_count);
 ONEUI_API void oneui_label_set_color(OneUiWidget* label, unsigned char r, unsigned char g, unsigned char b, unsigned char a);
 ONEUI_API void oneui_label_set_font_size(OneUiWidget* label, float font_size);
+ONEUI_API float oneui_label_natural_text_width(OneUiWidget* label);
+ONEUI_API void oneui_button_set_trailing_icon(OneUiWidget* button, int symbol);
+ONEUI_API void oneui_text_field_set_focused_placeholder(OneUiWidget* field, int visible);
 ONEUI_API void oneui_label_set_font_weight(OneUiWidget* label, int font_weight);
 /* align: 0 = left, 1 = center, 2 = right */
 ONEUI_API void oneui_label_set_align(OneUiWidget* label, int align);
@@ -840,6 +930,43 @@ ONEUI_API void oneui_label_set_max_lines(OneUiWidget* label, int max_lines);
 ONEUI_API void oneui_label_set_line_height(OneUiWidget* label, float line_height);
 
 /* Standard determinate progress indicator. Values are clamped to [0, 1]. */
+/* Input-only slider phases: Begin=0, Update=1, Commit=2, Cancel=3.
+ * Setters never dispatch these phases. Callbacks execute on the UI thread. */
+typedef void (*OneUiSliderInteractionCallback)(int phase, double value, void* user_data);
+ONEUI_API OneUiWidget* oneui_slider_create(void);
+ONEUI_API void oneui_slider_set_range(OneUiWidget* slider, double minimum, double maximum);
+ONEUI_API void oneui_slider_set_step(OneUiWidget* slider, double step);
+ONEUI_API void oneui_slider_set_value(OneUiWidget* slider, double value);
+ONEUI_API double oneui_slider_value(OneUiWidget* slider);
+ONEUI_API int oneui_slider_is_dragging(OneUiWidget* slider);
+ONEUI_API void oneui_slider_cancel_interaction(OneUiWidget* slider);
+ONEUI_API void oneui_slider_set_on_interaction(OneUiWidget* slider, OneUiSliderInteractionCallback callback, void* user_data);
+
+typedef struct OneUiProgressSegmentUtf8 {
+    double fraction;
+    OneUiColor color;
+    OneUiUtf8String label;
+} OneUiProgressSegmentUtf8;
+typedef struct OneUiTableRichCellUtf8 {
+    OneUiUtf8String text, detail, badge;
+    int alignment, icon;
+    float font_size;
+    int font_weight;
+    OneUiColor foreground;
+} OneUiTableRichCellUtf8;
+typedef struct OneUiTableRichRowUtf8 {
+    const OneUiTableRichCellUtf8* cells;
+    size_t count;
+} OneUiTableRichRowUtf8;
+
+ONEUI_API int oneui_progress_bar_set_segments_utf8(OneUiWidget* bar, const OneUiProgressSegmentUtf8* segments, size_t count);
+ONEUI_API void oneui_table_set_rich_rows_utf8(OneUiWidget* table, const OneUiTableRichRowUtf8* rows, size_t count);
+ONEUI_API int oneui_table_update_rich_row_utf8(OneUiWidget* table, size_t index, const OneUiTableRichRowUtf8* row);
+ONEUI_API void oneui_table_set_column_presentation(OneUiWidget* table, int column, int alignment, int action);
+ONEUI_API void oneui_table_set_column_dividers_visible(OneUiWidget* table, int visible);
+ONEUI_API void oneui_table_set_header_height(OneUiWidget* table, float height);
+ONEUI_API void oneui_table_set_on_cell_action(OneUiWidget* table, OneUiReorderRequestedCallback callback, void* user_data);
+
 ONEUI_API OneUiWidget* oneui_progress_bar_create(void);
 ONEUI_API void oneui_progress_bar_set_value(OneUiWidget* progress_bar, double value);
 ONEUI_API double oneui_progress_bar_value(OneUiWidget* progress_bar);
@@ -874,6 +1001,10 @@ ONEUI_API void oneui_time_series_chart_set_visual_style(
     float line_width,
     unsigned char fill_alpha);
 ONEUI_API void oneui_time_series_chart_set_plot_insets(OneUiWidget* chart, OneUiInsets insets);
+ONEUI_API void oneui_time_series_chart_set_grid_style(OneUiWidget* chart, int vertical_lines, float line_width);
+ONEUI_API void oneui_time_series_chart_set_axis_labels_utf8(OneUiWidget* chart, const OneUiUtf8String* labels, size_t count);
+ONEUI_API int oneui_time_series_chart_set_sample_positions(OneUiWidget* chart, const double* positions, size_t count);
+ONEUI_API void oneui_time_series_chart_set_latest_point_visible(OneUiWidget* chart, int visible);
 ONEUI_API void oneui_time_series_chart_set_thresholds(
     OneUiWidget* chart,
     const OneUiTimeSeriesThreshold* thresholds,
@@ -892,7 +1023,7 @@ ONEUI_API void oneui_icon_set_color(OneUiWidget* icon, unsigned char r, unsigned
 ONEUI_API void oneui_icon_set_accent(OneUiWidget* icon, unsigned char r, unsigned char g, unsigned char b, unsigned char a);
 ONEUI_API void oneui_icon_set_stroke_width(OneUiWidget* icon, float width);
 
-/* ImageView copies the RGBA buffer before returning. content_mode: 0=contain, 1=cover, 2=stretch. */
+/* ImageView copies the RGBA buffer before returning. content_mode: 0=contain, 1=cover, 2=stretch, 3=actual size. */
 ONEUI_API OneUiWidget* oneui_image_view_create();
 ONEUI_API int oneui_image_view_set_rgba(
     OneUiWidget* image,
@@ -903,6 +1034,11 @@ ONEUI_API int oneui_image_view_set_rgba(
     int stride);
 ONEUI_API void oneui_image_view_clear(OneUiWidget* image);
 ONEUI_API void oneui_image_view_set_content_mode(OneUiWidget* image, int content_mode);
+/* alignment: 0=start, 1=center, 2=end. */
+ONEUI_API void oneui_image_view_set_content_alignment(
+    OneUiWidget* image,
+    int horizontal_alignment,
+    int vertical_alignment);
 ONEUI_API void oneui_image_view_set_corner_radius(OneUiWidget* image, float radius);
 ONEUI_API void oneui_image_view_set_background(
     OneUiWidget* image,
@@ -1000,6 +1136,10 @@ ONEUI_API void oneui_tabs_set_item_width_range(
 ONEUI_API void oneui_tabs_set_closable(OneUiWidget* tabs, int closable);
 ONEUI_API void oneui_tabs_set_reorder_enabled(OneUiWidget* tabs, int enabled);
 ONEUI_API int oneui_tabs_reorder_enabled(OneUiWidget* tabs);
+ONEUI_API int oneui_tabs_begin_edit(OneUiWidget* tabs, int index);
+ONEUI_API void oneui_tabs_cancel_edit(OneUiWidget* tabs);
+ONEUI_API int oneui_tabs_editing_index(OneUiWidget* tabs);
+ONEUI_API void oneui_tabs_set_on_edit_finished(OneUiWidget* tabs, OneUiTabEditCallback callback, void* user_data);
 ONEUI_API void oneui_tabs_set_on_changed(
     OneUiWidget* tabs,
     OneUiIntCallback callback,
@@ -1269,6 +1409,9 @@ ONEUI_API void oneui_interactive_surface_set_on_pointer_moved(
     OneUiWidget* surface,
     OneUiPointerCallback callback,
     void* user_data);
+ONEUI_API void oneui_interactive_surface_set_on_drag(OneUiWidget* surface, OneUiPointerDragCallback callback, float threshold, void* user_data);
+/* CursorKind ordinal; 5 grab, 6 horizontal resize, 7 vertical resize. */
+ONEUI_API void oneui_interactive_surface_set_pointer_cursor(OneUiWidget* surface, int cursor);
 ONEUI_API void oneui_interactive_surface_set_on_hover_changed(
     OneUiWidget* surface,
     OneUiBoolCallback callback,
@@ -1280,6 +1423,10 @@ ONEUI_API void oneui_interactive_surface_set_on_context_menu_requested(
 
 ONEUI_API OneUiWidget* oneui_realtime_frame_view_create(void);
 ONEUI_API void oneui_realtime_frame_view_set_scale_mode(OneUiWidget* frame_view, OneUiVideoScaleMode scale_mode);
+ONEUI_API void oneui_realtime_frame_view_set_content_alignment(
+    OneUiWidget* frame_view,
+    int horizontal_alignment,
+    int vertical_alignment);
 ONEUI_API void oneui_realtime_frame_view_set_background(OneUiWidget* frame_view, unsigned char r, unsigned char g, unsigned char b, unsigned char a);
 ONEUI_API void oneui_realtime_frame_view_submit_frame(
     OneUiWidget* frame_view,
@@ -1399,6 +1546,7 @@ ONEUI_API int oneui_terminal_view_text_input_caret_rect(
 ONEUI_API void oneui_terminal_view_select_all(OneUiWidget* view);
 ONEUI_API int oneui_terminal_view_copy_selection(OneUiWidget* view);
 ONEUI_API int oneui_terminal_view_paste_clipboard(OneUiWidget* view);
+ONEUI_API int oneui_terminal_view_paste_utf8(OneUiWidget* view, OneUiUtf8String text);
 ONEUI_API void oneui_terminal_view_set_selection(
     OneUiWidget* view,
     unsigned short start_row,
@@ -1504,6 +1652,7 @@ ONEUI_API void oneui_text_field_set_read_only(OneUiWidget* text_field, int read_
 ONEUI_API void oneui_text_field_set_password_mode(OneUiWidget* text_field, int enabled);
 ONEUI_API void oneui_text_field_set_password_mask(OneUiWidget* text_field, unsigned int codepoint);
 ONEUI_API void oneui_text_field_set_multiline(OneUiWidget* text_field, int multiline);
+ONEUI_API void oneui_text_field_set_submit_on_enter(OneUiWidget* text_field, int submit_on_enter);
 ONEUI_API void oneui_text_field_set_line_height(OneUiWidget* text_field, float line_height);
 ONEUI_API void oneui_text_field_set_font_size(OneUiWidget* text_field, float font_size);
 ONEUI_API OneUiWidget* oneui_text_area_create_utf8(OneUiUtf8String placeholder);

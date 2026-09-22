@@ -56,6 +56,44 @@ int TimeSeriesChart::gridLines() const {
     return gridLines_;
 }
 
+void TimeSeriesChart::setGridStyle(int verticalLines, float lineWidth) {
+    verticalGridLines_ = std::clamp(verticalLines, 0, 16);
+    gridLineWidth_ = std::isfinite(lineWidth) ? std::clamp(lineWidth, 0.1f, 6.0f) : 1.0f;
+    invalidate();
+}
+
+void TimeSeriesChart::setAxisLabels(std::vector<std::wstring> labels) {
+    axisLabels_ = std::move(labels);
+    invalidate();
+}
+
+void TimeSeriesChart::setStyleBox(const StyleBox& style) {
+    gridColor_ = style.borderColor;
+    axisLabelColor_ = style.placeholderColor ? style.placeholderColor : style.foreground;
+    axisLabelSize_ = style.fontSize.value_or(11.0f);
+    invalidate();
+}
+
+bool TimeSeriesChart::setSamplePositions(std::vector<double> positions) {
+    if (!std::is_sorted(positions.begin(), positions.end()) ||
+        std::any_of(positions.begin(), positions.end(), [](double p) {
+            return !std::isfinite(p) || p < 0.0 || p > 1.0;
+        })) return false;
+    samplePositions_ = std::move(positions);
+    invalidate();
+    return true;
+}
+
+void TimeSeriesChart::setLatestPointVisible(bool visible) {
+    latestPointVisible_ = visible;
+    invalidate();
+}
+
+float TimeSeriesChart::sampleProgress(std::size_t index, std::size_t count) const {
+    if (count == samplePositions_.size() && index < count) return static_cast<float>(samplePositions_[index]);
+    return count <= 1 ? 1.0f : static_cast<float>(index) / static_cast<float>(count - 1);
+}
+
 void TimeSeriesChart::setSmoothCurves(bool enabled) {
     smoothCurves_ = enabled;
     invalidate();
@@ -154,6 +192,13 @@ int TimeSeriesChart::inspectionIndexAt(Point point) const {
         static_cast<double>(point.x - rect.x) / static_cast<double>(rect.width),
         0.0,
         1.0);
+    if (samplePositions_.size() == count) {
+        const auto it = std::lower_bound(samplePositions_.begin(), samplePositions_.end(), progress);
+        if (it == samplePositions_.begin()) return 0;
+        if (it == samplePositions_.end()) return static_cast<int>(count - 1);
+        const auto index = static_cast<int>(it - samplePositions_.begin());
+        return progress - *(it - 1) <= *it - progress ? index - 1 : index;
+    }
     return static_cast<int>(std::llround(progress * static_cast<double>(count - 1)));
 }
 
@@ -163,9 +208,7 @@ Rect TimeSeriesChart::inspectionDamageRect(int index) const {
     if (index < 0 || count == 0 || rect.width <= 0.0f || rect.height <= 0.0f) {
         return Rect{};
     }
-    const float progress = count <= 1
-        ? 1.0f
-        : static_cast<float>(index) / static_cast<float>(count - 1);
+    const float progress = sampleProgress(static_cast<std::size_t>(index), count);
     const float x = rect.x + rect.width * progress;
     return Rect{x - 7.0f, rect.y - 3.0f, 14.0f, rect.height + 6.0f};
 }
@@ -230,10 +273,10 @@ void TimeSeriesChart::paint(Canvas& canvas) {
         return;
     }
 
-    const Color grid{theme().border.r, theme().border.g, theme().border.b, 118};
+    const Color grid = gridColor_.value_or(Color{theme().border.r, theme().border.g, theme().border.b, 118});
     const auto drawGrid = [&](Point from, Point to) {
         if (!dashedGrid_) {
-            canvas.drawLine(from, to, grid, 1.0f);
+            canvas.drawLine(from, to, grid, gridLineWidth_);
             return;
         }
         const bool horizontal = std::abs(to.x - from.x) >= std::abs(to.y - from.y);
@@ -246,13 +289,13 @@ void TimeSeriesChart::paint(Canvas& canvas) {
                     Point{from.x + direction * offset, from.y},
                     Point{from.x + direction * end, from.y},
                     grid,
-                    1.0f);
+                    gridLineWidth_);
             } else {
                 canvas.drawLine(
                     Point{from.x, from.y + direction * offset},
                     Point{from.x, from.y + direction * end},
                     grid,
-                    1.0f);
+                    gridLineWidth_);
             }
         }
     };
@@ -262,9 +305,14 @@ void TimeSeriesChart::paint(Canvas& canvas) {
             : static_cast<float>(index) / static_cast<float>(gridLines_ - 1);
         const float y = rect.y + rect.height * progress;
         drawGrid(Point{rect.x, y}, Point{rect.x + rect.width, y});
+        if (static_cast<std::size_t>(index) < axisLabels_.size() && plotInsets_.left > 6.0f) {
+            canvas.drawTextStyledEllipsized(axisLabels_[index],
+                Rect{frame().x, y - axisLabelSize_ * 0.5f, plotInsets_.left - 6.0f, axisLabelSize_},
+                disabled() ? theme().disabledForeground : axisLabelColor_.value_or(theme().textMuted), axisLabelSize_, TextAlign::Left, 400);
+        }
     }
-    for (int index = 1; index < 6; ++index) {
-        const float x = rect.x + rect.width * static_cast<float>(index) / 6.0f;
+    for (int index = 1; index <= verticalGridLines_; ++index) {
+        const float x = rect.x + rect.width * static_cast<float>(index) / static_cast<float>(verticalGridLines_ + 1);
         drawGrid(Point{x, rect.y}, Point{x, rect.y + rect.height});
     }
     if (axesVisible_) {
@@ -294,16 +342,14 @@ void TimeSeriesChart::paint(Canvas& canvas) {
     }
 
     canvas.save();
-    canvas.clipRect(rect);
+    canvas.clipRect(Rect{rect.x - 3.0f, rect.y - 3.0f, rect.width + 6.0f, rect.height + 6.0f});
     for (const auto& item : series_) {
         if (item.values.empty()) {
             continue;
         }
         const Color color = disabled() ? theme().disabledForeground : item.color;
         const auto pointAt = [&](std::size_t index) {
-            const float xProgress = item.values.size() <= 1
-                ? 1.0f
-                : static_cast<float>(index) / static_cast<float>(item.values.size() - 1);
+            const float xProgress = sampleProgress(index, item.values.size());
             const double normalized = std::clamp((item.values[index] - minimum_) / span, 0.0, 1.0);
             return Point{
                 rect.x + rect.width * xProgress,
@@ -357,13 +403,15 @@ void TimeSeriesChart::paint(Canvas& canvas) {
             }
             canvas.strokePath(linePath, color, lineWidth_, true);
         }
+        if (latestPointVisible_ && std::isfinite(item.values.back())) {
+            const auto point = pointAt(item.values.size() - 1);
+            canvas.fillEllipse(Rect{point.x - 2.5f, point.y - 2.5f, 5.0f, 5.0f}, color);
+        }
     }
 
     const auto sampleCount = maximumSampleCount();
     if (inspectionIndex_ >= 0 && sampleCount > 0) {
-        const float progress = sampleCount <= 1
-            ? 1.0f
-            : static_cast<float>(inspectionIndex_) / static_cast<float>(sampleCount - 1);
+        const float progress = sampleProgress(static_cast<std::size_t>(inspectionIndex_), sampleCount);
         const float x = rect.x + rect.width * progress;
         const Color crosshair = inspectionPinned_
             ? Color{theme().primary.r, theme().primary.g, theme().primary.b, 220}

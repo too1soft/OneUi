@@ -1,13 +1,13 @@
 # OneUI C ABI 接入
 
 OneUI 使用版本化 C ABI 为 Rust、Go、C#、Python FFI 和不同 C++ ABI 的产品提供边界。本文说明
-当前 ABI v25 的形状、所有权、线程和迁移规则；完整函数签名只以
+当前 ABI v33 的形状、所有权、线程和迁移规则；完整函数签名只以
 `include/oneui/oneui_c_api.h` 为准。
 
 ## 当前版本
 
 ```c
-#define ONEUI_UTF8_ABI_VERSION 26u
+#define ONEUI_UTF8_ABI_VERSION 33u
 ```
 
 运行时检查：
@@ -20,6 +20,32 @@ if (oneui_utf8_abi_version() != ONEUI_UTF8_ABI_VERSION) {
 ```
 
 safe Rust `Window::new` 自动执行同一检查并返回 `AbiVersionMismatch`。
+
+开发阶段在同一 ABI 版本内也有增量符号，例如 Tabs 原位编辑与弱焦点书签。
+版本常量相同不保证旧 DLL 拥有新增导出；头文件、导入库、DLL 与 Rust 绑定必须来自同一构建。
+`supported-symbols.txt` 与 ABI 同步检查约束声明清单，消费者仍需链接并运行匹配产物。
+
+ABI v33 增加原生 `Slider` 创建、范围、步长、值、拖动查询和取消接口，以及输入专用的
+`Begin / Update / Commit / Cancel` 回调。程序设值不触发输入回调；松手才提交，
+Esc、隐藏、禁用和捕获丢失取消并恢复开始值。箭头及Home/End产生完整输入生命周期。
+回调在UI线程执行，卸载前需要恢复业务状态的调用者应先取消交互，再断开回调。
+非法非有限数值不改变控件状态；旧C++ `onChanged` 程序设值行为保持兼容。
+`slider` CSS标签支持普通、悬浮、按下、禁用和焦点状态：background为轨道色，
+color为填充与滑块色，border为滑块边缘，outline控制焦点环；height是命中区域高度。
+
+ABI v32 增加顶层窗口激活状态回调，用于在切换应用或最小化后暂停后台动态内容，并在恢复激活时按需继续。
+
+ABI v31 为 `ImageView` 增加原始尺寸内容模式和水平/垂直内容对齐，供可缩放工作区在
+不预裁剪像素的前提下实现 `cover / contain / auto / stretch` 与边缘定位。
+
+ABI v30 增加 `oneui_window_file_dialog_multiple_utf8`，为原生上传工作流提供有宿主窗口的
+多文件选择。结果以双 NUL 结尾的 UTF-8 路径序列返回；取消、缓冲区不足和错误仍沿用单路径
+文件对话框的返回约定。safe Rust 使用 `file_dialog_multiple` 将其转换为有序 `Vec<PathBuf>`。
+
+ABI v29 为只读 `Label` 增加原子富文本入口 `oneui_label_set_rich_text_utf8`。每个
+`OneUiLabelTextSpanUtf8` 使用 UTF-8 字节范围，并可覆盖字号、字重、斜体、等宽字体、
+下划线、删除线、前景和背景色。范围必须位于 Unicode scalar 边界、按升序且互不重叠；
+校验失败返回 0，控件现有文字与样式保持不变。span 数组只在调用期间借用，OneUI 会复制数据。
 
 ## 进程内字体
 
@@ -36,8 +62,12 @@ safe Rust `Window::new` 自动执行同一检查并返回 `AbiVersionMismatch`�
 跨平台增量接口为 `oneui_window_backend`、`oneui_window_capabilities` 和
 `oneui_window_initialize_checked`，既有 POD 字段布局和 Windows 符号保留。
 后端枚举为 Unknown、Win32、Cocoa、X11、Wayland；能力位覆盖 Clipboard、Ime、Placement、
-Activation、Topmost、Tray、NativeDialogs。能力查询必须在初始化后进行，并可随会话变化。
+Activation、Topmost、Tray、NativeDialogs、FileDrop。能力查询必须在初始化后进行，并可随会话变化。
 `oneui_window_create_utf8` 初始化连接失败返回 null；checked 初始化失败返回 0。
+
+Win32 的 `oneui_window_set_on_file_drop` 在 UI 线程提供已复制的 UTF-8 文件路径和逻辑客户区坐标；
+回调返回后路径 view 失效。清除回调会同时停止接受系统文件投递。`oneui_terminal_view_paste_utf8`
+可将应用提供的文字送入终端既有 paste 回调，不改写系统剪贴板。
 
 Linux/macOS 推荐 UTF-8 接口；遗留 `wchar_t*` 接口按目标系统宽度解释，Windows 是 UTF-16，
 Linux/macOS 是 UTF-32。`oneui-sys::WChar` 与此一致。原始 Rust FFI 仅承诺

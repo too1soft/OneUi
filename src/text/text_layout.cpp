@@ -3,6 +3,7 @@
 #include "internal/unicode.h"
 #include "platform/shared/skia_canvas.h"
 #include "include/core/SkCanvas.h"
+#include "include/core/SkData.h"
 #include "include/core/SkFontMgr.h"
 #include "modules/skparagraph/include/FontCollection.h"
 #include "modules/skparagraph/include/Paragraph.h"
@@ -38,7 +39,8 @@ struct Key {
             std::tie(a.family, a.fallbackFamily, a.size, a.weight, a.width, a.lineHeight,
                      a.scale, a.align, a.maxLines, a.ellipsis, a.text.direction, a.text.wrap, a.text.locale) ==
             std::tie(b.family, b.fallbackFamily, b.size, b.weight, b.width, b.lineHeight,
-                     b.scale, b.align, b.maxLines, b.ellipsis, b.text.direction, b.text.wrap, b.text.locale);
+                     b.scale, b.align, b.maxLines, b.ellipsis, b.text.direction, b.text.wrap, b.text.locale) &&
+            a.spans == b.spans;
     }
 };
 struct CacheEntry { Key key; std::shared_ptr<Layout> layout; };
@@ -95,6 +97,7 @@ struct Layout::Impl {
     std::vector<Line> lines;
     std::unique_ptr<p::Paragraph> paragraph;
     std::vector<Part> parts;
+    std::vector<SkColor> inlineForegrounds;
     mutable std::vector<Stop> stops;
     mutable bool stopsReady = false;
     float width = 0, height = 0, baseline = 0;
@@ -177,7 +180,55 @@ struct Layout::Impl {
         if (options.maxLines) paragraphStyle.setMaxLines(options.maxLines);
         if (options.ellipsis) paragraphStyle.setEllipsis(u"\u2026");
         auto builder = p::ParagraphBuilder::make(paragraphStyle, fonts(), unicodeEngine());
-        builder->addText(utf8.data(), utf8.size());
+        const auto addTextRange = [&](std::size_t start, std::size_t end) {
+            if (end <= start) return;
+            const auto byteStart = wideTo8.at(start);
+            const auto byteEnd = wideTo8.at(end);
+            builder->addText(utf8.data() + byteStart, byteEnd - byteStart);
+        };
+        std::size_t cursor = 0;
+        for (const auto& span : options.spans) {
+            addTextRange(cursor, span.start);
+            auto spanStyle = style;
+            if (span.fontSize > 0.0f) spanStyle.setFontSize(span.fontSize);
+            const auto spanWeight = span.fontWeight > 0 ? span.fontWeight : options.weight;
+            spanStyle.setFontStyle(SkFontStyle(
+                spanWeight,
+                SkFontStyle::kNormal_Width,
+                span.italic ? SkFontStyle::kItalic_Slant : SkFontStyle::kUpright_Slant));
+            if (span.monospace) {
+                if (testFonts) spanStyle.setFontFamilies({testFontFamilies.front()});
+                else spanStyle.setFontFamilies({SkString(defaultFamily(TextFontFamily::Monospace))});
+            }
+            if (span.foreground.a > 0) {
+                const auto foreground = SkColorSetARGB(
+                    span.foreground.a, span.foreground.r, span.foreground.g, span.foreground.b);
+                inlineForegrounds.push_back(foreground);
+                spanStyle.setForegroundPaintID(static_cast<int>(inlineForegrounds.size()));
+            }
+            if (span.background.a > 0) {
+                SkPaint paint;
+                paint.setAntiAlias(true);
+                paint.setColor(SkColorSetARGB(
+                    span.background.a, span.background.r, span.background.g, span.background.b));
+                spanStyle.setBackgroundPaint(paint);
+            }
+            int decorations = p::TextDecoration::kNoDecoration;
+            if (span.underline) decorations |= p::TextDecoration::kUnderline;
+            if (span.strikethrough) decorations |= p::TextDecoration::kLineThrough;
+            if (decorations != p::TextDecoration::kNoDecoration) {
+                spanStyle.setDecoration(static_cast<p::TextDecoration>(decorations));
+                const auto decoration = span.foreground.a > 0
+                    ? SkColorSetARGB(span.foreground.a, span.foreground.r, span.foreground.g, span.foreground.b)
+                    : SkColorSetARGB(210, 148, 163, 184);
+                spanStyle.setDecorationColor(decoration);
+            }
+            builder->pushStyle(spanStyle);
+            addTextRange(span.start, span.end);
+            builder->pop();
+            cursor = span.end;
+        }
+        addTextRange(cursor, wideTo8.size() - 1);
         paragraph = builder->Build();
         const float layoutWidth = options.text.wrap == TextWrapMode::NoWrap && !options.ellipsis ? 1000000.0f : options.width;
         paragraph->layout(layoutWidth);
@@ -210,6 +261,17 @@ std::shared_ptr<Layout> Layout::make(const std::wstring& value, const LayoutOpti
     if (!std::isfinite(options.size) || options.size <= 0 || !std::isfinite(options.width) || options.width < 0 ||
         !std::isfinite(options.lineHeight) || options.lineHeight < 0 || !std::isfinite(options.scale) || options.scale <= 0)
         throw std::invalid_argument("Invalid OneUI text layout metrics");
+    std::size_t previousSpanEnd = 0;
+    for (const auto& span : options.spans) {
+        if (!std::isfinite(span.fontSize) || span.fontSize < 0.0f ||
+            span.fontWeight < 0 || span.fontWeight > 1000 || span.start >= span.end ||
+            span.end > value.size() || span.start < previousSpanEnd ||
+            unicode::boundary(value, span.start) != span.start ||
+            unicode::boundary(value, span.end) != span.end) {
+            throw std::invalid_argument("Invalid OneUI text style span");
+        }
+        previousSpanEnd = span.end;
+    }
     if (options.text.locale.empty()) options.text.locale = "und";
     if (options.text.wrap == TextWrapMode::NoWrap && !options.ellipsis) options.width = 1000000.0f;
     Key key{options.sensitive ? std::wstring{} : value, options};
@@ -225,7 +287,7 @@ std::shared_ptr<Layout> Layout::make(const std::wstring& value, const LayoutOpti
     auto impl = std::make_unique<Impl>(value, options);
     // Each hard paragraph has its own base direction and cache entry. Edits in
     // one paragraph reuse the shaped results for all unchanged paragraphs.
-    if (value.find(L'\n') != std::wstring::npos) {
+    if (options.spans.empty() && value.find(L'\n') != std::wstring::npos) {
         std::size_t start = 0;
         do {
             auto end = value.find(L'\n', start);
@@ -436,7 +498,10 @@ std::pair<std::size_t, std::size_t> Layout::word(std::size_t offset) const {
 void Layout::paint(SkCanvas& canvas, Point origin, Color color) const {
     for (const auto& part : impl_->parts) part.layout->paint(canvas, {origin.x, origin.y + part.y}, color);
     if (!impl_->paragraph) return;
-    ForegroundPainter painter(canvas, SkColorSetARGB(color.a, color.r, color.g, color.b));
+    ForegroundPainter painter(
+        canvas,
+        SkColorSetARGB(color.a, color.r, color.g, color.b),
+        impl_->inlineForegrounds);
     impl_->paragraph->paint(&painter, origin.x, origin.y);
 }
 LayoutStats Layout::stats() { auto result = counters; result.cachedEntries = cache.size(); return result; }
@@ -445,9 +510,8 @@ void Layout::installTestFonts(const std::vector<std::string>& paths) {
     clearCache(); testFonts.reset(); testFontFamilies.clear();
     if (paths.empty()) return;
     auto provider = sk_make_sp<p::TypefaceFontProvider>();
-    auto loader = rendering::makePlatformFontManager();
     for (const auto& path : paths) {
-        auto face = loader->makeFromFile(path.c_str());
+        auto face = rendering::makeTypefaceFromData(SkData::MakeFromFileName(path.c_str()));
         if (!face) throw std::runtime_error("Could not load required test font: " + path);
         const SkString alias(("OneUI Test " + std::to_string(testFontFamilies.size())).c_str());
         provider->registerTypeface(std::move(face), alias);

@@ -1,24 +1,26 @@
 use super::sys;
 use super::{
     callback_panic_handler, clear_interaction_trace_handler, emit_interaction_trace,
-    run_callback_guarded, run_remote_text_input_callback, run_time_series_inspection_callback,
-    run_void_handler, run_window_client_size_changed_callback, run_window_raw_key_callback,
-    set_callback_panic_handler, set_interaction_trace_handler,
+    parse_multiple_file_dialog_output, run_callback_guarded, run_remote_text_input_callback,
+    run_time_series_inspection_callback, run_void_handler, run_window_activation_changed_callback,
+    run_window_client_size_changed_callback, run_window_file_drop_callback,
+    run_window_raw_key_callback, set_callback_panic_handler, set_interaction_trace_handler,
     should_apply_application_cursor_style, terminal_style, traced_callback, traced_value_callback,
-    Button, Color, Dialog, Error, FileDialogFilter, FileDialogMode, FileDialogOptions, IconSymbol,
-    Insets, InteractionTrace, InteractiveSurface, InteractiveSurfaceStateStyle,
-    InteractiveSurfaceStyle, Label, List, ListItem, LogLine, LogView, Menu, OverlayAlignment,
-    OverlayHost, Panel, PixelFormat, Popup, PopupInteractionMode, PopupPreferredPlacement,
-    ProgressBar, PromptOptions, RawKeyEvent, RealtimeFrameView, RemoteCursorImage, RemoteFrame,
-    RemoteFrameDamage, RemoteFramePatch, RemoteInputRegion, RemoteTextInputCallback,
-    ReorderableGrid, ScrollView, SegmentedControl, Select, SelectionMode, SplitOrientation,
-    SplitView, Stack, StackDirection, StyleSheet, Switch, Table, TableColumn, TableRow, Tabs,
-    TerminalCell, TerminalColor, TerminalCursor, TerminalCursorStyle, TerminalFrame,
-    TerminalSelection, TerminalUnderlineStyle, TerminalView, TextArea, TextField, TimeSeries,
-    TimeSeriesChart, TimeSeriesChartHandle, TimeSeriesInspection, TimeSeriesInspectionCallback,
-    TimeSeriesThreshold, TreeItem, TreeView, VirtualList, VirtualListItem, VirtualListRichMetrics,
-    Window, WindowClientSizeChangedCallback, WindowOptions, WindowPlacement, WindowRawKeyCallback,
-    WindowState, WindowTitleBar,
+    Button, Color, Dialog, Error, FileDialogFilter, FileDialogMode, FileDialogOptions,
+    FileDropEvent, IconSymbol, Insets, InteractionTrace, InteractiveSurface,
+    InteractiveSurfaceStateStyle, InteractiveSurfaceStyle, Label, LabelTextSpan, List, ListItem,
+    LogLine, LogView, Menu, OverlayAlignment, OverlayHost, Panel, PixelFormat, Popup,
+    PopupInteractionMode, PopupPreferredPlacement, ProgressBar, PromptOptions, RawKeyEvent,
+    RealtimeFrameView, RemoteCursorImage, RemoteFrame, RemoteFrameDamage, RemoteFramePatch,
+    RemoteInputRegion, RemoteTextInputCallback, ReorderableGrid, ScrollView, SegmentedControl,
+    Select, SelectionMode, SplitOrientation, SplitView, Stack, StackDirection, StyleSheet, Switch,
+    Table, TableColumn, TableRow, Tabs, TerminalCell, TerminalColor, TerminalCursor,
+    TerminalCursorStyle, TerminalFrame, TerminalSelection, TerminalUnderlineStyle, TerminalView,
+    TextArea, TextField, TimeSeries, TimeSeriesChart, TimeSeriesChartHandle, TimeSeriesInspection,
+    TimeSeriesInspectionCallback, TimeSeriesThreshold, TreeItem, TreeView, VirtualList,
+    VirtualListItem, VirtualListRichMetrics, Window, WindowActivationChangedCallback,
+    WindowClientSizeChangedCallback, WindowFileDropCallback, WindowOptions, WindowPlacement,
+    WindowRawKeyCallback, WindowState, WindowTitleBar,
 };
 use std::cell::{Cell, RefCell};
 use std::ptr::NonNull;
@@ -46,6 +48,241 @@ macro_rules! native_tests {
 }
 
 native_tests! {
+fn latest_signal_coalesces_and_cancels_on_the_window_thread() {
+    let _guard=window_test_lock().lock().unwrap();
+    let window=Window::new(&WindowOptions::default()).unwrap();
+    let dispatcher=window.dispatcher();
+    let observed=Rc::new(RefCell::new(Vec::new()));
+    let values=Rc::clone(&observed);let close=dispatcher.clone();
+    let owner=std::thread::current().id();
+    let (sender,_subscription)=dispatcher.latest_signal(move |value:u32| {
+        assert_eq!(std::thread::current().id(),owner);
+        values.borrow_mut().push(value);close.request_close();
+    }).unwrap();
+    let (cancelled,subscription)=dispatcher.latest_signal(move |_:u32|panic!("cancelled callback delivered")).unwrap();
+    cancelled.send(3).unwrap();drop(subscription);
+    assert_eq!(cancelled.send(4),Err(Error::WidgetDestroyed));
+    std::thread::spawn(move||{for value in 0..100 {sender.send(value).unwrap();}}).join().unwrap();
+    window.show();window.run();
+    assert_eq!(*observed.borrow(),vec![99]);
+}
+
+fn popup_closed_callback_is_edge_triggered_and_can_unregister() {
+    let popup = Rc::new(Popup::new().unwrap());
+    let weak = Rc::downgrade(&popup);
+    let count = Rc::new(Cell::new(0)); let calls = count.clone();
+    popup.set_on_closed(move || { calls.set(calls.get()+1); weak.upgrade().unwrap().clear_on_closed(); });
+    popup.set_open(true); popup.set_open(false); popup.set_open(false);
+    assert_eq!(count.get(),1);
+    popup.set_open(true); popup.set_open(false);
+    assert_eq!(count.get(),1);
+}
+
+fn widget_size_callback_can_clear_its_own_registration() {
+    let widget = Rc::new(Label::new("size observer").unwrap());
+    let weak = Rc::downgrade(&widget);
+    let calls = Rc::new(Cell::new(0));
+    let recorded = calls.clone();
+    widget.as_widget().set_on_size_changed(move |width,height| {
+        assert_eq!((width,height),(240.0,700.0));
+        recorded.set(recorded.get()+1);
+        weak.upgrade().unwrap().as_widget().clear_on_size_changed();
+    });
+    let data = (widget.as_widget().size_callback.borrow_mut().as_deref_mut().unwrap() as *mut super::WidgetSizeCallback).cast();
+    unsafe { super::run_widget_size_callback(240.0,700.0,data); }
+    assert_eq!(calls.get(),1);
+    assert!(widget.as_widget().size_callback.borrow().is_none());
+}
+
+fn floating_frame_keyboard_resize_is_scoped_and_disabled_while_docked() {
+    use super::layout::{floating_frame::FloatingFrame,workspace::FloatResizeEdge};
+    let _guard=window_test_lock().lock().unwrap();
+    let window=Window::new(&WindowOptions::default()).unwrap();
+    let input=TextField::new("draft").unwrap();
+    let events=Rc::new(RefCell::new(Vec::new()));let recorded=events.clone();
+    let frame=FloatingFrame::new(input.as_widget(),Rc::new(move|edge,event|recorded.borrow_mut().push((edge,event)))).unwrap();
+    frame.set_surface_classes("test-docked-material", "test-floating-material").unwrap();
+    window.set_content(frame.as_widget());window.show();
+    input.set_text("未提交草稿");
+    let original = input.as_widget().as_raw();
+    assert!(window.layout_snapshot_json().unwrap().contains("test-docked-material"));
+    let handle=frame.resize_handle(FloatResizeEdge::SouthEast).unwrap();
+    assert!(matches!(handle.execute_command("resize-right-10"),super::CommandResult::Disabled|super::CommandResult::NotFound));
+    frame.refresh(true,500.0,400.0);
+    assert!(window.layout_snapshot_json().unwrap().contains("test-floating-material"));
+    assert_eq!(input.as_widget().as_raw(), original);
+    assert!(window.layout_snapshot_json().unwrap().contains("\"valueLength\":5"));
+    assert!(window.request_focus(handle,true));
+    assert_eq!(handle.execute_command("resize-right-10"),super::CommandResult::Executed);
+    assert_eq!(events.borrow().len(),2);
+    assert_eq!(events.borrow()[0].1.phase,super::ItemDragPhase::Started);
+    assert_eq!(events.borrow()[1].1.phase,super::ItemDragPhase::Dropped);
+    assert_eq!(events.borrow()[1].1.pointer.x,10.0);
+    assert_eq!(handle.execute_command("resize-up-40"),super::CommandResult::Executed);
+    assert_eq!(events.borrow()[3].1.pointer.y,-40.0);
+    frame.refresh(false,500.0,400.0);
+    assert!(window.layout_snapshot_json().unwrap().contains("test-docked-material"));
+    assert!(window.layout_snapshot_json().unwrap().contains("\"valueLength\":5"));
+    assert!(matches!(handle.execute_command("resize-right-10"),super::CommandResult::Disabled|super::CommandResult::NotFound));
+}
+
+fn dock_surface_reparents_native_content_and_preserves_float_input_focus() {
+    use super::layout::workspace::*;
+    use super::layout::workspace_surface::*;
+    let _guard = window_test_lock().lock().unwrap();
+    let window = Window::new(&WindowOptions::default()).unwrap();
+    let terminal = TextField::new("命令草稿").unwrap();
+    let sftp = TextField::new("/srv/api").unwrap();
+    let ai = TextField::new("分析日志").unwrap();
+    terminal.set_text("命令草稿");
+    sftp.set_text("/srv/api");
+    ai.set_text("分析日志");
+    let mut surface = DockSurface::new().unwrap();
+    for (id, field) in [("terminal", &terminal), ("sftp", &sftp), ("ai", &ai)] {
+        surface.register(id, field.as_widget()).unwrap();
+    }
+    let root = DockNode::split(DockAxis::Horizontal, 0.25,
+        DockNode::Leaf("sftp"), DockNode::split(DockAxis::Horizontal, 0.7,
+            DockNode::Leaf("terminal"), DockNode::Leaf("ai")).unwrap()).unwrap();
+    let mut model = DockWorkspace::new(root).unwrap();
+    let viewport = super::Rect {x:0.0,y:0.0,width:900.0,height:600.0};
+    let min = |_: &&str| DockPaneMinimum::from(PaneMinimum {width:120.0,height:100.0});
+    let style = DockSurfaceStyle::default();
+    surface.mount(&model.snapshot(), viewport, None, style, min, Rc::new(|_,_,_|{})).unwrap();
+    window.set_content(surface.as_widget());
+    window.show();
+    assert!(window.request_focus(ai.as_widget(), true));
+    let original = surface.pane_widget(&"ai").unwrap().as_raw();
+    model.dock(&"ai", &"sftp", DockEdge::Bottom).unwrap();
+    surface.mount(&model.snapshot(), viewport, None, style, min, Rc::new(|_,_,_|{})).unwrap();
+    assert_eq!(surface.pane_widget(&"ai").unwrap().as_raw(), original);
+    assert!(ai.as_widget().is_focused(), "relative docking restores the same input leaf");
+    let snapshot = window.layout_snapshot_json().unwrap();
+    for text in ["命令草稿", "/srv/api", "分析日志"] { assert!(snapshot.contains(text)); }
+    model.float(&"ai", super::Rect {x:40.0,y:60.0,width:300.0,height:220.0}).unwrap();
+    surface.mount(&model.snapshot(), viewport, None, style, min, Rc::new(|_,_,_|{})).unwrap();
+    assert!(ai.as_widget().is_focused(), "floating a focused pane preserves the input target");
+    model.set_float_bounds(&"ai", super::Rect {x:100.0,y:110.0,width:380.0,height:280.0}).unwrap();
+    surface.update_floating(&model.snapshot(), viewport, |id| min(id).floating).unwrap();
+    assert!(ai.as_widget().is_focused(), "resizing must not remove/reinsert focused content");
+    assert!(window.layout_snapshot_json().unwrap().contains("分析日志"));
+    let before = window.layout_snapshot_json().unwrap();
+    let bad = PaneMinimum {width:f32::NAN,height:100.0};
+    assert!(matches!(surface.mount(&model.snapshot(), viewport, None, style, |_|bad.into(), Rc::new(|_,_,_|{})), Err(Error::InvalidLayout)));
+    assert_eq!(before, window.layout_snapshot_json().unwrap(), "invalid mount leaves native ownership unchanged");
+    model.hide(&"sftp").unwrap();
+    surface.mount(&model.snapshot(), viewport, None, style, min, Rc::new(|_,_,_|{})).unwrap();
+    model.show("sftp").unwrap();
+    surface.mount(&model.snapshot(), viewport, None, style, min, Rc::new(|_,_,_|{})).unwrap();
+    let snapshot = window.layout_snapshot_json().unwrap();
+    assert!(snapshot.contains("/srv/api"));
+    assert!(snapshot.contains("命令草稿"));
+    assert_eq!(surface.pane_widget(&"ai").unwrap().as_raw(), original);
+}
+
+fn focus_bookmarks_are_weak_and_reject_hidden_or_unmounted_targets() {
+    let _guard = window_test_lock().lock().unwrap();
+    let window = Window::new(&WindowOptions::default()).unwrap();
+    let panel = Panel::new().unwrap();
+    let field = TextField::new("input").unwrap();
+    panel.set_content(field.as_widget());
+    window.set_content(panel.as_widget());
+    window.show();
+    assert!(window.request_focus(field.as_widget(), true));
+    let bookmark = panel.as_widget().capture_focus().unwrap();
+    field.as_widget().set_visible(false);
+    assert!(!bookmark.restore(panel.as_widget()));
+    field.as_widget().set_visible(true);
+    assert!(bookmark.restore(panel.as_widget()));
+    let replacement = Label::new("replacement").unwrap();
+    panel.set_content(replacement.as_widget());
+    assert!(!bookmark.restore(panel.as_widget()));
+    drop(field);
+    assert!(!bookmark.restore(panel.as_widget()));
+}
+
+fn slider_worker_progress_is_coalesced_and_lifetime_safe() {
+    let _guard = window_test_lock().lock().unwrap();
+    let window = Window::new(&WindowOptions::default()).unwrap();
+    let slider = Rc::new(super::Slider::new().unwrap());
+    slider.set_step(0.1);
+    window.set_content(slider.as_widget());
+    let handle = slider.handle(&window.dispatcher());
+    let worker_handle = handle.clone();
+    thread::spawn(move || {
+        for value in 0..1000 { worker_handle.set_progress(Some(value as f64), 2000.0, true).unwrap(); }
+    }).join().unwrap();
+    let observed = Rc::new(Cell::new(0.0));
+    let value = observed.clone();
+    let control = slider.clone();
+    let dispatcher = window.dispatcher();
+    window.dispatcher().dispatch_local(move || {
+        value.set(control.value());
+        dispatcher.request_close();
+    }).unwrap();
+    assert_eq!(window.run(), 0);
+    assert_eq!(observed.get(), 999.0);
+    drop(slider);
+    assert!(matches!(handle.set_progress(Some(12.0), 100.0, true), Err(Error::WidgetDestroyed)));
+}
+
+fn slider_values_and_input_callbacks_have_independent_lifetimes() {
+    let mut slider = super::Slider::new().unwrap();
+    let calls = Rc::new(Cell::new(0));
+    let captured = calls.clone();
+    slider.set_on_interaction(move |_, _| captured.set(captured.get() + 1));
+    slider.set_range(0.0, 100.0);
+    slider.set_step(0.25);
+    slider.set_value(12.3);
+    assert_eq!(slider.value(), 12.25);
+    slider.set_value(f64::NAN);
+    assert_eq!(slider.value(), 12.25);
+    assert!(!slider.is_dragging());
+    slider.cancel_interaction();
+    assert_eq!(calls.get(), 0);
+    assert_eq!(Rc::strong_count(&calls), 2);
+    slider.clear_on_interaction();
+    assert_eq!(Rc::strong_count(&calls), 1);
+    let captured = calls.clone();
+    slider.set_on_interaction(move |_, _| captured.set(99));
+    drop(slider);
+    assert_eq!(Rc::strong_count(&calls), 1);
+    assert_eq!(calls.get(), 0);
+}
+
+fn slider_callback_ignores_unknown_phases_and_contains_panics() {
+    use super::slider::{run_interaction, InteractionCallback};
+    let values = Rc::new(RefCell::new(Vec::new()));
+    let captured = values.clone();
+    let mut callback = InteractionCallback { handler: Rc::new(move |phase, value| {
+        captured.borrow_mut().push((phase, value));
+    }) };
+    let raw = (&mut callback as *mut InteractionCallback).cast();
+    unsafe {
+        run_interaction(99, 10.0, raw);
+        run_interaction(1, f64::NAN, raw);
+        run_interaction(0, 10.0, std::ptr::null_mut());
+        run_interaction(0, 10.0, raw);
+        run_interaction(3, 10.0, raw);
+    }
+    assert_eq!(&*values.borrow(), &[(super::SliderInteraction::Begin, 10.0), (super::SliderInteraction::Cancel, 10.0)]);
+    callback.handler = Rc::new(|_, _| panic!("slider test callback"));
+    unsafe { run_interaction(2, 10.0, (&mut callback as *mut InteractionCallback).cast()) };
+
+    let owner = Rc::new(RefCell::new(None::<Box<InteractionCallback>>));
+    let weak = Rc::downgrade(&owner);
+    let completed = Rc::new(Cell::new(false));
+    let done = completed.clone();
+    *owner.borrow_mut() = Some(Box::new(InteractionCallback { handler: Rc::new(move |_, _| {
+        weak.upgrade().unwrap().borrow_mut().take();
+        done.set(true);
+    }) }));
+    let raw = (&mut **owner.borrow_mut().as_mut().unwrap() as *mut InteractionCallback).cast();
+    unsafe { run_interaction(2, 10.0, raw) };
+    assert!(owner.borrow().is_none());
+    assert!(completed.get());
+}
+
 fn scoped_commands_release_contexts_and_preserve_utf8_positions() {
     use super::{CommandResult, KeyChord, KeyModifiers, TextAffinity, TextOptions, TextPosition};
     let field = TextField::new("输入").unwrap();
@@ -107,6 +344,71 @@ fn client_size_callback_preserves_logical_dimensions() {
     }
 
     assert_eq!(*observed.borrow(), Some((1024.5, 720.25)));
+}
+
+fn activation_callback_preserves_native_active_state() {
+    let observed = Rc::new(RefCell::new(Vec::new()));
+    let observed_from_callback = Rc::clone(&observed);
+    let mut callback = WindowActivationChangedCallback {
+        handler: Box::new(move |active| observed_from_callback.borrow_mut().push(active)),
+    };
+
+    unsafe {
+        run_window_activation_changed_callback(
+            1,
+            (&mut callback as *mut WindowActivationChangedCallback).cast(),
+        );
+        run_window_activation_changed_callback(
+            0,
+            (&mut callback as *mut WindowActivationChangedCallback).cast(),
+        );
+    }
+
+    assert_eq!(&*observed.borrow(), &[true, false]);
+}
+
+fn file_drop_callback_owns_utf8_paths_and_logical_point() {
+    let observed = Rc::new(RefCell::new(None));
+    let observed_from_callback = Rc::clone(&observed);
+    let mut callback = WindowFileDropCallback {
+        handler: Box::new(move |event| {
+            *observed_from_callback.borrow_mut() = Some(event);
+        }),
+    };
+    let values = ["C:\\工作目录\\my file.txt", "D:\\logs"];
+    let paths = values.map(sys::OneUiUtf8String::from_str);
+
+    unsafe {
+        run_window_file_drop_callback(
+            paths.as_ptr(),
+            paths.len(),
+            318.5,
+            240.25,
+            (&mut callback as *mut WindowFileDropCallback).cast(),
+        );
+    }
+
+    assert_eq!(
+        *observed.borrow(),
+        Some(FileDropEvent {
+            paths: values.into_iter().map(str::to_owned).collect(),
+            x: 318.5,
+            y: 240.25,
+        })
+    );
+}
+
+fn programmatic_terminal_paste_uses_native_paste_callback() {
+    let observed = Rc::new(RefCell::new(String::new()));
+    let observed_from_callback = Rc::clone(&observed);
+    let mut terminal = TerminalView::new().expect("terminal should be created");
+    terminal.set_on_paste(move |text| {
+        *observed_from_callback.borrow_mut() = text;
+    });
+
+    assert!(terminal.paste_text("C:\\工作目录\\my file.txt"));
+    assert_eq!(&*observed.borrow(), "C:\\工作目录\\my file.txt");
+    assert!(!terminal.paste_text(""));
 }
 
 fn time_series_inspection_callback_preserves_index_and_pin_state() {
@@ -453,6 +755,16 @@ fn file_dialog_options_have_safe_platform_defaults() {
     assert_eq!(folder.mode, FileDialogMode::SelectFolder);
 }
 
+fn parses_double_nul_terminated_multi_file_dialog_paths() {
+    let bytes = b"C:\\one.txt\0D:\\two.txt\0\0";
+    let paths = parse_multiple_file_dialog_output(bytes, bytes.len()).unwrap();
+    assert_eq!(paths.len(), 2);
+    assert_eq!(paths[0], std::path::PathBuf::from("C:\\one.txt"));
+    assert_eq!(paths[1], std::path::PathBuf::from("D:\\two.txt"));
+    assert!(parse_multiple_file_dialog_output(b"bad\0", 4).is_err());
+    assert!(parse_multiple_file_dialog_output(b"\xff\0\0", 3).is_err());
+}
+
 fn round_trips_window_placement_through_the_safe_binding() {
     let _guard = window_test_lock().lock().expect("window test lock");
     let window = Window::new(&WindowOptions {
@@ -478,6 +790,54 @@ fn round_trips_window_placement_through_the_safe_binding() {
     assert_eq!(actual.width, requested.width);
     assert_eq!(actual.height, requested.height);
     assert!(actual.maximized);
+}
+
+fn window_owned_tray_has_a_safe_rust_lifecycle() {
+    let _guard = window_test_lock().lock().expect("window test lock");
+    let window = Window::new(&WindowOptions {
+        title: "OneUI Rust tray lifecycle".to_owned(),
+        ..WindowOptions::default()
+    })
+    .expect("window should be created");
+
+    #[cfg(target_os = "windows")]
+    {
+        assert!(window.set_tray_enabled(true));
+        assert!(window.tray_icon_visible());
+        window.set_close_to_tray(true);
+        let dispatcher = window.dispatcher();
+        assert!(dispatcher.tray_icon_visible().unwrap());
+        assert!(dispatcher.set_tray_enabled(false).unwrap());
+        assert!(!window.tray_icon_visible());
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        assert!(!window.set_tray_enabled(true));
+        assert!(!window.tray_icon_visible());
+    }
+}
+
+fn close_callback_intercepts_close_to_tray_before_window_destruction() {
+    let _guard = window_test_lock().lock().expect("window test lock");
+    let mut window = Window::new(&WindowOptions::default()).expect("window should be created");
+    let observed = Rc::new(Cell::new(false));
+    let observed_from_callback = Rc::clone(&observed);
+    let close_dispatcher = window.dispatcher();
+    window.set_close_to_tray(true);
+    window.set_on_close_requested(move |force_exit| {
+        assert!(!force_exit);
+        observed_from_callback.set(true);
+        close_dispatcher.set_close_to_tray(false).unwrap();
+        close_dispatcher.close().unwrap();
+    });
+
+    let request_dispatcher = window.dispatcher();
+    window
+        .dispatch(move || request_dispatcher.request_close())
+        .expect("close request should be queued");
+    assert_eq!(window.run(), 0);
+    assert!(observed.get());
 }
 
 fn mounts_rust_composed_content_into_a_hidden_window() {
@@ -734,6 +1094,29 @@ fn mounts_utf8_workspace_tabs_and_reports_selection_changes() {
     window.set_content(tabs.as_widget());
 }
 
+fn tab_inline_edit_binding_retains_utf8_reason_and_releases_callback() {
+    use super::TabEditReason;
+    let observed = Rc::new(RefCell::new(Vec::new()));
+    let mut tabs = Tabs::new(&["生产 中文🚀".into(), "Other".into()]).unwrap();
+    let captured = observed.clone();
+    tabs.set_on_edit_finished(move |index, text, reason| captured.borrow_mut().push((index, text, reason)));
+    assert!(!tabs.begin_edit(-1));
+    assert!(tabs.begin_edit(0));
+    assert_eq!(tabs.editing_index(), Some(0));
+    tabs.cancel_edit();
+    tabs.cancel_edit();
+    assert_eq!(&*observed.borrow(), &[(0, "生产 中文🚀".into(), TabEditReason::Cancelled)]);
+    assert!(tabs.begin_edit(1));
+    tabs.set_items(&["Changed".into()]);
+    assert_eq!(tabs.editing_index(), None);
+    assert_eq!(observed.borrow().len(), 2);
+    tabs.clear_on_edit_finished();
+    assert_eq!(Rc::strong_count(&observed), 1);
+    assert!(tabs.begin_edit(0));
+    drop(tabs);
+    assert_eq!(observed.borrow().len(), 2);
+}
+
 fn mounts_utf8_select_and_reports_selection_changes() {
     let _guard = window_test_lock().lock().expect("window test lock");
     let window = Window::new(&WindowOptions::default()).expect("window should be created");
@@ -751,6 +1134,93 @@ fn mounts_utf8_select_and_reports_selection_changes() {
     assert_eq!(select.selected_index(), 2);
     assert_eq!(*observed.borrow(), Some(2));
     window.set_content(select.as_widget());
+}
+
+fn select_handle_replaces_background_choices_and_selection() {
+    let _guard = window_test_lock().lock().expect("window test lock");
+    let window = Window::new(&WindowOptions::default()).expect("window should be created");
+    let observed = Arc::new(std::sync::atomic::AtomicI32::new(-1));
+    let observed_from_callback = Arc::clone(&observed);
+    let mut select = Select::new(&["Loading".to_string()]).expect("select should be created");
+    select.set_on_changed(move |index| {
+        observed_from_callback.store(index, Ordering::Release);
+    });
+    window.set_content(select.as_widget());
+    let handle = window.select_handle(&select);
+    let worker = thread::spawn(move || {
+        handle
+            .set_items(
+                vec!["第一条消息".to_string(), "AI 回答 🚀".to_string()],
+                1,
+            )
+            .expect("background select revision should be accepted");
+    });
+    worker.join().expect("worker should finish");
+
+    let close_dispatcher = window.dispatcher();
+    window
+        .dispatch(move || close_dispatcher.request_close())
+        .expect("window should accept close request after select revision");
+
+    assert_eq!(window.run(), 0);
+    assert_eq!(observed.load(Ordering::Acquire), 1);
+    assert_eq!(select.selected_index(), 1);
+}
+
+fn select_handle_rejects_updates_after_widget_destruction() {
+    let _guard = window_test_lock().lock().expect("window test lock");
+    let window = Window::new(&WindowOptions::default()).expect("window should be created");
+    let handle = {
+        let select = Select::new(&[]).expect("select should be created");
+        window.select_handle(&select)
+    };
+
+    assert!(matches!(
+        handle.set_items(vec!["Too late".to_string()], 0),
+        Err(Error::WidgetDestroyed)
+    ));
+    assert!(matches!(
+        handle.set_selected_index(0),
+        Err(Error::WidgetDestroyed)
+    ));
+}
+
+fn scroll_view_handle_updates_background_position_and_lifetime() {
+    let _guard = window_test_lock().lock().expect("window test lock");
+    let window = Window::new(&WindowOptions::default()).expect("window should be created");
+    let content = Panel::new().expect("scroll content should be created");
+    content.as_widget().set_preferred_size(200.0, 1200.0);
+    let scroll = ScrollView::new().expect("scroll view should be created");
+    scroll.as_widget().set_preferred_size(200.0, 180.0);
+    scroll.set_content(content.as_widget());
+    window.set_content(scroll.as_widget());
+    let handle = window.scroll_view_handle(&scroll);
+    let worker = thread::spawn(move || {
+        handle
+            .scroll_to_bottom()
+            .expect("background scroll should be accepted");
+    });
+    worker.join().expect("worker should finish");
+    let close_dispatcher = window.dispatcher();
+    window
+        .dispatch(move || close_dispatcher.request_close())
+        .expect("window should accept close request after scroll update");
+
+    assert_eq!(window.run(), 0);
+    assert!(scroll.max_scroll_offset() > 0.0);
+    assert!((scroll.scroll_offset() - scroll.max_scroll_offset()).abs() < 0.5);
+    let destroyed = {
+        let temporary = ScrollView::new().expect("temporary scroll should be created");
+        window.scroll_view_handle(&temporary)
+    };
+    assert!(matches!(
+        destroyed.set_scroll_offset(10.0),
+        Err(Error::WidgetDestroyed)
+    ));
+    assert!(matches!(
+        destroyed.scroll_to_bottom(),
+        Err(Error::WidgetDestroyed)
+    ));
 }
 
 fn reports_native_list_selection_changes_to_rust() {
@@ -1432,6 +1902,109 @@ fn label_handle_coalesces_worker_updates_on_the_window_thread() {
     assert_eq!(window.run(), 0);
 }
 
+fn scoped_labels_keep_background_status_without_replacing_foreground_pending_text() {
+    let _guard = window_test_lock().lock().unwrap();
+    let window = Window::new(&WindowOptions::default()).unwrap();
+    let label = Label::new("initial").unwrap();
+    window.set_content(label.as_widget());
+    let active = Arc::new(std::sync::atomic::AtomicU64::new(1));
+    let base = window.label_handle(&label);
+    let selected = active.clone();
+    let first = base.with_update_guard(move || selected.load(Ordering::Acquire) == 1);
+    let selected = active.clone();
+    let second = base.with_update_guard(move || selected.load(Ordering::Acquire) == 2);
+    first.set_text("A connected").unwrap();
+    active.store(2, Ordering::Release);
+    second.set_text("B connected").unwrap();
+    let background = first.clone();
+    thread::spawn(move || background.set_text("A disconnected").unwrap()).join().unwrap();
+    super::LabelHandle::drain_pending_text(&base.state);
+    assert!(window.layout_snapshot_json().unwrap().contains("B connected"));
+    assert!(!first.reapply_latest().unwrap());
+    active.store(1, Ordering::Release);
+    assert!(first.reapply_latest().unwrap());
+    super::LabelHandle::drain_pending_text(&base.state);
+    assert!(window.layout_snapshot_json().unwrap().contains("A disconnected"));
+}
+
+fn scoped_label_checks_selection_at_paint_and_generation_before_retaining() {
+    let _guard = window_test_lock().lock().unwrap();
+    let window = Window::new(&WindowOptions::default()).unwrap();
+    let label = Label::new("initial").unwrap();
+    window.set_content(label.as_widget());
+    let active = Arc::new(AtomicBool::new(true));
+    let selected = active.clone();
+    let scoped = window.label_handle(&label).with_update_guard(move || selected.load(Ordering::Acquire));
+    scoped.set_text("must not paint").unwrap();
+    active.store(false, Ordering::Release);
+    super::LabelHandle::drain_pending_text(&scoped.state);
+    assert!(window.layout_snapshot_json().unwrap().contains("initial"));
+    let generation = Arc::new(std::sync::atomic::AtomicU64::new(1));
+    let current = generation.clone();
+    let old = scoped.with_update_guard(move || current.load(Ordering::Acquire) == 1);
+    generation.store(2, Ordering::Release);
+    let current = generation.clone();
+    let new = scoped.with_update_guard(move || current.load(Ordering::Acquire) == 2);
+    new.set_text("new generation").unwrap();
+    old.set_text("late stale generation").unwrap();
+    active.store(true, Ordering::Release);
+    assert!(scoped.reapply_latest().unwrap());
+    super::LabelHandle::drain_pending_text(&scoped.state);
+    assert!(window.layout_snapshot_json().unwrap().contains("new generation"));
+    new.set_text("queued before reconnect").unwrap();
+    generation.store(3, Ordering::Release);
+    super::LabelHandle::drain_pending_text(&scoped.state);
+    assert!(window.layout_snapshot_json().unwrap().contains("new generation"));
+    assert!(!scoped.reapply_latest().unwrap());
+}
+
+fn scoped_label_retention_does_not_extend_widget_lifetime() {
+    let window = Window::new(&WindowOptions::default()).unwrap();
+    let scoped = {
+        let label = Label::new("initial").unwrap();
+        let scoped = window.label_handle(&label).with_update_guard(|| true);
+        scoped.set_text("retained").unwrap();
+        scoped
+    };
+    assert!(matches!(scoped.reapply_latest(), Err(Error::WidgetDestroyed)));
+    assert!(matches!(scoped.set_text("late"), Err(Error::WidgetDestroyed)));
+}
+
+fn label_rich_text_validates_utf8_ranges_and_coalesces_worker_revisions() {
+    let _guard = window_test_lock().lock().expect("window test lock");
+    let window = Window::new(&WindowOptions::default()).expect("window should be created");
+    let label = Label::new("连接 ready").expect("label should be created");
+    let mut ready = LabelTextSpan::new(7..12);
+    ready.font_weight = Some(650);
+    ready.monospace = true;
+    ready.background = Some(Color::rgba(59, 130, 246, 32));
+    label
+        .set_rich_text("连接 ready", &[ready.clone()])
+        .expect("scalar-aligned rich text should be accepted");
+    let invalid = LabelTextSpan::new(1..3);
+    assert!(matches!(
+        label.set_rich_text("连接 ready", &[invalid]),
+        Err(Error::InvalidTextOptions)
+    ));
+    window.set_content(label.as_widget());
+    let handle = window.label_handle(&label);
+    let worker = thread::spawn(move || {
+        handle
+            .set_rich_text("status pending", vec![LabelTextSpan::new(7..14)])
+            .expect("first rich revision should queue");
+        handle
+            .set_rich_text("status ready", vec![LabelTextSpan::new(7..12)])
+            .expect("newer rich revision should replace the pending value");
+    });
+    worker.join().expect("worker should finish");
+
+    let close_dispatcher = window.dispatcher();
+    window
+        .dispatch(move || close_dispatcher.request_close())
+        .expect("window should accept close request");
+    assert_eq!(window.run(), 0);
+}
+
 fn label_handle_rejects_updates_after_the_label_is_destroyed() {
     let _guard = window_test_lock().lock().expect("window test lock");
     let window = Window::new(&WindowOptions::default()).expect("window should be created");
@@ -1531,6 +2104,10 @@ fn widget_handle_rejects_layout_updates_after_widget_destruction() {
     ));
     assert!(matches!(
         handle.set_preferred_size(240.0, 120.0),
+        Err(Error::WidgetDestroyed)
+    ));
+    assert!(matches!(
+        handle.set_classes("surface selected"),
         Err(Error::WidgetDestroyed)
     ));
 }
@@ -1726,6 +2303,39 @@ fn table_handle_replaces_rows_and_clears_selection_atomically() {
 
     assert_eq!(window.run(), 0);
     assert!(table.selected_indices().is_empty());
+}
+
+fn table_handle_replaces_rows_and_selects_requested_index_atomically() {
+    let _guard = window_test_lock().lock().expect("window test lock");
+    let window = Window::new(&WindowOptions::default()).expect("window should be created");
+    let table = Table::new().expect("table should be created");
+    table.set_selection_mode(SelectionMode::Single);
+    table.set_rows(&[TableRow {
+        cells: vec!["旧连接".to_owned()],
+    }]);
+    window.set_content(table.as_widget());
+
+    let handle = window.table_handle(&table);
+    handle
+        .set_rows_and_selected_index(
+            vec![
+                TableRow {
+                    cells: vec!["SQLite".to_owned()],
+                },
+                TableRow {
+                    cells: vec!["PostgreSQL".to_owned()],
+                },
+            ],
+            1,
+        )
+        .expect("table revision and selection should be accepted");
+    let close_dispatcher = window.dispatcher();
+    window
+        .dispatch(move || close_dispatcher.request_close())
+        .expect("window should accept close request");
+
+    assert_eq!(window.run(), 0);
+    assert_eq!(table.selected_index(), 1);
 }
 
 fn virtual_list_full_reset_discards_row_patches_from_the_previous_revision() {

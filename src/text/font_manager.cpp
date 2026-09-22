@@ -11,6 +11,9 @@
 #include <unordered_set>
 #if defined(_WIN32)
 #include "include/ports/SkTypeface_win.h"
+#if defined(ONEUI_PORTABLE_FONT_LOADER)
+#include "include/ports/SkFontMgr_empty.h"
+#endif
 #elif defined(__APPLE__)
 #include "include/ports/SkFontMgr_mac_ct.h"
 #else
@@ -53,6 +56,23 @@ sk_sp<SkFontMgr> makeEmbeddedFontManager() {
     return embeddedProvider();
 }
 
+sk_sp<SkTypeface> makeTypefaceFromData(sk_sp<SkData> data) {
+    if (!data) return nullptr;
+    auto platform = makePlatformFontManager();
+    auto face = platform ? platform->makeFromData(data) : nullptr;
+#if defined(ONEUI_PORTABLE_FONT_LOADER)
+    // Win7 DirectWrite cannot open CBDT/color and some newer font formats.
+    // Keep native rendering for supported fonts, and decode application font
+    // bytes with the pinned static FreeType backend only when native loading
+    // fails. Never install fonts or change modern system font discovery.
+    if (!face) {
+        auto portable = SkFontMgr_New_Custom_Empty();
+        if (portable) face = portable->makeFromData(std::move(data));
+    }
+#endif
+    return face;
+}
+
 bool registerFontFromMemory(const void* data, std::size_t size, const std::string& familyAlias) {
     if (!data || size == 0 || familyAlias.empty()) {
         return false;
@@ -63,12 +83,8 @@ bool registerFontFromMemory(const void* data, std::size_t size, const std::strin
         return true;
     }
 
-    auto loader = makePlatformFontManager();
-    if (!loader) {
-        return false;
-    }
     auto fontData = SkData::MakeWithCopy(data, size);
-    auto baseTypeface = loader->makeFromData(std::move(fontData));
+    auto baseTypeface = makeTypefaceFromData(std::move(fontData));
     if (!baseTypeface) {
         return false;
     }

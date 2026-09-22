@@ -27,7 +27,7 @@ Retained UI core
   input routing | overlays | animations | accessibility metadata
                          |
 Style and rendering
-  StyleSheet | typed adapters | Canvas | Skia raster
+  StyleSheet | typed adapters | Canvas | Skia GPU/raster
                          |
 Platform backend
   Win32 | Cocoa | X11 | Wayland window/input/DPI/clipboard/presentation
@@ -68,7 +68,14 @@ Platform backend
 - BGRA/RGBA 像素帧绘制；
 - dirty `clipBounds()` 与不随局部裁剪变化的 `viewportBounds()`。
 
-Win32 后端当前使用 Skia raster。Core 不直接包含 Win32 HWND/GDI 消息逻辑。
+Win32 后端默认尝试 OpenGL + Skia Ganesh：绘制到保留的 GPU surface，再提交窗口 surface。
+初始化、surface 创建或交换缓冲失败时回退 Skia raster / GDI；`ONEUI_ENABLE_GPU=0`
+可显式关闭 GPU。Linux/macOS 当前为软件呈现路径。Core 不直接包含 HWND/GDI/OpenGL 逻辑。
+局部失效、缓存及性能验收边界见[渲染说明](39-rendering-and-validation.md)。
+
+普通文字的塑形、换行、命中、选择和绘制共用 `src/text/` 的 SkParagraph 布局，
+依赖固定 SkShaper、HarfBuzz、SkUnicode 和 ICU。终端按固定单元格绘制，
+不应用普通段落 Bidi；实现和验收见[文字引擎状态](38-text-and-interaction-engine.md)。
 
 ### 4. 样式系统
 
@@ -95,7 +102,7 @@ Win32 后端当前使用 Skia raster。Core 不直接包含 Win32 HWND/GDI 消�
 
 ### 6. 平台层
 
-当前唯一可运行后端位于 `src/platform/win32/`，负责：
+当前产品主线后端位于 `src/platform/win32/`，负责：
 
 - 窗口创建、初始化、显示、消息循环、激活、最小化/最大化/全屏；
 - borderless 标题栏命中、可拖拽区与交互附件区；
@@ -132,9 +139,17 @@ opaque handles；`oneui_c_api_internal.*` 保存共享转换与注册逻辑。�
 - UTF-8 字符串与结构化数组转换；
 - UI 线程约束；
 - `UiDispatcher` 将 `Send + 'static` 工作投递回窗口线程；
+- `UiDispatcher::latest_signal` 合并后台最新状态，UI 线程持有可捕获 `Rc` 的本地订阅；
 - worker-friendly `WidgetHandle` / `LabelHandle` / `TableHandle` 等合并更新；
 - callback panic 捕获，禁止 unwind 穿过 C ABI；
 - `InteractionTrace` 提供组件/事件/源代码位置诊断。
+
+Rust `layout::workspace` 提供按应用 ID 组织的 `DockWorkspace` 模型；
+`layout::workspace_surface` 使用原生 SplitView/Panel/OverlayHost 挂载现有内容。
+模型与原生视图保留内容身份，重挂载通过弱焦点书签恢复输入焦点。
+当前实现位于 Rust 组合层，未提供同名 C++/C ABI 工作区对象。通用拖拽、停靠和浮动窗口控制
+属于 OneUI 底座，完整控制器尚待整合；应用负责内容、样式、业务策略和持久化存储接入。
+详见[工作区组合](workspace-docking.md)。
 
 ## 线程模型
 
@@ -144,6 +159,13 @@ opaque handles；`oneui_c_api_internal.*` 保存共享转换与注册逻辑。�
 - dispatcher 在窗口关闭后拒绝或取消待执行工作；
 - `RealtimeFrameView::submitFrame` 保护最新帧状态，但 invalidation/presentation 仍由 UI 调度完成；
 - 不允许调用方从后台线程直接修改普通原生控件对象。
+
+`latest_signal<T, F>` 必须在拥有窗口的线程注册。后台仅持有可克隆的
+`LatestSignal<T>`，`T: Send`；回调 `F` 无需 `Send`，可在 UI 线程组合更新多个控件。
+尚未消费的值会被较新的值替换，因此适合采样/状态快照，不适合必须逐条处理的命令或审计事件。
+视图必须保留 `LocalSignalSubscription`；在窗口线程释放订阅会取消待投递值并释放回调，
+后续 `send` 返回 `WidgetDestroyed`。关闭窗口仍遵守 dispatcher 的取消/拒绝语义。
+本地订阅不是 `Send`，不要在捕获回调中强持有包含该订阅的视图，应使用 `Weak` 避免引用环。
 
 ## 所有权模型
 

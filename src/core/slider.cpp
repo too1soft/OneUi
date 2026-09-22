@@ -76,14 +76,27 @@ Slider::Slider() {
 }
 
 void Slider::setRange(double minimum, double maximum) {
+    if (!std::isfinite(minimum) || !std::isfinite(maximum)
+        || !std::isfinite(maximum - minimum)) {
+        return;
+    }
+    const double upper = std::max(minimum + 0.0001, maximum);
+    if (!std::isfinite(upper) || upper <= minimum) { return; }
+    if (minimum_ == minimum && maximum_ == upper) { return; }
+    cancelInteraction();
     minimum_ = minimum;
-    maximum_ = std::max(minimum + 0.0001, maximum);
+    maximum_ = upper;
     assignValue(value());
     invalidate();
 }
 
 void Slider::setStep(double step) {
-    step_ = std::max(0.0001, step);
+    if (!std::isfinite(step)) {
+        return;
+    }
+    const double next = std::max(0.0001, step);
+    if (step_ == next) { return; }
+    step_ = next;
     invalidate();
 }
 
@@ -114,6 +127,30 @@ void Slider::clearStyleOverride() {
 
 void Slider::setOnChanged(std::function<void(double)> callback) {
     onChanged_ = std::move(callback);
+}
+
+void Slider::setOnInteraction(std::function<void(SliderInteraction, double)> callback) {
+    onInteraction_ = std::move(callback);
+}
+
+bool Slider::dragging() const { return pressed_; }
+
+void Slider::notifyInteraction(SliderInteraction phase) {
+    // Callback replacement/removal during a callback must not destroy its
+    // currently executing std::function target.
+    auto callback = onInteraction_;
+    if (callback) {
+        callback(phase, value());
+    }
+}
+
+void Slider::cancelInteraction() {
+    if (!pressed_) {
+        return;
+    }
+    pressed_ = false;
+    assignValue(beginValue_);
+    notifyInteraction(SliderInteraction::Cancel);
 }
 
 void Slider::paint(Canvas& canvas) {
@@ -149,7 +186,11 @@ bool Slider::onMouseMove(const MouseEvent& event) {
     hovered_ = nextHover;
 
     if (pressed_) {
+        const double previous = value();
         assignFromPoint(event.position);
+        if (pressed_ && previous != value()) {
+            notifyInteraction(SliderInteraction::Update);
+        }
         changed = true;
     }
 
@@ -161,41 +202,70 @@ bool Slider::onMouseMove(const MouseEvent& event) {
 }
 
 bool Slider::onMouseDown(const MouseEvent& event) {
-    if (!interactive() || !contains(event.position)) {
+    if (!interactive() || !contains(event.position) || event.button != MouseButton::Left || pressed_) {
         return false;
     }
 
+    beginValue_ = value();
     pressed_ = true;
+    notifyInteraction(SliderInteraction::Begin);
+    if (!pressed_ || !interactive()) {
+        return true;
+    }
     assignFromPoint(event.position);
+    if (pressed_) {
+        notifyInteraction(SliderInteraction::Update);
+    }
     invalidate();
     return true;
 }
 
-bool Slider::onMouseUp(const MouseEvent&) {
-    if (!interactive()) {
+bool Slider::onMouseUp(const MouseEvent& event) {
+    if (!interactive() || !pressed_ || event.button != MouseButton::Left) {
         return false;
     }
-    const bool wasPressed = pressed_;
+    // The release can occur beyond the widget or without a final move event.
+    assignFromPoint(event.position);
+    if (!pressed_) {
+        return true;
+    }
     pressed_ = false;
+    notifyInteraction(SliderInteraction::Commit);
     invalidate();
-    return wasPressed;
+    return true;
 }
 
 bool Slider::onKeyDown(const KeyEvent& event) {
-    if (!interactive()) {
+    if (!interactive() || !event.pressed) {
         return false;
     }
-    if (event.key == Key::Left || event.key == Key::Down) {
-        assignValue(value() - step_);
+    if (event.key == Key::Escape && pressed_) {
+        cancelInteraction();
         return true;
     }
-
-    if (event.key == Key::Right || event.key == Key::Up) {
-        assignValue(value() + step_);
-        return true;
+    if (pressed_) {
+        return false;
     }
-
-    return false;
+    double target;
+    switch (event.key) {
+    case Key::Left: case Key::Down: target = value() - step_; break;
+    case Key::Right: case Key::Up: target = value() + step_; break;
+    case Key::Home: target = minimum_; break;
+    case Key::End: target = maximum_; break;
+    default: return false;
+    }
+    beginValue_ = value();
+    pressed_ = true;
+    notifyInteraction(SliderInteraction::Begin);
+    if (!pressed_ || !interactive()) { return true; }
+    assignValue(target);
+    if (!pressed_) { return true; }
+    notifyInteraction(SliderInteraction::Update);
+    if (!pressed_) { return true; }
+    pressed_ = false;
+    notifyInteraction(SliderInteraction::Commit);
+    invalidate();
+    return true;
 }
 
 bool Slider::isFocusable() const {
@@ -212,14 +282,17 @@ AccessibilityInfo Slider::accessibilityInfo() const {
 }
 
 void Slider::assignValue(double value) {
+    if (!std::isfinite(value)) { return; }
     const double previous = this->value();
     const double clamped = std::clamp(value, minimum_, maximum_);
     const double stepped = minimum_ + std::round((clamped - minimum_) / step_) * step_;
     const double next = std::clamp(stepped, minimum_, maximum_);
+    if (previous == next) { return; }
     valueBinding_.set(next, value_);
     invalidate();
     if (previous != next && onChanged_) {
-        onChanged_(next);
+        auto callback = onChanged_;
+        callback(next);
     }
 }
 
@@ -265,7 +338,7 @@ bool Slider::hasInteractionState() const {
 
 void Slider::resetInteractionState() {
     hovered_ = false;
-    pressed_ = false;
+    cancelInteraction();
 }
 
 } // namespace oneui

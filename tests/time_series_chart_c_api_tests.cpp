@@ -44,6 +44,16 @@ int main() {
     oneui_time_series_chart_set_visual_style(chart, 0, 1, 1, 0, 1.0f, 20);
     oneui_time_series_chart_set_plot_insets(chart, OneUiInsets{4.0f, 4.0f, 4.0f, 4.0f});
     oneui_time_series_chart_set_thresholds(chart, thresholds, 2);
+    oneui_time_series_chart_set_grid_style(chart, 0, 0.7f);
+    const std::string top = "100%", middle = "50%", bottom = "0%";
+    const OneUiUtf8String axis[] = {utf8View(top), utf8View(middle), utf8View(bottom)};
+    oneui_time_series_chart_set_axis_labels_utf8(chart, axis, 3);
+    oneui_time_series_chart_set_latest_point_visible(chart, 1);
+    const double positions[] = {0.5, 0.7, 1.0};
+    expectEqual("time domain copied", oneui_time_series_chart_set_sample_positions(chart, positions, 3), 1);
+    expectEqual("nonempty null domain rejected", oneui_time_series_chart_set_sample_positions(chart, nullptr, 3), 0);
+    expectEqual("empty domain restores fallback", oneui_time_series_chart_set_sample_positions(chart, nullptr, 0), 1);
+
     oneui_time_series_chart_set_inspection(chart, 2, 1);
     expectEqual("time-series C ABI inspection index", oneui_time_series_chart_inspection_index(chart), 2);
     expectEqual("time-series C ABI inspection pin", oneui_time_series_chart_inspection_pinned(chart), 1);

@@ -8,6 +8,7 @@ pub const WINDOW_CAPABILITY_ACTIVATION: c_uint = 1 << 3;
 pub const WINDOW_CAPABILITY_TOPMOST: c_uint = 1 << 4;
 pub const WINDOW_CAPABILITY_TRAY: c_uint = 1 << 5;
 pub const WINDOW_CAPABILITY_NATIVE_DIALOGS: c_uint = 1 << 6;
+pub const WINDOW_CAPABILITY_FILE_DROP: c_uint = 1 << 7;
 
 extern "C" {
     pub fn oneui_window_backend(window: *mut OneUiWindow) -> c_uint;
