@@ -1,0 +1,33 @@
+Test project <checkout>/examples/declarative/build
+      Start  1: declarative_runtime
+ 1/14 Test  #1: declarative_runtime ................   Passed    3.89 sec
+      Start  2: declarative_compiler
+ 2/14 Test  #2: declarative_compiler ...............   Passed    3.81 sec
+      Start  3: oneui_frame_profile_tests
+ 3/14 Test  #3: oneui_frame_profile_tests ..........   Passed    0.01 sec
+      Start  7: oneui_interaction_tests
+ 4/14 Test  #7: oneui_interaction_tests ............   Passed    0.06 sec
+      Start  8: oneui_reactive_lifetime_tests
+ 5/14 Test  #8: oneui_reactive_lifetime_tests ......   Passed    0.01 sec
+      Start 11: oneui_control_behavior_tests
+ 6/14 Test #11: oneui_control_behavior_tests .......   Passed    0.07 sec
+      Start 16: oneui_scroll_view_behavior_tests
+ 7/14 Test #16: oneui_scroll_view_behavior_tests ...   Passed    0.04 sec
+      Start 17: oneui_stack_behavior_tests
+ 8/14 Test #17: oneui_stack_behavior_tests .........   Passed    0.04 sec
+      Start 18: oneui_authoring_behavior_tests
+ 9/14 Test #18: oneui_authoring_behavior_tests .....   Passed    0.06 sec
+      Start 19: oneui_yoga_behavior_tests
+10/14 Test #19: oneui_yoga_behavior_tests ..........   Passed    0.06 sec
+      Start 20: oneui_component_behavior_tests
+11/14 Test #20: oneui_component_behavior_tests .....   Passed    0.06 sec
+      Start 27: oneui_win32_accessibility_tests
+12/14 Test #27: oneui_win32_accessibility_tests ....   Passed    0.04 sec
+      Start 28: oneui_win32_window_loop_tests
+13/14 Test #28: oneui_win32_window_loop_tests ......   Passed    0.42 sec
+      Start 38: oneui_abi_sync
+14/14 Test #38: oneui_abi_sync .....................   Passed    0.09 sec
+
+100% tests passed, 0 tests failed out of 14
+
+Total Test time (real) =   8.68 sec

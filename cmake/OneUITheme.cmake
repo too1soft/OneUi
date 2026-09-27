@@ -1,0 +1,5 @@
+set(form_theme "${CMAKE_CURRENT_SOURCE_DIR}/bindings/rust/oneui/src/ui/default.css")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${form_theme}")
+file(READ "${form_theme}" ONEUI_FORM_CSS)
+configure_file("${CMAKE_CURRENT_LIST_DIR}/ui_theme.h.in" "${CMAKE_CURRENT_BINARY_DIR}/generated/ui_theme.h" @ONLY)
+target_include_directories(oneui_core PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")

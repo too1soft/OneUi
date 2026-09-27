@@ -1,6 +1,9 @@
+#include "internal/frame_profile.h"
 #include "oneui/view.h"
 
 #include <algorithm>
+#include <stdexcept>
+#include <unordered_set>
 
 namespace oneui {
 
@@ -71,6 +74,24 @@ const std::vector<std::shared_ptr<Widget>>& View::children() const {
     return children_;
 }
 
+void View::reconcileChildren(std::vector<std::shared_ptr<Widget>> children) {
+    std::unordered_set<Widget*> keep;
+    for (const auto& child : children)
+        if (!child || !keep.insert(child.get()).second) throw std::invalid_argument("Duplicate or null child");
+    if (children == children_) return;
+    if (focusedChild_ && !keep.count(focusedChild_)) { focusedChild_->onFocusChanged(false); focusedChild_ = nullptr; }
+    if (pressedChild_ && !keep.count(pressedChild_)) pressedChild_ = nullptr;
+    if (hoveredChild_ && !keep.count(hoveredChild_)) hoveredChild_ = nullptr;
+    std::unordered_set<Widget*> previous;
+    for (const auto& child : children_) {
+        previous.insert(child.get());
+        if (!keep.count(child.get())) child->detachFromOwner(this);
+    }
+    for (const auto& child : children) if (!previous.count(child.get())) installChildCallbacks(*child);
+    children_ = std::move(children);
+    invalidate();
+}
+
 void View::setInvalidator(std::function<void()> invalidator) {
     Widget::setInvalidator(std::move(invalidator));
     for (const auto& child : children_) {
@@ -106,7 +127,7 @@ void View::installChildCallbacks(Widget& child) {
 }
 
 void View::paint(Canvas& canvas) {
-    layoutChildren();
+    { internal::FrameSpan span(internal::FrameStage::Layout); layoutChildren(); }
     const auto clip = canvas.clipBounds();
     const bool canCullByClip = clip && clip->width > 0.0f && clip->height > 0.0f;
     bool hasAboveSiblings = false;
@@ -482,7 +503,9 @@ bool View::focusFirstLeaf() {
     if (focusable.empty()) {
         return false;
     }
-    focusChild(focusable.front(), true); // 进入首个可聚焦子；容器会递归聚焦其首叶
+    focusChild(focusable.front(), true);
+    // The same child may still hold its last leaf after a scope wraps.
+    focusable.front()->focusFirstLeaf();
     return true;
 }
 

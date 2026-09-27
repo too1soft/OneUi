@@ -76,6 +76,7 @@ struct StyleBox {
     std::optional<float> detailFontSize;
     std::optional<int> detailFontWeight;
     std::optional<float> textInset;
+    std::optional<float> iconSize;
     std::optional<float> titleOffsetY;
     std::optional<float> detailOffsetY;
     std::optional<Color> scrollbarColor;

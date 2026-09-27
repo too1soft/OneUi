@@ -20,6 +20,7 @@ public:
     void setWheelStep(float step);
     void setChromeVisible(bool visible);
     void setScrollbarStyle(Color color, float thickness);
+    void setScrollbarInset(float inset);
     void setStyleBox(StyleBox style);
     void clearStyleBox();
     void setHorizontalScrollOffset(float offset);
@@ -64,6 +65,7 @@ private:
     bool chromeVisible_ = true;
     Color scrollbarColor_{148, 163, 184, 180};
     float scrollbarThickness_ = 4.0f;
+    float scrollbarInset_ = 5.0f;
     std::optional<StyleBox> styleBox_;
     bool draggingHorizontalThumb_ = false;
     float dragStartX_ = 0.0f;

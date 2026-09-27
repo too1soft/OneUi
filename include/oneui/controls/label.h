@@ -22,6 +22,9 @@ public:
     const std::vector<TextStyleSpan>& textSpans() const { return textSpans_; }
     void bindText(State<std::wstring>& state);
     void setColor(Color color);
+    /// Optional leading status dot, in logical pixels. Zero disables it.
+    /// Its color follows the leading text span, or the label foreground.
+    void setStatusIndicator(float diameter, float gap);
     void setFontSize(float size);
     void setFontWeight(int weight);
     void setAlign(TextAlign align);
@@ -31,6 +34,8 @@ public:
     /// Intrinsic text dimensions before clipping/ellipsis, using the same
     /// family, spans, weight and DPI as paint(). Intended for layout audits.
     Size naturalTextSize() const;
+    Size naturalSize() const override { return naturalTextSize(); }
+    Size measure(Size available) const override;
     void setTextOptions(TextOptions options);
     const TextOptions& textOptions() const { return textOptions_; }
     /// Enables width-aware multi-line layout. Disabled by default so existing
@@ -52,6 +57,8 @@ private:
     std::wstring text_;
     Binding<std::wstring> textBinding_;
     Color color_{25, 28, 33};
+    float indicatorDiameter_ = 0.0f;
+    float indicatorGap_ = 0.0f;
     float fontSize_ = 13.0f;
     int fontWeight_ = 400;
     TextAlign align_ = TextAlign::Left;

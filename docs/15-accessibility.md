@@ -1,6 +1,6 @@
 # OneUI 可访问性架构草案
 
-这份文档描述 OneUI 的可访问性方向。当前运行时已经有 `Widget` 基础语义 API，可以声明 role、name、description、value 和部分 state；`Button`、`TextField`、`Checkbox`、`Select`、`Slider`、`RadioGroup`、`Tabs`、`List`、`Table` 已经开始提供默认语义，`FormField` 会把 label/helper/error/required/invalid 同步到子控件。但还没有完整平台 accessibility bridge。本文不代表 Windows UI Automation、macOS Accessibility 或 Linux AT-SPI 已经实现。
+这份文档描述 OneUI 的可访问性方向。当前运行时已经有 `Widget` 基础语义 API，可以声明 role、name、description、value 和部分 state；`Button`、`TextField`、`Checkbox`、`Select`、`Slider`、`RadioGroup`、`Tabs`、`List`、`Table` 已经开始提供默认语义，`FormField` 会把 label/helper/error/required/invalid 同步到子控件。Windows 已新增初步 MSAA 桥，可由系统 UIA legacy bridge 读取；尚未完成原生 UIA pattern、屏幕阅读器和 OS 输入端到端验收。macOS Accessibility 与 Linux AT-SPI 尚未实现。
 
 ## 目标
 
@@ -146,7 +146,7 @@ auto info = input->accessibilityInfo();
 | TextField 基础编辑键 | 部分完成 | 已有 caret、基础选择区、copy/cut/paste API、Win32 系统剪贴板 bridge、Ctrl+A/C/X/V、Left/Right/Home/End/Delete/Backspace |
 | 语义 role/name/value | 部分完成 | `Widget` 已有基础公开 API；常用表单、选择和数据展示控件已有默认语义；平台语义树待做 |
 | FormField 语义关联 | 部分完成 | label/helper/error/required/invalid 已同步到子控件；更复杂的 described-by 语义树待做 |
-| 平台 accessibility bridge | 未完成 | Windows/macOS/Linux 都未实现 |
+| 平台 accessibility bridge | 部分完成 | Windows WM_GETOBJECT / IAccessible / IOleWindow 提供角色、名称、遮蔽值、状态、DPI 边界和原生默认动作。测试覆盖密码保护、禁用、只读及窗口失效；工具能读取实际原生控件，但坐标输入工具报错，不能视为 OS 交互通过。macOS/Linux 未实现 |
 | 自动化测试 | 部分完成 | 已覆盖 `Widget::accessibilityInfo()` 基础语义、动态状态，以及 Button/TextField/Checkbox/Select/Slider/RadioGroup/Tabs/List/Table 默认语义 |
 
 ## 不做的事

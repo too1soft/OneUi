@@ -161,6 +161,12 @@ public:
     Rect frame() const;
     void setPreferredSize(Size size);
     Size preferredSize() const;
+    // Unconstrained content size in logical pixels. Layout containers may opt
+    // into this without changing the legacy preferred-size contract.
+    virtual Size naturalSize() const { return preferredSize(); }
+    // Available dimensions are nonnegative; infinity means unconstrained.
+    virtual Size measure(Size available) const { return naturalSize(); }
+    std::uint64_t measureRevision() const { return measureRevision_; }
     virtual void setDisabled(bool disabled);
     void bindDisabled(State<bool>& state);
     bool disabled() const;
@@ -287,6 +293,7 @@ private:
     const void* invalidatorOwner_ = nullptr;
     const void* rectInvalidatorOwner_ = nullptr;
     const void* animationSchedulerOwner_ = nullptr;
+    std::uint64_t measureRevision_ = 0;
     std::shared_ptr<int> lifetime_ = std::make_shared<int>(0);
     std::uint64_t textInputSession_ = 0;
     bool focused_ = false;

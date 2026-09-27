@@ -30,6 +30,7 @@ void applyFocusRingOverride(FocusRingStyle& style, const FocusRingStyleOverride&
 }
 
 void applySelectStateOverride(SelectStyle& style, const SelectStateStyleOverride& override) {
+    if (override.fontSize) style.fontSize = *override.fontSize;
     if (override.background) {
         style.background = *override.background;
     }
@@ -95,6 +96,7 @@ void applySelectStateOverride(SelectStyle& style, const SelectStateStyleOverride
 SelectStyle baseSelectStyle(bool disabled, bool hovered, bool pressed) {
     const auto& t = theme();
     SelectStyle style;
+    style.fontSize = t.fontMd;
     style.background = disabled ? t.disabledBackground : (pressed ? t.pressedBackground : (hovered ? t.hoverBackground : t.surface));
     style.foreground = disabled ? t.disabledForeground : t.text;
     style.border = disabled ? t.disabledBorder : (pressed ? t.pressedBorder : (hovered ? t.hoverBorder : t.border));
@@ -226,7 +228,7 @@ void Select::paint(Canvas& canvas) {
             std::max(0.0f, rect.width - fieldStyle.padding.horizontal() - 18.0f),
             std::max(0.0f, rect.height - fieldStyle.padding.vertical())},
         fieldStyle.foreground,
-        theme().fontMd,
+        fieldStyle.fontSize,
         TextAlign::Left);
 
     const float cx = rect.x + rect.width - 20.0f;
@@ -257,7 +259,7 @@ void Select::paint(Canvas& canvas) {
             items_[static_cast<std::size_t>(i)],
             Rect{row.x + optionStyle.padding.left, row.y + optionStyle.padding.top, std::max(0.0f, row.width - optionStyle.padding.horizontal()), std::max(0.0f, row.height - optionStyle.padding.vertical())},
             i == selected ? optionStyle.selectedOptionForeground : optionStyle.optionForeground,
-            theme().fontMd,
+            optionStyle.fontSize,
             TextAlign::Left);
     }
     if (popupVisibleRows() < static_cast<int>(items_.size())) {
@@ -276,7 +278,12 @@ bool Select::onMouseMove(const MouseEvent& event) {
         return false;
     }
     const bool next = contains(event.position);
-    const int nextIndex = popup_.open ? hitPopupOptionIndex(event.position) : -1;
+    const bool moved=!lastHoverPosition_ || lastHoverPosition_->x!=event.position.x || lastHoverPosition_->y!=event.position.y;
+    lastHoverPosition_=event.position;
+    // Window hover reconciliation can replay the stationary pointer after a
+    // keyboard-driven paint. Only a real move onto an option changes the choice.
+    const int hit=popup_.open && moved?hitPopupOptionIndex(event.position):-1;
+    const int nextIndex=popup_.open?(hit>=0?hit:popup_.hoveredIndex):-1;
     if (next == hovered_ && nextIndex == popup_.hoveredIndex) {
         return false;
     }

@@ -54,6 +54,10 @@ struct ButtonStyle {
     FocusRingStyle focusRing{};
     TransitionSpec transition{};
     std::vector<ControlShadowStyle> shadows;
+    // Unset preserves the legacy inset; explicit zero removes it.
+    std::optional<Insets> padding;
+    std::optional<float> iconSize;
+    std::optional<float> iconGap;
 };
 
 struct ButtonStateStyleOverride {
@@ -67,6 +71,9 @@ struct ButtonStateStyleOverride {
     std::optional<FocusRingStyleOverride> focusRing;
     std::optional<TransitionSpec> transition;
     std::optional<std::vector<ControlShadowStyle>> shadows;
+    std::optional<Insets> padding;
+    std::optional<float> iconSize;
+    std::optional<float> iconGap;
 };
 
 struct ButtonStyleOverride {
@@ -259,6 +266,7 @@ struct SelectStyle {
     Color optionForeground{25, 28, 33};
     Color selectedOptionBackground{219, 234, 254};
     Color selectedOptionForeground{37, 99, 235};
+    float fontSize = 14.0f;
     float borderWidth = 1.0f;
     float radius = 6.0f;
     float popupRadius = 6.0f;
@@ -282,6 +290,7 @@ struct SelectStateStyleOverride {
     std::optional<Color> optionForeground;
     std::optional<Color> selectedOptionBackground;
     std::optional<Color> selectedOptionForeground;
+    std::optional<float> fontSize;
     std::optional<float> borderWidth;
     std::optional<float> radius;
     std::optional<float> popupRadius;

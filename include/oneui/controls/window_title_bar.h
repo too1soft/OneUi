@@ -24,6 +24,9 @@ public:
     // "titlebar--<variant>" / "titlebar-icon--<variant>" / "window-button--<variant>" 类，
     // 供样式表按类换肤（如登录页深色标题栏）；空则保持默认皮肤。
     void setVariant(std::string variant);
+    Rect windowButtonFrame(TitleBarButtonId id) const;
+    bool activateWindowButton(TitleBarButtonId id);
+    bool maximized() const { return maximized_; }
     void setStyleSheet(std::shared_ptr<StyleSheet> sheet);
     void setLeading(std::shared_ptr<Widget> leading);
     void setAccessory(std::shared_ptr<Widget> accessory);

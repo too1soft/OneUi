@@ -1,8 +1,10 @@
+#include "internal/frame_profile.h"
 #include "oneui/platform/window.h"
 #include "oneui/platform/dpi.h"
 
 #include "oneui/color.h"
 #include "oneui/view.h"
+#include "oneui/controls/window_title_bar.h"
 #include "internal/scroll_trace.h"
 #include "platform/shared/skia_canvas.h"
 #include "platform/win32/compat_win32.h"
@@ -74,6 +76,8 @@
 #include <utility>
 #include <vector>
 
+#include "platform/win32/accessibility_win32.h"
+
 namespace oneui {
 namespace {
 
@@ -105,7 +109,18 @@ using WglSwapIntervalExtProc = BOOL(WINAPI*)(int);
 #define DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 reinterpret_cast<HANDLE>(-4)
 #endif
 
-std::atomic<int> g_liveWindowCount{0};
+// HWND ownership and WM_QUIT are thread-local. A window on another UI thread
+// must not keep this thread's loop alive, and destroying a layout-only window
+// outside run() must not leave an exit message for a future window.
+thread_local int g_liveWindowCount = 0;
+thread_local unsigned int g_runLoopDepth = 0;
+
+struct RunLoopScope {
+    RunLoopScope() { ++g_runLoopDepth; }
+    ~RunLoopScope() { --g_runLoopDepth; }
+    RunLoopScope(const RunLoopScope&) = delete;
+    RunLoopScope& operator=(const RunLoopScope&) = delete;
+};
 
 using SetProcessDpiAwarenessContextFn = BOOL(WINAPI*)(HANDLE);
 using SetProcessDpiAwarenessFn = HRESULT(WINAPI*)(int);
@@ -266,6 +281,7 @@ public:
         , renderTraceEnabled_(renderTraceEnabled())
         , renderTraceFilePath_(renderTraceFilePath())
         , taskbarCreatedMessage_(RegisterWindowMessageW(L"TaskbarCreated")) {
+        accessibilityComResult_ = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
         animationFrameTimer_ = CreateWaitableTimerExW(
             nullptr,
             nullptr,
@@ -278,6 +294,7 @@ public:
 
     ~Win32Window() override {
         callbackWindowAlive_->store(false, std::memory_order_release);
+        if(accessibilityProvider_){accessibilityProvider_->Release();accessibilityProvider_=nullptr;}
         acceptingPostedCallbacks_.store(false, std::memory_order_release);
         discardPostedCallbacks();
         if (content_) {
@@ -292,6 +309,18 @@ public:
             CloseHandle(animationFrameTimer_);
             animationFrameTimer_ = nullptr;
         }
+        if (SUCCEEDED(accessibilityComResult_)) CoUninitialize();
+    }
+
+    void syncTitleBarWindowState() {
+        const auto sync = [&](const auto& self, const std::shared_ptr<Widget>& widget) -> void {
+            if (!widget) return;
+            if (const auto title = std::dynamic_pointer_cast<WindowTitleBar>(widget))
+                title->setMaximized(lastKnownMaximized_);
+            if (const auto view = std::dynamic_pointer_cast<View>(widget))
+                for (const auto& child : view->children()) self(self, child);
+        };
+        sync(sync, content_);
     }
 
     void setContent(std::shared_ptr<Widget> widget) override {
@@ -300,6 +329,7 @@ public:
         }
         content_ = std::move(widget);
         setCommandRoot(content_);
+        syncTitleBarWindowState();
         if (content_) {
             content_->setTextEnvironment(defaultFontFamily_, dpiScale());
             content_->attachToOwner(
@@ -490,6 +520,10 @@ public:
 
     int run() override {
         ensureCreated();
+        if (!hwnd_) {
+            return acceptingPostedCallbacks_.load(std::memory_order_acquire) ? -1 : 0;
+        }
+        const RunLoopScope loopScope;
         MSG message{};
         while (true) {
             // Win7's non-composited paint path can continuously enqueue paint
@@ -500,6 +534,9 @@ public:
             unsigned int dispatched = 0;
             while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE)) {
                 if (message.message == WM_QUIT) {
+                    // A nested loop must pass the thread's exit request back
+                    // to its caller instead of consuming it on its behalf.
+                    if (g_runLoopDepth > 1) PostQuitMessage(static_cast<int>(message.wParam));
                     return static_cast<int>(message.wParam);
                 }
                 TranslateMessage(&message);
@@ -668,6 +705,7 @@ public:
     }
 
     void requestRedraw() override {
+        if (internal::activeFrameProfile) ++tracePaintInvalidations_;
         if (hwnd_) {
             InvalidateRect(hwnd_, nullptr, FALSE);
         }
@@ -1372,6 +1410,21 @@ private:
             return 0;
         }
         switch (message) {
+        case WM_GETOBJECT:
+            if (static_cast<DWORD>(lParam)==static_cast<DWORD>(OBJID_CLIENT) && content_
+                && SUCCEEDED(accessibilityComResult_) && callbackWindowAlive_->load()) {
+                if(!accessibilityProvider_){
+                    auto context=std::make_shared<win32_accessibility::Context>();
+                    context->window=hwnd_;context->alive=callbackWindowAlive_;
+                    context->root=[this]{return content_;};
+                    context->focus=[this](Widget* widget){return requestFocus(widget,true);};
+                    context->scale=[this]{return dpiScale();};
+                    accessibilityProvider_=new win32_accessibility::Provider(context);
+                    context->provider=accessibilityProvider_;
+                }
+                return LresultFromObject(IID_IAccessible,wParam,accessibilityProvider_);
+            }
+            return DefWindowProcW(hwnd_,message,wParam,lParam);
         case WM_DROPFILES:
         {
             const HDROP drop = reinterpret_cast<HDROP>(wParam);
@@ -1654,6 +1707,7 @@ private:
             } else if (wParam == SIZE_RESTORED) {
                 lastKnownMaximized_ = borderlessMaximized_;
             }
+            if (wParam != SIZE_MINIMIZED) syncTitleBarWindowState();
             if (wParam == SIZE_MINIMIZED && shadowHwnd_) {
                 ShowWindow(shadowHwnd_, SW_HIDE); // 最小化立刻收起投影
             }
@@ -1797,7 +1851,7 @@ private:
             HWND destroyedHwnd = hwnd_;
             SetWindowLongPtrW(hwnd_, GWLP_USERDATA, 0);
             hwnd_ = nullptr;
-            if (--g_liveWindowCount == 0) {
+            if (--g_liveWindowCount == 0 && g_runLoopDepth > 0) {
                 PostQuitMessage(0);
             }
             return DefWindowProcW(destroyedHwnd, message, wParam, lParam);
@@ -2414,6 +2468,7 @@ private:
     }
 
     void requestRedrawRect(Rect rect) {
+        if (internal::activeFrameProfile) ++tracePaintInvalidations_;
         if (!hwnd_ || rect.width <= 0.0f || rect.height <= 0.0f) {
             requestRedraw();
             return;
@@ -2437,6 +2492,7 @@ private:
     }
 
     void paint() {
+        internal::FrameProfileSession profile(renderTraceEnabled_);
         const double paintStartMs = currentTimeMs();
         RECT clientRect{};
         GetClientRect(hwnd_, &clientRect);
@@ -2517,6 +2573,7 @@ private:
             paintTooltip(canvas);
             recordContentPaint(currentTimeMs() - contentStartMs);
             recordPrimitivePaint(g_primitivePaintTrace);
+            for (std::size_t i = 0; i < traceStageMs_.size(); ++i) traceStageMs_[i] += profile.data.ms[i];
         }
 
         if (!fullPaint) {
@@ -2525,11 +2582,14 @@ private:
         skCanvas->restore();
 
         if (gpuAvailable_ && grContext_ && windowSurface_) {
+            const double submitStartMs = currentTimeMs();
             SkCanvas* presentCanvas = windowSurface_->getCanvas();
             presentCanvas->clear(SK_ColorBLACK);
             paintSurface_->draw(presentCanvas, 0.0f, 0.0f);
             grContext_->flushAndSubmit();
-            if (SwapBuffers(glDC_)) {
+            const BOOL swapped = SwapBuffers(glDC_);
+            traceSubmitMs_ += currentTimeMs() - submitStartMs;
+            if (swapped) {
                 EndPaint(hwnd_, &paintStruct);
                 recordPaint(width, height, fullPaint, allocatedSurface, surfaceMs, currentTimeMs() - paintStartMs);
                 return;
@@ -2656,6 +2716,7 @@ private:
                 paintSurfaceHeight_ = surfaceHeight;
                 return true;
             }
+            traceGpu(!retainedSurface ? "retained-surface-failed" : "window-surface-failed");
             paintSurface_.reset();
             windowSurface_.reset();
             gpuAvailable_ = false;
@@ -2795,11 +2856,11 @@ private:
             ? traceFrameIntervalMs_ / static_cast<double>(traceFrameIntervals_)
             : 0.0;
         const double presentedFps = frameIntervalAvg > 0.0 ? 1000.0 / frameIntervalAvg : 0.0;
-        char line[1536]{};
+        char line[2048]{};
         std::snprintf(
             line,
             sizeof(line),
-            "[oneui-render] size=%dx%d wm_size=%llu interactive_size=%llu max=%llu restore=%llu paints=%llu full=%llu partial=%llu frame=%.2fms/%.1ffps min=%.2fms max=%.2fms surface_alloc=%llu avg_paint=%.2fms avg_content=%.2fms avg_blit=%.2fms surface_alloc_ms=%.2f text=%llu/%.2fms measure=%llu/%.2fms shadow=%llu/%.2fms gradient=%llu/%.2fms\n",
+            "[oneui-render] size=%dx%d wm_size=%llu interactive_size=%llu max=%llu restore=%llu paints=%llu full=%llu partial=%llu frame=%.2fms/%.1ffps min=%.2fms max=%.2fms surface_alloc=%llu avg_paint=%.2fms avg_content=%.2fms avg_blit=%.2fms surface_alloc_ms=%.2f text=%llu/%.2fms measure=%llu/%.2fms shadow=%llu/%.2fms gradient=%llu/%.2fms backend=%s avg_layout=%.3fms avg_text_layout=%.3fms avg_fill=%.3fms avg_path=%.3fms avg_submit=%.3fms paint_invalidations=%llu\n",
             traceLastWidth_,
             traceLastHeight_,
             static_cast<unsigned long long>(traceResizeMessages_),
@@ -2825,7 +2886,14 @@ private:
             static_cast<unsigned long long>(traceShadowCalls_),
             traceShadowMs_,
             static_cast<unsigned long long>(traceGradientCalls_),
-            traceGradientMs_);
+            traceGradientMs_,
+            gpuAvailable_ ? "opengl" : "raster",
+            traceStageMs_[0] / std::max<std::uint64_t>(1, tracePaints_),
+            traceStageMs_[1] / std::max<std::uint64_t>(1, tracePaints_),
+            traceStageMs_[2] / std::max<std::uint64_t>(1, tracePaints_),
+            traceStageMs_[3] / std::max<std::uint64_t>(1, tracePaints_),
+            traceSubmitMs_ / std::max<std::uint64_t>(1, tracePaints_),
+            static_cast<unsigned long long>(tracePaintInvalidations_));
         if (!renderTraceFilePath_.empty()) {
             if (FILE* file = _wfopen(renderTraceFilePath_.c_str(), L"ab")) {
                 std::fputs(line, file);
@@ -2861,6 +2929,9 @@ private:
         traceTextMeasureMs_ = 0.0;
         traceShadowMs_ = 0.0;
         traceGradientMs_ = 0.0;
+        traceStageMs_.fill(0);
+        traceSubmitMs_ = 0;
+        tracePaintInvalidations_ = 0;
     }
 
     void updateCursor(Point point, bool force = false) {
@@ -3440,6 +3511,18 @@ private:
         }
     }
 
+    void traceGpu(const char* stage) {
+        if (!renderTraceEnabled_) return;
+        const auto* renderer = wglGetCurrentContext() ? glGetString(GL_RENDERER) : nullptr;
+        const auto* version = wglGetCurrentContext() ? glGetString(GL_VERSION) : nullptr;
+        FILE* file = renderTraceFilePath_.empty() ? stderr : _wfopen(renderTraceFilePath_.c_str(), L"ab");
+        if (!file) return;
+        std::fprintf(file, "[oneui-gpu] stage=%s renderer=%s version=%s\n", stage,
+            renderer ? reinterpret_cast<const char*>(renderer) : "none",
+            version ? reinterpret_cast<const char*>(version) : "none");
+        if (file != stderr) std::fclose(file); else std::fflush(file);
+    }
+
     void initGPU() {
         if (gpuInitializationAttempted_ || !hwnd_) {
             return;
@@ -3483,8 +3566,10 @@ private:
             return;
         }
 
+        traceGpu("context-current");
         grContext_ = GrDirectContexts::MakeGL();
         if (!grContext_) {
+            traceGpu("ganesh-context-failed");
             wglMakeCurrent(nullptr, nullptr);
             wglDeleteContext(tempContext);
             ReleaseDC(hwnd_, glDC_);
@@ -3498,6 +3583,7 @@ private:
 
         glContext_ = tempContext;
         gpuAvailable_ = true;
+        traceGpu("ganesh-ready");
         std::fprintf(
             stderr,
             "OneUI GPU rendering enabled (OpenGL+Skia Ganesh, vsync=%s)\n",
@@ -3527,6 +3613,8 @@ private:
     bool imeActive_ = false;
     bool suppressKeyText_ = false;
     HANDLE animationFrameTimer_ = nullptr;
+    IAccessible* accessibilityProvider_=nullptr;
+    HRESULT accessibilityComResult_=E_FAIL;
     WindowOptions options_;
     float dpiScale_ = 1.0f;
     float contentScale_ = 1.0f;
@@ -3639,6 +3727,9 @@ private:
     double traceTextMeasureMs_ = 0.0;
     double traceShadowMs_ = 0.0;
     double traceGradientMs_ = 0.0;
+    std::array<double, 4> traceStageMs_{};
+    double traceSubmitMs_ = 0;
+    std::uint64_t tracePaintInvalidations_ = 0;
     std::vector<std::uint32_t> blitScratch_;
 };
 

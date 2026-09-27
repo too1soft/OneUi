@@ -53,3 +53,12 @@ Acceptance fonts and Unicode datasets are pinned with SHA-256 in `../tests/text-
 Fetch with `cmake -P scripts/fetch-text-test-assets.cmake`. Fonts are OFL-1.1 and Unicode
 fixtures Unicode-3.0; downloaded licenses accompany the fixtures in ignored `out/text-assets`.
 They are test inputs, not automatically part of the shipped SDK.
+
+
+## Optional Yoga layout experiment
+
+`ONEUI_ENABLE_YOGA=ON` uses the pinned Yoga 3.2.1 archive defined in
+`cmake/OneUIYoga.cmake`, with an SHA-256 check and the exact, idempotent
+`scripts/patch-yoga-wrap.cmake` patch. It builds only yogacore (MIT).
+The upstream license is copied to the build's `licenses/Yoga-LICENSE.txt`.
+Default builds do not fetch Yoga. See `cmake/OneUIYoga.cmake` and `scripts/patch-yoga-wrap.cmake`.

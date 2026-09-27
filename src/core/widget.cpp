@@ -394,6 +394,7 @@ void Widget::setFocused(bool focused) {
 }
 
 void Widget::invalidate() {
+    ++measureRevision_;
     if (rectInvalidator_) {
         rectInvalidator_(frame_);
     } else if (invalidator_) {
@@ -402,6 +403,7 @@ void Widget::invalidate() {
 }
 
 void Widget::invalidateRect(Rect rect) {
+    ++measureRevision_;
     if (rectInvalidator_) {
         rectInvalidator_(rect);
     } else {

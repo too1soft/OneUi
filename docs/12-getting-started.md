@@ -1,5 +1,7 @@
 # OneUI 入门指南
 
+第一次体验默认主题、自适应表单和声明式写法，建议先按[README 的三步运行](../README.md#运行-demowindows)，然后打开 [hello.cpp](../examples/declarative/hello.cpp)。完整[学习示例](../examples/declarative/README.md)和[性能实验台](../examples/performance_lab/README.md)已随仓库提供，不需要相邻工程。下文保留底层 SDK、旧 Gallery、C ABI 与 Rust 的接入方式。
+
 本文介绍 Win32 主线构建；Linux/macOS 的依赖、构建命令、SDK 和待验收边界见
 [原生桌面后端指南](37-native-desktop-backends.md)。C++ 控件、C ABI 和 Rust API 复用同一底座。
 

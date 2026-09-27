@@ -71,6 +71,7 @@ private:
     std::vector<std::wstring> items_;
     int selectedIndex_ = 0;
     bool hovered_ = false;
+    std::optional<Point> lastHoverPosition_;
     LightDismissModel popup_;
     Binding<int> selectedBinding_;
     std::optional<SelectStyleOverride> styleOverride_;

@@ -43,6 +43,8 @@ set(ONEUI_CORE_SOURCES
     src/core/sparkline.cpp
     src/core/split_view.cpp
     src/core/stack.cpp
+    src/core/stack_yoga.cpp
+    src/core/ui.cpp
     src/core/state_view.cpp
     src/core/status_strip.cpp
     src/core/style_adapter.cpp

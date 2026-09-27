@@ -1,3 +1,4 @@
+#include "internal/frame_profile.h"
 #include "skia_canvas.h"
 #include "internal/unicode.h"
 #include "skia_path.h"
@@ -165,6 +166,7 @@ class SkiaCanvasImpl final : public Canvas {
     std::optional<Rect> viewportBounds() const override { return viewportBounds_; }
 
     void fillRect(Rect rect, Color color, float radius) override {
+        internal::FrameSpan span(internal::FrameStage::Fill);
         SkPaint paint;
         paint.setAntiAlias(true);
         paint.setColor(toSkColor(color));
@@ -250,6 +252,7 @@ class SkiaCanvasImpl final : public Canvas {
     }
 
     void strokePath(const CanvasPath &path, Color color, float width, bool rounded) override {
+        internal::FrameSpan span(internal::FrameStage::Path);
         if (path.empty()) {
             return;
         }

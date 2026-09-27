@@ -1,0 +1,2 @@
+#pragma once
+inline constexpr const char* kOneUiFormTheme = R"ONEUI_FORM(@ONEUI_FORM_CSS@)ONEUI_FORM";

@@ -35,6 +35,10 @@ public:
     void clearStyleOverride();
     void setDisabled(bool disabled) override;
     void setOnClick(std::function<void()> callback);
+    // Measures current text/icons and resolved padding using the window font
+    // environment. Call after applying styles; does not change preferredSize.
+    Size naturalContentSize() const;
+    Size naturalSize() const override { return naturalContentSize(); }
 
     void paint(Canvas& canvas) override;
     bool onMouseMove(const MouseEvent& event) override;

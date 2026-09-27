@@ -565,6 +565,11 @@ bool applyDeclaration(
             rule.box.detailFontWeight = std::clamp(static_cast<int>(*fontWeight), 100, 900);
             return true;
         }
+    } else if (name == "icon-size") {
+        if (auto size = parsePx(value); size && *size >= 0.0f) {
+            rule.box.iconSize = *size;
+            return true;
+        }
     } else if (name == "text-inset") {
         if (auto inset = parsePx(value)) {
             rule.box.textInset = *inset;
@@ -1092,6 +1097,7 @@ StyleBox mergeStyleBox(StyleBox base, const StyleBox& overlay) {
     if (overlay.detailFontWeight) {
         base.detailFontWeight = overlay.detailFontWeight;
     }
+    if (overlay.iconSize) base.iconSize = overlay.iconSize;
     if (overlay.textInset) {
         base.textInset = overlay.textInset;
     }

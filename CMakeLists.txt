@@ -22,12 +22,18 @@ option(ONEUI_BUILD_PLATFORM_WIN32 "Build the Win32 platform renderer and gallery
 option(ONEUI_BUILD_PLATFORM_DESKTOP "Build native Linux/macOS backends" ON)
 option(ONEUI_BUILD_STATIC "Build the OneUI static library alongside the DLL" ON)
 option(ONEUI_ENABLE_TEST_FRAME_CAPTURE "Enable test-only native frame PNG capture" OFF)
+option(ONEUI_BUILD_VIEWC "Build the native .one template compiler" ON)
+if(ONEUI_BUILD_VIEWC)
+    include(cmake/OneUIView.cmake)
+endif()
 
 include(cmake/OneUISkia.cmake)
 include(cmake/OneUIText.cmake)
 
 add_library(oneui_core OBJECT ${ONEUI_CORE_SOURCES})
 target_link_libraries(oneui_core PUBLIC oneui_text)
+include(cmake/OneUIYoga.cmake)
+include(cmake/OneUITheme.cmake)
 set_target_properties(oneui_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 target_include_directories(oneui_core
@@ -61,6 +67,7 @@ if(WIN32 AND ONEUI_BUILD_PLATFORM_WIN32)
             dwrite
             opengl32
             ole32
+            oleacc
             oleaut32
             uuid
             windowscodecs
@@ -111,6 +118,7 @@ if(WIN32 AND ONEUI_BUILD_PLATFORM_WIN32)
             dwrite
             opengl32
             ole32
+            oleacc
             oleaut32
             uuid
             fontsub
@@ -173,6 +181,7 @@ if(WIN32 AND ONEUI_BUILD_PLATFORM_WIN32)
                 dwrite
                 opengl32
                 ole32
+            oleacc
                 oleaut32
                 uuid
                 windowscodecs
@@ -260,4 +269,8 @@ elseif(WIN32)
         PREFIX ""
         OUTPUT_NAME "oneui"
     )
+endif()
+
+if(TARGET oneui_static AND ONEUI_ENABLE_YOGA)
+    target_link_libraries(oneui_static PUBLIC yogacore)
 endif()

@@ -60,6 +60,9 @@ StyleBox resolveState(const StyleSheet& sheet, StyleNode node, StylePseudoMask s
 
 ButtonStateStyleOverride buttonStateStyleOverrideFromStyleBox(const StyleBox& box) {
     ButtonStateStyleOverride override;
+    override.padding = box.padding;
+    override.iconSize = box.iconSize;
+    override.iconGap = box.gap;
     override.background = box.background.color;
     override.foreground = box.foreground;
     override.border = box.borderColor;
@@ -114,6 +117,7 @@ SwitchStateStyleOverride switchStateStyleOverrideFromStyleBox(const StyleBox& bo
 
 SelectStateStyleOverride selectStateStyleOverrideFromStyleBox(const StyleBox& box) {
     SelectStateStyleOverride override;
+    override.fontSize = box.fontSize;
     override.background = box.background.color;
     override.foreground = box.foreground;
     override.border = box.borderColor;

@@ -69,6 +69,14 @@
 - hover/focus/pressed/caret 只能标记 dirty rect 并交给统一调度。
 - animation frame 只在有活动动画时继续调度。
 
+Win32 窗口生命周期补充（2026-09-24）：
+
+- 创建、操作、销毁原生窗口必须在同一 UI 线程；Go 绑定调用方应锁定实际执行这些操作的 goroutine，父测试的线程锁不能覆盖 `t.Run` 子测试。
+- 窗口计数和消息循环退出属于当前 UI 线程，其他线程上的窗口不得阻止本线程退出。
+- 未进入 `run()` 的窗口销毁时不投递自动 `WM_QUIT`，避免让后续窗口提前退出。
+- 已关闭窗口再次 `run()` 返回；嵌套循环必须向外层传递退出请求，保留显式应用退出码。
+- 回归入口：`oneui_win32_window_loop_tests`，与 `oneui_backend_contract_tests` 一起执行。
+
 ### 3. Rendering And Presentation
 
 后端必须实现 Skia 呈现路径：

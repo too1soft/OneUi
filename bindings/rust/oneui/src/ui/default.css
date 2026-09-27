@@ -1,0 +1,63 @@
+/* Opt-in FORM theme. No application-wide theme is changed implicitly. */
+:root {
+  --canvas: #101517;
+  --surface: #171e21;
+  --ink: #e5ece8;
+  --muted: #96aaa4;
+  --accent: #c4ed87;
+  --space: 12px;
+}
+stack { gap: var(--space); }
+scroll-view { background-color: var(--canvas); }
+stack.page { padding: 28px; gap: 24px; background-color: var(--canvas); }
+stack.surface { padding: 24px; gap: 16px; background-color: var(--surface); border-radius: 12px; }
+stack.toolbar { gap: 8px; }
+label { color: var(--ink); font-size: 14px; font-weight: 400; }
+label.heading { font-size: 28px; font-weight: 700; }
+label.section { font-size: 18px; font-weight: 600; }
+label.muted { color: var(--muted); font-size: 12px; }
+label.metric-value { font-size: 28px; font-weight: 500; }
+stack.metric { gap: 8px; }
+stack.page-header { gap: 12px; }
+stack.form-row { gap: 16px; }
+stack.empty-state { padding: 24px; }
+stack.rail { background-color: #131a1d; padding: 20px; gap: 12px; }
+button.active { color: var(--canvas); background-color: var(--accent); }
+button.active:hover { background-color: #d3f5a7; }
+button.active:disabled { background-color: #242c28; color: #86958b; }
+button {
+  padding: 9px 16px;
+  color: var(--ink);
+  background-color: #27332f;
+  border-width: 0;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  outline-color: var(--accent);
+  outline-width: 2px;
+  outline-offset: 2px;
+}
+button:hover { background-color: #384a3e; }
+button:pressed { background-color: #4b634f; }
+button.primary { color: var(--canvas); background-color: var(--accent); }
+button.primary:hover { background-color: #d3f5a7; }
+button.primary:pressed { background-color: #a4ce6b; }
+button:disabled { background-color: #242c28; color: #86958b; }
+button.primary:disabled { background-color: #242c28; color: #86958b; }
+
+input {
+  background-color: var(--canvas);
+  color: var(--ink);
+  placeholder-color: var(--muted);
+  caret-color: var(--accent);
+  selection-color: #40563b;
+  border-color: #52645d;
+  border-width: 1px;
+  border-radius: 6px;
+  padding: 9px 12px;
+  outline-color: var(--accent);
+  outline-width: 2px;
+  outline-offset: 2px;
+}
+input:hover { border-color: #96aaa4; }
+input:disabled { color: #86958b; background-color: #242c28; }

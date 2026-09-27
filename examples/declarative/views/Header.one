@@ -1,0 +1,10 @@
+<template>
+  <Header title="工作空间">
+    <Text class="muted">配置工作习惯，管理连接。所有数据均为本地模拟。</Text>
+    <slot name="navigation" />
+    <slot />
+  </Header>
+</template>
+<style scoped>
+Header { gap: 12px; }
+</style>

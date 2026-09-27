@@ -61,6 +61,12 @@ void Label::setColor(Color color) {
     invalidate();
 }
 
+void Label::setStatusIndicator(float diameter, float gap) {
+    indicatorDiameter_ = std::isfinite(diameter) ? std::clamp(diameter, 0.0f, 64.0f) : 0.0f;
+    indicatorGap_ = std::isfinite(gap) ? std::clamp(gap, 0.0f, 64.0f) : 0.0f;
+    invalidate();
+}
+
 void Label::setFontSize(float size) {
     fontSize_ = size;
     invalidate();
@@ -132,12 +138,32 @@ Size Label::naturalTextSize() const {
     options.scale = textDpiScale();
     options.spans = textSpans_;
     const auto layout = text::Layout::make(text(), options);
-    return {layout->width(), layout->height()};
+    const float inset = indicatorDiameter_ > 0 ? indicatorDiameter_ + indicatorGap_ : 0.0f;
+    return {layout->width() + inset, std::max(layout->height(), indicatorDiameter_)};
+}
+
+Size Label::measure(Size available) const {
+    if (!textWrapping_) return naturalTextSize();
+    text::LayoutOptions options;
+    options.text = textOptions_;
+    options.family = textFontFamily();
+    options.size = fontSize_; options.weight = fontWeight_;
+    options.scale = textDpiScale(); options.spans = textSpans_;
+    const float inset = indicatorDiameter_ > 0 ? indicatorDiameter_ + indicatorGap_ : 0.0f;
+    options.width = std::isfinite(available.width) ? std::max(0.0f, available.width - inset) : 1000000.0f;
+    options.lineHeight = lineHeight_ > 0 ? lineHeight_ : std::max(1.0f, fontSize_ * 1.4f);
+    options.maxLines = maxLines_; options.ellipsis = maxLines_ > 0;
+    const auto layout = text::Layout::make(text(), options);
+    return {std::min(available.width, std::ceil(layout->width() + inset)),
+            std::ceil(std::max({layout->height(), indicatorDiameter_,
+                static_cast<float>(layout->lines().size()) * options.lineHeight}))};
 }
 
 void Label::paint(Canvas& canvas) {
     const Rect bounds = frame();
     if (bounds.width <= 0 || bounds.height <= 0 || fontSize_ <= 0) return;
+    const float diameter = std::min({indicatorDiameter_, bounds.width, bounds.height});
+    const float inset = diameter > 0 ? std::min(bounds.width, diameter + indicatorGap_) : 0.0f;
     TextBlockStyle style;
     style.dpiScale = textDpiScale();
     style.options = textOptions_;
@@ -153,15 +179,24 @@ void Label::paint(Canvas& canvas) {
     text::LayoutOptions options;
     options.text = style.options; options.family = style.fontFamily;
     options.size = style.fontSize; options.weight = style.fontWeight;
-    options.width = bounds.width; options.lineHeight = style.lineHeight;
+    options.width = std::max(0.0f, bounds.width - inset); options.lineHeight = style.lineHeight;
     options.scale = textDpiScale(); options.align = align_;
     options.maxLines = style.maxLines; options.ellipsis = true;
     options.spans = style.spans;
     const auto layout = text::Layout::make(text(), options);
     auto area = bounds;
+    area.x += inset;
+    area.width -= inset;
     if (!textWrapping_) area.y += (bounds.height - layout->height()) / 2;
     canvas.save(); canvas.clipRect(bounds);
-    canvas.drawTextBlock(text(), area, disabled() ? Color{148, 163, 184} : color_, style);
+    const Color foreground = disabled() ? Color{148, 163, 184} : color_;
+    if (diameter > 0) {
+        Color indicatorColor = foreground;
+        if (!disabled() && !textSpans_.empty() && textSpans_.front().start == 0 && textSpans_.front().foreground.a > 0)
+            indicatorColor = textSpans_.front().foreground;
+        canvas.fillEllipse({bounds.x, bounds.y + (bounds.height - diameter) / 2, diameter, diameter}, indicatorColor);
+    }
+    if (area.width > 0) canvas.drawTextBlock(text(), area, foreground, style);
     canvas.restore();
 }
 

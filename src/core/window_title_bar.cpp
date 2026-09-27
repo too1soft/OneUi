@@ -238,6 +238,20 @@ TitleBarBridgeLayout WindowTitleBar::titleBarLayout() const {
     return computeTitleBarBridgeLayout(sheet, config);
 }
 
+Rect WindowTitleBar::windowButtonFrame(TitleBarButtonId id) const {
+    for (const auto& button : titleBarLayout().buttons) if (button.id == id) return button.frame;
+    return {};
+}
+
+bool WindowTitleBar::activateWindowButton(TitleBarButtonId id) {
+    if (!visible() || disabled()) return false;
+    const auto callback = id == TitleBarButtonId::Minimize ? onMinimize_ :
+        id == TitleBarButtonId::Maximize ? onMaximize_ : id == TitleBarButtonId::Close ? onClose_ : std::function<void()>{};
+    if (!callback) return false;
+    callback();
+    return true;
+}
+
 void WindowTitleBar::paint(Canvas& canvas) {
     const auto layout = titleBarLayout();
     paintStyleBox(canvas, frame(), layout.titleBarStyle);

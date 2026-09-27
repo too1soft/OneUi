@@ -1,0 +1,49 @@
+<import name="Editor" src="Editor.one" />
+<template>
+  <Column class="workspace" grow="1">
+    <ValidationMessage :text="list.styleError" />
+    <Page v-if="list.showList">
+      <Header title="连接管理">
+        <Toolbar>
+          <Button @click="list.back">返回性能实验台</Button>
+          <Select :items="editor.themes" v-model="editor.theme" name="连接页主题" />
+          <Select :items="editor.densities" v-model="editor.density" name="界面密度" />
+          <Button @click="list.showGallery">组件与布局</Button>
+        </Toolbar>
+      </Header>
+      <ListPage>
+        <Toolbar>
+          <SearchInput ref="search" v-model="list.query" placeholder="搜索名称、地址或 ID" name="搜索连接" />
+          <Select :items="list.filters" v-model="list.filter" name="连接状态" />
+          <Button variant="primary" @click="list.add">新建连接</Button>
+          <Button @click="list.edit">编辑选中</Button>
+          <Button variant="danger" @click="list.remove">删除选中</Button>
+        </Toolbar>
+        <Toolbar>
+          <Text class="muted" :text="list.count" />
+          <Text class="muted" :text="list.selection" />
+        </Toolbar>
+        <DataTable ref="table" v-if="list.hasRows" :columns="list.columns" :items="list.filtered" v-model="list.selectedKey"
+                   item-key="id" name="连接列表" @activate="list.edit" @delete="list.remove" />
+        <EmptyState v-if="list.empty" :title="list.emptyTitle" :subtitle="list.emptyText" grow="1">
+          <Button @click="list.clear">清除筛选</Button>
+        </EmptyState>
+        <ActionBar><Status :text="list.message" /></ActionBar>
+      </ListPage>
+    </Page>
+    <Editor v-if="list.showForm" />
+    <Page v-if="list.prompt">
+      <DetailPage :title="list.promptTitle" :subtitle="list.promptText">
+        <ActionBar>
+          <Button ref="keep" @click="list.keep">继续 / 取消</Button>
+          <Button v-if="list.canSavePrompt" variant="primary" @click="list.saveLeave">保存后离开</Button>
+          <Button v-if="list.notDeleting" variant="danger" @click="list.discard">放弃修改并离开</Button>
+          <Button v-if="list.deleting" variant="danger" @click="list.confirmDelete">确认删除</Button>
+        </ActionBar>
+      </DetailPage>
+    </Page>
+  </Column>
+</template>
+<style scoped>
+/* Styles here apply only to this template's controls. Structure needs a rebuild. */
+</style>

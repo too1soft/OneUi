@@ -1,0 +1,27 @@
+{
+  "date": "2026-09-27",
+  "os": "Windows 10 Pro 10.0.19045",
+  "cpu": "AMD Ryzen 9 9950X3D",
+  "logical_processors": 32,
+  "gpu": "NVIDIA GeForce RTX 5080",
+  "driver": "581.80",
+  "backend": "OpenGL / Skia Ganesh (separate trace probe)",
+  "compiler": "MSVC 19.50.35719",
+  "build": "Release x64 /MT; Yoga enabled; bundled static Skia",
+  "client_size": [
+    1320,
+    900
+  ],
+  "dpi_scale": 1,
+  "rows": 1000,
+  "rounds": 3,
+  "warmup_cycles": 50,
+  "measured_cycles_per_round": 150,
+  "dev_watcher": false,
+  "render_trace_during_comparison": false,
+  "binary_sha256": {
+    "oneui-performance-lab.exe": "e8944867cd409ac519aca4f094f1272e5722a4865a9a2cdf1c8c8b6e5055bb36",
+    "oneui.dll": "f60418de190ec076970352fe516dd569c92aee6e96dcdc525abe27763c88d726"
+  },
+  "aggregation": "Arithmetic mean of the three run summaries; P95 is mean of per-run P95 values, not pooled P95."
+}

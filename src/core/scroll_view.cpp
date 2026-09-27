@@ -1,6 +1,7 @@
 #include "oneui/layout/scroll_view.h"
 
 #include "oneui/style.h"
+#include "oneui/layout/stack.h"
 #include "internal/scroll_trace.h"
 
 #include <algorithm>
@@ -61,6 +62,10 @@ void ScrollView::setChromeVisible(bool visible) {
 void ScrollView::setScrollbarStyle(Color color, float thickness) {
     scrollbarColor_ = color;
     scrollbarThickness_ = std::max(1.0f, thickness);
+    invalidate();
+}
+void ScrollView::setScrollbarInset(float inset) {
+    scrollbarInset_ = std::max(0.0f, inset);
     invalidate();
 }
 
@@ -294,6 +299,10 @@ bool ScrollView::onKeyDown(const KeyEvent& event) {
         return false;
     }
 
+    // Embedded controls own their navigation keys before the scrolling
+    // fallback (sliders, selects, editors and lists all use arrows/Home/End).
+    const auto life = lifetimeToken();
+    if (View::onKeyDown(event) || life.expired()) return true;
     const float previousX = horizontalScrollOffset_;
     const float previousY = scrollOffset_;
 
@@ -319,7 +328,7 @@ bool ScrollView::onKeyDown(const KeyEvent& event) {
         setHorizontalScrollOffset(horizontalScrollOffset_ + wheelStep_);
         break;
     default:
-        return View::onKeyDown(event);
+        return false;
     }
 
     return std::fabs(previousX - horizontalScrollOffset_) > 0.001f || std::fabs(previousY - scrollOffset_) > 0.001f;
@@ -340,7 +349,7 @@ void ScrollView::layoutChildren() {
     horizontalScrollOffset_ = clampHorizontalOffset(horizontalScrollOffset_);
 
     const Rect viewport = viewportRect();
-    const float scrollbarReserve = hasVerticalOverflow() ? scrollbarThickness_ + 10.0f : 0.0f;
+    const float scrollbarReserve = hasVerticalOverflow() ? scrollbarThickness_ + scrollbarInset_ * 2.0f : 0.0f;
     const float fallbackWidth = std::max(0.0f, viewport.width - scrollbarReserve);
     const bool hasContentWidth = contentWidth_ > 0.0f || (content_ && content_->preferredSize().width > 0.0f);
     const float contentWidth = hasContentWidth ? std::max(fallbackWidth, resolvedContentWidth()) : fallbackWidth;
@@ -358,7 +367,7 @@ Rect ScrollView::horizontalThumbRect() const {
     }
 
     const float thumbHeight = scrollbarThickness_;
-    constexpr float thumbInset = 5.0f;
+    const float thumbInset = scrollbarInset_;
     constexpr float minThumbWidth = 24.0f;
     const Rect viewport = viewportRect();
     const float contentWidth = resolvedContentWidth();
@@ -374,7 +383,7 @@ Rect ScrollView::verticalThumbRect() const {
     }
 
     const float thumbWidth = scrollbarThickness_;
-    constexpr float thumbInset = 5.0f;
+    const float thumbInset = scrollbarInset_;
     constexpr float minThumbHeight = 24.0f;
     const Rect viewport = viewportRect();
     const float contentHeight = resolvedContentHeight();
@@ -400,6 +409,18 @@ float ScrollView::resolvedContentHeight() const {
     }
     if (content_ && content_->preferredSize().height > 0.0f) {
         return content_->preferredSize().height;
+    }
+    // Width-aware content is opt-in; explicit extents and legacy sizing win.
+    if (auto* stack = dynamic_cast<Stack*>(content_.get()); stack && stack->engine() == StackEngine::Yoga) {
+        const auto viewport = viewportRect();
+        const bool explicitWidth = contentWidth_ > 0 || content_->preferredSize().width > 0;
+        const float width = explicitWidth ? resolvedContentWidth() : viewport.width;
+        auto measured = stack->measure({std::max(0.0f, width), INFINITY});
+        if (!explicitWidth && measured.height > viewport.height + 0.001f) {
+            const float gutter = scrollbarThickness_ + scrollbarInset_ * 2.0f;
+            measured = stack->measure({std::max(0.0f, width - gutter), INFINITY});
+        }
+        return std::max(viewport.height, measured.height);
     }
     return viewportRect().height;
 }

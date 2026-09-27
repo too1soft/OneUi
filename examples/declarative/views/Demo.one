@@ -1,0 +1,63 @@
+<import name="WorkspaceHeader" src="Header.one" />
+<template view-model="DemoVM">
+  <Page>
+    <WorkspaceHeader>
+      <Toolbar slot="navigation">
+        <Button @click="showSettings">偏好设置</Button>
+        <Button @click="showConnections">连接管理</Button>
+      </Toolbar>
+      <ValidationMessage :text="styleError" />
+    </WorkspaceHeader>
+    <SettingsPage v-if="settings">
+          <Section title="常规设置">
+            <FormRow label="工作空间名称" hint="用于区分当前工作环境" :error="nameError">
+              <Input v-model="name" placeholder="输入工作空间名称" />
+            </FormRow>
+            <FormRow label="自动刷新" hint="保持连接状态为最新">
+              <Switch v-model="autoRefresh" text="启用自动刷新" />
+            </FormRow>
+            <FormRow label="刷新间隔" hint="1–3600 秒；关闭自动刷新后仍保留配置" :error="intervalError">
+              <Input v-model="interval" placeholder="30" />
+            </FormRow>
+            <FormRow label="外观" hint="立即预览，不影响当前输入内容">
+              <Select :items="themes" v-model="theme" />
+            </FormRow>
+          </Section>
+          <ActionBar>
+            <Button variant="primary" @click="save" :text="saveText" />
+            <Button @click="failNext">模拟保存失败</Button>
+            <Status :text="status" :tone="statusTone" />
+          </ActionBar>
+          <Text v-for="tip in tips" :key="tip.id" :text="tip.text" class="muted" />
+    </SettingsPage>
+    <ListPage v-if="connections">
+      <Toolbar>
+        <SearchInput v-model="query" placeholder="搜索名称或地址" name="搜索连接" />
+        <Select :items="filters" v-model="filter" name="连接状态" />
+        <Button variant="primary" @click="add">新建连接</Button>
+        <Button @click="reload">刷新</Button>
+        <Button @click="showDetails">查看详情</Button>
+        <Button variant="danger" @click="remove">删除选中</Button>
+      </Toolbar>
+      <Toolbar>
+        <Text :text="count" class="muted" />
+        <Status :text="selectedStatus" :tone="selectedTone" />
+      </Toolbar>
+      <LoadingState v-if="reload.running" subtitle="正在刷新本地模拟连接，筛选条件和选择将保留。" />
+      <EmptyState v-if="showEmpty" title="没有匹配的连接" subtitle="试试其他名称、地址，或切换状态筛选。" />
+      <DataTable v-if="showTable" :columns="columns" :items="filtered" v-model="selectedKey" item-key="id" name="连接列表" />
+    </ListPage>
+    <DetailPage v-if="details" title="连接详情" subtitle="查看当前连接的本地模拟信息。">
+      <Section title="基本信息">
+        <FormRow label="连接名称"><Text :text="selectedName" /></FormRow>
+        <FormRow label="地址"><Text :text="selectedAddress" /></FormRow>
+        <FormRow label="状态"><Status :text="selectedStatus" :tone="selectedTone" /></FormRow>
+        <FormRow label="延迟"><Text :text="selectedLatency" /></FormRow>
+      </Section>
+      <ActionBar><Button @click="showConnections">返回连接列表</Button></ActionBar>
+    </DetailPage>
+  </Page>
+</template>
+<style scoped>
+Page { gap: 24px; }
+</style>

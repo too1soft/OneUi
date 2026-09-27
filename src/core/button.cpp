@@ -1,4 +1,5 @@
 #include "oneui/controls/button.h"
+#include "text/text_layout.h"
 
 #include "oneui/color.h"
 #include "oneui/style.h"
@@ -29,6 +30,11 @@ void applyFocusRingOverride(FocusRingStyle& style, const FocusRingStyleOverride&
 }
 
 void applyButtonStateOverride(ButtonStyle& style, const ButtonStateStyleOverride& override) {
+    if (override.iconSize) style.iconSize = override.iconSize;
+    if (override.iconGap) style.iconGap = override.iconGap;
+    if (override.padding) {
+        style.padding = override.padding;
+    }
     if (override.background) {
         style.background = *override.background;
     }
@@ -203,8 +209,37 @@ void Button::setOnClick(std::function<void()> callback) {
     onClick_ = std::move(callback);
 }
 
+Size Button::naturalContentSize() const {
+    const auto style = resolvedStyle();
+    text::LayoutOptions options;
+    options.family = textFontFamily();
+    options.size = style.fontSize;
+    options.weight = style.fontWeight;
+    options.scale = textDpiScale();
+    options.text.wrap = TextWrapMode::NoWrap;
+    const auto label = text::Layout::make(text(), options);
+    float width = label->width();
+    float height = label->height();
+    const float iconSide = style.iconSize.value_or(style.fontSize + 2.0f);
+    if (icon_) {
+        width += iconSide + (text().empty() ? 0.0f : style.iconGap.value_or(trailingText_.empty() ? 6.0f : 8.0f));
+        height = std::max(height, iconSide);
+    }
+    if (!trailingText_.empty()) {
+        const auto trailing = text::Layout::make(trailingText_, options);
+        width += 8.0f + trailing->width();
+        height = std::max(height, trailing->height());
+    } else if (trailingIcon_) {
+        width += iconSide + (text().empty() && !icon_ ? 0.0f : 8.0f);
+        height = std::max(height, iconSide);
+    }
+    const auto padding = style.padding.value_or(Insets{0.0f, 12.0f});
+    return {width + std::max(0.0f, padding.left) + std::max(0.0f, padding.right),
+            height + std::max(0.0f, padding.top) + std::max(0.0f, padding.bottom)};
+}
+
 void Button::paint(Canvas& canvas) {
-    const auto rect = frame();
+    auto rect = frame();
     const ButtonStyle target = resolvedStyle();
     const ButtonStyle style = visualStyle(target);
 
@@ -235,10 +270,28 @@ void Button::paint(Canvas& canvas) {
             canvas.strokeRect(rect, shadow.color, style.radius, std::max(1.0f, shadow.blurRadius));
         }
     }
+    struct ContentClip {
+        Canvas* canvas = nullptr;
+        ~ContentClip() { if (canvas) canvas->restore(); }
+    } contentClip;
+    if (style.padding) {
+        const auto p = *style.padding;
+        const float left = std::clamp(p.left, 0.0f, std::max(0.0f, rect.width));
+        const float top = std::clamp(p.top, 0.0f, std::max(0.0f, rect.height));
+        rect = Rect{rect.x + left, rect.y + top,
+                    std::max(0.0f, rect.width - left - std::max(0.0f, p.right)),
+                    std::max(0.0f, rect.height - top - std::max(0.0f, p.bottom))};
+        if (rect.width <= 0.0f || rect.height <= 0.0f) {
+            return;
+        }
+        canvas.save();
+        canvas.clipRect(rect);
+        contentClip.canvas = &canvas;
+    }
     const std::wstring& label = this->text();
     if (icon_ && !trailingText_.empty()) {
-        const float inset = std::min(12.0f, rect.width / 4.0f);
-        const float side = style.fontSize + 2.0f;
+        const float inset = style.padding ? 0.0f : std::min(12.0f, rect.width / 4.0f);
+        const float side = style.iconSize.value_or(style.fontSize + 2.0f);
         const float countWidth = canvas.measureTextWidth(trailingText_, style.fontSize, style.fontWeight);
         const Rect iconRect{rect.x + inset, rect.y + (rect.height-side)/2, side, side};
         paintIcon(canvas, *icon_, iconRect, style.foreground, Color{0,0,0,0}, 1.6f);
@@ -250,7 +303,7 @@ void Button::paint(Canvas& canvas) {
     }
     if (!icon_ && !trailingIcon_) {
         if (!trailingText_.empty()) {
-            const float inset = std::min(12.0f, std::max(0.0f, rect.width / 4.0f));
+            const float inset = style.padding ? 0.0f : std::min(12.0f, std::max(0.0f, rect.width / 4.0f));
             const float gap = 8.0f;
             const float trailingWidth = canvas.measureTextWidth(trailingText_, style.fontSize, style.fontWeight);
             const Rect labelRect{
@@ -272,9 +325,9 @@ void Button::paint(Canvas& canvas) {
     }
 
     if (!icon_ && trailingIcon_) {
-        const float inset = std::min(12.0f, std::max(0.0f, rect.width / 4.0f));
-        const float iconSide = style.fontSize + 2.0f;
-        const float gap = label.empty() ? 0.0f : 8.0f;
+        const float inset = style.padding ? 0.0f : std::min(12.0f, std::max(0.0f, rect.width / 4.0f));
+        const float iconSide = style.iconSize.value_or(style.fontSize + 2.0f);
+        const float gap = label.empty() ? 0.0f : style.iconGap.value_or(8.0f);
         const Rect iconRect{
             rect.x + std::max(0.0f, rect.width - inset - iconSide),
             rect.y + (rect.height - iconSide) / 2.0f,
@@ -291,11 +344,11 @@ void Button::paint(Canvas& canvas) {
     }
 
     // 图标 + 文字作为整体水平居中：图标为字号等大的正方形，随前景色着色。
-    const float iconSide = style.fontSize + 2.0f;
-    const float gap = label.empty() ? 0.0f : 6.0f;
+    const float iconSide = style.iconSize.value_or(style.fontSize + 2.0f);
+    const float gap = label.empty() ? 0.0f : style.iconGap.value_or(6.0f);
     const float trailingGap = trailingIcon_ ? 8.0f : 0.0f;
     const float trailingWidth = trailingIcon_ ? iconSide : 0.0f;
-    const float inset = std::min(12.0f, std::max(0.0f, rect.width / 4.0f));
+    const float inset = style.padding ? 0.0f : std::min(12.0f, std::max(0.0f, rect.width / 4.0f));
     const float edgeReserve = contentAlign_ == TextAlign::Center ? 0.0f : inset * 2.0f;
     const float availableTextWidth = std::max(
         0.0f, rect.width - edgeReserve - iconSide - gap - trailingGap - trailingWidth);

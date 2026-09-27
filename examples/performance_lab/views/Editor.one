@@ -1,0 +1,50 @@
+<template>
+  <Page>
+    <Header :title="editor.heading">
+      <Text :text="editor.description" />
+      <Toolbar>
+        <Button :text="editor.backText" @click="editor.back" />
+        <Select :items="editor.themes" v-model="editor.theme" name="编辑页主题" />
+        <Select :items="editor.densities" v-model="editor.density" name="界面密度" />
+      </Toolbar>
+    </Header>
+    <SettingsPage>
+      <Section title="连接信息">
+        <FormGrid>
+        <FormRow label="连接名称" hint="用于识别此连接，支持中文" :error="editor.nameError">
+          <Input ref="name" v-model="editor.name" />
+        </FormRow>
+        <FormRow label="主机地址" hint="主机名或 IPv4，不含 https://" :error="editor.hostError">
+          <Input ref="host" v-model="editor.host" />
+        </FormRow>
+        <FormRow label="端口" hint="1–65535" :error="editor.portError">
+          <Input ref="port" v-model="editor.port" />
+        </FormRow>
+        <FormRow label="连接协议" hint="仅保存配置，不发起实际连接">
+          <Select :items="editor.protocols" v-model="editor.protocol" />
+        </FormRow>
+        </FormGrid>
+      </Section>
+      <Section title="连接行为">
+        <FormRow label="连接超时" hint="1–300 秒" :error="editor.timeoutError">
+          <Input ref="timeout" v-model="editor.timeout" />
+        </FormRow>
+        <FormRow label="断线处理" hint="本地配置选项，不启动后台网络任务">
+          <Switch v-model="editor.reconnect" text="允许自动重连" />
+        </FormRow>
+        <FormRow label="备注" hint="最多 200 字" :error="editor.noteError">
+          <Input ref="note" v-model="editor.note" />
+        </FormRow>
+      </Section>
+      <ActionBar>
+        <Button variant="primary" :text="editor.saveText" @click="editor.save" />
+        <Button @click="editor.reset">恢复已保存</Button>
+        <Button @click="editor.failNext">模拟失败</Button>
+        <Status :text="editor.status" :tone="editor.tone" />
+      </ActionBar>
+    </SettingsPage>
+  </Page>
+</template>
+<style scoped>
+/* Form-only overrides can be edited live with -Dev. */
+</style>

@@ -13,6 +13,8 @@ public:
 
     void add(std::shared_ptr<Widget> child);
     void clearChildren();
+    // Reorders retained children without discarding focus/IME in surviving nodes.
+    void reconcileChildren(std::vector<std::shared_ptr<Widget>> children);
     const std::vector<std::shared_ptr<Widget>>& children() const;
     void setInvalidator(std::function<void()> invalidator) override;
     void setRectInvalidator(std::function<void(Rect)> invalidator) override;

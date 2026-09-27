@@ -1,3 +1,4 @@
+#include "internal/frame_profile.h"
 #include "text_layout.h"
 #include "foreground_painter.h"
 #include "internal/unicode.h"
@@ -257,6 +258,7 @@ Layout::Layout(std::unique_ptr<Impl> impl) : impl_(std::move(impl)) {}
 Layout::~Layout() = default;
 
 std::shared_ptr<Layout> Layout::make(const std::wstring& value, const LayoutOptions& requested) {
+    internal::FrameSpan span(internal::FrameStage::TextLayout);
     LayoutOptions options = requested;
     if (!std::isfinite(options.size) || options.size <= 0 || !std::isfinite(options.width) || options.width < 0 ||
         !std::isfinite(options.lineHeight) || options.lineHeight < 0 || !std::isfinite(options.scale) || options.scale <= 0)

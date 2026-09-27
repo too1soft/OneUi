@@ -1,0 +1,72 @@
+<template>
+  <Page>
+    <Header title="组件与布局">
+      <Text class="muted">同一套原生组件，体验两种密度、主题与自适应布局。示例数据仅在本次运行中保留。</Text>
+      <Toolbar>
+        <Button ref="galleryBack" @click="sample.back">返回连接管理</Button>
+        <Select :items="settings.themes" v-model="settings.theme" name="展示页主题" />
+        <Select :items="settings.densities" v-model="settings.density" name="界面密度" />
+        <Select :items="sample.scenes" v-model="sample.scene" name="组件分类" />
+      </Toolbar>
+    </Header>
+    <SettingsPage v-if="sample.formVisible">
+      <Section title="连接信息">
+        <Text class="muted">拖窄窗口，字段会自动收成单列。按 Tab 可以依次操作表单。</Text>
+        <FormGrid>
+          <FormRow label="连接名称" hint="支持中文；清空后检查可查看错误状态" :error="sample.error">
+            <Input ref="galleryName" v-model="sample.name" placeholder="例如：上海研发节点" />
+          </FormRow>
+          <FormRow label="主机地址" hint="仅演示输入，不会建立网络连接">
+            <Input v-model="sample.address" />
+          </FormRow>
+          <FormRow label="连接协议" hint="原生下拉框，支持键盘选择">
+            <Select :items="settings.protocols" v-model="sample.protocol" />
+          </FormRow>
+          <FormRow label="自动重连" hint="只改变本地示例状态">
+            <Switch text="允许自动重连" v-model="sample.enabled" />
+          </FormRow>
+        </FormGrid>
+      </Section>
+      <Section title="操作与状态">
+        <FormRow label="备注" hint="较长的中文说明会换行，不压缩输入框">
+          <Input v-model="sample.note" />
+        </FormRow>
+        <Toolbar>
+          <Button variant="primary" @click="sample.validate">检查表单</Button>
+          <Button disabled="true">暂不可用</Button>
+          <Button variant="primary" disabled="true">正在保存…</Button>
+        </Toolbar>
+        <Status :text="sample.message" :tone="sample.tone" />
+      </Section>
+      <ActionBar><Text class="muted">主题、密度与窗口尺寸变化不会重建字段。</Text></ActionBar>
+    </SettingsPage>
+    <ListPage v-if="sample.tableVisible">
+      <Toolbar>
+        <SearchInput v-model="sample.query" placeholder="搜索模拟连接名称" name="搜索展示数据" />
+        <Button @click="sample.clear">清除搜索</Button>
+        <Text class="muted" :text="sample.count" />
+      </Toolbar>
+      <DataTable ref="galleryTable" v-if="sample.hasRows" :columns="sample.columns" :items="sample.rows" v-model="sample.selected" item-key="id" name="组件示例表格" />
+      <EmptyState v-if="sample.empty" title="没有匹配的连接" subtitle="调整关键词，或清除搜索以显示全部模拟数据。" grow="1">
+        <Button @click="sample.clear">显示全部连接</Button>
+      </EmptyState>
+      <ActionBar><Status :text="sample.selection" /></ActionBar>
+    </ListPage>
+    <SettingsPage v-if="sample.statesVisible">
+      <Section title="反馈状态">
+        <FormRow label="暂不可用" hint="禁用控件保留可读内容，不接受输入">
+          <Input text="等待连接就绪" disabled="true" />
+        </FormRow>
+        <Status text="连接已保存 · 操作成功" tone="success" />
+        <Status text="还有未保存的修改" tone="warning" />
+        <Status text="保存失败，输入内容已保留；可以重试。" tone="error" />
+        <Toolbar><Button :text="sample.loadingText" @click="sample.toggleLoading" /></Toolbar>
+        <Status v-if="sample.loading" text="正在加载本地模拟数据…" tone="pending" />
+      </Section>
+      <LoadingState v-if="sample.loading" title="正在加载连接" subtitle="模拟状态：点击“完成模拟加载”可切换回空状态。" />
+      <EmptyState v-else title="还没有连接" subtitle="空状态说明原因，并提供明确的下一步操作。">
+        <Button variant="primary" @click="sample.back">前往连接管理</Button>
+      </EmptyState>
+    </SettingsPage>
+  </Page>
+</template>
