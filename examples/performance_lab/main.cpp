@@ -90,6 +90,7 @@ struct Options {
   int load = 1, tab = 0, width = 1320, height = 900;
   double benchmark = 0;
   std::string renderer = "auto", rendererBenchmark;
+  ParticleMode particleMode=DEFAULT_PARTICLE_MODE;
   double sampleSeconds = 5;
   bool exitAfter = false, snapshotExit = false, traceInput = false;
   bool editor = false, warmEditor = false, editorLight = false, editorDark=false, editorInvalid = false;
@@ -425,6 +426,7 @@ public:
   }
   Lab(Window &w, Options o) : window(w), options(std::move(o)) {
     m.load = options.load;
+    m.particleMode = options.particleMode;
     m.tab = options.tab;
     createSidebar();
     title = label(*this, L"", 26, TEXT, 700);
@@ -585,7 +587,7 @@ public:
     if(diagnosticStop)return;
     if(elapsed>=3 && !rendererSampling_) { rendererBenchmark_.begin(window);rendererSampling_=true; }
     if(elapsed>=3+options.sampleSeconds) {
-      try { rendererBenchmark_.finish(window,options.output,options.renderer,options.rendererBenchmark); }
+      try { rendererBenchmark_.finish(window,options.output,options.renderer,options.rendererBenchmark,particleModeName(m.particleMode)); }
       catch(const std::exception& error){std::cerr<<error.what()<<'\n';result=2;}
       diagnosticStop=true;window.close();return;
     }
@@ -835,6 +837,13 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
         const auto value=next();
         if(value!=L"auto" && value!=L"gpu" && value!=L"cpu")throw std::runtime_error("Renderer must be auto, gpu or cpu");
         o.renderer=std::string(value.begin(),value.end());
+      } else if (arg == L"--particle-mode") {
+        const auto value=next();
+        if(value==L"reference")o.particleMode=ParticleMode::Reference;
+        else if(value==L"precomputed")o.particleMode=ParticleMode::Precomputed;
+        else if(value==L"batch")o.particleMode=ParticleMode::Batch;
+        else if(value==L"combined")o.particleMode=ParticleMode::Combined;
+        else throw std::runtime_error("Particle mode must be reference, precomputed, batch or combined");
       } else if (arg == L"--renderer-benchmark") {
         const auto value=next();
         if(value!=L"idle" && value!=L"table" && value!=L"chart" && value!=L"particles")throw std::runtime_error("Invalid renderer benchmark scene");

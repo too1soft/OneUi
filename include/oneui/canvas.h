@@ -5,6 +5,7 @@
 #include "oneui/geometry.h"
 #include "oneui/text.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -114,6 +115,12 @@ struct CanvasPath {
     bool empty() const {
         return commands.empty();
     }
+};
+
+struct RoundedRectFill {
+    Rect rect{};
+    Color color{0, 0, 0, 0};
+    float radius = 0.0f;
 };
 
 class ONEUI_API Canvas {
@@ -365,6 +372,14 @@ public:
         const std::wstring& text, float size, const std::wstring& familyName,
         TextFontFamily fallbackFamily, int weight = 400) const {
         return measureTextWidthWithNamedFont(text, size, familyName, fallbackFamily, weight);
+    }
+
+    /// Equivalent to ordered fillRect calls, including overlap, alpha and clipping.
+    /// The data is borrowed for this call only. nullptr is allowed only with count=0.
+    /// Backends may amortize setup; this does not promise a single GPU draw call.
+    virtual void fillRoundedRects(const RoundedRectFill* rects, std::size_t count) {
+        for (std::size_t i = 0; i < count; ++i)
+            fillRect(rects[i].rect, rects[i].color, rects[i].radius);
     }
 };
 

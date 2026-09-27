@@ -29,7 +29,7 @@ struct RendererBenchmark {
     active = true;
   }
   void finish(oneui::Window& window, const std::filesystem::path& output,
-              const std::string& requested, const std::string& scene) {
+              const std::string& requested, const std::string& scene, const char* particleMode) {
     const double elapsed = ms(Clock::now() - started);
     const double cpu = labProcessCpuMs() - cpuStart;
     active = false;
@@ -46,6 +46,7 @@ struct RendererBenchmark {
     out.exceptions(std::ios::failbit | std::ios::badbit);
     out << std::setprecision(8)
         << "requested=" << requested << "\nscene=" << scene
+        << "\nparticle_mode=" << particleMode
         << "\nbackend=" << backendName(info.backend)
         << "\ndevice=" << info.device << "\nreason=" << info.reason
         << "\nvsync=" << info.vsync

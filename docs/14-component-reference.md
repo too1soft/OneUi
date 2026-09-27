@@ -533,3 +533,9 @@ Skia Canvas 的矩形描边对非正或非有限线宽不绘制；CSS `border-wi
 `set_segments(&[ProgressSegment { fraction, color, label }])` 表示总容量的非重叠占比；每段复制标签，负数、NaN 或无穷拒绝并保持旧状态。各段按剩余容量截断，绘制、总 `value`、可访问文字保持相同口径。空数组归零；`set_value/bind_value` 恢复原单色模式。公共控件保留横向、纵向、平滑更新及禁用态；业务负责提供真实口径和主题可辨识颜色，不得将有交集的统计值直接叠加。
 
 Rust `Stack::set_direction` 对应 C++ `setDirection`，切换横纵排列且保留原子控件及状态；调用方需同时调整容器首选高度，保证正文滚动范围与折行后的内容一致。
+
+### Canvas：保序圆角矩形批量绘制
+
+`fillRoundedRects(const RoundedRectFill*, std::size_t)` 按输入顺序绘制 `{rect, color, radius}` 数组，等价于逐项 `fillRect`，保留重叠、透明度与裁剪。count 为零时可传 nullptr；否则须提供有效数组，数据只在本次调用中借用。
+
+Skia 后端复用绘制状态，其他 Canvas 子类默认逐项回退。它不承诺单次 GPU draw call，也不为性能改变抗锯齿或排序。新增 C++ 虚函数后需一起重建应用与 DLL；详见[示例、A/B 数据与像素验证](44-particle-drawing-optimization.md)。

@@ -173,6 +173,17 @@ class SkiaCanvasImpl final : public Canvas {
         canvas_.drawRRect(SkRRect::MakeRectXY(toSkRect(rect), radius, radius), paint);
     }
 
+    void fillRoundedRects(const RoundedRectFill* rects, std::size_t count) override {
+        internal::FrameSpan span(internal::FrameStage::Fill);
+        SkPaint paint;
+        paint.setAntiAlias(true);
+        for (std::size_t i = 0; i < count; ++i) {
+            const auto& item = rects[i];
+            paint.setColor(toSkColor(item.color));
+            canvas_.drawRRect(SkRRect::MakeRectXY(toSkRect(item.rect), item.radius, item.radius), paint);
+        }
+    }
+
     void fillLinearGradient(Rect rect, Color start, Color end, float angleDegrees, float radius) override {
         if (rect.width <= 0.0f || rect.height <= 0.0f) {
             return;

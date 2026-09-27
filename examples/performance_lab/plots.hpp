@@ -15,7 +15,28 @@ constexpr Color BG = color(0x101517), PANEL = color(0x171e21),
                 MUTED = color(0x96aaa4), ACCENT = color(0xc4ed87),
                 TEAL = color(0x61c9bb), ORANGE = color(0xecad72);
 constexpr float TAU = 6.2831853071795864769f;
+enum class ParticleMode { Reference, Precomputed, Batch, Combined };
+inline constexpr ParticleMode DEFAULT_PARTICLE_MODE = ParticleMode::Combined;
+inline const char* particleModeName(ParticleMode mode) {
+  switch (mode) {
+    case ParticleMode::Reference: return "reference";
+    case ParticleMode::Precomputed: return "precomputed";
+    case ParticleMode::Batch: return "batch";
+    case ParticleMode::Combined: return "combined";
+  }
+  return "reference";
+}
+struct ParticleConstants {
+  float radius, angle, velocity, size;
+  Color ink{0, 0, 0, 0};
+};
+inline ParticleConstants particleConstants(int i) {
+  const float seed = float(i), v = seed * .618034f, r = std::sqrt(v - std::floor(v));
+  return {r, seed * 2.399963f, .25f + (1 - r) * .7f, i % 13 == 0 ? 3.f : 1.6f,
+          i % 11 == 0 ? ORANGE : i % 3 == 0 ? ACCENT : color(0x4b9f98)};
+}
 struct Model {
+  ParticleMode particleMode = DEFAULT_PARTICLE_MODE;
   int load = 1, tab = 0, selected = 0;
   bool running = true;
   float time = 0, speed = 1;
@@ -43,6 +64,8 @@ class Plot final : public Widget {
   Model &m;
   PlotKind kind;
   float pointer = -1;
+  std::vector<ParticleConstants> particleConstants_;
+  std::vector<RoundedRectFill> particleRects_;
 
 public:
   Plot(Model &model, PlotKind k) : m(model), kind(k) {}
@@ -94,19 +117,55 @@ public:
         }
         stroke(c, p, color(0x283437));
       }
-      for (int i = 0; i < m.particles(); ++i) {
-        float seed = float(i), v = seed * .618034f,
-              r = std::sqrt(v - std::floor(v)),
-              a = seed * 2.399963f + t * (.25f + (1 - r) * .7f),
-              swirl = std::sin(a * 3 + t) * .035f;
-        float xx = cx + std::cos(a) * (r + swirl) * w * .46f,
-              yy = cy + std::sin(a) * r * h * .45f,
-              sz = i % 13 == 0 ? 3.f : 1.6f;
-        c.fillRect({xx, yy, sz, sz},
-                   i % 11 == 0  ? ORANGE
-                   : i % 3 == 0 ? ACCENT
-                                : color(0x4b9f98),
-                   sz / 2);
+      if (m.particleMode == ParticleMode::Reference) {
+        // Keep the original loop as the A/B reference, outside optimized-loop branches.
+        for (int i = 0; i < m.particles(); ++i) {
+          float seed = float(i), v = seed * .618034f,
+                r = std::sqrt(v - std::floor(v)),
+                a = seed * 2.399963f + t * (.25f + (1 - r) * .7f),
+                swirl = std::sin(a * 3 + t) * .035f;
+          float xx = cx + std::cos(a) * (r + swirl) * w * .46f,
+                yy = cy + std::sin(a) * r * h * .45f,
+                sz = i % 13 == 0 ? 3.f : 1.6f;
+          c.fillRect({xx, yy, sz, sz},
+                     i % 11 == 0  ? ORANGE
+                     : i % 3 == 0 ? ACCENT
+                                  : color(0x4b9f98),
+                     sz / 2);
+        }
+      } else {
+        const bool precompute = m.particleMode == ParticleMode::Precomputed ||
+                                m.particleMode == ParticleMode::Combined;
+        const bool batch = m.particleMode == ParticleMode::Batch ||
+                           m.particleMode == ParticleMode::Combined;
+        if (precompute && particleConstants_.size() != static_cast<std::size_t>(m.particles())) {
+          particleConstants_.resize(m.particles());
+          for (int i = 0; i < m.particles(); ++i)
+            particleConstants_[i] = particleConstants(i);
+        }
+        if (batch) particleRects_.resize(m.particles());
+        for (int i = 0; i < m.particles(); ++i) {
+          if (precompute) {
+            const auto& p = particleConstants_[i];
+            const float a = p.angle + t * p.velocity, swirl = std::sin(a * 3 + t) * .035f;
+            const float xx = cx + std::cos(a) * (p.radius + swirl) * w * .46f,
+                        yy = cy + std::sin(a) * p.radius * h * .45f;
+            if (batch) particleRects_[i] = {{xx, yy, p.size, p.size}, p.ink, p.size / 2};
+            else c.fillRect({xx, yy, p.size, p.size}, p.ink, p.size / 2);
+            continue;
+          }
+          float seed = float(i), v = seed * .618034f,
+                r = std::sqrt(v - std::floor(v)),
+                a = seed * 2.399963f + t * (.25f + (1 - r) * .7f),
+                swirl = std::sin(a * 3 + t) * .035f;
+          float xx = cx + std::cos(a) * (r + swirl) * w * .46f,
+                yy = cy + std::sin(a) * r * h * .45f,
+                sz = i % 13 == 0 ? 3.f : 1.6f;
+          const Color ink = i % 11 == 0 ? ORANGE : i % 3 == 0 ? ACCENT : color(0x4b9f98);
+          if (batch) particleRects_[i] = {{xx, yy, sz, sz}, ink, sz / 2};
+          else c.fillRect({xx, yy, sz, sz}, ink, sz / 2);
+        }
+        if (batch) c.fillRoundedRects(particleRects_.data(), particleRects_.size());
       }
     } else if (kind == PlotKind::Spectrum) {
       for (int i = 0; i < 28; ++i) {

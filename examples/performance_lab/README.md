@@ -28,6 +28,8 @@
 
 `-Load heavy` 将粒子提高到 10,000、曲线提高到每条 4,000 点。`summary.csv` 同时记录采样末尾的 Skia 字体／资源／GPU 缓存；这些不是全部进程内存或显存，`skia_gpu_cache_limit_mib` 只是预算。字段说明、实测和限制见[高压缓存诊断](../../docs/43-heavy-renderer-diagnostics.md)。
 
+粒子默认使用预计算与保序批量入口的组合方案。`-ParticleMode reference` 可恢复原始算法作对照；其余选项为 `precomputed`、`batch`、`combined`。自动比较四种模式：`.\examples\performance_lab\compare-particles.ps1 -Rounds 5 -Seconds 5`。本机 10,000 粒子 GPU 每次绘制降低 6.4%，画面像素对比一致；这是调用开销优化，不是单次 GPU draw call。详见[结果与复现](../../docs/44-particle-drawing-optimization.md)。
+
 ## 看什么、改哪里
 
 | 体验 | 操作 | 源码 |

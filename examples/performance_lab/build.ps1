@@ -14,7 +14,7 @@ if (!(Test-Path (Join-Path $skiaOut 'skia.lib'))) { throw 'Build Skia first: see
 $configure = "call `"$vcvars`" x64 && `"$cmake`" -S `"$PSScriptRoot`" -B `"$buildDir`" -G Ninja -DONEUI_SOURCE_ROOT=`"$OneUiRoot`" -DCMAKE_BUILD_TYPE=Release -DCMAKE_MAKE_PROGRAM=`"$ninja`" -DONEUI_SKIA_MODE=bundled-static -DONEUI_BUNDLED_SKIA_ROOT=`"$skiaRoot`" -DONEUI_BUNDLED_SKIA_OUT=`"$skiaOut`""
 cmd.exe /c $configure
 if ($LASTEXITCODE -ne 0) { throw 'OneUI configure failed' }
-cmd.exe /c "call `"$vcvars`" x64 && `"$cmake`" --build `"$buildDir`" --target oneui-performance-lab oneui-editor-tests oneui-connections-tests oneui-authoring-tests oneui-gallery-tests oneui-renderer-tests --parallel 8"
+cmd.exe /c "call `"$vcvars`" x64 && `"$cmake`" --build `"$buildDir`" --target oneui-performance-lab oneui-editor-tests oneui-connections-tests oneui-authoring-tests oneui-gallery-tests oneui-renderer-tests oneui-particle-tests --parallel 8"
 if ($LASTEXITCODE -ne 0) { throw 'OneUI build failed' }
 if ($Test) { & (Join-Path $buildDir 'bin/oneui-editor-tests.exe'); if ($LASTEXITCODE -ne 0) { throw 'Editor tests failed' } }
 if ($Test) { & (Join-Path $buildDir 'bin/oneui-connections-tests.exe'); if ($LASTEXITCODE -ne 0) { throw 'Connections tests failed' } }
@@ -22,4 +22,5 @@ if ($Test) { & (Join-Path $buildDir 'bin/oneui-connections-tests.exe') --templat
 if ($Test) { & (Join-Path $buildDir 'bin/oneui-authoring-tests.exe'); if ($LASTEXITCODE -ne 0) { throw 'Authoring tests failed' } }
 if ($Test) { & (Join-Path $buildDir 'bin/oneui-gallery-tests.exe'); if ($LASTEXITCODE -ne 0) { throw 'Gallery tests failed' } }
 if ($Test) { & (Join-Path $buildDir 'bin/oneui-renderer-tests.exe'); if ($LASTEXITCODE -ne 0) { throw 'Renderer tests failed' } }
+if ($Test) { & (Join-Path $buildDir 'bin/oneui-particle-tests.exe') --cpu (Join-Path $buildDir 'particle-tests'); if ($LASTEXITCODE -ne 0) { throw 'Particle tests failed' } }
 if ($Run) { Start-Process -FilePath (Join-Path $buildDir 'bin/oneui-performance-lab.exe') -WorkingDirectory $PSScriptRoot -WindowStyle Hidden }

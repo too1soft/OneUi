@@ -28,7 +28,7 @@ Cocoa 已接入源码但未构建；运行时服务和原生验收状态见 [后
 | 能力 | 公开头文件 | 成熟度 | C++ | C ABI | safe Rust | 当前说明 |
 | --- | --- | --- | --- | --- | --- | --- |
 | Geometry / Color | `geometry.h`, `color.h` | 主线 | ✓ | POD | ✓ | Point/Rect/Size/Insets/Color 与逻辑像素基础 |
-| Canvas | `canvas.h` | 主线 | ✓ | — | — | 图元、文字、渐变、阴影、clip、viewport、像素帧；主要由控件实现使用 |
+| Canvas | `canvas.h` | 主线 | ✓ | — | — | 图元、文字、渐变、阴影、clip、viewport、像素帧；支持保序圆角矩形批量入口，主要由控件实现使用 |
 | Widget | `widget.h` | 主线 | ✓ | ✓ | ✓ | frame、preferred size、disabled、visible、focus、class/style node、tooltip、语义 |
 | View | `view.h` | 主线 | ✓ | 间接 | 间接 | 子树、深层命中、焦点链、tooltip 查询、elevated paint routing |
 | Animation | `animation.h`, `style_transition.h` | 可用 | ✓ | 间接 | 间接 | easing、数值/颜色/StyleBox 过渡与 animation frame |
