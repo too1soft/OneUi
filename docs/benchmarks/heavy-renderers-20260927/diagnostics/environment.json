@@ -1,0 +1,45 @@
+{
+  "date": "2026-09-27T23:40:48.7390252+08:00",
+  "rounds": 3,
+  "sampleSeconds": 5,
+  "warmupSeconds": 3,
+  "load": "heavy",
+  "width": 1320,
+  "height": 900,
+  "entry": "code",
+  "dev": false,
+  "trace": false,
+  "cpu": {
+    "Name": "AMD Ryzen 9 9950X3D 16-Core Processor          ",
+    "NumberOfLogicalProcessors": 32
+  },
+  "os": {
+    "Caption": "Microsoft Windows 10 专业版",
+    "Version": "10.0.19045"
+  },
+  "adapters": [
+    {
+      "Name": "OrayIddDriver Device",
+      "DriverVersion": "17.50.19.949"
+    },
+    {
+      "Name": "NVIDIA GeForce RTX 5080",
+      "DriverVersion": "32.0.15.8180"
+    },
+    {
+      "Name": "AMD Radeon(TM) Graphics",
+      "DriverVersion": "32.0.21030.2001"
+    }
+  ],
+  "binaries": [
+    {
+      "name": "oneui-performance-lab.exe",
+      "Hash": "DE1F1394A11591A360987E9FC50358BC65DC01F7CC6D7F44B32690343ECAF90A"
+    },
+    {
+      "name": "oneui.dll",
+      "Hash": "74E918F461B2CA99BDB12BD879347ECFA5C021A36308426B197A76A690A7AB5A"
+    }
+  ],
+  "method": "Same binaries and deterministic data. Alternating CPU/GPU-first rounds. Idle is the connection page; table scrolls 360 logical px/s with at most 60 UI posts/s; chart and particles use native animation scheduling. All timings are CPU wall times. No GPU timestamps or display-FPS claims. Paint includes content and submission: do not sum those columns. Idle does not repaint for sampling."
+}

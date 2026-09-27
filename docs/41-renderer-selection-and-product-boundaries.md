@@ -37,6 +37,8 @@
 
 这是 C++ 源码接口扩展；使用新头文件应重建应用和 DLL。C ABI 版本和现有 Rust API 没有因此改变。其他后端暂返回 Unknown，不以其平台类型推断 GPU 状态。现有 Linux/macOS 软件渲染实现未在本轮变更。
 
+后续增加独立的 `Window::rendererMemoryInfo()`，仅按需查询 Skia CPU/GPU 缓存与 surface 估算；不会增加正常状态查询的缓存开销。字段口径、10,000 粒子结果和原始记录见[高压渲染诊断](43-heavy-renderer-diagnostics.md)。下文标准负载历史数据不包含这些新字段。
+
 ## 可复现基准
 
 ```powershell

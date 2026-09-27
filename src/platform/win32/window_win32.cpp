@@ -35,6 +35,7 @@
 #include "include/core/SkFontMetrics.h"
 #include "include/core/SkFontMgr.h"
 #include "include/core/SkFontStyle.h"
+#include "include/core/SkGraphics.h"
 #include "include/core/SkImage.h"
 #include "include/core/SkImageInfo.h"
 #include "include/core/SkMaskFilter.h"
@@ -324,6 +325,28 @@ public:
     }
 
     RendererInfo rendererInfo() const override { return rendererInfo_; }
+
+    RendererMemoryInfo rendererMemoryInfo() const override {
+        RendererMemoryInfo info;
+        info.cpuCachesAvailable = true;
+        info.cpuFontCacheBytes = SkGraphics::GetFontCacheUsed();
+        info.cpuResourceCacheBytes = SkGraphics::GetResourceCacheTotalBytesUsed();
+        if (grContext_ && gpuAvailable_) {
+            int count = 0;
+            size_t bytes = 0;
+            grContext_->getResourceCacheUsage(&count, &bytes);
+            info.gpuCacheAvailable = true;
+            info.gpuCacheBytes = bytes;
+            info.gpuResourceCount = static_cast<std::uint64_t>(std::max(0, count));
+            info.gpuPurgeableBytes = grContext_->getResourceCachePurgeableBytes();
+            info.gpuCacheLimitBytes = grContext_->getResourceCacheLimit();
+        }
+        if (paintSurface_) {
+            info.retainedSurfaceBytes = static_cast<std::uint64_t>(paintSurfaceWidth_)
+                * static_cast<std::uint64_t>(paintSurfaceHeight_) * 4;
+        }
+        return info;
+    }
 
     void setContent(std::shared_ptr<Widget> widget) override {
         if (content_) {

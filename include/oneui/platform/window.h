@@ -43,6 +43,17 @@ struct RendererInfo {
     double blitMs = 0;
 };
 
+// Diagnostic cache accounting, not total process memory or total GPU residency.
+// GPU cache includes resources in use; retainedSurfaceBytes may overlap it.
+struct RendererMemoryInfo {
+    // These Skia CPU caches are shared by the process, not owned by this window.
+    bool cpuCachesAvailable = false;
+    bool gpuCacheAvailable = false;
+    std::uint64_t cpuFontCacheBytes = 0, cpuResourceCacheBytes = 0;
+    std::uint64_t gpuCacheBytes = 0, gpuPurgeableBytes = 0, gpuCacheLimitBytes = 0;
+    std::uint64_t gpuResourceCount = 0, retainedSurfaceBytes = 0;
+};
+
 struct WindowOptions {
     std::wstring title;
     int width = 1280;
@@ -213,6 +224,9 @@ public:
     virtual void setOnCloseRequested(std::function<void(bool)> callback) { (void)callback; }
     // Query on the owning UI thread. Default preserves other backend behavior.
     virtual RendererInfo rendererInfo() const { return {}; }
+    // Query on the owning UI thread. Separate opt-in cache query; unavailable
+    // backends return false availability flags, not a measured zero usage.
+    virtual RendererMemoryInfo rendererMemoryInfo() const { return {}; }
 protected:
     void setCommandRoot(const std::shared_ptr<Widget>& root) { commandRoot_ = root; }
 private:

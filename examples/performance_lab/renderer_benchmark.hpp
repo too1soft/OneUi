@@ -40,6 +40,7 @@ struct RendererBenchmark {
     memory.cb = sizeof(memory);
     if (!GetProcessMemoryInfo(GetCurrentProcess(), reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&memory), sizeof(memory)))
       throw std::runtime_error("GetProcessMemoryInfo failed");
+    const auto caches = window.rendererMemoryInfo();
     std::filesystem::create_directories(output);
     std::ofstream out(output / "renderer-performance.txt");
     out.exceptions(std::ios::failbit | std::ios::badbit);
@@ -53,6 +54,15 @@ struct RendererBenchmark {
         << "\ncpu_percent=" << 100 * cpu / elapsed / std::max(1u, std::thread::hardware_concurrency())
         << "\nworking_set_mib=" << memory.WorkingSetSize / 1048576.0
         << "\nprivate_mib=" << memory.PrivateUsage / 1048576.0
+        << "\ncpu_caches_available=" << caches.cpuCachesAvailable
+        << "\ngpu_cache_available=" << caches.gpuCacheAvailable
+        << "\nskia_cpu_font_cache_mib=" << caches.cpuFontCacheBytes / 1048576.0
+        << "\nskia_cpu_resource_cache_mib=" << caches.cpuResourceCacheBytes / 1048576.0
+        << "\nskia_gpu_cache_mib=" << caches.gpuCacheBytes / 1048576.0
+        << "\nskia_gpu_purgeable_mib=" << caches.gpuPurgeableBytes / 1048576.0
+        << "\nskia_gpu_cache_limit_mib=" << caches.gpuCacheLimitBytes / 1048576.0
+        << "\nskia_gpu_resource_count=" << caches.gpuResourceCount
+        << "\nretained_surface_estimate_mib=" << caches.retainedSurfaceBytes / 1048576.0
         << "\npaint_count=" << paints
         << "\npaint_mean_ms=" << (info.paintMs - initial.paintMs) / divisor
         << "\ncontent_mean_ms=" << (info.contentMs - initial.contentMs) / divisor

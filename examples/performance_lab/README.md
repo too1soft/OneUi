@@ -21,9 +21,12 @@
 .\examples\performance_lab\run.ps1 -Renderer gpu
 .\examples\performance_lab\run.ps1 -Renderer cpu
 .\examples\performance_lab\compare-renderers.ps1 -Rounds 3 -Seconds 5
+.\examples\performance_lab\compare-renderers.ps1 -Load heavy -Rounds 3 -Seconds 5
 ```
 
 每次关闭上一窗口再切换。auto 继承环境，gpu 优先尝试 GPU，cpu 使用软件；都只改变当前应用的启动策略。标题下方显示实际后端、设备或回退原因。对比脚本测空闲、表格滚动、图表和粒子，并拒绝 GPU 回退样本。需先 `-Build`；详见[实测与诊断 API](../../docs/41-renderer-selection-and-product-boundaries.md)。
+
+`-Load heavy` 将粒子提高到 10,000、曲线提高到每条 4,000 点。`summary.csv` 同时记录采样末尾的 Skia 字体／资源／GPU 缓存；这些不是全部进程内存或显存，`skia_gpu_cache_limit_mib` 只是预算。字段说明、实测和限制见[高压缓存诊断](../../docs/43-heavy-renderer-diagnostics.md)。
 
 ## 看什么、改哪里
 

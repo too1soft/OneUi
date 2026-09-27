@@ -152,6 +152,8 @@ Windows 默认尝试 GPU，失败回退软件绘制。实验台可以启动时�
 
 本机同一构建、三轮实测：表格滚动 CPU / GPU 每次绘制 **7.62 / 0.95ms**，进程工作集 **53.50 / 120.52MiB**；空闲连接页两种模式均无额外绘制。GPU 更快，但进程内存更高。这是 CPU 侧绘制耗时，不能等同 GPU 时间或显示帧率。完整的[四场景数据、环境与原始记录](docs/41-renderer-selection-and-product-boundaries.md)解释了测量口径和波动。
 
+把负载升到 **10,000 粒子**，另一组同机三轮基线的 CPU / GPU 每次绘制为 **31.35 / 5.39ms**。用 `compare-renderers.ps1 -Load heavy` 可复现；新版输出还包含 Skia 缓存统计，帮助区分缓存预算、资源用量与进程内存。见[高压测试与内存诊断](docs/43-heavy-renderer-diagnostics.md)。这轮补齐测量，粒子批量绘制仍待优化。
+
 标题栏的产品外观也可通过 [C++／C／Rust 通用配置](docs/42-titlebar-presentation.md)提供，主题名称只控制 CSS，核心不按产品名称切换几何。
 
 ## 当前阶段与兼容性

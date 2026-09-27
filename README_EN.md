@@ -115,6 +115,8 @@ Windows prefers GPU and falls back to software. Start the lab with `-Renderer gp
 
 On the same build, three table-scroll rounds averaged **7.62 / 0.95ms CPU-side paint time** and **53.50 / 120.52MiB working set** for CPU / GPU. Both modes produced no additional idle connection-page paints. GPU rendering was faster but used more process memory. These are neither GPU timestamps nor display FPS. Run `examples/performance_lab/compare-renderers.ps1 -Rounds 3 -Seconds 5`; see the [four-scene results and raw data](docs/41-renderer-selection-and-product-boundaries.md).
 
+A separate three-round baseline on the same machine with **10,000 particles** measured **31.35 / 5.39ms** CPU-side paint time for CPU / GPU. Reproduce with `compare-renderers.ps1 -Load heavy`. New results also expose Skia cache accounting, distinguishing limits from usage and process memory. See [heavy-load measurements and memory diagnostics](docs/43-heavy-renderer-diagnostics.md). This adds diagnostics; particle batching remains future work.
+
 Custom caption geometry and line-art glyphs use [TitleBarPresentation](docs/42-titlebar-presentation.md) in C++/C/Rust. CSS variants no longer select product-specific geometry.
 
 ## Scope and maturity
