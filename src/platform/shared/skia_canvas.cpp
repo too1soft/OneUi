@@ -3,6 +3,11 @@
 #include "internal/unicode.h"
 #include "skia_path.h"
 #include "text/text_layout.h"
+#if defined(ONEUI_CIRCLE_MESH_EXPERIMENT)
+#include "circle_mesh_experiment.h"
+#include "include/core/SkMesh.h"
+#include "include/core/SkBlender.h"
+#endif
 
 #include "include/core/SkBlurTypes.h"
 #include "include/core/SkCanvas.h"
@@ -125,6 +130,9 @@ struct TextBlobEntry {
     float advanceWidth = 0.0f;
 };
 
+#if defined(ONEUI_CIRCLE_MESH_EXPERIMENT)
+#include "circle_mesh_experiment.inc"
+#endif
 class SkiaCanvasImpl final : public Canvas {
   public:
     explicit SkiaCanvasImpl(SkCanvas &canvas, const std::wstring *defaultFontFamily = nullptr,
@@ -132,6 +140,11 @@ class SkiaCanvasImpl final : public Canvas {
         : canvas_(canvas), defaultFontFamily_(defaultFontFamily), viewportBounds_(viewportBounds) {}
 
     void clear(Color color) override { canvas_.clear(toSkColor(color)); }
+#if defined(ONEUI_CIRCLE_MESH_EXPERIMENT)
+    experimental::CircleMeshResult tryCircleMesh(const RoundedRectFill* items, std::size_t count) {
+        return drawCircleMesh(canvas_, items, count);
+    }
+#endif
 
     void save() override {
         clipStack_.push_back(clipBounds_);
@@ -919,6 +932,14 @@ class SkiaCanvasImpl final : public Canvas {
 };
 
 } // namespace
+
+#if defined(ONEUI_CIRCLE_MESH_EXPERIMENT)
+experimental::CircleMeshResult experimental::tryCircleMesh(
+        Canvas& canvas, const RoundedRectFill* items, std::size_t count) {
+    if (auto* skia = dynamic_cast<SkiaCanvasImpl*>(&canvas)) return skia->tryCircleMesh(items,count);
+    return {};
+}
+#endif
 
 std::unique_ptr<Canvas> makeSkiaCanvas(SkCanvas &canvas, const std::wstring *family,
                                        std::optional<Rect> viewport) {

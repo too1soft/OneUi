@@ -1,0 +1,5 @@
+OneUI GPU rendering enabled (OpenGL+Skia Ganesh, vsync=on)
+OneUI GPU rendering enabled (OpenGL+Skia Ganesh, vsync=on)
+Exact geometry/fallback parity: 160 cases
+Mesh exact-pixel gate FAILED: preserve combined as default; see mesh-differences.csv
+Actual OpenGL front buffer mesh difference report: 18 cases; 100/125/150% content scale

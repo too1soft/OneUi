@@ -1,0 +1,14 @@
+Editor validation, snapshot save, cancellation, layout, input retention and focus reveal tests passed
+Connection workflow tests passed: 300 cycles, 117 widgets, 50 mount subscriptions, 115 style nodes; no growth.
+Connection workflow tests passed: 300 cycles, 117 widgets, 50 mount subscriptions, 115 style nodes; no growth.
+Authoring parity: 30 scenes; hot CSS rollback/removal, scoped blocks, input retention, 50 reloads and debounce passed for both entries.
+Gallery: 36 theme/density/width/scenes; responsive geometry, state feedback, focus/composition, stable subscriptions and table anchor passed.
+Renderer diagnostics: forced raster, actual surface, monotonic counters and read-only snapshots passed
+Exact geometry/fallback parity: 160 cases
+Raster PNG exact parity: 54 cases; 100/125/150% content scale
+OneUI GPU rendering enabled (OpenGL+Skia Ganesh, vsync=on)
+OneUI GPU rendering enabled (OpenGL+Skia Ganesh, vsync=on)
+Exact geometry/fallback parity: 160 cases
+Actual OpenGL front buffer exact parity: 54 cases; 100/125/150% content scale
+Exact geometry/fallback parity: 160 cases
+Raster PNG exact parity: 18 cases; 100/125/150% content scale

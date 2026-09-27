@@ -21,7 +21,9 @@ struct RendererBenchmark {
   double cpuStart = 0;
   oneui::RendererInfo initial;
   std::vector<double> contentSamples;
-  void begin(oneui::Window& window) {
+  std::uint64_t initialMeshDraws=0, initialMeshFallbacks=0, initialMeshVertices=0;
+  void begin(oneui::Window& window, std::uint64_t meshDraws, std::uint64_t meshFallbacks, std::uint64_t meshVertices) {
+    initialMeshDraws=meshDraws;initialMeshFallbacks=meshFallbacks;initialMeshVertices=meshVertices;
     initial = window.rendererInfo();
     cpuStart = labProcessCpuMs();
     started = Clock::now();
@@ -29,7 +31,9 @@ struct RendererBenchmark {
     active = true;
   }
   void finish(oneui::Window& window, const std::filesystem::path& output,
-              const std::string& requested, const std::string& scene, const char* particleMode) {
+              const std::string& requested, const std::string& scene, const char* particleMode,
+              std::uint64_t meshDraws, std::uint64_t meshFallbacks, std::uint64_t meshVertices, const char* meshReason,
+              const char* meshLastFallback) {
     const double elapsed = ms(Clock::now() - started);
     const double cpu = labProcessCpuMs() - cpuStart;
     active = false;
@@ -47,6 +51,12 @@ struct RendererBenchmark {
     out << std::setprecision(8)
         << "requested=" << requested << "\nscene=" << scene
         << "\nparticle_mode=" << particleMode
+        << "\nmesh_draws_total=" << meshDraws << "\nmesh_fallbacks_total=" << meshFallbacks
+        << "\nmesh_vertices_total=" << meshVertices << "\nmesh_reason=" << meshReason
+        << "\nmesh_draws_sample=" << meshDraws-initialMeshDraws
+        << "\nmesh_fallbacks_sample=" << meshFallbacks-initialMeshFallbacks
+        << "\nmesh_vertices_sample=" << meshVertices-initialMeshVertices
+        << "\nmesh_last_fallback=" << meshLastFallback
         << "\nbackend=" << backendName(info.backend)
         << "\ndevice=" << info.device << "\nreason=" << info.reason
         << "\nvsync=" << info.vsync

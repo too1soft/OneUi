@@ -4,6 +4,7 @@
 #include <cmath>
 #include <functional>
 #include <oneui/oneui.h>
+#include "platform/shared/circle_mesh_experiment.h"
 using namespace oneui;
 constexpr Color color(unsigned hex) {
   return Color(static_cast<unsigned char>(hex >> 16),
@@ -15,7 +16,7 @@ constexpr Color BG = color(0x101517), PANEL = color(0x171e21),
                 MUTED = color(0x96aaa4), ACCENT = color(0xc4ed87),
                 TEAL = color(0x61c9bb), ORANGE = color(0xecad72);
 constexpr float TAU = 6.2831853071795864769f;
-enum class ParticleMode { Reference, Precomputed, Batch, Combined };
+enum class ParticleMode { Reference, Precomputed, Batch, Combined, Mesh };
 inline constexpr ParticleMode DEFAULT_PARTICLE_MODE = ParticleMode::Combined;
 inline const char* particleModeName(ParticleMode mode) {
   switch (mode) {
@@ -23,6 +24,7 @@ inline const char* particleModeName(ParticleMode mode) {
     case ParticleMode::Precomputed: return "precomputed";
     case ParticleMode::Batch: return "batch";
     case ParticleMode::Combined: return "combined";
+    case ParticleMode::Mesh: return "mesh";
   }
   return "reference";
 }
@@ -37,6 +39,9 @@ inline ParticleConstants particleConstants(int i) {
 }
 struct Model {
   ParticleMode particleMode = DEFAULT_PARTICLE_MODE;
+  std::uint64_t meshDraws = 0, meshFallbacks = 0, meshVertices = 0;
+  const char* meshReason = "not-requested";
+  const char* meshLastFallback = "none";
   int load = 1, tab = 0, selected = 0;
   bool running = true;
   float time = 0, speed = 1;
@@ -135,9 +140,9 @@ public:
         }
       } else {
         const bool precompute = m.particleMode == ParticleMode::Precomputed ||
-                                m.particleMode == ParticleMode::Combined;
+                                m.particleMode == ParticleMode::Combined || m.particleMode == ParticleMode::Mesh;
         const bool batch = m.particleMode == ParticleMode::Batch ||
-                           m.particleMode == ParticleMode::Combined;
+                           m.particleMode == ParticleMode::Combined || m.particleMode == ParticleMode::Mesh;
         if (precompute && particleConstants_.size() != static_cast<std::size_t>(m.particles())) {
           particleConstants_.resize(m.particles());
           for (int i = 0; i < m.particles(); ++i)
@@ -165,7 +170,14 @@ public:
           if (batch) particleRects_[i] = {{xx, yy, sz, sz}, ink, sz / 2};
           else c.fillRect({xx, yy, sz, sz}, ink, sz / 2);
         }
-        if (batch) c.fillRoundedRects(particleRects_.data(), particleRects_.size());
+        bool meshDrawn = false;
+        if (m.particleMode == ParticleMode::Mesh) {
+          const auto result = oneui::rendering::experimental::tryCircleMesh(c,particleRects_.data(),particleRects_.size());
+          m.meshReason=result.reason;meshDrawn=result.drawn;
+          if(meshDrawn){++m.meshDraws;m.meshVertices+=result.vertices;}
+          else {++m.meshFallbacks;m.meshLastFallback=result.reason;}
+        }
+        if (batch && !meshDrawn) c.fillRoundedRects(particleRects_.data(), particleRects_.size());
       }
     } else if (kind == PlotKind::Spectrum) {
       for (int i = 0; i < 28; ++i) {

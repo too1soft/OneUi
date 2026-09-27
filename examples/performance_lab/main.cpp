@@ -585,9 +585,12 @@ public:
   }
   void rendererBenchmarkTick(double elapsed) {
     if(diagnosticStop)return;
-    if(elapsed>=3 && !rendererSampling_) { rendererBenchmark_.begin(window);rendererSampling_=true; }
+    if(elapsed>=3 && !rendererSampling_) {
+      rendererBenchmark_.begin(window,m.meshDraws,m.meshFallbacks,m.meshVertices);rendererSampling_=true;
+    }
     if(elapsed>=3+options.sampleSeconds) {
-      try { rendererBenchmark_.finish(window,options.output,options.renderer,options.rendererBenchmark,particleModeName(m.particleMode)); }
+      try { rendererBenchmark_.finish(window,options.output,options.renderer,options.rendererBenchmark,
+          particleModeName(m.particleMode),m.meshDraws,m.meshFallbacks,m.meshVertices,m.meshReason,m.meshLastFallback); }
       catch(const std::exception& error){std::cerr<<error.what()<<'\n';result=2;}
       diagnosticStop=true;window.close();return;
     }
@@ -843,7 +846,8 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
         else if(value==L"precomputed")o.particleMode=ParticleMode::Precomputed;
         else if(value==L"batch")o.particleMode=ParticleMode::Batch;
         else if(value==L"combined")o.particleMode=ParticleMode::Combined;
-        else throw std::runtime_error("Particle mode must be reference, precomputed, batch or combined");
+        else if(value==L"mesh")o.particleMode=ParticleMode::Mesh;
+        else throw std::runtime_error("Particle mode must be reference, precomputed, batch, combined or mesh");
       } else if (arg == L"--renderer-benchmark") {
         const auto value=next();
         if(value!=L"idle" && value!=L"table" && value!=L"chart" && value!=L"particles")throw std::runtime_error("Invalid renderer benchmark scene");

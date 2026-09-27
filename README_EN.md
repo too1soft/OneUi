@@ -119,6 +119,8 @@ A previous three-round baseline on the same machine with **10,000 particles** me
 
 A subsequent five-round, same-binary A/B test reduced GPU paint time from **5.43 to 5.08ms (6.4%)** using precomputed constants and ordered bulk drawing, with exact raster and actual OpenGL pixel parity. The demo now defaults to this combination; `-ParticleMode reference` selects the original loop. Software paint improved by less than 1%, and reusable buffers add a small amount of memory. [Four variants, raw results and reproduction](docs/44-particle-drawing-optimization.md).
 
+A further **mesh experiment** measured **5.10 → 1.96ms** CPU-side GPU-path paint time over five rounds, but still has antialiasing pixel differences. **The default remains combined.** Select `-ParticleMode mesh` explicitly in the lab; normal SDK builds exclude this private experiment. [Performance, image differences and limits](docs/45-particle-mesh-experiment.md).
+
 Custom caption geometry and line-art glyphs use [TitleBarPresentation](docs/42-titlebar-presentation.md) in C++/C/Rust. CSS variants no longer select product-specific geometry.
 
 ## Scope and maturity
