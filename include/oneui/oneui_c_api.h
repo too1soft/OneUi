@@ -517,7 +517,7 @@ enum {
     OneUiTerminalCellOverline = 1u << 11
 };
 
-#define ONEUI_UTF8_ABI_VERSION 33u
+#define ONEUI_UTF8_ABI_VERSION 39u
 
 /*
  * Copies and registers a process-local font under family_alias. Call before
@@ -1068,6 +1068,9 @@ ONEUI_API void oneui_title_bar_set_title(OneUiWidget* title_bar, const wchar_t* 
 ONEUI_API void oneui_title_bar_set_icon_symbol(OneUiWidget* title_bar, int symbol);
 ONEUI_API void oneui_title_bar_set_maximized(OneUiWidget* title_bar, int maximized);
 ONEUI_API void oneui_title_bar_set_variant(OneUiWidget* title_bar, const char* variant);
+/* Explicit presentation types are defined in title_bar_presentation_c.h. */
+typedef struct OneUiTitleBarPresentation OneUiTitleBarPresentation;
+ONEUI_API int oneui_title_bar_set_presentation(OneUiWidget* title_bar, const OneUiTitleBarPresentation* presentation);
 ONEUI_API void oneui_title_bar_set_leading(OneUiWidget* title_bar, OneUiWidget* leading);
 ONEUI_API void oneui_title_bar_set_accessory(OneUiWidget* title_bar, OneUiWidget* accessory);
 ONEUI_API void oneui_title_bar_set_on_minimize(OneUiWidget* title_bar, OneUiVoidCallback callback, void* user_data);
@@ -1691,3 +1694,5 @@ ONEUI_API void oneui_button_clear_style(OneUiWidget* button);
 #ifdef __cplusplus
 }
 #endif
+
+#include "oneui/title_bar_presentation_c.h"

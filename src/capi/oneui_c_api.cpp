@@ -3563,6 +3563,47 @@ void oneui_title_bar_set_variant(OneUiWidget* title_bar, const char* variant) {
     nativeTitleBar->setVariant(variant ? std::string(variant) : std::string());
 }
 
+int oneui_title_bar_set_presentation(OneUiWidget* title_bar, const OneUiTitleBarPresentation* input) {
+    auto* bar = asWidget<oneui::WindowTitleBar>(title_bar);
+    if (!bar) return 0;
+    if (!input) return bar->setPresentation(nullptr) ? 1 : 0;
+    if (input->struct_size != sizeof(OneUiTitleBarPresentation)) return 0;
+    const auto rect = [](OneUiRect r) { return oneui::Rect{r.x,r.y,r.width,r.height}; };
+    const auto color = [](OneUiColor c) { return oneui::Color{c.r,c.g,c.b,c.a}; };
+    const auto flag = [](int value) { return value == 0 || value == 1; };
+    const auto path = [](const OneUiCaptionPath& source, oneui::CanvasPath& target) {
+        if (source.count > 64 || (source.count && !source.commands)) return false;
+        for (size_t i = 0; i < source.count; ++i) {
+            const auto& c = source.commands[i];
+            if (!std::isfinite(c.x) || !std::isfinite(c.y)) return false;
+            if (c.verb == 0) target.moveTo({c.x,c.y});
+            else if (c.verb == 1) target.lineTo({c.x,c.y});
+            else if (c.verb == 2) target.close();
+            else return false;
+        }
+        return true;
+    };
+    try {
+        oneui::TitleBarPresentation p;
+        p.logo=rect(input->logo); p.logoIcon=rect(input->logo_icon); p.title=rect(input->title);
+        p.leading=rect(input->leading); p.accessory=rect(input->accessory);
+        p.logoStrokeWidth=input->logo_stroke_width; p.titleFontSize=input->title_font_size;
+        if (!flag(input->hide_logo_border)) return 0;
+        p.hideLogoBorder=input->hide_logo_border != 0;
+        for (size_t i=0; i<3; ++i) {
+            const auto& source=input->buttons[i]; auto& target=p.buttons[i];
+            if (!flag(source.ellipse) || !flag(source.glyph_on_group_hover) || !flag(source.glyph_uses_foreground)) return 0;
+            target.frame=rect(source.frame); target.visual=rect(source.visual); target.icon=rect(source.icon);
+            if (!path(source.glyph,target.glyph) || !path(source.maximized_glyph,target.maximizedGlyph)) return 0;
+            target.strokeWidth=source.stroke_width; target.cornerRadius=source.corner_radius;
+            target.ellipse=source.ellipse != 0; target.glyphOnGroupHover=source.glyph_on_group_hover != 0;
+            target.glyphUsesForeground=source.glyph_uses_foreground != 0;
+            target.fill=color(source.fill); target.pressedFill=color(source.pressed_fill); target.glyphColor=color(source.glyph_color);
+        }
+        return bar->setPresentation(&p) ? 1 : 0;
+    } catch (...) { return 0; }
+}
+
 void oneui_title_bar_set_leading(OneUiWidget* title_bar, OneUiWidget* leading) {
     auto* nativeTitleBar = asWidget<oneui::WindowTitleBar>(title_bar);
     if (!nativeTitleBar) {

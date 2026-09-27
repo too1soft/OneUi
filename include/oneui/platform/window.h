@@ -5,6 +5,7 @@
 #include "oneui/geometry.h"
 #include "oneui/widget.h"
 
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <string>
@@ -24,6 +25,22 @@ enum WindowCapability : unsigned int {
     WindowCapabilityTray = 1u << 5,
     WindowCapabilityNativeDialogs = 1u << 6,
     WindowCapabilityFileDrop = 1u << 7
+};
+
+enum class RenderBackend { Unknown, Software, OpenGL };
+// UI-thread snapshot. Counters are cumulative CPU wall times, not GPU timestamps.
+// Unknown means no render surface has been established (or backend unsupported).
+struct RendererInfo {
+    RenderBackend backend = RenderBackend::Unknown;
+    std::string device;
+    std::string reason = "not-initialized";
+    bool vsync = false;
+    std::uint64_t backendChanges = 0;
+    std::uint64_t paints = 0;
+    double paintMs = 0;
+    double contentMs = 0;
+    double submitMs = 0;
+    double blitMs = 0;
 };
 
 struct WindowOptions {
@@ -194,6 +211,8 @@ public:
         (void)title; (void)message; return false;
     }
     virtual void setOnCloseRequested(std::function<void(bool)> callback) { (void)callback; }
+    // Query on the owning UI thread. Default preserves other backend behavior.
+    virtual RendererInfo rendererInfo() const { return {}; }
 protected:
     void setCommandRoot(const std::shared_ptr<Widget>& root) { commandRoot_ = root; }
 private:

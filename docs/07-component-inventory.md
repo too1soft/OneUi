@@ -54,7 +54,7 @@ Cocoa 已接入源码但未构建；运行时服务和原生验收状态见 [后
 | `TopBar` | `layout/top_bar.h` | 可用 | ✓ | ✓ | raw | leading/actions/padding/gap；safe Rust 无专用包装 |
 | `AppShell` | `layout/app_shell.h` | 主线 | ✓ | ✓ | raw | sidebar/header/content/footer、footer 跨 sidebar 与响应式显示 |
 | `ProductShell` | `layout/product_shell.h` | 可用 | ✓ | ✓ | raw | 产品工作台几何 helper 与 sidebar/topbar/status slots |
-| `WindowTitleBar` | `controls/window_title_bar.h` | 主线 | ✓ | ✓ | ✓ | 自绘 caption 按钮、leading/accessory、variant、最大化状态 |
+| `WindowTitleBar` | `controls/window_title_bar.h` | 主线 | ✓ | ✓ | ✓ | 自绘 caption 按钮、leading/accessory、CSS variant、显式 presentation、最大化状态 |
 
 ## 文本、按钮与表单
 

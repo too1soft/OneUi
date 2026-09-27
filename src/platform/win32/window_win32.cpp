@@ -323,6 +323,8 @@ public:
         sync(sync, content_);
     }
 
+    RendererInfo rendererInfo() const override { return rendererInfo_; }
+
     void setContent(std::shared_ptr<Widget> widget) override {
         if (content_) {
             content_->detachFromOwner(this);
@@ -1941,6 +1943,20 @@ private:
         }
 
         const bool inTitleBar = localY >= 0 && localY < titleBarHeight;
+        // Caption controls may live on either edge. Use the rendered widget's
+        // hit geometry rather than assuming every client uses Windows chrome.
+        if (inTitleBar && content_) {
+            const Point point{localX / dpiScale(), localY / dpiScale()};
+            const auto hitsControl = [&](const auto& self, const std::shared_ptr<Widget>& widget) -> bool {
+                if (!widget || !widget->visible()) return false;
+                if (const auto title = std::dynamic_pointer_cast<WindowTitleBar>(widget))
+                    return title->hitsWindowButton(point);
+                if (const auto view = std::dynamic_pointer_cast<View>(widget))
+                    for (const auto& child : view->children()) if (self(self, child)) return true;
+                return false;
+            };
+            if (hitsControl(hitsControl, content_)) return HTNOWHERE;
+        }
         const bool hasInteractiveTitleBarRegion =
             titleBarInteractiveLeadingWidthLogical_ >= 0.0f
             && titleBarInteractiveTrailingWidthLogical_ >= 0.0f;
@@ -2588,12 +2604,16 @@ private:
             paintSurface_->draw(presentCanvas, 0.0f, 0.0f);
             grContext_->flushAndSubmit();
             const BOOL swapped = SwapBuffers(glDC_);
-            traceSubmitMs_ += currentTimeMs() - submitStartMs;
+            const double submitMs = currentTimeMs() - submitStartMs;
+            traceSubmitMs_ += submitMs;
+            rendererInfo_.submitMs += submitMs;
             if (swapped) {
                 EndPaint(hwnd_, &paintStruct);
                 recordPaint(width, height, fullPaint, allocatedSurface, surfaceMs, currentTimeMs() - paintStartMs);
                 return;
             }
+            rendererInfo_.reason = "swap-buffers-failed";
+            setRenderBackend(RenderBackend::Unknown);
             gpuAvailable_ = false;
             swapIntervalEnabled_ = false;
             windowSurface_.reset();
@@ -2714,9 +2734,13 @@ private:
                 windowSurface_ = std::move(windowSurface);
                 paintSurfaceWidth_ = surfaceWidth;
                 paintSurfaceHeight_ = surfaceHeight;
+                setRenderBackend(RenderBackend::OpenGL);
+                rendererInfo_.reason.clear();
+                rendererInfo_.vsync = swapIntervalEnabled_;
                 return true;
             }
-            traceGpu(!retainedSurface ? "retained-surface-failed" : "window-surface-failed");
+            rendererInfo_.reason = !retainedSurface ? "retained-surface-failed" : "window-surface-failed";
+            traceGpu(rendererInfo_.reason.c_str());
             paintSurface_.reset();
             windowSurface_.reset();
             gpuAvailable_ = false;
@@ -2726,6 +2750,9 @@ private:
         // 旧逻辑仅在表面为空时新建：容量不足时沿用小表面、记账尺寸却改成大的，
         // 后续 blit 按大尺寸读小缓冲越界崩溃（窗口最大化时交互重绘先于延迟全绘触发，必现）。
         paintSurface_ = SkSurfaces::Raster(imageInfo);
+        setRenderBackend(paintSurface_ ? RenderBackend::Software : RenderBackend::Unknown);
+        rendererInfo_.vsync = false;
+        if (!paintSurface_) rendererInfo_.reason = "raster-surface-failed";
         paintSurfaceWidth_ = paintSurface_ ? surfaceWidth : 0;
         paintSurfaceHeight_ = paintSurface_ ? surfaceHeight : 0;
         return true;
@@ -2760,6 +2787,7 @@ private:
     }
 
     void recordContentPaint(double elapsedMs) {
+        rendererInfo_.contentMs += elapsedMs;
         if (renderTraceEnabled_) {
             traceContentPaintMs_ += elapsedMs;
         }
@@ -2780,12 +2808,15 @@ private:
     }
 
     void recordBlit(double elapsedMs) {
+        rendererInfo_.blitMs += elapsedMs;
         if (renderTraceEnabled_) {
             traceBlitMs_ += elapsedMs;
         }
     }
 
     void recordPaint(int width, int height, bool fullPaint, bool allocatedSurface, double surfaceMs, double elapsedMs) {
+        ++rendererInfo_.paints;
+        rendererInfo_.paintMs += elapsedMs;
         const double nowMs = currentTimeMs();
         double frameIntervalMs = 0.0;
         if (internal::scrollTraceEnabled()) {
@@ -3523,17 +3554,23 @@ private:
         if (file != stderr) std::fclose(file); else std::fflush(file);
     }
 
+    void setRenderBackend(RenderBackend backend) {
+        if (rendererInfo_.backend != backend) ++rendererInfo_.backendChanges;
+        rendererInfo_.backend = backend;
+    }
+
     void initGPU() {
         if (gpuInitializationAttempted_ || !hwnd_) {
             return;
         }
         gpuInitializationAttempted_ = true;
         if (!gpuRenderingEnabled()) {
+            rendererInfo_.reason = "disabled-by-environment";
             return;
         }
 
         glDC_ = GetDC(hwnd_);
-        if (!glDC_) return;
+        if (!glDC_) { rendererInfo_.reason = "window-dc-failed"; return; }
 
         PIXELFORMATDESCRIPTOR pfd = {};
         pfd.nSize = sizeof(PIXELFORMATDESCRIPTOR);
@@ -3547,6 +3584,7 @@ private:
 
         int pixelFormat = ChoosePixelFormat(glDC_, &pfd);
         if (!pixelFormat || !SetPixelFormat(glDC_, pixelFormat, &pfd)) {
+            rendererInfo_.reason = "pixel-format-failed";
             ReleaseDC(hwnd_, glDC_);
             glDC_ = nullptr;
             return;
@@ -3554,21 +3592,26 @@ private:
 
         HGLRC tempContext = wglCreateContext(glDC_);
         if (!tempContext) {
+            rendererInfo_.reason = "opengl-context-failed";
             ReleaseDC(hwnd_, glDC_);
             glDC_ = nullptr;
             return;
         }
 
         if (!wglMakeCurrent(glDC_, tempContext)) {
+            rendererInfo_.reason = "opengl-make-current-failed";
             wglDeleteContext(tempContext);
             ReleaseDC(hwnd_, glDC_);
             glDC_ = nullptr;
             return;
         }
 
+        if (const auto* device = glGetString(GL_RENDERER))
+            rendererInfo_.device = reinterpret_cast<const char*>(device);
         traceGpu("context-current");
         grContext_ = GrDirectContexts::MakeGL();
         if (!grContext_) {
+            rendererInfo_.reason = "ganesh-context-failed";
             traceGpu("ganesh-context-failed");
             wglMakeCurrent(nullptr, nullptr);
             wglDeleteContext(tempContext);
@@ -3607,6 +3650,7 @@ private:
         swapIntervalEnabled_ = false;
     }
 
+    RendererInfo rendererInfo_;
     HWND hwnd_ = nullptr;
     const void* imeIdentity_ = nullptr;
     std::uint64_t imeSession_ = 0;

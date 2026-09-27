@@ -1,5 +1,6 @@
 #include "plots.hpp"
 #include "connection_workspace.hpp"
+#include "renderer_benchmark.hpp"
 #include <iostream>
 #include <oneui/layout/panel.h>
 #include <shellapi.h>
@@ -88,6 +89,8 @@ panel(View &parent, const std::shared_ptr<Widget> &content, Color bg = PANEL) {
 struct Options {
   int load = 1, tab = 0, width = 1320, height = 900;
   double benchmark = 0;
+  std::string renderer = "auto", rendererBenchmark;
+  double sampleSeconds = 5;
   bool exitAfter = false, snapshotExit = false, traceInput = false;
   bool editor = false, warmEditor = false, editorLight = false, editorDark=false, editorInvalid = false;
   bool connections = false, gallery=false, compact=false;
@@ -105,6 +108,10 @@ class Lab final : public LayoutView {
   Window &window;
   Options options;
   Model m;
+  RendererBenchmark rendererBenchmark_;
+  Clock::time_point rendererLabelTime_{};
+  std::atomic<bool> benchmarkPostPending_{false};
+  bool rendererSampling_ = false;
   bool autoStarted = false, snapshotDone = false, finishing = false;
   int result = 0;
   std::unique_ptr<connection_demo::Workspace> editor;
@@ -390,7 +397,7 @@ public:
   }
   void showEditor() {
     ensureEditor();resumeAnimation=m.running;m.running=false;editing=true;
-    for(auto& child:children())child->setVisible(child==editor->page.root.widget);
+    for(auto& child:children())child->setVisible(child==editor->page.root.widget || child==subtitle);
     window.setMinimumClientSize({640,560});invalidate();
   }
   void hideEditor() {
@@ -497,7 +504,7 @@ public:
       method->setFrame({r.x, r.y + y + 94, r.width, 22});
     };
     arrange = [this](Rect r) {
-      if(editing){editor->page.root.widget->setFrame(r);return;}
+      if(editing){subtitle->setFrame({r.x+20,r.y+7,r.width-40,20});editor->page.root.widget->setFrame({r.x,r.y+34,r.width,std::max(0.f,r.height-34)});return;}
       sidebar->setFrame({r.x, r.y, 190, r.height});
       float x = r.x + 214, w = r.width - 238;
       title->setFrame({x, r.y + 24, w - 120, 43});
@@ -558,7 +565,57 @@ public:
     editor->flush();++stressStep_;
     window.requestAnimationFrame([this](double){stressStep();});
   }
+  void updateRendererLabel() {
+    const auto now = Clock::now();
+    if (ms(now-rendererLabelTime_) < 250) return;
+    rendererLabelTime_ = now;
+    const auto info = window.rendererInfo();
+    const auto wide=[](const std::string& text){return std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>>{}.from_bytes(text);};
+    const auto policy=options.renderer=="cpu"?L"CPU 软件":options.renderer=="gpu"?L"GPU 优先":L"自动";
+    std::wstring text = std::wstring(L"启动选择：") + policy + L"  ·  实际：";
+    if (info.backend==RenderBackend::OpenGL) text += L"OpenGL / Skia Ganesh  ·  " + wide(info.device);
+    else if(info.backend==RenderBackend::Software) {
+      text += L"CPU / Skia Raster";
+      text += info.reason=="disabled-by-environment"?L"  ·  已指定软件渲染":L"  ·  GPU 回退：" + wide(info.reason);
+    } else text += L"等待首次绘制";
+    subtitle->setText(text);
+    subtitle->setTooltip(text + L"\n切换模式需要重新启动；自动遵循 ONEUI_ENABLE_GPU 环境设置。");
+  }
+  void rendererBenchmarkTick(double elapsed) {
+    if(diagnosticStop)return;
+    if(elapsed>=3 && !rendererSampling_) { rendererBenchmark_.begin(window);rendererSampling_=true; }
+    if(elapsed>=3+options.sampleSeconds) {
+      try { rendererBenchmark_.finish(window,options.output,options.renderer,options.rendererBenchmark); }
+      catch(const std::exception& error){std::cerr<<error.what()<<'\n';result=2;}
+      diagnosticStop=true;window.close();return;
+    }
+    if(options.rendererBenchmark=="table") {
+      auto table=std::dynamic_pointer_cast<Table>(editor->page.fields.at("$table"));
+      // Same wall-time trajectory at 60 posted updates/s; native virtualized table.
+      table->setScrollOffset(static_cast<float>(std::fmod(elapsed*360.0,8000.0)));
+    }
+  }
+  void beginRendererBenchmark() {
+    diagnosticThread=std::thread([this]{
+      const auto start=Clock::now();auto next=start;
+      while(!diagnosticStop) {
+        const double elapsed=ms(Clock::now()-start)/1000.0;
+        const bool idle=options.rendererBenchmark=="idle";
+        const bool shouldPost=!idle || (elapsed>=3 && !idleStarted_) || elapsed>=3+options.sampleSeconds;
+        if(shouldPost && !benchmarkPostPending_.exchange(true)) {
+          if(elapsed>=3)idleStarted_=true;
+          if(!window.post([this,elapsed]{benchmarkPostPending_=false;rendererBenchmarkTick(elapsed);}))break;
+        }
+        next+=std::chrono::microseconds(16667);
+        if(next<Clock::now())next=Clock::now();
+        std::this_thread::sleep_until(next);
+      }
+    });
+  }
+  bool idleStarted_=false; // Accessed only by the bounded benchmark worker.
   void begin() {
+    window.prepareLayoutSnapshot();updateRendererLabel();
+    if(!options.rendererBenchmark.empty()){if(!editing)requestAnimationFrame();beginRendererBenchmark();return;}
     if(options.warmEditor && !editing){showEditor();window.prepareLayoutSnapshot();hideEditor();window.prepareLayoutSnapshot();}
     requestAnimationFrame();
     if(options.connectionStress>0){window.requestAnimationFrame([this](double){stressStep();});return;}
@@ -719,6 +776,7 @@ public:
                         : message);
   }
   bool tickAnimations(double now) override {
+    updateRendererLabel();
     if (!editing) updateMetrics();
     bool changed = View::tickAnimations(now);
     if (m.running) {
@@ -728,7 +786,9 @@ public:
     return changed;
   }
   void paint(Canvas &canvas) override {
+    RendererBenchmark::PaintSample sample(rendererBenchmark_);
     if(editing){
+      canvas.fillRect(frame(),BG);
       ++editorPaints;const auto begin=Clock::now();View::paint(canvas);
       if(options.connectionStress>50 && stressStep_>=150) {
         stressPaints_.push_back(ms(Clock::now()-begin));
@@ -771,7 +831,16 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
           throw std::runtime_error("Missing argument value");
         return argv[++i];
       };
-      if (arg == L"--load") {
+      if (arg == L"--renderer") {
+        const auto value=next();
+        if(value!=L"auto" && value!=L"gpu" && value!=L"cpu")throw std::runtime_error("Renderer must be auto, gpu or cpu");
+        o.renderer=std::string(value.begin(),value.end());
+      } else if (arg == L"--renderer-benchmark") {
+        const auto value=next();
+        if(value!=L"idle" && value!=L"table" && value!=L"chart" && value!=L"particles")throw std::runtime_error("Invalid renderer benchmark scene");
+        o.rendererBenchmark=std::string(value.begin(),value.end());
+      } else if(arg==L"--sample-seconds")o.sampleSeconds=std::stod(next());
+      else if (arg == L"--load") {
         auto s = next();
         if (s != L"light" && s != L"medium" && s != L"heavy")
           throw std::runtime_error("Invalid load");
@@ -840,6 +909,14 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
     }
     if (o.benchmark > 0 && !o.snapshot.empty())
       throw std::runtime_error("Capture and benchmark must run separately");
+    if(!std::isfinite(o.sampleSeconds) || o.sampleSeconds<1 || o.sampleSeconds>60)throw std::runtime_error("Sample seconds must be 1..60");
+    if(!o.rendererBenchmark.empty()) {
+      if(o.benchmark>0 || o.dev || !o.snapshot.empty() || o.editorIdle>0 || o.connectionStress>0)throw std::runtime_error("Renderer benchmark must run standalone with dev and capture disabled");
+      o.editor=o.connections=o.rendererBenchmark=="idle" || o.rendererBenchmark=="table";
+      o.gallery=false;o.tab=o.rendererBenchmark=="chart"?1:o.rendererBenchmark=="particles"?2:0;
+    }
+    // Auto inherits the process environment. Explicit modes override it before initialization.
+    if(o.renderer!="auto" && !SetEnvironmentVariableW(L"ONEUI_ENABLE_GPU",o.renderer=="cpu"?L"0":L"1"))throw std::runtime_error("Unable to select renderer");
     WindowOptions wo;
     wo.title = std::wstring(L"FORM / LAB — OneUI 性能实验台 · ")+(o.templateEntry?L".one":L"C++")+(o.dev?L" · 样式预览":L"");
     wo.width = o.width;

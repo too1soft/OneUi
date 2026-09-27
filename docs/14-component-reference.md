@@ -157,6 +157,8 @@ sidebar，适合承载全窗口状态与传输信息。
 
 ### WindowTitleBar
 
+`variant` 只控制 CSS。自定义标题／按钮排列、线条图标和椭圆外观使用 C++／C／Rust 共用的 [TitleBarPresentation](42-titlebar-presentation.md)，绘制与命中使用同一份布局。
+
 自绘标题栏支持 icon、caption、minimize/maximize/close、variant、leading 与 accessory：
 
 ```cpp

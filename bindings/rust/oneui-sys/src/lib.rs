@@ -11,7 +11,7 @@ mod types;
 pub use ffi::*;
 pub use types::*;
 
-pub const UTF8_ABI_VERSION: c_uint = 33;
+pub const UTF8_ABI_VERSION: c_uint = 39;
 
 /// Native C wchar_t, not a fixed-width UTF-16 buffer. Prefer UTF-8 entrypoints.
 #[cfg(windows)]
@@ -1653,3 +1653,6 @@ extern "C" {
     pub fn oneui_clipboard_set_text_utf8(text: OneUiUtf8String) -> c_int;
     pub fn oneui_clipboard_get_text_utf8(buffer: *mut c_char, buffer_len: usize) -> usize;
 }
+
+mod title_bar_presentation;
+pub use title_bar_presentation::*;

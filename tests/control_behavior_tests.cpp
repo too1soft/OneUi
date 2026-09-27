@@ -627,7 +627,7 @@ void testTabsInlineEditingUsesNativeTextAndStableLifecycle() {
 
 void testTitleBarRoutesInlineEditorFocusAndTextThroughTheRealViewTree() {
     oneui::View root;
-    auto title = std::make_shared<oneui::WindowTitleBar>(L"iShell Pro");
+    auto title = std::make_shared<oneui::WindowTitleBar>(L"OneUI Demo");
     auto tabs = std::make_shared<oneui::Tabs>();
     auto other = std::make_shared<oneui::Button>(L"Other");
     tabs->setItems({L"Original"});
@@ -4310,7 +4310,7 @@ void testVirtualListPaintsRichOperationalRows() {
     list.setFrame(oneui::Rect{0.0f, 0.0f, 320.0f, 72.0f});
     oneui::VirtualListItem item;
     item.title = L"ERP management";
-    item.detail = L"erp-demo.wangyunchuan.cn";
+    item.detail = L"erp-demo.example.test";
     item.badge = L"HTTP";
     item.trailing = L"Running";
     item.indicatorVisible = true;

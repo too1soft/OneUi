@@ -21,6 +21,10 @@ Win32 `gpuRenderingEnabled()` 默认返回启用；`initGPU()` 尝试创建 Open
 核心控件通过 `Canvas` 绘制，不接触 OpenGL/Skia 私有对象。
 GPU 和软件路径共用逻辑像素、DPI、布局、文字及输入契约。
 
+## 直接读取实际后端
+
+`Window::rendererInfo()` 提供 UI 线程只读快照，包括实际 backend、device、reason、交换间隔状态以及累计 CPU 侧绘制计数／时间。首次 surface 成功创建之前为 Unknown；不因调用查询而重绘。实验台支持 `run.ps1 -Renderer auto|gpu|cpu`（启动时选择）。接口边界、失败原因及[可复现 CPU/GPU 对比](41-renderer-selection-and-product-boundaries.md)见专题。
+
 ## 运行时排查
 
 以下 PowerShell 命令在仓库根目录执行，只影响当前 shell 及后续启动的进程：

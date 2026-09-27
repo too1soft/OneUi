@@ -39,7 +39,7 @@ void testOperationalWorkspacePrimitivesAbi() {
     }
 
     const std::string title = "ERP management";
-    const std::string detail = "erp-demo.wangyunchuan.cn";
+    const std::string detail = "erp-demo.example.test";
     const std::string badge = "HTTP";
     const std::string trailing = "Running";
     const OneUiRichListItemUtf8 richItem{

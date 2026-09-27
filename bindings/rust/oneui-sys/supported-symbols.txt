@@ -467,3 +467,4 @@ oneui_table_set_column_dividers_visible
 oneui_stack_set_direction
 oneui_widget_set_on_size_changed
 oneui_popup_set_on_closed
+oneui_title_bar_set_presentation

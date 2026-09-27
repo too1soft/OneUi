@@ -109,6 +109,14 @@ Measured 2026-09-27 on Windows 10, Ryzen 9 9950X3D (32 logical processors), RTX 
 
 No material template runtime overhead was observed in this run; three rounds do not establish significance for small differences. Paint measures CPU widget traversal, not GPU time or displayed FPS. Idle results apply to the connection page; chart/particle scenes continuously animate. This is not a GPUI comparison or a low-end hardware claim. [Raw data, hashes and reproduction](docs/40-declarative-stage-validation.md#性能测量).
 
+### CPU or GPU?
+
+Windows prefers GPU and falls back to software. Start the lab with `-Renderer gpu`, `-Renderer cpu`, or `-Renderer auto` (inherits the environment); restart to switch. The window reports the actual backend and device/reason.
+
+On the same build, three table-scroll rounds averaged **7.62 / 0.95ms CPU-side paint time** and **53.50 / 120.52MiB working set** for CPU / GPU. Both modes produced no additional idle connection-page paints. GPU rendering was faster but used more process memory. These are neither GPU timestamps nor display FPS. Run `examples/performance_lab/compare-renderers.ps1 -Rounds 3 -Seconds 5`; see the [four-scene results and raw data](docs/41-renderer-selection-and-product-boundaries.md).
+
+Custom caption geometry and line-art glyphs use [TitleBarPresentation](docs/42-titlebar-presentation.md) in C++/C/Rust. CSS variants no longer select product-specific geometry.
+
 ## Scope and maturity
 
 The declarative authoring/default component stage delivers shared bindings and commands, template compilation, strict CSS diagnostics and hot reload, light/dark themes, two densities, responsive forms and runnable examples. Real **125%/150% system DPI, cross-monitor movement and native Chinese IME candidate windows** remain unverified. Internal layout/composition tests do not substitute for those checks. Particle drawing/submission optimization is separate future work.

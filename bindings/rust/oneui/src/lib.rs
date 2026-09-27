@@ -11668,3 +11668,6 @@ mod test_runner;
 pub fn run_native_tests() -> std::process::ExitCode {
     binding_tests::run()
 }
+
+mod title_bar_presentation;
+pub use title_bar_presentation::*;

@@ -3,11 +3,35 @@
 #include "oneui/icon.h"
 
 #include <algorithm>
+#include <cmath>
 #include "internal/ui_clock.h"
 #include <utility>
 
 namespace oneui {
 namespace {
+
+bool validRect(Rect r) {
+    return std::isfinite(r.x) && std::isfinite(r.y) && std::isfinite(r.width) &&
+        std::isfinite(r.height) && r.width >= 0 && r.height >= 0;
+}
+bool validGlyph(const CanvasPath& path) {
+    if (path.commands.size() > 64) return false;
+    for (const auto& c : path.commands) {
+        if (c.verb != CanvasPathVerb::MoveTo && c.verb != CanvasPathVerb::LineTo && c.verb != CanvasPathVerb::Close) return false;
+        if (!std::isfinite(c.first.x) || !std::isfinite(c.first.y)) return false;
+    }
+    return true;
+}
+void paintCaptionGlyph(Canvas& canvas, const CanvasPath& source, Rect rect, Color color, float strokeWidth) {
+    CanvasPath path;
+    path.commands.reserve(source.commands.size());
+    for (auto command : source.commands) {
+        command.first = {rect.x + command.first.x * rect.width / 16.0f,
+                         rect.y + command.first.y * rect.height / 16.0f};
+        path.commands.push_back(command);
+    }
+    canvas.strokePath(path, color, strokeWidth * rect.width / 16.0f, false);
+}
 
 StyleSheet defaultTitleBarSheet() {
     StyleSheet sheet;
@@ -139,8 +163,31 @@ void WindowTitleBar::setVariant(std::string variant) {
     }
     const auto previous = titleBarLayout();
     variant_ = std::move(variant);
+    layoutChildren();
     beginButtonTransitions(previous, titleBarLayout());
     invalidate();
+}
+
+bool WindowTitleBar::setPresentation(const TitleBarPresentation* value) {
+    if (value) {
+        if (!validRect(value->logo) || !validRect(value->logoIcon) || !validRect(value->title) ||
+            !validRect(value->leading) || !validRect(value->accessory) ||
+            !std::isfinite(value->logoStrokeWidth) || value->logoStrokeWidth < 0 ||
+            !std::isfinite(value->titleFontSize) || value->titleFontSize <= 0) return false;
+        for (const auto& button : value->buttons) {
+            if (!validRect(button.frame) || !validRect(button.visual) || !validRect(button.icon) ||
+                !validGlyph(button.glyph) || !validGlyph(button.maximizedGlyph) ||
+                !std::isfinite(button.strokeWidth) || button.strokeWidth < 0 ||
+                !std::isfinite(button.cornerRadius)) return false;
+        }
+    }
+    std::optional<TitleBarPresentation> next;
+    if (value) next = *value; // Finish allocations before changing live state.
+    resetInteractionState(); // Geometry changes must cancel an in-flight press.
+    presentation_ = std::move(next);
+    layoutChildren();
+    invalidate();
+    return true;
 }
 
 void WindowTitleBar::setStyleSheet(std::shared_ptr<StyleSheet> sheet) {
@@ -235,7 +282,27 @@ TitleBarBridgeLayout WindowTitleBar::titleBarLayout() const {
     config.logoNode = StyleNode{"icon", logoClasses, StyleStateNone};
     config.buttonNode = StyleNode{"button", buttonClasses, StyleStateNone};
     config.closeButtonNode = StyleNode{"button", closeClasses, StyleStateNone};
-    return computeTitleBarBridgeLayout(sheet, config);
+    auto layout = computeTitleBarBridgeLayout(sheet, config);
+    if (presentation_) {
+        const auto& p = *presentation_;
+        const Point origin{frame().x, frame().y};
+        layout.logo = offset(p.logo, origin);
+        layout.logoIcon = offset(p.logoIcon, origin);
+        layout.title = offset(p.title, origin);
+        if (p.hideLogoBorder) layout.logoStyle.borderWidth = 0.0f;
+        for (auto& button : layout.buttons) {
+            const auto& spec = p.buttons[buttonIndex(button.id)];
+            button.frame = offset(spec.frame, origin);
+            button.visual = offset(spec.visual, origin);
+            button.icon = offset(spec.icon, origin);
+            if (spec.cornerRadius >= 0) button.style.radius = spec.cornerRadius;
+        }
+    }
+    return layout;
+}
+
+bool WindowTitleBar::hitsWindowButton(Point point) const {
+    return visible() && !disabled() && hitTestTitleBarButton(titleBarLayout(), point) != TitleBarButtonId::None;
 }
 
 Rect WindowTitleBar::windowButtonFrame(TitleBarButtonId id) const {
@@ -260,22 +327,38 @@ void WindowTitleBar::paint(Canvas& canvas) {
 
         const Color logoColor = layout.logoStyle.foreground.value_or(Color{17, 17, 20});
         const Color logoAccent = layout.logoStyle.background.color.value_or(Color{123, 212, 198});
-        paintIcon(canvas, iconSymbol_, layout.logoIcon, logoColor, logoAccent, layout.logoStyle.borderWidth.value_or(1.5f));
+        paintIcon(canvas, iconSymbol_, layout.logoIcon, logoColor, logoAccent, presentation_ ? presentation_->logoStrokeWidth : layout.logoStyle.borderWidth.value_or(1.5f));
         const Color titleColor = layout.titleBarStyle.foreground.value_or(Color{32, 33, 36});
-        canvas.drawTextEllipsized(title_, layout.title, titleColor, 12.0f, TextAlign::Left);
+        canvas.drawTextEllipsized(title_, layout.title, titleColor, presentation_ ? presentation_->titleFontSize : 12.0f, TextAlign::Left);
     }
 
     for (const auto& button : layout.buttons) {
         const StyleBox style = visualButtonStyle(button.id, button.style);
-        paintStyleBox(canvas, button.visual, style);
-        const Color iconColor = style.foreground.value_or(button.iconColor);
-        paintIcon(canvas, button.symbol, button.icon, iconColor, Color{0, 0, 0, 0}, 1.5f);
+        if (presentation_) {
+            const auto& spec = presentation_->buttons[buttonIndex(button.id)];
+            if (spec.ellipse) canvas.fillEllipse(button.visual, pressedButton_ == button.id ? spec.pressedFill : spec.fill);
+            else paintStyleBox(canvas, button.visual, style);
+            if (spec.glyphOnGroupHover && hoveredButton_ == TitleBarButtonId::None) continue;
+            const auto color = spec.glyphUsesForeground ? style.foreground.value_or(button.iconColor) : spec.glyphColor;
+            const auto& glyph = maximized_ && !spec.maximizedGlyph.empty() ? spec.maximizedGlyph : spec.glyph;
+            if (!glyph.empty()) paintCaptionGlyph(canvas, glyph, button.icon, color, spec.strokeWidth);
+            else paintIcon(canvas, button.symbol, button.icon, color, Color{0,0,0,0}, 1.5f);
+        } else {
+            paintStyleBox(canvas, button.visual, style);
+            paintIcon(canvas, button.symbol, button.icon, style.foreground.value_or(button.iconColor), Color{0,0,0,0}, 1.5f);
+        }
     }
     View::paint(canvas);
 }
 
 void WindowTitleBar::layoutChildren() {
     const auto layout = titleBarLayout();
+    if (presentation_) {
+        const Point origin{frame().x, frame().y};
+        if (leading_) leading_->setFrame(offset(presentation_->leading, origin));
+        if (accessory_) accessory_->setFrame(offset(presentation_->accessory, origin));
+        return;
+    }
     const float rightEdge = layout.buttons.empty()
         ? frame().x + frame().width - 12.0f
         : layout.buttons.front().visual.x - 10.0f;
@@ -354,21 +437,14 @@ bool WindowTitleBar::onMouseUp(const MouseEvent& event) {
     if (pressed != released) {
         return true;
     }
-    if (pressed == TitleBarButtonId::Minimize && onMinimize_) {
-        onMinimize_();
-    } else if (pressed == TitleBarButtonId::Maximize && onMaximize_) {
-        onMaximize_();
-    } else if (pressed == TitleBarButtonId::Close) {
-        const auto callback = onClose_;
-        if (callback) {
-            callback();
-        }
-    }
+    activateWindowButton(pressed);
     return true;
 }
 
 bool WindowTitleBar::tickAnimations(double nowMs) {
-    bool running = false;
+    // Custom leading/accessory controls own transitions too. Omitting the
+    // View traversal freezes their theme/hover colors at the first frame.
+    bool running = View::tickAnimations(nowMs);
     for (std::size_t index = 0; index < buttonBackgroundTransitions_.size(); ++index) {
         running = buttonBackgroundTransitions_[index].tick(nowMs) || running;
         running = buttonForegroundTransitions_[index].tick(nowMs) || running;

@@ -520,7 +520,7 @@ void onIndexChanged(int index, void* userData) {
 }
 
 void testUtf8AbiRoundTripsUnicodeText() {
-    const std::string title = "iShellPro \xE9\xBA\x92\xE9\xBA\x9F \xF0\x9F\x9A\x80";
+    const std::string title = "OneUI Demo \xE9\xBA\x92\xE9\xBA\x9F \xF0\x9F\x9A\x80";
     const std::string text = "\xE5\x85\xB4\xE4\xB8\x9A\xE9\x93\xB6\xE8\xA1\x8C SSH \xF0\x9F\x94\x90";
 
     expectTrue("utf8 abi version", oneui_utf8_abi_version() == ONEUI_UTF8_ABI_VERSION);

@@ -13,6 +13,27 @@
 
 namespace oneui {
 
+// Explicit local-coordinate presentation. The application owns responsive
+// geometry; painting, hit testing and native window actions share these frames.
+// A missing presentation preserves the existing default title bar.
+struct TitleBarButtonPresentation {
+    Rect frame{}, visual{}, icon{};
+    CanvasPath glyph, maximizedGlyph; // 16 x 16 coordinates; empty uses the built-in icon.
+    float strokeWidth = 1.5f; // Scaled from the 16-unit glyph to icon.width.
+    float cornerRadius = -1.0f; // Negative inherits CSS.
+    bool ellipse = false;
+    bool glyphOnGroupHover = false;
+    bool glyphUsesForeground = true;
+    Color fill{0,0,0,0}, pressedFill{0,0,0,0}, glyphColor{0,0,0,255};
+};
+struct TitleBarPresentation {
+    Rect logo{}, logoIcon{}, title{}, leading{}, accessory{};
+    float logoStrokeWidth = 1.5f, titleFontSize = 12.0f;
+    bool hideLogoBorder = false;
+    // Fixed semantic order: minimize, maximize/restore, close. Visual order is free.
+    std::array<TitleBarButtonPresentation, 3> buttons{};
+};
+
 class ONEUI_API WindowTitleBar final : public View {
 public:
     explicit WindowTitleBar(std::wstring title = {});
@@ -21,9 +42,13 @@ public:
     void setIconSymbol(IconSymbol symbol);
     void setMaximized(bool maximized);
     // setVariant 给标题栏挂一个皮肤变体（如 "dark"）：非空时在各样式节点上追加
-    // "titlebar--<variant>" / "titlebar-icon--<variant>" / "window-button--<variant>" 类，
-    // 供样式表按类换肤（如登录页深色标题栏）；空则保持默认皮肤。
+    // "chrome-<variant>" 类，
+    // 供样式表按类换肤（如登录页深色标题栏）；空则保持默认皮肤。几何独立配置。
     void setVariant(std::string variant);
+    // Copies and validates atomically; invalid input leaves the previous layout.
+    // nullptr restores default geometry. Call on the UI thread after size changes.
+    bool setPresentation(const TitleBarPresentation* presentation);
+    bool hitsWindowButton(Point point) const;
     Rect windowButtonFrame(TitleBarButtonId id) const;
     bool activateWindowButton(TitleBarButtonId id);
     bool maximized() const { return maximized_; }
@@ -52,6 +77,7 @@ private:
 
     std::wstring title_;
     std::string variant_;
+    std::optional<TitleBarPresentation> presentation_;
     IconSymbol iconSymbol_ = IconSymbol::BrandBloom;
     std::shared_ptr<StyleSheet> styleSheet_;
     std::shared_ptr<Widget> leading_;

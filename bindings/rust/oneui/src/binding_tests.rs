@@ -714,7 +714,7 @@ fn window_raw_key_callback_does_not_consume_null_or_panicking_handlers() {
 fn creates_hidden_window_through_utf8_abi() {
     let _guard = window_test_lock().lock().expect("window test lock");
     let window = Window::new(&WindowOptions {
-        title: "iShellPro 麒麟 🚀".to_owned(),
+        title: "OneUI Demo 麒麟 🚀".to_owned(),
         ..WindowOptions::default()
     })
     .expect("OneUI window should be created through the UTF-8 ABI");
@@ -850,7 +850,7 @@ fn mounts_rust_composed_content_into_a_hidden_window() {
         bottom: 24.0,
         left: 24.0,
     });
-    let label = Label::new("iShell Pro").expect("label should be created");
+    let label = Label::new("OneUI Demo").expect("label should be created");
     label.set_font_size(20.0);
     content.add(label.as_widget());
     window.set_content(content.as_widget());
@@ -1319,7 +1319,7 @@ fn mounts_rich_virtual_list_rows_and_title_bar_leading_content() {
     let list = VirtualList::new().expect("virtual list should be created");
     let row = VirtualListItem {
         title: "ERP management".to_owned(),
-        detail: "erp-demo.wangyunchuan.cn".to_owned(),
+        detail: "erp-demo.example.test".to_owned(),
         badge: "HTTP".to_owned(),
         trailing: "Running".to_owned(),
         indicator_color: Some(Color::rgb(34, 197, 94)),

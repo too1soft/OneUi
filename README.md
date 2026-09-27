@@ -140,6 +140,20 @@ CSS 修改成功后整体替换；失败保留上一份有效样式，输入、�
 
 本次未观察到明显的模板运行开销；三轮结果不足以证明微小差异有统计意义。paint 是 CPU 侧控件绘制遍历，不是 GPU 执行时间或屏幕帧率。空闲结果仅针对连接页，图表／粒子页本来就持续动画。这不是 GPUI 对比，也不代表低配机器性能。 [原始数据、哈希与复现步骤](docs/40-declarative-stage-validation.md#性能测量)。
 
+### CPU 与 GPU 怎么选？
+
+Windows 默认尝试 GPU，失败回退软件绘制。实验台可以启动时选择，窗口会显示**实际后端**；切换需重启：
+
+```powershell
+.\examples\performance_lab\run.ps1 -Renderer gpu
+.\examples\performance_lab\run.ps1 -Renderer cpu
+.\examples\performance_lab\compare-renderers.ps1 -Rounds 3 -Seconds 5
+```
+
+本机同一构建、三轮实测：表格滚动 CPU / GPU 每次绘制 **7.62 / 0.95ms**，进程工作集 **53.50 / 120.52MiB**；空闲连接页两种模式均无额外绘制。GPU 更快，但进程内存更高。这是 CPU 侧绘制耗时，不能等同 GPU 时间或显示帧率。完整的[四场景数据、环境与原始记录](docs/41-renderer-selection-and-product-boundaries.md)解释了测量口径和波动。
+
+标题栏的产品外观也可通过 [C++／C／Rust 通用配置](docs/42-titlebar-presentation.md)提供，主题名称只控制 CSS，核心不按产品名称切换几何。
+
 ## 当前阶段与兼容性
 
 声明式开发与默认组件阶段已交付：共享绑定／命令、模板编译、严格样式诊断与热更新、浅／深主题、两档密度、自动表单布局，以及可运行和可回归的示例。真实系统 **125%／150% DPI、跨屏、中文输入法候选窗口** 仍待验收；内部布局／组合输入测试不替代这些检查。大量粒子的绘制与提交优化仍是后续任务。

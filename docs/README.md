@@ -69,6 +69,15 @@ roadmap 或差距分析当成现状。
 - [Overlay fill/input E2E 案例](30-overlay-fill-and-input-e2e-case.md)
 - [iShellPro 原生就绪性](32-ishellpro-native-readiness.md)
 
+## 标题栏配置
+
+- [通用标题栏 presentation、C++／C／Rust 接入与迁移边界](42-titlebar-presentation.md)
+
+## 渲染选择与性能证据
+
+- [启动选择、实际后端诊断、四场景 CPU/GPU 原始对比与产品边界检查](41-renderer-selection-and-product-boundaries.md)
+- [渲染状态展示的局部视觉复核](renderer-design-review.md)
+
 ## 设计与演进记录
 
 以下文档用于解释历史决策、规划或当时的缺口。实现可能已经超过其中描述：
