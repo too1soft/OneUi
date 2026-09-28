@@ -11,7 +11,7 @@ set(ONEUI_SOURCE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../.." CACHE PATH "OneUI sour
 set(ONEUI_ENABLE_YOGA ON CACHE BOOL "" FORCE)
 add_subdirectory("${ONEUI_SOURCE_ROOT}" sdk EXCLUDE_FROM_ALL)
 # The private SkMesh experiment is not compiled into normal SDK builds.
-target_compile_definitions(oneui_platform_win32 PRIVATE ONEUI_CIRCLE_MESH_EXPERIMENT=1)
+target_compile_definitions(oneui_platform_win32 PRIVATE ONEUI_CIRCLE_MESH_EXPERIMENT=1 ONEUI_LAB_RENDER_TESTS=1)
 include("${ONEUI_SOURCE_ROOT}/cmake/OneUIView.cmake")
 add_executable(oneui-performance-lab WIN32 main.cpp)
 target_link_libraries(oneui-performance-lab PRIVATE oneui psapi)
@@ -57,3 +57,9 @@ target_include_directories(oneui-particle-tests PRIVATE "${ONEUI_SOURCE_ROOT}/te
 foreach(target oneui-performance-lab oneui-particle-tests)
   target_include_directories(${target} PRIVATE "${ONEUI_SOURCE_ROOT}/src")
 endforeach()
+
+add_executable(oneui-lifecycle-tests lifecycle_tests.cpp)
+target_link_libraries(oneui-lifecycle-tests PRIVATE oneui psapi)
+target_compile_options(oneui-lifecycle-tests PRIVATE /utf-8)
+target_compile_definitions(oneui-lifecycle-tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+target_include_directories(oneui-lifecycle-tests PRIVATE "${ONEUI_SOURCE_ROOT}/src")

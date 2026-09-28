@@ -3613,7 +3613,14 @@ private:
             return;
         }
 
+        // Fault injection is compiled only into the performance-lab test renderer.
+#if defined(ONEUI_LAB_RENDER_TESTS)
+        wchar_t failInit[2]{};
+        const bool injectedFailure = GetEnvironmentVariableW(L"ONEUI_LAB_FAIL_GPU_INIT",failInit,2)>0 && failInit[0]==L'1';
+        HGLRC tempContext = injectedFailure ? nullptr : wglCreateContext(glDC_);
+#else
         HGLRC tempContext = wglCreateContext(glDC_);
+#endif
         if (!tempContext) {
             rendererInfo_.reason = "opengl-context-failed";
             ReleaseDC(hwnd_, glDC_);

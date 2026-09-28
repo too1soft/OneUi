@@ -80,6 +80,7 @@ roadmap 或差距分析当成现状。
 - [粒子预计算、保序批量绘制与 CPU/GPU A/B 实验](44-particle-drawing-optimization.md)
 - [粒子网格实验第一版：历史性能与像素差异](45-particle-mesh-experiment.md)
 - [粒子网格画质修正：严格像素回归与重新测量](46-particle-mesh-parity.md)
+- [性能实验台默认 Mesh：30 分钟稳定性与回退验收](47-particle-mesh-default.md)
 - [渲染状态展示的局部视觉复核](renderer-design-review.md)
 
 ## 设计与演进记录

@@ -1,0 +1,6 @@
+particle_mode=mesh
+backend=raster
+device=
+reason=opengl-context-failed
+particles=10000
+startup_mesh_fallbacks=113

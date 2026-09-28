@@ -1,6 +1,7 @@
 #include "plots.hpp"
 #include "connection_workspace.hpp"
 #include "renderer_benchmark.hpp"
+#include "renderer_soak.hpp"
 #include <iostream>
 #include <oneui/layout/panel.h>
 #include <shellapi.h>
@@ -91,7 +92,8 @@ struct Options {
   double benchmark = 0;
   std::string renderer = "auto", rendererBenchmark;
   ParticleMode particleMode=DEFAULT_PARTICLE_MODE;
-  double sampleSeconds = 5;
+  double sampleSeconds = 5, stabilitySeconds=0;
+  bool stabilityExercise=false;
   bool exitAfter = false, snapshotExit = false, traceInput = false;
   bool editor = false, warmEditor = false, editorLight = false, editorDark=false, editorInvalid = false;
   bool connections = false, gallery=false, compact=false;
@@ -110,6 +112,9 @@ class Lab final : public LayoutView {
   Options options;
   Model m;
   RendererBenchmark rendererBenchmark_;
+  RendererSoak soak_;
+  int exerciseStep_=-1;
+  std::ofstream exerciseLog_;
   Clock::time_point rendererLabelTime_{};
   std::atomic<bool> benchmarkPostPending_{false};
   bool rendererSampling_ = false;
@@ -617,9 +622,72 @@ public:
       }
     });
   }
+  void stabilityTick(double elapsed) {
+    if(diagnosticStop)return;
+    try {
+      if(elapsed<3)return;
+      const double sampled=elapsed-3;
+      if(!soak_.active)soak_.begin(window,m,options.output);
+      if(sampled-soak_.previousSeconds>=5 || sampled>=options.stabilitySeconds)
+        soak_.sample(window,m,sampled);
+      if(options.stabilityExercise) {
+        const int step=int(sampled/2);
+        if(step!=exerciseStep_) {
+          exerciseStep_=step;
+          switch(step%10) {
+            case 0: setTab(2);break;
+            case 1: toggle();break;
+            case 2: toggle();break;
+            case 3: setTab(1);break;
+            case 4: setTab(3);break;
+            case 5: showEditor();break;
+            case 6: {
+              window.setContentScale(1.5f);
+              auto hwnd=static_cast<HWND>(window.nativeHandle());RECT outer{},client{};
+              if(!GetWindowRect(hwnd,&outer) || !GetClientRect(hwnd,&client))throw std::runtime_error("Resize diagnostic failed");
+              if(!SetWindowPos(hwnd,nullptr,0,0,640+outer.right-outer.left-client.right,
+                  600+outer.bottom-outer.top-client.bottom,SWP_NOMOVE|SWP_NOZORDER|SWP_NOACTIVATE))throw std::runtime_error("Resize failed");
+              break;
+            }
+            case 7: hideEditor();break;
+            case 8: window.setContentScale(1.25f);break;
+            case 9: window.setContentScale(1);setTab(2);break;
+          }
+          if(m.running != !(step%10==1 || step%10==5 || step%10==6) ||
+             editing != (step%10==5 || step%10==6))throw std::runtime_error("Interaction state mismatch");
+          if(!exerciseLog_.is_open()) {
+            exerciseLog_.open(options.output/"interactions.csv");exerciseLog_.exceptions(std::ios::failbit|std::ios::badbit);
+            exerciseLog_<<"step,seconds,tab,editing,running,width,height,mesh_draws,mesh_fallbacks\n";
+          }
+          exerciseLog_<<step<<','<<sampled<<','<<m.tab<<','<<editing<<','<<m.running<<','
+            <<window.clientSize().width<<','<<window.clientSize().height<<','<<m.meshDraws<<','<<m.meshFallbacks<<'\n';
+          exerciseLog_.flush();
+        }
+      }
+      if(sampled>=options.stabilitySeconds) {
+        std::ofstream done(options.output/"stability-complete.txt");done<<"seconds="<<sampled<<"\nexercise_steps="<<exerciseStep_+1<<'\n';
+        diagnosticStop=true;window.close();
+      }
+    } catch(const std::exception& error) {
+      std::cerr<<error.what()<<'\n';result=2;diagnosticStop=true;window.close();
+    }
+  }
+  void beginStability() {
+    diagnosticThread=std::thread([this]{
+      const auto start=Clock::now();
+      while(!diagnosticStop) {
+        const double elapsed=ms(Clock::now()-start)/1000;
+        if(!benchmarkPostPending_.exchange(true) && !window.post([this,elapsed]{
+          benchmarkPostPending_=false;stabilityTick(elapsed);
+        }))break;
+        for(int i=0;i<5 && !diagnosticStop;++i)std::this_thread::sleep_for(std::chrono::milliseconds(50));
+      }
+    });
+  }
   bool idleStarted_=false; // Accessed only by the bounded benchmark worker.
   void begin() {
     window.prepareLayoutSnapshot();updateRendererLabel();
+    if(options.stabilitySeconds>0){requestAnimationFrame();beginStability();return;}
     if(!options.rendererBenchmark.empty()){if(!editing)requestAnimationFrame();beginRendererBenchmark();return;}
     if(options.warmEditor && !editing){showEditor();window.prepareLayoutSnapshot();hideEditor();window.prepareLayoutSnapshot();}
     requestAnimationFrame();
@@ -853,6 +921,8 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
         if(value!=L"idle" && value!=L"table" && value!=L"chart" && value!=L"particles")throw std::runtime_error("Invalid renderer benchmark scene");
         o.rendererBenchmark=std::string(value.begin(),value.end());
       } else if(arg==L"--sample-seconds")o.sampleSeconds=std::stod(next());
+      else if(arg==L"--stability-seconds")o.stabilitySeconds=std::stod(next());
+      else if(arg==L"--stability-exercise")o.stabilityExercise=true;
       else if (arg == L"--load") {
         auto s = next();
         if (s != L"light" && s != L"medium" && s != L"heavy")
@@ -927,6 +997,13 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
       if(o.benchmark>0 || o.dev || !o.snapshot.empty() || o.editorIdle>0 || o.connectionStress>0)throw std::runtime_error("Renderer benchmark must run standalone with dev and capture disabled");
       o.editor=o.connections=o.rendererBenchmark=="idle" || o.rendererBenchmark=="table";
       o.gallery=false;o.tab=o.rendererBenchmark=="chart"?1:o.rendererBenchmark=="particles"?2:0;
+    }
+    if(!std::isfinite(o.stabilitySeconds) || o.stabilitySeconds<0 || o.stabilitySeconds>3600 ||
+       (o.stabilityExercise && o.stabilitySeconds<20))throw std::runtime_error("Invalid stability duration");
+    if(o.stabilitySeconds>0) {
+      if(o.benchmark>0 || !o.rendererBenchmark.empty() || o.dev || !o.snapshot.empty() || o.editorIdle>0 || o.connectionStress>0)
+        throw std::runtime_error("Stability diagnostics must run standalone");
+      o.editor=o.connections=o.gallery=false;o.tab=2;
     }
     // Auto inherits the process environment. Explicit modes override it before initialization.
     if(o.renderer!="auto" && !SetEnvironmentVariableW(L"ONEUI_ENABLE_GPU",o.renderer=="cpu"?L"0":L"1"))throw std::runtime_error("Unable to select renderer");

@@ -28,9 +28,11 @@
 
 `-Load heavy` 将粒子提高到 10,000、曲线提高到每条 4,000 点。`summary.csv` 同时记录采样末尾的 Skia 字体／资源／GPU 缓存；这些不是全部进程内存或显存，`skia_gpu_cache_limit_mib` 只是预算。字段说明、实测和限制见[高压缓存诊断](../../docs/43-heavy-renderer-diagnostics.md)。
 
-粒子默认使用预计算与保序批量入口的组合方案。`-ParticleMode reference` 可恢复原始算法作对照；其余选项为 `precomputed`、`batch`、`combined`。自动比较四种模式：`.\examples\performance_lab\compare-particles.ps1 -Rounds 5 -Seconds 5`。本机 10,000 粒子 GPU 每次绘制降低 6.4%，画面像素对比一致；这是调用开销优化，不是单次 GPU draw call。详见[结果与复现](../../docs/44-particle-drawing-optimization.md)。
+粒子默认选择 **mesh 索引网格**：GPU 走网格，软件或不支持的输入自动回退到保序批量绘制。`-ParticleMode combined` 选择旧组合方案作对照；其余选项为 `reference`、`precomputed`、`batch`、`mesh`。普通 SDK 控件不受此 Demo 默认值影响。
 
-另有显式 `-ParticleMode mesh` 网格实验，修正版已通过本机严格 RGB 门槛，仍保留为显式实验，默认不启用。比较当前默认与实验：`.\examples\performance_lab\compare-particles.ps1 -Modes combined,mesh -Rounds 5 -Seconds 5`。CPU 自动回退；CSV 分别记录采样区间和包含预热的 mesh 计数。[当前运行、画质门槛和完整数据](../../docs/46-particle-mesh-parity.md)。
+本机修正版已通过 18 + 36 个严格 GPU RGB 场景；上一轮五次 A/B 的 CPU 侧绘制耗时为 **5.23 → 4.17ms，降低约 20.4%**。对比两个方案：`.\examples\performance_lab\compare-particles.ps1 -Modes combined,mesh -Rounds 5 -Seconds 5`。[画质与性能原始数据](../../docs/46-particle-mesh-parity.md)。
+
+新增长期验证脚本：`.\examples\performance_lab\test-stability.ps1 -Seconds 1800`，流式记录内存、资源计数和绘制耗时；加 `-Seconds 20 -Exercise` 可单独检查页面、暂停与窗口缩放。另有 `-Renderer cpu` 和仅实验台有效的 `-FailGpuInit`。脚本验证省略模式参数后的实际默认值，提前关闭算未完成。[默认行为、稳定性与回退报告](../../docs/47-particle-mesh-default.md)。
 
 ## 看什么、改哪里
 

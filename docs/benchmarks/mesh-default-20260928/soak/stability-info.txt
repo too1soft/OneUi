@@ -1,0 +1,6 @@
+particle_mode=mesh
+backend=opengl
+device=NVIDIA GeForce RTX 5080/PCIe/SSE2
+reason=
+particles=10000
+startup_mesh_fallbacks=1

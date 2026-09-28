@@ -2,7 +2,7 @@
 
 本轮针对[高压诊断](43-heavy-renderer-diagnostics.md)中的粒子场景，分别测量常量预计算、批量接口，以及两者组合。保持 10,000 个粒子、动画公式、画面、绘制顺序和原有调度方式。
 
-后续[私有网格实验的画质修正](46-particle-mesh-parity.md)已通过本机 GPU 像素门槛，仍需跨驱动验证；本页 combined 仍是默认方案，以下数据保留原测量口径。
+后续[私有网格实验的画质修正](46-particle-mesh-parity.md)已通过本机 GPU 像素门槛，仍需跨驱动验证；以下 combined 默认选择属于该阶段的历史记录；当前 Demo 默认行为见[默认 Mesh 与稳定性验收](47-particle-mesh-default.md)，本页数据保留原测量口径。
 
 ## 四种模式
 

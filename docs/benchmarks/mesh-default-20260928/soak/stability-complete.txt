@@ -1,0 +1,2 @@
+seconds=1800.17
+exercise_steps=0

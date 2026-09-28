@@ -10,6 +10,7 @@ static void require(bool value, const char* message) { if(!value)throw std::runt
 static bool same(Color a, Color b) { return a.r==b.r && a.g==b.g && a.b==b.b && a.a==b.a; }
 static bool same(Rect a, Rect b) { return a.x==b.x && a.y==b.y && a.width==b.width && a.height==b.height; }
 static void geometryTests() {
+  require(DEFAULT_PARTICLE_MODE==ParticleMode::Mesh,"Default particle mode changed unexpectedly");
   Model m;
   Plot plot(m,PlotKind::Particles);
   std::size_t cases=0;
@@ -38,6 +39,7 @@ static void geometryTests() {
 class ParticleScene final : public Widget {
 public:
   Model model;
+  ParticleScene(){model.particleMode=ParticleMode::Combined;}
   bool fixture=false, rejectLate=false;
   bool fixtureUsedMesh=false;
   std::vector<RoundedRectFill> fixtureItems;

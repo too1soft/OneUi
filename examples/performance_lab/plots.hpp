@@ -17,7 +17,7 @@ constexpr Color BG = color(0x101517), PANEL = color(0x171e21),
                 TEAL = color(0x61c9bb), ORANGE = color(0xecad72);
 constexpr float TAU = 6.2831853071795864769f;
 enum class ParticleMode { Reference, Precomputed, Batch, Combined, Mesh };
-inline constexpr ParticleMode DEFAULT_PARTICLE_MODE = ParticleMode::Combined;
+inline constexpr ParticleMode DEFAULT_PARTICLE_MODE = ParticleMode::Mesh;
 inline const char* particleModeName(ParticleMode mode) {
   switch (mode) {
     case ParticleMode::Reference: return "reference";

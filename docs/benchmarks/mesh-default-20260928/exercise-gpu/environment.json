@@ -1,0 +1,44 @@
+{
+  "date": "2026-09-28T09:17:33.1309586+08:00",
+  "seconds": 20,
+  "renderer": "gpu",
+  "exercise": true,
+  "injectedGpuFailure": false,
+  "width": 1320,
+  "height": 900,
+  "load": "heavy",
+  "particleMode": "omitted (verify executable default)",
+  "cpu": {
+    "Name": "AMD Ryzen 9 9950X3D 16-Core Processor          ",
+    "NumberOfLogicalProcessors": 32
+  },
+  "os": {
+    "Caption": "Microsoft Windows 10 专业版",
+    "Version": "10.0.19045"
+  },
+  "adapters": [
+    {
+      "Name": "OrayIddDriver Device",
+      "DriverVersion": "17.50.19.949"
+    },
+    {
+      "Name": "NVIDIA GeForce RTX 5080",
+      "DriverVersion": "32.0.15.8180"
+    },
+    {
+      "Name": "AMD Radeon(TM) Graphics",
+      "DriverVersion": "32.0.21030.2001"
+    }
+  ],
+  "binaries": [
+    {
+      "name": "oneui-performance-lab.exe",
+      "Hash": "D3FB6B579783F96DBC4F5CA4FE3A3952B7996BF11D0CCD29E69B9F9D2C5120AC"
+    },
+    {
+      "name": "oneui.dll",
+      "Hash": "CAB23C24F9D94C3CC8DF91C74B86CE71DAE47653B3F5892D488686EF1EF09F32"
+    }
+  ],
+  "method": "3-second warmup; stream 5-second interval aggregates; no per-frame sample vector. CPU wall times, not GPU execution or display FPS. Fault injection is compiled only in the lab renderer."
+}
