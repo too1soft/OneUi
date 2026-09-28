@@ -9,6 +9,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "oneui/ui_component_schema.h"
 
 namespace oneui::ui::syntax {
 inline std::string trim(std::string s) {
@@ -16,36 +17,20 @@ inline std::string trim(std::string s) {
     return s.substr(a, s.find_last_not_of(" \t\r\n") - a + 1);
 }
 inline const std::map<std::string, std::string>& components() {
-    static const std::map<std::string, std::string> value = {
-        {"Page","stack"},{"Header","stack"},{"Toolbar","stack"},{"Section","stack"},
-        {"SettingsPage","stack"},{"ListPage","stack"},{"DetailPage","stack"},{"ActionBar","stack"},{"LoadingState","stack"},{"Status","label"},
-        {"Column","stack"},{"Row","stack"},{"Content","stack"},{"FormRow","stack"},{"FormGrid","stack"},{"EmptyState","stack"},
-        {"Scroll","scroll-view"},{"Text","label"},{"ValidationMessage","label"},
-        {"Input","input"},{"SearchInput","input"},{"Switch","switch"},{"Select","select"},
-        {"Button","button"},{"DataTable","table"}};
+    static const std::map<std::string, std::string> value = [] {
+        std::map<std::string,std::string> result;
+        for(const auto& spec:schema::components)result.emplace(spec.name,spec.tag);
+        return result;
+    }();
     return value;
 }
 inline bool pagePattern(const std::string& tag) { return tag=="SettingsPage" || tag=="ListPage" || tag=="DetailPage"; }
 inline bool property(const std::string& tag, const std::string& key) {
-    if (key == "min-column-width") return tag == "FormGrid";
-    if (key == "tone") return tag == "Status";
-    if (key == "error") return tag == "FormRow";
-    if (key == "subtitle") return pagePattern(tag) || tag=="EmptyState" || tag=="LoadingState";
-    if (key == "max-width" || key == "align") return tag == "Content";
-    if (key == "class" || key == "grow" || key == "basis" || key == "min" || key == "max" || key == "shrink" || key == "visible" || key == "disabled" || key == "name" || key == "description") return true;
-    if (key == "text") return tag == "Text" || tag == "Status" || tag == "ValidationMessage" || tag == "Button" || tag == "Switch" || tag == "Input" || tag == "SearchInput";
-    if (key == "title") return pagePattern(tag) || tag == "Page" || tag == "Header" || tag == "Section" || tag == "EmptyState" || tag == "LoadingState";
-    if (key == "label" || key == "hint") return tag == "FormRow";
-    if (key == "placeholder") return tag == "Input" || tag == "SearchInput";
-    if (key == "variant") return tag == "Button";
-    if (key == "items") return tag == "Select" || tag == "DataTable";
-    if (key == "columns" || key == "selectedKey" || key == "item-key") return tag == "DataTable";
-    if (key == "checked") return tag == "Switch";
-    if (key == "selectedIndex") return tag == "Select";
-    return false;
+    const auto* spec=schema::component(tag);
+    return spec && schema::supports(spec->kind,key);
 }
 inline bool layoutNumber(const std::string& key) {
-    return key == "grow" || key == "shrink" || key == "basis" || key == "min" || key == "max" || key == "max-width" || key == "min-column-width";
+    return schema::layoutNumber(key);
 }
 // Shared by the template compiler and native adapter. Reject values that Yoga
 // would otherwise clamp or reinterpret, while preserving legacy Builder APIs.

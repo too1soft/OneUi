@@ -78,4 +78,22 @@ with tempfile.TemporaryDirectory() as directory:
             result = subprocess.run([cpp_compiler,'/nologo','/Zs','/EHsc','/std:c++17','/utf-8','/I'+includes,str(root/'typed.cpp')],capture_output=True)
             assert (result.returncode==0)==valid, result.stdout.decode(errors='replace')
             if not valid: assert b'Typed.one(2)' in result.stdout, result.stdout.decode(errors='replace')
+        compose_cases = [
+            ('ui.settingsPage({ui.formGrid({ui.field(L"Name",ui.input(name)).hint(L"Help").error(error)}),ui.actions({ui.button(L"Save",save).primary()})});',True,''),
+            ('ui.text(name).ref("caption"); ui.select(items,index); ui.toggle(flag);',True,''),
+            ('ui.input(flag);',False,''),
+            ('ui.text(flag);',False,'Compose property and State/Computed value types do not match'),
+            ('ui.text(L"Caption").error(error);',False,'Compose property is not supported'),
+            ('ui.text(L"Caption").primary();',False,'Compose primary requires Button'),
+            ('ui.text(L"Caption").model(name);',False,'Compose model is not supported'),
+            ('ui.input(name).disabled(1);',False,'Compose property value has the wrong type'),
+            ('ui.text(oneui::State<std::wstring>{L"temporary"});',False,'persistent State/Computed lvalue'),
+            ('ui.formGrid({ui.text(L"Not a field")});',False,''),
+        ]
+        for body,valid,diagnostic in compose_cases:
+            (root/'compose.cpp').write_text('#include "oneui/ui_compose.h"\nvoid check(oneui::ui::Mount& mount){oneui::ui::Compose ui(mount); oneui::State<std::wstring> name,error; oneui::State<bool> flag; oneui::State<int> index; oneui::State<std::vector<std::wstring>> items; oneui::ui::VmCommand save;\n'+body+'\n}',encoding='utf-8')
+            result=subprocess.run([cpp_compiler,'/nologo','/Zs','/EHsc','/std:c++17','/utf-8','/I'+includes,str(root/'compose.cpp')],capture_output=True)
+            assert (result.returncode==0)==valid,result.stdout.decode(errors='replace')
+            if diagnostic: assert diagnostic.encode() in result.stdout,result.stdout.decode(errors='replace')
+        print('Compose: 2 positive and 8 negative C++ type/structure/lifetime diagnostics passed')
 print('Compiler positive, negative, source mapping, imports, slots and scoped CSS tests passed')

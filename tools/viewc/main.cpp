@@ -173,8 +173,9 @@ struct Compiler {
                 out<<"ui.tableEvent("<<id<<","<<quote(key.substr(1))<<","<<expr(d,entry.second.line,value,item)<<");\n";continue;
             }
             if(key=="v-model") {
-                if(n.tag!="Input" && n.tag!="SearchInput" && n.tag!="Switch" && n.tag!="Select" && n.tag!="DataTable") fail(d,n.line,"v-model unsupported on component");
-                auto type=n.tag=="Switch"?"bool":n.tag=="Select"?"int":"std::wstring";
+                const auto* spec=oneui::ui::schema::component(n.tag);
+                if(!spec || spec->model==oneui::ui::schema::ValueType::None) fail(d,n.line,"v-model unsupported on component");
+                auto type=oneui::ui::schema::cppType(spec->model);
                 out<<"ui.modelTyped<"<<type<<">("<<id<<","<<expr(d,n.line,value,item)<<");\n"; continue;
             }
             if(key=="v-if") {out<<"ui.condition("<<id<<","<<expr(d,n.line,value,item)<<");\n";continue;}
@@ -184,11 +185,8 @@ struct Compiler {
             if(key=="item-key") { if(value!="id" || bound) fail(d,n.line,"DataTable uses TableRow.id as its stable key"); continue; }
             if(bound) {
                 if(layoutNumber(key) || key=="align" || key=="class" || key=="variant") fail(d,entry.second.line,"This property is static in v1");
-                std::string type="std::wstring";
-                if(key=="disabled" || key=="visible" || key=="checked") type="bool";
-                else if(key=="selectedIndex") type="int";
-                else if(key=="items") type=n.tag=="Select"?"std::vector<std::wstring>":"std::vector<oneui::ui::TableRow>";
-                else if(key=="columns") type="std::vector<oneui::TableColumn>";
+                const auto* spec=oneui::ui::schema::component(custom?"Column":n.tag);
+                const auto type=oneui::ui::schema::cppType(oneui::ui::schema::propertyType(spec->kind,key));
                 out<<"ui.bindTyped<"<<type<<">("<<id<<","<<quote(key)<<","<<expr(d,n.line,value,item)<<");\n";
             } else {
                 std::string v="oneui::ui::wide("+quote(value)+")";

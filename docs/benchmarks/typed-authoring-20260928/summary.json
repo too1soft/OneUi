@@ -1,0 +1,69 @@
+{
+  "before": {
+    "code": {
+      "cpu_percent": 3.1636533333333334,
+      "paint_mean_ms": 3.3720866666666667,
+      "paint_p95_ms": 6.820733333333333,
+      "working_set_mib": 100.996,
+      "private_mib": 143.66033333333334
+    },
+    "template": {
+      "cpu_percent": 3.1809766666666666,
+      "paint_mean_ms": 3.360743333333333,
+      "paint_p95_ms": 6.7941,
+      "working_set_mib": 99.77863333333333,
+      "private_mib": 142.31799999999998
+    }
+  },
+  "after": {
+    "code": {
+      "cpu_percent": 3.1864833333333333,
+      "paint_mean_ms": 3.25968,
+      "paint_p95_ms": 6.539733333333333,
+      "working_set_mib": 100.27863333333333,
+      "private_mib": 142.74733333333333
+    },
+    "template": {
+      "cpu_percent": 3.18623,
+      "paint_mean_ms": 3.26337,
+      "paint_p95_ms": 6.554366666666667,
+      "working_set_mib": 99.59636666666667,
+      "private_mib": 142.439
+    }
+  },
+  "construction": {
+    "code": {
+      "mean_ms": 10.85023,
+      "median_ms": 10.8239,
+      "min_ms": 10.6738,
+      "max_ms": 11.0154
+    },
+    "template": {
+      "mean_ms": 14.06001,
+      "median_ms": 11.6127,
+      "min_ms": 11.3724,
+      "max_ms": 22.7921
+    }
+  },
+  "authoring_non_whitespace_characters": [
+    {
+      "function": "buildPage",
+      "before": 2528,
+      "after": 1360
+    },
+    {
+      "function": "buildDetails",
+      "before": 1871,
+      "after": 1132
+    },
+    {
+      "function": "buildWorkspace",
+      "before": 3480,
+      "after": 2351
+    }
+  ],
+  "character_totals": {
+    "before": 7879,
+    "after": 4843
+  }
+}

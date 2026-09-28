@@ -266,10 +266,12 @@ public:
         }
         if (type=="FormRow") {
             if (children.size()!=1) throw std::invalid_argument("FormRow needs one control");
-            auto label=make("Text",{},"field-label"), hint=make("Text",{},"muted");
+            const bool readOnly=children.front().component=="Text" || children.front().component=="Status";
+            auto label=make("Text",{},readOnly?"field-label read-only-label":"field-label"), hint=make("Text",{},"muted");
             hint.widget->setVisible(false);
             auto labels=make("Column",{label,hint},"field-copy"); labels.basis(260).grow();
             auto control=children.front();e.fieldControl=control.widget;
+            if(control.component=="Text") {control.classes+=" field-value";styles_->add(control);}
             auto error=make("ValidationMessage");error.widget->setVisible(false);e.error=error.as<Label>();
             auto controlColumn=make("Column",{control,error},"field-control");controlColumn.basis(300).grow();
             e.title=label.as<Label>(); e.hint=hint.as<Label>();

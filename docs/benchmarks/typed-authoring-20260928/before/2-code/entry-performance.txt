@@ -1,0 +1,12 @@
+entry=code
+cycles=50
+elapsed_ms=2179.19
+cpu_ms=2218.75
+cpu_percent=3.18173
+paint_mean_ms=3.35166
+paint_p95_ms=6.7675
+interval_mean_ms=4.34837
+interval_p95_ms=8.7808
+paint_count=500
+working_set_mib=102.082
+private_mib=144.797

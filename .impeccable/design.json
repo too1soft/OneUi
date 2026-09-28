@@ -1,0 +1,191 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-28T05:32:22.907827+00:00",
+  "title": "Design System: OneUI",
+  "extensions": {
+    "colorMeta": {
+      "light-canvas": {
+        "role": "neutral",
+        "displayName": "Light canvas"
+      },
+      "light-surface": {
+        "role": "neutral",
+        "displayName": "Light surface"
+      },
+      "light-ink": {
+        "role": "neutral",
+        "displayName": "Light ink"
+      },
+      "light-muted": {
+        "role": "neutral",
+        "displayName": "Light muted"
+      },
+      "light-line": {
+        "role": "neutral",
+        "displayName": "Light line"
+      },
+      "light-control": {
+        "role": "neutral",
+        "displayName": "Light control"
+      },
+      "light-hover": {
+        "role": "neutral",
+        "displayName": "Light hover"
+      },
+      "light-accent": {
+        "role": "primary",
+        "displayName": "Light accent"
+      },
+      "light-accent-ink": {
+        "role": "primary",
+        "displayName": "Light accent ink"
+      },
+      "light-selection": {
+        "role": "neutral",
+        "displayName": "Light selection"
+      },
+      "dark-canvas": {
+        "role": "neutral",
+        "displayName": "Dark canvas"
+      },
+      "dark-surface": {
+        "role": "neutral",
+        "displayName": "Dark surface"
+      },
+      "dark-ink": {
+        "role": "neutral",
+        "displayName": "Dark ink"
+      },
+      "dark-muted": {
+        "role": "neutral",
+        "displayName": "Dark muted"
+      },
+      "dark-line": {
+        "role": "neutral",
+        "displayName": "Dark line"
+      },
+      "dark-control": {
+        "role": "neutral",
+        "displayName": "Dark control"
+      },
+      "dark-hover": {
+        "role": "neutral",
+        "displayName": "Dark hover"
+      },
+      "dark-accent": {
+        "role": "primary",
+        "displayName": "Dark accent"
+      },
+      "dark-accent-ink": {
+        "role": "primary",
+        "displayName": "Dark accent ink"
+      },
+      "dark-selection": {
+        "role": "neutral",
+        "displayName": "Dark selection"
+      }
+    },
+    "typographyMeta": {
+      "read-only-label": {
+        "displayName": "Read-only label",
+        "purpose": "Muted descriptor above or beside a read-only value."
+      },
+      "field-value": {
+        "displayName": "Read-only Text value",
+        "purpose": "The stronger value role automatically applied to a Text child of FormRow."
+      }
+    },
+    "shadows": [],
+    "motion": [
+      {
+        "name": "button-transition-duration",
+        "value": "120ms",
+        "purpose": "Duration set on Button by ui_theme.h; no easing token is declared."
+      }
+    ],
+    "breakpoints": []
+  },
+  "components": [
+    {
+      "name": "Default button",
+      "kind": "button",
+      "refersTo": "button-default",
+      "description": "Illustrative light/comfortable translation of the native Button theme; browser behavior is not native validation.",
+      "html": "<button class=\"ds-button-default\">返回列表</button>",
+      "css": ".ds-button-default{padding:10px 18px;font-size:14px;font-weight:500;border-radius:6px;transition-duration:120ms;background:#e7eee8;color:#1c2b23;border:0;}.ds-button-default:hover{background:#d5e2d7;}.ds-button-default:active{background:#d5e9d7;}.ds-button-default:focus-visible{outline:2px solid #28613d;outline-offset:2px;}.ds-button-default:disabled{background:#e7eee8;color:#54675b;}"
+    },
+    {
+      "name": "Primary button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Illustrative light/comfortable translation of the native Button theme; browser behavior is not native validation.",
+      "html": "<button class=\"ds-button-primary\">保存更改</button>",
+      "css": ".ds-button-primary{padding:10px 18px;font-size:14px;font-weight:500;border-radius:6px;transition-duration:120ms;background:#28613d;color:#ffffff;border:0;}.ds-button-primary:hover{background:#1c2b23;color:#f5f7f4;}.ds-button-primary:focus-visible{outline:2px solid #28613d;outline-offset:2px;}.ds-button-primary:disabled{background:#e7eee8;color:#54675b;}"
+    },
+    {
+      "name": "Danger button",
+      "kind": "button",
+      "refersTo": "button-danger",
+      "description": "Illustrative light/comfortable translation of the native Button theme; browser behavior is not native validation.",
+      "html": "<button class=\"ds-button-danger\">删除连接</button>",
+      "css": ".ds-button-danger{padding:10px 18px;font-size:14px;font-weight:500;border-radius:6px;transition-duration:120ms;background:#ffffff;color:#a02b24;border:1px solid #bac8bf;}.ds-button-danger:hover{border-color:#a02b24;}.ds-button-danger:focus-visible{outline:2px solid #28613d;outline-offset:2px;}.ds-button-danger:disabled{background:#ffffff;color:#54675b;}"
+    },
+    {
+      "name": "Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Illustrative native Input token translation; real caret, clipboard, focus, and IME behavior require native validation.",
+      "html": "<input class=\"ds-input\" aria-label=\"连接名称\" placeholder=\"输入连接名称\" />",
+      "css": ".ds-input{background:#ffffff;color:#1c2b23;caret-color:#28613d;border:1px solid #bac8bf;border-radius:6px;padding:10px 12px;}.ds-input::placeholder{color:#54675b;}.ds-input::selection{background:#d5e9d7;}.ds-input:hover{border-color:#28613d;}.ds-input:focus-visible{outline:2px solid #28613d;outline-offset:2px;}.ds-input:disabled{background:#e7eee8;color:#54675b;}.ds-input[aria-invalid=\"true\"]{border-color:#a02b24;}.ds-input[aria-invalid=\"true\"]:focus-visible{outline-color:#a02b24;}"
+    },
+    {
+      "name": "Section",
+      "kind": "card",
+      "refersTo": "section",
+      "description": "Illustrative Section surface with the comfortable field gap; no shadow is defined by the native default theme.",
+      "html": "<section class=\"ds-section\"><div class=\"ds-section-title\">连接信息</div><div class=\"ds-section-body\">将相关字段放在同一分区。</div></section>",
+      "css": ".ds-section{display:flex;flex-direction:column;gap:20px;background:#ffffff;padding:24px;border-radius:12px;color:#1c2b23;}.ds-section-title{font-size:18px;font-weight:600;}.ds-section-body{font-size:14px;font-weight:400;}"
+    },
+    {
+      "name": "Read-only grid field",
+      "kind": "custom",
+      "refersTo": "read-only-value",
+      "description": "Illustrative FormGrid label/value hierarchy for a Text field; Status fields retain semantic styling.",
+      "html": "<div class=\"ds-read-only\"><div class=\"ds-read-only-label\">主机地址</div><div class=\"ds-read-only-value\">10.24.0.2</div></div>",
+      "css": ".ds-read-only{display:flex;flex-direction:column;gap:8px;}.ds-read-only-label{color:#54675b;font-size:13px;font-weight:400;}.ds-read-only-value{color:#1c2b23;font-size:15px;font-weight:500;}"
+    }
+  ],
+  "narrative": {
+    "northStar": "Native desktop clarity",
+    "overview": "OneUI's existing identity is a restrained green desktop interface with light and dark surfaces, readable forms, and compact or comfortable density. This descriptive north star records the incumbent system; it does not introduce a new visual identity. Content, field relationships, and actions establish the hierarchy.\n\nThe product context comes from [README.md](README.md). The authoritative implementation is [ui_theme.h](include/oneui/ui_theme.h); this document captures its public defaults. Tokens above are the machine-readable snapshot, with theme and density suffixes exposing the existing alternatives. Component entries show light, comfortable defaults; dark mode substitutes the corresponding dark color roles and compact mode substitutes compact spacing. These names do not add new runtime CSS variables.",
+    "keyCharacteristics": [
+      "Green emphasis on neutral surfaces.",
+      "Separate spacing for sections, fields, and related copy.",
+      "Native controls and Yoga layout shared by C++ and template authoring.",
+      "Read-only values carry more emphasis than their labels."
+    ],
+    "rules": [
+      {
+        "name": "The Semantic Feedback Rule",
+        "body": "Status text must communicate the state in words; color and the native status dot support that meaning.",
+        "section": "colors"
+      },
+      {
+        "name": "The Read-Only Hierarchy Rule",
+        "body": "In a read-only field, the label describes the value; the value receives the stronger text role.",
+        "section": "typography"
+      }
+    ],
+    "dos": [
+      "**Do** apply the shared theme and density roles when composing public pages.",
+      "**Do** let Yoga measure, wrap, and position fields and action groups.",
+      "**Do** use muted read-only labels and the field-value role for Text values.",
+      "**Do** retain semantic status text alongside color feedback."
+    ],
+    "donts": [
+      "**Don't** introduce a second widget tree or layout engine for typed authoring.",
+      "**Don't** replace shared default tokens with page-specific coordinates to reproduce a screenshot.",
+      "**Don't** treat documentation HTML previews as proof of native input, focus, DPI, or IME behavior."
+    ]
+  }
+}

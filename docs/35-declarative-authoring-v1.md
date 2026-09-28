@@ -90,7 +90,7 @@ ui.set(body, "align", L"center");
 auto pageBody = ui.make("Scroll", {body});
 ```
 
-`Content` 内部保留两个 Yoga Stack，不增加一套布局算法，也不因窗口缩放重建控件。`Content { gap:24px; padding:12px; }` 中 gap 控制正文子项间距，padding 位于限宽正文之外；背景和边框属于外层容器。默认主题给正文 16px 间距。只替换为一张没有 gap 声明的样式表时，间距回到零；热更新保留默认主题时则回落到主题的 16px。
+`Content` 内部保留两个 Yoga Stack，不增加一套布局算法，也不因窗口缩放重建控件。`Content { gap:24px; padding:12px; }` 中 gap 控制正文子项间距，padding 位于限宽正文之外；背景和边框属于外层容器。默认主题给正文 24px 间距，紧凑密度为 16px。只替换为一张没有 gap 声明的样式表时，间距回到零；热更新保留默认主题时则回落到所选密度的主题间距。
 
 `basis/min/max` 仍表示**父容器主轴**尺寸：父节点为 Column 时约束高度，为 Row 时约束宽度。正文宽度优先使用 `Content max-width`，避免把 Column 子项的 `max` 误当宽度。
 
@@ -143,3 +143,5 @@ C++ 对应 `ui.make("FormGrid", {nameRow, hostRow})`，布局无需 setFrame 或
 运行入口见 [示例 README](../examples/declarative/README.md)，回归、截图和测量见 [阶段验收](40-declarative-stage-validation.md)。系统输入法候选窗口、跨真实 DPI 显示器拖动与物理鼠标自动化需要单独验收，不能以内部事件测试替代。
 
 完整业务示例也已接入 `examples/performance_lab`：`run.ps1 -Connections -Entry template -Dev` 使用 `.one` 列表、编辑和确认页；`-Entry code` 使用同一 VM 的手写 C++ 页面。两者共用主题和 `connections.css`，开发模式监听外部 CSS 与所有导入模板的 style 块。模板结构、ref、事件及业务逻辑修改需要重新构建；只改样式会替换规则并保留原生控件。详见 [阶段验收](40-declarative-stage-validation.md)。
+
+新增的类型化 C++ 快捷入口见 [Compose 用法与公共默认布局](50-typed-authoring-and-defaults.md)，与本页的 Mount／模板共用组件元数据及绑定机制；本页旧 API 继续可用。

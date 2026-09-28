@@ -18,7 +18,19 @@ struct Temporary {
     ~Temporary(){std::error_code ignored;if(path.parent_path()==std::filesystem::temp_directory_path() && path.filename().string().rfind("oneui-authoring-",0)==0)std::filesystem::remove_all(path,ignored);}
 };
 static void write(const std::filesystem::path& file,const std::string& text){std::ofstream out(file,std::ios::binary);out<<text;}
-int main(){try {
+int main(int argc,char** argv){try {
+    if(argc==2 && std::string(argv[1])=="--construction-benchmark") {
+        std::cout<<"round,entry,build_ms,widgets,subscriptions,styles\n";
+        for(int round=0;round<12;++round)for(int index=0;index<2;++index) {
+            const bool compiled=(index+(round%2))%2;
+            const auto start=std::chrono::steady_clock::now();
+            Fixture fixture(compiled);applyTheme(fixture.ui);fixture.ui.flush();
+            const double elapsed=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-start).count();
+            std::function<size_t(const std::shared_ptr<Widget>&)> count=[&](const auto& widget){size_t n=1;if(auto view=std::dynamic_pointer_cast<View>(widget))for(const auto& child:view->children())n+=count(child);return n;};
+            if(round>=2)std::cout<<round-1<<','<<(compiled?"template":"code")<<','<<elapsed<<','<<count(fixture.page.root.widget)<<','<<fixture.ui.diagnostics().subscriptions<<','<<fixture.ui.styles()->size()<<'\n';
+        }
+        return 0;
+    }
     Fixture code(false),compiled(true);
     for(bool dark:{false,true})for(int density:{0,1})for(float width:{1320.f,640.f,426.f})for(int scene=0;scene<7;++scene) {
         for(auto* f:{&code,&compiled}) {

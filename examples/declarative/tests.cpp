@@ -1,4 +1,5 @@
 #include "oneui/ui_theme.h"
+#include "oneui/ui_compose.h"
 #include "oneui/ui_dev.h"
 #include "oneui/ui_layout_diagnostics.h"
 #include "manual.h"
@@ -88,7 +89,36 @@ void pagePatternTests() {
     auto status=ui.make("Status");throws([&]{ui.set(status,"tone",L"invalid");});
     auto registrations=ui.styles()->size();for(int i=0;i<40;++i){ui.set(status,"tone",i%2?L"error":L"success");ui.styles()->replace(declarativeTheme(i%2));}CHECK(ui.styles()->size()==registrations);
 }
+void composeTests() {
+    State<std::wstring> name{L"中文名称"}, error;
+    State<bool> enabled{true};VmCommand save;int calls=0;save.setAction([&]{++calls;});
+    std::shared_ptr<Button> retainedButton;
+    {
+        Mount mount;Compose ui(mount);
+        auto input=ui.input(name).ref("input");
+        auto field=ui.field(L"名称",input).hint(L"支持中文").error(error);
+        auto button=ui.button(L"保存",save).primary().ref("save");
+        auto page=ui.page({ui.settingsPage({ui.formGrid({field}),ui.actions({button})})});
+        applyTheme(mount);auto root=page.element().as<View>();root->setFrame({0,0,640,600});
+        oneui::test_support::RecordingCanvas canvas;mount.flush();root->paint(canvas);
+        CHECK(mount.find("input")==input.widget());CHECK(input.widget()->accessibleName()==L"名称");
+        error.set(L"名称不能为空");mount.flush();CHECK(field.element().error->visible());
+        CHECK(input.widget()->accessibleDescription().find(L"名称不能为空")!=std::wstring::npos);
+        auto native=input.element().as<TextField>();root->requestFocus(native.get());native->setCaretIndex(2);native->setTextComposition(L"测试",1);
+        save.canExecute.set(false);mount.flush();CHECK(button.widget()->disabled());CHECK(native->focused());CHECK(native->caretIndex()==2);CHECK(native->hasTextComposition());
+        save.canExecute.set(true);error.set({});mount.flush();CHECK(!field.element().error->visible());
+        retainedButton=button.element().as<Button>();
+        KeyEvent enter;enter.key=Key::Enter;retainedButton->onKeyDown(enter);CHECK(calls==1);
+        auto stats=mount.diagnostics();applyTheme(mount,true,Density::Compact);mount.flush();root->paint(canvas);
+        CHECK(mount.diagnostics().subscriptions==stats.subscriptions);CHECK(mount.find("input")==native);
+        CHECK(inspectLayout(root,*mount.styles()).empty());
+        throws([&]{ui.formGrid({field}).minColumnWidth(0);});
+        throws([&]{ui.text(L"重复引用").ref("input");});
+    }
+    KeyEvent enter;enter.key=Key::Enter;retainedButton->onKeyDown(enter);CHECK(calls==1);
+}
 int main(){try{
+    composeTests();
     contentLayoutTests();
     pagePatternTests();
     State<int> a{1},b{2};int notifications=0,recomputes=0;

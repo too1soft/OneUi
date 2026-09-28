@@ -1,6 +1,7 @@
 #pragma once
 #include <oneui/platform/window.h>
 #include <oneui/ui_theme.h>
+#include <oneui/ui_compose.h>
 #include <oneui/ui_focus.h>
 #include <oneui/ui_layout_diagnostics.h>
 #include <chrono>
@@ -77,28 +78,33 @@ struct VM {
 };
 
 struct Page { Element root;std::map<std::string,std::shared_ptr<Widget>> fields; };
-inline Page buildPage(Mount& ui,VM& vm) {
+inline Page buildPage(Mount& mount,VM& vm) {
+    Compose ui(mount);
     std::map<std::string,std::shared_ptr<Widget>> fields;
-    auto text=[&](const wchar_t* value){auto e=ui.make("Text");ui.set(e,"text",value);return e;};
-    auto action=[&](const wchar_t* text,VmCommand& cmd,const char* style=""){auto e=ui.make("Button",{},style);ui.set(e,"text",text);ui.click(e,cmd);return e;};
-    auto input=[&](const char* id,const wchar_t* label,const wchar_t* hint,auto& state,auto& error){auto control=ui.make("Input");ui.model(control,state);fields[id]=control.widget;auto row=ui.make("FormRow",{control});ui.set(row,"label",label);ui.set(row,"hint",hint);ui.bind(row,"error",error);ui.locate(row,__FILE__,__LINE__);return row;};
-    auto protocol=ui.make("Select");ui.bind(protocol,"items",vm.protocols);ui.model(protocol,vm.protocol);
-    auto protocolRow=ui.make("FormRow",{protocol});ui.set(protocolRow,"label",L"连接协议");ui.set(protocolRow,"hint",L"仅保存配置，不发起实际连接");
-    auto generalGrid=ui.make("FormGrid",{input("name",L"连接名称",L"用于识别此连接，支持中文",vm.name,vm.nameError),input("host",L"主机地址",L"主机名或 IPv4，不含 https://",vm.host,vm.hostError),input("port",L"端口",L"1–65535",vm.port,vm.portError),protocolRow});
-    auto general=ui.make("Section",{generalGrid});ui.set(general,"title",L"连接信息");
-    auto reconnect=ui.make("Switch");ui.set(reconnect,"text",L"允许自动重连");ui.model(reconnect,vm.reconnect);
-    auto reconnectRow=ui.make("FormRow",{reconnect});ui.set(reconnectRow,"label",L"断线处理");ui.set(reconnectRow,"hint",L"本地配置选项，不启动后台网络任务");
-    auto advanced=ui.make("Section",{input("timeout",L"连接超时",L"1–300 秒",vm.timeout,vm.timeoutError),reconnectRow,input("note",L"备注",L"最多 200 字",vm.note,vm.noteError)});ui.set(advanced,"title",L"连接行为");
-    auto status=ui.make("Status");ui.bind(status,"text",vm.status);ui.bind(status,"tone",vm.tone);
-    auto save=action(L"",vm.save,"primary");ui.bind(save,"text",vm.saveText);
-    auto footer=ui.make("ActionBar",{save,action(L"恢复已保存",vm.reset),action(L"模拟失败",vm.failNext),status});
-    auto body=ui.make("SettingsPage",{general,advanced,footer});
-    auto theme=ui.make("Select");ui.bind(theme,"items",vm.themes);ui.set(theme,"name",L"编辑页主题");ui.model(theme,vm.theme);
-    auto density=ui.make("Select");ui.bind(density,"items",vm.densities);ui.set(density,"name",L"界面密度");ui.model(density,vm.density);
-    auto description=text(L"");ui.bind(description,"text",vm.description);
-    auto back=action(L"",vm.back);ui.bind(back,"text",vm.backText);
-    auto header=ui.make("Header",{description,ui.make("Toolbar",{back,theme,density})});ui.bind(header,"title",vm.heading);
-    auto root=ui.make("Page",{header,body});ui.locate(root,__FILE__,__LINE__);return {root,std::move(fields)};
+    auto input=[&](const char* id,const wchar_t* label,const wchar_t* hint,auto& state,auto& error) {
+        auto control=ui.input(state);fields[id]=control.widget();
+        return ui.field(label,control).hint(hint).error(error).located(__FILE__,__LINE__);
+    };
+    auto general=ui.section({ui.formGrid({
+        input("name",L"连接名称",L"用于识别此连接，支持中文",vm.name,vm.nameError),
+        input("host",L"主机地址",L"主机名或 IPv4，不含 https://",vm.host,vm.hostError),
+        input("port",L"端口",L"1–65535",vm.port,vm.portError),
+        ui.field(L"连接协议",ui.select(vm.protocols,vm.protocol)).hint(L"仅保存配置，不发起实际连接")
+    })}).title(L"连接信息");
+    auto advanced=ui.section({
+        input("timeout",L"连接超时",L"1–300 秒",vm.timeout,vm.timeoutError),
+        ui.field(L"断线处理",ui.toggle(vm.reconnect).text(L"允许自动重连")).hint(L"本地配置选项，不启动后台网络任务"),
+        input("note",L"备注",L"最多 200 字",vm.note,vm.noteError)
+    }).title(L"连接行为");
+    auto body=ui.settingsPage({general,advanced,ui.actions({
+        ui.button(vm.saveText,vm.save).primary(),ui.button(L"恢复已保存",vm.reset),ui.button(L"模拟失败",vm.failNext),
+        ui.status(vm.status).tone(vm.tone)
+    })});
+    auto header=ui.header({ui.text(vm.description),ui.toolbar({
+        ui.button(vm.backText,vm.back),ui.select(vm.themes,vm.theme).name(L"编辑页主题"),
+        ui.select(vm.densities,vm.density).name(L"界面密度")
+    })}).title(vm.heading);
+    return {ui.page({header,body}).located(__FILE__,__LINE__),std::move(fields)};
 }
 
 class Editor {

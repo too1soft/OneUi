@@ -12,7 +12,7 @@ OneUI suits settings tools, connection managers, operations consoles, and applic
 
 Default light form with responsive columns:
 
-![Native light form](docs/images/performance-lab/form-light-wide.png)
+![Native light form](docs/images/typed-authoring/editor-light-wide.png)
 
 Dark compact table with 1,000 simulated records:
 
@@ -66,7 +66,19 @@ If VS is not found, check the C++ and CMake installation components. Missing `sk
 .\examples\declarative\build\bin\oneui-hello.exe
 ```
 
-`ui.make` creates a component; `ui.set` supplies a fixed property; `ui.model` binds both directions; `ui.bind` maps observable state to a property. `SettingsPage` handles content width and scrolling, `FormRow` provides label/help/field layout, and `applyTheme` supplies the default appearance.
+Use the typed C++ builder for a labeled input and live preview:
+
+```cpp
+oneui::ui::Compose ui(app.mount()); // #include <oneui/ui_compose.h>
+auto page = ui.settingsPage({
+    ui.field(L"Name", ui.input(name)).hint(L"Changes appear below"),
+    ui.text(name)
+}).title(L"Settings");
+oneui::ui::applyTheme(app.mount());
+return app.run(page);
+```
+
+`ui.input(name)` binds both directions; `ui.text(name)` observes state. Field/page components handle labels, spacing, content width and scrolling. Compose delegates to the existing Mount; `make/set/model/bind` remain available. Unsupported properties and wrong binding types fail at compile time. See the [typed API, defaults and measurements](docs/50-typed-authoring-and-defaults.md) (Chinese).
 
 Next, run `examples/declarative/build/bin/oneui-details.exe`: [details.cpp](examples/declarative/details.cpp) is a standalone C++ example of responsive fields, read-only text, bottom actions and theme switching without manual field coordinates. The lab now supports list → details → edit, preserving filters and scroll position; saving from details returns to the same record. See the [page recipes](docs/48-connection-page-recipes.md) and [validation limits](docs/49-connection-workflow-validation.md) (Chinese).
 
@@ -92,7 +104,7 @@ Declare `name` and `host` as `State<std::wstring>` members in your C++ ViewModel
 | Pick a page layout | SettingsPage / ListPage / DetailPage |
 | Arrange labeled fields | FormRow; FormGrid for automatic columns |
 | Change color, spacing or typography | External CSS or `<style scoped>`, with `-Dev` |
-| Dark / compact appearance | `ui::applyTheme(ui, true, ui::Density::Compact)` |
+| Dark / compact appearance | `ui::applyTheme(app.mount(), true, ui::Density::Compact)` |
 | Derived values and validation | C++ `Computed` |
 | Actions, running state and errors | `VmCommand`, bound through `@click="save"` |
 | Large lists | DataTable and stable business IDs; visible rows are drawn |
@@ -100,6 +112,8 @@ Declare `name` and `host` as `State<std::wstring>` members in your C++ ViewModel
 Successful CSS edits replace the rules; invalid edits retain the last valid style. Input, focus, caret and valid scrolling state survive. **Template structure, events and C++ changes require a rebuild.** This is not full Vue or browser CSS Grid, and templates do not evaluate JavaScript. See the [authoring API](docs/35-declarative-authoring-v1.md) and [layout guide](docs/36-declarative-page-patterns.md).
 
 ## Performance
+
+The 2026-09-28 typed-authoring regression measured **3.260 / 3.263ms** mean CPU paint and **100.28 / 99.60MiB** working set for C++ / templates. Equivalent page-construction code shrank **38.5%**, excluding the shared wrapper; widget and subscription counts stayed unchanged. No material runtime regression was observed across three rounds. This workload differs from the historical results below. [Matched before/after samples and methodology](docs/50-typed-authoring-and-defaults.md#代码量与实测).
 
 Measured 2026-09-27 on Windows 10, Ryzen 9 9950X3D (32 logical processors), RTX 5080, MSVC Release, OpenGL + Skia Ganesh. Both entries used the same exe/DLL, a 1320×900 client and 1,000 seeded records. Three alternating rounds each warm up for 50 cycles, then measure 150 search/edit/discard cycles. Style watching and render tracing are off.
 

@@ -31,20 +31,14 @@
 先改 `name`、`host`、`note` 的初始内容，再调整窗口宽度。以下是程序中的字段组合方式：
 
 ```cpp
-auto field = [&](const wchar_t* label, auto& value) {
-    auto text = ui.make("Text");
-    ui.bind(text, "text", value);
-    auto row = ui.make("FormRow", {text});
-    ui.set(row, "label", label);
-    return row;
-};
-auto grid = ui.make("FormGrid", {
-    field(L"连接名称", name),
-    field(L"主机地址", host)
+oneui::ui::Compose ui(app.mount());
+auto grid = ui.formGrid({
+    ui.field(L"连接名称", ui.text(name)),
+    ui.field(L"主机地址", ui.text(host))
 });
 ```
 
-`name`、`host` 是 `State<std::wstring>`。把 `Text` 换成 `Input`，再把 `ui.bind(text, "text", value)` 换成 `ui.model(text, value)`，同样的字段布局就成为可编辑表单。可运行的输入示例见 [hello.cpp](../examples/declarative/hello.cpp)。
+`name`、`host` 是 `State<std::wstring>`。把 `ui.text(name)` 换成 `ui.input(name)`，同样的字段布局就成为双向绑定的可编辑表单。可运行的输入示例见 [hello.cpp](../examples/declarative/hello.cpp)。
 
 模板中的对应写法如下；完整详情模板见 [Details.one](../examples/performance_lab/views/Details.one)。
 
@@ -89,7 +83,7 @@ auto grid = ui.make("FormGrid", {
 | 详情模板 | [Details.one](../examples/performance_lab/views/Details.one) |
 | 默认外观 | [ui_theme.h](../include/oneui/ui_theme.h)；应用覆盖写在 [connections.css](../examples/performance_lab/connections.css) |
 
-例如在 `connections.css` 添加 `Section { gap: 20px; }`，开发模式下保存后会更新间距；删除该规则恢复默认主题值。放在 `Details.one` 的 `<style scoped>` 内只影响详情页。CSS 可热更新，模板结构、import 和 C++ 变更需要关闭应用后重新构建。
+例如在 `connections.css` 添加 `Section { gap: 28px; }`，开发模式下保存后会更新间距；删除该规则恢复默认主题值。放在 `Details.one` 的 `<style scoped>` 内只影响详情页。CSS 可热更新，模板结构、import 和 C++ 变更需要关闭应用后重新构建。
 
 页面创建后保留原生控件，通过可见性切换。详情绑定独立的稳定业务 ID，表格选择可以因筛选清空，详情仍能显示原记录；不将表格行号当成业务身份。保存完成更新原数据，详情使用 `Computed` 自动刷新。示例中的返回目的地属于业务流程，无需在布局组件里写特殊判断。
 
@@ -98,3 +92,5 @@ auto grid = ui.make("FormGrid", {
 运行 `examples/performance_lab/build.ps1 -Test` 可验证两种入口各 300 次列表／详情／编辑往返，及 84 组主题、密度、宽度和页面状态绘制一致性。长中文覆盖 64 字名称与 200 字备注；热更新包括作用域隔离、错误回滚、删除规则及输入保留。截图脚本为 `examples/performance_lab/capture-connections.ps1`。
 
 具体结果与尚未完成的真实 DPI／跨屏／输入法验收见 [本轮验证记录](49-connection-workflow-validation.md)。程序内部缩放与组合输入状态测试不能替代系统输入法候选窗口验收。
+
+2026-09-28：C++ 示例已改用 `Compose`，公共默认间距和只读文字层级已精修。[新写法与当前截图／实测](50-typed-authoring-and-defaults.md)；上面的 49 号报告保留为上一阶段记录。

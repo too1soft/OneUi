@@ -1,0 +1,37 @@
+Validation on clean detached worktree (baseline 219b76e), 2026-09-28.
+
+typed-authoring-tests-final.log
+Editor validation, snapshot save, cancellation, layout, input retention and focus reveal tests passed
+Connection workflow tests passed: 300 cycles, 207 widgets, 71 mount subscriptions, 204 style nodes; no growth.
+Connection workflow tests passed: 300 cycles, 207 widgets, 71 mount subscriptions, 204 style nodes; no growth.
+Authoring parity: 84 scenes (themes, densities, widths, list/detail/editor/prompt); hot CSS rollback/removal, scoped blocks, input retention, 50 reloads and debounce passed for both entries.
+Gallery: 36 theme/density/width/scenes; responsive geometry, state feedback, focus/composition, stable subscriptions and table anchor passed.
+Renderer diagnostics: forced raster, actual surface, monotonic counters and read-only snapshots passed
+mode=cpu cycles=30 warm_handles=208 end_handles=207 warm_gdi=9 end_gdi=9 warm_user=5 end_user=4
+Default mode, fallback, close and pending callback lifecycle passed
+mode=failed-gpu cycles=30 warm_handles=304 end_handles=303 warm_gdi=11 end_gdi=11 warm_user=8 end_user=7
+Default mode, fallback, close and pending callback lifecycle passed
+
+typed-authoring-sdk-final.log
+ 1/14 Test  #1: declarative_runtime ................   Passed    3.94 sec
+ 2/14 Test  #2: declarative_compiler ...............   Passed    9.69 sec
+ 3/14 Test  #3: oneui_frame_profile_tests ..........   Passed    0.01 sec
+ 4/14 Test  #7: oneui_interaction_tests ............   Passed    0.06 sec
+ 5/14 Test  #8: oneui_reactive_lifetime_tests ......   Passed    0.01 sec
+ 6/14 Test #11: oneui_control_behavior_tests .......   Passed    0.07 sec
+ 7/14 Test #16: oneui_scroll_view_behavior_tests ...   Passed    0.03 sec
+ 8/14 Test #17: oneui_stack_behavior_tests .........   Passed    0.03 sec
+ 9/14 Test #18: oneui_authoring_behavior_tests .....   Passed    0.06 sec
+10/14 Test #19: oneui_yoga_behavior_tests ..........   Passed    0.06 sec
+11/14 Test #20: oneui_component_behavior_tests .....   Passed    0.06 sec
+12/14 Test #27: oneui_win32_accessibility_tests ....   Passed    0.04 sec
+13/14 Test #28: oneui_win32_window_loop_tests ......   Passed    0.41 sec
+14/14 Test #39: oneui_abi_sync .....................   Passed    0.09 sec
+100% tests passed, 0 tests failed out of 14
+
+Integration into original dirty workspace:
+Performance-lab tests all passed, including 160 geometry cases and 54 raster cases.
+SDK CTest: 13/14 passed. Existing uncommitted terminal-mac accessibility assertion failed.
+Isolated rerun: oneui_win32_accessibility_tests exit=1, Mac caption keeps same identity with left geometry.
+This target does not depend on the changed declarative headers.
+47 tracked modifications and 14 untracked files outside this stage were byte-identical after integration.

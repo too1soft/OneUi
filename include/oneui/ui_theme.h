@@ -19,23 +19,23 @@ inline std::string declarativeTheme(bool dark=false,Density density=Density::Com
       :root { --page-pad:28px; --section-pad:24px; --section-gap:24px; --field-gap:20px; --control-pad:10px; }
     )";
     return syntax::css(tokens+metrics+R"(
-      :root { --space-sm:8px; --space-md:16px; --space-lg:24px; }
+      :root { --space-sm:8px; --space-md:16px; --space-lg:24px; --copy-gap:4px; --label-control-gap:8px; }
       Column { gap:var(--space-md); }
-      Content { gap:var(--space-md); }
-      SettingsPage { gap:16px; }
-      ListPage { gap:16px; }
-      DetailPage { gap:16px; }
+      Content { gap:var(--section-gap); }
+      SettingsPage { gap:var(--section-gap); }
+      ListPage { gap:var(--section-gap); }
+      DetailPage { gap:var(--section-gap); }
       Row { gap:var(--space-md); }
       Page { background-color:var(--canvas); padding:var(--page-pad); gap:var(--section-gap); }
       Header { gap:8px; }
-      Section { background-color:var(--surface); padding:var(--section-pad); gap:var(--section-gap); border-radius:12px; }
+      Section { background-color:var(--surface); padding:var(--section-pad); gap:var(--field-gap); border-radius:12px; }
       Toolbar { gap:8px; }
       ActionBar { gap:12px; padding:12px 0px; }
       FormRow { gap:var(--field-gap); }
-      FormGrid { gap:var(--section-gap); }
-      FormRow.grid-field { gap:8px; }
-      Column.field-copy { gap:6px; }
-      Column.field-control { gap:6px; }
+      FormGrid { gap:var(--field-gap); }
+      FormRow.grid-field { gap:var(--label-control-gap); }
+      Column.field-copy { gap:var(--copy-gap); }
+      Column.field-control { gap:var(--copy-gap); }
       EmptyState { padding:32px; gap:12px; background-color:var(--surface); border-radius:12px; }
       LoadingState { padding:32px; gap:12px; background-color:var(--surface); border-radius:12px; }
       Scroll { background-color:var(--canvas); }
@@ -45,6 +45,8 @@ inline std::string declarativeTheme(bool dark=false,Density density=Density::Com
       Text.page-title { font-size:22px; font-weight:600; }
       Text.muted { font-size:13px; color:var(--muted); }
       Text.field-label { font-weight:600; }
+      Text.read-only-label { color:var(--muted); font-size:13px; font-weight:400; }
+      Text.field-value { font-size:15px; font-weight:500; }
       ValidationMessage { color:var(--error); font-size:13px; }
       Status { color:var(--muted); font-size:13px; }
       Status.tone-success { color:var(--success); }

@@ -192,71 +192,60 @@ public:
 };
 
 // The same public layout components handle read-only fields and editable fields.
-inline Page buildDetails(Mount& ui,VM& vm,Connections& flow) {
-    auto button=[&](const wchar_t* label,VmCommand& command,const char* variant="") {
-        auto e=ui.make("Button",{},variant);ui.set(e,"text",label);ui.click(e,command);return e;
-    };
-    auto field=[&](const wchar_t* label,auto& value) {
-        auto text=ui.make("Text");ui.bind(text,"text",value);
-        auto row=ui.make("FormRow",{text});ui.set(row,"label",label);return row;
-    };
-    auto status=ui.make("Status");ui.bind(status,"text",flow.detailStatus);ui.bind(status,"tone",flow.detailTone);
-    auto statusRow=ui.make("FormRow",{status});ui.set(statusRow,"label",L"连接状态");
-    auto info=ui.make("Section",{ui.make("FormGrid",{
-        field(L"连接名称",flow.detailName),statusRow,field(L"主机地址",flow.detailHost),field(L"端口",flow.detailPort),
-        field(L"连接协议",flow.detailProtocol),field(L"连接 ID",flow.detailKey)})});ui.set(info,"title",L"连接信息");
-    auto behavior=ui.make("Section",{ui.make("FormGrid",{field(L"连接超时",flow.detailTimeout),field(L"断线处理",flow.detailReconnect)}),field(L"备注",flow.detailNote)});ui.set(behavior,"title",L"连接行为");
-    auto edit=button(L"编辑连接",flow.edit,"primary"),back=button(L"返回连接列表",flow.detailBack);
-    auto message=ui.make("Status");ui.bind(message,"text",flow.message);
-    auto body=ui.make("DetailPage",{info,behavior,ui.make("ActionBar",{edit,button(L"删除连接",flow.remove,"danger"),message})});
-    auto theme=ui.make("Select");ui.bind(theme,"items",vm.themes);ui.model(theme,vm.theme);ui.set(theme,"name",L"详情页主题");
-    auto density=ui.make("Select");ui.bind(density,"items",vm.densities);ui.model(density,vm.density);ui.set(density,"name",L"界面密度");
-    auto description=ui.make("Text");ui.set(description,"text",L"已保存的本地配置 · 状态为固定模拟数据，不发起网络连接。");
-    auto header=ui.make("Header",{description,ui.make("Toolbar",{back,theme,density})});ui.set(header,"title",L"连接详情");
-    auto root=ui.make("Page",{header,body});ui.locate(root,__FILE__,__LINE__);
-    return {root,{{"$detailEdit",edit.widget},{"$detailBack",back.widget}}};
+inline Page buildDetails(Mount& mount,VM& vm,Connections& flow) {
+    Compose ui(mount);
+    auto info=ui.section({ui.formGrid({
+        ui.field(L"连接名称",ui.text(flow.detailName)),
+        ui.field(L"连接状态",ui.status(flow.detailStatus).tone(flow.detailTone)),
+        ui.field(L"主机地址",ui.text(flow.detailHost)),ui.field(L"端口",ui.text(flow.detailPort)),
+        ui.field(L"连接协议",ui.text(flow.detailProtocol)),ui.field(L"连接 ID",ui.text(flow.detailKey))
+    })}).title(L"连接信息");
+    auto behavior=ui.section({ui.formGrid({
+        ui.field(L"连接超时",ui.text(flow.detailTimeout)),ui.field(L"断线处理",ui.text(flow.detailReconnect))
+    }),ui.field(L"备注",ui.text(flow.detailNote))}).title(L"连接行为");
+    auto edit=ui.button(L"编辑连接",flow.edit).primary(),back=ui.button(L"返回连接列表",flow.detailBack);
+    auto body=ui.detailPage({info,behavior,ui.actions({edit,ui.button(L"删除连接",flow.remove).danger(),ui.status(flow.message)})});
+    auto header=ui.header({ui.text(L"已保存的本地配置 · 状态为固定模拟数据，不发起网络连接。"),ui.toolbar({
+        back,ui.select(vm.themes,vm.theme).name(L"详情页主题"),ui.select(vm.densities,vm.density).name(L"界面密度")
+    })}).title(L"连接详情");
+    return {ui.page({header,body}).located(__FILE__,__LINE__),{{"$detailEdit",edit.widget()},{"$detailBack",back.widget()}}};
 }
 
-inline Page buildWorkspace(Mount& ui,VM& vm,Connections& flow) {
-    const auto oldScope=ui.scope();ui.setScope("scope_Connections_Editor");
-    auto button=[&](const wchar_t* title,VmCommand& command,const char* variant="") {
-        auto e=ui.make("Button",{},variant);ui.set(e,"text",title);ui.click(e,command);return e;
-    };
-    auto form=buildPage(ui,vm);ui.condition(form.root,flow.showForm);
-    ui.setScope("scope_Connections_Details");
-    auto detail=buildDetails(ui,vm,flow);ui.condition(detail.root,flow.showDetail);
-    ui.setScope("scope_Connections");
-    auto search=ui.make("SearchInput");ui.model(search,flow.query);ui.set(search,"name",L"搜索连接");ui.set(search,"placeholder",L"搜索名称、地址或 ID");
-    auto filter=ui.make("Select");ui.bind(filter,"items",flow.filters);ui.model(filter,flow.filter);ui.set(filter,"name",L"连接状态");
-    auto theme=ui.make("Select");ui.bind(theme,"items",vm.themes);ui.model(theme,vm.theme);ui.set(theme,"name",L"连接页主题");
-    auto table=ui.make("DataTable");ui.bind(table,"columns",flow.columns);
-    ui.bind(table,"items",flow.filtered);ui.model(table,flow.selectedKey);ui.set(table,"name",L"连接列表");ui.condition(table,flow.hasRows);
-    ui.tableEvent(table,"activate",flow.view);ui.tableEvent(table,"delete",flow.remove);
-    auto count=ui.make("Text",{},"muted");ui.bind(count,"text",flow.count);
-    auto selected=ui.make("Text",{},"muted");ui.bind(selected,"text",flow.selection);
-    auto status=ui.make("Status");ui.bind(status,"text",flow.message);
-    auto clear=button(L"清除筛选",flow.clear);ui.condition(clear,flow.hasRecords);
-    auto create=button(L"新建连接",flow.add,"primary");ui.condition(create,flow.noRecords);
-    auto empty=ui.make("EmptyState",{clear,create});ui.bind(empty,"title",flow.emptyTitle);ui.bind(empty,"subtitle",flow.emptyText);ui.condition(empty,flow.empty);empty.grow();
-    auto density=ui.make("Select");ui.bind(density,"items",vm.densities);ui.model(density,vm.density);ui.set(density,"name",L"界面密度");
-    auto header=ui.make("Header",{ui.make("Toolbar",{button(L"返回性能实验台",flow.back),theme,density,button(L"组件与布局",flow.showGallery)})});ui.set(header,"title",L"连接管理");
-    auto list=ui.make("ListPage",{
-        ui.make("Toolbar",{search,filter,button(L"新建连接",flow.add,"primary"),button(L"查看详情",flow.view),button(L"编辑选中",flow.edit),button(L"删除选中",flow.remove,"danger")}),
-        ui.make("Toolbar",{count,selected}),table,empty,ui.make("ActionBar",{status})});
-    auto listRoot=ui.make("Page",{header,list});ui.condition(listRoot,flow.showList);
-    auto keep=button(L"继续 / 取消",flow.keep);
-    auto discard=button(L"放弃修改并离开",flow.discard,"danger");ui.condition(discard,flow.notDeleting);
-    auto save=button(L"保存后离开",flow.saveLeave,"primary");ui.condition(save,flow.canSavePrompt);
-    auto remove=button(L"确认删除",flow.confirmDelete,"danger");ui.condition(remove,flow.deleting);
-    auto warning=ui.make("DetailPage",{ui.make("ActionBar",{keep,save,discard,remove})});
-    ui.bind(warning,"title",flow.promptTitle);ui.bind(warning,"subtitle",flow.promptText);
-    auto prompt=ui.make("Page",{warning});ui.condition(prompt,flow.prompt);
-    auto styleError=ui.make("ValidationMessage");ui.bind(styleError,"text",flow.styleError);
-    auto root=ui.make("Column",{styleError,listRoot,detail.root,form.root,prompt},"workspace");root.grow();ui.locate(root,__FILE__,__LINE__);ui.locate(list,__FILE__,__LINE__);
+inline Page buildWorkspace(Mount& mount,VM& vm,Connections& flow) {
+    Compose ui(mount);
+    const auto oldScope=mount.scope();mount.setScope("scope_Connections_Editor");
+    auto form=buildPage(mount,vm);mount.condition(form.root,flow.showForm);
+    mount.setScope("scope_Connections_Details");
+    auto detail=buildDetails(mount,vm,flow);mount.condition(detail.root,flow.showDetail);
+    mount.setScope("scope_Connections");
+    auto search=ui.search(flow.query).name(L"搜索连接").placeholder(L"搜索名称、地址或 ID");
+    auto table=ui.table(flow.columns,flow.filtered,flow.selectedKey).name(L"连接列表").visible(flow.hasRows)
+        .onActivate(flow.view).onDelete(flow.remove);
+    auto empty=ui.emptyState({
+        ui.button(L"清除筛选",flow.clear).visible(flow.hasRecords),
+        ui.button(L"新建连接",flow.add).primary().visible(flow.noRecords)
+    }).title(flow.emptyTitle).subtitle(flow.emptyText).visible(flow.empty).grow();
+    auto header=ui.header({ui.toolbar({
+        ui.button(L"返回性能实验台",flow.back),ui.select(vm.themes,vm.theme).name(L"连接页主题"),
+        ui.select(vm.densities,vm.density).name(L"界面密度"),ui.button(L"组件与布局",flow.showGallery)
+    })}).title(L"连接管理");
+    auto list=ui.listPage({ui.toolbar({
+        search,ui.select(flow.filters,flow.filter).name(L"连接状态"),ui.button(L"新建连接",flow.add).primary(),
+        ui.button(L"查看详情",flow.view),ui.button(L"编辑选中",flow.edit),ui.button(L"删除选中",flow.remove).danger()
+    }),ui.toolbar({ui.text(flow.count).classes("muted"),ui.text(flow.selection).classes("muted")}),
+        table,empty,ui.actions({ui.status(flow.message)})}).located(__FILE__,__LINE__);
+    auto keep=ui.button(L"继续 / 取消",flow.keep);
+    auto warning=ui.detailPage({ui.actions({
+        keep,ui.button(L"保存后离开",flow.saveLeave).primary().visible(flow.canSavePrompt),
+        ui.button(L"放弃修改并离开",flow.discard).danger().visible(flow.notDeleting),
+        ui.button(L"确认删除",flow.confirmDelete).danger().visible(flow.deleting)
+    })}).title(flow.promptTitle).subtitle(flow.promptText);
+    auto root=ui.column({ui.validation(flow.styleError),ui.page({header,list}).visible(flow.showList),
+        detail.root,form.root,ui.page({warning}).visible(flow.prompt)}).classes("workspace").grow().located(__FILE__,__LINE__);
     form.fields.insert(detail.fields.begin(),detail.fields.end());
-    form.fields["$table"]=table.widget;form.fields["$search"]=search.widget;form.fields["$keep"]=keep.widget;
-    for(auto& field:form.fields)ui.remember(field.first[0]=='$'?field.first.substr(1):field.first,field.second);
-    ui.setScope(oldScope);
+    form.fields["$table"]=table.widget();form.fields["$search"]=search.widget();form.fields["$keep"]=keep.widget();
+    for(auto& field:form.fields)mount.remember(field.first[0]=='$'?field.first.substr(1):field.first,field.second);
+    mount.setScope(oldScope);
     return {root,std::move(form.fields)};
 }
 

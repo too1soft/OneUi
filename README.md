@@ -12,7 +12,7 @@
 
 浅色表单：默认间距、字号、绿色强调色和自动分栏，应用代码不用计算字段坐标。
 
-![OneUI 浅色表单和自适应双列布局](docs/images/performance-lab/form-light-wide.png)
+![OneUI 浅色表单和自适应双列布局](docs/images/typed-authoring/editor-light-wide.png)
 
 深色紧凑表格：1,000 条模拟记录，原生虚拟化绘制。
 
@@ -72,23 +72,19 @@ $sdk = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows Kits\Installed Roots'
 
 ```cpp
 #include <oneui/ui_declarative_app.h>
+#include <oneui/ui_compose.h>
 #include <oneui/ui_theme.h>
 
 int main() {
     oneui::ui::DeclarativeApp app(L"我的第一个 OneUI 页面", 760, 540);
     oneui::State<std::wstring> name{L"工作空间"};
-    auto& ui = app.mount();
-
-    auto input = ui.make("Input");
-    ui.model(input, name); // 输入与状态双向同步。
-    auto row = ui.make("FormRow", {input});
-    ui.set(row, "label", L"名称");
-    ui.set(row, "hint", L"修改输入，下面的文字会跟着变化。");
-    auto preview = ui.make("Text");
-    ui.bind(preview, "text", name);
-    auto page = ui.make("SettingsPage", {row, preview});
-    ui.set(page, "title", L"偏好设置");
-    oneui::ui::applyTheme(ui);
+    oneui::ui::Compose ui(app.mount());
+    auto page = ui.settingsPage({
+        ui.field(L"名称", ui.input(name))
+            .hint(L"修改输入，下面的文字会跟着变化。"),
+        ui.text(name)
+    }).title(L"偏好设置");
+    oneui::ui::applyTheme(app.mount());
     return app.run(page);
 }
 ```
@@ -98,7 +94,7 @@ int main() {
 .\examples\declarative\build\bin\oneui-hello.exe
 ```
 
-把这个文件作为自己页面的起点。`ui.make` 创建控件，`ui.set` 设置固定属性，`ui.model` 双向绑定，`ui.bind` 将变量映射到界面属性。`SettingsPage` 负责正文限宽和滚动，`FormRow` 负责标签、说明与字段排列，主题提供默认外观。
+把这个文件作为自己页面的起点。`ui.input(name)` 自动双向绑定，`ui.text(name)` 随状态更新，`ui.field` 提供标签和说明，`ui.settingsPage` 负责正文限宽和滚动。`Compose` 直接使用原有 Mount，旧的 `make/set/model/bind` 写法仍然可用。错误属性或绑定类型会在编译时报告。[常用写法、默认外观与验证](docs/50-typed-authoring-and-defaults.md)。
 
 下一步可直接运行 [details.cpp](examples/declarative/details.cpp)：构建后启动 `examples/declarative/build/bin/oneui-details.exe`，体验只用公共组件完成的自动分栏、长文本、底部操作和主题切换。[从字段到完整页面](docs/48-connection-page-recipes.md) 按“运行 → 改字段 → 组合布局 → 接入业务”说明代码和模板写法。
 
@@ -123,7 +119,7 @@ int main() {
 |---|---|
 | 页面布局 | 选 SettingsPage / ListPage / DetailPage；字段放 FormRow，自动分栏用 FormGrid |
 | 样式与间距 | 修改外部 CSS 或 `.one` 的 `<style scoped>`，用 `-Dev` 即时预览 |
-| 深色或紧凑外观 | `ui::applyTheme(ui, true, ui::Density::Compact)` |
+| 深色或紧凑外观 | `ui::applyTheme(app.mount(), true, ui::Density::Compact)` |
 | 派生文字或校验 | 在 C++ 中写 `Computed`，模板只引用成员 |
 | 按钮执行与保存中 | 使用 `VmCommand`，模板通过 `@click="save"` 绑定 |
 | 复杂数据列表 | DataTable + 稳定业务 ID；原生表格只绘制可见行 |
@@ -131,6 +127,8 @@ int main() {
 CSS 修改成功后整体替换；失败保留上一份有效样式，输入、焦点、光标与有效滚动位置保留。**模板结构、事件与 C++ 逻辑仍需重编译。** 这里没有完整 Vue、浏览器 CSS Grid 或 JavaScript 表达式；明确的支持范围见[声明式 API](docs/35-declarative-authoring-v1.md)和[布局指南](docs/36-declarative-page-patterns.md)。
 
 ## 性能数据
+
+2026-09-28 的新写法回归：连接页 C++ / 模板平均 CPU paint 为 **3.260 / 3.263ms**，工作集 **100.28 / 99.60MiB**。相同功能的页面创建代码少了 **38.5%**，控件和订阅数量不变；三轮未观察到明显运行期开销回归。负载和轮次与下面的历史数据不同，请勿直接纵向比较。[前后同负载实测、代码量口径和原始数据](docs/50-typed-authoring-and-defaults.md#代码量与实测)。
 
 2026-09-27，Windows 10、Ryzen 9 9950X3D（32 逻辑处理器）、RTX 5080、MSVC Release、OpenGL + Skia Ganesh。使用同一 exe/DLL、1320×900 窗口、1,000 条固定数据，交替执行三轮搜索／编辑／取消流程；每轮先预热 50 次，再测 150 次。开发监听与渲染追踪关闭。
 

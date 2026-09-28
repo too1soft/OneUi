@@ -1,6 +1,6 @@
 # 从一个输入框开始
 
-这个示例适合学习 OneUI：先看 22 行的 [hello.cpp](hello.cpp)，再看包含保存、验证和千行列表的完整页面。Windows 首次构建需先按[仓库 README](../../README.md#运行-demowindows)准备 Skia。
+这个示例适合学习 OneUI：先看 16 行的 [hello.cpp](hello.cpp)，再看包含保存、验证和千行列表的完整页面。Windows 首次构建需先按[仓库 README](../../README.md#运行-demowindows)准备 Skia。
 
 在仓库根目录执行：
 
@@ -46,3 +46,5 @@
 完整[模板／绑定接口](../../docs/35-declarative-authoring-v1.md)、[页面与布局指南](../../docs/36-declarative-page-patterns.md)。本轮入口为 C++，不代表 Rust 已拥有等价模板接口。
 
 下一步可按[页面组合教程](../../docs/48-connection-page-recipes.md)体验性能实验台中的完整列表 → 详情 → 编辑流程；它与这里的最小程序使用相同的公共布局组件。
+
+`hello.cpp` 与 `details.cpp` 使用类型化 `Compose`：`ui.field(L"名称", ui.input(name))` 即可创建双向字段。`manual.h` 保留底层 Mount 示例，便于对照。[常用写法、编译诊断与性能记录](../../docs/50-typed-authoring-and-defaults.md)。

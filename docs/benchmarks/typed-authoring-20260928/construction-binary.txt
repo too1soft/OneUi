@@ -1,0 +1,3 @@
+SHA256 5de51e2ef7325cae4886ccf262871fb822c0faaf057d1227a7c34a16fa4a0d28
+E:\project\byname\oneui-renderer-check\examples\performance_lab\build-current\bin\oneui-authoring-tests.exe
+2 warmup rounds; 10 measured rounds; entries alternate; same process.

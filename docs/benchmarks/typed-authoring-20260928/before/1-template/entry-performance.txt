@@ -1,0 +1,12 @@
+entry=template
+cycles=50
+elapsed_ms=2169.38
+cpu_ms=2171.88
+cpu_percent=3.12859
+paint_mean_ms=3.34234
+paint_p95_ms=6.743
+interval_mean_ms=4.32913
+interval_p95_ms=8.6078
+paint_count=500
+working_set_mib=99.8203
+private_mib=142.551

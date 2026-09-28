@@ -1,0 +1,1 @@
+Same Release exe/DLL, 1320x900, 1000 seeded records, dev watcher OFF. First 50 cycles warm up; then measure filtering, editing, unsaved confirmation and discard. Paint is CPU callback work, not GPU time. Entry order alternates. Other desktop apps can affect timings.

@@ -66,3 +66,15 @@
 CPU 百分比是整机逻辑处理器归一化后的进程 CPU；paint 是 CPU 侧控件绘制遍历，不是 GPU 执行时间或显示帧率。综合图表页持续动画，不能用连接页空闲结果代表它。详细[测量结果与边界](../../docs/40-declarative-stage-validation.md)。
 
 截图来自 OneUI 原生离屏客户端捕获，可复现宽／窄、浅／深和紧凑密度。它不证明物理显示器 125%／150% DPI 或系统 IME 候选窗口已通过验收。
+
+## 类型化 C++ 入口
+
+连接列表、详情及编辑页已使用公共 `Compose` API。`ui.field(L"名称", ui.input(vm.name))` 自动创建标签与绑定，`ui.formGrid({...})` 自动分栏。两种入口共用组件元数据、原生控件和布局；[用法、截图与实测](../../docs/50-typed-authoring-and-defaults.md)。当前默认主题进一步区分分组／字段／说明间距，以及只读标签与值的文字层级。
+
+单独测当前代码版／模板版的页面构建成本：
+
+```powershell
+.\examples\performance_lab\build-current\bin\oneui-authoring-tests.exe --construction-benchmark
+```
+
+该 CSV 包含 2 轮预热后的 10 轮交替样本，计时包含 ViewModel、Mount、控件创建、应用主题和提交属性，不包含窗口启动／绘制／析构。
