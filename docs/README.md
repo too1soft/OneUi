@@ -23,6 +23,8 @@ roadmap 或差距分析当成现状。
 | 8 | [Rust 绑定](../bindings/rust/README.md) | `oneui-sys`、安全层、dispatcher、handle 和回调生命周期 |
 | 9 | [从字段到完整连接管理页](48-connection-page-recipes.md) | C++ 最小程序、模板组合、列表／详情／编辑、样式热更新 |
 
+阴影、渐变、展开与淡入见[效果与动效上手](51-effects-and-motion.md)：包含可复制代码、支持范围和实验台测量入口。
+
 连接管理最新[验证记录与截图](49-connection-workflow-validation.md)；真实系统 DPI、跨屏和输入法候选窗口状态单独列出。
 
 ## 当前规范

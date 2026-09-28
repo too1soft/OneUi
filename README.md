@@ -66,6 +66,14 @@ $sdk = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows Kits\Installed Roots'
 
 构建找不到 VS 时请确认安装了 C++ 和 CMake 组件；提示缺少 `skia.lib` 或文字模块时，完成第 2 步。回归测试还会下载固定的 Unicode／字体测试资源。更多参数见[实验台说明](examples/performance_lab/README.md)与[学习示例说明](examples/declarative/README.md)。
 
+## 阴影、渐变和动效怎么加？
+
+先运行 `.\examples\performance_lab\run.ps1 -Build -Effects`，直接调节多色标渐变、内／外阴影、展开与淡入。按钮加 `class="motion-lift"` 或 `class="motion-press"` 即可使用悬停／按压反馈；内容用 `Reveal` 绑定显示状态。默认页面仍保持简洁，效果按需开启。
+
+![OneUI 阴影、三色渐变与动效展示](docs/images/effects/effects-light-1320-1.png)
+
+软件和 GPU 后端都可运行；渐变本身即时切换，尚不做色标动画。[可复制的 C++／模板例子、CSS 支持边界与测量方法](docs/51-effects-and-motion.md)。
+
 ## 写第一个页面
 
 这是完整的 [hello.cpp](examples/declarative/hello.cpp)。输入框和预览绑定同一个变量，改输入会立即更新文字。

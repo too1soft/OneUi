@@ -3,6 +3,7 @@
 #include "oneui/platform/dpi.h"
 
 #include "oneui/color.h"
+#include "oneui/animation.h"
 #include "oneui/view.h"
 #include "oneui/controls/window_title_bar.h"
 #include "internal/scroll_trace.h"
@@ -1338,6 +1339,7 @@ private:
     }
 
     void ensureCreated() {
+        setPlatformMotionEnabled(clientAreaAnimationsEnabled());
         if (hwnd_ || !acceptingPostedCallbacks_.load(std::memory_order_acquire)) {
             return;
         }
@@ -1509,6 +1511,9 @@ private:
             }
             return 0;
         }
+        case WM_SETTINGCHANGE:
+            setPlatformMotionEnabled(clientAreaAnimationsEnabled());
+            break;
         case WM_CLOSE:
             if (onCloseRequested_) { auto callback = onCloseRequested_; callback(false); }
             else close();

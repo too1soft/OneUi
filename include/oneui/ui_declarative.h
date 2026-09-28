@@ -1,4 +1,5 @@
 #pragma once
+#include "oneui/controls/reveal.h"
 #include "oneui/ui.h"
 #include "oneui/ui_density.h"
 #include "oneui/ui_reactive.h"
@@ -112,6 +113,7 @@ private:
         else if (auto v = std::dynamic_pointer_cast<Select>(w)) v->setStyleOverride(selectStyleOverrideFromStyleSheet(sheet,n));
         else if (auto v = std::dynamic_pointer_cast<Table>(w)) v->setStyleOverride(tableStyleOverrideFromStyleSheet(sheet,n));
         else if (auto v = std::dynamic_pointer_cast<ScrollView>(w)) v->setStyleBox(box);
+        else if (auto v = std::dynamic_pointer_cast<Reveal>(w)) v->setTransition({box.transitionDurationMs.value_or(220),box.transitionEasing.value_or(EasingCurve::EaseOutCubic)});
     }
 public:
     void invalid(const std::shared_ptr<Widget>& widget,bool value) {
@@ -142,6 +144,13 @@ public:
     void replace(const std::string& validatedCss,Density density=Density::Comfortable) {
         StyleSheet next; std::string error;
         if (!next.addRulesFromCss(validatedCss,&error)) throw std::invalid_argument(error);
+        // Validate resolved tokens too: var(--gradient) must not bypass the
+        // strict entry's component consumption checks.
+        for(const auto& rule:next.rules()) if(rule.box.background.gradient || rule.box.background.gradientStart) {
+            const auto tag=rule.selector.substr(0,rule.selector.find_first_of(".:"));
+            if(tag!="stack" && tag!="scroll-view" && tag!="button" && tag!="input")
+                throw std::invalid_argument("Gradient is not consumed by "+tag+" in "+rule.selector);
+        }
         // Force variable resolution before committing the sheet.
         for (auto& entry : entries_) { StyleNode n{syntax::components().at(entry.component), {"one-"+entry.component},0}; next.resolve(n); }
         sheet_ = std::move(next);density_=density;
@@ -239,6 +248,10 @@ public:
         else if (type == "Button") node = b.button(L"",{});
         else if (type == "DataTable") node = b.native(std::make_shared<Table>()).grow();
         else if (type == "Scroll") { if (nodes.size()!=1) throw std::invalid_argument("Scroll needs one child"); node=b.scroll(nodes.front()).grow(); }
+        else if(type=="Reveal") {
+            if(children.size()!=1)throw std::invalid_argument("Reveal needs one child");
+            node=b.native(std::make_shared<Reveal>(children.front().widget)).shrink(0);
+        }
         else if (type == "Content") {
             auto body = b.column(nodes); body.basis(880).max(880).grow();
             content = body.as<Stack>(); node = b.row({body}); node.as<Stack>()->setAlign(StackAlign::Start);
@@ -316,6 +329,9 @@ public:
         } else if(key=="hint") {
             e.hint->setText(value);e.hint->setVisible(!value.empty());
             if(e.fieldControl)e.fieldControl->setAccessibleDescription(value+(e.error && !e.error->text().empty()?L" "+e.error->text():L""));
+        } else if(key=="preset") {
+            if(value!=L"fade" && value!=L"expand")throw std::invalid_argument("Reveal preset must be fade or expand");
+            e.as<Reveal>()->setPreset(value==L"fade"?RevealPreset::Fade:RevealPreset::Expand);
         } else if(key=="placeholder") e.as<TextField>()->setPlaceholder(value);
         else if(key=="selectedKey") e.table->select(value);
         else if(key=="text") {
@@ -333,6 +349,8 @@ public:
     }
     void set(Element& e,const std::string& key,bool value) {
         if(key=="visible") e.widget->setVisible(value); else if(key=="disabled") e.widget->setDisabled(value);
+        else if(key=="open") e.as<Reveal>()->setOpen(value);
+        else if(key=="reduced-motion") e.as<Reveal>()->setReducedMotion(value);
         else if(key=="checked") e.as<Switch>()->setChecked(value); else throw std::invalid_argument("Invalid bool property");
     }
     void set(Element& e,const std::string& key,float value) {

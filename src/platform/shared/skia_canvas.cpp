@@ -239,6 +239,64 @@ class SkiaCanvasImpl final : public Canvas {
         ++g_primitivePaintTrace.gradientCalls;
     }
 
+    void fillGradient(Rect rect, const Gradient& gradient, float radius) override {
+        if (rect.width <= 0 || rect.height <= 0 || gradient.stops.size() < 2 || gradient.stops.size() > 32) return;
+        const double started = currentTimeMs();
+        std::vector<SkColor4f> colors; std::vector<SkScalar> positions;
+        colors.reserve(gradient.stops.size()); positions.reserve(gradient.stops.size());
+        float previous = 0;
+        for (const auto& stop : gradient.stops) {
+            if (!std::isfinite(stop.position) || stop.position < previous || stop.position > 1) return;
+            colors.push_back(SkColor4f::FromColor(toSkColor(stop.color))); positions.push_back(stop.position); previous = stop.position;
+        }
+        SkPaint paint; paint.setAntiAlias(true);
+        if (gradient.radial) {
+            if (!std::isfinite(gradient.radius) || gradient.radius <= 0 || !std::isfinite(gradient.center.x) || !std::isfinite(gradient.center.y)) return;
+            const SkPoint center = SkPoint::Make(rect.x + rect.width * gradient.center.x, rect.y + rect.height * gradient.center.y);
+            paint.setShader(SkGradientShader::MakeRadial(center, std::max(rect.width, rect.height) * gradient.radius,
+                colors.data(), nullptr, positions.data(), int(colors.size()), SkTileMode::kClamp, SkGradientShader::Interpolation{}, nullptr));
+        } else {
+            if (!std::isfinite(gradient.angleDegrees)) return;
+            const float radians = (gradient.angleDegrees - 90.0f) * 3.14159265358979323846f / 180.0f;
+            const float dx = std::cos(radians), dy = std::sin(radians);
+            // CSS corner projection, including horizontal/vertical gradients on non-square boxes.
+            const float half = (std::abs(dx) * rect.width + std::abs(dy) * rect.height) * 0.5f;
+            const SkPoint ends[] = {{rect.x + rect.width/2 - dx*half, rect.y + rect.height/2 - dy*half},
+                                    {rect.x + rect.width/2 + dx*half, rect.y + rect.height/2 + dy*half}};
+            paint.setShader(SkGradientShader::MakeLinear(ends, colors.data(), nullptr, positions.data(), int(colors.size()),
+                SkTileMode::kClamp, SkGradientShader::Interpolation{}, nullptr));
+        }
+        canvas_.drawRRect(SkRRect::MakeRectXY(toSkRect(rect), radius, radius), paint);
+        ++g_primitivePaintTrace.gradientCalls; g_primitivePaintTrace.gradientMs += currentTimeMs() - started;
+    }
+
+    void drawInsetShadow(Rect rect, const BoxShadow& shadow, float radius) override {
+        if (rect.width <= 0 || rect.height <= 0 || shadow.color.a == 0) return;
+        if (!std::isfinite(shadow.blurRadius) || !std::isfinite(shadow.spreadRadius) || !std::isfinite(shadow.offset.x) || !std::isfinite(shadow.offset.y)) return;
+        const double started = currentTimeMs();
+        const float blur = std::max(0.0f, shadow.blurRadius), spread = shadow.spreadRadius;
+        const Rect hole{rect.x + shadow.offset.x + spread, rect.y + shadow.offset.y + spread,
+                        rect.width - spread*2, rect.height - spread*2};
+        SkPaint paint; paint.setAntiAlias(true); paint.setColor(toSkColor(shadow.color));
+        canvas_.save();
+        canvas_.clipRRect(SkRRect::MakeRectXY(toSkRect(rect), radius, radius), SkClipOp::kIntersect, true);
+        if (hole.width <= 0 || hole.height <= 0) canvas_.drawRect(toSkRect(rect), paint);
+        else {
+            if (blur > 0) paint.setMaskFilter(shadowMaskFilter(blur,true));
+            const float pad = blur*4 + std::abs(spread) + std::abs(shadow.offset.x) + std::abs(shadow.offset.y) + 2;
+            const SkRRect outer = SkRRect::MakeRect(toSkRect({rect.x-pad,rect.y-pad,rect.width+2*pad,rect.height+2*pad}));
+            const float innerRadius = std::max(0.0f, radius-spread);
+            canvas_.drawDRRect(outer, SkRRect::MakeRectXY(toSkRect(hole),innerRadius,innerRadius),paint);
+        }
+        canvas_.restore();
+        ++g_primitivePaintTrace.shadowCalls; g_primitivePaintTrace.shadowMs += currentTimeMs()-started;
+    }
+
+    void saveOpacity(Rect bounds, float opacity) override {
+        const SkRect rect = toSkRect(bounds);
+        canvas_.saveLayerAlphaf(&rect, std::clamp(opacity,0.0f,1.0f));
+    }
+
     void strokeRect(Rect rect, Color color, float radius, float width) override {
         // CSS border-width: 0 means no border, not Skia's device hairline.
         if (!(width > 0.0f) || !std::isfinite(width) || color.a == 0) return;
@@ -777,19 +835,20 @@ class SkiaCanvasImpl final : public Canvas {
         return it->second;
     }
 
-    static sk_sp<SkMaskFilter> shadowMaskFilter(float blurRadius) {
+    static sk_sp<SkMaskFilter> shadowMaskFilter(float blurRadius, bool respectTransform=false) {
         const float sigma = std::max(0.0f, blurRadius * 0.5f);
         if (sigma <= 0.0f) {
             return nullptr;
         }
 
-        const int key = static_cast<int>(std::round(sigma * 100.0f));
-        static thread_local std::map<int, sk_sp<SkMaskFilter>> cache;
+        const auto key = std::make_pair(static_cast<int>(std::round(sigma * 100.0f)),respectTransform);
+        static thread_local std::map<std::pair<int,bool>, sk_sp<SkMaskFilter>> cache;
         if (auto cached = cache.find(key); cached != cache.end()) {
             return cached->second;
         }
 
-        auto filter = SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, sigma, false);
+        if(cache.size()>=256)cache.clear();
+        auto filter = SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, sigma, respectTransform);
         cache[key] = filter;
         return filter;
     }

@@ -1,6 +1,7 @@
 #include "oneui/widget.h"
 
 #include <utility>
+#include <algorithm>
 #include <atomic>
 
 namespace oneui {
@@ -396,7 +397,14 @@ void Widget::setFocused(bool focused) {
 void Widget::invalidate() {
     ++measureRevision_;
     if (rectInvalidator_) {
-        rectInvalidator_(frame_);
+        const Rect current=paintBounds();Rect dirty=current;
+        if(lastPaintInvalidation_.width>0 && lastPaintInvalidation_.height>0) {
+            const float right=std::max(current.x+current.width,lastPaintInvalidation_.x+lastPaintInvalidation_.width);
+            const float bottom=std::max(current.y+current.height,lastPaintInvalidation_.y+lastPaintInvalidation_.height);
+            dirty.x=std::min(current.x,lastPaintInvalidation_.x);dirty.y=std::min(current.y,lastPaintInvalidation_.y);
+            dirty.width=right-dirty.x;dirty.height=bottom-dirty.y;
+        }
+        lastPaintInvalidation_=current;rectInvalidator_(dirty);
     } else if (invalidator_) {
         invalidator_();
     }

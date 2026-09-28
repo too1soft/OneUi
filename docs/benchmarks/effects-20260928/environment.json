@@ -1,0 +1,44 @@
+{
+  "date": "2026-09-28T14:36:42.1139862+08:00",
+  "rounds": 3,
+  "sampleSeconds": 5,
+  "warmupSeconds": 3,
+  "width": 1320,
+  "height": 1000,
+  "entry": "code",
+  "dev": false,
+  "trace": false,
+  "cpu": {
+    "Name": "AMD Ryzen 9 9950X3D 16-Core Processor          ",
+    "NumberOfLogicalProcessors": 32
+  },
+  "os": {
+    "Caption": "Microsoft Windows 10 专业版",
+    "Version": "10.0.19045"
+  },
+  "adapters": [
+    {
+      "Name": "OrayIddDriver Device",
+      "DriverVersion": "17.50.19.949"
+    },
+    {
+      "Name": "NVIDIA GeForce RTX 5080",
+      "DriverVersion": "32.0.15.8180"
+    },
+    {
+      "Name": "AMD Radeon(TM) Graphics",
+      "DriverVersion": "32.0.21030.2001"
+    }
+  ],
+  "binaries": [
+    {
+      "name": "oneui-performance-lab.exe",
+      "Hash": "F4BA197704E361B09ADB3C45033C252442BCFE8B97CC839A465EED7F6146050A"
+    },
+    {
+      "name": "oneui.dll",
+      "Hash": "CD8FF6A3FF9D2EA6AA0BF7A49F8BF991F77AE701CBCD0206E04BD663DBF95207"
+    }
+  ],
+  "method": "Three-second warmup. Alternating CPU/GPU-first rounds. Effects toggles Reveal every 500ms and alternates expand/fade every four seconds, with native button hover; effects-idle exercises the same page for the first 2.1 seconds, then settles before sampling; only boundary posts occur in its sample. No per-frame tree rebuild or stylesheet parsing. CPU wall times, not GPU timestamps or display FPS; paint includes submission. Idle count must be zero."
+}

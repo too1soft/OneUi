@@ -126,6 +126,16 @@ void View::installChildCallbacks(Widget& child) {
         [this] { requestAnimationFrame(); });
 }
 
+Rect View::paintBounds() const {
+    Rect bounds=frame();
+    for(const auto& child:children_)if(child->visible()) {
+        const auto b=child->paintBounds();
+        const float x=(std::min)(bounds.x,b.x),y=(std::min)(bounds.y,b.y);
+        bounds={x,y,(std::max)(bounds.x+bounds.width,b.x+b.width)-x,(std::max)(bounds.y+bounds.height,b.y+b.height)-y};
+    }
+    return bounds;
+}
+
 void View::paint(Canvas& canvas) {
     { internal::FrameSpan span(internal::FrameStage::Layout); layoutChildren(); }
     const auto clip = canvas.clipBounds();
@@ -135,7 +145,7 @@ void View::paint(Canvas& canvas) {
         if (!child->visible()) {
             continue;
         }
-        if (canCullByClip && !intersects(child->frame(), *clip)) {
+        if (canCullByClip && !intersects(child->paintBounds(), *clip)) {
             continue;
         }
         if (child->paintsAboveSiblings()) {
@@ -153,7 +163,7 @@ void View::paint(Canvas& canvas) {
         if (!child->visible() || !child->paintsAboveSiblings()) {
             continue;
         }
-        if (canCullByClip && !intersects(child->frame(), *clip)) {
+        if (canCullByClip && !intersects(child->paintBounds(), *clip)) {
             continue;
         }
         child->paint(canvas);

@@ -1,0 +1,8 @@
+<template>
+  <Reveal ref="reveal" :open="open" :preset="preset" :reduced-motion="reduced">
+    <Input ref="input" v-model="text" class="effect-inset" />
+  </Reveal>
+</template>
+<style scoped>
+Input.effect-inset { background: linear-gradient(90deg, #ffffff, #aaddcc 50%, #ffffff); box-shadow: inset 0px 2px 6px #00000040; }
+</style>

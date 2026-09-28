@@ -66,9 +66,7 @@ StyleBox StyleBoxTransition::applyTo(StyleBox target) const {
         return target;
     }
 
-    target.background.color = background_.value();
-    target.background.gradientStart.reset();
-    target.background.gradientEnd.reset();
+    if(!target.background.gradient && !target.background.gradientStart) target.background.color = background_.value();
     target.foreground = foreground_.value();
     target.borderColor = border_.value();
     target.opacity = opacity_.value();

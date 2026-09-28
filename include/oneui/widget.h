@@ -159,6 +159,7 @@ public:
     /// Updating child layout hints is safe; do not directly resize this widget here.
     void setOnSizeChanged(std::function<void(Size)> callback);
     Rect frame() const;
+    virtual Rect paintBounds() const { return frame(); }
     void setPreferredSize(Size size);
     Size preferredSize() const;
     // Unconstrained content size in logical pixels. Layout containers may opt
@@ -309,6 +310,7 @@ private:
     AccessibilityState accessibilityState_;
     Binding<bool> disabledBinding_;
     Binding<bool> visibleBinding_;
+    Rect lastPaintInvalidation_{};
 };
 
 } // namespace oneui

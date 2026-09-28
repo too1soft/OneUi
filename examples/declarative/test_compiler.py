@@ -4,6 +4,11 @@ with tempfile.TemporaryDirectory() as directory:
     root = pathlib.Path(directory)
     cases = [
         ('<Text>hello</Text>', True, ''),
+        ('<Reveal :open="flag" preset="expand" reduced-motion="false"><Input v-model="name"/></Reveal>', True, ''),
+        ('<Reveal/>', False, 'exactly one child'),
+        ('<Reveal><Text/><Text/></Reveal>', False, 'exactly one child'),
+        ('<Reveal preset="bounce"><Text/></Reveal>', False, 'fade or expand'),
+        ('<Reveal open="yes"><Text/></Reveal>', False, 'true or false'),
         ('<Input ref="name" v-model="name"/>', True, ''),
         ('<Input ref="name.invalid"/>', False, 'static identifier'),
         ('<Column><Input ref="same"/><Input ref="same"/></Column>', False, 'Duplicate ref'),
@@ -71,7 +76,7 @@ with tempfile.TemporaryDirectory() as directory:
     assert 'scope_Main_Child' in generated and 'slots' in generated and 'Child.one' in (root/'main.d').read_text()
     if len(sys.argv) > 3:
         cpp_compiler, includes = sys.argv[2:4]
-        for body, valid in [('<Content max-width="0008" align="center"><Input v-model="name"/></Content>',True),('<Input v-model="name"/>',True),('<Input v-model="flag"/>',False),('<Text :text="flag"/>',False),('<Text :text="missing"/>',False)]:
+        for body, valid in [('<Reveal :open="flag"><Input v-model="name"/></Reveal>',True),('<Reveal :open="name"><Text/></Reveal>',False),('<Content max-width="0008" align="center"><Input v-model="name"/></Content>',True),('<Input v-model="name"/>',True),('<Input v-model="flag"/>',False),('<Text :text="flag"/>',False),('<Text :text="missing"/>',False)]:
             (root/'Typed.one').write_text('<template view-model="VM">\n'+body+'\n</template>')
             subprocess.run([compiler,'--input',str(root/'Typed.one'),'--output',str(root/'typed.h'),'--name','Typed'],check=True)
             (root/'typed.cpp').write_text('#include "oneui/ui_declarative.h"\nstruct VM { oneui::State<std::wstring> name; oneui::State<bool> flag; };\n#include "typed.h"\nvoid check(VM& vm,oneui::ui::Mount& ui){build_Typed(vm,ui);}')
@@ -79,6 +84,8 @@ with tempfile.TemporaryDirectory() as directory:
             assert (result.returncode==0)==valid, result.stdout.decode(errors='replace')
             if not valid: assert b'Typed.one(2)' in result.stdout, result.stdout.decode(errors='replace')
         compose_cases = [
+            ('ui.reveal(ui.input(name)).open(flag).preset(L"fade").reducedMotion(false);',True,''),
+            ('ui.reveal(ui.text(L"Hint")).open(name);',False,'Compose property and State/Computed value types do not match'),
             ('ui.settingsPage({ui.formGrid({ui.field(L"Name",ui.input(name)).hint(L"Help").error(error)}),ui.actions({ui.button(L"Save",save).primary()})});',True,''),
             ('ui.text(name).ref("caption"); ui.select(items,index); ui.toggle(flag);',True,''),
             ('ui.input(flag);',False,''),
@@ -95,5 +102,5 @@ with tempfile.TemporaryDirectory() as directory:
             result=subprocess.run([cpp_compiler,'/nologo','/Zs','/EHsc','/std:c++17','/utf-8','/I'+includes,str(root/'compose.cpp')],capture_output=True)
             assert (result.returncode==0)==valid,result.stdout.decode(errors='replace')
             if diagnostic: assert diagnostic.encode() in result.stdout,result.stdout.decode(errors='replace')
-        print('Compose: 2 positive and 8 negative C++ type/structure/lifetime diagnostics passed')
+        print(f'Compose: {sum(valid for _,valid,_ in compose_cases)} positive and {sum(not valid for _,valid,_ in compose_cases)} negative C++ type/structure/lifetime diagnostics passed')
 print('Compiler positive, negative, source mapping, imports, slots and scoped CSS tests passed')

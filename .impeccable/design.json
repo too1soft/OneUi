@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-28T05:32:22.907827+00:00",
+  "generatedAt": "2026-09-28T06:31:18.579151+00:00",
   "title": "Design System: OneUI",
   "extensions": {
     "colorMeta": {
@@ -95,12 +95,48 @@
         "purpose": "The stronger value role automatically applied to a Text child of FormRow."
       }
     },
-    "shadows": [],
+    "shadows": [
+      {
+        "name": "motion-lift-rest",
+        "value": "0px 2px 6px #00000018",
+        "purpose": "Opt-in Button.motion-lift; default surfaces stay flat."
+      },
+      {
+        "name": "motion-lift-hover",
+        "value": "0px 5px 12px #00000030",
+        "purpose": "Hover elevation without moving the hit target."
+      },
+      {
+        "name": "motion-press-rest",
+        "value": "0px 2px 4px #00000020",
+        "purpose": "Opt-in Button.motion-press resting shadow."
+      },
+      {
+        "name": "motion-press-active",
+        "value": "inset 0px 2px 5px #00000038",
+        "purpose": "Pressed feedback, removed when disabled."
+      }
+    ],
     "motion": [
       {
         "name": "button-transition-duration",
         "value": "120ms",
         "purpose": "Duration set on Button by ui_theme.h; no easing token is declared."
+      },
+      {
+        "name": "reveal-transition",
+        "value": "220ms ease-out",
+        "purpose": "Retained content fade/expand; closing uses 75%; reduced motion settles immediately."
+      },
+      {
+        "name": "motion-lift-duration",
+        "value": "140ms",
+        "purpose": "Optional button shadow elevation feedback."
+      },
+      {
+        "name": "motion-press-duration",
+        "value": "110ms",
+        "purpose": "Optional button inner-shadow press feedback."
       }
     ],
     "breakpoints": []
@@ -174,6 +210,11 @@
         "name": "The Read-Only Hierarchy Rule",
         "body": "In a read-only field, the label describes the value; the value receives the stronger text role.",
         "section": "typography"
+      },
+      {
+        "name": "Flat defaults, purposeful motion",
+        "body": "Preserve flat default surfaces. Opt-in shadows indicate interaction; Reveal completes a content transition and stops. Respect reduced motion.",
+        "section": "elevation"
       }
     ],
     "dos": [

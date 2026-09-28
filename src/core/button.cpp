@@ -3,6 +3,7 @@
 
 #include "oneui/color.h"
 #include "oneui/style.h"
+#include "oneui/style_sheet.h"
 
 #include <algorithm>
 #include "internal/ui_clock.h"
@@ -37,7 +38,9 @@ void applyButtonStateOverride(ButtonStyle& style, const ButtonStateStyleOverride
     }
     if (override.background) {
         style.background = *override.background;
+        style.gradient.reset();
     }
+    if (override.gradient) style.gradient=override.gradient;
     if (override.foreground) {
         style.foreground = *override.foreground;
     }
@@ -238,6 +241,17 @@ Size Button::naturalContentSize() const {
             height + std::max(0.0f, padding.top) + std::max(0.0f, padding.bottom)};
 }
 
+Rect Button::paintBounds() const {
+    const auto style=visualStyle(resolvedStyle());StyleBox box;
+    for(const auto& s:style.shadows)box.shadows.push_back({s.color,s.offset,s.blurRadius,s.spreadRadius,s.inset});
+    auto r=stylePaintBounds(frame(),box);
+    if(focusVisible() && style.focusRing.visible) {
+        const float p=std::max(0.0f,style.focusRing.offset+style.focusRing.width);
+        r={r.x-p,r.y-p,r.width+2*p,r.height+2*p};
+    }
+    return r;
+}
+
 void Button::paint(Canvas& canvas) {
     auto rect = frame();
     const ButtonStyle target = resolvedStyle();
@@ -260,14 +274,15 @@ void Button::paint(Canvas& canvas) {
                 style.radius);
         }
     }
-    canvas.fillRect(rect, style.background, style.radius);
+    if(style.gradient) canvas.fillGradient(rect,*style.gradient,style.radius);
+    else canvas.fillRect(rect, style.background, style.radius);
     // border-width: 0 语义为“无边框”：宽度 0 传给 Skia 会画 1px 发丝线，必须显式跳过。
     if (style.borderWidth > 0.0f && style.border.a > 0) {
         canvas.strokeRect(rect, style.border, style.radius, style.borderWidth);
     }
     for (const auto& shadow : style.shadows) {
         if (shadow.inset) {
-            canvas.strokeRect(rect, shadow.color, style.radius, std::max(1.0f, shadow.blurRadius));
+            canvas.drawInsetShadow(rect,BoxShadow{shadow.color,shadow.offset,shadow.blurRadius,shadow.spreadRadius},style.radius);
         }
     }
     struct ContentClip {
@@ -460,6 +475,7 @@ bool Button::isFocusable() const {
 
 bool Button::tickAnimations(double nowMs) {
     bool running = false;
+    running = shadowTransition_.tick(nowMs) || running;
     running = backgroundTransition_.tick(nowMs) || running;
     running = foregroundTransition_.tick(nowMs) || running;
     running = borderTransition_.tick(nowMs) || running;
@@ -501,6 +517,7 @@ ButtonStyle Button::visualStyle(ButtonStyle target) const {
         return target;
     }
 
+    target.shadows = shadowTransition_.value();
     target.background = backgroundTransition_.value();
     target.foreground = foregroundTransition_.value();
     target.border = borderTransition_.value();
@@ -514,6 +531,7 @@ void Button::beginVisualTransition(ButtonStyle from, ButtonStyle target) {
     }
 
     if (!visualInitialized_) {
+        shadowTransition_.reset(from.shadows);
         backgroundTransition_.reset(from.background);
         foregroundTransition_.reset(from.foreground);
         borderTransition_.reset(from.border);
@@ -521,10 +539,11 @@ void Button::beginVisualTransition(ButtonStyle from, ButtonStyle target) {
     }
 
     const double nowMs = currentTimeMs();
+    shadowTransition_.animateTo(target.shadows,nowMs,target.transition);
     backgroundTransition_.animateTo(target.background, nowMs, target.transition);
     foregroundTransition_.animateTo(target.foreground, nowMs, target.transition);
     borderTransition_.animateTo(target.border, nowMs, target.transition);
-    if (backgroundTransition_.running() || foregroundTransition_.running() || borderTransition_.running()) {
+    if (shadowTransition_.running() || backgroundTransition_.running() || foregroundTransition_.running() || borderTransition_.running()) {
         requestAnimationFrame();
     }
 }
@@ -537,6 +556,7 @@ void Button::resetInteractionState() {
     hovered_ = false;
     pressed_ = false;
     const ButtonStyle target = resolvedStyle();
+    shadowTransition_.reset(target.shadows);
     backgroundTransition_.reset(target.background);
     foregroundTransition_.reset(target.foreground);
     borderTransition_.reset(target.border);

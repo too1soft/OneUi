@@ -5,6 +5,11 @@
 
 namespace oneui {
 
+// UI-thread policy. Platform preference and application choice are combined.
+ONEUI_API bool motionEnabled();
+ONEUI_API void setMotionEnabled(bool enabled);
+ONEUI_API void setPlatformMotionEnabled(bool enabled);
+
 enum class EasingCurve {
     Linear,
     EaseOutCubic,

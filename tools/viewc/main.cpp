@@ -115,8 +115,8 @@ struct Compiler {
         bool custom=d.imports.count(n.tag)>0;
         if(!custom && components().count(n.tag)) {
             auto tag=components().at(n.tag);
-            if(tag!="stack" && tag!="scroll-view" && !n.children.empty())fail(d,n.line,"Leaf components cannot contain child elements");
-            if((n.tag=="Scroll" || n.tag=="FormRow") && n.children.size()!=1)fail(d,n.line,n.tag+" requires exactly one child");
+            if(tag!="stack" && tag!="scroll-view" && tag!="reveal" && !n.children.empty())fail(d,n.line,"Leaf components cannot contain child elements");
+            if((n.tag=="Scroll" || n.tag=="FormRow" || n.tag=="Reveal") && n.children.size()!=1)fail(d,n.line,n.tag+" requires exactly one child");
             if(n.tag=="FormGrid")for(auto& child:n.children) {
                 if(child.tag!="FormRow")fail(d,child.line,"FormGrid accepts FormRow children only");
                 if(child.attrs.count("v-for"))fail(d,child.line,"FormGrid direct v-for children are unsupported in v1");
@@ -191,7 +191,7 @@ struct Compiler {
             } else {
                 std::string v="oneui::ui::wide("+quote(value)+")";
                 if(key=="class" || key=="variant") v="std::string("+quote(value)+")";
-                else if(key=="visible" || key=="disabled" || key=="checked") { if(value!="true" && value!="false") fail(d,n.line,"Expected true or false"); v=value; }
+                else if(key=="visible" || key=="disabled" || key=="checked" || key=="open" || key=="reduced-motion") { if(value!="true" && value!="false") fail(d,n.line,"Expected true or false"); v=value; }
                 else if(layoutNumber(key)) {
                     std::ostringstream number; number<<std::setprecision(std::numeric_limits<float>::max_digits10)<<layoutValue(d,key,entry.second);
                     v="float("+number.str()+")";
@@ -200,6 +200,8 @@ struct Compiler {
                     try { v=std::to_string(std::stoi(value)); } catch(const std::exception&) { fail(d,entry.second.line,"selectedIndex is outside integer range"); }
                 } else if(key=="align") {
                     if(value!="start" && value!="center" && value!="end") fail(d,entry.second.line,"Content align must be start, center or end");
+                } else if(key=="preset") {
+                    if(value!="fade" && value!="expand")fail(d,entry.second.line,"Reveal preset must be fade or expand");
                 } else if(key=="tone") {
                     if(value!="neutral" && value!="success" && value!="warning" && value!="error" && value!="pending") fail(d,entry.second.line,"Status tone must be neutral, success, warning, error or pending");
                 } else if(key=="items" || key=="columns") fail(d,n.line,"Use a bound ViewModel member for collection properties");

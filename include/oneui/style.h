@@ -1,6 +1,7 @@
 #pragma once
 
 #include "oneui/animation.h"
+#include "oneui/canvas.h"
 #include "oneui/color.h"
 #include "oneui/geometry.h"
 
@@ -58,6 +59,7 @@ struct ButtonStyle {
     std::optional<Insets> padding;
     std::optional<float> iconSize;
     std::optional<float> iconGap;
+    std::optional<Gradient> gradient;
 };
 
 struct ButtonStateStyleOverride {
@@ -74,6 +76,7 @@ struct ButtonStateStyleOverride {
     std::optional<Insets> padding;
     std::optional<float> iconSize;
     std::optional<float> iconGap;
+    std::optional<Gradient> gradient;
 };
 
 struct ButtonStyleOverride {
@@ -127,6 +130,7 @@ struct TextFieldStyle {
     FocusRingStyle focusRing{};
     TransitionSpec transition{};
     std::vector<ControlShadowStyle> shadows;
+    std::optional<Gradient> gradient;
 };
 
 struct TextFieldStateStyleOverride {
@@ -142,6 +146,7 @@ struct TextFieldStateStyleOverride {
     std::optional<FocusRingStyleOverride> focusRing;
     std::optional<TransitionSpec> transition;
     std::optional<std::vector<ControlShadowStyle>> shadows;
+    std::optional<Gradient> gradient;
 };
 
 struct TextFieldStyleOverride {

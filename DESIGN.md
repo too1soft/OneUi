@@ -159,7 +159,9 @@ The section gap separates major groups; the field gap separates rows and grid ce
 
 ## Elevation & Depth
 
-The public declarative theme defines no shadow tokens. Canvas, surface, control, borders, and selection convey separation. Keep these default surfaces flat. Focus outlines are interaction feedback rather than surface elevation: controls use an accent outline (2px) with offset (2px); invalid focused input uses the error role.
+Canvas, surface, control, borders, and selection convey separation. Keep default surfaces flat. The shared theme additionally offers opt-in button feedback: `motion-lift` uses `0px 2px 6px #00000018` at rest and `0px 5px 12px #00000030` on hover, while `motion-press` changes `0px 2px 4px #00000020` to `inset 0px 2px 5px #00000038` on press. Both remove shadows when disabled. These classes communicate interaction without moving the hit target; they do not establish a raised-card default. Focus outlines are interaction feedback rather than surface elevation: controls use an accent outline (2px) with offset (2px); invalid focused input uses the error role.
+
+The effects gallery demonstrates multi-stop linear/radial fills and real inner shadows. Its light green gradient uses a dark foreground in both themes. These are optional demonstrations, not replacement palette tokens; retain readable contrast when applying gradients.
 
 ## Shapes
 
@@ -182,6 +184,10 @@ Primary actions use the accent fill; secondary actions use the control fill; des
 ### Read-only details
 
 Compose detail content from `DetailPage`, `Section`, `FormGrid`, `FormRow`, and `Text` or `Status`. A read-only label/value pair gets its hierarchy from the theme automatically. This is a shared component behavior, not page-specific styling.
+
+### Content transitions
+
+`Reveal` retains one native subtree. Use expand for a content disclosure that should move adjacent layout, and fade when content should keep its slot until disappearing. The shared default is 220ms with ease-out; closing uses 75% of the duration. `motion-lift` and `motion-press` use 140ms and 110ms respectively. Transitions finish rather than loop. Respect the local reduced-motion setting and Windows client-area animation preference; do not add continuous decorative animation to the default forms. Closing content releases its focus and does not steal focus back on reopening.
 
 ### Tables and status
 

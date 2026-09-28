@@ -5,6 +5,12 @@
 #include <utility>
 
 namespace oneui {
+Rect Stack::paintBounds() const {
+    const auto a=View::paintBounds(),b=styleBox_?stylePaintBounds(frame(),*styleBox_):frame();
+    const float x=(std::min)(a.x,b.x),y=(std::min)(a.y,b.y);
+    return {x,y,(std::max)(a.x+a.width,b.x+b.width)-x,(std::max)(a.y+a.height,b.y+b.height)-y};
+}
+
 
 Stack::Stack(StackDirection direction) : direction_(direction) {}
 

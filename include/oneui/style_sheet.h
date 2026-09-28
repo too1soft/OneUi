@@ -44,6 +44,7 @@ struct StyleBackground {
     // radialCenter 有值时 gradientStart/End 按径向渐变绘制，否则走线性。
     std::optional<Point> radialCenter;
     std::optional<float> radialRadius;
+    std::optional<Gradient> gradient;
 };
 
 struct StyleContentBox {
@@ -84,6 +85,7 @@ struct StyleBox {
     std::optional<double> transitionDurationMs;
     std::optional<EasingCurve> transitionEasing;
     std::vector<StyleShadow> shadows;
+    bool shadowsSpecified = false;
 };
 
 struct StyleRule {
@@ -125,6 +127,7 @@ ONEUI_API std::optional<Color> parseStyleColor(const std::string& value);
 ONEUI_API bool selectorMatches(const std::string& selector, const StyleNode& node);
 ONEUI_API int selectorSpecificity(const std::string& selector);
 ONEUI_API StyleBox mergeStyleBox(StyleBox base, const StyleBox& overlay);
+ONEUI_API Rect stylePaintBounds(Rect rect, const StyleBox& box);
 ONEUI_API Rect styleContentRect(Rect rect, const StyleBox& box);
 ONEUI_API void paintStyleBox(Canvas& canvas, Rect rect, const StyleBox& box);
 

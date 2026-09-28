@@ -78,3 +78,17 @@ CPU 百分比是整机逻辑处理器归一化后的进程 CPU；paint 是 CPU �
 ```
 
 该 CSV 包含 2 轮预热后的 10 轮交替样本，计时包含 ViewModel、Mount、控件创建、应用主题和提交属性，不包含窗口启动／绘制／析构。
+
+## 材质与动效场景
+
+```powershell
+.\examples\performance_lab\run.ps1 -Build -Effects
+.\examples\performance_lab\run.ps1 -Effects -Dev -Renderer gpu
+.\examples\performance_lab\compare-effects.ps1 -Rounds 3 -Seconds 5
+```
+
+`-Effects` 直达组件展示的第四页：调节三色线性／径向渐变、阴影模糊、展开／淡入和时长，输入框可体验真实内阴影。悬停／按住两个按钮观察反馈，点击切换说明；“直接切换”关闭内容过渡。切换主题、密度和参数时保留同一份输入状态。
+
+布局及 scoped 样式在 [Gallery.one](views/Gallery.one)，参数与命令在 [component_gallery.hpp](component_gallery.hpp)。`-Dev` 支持 CSS 热更新，模板结构仍需重建。应用默认主题没有普遍添加阴影；这是按需使用公共能力的展示。
+
+对比脚本分别测活动和空闲的 CPU／GPU 路径，保存环境、哈希和逐轮数据，拒绝 GPU 回退及空闲额外绘制；计时是 CPU 侧耗时，不代表 GPU 执行时间或显示 FPS。效果页统一使用模板，`-Entry` 不会生成另一套 C++ 效果页，因此不能据此对比两种写法的运行开销。详见[用法、支持边界和验收](../../docs/51-effects-and-motion.md)。

@@ -23,6 +23,7 @@ public:
     std::shared_ptr<Widget> activeFocusChild() const override;
     bool hasTextComposition() const override;
 
+    Rect paintBounds() const override;
     void paint(Canvas& canvas) override;
     bool onMouseMove(const MouseEvent& event) override;
     bool onMouseDown(const MouseEvent& event) override;

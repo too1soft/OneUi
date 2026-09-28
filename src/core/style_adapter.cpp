@@ -64,13 +64,14 @@ ButtonStateStyleOverride buttonStateStyleOverrideFromStyleBox(const StyleBox& bo
     override.iconSize = box.iconSize;
     override.iconGap = box.gap;
     override.background = box.background.color;
+    override.gradient = box.background.gradient;
     override.foreground = box.foreground;
     override.border = box.borderColor;
     override.borderWidth = box.borderWidth;
     override.radius = box.radius;
     override.fontSize = box.fontSize;
     override.fontWeight = box.fontWeight;
-    if (!box.shadows.empty()) {
+    if (box.shadowsSpecified || !box.shadows.empty()) {
         override.shadows = controlShadowsFromStyleBox(box);
     }
     if (box.outlineColor || box.outlineWidth || box.outlineOffset || box.radius) {
@@ -83,6 +84,7 @@ ButtonStateStyleOverride buttonStateStyleOverrideFromStyleBox(const StyleBox& bo
 TextFieldStateStyleOverride textFieldStateStyleOverrideFromStyleBox(const StyleBox& box) {
     TextFieldStateStyleOverride override;
     override.background = box.background.color;
+    override.gradient = box.background.gradient;
     override.foreground = box.foreground;
     override.placeholderForeground = box.placeholderColor;
     override.border = box.borderColor;
@@ -91,7 +93,7 @@ TextFieldStateStyleOverride textFieldStateStyleOverrideFromStyleBox(const StyleB
     override.borderWidth = box.borderWidth;
     override.radius = box.radius;
     override.padding = box.padding;
-    if (!box.shadows.empty()) {
+    if (box.shadowsSpecified || !box.shadows.empty()) {
         override.shadows = controlShadowsFromStyleBox(box);
     }
     if (box.outlineColor || box.outlineWidth || box.outlineOffset || box.radius) {

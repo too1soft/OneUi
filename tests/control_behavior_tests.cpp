@@ -5750,7 +5750,7 @@ void testTextFieldStyleOverridePaintsCustomColors() {
     expectEqual("TextField style override selection", countFillRectsWithColor(canvas, selection), 1);
     expectEqual("TextField style override border", countStrokeRectsWithColor(canvas, border), 1);
     expectEqual("TextField style override outer shadow", static_cast<int>(canvas.boxShadows.size()), 1);
-    expectEqual("TextField style override inset shadow", countStrokeRectsWithColor(canvas, oneui::Color{255, 255, 255, 24}), 1);
+    expectEqual("TextField style override inset shadow", static_cast<int>(canvas.insetShadows.size()), 1);
     expectEqual("TextField style override text", countTextsWithColor(canvas, foreground), 1);
     expectEqual("TextField style override caret", countFillRectsWithColor(canvas, caret), 1);
     if (!canvas.clips.empty()) {
@@ -6838,7 +6838,8 @@ void testStyleBoxPainterDrawsShadowFillBorderAndInset() {
 
     expectEqual("StyleBox painter emits outer shadow", static_cast<int>(canvas.boxShadows.size()), 1);
     expectEqual("StyleBox painter emits shell and content fills", static_cast<int>(canvas.fillRects.size()), 2);
-    expectEqual("StyleBox painter emits border, inset, and outline strokes", static_cast<int>(canvas.strokeRects.size()), 3);
+    expectEqual("StyleBox painter emits border and outline strokes", static_cast<int>(canvas.strokeRects.size()), 2);
+    expectEqual("StyleBox painter emits a real inset shadow", static_cast<int>(canvas.insetShadows.size()), 1);
     expectEqual("StyleBox painter fill alpha applies opacity", canvas.fillRects.front().color.a, 127);
     expectEqual("StyleBox painter content inset x", static_cast<int>(canvas.fillRects.back().rect.x), 20);
     expectEqual("StyleBox painter outline expands", static_cast<int>(canvas.strokeRects.back().rect.x), 8);
@@ -6897,7 +6898,7 @@ void testCardCanPaintStyleBox() {
     expectEqual("Card style box draws one outer shadow", static_cast<int>(canvas.boxShadows.size()), 1);
     expectEqual("Card style box background", countFillRectsWithColor(canvas, oneui::Color{18, 19, 24}), 1);
     expectEqual("Card style box border", countStrokeRectsWithColor(canvas, oneui::Color{48, 52, 64}), 1);
-    expectEqual("Card style box inset shadow stroke", countStrokeRectsWithColor(canvas, oneui::Color{255, 255, 255, 24}), 1);
+    expectEqual("Card style box inset shadow", static_cast<int>(canvas.insetShadows.size()), 1);
 
     card.clearStyleBox();
     RecordingCanvas defaultCanvas;

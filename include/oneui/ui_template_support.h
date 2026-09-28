@@ -38,15 +38,17 @@ inline void validateLayoutNumber(const std::string& key, float value) {
     if (!std::isfinite(value) || value < 0 || ((key == "max-width" || key=="min-column-width") && value == 0))
         throw std::invalid_argument(key + ((key == "max-width" || key=="min-column-width") ? " must be a finite positive number" : " must be a finite nonnegative number"));
 }
+inline std::string lowerValue(std::string value) { for(auto& ch:value)ch=static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));return value; }
 inline std::set<std::string> cssProperties(const std::string& tag) {
+    if (tag == "reveal") return {"transition-duration","transition-timing-function"};
     if (tag == "label") return {"color","font-size","font-weight"};
-    if (tag == "stack") return {"background-color","border-color","border-width","border-radius","padding","gap"};
-    if (tag == "scroll-view") return {"background-color","border-color","border-width","border-radius","padding"};
+    if (tag == "stack") return {"background","box-shadow","background-color","border-color","border-width","border-radius","padding","gap"};
+    if (tag == "scroll-view") return {"background","box-shadow","background-color","border-color","border-width","border-radius","padding"};
     std::set<std::string> keys = {"color","background-color","border-color","border-width","border-radius","outline-color","outline-width","outline-offset"};
     if (tag != "switch") keys.insert("padding");
     if (tag == "button" || tag == "select" || tag == "table") keys.insert("font-size");
     if (tag == "button") keys.insert("font-weight");
-    if (tag == "button") { keys.insert("transition-duration"); keys.insert("transition-timing-function"); }
+    if (tag == "button" || tag == "input") { keys.insert("background"); keys.insert("box-shadow"); keys.insert("transition-duration"); keys.insert("transition-timing-function"); }
     if (tag == "input") { keys.insert("placeholder-color"); keys.insert("caret-color"); keys.insert("selection-color"); }
     if (tag == "switch" || tag == "select" || tag == "table") keys.insert("content-background-color");
     if (tag == "table") { keys.insert("scrollbar-color"); keys.insert("scrollbar-width"); keys.insert("placeholder-color"); keys.erase("outline-color"); keys.erase("outline-width"); keys.erase("outline-offset"); }
@@ -96,7 +98,7 @@ inline std::string css(std::string source, const std::string& scope = {}, const 
                 if(tag=="button")states={"hover","pressed","focus","disabled"};
                 else if(tag=="input")states={"hover","focus","disabled","read-only"};
                 else if(tag=="switch" || tag=="select")states={"hover","pressed","focus","disabled","selected"};
-                else if(tag=="table")states={"hover","pressed","selected"};
+            else if(tag=="table")states={"hover","pressed","selected"};
                 if(!states.count(pseudo))fail("State is not consumed by "+tag+": "+pseudo);
             }
             if (!scope.empty()) { const auto pseudo = mapped.find(':'); mapped.insert(pseudo == mapped.npos ? mapped.size() : pseudo, "." + scope); }
@@ -112,6 +114,7 @@ inline std::string css(std::string source, const std::string& scope = {}, const 
                 if (property.rfind("--", 0) != 0) fail(":root only accepts custom properties");
                 if (!scope.empty()) fail("Scoped :root tokens are unsupported; put shared tokens in external CSS");
             } else if (!cssProperties(tag).count(property)) fail("Property is not consumed by " + tag + ": " + property);
+            else if(property=="background-color" && lowerValue(trim(declaration.substr(colon+1))).find("gradient(")!=std::string::npos) fail("Use background for gradients on supported components");
             else if(tag=="table" && !pseudo.empty() && property!="background-color") fail("DataTable row states only consume background-color");
         }
         output += mapped + " {" + body + "}\n";

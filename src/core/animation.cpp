@@ -5,6 +5,7 @@
 
 namespace oneui {
 namespace {
+thread_local bool applicationMotion=true,platformMotion=true;
 
 std::uint8_t interpolateByte(std::uint8_t from, std::uint8_t to, double progress) {
     const double value = static_cast<double>(from) + (static_cast<double>(to) - static_cast<double>(from)) * clampUnit(progress);
@@ -29,6 +30,10 @@ constexpr double kScrollSettleDistance = 0.05;
 constexpr double kScrollSettleVelocity = 1.0;
 
 } // namespace
+
+bool motionEnabled(){return applicationMotion && platformMotion;}
+void setMotionEnabled(bool value){applicationMotion=value;}
+void setPlatformMotionEnabled(bool value){platformMotion=value;}
 
 double clampUnit(double value) {
     return std::max(0.0, std::min(1.0, value));
@@ -71,6 +76,7 @@ void FloatTransition::reset(float value) {
 }
 
 void FloatTransition::animateTo(float target, double nowMs, TransitionSpec spec) {
+    if (!motionEnabled()) {reset(target);return;}
     if (target == target_ && running_) {
         return;
     }
@@ -92,6 +98,7 @@ bool FloatTransition::tick(double nowMs) {
     if (!running_) {
         return false;
     }
+    if(!motionEnabled()){reset(target_);return true;}
     const double raw = normalizedProgress(nowMs, startMs_, spec_.durationMs);
     value_ = interpolateFloat(from_, target_, applyEasing(spec_.easing, raw));
     if (raw >= 1.0) {
@@ -255,6 +262,7 @@ void ColorTransition::reset(Color value) {
 }
 
 void ColorTransition::animateTo(Color target, double nowMs, TransitionSpec spec) {
+    if (!motionEnabled()) {reset(target);return;}
     if (sameColor(target, target_) && running_) {
         return;
     }
@@ -285,6 +293,7 @@ bool ColorTransition::tick(double nowMs) {
     if (!running_) {
         return false;
     }
+    if(!motionEnabled()){reset(target_);return true;}
     const double raw = normalizedProgress(nowMs, startMs_, spec_.durationMs);
     value_ = interpolateColor(from_, target_, applyEasing(spec_.easing, raw));
     if (raw >= 1.0) {

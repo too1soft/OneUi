@@ -56,6 +56,9 @@ struct BoxShadowCall {
     float radius;
 };
 
+struct GradientCall { Rect rect; Gradient gradient; float radius; };
+struct OpacityCall { Rect rect; float opacity; };
+
 class RecordingCanvas final : public Canvas {
 public:
     void drawTextBlock(const std::wstring& text, Rect rect, Color color, const TextBlockStyle& style) override {
@@ -104,6 +107,9 @@ public:
         lines.push_back(DrawLineCall{from, to, color, width});
     }
 
+    void fillGradient(Rect rect, const Gradient& gradient, float radius=0) override { gradients.push_back({rect,gradient,radius}); }
+    void drawInsetShadow(Rect rect, const BoxShadow& shadow, float radius=0) override { insetShadows.push_back({rect,shadow,radius}); }
+    void saveOpacity(Rect rect,float opacity) override { opacityLayers.push_back({rect,opacity});save(); }
     void drawBoxShadow(Rect rect, const BoxShadow& shadow, float radius = 0.0f) override {
         boxShadows.push_back(BoxShadowCall{rect, shadow, radius});
     }
@@ -164,7 +170,9 @@ public:
     std::vector<DrawTextCall> texts;
     std::vector<DrawTextBlockCall> textBlocks;
     std::vector<DrawLineCall> lines;
-    std::vector<BoxShadowCall> boxShadows;
+    std::vector<BoxShadowCall> boxShadows, insetShadows;
+    std::vector<GradientCall> gradients;
+    std::vector<OpacityCall> opacityLayers;
     std::vector<Rect> clips;
     std::optional<Rect> clipOverride;
     std::optional<Rect> viewportOverride;

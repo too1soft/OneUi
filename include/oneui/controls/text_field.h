@@ -1,4 +1,5 @@
 #pragma once
+#include "oneui/effect_transition.h"
 
 #include "oneui/animation.h"
 #include "oneui/clipboard.h"
@@ -74,6 +75,7 @@ public:
     void setDisabled(bool disabled) override;
     void setAnimationScheduler(std::function<void()> scheduler) override;
 
+    Rect paintBounds() const override;
     void paint(Canvas& canvas) override;
     bool onMouseMove(const MouseEvent& event) override;
     bool onMouseDown(const MouseEvent& event) override;
@@ -180,6 +182,7 @@ private:
     std::optional<TextFieldStyleOverride> styleOverride_;
     std::shared_ptr<Clipboard> clipboard_;
     Binding<std::wstring> textBinding_;
+    ShadowTransition shadowTransition_;
     ColorTransition backgroundTransition_;
     ColorTransition foregroundTransition_;
     ColorTransition placeholderTransition_;

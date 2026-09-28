@@ -204,3 +204,14 @@ Rust workspace 另外覆盖 safe wrapper、结构化数组、handle 合并更新
 - 任何重排 callback 都视为请求，数据层成功后再更新 UI；
 - 需要跨线程更新时使用 dispatcher/handle，不直接跨线程调用控件；
 - 需要像素级布局审计时使用布局 JSON + 同视口截图，两者不能互相替代。
+
+## 新增效果与内容过渡（C++／声明式）
+
+| 能力 | 当前入口 | 范围 |
+|---|---|---|
+| 多色标渐变 | `Canvas::fillGradient`、严格 CSS `background` | 2至32色标；Stack／Scroll、Button、Input／SearchInput；Skia 软件与 GPU |
+| 真实内阴影／外阴影 | `drawInsetShadow`／已有外阴影、CSS `box-shadow` | 同上；圆角裁剪、外阴影重绘范围、显式 `none` |
+| `Reveal` | C++ 控件、Compose `reveal`、`.one` | 一个保留的子树；open、fade／expand、reduced-motion；本轮没有 C ABI／Rust 对等入口 |
+| 按钮反馈预设 | `motion-lift`／`motion-press` 类 | 共享主题中的可选阴影过渡；默认控件保持原外观 |
+
+渐变色标不做动画；Select／Switch／DataTable 的严格声明式样式未扩展上述效果。自定义 Canvas 的默认兼容实现不提供完整内阴影／淡出，需实现新虚函数。详见[语法、代码和验证边界](51-effects-and-motion.md)。

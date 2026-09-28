@@ -117,6 +117,7 @@ class Lab final : public LayoutView {
   std::ofstream exerciseLog_;
   Clock::time_point rendererLabelTime_{};
   std::atomic<bool> benchmarkPostPending_{false};
+  int effectStep_=-1;
   bool rendererSampling_ = false;
   bool autoStarted = false, snapshotDone = false, finishing = false;
   int result = 0;
@@ -599,6 +600,15 @@ public:
       catch(const std::exception& error){std::cerr<<error.what()<<'\n';result=2;}
       diagnosticStop=true;window.close();return;
     }
+    if(options.rendererBenchmark=="effects" || (options.rendererBenchmark=="effects-idle" && elapsed<2.1)) {
+      const int step=static_cast<int>(elapsed*2);
+      if(step!=effectStep_) {
+        effectStep_=step;editor->samples->expanded.set(step%2==0);
+        editor->samples->motion.set((step/8)%2);editor->mount.flush();
+        auto button=std::dynamic_pointer_cast<Button>(editor->mount.find("effectsLift"));
+        MouseEvent event;const auto r=button->frame();event.position=step%2==0?Point{r.x+5,r.y+5}:Point{-1,-1};button->onMouseMove(event);
+      }
+    }
     if(options.rendererBenchmark=="table") {
       auto table=std::dynamic_pointer_cast<Table>(editor->page.fields.at("$table"));
       // Same wall-time trajectory at 60 posted updates/s; native virtualized table.
@@ -610,8 +620,8 @@ public:
       const auto start=Clock::now();auto next=start;
       while(!diagnosticStop) {
         const double elapsed=ms(Clock::now()-start)/1000.0;
-        const bool idle=options.rendererBenchmark=="idle";
-        const bool shouldPost=!idle || (elapsed>=3 && !idleStarted_) || elapsed>=3+options.sampleSeconds;
+        const bool idle=options.rendererBenchmark=="idle" || options.rendererBenchmark=="effects-idle";
+        const bool shouldPost=!idle || (options.rendererBenchmark=="effects-idle" && elapsed<2.1) || (elapsed>=3 && !idleStarted_) || elapsed>=3+options.sampleSeconds;
         if(shouldPost && !benchmarkPostPending_.exchange(true)) {
           if(elapsed>=3)idleStarted_=true;
           if(!window.post([this,elapsed]{benchmarkPostPending_=false;rendererBenchmarkTick(elapsed);}))break;
@@ -918,7 +928,7 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
         else throw std::runtime_error("Particle mode must be reference, precomputed, batch, combined or mesh");
       } else if (arg == L"--renderer-benchmark") {
         const auto value=next();
-        if(value!=L"idle" && value!=L"table" && value!=L"chart" && value!=L"particles")throw std::runtime_error("Invalid renderer benchmark scene");
+        if(value!=L"idle" && value!=L"table" && value!=L"chart" && value!=L"particles" && value!=L"effects" && value!=L"effects-idle")throw std::runtime_error("Invalid renderer benchmark scene");
         o.rendererBenchmark=std::string(value.begin(),value.end());
       } else if(arg==L"--sample-seconds")o.sampleSeconds=std::stod(next());
       else if(arg==L"--stability-seconds")o.stabilitySeconds=std::stod(next());
@@ -955,7 +965,7 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
       else if (arg == L"--entry") {auto value=next();if(value!=L"code" && value!=L"template")throw std::runtime_error("Invalid entry");o.templateEntry=value==L"template";}
       else if (arg == L"--dev")o.dev=true;
       else if (arg == L"--compact")o.compact=true;
-      else if (arg == L"--component-scene"){o.galleryScene=std::stoi(next());if(o.galleryScene<0 || o.galleryScene>2)throw std::runtime_error("Component scene must be 0, 1 or 2");}
+      else if (arg == L"--component-scene"){o.galleryScene=std::stoi(next());if(o.galleryScene<0 || o.galleryScene>3)throw std::runtime_error("Component scene must be 0, 1, 2 or 3");}
       else if (arg == L"--css")o.css=std::filesystem::absolute(next());
       else if (arg == L"--connections-stress")o.connectionStress=std::stoi(next());
       else if (arg == L"--scale")o.scale=std::stof(next());
@@ -996,7 +1006,9 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
     if(!o.rendererBenchmark.empty()) {
       if(o.benchmark>0 || o.dev || !o.snapshot.empty() || o.editorIdle>0 || o.connectionStress>0)throw std::runtime_error("Renderer benchmark must run standalone with dev and capture disabled");
       o.editor=o.connections=o.rendererBenchmark=="idle" || o.rendererBenchmark=="table";
-      o.details=o.gallery=false;o.tab=o.rendererBenchmark=="chart"?1:o.rendererBenchmark=="particles"?2:0;
+      o.details=o.gallery=false;
+      if(o.rendererBenchmark=="effects" || o.rendererBenchmark=="effects-idle"){o.editor=o.gallery=true;o.galleryScene=3;}
+      o.tab=o.rendererBenchmark=="chart"?1:o.rendererBenchmark=="particles"?2:0;
     }
     if(!std::isfinite(o.stabilitySeconds) || o.stabilitySeconds<0 || o.stabilitySeconds>3600 ||
        (o.stabilityExercise && o.stabilitySeconds<20))throw std::runtime_error("Invalid stability duration");

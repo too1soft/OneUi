@@ -68,6 +68,7 @@ public:
     float contentHeight() const;
     Size naturalSize() const override;
 
+    Rect paintBounds() const override;
     void paint(Canvas& canvas) override;
 
 private:

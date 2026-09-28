@@ -10,12 +10,15 @@ int main(){try {
     auto table=std::dynamic_pointer_cast<Table>(ui.find("galleryTable"));
     const auto subscriptions=ui.diagnostics().subscriptions,styles=ui.styles()->size();
     int cases=0;
-    for(bool dark:{false,true})for(auto density:{Density::Comfortable,Density::Compact})for(float width:{1320.f,640.f,426.f})for(int scene=0;scene<3;++scene) {
-        samples.scene.set(scene);ui.flush();applyTheme(ui,dark,density);
+    for(bool dark:{false,true})for(auto density:{Density::Comfortable,Density::Compact})for(float width:{1320.f,640.f,426.f})for(int scene=0;scene<4;++scene) {
+        samples.scene.set(scene);ui.flush();ui.styles()->replace(declarativeTheme(dark,density)+styles_Gallery()+samples.effectCss(),density);
         root.widget->setFrame({0,0,width,800});oneui::test_support::RecordingCanvas canvas;root.widget->paint(canvas);
         const auto issues=inspectLayout(root.widget,*ui.styles());if(!issues.empty())throw std::runtime_error("width="+std::to_string(width)+" scene="+std::to_string(scene)+" "+formatLayoutIssues(issues));
         CHECK(table->rowHeight()==tableRowHeight(density));CHECK(input->preferredSize().height==controlHeight(density));++cases;
     }
+    samples.scene.set(3);samples.strength.set(2);samples.gradient.set(1);ui.flush();ui.styles()->replace(declarativeTheme()+styles_Gallery()+samples.effectCss());
+    root.widget->tickAnimations(std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count()+1000);root.widget->setFrame({0,0,1320,1400});oneui::test_support::RecordingCanvas effectCanvas;root.widget->paint(effectCanvas);
+    CHECK(!effectCanvas.gradients.empty());CHECK(effectCanvas.gradients.front().gradient.radial);CHECK(!effectCanvas.insetShadows.empty());CHECK(effectCanvas.insetShadows.front().shadow.blurRadius==10);
     // Geometry is computed by Yoga, without callbacks or reconstructing fields.
     Mount gridUi;auto first=gridUi.make("Input"),second=gridUi.make("Input");
     auto a=gridUi.make("FormRow",{first}),b=gridUi.make("FormRow",{second});

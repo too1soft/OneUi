@@ -91,6 +91,14 @@ inline std::string declarativeTheme(bool dark=false,Density density=Density::Com
         placeholder-color:var(--muted);
         border-width:0; content-background-color:var(--control); font-size:14px;
         scrollbar-color:var(--muted); scrollbar-width:5px; }
+      Reveal { transition-duration:220ms; transition-timing-function:ease-out; }
+      Button.motion-lift { box-shadow:0px 2px 6px #00000018; transition-duration:140ms; }
+      Button.motion-lift:hover { box-shadow:0px 5px 12px #00000030; }
+      Button.motion-lift:pressed { box-shadow:0px 1px 3px #00000018; }
+      Button.motion-lift:disabled { box-shadow:none; }
+      Button.motion-press { box-shadow:0px 2px 4px #00000020; transition-duration:110ms; }
+      Button.motion-press:pressed { box-shadow:inset 0px 2px 5px #00000038; }
+      Button.motion-press:disabled { box-shadow:none; }
       DataTable:hover { background-color:var(--hover); }
       DataTable:selected { background-color:var(--selection); }
     )");

@@ -52,6 +52,9 @@ public:
             compose_detail::assign<schema::propertyType(Kind,key)>(*mount_,element_,key,std::forward<V>(value)); \
         return *this; \
     }
+    ONEUI_COMPOSE_PROPERTY(open,"open")
+    ONEUI_COMPOSE_PROPERTY(preset,"preset")
+    ONEUI_COMPOSE_PROPERTY(reducedMotion,"reduced-motion")
     ONEUI_COMPOSE_PROPERTY(text,"text")
     ONEUI_COMPOSE_PROPERTY(title,"title")
     ONEUI_COMPOSE_PROPERTY(subtitle,"subtitle")
@@ -118,6 +121,7 @@ public:
     ONEUI_COMPOSE_CONTAINER(emptyState,EmptyState)
     ONEUI_COMPOSE_CONTAINER(loadingState,LoadingState)
 #undef ONEUI_COMPOSE_CONTAINER
+    auto reveal(Element child) {return make<schema::Kind::Reveal>({std::move(child)});}
     auto scroll(Element child) {return make<schema::Kind::Scroll>({std::move(child)});}
     auto field(const std::wstring& label,Element control) {return make<schema::Kind::FormRow>({std::move(control)}).label(label);}
     auto formGrid(std::initializer_list<Part<schema::Kind::FormRow>> fields) {

@@ -57,6 +57,14 @@ Skip the Skia step if the matching dependency already exists in `third_party/ski
 
 If VS is not found, check the C++ and CMake installation components. Missing `skia.lib` or text modules means the Skia step needs completing. Details: [learning example](examples/declarative/README.md), [performance lab](examples/performance_lab/README.md).
 
+## Shadows, gradients and motion
+
+Run `.\examples\performance_lab\run.ps1 -Build -Effects` to adjust multi-stop gradients, outer/inner shadows, expansion and fading. Add `motion-lift` or `motion-press` to a button for hover/press feedback; bind `Reveal.open` to show or hide retained content. Effects are opt-in; the default pages remain flat.
+
+![Native effects gallery](docs/images/effects/effects-light-1320-1.png)
+
+Both Skia software and GPU renderers support these effects. Gradients change immediately; stop interpolation is not animated. See [C++/template examples, CSS limits and measurement instructions](docs/51-effects-and-motion.md) (Chinese).
+
 ## Start with one input
 
 [hello.cpp](examples/declarative/hello.cpp) is a complete small program: a named input and a preview share one `State<std::wstring>`. Build and run it:

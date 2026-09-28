@@ -307,6 +307,64 @@ bool applyBorderShorthand(StyleRule& rule, const std::string& value, bool outlin
     return applied;
 }
 
+std::optional<float> effectNumber(const std::string& token, const std::string& suffix) {
+    if (token.size() <= suffix.size() || token.compare(token.size()-suffix.size(),suffix.size(),suffix)!=0) return {};
+    const auto number=token.substr(0,token.size()-suffix.size()); char* end=nullptr;
+    const float value=std::strtof(number.c_str(),&end);
+    if (end==number.c_str() || *end || !std::isfinite(value)) return {};
+    return value;
+}
+
+std::optional<Gradient> parseGradient(const std::string& value) {
+    Gradient gradient;
+    const auto open=value.find('(');
+    if (open==value.npos || value.back()!=')') return {};
+    const auto kind=lower(trim(value.substr(0,open)));
+    if (kind!="linear-gradient" && kind!="radial-gradient") return {};
+    gradient.radial=kind=="radial-gradient";
+    auto parts=splitTopLevel(value.substr(open+1,value.size()-open-2),',');
+    if (parts.size()<2) return {};
+    size_t first=0;
+    if (!parseStyleColor(trim(parts[0]))) {
+        auto tokens=splitWhitespaceTopLevel(trim(parts[0]));
+        // A first color with a position is a stop, not a descriptor.
+        if (tokens.empty()) return {};
+        if (!parseStyleColor(tokens[0])) {
+            first=1;
+            if (!gradient.radial) {
+                if (tokens.size()!=1) return {};
+                auto angle=effectNumber(tokens[0],"deg"); if(!angle)return {};gradient.angleDegrees=*angle;
+            } else {
+                size_t i=0;
+                if(tokens[i]!="at") {auto radius=effectNumber(tokens[i++],"%");if(!radius || *radius<=0)return {};gradient.radius=*radius/100;}
+                if(i<tokens.size()) {
+                    if(tokens[i++]!="at" || tokens.size()-i!=2)return {};
+                    auto x=effectNumber(tokens[i++],"%"),y=effectNumber(tokens[i],"%");if(!x || !y)return {};
+                    gradient.center={*x/100,*y/100};
+                }
+            }
+        }
+    }
+    if(parts.size()-first<2 || parts.size()-first>32)return {};
+    for(size_t i=first;i<parts.size();++i) {
+        auto tokens=splitWhitespaceTopLevel(trim(parts[i]));if(tokens.empty() || tokens.size()>2)return {};
+        auto color=parseStyleColor(tokens[0]);if(!color)return {};
+        float position=-1;
+        if(tokens.size()==2) {auto p=effectNumber(tokens[1],"%");if(!p || *p<0 || *p>100)return {};position=*p/100;}
+        gradient.stops.push_back({*color,position});
+    }
+    auto& stops=gradient.stops;
+    if(stops.front().position<0)stops.front().position=0;
+    if(stops.back().position<0)stops.back().position=1;
+    size_t anchor=0;
+    for(size_t i=1;i<stops.size();++i)if(stops[i].position>=0) {
+        if(stops[i].position<stops[anchor].position)return {};
+        for(size_t j=anchor+1;j<i;++j)stops[j].position=stops[anchor].position+(stops[i].position-stops[anchor].position)*float(j-anchor)/float(i-anchor);
+        anchor=i;
+    }
+    return gradient;
+}
+
 bool applyDeclaration(
     StyleRule& rule,
     const std::string& property,
@@ -331,118 +389,18 @@ bool applyDeclaration(
 
     if (name == "background" || name == "background-color") {
         const std::string lowered_value = lower(value);
-        if (startsWith(lowered_value, "radial-gradient")) {
-            // 语法子集：radial-gradient([R% ][at X% Y%,] #start, #end)。
-            // R% 为半径（相对 max(宽,高)），at X% Y% 为圆心（相对 rect），缺省 50% 50%、半径 75%。
-            // 颜色沿用 # 十六进制扫描（支持 #RRGGBBAA，光晕靠 alpha 淡出）。
-            float centerX = 0.5f;
-            float centerY = 0.5f;
-            float radiusRatio = 0.75f;
-            const std::size_t open = value.find('(');
-            const std::size_t close = value.rfind(')');
-            if (open != std::string::npos && close != std::string::npos && close > open) {
-                const auto gradient_parts = split(value.substr(open + 1, close - open - 1), ',');
-                if (!gradient_parts.empty()) {
-                    const std::string descriptor = lower(trim(gradient_parts.front()));
-                    if (descriptor.find('#') == std::string::npos) {
-                        auto parsePercent = [](const std::string& token) -> std::optional<float> {
-                            if (token.empty() || token.back() != '%') {
-                                return std::nullopt;
-                            }
-                            char* end = nullptr;
-                            const float parsed = std::strtof(token.c_str(), &end);
-                            if (!end || *end != '%') {
-                                return std::nullopt;
-                            }
-                            return parsed / 100.0f;
-                        };
-                        std::vector<std::string> tokens;
-                        std::string token;
-                        for (char ch : descriptor) {
-                            if (std::isspace(static_cast<unsigned char>(ch))) {
-                                if (!token.empty()) {
-                                    tokens.push_back(token);
-                                    token.clear();
-                                }
-                            } else {
-                                token.push_back(ch);
-                            }
-                        }
-                        if (!token.empty()) {
-                            tokens.push_back(token);
-                        }
-                        for (std::size_t i = 0; i < tokens.size(); ++i) {
-                            if (tokens[i] == "at") {
-                                if (i + 1 < tokens.size()) {
-                                    if (auto x = parsePercent(tokens[i + 1])) {
-                                        centerX = *x;
-                                    }
-                                }
-                                if (i + 2 < tokens.size()) {
-                                    if (auto y = parsePercent(tokens[i + 2])) {
-                                        centerY = *y;
-                                    }
-                                }
-                                break;
-                            }
-                            if (auto r = parsePercent(tokens[i])) {
-                                radiusRatio = *r;
-                            }
-                        }
-                    }
-                }
-            }
-            std::vector<Color> colors;
-            std::size_t pos = 0;
-            while ((pos = value.find('#', pos)) != std::string::npos) {
-                std::size_t end = pos + 1;
-                while (end < value.size() && std::isxdigit(static_cast<unsigned char>(value[end]))) {
-                    ++end;
-                }
-                if (auto color = parseStyleColor(value.substr(pos, end - pos))) {
-                    colors.push_back(*color);
-                }
-                pos = end;
-            }
-            if (colors.size() >= 2) {
-                rule.box.background.gradientStart = colors[0];
-                rule.box.background.gradientEnd = colors[1];
-                rule.box.background.radialCenter = Point{centerX, centerY};
-                rule.box.background.radialRadius = radiusRatio;
-                return true;
-            }
-        }
-        if (startsWith(lowered_value, "linear-gradient")) {
-            std::vector<Color> colors;
-            const std::size_t open = value.find('(');
-            const std::size_t close = value.rfind(')');
-            if (open != std::string::npos && close != std::string::npos && close > open) {
-                const auto gradient_parts = split(value.substr(open + 1, close - open - 1), ',');
-                if (!gradient_parts.empty()) {
-                    const std::string first_part = trim(gradient_parts.front());
-                    if (lower(first_part).find("deg") != std::string::npos) {
-                        rule.box.background.gradientAngleDegrees = parseDeg(first_part);
-                    }
-                }
-            }
-            std::size_t pos = 0;
-            while ((pos = value.find('#', pos)) != std::string::npos) {
-                std::size_t end = pos + 1;
-                while (end < value.size() && std::isxdigit(static_cast<unsigned char>(value[end]))) {
-                    ++end;
-                }
-                if (auto color = parseStyleColor(value.substr(pos, end - pos))) {
-                    colors.push_back(*color);
-                }
-                pos = end;
-            }
-            if (colors.size() >= 2) {
-                rule.box.background.gradientStart = colors[0];
-                rule.box.background.gradientEnd = colors[1];
-                return true;
-            }
+        if (startsWith(lowered_value,"radial-gradient") || startsWith(lowered_value,"linear-gradient")) {
+            const auto gradient=parseGradient(value);
+            if(!gradient) {if(error)*error="Invalid gradient: expected 2-32 ordered color stops (0-100%) and a supported descriptor";return false;}
+            rule.box.background={};rule.box.background.gradient=*gradient;
+            rule.box.background.gradientStart=gradient->stops.front().color;
+            rule.box.background.gradientEnd=gradient->stops.back().color;
+            rule.box.background.gradientAngleDegrees=gradient->angleDegrees;
+            if(gradient->radial){rule.box.background.radialCenter=gradient->center;rule.box.background.radialRadius=gradient->radius;}
+            return true;
         }
         if (auto color = parseStyleColor(value)) {
+            rule.box.background={};
             rule.box.background.color = *color;
             return true;
         }
@@ -608,47 +566,21 @@ bool applyDeclaration(
     } else if (name == "transition") {
         return applyTransitionShorthand(rule, value);
     } else if (name == "box-shadow") {
-        rule.box.shadows.clear();
-        const auto shadows = splitTopLevel(value, ',');
-        for (const auto& shadow_text : shadows) {
-            auto tokens = splitWhitespaceTopLevel(trim(shadow_text));
-            tokens.erase(std::remove_if(tokens.begin(), tokens.end(), [](const std::string& token) {
-                return token.empty();
-            }), tokens.end());
-            if (tokens.size() < 4) {
-                continue;
-            }
-            StyleShadow shadow;
-            std::size_t cursor = 0;
-            if (lower(tokens[cursor]) == "inset") {
-                shadow.inset = true;
-                ++cursor;
-            }
-            if (cursor + 3 >= tokens.size()) {
-                continue;
-            }
-            auto x = parsePx(tokens[cursor++]);
-            auto y = parsePx(tokens[cursor++]);
-            auto blur = parsePx(tokens[cursor++]);
-            float spread = 0.0f;
-            std::optional<Color> color;
-            if (cursor < tokens.size()) {
-                if (auto maybe_spread = parsePx(tokens[cursor])) {
-                    spread = *maybe_spread;
-                    ++cursor;
-                }
-            }
-            if (cursor < tokens.size()) {
-                color = parseStyleColor(tokens[cursor]);
-            }
-            if (x && y && blur && color) {
-                shadow.offset = Point{*x, *y};
-                shadow.blurRadius = *blur;
-                shadow.spreadRadius = spread;
-                shadow.color = *color;
-                rule.box.shadows.push_back(shadow);
-            }
+        std::vector<StyleShadow> parsed;
+        if(lower(value)!="none")for(const auto& part:splitTopLevel(value,',')) {
+            auto tokens=splitWhitespaceTopLevel(trim(part));StyleShadow shadow;size_t i=0;
+            if(!tokens.empty() && lower(tokens[0])=="inset"){shadow.inset=true;++i;}
+            const auto count=tokens.size()-i;
+            auto fail=[&]{if(error)*error="Invalid box-shadow: expected [inset] xpx ypx blurpx [spreadpx] color, or none";return false;};
+            if(count!=4 && count!=5)return fail();
+            auto x=effectNumber(tokens[i++],"px"),y=effectNumber(tokens[i++],"px"),blur=effectNumber(tokens[i++],"px");
+            std::optional<float> spread=0.0f;if(count==5)spread=effectNumber(tokens[i++],"px");
+            auto color=parseStyleColor(tokens[i]);
+            if(!x || !y || !blur || *blur<0 || !spread || !color)return fail();
+            shadow.offset={*x,*y};shadow.blurRadius=*blur;shadow.spreadRadius=*spread;shadow.color=*color;parsed.push_back(shadow);
+            if(parsed.size()>8)return fail();
         }
+        rule.box.shadows=std::move(parsed);rule.box.shadowsSpecified=true;
         return true;
     }
 
@@ -1010,23 +942,8 @@ int selectorSpecificity(const std::string& selector) {
 }
 
 StyleBox mergeStyleBox(StyleBox base, const StyleBox& overlay) {
-    if (overlay.background.color) {
-        base.background.color = overlay.background.color;
-    }
-    if (overlay.background.gradientStart) {
-        base.background.gradientStart = overlay.background.gradientStart;
-    }
-    if (overlay.background.gradientEnd) {
-        base.background.gradientEnd = overlay.background.gradientEnd;
-    }
-    if (overlay.background.gradientAngleDegrees) {
-        base.background.gradientAngleDegrees = overlay.background.gradientAngleDegrees;
-    }
-    if (overlay.background.radialCenter) {
-        base.background.radialCenter = overlay.background.radialCenter;
-    }
-    if (overlay.background.radialRadius) {
-        base.background.radialRadius = overlay.background.radialRadius;
+    if (overlay.background.color || overlay.background.gradient || overlay.background.gradientStart) {
+        base.background=overlay.background;
     }
     if (overlay.content.backgroundColor) {
         base.content.backgroundColor = overlay.content.backgroundColor;
@@ -1119,7 +1036,8 @@ StyleBox mergeStyleBox(StyleBox base, const StyleBox& overlay) {
     if (overlay.transitionEasing) {
         base.transitionEasing = overlay.transitionEasing;
     }
-    if (!overlay.shadows.empty()) {
+    if (overlay.shadowsSpecified || !overlay.shadows.empty()) {
+        base.shadowsSpecified = true;
         base.shadows = overlay.shadows;
     }
     return base;
@@ -1127,6 +1045,16 @@ StyleBox mergeStyleBox(StyleBox base, const StyleBox& overlay) {
 
 Rect styleContentRect(Rect rect, const StyleBox& box) {
     return box.content.inset ? rect.inset(*box.content.inset) : rect;
+}
+
+Rect stylePaintBounds(Rect rect,const StyleBox& box) {
+    float left=0,right=0,top=0,bottom=0;
+    for(const auto& s:box.shadows)if(!s.inset && s.color.a) {
+        const float pad=std::max(0.0f,s.blurRadius*3+s.spreadRadius+4);
+        left=std::max(left,pad-s.offset.x);right=std::max(right,pad+s.offset.x);
+        top=std::max(top,pad-s.offset.y);bottom=std::max(bottom,pad+s.offset.y);
+    }
+    return {rect.x-left,rect.y-top,rect.width+left+right,rect.height+top+bottom};
 }
 
 void paintStyleBox(Canvas& canvas, Rect rect, const StyleBox& box) {
@@ -1148,6 +1076,10 @@ void paintStyleBox(Canvas& canvas, Rect rect, const StyleBox& box) {
 
     if (box.background.color) {
         canvas.fillRect(rect, applyOpacity(*box.background.color, box.opacity), radius);
+    } else if (box.background.gradient) {
+        auto gradient=*box.background.gradient;
+        for(auto& stop:gradient.stops)stop.color=applyOpacity(stop.color,box.opacity);
+        canvas.fillGradient(rect,gradient,radius);
     } else if (box.background.gradientStart && box.background.gradientEnd) {
         if (box.background.radialCenter) {
             canvas.fillRadialGradient(
@@ -1177,7 +1109,7 @@ void paintStyleBox(Canvas& canvas, Rect rect, const StyleBox& box) {
     }
     for (const auto& shadow : box.shadows) {
         if (shadow.inset) {
-            canvas.strokeRect(rect, applyOpacity(shadow.color, box.opacity), radius, std::max(1.0f, shadow.blurRadius));
+            canvas.drawInsetShadow(rect,BoxShadow{applyOpacity(shadow.color,box.opacity),shadow.offset,shadow.blurRadius,shadow.spreadRadius},radius);
         }
     }
     if (box.outlineColor && box.outlineWidth) {

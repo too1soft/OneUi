@@ -268,6 +268,7 @@ struct StyleSession {
     std::vector<std::pair<std::string,std::string>> sourceFiles=[] {
         auto files=sources_Connections(),gallery=sources_Gallery();files.insert(files.end(),gallery.begin(),gallery.end());return files;
     }();
+    std::function<std::string()> effectCss;
     std::string validCss;
     std::size_t applied=0;
     static void appendCss(std::string& output,std::string text,const std::string& scope,const std::string& file,int firstLine=1) {
@@ -299,6 +300,7 @@ struct StyleSession {
             auto css=declarativeTheme(vm.theme.get()==1,density);
             if(dev)for(auto& source:sourceFiles)appendInline(css,readStyleFile(source.first),source.second,source.first);
             else css+=styles_Connections()+styles_Gallery();
+            if(effectCss)css+=effectCss();
             appendCss(css,readStyleFile(external),{},external.string());
             mount.styles()->replace(css,density);validCss=std::move(css);++applied;flow.styleError.set({});return true;
         }catch(const std::exception& e){flow.styleError.set(wide(e.what()));return false;}
@@ -344,6 +346,11 @@ public:
                 galleryPage=std::make_unique<Element>(buildGallery(mount,vm,*samples));
                 page.root.as<Stack>()->add(galleryPage->widget);
                 page.root.as<Stack>()->setFlex(galleryPage->widget,galleryPage->flex);
+                styles.effectCss=[this]{return samples->effectCss();};
+                mount.watch(samples->strength,[this](int){styles.apply();});
+                mount.watch(samples->timing,[this](int){styles.apply();});
+                mount.watch(samples->gradient,[this](int){styles.apply();});
+                styles.apply();
                 samples->back.setAction([this]{flow.gallery.set(false);});
             }
             if(galleryPage)galleryPage->widget->setVisible(shown);

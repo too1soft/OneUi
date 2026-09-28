@@ -1,4 +1,5 @@
 #pragma once
+#include "oneui/effect_transition.h"
 
 #include "oneui/export.h"
 #include "oneui/animation.h"
@@ -40,6 +41,7 @@ public:
     Size naturalContentSize() const;
     Size naturalSize() const override { return naturalContentSize(); }
 
+    Rect paintBounds() const override;
     void paint(Canvas& canvas) override;
     bool onMouseMove(const MouseEvent& event) override;
     bool onMouseDown(const MouseEvent& event) override;
@@ -69,6 +71,7 @@ private:
     bool hovered_ = false;
     bool pressed_ = false;
     bool visualInitialized_ = false;
+    ShadowTransition shadowTransition_;
     ColorTransition backgroundTransition_;
     ColorTransition foregroundTransition_;
     ColorTransition borderTransition_;

@@ -22,6 +22,7 @@ enum class ValueType { None, Text, Boolean, Integer, Number, Strings, Columns, R
     X(FormGrid, "stack", "min-column-width", None) \
     X(EmptyState, "stack", "title subtitle", None) \
     X(Scroll, "scroll-view", "", None) \
+    X(Reveal, "reveal", "open preset reduced-motion", None) \
     X(Text, "label", "text", None) \
     X(ValidationMessage, "label", "text", None) \
     X(Input, "input", "text placeholder", Text) \
@@ -72,7 +73,7 @@ constexpr bool layoutNumber(std::string_view key) {
 }
 constexpr ValueType propertyType(Kind kind,std::string_view key) {
     if(!supports(kind,key))return ValueType::None;
-    if(contains("disabled visible checked",key))return ValueType::Boolean;
+    if(contains("disabled visible checked open reduced-motion",key))return ValueType::Boolean;
     if(key=="selectedIndex")return ValueType::Integer;
     if(key=="items")return kind==Kind::Select?ValueType::Strings:ValueType::Rows;
     if(key=="columns")return ValueType::Columns;

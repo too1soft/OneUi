@@ -76,6 +76,16 @@ struct BoxShadow {
     float spreadRadius = 0.0f;
 };
 
+// Ordered normalized stops, including repeated positions for hard edges.
+struct GradientStop { Color color; float position = 0.0f; };
+struct Gradient {
+    std::vector<GradientStop> stops;
+    float angleDegrees = 180.0f;
+    bool radial = false;
+    Point center{0.5f, 0.5f};
+    float radius = 0.75f;
+};
+
 enum class CanvasPixelFormat {
     Bgra8888,
     Rgba8888
@@ -154,6 +164,17 @@ public:
         (void)radiusNorm;
         fillRect(rect, center, radius);
     }
+    // New optional primitives keep existing custom Canvas implementations source compatible.
+    virtual void fillGradient(Rect rect, const Gradient& gradient, float radius = 0.0f) {
+        if (gradient.stops.empty()) return;
+        if (gradient.radial) fillRadialGradient(rect, gradient.stops.front().color, gradient.stops.back().color, gradient.center, gradient.radius, radius);
+        else fillLinearGradient(rect, gradient.stops.front().color, gradient.stops.back().color, gradient.angleDegrees, radius);
+    }
+    virtual void drawInsetShadow(Rect rect, const BoxShadow& shadow, float radius = 0.0f) {
+        (void)rect; (void)shadow; (void)radius;
+    }
+    // Pair with restore(). Basic custom backends may omit the opacity effect.
+    virtual void saveOpacity(Rect bounds, float opacity) { (void)bounds; (void)opacity; save(); }
     virtual void strokeRect(Rect rect, Color color, float radius = 0.0f, float width = 1.0f) = 0;
     virtual void fillEllipse(Rect rect, Color color) = 0;
     virtual void strokeEllipse(Rect rect, Color color, float width = 1.0f) = 0;

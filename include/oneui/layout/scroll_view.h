@@ -30,6 +30,7 @@ public:
     float maxHorizontalScrollOffset() const;
     float maxScrollOffset() const;
 
+    Rect paintBounds() const override { return styleBox_ ? stylePaintBounds(frame(), *styleBox_) : frame(); }
     void paint(Canvas& canvas) override;
     bool onMouseMove(const MouseEvent& event) override;
     bool onMouseDown(const MouseEvent& event) override;

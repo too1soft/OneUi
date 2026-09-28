@@ -68,5 +68,45 @@
         <Button variant="primary" @click="sample.back">前往连接管理</Button>
       </EmptyState>
     </SettingsPage>
+    <SettingsPage v-if="sample.effectsVisible">
+      <Section class="effect-gradient" title="">
+        <Text class="effect-ink effect-title">柔和层次，清晰反馈</Text>
+        <Text class="effect-ink">三个色标连续过渡；阴影与动效按需开启。下方直接调节并体验。</Text>
+      </Section>
+      <Section title="调节效果">
+        <FormGrid>
+          <FormRow label="渐变方向"><Select :items="sample.gradients" v-model="sample.gradient" /></FormRow>
+          <FormRow label="阴影模糊"><Select :items="sample.strengths" v-model="sample.strength" /></FormRow>
+          <FormRow label="内容切换"><Select :items="sample.motions" v-model="sample.motion" /></FormRow>
+          <FormRow label="切换时长"><Select :items="sample.timings" v-model="sample.timing" /></FormRow>
+        </FormGrid>
+      </Section>
+      <Section class="effect-shadow" title="触碰与输入">
+        <FormRow label="内阴影输入框" hint="可输入中文；切换效果保留焦点、光标与内容">
+          <Input ref="effectsInput" class="effect-inset" v-model="sample.note" />
+        </FormRow>
+        <Toolbar>
+          <Button ref="effectsLift" class="motion-lift" @click="sample.toggleExpanded" :text="sample.expandText" />
+          <Button ref="effectsPress" class="motion-press" @click="sample.toggleExpanded">按下体验内凹反馈</Button>
+          <Switch text="直接切换" v-model="sample.reducedMotion" />
+        </Toolbar>
+        <Reveal ref="effectsReveal" class="effect-reveal" :open="sample.expanded" :preset="sample.effectPreset" :reduced-motion="sample.reducedMotion">
+          <Column>
+            <Text class="effect-caption">同一份内容，平滑切换</Text>
+            <Text>悬停在左侧按钮上查看抬升阴影；按住右侧按钮查看内凹阴影。点击任一按钮切换这段说明。</Text>
+            <Text class="muted">内容只创建一次。动画结束后停止刷新；关闭系统动画时直接切换。</Text>
+          </Column>
+        </Reveal>
+      </Section>
+    </SettingsPage>
   </Page>
 </template>
+
+<style scoped>
+Text.effect-caption { font-size: 18px; font-weight: 600; }
+Text.effect-title { font-size: 24px; font-weight: 600; }
+Text.effect-ink { color: #153d36; }
+Section.effect-gradient { background: linear-gradient(110deg, #d9f5e5 0%, #9ddfd0 48%, #c3e5f5 100%); border-width: 0px; padding: 24px; }
+Section.effect-shadow { box-shadow: 0px 4px 12px #00000026; }
+Input.effect-inset { box-shadow: inset 0px 2px 6px #00000040; }
+</style>

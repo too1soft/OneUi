@@ -539,3 +539,15 @@ Rust `Stack::set_direction` 对应 C++ `setDirection`，切换横纵排列且保
 `fillRoundedRects(const RoundedRectFill*, std::size_t)` 按输入顺序绘制 `{rect, color, radius}` 数组，等价于逐项 `fillRect`，保留重叠、透明度与裁剪。count 为零时可传 nullptr；否则须提供有效数组，数据只在本次调用中借用。
 
 Skia 后端复用绘制状态，其他 Canvas 子类默认逐项回退。它不承诺单次 GPU draw call，也不为性能改变抗锯齿或排序。新增 C++ 虚函数后需一起重建应用与 DLL；详见[示例、A/B 数据与像素验证](44-particle-drawing-optimization.md)。
+
+### Reveal：保留内容的展开与淡入
+
+`Reveal(std::shared_ptr<Widget> content)` 接受一个子控件；通过 `setOpen`、`setPreset(RevealPreset::Fade/Expand)`、`setTransition`、`setReducedMotion` 配置。Compose 使用 `ui.reveal(child).open(state).preset(L"expand")`；模板使用 `<Reveal :open="open" preset="expand">...</Reveal>`。多个内容项放进一个 Column。
+
+默认220ms、ease-out；退出时长为设置值的75%。Expand 将高度进度交给现有布局，Fade 淡出结束前保持占位。关闭时立即清除内部焦点并停止命中；完成后不占布局，重新展开保留同一子树和状态。不要用 v-if 移除正在过渡的 Reveal。CSS 只接收过渡时长／缓动，背景效果加在子容器。
+
+### Canvas 与 CSS：渐变及内阴影
+
+`fillGradient(Rect, const Gradient&, float radius)` 接受2至32个有序色标；`drawInsetShadow(Rect, const BoxShadow&, float radius)` 绘制真实内阴影；`saveOpacity(Rect, float)` 与 restore 配对，为整个内容建立透明度层。Skia 的软件和 GPU 路径均实现；其他 Canvas 子类默认分别退化为两色渐变、无内阴影及普通 save。新增虚函数需同时重建应用与 DLL。
+
+严格声明式 CSS 在容器、Button、Input／SearchInput 上接收 `background` 渐变及 `box-shadow`；输入框和按钮的状态阴影支持过渡，渐变即时替换。`motion-lift` 和 `motion-press` 是共享主题的可选类。`setMotionEnabled(false)` 与 Windows 客户端区域动画偏好约束 FloatTransition／ColorTransition／Reveal，不改变 SmoothScrollMotion 或应用自定义动画。完整语法、可运行例子及边界见[效果与动效](51-effects-and-motion.md)。

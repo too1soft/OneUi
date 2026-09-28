@@ -2,6 +2,7 @@
 
 #include "oneui/icon.h"
 #include "oneui/style.h"
+#include "oneui/style_sheet.h"
 #include "internal/unicode.h"
 #include "text/text_layout.h"
 
@@ -50,7 +51,9 @@ void applyFocusRingOverride(FocusRingStyle& style, const FocusRingStyleOverride&
 void applyTextFieldStateOverride(TextFieldStyle& style, const TextFieldStateStyleOverride& override) {
     if (override.background) {
         style.background = *override.background;
+        style.gradient.reset();
     }
+    if (override.gradient) style.gradient=override.gradient;
     if (override.foreground) {
         style.foreground = *override.foreground;
     }
@@ -654,6 +657,17 @@ void TextField::setAnimationScheduler(std::function<void()> scheduler) {
     }
 }
 
+Rect TextField::paintBounds() const {
+    const auto style=visualStyle(resolvedStyle());StyleBox box;
+    for(const auto& s:style.shadows)box.shadows.push_back({s.color,s.offset,s.blurRadius,s.spreadRadius,s.inset});
+    auto r=stylePaintBounds(frame(),box);
+    if(focusVisible() && style.focusRing.visible) {
+        const float p=std::max(0.0f,style.focusRing.offset+style.focusRing.width);
+        r={r.x-p,r.y-p,r.width+2*p,r.height+2*p};
+    }
+    return r;
+}
+
 void TextField::paint(Canvas& canvas) {
     const Rect rect = frame();
     const bool hasText = !value().empty();
@@ -674,11 +688,12 @@ void TextField::paint(Canvas& canvas) {
         }
     }
 
-    canvas.fillRect(rect, style.background, style.radius);
+    if(style.gradient) canvas.fillGradient(rect,*style.gradient,style.radius);
+    else canvas.fillRect(rect, style.background, style.radius);
     canvas.strokeRect(rect, style.border, style.radius, style.borderWidth);
     for (const auto& shadow : style.shadows) {
         if (shadow.inset) {
-            canvas.strokeRect(rect, shadow.color, style.radius, std::max(1.0f, shadow.blurRadius));
+            canvas.drawInsetShadow(rect,BoxShadow{shadow.color,shadow.offset,shadow.blurRadius,shadow.spreadRadius},style.radius);
         }
     }
 
@@ -1050,11 +1065,12 @@ void TextField::setFocusVisible(bool visible) {
 bool TextField::tickAnimations(double nowMs) {
     bool keepScheduling = false;
     bool needsPaint = false;
+    needsPaint = shadowTransition_.tick(nowMs) || needsPaint;
     needsPaint = backgroundTransition_.tick(nowMs) || needsPaint;
     needsPaint = foregroundTransition_.tick(nowMs) || needsPaint;
     needsPaint = placeholderTransition_.tick(nowMs) || needsPaint;
     needsPaint = borderTransition_.tick(nowMs) || needsPaint;
-    keepScheduling = backgroundTransition_.running() ||
+    keepScheduling = shadowTransition_.running() || backgroundTransition_.running() ||
                      foregroundTransition_.running() ||
                      placeholderTransition_.running() ||
                      borderTransition_.running();
@@ -1258,6 +1274,7 @@ TextFieldStyle TextField::visualStyle(TextFieldStyle target) const {
         return target;
     }
 
+    target.shadows = shadowTransition_.value();
     target.background = backgroundTransition_.value();
     target.foreground = foregroundTransition_.value();
     target.placeholderForeground = placeholderTransition_.value();
@@ -1272,6 +1289,7 @@ void TextField::beginVisualTransition(TextFieldStyle from, TextFieldStyle target
     }
 
     if (!visualInitialized_) {
+        shadowTransition_.reset(from.shadows);
         backgroundTransition_.reset(from.background);
         foregroundTransition_.reset(from.foreground);
         placeholderTransition_.reset(from.placeholderForeground);
@@ -1280,11 +1298,12 @@ void TextField::beginVisualTransition(TextFieldStyle from, TextFieldStyle target
     }
 
     const double nowMs = currentTimeMs();
+    shadowTransition_.animateTo(target.shadows,nowMs,target.transition);
     backgroundTransition_.animateTo(target.background, nowMs, target.transition);
     foregroundTransition_.animateTo(target.foreground, nowMs, target.transition);
     placeholderTransition_.animateTo(target.placeholderForeground, nowMs, target.transition);
     borderTransition_.animateTo(target.border, nowMs, target.transition);
-    if (backgroundTransition_.running() || foregroundTransition_.running() || placeholderTransition_.running() || borderTransition_.running()) {
+    if (shadowTransition_.running() || backgroundTransition_.running() || foregroundTransition_.running() || placeholderTransition_.running() || borderTransition_.running()) {
         requestAnimationFrame();
     }
 }
@@ -1404,6 +1423,7 @@ void TextField::resetInteractionState() {
     selecting_ = false;
     scrollbarDragging_ = false;
     const TextFieldStyle target = resolvedStyle();
+    shadowTransition_.reset(target.shadows);
     backgroundTransition_.reset(target.background);
     foregroundTransition_.reset(target.foreground);
     placeholderTransition_.reset(target.placeholderForeground);

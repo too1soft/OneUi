@@ -1,5 +1,6 @@
 set(ONEUI_CORE_SOURCES
     src/core/animation.cpp
+    src/core/reveal.cpp
     src/core/app_shell.cpp
     src/core/badge.cpp
     src/core/button.cpp
