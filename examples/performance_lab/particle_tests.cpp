@@ -38,9 +38,29 @@ static void geometryTests() {
 class ParticleScene final : public Widget {
 public:
   Model model;
+  bool fixture=false, rejectLate=false;
+  bool fixtureUsedMesh=false;
+  std::vector<RoundedRectFill> fixtureItems;
   Plot plot{model,PlotKind::Particles};
   void paint(Canvas& canvas) override {
     const auto b=frame();canvas.fillRect(b,BG);
+    if(fixture) {
+      if(rejectLate) {
+        std::vector<RoundedRectFill> bad(8193,{{100,100,3,3},ORANGE,1.5f});
+        // Individually valid float inputs, but x+width cannot represent a rectangle.
+        // This is rejected after at least one mesh chunk has been prepared.
+        bad.back().rect.x=1e30f;
+        require(!oneui::rendering::experimental::tryCircleMesh(canvas,bad.data(),bad.size()).drawn,
+                "Unrepresentable late item was accepted");
+      }
+      fixtureUsedMesh=false;
+      if(model.particleMode==ParticleMode::Mesh)
+        fixtureUsedMesh=oneui::rendering::experimental::tryCircleMesh(canvas,fixtureItems.data(),fixtureItems.size()).drawn;
+      if(!fixtureUsedMesh) canvas.fillRoundedRects(fixtureItems.data(),fixtureItems.size());
+      // Fixed contrasting marker also makes a minimal framebuffer non-uniform.
+      canvas.fillRect({10,10,50,50},ACCENT);
+      return;
+    }
     plot.setFrame({b.x+10.25f,b.y+10.5f,b.width-20,b.height-20});plot.paint(canvas);
     // Exercise ordered source-over alpha and a fractional clip separately.
     const RoundedRectFill items[]={{{15.25f,20.5f,55,31},{255,90,20,100},8},
@@ -98,6 +118,56 @@ static void savePpm(const std::filesystem::path& path,const std::vector<unsigned
   for(int y=height-1;y>=0;--y)for(int x=0;x<width;++x)
     file.write(reinterpret_cast<const char*>(pixels.data()+4*(std::size_t(y)*width+x)),3);
 }
+static bool meshFixtureTests(bool gpu,const std::filesystem::path& output) {
+  auto window=Window::create(L"OneUI mesh edge fixtures",640,600);
+  auto scene=std::make_shared<ParticleScene>();scene->fixture=true;
+  window->setContent(scene);window->initialize();window->show();
+  std::ofstream report(output/"mesh-fixtures.csv");
+  report<<"scale,alpha,fixture,max_channel_delta,changed_pixels\n";
+  bool exact=true;std::size_t cases=0;
+  for(float scale:{1.f,1.25f,1.5f}) for(unsigned char alpha:{255,160,64}) for(int which=0;which<4;++which) {
+    window->setContentScale(scale);scene->fixtureItems.clear();
+    const RoundedRectFill items[]={
+      {{282.867981f,246.474762f,1.6f,1.6f},{75,159,152,alpha},.8f},
+      {{282.8579712f,246.4752502f,1.6f,1.6f},{236,173,114,alpha},.8f}};
+    for(int i=0;i<2;++i)if(which>=2 || which==i)scene->fixtureItems.push_back(items[i]);
+    if(which==3)std::reverse(scene->fixtureItems.begin(),scene->fixtureItems.end());
+    std::vector<unsigned char> baseline;
+    for(auto mode:{ParticleMode::Combined,ParticleMode::Mesh}) {
+      scene->model.particleMode=mode;
+      // Rejection must be atomic even after an earlier chunk was prepared.
+      scene->rejectLate=mode==ParticleMode::Mesh;
+      window->requestRedraw();UpdateWindow(static_cast<HWND>(window->nativeHandle()));
+      require(window->rendererInfo().backend==(gpu?RenderBackend::OpenGL:RenderBackend::Software),"Fixture backend mismatch");
+      const auto name="fixture-"+std::to_string(scale)+"-"+std::to_string(alpha)+"-"+std::to_string(which);
+      const auto pixels=gpu?gpuPixels(*window):rasterPixels(*window,output/(name+"-"+particleModeName(mode)+".png"));
+      if(mode==ParticleMode::Combined){baseline=pixels;continue;}
+      require(scene->fixtureUsedMesh==gpu,"Fixture silently used an unexpected rendering path");
+      require(pixels.size()==baseline.size(),"Fixture readback size mismatch");
+      int maximum=0;std::size_t changed=0;
+      if(gpu) {
+        for(std::size_t i=0;i<pixels.size();i+=4) {
+          bool different=false;
+          for(int ch=0;ch<3;++ch) {
+            int delta=std::abs(int(pixels[i+ch])-int(baseline[i+ch]));
+            maximum=std::max(maximum,delta);different|=delta!=0;
+          }
+          changed+=different;
+        }
+        if(changed) {
+          RECT r{};GetClientRect(static_cast<HWND>(window->nativeHandle()),&r);
+          savePpm(output/(name+"-mesh.ppm"),pixels,r.right,r.bottom);
+          savePpm(output/(name+"-combined.ppm"),baseline,r.right,r.bottom);
+        }
+      } else require(pixels==baseline,"Fixture raster fallback differs");
+      report<<scale<<','<<int(alpha)<<','<<which<<','<<maximum<<','<<changed<<'\n';
+      exact &= changed==0;++cases;
+    }
+  }
+  window->close();
+  std::cout<<"Mesh edge/alpha/order/atomic-fallback fixtures: "<<cases<<(exact?" exact":" DIFFERENT")<<" cases\n";
+  return exact;
+}
 int main(int argc,char** argv) {
   try {
     const bool gpu=argc>1 && std::string(argv[1])=="--gpu";
@@ -149,6 +219,7 @@ int main(int argc,char** argv) {
     }
     std::cout<<(gpu?"Actual OpenGL front buffer":"Raster PNG")
       <<(mesh&&gpu?" mesh difference report: ":" exact parity: ")<<cases<<" cases; 100/125/150% content scale\n";
+    if(mesh) meshPixelMismatch |= !meshFixtureTests(gpu,output);
     if(meshPixelMismatch) {
       std::cerr<<"Mesh exact-pixel gate FAILED: preserve combined as default; see mesh-differences.csv\n";
       return 2;

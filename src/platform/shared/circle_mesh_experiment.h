@@ -6,6 +6,7 @@ struct CircleMeshResult {
     bool drawn = false;
     const char* reason = "unsupported-canvas";
     std::size_t vertices = 0;
+    std::size_t draws = 0;
 };
 ONEUI_API CircleMeshResult tryCircleMesh(Canvas&, const RoundedRectFill*, std::size_t);
 }

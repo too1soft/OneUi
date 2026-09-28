@@ -78,7 +78,8 @@ roadmap 或差距分析当成现状。
 - [启动选择、实际后端诊断、四场景 CPU/GPU 原始对比与产品边界检查](41-renderer-selection-and-product-boundaries.md)
 - [10,000 粒子高压测试、Skia 缓存诊断与优化方向](43-heavy-renderer-diagnostics.md)
 - [粒子预计算、保序批量绘制与 CPU/GPU A/B 实验](44-particle-drawing-optimization.md)
-- [粒子网格实验：性能收益、像素差异与保留默认方案的决定](45-particle-mesh-experiment.md)
+- [粒子网格实验第一版：历史性能与像素差异](45-particle-mesh-experiment.md)
+- [粒子网格画质修正：严格像素回归与重新测量](46-particle-mesh-parity.md)
 - [渲染状态展示的局部视觉复核](renderer-design-review.md)
 
 ## 设计与演进记录

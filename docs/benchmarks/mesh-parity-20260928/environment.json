@@ -1,0 +1,49 @@
+{
+  "date": "2026-09-28T09:00:38.5833038+08:00",
+  "rounds": 5,
+  "sampleSeconds": 5,
+  "warmupSeconds": 3,
+  "load": "heavy",
+  "width": 1320,
+  "height": 900,
+  "entry": "code",
+  "dev": false,
+  "trace": false,
+  "particleModes": [
+    "combined",
+    "mesh"
+  ],
+  "cpu": {
+    "Name": "AMD Ryzen 9 9950X3D 16-Core Processor          ",
+    "NumberOfLogicalProcessors": 32
+  },
+  "os": {
+    "Caption": "Microsoft Windows 10 专业版",
+    "Version": "10.0.19045"
+  },
+  "adapters": [
+    {
+      "Name": "OrayIddDriver Device",
+      "DriverVersion": "17.50.19.949"
+    },
+    {
+      "Name": "NVIDIA GeForce RTX 5080",
+      "DriverVersion": "32.0.15.8180"
+    },
+    {
+      "Name": "AMD Radeon(TM) Graphics",
+      "DriverVersion": "32.0.21030.2001"
+    }
+  ],
+  "binaries": [
+    {
+      "name": "oneui-performance-lab.exe",
+      "Hash": "BED78DC9159771471DF19F0A19C4CABD6EF2FAF9370DBEE1E68B7FCAF680DD56"
+    },
+    {
+      "name": "oneui.dll",
+      "Hash": "E069D82ACFB55941278E5EB4DB0EA2C642C62F6952CDC3C821DE86541364E8C1"
+    }
+  ],
+  "method": "Same binaries/data/animation. Rotate selected particle modes each round and alternate renderer order. CPU wall times, not GPU execution/display FPS. Paint includes content/submit. Cache and process memory are different accounting domains. Each run is a fresh process. Mesh sample counters exclude warmup; total counters include it."
+}

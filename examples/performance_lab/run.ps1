@@ -1,6 +1,6 @@
 param([switch]$Build, [switch]$Test, [switch]$Editor, [switch]$Connections, [switch]$Components, [switch]$Compact, [switch]$Dev, [ValidateSet('code','template')][string]$Entry='code', [ValidateSet('light','medium','heavy')][string]$Load='medium', [ValidateSet('auto','gpu','cpu')][string]$Renderer='auto', [ValidateSet('reference','precomputed','batch','combined','mesh')][string]$ParticleMode='combined')
 $ErrorActionPreference = 'Stop'
-if($ParticleMode -eq 'mesh'){Write-Host 'Mesh 实验模式：存在像素差异，默认方案仍为 combined。'}
+if($ParticleMode -eq 'mesh'){Write-Host 'Mesh 实验模式：本机像素回归已通过，跨驱动与长期验证待补；默认仍为 combined。'}
 $exe = Join-Path $PSScriptRoot 'build-current/bin/oneui-performance-lab.exe'
 if ($Build -or $Test -or !(Test-Path -LiteralPath $exe)) { & (Join-Path $PSScriptRoot 'build.ps1') -Test:$Test }
 $view = if ($Components) { 'components' } elseif ($Connections) { 'connections' } elseif ($Editor) { 'editor' } else { 'overview' }

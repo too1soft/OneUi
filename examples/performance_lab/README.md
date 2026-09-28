@@ -30,7 +30,7 @@
 
 粒子默认使用预计算与保序批量入口的组合方案。`-ParticleMode reference` 可恢复原始算法作对照；其余选项为 `precomputed`、`batch`、`combined`。自动比较四种模式：`.\examples\performance_lab\compare-particles.ps1 -Rounds 5 -Seconds 5`。本机 10,000 粒子 GPU 每次绘制降低 6.4%，画面像素对比一致；这是调用开销优化，不是单次 GPU draw call。详见[结果与复现](../../docs/44-particle-drawing-optimization.md)。
 
-另有显式 `-ParticleMode mesh` 网格实验，本机 GPU 绘制耗时进一步降低，但严格像素门槛未通过，默认不启用。比较当前默认与实验：`.\examples\performance_lab\compare-particles.ps1 -Modes combined,mesh -Rounds 5 -Seconds 5`。CPU 自动回退；CSV 分别记录采样区间和包含预热的 mesh 计数。[运行、画质门槛和完整数据](../../docs/45-particle-mesh-experiment.md)。
+另有显式 `-ParticleMode mesh` 网格实验，修正版已通过本机严格 RGB 门槛，仍保留为显式实验，默认不启用。比较当前默认与实验：`.\examples\performance_lab\compare-particles.ps1 -Modes combined,mesh -Rounds 5 -Seconds 5`。CPU 自动回退；CSV 分别记录采样区间和包含预热的 mesh 计数。[当前运行、画质门槛和完整数据](../../docs/46-particle-mesh-parity.md)。
 
 ## 看什么、改哪里
 

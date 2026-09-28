@@ -174,7 +174,7 @@ public:
         if (m.particleMode == ParticleMode::Mesh) {
           const auto result = oneui::rendering::experimental::tryCircleMesh(c,particleRects_.data(),particleRects_.size());
           m.meshReason=result.reason;meshDrawn=result.drawn;
-          if(meshDrawn){++m.meshDraws;m.meshVertices+=result.vertices;}
+          if(meshDrawn){m.meshDraws+=result.draws;m.meshVertices+=result.vertices;}
           else {++m.meshFallbacks;m.meshLastFallback=result.reason;}
         }
         if (batch && !meshDrawn) c.fillRoundedRects(particleRects_.data(), particleRects_.size());

@@ -156,7 +156,7 @@ Windows 默认尝试 GPU，失败回退软件绘制。实验台可以启动时�
 
 后续五轮同一二进制 A/B 测试中，预计算与保序批量入口让 GPU 每次绘制从 **5.43ms 降至 5.08ms（降低 6.4%）**，软件及实际 OpenGL 像素对比一致。Demo 已默认启用；`-ParticleMode reference` 可切回原始模式。CPU 软件路径改善不到 1%，仍有优化空间；缓冲增加了少量内存。[四种方案、原始数据与复现](docs/44-particle-drawing-optimization.md)。
 
-进一步的 **mesh 实验**把粒子合成网格，本机五轮 GPU 每次绘制为 **5.10 → 1.96ms**。它仍存在抗锯齿像素差异，**尚未替换默认方案**；仅实验台可通过 `-ParticleMode mesh` 显式体验，普通 SDK 不编译该实验。[性能、画质差异与限制](docs/45-particle-mesh-experiment.md)。
+显式 **mesh 网格实验**已修正画质，本机 18 个完整场景和 36 个定向场景的严格 RGB 比较均为零差异。重新五轮测量：GPU 路径的 CPU 侧绘制耗时 **5.23 → 4.17ms，降低约 20.4%**。默认仍为 combined，跨驱动和长期验证待补；仅实验台通过 `-ParticleMode mesh` 启用，普通 SDK 不编译该实验。[当前实测、运行命令和限制](docs/46-particle-mesh-parity.md)。
 
 标题栏的产品外观也可通过 [C++／C／Rust 通用配置](docs/42-titlebar-presentation.md)提供，主题名称只控制 CSS，核心不按产品名称切换几何。
 
