@@ -8,6 +8,18 @@ Compose widgets in C++, or describe the same page with `.one` templates. Both sh
 
 OneUI suits settings tools, connection managers, operations consoles, and applications with many forms, tables and charts. The new authoring path is validated on **Windows with C++17**. APIs are still evolving.
 
+Compose a sidebar, master/detail workspace and settings page with pinned actions. Run `./examples/performance_lab/run.ps1 -Layouts`; see the [layout recipe guide](docs/52-layout-recipes-and-presets.md) for C++ and `.one` examples and standard/soft presets.
+
+Measured GPU shadow improvement in the effects workload: mean paint **1.09→0.62ms**, content P95 **12.81→0.95ms**, working set **170→109MiB**. Software rendering retains its original path. [Environment, raw data and limits](docs/52-layout-recipes-and-presets.md#最终同机实测2026-09-28).
+
+Native connection workspace: searchable connections, stable-ID tabs, draggable splits, a virtualized file table and monitoring charts, with light/dark themes and a narrow layout. `.one` builds the page; Rust owns terminals. Connections, commands and metrics are simulated locally. Run `./examples/terminal_workbench/build.ps1 -Test -Run` with the Rust MSVC toolchain. [Try it and find the code](examples/terminal_workbench/README.md) · [Workspace layout components and validation](docs/57-workspace-layout-components.md).
+
+Use `Workspace` for page regions, `DockPanel` for panel headers/body/footer, and `ToolButton` for consistent actions. C++ and `.one` share these retained native components.
+
+![OneUI terminal workspace](docs/images/terminal-workspace-v4/dark-wide.png)
+
+**Stage status:** the first C++ / `.one` declarative development stage is complete; this remains a 0.1 development release. [Delivered scope, regression checks and remaining validation](docs/58-declarative-workspace-stage.md).
+
 ## Running examples
 
 Default light form with responsive columns:
@@ -158,6 +170,12 @@ Existing Widget/View APIs and the default Stack path remain available. Yoga is o
 
 Windows is the primary platform. Linux X11/Wayland has built and run under WSLg; native Linux desktop acceptance is pending. Cocoa sources are integrated but await a Mac build. Consult the [platform matrix](docs/37-native-desktop-backends.md).
 
+## Built-in developer tools
+
+Call `window->enableDeveloperTools()` to inspect slow paints, animation delays, Reveal progress reversals and widget self-paint costs during normal use. Templates attach source locations automatically. F12 toggles the overlay; Ctrl+F12 exports JSON. Opt-in, no sampling repaint timer; native Windows integration is available now.
+
+Try `./examples/performance_lab/run.ps1 -Effects -DevTools`. [Usage, screenshot and limitations](docs/54-built-in-developer-tools.md).
+
 ## References
 
 - [Stage validation and reproducible measurements](docs/40-declarative-stage-validation.md)
@@ -166,3 +184,5 @@ Windows is the primary platform. Linux X11/Wayland has built and run under WSLg;
 - [Architecture](docs/01-architecture.md), [rendering](docs/39-rendering-and-validation.md), [accessibility](docs/15-accessibility.md)
 
 Public headers live in `include/oneui/`, widgets in `src/core/`, the template compiler in `tools/viewc/`, examples in `examples/`, and regressions in `tests/`. See [LICENSE](LICENSE) and [third-party notices](third_party/README.md).
+
+Expansion/collapse now has a native regression runner: `./examples/performance_lab/check-motion.ps1`. It checks geometry jumps, progress reversals and slow paint intervals, preserves frame traces and exits nonzero on failure. See [motion diagnostics and measurement limits](docs/53-motion-continuity-and-diagnostics.md).

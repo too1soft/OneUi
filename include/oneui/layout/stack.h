@@ -91,7 +91,7 @@ private:
     std::map<std::weak_ptr<Widget>, StackFlex, std::owner_less<std::weak_ptr<Widget>>> flex_;
     struct FlexItem {
         Widget* child;
-        float size, grow, shrinkWeight, min, max, cross;
+        float size, grow, shrinkWeight, min, max, cross, gapBefore;
     };
     // Reuse storage during animation instead of allocating on each paint.
     std::vector<FlexItem> layoutItems_;

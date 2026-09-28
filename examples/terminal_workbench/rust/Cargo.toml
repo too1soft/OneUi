@@ -1,0 +1,13 @@
+[package]
+name = "oneui-terminal-demo-owner"
+version = "0.1.0"
+edition = "2021"
+publish = false
+[lib]
+crate-type = ["cdylib"]
+[workspace]
+[dependencies]
+oneui = { path = "../../../bindings/rust/oneui" }
+oneui-sys = { path = "../../../bindings/rust/oneui-sys" }
+[profile.release]
+panic = "abort"

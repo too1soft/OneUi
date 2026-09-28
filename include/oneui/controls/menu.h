@@ -41,6 +41,7 @@ public:
     CursorKind cursor(Point point) const override;
     bool isFocusable() const override;
     bool onKeyDown(const KeyEvent& event) override;
+    bool onFocusChanged(bool focused) override;
 
 protected:
     bool hasInteractionState() const override;
@@ -68,6 +69,8 @@ private:
     std::vector<Entry> entries_;
     int itemCount_ = 0;
     int hoveredEntry_ = -1;
+    int keyboardEntry_ = -1;
+    std::optional<Point> lastPointerPosition_;
     int pressedEntry_ = -1;
     std::function<void(int)> onItemActivated_;
     std::shared_ptr<StyleSheet> styleSheet_;

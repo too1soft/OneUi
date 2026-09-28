@@ -1,5 +1,6 @@
 #include "internal/frame_profile.h"
 #include "text_layout.h"
+#include "font_family_list.h"
 #include "foreground_painter.h"
 #include "internal/unicode.h"
 #include "platform/shared/skia_canvas.h"
@@ -148,7 +149,10 @@ struct Layout::Impl {
     void shape() {
         p::TextStyle style;
         const std::string family = options.family.empty() ? defaultFamily(options.fallbackFamily) : unicode::toUtf8(options.family);
-        style.setFontFamilies({SkString(family.c_str())});
+        std::vector<SkString> families;
+        for (const auto& candidate : fontFamilyList(family)) families.emplace_back(candidate.c_str());
+        if (families.empty()) families.emplace_back(defaultFamily(options.fallbackFamily));
+        style.setFontFamilies(families);
         if (testFonts && options.family.empty()) style.setFontFamilies(testFontFamilies);
         style.setFontSize(options.size);
         style.setFontStyle(SkFontStyle(options.weight, SkFontStyle::kNormal_Width, SkFontStyle::kUpright_Slant));

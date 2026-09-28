@@ -1,0 +1,12 @@
+Effects: parser, CSS replacement, native adapters, retained Reveal, focus, 1000 retargets, policy, bounds passed.
+OneUI GPU rendering enabled (OpenGL+Skia Ganesh, vsync=on)
+Effects: parser, CSS replacement, native adapters, retained Reveal, focus, 1000 retargets, policy, bounds passed.
+Effects: parser, CSS replacement, native adapters, retained Reveal, focus, 1000 retargets, policy, bounds passed.
+OneUI GPU rendering enabled (OpenGL+Skia Ganesh, vsync=on)
+Effects: parser, CSS replacement, native adapters, retained Reveal, focus, 1000 retargets, policy, bounds passed.
+cpu-1.000000.png: max=0, mean=0.000000
+cpu-1.250000.png: max=0, mean=0.000000
+cpu-1.500000.png: max=0, mean=0.000000
+gpu-1.000000.ppm: max=0, mean=0.000000
+gpu-1.250000.ppm: max=11, mean=0.003031
+gpu-1.500000.ppm: max=10, mean=0.001768

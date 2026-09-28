@@ -1,10 +1,18 @@
 #include "oneui/layout/stack.h"
+#include "oneui/controls/reveal.h"
 
 #include <algorithm>
 #include <cmath>
 #include <utility>
 
 namespace oneui {
+namespace {
+float weightedGap(float gap,float factor){return factor==1?gap:std::round(gap*factor);}
+float motionWeight(const std::shared_ptr<Widget>& child,bool column) {
+    if(column)if(auto reveal=std::dynamic_pointer_cast<Reveal>(child))return reveal->layoutWeight();
+    return 1.f;
+}
+}
 Rect Stack::paintBounds() const {
     const auto a=View::paintBounds(),b=styleBox_?stylePaintBounds(frame(),*styleBox_):frame();
     const float x=(std::min)(a.x,b.x),y=(std::min)(a.y,b.y);
@@ -84,11 +92,13 @@ void Stack::clearStyleBox() {
 Size Stack::naturalSize() const {
     if (engine_ == StackEngine::Yoga) return measureYoga({INFINITY, INFINITY});
     Size result{};
-    int count = 0;
+    float precedingWeight=0,gaps=0;
     const bool column = direction_ == StackDirection::Column;
     for (const auto& child : children()) {
         if (!child->visible()) continue;
-        ++count;
+        const float weight=motionWeight(child,column);
+        gaps+=weightedGap(std::max(0.f,gap_),std::min(precedingWeight,weight));
+        precedingWeight=std::max(precedingWeight,weight);
         const Size preferred = itemSize(child);
         const float main = column ? preferred.height : preferred.width;
         const auto flex = itemFlex(child, main);
@@ -101,7 +111,6 @@ Size Stack::naturalSize() const {
             result.height = std::max(result.height, preferred.height);
         }
     }
-    const float gaps = std::max(0, count - 1) * std::max(0.0f, gap_);
     if (column) result.height += gaps;
     else result.width += gaps;
     result.width += padding_.horizontal();
@@ -132,7 +141,7 @@ void Stack::layoutChildren() {
     const bool column = direction_ == StackDirection::Column;
     const float gap = std::max(0.0f, gap_);
     layoutItems_.clear();
-    float occupied = 0.0f;
+    float occupied = 0.0f,precedingWeight=0,gaps=0;
     for (const auto& child : children()) {
         if (!child->visible()) continue;
         const Size preferred = itemSize(child);
@@ -140,12 +149,15 @@ void Stack::layoutChildren() {
         const StackFlex flex = itemFlex(child, main);
         const float basis = flex.basis.value_or(std::max(0.0f, main));
         const float size = std::clamp(basis, flex.min, flex.max);
+        const float weight=motionWeight(child,column);
+        const float before=weightedGap(gap,std::min(precedingWeight,weight));
+        precedingWeight=std::max(precedingWeight,weight);gaps+=before;
         layoutItems_.push_back({child.get(), size, flex.grow, flex.shrink * basis, flex.min, flex.max,
-                               column ? preferred.width : preferred.height});
+                               column ? preferred.width : preferred.height,before});
         occupied += size;
     }
     if (layoutItems_.empty()) return;
-    const float available = (column ? content.height : content.width) - gap * (layoutItems_.size() - 1);
+    const float available = (column ? content.height : content.width) - gaps;
     float free = available - occupied;
     const bool growing = free > 0.0f;
     // Freeze items at their limit and redistribute the remainder. Minimums
@@ -169,14 +181,16 @@ void Stack::layoutChildren() {
         if (std::abs(distributed) < 0.001f) break;
     }
     float cursor = column ? content.y : content.x;
-    float spacing = gap;
+    float spacing = 0;
     const float leftover = std::max(0.0f, free);
     if (justify_ == StackJustify::Center) cursor += leftover / 2.0f;
     if (justify_ == StackJustify::End) cursor += leftover;
     if (justify_ == StackJustify::SpaceBetween && layoutItems_.size() > 1)
         spacing += leftover / (layoutItems_.size() - 1);
     const float availableCross = column ? content.width : content.height;
+    bool firstItem=true;
     for (const auto& item : layoutItems_) {
+        cursor+=item.gapBefore+(firstItem?0:spacing);firstItem=false;
         const float preferredCross = item.cross;
         const float crossSize = align_ == StackAlign::Stretch || preferredCross <= 0.0f
             ? availableCross : std::min(preferredCross, availableCross);
@@ -185,7 +199,7 @@ void Stack::layoutChildren() {
         if (align_ == StackAlign::End) cross += availableCross - crossSize;
         item.child->setFrame(column ? Rect{cross, cursor, crossSize, item.size}
                                    : Rect{cursor, cross, item.size, crossSize});
-        cursor += item.size + spacing;
+        cursor += item.size;
     }
 }
 

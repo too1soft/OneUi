@@ -1,6 +1,7 @@
 #pragma once
 
 #include "oneui/canvas.h"
+#include "oneui/developer_tools.h"
 #include "oneui/export.h"
 #include "oneui/geometry.h"
 #include "oneui/reactive.h"
@@ -10,6 +11,7 @@
 #include <string>
 
 namespace oneui {
+namespace internal { class DeveloperRecorder; }
 
 enum class MouseButton {
     None,
@@ -152,6 +154,11 @@ struct AccessibilityInfo {
 class ONEUI_API Widget {
 public:
     Widget();
+    void setDiagnosticSource(DiagnosticSource source) { diagnosticSource_=std::make_unique<DiagnosticSource>(std::move(source)); }
+    const DiagnosticSource& diagnosticSource() const {
+        static const DiagnosticSource anonymous{"Widget",{},0};
+        return diagnosticSource_ ? *diagnosticSource_ : anonymous;
+    }
     virtual ~Widget() { lifetime_.reset(); }
 
     void setFrame(Rect frame);
@@ -198,6 +205,8 @@ public:
     /// This makes destruction of an old parent safe after a child was
     /// reparented into a new native tree.
     void detachFromOwner(const void* owner);
+    // UI-thread query for exclusive native-host attachment.
+    bool hasCompositionOwner() const { return invalidatorOwner_ || rectInvalidatorOwner_ || animationSchedulerOwner_; }
 
     virtual void paint(Canvas& canvas) = 0;
     virtual bool onMouseMove(const MouseEvent& event);
@@ -282,6 +291,8 @@ protected:
     virtual void resetInteractionState();
 
 private:
+    friend class internal::DeveloperRecorder;
+    std::unique_ptr<DiagnosticSource> diagnosticSource_;
     CommandScope commands_;
     std::wstring textFontFamily_;
     float textDpiScale_ = 1.0f;

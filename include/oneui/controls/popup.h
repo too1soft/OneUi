@@ -95,6 +95,9 @@ public:
     bool onTextInputText(const std::wstring& text) override;
     bool onFocusChanged(bool focused) override;
     bool isFocusable() const override;
+    bool focusFirstLeaf() override;
+    bool focusLastLeaf() override;
+    std::shared_ptr<Widget> activeFocusChild() const override;
     bool hitTest(Point point) const override;
     bool paintsAboveSiblings() const override;
     void setFocusVisible(bool visible) override;

@@ -1,5 +1,7 @@
 set(ONEUI_CORE_SOURCES
+    src/core/developer_tools.cpp
     src/core/animation.cpp
+    src/core/adaptive_panes.cpp
     src/core/reveal.cpp
     src/core/app_shell.cpp
     src/core/badge.cpp

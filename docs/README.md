@@ -119,3 +119,22 @@ roadmap 或差距分析当成现状。
 - 已被实现反转的历史文档不要静默当成现状，应在当前文档中明确覆盖关系；
 - 示例命令必须在仓库根目录可执行，Windows 路径优先使用 PowerShell；
 - 对“完整支持”“生产级”等表述必须给出测试或限制依据。
+
+## 页面组合与视觉预设
+
+新增 `SidebarLayout`、`Sidebar`、`MasterDetail`、`Surface`，共用 C++／`.one` 适配和 Yoga；`VisualPreset::Standard/Soft` 独立于主题与密度。用法、约束及验证边界见[完整页面组合](52-layout-recipes-and-presets.md)。
+
+- [展开／收起连续性与自动检测](53-motion-continuity-and-diagnostics.md)：修复布局跳变、软件阴影开销，以及可运行的原生回归门禁。
+
+- [内置开发诊断](54-built-in-developer-tools.md)：窗口一行开启，面板、异常记录、控件归因和源码定位。
+
+- [NativeHost 与终端工作台](55-native-host-and-terminal-workbench.md)：模板嵌入 Rust 原生控件、所有权、布局入口与最小运行验收。
+
+- [声明式终端工作区](56-declarative-terminal-workspace.md)：连接侧栏、稳定 ID 标签、可拖动分隔区、原生主题、文件表格与图表的完整示例。
+
+
+## 工作区布局组件
+
+`Workspace`、`TitleBar`、`NavigationRail`、`SessionBar`、`WorkspaceBody`、`StatusBar`、`DockPanel`、`PanelHeader/Body/Footer`、`Spacer`、`ToolButton`、`Progress` 共用 C++／`.one` 适配层。`SplitView` 增加第二面板收起且保留比例，`Tabs` 支持 segmented 呈现。结构要求、默认尺寸、主题和限制见[工作区快速布局](57-workspace-layout-components.md)。
+
+- [声明式模板与工作区阶段完成说明](58-declarative-workspace-stage.md)：提交基线、回归结果及尚未验收的范围。

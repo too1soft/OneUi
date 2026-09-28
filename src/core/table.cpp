@@ -20,6 +20,9 @@ double currentTimeMs() {
 }
 
 void applyTableStyleOverride(TableStyle& style, const TableStyleOverride& override) {
+    if (override.checkBackground) style.checkBackground = override.checkBackground;
+    if (override.checkBorder) style.checkBorder = override.checkBorder;
+    if (override.checkRadius) style.checkRadius = *override.checkRadius;
     if (override.background) style.background = *override.background;
     if (override.border) style.border = *override.border;
     if (override.headerBackground) style.headerBackground = *override.headerBackground;
@@ -39,6 +42,8 @@ void applyTableStyleOverride(TableStyle& style, const TableStyleOverride& overri
     if (override.headerHeight) style.headerHeight = *override.headerHeight;
     if (override.scrollbarWidth) style.scrollbarWidth = *override.scrollbarWidth;
     if (override.cellPadding) style.cellPadding = *override.cellPadding;
+    if (override.headerTextInset) style.headerTextInset = override.headerTextInset;
+    if (override.cellIconGap) style.cellIconGap = *override.cellIconGap;
 }
 
 } // namespace
@@ -62,14 +67,20 @@ void Table::setHeaderHeight(float height) {
     headerHeight_ = std::isfinite(height) ? std::clamp(height, 1.0f, 96.0f) : 30.0f;
     invalidate();
 }
+void Table::setSelectionColumnVisible(bool visible) { selectionColumnVisible_ = visible; pressedSelection_ = false; invalidate(); }
+void Table::setSelectionColumnWidth(float width) {
+    if (!std::isfinite(width)) return;
+    selectionColumnWidth_ = std::clamp(width, 24.0f, 128.0f);
+    invalidate();
+}
 void Table::setOnCellAction(std::function<void(int, int)> callback) { onCellAction_ = std::move(callback); }
 int Table::hitColumnIndex(Point point) const {
     if (!frame().contains(point)) return -1;
     float fixed = 0.0f; int flexible = 0;
     for (const auto& column : columns_) { if (column.width > 0) fixed += column.width; else ++flexible; }
-    float x = frame().x;
+    float x = frame().x + selectionGutter();
     for (int i = 0; i < static_cast<int>(columns_.size()); ++i) {
-        const float width = columnWidth(i, std::max(0.0f, frame().width - fixed), flexible);
+        const float width = columnWidth(i, std::max(0.0f, frame().width - fixed - selectionGutter()), flexible);
         if (point.x >= x && point.x < x + width) return i;
         x += width;
     }
@@ -343,23 +354,43 @@ void Table::paint(Canvas& canvas) {
     canvas.fillRect(headerRect, style.headerBackground, style.radius);
     canvas.drawLine(Point{rect.x, rect.y + headerHeight}, Point{rect.x + rect.width, rect.y + headerHeight}, style.gridLine, 1.0f);
 
+    const auto paintCheck = [&](float y, float h, bool checked, bool partial) {
+        const Rect box{rect.x + (selectionGutter() - 16.0f) * .5f, y + (h - 16.0f) * .5f, 16.0f, 16.0f};
+        const Color accent = disabled() ? style.headerForeground : theme().focusOutline;
+        canvas.fillRect(box, checked || partial ? accent : style.checkBackground.value_or(style.background), style.checkRadius);
+        canvas.strokeRect(box, checked || partial ? accent : style.checkBorder.value_or(style.headerForeground), style.checkRadius, 1.0f);
+        if (partial) canvas.drawLine({box.x+4.0f,box.y+8.0f},{box.x+12.0f,box.y+8.0f},Color{255,255,255},1.5f);
+        else if (checked) paintIcon(canvas,IconSymbol::Check,box.inset(Insets{3.0f}),Color{255,255,255});
+    };
+    if (selectionColumnVisible_) paintCheck(headerRect.y,headerRect.height,
+        !rows_.empty() && selection_.selectedIndices().size()==rows_.size(),
+        !selection_.selectedIndices().empty() && selection_.selectedIndices().size()!=rows_.size());
     float fixedWidth = 0.0f;
     int flexibleCount = 0;
     for (const auto& column : columns_) {
         if (column.width > 0.0f) fixedWidth += column.width;
         else ++flexibleCount;
     }
-    const float remainingWidth = std::max(0.0f, rect.width - fixedWidth);
-    float x = rect.x;
+    const float remainingWidth = std::max(0.0f, rect.width - fixedWidth - selectionGutter());
+    float x = rect.x + selectionGutter();
     for (int columnIndex = 0; columnIndex < static_cast<int>(columns_.size()); ++columnIndex) {
         const float width = columnWidth(columnIndex, remainingWidth, flexibleCount);
         if (columnDividersVisible_ && columnIndex > 0) {
             canvas.drawLine(Point{x, rect.y}, Point{x, rect.y + rect.height}, style.gridLine, 1.0f);
         }
-        canvas.drawTextEllipsized(
-            columns_[static_cast<std::size_t>(columnIndex)].header,
-            Rect{x, rect.y, width, headerHeight}.inset(style.cellPadding),
+        const Insets headerPadding = style.headerTextInset
+            ? Insets{0.0f, *style.headerTextInset} : style.cellPadding;
+        auto label = Rect{x, rect.y, width, headerHeight}.inset(headerPadding);
+        if (columnIndex == sortColumn_) {
+            const float titleWidth = std::min(canvas.measureTextWidth(columns_[columnIndex].header, style.headerFontSize, 400), std::max(0.0f, label.width - 22.0f));
+            paintIcon(canvas, sortDescending_ ? IconSymbol::ChevronUp : IconSymbol::ChevronDown,
+                {label.x + titleWidth + 8.0f, rect.y + (headerHeight - 12.0f) * .5f, 12.0f, 12.0f}, style.headerForeground);
+            label.width = titleWidth;
+        }
+        canvas.drawTextEllipsized(columns_[columnIndex].header, label,
             style.headerForeground, style.headerFontSize, columns_[columnIndex].alignment);
+        if (focused() && focusedHeader_ == columnIndex)
+            canvas.strokeRect(Rect{x + 1, rect.y + 1, std::max(0.0f,width - 2), headerHeight - 2}, theme().focusOutline, 3, 1);
         x += width;
     }
 
@@ -379,7 +410,8 @@ void Table::paint(Canvas& canvas) {
             canvas.drawLine(Point{rect.x, row.y}, Point{rect.x + rect.width, row.y}, style.gridLine, 1.0f);
         }
 
-        x = rect.x;
+        x = rect.x + selectionGutter();
+        if (selectionColumnVisible_) paintCheck(row.y,row.height,selection_.contains(rowIndex),false);
         const auto& values = richRows_[static_cast<std::size_t>(rowIndex)];
         for (int columnIndex = 0; columnIndex < static_cast<int>(columns_.size()); ++columnIndex) {
             const float width = columnWidth(columnIndex, remainingWidth, flexibleCount);
@@ -416,7 +448,9 @@ void Table::paint(Canvas& canvas) {
             Rect cellRect = Rect{x, row.y, width, row.height}.inset(style.cellPadding);
             const Color foreground = cell.foreground.value_or(style.cellForeground);
             float leading = cellRect.x;
-            const float iconSize = std::clamp(cell.iconSize, 12.0f, std::max(12.0f, row.height - 12.0f));
+            const bool workbenchFile = cell.leadingIcon == IconSymbol::OutlineWorkbenchFolder
+                || cell.leadingIcon == IconSymbol::OutlineWorkbenchFile;
+            const float iconSize = std::clamp(workbenchFile ? 18.0f : cell.iconSize, 12.0f, std::max(12.0f, row.height - 12.0f));
             canvas.save();
             canvas.clipRect(Rect{x, row.y, std::max(0.0f, width), row.height});
             if (columns_[columnIndex].action && cell.leadingIcon && text.empty()) {
@@ -432,7 +466,7 @@ void Table::paint(Canvas& canvas) {
                     *cell.leadingIcon,
                     Rect{leading, row.y + (row.height - iconSize) * 0.5f, iconSize, iconSize},
                     foreground);
-                leading += iconSize + 18.0f;
+                leading += iconSize + style.cellIconGap;
             }
             if (cell.indicator) {
                 constexpr float diameter = 7.0f;
@@ -455,8 +489,8 @@ void Table::paint(Canvas& canvas) {
                 const float badgeWidth = std::min(textRect.width * 0.35f, std::max(18.0f, canvas.measureTextWidth(cell.badge, 11.0f, 400) + 8.0f));
                 const float titleWidth = std::min(canvas.measureTextWidth(text, fontSize, cell.fontWeight) + 2.0f, std::max(0.0f, textRect.width - badgeWidth - 6.0f));
                 const Rect badge{textRect.x + titleWidth + 6.0f, textRect.y + (textRect.height - 16.0f) / 2.0f, badgeWidth, 16.0f};
-                canvas.fillRect(badge, Color{foreground.r, foreground.g, foreground.b, 18}, 3.0f);
-                canvas.drawTextEllipsized(cell.badge, badge, style.detailForeground, 11.0f, TextAlign::Center);
+                canvas.fillRect(badge, cell.badgeBackground.value_or(Color{foreground.r, foreground.g, foreground.b, 18}), 3.0f);
+                canvas.drawTextEllipsized(cell.badge, badge, cell.badgeForeground.value_or(style.detailForeground), 11.0f, TextAlign::Center);
                 textRect.width = titleWidth;
             }
             canvas.drawTextStyledEllipsized(text, textRect, foreground, fontSize, cell.alignment, cell.fontWeight);
@@ -502,7 +536,17 @@ void Table::paint(Canvas& canvas) {
     }
 }
 
+void Table::dragScrollbar(float y) {
+    const auto style = resolvedStyle();
+    const float height = std::max(0.0f, frame().height - style.headerHeight);
+    const auto thumb = verticalThumbRect(style.scrollbarWidth, height);
+    const float travel = std::max(0.0f, height - 8.0f - thumb.height);
+    if (travel <= 0.0f) return;
+    setScrollOffset(std::clamp((y - frame().y - style.headerHeight - 4.0f - scrollbarGrab_) / travel, 0.0f, 1.0f) * maxScrollOffset());
+}
+
 bool Table::onMouseMove(const MouseEvent& event) {
+    if (draggingScrollbar_) { if (interactive()) dragScrollbar(event.position.y); return true; }
     if (!interactive()) return false;
     if ((reorderEnabled_ || itemDragEnabled_) && reorderSourceIndex_ >= 0) {
         if (!reordering_ && detail::exceedsReorderDragThreshold(
@@ -551,12 +595,40 @@ bool Table::onMouseMove(const MouseEvent& event) {
     return true;
 }
 
+void Table::setHeaderSort(int column, bool descending) {
+    sortColumn_ = column < 0 ? -1 : column; sortDescending_ = descending;
+    if (sortColumn_ < 0) focusedHeader_ = -1; invalidate();
+}
+
 bool Table::onMouseDown(const MouseEvent& event) {
     if (!interactive() || (event.button != MouseButton::Left && event.button != MouseButton::Right)) return false;
     resetReorderState();
+    const auto style = resolvedStyle();
+    const float body = std::max(0.0f, frame().height - style.headerHeight);
+    if (event.button == MouseButton::Left && contains(event.position) && maxScrollOffset() > .001f &&
+        event.position.y >= frame().y + style.headerHeight &&
+        event.position.x >= frame().x + frame().width - std::max(10.0f, style.scrollbarWidth + 6.0f)) {
+        const auto thumb = verticalThumbRect(style.scrollbarWidth, body);
+        draggingScrollbar_ = true;
+        pressedIndex_ = -1; pressedSelection_ = false;
+        scrollbarGrab_ = event.position.y >= thumb.y && event.position.y <= thumb.y + thumb.height
+            ? event.position.y - thumb.y : thumb.height * .5f;
+        dragScrollbar(event.position.y);
+        return true;
+    }
     pressedColumn_ = hitColumnIndex(event.position);
     pressedIndex_ = hitRowIndex(event.position);
     pressedClickCount_ = event.clickCount;
+    pressedSelection_ = selectionColumnVisible_ && event.button == MouseButton::Left
+        && contains(event.position) && event.position.x < frame().x + selectionGutter();
+    if (pressedSelection_) {
+        if (event.position.y < frame().y + resolvedStyle().headerHeight) pressedIndex_ = -2;
+        return pressedIndex_ >= 0 || pressedIndex_ == -2;
+    }
+    if (pressedIndex_ < 0 && event.button == MouseButton::Left && sortColumn_ >= 0 && onCellAction_ && contains(event.position) && pressedColumn_ >= 0 && event.position.y < frame().y + style.headerHeight) {
+        pressedIndex_ = -3; return true;
+    }
+    focusedHeader_ = -1;
     if (pressedIndex_ < 0) return false;
     if (event.button == MouseButton::Left
         && (reorderEnabled_ || (itemDragEnabled_ && itemDragIds_.size() == rows_.size()))) {
@@ -571,6 +643,21 @@ bool Table::onMouseDown(const MouseEvent& event) {
 
 bool Table::onMouseUp(const MouseEvent& event) {
     if (!interactive()) return false;
+    if (draggingScrollbar_) { dragScrollbar(event.position.y); draggingScrollbar_ = false; return true; }
+    if (pressedSelection_) {
+        pressedSelection_ = false;
+        const int pressed = pressedIndex_;pressedIndex_ = -1;
+        const bool inGutter = contains(event.position) && event.position.x < frame().x + selectionGutter();
+        const bool header = event.position.y < frame().y + resolvedStyle().headerHeight;
+        if (event.button == MouseButton::Left && inGutter && ((pressed == -2 && header) || (pressed >= 0 && hitRowIndex(event.position)==pressed))) {
+            const auto previous=selection_.selectedIndices();const int active=selectedIndex();
+            if (pressed == -2) {
+                if (selection_.selectedIndices().size()==rows_.size()) selection_.clear(); else selection_.selectAll();
+            } else selection_.applyPointerSelection(pressed,true,event.shift);
+            notifySelectionChanged(previous,active);invalidate();
+        }
+        return true;
+    }
     if (event.button == MouseButton::Left && reordering_) {
         if (!externalDragging_ && reorderEnabled_ && contains(event.position)) {
             updateReorderTarget(event.position);
@@ -606,6 +693,12 @@ bool Table::onMouseUp(const MouseEvent& event) {
     pressedIndex_ = -1;
     pressedClickCount_ = 1;
     resetReorderState();
+    if (pressed == -3) {
+        if (event.button == MouseButton::Left && contains(event.position) && event.position.y < frame().y + resolvedStyle().headerHeight && hitColumnIndex(event.position) == pressedColumn && onCellAction_) {
+            focusedHeader_ = pressedColumn; onCellAction_(-1, pressedColumn); invalidate();
+        }
+        return true;
+    }
     if (pressed < 0) return false;
     if (hitRowIndex(event.position) == pressed) {
         const auto previousIndices = selection_.selectedIndices();
@@ -641,7 +734,21 @@ bool Table::onMouseWheel(const MouseWheelEvent& event) {
 }
 
 bool Table::onKeyDown(const KeyEvent& event) {
-    if (!interactive() || rows_.empty()) return false;
+    if (!interactive()) return false;
+    if (sortColumn_ >= 0 && onCellAction_ && !columns_.empty()) {
+        if (focusedHeader_ < 0 && event.key == Key::Up && selectedIndex() <= 0 && !event.control && !event.shift) {
+            focusedHeader_ = std::min(sortColumn_, static_cast<int>(columns_.size()) - 1); invalidate(); return true;
+        }
+        if (focusedHeader_ >= 0) {
+            if (event.key == Key::Left) focusedHeader_ = std::max(0, focusedHeader_ - 1);
+            else if (event.key == Key::Right) focusedHeader_ = std::min(static_cast<int>(columns_.size()) - 1, focusedHeader_ + 1);
+            else if (event.key == Key::Enter || event.key == Key::Space) { onCellAction_(-1, focusedHeader_); return true; }
+            else if (event.key == Key::Down) { focusedHeader_ = -1; if (!rows_.empty()) setSelectedIndex(0); }
+            else return false;
+            invalidate(); return true;
+        }
+    }
+    if (rows_.empty()) return false;
     if (event.key == Key::A && event.control && selection_.mode() == SelectionMode::Multiple) {
         const auto previous = selection_.selectedIndices();
         const int previousIndex = selectedIndex();
@@ -651,6 +758,11 @@ bool Table::onKeyDown(const KeyEvent& event) {
         return true;
     }
     const int active = selection_.activeIndex();
+    if (selectionColumnVisible_ && active >= 0 && event.key == Key::Space) {
+        const auto previous = selection_.selectedIndices();const int before=selectedIndex();
+        selection_.applyPointerSelection(active,true,event.shift);
+        notifySelectionChanged(previous,before);invalidate();return true;
+    }
     if (reorderEnabled_ && event.alt && !event.control && active >= 0
         && (event.key == Key::Up || event.key == Key::Down)) {
         const int target = event.key == Key::Up
@@ -767,7 +879,7 @@ Rect Table::verticalThumbRect(float width, float contentHeight) const {
     const float row = effectiveRowHeight(contentHeight);
     const float fullHeight = static_cast<float>(rows_.size()) * row;
     const float thumbWidth = std::max(1.0f, width);
-    const float thumbHeight = std::max(24.0f, contentHeight * contentHeight / std::max(contentHeight, fullHeight));
+    const float thumbHeight = std::min(std::max(0.0f, contentHeight - 8.0f), std::max(24.0f, contentHeight * contentHeight / std::max(1.0f, fullHeight)));
     const float travel = std::max(0.0f, contentHeight - thumbHeight - 8.0f);
     const float progress = maxScrollOffset() <= 0.001f ? 0.0f : scrollOffset_ / maxScrollOffset();
     return Rect{rect.x + rect.width - thumbWidth - 3.0f, rect.y + style.headerHeight + 4.0f + progress * travel, thumbWidth, thumbHeight};
@@ -841,11 +953,13 @@ bool Table::advanceScrollMotion(double nowMs) {
 void Table::resetScrollMotion(float offset) { scrollMotion_.reset(offset); }
 
 bool Table::hasInteractionState() const {
-    return hoveredIndex_ >= 0 || pressedIndex_ >= 0 || reordering_
+    return draggingScrollbar_ || hoveredIndex_ >= 0 || pressedIndex_ != -1 || reordering_
         || !selection_.selectedIndices().empty();
 }
 
 void Table::resetInteractionState() {
+    draggingScrollbar_ = false;
+    pressedSelection_ = false;
     const int source = reorderSourceIndex_;
     const bool notifyCancellation = externalDragging_ && itemDragEnabled_ && onItemDrag_
         && source >= 0 && source < static_cast<int>(itemDragIds_.size());

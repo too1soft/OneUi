@@ -224,6 +224,12 @@ public:
     virtual void setOnCloseRequested(std::function<void(bool)> callback) { (void)callback; }
     // Query on the owning UI thread. Default preserves other backend behavior.
     virtual RendererInfo rendererInfo() const { return {}; }
+    // Opt-in developer instrumentation. UI-thread only; unsupported platforms
+    // return false. No polling timer or automatic repaint is introduced.
+    virtual bool setDeveloperTools(DeveloperOptions options) { (void)options; return false; }
+    bool enableDeveloperTools() { return setDeveloperTools({}); }
+    virtual DeveloperSnapshot developerSnapshot() const { return {}; }
+    virtual bool exportDeveloperReport(const std::wstring& path) const { (void)path; return false; }
     // Query on the owning UI thread. Separate opt-in cache query; unavailable
     // backends return false availability flags, not a measured zero usage.
     virtual RendererMemoryInfo rendererMemoryInfo() const { return {}; }

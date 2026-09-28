@@ -19,6 +19,16 @@ namespace {
 
 int failures = 0;
 
+class HoverProbe final : public oneui::Widget {
+public:
+    bool hovered = false;
+    void paint(oneui::Canvas&) override {}
+    bool onMouseMove(const oneui::MouseEvent&) override { const bool changed = !hovered; hovered = true; return changed; }
+protected:
+    bool hasInteractionState() const override { return hovered; }
+    void resetInteractionState() override { hovered = false; }
+};
+
 class NullCanvas final : public oneui::Canvas {
 public:
     void save() override {}
@@ -905,6 +915,53 @@ void testFocusedPopupReceivesEscapeThroughOverlayHost() {
 
     expectEqual("OverlayHost focused popup handles Escape", host.onKeyDown(oneui::KeyEvent{oneui::Key::Escape}) ? 1 : 0, 1);
     expectEqual("OverlayHost Escape closes focused popup", popup->isOpen() ? 1 : 0, 0);
+
+    // Reactivation/programmatic focus can put the caret back in the terminal
+    // while a light-dismiss menu is still visible. Escape must close that
+    // visible menu before reaching the terminal underneath it.
+    auto terminal = std::make_shared<oneui::TerminalView>();
+    host.setContent(terminal);
+    popup->setOpen(true);
+    host.requestFocus(terminal.get(), false);
+    expectEqual("Visible popup Escape survives focus handoff", host.onKeyDown(oneui::KeyEvent{oneui::Key::Escape}) ? 1 : 0, 1);
+    expectEqual("Visible unfocused popup closes", popup->isOpen() ? 1 : 0, 0);
+}
+
+void testClosedAnchorlessPopupDoesNotInterceptWorkspacePointer() {
+    std::vector<int> paintLog, eventLog;
+    oneui::OverlayHost host;
+    host.setFrame({0, 0, 800, 600});
+    auto content = makeProbe(1, paintLog, eventLog, {0, 0, 800, 600});
+    host.setContent(content);
+    auto popup = std::make_shared<oneui::Popup>();
+    // Product context menus use an anchor rectangle, not an anchor widget.
+    // Their frame fills the window only to provide placement bounds.
+    popup->setAnchorRect(oneui::Rect{620, 50, 26, 26});
+    popup->setContent(std::make_shared<oneui::Button>(L"Menu action"));
+    popup->content()->setPreferredSize({160, 32});
+    popup->setInteractionMode(oneui::PopupInteractionMode::LightDismiss);
+    host.addAnchoredOverlay(popup, oneui::OverlayOptions{340, false, false},
+                            {-1, -1}, {}, 0, 0);
+    const oneui::MouseEvent click{{100, 200}, oneui::MouseButton::Left};
+    for (int cycle = 0; cycle < 3; ++cycle) {
+        popup->setOpen(true);
+        expectEqual("Anchorless popup Escape closes", host.onKeyDown({oneui::Key::Escape}) ? 1 : 0, 1);
+        expectEqual("Closed context popup does not hit viewport", popup->hitTest(click.position) ? 1 : 0, 0);
+        expectEqual("Closed context popup does not hit synthetic anchor", popup->hitTest({625, 55}) ? 1 : 0, 0);
+        eventLog.clear();
+        host.onMouseDown(click);
+        host.onMouseUp(click);
+        expectSequence("Workspace receives click after menu Escape", eventLog, {12, 13});
+    }
+    popup->setOpen(true);
+    eventLog.clear();
+    host.onMouseDown(click);
+    host.onMouseUp(click);
+    expectEqual("Outside click closes context menu", popup->isOpen() ? 1 : 0, 0);
+    expectSequence("Dismiss click does not click through", eventLog, {});
+    host.onMouseDown(click);
+    host.onMouseUp(click);
+    expectSequence("Next click reaches workspace", eventLog, {12, 13});
 }
 
 void testCommittedTextAndProgrammaticFocusReachNestedTerminal() {
@@ -1127,6 +1184,31 @@ int main() {
         expectEqual("modal diagnostic Escape cancels once",closed,1);
     }
 
+    // Match a sidebar: each sibling owns a transparent hit overlay. Moving
+    // through the items must leave exactly one hover, and none after exit.
+    for (bool overlay : {false, true}) {
+        oneui::View sidebar;
+        sidebar.setFrame({0, 0, 100, 400});
+        std::vector<std::shared_ptr<HoverProbe>> probes;
+        for (int i = 0; i < 4; ++i) {
+            auto host = std::make_shared<oneui::OverlayHost>();
+            host->setFrame({0, static_cast<float>(i * 80), 100, 76});
+            auto probe = std::make_shared<HoverProbe>();
+            probe->setFrame(host->frame());
+            if (overlay) host->addOverlay(probe, 2); else host->setContent(probe);
+            sidebar.add(host);
+            probes.push_back(probe);
+        }
+        for (int i = 0; i < 4; ++i) {
+            sidebar.onMouseMove({{50, static_cast<float>(i * 80 + 30)}});
+            sidebar.onMouseMove({{51, static_cast<float>(i * 80 + 30)}});
+            for (int j = 0; j < 4; ++j)
+                expectEqual("hover sweep clears previous overlay/content", probes[j]->hovered, i == j);
+        }
+        sidebar.onMouseMove({{150, 390}});
+        for (const auto& probe : probes) expectEqual("sidebar exit clears all hover", probe->hovered, false);
+    }
+
     testAddOverlayPreservesEntryOrderAndLayerValues();
     testPaintOrdersByLayerWithStableEqualLayers();
     testModalOverlayPaintsTheStandardBackdrop();
@@ -1155,6 +1237,7 @@ int main() {
     testPopupBlockOutsidePolicyStopsLowerOverlayWithoutClosing();
     testPopupModalModeCombinesFocusTrapAndPointerBlocker();
     testFocusedPopupReceivesEscapeThroughOverlayHost();
+    testClosedAnchorlessPopupDoesNotInterceptWorkspacePointer();
     testCommittedTextAndProgrammaticFocusReachNestedTerminal();
     testModalDialogScrollViewRoutesSelectPopupPointerCommit();
     testNestedViewRoutesElevatedSelectOutsideParentBounds();

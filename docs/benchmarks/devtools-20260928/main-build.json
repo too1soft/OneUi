@@ -1,0 +1,5 @@
+{
+  "exe_sha256": "28c1d76b6140636248a8ebbbcddbe4184094eea5522278c5b6ef5c941e95ada3",
+  "sdk_sha256": "168680570a6be4c7fc20a0045211378135fe31dc4d0b8be124a5772c5f28dd6e",
+  "notes": "Main integration verification. Native injected slow-paint fixtures are correctness tests, not throughput benchmarks."
+}

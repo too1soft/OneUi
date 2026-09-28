@@ -1,4 +1,5 @@
 #include "internal/frame_profile.h"
+#include "internal/developer_tools.h"
 #include "oneui/view.h"
 
 #include <algorithm>
@@ -152,6 +153,7 @@ void View::paint(Canvas& canvas) {
             hasAboveSiblings = true;
             continue;
         }
+        internal::DiagnosticPaintSpan diagnostic(*child);
         child->paint(canvas);
     }
 
@@ -166,6 +168,7 @@ void View::paint(Canvas& canvas) {
         if (canCullByClip && !intersects(child->paintBounds(), *clip)) {
             continue;
         }
+        internal::DiagnosticPaintSpan diagnostic(*child);
         child->paint(canvas);
     }
 }

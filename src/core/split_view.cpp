@@ -70,6 +70,15 @@ float SplitView::splitRatio() const {
     return splitRatio_;
 }
 
+void SplitView::setSecondCollapsed(bool collapsed) {
+    if(secondCollapsed_==collapsed)return;
+    resetInteractionState();secondCollapsed_=collapsed;invalidate();
+}
+void SplitView::setCollapsedExtent(float extent) {
+    if(!std::isfinite(extent) || extent<0)return;
+    collapsedExtent_=extent;invalidate();
+}
+
 void SplitView::setGap(float gap) {
     if (!std::isfinite(gap)) return;
     gap_ = std::max(0.0f, gap);
@@ -215,6 +224,11 @@ bool SplitView::onMouseDown(const MouseEvent& event) {
 
 bool SplitView::onMouseUp(const MouseEvent& event) {
     if (draggingDivider_) {
+        // Mouse-up may be newer than the last coalesced mouse move. Apply its
+        // position before committing, retaining the normal clamp/callback path.
+        const auto life = lifetimeToken();
+        onMouseMove(event);
+        if (life.expired()) return true;
         dividerHovered_ = hasResizableDivider() && dividerHitRect().contains(event.position);
         finishDividerDrag();
         invalidate();
@@ -257,6 +271,14 @@ void SplitView::layoutChildren() {
         return;
     }
 
+    if(secondCollapsed_) {
+        const bool horizontal=orientation_==SplitOrientation::Horizontal;
+        const float available=std::max(0.0f,(horizontal?content.width:content.height)-effectiveGap);
+        const float second=std::min(available,collapsedExtent_),first=available-second;
+        first_->setFrame(horizontal?Rect{content.x,content.y,first,content.height}:Rect{content.x,content.y,content.width,first});
+        second_->setFrame(horizontal?Rect{content.x+first+effectiveGap,content.y,second,content.height}:Rect{content.x,content.y+first+effectiveGap,content.width,second});
+        return;
+    }
     if (orientation_ == SplitOrientation::Horizontal) {
         const float available = std::max(0.0f, content.width - effectiveGap);
         splitRatio_ = constrainedRatio(splitRatio_);
@@ -280,7 +302,7 @@ Rect SplitView::contentRect() const {
 }
 
 bool SplitView::hasResizableDivider() const {
-    return resizable_ && first_ && first_->visible() && second_ && second_->visible();
+    return resizable_ && !secondCollapsed_ && first_ && first_->visible() && second_ && second_->visible();
 }
 
 float SplitView::availableExtent() const {

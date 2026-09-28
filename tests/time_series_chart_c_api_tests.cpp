@@ -49,6 +49,8 @@ int main() {
     const OneUiUtf8String axis[] = {utf8View(top), utf8View(middle), utf8View(bottom)};
     oneui_time_series_chart_set_axis_labels_utf8(chart, axis, 3);
     oneui_time_series_chart_set_latest_point_visible(chart, 1);
+    oneui_time_series_chart_set_latest_point_size(chart, 6.0f, 4.5f);
+    oneui_time_series_chart_set_latest_point_size(nullptr, 6.0f, 4.5f);
     const double positions[] = {0.5, 0.7, 1.0};
     expectEqual("time domain copied", oneui_time_series_chart_set_sample_positions(chart, positions, 3), 1);
     expectEqual("nonempty null domain rejected", oneui_time_series_chart_set_sample_positions(chart, nullptr, 3), 0);

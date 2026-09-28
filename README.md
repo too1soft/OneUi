@@ -8,11 +8,27 @@
 
 适合设置工具、连接管理器、运维控制台，以及包含大量表格、图表和表单的桌面应用。当前新增开发入口以 **Windows + C++17** 验收；API 仍在演进，不是稳定版承诺。
 
+现在可以直接组合导航、列表＋详情和底部固定操作的设置页，并选择标准／柔和视觉预设。运行 `./examples/performance_lab/run.ps1 -Layouts`，或看[完整页面组合教程](docs/52-layout-recipes-and-presets.md)。
+
+最近的阴影优化实测：同一 GPU 效果场景的平均绘制 **1.09→0.62ms**、内容 P95 **12.81→0.95ms**、工作集 **170→109MiB**；软件路径保持不变。[环境、原始数据与限制](docs/52-layout-recipes-and-presets.md#最终同机实测2026-09-28)。
+
+原生连接工作区：导航栏、稳定 ID 标签、终端分屏、可收起文件区和监控页签，支持浅色/深色与窄窗口。`.one` 写页面，Rust 持有终端；连接、命令和指标为本地模拟。运行 `./examples/terminal_workbench/build.ps1 -Test -Run`（额外需要 Rust MSVC 工具链）。[体验步骤与源码入口](examples/terminal_workbench/README.md) · [工作区快速布局与验收](docs/57-workspace-layout-components.md)。
+
+`Workspace` 声明页面区域，`DockPanel` 声明面板头／正文／页脚，`ToolButton` 统一工具按钮样式；共用 C++／`.one` 入口，不必手工计算位置。
+
+![OneUI terminal workspace](docs/images/terminal-workspace-v4/dark-wide.png)
+
+**阶段状态：** C++／`.one` 声明式开发第一阶段已完成，当前仍为 0.1 开发版。[已交付能力、提交前回归与后续边界](docs/58-declarative-workspace-stage.md)。
+
 ## 实际运行效果
 
 浅色表单：默认间距、字号、绿色强调色和自动分栏，应用代码不用计算字段坐标。
 
 ![OneUI 浅色表单和自适应双列布局](docs/images/typed-authoring/editor-light-wide.png)
+
+完整工作区：同一套布局自动适配侧栏、列表与详情；窄窗口切换为单页。
+
+![OneUI 页面组合与柔和预设](docs/images/layout-recipes/list-wide.png)
 
 深色紧凑表格：1,000 条模拟记录，原生虚拟化绘制。
 
@@ -179,6 +195,12 @@ Windows 默认尝试 GPU，失败回退软件绘制。实验台可以启动时�
 
 Windows 为当前主线。Linux X11／Wayland 已在 WSLg 构建运行，原生 Linux 桌面验收未完成；macOS 源码已接入，尚待 Mac 构建。[平台支持矩阵](docs/37-native-desktop-backends.md)分别记录实现与验收状态。
 
+## 内置开发诊断
+
+调用 `window->enableDeveloperTools()`，正常操作时就能观察慢绘制、动画延迟、Reveal 进度倒退和耗时控件；`.one` 自动附带源码行。F12 显隐面板，Ctrl+F12 导出报告。默认关闭，无采样刷新定时器，当前 Windows 可用。
+
+实验台直接运行 `./examples/performance_lab/run.ps1 -Effects -DevTools`。[接入、截图与检测边界](docs/54-built-in-developer-tools.md)。
+
 ## 深入了解
 
 - [本轮验收与可复现性能](docs/40-declarative-stage-validation.md)
@@ -187,3 +209,5 @@ Windows 为当前主线。Linux X11／Wayland 已在 WSLg 构建运行，原生 
 - [架构](docs/01-architecture.md) · [渲染边界](docs/39-rendering-and-validation.md) · [无障碍](docs/15-accessibility.md)
 
 核心头文件在 `include/oneui/`，控件实现位于 `src/core/`，模板编译器在 `tools/viewc/`；演示和回归分别在 `examples/` 与 `tests/`。许可证见 [LICENSE](LICENSE)，第三方依赖见 [third_party/README.md](third_party/README.md)。
+
+展开／收起可自动检查位置跳变、进度倒退和慢帧：`./examples/performance_lab/check-motion.ps1`。脚本驱动真实原生窗口，失败保留逐帧数据并返回非零；见[动效连续性与检测](docs/53-motion-continuity-and-diagnostics.md)。

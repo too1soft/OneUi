@@ -1,0 +1,1 @@
+PASS: full workspace (4 sessions, search, keyed tabs/duplicates, files, split drag, charts, panels), Rust-owned terminal/input, native text route, 100 switch/theme/close/restore cycles, identity/selection/subscription retention, native tab click, composition/focus retention, resize, 42px tabs, exclusive mount, owner lifetime, post-close worker rejection, idle redraw=0.

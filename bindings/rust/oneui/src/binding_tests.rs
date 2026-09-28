@@ -48,6 +48,100 @@ macro_rules! native_tests {
 }
 
 native_tests! {
+fn component_app_owns_callbacks_and_rejects_invalid_size() {
+    use super::ui::*;
+    let retained = Rc::new(());
+    let weak = Rc::downgrade(&retained);
+    let root = scroll(page([
+        page_header("Title", "Description", []),
+        section("Settings", "Details", [form_row("Name", "Hint", text("Value"))]),
+        metric("Count", text("42"), "rows"),
+        empty_state("Empty", "Create a record", [button("Create", move || { let _ = &retained; })]),
+    ]));
+    let app = App::new("Components", root).size(700, 560).build().unwrap();
+    assert!(weak.upgrade().is_some());
+    drop(app);
+    assert!(weak.upgrade().is_none());
+    assert!(App::new("Invalid", text("x")).size(0, 500).build().is_err());
+}
+fn yoga_width_measurement_and_composition() {
+    use super::{ui::*, StackEngine};
+    let probe = Stack::new(StackDirection::Row).unwrap();
+    if probe.set_engine(StackEngine::Yoga).is_err() {
+        assert!(probe.set_wrap(true).is_err());
+        return;
+    }
+    let paragraph_text = "中文段落根据宽度调整高度，后续控件应保持正确的位置。".repeat(4);
+    let label = Label::new(&paragraph_text).unwrap();
+    label.set_text_wrapping(true);
+    let wide = label.as_widget().measure(600.0, f32::INFINITY).unwrap();
+    let narrow = label.as_widget().measure(180.0, f32::INFINITY).unwrap();
+    assert!(narrow.1 > wide.1);
+    assert!(label.as_widget().measure(f32::NAN, 10.0).is_err());
+    assert!(label.as_widget().measure(-1.0, 10.0).is_err());
+    assert!(unsafe { sys::oneui_stack_set_engine(probe.as_widget().as_raw(), 99) } == 0);
+    let tree = Ui::with_engine(page([
+        responsive_columns(300.0, [
+            surface([paragraph(&paragraph_text)]),
+            surface([paragraph(&paragraph_text)]),
+        ]),
+        flow([button("one", || {}), button("two", || {})]),
+    ]), StackEngine::Yoga).unwrap();
+    assert!(tree.as_widget().measure(380.0, f32::INFINITY).unwrap().1 >
+            tree.as_widget().measure(1000.0, f32::INFINITY).unwrap().1);
+    assert!(Ui::new(flow([text("requires Yoga")])).is_err());
+}
+
+fn authoring_content_flex_and_owned_composition() {
+    use super::{ui, Flex, FlexBasis, StackJustify};
+    let row = Stack::new(StackDirection::Row).unwrap();
+    let label = Rc::new(Label::new("short").unwrap());
+    row.add(label.as_widget());
+    row.set_flex(label.as_widget(), Flex::content()).unwrap();
+    row.set_justify(StackJustify::SpaceBetween);
+    let short = row.as_widget().natural_size().unwrap();
+    label.set_text("A much longer title with content-sized layout");
+    assert!(row.as_widget().natural_size().unwrap().0 > short.0);
+    assert!(row.set_flex(label.as_widget(), Flex { grow: f32::NAN, ..Flex::content() }).is_err());
+    let outsider = Label::new("not a child").unwrap();
+    assert!(row.set_flex(outsider.as_widget(), Flex::content()).is_err());
+    row.set_flex(label.as_widget(), Flex { basis: FlexBasis::Length(123.0), ..Flex::default() }).unwrap();
+    assert!((row.content_width() - 123.0).abs() < 0.1);
+    row.clear_flex(label.as_widget());
+    let retained = Rc::new(());
+    let weak = Rc::downgrade(&retained);
+    let app = ui::Ui::new(ui::page([
+        ui::widget(label.clone()),
+        ui::button("Own callback", move || { let _ = &retained; }),
+    ])).unwrap();
+    assert!(weak.upgrade().is_some());
+    assert!(app.as_widget().natural_size().unwrap().0 > 50.0);
+    drop(app);
+    assert!(weak.upgrade().is_none(), "composition must drop callback captures");
+    assert!(ui::Ui::new(ui::row([]).gap(f32::NAN)).is_err());
+    assert!(ui::Ui::new(ui::row([ui::text("bad").grow(-1.0)])).is_err());
+}
+
+fn authoring_theme_replacement_remeasures_and_preserves_explicit_gap() {
+    use super::ui;
+    let button = Rc::new(Button::new("Native action").unwrap());
+    let css = "stack { gap: 10px; } button { padding: 10px 20px; }";
+    let mut app = ui::Ui::with_css(ui::column([
+        ui::widget(button.clone()), ui::text("Label")
+    ]).gap(7.0), css).unwrap();
+    let before = button.as_widget().natural_size().unwrap();
+    let first_height = app.as_widget().natural_size().unwrap().1;
+    app.replace_css("stack { gap: 100px; } button { padding: 2px 4px; }").unwrap();
+    let after = button.as_widget().natural_size().unwrap();
+    assert!((before.0 - after.0 - 32.0).abs() < 0.1);
+    assert!((before.1 - after.1 - 16.0).abs() < 0.1);
+    assert!((first_height - app.as_widget().natural_size().unwrap().1 - 16.0).abs() < 0.1,
+        "explicit gap must win over changed CSS gap");
+    let size = app.as_widget().natural_size().unwrap();
+    assert!(app.replace_css("button { padding: invalid; }").is_err());
+    assert_eq!(app.as_widget().natural_size().unwrap(), size, "failed CSS is atomic");
+}
+
 fn latest_signal_coalesces_and_cancels_on_the_window_thread() {
     let _guard=window_test_lock().lock().unwrap();
     let window=Window::new(&WindowOptions::default()).unwrap();
@@ -1484,6 +1578,8 @@ fn terminal_dirty_ranges_preserve_sparse_updates() {
         cursor_style_from_application: false,
         mouse_reporting: false,
         first_visible_line_number: 1,
+        history_rows: 0,
+        scrollback_offset: 0,
     };
     let mut current = previous.clone();
     assert_eq!(
@@ -1546,6 +1642,8 @@ fn terminal_dirty_ranges_collapse_pathological_fragmentation() {
         cursor_style_from_application: false,
         mouse_reporting: false,
         first_visible_line_number: 1,
+        history_rows: 0,
+        scrollback_offset: 0,
     };
     let mut current = previous.clone();
     for index in (0..80).step_by(2) {
@@ -1656,6 +1754,8 @@ fn terminal_handle_submits_a_worker_frame_on_the_window_thread() {
                 cursor_style_from_application: true,
                 mouse_reporting: true,
                 first_visible_line_number: 1,
+        history_rows: 0,
+        scrollback_offset: 0,
             })
             .expect("worker should submit a terminal frame");
     });
@@ -1691,6 +1791,8 @@ fn terminal_handle_rejects_updates_after_the_view_is_destroyed() {
             cursor_style_from_application: false,
             mouse_reporting: false,
             first_visible_line_number: 1,
+        history_rows: 0,
+        scrollback_offset: 0,
         }),
         Err(Error::WidgetDestroyed)
     ));
@@ -2303,6 +2405,68 @@ fn table_handle_replaces_rows_and_clears_selection_atomically() {
 
     assert_eq!(window.run(), 0);
     assert!(table.selected_indices().is_empty());
+}
+
+fn row_models_commit_with_the_visual_revision_on_the_ui_thread() {
+    let _guard = window_test_lock().lock().unwrap();
+    let window = Window::new(&WindowOptions::default()).unwrap();
+    let table = Table::new().unwrap();
+    table.set_rows(&[TableRow{cells:vec!["old".into()]}]);
+    table.set_selection_mode(SelectionMode::Multiple);
+    table.set_selected_indices(&[0]);
+    let list = VirtualList::new().unwrap();
+    list.set_items(&[ListItem{title:"old".into(),detail:String::new()}]);
+    list.set_selected_index(0);
+    let root = Stack::new(StackDirection::Column).unwrap();
+    root.add(table.as_widget()); root.add(list.as_widget());
+    window.set_content(root.as_widget());
+    let table_handle = window.table_handle(&table);
+    let list_handle = window.virtual_list_handle(&list);
+    let owner = thread::current().id();
+    let committed = Arc::new(Mutex::new(Vec::new()));
+    let table_committed = Arc::clone(&committed);
+    let list_committed = Arc::clone(&committed);
+    thread::spawn(move || {
+        table_handle.set_rich_rows_with_commit(vec![super::TableRichRow{cells:vec![super::TableRichCell{text:"new".into(),..Default::default()}]}], move || {
+            assert_eq!(thread::current().id(),owner);
+            table_committed.lock().unwrap().push("table"); false
+        }).unwrap();
+        list_handle.set_items_with_commit(vec![ListItem{title:"new".into(),detail:String::new()}], move || {
+            assert_eq!(thread::current().id(),owner);
+            list_committed.lock().unwrap().push("list"); false
+        }).unwrap();
+    }).join().unwrap();
+    assert!(committed.lock().unwrap().is_empty());
+    assert_eq!(table.selected_indices(),vec![0]);
+    assert_eq!(list.selected_index(),0);
+    let close=window.dispatcher(); window.dispatch(move || close.request_close()).unwrap();
+    assert_eq!(window.run(),0);
+    assert_eq!(*committed.lock().unwrap(),vec!["table","list"]);
+    assert!(table.selected_indices().is_empty());
+    assert_eq!(list.selected_index(),-1);
+}
+
+fn rich_table_handle_publishes_selection_policy_on_window_thread() {
+    let _guard = window_test_lock().lock().expect("window test lock");
+    for preserve in [true, false] {
+        let window=Window::new(&WindowOptions::default()).unwrap();
+        let table=Table::new().unwrap();
+        table.set_selection_mode(SelectionMode::Multiple);
+        table.set_rows(&[TableRow{cells:vec!["目录".into()]},TableRow{cells:vec!["文件".into()]}]);
+        table.set_selected_indices(&[1]);
+        window.set_content(table.as_widget());
+        let handle=window.table_handle(&table);
+        let worker=handle.clone();
+        thread::spawn(move || worker.set_rich_rows(vec![
+            super::TableRichRow{cells:vec![super::TableRichCell{text:"目录".into(),icon:Some(IconSymbol::Folder),..Default::default()}]},
+            super::TableRichRow{cells:vec![super::TableRichCell{text:"文件".into(),icon:Some(IconSymbol::File),..Default::default()}]},
+        ],preserve).unwrap()).join().unwrap();
+        let close=window.dispatcher();window.dispatch(move||close.request_close()).unwrap();
+        assert_eq!(window.run(),0);
+        assert_eq!(table.selected_indices(),if preserve{vec![1]}else{vec![]});
+        drop(table);
+        assert_eq!(handle.set_rich_rows(vec![],false),Err(Error::WidgetDestroyed));
+    }
 }
 
 fn table_handle_replaces_rows_and_selects_requested_index_atomically() {

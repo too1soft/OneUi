@@ -248,6 +248,11 @@ bool OverlayHost::onMouseMove(const MouseEvent& event) {
         return false;
     }
 
+    // Content and overlays are owned outside View::children_. Remember that
+    // they received pointer events so an ancestor leaving this host cannot
+    // skip resetInteractionState() via View's empty-child fast path.
+    pointerInteraction_ = true;
+
     // Preserve pointer capture across the overlay boundary.  Content controls
     // such as TerminalView and TextField use move events after mouse-down to
     // extend a selection.  Re-running overlay hit testing here would clear the
@@ -314,6 +319,8 @@ bool OverlayHost::onMouseDown(const MouseEvent& event) {
         focusOverlay(nullptr);
         return false;
     }
+
+    pointerInteraction_ = true;
 
     layoutAnchoredOverlays();
     for (const std::size_t index : hitOrder()) {
@@ -432,6 +439,21 @@ bool OverlayHost::onKeyDown(const KeyEvent& event) {
         return false;
     }
 
+    // A modeless popup can remain open after programmatic focus returns to
+    // the document (for example when its native window is reactivated).
+    // Dismiss the frontmost eligible popup before forwarding Escape to that
+    // document. Keep modal focus boundaries and the popup's close policy.
+    if (event.key == Key::Escape) {
+        for (const auto index : hitOrder()) {
+            const auto child = overlays_[index].child;
+            auto* popup = dynamic_cast<Popup*>(child.get());
+            if (popup && popup->isOpen() && isInteractive(child.get()) && isFocusAllowed(child.get())) {
+                if (popup->onKeyDown(event)) return true;
+                break;
+            }
+        }
+    }
+
     // A modal may be added while a native window retains its previous focus.
     // Route the first key (especially Escape) to the modal without requiring a
     // mouse click first; lower overlays must not keep receiving input.
@@ -450,18 +472,23 @@ bool OverlayHost::onKeyDown(const KeyEvent& event) {
         // 模态 overlay 在自身内部回绕；非模态 overlay 按层级参与 Tab 序。
         // 若没有可聚焦 overlay，则内容层内部回绕。窗口 chrome 以 tabStop=false
         // 排除出焦点序，故不会“跳到标题栏按钮”。
-        if (focusedOverlay_ && isInteractive(focusedOverlay_) && hasActiveFocusTrap()) {
-            if (focusedOverlay_->onKeyDown(event)) {
+        if (focusedOverlay_ && isInteractive(focusedOverlay_)) {
+            // Composite light-dismiss popups contain real form controls too.
+            // Traverse that subtree before moving to another overlay.
+            const auto life = lifetimeToken();
+            if (focusedOverlay_->onKeyDown(event)) return true;
+            if (life.expired()) return true;
+            if (hasActiveFocusTrap() && focusedOverlay_) {
+                if (event.shift) focusedOverlay_->focusLastLeaf();
+                else focusedOverlay_->focusFirstLeaf();
                 return true;
             }
-            if (event.shift) {
-                focusedOverlay_->focusLastLeaf();
-            } else {
-                focusedOverlay_->focusFirstLeaf();
-            }
-            return true;
         }
         if (focusNextOverlay(event.shift, true)) {
+            if (focusedOverlay_) {
+                if (event.shift) focusedOverlay_->focusLastLeaf();
+                else focusedOverlay_->focusFirstLeaf();
+            }
             return true;
         }
         if (content_ && content_->visible() && !content_->disabled()) {
@@ -663,7 +690,13 @@ bool OverlayHost::tickAnimations(double nowMs) {
     return running;
 }
 
+bool OverlayHost::hasInteractionState() const {
+    return pointerInteraction_ || pressedOverlay_ || pressedContent_ ||
+        focusedOverlay_ || View::hasInteractionState();
+}
+
 void OverlayHost::resetInteractionState() {
+    pointerInteraction_ = false;
     View::resetInteractionState();
     pressedOverlay_ = nullptr;
     pressedContent_ = nullptr;

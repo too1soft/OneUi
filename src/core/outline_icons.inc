@@ -2,7 +2,7 @@
 bool paintOutlineIcon(Canvas& canvas, IconSymbol symbol, Rect rect, Color color) {
     const auto p=[&](float x,float y){return Point{rect.x+x*rect.width/24.0f,rect.y+y*rect.height/24.0f};};
     const auto r=[&](float x,float y,float w,float h){return Rect{rect.x+x*rect.width/24.0f,rect.y+y*rect.height/24.0f,w*rect.width/24.0f,h*rect.height/24.0f};};
-    const float stroke=1.6f*std::min(rect.width,rect.height)/24.0f;
+    const float stroke=(symbol >= IconSymbol::OutlineWorkbenchLayout ? 1.65f : 1.6f)*std::min(rect.width,rect.height)/24.0f;
     switch(symbol) {
     case IconSymbol::OutlineServer: {
         canvas.strokeRect(r(4.00000000f,3.00000000f,16.00000000f,7.00000000f),color,2.00000000f*rect.width/24.0f,stroke);
@@ -810,6 +810,29 @@ bool paintOutlineIcon(Canvas& canvas, IconSymbol symbol, Rect rect, Color color)
         path.moveTo(p(16.0f,5.0f)); path.lineTo(p(16.0f,19.0f));
         canvas.strokePath(path,color,stroke,true);
         return true; }
+    // Terminal V9 approved 24-unit paths; keep the existing V4 icons unchanged.
+    case IconSymbol::OutlineSun: {
+        canvas.strokeEllipse(r(8,8,8,8),color,stroke);
+        CanvasPath path;
+        path.moveTo(p(12,2));path.lineTo(p(12,4));path.moveTo(p(12,20));path.lineTo(p(12,22));
+        path.moveTo(p(2,12));path.lineTo(p(4,12));path.moveTo(p(20,12));path.lineTo(p(22,12));
+        path.moveTo(p(5,5));path.lineTo(p(6,6));path.moveTo(p(18,18));path.lineTo(p(19,19));
+        path.moveTo(p(5,19));path.lineTo(p(6,18));path.moveTo(p(18,6));path.lineTo(p(19,5));
+        canvas.strokePath(path,color,stroke,true); return true; }
+    case IconSymbol::OutlineShield: {
+        CanvasPath path;
+        path.moveTo(p(12,3));path.lineTo(p(20,6));path.lineTo(p(20,12));
+        path.cubicTo(p(20,17),p(12,21),p(12,21));
+        path.cubicTo(p(12,21),p(4,17),p(4,12));path.lineTo(p(4,6));path.close();
+        path.moveTo(p(8,12));path.lineTo(p(11,15));path.lineTo(p(16,9));
+        canvas.strokePath(path,color,stroke,true); return true; }
+    case IconSymbol::OutlineWorkbenchTerminal: {
+        canvas.strokeRect(r(4,5,16,14),color,0,stroke);
+        CanvasPath path;
+        path.moveTo(p(7,9));path.lineTo(p(10,12));path.lineTo(p(7,15));
+        path.moveTo(p(13,15));path.lineTo(p(17,15));
+        canvas.strokePath(path,color,stroke,true); return true; }
+    #include "workbench_outline_icons.inc"
     default: return false;
     }
 }

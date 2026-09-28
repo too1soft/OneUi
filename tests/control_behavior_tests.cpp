@@ -169,6 +169,22 @@ void expectRect(const char* name, oneui::Rect actual, oneui::Rect expected) {
     expectNear((std::string(name) + " height").c_str(), actual.height, expected.height);
 }
 
+void testStyleBorderStaysInsideItsClip() {
+    RecordingCanvas canvas;
+    oneui::StyleBox style;
+    style.borderColor = oneui::Color{191, 204, 219, 41};
+    style.borderWidth = 1.0f;
+    style.radius = 3.0f;
+    oneui::paintStyleBox(canvas, {10, 20, 100, 60}, style);
+    expectEqual("Inside border drawn once", static_cast<int>(canvas.strokeRects.size()), 1);
+    expectRect("Inside border centerline", canvas.strokeRects[0].rect, {10.5f, 20.5f, 99, 59});
+    expectNear("Inside border preserves outer radius", canvas.strokeRects[0].radius, 2.5f);
+    expectNear("Inside border preserves specified width", canvas.strokeRects[0].width, 1.0f);
+    style.borderWidth = 0.0f;
+    oneui::paintStyleBox(canvas, {10, 20, 100, 60}, style);
+    expectEqual("Zero width does not become a hairline", static_cast<int>(canvas.strokeRects.size()), 1);
+}
+
 void testSingleLineTextEllipsizesByMeasuredWidth() {
     RecordingCanvas canvas;
     const std::wstring fitted = canvas.ellipsizeText(L"Cloud synchronization", 52.0f, 14.0f);
@@ -679,6 +695,68 @@ void testTabsCompactSizingAndCloseInteraction() {
     tabs.onMouseDown(oneui::MouseEvent{oneui::Point{112.0f, 16.0f}});
     tabs.onMouseUp(oneui::MouseEvent{oneui::Point{112.0f, 16.0f}});
     expectEqual("Tabs compact close callback", closed, 0);
+}
+
+void testDocumentTabsKeepGeometryAndStatusAcrossHover() {
+    oneui::Tabs tabs;
+    tabs.setItems({L"Production",L"Database"});
+    tabs.setSizingMode(oneui::TabsSizingMode::Compact);
+    tabs.setItemWidthRange(160,210);
+    tabs.setFrame({0,0,500,38});
+    tabs.setClosable(true);
+    tabs.setDocumentMode(true);
+    tabs.setItemStatusColors({{54,214,155,255},{239,105,120,255}});
+    RecordingCanvas before;
+    tabs.paint(before);
+    const auto a=tabs.itemTextFrame(1);
+    const auto item=tabs.itemFrame(1);
+    tabs.onMouseMove(oneui::MouseEvent{{item.x+20,19}});
+    RecordingCanvas after;
+    tabs.paint(after);
+    const auto b=tabs.itemTextFrame(1);
+    expectEqual("Document hover keeps text width", a.width==b.width ? 1:0,1);
+    expectEqual("Document hover keeps text origin", a.x==b.x ? 1:0,1);
+    expectEqual("Document draws both persistent status dots", static_cast<int>(after.fillEllipses.size()),2);
+    expectEqual("Document status size", after.fillEllipses[0].rect.width==6 ? 1:0,1);
+    expectEqual("Document does not draw outer frame", std::any_of(after.strokeRects.begin(),after.strokeRects.end(),[](const auto& c){return c.rect.width==500;}) ? 1:0,0);
+    int closed=-1;tabs.setOnCloseRequested([&](int i){closed=i;});
+    // The 24px target includes whitespace beyond the 13px close glyph.
+    const oneui::Point close{item.x+item.width-28,19};
+    tabs.onMouseMove(oneui::MouseEvent{close});tabs.onMouseDown(oneui::MouseEvent{close});tabs.onMouseUp(oneui::MouseEvent{close});
+    expectEqual("Document close uses reserved 24px target",closed,1);
+    tabs.setDisabled(true);closed=-1;
+    tabs.onMouseDown(oneui::MouseEvent{close});tabs.onMouseUp(oneui::MouseEvent{close});
+    expectEqual("Document disabled close ignored",closed,-1);
+    tabs.setDisabled(false);
+    tabs.setSelectedIndex(0);
+    tabs.setFrame(oneui::Rect{0,0,220,38});
+    RecordingCanvas clipped;
+    tabs.paint(clipped);
+    expectEqual("Document partial tab is counted as overflow",tabs.overflowItemCount(),1);
+    expectEqual("Document partial tab is not painted",static_cast<int>(clipped.fillEllipses.size()),1);
+    const auto partial=tabs.itemFrame(1);
+    tabs.onMouseDown(oneui::MouseEvent{{partial.x+1,19}});
+    tabs.onMouseUp(oneui::MouseEvent{{partial.x+1,19}});
+    expectEqual("Document hidden partial tab cannot be clicked",tabs.selectedIndex(),0);
+    tabs.onKeyDown(oneui::KeyEvent{oneui::Key::End});
+    RecordingCanvas last;
+    tabs.paint(last);
+    expectEqual("Document hidden tab stays reachable by keyboard",tabs.selectedIndex(),1);
+
+    tabs.setItems({L"A", L"A very long session name", L"B"});
+    tabs.setItemWidthRange(100,210);
+    tabs.setSelectedIndex(0);
+    tabs.setFrame({0,0,250,38});
+    RecordingCanvas packed; tabs.paint(packed);
+    expectNear("Document skips a long tab that does not fit", tabs.itemFrame(1).width, 0);
+    expectTrue("Document fills remaining space with a later short tab", tabs.itemFrame(2).width > 0);
+    const auto shortTab=tabs.itemFrame(2);
+    tabs.onMouseDown(oneui::MouseEvent{{shortTab.x+20,19}});
+    tabs.onMouseUp(oneui::MouseEvent{{shortTab.x+20,19}});
+    expectEqual("Packed tab keeps its original session index",tabs.selectedIndex(),2);
+    tabs.setSelectedIndex(1); tabs.paint(packed);
+    expectTrue("Selecting a hidden long tab reserves its full width",tabs.itemFrame(1).width > 0);
+    expectEqual("Selecting a long tab evicts the tail without clipping",tabs.overflowItemCount(),2);
 }
 
 void testTabsCompactUsesMeasuredContentWidths() {
@@ -1749,6 +1827,66 @@ void testOverlayRequestsFocusInsidePopup() {
     expectWideEqual("popup search contains typed text", search->text(), L"x");
     popup->setOpen(false);
     expectEqual("closed popup rejects focus", root.requestFocus(search.get(), true) ? 1 : 0, 0);
+}
+
+void testScrollViewPreservesFocusedControlNavigation() {
+    oneui::ScrollView scroll;
+    scroll.setFrame(oneui::Rect{0,0,200,80});
+    auto content=std::make_shared<oneui::Stack>(oneui::StackDirection::Column);
+    auto slider=std::make_shared<oneui::Slider>();
+    auto button=std::make_shared<oneui::Button>(L"Other action");
+    slider->setStep(0.1); slider->setValue(0.5);
+    content->add(slider); content->add(button); scroll.setContent(content);
+    scroll.setContentHeight(400); scroll.setScrollOffset(40);
+    expectTrue("focus slider in scrolling form",scroll.requestFocus(slider.get(),true));
+    const float before=scroll.scrollOffset();
+    scroll.onKeyDown(oneui::KeyEvent{oneui::Key::Right});
+    expectNear("arrow reaches slider inside scroll view",static_cast<float>(slider->value()),0.6f);
+    scroll.onKeyDown(oneui::KeyEvent{oneui::Key::End});
+    expectNear("End belongs to focused slider",static_cast<float>(slider->value()),1.0f);
+    expectNear("handled control keys do not scroll container",scroll.scrollOffset(),before);
+    scroll.requestFocus(button.get(),true);
+    scroll.onKeyDown(oneui::KeyEvent{oneui::Key::Down});
+    expectTrue("unhandled arrow still scrolls container",scroll.scrollOffset()>before);
+}
+
+void testLightDismissPopupTraversesNestedControlsAndWraps() {
+    oneui::OverlayHost root;
+    auto trigger = std::make_shared<oneui::Button>(L"Split");
+    root.setContent(trigger);
+    auto popup = std::make_shared<oneui::Popup>();
+    auto scroll = std::make_shared<oneui::ScrollView>();
+    auto content = std::make_shared<oneui::Stack>(oneui::StackDirection::Column);
+    auto first = std::make_shared<oneui::Button>(L"Right");
+    auto disabled = std::make_shared<oneui::Button>(L"Unavailable");
+    auto last = std::make_shared<oneui::Button>(L"Below");
+    disabled->setDisabled(true);
+    int activated = 0;
+    last->setOnClick([&] { ++activated; });
+    content->add(first); content->add(disabled); content->add(last);
+    scroll->setContent(content); popup->setContent(scroll);
+    root.addOverlay(popup, 1); popup->setOpen(true);
+    popup->setOnClosed([&] { root.requestFocus(trigger.get(), true); });
+    expectTrue("composite popup initial focus", root.requestFocus(first.get(), true));
+    auto focusLeaf = [&]() {
+        auto child = root.activeFocusChild();
+        while (child && child->activeFocusChild()) child = child->activeFocusChild();
+        return child;
+    };
+    expectTrue("popup exposes the actual active focus chain", focusLeaf() == first);
+    root.onKeyDown(oneui::KeyEvent{oneui::Key::Tab});
+    expectTrue("Tab traverses light-dismiss popup and skips disabled action", last->focused());
+    expectTrue("popup focus chain follows Tab navigation", focusLeaf() == last);
+    root.onKeyDown(oneui::KeyEvent{oneui::Key::Tab});
+    expectTrue("Tab wraps through nested ScrollView and Stack", first->focused());
+    oneui::KeyEvent reverse{oneui::Key::Tab}; reverse.shift = true;
+    root.onKeyDown(reverse);
+    expectTrue("Shift Tab wraps to last popup action", last->focused());
+    root.onKeyDown(oneui::KeyEvent{oneui::Key::Enter});
+    expectEqual("Enter invokes the focused popup action", activated, 1);
+    root.onKeyDown(oneui::KeyEvent{oneui::Key::Escape});
+    expectTrue("Escape closes popup", !popup->isOpen());
+    expectTrue("Escape restores trigger focus", trigger->focused());
 }
 
 void testViewTooltipUsesDeepestVisibleEnabledChild() {
@@ -3987,6 +4125,36 @@ void testTableStyleOverridePaintsCustomColorsAndGeometry() {
     }
 }
 
+void testTableHeaderInsetAndIconGapRemainIndependent() {
+    oneui::Table table;
+    table.setColumns({{L"Name", 0}});
+    table.setFrame({0,0,300,100});
+    table.setRowHeight(30);
+    table.setSelectionColumnVisible(true);
+    table.setSelectionColumnWidth(64);
+    oneui::TableCell cell; cell.text=L"archive";
+    cell.leadingIcon=oneui::IconSymbol::OutlineWorkbenchFolder;
+    table.setRichRows({{cell}});
+    oneui::TableStyleOverride style;
+    style.cellPadding=oneui::Insets{0,12,0,16};
+    style.headerTextInset=2; style.cellIconGap=18;
+    table.setStyleOverride(style);
+    RecordingCanvas canvas; table.paint(canvas);
+    for (const auto& text : canvas.texts) {
+        if (text.text==L"Name") expectNear("File header has its own inset",text.rect.x,66);
+        if (text.text==L"archive") expectNear("File icon leaves a readable name gap",text.rect.x,116);
+    }
+    int activated=-1; table.setOnActivated([&](int row){activated=row;});
+    table.setSelectedIndex(0); table.onKeyDown({oneui::Key::Enter});
+    expectEqual("File styling preserves keyboard activation",activated,0);
+    style.headerTextInset.reset(); style.cellIconGap=8;
+    table.setStyleOverride(style); RecordingCanvas compact; table.paint(compact);
+    for (const auto& text : compact.texts) {
+        if (text.text==L"Name") expectNear("Default header follows cell inset",text.rect.x,80);
+        if (text.text==L"archive") expectNear("Compact files use compact icon spacing",text.rect.x,106);
+    }
+}
+
 void testTableRichCellsAndColumnDividerVisibility() {
     oneui::Table table;
     table.setColumns({
@@ -4052,6 +4220,42 @@ void testWidgetSizeObserverUsesCommittedGeometryAndStableChildren() {
     expectEqual("Observer may clear itself safely",calls,3);
 }
 
+void testTableSortableHeadersHavePointerAndKeyboardActions() {
+    oneui::Table table; table.setColumns({{L"Name",140},{L"Size",100}});
+    table.setRows({{L"one",L"2"},{L"two",L"10"}}); table.setFrame({0,0,240,160}); table.setHeaderHeight(32);
+    table.setHeaderSort(0,false);
+    int calls=0,row=9,column=9;
+    table.setOnCellAction([&](int r,int c){++calls;row=r;column=c;});
+    table.onMouseDown({{50,16},oneui::MouseButton::Left}); table.onMouseUp({{50,16},oneui::MouseButton::Left});
+    expectEqual("Sortable header pointer action",calls,1); expectEqual("Header action does not name a file row",row,-1); expectEqual("Name header index",column,0);
+    table.onKeyDown({oneui::Key::Right}); table.onKeyDown({oneui::Key::Enter});
+    expectEqual("Header supports keyboard sorting",column,1); expectEqual("Header keyboard calls once",calls,2);
+    table.onKeyDown({oneui::Key::Down}); table.onKeyDown({oneui::Key::Up}); table.onKeyDown({oneui::Key::Enter});
+    expectEqual("First row up returns to current sort header",column,0);
+    table.onMouseDown({{50,16},oneui::MouseButton::Left}); table.onMouseUp({{190,16},oneui::MouseButton::Left});
+    expectEqual("Mismatched header release does not sort",calls,3);
+    table.setDisabled(true); table.onKeyDown({oneui::Key::Enter});
+    expectEqual("Disabled headers cannot sort",calls,3);
+}
+
+void testTableScrollbarDragDoesNotSelectOrActivateRows() {
+    oneui::Table table;
+    table.setColumns({{L"File", 0}}); table.setRowHeight(30); table.setHeaderHeight(30);
+    std::vector<std::vector<std::wstring>> rows(100, {L"file"});
+    table.setRows(rows); table.setFrame({0,0,240,150});
+    const int originalSelection = table.selectedIndex();
+    int actions=0; table.setOnActivated([&](int){++actions;});
+    table.onMouseDown({{235, 40},oneui::MouseButton::Left});
+    table.onMouseMove({{235, 400},oneui::MouseButton::Left});
+    table.onMouseUp({{235,400},oneui::MouseButton::Left});
+    expectNear("Table scrollbar drags to end beyond bounds",table.scrollOffset(),table.maxScrollOffset());
+    expectEqual("Table scrollbar preserves selection",table.selectedIndex(),originalSelection);
+    expectEqual("Table scrollbar never activates a row",actions,0);
+    table.onMouseDown({{235,140},oneui::MouseButton::Left});
+    table.onMouseUp({{235,-100},oneui::MouseButton::Left});
+    expectNear("Table scrollbar drags back to beginning",table.scrollOffset(),0);
+}
+
 void testTableRichDetailsAndCellActions() {
     oneui::Table table;
     table.setColumns({{L"Process", 0.0f}, {L"CPU", 50.0f}, {L"", 28.0f}});
@@ -4063,13 +4267,14 @@ void testTableRichDetailsAndCellActions() {
     table.setRowHeight(46.0f);
     table.setColumnDividersVisible(false);
     table.setFrame({0, 0, 240, 120});
-    oneui::TableCell name; name.text = L"api"; name.detail = L"3124 deploy"; name.badge = L"S";
+    oneui::TableCell name; name.text = L"api"; name.detail = L"3124 deploy"; name.badge = L"S"; name.badgeForeground = oneui::Color{17, 143, 79}; name.badgeBackground = oneui::Color{0,0,0,0};
     oneui::TableCell cpu; cpu.text = L"12.8%"; cpu.alignment = oneui::TextAlign::Right;
     oneui::TableCell action; action.leadingIcon = oneui::IconSymbol::OutlineMore; action.iconSize = 14;
     table.setRichRows({{name, cpu, action}, {name, cpu, action}});
     RecordingCanvas canvas; table.paint(canvas);
     const auto detail = std::find_if(canvas.texts.begin(),canvas.texts.end(),[](const auto& c){return c.text == L"3124 deploy";});
     expectTrue("Table paints second line", detail != canvas.texts.end());
+    expectEqual("Table status badge has independent semantic color", countTextsWithTextAndColor(canvas,L"S",oneui::Color{17,143,79}), 2);
     if (detail != canvas.texts.end()) expectNear("Table detail uses second baseline", detail->rect.y, 50.0f);
     const auto cpuText = std::find_if(canvas.texts.begin(),canvas.texts.end(),[](const auto& c){return c.text == L"12.8%";});
     expectTrue("Table preserves numeric alignment", cpuText != canvas.texts.end() && cpuText->align == oneui::TextAlign::Right);
@@ -4681,6 +4886,7 @@ void testSelectStyleOverridePaintsCustomColorsAndPopupGeometry() {
 
     oneui::SelectStyleOverride style;
     oneui::SelectStateStyleOverride normal;
+    normal.fontSize = 11.0f;
     normal.background = background;
     normal.foreground = foreground;
     normal.border = border;
@@ -4707,6 +4913,7 @@ void testSelectStyleOverridePaintsCustomColorsAndPopupGeometry() {
     RecordingCanvas canvas;
     select.paint(canvas);
 
+    for (const auto& text : canvas.texts) expectNear("Select field and options respect font size", text.size, 11.0f);
     expectEqual("Select style override field background", countFillRectsWithColor(canvas, background), 1);
     expectEqual("Select style override field border", countStrokeRectsWithColor(canvas, border), 1);
     expectEqual("Select style override field text", countTextsWithTextAndColor(canvas, L"Linux", foreground), 1);
@@ -6258,6 +6465,48 @@ void testStyleSheetResolvesCssLikeSelectorsAndStates() {
         0);
 }
 
+void testCompiledSelectorsPreserveMatchingAndSheetCopies() {
+    oneui::StyleSheet sheet;
+    const std::vector<std::string> selectors = {
+        "button", ".primary", "button.primary:hover", ".primary:active:selected",
+        ".primary:unsupported", "label.primary", " .primary.focused:focus-visible ",
+        "", ".primary.primary", ".primary:disabled", ".primary:read-only"
+    };
+    for (std::size_t index = 0; index < selectors.size(); ++index) {
+        oneui::StyleRule rule;
+        rule.selector = selectors[index];
+        rule.box.radius = static_cast<float>(index + 1);
+        sheet.addRule(rule);
+    }
+    const auto check = [&](const oneui::StyleSheet& value) {
+        for (unsigned state = 0; state < 128; ++state) {
+            for (const auto& tag : {"button", "label", "panel"}) {
+                const oneui::StyleNode node{tag, {"primary", "focused"}, state};
+                std::vector<const oneui::StyleRule*> matches;
+                for (const auto& rule : value.rules()) {
+                    if (oneui::selectorMatches(rule.selector, node)) matches.push_back(&rule);
+                }
+                std::stable_sort(matches.begin(), matches.end(), [](const auto* a, const auto* b) {
+                    const int x = oneui::selectorSpecificity(a->selector), y = oneui::selectorSpecificity(b->selector);
+                    return x == y ? a->order < b->order : x < y;
+                });
+                const int expected = matches.empty() ? 0 : static_cast<int>(*matches.back()->box.radius);
+                expectEqual("compiled selector preserves string matcher cascade", static_cast<int>(value.resolve(node).radius.value_or(0)), expected);
+            }
+        }
+    };
+    check(sheet);
+    auto copy = sheet;
+    oneui::StyleRule late; late.selector = ".primary.primary"; late.box.radius = 99.0f;
+    copy.addRule(late);
+    copy.setCustomProperty("--accent", "#ffffff");
+    check(copy);
+    auto moved = std::move(copy);
+    check(moved);
+    sheet = moved;
+    check(sheet);
+}
+
 void testStyleSheetParsesCssLikeRules() {
     oneui::StyleSheet sheet;
     std::string error;
@@ -7232,6 +7481,27 @@ void testButtonSupportsLeadingContentAndTrailingMetadata() {
     expectEqual("Button trailing metadata stays right", static_cast<int>(canvas.texts[1].rect.x), 181);
 }
 
+void testButtonIndependentIconSizeAndGap() {
+    oneui::StyleSheet sheet;
+    expectTrue("Button icon-size CSS parses",sheet.addRulesFromCss("button.exact {font-size:13px;icon-size:19px;gap:8px;padding:0px 7px;}"));
+    oneui::Button button(L"Files");button.setFrame({0,0,100,32});
+    button.setContentAlign(oneui::TextAlign::Left);button.setIcon(oneui::IconSymbol::OutlineWorkbenchFolder);
+    button.setStyleOverride(oneui::buttonStyleOverrideFromStyleSheet(sheet,{"button",{"exact"},oneui::StyleStateNone}));
+    RecordingCanvas canvas;button.paint(canvas);
+    expectEqual("Explicit icon size keeps the label",countTextsWithText(canvas,L"Files"),1);
+    if(!canvas.texts.empty()) {
+        expectNear("Icon size does not inflate label font",canvas.texts.back().size,13);
+        expectNear("Icon and label use independent gap",canvas.texts.back().rect.x,34);
+    }
+    const auto natural=button.naturalContentSize();
+    expectTrue("Button intrinsic size includes explicit icon",natural.height>=19);
+    int clicks=0;button.setOnClick([&](){++clicks;});
+    button.onMouseDown({{96,16},oneui::MouseButton::Left});button.onMouseUp({{96,16},oneui::MouseButton::Left});
+    expectEqual("Icon size preserves the full button hit target",clicks,1);
+    button.setDisabled(true);button.onMouseDown({{96,16},oneui::MouseButton::Left});button.onMouseUp({{96,16},oneui::MouseButton::Left});
+    expectEqual("Icon styling preserves disabled behavior",clicks,1);
+}
+
 void testButtonSupportsLeadingAndTrailingIcons() {
     oneui::Button button(L"Network");
     button.setFrame(oneui::Rect{0.0f, 0.0f, 220.0f, 40.0f});
@@ -7612,6 +7882,13 @@ void testSplitViewResizableDividerHonorsMinimumExtents() {
     expectEqual("Split drag commits once on mouse up", commitCount, 1);
     expectNear("Split drag commits final constrained ratio", committedRatio, 60.0f / 190.0f);
 
+    split.paint(canvas);
+    split.onMouseDown(oneui::MouseEvent{{70.0f, 50.0f}, oneui::MouseButton::Left});
+    split.onMouseMove(oneui::MouseEvent{{85.0f, 50.0f}, oneui::MouseButton::Left});
+    split.onMouseUp(oneui::MouseEvent{{124.0f, 50.0f}, oneui::MouseButton::Left});
+    expectNear("Split commit uses release point after coalesced moves", committedRatio, 114.0f / 190.0f);
+    expectEqual("Final release commits only once", commitCount, 2);
+
     split.setOrientation(oneui::SplitOrientation::Vertical);
     split.setSplitRatio(0.5f);
     split.paint(canvas);
@@ -7624,7 +7901,7 @@ void testSplitViewResizableDividerHonorsMinimumExtents() {
         split.onMouseDown(oneui::MouseEvent{oneui::Point{105.0f, 58.0f}, oneui::MouseButton::Left}) ? 1 : 0,
         1);
     split.setResizable(false);
-    expectEqual("Split capture loss commits the visible ratio once", commitCount, 2);
+    expectEqual("Split capture loss commits the visible ratio once", commitCount, 3);
 }
 
 void testSplitViewKeyboardCancellationAndDoubleClick() {
@@ -7718,6 +7995,70 @@ void testScrollViewWheelClampsToContentBounds() {
     scroll.onMouseWheel(oneui::MouseWheelEvent{oneui::Point{20.0f, 20.0f}, 10.0f});
     scroll.tickAnimations(1.0e15);
     expectNear("ScrollView clamps top", scroll.scrollOffset(), 0.0f);
+
+    scroll.setScrollbarStyle(oneui::Color{131, 144, 159, 96}, 7.0f);
+    scroll.setScrollbarInset(0.0f);
+    RecordingCanvas canvas;
+    scroll.paint(canvas);
+    expectNear("Edge scrollbar reserves only its thickness", content->frame().width, 113.0f);
+    scroll.setScrollbarInset(5.0f);
+    scroll.paint(canvas);
+    expectNear("Restoring scrollbar inset reserves both margins", content->frame().width, 103.0f);
+}
+
+void testLabelStatusIndicatorFollowsContentAndReservesSpace() {
+    oneui::Label label(L"Connected");
+    label.setFrame({12, 20, 120, 22});
+    const auto plainWidth = label.naturalTextSize().width;
+    label.setColor({20, 180, 120});
+    label.setStatusIndicator(10, 8);
+    expectNear("Status label includes dot and gap in intrinsic width", label.naturalTextSize().width, plainWidth + 18);
+    RecordingCanvas connected;
+    label.paint(connected);
+    expectEqual("Status label paints one geometric dot", static_cast<int>(connected.fillEllipses.size()), 1);
+    expectNear("Status dot diameter is independent of font glyph", connected.fillEllipses.front().rect.width, 10);
+    expectNear("Status dot is vertically centered", connected.fillEllipses.front().rect.y, 26);
+    expectNear("Status text starts after dot and gap", connected.textBlocks.front().rect.x, 30);
+    expectNear("Status text has remaining width", connected.textBlocks.front().rect.width, 102);
+    oneui::TextStyleSpan failed;
+    failed.start = 0; failed.end = 6; failed.foreground = {230, 60, 70};
+    label.setRichText(L"Failed", {failed});
+    RecordingCanvas error;
+    label.paint(error);
+    expectEqual("Status dot changes atomically with rich text color", error.fillEllipses.front().color.r, 230);
+    label.setStatusIndicator(0, 8);
+    RecordingCanvas plain;
+    label.paint(plain);
+    expectEqual("Ordinary labels have no status decoration", static_cast<int>(plain.fillEllipses.size()), 0);
+    expectNear("Disabled indicator releases its inset", plain.textBlocks.front().rect.x, 12);
+    label.setStatusIndicator(10, 8);
+    label.setFrame({0, 0, 6, 5});
+    RecordingCanvas narrow;
+    label.paint(narrow);
+    expectNear("Indicator stays inside tiny bounds", narrow.fillEllipses.front().rect.width, 5);
+    expectEqual("No negative-width text draw", static_cast<int>(narrow.textBlocks.size()), 0);
+}
+
+void testWindowTitleBarAdvancesAccessoryThemeTransition() {
+    oneui::WindowTitleBar titleBar(L"Theme transition");
+    titleBar.setFrame(oneui::Rect{0, 0, 900, 38});
+    auto accessory = std::make_shared<oneui::Button>(L"Monitor");
+    titleBar.setAccessory(accessory);
+    titleBar.setAnimationScheduler([] {});
+    oneui::ButtonStyleOverride style;
+    style.normal.emplace();
+    style.normal->background = oneui::Color{34, 118, 227, 28};
+    style.normal->transition = oneui::TransitionSpec{};
+    style.normal->transition->durationMs = 150.0;
+    accessory->setStyleOverride(style);
+    titleBar.tickAnimations(testSteadyTimeMs() + 1000.0);
+    RecordingCanvas canvas;
+    titleBar.paint(canvas);
+    const auto color = canvas.fillRects.back().color;
+    expectEqual("Title bar accessory transition reaches red", color.r, 34);
+    expectEqual("Title bar accessory transition reaches green", color.g, 118);
+    expectEqual("Title bar accessory transition reaches blue", color.b, 227);
+    expectEqual("Title bar accessory transition reaches alpha", color.a, 28);
 }
 
 void testScrollViewNoOverflowDoesNotScrollOrPaintThumb() {
@@ -8163,6 +8504,8 @@ void testPopupMenuPaddingKeyboardAndDismissal() {
     RecordingCanvas canvas; popup.paint(canvas);
     expectNear("Menu preferred height survives decorated popup", menu->frame().height, menu->preferredHeight());
     popup.onKeyDown({oneui::Key::Down}); popup.onKeyDown({oneui::Key::Down});
+    popup.onMouseMove(oneui::MouseEvent{{590.0f, 490.0f}});
+    menu->clearInteractionState(); // Window hover refresh must not erase keyboard selection.
     popup.onKeyDown({oneui::Key::Enter});
     expectEqual("Keyboard skips header separator and disabled item", selected, 2);
     popup.onKeyDown({oneui::Key::Home}); popup.onKeyDown({oneui::Key::Enter});
@@ -8170,9 +8513,116 @@ void testPopupMenuPaddingKeyboardAndDismissal() {
     popup.onKeyDown({oneui::Key::Escape}); popup.setOpen(false);
     expectEqual("Close callback fires once", dismissed, 1);
     expectEqual("Closed synthetic popup cannot intercept sidebar", popup.hitTest({22,22}) ? 1 : 0, 0);
+    selected = -1;
+    popup.setOpen(true);
+    popup.onKeyDown({oneui::Key::Enter});
+    expectEqual("Reopened menu does not activate an old keyboard selection", selected, -1);
+    popup.onKeyDown({oneui::Key::End});
+    popup.onKeyDown({oneui::Key::Enter});
+    expectEqual("End still selects the last enabled menu action", selected, 2);
+    const auto r = menu->frame();
+    const oneui::MouseEvent stationary{{r.x + 20.0f, r.y + 70.0f}};
+    menu->onMouseMove(stationary);
+    popup.onKeyDown({oneui::Key::End});
+    menu->onMouseMove(stationary);
+    popup.onKeyDown({oneui::Key::Enter});
+    expectEqual("Stationary pointer refresh preserves keyboard selection", selected, 2);
+    popup.setOpen(false);
+}
+
+void testCompactIconGlyphFitsAllocatedBox() {
+    for (float extent : {12.0f, 15.0f, 16.0f, 19.0f, 23.0f, 30.0f, 57.0f}) {
+        for (auto icon : {oneui::IconSymbol::Copy, oneui::IconSymbol::Globe, oneui::IconSymbol::Refresh}) {
+            RecordingCanvas canvas;
+            canvas.namedFontsSupported = true;
+            oneui::paintIcon(canvas, icon, {0, 0, extent, extent}, oneui::Color{0, 0, 0, 255});
+            expectEqual("Named icon emits one glyph", static_cast<int>(canvas.texts.size()), 1);
+            if (!canvas.texts.empty()) {
+                expectEqual("Icon font stays inside allocation", canvas.texts.front().size <= extent ? 1 : 0, 1);
+            }
+        }
+    }
+}
+
+void testCompactTabsReserveBothTextInsets() {
+    oneui::Tabs tabs;
+    tabs.setItems({L"SFTP", L"AI assistant"});
+    tabs.setFrame(oneui::Rect{0.0f, 0.0f, 500.0f, 38.0f});
+    tabs.setSizingMode(oneui::TabsSizingMode::Compact);
+    tabs.setItemWidthRange(1.0f, 240.0f);
+    oneui::TabsStyleOverride style;
+    oneui::TabsStateStyleOverride normal;
+    normal.textInset = 12.0f;
+    normal.itemInset = oneui::Insets{2.0f};
+    normal.fontSize = 12.0f;
+    style.normal = normal;
+    tabs.setStyleOverride(style);
+    RecordingCanvas canvas;
+    tabs.paint(canvas);
+    for (const auto& text : canvas.texts) {
+        expectEqual("Compact tab fits its measured title with custom insets",
+            text.rect.width + 0.01f >= canvas.measureTextWidth(text.text, text.size, text.weight) ? 1 : 0, 1);
+    }
+}
+
+void testInteractiveSurfaceFocusNotificationTracksTransitions() {
+    oneui::InteractiveSurface surface;
+    std::vector<bool> changes;
+    surface.setOnFocusChanged([&](bool focused) { changes.push_back(focused); });
+    surface.onFocusChanged(true);
+    surface.onFocusChanged(true);
+    surface.onFocusChanged(false);
+    expectEqual("Surface focus callback only reports state transitions", static_cast<int>(changes.size()), 2);
+    expectEqual("Surface reports keyboard focus enter", changes.front() ? 1 : 0, 1);
+    expectEqual("Surface reports keyboard focus exit", changes.back() ? 1 : 0, 0);
+    surface.setOnFocusChanged({});
+    surface.onFocusChanged(true);
+    expectEqual("Surface focus callback can be safely removed", static_cast<int>(changes.size()), 2);
+}
+
+void testTableSelectionColumnPointerAndKeyboard() {
+    oneui::Table table;
+    table.setFrame({0,0,300,180});
+    table.setColumns({{L"Name",0}});
+    table.setRows({{L"one"},{L"two"},{L"three"}});
+    table.setSelectionMode(oneui::SelectionMode::Multiple);
+    table.setSelectedIndices({});
+    table.setRowHeight(32);
+    table.setHeaderHeight(34);
+    table.setSelectionColumnVisible(true);
+    int calls=0; table.setOnSelectionChanged([&](const std::vector<int>&){++calls;});
+    const auto click=[&](float x,float y){oneui::MouseEvent event{{x,y},oneui::MouseButton::Left};table.onMouseDown(event);table.onMouseUp(event);};
+    click(22,50);click(22,82);
+    expectEqual("Checkbox column toggles multiple rows without Ctrl",static_cast<int>(table.selectedIndices().size()),2);
+    click(22,16);
+    expectEqual("Checkbox header selects all",static_cast<int>(table.selectedIndices().size()),3);
+    click(22,16);
+    expectEqual("Checkbox header clears all",static_cast<int>(table.selectedIndices().size()),0);
+    click(22,50);
+    table.onKeyDown(oneui::KeyEvent{oneui::Key::Space});
+    expectEqual("Space toggles focused checkbox row",static_cast<int>(table.selectedIndices().size()),0);
+    table.onMouseDown({{22,50},oneui::MouseButton::Left});
+    table.onMouseUp({{22,82},oneui::MouseButton::Left});
+    expectEqual("Checkbox release on another row does not select",static_cast<int>(table.selectedIndices().size()),0);
+    table.setSelectionColumnWidth(64.0f);
+    click(60,16);
+    expectEqual("Expanded checkbox gutter shares hit testing",static_cast<int>(table.selectedIndices().size()),3);
+    table.setSelectedIndices({});
+    table.setSelectionColumnWidth(40.0f);
+    click(60,16);
+    expectEqual("Narrow gutter leaves column header usable",static_cast<int>(table.selectedIndices().size()),0);
+    RecordingCanvas narrow;
+    table.paint(narrow);
+    const auto check=std::find_if(narrow.strokeRects.begin(),narrow.strokeRects.end(),[](const auto& call){return call.rect.width==16.0f && call.rect.height==16.0f;});
+    expectEqual("Checkbox is painted",check!=narrow.strokeRects.end()?1:0,1);
+    if(check!=narrow.strokeRects.end())expectNear("Checkbox centered in configured gutter",check->rect.x,12.0f);
+    const int before=calls;table.setDisabled(true);click(22,16);
+    expectEqual("Disabled checkbox header does not emit",calls,before);
 }
 
 int main() {
+    testStyleBorderStaysInsideItsClip();
+    testCompactIconGlyphFitsAllocatedBox();
     testPopupMenuPaddingKeyboardAndDismissal();
     testCompactSwitchPaintStaysInsideHitTarget();
     testSingleLineTextEllipsizesByMeasuredWidth();
@@ -8190,7 +8640,9 @@ int main() {
     testTitleBarRoutesInlineEditorFocusAndTextThroughTheRealViewTree();
     testTabsCompactSizingAndCloseInteraction();
     testTabsCompactUsesMeasuredContentWidths();
+    testDocumentTabsKeepGeometryAndStatusAcrossHover();
     testTabsCompactOverflowWheelAndKeyboardNavigation();
+    testCompactTabsReserveBothTextInsets();
     testTabsContextMenuReportsStableTarget();
     testTabsReorderReportsRequestWithoutMutatingSelection();
     testTabsPaintOptionalLeadingIconsWithoutCrowdingText();
@@ -8237,6 +8689,8 @@ int main() {
     testViewCanRequestFocusForNestedDescendant();
     testModalOverlayFitsSmallViewport();
     testOverlayRequestsFocusInsidePopup();
+    testLightDismissPopupTraversesNestedControlsAndWraps();
+    testScrollViewPreservesFocusedControlNavigation();
     testViewTooltipUsesDeepestVisibleEnabledChild();
     testViewMouseMoveDoesNotInvalidateSiblingsWhenHoverUnchanged();
     testViewMouseMoveKeepsSingleHoveredChild();
@@ -8286,6 +8740,8 @@ int main() {
     testReorderableGridEmitsExternalItemDragWithoutInternalReorder();
     testPointerActivationUsesSystemClickCountAndSeparateContextAction();
     testInteractiveSurfaceKeepsSemanticAndNestedKeyboardTargetsDistinct();
+    testInteractiveSurfaceFocusNotificationTracksTransitions();
+    testTableSelectionColumnPointerAndKeyboard();
     testInteractiveSurfaceDragLifecycle();
     testVirtualListCssControlsCompactTypographyAndScrollbar();
     testVirtualListPaintsRichOperationalRows();
@@ -8297,9 +8753,12 @@ int main() {
     testTableSupportsInternalReorderAndStableExternalItemDrag();
     testTableCssAdapterMapsNativeTableStates();
     testTableStyleOverridePaintsCustomColorsAndGeometry();
+    testTableHeaderInsetAndIconGapRemainIndependent();
     testTableRichCellsAndColumnDividerVisibility();
     testWidgetSizeObserverUsesCommittedGeometryAndStableChildren();
     testTableRichDetailsAndCellActions();
+    testTableScrollbarDragDoesNotSelectOrActivateRows();
+    testTableSortableHeadersHavePointerAndKeyboardActions();
     testProgressBarSegmentBoundsAndValidation();
     testTableEmptyStyleOverrideKeepsDefaultPaint();
     testTableDisabledStyleAndClearRestoresDefault();
@@ -8370,6 +8829,7 @@ int main() {
     testMaterial3TokensResolveStateLayersAndElevation();
     testAnimationTransitionsInterpolateAndComplete();
     testStyleSheetResolvesCssLikeSelectorsAndStates();
+    testCompiledSelectorsPreserveMatchingAndSheetCopies();
     testStyleSheetParsesCssLikeRules();
     testStyleAdapterBuildsButtonAndTextFieldOverrides();
     testTextInputBridgeComputesHostEditorGeometryAndStates();
@@ -8386,9 +8846,12 @@ int main() {
     testCardLaysOutContentWithPadding();
     testIconPrimitivesProvideReusableNativeShapes();
     testButtonSupportsLeadingContentAndTrailingMetadata();
+    testButtonIndependentIconSizeAndGap();
     testButtonSupportsLeadingAndTrailingIcons();
     testIconViewPaintsRegistryPrimitives();
     testWindowTitleBarPaintsAndDispatchesChromeActions();
+    testWindowTitleBarAdvancesAccessoryThemeTransition();
+    testLabelStatusIndicatorFollowsContentAndReservesSpace();
     testWindowTitleBarAccessoryReceivesLayoutAndPointerInput();
     testNavItemPaintsSelectionAndDispatchesClick();
     testNavItemSupportsExplicitSelectionIndicatorColor();

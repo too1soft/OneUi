@@ -140,6 +140,10 @@ public:
     virtual void save() = 0;
     virtual void restore() = 0;
     virtual void clipRect(Rect rect) = 0;
+    /// Optional occlusion optimization. Exclude an interior rectangle from the
+    /// current clip; unsupported backends leave the clip unchanged and return
+    /// false. Use only when subsequent opaque painting covers that rectangle.
+    virtual bool clipOutRect(Rect rect) { (void)rect; return false; }
     virtual std::optional<Rect> clipBounds() const {
         return std::nullopt;
     }

@@ -92,7 +92,7 @@ struct Compiler {
         if(!std::regex_match(a.value,std::regex("[0-9]+(\\.[0-9]+)?"))) fail(d,a.line,key+" expects a finite nonnegative number in logical pixels (no px suffix)");
         float value=0;
         try { value=std::stof(a.value); validateLayoutNumber(key,value); }
-        catch(const std::exception&) { fail(d,a.line,key+" expects a finite "+std::string(key=="max-width" || key=="min-column-width"?"positive":"nonnegative")+" number within float range"); }
+        catch(const std::exception&) { fail(d,a.line,key+" expects a finite "+std::string(key=="max-width" || key=="min-column-width" || key=="breakpoint" || key=="pane-width"?"positive":"nonnegative")+" number within float range"); }
         return value;
     }
     std::string list(const std::vector<std::string>& values) { std::string s="{"; for(auto& v:values) s+=v+","; return s+"}"; }
@@ -115,8 +115,21 @@ struct Compiler {
         bool custom=d.imports.count(n.tag)>0;
         if(!custom && components().count(n.tag)) {
             auto tag=components().at(n.tag);
-            if(tag!="stack" && tag!="scroll-view" && tag!="reveal" && !n.children.empty())fail(d,n.line,"Leaf components cannot contain child elements");
+            if(tag!="stack" && tag!="scroll-view" && tag!="reveal" && tag!="panes" && tag!="split-view" && !n.children.empty())fail(d,n.line,"Leaf components cannot contain child elements");
             if((n.tag=="Scroll" || n.tag=="FormRow" || n.tag=="Reveal") && n.children.size()!=1)fail(d,n.line,n.tag+" requires exactly one child");
+            if((n.tag=="SidebarLayout" || n.tag=="MasterDetail" || n.tag=="SplitView") && n.children.size()!=2)fail(d,n.line,n.tag+" requires exactly two children");
+            if(n.tag=="Workspace" || n.tag=="DockPanel") {
+                const bool workspace=n.tag=="Workspace";
+                const std::set<std::string> allowed=workspace?std::set<std::string>{"TitleBar","NavigationRail","SessionBar","WorkspaceBody","StatusBar"}:std::set<std::string>{"PanelHeader","PanelBody","PanelFooter"};
+                std::set<std::string> seen;
+                for(const auto& child:n.children) {
+                    if(!allowed.count(child.tag))fail(d,child.line,"Invalid region in "+n.tag+": "+child.tag);
+                    if(!seen.insert(child.tag).second)fail(d,child.line,"Duplicate region in "+n.tag);
+                }
+                if(workspace && !seen.count("WorkspaceBody"))fail(d,n.line,"Workspace requires WorkspaceBody");
+                if(!workspace && (!seen.count("PanelHeader") || !seen.count("PanelBody")))fail(d,n.line,"DockPanel requires PanelHeader and PanelBody");
+            }
+            if(n.tag=="SidebarLayout" && n.children.front().tag!="Sidebar")fail(d,n.line,"SidebarLayout requires Sidebar first");
             if(n.tag=="FormGrid")for(auto& child:n.children) {
                 if(child.tag!="FormRow")fail(d,child.line,"FormGrid accepts FormRow children only");
                 if(child.attrs.count("v-for"))fail(d,child.line,"FormGrid direct v-for children are unsupported in v1");
@@ -153,7 +166,10 @@ struct Compiler {
         if(custom) out<<"auto "<<id<<" = build_"<<d.imports.at(n.tag)<<"(vm,ui,"<<slotVariable<<");\n";
         else {
             if(!components().count(n.tag)) fail(d,n.line,"Unknown component: "+n.tag);
-            out<<"auto "<<id<<" = ui.make("<<quote(n.tag)<<","<<list(children)<<");\n";
+            if(n.tag=="NativeHost") {
+                if(!n.attrs.count("host") || n.attrs.at("host").value.empty())fail(d,n.line,"NativeHost requires a static nonempty host registration name");
+                out<<"auto "<<id<<" = ui.nativeHost("<<quote(n.attrs.at("host").value)<<");\n";
+            } else out<<"auto "<<id<<" = ui.make("<<quote(n.tag)<<","<<list(children)<<");\n";
         }
         out<<"ui.locate("<<id<<","<<quote(d.file.generic_string())<<","<<n.line<<");\n";
         if(!n.text.empty()) {
@@ -162,11 +178,16 @@ struct Compiler {
         }
         for(auto& entry:n.attrs) {
             auto key=entry.first,value=entry.second.value; location(d,entry.second.line);
+            if(n.tag=="NativeHost" && key=="host")continue;
             if(key=="ref") {
                 if(!std::regex_match(value,std::regex("[A-Za-z_][A-Za-z0-9_]*")))fail(d,entry.second.line,"ref expects a static identifier");
                 if(!item.empty())fail(d,entry.second.line,"ref inside v-for is unsupported; use keyed row state");
                 if(!references.insert(value).second)fail(d,entry.second.line,"Duplicate ref: "+value);
                 out<<"ui.remember("<<quote(value)<<","<<id<<".widget);\n";continue;
+            }
+            if(key=="@close") {
+                if(n.tag!="Tabs")fail(d,entry.second.line,"close requires Tabs");
+                out<<"ui.closeTab("<<id<<","<<expr(d,entry.second.line,value,item)<<");\n";continue;
             }
             if(key=="@activate" || key=="@delete") {
                 if(n.tag!="DataTable")fail(d,entry.second.line,"activate/delete events require DataTable");
@@ -179,19 +200,23 @@ struct Compiler {
                 out<<"ui.modelTyped<"<<type<<">("<<id<<","<<expr(d,n.line,value,item)<<");\n"; continue;
             }
             if(key=="v-if") {out<<"ui.condition("<<id<<","<<expr(d,n.line,value,item)<<");\n";continue;}
-            if(key=="@click") { if(n.tag!="Button") fail(d,n.line,"click only supported on Button"); out<<"ui.click("<<id<<","<<expr(d,n.line,value,item)<<");\n";continue; }
+            if(key=="@click") { if(n.tag!="Button" && n.tag!="ToolButton") fail(d,n.line,"click only supported on Button or ToolButton"); out<<"ui.click("<<id<<","<<expr(d,n.line,value,item)<<");\n";continue; }
             bool bound=key[0]==':'; if(bound) key.erase(0,1);
             if(!property(custom?"Column":n.tag,key)) fail(d,n.line,"Unknown property/event: "+entry.first+" on "+n.tag);
             if(key=="item-key") { if(value!="id" || bound) fail(d,n.line,"DataTable uses TableRow.id as its stable key"); continue; }
             if(bound) {
-                if(layoutNumber(key) || key=="align" || key=="class" || key=="variant") fail(d,entry.second.line,"This property is static in v1");
+                if((layoutNumber(key) && key!="value") || key=="align" || key=="justify" || key=="host" || key=="class" ) fail(d,entry.second.line,"This property is static in v1");
                 const auto* spec=oneui::ui::schema::component(custom?"Column":n.tag);
                 const auto type=oneui::ui::schema::cppType(oneui::ui::schema::propertyType(spec->kind,key));
                 out<<"ui.bindTyped<"<<type<<">("<<id<<","<<quote(key)<<","<<expr(d,n.line,value,item)<<");\n";
             } else {
                 std::string v="oneui::ui::wide("+quote(value)+")";
-                if(key=="class" || key=="variant") v="std::string("+quote(value)+")";
-                else if(key=="visible" || key=="disabled" || key=="checked" || key=="open" || key=="reduced-motion") { if(value!="true" && value!="false") fail(d,n.line,"Expected true or false"); v=value; }
+                if(key=="class") v="std::string("+quote(value)+")";
+                else if(key=="icon" || key=="symbol") {if(!oneui::ui::namedIcon(value))fail(d,entry.second.line,"Unknown authoring icon: "+value);}
+                else if(key=="orientation") {if(value!="horizontal" && value!="vertical")fail(d,entry.second.line,"orientation must be horizontal or vertical");}
+                else if(key=="presentation") {if(value!="document" && value!="segmented")fail(d,entry.second.line,"presentation must be document or segmented");}
+                else if(key=="variant") {if(value!="normal" && value!="primary" && value!="danger" && value!="ghost")fail(d,entry.second.line,"Button variant must be normal, primary or danger");}
+                else if(key=="visible" || key=="disabled" || key=="checked" || key=="open" || key=="reduced-motion" || key=="detail-open" || key=="wrap" || key=="closable" || key=="themed" || key=="second-collapsed" || key=="collapsed") { if(value!="true" && value!="false") fail(d,n.line,"Expected true or false"); v=value; }
                 else if(layoutNumber(key)) {
                     std::ostringstream number; number<<std::setprecision(std::numeric_limits<float>::max_digits10)<<layoutValue(d,key,entry.second);
                     v="float("+number.str()+")";
@@ -199,12 +224,16 @@ struct Compiler {
                     if(!std::regex_match(value,std::regex("-1|[0-9]+"))) fail(d,entry.second.line,"selectedIndex expects an integer >= -1");
                     try { v=std::to_string(std::stoi(value)); } catch(const std::exception&) { fail(d,entry.second.line,"selectedIndex is outside integer range"); }
                 } else if(key=="align") {
-                    if(value!="start" && value!="center" && value!="end") fail(d,entry.second.line,"Content align must be start, center or end");
+                    if(value!="start" && value!="center" && value!="end" && !(value=="stretch" && (n.tag=="Row" || n.tag=="Column"))) fail(d,entry.second.line,n.tag=="Content"?"Content align must be start, center or end":"align must be start, center, end or stretch");
+                } else if(key=="justify") {
+                    if(value!="start" && value!="center" && value!="end" && value!="space-between")fail(d,entry.second.line,"justify must be start, center, end or space-between");
                 } else if(key=="preset") {
                     if(value!="fade" && value!="expand")fail(d,entry.second.line,"Reveal preset must be fade or expand");
                 } else if(key=="tone") {
                     if(value!="neutral" && value!="success" && value!="warning" && value!="error" && value!="pending") fail(d,entry.second.line,"Status tone must be neutral, success, warning, error or pending");
-                } else if(key=="items" || key=="columns") fail(d,n.line,"Use a bound ViewModel member for collection properties");
+                } else if(key=="appearance") {
+                    if(value!="flat" && value!="outlined" && value!="raised" && value!="tinted")fail(d,n.line,"Surface appearance must be flat, outlined, raised or tinted");
+                } else if(key=="items" || key=="columns" || key=="series") fail(d,n.line,"Use a bound ViewModel member for collection properties");
                 out<<"ui.set("<<id<<","<<quote(key)<<","<<v<<");\n";
             }
         }

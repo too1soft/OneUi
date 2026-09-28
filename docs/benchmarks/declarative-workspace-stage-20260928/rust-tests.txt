@@ -1,0 +1,160 @@
+   Compiling oneui-sys v0.1.0 (E:\project\byname\oneui\bindings\rust\oneui-sys)
+   Compiling oneui v0.1.0 (E:\project\byname\oneui\bindings\rust\oneui)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.59s
+     Running src\main_thread_tests.rs (bindings\rust\target\debug\deps\oneui_main_thread_tests-6c5cba28a5f4591b.exe)
+running 100 tests on the process main thread
+test component_app_owns_callbacks_and_rejects_invalid_size ... ok
+test yoga_width_measurement_and_composition ... ok
+test authoring_content_flex_and_owned_composition ... ok
+test authoring_theme_replacement_remeasures_and_preserves_explicit_gap ... ok
+OneUI GPU rendering enabled (OpenGL+Skia Ganesh, vsync=on)
+test latest_signal_coalesces_and_cancels_on_the_window_thread ... ok
+test popup_closed_callback_is_edge_triggered_and_can_unregister ... ok
+test widget_size_callback_can_clear_its_own_registration ... ok
+OneUI GPU rendering enabled (OpenGL+Skia Ganesh, vsync=on)
+test floating_frame_keyboard_resize_is_scoped_and_disabled_while_docked ... ok
+OneUI GPU rendering enabled (OpenGL+Skia Ganesh, vsync=on)
+test dock_surface_reparents_native_content_and_preserves_float_input_focus ... ok
+OneUI GPU rendering enabled (OpenGL+Skia Ganesh, vsync=on)
+test focus_bookmarks_are_weak_and_reject_hidden_or_unmounted_targets ... ok
+test slider_worker_progress_is_coalesced_and_lifetime_safe ... ok
+
+thread 'main' (57032) panicked at oneui\src\binding_tests.rs:363:39:
+slider test callback
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test slider_values_and_input_callbacks_have_independent_lifetimes ... ok
+test slider_callback_ignores_unknown_phases_and_contains_panics ... ok
+test scoped_commands_release_contexts_and_preserve_utf8_positions ... ok
+test command_callback_can_drop_its_own_registration ... ok
+test application_cursor_style_requires_both_user_consent_and_an_application_frame ... ok
+test client_size_callback_preserves_logical_dimensions ... ok
+test activation_callback_preserves_native_active_state ... ok
+test file_drop_callback_owns_utf8_paths_and_logical_point ... ok
+test programmatic_terminal_paste_uses_native_paste_callback ... ok
+test time_series_inspection_callback_preserves_index_and_pin_state ... ok
+test time_series_chart_safe_binding_keeps_gaps_thresholds_and_handle_lifetime_safe ... ok
+test remote_text_input_callback_preserves_committed_utf8 ... ok
+test window_default_font_can_be_changed_through_window_and_dispatcher ... ok
+
+thread 'main' (57032) panicked at oneui\src\binding_tests.rs:622:59:
+callback failed
+test reports_panics_caught_at_callback_boundaries ... ok
+test interaction_trace_observer_reports_callbacks_without_changing_behavior ... ok
+test application_interaction_trace_uses_the_same_isolated_observer ... ok
+
+thread 'main' (57032) panicked at oneui\src\binding_tests.rs:699:39:
+trace observer failed
+test interaction_trace_observer_panics_are_isolated_from_value_callbacks ... ok
+
+thread 'main' (57032) panicked at oneui\src\binding_tests.rs:796:31:
+window shortcut failed
+test nested_void_command_is_ignored_instead_of_panicking ... ok
+test window_raw_key_callback_reports_consumption_and_preserves_event_data ... ok
+test window_raw_key_callback_does_not_consume_null_or_panicking_handlers ... ok
+test creates_hidden_window_through_utf8_abi ... ok
+test runtime_fullscreen_and_minimum_client_size_round_trip_through_v21 ... ok
+test file_dialog_options_have_safe_platform_defaults ... ok
+test parses_double_nul_terminated_multi_file_dialog_paths ... ok
+test round_trips_window_placement_through_the_safe_binding ... ok
+test window_owned_tray_has_a_safe_rust_lifecycle ... ok
+test close_callback_intercepts_close_to_tray_before_window_destruction ... ok
+test mounts_rust_composed_content_into_a_hidden_window ... ok
+test configures_resizable_split_view_through_safe_binding ... ok
+test applies_css_theme_to_semantic_widget_nodes ... ok
+test mounts_a_styled_interactive_surface_with_native_hover_states ... ok
+test configures_a_native_reorderable_grid_without_product_geometry ... ok
+test reports_stack_content_extent_for_scroll_view_composition ... ok
+test mounts_safe_inventory_controls_with_structured_utf8_list_items ... ok
+test retains_text_field_change_callbacks_through_programmatic_updates ... ok
+test mounts_stateful_native_setting_controls ... ok
+test mounts_utf8_workspace_tabs_and_reports_selection_changes ... ok
+test tab_inline_edit_binding_retains_utf8_reason_and_releases_callback ... ok
+test mounts_utf8_select_and_reports_selection_changes ... ok
+test select_handle_replaces_background_choices_and_selection ... ok
+test select_handle_rejects_updates_after_widget_destruction ... ok
+test scroll_view_handle_updates_background_position_and_lifetime ... ok
+test reports_native_list_selection_changes_to_rust ... ok
+test supports_an_explicit_unselected_list_state ... ok
+test mounts_virtual_list_with_large_structured_data_without_widget_per_row ... ok
+test mounts_rich_virtual_list_rows_and_title_bar_leading_content ... ok
+test mounts_multiline_log_view_with_structured_colored_lines ... ok
+test mounts_and_removes_a_modal_dialog_from_an_overlay_host ... ok
+test mounts_a_light_dismiss_native_context_menu ... ok
+test mounts_native_tree_with_structured_id_based_items ... ok
+test terminal_dirty_ranges_preserve_sparse_updates ... ok
+test terminal_cells_preserve_extended_attributes_across_the_c_abi ... ok
+test terminal_dirty_ranges_collapse_pathological_fragmentation ... ok
+test mounts_terminal_grid_with_wide_cells_and_cursor ... ok
+test exposes_terminal_caret_geometry_for_native_overlays ... ok
+test terminal_handle_submits_a_worker_frame_on_the_window_thread ... ok
+test terminal_handle_rejects_updates_after_the_view_is_destroyed ... ok
+test remote_frame_normalizes_stride_and_rejects_short_buffers ... ok
+test remote_frame_damage_normalizes_patches_and_rejects_invalid_batches ... ok
+test remote_cursor_image_normalizes_stride_and_rejects_invalid_metadata ... ok
+test remote_input_handle_submits_worker_cursor_updates_on_the_window_thread ... ok
+test remote_input_handle_rejects_updates_after_region_destruction ... ok
+test realtime_frame_handle_submits_worker_frames_on_the_window_thread ... ok
+test realtime_frame_handle_rejects_updates_after_view_destruction ... ok
+test label_handle_coalesces_worker_updates_on_the_window_thread ... ok
+test scoped_labels_keep_background_status_without_replacing_foreground_pending_text ... ok
+test scoped_label_checks_selection_at_paint_and_generation_before_retaining ... ok
+test scoped_label_retention_does_not_extend_widget_lifetime ... ok
+test label_rich_text_validates_utf8_ranges_and_coalesces_worker_revisions ... ok
+test label_handle_rejects_updates_after_the_label_is_destroyed ... ok
+test text_area_handle_coalesces_worker_updates_on_the_window_thread ... ok
+test text_area_handle_rejects_updates_after_the_editor_is_destroyed ... ok
+test progress_bar_clamps_values_and_worker_handle_is_lifetime_safe ... ok
+test progress_bar_handle_rejects_updates_after_widget_destruction ... ok
+test widget_handle_rejects_layout_updates_after_widget_destruction ... ok
+test virtual_list_handle_coalesces_row_updates_on_the_window_thread ... ok
+test virtual_list_handle_replaces_a_background_data_revision ... ok
+test virtual_list_handle_rejects_updates_after_the_list_is_destroyed ... ok
+test table_preserves_utf8_selection_and_coalesces_background_row_updates ... ok
+test table_handle_replaces_rows_and_clears_selection_atomically ... ok
+test row_models_commit_with_the_visual_revision_on_the_ui_thread ... ok
+test rich_table_handle_publishes_selection_policy_on_window_thread ... ok
+test table_handle_replaces_rows_and_selects_requested_index_atomically ... ok
+test virtual_list_full_reset_discards_row_patches_from_the_previous_revision ... ok
+test dispatcher_runs_work_on_the_window_thread ... ok
+test dispatcher_defers_non_send_ui_work_without_crossing_threads ... ok
+test window_state_allows_reentrant_ui_thread_raw_access ... ok
+test dispatcher_runs_one_shot_animation_frame_on_the_window_thread ... ok
+test dispatcher_cancels_queued_work_when_window_closes ... ok
+
+test result: ok. 100 passed; 0 failed; 0 ignored; 0 filtered out
+     Running tests\workspace_layout.rs (bindings\rust\target\debug\deps\workspace_layout-14cef7acaddaf48e.exe)
+
+running 13 tests
+test all_resize_edges_keep_opposite_anchors_and_obey_minima ... ok
+test dock_guides_resolve_central_arrows_and_ignore_floating_targets ... ok
+test swap_balance_and_local_ratio_do_not_recreate_or_lose_ids ... ok
+test invalid_edits_are_atomic ... ok
+test pane_drop_uses_relative_edges_and_a_center_swap_zone ... ok
+test externally_restored_float_can_redock_without_losing_the_pane ... ok
+test hidden_target_removed_uses_surviving_layout_without_resurrecting_panels ... ok
+test drag_preview_is_non_destructive_until_release ... ok
+test pin_order_and_escape_checkpoint ... ok
+test relative_docking_preserves_surrounding_geometry_and_float_state ... ok
+test repeated_hide_restore_returns_exact_tree_and_floating_bounds ... ok
+test tiny_geometry_is_finite_inside_bounds_and_gap_does_not_go_negative ... ok
+test floating_clamp_does_not_destroy_saved_desktop_bounds ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (bindings\rust\target\debug\deps\oneui_sys-e8be03d813c689e2.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests oneui
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests oneui_sys
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

@@ -1,0 +1,33 @@
+{
+  "scope": "Native WM_CHAR/mouse route, synthetic composition, resize and lifetime; not OS IME candidate-window or cross-monitor DPI acceptance.",
+  "cases": [
+    {
+      "passed": true,
+      "exitCode": 0,
+      "case": "gpu-light-wide"
+    },
+    {
+      "passed": true,
+      "exitCode": 0,
+      "case": "gpu-dark-narrow"
+    },
+    {
+      "passed": true,
+      "exitCode": 0,
+      "case": "cpu-light-wide"
+    },
+    {
+      "passed": true,
+      "exitCode": 0,
+      "case": "cpu-dark-narrow"
+    }
+  ],
+  "platform": "Windows native",
+  "sha256": {
+    "oneui_terminal_demo_owner.dll": "8C952BD521FEBBC6BA298BCA83935BCF2A0DED2839E51DE53E76338122CF4FBB",
+    "oneui-terminal-workbench.exe": "C67A6E0F690D3FA81ACF31030D35E497AB2B81C0E3CE1C8D6CA038D32DFE1D03",
+    "oneui-viewc.exe": "F3757759A918C9F602DA738CC348983D918B1D84E4DD04F62A712459FE9F585D",
+    "oneui.dll": "AAF12687B9A9E35506A8191E7860A8838B372660D4879157AF395A0737A68EA2"
+  },
+  "date": "2026-09-28T18:11:10.5860272+08:00"
+}

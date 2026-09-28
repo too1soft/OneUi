@@ -431,6 +431,9 @@ using TreeViewStateStyleOverride = ListStateStyleOverride;
 using TreeViewStyleOverride = ListStyleOverride;
 
 struct TableStyle {
+    std::optional<Color> checkBackground;
+    std::optional<Color> checkBorder;
+    float checkRadius = 3.0f;
     Color background{255, 255, 255};
     Color border{211, 216, 224};
     Color headerBackground{241, 245, 249};
@@ -450,9 +453,14 @@ struct TableStyle {
     float headerHeight = 30.0f;
     float scrollbarWidth = 4.0f;
     Insets cellPadding{0.0f, 10.0f};
+    std::optional<float> headerTextInset;
+    float cellIconGap = 18.0f;
 };
 
 struct TableStyleOverride {
+    std::optional<Color> checkBackground;
+    std::optional<Color> checkBorder;
+    std::optional<float> checkRadius;
     std::optional<Color> background;
     std::optional<Color> border;
     std::optional<Color> headerBackground;
@@ -472,6 +480,8 @@ struct TableStyleOverride {
     std::optional<float> headerHeight;
     std::optional<float> scrollbarWidth;
     std::optional<Insets> cellPadding;
+    std::optional<float> headerTextInset;
+    std::optional<float> cellIconGap;
 };
 
 struct BadgeStyle {

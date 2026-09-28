@@ -41,3 +41,6 @@ uerr.txt
 bindings/rust/target/
 __pycache__/
 *.pyc
+
+# Opt-in native developer report
+oneui-devtools.json

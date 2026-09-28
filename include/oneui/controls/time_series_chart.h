@@ -16,6 +16,9 @@ struct TimeSeriesChartSeries {
     std::wstring name;
     Color color{37, 99, 235, 255};
     std::vector<double> values;
+    bool operator==(const TimeSeriesChartSeries& other) const {
+        return name==other.name && values==other.values && color.r==other.color.r && color.g==other.color.g && color.b==other.color.b && color.a==other.color.a;
+    }
 };
 
 struct TimeSeriesChartThreshold {
@@ -45,6 +48,8 @@ public:
     // evenly-spaced samples. Invalid input preserves the previous positions.
     bool setSamplePositions(std::vector<double> positions);
     void setLatestPointVisible(bool visible);
+    // Invalid or non-positive sizes are ignored; the default is 5 x 5.
+    void setLatestPointSize(float width, float height);
     void setSmoothCurves(bool enabled);
     void setAreaFill(bool enabled);
     void setDashedGrid(bool enabled);
@@ -92,8 +97,11 @@ private:
     std::vector<std::wstring> axisLabels_;
     std::optional<Color> axisLabelColor_;
     float axisLabelSize_ = 11.0f;
+    float axisLabelGap_ = 6.0f;
     std::vector<double> samplePositions_;
     bool latestPointVisible_ = false;
+    float latestPointWidth_ = 5.0f;
+    float latestPointHeight_ = 5.0f;
     bool smoothCurves_ = true;
     bool areaFill_ = true;
     bool dashedGrid_ = true;

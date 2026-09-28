@@ -71,6 +71,7 @@ void TimeSeriesChart::setStyleBox(const StyleBox& style) {
     gridColor_ = style.borderColor;
     axisLabelColor_ = style.placeholderColor ? style.placeholderColor : style.foreground;
     axisLabelSize_ = style.fontSize.value_or(11.0f);
+    axisLabelGap_ = std::max(0.0f, style.gap.value_or(6.0f));
     invalidate();
 }
 
@@ -86,6 +87,13 @@ bool TimeSeriesChart::setSamplePositions(std::vector<double> positions) {
 
 void TimeSeriesChart::setLatestPointVisible(bool visible) {
     latestPointVisible_ = visible;
+    invalidate();
+}
+
+void TimeSeriesChart::setLatestPointSize(float width, float height) {
+    if (!std::isfinite(width) || !std::isfinite(height) || width <= 0.0f || height <= 0.0f) return;
+    latestPointWidth_ = std::min(width, 128.0f);
+    latestPointHeight_ = std::min(height, 128.0f);
     invalidate();
 }
 
@@ -307,7 +315,7 @@ void TimeSeriesChart::paint(Canvas& canvas) {
         drawGrid(Point{rect.x, y}, Point{rect.x + rect.width, y});
         if (static_cast<std::size_t>(index) < axisLabels_.size() && plotInsets_.left > 6.0f) {
             canvas.drawTextStyledEllipsized(axisLabels_[index],
-                Rect{frame().x, y - axisLabelSize_ * 0.5f, plotInsets_.left - 6.0f, axisLabelSize_},
+                Rect{frame().x, y - axisLabelSize_ * 0.5f, std::max(0.0f, plotInsets_.left - axisLabelGap_), axisLabelSize_},
                 disabled() ? theme().disabledForeground : axisLabelColor_.value_or(theme().textMuted), axisLabelSize_, TextAlign::Left, 400);
         }
     }
@@ -342,7 +350,9 @@ void TimeSeriesChart::paint(Canvas& canvas) {
     }
 
     canvas.save();
-    canvas.clipRect(Rect{rect.x - 3.0f, rect.y - 3.0f, rect.width + 6.0f, rect.height + 6.0f});
+    const float dotInsetX = std::max(3.0f, latestPointWidth_ * 0.5f);
+    const float dotInsetY = std::max(3.0f, latestPointHeight_ * 0.5f);
+    canvas.clipRect(Rect{rect.x - dotInsetX, rect.y - dotInsetY, rect.width + 2 * dotInsetX, rect.height + 2 * dotInsetY});
     for (const auto& item : series_) {
         if (item.values.empty()) {
             continue;
@@ -405,7 +415,7 @@ void TimeSeriesChart::paint(Canvas& canvas) {
         }
         if (latestPointVisible_ && std::isfinite(item.values.back())) {
             const auto point = pointAt(item.values.size() - 1);
-            canvas.fillEllipse(Rect{point.x - 2.5f, point.y - 2.5f, 5.0f, 5.0f}, color);
+            canvas.fillEllipse(Rect{point.x - latestPointWidth_ * 0.5f, point.y - latestPointHeight_ * 0.5f, latestPointWidth_, latestPointHeight_}, color);
         }
     }
 

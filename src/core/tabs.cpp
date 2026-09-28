@@ -159,6 +159,38 @@ void Tabs::setItemIcons(std::vector<std::optional<IconSymbol>> icons) {
     invalidate();
 }
 
+void Tabs::setDocumentMode(bool enabled) {
+    if (documentMode_ == enabled) return;
+    documentMode_ = enabled;
+    compactItemOffsets_.clear();
+    invalidate();
+}
+void Tabs::setItemStatusColors(std::vector<Color> colors) {
+    itemStatusColors_ = std::move(colors);
+    compactItemOffsets_.clear();
+    invalidate();
+}
+
+bool Tabs::itemFullyVisible(int index) const {
+    const auto cell = itemRect(index);
+    const auto bounds = frame();
+    // A single item wider than the viewport must remain usable at narrow sizes.
+    return cell.width > 0.0f && cell.x >= bounds.x - 0.5f &&
+        (cell.x + cell.width <= bounds.x + bounds.width + 0.5f || cell.width > bounds.width);
+}
+
+int Tabs::overflowItemCount() const {
+    int hidden = 0;
+    for (int i = 0; i < static_cast<int>(items_.size()); ++i)
+        if (!itemFullyVisible(i)) ++hidden;
+    return hidden;
+}
+void Tabs::setOnOverflowChanged(std::function<void(int)> callback) {
+    onOverflowChanged_ = std::move(callback);
+    reportedOverflow_ = -1;
+    invalidate();
+}
+
 void Tabs::setSelectedIndex(int index) {
     assignSelectedIndex(index);
 }
@@ -360,9 +392,9 @@ void Tabs::paint(Canvas& canvas) {
     const TabsStyle containerStyle = resolvedContainerStyle();
 
     canvas.fillRect(rect, containerStyle.background, containerStyle.radius);
-    canvas.strokeRect(rect, containerStyle.border, containerStyle.radius, containerStyle.borderWidth);
+    if (!documentMode_) canvas.strokeRect(rect, containerStyle.border, containerStyle.radius, containerStyle.borderWidth);
 
-    if (focusVisible() && !disabled() && containerStyle.focusRing.visible) {
+    if (!documentMode_ && focusVisible() && !disabled() && containerStyle.focusRing.visible) {
         const float offset = containerStyle.focusRing.offset;
         canvas.strokeRect(
             Rect{rect.x - offset, rect.y - offset, rect.width + offset * 2.0f, rect.height + offset * 2.0f},
@@ -378,18 +410,39 @@ void Tabs::paint(Canvas& canvas) {
     updateCompactMetrics(canvas);
     const int selected = std::clamp(selectedIndex(), 0, count - 1);
     ensureIndexVisible(editingIndex_ >= 0 ? editingIndex_ : selected);
+    const int overflow = overflowItemCount();
+    if (reportedOverflow_ != overflow) {
+        reportedOverflow_ = overflow;
+        if (onOverflowChanged_) onOverflowChanged_(overflow);
+    }
 
     canvas.save();
     canvas.clipRect(rect);
     for (int i = 0; i < count; ++i) {
+        if (documentMode_ && !itemFullyVisible(i)) continue;
         const TabsStyle itemStyle = resolvedItemStyle(i);
         const Rect itemCell = itemRect(i);
-        const Rect itemRect = itemCell.inset(itemStyle.itemInset);
+        const Rect itemRect = documentMode_ ? itemCell : itemCell.inset(itemStyle.itemInset);
         const bool active = i == selected;
         if (itemStyle.itemBackground.a > 0) {
-            canvas.fillRect(itemRect, itemStyle.itemBackground, itemStyle.itemRadius);
+            canvas.fillRect(itemRect, itemStyle.itemBackground, documentMode_ ? 0.0f : itemStyle.itemRadius);
         }
-        if (active) {
+        if (documentMode_) {
+            // Document tabs use one selection rule, not a rounded button border
+            // painted over at the bottom. Selection and keyboard focus are distinct.
+            if (active) {
+                canvas.fillRect(Rect{itemRect.x, itemRect.y + itemRect.height - 2.0f,
+                    itemRect.width, 2.0f}, itemStyle.selectedItemBorder);
+                if (focusVisible() && !disabled() && containerStyle.focusRing.visible) {
+                    canvas.strokeRect(itemRect.inset(Insets{4.0f}), containerStyle.focusRing.color,
+                        3.0f, containerStyle.focusRing.width);
+                }
+            } else if (i + 1 < count && i + 1 != selected && itemFullyVisible(i + 1)) {
+                // Separate adjacent inactive tabs only; no orphan at the strip end.
+                canvas.fillRect(Rect{itemRect.x + itemRect.width - 1.0f, itemRect.y + 10.0f,
+                    1.0f, std::max(0.0f, itemRect.height - 20.0f)}, containerStyle.border);
+            }
+        } else if (active) {
             canvas.strokeRect(itemRect, itemStyle.selectedItemBorder, itemStyle.itemRadius, itemStyle.itemBorderWidth);
         }
         const bool showClose = closable_ && (active || i == hoveredIndex_ || i == hoveredCloseIndex_);
@@ -398,10 +451,10 @@ void Tabs::paint(Canvas& canvas) {
             : std::nullopt;
         const Rect textFrame = textRect(i);
         if (icon.has_value()) {
-            const float iconSize = std::min(16.0f, std::max(0.0f, itemRect.height - 8.0f));
+            const float iconSize = std::min(documentMode_ ? 15.0f : 16.0f, std::max(0.0f, itemRect.height - 8.0f));
             const Rect iconRect{
-                itemRect.x + 8.0f,
-                itemRect.y + (itemRect.height - iconSize) * 0.5f,
+                itemRect.x + (documentMode_ ? 12.0f + (active ? 1.0f : 0.0f) : 8.0f),
+                itemRect.y + (itemRect.height - iconSize) * 0.5f + (documentMode_ && active ? 0.5f : 0.0f),
                 iconSize,
                 iconSize};
             paintIcon(
@@ -419,6 +472,11 @@ void Tabs::paint(Canvas& canvas) {
             itemStyle.fontSize,
             itemTextAlign(i),
             itemStyle.fontWeight); }
+        if (documentMode_ && static_cast<std::size_t>(i) < itemStatusColors_.size() && itemStatusColors_[i].a > 0) {
+            const float right = closable_ ? closeRect(i).x - 8.0f : itemRect.x + itemRect.width - 7.0f;
+            const Color color = disabled() ? itemStyle.itemForeground : itemStatusColors_[i];
+            canvas.fillEllipse(Rect{right - 6.0f, itemRect.y + (itemRect.height - 6.0f) * .5f + (active ? 0.5f : 0.0f), 6.0f, 6.0f}, color);
+        }
         if (showClose) {
             const Rect iconRect = closeRect(i);
             if (i == hoveredCloseIndex_ || i == pressedCloseIndex_) {
@@ -431,8 +489,8 @@ void Tabs::paint(Canvas& canvas) {
             }
             paintIcon(
                 canvas,
-                IconSymbol::Close,
-                iconRect.inset(Insets{4.0f}),
+                documentMode_ ? IconSymbol::OutlineWorkbenchClose : IconSymbol::Close,
+                iconRect.inset(Insets{documentMode_ ? 5.5f : 4.0f}),
                 itemStyle.itemForeground,
                 Color{0, 0, 0, 0},
                 1.35f);
@@ -662,6 +720,11 @@ int Tabs::hitIndex(Point point) const {
     if (!frame().contains(point) || items_.empty()) {
         return -1;
     }
+    if (documentMode_ && sizingMode_ == TabsSizingMode::Compact) {
+        for (int i = 0; i < static_cast<int>(items_.size()); ++i)
+            if (itemFullyVisible(i) && itemRect(i).contains(point)) return i;
+        return -1;
+    }
 
     const float contentX = point.x - frame().x + scrollOffset_;
     if (sizingMode_ == TabsSizingMode::Equal) {
@@ -685,6 +748,7 @@ int Tabs::hitIndex(Point point) const {
         return -1;
     }
     const int index = static_cast<int>(std::distance(compactItemOffsets_.begin(), upper) - 1);
+    if (documentMode_ && !itemFullyVisible(index)) return -1;
     return index >= 0 && index < static_cast<int>(items_.size()) ? index : -1;
 }
 
@@ -700,11 +764,14 @@ void Tabs::updateCompactMetrics(Canvas& canvas) {
     for (std::size_t index = 0; index < items_.size(); ++index) {
         const TabsStyle style = resolvedItemStyle(static_cast<int>(index));
         const bool hasIcon = index < itemIcons_.size() && itemIcons_[index].has_value();
-        const float leadingInset = style.textInset + (hasIcon ? 20.0f : 0.0f);
-        const float trailingInset = closable_ ? 27.0f : 8.0f;
+        const float leadingInset = documentMode_ ? 11.0f + (hasIcon ? 23.0f : 0.0f) : style.textInset + (hasIcon ? 20.0f : 0.0f);
+        const bool status = documentMode_ && index < itemStatusColors_.size() && itemStatusColors_[index].a > 0;
+        // Measure the same reserved space that textRect removes when painting.
+        const float trailingInset = documentMode_ ? (closable_ ? 29.0f : 7.0f) + (status ? 21.0f : 0.0f) : (closable_ ? std::max(27.0f, style.textInset) : style.textInset);
         const float measured = canvas.measureTextWidth(items_[index], style.fontSize, style.fontWeight);
         const float desired = style.itemInset.left + style.itemInset.right
-            + leadingInset + measured + trailingInset;
+            + leadingInset + measured + trailingInset
+            + (documentMode_ ? (static_cast<int>(index) == selectedIndex() ? 6.0f : 4.0f) : 0.0f);
         const float width = std::clamp(desired, minimumItemWidth_, maximumItemWidth_);
         offsets.push_back(offsets.back() + width);
     }
@@ -761,6 +828,10 @@ float Tabs::maximumScrollOffset() const {
 Rect Tabs::itemRect(int index) const {
     const Rect rect = frame();
     const float width = itemWidth(index);
+    if (documentMode_ && sizingMode_ == TabsSizingMode::Compact && documentItemOffsets_.size() == items_.size()) {
+        if (index < 0 || index >= static_cast<int>(documentItemOffsets_.size()) || documentItemOffsets_[index] < 0.0f) return Rect{};
+        return Rect{rect.x + documentItemOffsets_[index], rect.y, std::min(width, rect.width), rect.height};
+    }
     return Rect{
         rect.x + itemOffset(index) - scrollOffset_,
         rect.y,
@@ -773,22 +844,30 @@ Rect Tabs::textRect(int index) const {
         return Rect{};
     }
     const TabsStyle style = resolvedItemStyle(index);
-    const Rect item = itemRect(index).inset(style.itemInset);
+    const Rect item = documentMode_ ? itemRect(index) : itemRect(index).inset(style.itemInset);
     const bool active = index == std::clamp(selectedIndex(), 0, static_cast<int>(items_.size()) - 1);
     const bool showClose = closable_ &&
         (active || index == hoveredIndex_ || index == hoveredCloseIndex_);
     const bool hasIcon = static_cast<std::size_t>(index) < itemIcons_.size() &&
         itemIcons_[static_cast<std::size_t>(index)].has_value();
-    const float leadingInset = style.textInset + (hasIcon ? 20.0f : 0.0f);
-    const float trailingInset = showClose ? 27.0f : style.textInset;
+    const bool status = documentMode_ && static_cast<std::size_t>(index) < itemStatusColors_.size() && itemStatusColors_[index].a > 0;
+    const float leadingInset = documentMode_ ? 12.0f + (active ? 1.0f : 0.0f) + (hasIcon ? 23.0f : 0.0f) : style.textInset + (hasIcon ? 20.0f : 0.0f);
+    const float trailingInset = documentMode_ ? (closable_ ? 29.0f : 7.0f) + (status ? 21.0f : 0.0f) + 3.0f + (active ? 1.0f : 0.0f) : (showClose ? 27.0f : style.textInset);
     return Rect{
         item.x + leadingInset,
-        item.y,
+        item.y + (documentMode_ ? (active ? 0.5f : -0.5f) : 0.0f),
         std::max(0.0f, item.width - leadingInset - trailingInset),
         item.height};
 }
 
 Rect Tabs::closeRect(int index) const {
+    if (documentMode_) {
+        const Rect cell = itemRect(index);
+        const float side = std::min(24.0f, cell.height);
+        const bool active = index == selectedIndex();
+        return Rect{cell.x + cell.width - 5.0f - side - (active ? 1.0f : 0.0f),
+            cell.y + (cell.height-side)*.5f + 3.0f + (active ? 0.5f : 0.0f), side, side};
+    }
     const Rect item = itemRect(index).inset(Insets{4.0f});
     const float side = std::min(22.0f, item.height);
     return Rect{item.x + item.width - side, item.y + (item.height - side) * 0.5f, side, side};
@@ -810,6 +889,31 @@ int Tabs::hitCloseIndex(Point point) const {
 }
 
 void Tabs::ensureIndexVisible(int index) {
+    if (documentMode_ && sizingMode_ == TabsSizingMode::Compact && !items_.empty()) {
+        documentItemOffsets_.assign(items_.size(), -1.0f);
+        const float available = std::max(0.0f, frame().width);
+        float used = 0.0f;
+        std::vector<int> shown;
+        for (int i = 0; i < static_cast<int>(items_.size()); ++i) {
+            if (used + itemWidth(i) <= available) {
+                documentItemOffsets_[i] = used;
+                used += itemWidth(i);
+                shown.push_back(i);
+            }
+        }
+        const int active = std::clamp(index, 0, static_cast<int>(items_.size()) - 1);
+        if (documentItemOffsets_[active] < 0.0f) {
+            const float width = std::min(itemWidth(active), available);
+            while (!shown.empty() && used + width > available) {
+                const int last = shown.back(); shown.pop_back();
+                used -= itemWidth(last);
+                documentItemOffsets_[last] = -1.0f;
+            }
+            documentItemOffsets_[active] = used;
+        }
+        scrollOffset_ = 0.0f;
+        return;
+    }
     if (sizingMode_ != TabsSizingMode::Compact || items_.empty()) {
         scrollOffset_ = 0.0f;
         return;

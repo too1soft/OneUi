@@ -42,7 +42,8 @@ public:
         ++fillCount;
         fills.push_back(FillCall{rect, color});
     }
-    void strokeRect(oneui::Rect, oneui::Color, float, float = 1.0f) override {}
+    void strokeRect(oneui::Rect, oneui::Color, float, float = 1.0f) override { ++strokeCount; }
+    int strokeCount = 0;
     void fillEllipse(oneui::Rect, oneui::Color) override {}
     void strokeEllipse(oneui::Rect, oneui::Color, float = 1.0f) override {}
     void drawLine(
@@ -160,6 +161,7 @@ void testPaintHonorsWideCellsStylesAndCursor() {
         oneui::TerminalCell{L"", {240, 200, 80, 255}, {20, 24, 36, 255}, oneui::TerminalCellWideContinuation},
     });
     terminal.setCursor(oneui::TerminalCursor{0, 1, true});
+    terminal.onFocusChanged(true);
     oneui::TerminalViewport viewport{};
     int viewportChanges = 0;
     terminal.setOnViewportChanged([&](oneui::TerminalViewport value) {
@@ -419,8 +421,13 @@ void testLineHeightAndCursorStylesAreNativeMetrics() {
 
     oneui::TerminalViewport viewport{};
     terminal.setOnViewportChanged([&](oneui::TerminalViewport value) { viewport = value; });
+    RecordingCanvas inactiveCanvas;
+    terminal.paint(inactiveCanvas);
+    expectEqual("inactive terminal uses an outline cursor", inactiveCanvas.strokeCount, 1);
+    terminal.onFocusChanged(true);
     RecordingCanvas blockCanvas;
     terminal.paint(blockCanvas);
+    expectEqual("focused terminal does not draw an outline cursor", blockCanvas.strokeCount, 0);
     expectNear("terminal configurable line height updates caret", terminal.textInputCaretRect().height, 30.0f);
     expectEqual("terminal configurable line height updates viewport", viewport.rows, 4);
     expectEqual("terminal block cursor fills its cell", blockCanvas.fillCount >= 2 ? 1 : 0, 1);
@@ -907,6 +914,31 @@ void testProgrammaticSelectionUsesHalfOpenCellRanges() {
     expectEqual("terminal programmatic selection clamps safely", terminal.hasSelection() ? 1 : 0, 0);
 }
 
+void testScrollbackThumbRoutesDragWithoutRemotePointerInput() {
+    oneui::TerminalView terminal;
+    terminal.setFrame({10, 20, 240, 100});
+    terminal.setGrid(10, 20, {});
+    terminal.setScrollback(90, 0);
+    auto thumb = terminal.scrollbackThumbRect();
+    expectEqual("scrollbar minimum thumb height", static_cast<int>(thumb.height), 20);
+    expectEqual("live thumb is at bottom", static_cast<int>(thumb.y), 100);
+    int moved = 0, remote = 0;
+    terminal.setOnScroll([&](int rows) { moved += rows; });
+    terminal.setMouseReporting(true);
+    terminal.setOnPointer([&](const oneui::TerminalPointerEvent&) { ++remote; });
+    terminal.onMouseDown({{245, 110}, oneui::MouseButton::Left});
+    terminal.onMouseMove({{245, 30}, oneui::MouseButton::Left});
+    expectEqual("drag reaches oldest history", moved, 90);
+    terminal.setScrollback(90, 0); // A previously queued live frame arrives during drag.
+    terminal.onMouseMove({{245, 30}, oneui::MouseButton::Left});
+    expectEqual("repeated pointer does not repeat delta", moved, 90);
+    terminal.onMouseUp({{245, 110}, oneui::MouseButton::Left});
+    expectEqual("drag reaches live output", moved, 0);
+    expectEqual("scrollbar input never reaches remote application", remote, 0);
+    terminal.setScrollback(0, 0);
+    expectEqual("alternate or empty history has no scrollbar", static_cast<int>(terminal.scrollbackThumbRect().height), 0);
+}
+
 void testWheelReportsWholeScrollbackRows() {
     oneui::TerminalView terminal;
     terminal.setFrame(oneui::Rect{10.0f, 10.0f, 240.0f, 80.0f});
@@ -1081,6 +1113,7 @@ int main() {
     testAuxiliaryButtonPoliciesRespectRemoteMouseOwnership();
     testProgrammaticSelectionUsesHalfOpenCellRanges();
     testWheelReportsWholeScrollbackRows();
+    testScrollbackThumbRoutesDragWithoutRemotePointerInput();
     testMouseReportingPreservesApplicationInputAndShiftSelection();
     testOsc8HyperlinksUseExplicitCtrlClickActivation();
     testFocusCallbackReportsRealFocusTransitions();

@@ -3,7 +3,48 @@
 #include <iostream>
 #define CHECK(x) do{if(!(x))throw std::runtime_error("Failed: " #x);}while(0)
 using namespace connection_demo;
-int main(){try {
+static void recipeTests(){
+    int cases=0;
+    for(bool code:{false,true}) {
+        UiMailbox mailbox;VM vm(mailbox.sender());Samples samples;Mount ui;
+        auto root=buildGallery(ui,vm,samples,code);samples.scene.set(4);ui.flush();
+        auto panes=std::dynamic_pointer_cast<AdaptivePanes>(ui.find("recipePanes"));
+        auto shell=std::dynamic_pointer_cast<AdaptivePanes>(ui.find("recipeShell"));
+        auto table=std::dynamic_pointer_cast<Table>(ui.find("recipeTable"));
+        auto input=std::dynamic_pointer_cast<TextField>(ui.find("recipeName"));
+        CHECK(panes && shell && table && input);
+        const auto subscriptions=ui.diagnostics().subscriptions,styles=ui.styles()->size();
+        oneui::test_support::RecordingCanvas canvas;
+        for(bool dark:{false,true})for(auto density:{Density::Comfortable,Density::Compact})for(auto preset:{VisualPreset::Standard,VisualPreset::Soft})for(float width:{1320.f,960.f,800.f,640.f,426.f})for(int mode:{0,1,2}) {
+            samples.workspaceMode.set(mode==2?1:0);samples.selected.set(L"40");samples.detailOpen.set(mode==1);ui.flush();
+            ui.styles()->replace(declarativeTheme(dark,density,preset)+styles_Gallery(),density);
+            root.widget->setFrame({0,0,width,1000});root.widget->paint(canvas);
+            const auto issues=inspectLayout(root.widget,*ui.styles());
+            if(!issues.empty())throw std::runtime_error("recipe code="+std::to_string(code)+" width="+std::to_string(width)+" mode="+std::to_string(mode)+" "+formatLayoutIssues(issues));
+            CHECK(shell->narrow()==(shell->frame().width<960));
+            if(mode!=2){CHECK(panes->narrow()==(panes->frame().width<800));CHECK(table->selectedIndex()==39);}
+            ++cases;
+        }
+        samples.workspaceMode.set(1);ui.flush();root.widget->setFrame({0,0,1320,1000});root.widget->paint(canvas);
+        CHECK(root.as<View>()->requestFocus(input.get()));input->setCaretIndex(2);input->setSelectionRange(1,2);input->setTextComposition(L"中文",1);
+        for(int i=0;i<60;++i){ui.styles()->replace(declarativeTheme(i%2,Density::Comfortable,i%3?VisualPreset::Soft:VisualPreset::Standard));root.widget->setFrame({0,0,i%2?640.f:1320.f,1000});root.widget->paint(canvas);CHECK(input->focused());CHECK(input->caretIndex()==2);CHECK(input->hasTextComposition());}
+        input->setTextComposition(L"",0);
+        samples.workspaceMode.set(0);samples.detailOpen.set(false);ui.flush();root.widget->setFrame({0,0,640,1000});root.widget->paint(canvas);
+        auto search=ui.find("recipeSearch");CHECK(root.as<View>()->requestFocus(search.get()));
+        samples.openDetail.execute();ui.flush();root.widget->paint(canvas);CHECK(!search->focused());CHECK(!root.as<View>()->requestFocus(search.get()));
+        samples.closeDetail.execute();ui.flush();root.widget->paint(canvas);CHECK(root.as<View>()->requestFocus(search.get()));
+        root.widget->setFrame({0,0,1320,1000});root.widget->paint(canvas);
+        CHECK(root.as<View>()->requestFocus(search.get()));samples.openDetail.execute();ui.flush();root.widget->paint(canvas);CHECK(ui.find("recipeAppearance")->focused());
+        samples.closeDetail.execute();ui.flush();root.widget->paint(canvas);CHECK(search->focused());
+        table->setScrollOffset(44*20);const auto offset=table->scrollOffset();
+        for(int i=0;i<300;++i){samples.detailOpen.set(i%2);samples.workspaceMode.set(i%3==0?1:0);samples.scene.set(i%5?4:0);ui.flush();root.widget->paint(canvas);}
+        samples.scene.set(4);samples.workspaceMode.set(0);samples.detailOpen.set(false);ui.flush();root.widget->paint(canvas);
+        CHECK(ui.find("recipeTable")==table);CHECK(samples.selected.get()==L"40");CHECK(table->scrollOffset()==offset);CHECK(ui.diagnostics().subscriptions==subscriptions);CHECK(ui.styles()->size()==styles);
+        samples.name.set(L"新工作区");ui.flush();CHECK(samples.saveStatus.get()!=L"设置已保存");samples.applySettings.execute();ui.flush();CHECK(samples.savedName.get()==L"新工作区");
+    }
+    std::cout<<"Recipes: "<<cases<<" code/template, theme, density, preset, width and navigation cases; retained state/focus/composition and 300 navigation cycles passed.\n";
+}
+int main(){try {recipeTests();
     UiMailbox mailbox;VM vm(mailbox.sender());Samples samples;Mount ui;
     auto root=buildGallery(ui,vm,samples);
     auto input=std::dynamic_pointer_cast<TextField>(ui.find("galleryName"));

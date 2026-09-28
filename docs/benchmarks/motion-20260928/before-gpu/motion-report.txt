@@ -1,0 +1,9 @@
+backend=gpu
+samples=449
+geometry_errors=342
+reverse_steps=12
+late_frames=0
+stalls=0
+max_geometry_error=21
+max_interval_ms=6.4278
+max_content_paint_ms=0.4985

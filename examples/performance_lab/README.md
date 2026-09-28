@@ -92,3 +92,19 @@ CPU 百分比是整机逻辑处理器归一化后的进程 CPU；paint 是 CPU �
 布局及 scoped 样式在 [Gallery.one](views/Gallery.one)，参数与命令在 [component_gallery.hpp](component_gallery.hpp)。`-Dev` 支持 CSS 热更新，模板结构仍需重建。应用默认主题没有普遍添加阴影；这是按需使用公共能力的展示。
 
 对比脚本分别测活动和空闲的 CPU／GPU 路径，保存环境、哈希和逐轮数据，拒绝 GPU 回退及空闲额外绘制；计时是 CPU 侧耗时，不代表 GPU 执行时间或显示 FPS。效果页统一使用模板，`-Entry` 不会生成另一套 C++ 效果页，因此不能据此对比两种写法的运行开销。详见[用法、支持边界和验收](../../docs/51-effects-and-motion.md)。
+
+## 完整页面组合
+
+`./run.ps1 -Layouts -Entry code` 或 `-Entry template` 打开场景4。支持导航、列表与详情、限宽设置页、固定底部操作和标准／柔和预设。可用 `-Dev` 保持原有 CSS 热更新。命令行截图可加 `--layout-settings`、`--layout-detail`、`--soft-preset`。见[教程与验证](../../docs/52-layout-recipes-and-presets.md)。
+
+`./compare-shadows.ps1` 用同一实验台二进制对比原尺寸阴影缓存与九宫格缓存；它是阴影路径对照，不是 C++／模板性能对照。
+
+## 展开／收起自动回归
+
+构建后运行 `./check-motion.ps1`，自动打开原生窗口完成十组 CPU／GPU、宽／窄、时长与内容缩放测试。检查位置跳变、进度倒退、慢帧和节点／订阅增长；失败退出非零并保留逐帧 CSV。可加 `-Renderer cpu` 或 `-TargetHz 120`。运行时关闭其他实验台，避免并行编译干扰计时。详见[检测接入、阈值与边界](../../docs/53-motion-continuity-and-diagnostics.md)。
+
+## 内置 DevTools
+
+`./run.ps1 -Effects -DevTools` 开启 SDK 自带诊断面板。F12 显隐、Ctrl+F12 导出工作目录的 `oneui-devtools.json`；正常使用即可发现慢绘制、动画延迟及 Reveal 倒退。它独立于 `-Dev` 样式热更新，也不依赖回归脚本。[完整接入与限制](../../docs/54-built-in-developer-tools.md)。
+
+字体：正式实验台和动效回归窗口统一指定 `Microsoft YaHei UI`。该 Demo 目前使用系统字体，没有随包默认中文字体；SDK 支持注册应用字体数据。

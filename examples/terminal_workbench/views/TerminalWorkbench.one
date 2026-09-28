@@ -1,0 +1,147 @@
+<template>
+  <Workspace>
+    <TitleBar>
+      <Icon symbol="terminal" size="16"/><Text class="brand">OneUI / 终端工作台</Text><Text v-if="wide" class="muted">交互示例 · 模拟会话</Text><Spacer/>
+      <ToolButton icon="cpu" @click="toggleMonitor" name="切换监控">监控</ToolButton>
+      <ToolButton icon="sun" @click="theme" name="切换浅色与深色"/>
+      <ToolButton icon="layout" @click="restore" name="恢复布局"/>
+    </TitleBar>
+    <NavigationRail>
+      <ToolButton icon="server" @click="toggleSidebar" name="连接列表"/>
+      <ToolButton icon="terminal" class="current" @click="showTerminal" name="终端"/>
+      <ToolButton icon="folder" @click="showFiles" name="SFTP 文件"/>
+      <ToolButton icon="code" @click="toggleCommand" name="命令输入"/>
+      <ToolButton icon="cpu" @click="showMonitor" name="资源监控"/>
+      <ToolButton icon="database" @click="showProcesses" name="进程列表"/>
+      <Spacer/><ToolButton icon="settings" @click="theme" name="外观主题"/>
+    </NavigationRail>
+    <SessionBar>
+      <Tabs ref="tabs" :items="tabs" v-model="selected" closable="true" @close="closeSession" basis="0" grow="1" min="0"/>
+      <ToolButton icon="plus" @click="newSession" name="打开下一个演示会话"/>
+      <Select :items="connectionNames" v-model="quickConnection" name="全部演示会话" basis="160" shrink="0"/>
+    </SessionBar>
+    <WorkspaceBody>
+      <Column class="connections" :visible="sidebarVisible" basis="210" shrink="0">
+        <Text class="section-title">连接</Text><SearchInput v-model="connectionQuery" name="搜索连接" placeholder="名称或地址" basis="34" grow="0" shrink="0"/>
+        <NativeHost host="connections" themed="true" basis="0" grow="1"/><Text class="muted">本地沙箱 · 不访问网络</Text>
+      </Column>
+      <Column class="workspace-content" basis="0" grow="1">
+        <Tabs v-if="narrow" :items="compactTabs" v-model="compactTab" presentation="segmented" basis="36" shrink="0"/>
+        <SplitView ref="monitorSplit" v-model="monitorRatio" first-min="360" second-min="320">
+          <SplitView ref="fileSplit" :visible="mainVisible" orientation="vertical" v-model="fileRatio" first-min="160" second-min="160" :second-collapsed="filesCollapsed" collapsed-extent="40">
+            <DockPanel :visible="terminalVisible">
+              <PanelHeader>
+                <Status :text="sessionInfo" tone="success" grow="1"/>
+                <ToolButton icon="search" @click="toggleSearch" name="搜索终端">搜索</ToolButton>
+                <ToolButton icon="split" @click="toggleSplit" name="切换当前会话左右分屏">分屏</ToolButton>
+                <ToolButton icon="terminal" @click="toggleCommand" name="命令输入">命令</ToolButton>
+                <ToolButton icon="refresh" @click="clear" name="清空当前终端"/>
+              </PanelHeader>
+              <PanelBody>
+                <Row class="searchbar" :visible="searchVisible" shrink="0" wrap="false">
+                  <SearchInput ref="terminalSearch" v-model="terminalQuery" placeholder="搜索当前可见终端内容" name="终端搜索" basis="0" grow="1"/>
+                  <Text :text="searchResult" class="muted"/><ToolButton icon="down" @click="searchNext" name="下一个匹配"/><ToolButton icon="close" @click="toggleSearch" name="关闭搜索"/>
+                </Row>
+              <SplitView :visible="first" v-model="paneRatio0" first-min="170" second-min="170">
+                <Column class="terminal-inset" basis="0" grow="1"><NativeHost host="terminal0" ref="firstHost" basis="0" grow="1" /></Column>
+                <Column class="terminal-inset" :visible="pane0" basis="0" grow="1"><NativeHost host="secondary0" basis="0" grow="1" /></Column>
+              </SplitView>
+              <SplitView :visible="second" v-model="paneRatio1" first-min="170" second-min="170">
+                <Column class="terminal-inset" basis="0" grow="1"><NativeHost host="terminal1" ref="secondHost" basis="0" grow="1" /></Column>
+                <Column class="terminal-inset" :visible="pane1" basis="0" grow="1"><NativeHost host="secondary1" basis="0" grow="1" /></Column>
+              </SplitView>
+              <SplitView :visible="third" v-model="paneRatio2" first-min="170" second-min="170">
+                <Column class="terminal-inset" basis="0" grow="1"><NativeHost host="terminal2"  basis="0" grow="1" /></Column>
+                <Column class="terminal-inset" :visible="pane2" basis="0" grow="1"><NativeHost host="secondary2" basis="0" grow="1" /></Column>
+              </SplitView>
+              <SplitView :visible="fourth" v-model="paneRatio3" first-min="170" second-min="170">
+                <Column class="terminal-inset" basis="0" grow="1"><NativeHost host="terminal3"  basis="0" grow="1" /></Column>
+                <Column class="terminal-inset" :visible="pane3" basis="0" grow="1"><NativeHost host="secondary3" basis="0" grow="1" /></Column>
+              </SplitView>
+                <EmptyState v-if="empty" title="选择连接开始" subtitle="关闭标签会保留终端内容。" grow="1"/>
+                <Row class="commandbar" :visible="commandVisible" align="center" wrap="false" shrink="0">
+                  <NativeHost host="input" themed="true" ref="inputHost" basis="0" grow="1"/>
+                  <Button variant="primary" @click="send">运行</Button>
+                </Row>
+              </PanelBody>
+            </DockPanel>
+            <DockPanel :visible="filesVisible" :collapsed="filesCollapsed">
+              <PanelHeader>
+                <ToolButton :icon="fileCollapseIcon" @click="collapseFiles" name="展开或收起 SFTP">SFTP</ToolButton>
+                <Text class="muted" grow="1" :text="path"/>
+                <ToolButton icon="maximize" @click="showFiles" name="专注文件区"/>
+              </PanelHeader>
+              <PanelBody>
+                <Row class="filetools" align="center" wrap="true" shrink="0">
+                  <ToolButton icon="up" @click="up" name="上一级目录"/>
+                  <Text :text="path" grow="1"/>
+                  <SearchInput v-model="fileQuery" placeholder="搜索当前目录" name="筛选文件" basis="170" grow="0"/>
+                  <ToolButton icon="download" @click="download" name="模拟下载">下载</ToolButton>
+                  <ToolButton icon="upload" @click="upload" name="添加模拟上传文件">上传</ToolButton>
+                  <ToolButton icon="plus" @click="newFolder" name="新建目录"/>
+                  <ToolButton icon="close" @click="removeFile" name="删除选中文件"/>
+                </Row>
+                <Text :text="fileSummary" class="file-count"/>
+                <NativeHost host="files" themed="true" ref="filesHost" basis="0" grow="1"/>
+              </PanelBody>
+            </DockPanel>
+          </SplitView>
+          <DockPanel :visible="monitorVisible" ref="monitorPane">
+            <PanelHeader><Text class="section-title">监控</Text><Status :text="sessionInfo" class="muted" grow="1"/><ToolButton icon="right" @click="toggleMonitor" name="收起监控"/></PanelHeader>
+            <PanelBody>
+              <Tabs :items="monitorTabs" v-model="monitorTab" presentation="segmented" basis="36" shrink="0"/>
+              <Scroll :visible="resourceVisible" basis="0" grow="1">
+                <Column class="monitor-content">
+                  <Text class="section-title">Ubuntu 24.04 LTS · x86_64</Text><Text class="muted">运行 12 天 4 小时 · 内核 6.8.0 · 模拟</Text>
+                  <Column class="notice"><Status tone="warning" text="/data 空间使用 82%"/><Text class="muted">建议检查日志保留与归档文件</Text></Column>
+                  <Text class="muted">资源趋势 · 最近 90 秒</Text>
+                  <Text class="section-title">处理器</Text><Row align="center" wrap="false"><Text :text="cpu" class="metric"/><Text class="muted" grow="1">8 vCPU · AMD EPYC</Text><ToolButton icon="terminal" @click="showStatus" name="在终端查看状态"/></Row>
+                  <TimeSeriesChart ref="cpuChart" :series="cpuSeries" basis="72" min="72" shrink="0"/>
+                  <Row wrap="false"><Text class="muted" grow="1">用户 13.3%</Text><Text class="muted" grow="1">系统 5.6%</Text><Text class="muted">I/O 2.9%</Text></Row>
+                  <Row class="rule" wrap="false"><Text class="muted" grow="1">系统负载 1 / 5 / 15</Text><Text class="muted">0.68 / 0.72 / 0.61</Text></Row>
+                  <Text class="section-title">内存与交换区</Text><Row align="center"><Text :text="memory" class="metric"/><Text class="muted">8 GiB · 含缓存</Text></Row>
+                  <Progress :value="memoryValue" basis="5" min="5" shrink="0"/>
+                  <Row wrap="false"><Text class="muted" grow="1">应用 RSS 798 MiB</Text><Text class="muted">缓存 454 MiB</Text></Row>
+                  <Text class="muted rule">Swap 0 / 2 GiB · 换入 / 换出 0 KiB/s</Text>
+                  <Text class="section-title">存储与 I/O</Text><Row wrap="false"><Text grow="1">/data</Text><Text class="muted">/dev/vdb1 · 82%</Text></Row><Progress :value="diskValue" basis="5" min="5" shrink="0"/>
+                  <Row class="rule" wrap="false"><Text class="muted" grow="1">1640 / 2000 GiB</Text><Text class="muted">Inode 38%</Text></Row>
+                  <Text class="section-title">网络接口 · eth0</Text><Text :text="network" class="metric"/><TimeSeriesChart :series="networkSeries" basis="66" min="66" shrink="0"/><Text class="muted">接收 / 发送 · 错误与丢包 0 / 0</Text>
+                </Column>
+              </Scroll>
+              <Column :visible="processVisible" class="process-body" basis="0" grow="1">
+                <Text class="section-title">进程快照 · 8 个进程</Text><Text class="muted">点击行查看详情</Text>
+                <NativeHost host="processes" themed="true" basis="0" grow="1"/><Text :text="processDetail" class="muted"/>
+              </Column>
+              <Scroll :visible="connectionVisible" basis="0" grow="1"><Column class="monitor-content">
+                <Text :text="sessionInfo" class="section-title"/><Status tone="success" text="本地模拟连接正常"/>
+                <Text class="section-title">连接信息</Text><Text text="协议   SSH 2（模拟）"/><Text text="连接时长   00:24:16"/><Text text="保活间隔   30 秒"/>
+                <Text class="section-title">链路质量</Text><Text text="21.0 ms" class="metric"/><TimeSeriesChart :series="cpuSeries" basis="100" min="100"/><Text class="muted">往返延迟 · 示例数据</Text>
+                <Text class="section-title">认证与安全</Text><Text text="Ed25519 示例密钥"/><Text class="muted">OpenSSH 9.6p1 · Ubuntu</Text><Text class="muted">演示不存储凭证，不建立真实网络连接。</Text>
+              </Column></Scroll>
+            </PanelBody>
+            <PanelFooter><Text :text="samplingStatus" class="muted" grow="1"/><ToolButton icon="pause" :text="samplingLabel" @click="toggleSampling" name="暂停或开始模拟采样"/></PanelFooter>
+          </DockPanel>
+        </SplitView>
+      </Column>
+    </WorkspaceBody>
+    <StatusBar><Status text="本地模拟" tone="success"/><ToolButton icon="folder" @click="showFiles" name="SFTP 文件区">SFTP</ToolButton><Text :text="transferLabel" class="muted" grow="1"/><Progress :visible="transferring" :value="transferValue" basis="140" shrink="0"/><Text class="muted">UTF-8</Text><Text v-if="wide" class="muted">OneUI 原生</Text></StatusBar>
+  </Workspace>
+</template>
+<style scoped>
+Text.brand { font-size:13px; font-weight:600; }
+Text.section-title { font-size:13px; font-weight:600; }
+Text.metric { font-size:23px; font-weight:600; }
+ToolButton.current { background-color:var(--selection); color:var(--accent); }
+Column.connections { padding:12px; gap:12px; background-color:var(--surface); }
+Column.workspace-content { gap:0px; }
+Column.terminal-inset { background-color:#1c2228; padding:10px 16px; gap:0px; }
+Row.searchbar { background-color:var(--chrome); padding:6px 10px; gap:8px; }
+Row.commandbar { padding:6px 12px; gap:8px; background-color:var(--surface); }
+Row.filetools { padding:6px 10px; gap:6px; }
+Text.file-count { color:var(--muted); font-size:12px; }
+Column.monitor-content { padding:16px; gap:12px; }
+Column.notice { background-color:var(--control); padding:10px; gap:4px; border-radius:4px; }
+Row.rule { padding:0px 0px 14px 0px; }
+Text.rule { font-size:12px; }
+Column.process-body { padding:12px; gap:12px; }
+</style>

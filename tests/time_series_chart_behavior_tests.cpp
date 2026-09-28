@@ -78,6 +78,15 @@ int main() {
     expectEqual("axis labels are rendered", static_cast<int>(grid.texts.size()), 3);
     expectTrue("top label content", grid.texts.front().text == L"100%");
     expectTrue("label uses stylesheet", grid.texts.front().color.r == 150);
+    chart.setPlotInsets({10, 10, 10, 24});
+    style.gap = 0.0f;
+    style.fontSize = 10.0f;
+    chart.setStyleBox(style);
+    oneui::test_support::RecordingCanvas compactGrid;
+    chart.paint(compactGrid);
+    expectTrue("compact chart retains complete percentage ticks", compactGrid.texts.front().text == L"100%");
+    expectTrue("compact axis can use its full reserved lane", std::abs(compactGrid.texts.front().rect.width - 24.0f) < 0.001f);
+    chart.setPlotInsets({10, 10, 10, 40});
     for (const auto& line : grid.lines) {
         expectTrue("horizontal grid", line.from.y == line.to.y);
         expectTrue("grid uses supplied thickness", std::abs(line.width - 0.7f) < 0.001f);
@@ -99,6 +108,13 @@ int main() {
     chart.paint(latest);
     expectEqual("latest point paints without hover", static_cast<int>(latest.fillEllipses.size()), 1);
     expectTrue("latest dot reaches domain end", std::abs(latest.fillEllipses.front().rect.x - 227.5f) < 0.001f);
+    chart.setLatestPointSize(8.0f, 4.0f);
+    chart.setLatestPointSize(std::numeric_limits<float>::quiet_NaN(), 10.0f);
+    oneui::test_support::RecordingCanvas scaledPoint;
+    chart.paint(scaledPoint);
+    const auto marker = scaledPoint.fillEllipses.front().rect;
+    expectTrue("scaled marker keeps its sample center", std::abs(marker.x + marker.width * 0.5f - 230.0f) < 0.001f);
+    expectTrue("independent marker dimensions survive invalid update", marker.width == 8.0f && marker.height == 4.0f);
     chart.setSamplePositions({});
     chart.onMouseMove(mouse);
     expectEqual("empty domain restores equal spacing", chart.inspectionIndex(), 2);

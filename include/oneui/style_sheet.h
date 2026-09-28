@@ -80,6 +80,9 @@ struct StyleBox {
     std::optional<float> iconSize;
     std::optional<float> titleOffsetY;
     std::optional<float> detailOffsetY;
+    std::optional<Color> checkBackground;
+    std::optional<Color> checkBorder;
+    std::optional<float> checkRadius;
     std::optional<Color> scrollbarColor;
     std::optional<float> scrollbarWidth;
     std::optional<double> transitionDurationMs;
@@ -116,7 +119,15 @@ public:
     std::size_t version() const;
 
 private:
+    struct CompiledSelector {
+        StyleNode node;
+        bool valid = false;
+        int specificity = 0;
+    };
     std::vector<StyleRule> rules_;
+    // Selector syntax is independent of theme tokens and node pseudo-state.
+    // Compile it once, instead of allocating strings for every cold resolve.
+    std::vector<CompiledSelector> selectors_;
     std::map<std::string, std::string> customProperties_;
     mutable std::unordered_map<std::string, StyleBox> resolveCache_;
     std::size_t version_ = 0;

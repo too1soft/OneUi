@@ -26,6 +26,9 @@ public:
     void setSplitRatio(float ratio);
     float splitRatio() const;
     void setGap(float gap);
+    void setSecondCollapsed(bool collapsed);
+    bool secondCollapsed() const { return secondCollapsed_; }
+    void setCollapsedExtent(float extent);
     void setDividerColors(Color normal, Color active);
     void setPadding(Insets padding);
     void setResizable(bool resizable);
@@ -64,6 +67,8 @@ private:
     SplitOrientation orientation_ = SplitOrientation::Horizontal;
     float splitRatio_ = 0.5f;
     float gap_ = 0.0f;
+    bool secondCollapsed_ = false;
+    float collapsedExtent_ = 40.0f;
     Insets padding_;
     float firstMinimumExtent_ = 0.0f;
     float secondMinimumExtent_ = 0.0f;

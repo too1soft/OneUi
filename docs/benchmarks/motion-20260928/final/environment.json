@@ -1,0 +1,14 @@
+{
+  "os": "Microsoft Windows NT 10.0.19045.0",
+  "exe_sha256": "F1B06BD37387BC8775A104003D54E412B37EF267CC2D1CC7DC2FF3E6E2E35DC5",
+  "gpu": [
+    "OrayIddDriver Device",
+    "NVIDIA GeForce RTX 5080",
+    "AMD Radeon(TM) Graphics"
+  ],
+  "note": "Content scale exercises raster/layout scaling; this is not a physical monitor DPI or display-present measurement.",
+  "target_hz": 60,
+  "captured_at": "2026-09-28T15:58:15.2787172+08:00",
+  "cpu": "AMD Ryzen 9 9950X3D 16-Core Processor          ",
+  "sdk_sha256": "907b981eac99c681b5a78b2fedc77041b4675f42227ec55064f659ed625f62fd"
+}

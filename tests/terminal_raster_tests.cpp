@@ -92,6 +92,14 @@ static void zeroBorderDoesNotPaint() {
 int main() {
     try {
         zeroBorderDoesNotPaint();
+#ifdef _WIN32
+        auto surface = SkSurfaces::Raster(SkImageInfo::MakeN32Premul(240,80));
+        const std::wstring direct=L"Segoe UI", stack=L"Missing OneUI Test Font, 'Segoe UI', 'Microsoft YaHei UI'";
+        auto canvas=oneui::rendering::makeSkiaCanvas(*surface->getCanvas(),&stack);
+        auto expected=oneui::rendering::makeSkiaCanvas(*surface->getCanvas(),&direct);
+        if (std::abs(canvas->measureTextWidth(L"PostgreSQL API 01",13)-expected->measureTextWidth(L"PostgreSQL API 01",13))>0.01f)
+            throw std::runtime_error("font stack measurement must use first available family");
+#endif
         bool passed = true;
         for (const auto* family : {L"", L"Consolas", L"OneUI Missing Terminal Font", L"Segoe UI"})
             for (const float scale : {1.0f, 1.25f, 1.5f})

@@ -1,4 +1,5 @@
 #include "oneui/oneui_c_api.h"
+#include "oneui/native_interop.h"
 #include "oneui_c_api_internal.h"
 #include "oneui_c_api_window_internal.h"
 #include "oneui_c_api_widget_internal.h"
@@ -74,6 +75,10 @@
 #include <utility>
 #include <vector>
 
+std::shared_ptr<oneui::Widget> oneui::retainNativeWidget(const OneUiWidget* handle) {
+    return handle ? handle->widget : nullptr;
+}
+
 struct OneUiStyleSheet {
     std::shared_ptr<oneui::StyleSheet> sheet = std::make_shared<oneui::StyleSheet>();
 };
@@ -116,7 +121,7 @@ using oneui::capi::utf8OrEmpty;
 using oneui::capi::wideOrEmpty;
 
 int clampIconSymbol(int symbol) {
-    return std::clamp(symbol, 0, static_cast<int>(oneui::IconSymbol::Pause));
+    return std::clamp(symbol, 0, static_cast<int>(oneui::IconSymbol::OutlineWorkbenchClose));
 }
 
 std::weak_ptr<oneui::StyleSheet> gDefaultStyleSheet;
@@ -2212,6 +2217,68 @@ float oneui_stack_content_width(OneUiWidget* stack) {
     return nativeStack ? nativeStack->contentWidth() : 0.0f;
 }
 
+int oneui_stack_set_engine(OneUiWidget* stack, int engine) {
+    auto* native = asWidget<oneui::Stack>(stack);
+    if (!native || engine < 0 || engine > 1) return 0;
+    try { return native->setEngine(static_cast<oneui::StackEngine>(engine)) ? 1 : 0; }
+    catch (...) { return 0; }
+}
+int oneui_stack_set_wrap(OneUiWidget* stack, int enabled) {
+    auto* native = asWidget<oneui::Stack>(stack);
+    if (!native || (enabled != 0 && enabled != 1)) return 0;
+    return native->setWrap(enabled != 0) ? 1 : 0;
+}
+int oneui_widget_measure(OneUiWidget* widget, float max_width, float max_height, float* width, float* height) {
+    if (!width || !height) return 0;
+    *width = *height = 0;
+    if (!widget || !widget->widget || std::isnan(max_width) || max_width < 0 ||
+        std::isnan(max_height) || max_height < 0) return 0;
+    try {
+        const auto size = widget->widget->measure({max_width, max_height});
+        *width = size.width; *height = size.height;
+        return 1;
+    } catch (...) { return 0; }
+}
+
+int oneui_stack_set_justify(OneUiWidget* stack, int justify) {
+    auto* native = asWidget<oneui::Stack>(stack);
+    if (!native || justify < 0 || justify > 3) return 0;
+    native->setJustify(static_cast<oneui::StackJustify>(justify));
+    return 1;
+}
+
+int oneui_stack_set_flex(OneUiWidget* stack, OneUiWidget* child,
+    float grow, float shrink, int basis_mode, float basis, float min, float max) {
+    auto* native = asWidget<oneui::Stack>(stack);
+    if (!native || !child || !child->widget || basis_mode < 0 || basis_mode > 2 ||
+        !std::isfinite(grow) || grow < 0 || !std::isfinite(shrink) || shrink < 0 ||
+        !std::isfinite(min) || min < 0 || std::isnan(max) || max < min ||
+        (basis_mode == 1 && (!std::isfinite(basis) || basis < 0))) return 0;
+    if (std::find(native->children().begin(), native->children().end(), child->widget) == native->children().end()) return 0;
+    try {
+        oneui::StackFlex flex{grow, shrink, {}, min, max, basis_mode == 2};
+        if (basis_mode == 1) flex.basis = basis;
+        native->setFlex(child->widget, flex);
+        return 1;
+    } catch (...) { return 0; }
+}
+
+void oneui_stack_clear_flex(OneUiWidget* stack, OneUiWidget* child) {
+    if (auto* native = asWidget<oneui::Stack>(stack); native && child && child->widget)
+        native->clearFlex(child->widget);
+}
+
+int oneui_widget_natural_size(OneUiWidget* widget, float* width, float* height) {
+    if (!width || !height) return 0;
+    *width = *height = 0;
+    if (!widget || !widget->widget) return 0;
+    try {
+        const auto size = widget->widget->naturalSize();
+        *width = size.width; *height = size.height;
+        return 1;
+    } catch (...) { return 0; }
+}
+
 float oneui_stack_content_height(OneUiWidget* stack) {
     auto* nativeStack = asWidget<oneui::Stack>(stack);
     return nativeStack ? nativeStack->contentHeight() : 0.0f;
@@ -2932,6 +2999,10 @@ void oneui_label_set_color(OneUiWidget* label, unsigned char r, unsigned char g,
     nativeLabel->setColor(toNativeColor(OneUiColor{r, g, b, a}));
 }
 
+void oneui_label_set_status_indicator(OneUiWidget* label, float diameter, float gap) {
+    if (auto* nativeLabel = asWidget<oneui::Label>(label)) nativeLabel->setStatusIndicator(diameter, gap);
+}
+
 void oneui_label_set_font_size(OneUiWidget* label, float font_size) {
     auto* nativeLabel = asWidget<oneui::Label>(label);
     if (!nativeLabel) {
@@ -2946,7 +3017,7 @@ float oneui_label_natural_text_width(OneUiWidget* label) {
 }
 
 void oneui_button_set_trailing_icon(OneUiWidget* button, int symbol) {
-    if(auto* value=asWidget<oneui::Button>(button)) value->setTrailingIcon(static_cast<oneui::IconSymbol>(std::clamp(symbol,0,static_cast<int>(oneui::IconSymbol::Pause))));
+    if(auto* value=asWidget<oneui::Button>(button)) value->setTrailingIcon(static_cast<oneui::IconSymbol>(std::clamp(symbol,0,static_cast<int>(oneui::IconSymbol::OutlineWorkbenchClose))));
 }
 
 void oneui_text_field_set_focused_placeholder(OneUiWidget* field, int visible) {
@@ -3049,8 +3120,10 @@ static std::vector<oneui::TableCell> copyRichTableRow(const OneUiTableRichRowUtf
         const auto& source = row.cells[i]; oneui::TableCell cell;
         cell.text = utf8OrEmpty(source.text); cell.detail = utf8OrEmpty(source.detail); cell.badge = utf8OrEmpty(source.badge);
         cell.alignment = source.alignment == 2 ? oneui::TextAlign::Right : source.alignment == 1 ? oneui::TextAlign::Center : oneui::TextAlign::Left;
-        if (source.icon >= 0 && source.icon <= static_cast<int>(oneui::IconSymbol::Pause)) cell.leadingIcon = static_cast<oneui::IconSymbol>(source.icon);
+        if (source.icon >= 0 && source.icon <= static_cast<int>(oneui::IconSymbol::OutlineWorkbenchClose)) cell.leadingIcon = static_cast<oneui::IconSymbol>(source.icon);
         if (source.foreground.a) cell.foreground = toNativeColor(source.foreground);
+        if (source.badge_color_flags & 1u) cell.badgeForeground = toNativeColor(source.badge_foreground);
+        if (source.badge_color_flags & 2u) cell.badgeBackground = toNativeColor(source.badge_background);
         cell.iconSize = 14.0f; cell.fontSize = source.font_size; cell.fontWeight = source.font_weight;
         copy.push_back(std::move(cell));
     }
@@ -3073,6 +3146,15 @@ void oneui_table_set_column_presentation(OneUiWidget* table, int column, int ali
 }
 void oneui_table_set_column_dividers_visible(OneUiWidget* table, int visible) {
     if (auto* value = asWidget<oneui::Table>(table)) value->setColumnDividersVisible(visible != 0);
+}
+void oneui_table_set_selection_column_visible(OneUiWidget* table, int visible) {
+    if (auto* value = asWidget<oneui::Table>(table)) value->setSelectionColumnVisible(visible != 0);
+}
+void oneui_table_set_selection_column_width(OneUiWidget* table, float width) {
+    if (auto* value = asWidget<oneui::Table>(table)) value->setSelectionColumnWidth(width);
+}
+void oneui_table_set_header_sort(OneUiWidget* table, int column, int descending) {
+    if (auto* native = asWidget<oneui::Table>(table)) native->setHeaderSort(column, descending != 0);
 }
 void oneui_table_set_header_height(OneUiWidget* table, float height) {
     if (auto* native = asWidget<oneui::Table>(table)) native->setHeaderHeight(height);
@@ -3243,6 +3325,10 @@ int oneui_time_series_chart_set_sample_positions(OneUiWidget* chart, const doubl
 }
 void oneui_time_series_chart_set_latest_point_visible(OneUiWidget* chart, int visible) {
     if (auto* native = asWidget<oneui::TimeSeriesChart>(chart)) native->setLatestPointVisible(visible != 0);
+}
+
+void oneui_time_series_chart_set_latest_point_size(OneUiWidget* chart, float width, float height) {
+    if (auto* native = asWidget<oneui::TimeSeriesChart>(chart)) native->setLatestPointSize(width, height);
 }
 
 void oneui_time_series_chart_set_thresholds(
@@ -3562,6 +3648,7 @@ void oneui_title_bar_set_variant(OneUiWidget* title_bar, const char* variant) {
     }
     nativeTitleBar->setVariant(variant ? std::string(variant) : std::string());
 }
+
 
 int oneui_title_bar_set_presentation(OneUiWidget* title_bar, const OneUiTitleBarPresentation* input) {
     auto* bar = asWidget<oneui::WindowTitleBar>(title_bar);
@@ -3988,7 +4075,7 @@ void oneui_tabs_set_item_icons(OneUiWidget* tabs, const int* symbols, std::size_
         values.reserve(count);
         for (std::size_t index = 0; index < count; ++index) {
             const int symbol = symbols[index];
-            if (symbol < 0 || symbol > static_cast<int>(oneui::IconSymbol::Pause)) {
+            if (symbol < 0 || symbol > static_cast<int>(oneui::IconSymbol::OutlineWorkbenchClose)) {
                 values.push_back(std::nullopt);
             } else {
                 values.push_back(static_cast<oneui::IconSymbol>(symbol));
@@ -3998,6 +4085,29 @@ void oneui_tabs_set_item_icons(OneUiWidget* tabs, const int* symbols, std::size_
     nativeTabs->setItemIcons(std::move(values));
 }
 
+void oneui_tabs_set_document_mode(OneUiWidget* tabs, int enabled) {
+    if (auto* nativeTabs = asWidget<oneui::Tabs>(tabs)) nativeTabs->setDocumentMode(enabled != 0);
+}
+void oneui_scroll_view_set_scrollbar_inset(OneUiWidget* view, float inset) {
+    if (auto* nativeView = asWidget<oneui::ScrollView>(view)) nativeView->setScrollbarInset(inset);
+}
+int oneui_tabs_overflow_item_count(OneUiWidget* tabs) {
+    auto* nativeTabs = asWidget<oneui::Tabs>(tabs);
+    return nativeTabs ? nativeTabs->overflowItemCount() : 0;
+}
+void oneui_tabs_set_on_overflow_changed(OneUiWidget* tabs, OneUiIntCallback callback, void* user_data) {
+    if (auto* nativeTabs = asWidget<oneui::Tabs>(tabs)) {
+        if (!callback) nativeTabs->setOnOverflowChanged(nullptr);
+        else nativeTabs->setOnOverflowChanged([callback,user_data](int n){callback(n,user_data);});
+    }
+}
+void oneui_tabs_set_item_status_colors(OneUiWidget* tabs, const OneUiColor* colors, size_t count) {
+    if (auto* nativeTabs = asWidget<oneui::Tabs>(tabs)) {
+        std::vector<oneui::Color> values;
+        if (colors) { for (size_t i=0; i<count; ++i) values.push_back(toNativeColor(colors[i])); }
+        nativeTabs->setItemStatusColors(std::move(values));
+    }
+}
 void oneui_tabs_set_selected_index(OneUiWidget* tabs, int index) {
     if (auto* nativeTabs = asWidget<oneui::Tabs>(tabs)) {
         nativeTabs->setSelectedIndex(index);
@@ -5209,6 +5319,22 @@ void oneui_interactive_surface_set_on_hover_changed(
         callback(hovered ? 1 : 0, user_data);
     });
 }
+void oneui_interactive_surface_set_on_focus_changed(
+    OneUiWidget* surface,
+    OneUiBoolCallback callback,
+    void* user_data) {
+    auto* nativeSurface = asWidget<oneui::InteractiveSurface>(surface);
+    if (!nativeSurface) {
+        return;
+    }
+    if (!callback) {
+        nativeSurface->setOnFocusChanged(nullptr);
+        return;
+    }
+    nativeSurface->setOnFocusChanged([callback, user_data](bool hovered) {
+        callback(hovered ? 1 : 0, user_data);
+    });
+}
 
 void oneui_interactive_surface_set_on_drag(OneUiWidget* surface, OneUiPointerDragCallback callback, float threshold, void* user_data) {
     auto* native = asWidget<oneui::InteractiveSurface>(surface);
@@ -5563,6 +5689,10 @@ void oneui_terminal_view_set_line_numbers_visible(OneUiWidget* view, int visible
     if (auto* nativeView = asWidget<oneui::TerminalView>(view)) {
         nativeView->setLineNumbersVisible(visible != 0);
     }
+}
+
+void oneui_terminal_view_set_scrollback(OneUiWidget* view, unsigned long long history_rows, unsigned long long offset) {
+    if (auto* nativeView = asWidget<oneui::TerminalView>(view)) nativeView->setScrollback(history_rows, offset);
 }
 
 void oneui_terminal_view_set_first_visible_line_number(
@@ -6032,7 +6162,7 @@ void oneui_status_strip_set_primary_action_trailing_icon(OneUiWidget* status_str
             nativeStatusStrip->setPrimaryActionTrailingIcon(std::nullopt);
         } else {
             nativeStatusStrip->setPrimaryActionTrailingIcon(static_cast<oneui::IconSymbol>(
-                std::clamp(symbol, 0, static_cast<int>(oneui::IconSymbol::Pause))));
+                std::clamp(symbol, 0, static_cast<int>(oneui::IconSymbol::OutlineWorkbenchClose))));
         }
     }
 }

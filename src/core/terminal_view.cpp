@@ -792,7 +792,7 @@ void TerminalView::paint(Canvas& canvas) {
             style.background = selectionBackground_;
         }
         style.cursor = cursorPaintVisible() && cursor_.row == row && cursor_.column == column;
-        if (style.cursor && cursorStyle_ == TerminalCursorStyle::Block) {
+        if (style.cursor && focused() && cursorStyle_ == TerminalCursorStyle::Block) {
             style.background = cursorColor_;
             style.foreground = background_;
         }
@@ -837,7 +837,7 @@ void TerminalView::paint(Canvas& canvas) {
             metrics.cellHeight,
         };
         if (!sameColor(style.background, background_) ||
-            (style.cursor && cursorStyle_ == TerminalCursorStyle::Block)) {
+            (style.cursor && focused() && cursorStyle_ == TerminalCursorStyle::Block)) {
             canvas.fillRect(runRect, style.background);
         }
         if (style.textVisible && !text.empty()) {
@@ -876,7 +876,9 @@ void TerminalView::paint(Canvas& canvas) {
                 style.foreground,
                 decorationStroke);
         }
-        if (style.cursor && cursorStyle_ == TerminalCursorStyle::Bar) {
+        if (style.cursor && !focused() && cursorStyle_ == TerminalCursorStyle::Block) {
+            canvas.strokeRect(runRect.inset(Insets{0.5f}), cursorColor_, 0.0f, 1.0f);
+        } else if (style.cursor && cursorStyle_ == TerminalCursorStyle::Bar) {
             const float cursorX = runRect.x + 1.0f;
             canvas.drawLine(
                 Point{cursorX, runRect.y + 1.0f},
@@ -947,11 +949,56 @@ void TerminalView::paint(Canvas& canvas) {
         }
     }
     canvas.restore();
+    const auto thumb = scrollbackThumbRect();
+    if (thumb.height > 0.0f) canvas.fillRect(thumb, Color{foreground_.r, foreground_.g, foreground_.b, static_cast<std::uint8_t>(draggingScrollback_ ? 110 : 65)}, 3.0f);
+}
+
+void TerminalView::setScrollback(std::uint64_t historyRows, std::uint64_t offset) {
+    historyRows = std::min<std::uint64_t>(historyRows, 1000000000);
+    offset = std::min(draggingScrollback_ ? scrollbackOffset_ : offset, historyRows);
+    if (historyRows_ == historyRows && scrollbackOffset_ == offset) return;
+    historyRows_ = historyRows;
+    scrollbackOffset_ = offset;
+    if (!historyRows_) draggingScrollback_ = false;
+    invalidate();
+}
+
+Rect TerminalView::scrollbackThumbRect() const {
+    const auto r = frame();
+    if (!historyRows_ || r.height <= 0.0f || r.width < 10.0f) return {};
+    const float h = std::min(r.height, std::max(20.0f, static_cast<float>(r.height * rows_ / (historyRows_ + static_cast<double>(rows_)))));
+    const float progress = 1.0f - static_cast<double>(scrollbackOffset_) / historyRows_;
+    return {r.x + r.width - 9.0f, r.y + progress * (r.height - h), 7.0f, h};
+}
+
+void TerminalView::dragScrollback(float y) {
+    const auto thumb = scrollbackThumbRect();
+    const float travel = frame().height - thumb.height;
+    if (travel <= 0.0f || !historyRows_) return;
+    const double position = std::clamp((y - frame().y - scrollbackGrab_) / travel, 0.0f, 1.0f);
+    const auto target = static_cast<std::uint64_t>(std::llround((1.0 - position) * historyRows_));
+    const int delta = static_cast<int>(static_cast<std::int64_t>(target) - static_cast<std::int64_t>(scrollbackOffset_));
+    if (delta && onScroll_) {
+        // Publish the requested offset immediately so consecutive drag events
+        // don't duplicate deltas while a background session posts its frame.
+        scrollbackOffset_ = target;
+        invalidate();
+        onScroll_(delta);
+    }
 }
 
 bool TerminalView::onMouseDown(const MouseEvent& event) {
     if (!interactive() || !contains(event.position) || rows_ == 0 || columns_ == 0) {
         return false;
+    }
+    const auto thumb = scrollbackThumbRect();
+    if (event.button == MouseButton::Left && thumb.height > 0.0f &&
+        event.position.x >= frame().x + frame().width - 10.0f && onScroll_) {
+        draggingScrollback_ = true;
+        scrollbackGrab_ = event.position.y >= thumb.y && event.position.y <= thumb.y + thumb.height
+            ? event.position.y - thumb.y : thumb.height * .5f;
+        dragScrollback(event.position.y);
+        return true;
     }
     const std::uint32_t hyperlinkId = hyperlinkAt(event.position);
     if (event.button == MouseButton::Left && event.control && hyperlinkId != 0 && onHyperlink_) {
@@ -1042,6 +1089,7 @@ bool TerminalView::handleAuxiliaryButton(const MouseEvent& event) {
 }
 
 bool TerminalView::onMouseMove(const MouseEvent& event) {
+    if (draggingScrollback_) { dragScrollback(event.position.y); return true; }
     const std::uint32_t hyperlinkId = interactive() && contains(event.position)
                                           ? hyperlinkAt(event.position)
                                           : 0;
@@ -1087,6 +1135,7 @@ bool TerminalView::onMouseMove(const MouseEvent& event) {
 }
 
 bool TerminalView::onMouseUp(const MouseEvent& event) {
+    if (draggingScrollback_) { dragScrollback(event.position.y); draggingScrollback_ = false; return true; }
     if (pressedHyperlink_ != 0) {
         const std::uint32_t hyperlinkId = pressedHyperlink_;
         pressedHyperlink_ = 0;
@@ -1842,10 +1891,11 @@ bool TerminalView::cellSelected(std::uint16_t row, std::uint16_t column) const {
 }
 
 bool TerminalView::hasInteractionState() const {
-    return selecting_ || reportedButton_ != MouseButton::None || pressedHyperlink_ != 0;
+    return draggingScrollback_ || selecting_ || reportedButton_ != MouseButton::None || pressedHyperlink_ != 0;
 }
 
 void TerminalView::resetInteractionState() {
+    draggingScrollback_ = false;
     selecting_ = false;
     reportedButton_ = MouseButton::None;
     pressedHyperlink_ = 0;

@@ -127,7 +127,9 @@ void StatusStrip::paint(Canvas& canvas) {
     const Layout l = layout();
     paintIcon(canvas, iconSymbol_, l.icon, Color{49, 88, 212}, Color{0, 0, 0, 0}, 1.4f);
     canvas.drawTextStyledEllipsized(title_, l.title, foreground, 13.0f, TextAlign::Left, std::max(500, fontWeight));
-    canvas.drawTextEllipsized(message_, l.message, Color{190, 193, 203}, 12.0f, TextAlign::Left);
+    // Follow the caller's foreground on light as well as dark surfaces. A
+    // fixed pale gray made actionable error details nearly invisible in WYC.
+    canvas.drawTextEllipsized(message_, l.message, foreground, 12.0f, TextAlign::Left);
 
     auto paintAction = [&](Rect rect, const std::wstring& text, Action action) {
         if (text.empty()) {

@@ -1,0 +1,1738 @@
+**********************************************************************
+** Visual Studio 2026 Developer Command Prompt v18.0.2
+** Copyright (c) 2025 Microsoft Corporation
+**********************************************************************
+[DEBUG:ext\vcvars.bat] Found potential v145 version file: 'Microsoft.VCToolsVersion.VC.14.50.18.0.txt'
+[DEBUG:ext\vcvars.bat] Testing v145 version file: 'Microsoft.VCToolsVersion.VC.14.50.18.0.txt'
+[vcvarsall.bat] Environment initialized for: 'x64'
+-- Verified OneUI's ICU 74.2 / Unicode 15.1 Bidi patch (already applied)
+CMake Warning (dev) at D:/Program Files/Microsoft Visual Studio/18/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-4.1/Modules/FetchContent.cmake:1373 (message):
+  The DOWNLOAD_EXTRACT_TIMESTAMP option was not given and policy CMP0135 is
+  not set.  The policy's OLD behavior will be used.  When using a URL
+  download, the timestamps of extracted files should preferably be that of
+  the time of extraction, otherwise code that depends on the extracted
+  contents might not be rebuilt if the URL changes.  The OLD behavior
+  preserves the timestamps from the archive instead, but this is usually not
+  what you want.  Update your project to the NEW behavior or specify the
+  DOWNLOAD_EXTRACT_TIMESTAMP option with a value of true to avoid this
+  robustness issue.
+Call Stack (most recent call first):
+  E:/project/byname/oneui/cmake/OneUIYoga.cmake:5 (FetchContent_Declare)
+  E:/project/byname/oneui/CMakeLists.txt:35 (include)
+This warning is for project developers.  Use -Wno-dev to suppress it.
+
+CMake Warning (dev) at D:/Program Files/Microsoft Visual Studio/18/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-4.1/Modules/FetchContent.cmake:1953 (message):
+  Calling FetchContent_Populate(oneui_yoga) is deprecated, call
+  FetchContent_MakeAvailable(oneui_yoga) instead.  Policy CMP0169 can be set
+  to OLD to allow FetchContent_Populate(oneui_yoga) to be called directly for
+  now, but the ability to call it with declared details will be removed
+  completely in a future version.
+Call Stack (most recent call first):
+  E:/project/byname/oneui/cmake/OneUIYoga.cmake:10 (FetchContent_Populate)
+  E:/project/byname/oneui/CMakeLists.txt:35 (include)
+This warning is for project developers.  Use -Wno-dev to suppress it.
+
+-- Configuring done (1.4s)
+-- Generating done (0.1s)
+-- Build files have been written to: E:/project/byname/oneui/examples/performance_lab/build-current
+**********************************************************************
+** Visual Studio 2026 Developer Command Prompt v18.0.2
+** Copyright (c) 2025 Microsoft Corporation
+**********************************************************************
+[DEBUG:ext\vcvars.bat] Found potential v145 version file: 'Microsoft.VCToolsVersion.VC.14.50.18.0.txt'
+[DEBUG:ext\vcvars.bat] Testing v145 version file: 'Microsoft.VCToolsVersion.VC.14.50.18.0.txt'
+[vcvarsall.bat] Environment initialized for: 'x64'
+[0/2] Re-checking globbed directories...
+[1/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\reveal.cpp.obj
+[2/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\badge.cpp.obj
+[3/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\app_shell.cpp.obj
+[4/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\developer_tools.cpp.obj
+[5/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\button_bridge.cpp.obj
+[6/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\adaptive_panes.cpp.obj
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(82): warning C4244: “初始化”: 从“_Ty”转换到“float”，可能丢失数据
+        with
+        [
+            _Ty=int
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(82): note: 模板实例化上下文(最早的实例化上下文)为
+E:\project\byname\oneui\src\core\adaptive_panes.cpp(54): note: 查看对正在编译的函数 模板 实例化“std::optional<float>::optional<int,0>(_Ty2 &&) noexcept”的引用
+        with
+        [
+            _Ty2=int
+        ]
+E:\project\byname\oneui\src\core\adaptive_panes.cpp(54): note: 请参阅 "oneui::AdaptivePanes::configure" 中对 "std::optional<float>::optional" 的第一个引用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(272): note: 查看对正在编译的函数 模板 实例化“std::_Optional_construct_base<_Ty>::_Optional_construct_base<int>(std::in_place_t,int &&)”的引用
+        with
+        [
+            _Ty=float
+        ]
+E:\project\byname\oneui\src\core\adaptive_panes.cpp(61): note: 查看对正在编译的函数 模板 实例化“std::_Optional_destruct_base<_Ty,true>::_Optional_destruct_base<int>(std::in_place_t,int &&) noexcept”的引用
+        with
+        [
+            _Ty=float
+        ]
+[7/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\button.cpp.obj
+[8/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\checkbox.cpp.obj
+[9/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\dock_view.cpp.obj
+[10/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\card.cpp.obj
+[11/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\grid.cpp.obj
+[12/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\command.cpp.obj
+[13/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\dialog.cpp.obj
+[14/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\form_field.cpp.obj
+[15/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\interactive_surface.cpp.obj
+[16/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\image_view.cpp.obj
+[17/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\icon_view.cpp.obj
+[18/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\icon_badge.cpp.obj
+[19/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\label.cpp.obj
+[20/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\icon_button.cpp.obj
+[21/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\log_view.cpp.obj
+[22/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\list.cpp.obj
+[23/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\material3_tokens.cpp.obj
+[24/103] Building CXX object sdk\CMakeFiles\oneui-viewc.dir\tools\viewc\main.cpp.obj
+[25/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\menu.cpp.obj
+[26/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\nav_item.cpp.obj
+[27/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\overlay_host.cpp.obj
+[28/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\panel.cpp.obj
+[29/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\popup.cpp.obj
+[30/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\product_shell.cpp.obj
+[31/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\radio_group.cpp.obj
+[32/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\realtime_frame_view.cpp.obj
+[33/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\remote_input_region.cpp.obj
+[34/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\progress_bar.cpp.obj
+[35/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\separator.cpp.obj
+[36/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\select.cpp.obj
+[37/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\reorderable_grid.cpp.obj
+[38/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\scroll_view.cpp.obj
+[39/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\split_view.cpp.obj
+[40/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\slider.cpp.obj
+[41/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\sidebar_nav_bridge.cpp.obj
+[42/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\sparkline.cpp.obj
+[43/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\stack.cpp.obj
+[44/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\stack_yoga.cpp.obj
+[45/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\state_view.cpp.obj
+[46/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\status_strip.cpp.obj
+[47/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\style_transition.cpp.obj
+[48/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\ui.cpp.obj
+[49/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\switch.cpp.obj
+[50/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\style_adapter.cpp.obj
+[51/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\tabs.cpp.obj
+[52/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\table.cpp.obj
+[53/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\terminal_view.cpp.obj
+[54/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\text_input_bridge.cpp.obj
+[55/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\tile.cpp.obj
+[56/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\style_sheet.cpp.obj
+[57/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\text_field.cpp.obj
+[58/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\time_series_chart.cpp.obj
+[59/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\title_bar_bridge.cpp.obj
+[60/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\toast.cpp.obj
+[61/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\top_bar.cpp.obj
+[62/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\validation_message.cpp.obj
+[63/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\tree_view.cpp.obj
+[64/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\view.cpp.obj
+[65/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\widget.cpp.obj
+[66/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\wrap.cpp.obj
+[67/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\virtual_list.cpp.obj
+[68/103] Linking CXX executable bin\oneui-viewc.exe
+[69/103] Building CXX object sdk\CMakeFiles\oneui_platform_win32.dir\src\platform\win32\clipboard_win32.cpp.obj
+[70/103] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\window_title_bar.cpp.obj
+[71/103] Building CXX object sdk\CMakeFiles\oneui.dir\src\capi\oneui_c_api_internal.cpp.obj
+[72/103] Building CXX object sdk\CMakeFiles\oneui.dir\src\capi\oneui_c_api_interaction.cpp.obj
+[73/103] Building CXX object sdk\CMakeFiles\oneui.dir\src\platform\native_services.cpp.obj
+[74/103] Building CXX object CMakeFiles\oneui-renderer-tests.dir\renderer_tests.cpp.obj
+[75/103] Building CXX object CMakeFiles\oneui-lifecycle-tests.dir\lifecycle_tests.cpp.obj
+[76/103] Building CXX object sdk\CMakeFiles\oneui_platform_win32.dir\src\platform\win32\window_win32.cpp.obj
+E:\project\byname\oneui\src\platform\win32\window_win32.cpp(1905) : warning C4715: “oneui::`anonymous namespace'::Win32Window::handleMessage”: 不是所有的控件路径都返回值
+[77/103] Building CXX object CMakeFiles\oneui-particle-tests.dir\particle_tests.cpp.obj
+[78/103] Building CXX object CMakeFiles\oneui-devtools-tests.dir\devtools_tests.cpp.obj
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(166): warning C4244: “=”: 从“_Ty”转换到“_Ty”，可能丢失数据
+        with
+        [
+            _Ty=int
+        ]
+        and
+        [
+            _Ty=float
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(166): note: 模板实例化上下文(最早的实例化上下文)为
+E:\project\byname\oneui\include\oneui/ui_native_theme.h(37): note: 查看对正在编译的函数 模板 实例化“std::optional<float> &std::optional<float>::operator =<int,0>(_Ty2 &&) noexcept”的引用
+        with
+        [
+            _Ty2=int
+        ]
+E:\project\byname\oneui\include\oneui/ui_native_theme.h(37): note: 请参阅 "oneui::ui::applyNativeTheme" 中对 "std::optional<float>::operator =" 的第一个引用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(312): note: 查看对正在编译的函数 模板 实例化“void std::_Optional_construct_base<_Ty>::_Assign<int>(_Ty2 &&) noexcept”的引用
+        with
+        [
+            _Ty=float,
+            _Ty2=int
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(82): warning C4244: “初始化”: 从“_Ty”转换到“float”，可能丢失数据
+        with
+        [
+            _Ty=int
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(82): note: 模板实例化上下文(最早的实例化上下文)为
+E:\project\byname\oneui\include\oneui/ui_native_theme.h(37): note: 查看对正在编译的函数 模板 实例化“std::optional<float>::optional<int,0>(_Ty2 &&) noexcept”的引用
+        with
+        [
+            _Ty2=int
+        ]
+E:\project\byname\oneui\include\oneui/ui_declarative.h(372): note: 请参阅 "oneui::ui::Mount::make" 中对 "std::optional<float>::optional" 的第一个引用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(272): note: 查看对正在编译的函数 模板 实例化“std::_Optional_construct_base<_Ty>::_Optional_construct_base<int>(std::in_place_t,int &&)”的引用
+        with
+        [
+            _Ty=float
+        ]
+E:\project\byname\oneui\examples\performance_lab\devtools_tests.cpp(61): note: 查看对正在编译的函数 模板 实例化“std::_Optional_destruct_base<_Ty,true>::_Optional_destruct_base<int>(std::in_place_t,int &&) noexcept”的引用
+        with
+        [
+            _Ty=float
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xutility(4924): warning C4244: “=”: 从“const wchar_t”转换到“char”，可能丢失数据
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xutility(4924): note: 模板实例化上下文(最早的实例化上下文)为
+E:\project\byname\oneui\include\oneui/ui_declarative.h(140): note: 查看对正在编译的函数 模板 实例化“std::basic_string<char,std::char_traits<char>,std::allocator<char>>::basic_string<std::_String_const_iterator<std::_String_val<std::_Simple_types<_Elem>>>,0>(_Iter,_Iter,const _Alloc &)”的引用
+        with
+        [
+            _Elem=wchar_t,
+            _Iter=std::_String_const_iterator<std::_String_val<std::_Simple_types<wchar_t>>>,
+            _Alloc=std::allocator<char>
+        ]
+E:\project\byname\oneui\include\oneui/ui_declarative.h(140): note: 请参阅 "oneui::ui::StyleRegistry::variant" 中对 "std::basic_string<char,std::char_traits<char>,std::allocator<char>>::basic_string" 的第一个引用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(862): note: 查看对正在编译的函数 模板 实例化“void std::basic_string<char,std::char_traits<char>,std::allocator<char>>::_Construct_from_iter<const wchar_t*,const wchar_t*,_Size_type>(_Iter,const _Sent,_Size)”的引用
+        with
+        [
+            _Size_type=std::+::_Size_type,
+            _Iter=const wchar_t *,
+            _Sent=const wchar_t *,
+            _Size=std::+::_Size_type
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(1018): note: 查看对正在编译的函数 模板 实例化“_OutIt *std::_Copy_n_unchecked4<const wchar_t*,_Size,char*>(_InIt,_SizeTy,_OutIt)”的引用
+        with
+        [
+            _OutIt=char *,
+            _Size=std::+::_Size_type,
+            _InIt=const wchar_t *,
+            _SizeTy=std::+::_Size_type
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xutility(522): warning C4244: “初始化”: 从“_Ty”转换到“_Ty”，可能丢失数据
+        with
+        [
+            _Ty=int
+        ]
+        and
+        [
+            _Ty=float
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xutility(522): note: 模板实例化上下文(最早的实例化上下文)为
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(312): note: 查看对正在编译的函数 模板 实例化“void std::_Optional_construct_base<_Ty>::_Assign<int>(_Ty2 &&) noexcept”的引用
+        with
+        [
+            _Ty=float,
+            _Ty2=int
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(168): note: 查看对正在编译的函数 模板 实例化“_Ty &std::_Optional_construct_base<_Ty>::_Construct<int>(int &&) noexcept”的引用
+        with
+        [
+            _Ty=float
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(156): note: 查看对正在编译的函数 模板 实例化“void std::_Construct_in_place<float,_Ty>(float &,_Ty &&) noexcept”的引用
+        with
+        [
+            _Ty=int
+        ]
+[79/103] Building CXX object sdk\CMakeFiles\oneui.dir\src\capi\oneui_c_api.cpp.obj
+[80/103] Linking CXX shared library bin\oneui.dll
+[81/103] Generating views/Connections.g.h
+[82/103] Generating views/Gallery.g.h
+[83/103] Generating views/Recipes.g.h
+[84/103] Generating views/EffectsProbe.g.h
+[85/103] Linking CXX executable bin\oneui-particle-tests.exe
+[86/103] Linking CXX executable bin\oneui-renderer-tests.exe
+[87/103] Linking CXX executable bin\oneui-lifecycle-tests.exe
+[88/103] Linking CXX executable bin\oneui-devtools-tests.exe
+[89/103] Building CXX object CMakeFiles\oneui-editor-tests.dir\editor_tests.cpp.obj
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(166): warning C4244: “=”: 从“_Ty”转换到“_Ty”，可能丢失数据
+        with
+        [
+            _Ty=int
+        ]
+        and
+        [
+            _Ty=float
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(166): note: 模板实例化上下文(最早的实例化上下文)为
+E:\project\byname\oneui\include\oneui/ui_native_theme.h(37): note: 查看对正在编译的函数 模板 实例化“std::optional<float> &std::optional<float>::operator =<int,0>(_Ty2 &&) noexcept”的引用
+        with
+        [
+            _Ty2=int
+        ]
+E:\project\byname\oneui\include\oneui/ui_native_theme.h(37): note: 请参阅 "oneui::ui::applyNativeTheme" 中对 "std::optional<float>::operator =" 的第一个引用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(312): note: 查看对正在编译的函数 模板 实例化“void std::_Optional_construct_base<_Ty>::_Assign<int>(_Ty2 &&) noexcept”的引用
+        with
+        [
+            _Ty=float,
+            _Ty2=int
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(82): warning C4244: “初始化”: 从“_Ty”转换到“float”，可能丢失数据
+        with
+        [
+            _Ty=int
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(82): note: 模板实例化上下文(最早的实例化上下文)为
+E:\project\byname\oneui\include\oneui/ui_native_theme.h(37): note: 查看对正在编译的函数 模板 实例化“std::optional<float>::optional<int,0>(_Ty2 &&) noexcept”的引用
+        with
+        [
+            _Ty2=int
+        ]
+E:\project\byname\oneui\include\oneui/ui_declarative.h(372): note: 请参阅 "oneui::ui::Mount::make" 中对 "std::optional<float>::optional" 的第一个引用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(272): note: 查看对正在编译的函数 模板 实例化“std::_Optional_construct_base<_Ty>::_Optional_construct_base<int>(std::in_place_t,int &&)”的引用
+        with
+        [
+            _Ty=float
+        ]
+E:\project\byname\oneui\examples\performance_lab\editor_tests.cpp(34): note: 查看对正在编译的函数 模板 实例化“std::_Optional_destruct_base<_Ty,true>::_Optional_destruct_base<int>(std::in_place_t,int &&) noexcept”的引用
+        with
+        [
+            _Ty=float
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xutility(4924): warning C4244: “=”: 从“const wchar_t”转换到“char”，可能丢失数据
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xutility(4924): note: 模板实例化上下文(最早的实例化上下文)为
+E:\project\byname\oneui\include\oneui/ui_declarative.h(140): note: 查看对正在编译的函数 模板 实例化“std::basic_string<char,std::char_traits<char>,std::allocator<char>>::basic_string<std::_String_const_iterator<std::_String_val<std::_Simple_types<_Elem>>>,0>(_Iter,_Iter,const _Alloc &)”的引用
+        with
+        [
+            _Elem=wchar_t,
+            _Iter=std::_String_const_iterator<std::_String_val<std::_Simple_types<wchar_t>>>,
+            _Alloc=std::allocator<char>
+        ]
+E:\project\byname\oneui\include\oneui/ui_declarative.h(140): note: 请参阅 "oneui::ui::StyleRegistry::variant" 中对 "std::basic_string<char,std::char_traits<char>,std::allocator<char>>::basic_string" 的第一个引用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(862): note: 查看对正在编译的函数 模板 实例化“void std::basic_string<char,std::char_traits<char>,std::allocator<char>>::_Construct_from_iter<const wchar_t*,const wchar_t*,_Size_type>(_Iter,const _Sent,_Size)”的引用
+        with
+        [
+            _Size_type=std::+::_Size_type,
+            _Iter=const wchar_t *,
+            _Sent=const wchar_t *,
+            _Size=std::+::_Size_type
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(1018): note: 查看对正在编译的函数 模板 实例化“_OutIt *std::_Copy_n_unchecked4<const wchar_t*,_Size,char*>(_InIt,_SizeTy,_OutIt)”的引用
+        with
+        [
+            _OutIt=char *,
+            _Size=std::+::_Size_type,
+            _InIt=const wchar_t *,
+            _SizeTy=std::+::_Size_type
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xutility(522): warning C4244: “初始化”: 从“_Ty”转换到“_Ty”，可能丢失数据
+        with
+        [
+            _Ty=int
+        ]
+        and
+        [
+            _Ty=float
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xutility(522): note: 模板实例化上下文(最早的实例化上下文)为
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(312): note: 查看对正在编译的函数 模板 实例化“void std::_Optional_construct_base<_Ty>::_Assign<int>(_Ty2 &&) noexcept”的引用
+        with
+        [
+            _Ty=float,
+            _Ty2=int
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(168): note: 查看对正在编译的函数 模板 实例化“_Ty &std::_Optional_construct_base<_Ty>::_Construct<int>(int &&) noexcept”的引用
+        with
+        [
+            _Ty=float
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(156): note: 查看对正在编译的函数 模板 实例化“void std::_Construct_in_place<float,_Ty>(float &,_Ty &&) noexcept”的引用
+        with
+        [
+            _Ty=int
+        ]
+[90/103] Linking CXX executable bin\oneui-editor-tests.exe
+[91/103] Building CXX object CMakeFiles\oneui-effects-tests.dir\effects_tests.cpp.obj
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(166): warning C4244: “=”: 从“_Ty”转换到“_Ty”，可能丢失数据
+        with
+        [
+            _Ty=int
+        ]
+        and
+        [
+            _Ty=float
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(166): note: 模板实例化上下文(最早的实例化上下文)为
+E:\project\byname\oneui\include\oneui/ui_native_theme.h(37): note: 查看对正在编译的函数 模板 实例化“std::optional<float> &std::optional<float>::operator =<int,0>(_Ty2 &&) noexcept”的引用
+        with
+        [
+            _Ty2=int
+        ]
+E:\project\byname\oneui\include\oneui/ui_native_theme.h(37): note: 请参阅 "oneui::ui::applyNativeTheme" 中对 "std::optional<float>::operator =" 的第一个引用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(312): note: 查看对正在编译的函数 模板 实例化“void std::_Optional_construct_base<_Ty>::_Assign<int>(_Ty2 &&) noexcept”的引用
+        with
+        [
+            _Ty=float,
+            _Ty2=int
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(82): warning C4244: “初始化”: 从“_Ty”转换到“float”，可能丢失数据
+        with
+        [
+            _Ty=int
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(82): note: 模板实例化上下文(最早的实例化上下文)为
+E:\project\byname\oneui\include\oneui/ui_native_theme.h(37): note: 查看对正在编译的函数 模板 实例化“std::optional<float>::optional<int,0>(_Ty2 &&) noexcept”的引用
+        with
+        [
+            _Ty2=int
+        ]
+E:\project\byname\oneui\include\oneui/ui_declarative.h(372): note: 请参阅 "oneui::ui::Mount::make" 中对 "std::optional<float>::optional" 的第一个引用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(272): note: 查看对正在编译的函数 模板 实例化“std::_Optional_construct_base<_Ty>::_Optional_construct_base<int>(std::in_place_t,int &&)”的引用
+        with
+        [
+            _Ty=float
+        ]
+E:\project\byname\oneui\examples\performance_lab\effects_tests.cpp(112): note: 查看对正在编译的函数 模板 实例化“std::_Optional_destruct_base<_Ty,true>::_Optional_destruct_base<int>(std::in_place_t,int &&) noexcept”的引用
+        with
+        [
+            _Ty=float
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xutility(4924): warning C4244: “=”: 从“const wchar_t”转换到“char”，可能丢失数据
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xutility(4924): note: 模板实例化上下文(最早的实例化上下文)为
+E:\project\byname\oneui\include\oneui/ui_declarative.h(140): note: 查看对正在编译的函数 模板 实例化“std::basic_string<char,std::char_traits<char>,std::allocator<char>>::basic_string<std::_String_const_iterator<std::_String_val<std::_Simple_types<_Elem>>>,0>(_Iter,_Iter,const _Alloc &)”的引用
+        with
+        [
+            _Elem=wchar_t,
+            _Iter=std::_String_const_iterator<std::_String_val<std::_Simple_types<wchar_t>>>,
+            _Alloc=std::allocator<char>
+        ]
+E:\project\byname\oneui\include\oneui/ui_declarative.h(140): note: 请参阅 "oneui::ui::StyleRegistry::variant" 中对 "std::basic_string<char,std::char_traits<char>,std::allocator<char>>::basic_string" 的第一个引用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(862): note: 查看对正在编译的函数 模板 实例化“void std::basic_string<char,std::char_traits<char>,std::allocator<char>>::_Construct_from_iter<const wchar_t*,const wchar_t*,_Size_type>(_Iter,const _Sent,_Size)”的引用
+        with
+        [
+            _Size_type=std::+::_Size_type,
+            _Iter=const wchar_t *,
+            _Sent=const wchar_t *,
+            _Size=std::+::_Size_type
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(1018): note: 查看对正在编译的函数 模板 实例化“_OutIt *std::_Copy_n_unchecked4<const wchar_t*,_Size,char*>(_InIt,_SizeTy,_OutIt)”的引用
+        with
+        [
+            _OutIt=char *,
+            _Size=std::+::_Size_type,
+            _InIt=const wchar_t *,
+            _SizeTy=std::+::_Size_type
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xutility(522): warning C4244: “初始化”: 从“_Ty”转换到“_Ty”，可能丢失数据
+        with
+        [
+            _Ty=int
+        ]
+        and
+        [
+            _Ty=float
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xutility(522): note: 模板实例化上下文(最早的实例化上下文)为
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(312): note: 查看对正在编译的函数 模板 实例化“void std::_Optional_construct_base<_Ty>::_Assign<int>(_Ty2 &&) noexcept”的引用
+        with
+        [
+            _Ty=float,
+            _Ty2=int
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(168): note: 查看对正在编译的函数 模板 实例化“_Ty &std::_Optional_construct_base<_Ty>::_Construct<int>(int &&) noexcept”的引用
+        with
+        [
+            _Ty=float
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(156): note: 查看对正在编译的函数 模板 实例化“void std::_Construct_in_place<float,_Ty>(float &,_Ty &&) noexcept”的引用
+        with
+        [
+            _Ty=int
+        ]
+[92/103] Linking CXX executable bin\oneui-effects-tests.exe
+[93/103] Building CXX object CMakeFiles\oneui-motion-tests.dir\motion_tests.cpp.obj
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(166): warning C4244: “=”: 从“_Ty”转换到“_Ty”，可能丢失数据
+        with
+        [
+            _Ty=int
+        ]
+        and
+        [
+            _Ty=float
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(166): note: 模板实例化上下文(最早的实例化上下文)为
+E:\project\byname\oneui\include\oneui/ui_native_theme.h(37): note: 查看对正在编译的函数 模板 实例化“std::optional<float> &std::optional<float>::operator =<int,0>(_Ty2 &&) noexcept”的引用
+        with
+        [
+            _Ty2=int
+        ]
+E:\project\byname\oneui\include\oneui/ui_native_theme.h(37): note: 请参阅 "oneui::ui::applyNativeTheme" 中对 "std::optional<float>::operator =" 的第一个引用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(312): note: 查看对正在编译的函数 模板 实例化“void std::_Optional_construct_base<_Ty>::_Assign<int>(_Ty2 &&) noexcept”的引用
+        with
+        [
+            _Ty=float,
+            _Ty2=int
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(82): warning C4244: “初始化”: 从“_Ty”转换到“float”，可能丢失数据
+        with
+        [
+            _Ty=int
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(82): note: 模板实例化上下文(最早的实例化上下文)为
+E:\project\byname\oneui\include\oneui/ui_native_theme.h(37): note: 查看对正在编译的函数 模板 实例化“std::optional<float>::optional<int,0>(_Ty2 &&) noexcept”的引用
+        with
+        [
+            _Ty2=int
+        ]
+E:\project\byname\oneui\include\oneui/ui_declarative.h(372): note: 请参阅 "oneui::ui::Mount::make" 中对 "std::optional<float>::optional" 的第一个引用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(272): note: 查看对正在编译的函数 模板 实例化“std::_Optional_construct_base<_Ty>::_Optional_construct_base<int>(std::in_place_t,int &&)”的引用
+        with
+        [
+            _Ty=float
+        ]
+E:\project\byname\oneui\examples\performance_lab\motion_tests.cpp(74): note: 查看对正在编译的函数 模板 实例化“std::_Optional_destruct_base<_Ty,true>::_Optional_destruct_base<int>(std::in_place_t,int &&) noexcept”的引用
+        with
+        [
+            _Ty=float
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xutility(4924): warning C4244: “=”: 从“const wchar_t”转换到“char”，可能丢失数据
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xutility(4924): note: 模板实例化上下文(最早的实例化上下文)为
+E:\project\byname\oneui\include\oneui/ui_declarative.h(140): note: 查看对正在编译的函数 模板 实例化“std::basic_string<char,std::char_traits<char>,std::allocator<char>>::basic_string<std::_String_const_iterator<std::_String_val<std::_Simple_types<_Elem>>>,0>(_Iter,_Iter,const _Alloc &)”的引用
+        with
+        [
+            _Elem=wchar_t,
+            _Iter=std::_String_const_iterator<std::_String_val<std::_Simple_types<wchar_t>>>,
+            _Alloc=std::allocator<char>
+        ]
+E:\project\byname\oneui\include\oneui/ui_declarative.h(140): note: 请参阅 "oneui::ui::StyleRegistry::variant" 中对 "std::basic_string<char,std::char_traits<char>,std::allocator<char>>::basic_string" 的第一个引用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(862): note: 查看对正在编译的函数 模板 实例化“void std::basic_string<char,std::char_traits<char>,std::allocator<char>>::_Construct_from_iter<const wchar_t*,const wchar_t*,_Size_type>(_Iter,const _Sent,_Size)”的引用
+        with
+        [
+            _Size_type=std::+::_Size_type,
+            _Iter=const wchar_t *,
+            _Sent=const wchar_t *,
+            _Size=std::+::_Size_type
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(1018): note: 查看对正在编译的函数 模板 实例化“_OutIt *std::_Copy_n_unchecked4<const wchar_t*,_Size,char*>(_InIt,_SizeTy,_OutIt)”的引用
+        with
+        [
+            _OutIt=char *,
+            _Size=std::+::_Size_type,
+            _InIt=const wchar_t *,
+            _SizeTy=std::+::_Size_type
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xutility(522): warning C4244: “初始化”: 从“_Ty”转换到“_Ty”，可能丢失数据
+        with
+        [
+            _Ty=int
+        ]
+        and
+        [
+            _Ty=float
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xutility(522): note: 模板实例化上下文(最早的实例化上下文)为
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(312): note: 查看对正在编译的函数 模板 实例化“void std::_Optional_construct_base<_Ty>::_Assign<int>(_Ty2 &&) noexcept”的引用
+        with
+        [
+            _Ty=float,
+            _Ty2=int
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(168): note: 查看对正在编译的函数 模板 实例化“_Ty &std::_Optional_construct_base<_Ty>::_Construct<int>(int &&) noexcept”的引用
+        with
+        [
+            _Ty=float
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(156): note: 查看对正在编译的函数 模板 实例化“void std::_Construct_in_place<float,_Ty>(float &,_Ty &&) noexcept”的引用
+        with
+        [
+            _Ty=int
+        ]
+[94/103] Linking CXX executable bin\oneui-motion-tests.exe
+[95/103] Building CXX object CMakeFiles\oneui-connections-tests.dir\connections_tests.cpp.obj
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(166): warning C4244: “=”: 从“_Ty”转换到“_Ty”，可能丢失数据
+        with
+        [
+            _Ty=int
+        ]
+        and
+        [
+            _Ty=float
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(166): note: 模板实例化上下文(最早的实例化上下文)为
+E:\project\byname\oneui\include\oneui/ui_native_theme.h(37): note: 查看对正在编译的函数 模板 实例化“std::optional<float> &std::optional<float>::operator =<int,0>(_Ty2 &&) noexcept”的引用
+        with
+        [
+            _Ty2=int
+        ]
+E:\project\byname\oneui\include\oneui/ui_native_theme.h(37): note: 请参阅 "oneui::ui::applyNativeTheme" 中对 "std::optional<float>::operator =" 的第一个引用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(312): note: 查看对正在编译的函数 模板 实例化“void std::_Optional_construct_base<_Ty>::_Assign<int>(_Ty2 &&) noexcept”的引用
+        with
+        [
+            _Ty=float,
+            _Ty2=int
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(82): warning C4244: “初始化”: 从“_Ty”转换到“float”，可能丢失数据
+        with
+        [
+            _Ty=int
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(82): note: 模板实例化上下文(最早的实例化上下文)为
+E:\project\byname\oneui\include\oneui/ui_native_theme.h(37): note: 查看对正在编译的函数 模板 实例化“std::optional<float>::optional<int,0>(_Ty2 &&) noexcept”的引用
+        with
+        [
+            _Ty2=int
+        ]
+E:\project\byname\oneui\include\oneui/ui_declarative.h(372): note: 请参阅 "oneui::ui::Mount::make" 中对 "std::optional<float>::optional" 的第一个引用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(272): note: 查看对正在编译的函数 模板 实例化“std::_Optional_construct_base<_Ty>::_Optional_construct_base<int>(std::in_place_t,int &&)”的引用
+        with
+        [
+            _Ty=float
+        ]
+E:\project\byname\oneui\examples\performance_lab\connections_tests.cpp(104): note: 查看对正在编译的函数 模板 实例化“std::_Optional_destruct_base<_Ty,true>::_Optional_destruct_base<int>(std::in_place_t,int &&) noexcept”的引用
+        with
+        [
+            _Ty=float
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xutility(4924): warning C4244: “=”: 从“const wchar_t”转换到“char”，可能丢失数据
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xutility(4924): note: 模板实例化上下文(最早的实例化上下文)为
+E:\project\byname\oneui\include\oneui/ui_declarative.h(140): note: 查看对正在编译的函数 模板 实例化“std::basic_string<char,std::char_traits<char>,std::allocator<char>>::basic_string<std::_String_const_iterator<std::_String_val<std::_Simple_types<_Elem>>>,0>(_Iter,_Iter,const _Alloc &)”的引用
+        with
+        [
+            _Elem=wchar_t,
+            _Iter=std::_String_const_iterator<std::_String_val<std::_Simple_types<wchar_t>>>,
+            _Alloc=std::allocator<char>
+        ]
+E:\project\byname\oneui\include\oneui/ui_declarative.h(140): note: 请参阅 "oneui::ui::StyleRegistry::variant" 中对 "std::basic_string<char,std::char_traits<char>,std::allocator<char>>::basic_string" 的第一个引用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(862): note: 查看对正在编译的函数 模板 实例化“void std::basic_string<char,std::char_traits<char>,std::allocator<char>>::_Construct_from_iter<const wchar_t*,const wchar_t*,_Size_type>(_Iter,const _Sent,_Size)”的引用
+        with
+        [
+            _Size_type=std::+::_Size_type,
+            _Iter=const wchar_t *,
+            _Sent=const wchar_t *,
+            _Size=std::+::_Size_type
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(1018): note: 查看对正在编译的函数 模板 实例化“_OutIt *std::_Copy_n_unchecked4<const wchar_t*,_Size,char*>(_InIt,_SizeTy,_OutIt)”的引用
+        with
+        [
+            _OutIt=char *,
+            _Size=std::+::_Size_type,
+            _InIt=const wchar_t *,
+            _SizeTy=std::+::_Size_type
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xutility(522): warning C4244: “初始化”: 从“_Ty”转换到“_Ty”，可能丢失数据
+        with
+        [
+            _Ty=int
+        ]
+        and
+        [
+            _Ty=float
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xutility(522): note: 模板实例化上下文(最早的实例化上下文)为
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(312): note: 查看对正在编译的函数 模板 实例化“void std::_Optional_construct_base<_Ty>::_Assign<int>(_Ty2 &&) noexcept”的引用
+        with
+        [
+            _Ty=float,
+            _Ty2=int
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(168): note: 查看对正在编译的函数 模板 实例化“_Ty &std::_Optional_construct_base<_Ty>::_Construct<int>(int &&) noexcept”的引用
+        with
+        [
+            _Ty=float
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(156): note: 查看对正在编译的函数 模板 实例化“void std::_Construct_in_place<float,_Ty>(float &,_Ty &&) noexcept”的引用
+        with
+        [
+            _Ty=int
+        ]
+[96/103] Linking CXX executable bin\oneui-connections-tests.exe
+[97/103] Building CXX object CMakeFiles\oneui-gallery-tests.dir\gallery_tests.cpp.obj
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(166): warning C4244: “=”: 从“_Ty”转换到“_Ty”，可能丢失数据
+        with
+        [
+            _Ty=int
+        ]
+        and
+        [
+            _Ty=float
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(166): note: 模板实例化上下文(最早的实例化上下文)为
+E:\project\byname\oneui\include\oneui/ui_native_theme.h(37): note: 查看对正在编译的函数 模板 实例化“std::optional<float> &std::optional<float>::operator =<int,0>(_Ty2 &&) noexcept”的引用
+        with
+        [
+            _Ty2=int
+        ]
+E:\project\byname\oneui\include\oneui/ui_native_theme.h(37): note: 请参阅 "oneui::ui::applyNativeTheme" 中对 "std::optional<float>::operator =" 的第一个引用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(312): note: 查看对正在编译的函数 模板 实例化“void std::_Optional_construct_base<_Ty>::_Assign<int>(_Ty2 &&) noexcept”的引用
+        with
+        [
+            _Ty=float,
+            _Ty2=int
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(82): warning C4244: “初始化”: 从“_Ty”转换到“float”，可能丢失数据
+        with
+        [
+            _Ty=int
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(82): note: 模板实例化上下文(最早的实例化上下文)为
+E:\project\byname\oneui\include\oneui/ui_native_theme.h(37): note: 查看对正在编译的函数 模板 实例化“std::optional<float>::optional<int,0>(_Ty2 &&) noexcept”的引用
+        with
+        [
+            _Ty2=int
+        ]
+E:\project\byname\oneui\include\oneui/ui_declarative.h(372): note: 请参阅 "oneui::ui::Mount::make" 中对 "std::optional<float>::optional" 的第一个引用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(272): note: 查看对正在编译的函数 模板 实例化“std::_Optional_construct_base<_Ty>::_Optional_construct_base<int>(std::in_place_t,int &&)”的引用
+        with
+        [
+            _Ty=float
+        ]
+E:\project\byname\oneui\examples\performance_lab\gallery_tests.cpp(96): note: 查看对正在编译的函数 模板 实例化“std::_Optional_destruct_base<_Ty,true>::_Optional_destruct_base<int>(std::in_place_t,int &&) noexcept”的引用
+        with
+        [
+            _Ty=float
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xutility(4924): warning C4244: “=”: 从“const wchar_t”转换到“char”，可能丢失数据
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xutility(4924): note: 模板实例化上下文(最早的实例化上下文)为
+E:\project\byname\oneui\include\oneui/ui_declarative.h(140): note: 查看对正在编译的函数 模板 实例化“std::basic_string<char,std::char_traits<char>,std::allocator<char>>::basic_string<std::_String_const_iterator<std::_String_val<std::_Simple_types<_Elem>>>,0>(_Iter,_Iter,const _Alloc &)”的引用
+        with
+        [
+            _Elem=wchar_t,
+            _Iter=std::_String_const_iterator<std::_String_val<std::_Simple_types<wchar_t>>>,
+            _Alloc=std::allocator<char>
+        ]
+E:\project\byname\oneui\include\oneui/ui_declarative.h(140): note: 请参阅 "oneui::ui::StyleRegistry::variant" 中对 "std::basic_string<char,std::char_traits<char>,std::allocator<char>>::basic_string" 的第一个引用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(862): note: 查看对正在编译的函数 模板 实例化“void std::basic_string<char,std::char_traits<char>,std::allocator<char>>::_Construct_from_iter<const wchar_t*,const wchar_t*,_Size_type>(_Iter,const _Sent,_Size)”的引用
+        with
+        [
+            _Size_type=std::+::_Size_type,
+            _Iter=const wchar_t *,
+            _Sent=const wchar_t *,
+            _Size=std::+::_Size_type
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(1018): note: 查看对正在编译的函数 模板 实例化“_OutIt *std::_Copy_n_unchecked4<const wchar_t*,_Size,char*>(_InIt,_SizeTy,_OutIt)”的引用
+        with
+        [
+            _OutIt=char *,
+            _Size=std::+::_Size_type,
+            _InIt=const wchar_t *,
+            _SizeTy=std::+::_Size_type
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xutility(522): warning C4244: “初始化”: 从“_Ty”转换到“_Ty”，可能丢失数据
+        with
+        [
+            _Ty=int
+        ]
+        and
+        [
+            _Ty=float
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xutility(522): note: 模板实例化上下文(最早的实例化上下文)为
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(312): note: 查看对正在编译的函数 模板 实例化“void std::_Optional_construct_base<_Ty>::_Assign<int>(_Ty2 &&) noexcept”的引用
+        with
+        [
+            _Ty=float,
+            _Ty2=int
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(168): note: 查看对正在编译的函数 模板 实例化“_Ty &std::_Optional_construct_base<_Ty>::_Construct<int>(int &&) noexcept”的引用
+        with
+        [
+            _Ty=float
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(156): note: 查看对正在编译的函数 模板 实例化“void std::_Construct_in_place<float,_Ty>(float &,_Ty &&) noexcept”的引用
+        with
+        [
+            _Ty=int
+        ]
+[98/103] Linking CXX executable bin\oneui-gallery-tests.exe
+[99/103] Building CXX object CMakeFiles\oneui-authoring-tests.dir\authoring_tests.cpp.obj
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(166): warning C4244: “=”: 从“_Ty”转换到“_Ty”，可能丢失数据
+        with
+        [
+            _Ty=int
+        ]
+        and
+        [
+            _Ty=float
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(166): note: 模板实例化上下文(最早的实例化上下文)为
+E:\project\byname\oneui\include\oneui/ui_native_theme.h(37): note: 查看对正在编译的函数 模板 实例化“std::optional<float> &std::optional<float>::operator =<int,0>(_Ty2 &&) noexcept”的引用
+        with
+        [
+            _Ty2=int
+        ]
+E:\project\byname\oneui\include\oneui/ui_native_theme.h(37): note: 请参阅 "oneui::ui::applyNativeTheme" 中对 "std::optional<float>::operator =" 的第一个引用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(312): note: 查看对正在编译的函数 模板 实例化“void std::_Optional_construct_base<_Ty>::_Assign<int>(_Ty2 &&) noexcept”的引用
+        with
+        [
+            _Ty=float,
+            _Ty2=int
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(82): warning C4244: “初始化”: 从“_Ty”转换到“float”，可能丢失数据
+        with
+        [
+            _Ty=int
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(82): note: 模板实例化上下文(最早的实例化上下文)为
+E:\project\byname\oneui\include\oneui/ui_native_theme.h(37): note: 查看对正在编译的函数 模板 实例化“std::optional<float>::optional<int,0>(_Ty2 &&) noexcept”的引用
+        with
+        [
+            _Ty2=int
+        ]
+E:\project\byname\oneui\include\oneui/ui_declarative.h(372): note: 请参阅 "oneui::ui::Mount::make" 中对 "std::optional<float>::optional" 的第一个引用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(272): note: 查看对正在编译的函数 模板 实例化“std::_Optional_construct_base<_Ty>::_Optional_construct_base<int>(std::in_place_t,int &&)”的引用
+        with
+        [
+            _Ty=float
+        ]
+E:\project\byname\oneui\examples\performance_lab\authoring_tests.cpp(105): note: 查看对正在编译的函数 模板 实例化“std::_Optional_destruct_base<_Ty,true>::_Optional_destruct_base<int>(std::in_place_t,int &&) noexcept”的引用
+        with
+        [
+            _Ty=float
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xutility(4924): warning C4244: “=”: 从“const wchar_t”转换到“char”，可能丢失数据
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xutility(4924): note: 模板实例化上下文(最早的实例化上下文)为
+E:\project\byname\oneui\include\oneui/ui_declarative.h(140): note: 查看对正在编译的函数 模板 实例化“std::basic_string<char,std::char_traits<char>,std::allocator<char>>::basic_string<std::_String_const_iterator<std::_String_val<std::_Simple_types<_Elem>>>,0>(_Iter,_Iter,const _Alloc &)”的引用
+        with
+        [
+            _Elem=wchar_t,
+            _Iter=std::_String_const_iterator<std::_String_val<std::_Simple_types<wchar_t>>>,
+            _Alloc=std::allocator<char>
+        ]
+E:\project\byname\oneui\include\oneui/ui_declarative.h(140): note: 请参阅 "oneui::ui::StyleRegistry::variant" 中对 "std::basic_string<char,std::char_traits<char>,std::allocator<char>>::basic_string" 的第一个引用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(862): note: 查看对正在编译的函数 模板 实例化“void std::basic_string<char,std::char_traits<char>,std::allocator<char>>::_Construct_from_iter<const wchar_t*,const wchar_t*,_Size_type>(_Iter,const _Sent,_Size)”的引用
+        with
+        [
+            _Size_type=std::+::_Size_type,
+            _Iter=const wchar_t *,
+            _Sent=const wchar_t *,
+            _Size=std::+::_Size_type
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(1018): note: 查看对正在编译的函数 模板 实例化“_OutIt *std::_Copy_n_unchecked4<const wchar_t*,_Size,char*>(_InIt,_SizeTy,_OutIt)”的引用
+        with
+        [
+            _OutIt=char *,
+            _Size=std::+::_Size_type,
+            _InIt=const wchar_t *,
+            _SizeTy=std::+::_Size_type
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xutility(522): warning C4244: “初始化”: 从“_Ty”转换到“_Ty”，可能丢失数据
+        with
+        [
+            _Ty=int
+        ]
+        and
+        [
+            _Ty=float
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xutility(522): note: 模板实例化上下文(最早的实例化上下文)为
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(312): note: 查看对正在编译的函数 模板 实例化“void std::_Optional_construct_base<_Ty>::_Assign<int>(_Ty2 &&) noexcept”的引用
+        with
+        [
+            _Ty=float,
+            _Ty2=int
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(168): note: 查看对正在编译的函数 模板 实例化“_Ty &std::_Optional_construct_base<_Ty>::_Construct<int>(int &&) noexcept”的引用
+        with
+        [
+            _Ty=float
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(156): note: 查看对正在编译的函数 模板 实例化“void std::_Construct_in_place<float,_Ty>(float &,_Ty &&) noexcept”的引用
+        with
+        [
+            _Ty=int
+        ]
+[100/103] Linking CXX executable bin\oneui-authoring-tests.exe
+[101/103] Building CXX object CMakeFiles\oneui-performance-lab.dir\main.cpp.obj
+E:\project\byname\oneui\include\oneui/command.h(38): warning C4251: “oneui::CommandScope::data_”:“std::shared_ptr<oneui::CommandScope::Data>”需要有 dll 接口以供“oneui::CommandScope”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\memory(1588): note: 参见“std::shared_ptr<oneui::CommandScope::Data>”的声明
+E:\project\byname\oneui\include\oneui/clipboard.h(23): warning C4251: “oneui::MemoryClipboard::text_”:“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”需要有 dll 接口以供“oneui::MemoryClipboard”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(589): note: 参见“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”的声明
+E:\project\byname\oneui\include\oneui/animation.h(106): warning C4251: “oneui::ColorTransition::from_”:“oneui::Color”需要有 dll 接口以供“oneui::ColorTransition”的客户端使用
+E:\project\byname\oneui\include\oneui/color.h(7): note: 参见“oneui::Color”的声明
+E:\project\byname\oneui\include\oneui/animation.h(107): warning C4251: “oneui::ColorTransition::value_”:“oneui::Color”需要有 dll 接口以供“oneui::ColorTransition”的客户端使用
+E:\project\byname\oneui\include\oneui/color.h(7): note: 参见“oneui::Color”的声明
+E:\project\byname\oneui\include\oneui/animation.h(108): warning C4251: “oneui::ColorTransition::target_”:“oneui::Color”需要有 dll 接口以供“oneui::ColorTransition”的客户端使用
+E:\project\byname\oneui\include\oneui/color.h(7): note: 参见“oneui::Color”的声明
+E:\project\byname\oneui\include\oneui/widget.h(295): warning C4251: “oneui::Widget::diagnosticSource_”:“std::unique_ptr<oneui::DiagnosticSource,std::default_delete<oneui::DiagnosticSource>>”需要有 dll 接口以供“oneui::Widget”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\memory(3376): note: 参见“std::unique_ptr<oneui::DiagnosticSource,std::default_delete<oneui::DiagnosticSource>>”的声明
+E:\project\byname\oneui\include\oneui/widget.h(297): warning C4251: “oneui::Widget::textFontFamily_”:“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”需要有 dll 接口以供“oneui::Widget”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(589): note: 参见“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”的声明
+E:\project\byname\oneui\include\oneui/widget.h(300): warning C4251: “oneui::Widget::onSizeChanged_”:“std::function<void (oneui::Size)>”需要有 dll 接口以供“oneui::Widget”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (oneui::Size)>”的声明
+E:\project\byname\oneui\include\oneui/widget.h(302): warning C4251: “oneui::Widget::invalidator_”:“std::function<void (void)>”需要有 dll 接口以供“oneui::Widget”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (void)>”的声明
+E:\project\byname\oneui\include\oneui/widget.h(303): warning C4251: “oneui::Widget::rectInvalidator_”:“std::function<void (oneui::Rect)>”需要有 dll 接口以供“oneui::Widget”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (oneui::Rect)>”的声明
+E:\project\byname\oneui\include\oneui/widget.h(304): warning C4251: “oneui::Widget::animationScheduler_”:“std::function<void (void)>”需要有 dll 接口以供“oneui::Widget”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (void)>”的声明
+E:\project\byname\oneui\include\oneui/widget.h(309): warning C4251: “oneui::Widget::lifetime_”:“std::shared_ptr<int>”需要有 dll 接口以供“oneui::Widget”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\memory(1588): note: 参见“std::shared_ptr<int>”的声明
+E:\project\byname\oneui\include\oneui/widget.h(317): warning C4251: “oneui::Widget::accessibleName_”:“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”需要有 dll 接口以供“oneui::Widget”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(589): note: 参见“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”的声明
+E:\project\byname\oneui\include\oneui/widget.h(318): warning C4251: “oneui::Widget::accessibleDescription_”:“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”需要有 dll 接口以供“oneui::Widget”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(589): note: 参见“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”的声明
+E:\project\byname\oneui\include\oneui/widget.h(319): warning C4251: “oneui::Widget::tooltip_”:“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”需要有 dll 接口以供“oneui::Widget”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(589): note: 参见“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”的声明
+E:\project\byname\oneui\include\oneui/widget.h(320): warning C4251: “oneui::Widget::accessibleValue_”:“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”需要有 dll 接口以供“oneui::Widget”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(589): note: 参见“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”的声明
+E:\project\byname\oneui\include\oneui/widget.h(322): warning C4251: “oneui::Widget::disabledBinding_”:“oneui::Binding<bool>”需要有 dll 接口以供“oneui::Widget”的客户端使用
+E:\project\byname\oneui\include\oneui/reactive.h(103): note: 参见“oneui::Binding<bool>”的声明
+E:\project\byname\oneui\include\oneui/widget.h(323): warning C4251: “oneui::Widget::visibleBinding_”:“oneui::Binding<bool>”需要有 dll 接口以供“oneui::Widget”的客户端使用
+E:\project\byname\oneui\include\oneui/reactive.h(103): note: 参见“oneui::Binding<bool>”的声明
+E:\project\byname\oneui\include\oneui/widget.h(176): warning C4100: 'available': 未引用的参数
+E:\project\byname\oneui\include\oneui/controls/badge.h(36): warning C4251: “oneui::Badge::text_”:“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”需要有 dll 接口以供“oneui::Badge”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(589): note: 参见“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”的声明
+E:\project\byname\oneui\include\oneui/controls/badge.h(37): warning C4251: “oneui::Badge::textBinding_”:“oneui::Binding<std::wstring>”需要有 dll 接口以供“oneui::Badge”的客户端使用
+E:\project\byname\oneui\include\oneui/reactive.h(103): note: 参见“oneui::Binding<std::wstring>”的声明
+E:\project\byname\oneui\include\oneui/controls/badge.h(39): warning C4251: “oneui::Badge::styleOverride_”:“std::optional<oneui::BadgeStyleOverride>”需要有 dll 接口以供“oneui::Badge”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(227): note: 参见“std::optional<oneui::BadgeStyleOverride>”的声明
+E:\project\byname\oneui\include\oneui/controls/button.h(63): warning C4251: “oneui::Button::text_”:“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”需要有 dll 接口以供“oneui::Button”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(589): note: 参见“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”的声明
+E:\project\byname\oneui\include\oneui/controls/button.h(64): warning C4251: “oneui::Button::textBinding_”:“oneui::Binding<std::wstring>”需要有 dll 接口以供“oneui::Button”的客户端使用
+E:\project\byname\oneui\include\oneui/reactive.h(103): note: 参见“oneui::Binding<std::wstring>”的声明
+E:\project\byname\oneui\include\oneui/controls/button.h(66): warning C4251: “oneui::Button::icon_”:“std::optional<oneui::IconSymbol>”需要有 dll 接口以供“oneui::Button”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(227): note: 参见“std::optional<oneui::IconSymbol>”的声明
+E:\project\byname\oneui\include\oneui/controls/button.h(67): warning C4251: “oneui::Button::trailingIcon_”:“std::optional<oneui::IconSymbol>”需要有 dll 接口以供“oneui::Button”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(227): note: 参见“std::optional<oneui::IconSymbol>”的声明
+E:\project\byname\oneui\include\oneui/controls/button.h(69): warning C4251: “oneui::Button::trailingText_”:“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”需要有 dll 接口以供“oneui::Button”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(589): note: 参见“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”的声明
+E:\project\byname\oneui\include\oneui/controls/button.h(70): warning C4251: “oneui::Button::styleOverride_”:“std::optional<oneui::ButtonStyleOverride>”需要有 dll 接口以供“oneui::Button”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(227): note: 参见“std::optional<oneui::ButtonStyleOverride>”的声明
+E:\project\byname\oneui\include\oneui/controls/button.h(74): warning C4251: “oneui::Button::shadowTransition_”:“oneui::ShadowTransition”需要有 dll 接口以供“oneui::Button”的客户端使用
+E:\project\byname\oneui\include\oneui/effect_transition.h(8): note: 参见“oneui::ShadowTransition”的声明
+E:\project\byname\oneui\include\oneui/controls/button.h(78): warning C4251: “oneui::Button::onClick_”:“std::function<void (void)>”需要有 dll 接口以供“oneui::Button”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (void)>”的声明
+E:\project\byname\oneui\include\oneui/style_sheet.h(127): warning C4251: “oneui::StyleSheet::rules_”:“std::vector<oneui::StyleRule,std::allocator<oneui::StyleRule>>”需要有 dll 接口以供“oneui::StyleSheet”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\vector(442): note: 参见“std::vector<oneui::StyleRule,std::allocator<oneui::StyleRule>>”的声明
+E:\project\byname\oneui\include\oneui/style_sheet.h(130): warning C4251: “oneui::StyleSheet::selectors_”:“std::vector<oneui::StyleSheet::CompiledSelector,std::allocator<oneui::StyleSheet::CompiledSelector>>”需要有 dll 接口以供“oneui::StyleSheet”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\vector(442): note: 参见“std::vector<oneui::StyleSheet::CompiledSelector,std::allocator<oneui::StyleSheet::CompiledSelector>>”的声明
+E:\project\byname\oneui\include\oneui/style_sheet.h(131): warning C4251: “oneui::StyleSheet::customProperties_”:“std::map<std::string,std::string,std::less<std::string>,std::allocator<std::pair<const std::string,std::string>>>”需要有 dll 接口以供“oneui::StyleSheet”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\map(72): note: 参见“std::map<std::string,std::string,std::less<std::string>,std::allocator<std::pair<const std::string,std::string>>>”的声明
+E:\project\byname\oneui\include\oneui/style_sheet.h(132): warning C4251: “oneui::StyleSheet::resolveCache_”:“std::unordered_map<std::string,oneui::StyleBox,std::hash<std::string>,std::equal_to<std::string>,std::allocator<std::pair<const std::string,oneui::StyleBox>>>”需要有 dll 接口以供“oneui::StyleSheet”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\unordered_map(61): note: 参见“std::unordered_map<std::string,oneui::StyleBox,std::hash<std::string>,std::equal_to<std::string>,std::allocator<std::pair<const std::string,oneui::StyleBox>>>”的声明
+E:\project\byname\oneui\include\oneui/view.h(70): warning C4251: “oneui::View::children_”:“std::vector<std::shared_ptr<oneui::Widget>,std::allocator<std::shared_ptr<oneui::Widget>>>”需要有 dll 接口以供“oneui::View”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\vector(442): note: 参见“std::vector<std::shared_ptr<oneui::Widget>,std::allocator<std::shared_ptr<oneui::Widget>>>”的声明
+E:\project\byname\oneui\include\oneui/controls/card.h(27): warning C4251: “oneui::Card::background_”:“oneui::Color”需要有 dll 接口以供“oneui::Card”的客户端使用
+E:\project\byname\oneui\include\oneui/color.h(7): note: 参见“oneui::Color”的声明
+E:\project\byname\oneui\include\oneui/controls/card.h(28): warning C4251: “oneui::Card::border_”:“oneui::Color”需要有 dll 接口以供“oneui::Card”的客户端使用
+E:\project\byname\oneui\include\oneui/color.h(7): note: 参见“oneui::Color”的声明
+E:\project\byname\oneui\include\oneui/controls/card.h(30): warning C4251: “oneui::Card::padding_”:“oneui::Insets”需要有 dll 接口以供“oneui::Card”的客户端使用
+E:\project\byname\oneui\include\oneui/geometry.h(15): note: 参见“oneui::Insets”的声明
+E:\project\byname\oneui\include\oneui/controls/card.h(32): warning C4251: “oneui::Card::styleBox_”:“std::optional<oneui::StyleBox>”需要有 dll 接口以供“oneui::Card”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(227): note: 参见“std::optional<oneui::StyleBox>”的声明
+E:\project\byname\oneui\include\oneui/controls/checkbox.h(40): warning C4251: “oneui::Checkbox::text_”:“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”需要有 dll 接口以供“oneui::Checkbox”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(589): note: 参见“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”的声明
+E:\project\byname\oneui\include\oneui/controls/checkbox.h(44): warning C4251: “oneui::Checkbox::styleOverride_”:“std::optional<oneui::CheckboxStyleOverride>”需要有 dll 接口以供“oneui::Checkbox”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(227): note: 参见“std::optional<oneui::CheckboxStyleOverride>”的声明
+E:\project\byname\oneui\include\oneui/controls/checkbox.h(45): warning C4251: “oneui::Checkbox::checkedBinding_”:“oneui::Binding<bool>”需要有 dll 接口以供“oneui::Checkbox”的客户端使用
+E:\project\byname\oneui\include\oneui/reactive.h(103): note: 参见“oneui::Binding<bool>”的声明
+E:\project\byname\oneui\include\oneui/controls/checkbox.h(46): warning C4251: “oneui::Checkbox::onChanged_”:“std::function<void (bool)>”需要有 dll 接口以供“oneui::Checkbox”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (bool)>”的声明
+E:\project\byname\oneui\include\oneui/controls/validation_message.h(35): warning C4251: “oneui::ValidationMessage::text_”:“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”需要有 dll 接口以供“oneui::ValidationMessage”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(589): note: 参见“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”的声明
+E:\project\byname\oneui\include\oneui/controls/validation_message.h(37): warning C4251: “oneui::ValidationMessage::textBinding_”:“oneui::Binding<std::wstring>”需要有 dll 接口以供“oneui::ValidationMessage”的客户端使用
+E:\project\byname\oneui\include\oneui/reactive.h(103): note: 参见“oneui::Binding<std::wstring>”的声明
+E:\project\byname\oneui\include\oneui/controls/validation_message.h(38): warning C4251: “oneui::ValidationMessage::styleOverride_”:“std::optional<oneui::ValidationMessageStyleOverride>”需要有 dll 接口以供“oneui::ValidationMessage”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(227): note: 参见“std::optional<oneui::ValidationMessageStyleOverride>”的声明
+E:\project\byname\oneui\include\oneui/controls/form_field.h(69): warning C4251: “oneui::FormField::child_”:“std::shared_ptr<oneui::Widget>”需要有 dll 接口以供“oneui::FormField”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\memory(1588): note: 参见“std::shared_ptr<oneui::Widget>”的声明
+E:\project\byname\oneui\include\oneui/controls/form_field.h(70): warning C4251: “oneui::FormField::label_”:“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”需要有 dll 接口以供“oneui::FormField”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(589): note: 参见“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”的声明
+E:\project\byname\oneui\include\oneui/controls/form_field.h(71): warning C4251: “oneui::FormField::helperText_”:“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”需要有 dll 接口以供“oneui::FormField”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(589): note: 参见“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”的声明
+E:\project\byname\oneui\include\oneui/controls/form_field.h(72): warning C4251: “oneui::FormField::errorText_”:“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”需要有 dll 接口以供“oneui::FormField”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(589): note: 参见“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”的声明
+E:\project\byname\oneui\include\oneui/controls/form_field.h(75): warning C4251: “oneui::FormField::labelBinding_”:“oneui::Binding<std::wstring>”需要有 dll 接口以供“oneui::FormField”的客户端使用
+E:\project\byname\oneui\include\oneui/reactive.h(103): note: 参见“oneui::Binding<std::wstring>”的声明
+E:\project\byname\oneui\include\oneui/controls/form_field.h(76): warning C4251: “oneui::FormField::helperTextBinding_”:“oneui::Binding<std::wstring>”需要有 dll 接口以供“oneui::FormField”的客户端使用
+E:\project\byname\oneui\include\oneui/reactive.h(103): note: 参见“oneui::Binding<std::wstring>”的声明
+E:\project\byname\oneui\include\oneui/controls/form_field.h(77): warning C4251: “oneui::FormField::errorTextBinding_”:“oneui::Binding<std::wstring>”需要有 dll 接口以供“oneui::FormField”的客户端使用
+E:\project\byname\oneui\include\oneui/reactive.h(103): note: 参见“oneui::Binding<std::wstring>”的声明
+E:\project\byname\oneui\include\oneui/controls/form_field.h(78): warning C4251: “oneui::FormField::requiredBinding_”:“oneui::Binding<bool>”需要有 dll 接口以供“oneui::FormField”的客户端使用
+E:\project\byname\oneui\include\oneui/reactive.h(103): note: 参见“oneui::Binding<bool>”的声明
+E:\project\byname\oneui\include\oneui/controls/form_field.h(79): warning C4251: “oneui::FormField::invalidBinding_”:“oneui::Binding<bool>”需要有 dll 接口以供“oneui::FormField”的客户端使用
+E:\project\byname\oneui\include\oneui/reactive.h(103): note: 参见“oneui::Binding<bool>”的声明
+E:\project\byname\oneui\include\oneui/controls/form_field.h(80): warning C4251: “oneui::FormField::styleOverride_”:“std::optional<oneui::FormFieldStyleOverride>”需要有 dll 接口以供“oneui::FormField”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(227): note: 参见“std::optional<oneui::FormFieldStyleOverride>”的声明
+E:\project\byname\oneui\include\oneui/controls/form_field.h(81): warning C4251: “oneui::FormField::propagatedAccessibleName_”:“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”需要有 dll 接口以供“oneui::FormField”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(589): note: 参见“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”的声明
+E:\project\byname\oneui\include\oneui/controls/form_field.h(82): warning C4251: “oneui::FormField::propagatedAccessibleDescription_”:“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”需要有 dll 接口以供“oneui::FormField”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(589): note: 参见“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”的声明
+E:\project\byname\oneui\include\oneui/controls/interactive_surface.h(87): warning C4251: “oneui::InteractiveSurface::padding_”:“oneui::Insets”需要有 dll 接口以供“oneui::InteractiveSurface”的客户端使用
+E:\project\byname\oneui\include\oneui/geometry.h(15): note: 参见“oneui::Insets”的声明
+E:\project\byname\oneui\include\oneui/controls/interactive_surface.h(98): warning C4251: “oneui::InteractiveSurface::onDrag_”:“std::function<void (const oneui::PointerDragEvent &)>”需要有 dll 接口以供“oneui::InteractiveSurface”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (const oneui::PointerDragEvent &)>”的声明
+E:\project\byname\oneui\include\oneui/controls/interactive_surface.h(103): warning C4251: “oneui::InteractiveSurface::onClick_”:“std::function<void (void)>”需要有 dll 接口以供“oneui::InteractiveSurface”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (void)>”的声明
+E:\project\byname\oneui\include\oneui/controls/interactive_surface.h(104): warning C4251: “oneui::InteractiveSurface::onPointerActivated_”:“std::function<void (const oneui::MouseEvent &)>”需要有 dll 接口以供“oneui::InteractiveSurface”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (const oneui::MouseEvent &)>”的声明
+E:\project\byname\oneui\include\oneui/controls/interactive_surface.h(105): warning C4251: “oneui::InteractiveSurface::onPointerMoved_”:“std::function<void (const oneui::MouseEvent &)>”需要有 dll 接口以供“oneui::InteractiveSurface”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (const oneui::MouseEvent &)>”的声明
+E:\project\byname\oneui\include\oneui/controls/interactive_surface.h(106): warning C4251: “oneui::InteractiveSurface::onHoverChanged_”:“std::function<void (bool)>”需要有 dll 接口以供“oneui::InteractiveSurface”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (bool)>”的声明
+E:\project\byname\oneui\include\oneui/controls/interactive_surface.h(107): warning C4251: “oneui::InteractiveSurface::onFocusChanged_”:“std::function<void (bool)>”需要有 dll 接口以供“oneui::InteractiveSurface”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (bool)>”的声明
+E:\project\byname\oneui\include\oneui/controls/interactive_surface.h(108): warning C4251: “oneui::InteractiveSurface::onContextMenuRequested_”:“std::function<void (const oneui::MouseEvent &)>”需要有 dll 接口以供“oneui::InteractiveSurface”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (const oneui::MouseEvent &)>”的声明
+E:\project\byname\oneui\include\oneui/controls/icon_button.h(42): warning C4251: “oneui::IconButton::styleSheet_”:“std::shared_ptr<oneui::StyleSheet>”需要有 dll 接口以供“oneui::IconButton”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\memory(1588): note: 参见“std::shared_ptr<oneui::StyleSheet>”的声明
+E:\project\byname\oneui\include\oneui/controls/icon_button.h(44): warning C4251: “oneui::IconButton::onClick_”:“std::function<void (void)>”需要有 dll 接口以供“oneui::IconButton”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (void)>”的声明
+E:\project\byname\oneui\include\oneui/controls/icon_view.h(21): warning C4251: “oneui::IconView::color_”:“oneui::Color”需要有 dll 接口以供“oneui::IconView”的客户端使用
+E:\project\byname\oneui\include\oneui/color.h(7): note: 参见“oneui::Color”的声明
+E:\project\byname\oneui\include\oneui/controls/icon_view.h(22): warning C4251: “oneui::IconView::accent_”:“oneui::Color”需要有 dll 接口以供“oneui::IconView”的客户端使用
+E:\project\byname\oneui\include\oneui/color.h(7): note: 参见“oneui::Color”的声明
+E:\project\byname\oneui\include\oneui/controls/image_view.h(50): warning C4251: “oneui::ImageView::pixels_”:“std::vector<uint8_t,std::allocator<uint8_t>>”需要有 dll 接口以供“oneui::ImageView”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\vector(442): note: 参见“std::vector<uint8_t,std::allocator<uint8_t>>”的声明
+E:\project\byname\oneui\include\oneui/controls/image_view.h(58): warning C4251: “oneui::ImageView::background_”:“oneui::Color”需要有 dll 接口以供“oneui::ImageView”的客户端使用
+E:\project\byname\oneui\include\oneui/color.h(7): note: 参见“oneui::Color”的声明
+E:\project\byname\oneui\include\oneui/controls/log_view.h(74): warning C4251: “oneui::LogView::lines_”:“std::vector<oneui::LogView::LogLine,std::allocator<oneui::LogView::LogLine>>”需要有 dll 接口以供“oneui::LogView”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\vector(442): note: 参见“std::vector<oneui::LogView::LogLine,std::allocator<oneui::LogView::LogLine>>”的声明
+E:\project\byname\oneui\include\oneui/controls/log_view.h(77): warning C4251: “oneui::LogView::padding_”:“oneui::Insets”需要有 dll 接口以供“oneui::LogView”的客户端使用
+E:\project\byname\oneui\include\oneui/geometry.h(15): note: 参见“oneui::Insets”的声明
+E:\project\byname\oneui\include\oneui/controls/log_view.h(78): warning C4251: “oneui::LogView::selectionBackground_”:“oneui::Color”需要有 dll 接口以供“oneui::LogView”的客户端使用
+E:\project\byname\oneui\include\oneui/color.h(7): note: 参见“oneui::Color”的声明
+E:\project\byname\oneui\include\oneui/controls/log_view.h(84): warning C4251: “oneui::LogView::clipboard_”:“std::shared_ptr<oneui::Clipboard>”需要有 dll 接口以供“oneui::LogView”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\memory(1588): note: 参见“std::shared_ptr<oneui::Clipboard>”的声明
+E:\project\byname\oneui\include\oneui/controls/log_view.h(87): warning C4251: “oneui::LogView::layouts_”:“std::vector<std::shared_ptr<oneui::text::Layout>,std::allocator<std::shared_ptr<oneui::text::Layout>>>”需要有 dll 接口以供“oneui::LogView”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\vector(442): note: 参见“std::vector<std::shared_ptr<oneui::text::Layout>,std::allocator<std::shared_ptr<oneui::text::Layout>>>”的声明
+E:\project\byname\oneui\include\oneui/controls/log_view.h(88): warning C4251: “oneui::LogView::layoutFamily_”:“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”需要有 dll 接口以供“oneui::LogView”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(589): note: 参见“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”的声明
+E:\project\byname\oneui\include\oneui/controls/menu.h(69): warning C4251: “oneui::Menu::entries_”:“std::vector<oneui::Menu::Entry,std::allocator<oneui::Menu::Entry>>”需要有 dll 接口以供“oneui::Menu”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\vector(442): note: 参见“std::vector<oneui::Menu::Entry,std::allocator<oneui::Menu::Entry>>”的声明
+E:\project\byname\oneui\include\oneui/controls/menu.h(73): warning C4251: “oneui::Menu::lastPointerPosition_”:“std::optional<oneui::Point>”需要有 dll 接口以供“oneui::Menu”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(227): note: 参见“std::optional<oneui::Point>”的声明
+E:\project\byname\oneui\include\oneui/controls/menu.h(75): warning C4251: “oneui::Menu::onItemActivated_”:“std::function<void (int)>”需要有 dll 接口以供“oneui::Menu”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (int)>”的声明
+E:\project\byname\oneui\include\oneui/controls/menu.h(76): warning C4251: “oneui::Menu::styleSheet_”:“std::shared_ptr<oneui::StyleSheet>”需要有 dll 接口以供“oneui::Menu”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\memory(1588): note: 参见“std::shared_ptr<oneui::StyleSheet>”的声明
+E:\project\byname\oneui\include\oneui/controls/status_strip.h(62): warning C4251: “oneui::StatusStrip::title_”:“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”需要有 dll 接口以供“oneui::StatusStrip”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(589): note: 参见“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”的声明
+E:\project\byname\oneui\include\oneui/controls/status_strip.h(63): warning C4251: “oneui::StatusStrip::message_”:“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”需要有 dll 接口以供“oneui::StatusStrip”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(589): note: 参见“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”的声明
+E:\project\byname\oneui\include\oneui/controls/status_strip.h(65): warning C4251: “oneui::StatusStrip::primaryAction_”:“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”需要有 dll 接口以供“oneui::StatusStrip”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(589): note: 参见“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”的声明
+E:\project\byname\oneui\include\oneui/controls/status_strip.h(66): warning C4251: “oneui::StatusStrip::secondaryAction_”:“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”需要有 dll 接口以供“oneui::StatusStrip”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(589): note: 参见“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”的声明
+E:\project\byname\oneui\include\oneui/controls/status_strip.h(68): warning C4251: “oneui::StatusStrip::primaryActionTrailingIcon_”:“std::optional<oneui::IconSymbol>”需要有 dll 接口以供“oneui::StatusStrip”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(227): note: 参见“std::optional<oneui::IconSymbol>”的声明
+E:\project\byname\oneui\include\oneui/controls/status_strip.h(69): warning C4251: “oneui::StatusStrip::onPrimaryAction_”:“std::function<void (void)>”需要有 dll 接口以供“oneui::StatusStrip”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (void)>”的声明
+E:\project\byname\oneui\include\oneui/controls/status_strip.h(70): warning C4251: “oneui::StatusStrip::onSecondaryAction_”:“std::function<void (void)>”需要有 dll 接口以供“oneui::StatusStrip”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (void)>”的声明
+E:\project\byname\oneui\include\oneui/controls/status_strip.h(71): warning C4251: “oneui::StatusStrip::styleSheet_”:“std::shared_ptr<oneui::StyleSheet>”需要有 dll 接口以供“oneui::StatusStrip”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\memory(1588): note: 参见“std::shared_ptr<oneui::StyleSheet>”的声明
+E:\project\byname\oneui\include\oneui/controls/tile.h(41): warning C4251: “oneui::Tile::title_”:“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”需要有 dll 接口以供“oneui::Tile”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(589): note: 参见“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”的声明
+E:\project\byname\oneui\include\oneui/controls/tile.h(42): warning C4251: “oneui::Tile::subtitle_”:“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”需要有 dll 接口以供“oneui::Tile”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(589): note: 参见“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”的声明
+E:\project\byname\oneui\include\oneui/controls/tile.h(43): warning C4251: “oneui::Tile::leadingSymbol_”:“std::optional<oneui::IconSymbol>”需要有 dll 接口以供“oneui::Tile”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(227): note: 参见“std::optional<oneui::IconSymbol>”的声明
+E:\project\byname\oneui\include\oneui/controls/tile.h(44): warning C4251: “oneui::Tile::trailingSymbol_”:“std::optional<oneui::IconSymbol>”需要有 dll 接口以供“oneui::Tile”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(227): note: 参见“std::optional<oneui::IconSymbol>”的声明
+E:\project\byname\oneui\include\oneui/controls/tile.h(45): warning C4251: “oneui::Tile::styleSheet_”:“std::shared_ptr<oneui::StyleSheet>”需要有 dll 接口以供“oneui::Tile”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\memory(1588): note: 参见“std::shared_ptr<oneui::StyleSheet>”的声明
+E:\project\byname\oneui\include\oneui/controls/tile.h(47): warning C4251: “oneui::Tile::onClick_”:“std::function<void (void)>”需要有 dll 接口以供“oneui::Tile”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (void)>”的声明
+E:\project\byname\oneui\include\oneui/controls/time_series_chart.h(89): warning C4251: “oneui::TimeSeriesChart::series_”:“std::vector<oneui::TimeSeriesChartSeries,std::allocator<oneui::TimeSeriesChartSeries>>”需要有 dll 接口以供“oneui::TimeSeriesChart”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\vector(442): note: 参见“std::vector<oneui::TimeSeriesChartSeries,std::allocator<oneui::TimeSeriesChartSeries>>”的声明
+E:\project\byname\oneui\include\oneui/controls/time_series_chart.h(90): warning C4251: “oneui::TimeSeriesChart::thresholds_”:“std::vector<oneui::TimeSeriesChartThreshold,std::allocator<oneui::TimeSeriesChartThreshold>>”需要有 dll 接口以供“oneui::TimeSeriesChart”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\vector(442): note: 参见“std::vector<oneui::TimeSeriesChartThreshold,std::allocator<oneui::TimeSeriesChartThreshold>>”的声明
+E:\project\byname\oneui\include\oneui/controls/time_series_chart.h(96): warning C4251: “oneui::TimeSeriesChart::gridColor_”:“std::optional<oneui::Color>”需要有 dll 接口以供“oneui::TimeSeriesChart”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(227): note: 参见“std::optional<oneui::Color>”的声明
+E:\project\byname\oneui\include\oneui/controls/time_series_chart.h(97): warning C4251: “oneui::TimeSeriesChart::axisLabels_”:“std::vector<std::wstring,std::allocator<std::wstring>>”需要有 dll 接口以供“oneui::TimeSeriesChart”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\vector(442): note: 参见“std::vector<std::wstring,std::allocator<std::wstring>>”的声明
+E:\project\byname\oneui\include\oneui/controls/time_series_chart.h(98): warning C4251: “oneui::TimeSeriesChart::axisLabelColor_”:“std::optional<oneui::Color>”需要有 dll 接口以供“oneui::TimeSeriesChart”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(227): note: 参见“std::optional<oneui::Color>”的声明
+E:\project\byname\oneui\include\oneui/controls/time_series_chart.h(101): warning C4251: “oneui::TimeSeriesChart::samplePositions_”:“std::vector<double,std::allocator<double>>”需要有 dll 接口以供“oneui::TimeSeriesChart”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\vector(442): note: 参见“std::vector<double,std::allocator<double>>”的声明
+E:\project\byname\oneui\include\oneui/controls/time_series_chart.h(111): warning C4251: “oneui::TimeSeriesChart::plotInsets_”:“oneui::Insets”需要有 dll 接口以供“oneui::TimeSeriesChart”的客户端使用
+E:\project\byname\oneui\include\oneui/geometry.h(15): note: 参见“oneui::Insets”的声明
+E:\project\byname\oneui\include\oneui/controls/time_series_chart.h(115): warning C4251: “oneui::TimeSeriesChart::onInspectionChanged_”:“std::function<void (int,bool)>”需要有 dll 接口以供“oneui::TimeSeriesChart”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (int,bool)>”的声明
+E:\project\byname\oneui\include\oneui/controls/toast.h(59): warning C4251: “oneui::Toast::title_”:“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”需要有 dll 接口以供“oneui::Toast”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(589): note: 参见“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”的声明
+E:\project\byname\oneui\include\oneui/controls/toast.h(60): warning C4251: “oneui::Toast::message_”:“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”需要有 dll 接口以供“oneui::Toast”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(589): note: 参见“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”的声明
+E:\project\byname\oneui\include\oneui/controls/toast.h(61): warning C4251: “oneui::Toast::primaryAction_”:“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”需要有 dll 接口以供“oneui::Toast”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(589): note: 参见“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”的声明
+E:\project\byname\oneui\include\oneui/controls/toast.h(62): warning C4251: “oneui::Toast::secondaryAction_”:“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”需要有 dll 接口以供“oneui::Toast”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(589): note: 参见“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”的声明
+E:\project\byname\oneui\include\oneui/controls/toast.h(63): warning C4251: “oneui::Toast::iconSymbol_”:“std::optional<oneui::IconSymbol>”需要有 dll 接口以供“oneui::Toast”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(227): note: 参见“std::optional<oneui::IconSymbol>”的声明
+E:\project\byname\oneui\include\oneui/controls/toast.h(65): warning C4251: “oneui::Toast::onPrimaryAction_”:“std::function<void (void)>”需要有 dll 接口以供“oneui::Toast”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (void)>”的声明
+E:\project\byname\oneui\include\oneui/controls/toast.h(66): warning C4251: “oneui::Toast::onSecondaryAction_”:“std::function<void (void)>”需要有 dll 接口以供“oneui::Toast”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (void)>”的声明
+E:\project\byname\oneui\include\oneui/controls/toast.h(67): warning C4251: “oneui::Toast::onClose_”:“std::function<void (void)>”需要有 dll 接口以供“oneui::Toast”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (void)>”的声明
+E:\project\byname\oneui\include\oneui/controls/toast.h(68): warning C4251: “oneui::Toast::styleSheet_”:“std::shared_ptr<oneui::StyleSheet>”需要有 dll 接口以供“oneui::Toast”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\memory(1588): note: 参见“std::shared_ptr<oneui::StyleSheet>”的声明
+E:\project\byname\oneui\include\oneui/controls/list.h(55): warning C4251: “oneui::List::items_”:“std::vector<oneui::ListItem,std::allocator<oneui::ListItem>>”需要有 dll 接口以供“oneui::List”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\vector(442): note: 参见“std::vector<oneui::ListItem,std::allocator<oneui::ListItem>>”的声明
+E:\project\byname\oneui\include\oneui/controls/list.h(60): warning C4251: “oneui::List::selectedBinding_”:“oneui::Binding<int>”需要有 dll 接口以供“oneui::List”的客户端使用
+E:\project\byname\oneui\include\oneui/reactive.h(103): note: 参见“oneui::Binding<int>”的声明
+E:\project\byname\oneui\include\oneui/controls/list.h(61): warning C4251: “oneui::List::styleOverride_”:“std::optional<oneui::ListStyleOverride>”需要有 dll 接口以供“oneui::List”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(227): note: 参见“std::optional<oneui::ListStyleOverride>”的声明
+E:\project\byname\oneui\include\oneui/controls/list.h(62): warning C4251: “oneui::List::onChanged_”:“std::function<void (int)>”需要有 dll 接口以供“oneui::List”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (int)>”的声明
+E:\project\byname\oneui\include\oneui/selection_model.h(45): warning C4251: “oneui::SelectionModel::selectedIndices_”:“std::vector<int,std::allocator<int>>”需要有 dll 接口以供“oneui::SelectionModel”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\vector(442): note: 参见“std::vector<int,std::allocator<int>>”的声明
+E:\project\byname\oneui\include\oneui/controls/virtual_list.h(110): warning C4251: “oneui::VirtualList::items_”:“std::vector<oneui::VirtualListItem,std::allocator<oneui::VirtualListItem>>”需要有 dll 接口以供“oneui::VirtualList”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\vector(442): note: 参见“std::vector<oneui::VirtualListItem,std::allocator<oneui::VirtualListItem>>”的声明
+E:\project\byname\oneui\include\oneui/controls/virtual_list.h(131): warning C4251: “oneui::VirtualList::styleOverride_”:“std::optional<oneui::ListStyleOverride>”需要有 dll 接口以供“oneui::VirtualList”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(227): note: 参见“std::optional<oneui::ListStyleOverride>”的声明
+E:\project\byname\oneui\include\oneui/controls/virtual_list.h(132): warning C4251: “oneui::VirtualList::onChanged_”:“std::function<void (int)>”需要有 dll 接口以供“oneui::VirtualList”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (int)>”的声明
+E:\project\byname\oneui\include\oneui/controls/virtual_list.h(133): warning C4251: “oneui::VirtualList::onSelectionChanged_”:“std::function<void (const std::vector<int,std::allocator<int>> &)>”需要有 dll 接口以供“oneui::VirtualList”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (const std::vector<int,std::allocator<int>> &)>”的声明
+E:\project\byname\oneui\include\oneui/controls/virtual_list.h(134): warning C4251: “oneui::VirtualList::onActivated_”:“std::function<void (int)>”需要有 dll 接口以供“oneui::VirtualList”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (int)>”的声明
+E:\project\byname\oneui\include\oneui/controls/virtual_list.h(135): warning C4251: “oneui::VirtualList::onEditRequested_”:“std::function<void (int)>”需要有 dll 接口以供“oneui::VirtualList”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (int)>”的声明
+E:\project\byname\oneui\include\oneui/controls/virtual_list.h(136): warning C4251: “oneui::VirtualList::onDeleteRequested_”:“std::function<void (const std::vector<int,std::allocator<int>> &)>”需要有 dll 接口以供“oneui::VirtualList”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (const std::vector<int,std::allocator<int>> &)>”的声明
+E:\project\byname\oneui\include\oneui/controls/virtual_list.h(137): warning C4251: “oneui::VirtualList::onContextMenuRequested_”:“std::function<void (int,oneui::Point)>”需要有 dll 接口以供“oneui::VirtualList”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (int,oneui::Point)>”的声明
+E:\project\byname\oneui\include\oneui/controls/virtual_list.h(138): warning C4251: “oneui::VirtualList::onReorderRequested_”:“std::function<void (int,int)>”需要有 dll 接口以供“oneui::VirtualList”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (int,int)>”的声明
+E:\project\byname\oneui\include\oneui/controls/virtual_list.h(139): warning C4251: “oneui::VirtualList::itemDragIds_”:“std::vector<std::wstring,std::allocator<std::wstring>>”需要有 dll 接口以供“oneui::VirtualList”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\vector(442): note: 参见“std::vector<std::wstring,std::allocator<std::wstring>>”的声明
+E:\project\byname\oneui\include\oneui/controls/virtual_list.h(140): warning C4251: “oneui::VirtualList::onItemDrag_”:“std::function<void (const oneui::ItemDragEvent &)>”需要有 dll 接口以供“oneui::VirtualList”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (const oneui::ItemDragEvent &)>”的声明
+E:\project\byname\oneui\include\oneui/controls/window_title_bar.h(78): warning C4251: “oneui::WindowTitleBar::title_”:“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”需要有 dll 接口以供“oneui::WindowTitleBar”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(589): note: 参见“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”的声明
+E:\project\byname\oneui\include\oneui/controls/window_title_bar.h(79): warning C4251: “oneui::WindowTitleBar::variant_”:“std::basic_string<char,std::char_traits<char>,std::allocator<char>>”需要有 dll 接口以供“oneui::WindowTitleBar”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(589): note: 参见“std::basic_string<char,std::char_traits<char>,std::allocator<char>>”的声明
+E:\project\byname\oneui\include\oneui/controls/window_title_bar.h(80): warning C4251: “oneui::WindowTitleBar::presentation_”:“std::optional<oneui::TitleBarPresentation>”需要有 dll 接口以供“oneui::WindowTitleBar”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(227): note: 参见“std::optional<oneui::TitleBarPresentation>”的声明
+E:\project\byname\oneui\include\oneui/controls/window_title_bar.h(82): warning C4251: “oneui::WindowTitleBar::styleSheet_”:“std::shared_ptr<oneui::StyleSheet>”需要有 dll 接口以供“oneui::WindowTitleBar”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\memory(1588): note: 参见“std::shared_ptr<oneui::StyleSheet>”的声明
+E:\project\byname\oneui\include\oneui/controls/window_title_bar.h(83): warning C4251: “oneui::WindowTitleBar::leading_”:“std::shared_ptr<oneui::Widget>”需要有 dll 接口以供“oneui::WindowTitleBar”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\memory(1588): note: 参见“std::shared_ptr<oneui::Widget>”的声明
+E:\project\byname\oneui\include\oneui/controls/window_title_bar.h(84): warning C4251: “oneui::WindowTitleBar::accessory_”:“std::shared_ptr<oneui::Widget>”需要有 dll 接口以供“oneui::WindowTitleBar”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\memory(1588): note: 参见“std::shared_ptr<oneui::Widget>”的声明
+E:\project\byname\oneui\include\oneui/controls/window_title_bar.h(101): warning C4251: “oneui::WindowTitleBar::onMinimize_”:“std::function<void (void)>”需要有 dll 接口以供“oneui::WindowTitleBar”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (void)>”的声明
+E:\project\byname\oneui\include\oneui/controls/window_title_bar.h(102): warning C4251: “oneui::WindowTitleBar::onMaximize_”:“std::function<void (void)>”需要有 dll 接口以供“oneui::WindowTitleBar”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (void)>”的声明
+E:\project\byname\oneui\include\oneui/controls/window_title_bar.h(103): warning C4251: “oneui::WindowTitleBar::onClose_”:“std::function<void (void)>”需要有 dll 接口以供“oneui::WindowTitleBar”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (void)>”的声明
+E:\project\byname\oneui\include\oneui/controls/label.h(57): warning C4251: “oneui::Label::text_”:“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”需要有 dll 接口以供“oneui::Label”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(589): note: 参见“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”的声明
+E:\project\byname\oneui\include\oneui/controls/label.h(58): warning C4251: “oneui::Label::textBinding_”:“oneui::Binding<std::wstring>”需要有 dll 接口以供“oneui::Label”的客户端使用
+E:\project\byname\oneui\include\oneui/reactive.h(103): note: 参见“oneui::Binding<std::wstring>”的声明
+E:\project\byname\oneui\include\oneui/controls/label.h(59): warning C4251: “oneui::Label::color_”:“oneui::Color”需要有 dll 接口以供“oneui::Label”的客户端使用
+E:\project\byname\oneui\include\oneui/color.h(7): note: 参见“oneui::Color”的声明
+E:\project\byname\oneui\include\oneui/controls/label.h(69): warning C4251: “oneui::Label::textSpans_”:“std::vector<oneui::TextStyleSpan,std::allocator<oneui::TextStyleSpan>>”需要有 dll 接口以供“oneui::Label”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\vector(442): note: 参见“std::vector<oneui::TextStyleSpan,std::allocator<oneui::TextStyleSpan>>”的声明
+E:\project\byname\oneui\include\oneui/layout/overlay_host.h(116): warning C4251: “oneui::OverlayHost::overlays_”:“std::vector<oneui::OverlayEntry,std::allocator<oneui::OverlayEntry>>”需要有 dll 接口以供“oneui::OverlayHost”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\vector(442): note: 参见“std::vector<oneui::OverlayEntry,std::allocator<oneui::OverlayEntry>>”的声明
+E:\project\byname\oneui\include\oneui/layout/overlay_host.h(117): warning C4251: “oneui::OverlayHost::content_”:“std::shared_ptr<oneui::Widget>”需要有 dll 接口以供“oneui::OverlayHost”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\memory(1588): note: 参见“std::shared_ptr<oneui::Widget>”的声明
+E:\project\byname\oneui\include\oneui/layout/overlay_host.h(118): warning C4251: “oneui::OverlayHost::overlayFocusHistory_”:“std::vector<oneui::OverlayHost::OverlayFocusRecord,std::allocator<oneui::OverlayHost::OverlayFocusRecord>>”需要有 dll 接口以供“oneui::OverlayHost”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\vector(442): note: 参见“std::vector<oneui::OverlayHost::OverlayFocusRecord,std::allocator<oneui::OverlayHost::OverlayFocusRecord>>”的声明
+E:\project\byname\oneui\include\oneui/controls/popup.h(117): warning C4251: “oneui::Popup::anchor_”:“std::shared_ptr<oneui::Widget>”需要有 dll 接口以供“oneui::Popup”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\memory(1588): note: 参见“std::shared_ptr<oneui::Widget>”的声明
+E:\project\byname\oneui\include\oneui/controls/popup.h(118): warning C4251: “oneui::Popup::content_”:“std::shared_ptr<oneui::Widget>”需要有 dll 接口以供“oneui::Popup”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\memory(1588): note: 参见“std::shared_ptr<oneui::Widget>”的声明
+E:\project\byname\oneui\include\oneui/controls/popup.h(120): warning C4251: “oneui::Popup::onClosed_”:“std::function<void (void)>”需要有 dll 接口以供“oneui::Popup”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (void)>”的声明
+E:\project\byname\oneui\include\oneui/controls/popup.h(121): warning C4251: “oneui::Popup::openBinding_”:“oneui::Binding<bool>”需要有 dll 接口以供“oneui::Popup”的客户端使用
+E:\project\byname\oneui\include\oneui/reactive.h(103): note: 参见“oneui::Binding<bool>”的声明
+E:\project\byname\oneui\include\oneui/controls/popup.h(123): warning C4251: “oneui::Popup::viewport_”:“std::optional<oneui::Rect>”需要有 dll 接口以供“oneui::Popup”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(227): note: 参见“std::optional<oneui::Rect>”的声明
+E:\project\byname\oneui\include\oneui/controls/popup.h(124): warning C4251: “oneui::Popup::anchorRect_”:“std::optional<oneui::Rect>”需要有 dll 接口以供“oneui::Popup”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(227): note: 参见“std::optional<oneui::Rect>”的声明
+E:\project\byname\oneui\include\oneui/controls/popup.h(125): warning C4251: “oneui::Popup::styleOverride_”:“std::optional<oneui::PopupStyleOverride>”需要有 dll 接口以供“oneui::Popup”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(227): note: 参见“std::optional<oneui::PopupStyleOverride>”的声明
+E:\project\byname\oneui\include\oneui/controls/progress_bar.h(52): warning C4251: “oneui::ProgressBar::segments_”:“std::vector<oneui::ProgressSegment,std::allocator<oneui::ProgressSegment>>”需要有 dll 接口以供“oneui::ProgressBar”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\vector(442): note: 参见“std::vector<oneui::ProgressSegment,std::allocator<oneui::ProgressSegment>>”的声明
+E:\project\byname\oneui\include\oneui/controls/progress_bar.h(53): warning C4251: “oneui::ProgressBar::valueBinding_”:“oneui::Binding<double>”需要有 dll 接口以供“oneui::ProgressBar”的客户端使用
+E:\project\byname\oneui\include\oneui/reactive.h(103): note: 参见“oneui::Binding<double>”的声明
+E:\project\byname\oneui\include\oneui/controls/progress_bar.h(61): warning C4251: “oneui::ProgressBar::styleOverride_”:“std::optional<oneui::ProgressBarStyleOverride>”需要有 dll 接口以供“oneui::ProgressBar”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(227): note: 参见“std::optional<oneui::ProgressBarStyleOverride>”的声明
+E:\project\byname\oneui\include\oneui/controls/radio_group.h(50): warning C4251: “oneui::RadioGroup::items_”:“std::vector<std::wstring,std::allocator<std::wstring>>”需要有 dll 接口以供“oneui::RadioGroup”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\vector(442): note: 参见“std::vector<std::wstring,std::allocator<std::wstring>>”的声明
+E:\project\byname\oneui\include\oneui/controls/radio_group.h(55): warning C4251: “oneui::RadioGroup::selectedBinding_”:“oneui::Binding<int>”需要有 dll 接口以供“oneui::RadioGroup”的客户端使用
+E:\project\byname\oneui\include\oneui/reactive.h(103): note: 参见“oneui::Binding<int>”的声明
+E:\project\byname\oneui\include\oneui/controls/radio_group.h(56): warning C4251: “oneui::RadioGroup::styleOverride_”:“std::optional<oneui::RadioGroupStyleOverride>”需要有 dll 接口以供“oneui::RadioGroup”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(227): note: 参见“std::optional<oneui::RadioGroupStyleOverride>”的声明
+E:\project\byname\oneui\include\oneui/controls/radio_group.h(57): warning C4251: “oneui::RadioGroup::onChanged_”:“std::function<void (int)>”需要有 dll 接口以供“oneui::RadioGroup”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (int)>”的声明
+E:\project\byname\oneui\include\oneui/controls/realtime_frame_view.h(118): warning C4251: “oneui::RealtimeFrameView::backgroundColor_”:“oneui::Color”需要有 dll 接口以供“oneui::RealtimeFrameView”的客户端使用
+E:\project\byname\oneui\include\oneui/color.h(7): note: 参见“oneui::Color”的声明
+E:\project\byname\oneui\include\oneui/controls/realtime_frame_view.h(119): warning C4251: “oneui::RealtimeFrameView::latestFrame_”:“std::shared_ptr<oneui::RealtimeFrameView::StoredVideoFrame>”需要有 dll 接口以供“oneui::RealtimeFrameView”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\memory(1588): note: 参见“std::shared_ptr<oneui::RealtimeFrameView::StoredVideoFrame>”的声明
+E:\project\byname\oneui\include\oneui/controls/remote_input_region.h(133): warning C4251: “oneui::RemoteInputRegion::onPointer_”:“std::function<void (const oneui::RemotePointerEvent &)>”需要有 dll 接口以供“oneui::RemoteInputRegion”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (const oneui::RemotePointerEvent &)>”的声明
+E:\project\byname\oneui\include\oneui/controls/remote_input_region.h(134): warning C4251: “oneui::RemoteInputRegion::onRawKey_”:“std::function<void (const oneui::RawKeyEvent &)>”需要有 dll 接口以供“oneui::RemoteInputRegion”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (const oneui::RawKeyEvent &)>”的声明
+E:\project\byname\oneui\include\oneui/controls/remote_input_region.h(135): warning C4251: “oneui::RemoteInputRegion::onTextInput_”:“std::function<void (const T &)>”需要有 dll 接口以供“oneui::RemoteInputRegion”的客户端使用
+        with
+        [
+            T=std::wstring
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (const T &)>”的声明
+        with
+        [
+            T=std::wstring
+        ]
+E:\project\byname\oneui\include\oneui/controls/remote_input_region.h(136): warning C4251: “oneui::RemoteInputRegion::pressedButtons_”:“std::set<oneui::PointerButton,std::less<oneui::PointerButton>,std::allocator<oneui::PointerButton>>”需要有 dll 接口以供“oneui::RemoteInputRegion”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\set(51): note: 参见“std::set<oneui::PointerButton,std::less<oneui::PointerButton>,std::allocator<oneui::PointerButton>>”的声明
+E:\project\byname\oneui\include\oneui/controls/remote_input_region.h(137): warning C4251: “oneui::RemoteInputRegion::pressedKeys_”:“std::set<oneui::RemoteInputRegion::RawKeyIdentity,std::less<oneui::RemoteInputRegion::RawKeyIdentity>,std::allocator<oneui::RemoteInputRegion::RawKeyIdentity>>”需要有 dll 接口以供“oneui::RemoteInputRegion”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\set(51): note: 参见“std::set<oneui::RemoteInputRegion::RawKeyIdentity,std::less<oneui::RemoteInputRegion::RawKeyIdentity>,std::allocator<oneui::RemoteInputRegion::RawKeyIdentity>>”的声明
+E:\project\byname\oneui\include\oneui/controls/remote_input_region.h(138): warning C4251: “oneui::RemoteInputRegion::textInputKeys_”:“std::set<oneui::RemoteInputRegion::RawKeyIdentity,std::less<oneui::RemoteInputRegion::RawKeyIdentity>,std::allocator<oneui::RemoteInputRegion::RawKeyIdentity>>”需要有 dll 接口以供“oneui::RemoteInputRegion”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\set(51): note: 参见“std::set<oneui::RemoteInputRegion::RawKeyIdentity,std::less<oneui::RemoteInputRegion::RawKeyIdentity>,std::allocator<oneui::RemoteInputRegion::RawKeyIdentity>>”的声明
+E:\project\byname\oneui\include\oneui/controls/select.h(71): warning C4251: “oneui::Select::items_”:“std::vector<std::wstring,std::allocator<std::wstring>>”需要有 dll 接口以供“oneui::Select”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\vector(442): note: 参见“std::vector<std::wstring,std::allocator<std::wstring>>”的声明
+E:\project\byname\oneui\include\oneui/controls/select.h(74): warning C4251: “oneui::Select::lastHoverPosition_”:“std::optional<oneui::Point>”需要有 dll 接口以供“oneui::Select”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(227): note: 参见“std::optional<oneui::Point>”的声明
+E:\project\byname\oneui\include\oneui/controls/select.h(76): warning C4251: “oneui::Select::selectedBinding_”:“oneui::Binding<int>”需要有 dll 接口以供“oneui::Select”的客户端使用
+E:\project\byname\oneui\include\oneui/reactive.h(103): note: 参见“oneui::Binding<int>”的声明
+E:\project\byname\oneui\include\oneui/controls/select.h(77): warning C4251: “oneui::Select::styleOverride_”:“std::optional<oneui::SelectStyleOverride>”需要有 dll 接口以供“oneui::Select”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(227): note: 参见“std::optional<oneui::SelectStyleOverride>”的声明
+E:\project\byname\oneui\include\oneui/controls/select.h(78): warning C4251: “oneui::Select::popupViewport_”:“std::optional<oneui::Rect>”需要有 dll 接口以供“oneui::Select”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(227): note: 参见“std::optional<oneui::Rect>”的声明
+E:\project\byname\oneui\include\oneui/controls/select.h(79): warning C4251: “oneui::Select::onChanged_”:“std::function<void (int)>”需要有 dll 接口以供“oneui::Select”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (int)>”的声明
+E:\project\byname\oneui\include\oneui/controls/separator.h(31): warning C4251: “oneui::Separator::styleOverride_”:“std::optional<oneui::SeparatorStyleOverride>”需要有 dll 接口以供“oneui::Separator”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(227): note: 参见“std::optional<oneui::SeparatorStyleOverride>”的声明
+E:\project\byname\oneui\include\oneui/controls/slider.h(57): warning C4251: “oneui::Slider::styleOverride_”:“std::optional<oneui::SliderStyleOverride>”需要有 dll 接口以供“oneui::Slider”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(227): note: 参见“std::optional<oneui::SliderStyleOverride>”的声明
+E:\project\byname\oneui\include\oneui/controls/slider.h(58): warning C4251: “oneui::Slider::valueBinding_”:“oneui::Binding<double>”需要有 dll 接口以供“oneui::Slider”的客户端使用
+E:\project\byname\oneui\include\oneui/reactive.h(103): note: 参见“oneui::Binding<double>”的声明
+E:\project\byname\oneui\include\oneui/controls/slider.h(59): warning C4251: “oneui::Slider::onChanged_”:“std::function<void (double)>”需要有 dll 接口以供“oneui::Slider”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (double)>”的声明
+E:\project\byname\oneui\include\oneui/controls/slider.h(60): warning C4251: “oneui::Slider::onInteraction_”:“std::function<void (oneui::SliderInteraction,double)>”需要有 dll 接口以供“oneui::Slider”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (oneui::SliderInteraction,double)>”的声明
+E:\project\byname\oneui\include\oneui/controls/sparkline.h(28): warning C4251: “oneui::Sparkline::values_”:“std::vector<double,std::allocator<double>>”需要有 dll 接口以供“oneui::Sparkline”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\vector(442): note: 参见“std::vector<double,std::allocator<double>>”的声明
+E:\project\byname\oneui\include\oneui/controls/sparkline.h(29): warning C4251: “oneui::Sparkline::styleBox_”:“std::optional<oneui::StyleBox>”需要有 dll 接口以供“oneui::Sparkline”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(227): note: 参见“std::optional<oneui::StyleBox>”的声明
+E:\project\byname\oneui\include\oneui/controls/state_view.h(54): warning C4251: “oneui::StateView::title_”:“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”需要有 dll 接口以供“oneui::StateView”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(589): note: 参见“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”的声明
+E:\project\byname\oneui\include\oneui/controls/state_view.h(55): warning C4251: “oneui::StateView::message_”:“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”需要有 dll 接口以供“oneui::StateView”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(589): note: 参见“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”的声明
+E:\project\byname\oneui\include\oneui/controls/state_view.h(59): warning C4251: “oneui::StateView::action_”:“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”需要有 dll 接口以供“oneui::StateView”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(589): note: 参见“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”的声明
+E:\project\byname\oneui\include\oneui/controls/state_view.h(60): warning C4251: “oneui::StateView::onAction_”:“std::function<void (void)>”需要有 dll 接口以供“oneui::StateView”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (void)>”的声明
+E:\project\byname\oneui\include\oneui/controls/state_view.h(61): warning C4251: “oneui::StateView::styleSheet_”:“std::shared_ptr<oneui::StyleSheet>”需要有 dll 接口以供“oneui::StateView”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\memory(1588): note: 参见“std::shared_ptr<oneui::StyleSheet>”的声明
+E:\project\byname\oneui\include\oneui/controls/switch.h(41): warning C4251: “oneui::Switch::text_”:“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”需要有 dll 接口以供“oneui::Switch”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(589): note: 参见“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”的声明
+E:\project\byname\oneui\include\oneui/controls/switch.h(45): warning C4251: “oneui::Switch::checkedBinding_”:“oneui::Binding<bool>”需要有 dll 接口以供“oneui::Switch”的客户端使用
+E:\project\byname\oneui\include\oneui/reactive.h(103): note: 参见“oneui::Binding<bool>”的声明
+E:\project\byname\oneui\include\oneui/controls/switch.h(46): warning C4251: “oneui::Switch::onChanged_”:“std::function<void (bool)>”需要有 dll 接口以供“oneui::Switch”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (bool)>”的声明
+E:\project\byname\oneui\include\oneui/controls/switch.h(47): warning C4251: “oneui::Switch::styleOverride_”:“std::optional<oneui::SwitchStyleOverride>”需要有 dll 接口以供“oneui::Switch”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(227): note: 参见“std::optional<oneui::SwitchStyleOverride>”的声明
+E:\project\byname\oneui\include\oneui/controls/text_field.h(110): warning C4251: “oneui::TextField::textLayout_”:“std::unique_ptr<oneui::TextField::TextLayoutState,std::default_delete<oneui::TextField::TextLayoutState>>”需要有 dll 接口以供“oneui::TextField”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\memory(3376): note: 参见“std::unique_ptr<oneui::TextField::TextLayoutState,std::default_delete<oneui::TextField::TextLayoutState>>”的声明
+E:\project\byname\oneui\include\oneui/controls/text_field.h(114): warning C4251: “oneui::TextField::verticalCaretX_”:“std::optional<float>”需要有 dll 接口以供“oneui::TextField”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(227): note: 参见“std::optional<float>”的声明
+E:\project\byname\oneui\include\oneui/controls/text_field.h(155): warning C4251: “oneui::TextField::placeholder_”:“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”需要有 dll 接口以供“oneui::TextField”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(589): note: 参见“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”的声明
+E:\project\byname\oneui\include\oneui/controls/text_field.h(157): warning C4251: “oneui::TextField::text_”:“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”需要有 dll 接口以供“oneui::TextField”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(589): note: 参见“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”的声明
+E:\project\byname\oneui\include\oneui/controls/text_field.h(158): warning C4251: “oneui::TextField::composition_”:“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”需要有 dll 接口以供“oneui::TextField”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(589): note: 参见“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”的声明
+E:\project\byname\oneui\include\oneui/controls/text_field.h(179): warning C4251: “oneui::TextField::prefixIcon_”:“std::optional<oneui::IconSymbol>”需要有 dll 接口以供“oneui::TextField”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(227): note: 参见“std::optional<oneui::IconSymbol>”的声明
+E:\project\byname\oneui\include\oneui/controls/text_field.h(180): warning C4251: “oneui::TextField::suffixIcon_”:“std::optional<oneui::IconSymbol>”需要有 dll 接口以供“oneui::TextField”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(227): note: 参见“std::optional<oneui::IconSymbol>”的声明
+E:\project\byname\oneui\include\oneui/controls/text_field.h(182): warning C4251: “oneui::TextField::styleOverride_”:“std::optional<oneui::TextFieldStyleOverride>”需要有 dll 接口以供“oneui::TextField”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(227): note: 参见“std::optional<oneui::TextFieldStyleOverride>”的声明
+E:\project\byname\oneui\include\oneui/controls/text_field.h(183): warning C4251: “oneui::TextField::clipboard_”:“std::shared_ptr<oneui::Clipboard>”需要有 dll 接口以供“oneui::TextField”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\memory(1588): note: 参见“std::shared_ptr<oneui::Clipboard>”的声明
+E:\project\byname\oneui\include\oneui/controls/text_field.h(184): warning C4251: “oneui::TextField::textBinding_”:“oneui::Binding<std::wstring>”需要有 dll 接口以供“oneui::TextField”的客户端使用
+E:\project\byname\oneui\include\oneui/reactive.h(103): note: 参见“oneui::Binding<std::wstring>”的声明
+E:\project\byname\oneui\include\oneui/controls/text_field.h(185): warning C4251: “oneui::TextField::shadowTransition_”:“oneui::ShadowTransition”需要有 dll 接口以供“oneui::TextField”的客户端使用
+E:\project\byname\oneui\include\oneui/effect_transition.h(8): note: 参见“oneui::ShadowTransition”的声明
+E:\project\byname\oneui\include\oneui/controls/text_field.h(190): warning C4251: “oneui::TextField::onChanged_”:“std::function<void (const T &)>”需要有 dll 接口以供“oneui::TextField”的客户端使用
+        with
+        [
+            T=std::wstring
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (const T &)>”的声明
+        with
+        [
+            T=std::wstring
+        ]
+E:\project\byname\oneui\include\oneui/controls/text_field.h(191): warning C4251: “oneui::TextField::onSubmitted_”:“std::function<void (const T &)>”需要有 dll 接口以供“oneui::TextField”的客户端使用
+        with
+        [
+            T=std::wstring
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (const T &)>”的声明
+        with
+        [
+            T=std::wstring
+        ]
+E:\project\byname\oneui\include\oneui/controls/text_field.h(192): warning C4251: “oneui::TextField::undoStack_”:“std::vector<oneui::TextField::TextEditEntry,std::allocator<oneui::TextField::TextEditEntry>>”需要有 dll 接口以供“oneui::TextField”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\vector(442): note: 参见“std::vector<oneui::TextField::TextEditEntry,std::allocator<oneui::TextField::TextEditEntry>>”的声明
+E:\project\byname\oneui\include\oneui/controls/text_field.h(193): warning C4251: “oneui::TextField::redoStack_”:“std::vector<oneui::TextField::TextEditEntry,std::allocator<oneui::TextField::TextEditEntry>>”需要有 dll 接口以供“oneui::TextField”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\vector(442): note: 参见“std::vector<oneui::TextField::TextEditEntry,std::allocator<oneui::TextField::TextEditEntry>>”的声明
+E:\project\byname\oneui\include\oneui/controls/tabs.h(106): warning C4251: “oneui::Tabs::editor_”:“std::shared_ptr<oneui::TextField>”需要有 dll 接口以供“oneui::Tabs”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\memory(1588): note: 参见“std::shared_ptr<oneui::TextField>”的声明
+E:\project\byname\oneui\include\oneui/controls/tabs.h(107): warning C4251: “oneui::Tabs::onEditFinished_”:“std::function<void (int,const std::wstring &,oneui::TabEditReason)>”需要有 dll 接口以供“oneui::Tabs”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (int,const std::wstring &,oneui::TabEditReason)>”的声明
+E:\project\byname\oneui\include\oneui/controls/tabs.h(109): warning C4251: “oneui::Tabs::items_”:“std::vector<std::wstring,std::allocator<std::wstring>>”需要有 dll 接口以供“oneui::Tabs”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\vector(442): note: 参见“std::vector<std::wstring,std::allocator<std::wstring>>”的声明
+E:\project\byname\oneui\include\oneui/controls/tabs.h(110): warning C4251: “oneui::Tabs::itemIcons_”:“std::vector<std::optional<oneui::IconSymbol>,std::allocator<std::optional<oneui::IconSymbol>>>”需要有 dll 接口以供“oneui::Tabs”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\vector(442): note: 参见“std::vector<std::optional<oneui::IconSymbol>,std::allocator<std::optional<oneui::IconSymbol>>>”的声明
+E:\project\byname\oneui\include\oneui/controls/tabs.h(124): warning C4251: “oneui::Tabs::compactItemOffsets_”:“std::vector<float,std::allocator<float>>”需要有 dll 接口以供“oneui::Tabs”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\vector(442): note: 参见“std::vector<float,std::allocator<float>>”的声明
+E:\project\byname\oneui\include\oneui/controls/tabs.h(125): warning C4251: “oneui::Tabs::documentItemOffsets_”:“std::vector<float,std::allocator<float>>”需要有 dll 接口以供“oneui::Tabs”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\vector(442): note: 参见“std::vector<float,std::allocator<float>>”的声明
+E:\project\byname\oneui\include\oneui/controls/tabs.h(129): warning C4251: “oneui::Tabs::onOverflowChanged_”:“std::function<void (int)>”需要有 dll 接口以供“oneui::Tabs”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (int)>”的声明
+E:\project\byname\oneui\include\oneui/controls/tabs.h(130): warning C4251: “oneui::Tabs::itemStatusColors_”:“std::vector<oneui::Color,std::allocator<oneui::Color>>”需要有 dll 接口以供“oneui::Tabs”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\vector(442): note: 参见“std::vector<oneui::Color,std::allocator<oneui::Color>>”的声明
+E:\project\byname\oneui\include\oneui/controls/tabs.h(133): warning C4251: “oneui::Tabs::selectedBinding_”:“oneui::Binding<int>”需要有 dll 接口以供“oneui::Tabs”的客户端使用
+E:\project\byname\oneui\include\oneui/reactive.h(103): note: 参见“oneui::Binding<int>”的声明
+E:\project\byname\oneui\include\oneui/controls/tabs.h(134): warning C4251: “oneui::Tabs::styleOverride_”:“std::optional<oneui::TabsStyleOverride>”需要有 dll 接口以供“oneui::Tabs”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(227): note: 参见“std::optional<oneui::TabsStyleOverride>”的声明
+E:\project\byname\oneui\include\oneui/controls/tabs.h(135): warning C4251: “oneui::Tabs::onChanged_”:“std::function<void (int)>”需要有 dll 接口以供“oneui::Tabs”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (int)>”的声明
+E:\project\byname\oneui\include\oneui/controls/tabs.h(136): warning C4251: “oneui::Tabs::onCloseRequested_”:“std::function<void (int)>”需要有 dll 接口以供“oneui::Tabs”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (int)>”的声明
+E:\project\byname\oneui\include\oneui/controls/tabs.h(137): warning C4251: “oneui::Tabs::onContextMenuRequested_”:“std::function<void (int,oneui::Point)>”需要有 dll 接口以供“oneui::Tabs”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (int,oneui::Point)>”的声明
+E:\project\byname\oneui\include\oneui/controls/tabs.h(138): warning C4251: “oneui::Tabs::onReorderRequested_”:“std::function<void (int,int)>”需要有 dll 接口以供“oneui::Tabs”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (int,int)>”的声明
+E:\project\byname\oneui\include\oneui/controls/table.h(121): warning C4251: “oneui::Table::columns_”:“std::vector<oneui::TableColumn,std::allocator<oneui::TableColumn>>”需要有 dll 接口以供“oneui::Table”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\vector(442): note: 参见“std::vector<oneui::TableColumn,std::allocator<oneui::TableColumn>>”的声明
+E:\project\byname\oneui\include\oneui/controls/table.h(122): warning C4251: “oneui::Table::rows_”:“std::vector<std::vector<std::wstring,std::allocator<std::wstring>>,std::allocator<std::vector<std::wstring,std::allocator<std::wstring>>>>”需要有 dll 接口以供“oneui::Table”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\vector(442): note: 参见“std::vector<std::vector<std::wstring,std::allocator<std::wstring>>,std::allocator<std::vector<std::wstring,std::allocator<std::wstring>>>>”的声明
+E:\project\byname\oneui\include\oneui/controls/table.h(123): warning C4251: “oneui::Table::richRows_”:“std::vector<std::vector<oneui::TableCell,std::allocator<oneui::TableCell>>,std::allocator<std::vector<oneui::TableCell,std::allocator<oneui::TableCell>>>>”需要有 dll 接口以供“oneui::Table”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\vector(442): note: 参见“std::vector<std::vector<oneui::TableCell,std::allocator<oneui::TableCell>>,std::allocator<std::vector<oneui::TableCell,std::allocator<oneui::TableCell>>>>”的声明
+E:\project\byname\oneui\include\oneui/controls/table.h(134): warning C4251: “oneui::Table::headerHeight_”:“std::optional<float>”需要有 dll 接口以供“oneui::Table”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(227): note: 参见“std::optional<float>”的声明
+E:\project\byname\oneui\include\oneui/controls/table.h(135): warning C4251: “oneui::Table::onCellAction_”:“std::function<void (int,int)>”需要有 dll 接口以供“oneui::Table”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (int,int)>”的声明
+E:\project\byname\oneui\include\oneui/controls/table.h(155): warning C4251: “oneui::Table::styleOverride_”:“std::optional<oneui::TableStyleOverride>”需要有 dll 接口以供“oneui::Table”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(227): note: 参见“std::optional<oneui::TableStyleOverride>”的声明
+E:\project\byname\oneui\include\oneui/controls/table.h(156): warning C4251: “oneui::Table::onChanged_”:“std::function<void (int)>”需要有 dll 接口以供“oneui::Table”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (int)>”的声明
+E:\project\byname\oneui\include\oneui/controls/table.h(157): warning C4251: “oneui::Table::onSelectionChanged_”:“std::function<void (const std::vector<int,std::allocator<int>> &)>”需要有 dll 接口以供“oneui::Table”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (const std::vector<int,std::allocator<int>> &)>”的声明
+E:\project\byname\oneui\include\oneui/controls/table.h(158): warning C4251: “oneui::Table::onActivated_”:“std::function<void (int)>”需要有 dll 接口以供“oneui::Table”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (int)>”的声明
+E:\project\byname\oneui\include\oneui/controls/table.h(159): warning C4251: “oneui::Table::onEditRequested_”:“std::function<void (int)>”需要有 dll 接口以供“oneui::Table”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (int)>”的声明
+E:\project\byname\oneui\include\oneui/controls/table.h(160): warning C4251: “oneui::Table::onDeleteRequested_”:“std::function<void (const std::vector<int,std::allocator<int>> &)>”需要有 dll 接口以供“oneui::Table”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (const std::vector<int,std::allocator<int>> &)>”的声明
+E:\project\byname\oneui\include\oneui/controls/table.h(161): warning C4251: “oneui::Table::onContextMenuRequested_”:“std::function<void (int,oneui::Point)>”需要有 dll 接口以供“oneui::Table”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (int,oneui::Point)>”的声明
+E:\project\byname\oneui\include\oneui/controls/table.h(162): warning C4251: “oneui::Table::onReorderRequested_”:“std::function<void (int,int)>”需要有 dll 接口以供“oneui::Table”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (int,int)>”的声明
+E:\project\byname\oneui\include\oneui/controls/table.h(163): warning C4251: “oneui::Table::itemDragIds_”:“std::vector<std::wstring,std::allocator<std::wstring>>”需要有 dll 接口以供“oneui::Table”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\vector(442): note: 参见“std::vector<std::wstring,std::allocator<std::wstring>>”的声明
+E:\project\byname\oneui\include\oneui/controls/table.h(164): warning C4251: “oneui::Table::onItemDrag_”:“std::function<void (const oneui::ItemDragEvent &)>”需要有 dll 接口以供“oneui::Table”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (const oneui::ItemDragEvent &)>”的声明
+E:\project\byname\oneui\include\oneui/controls/terminal_view.h(286): warning C4251: “oneui::TerminalView::cells_”:“std::vector<oneui::TerminalCell,std::allocator<oneui::TerminalCell>>”需要有 dll 接口以供“oneui::TerminalView”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\vector(442): note: 参见“std::vector<oneui::TerminalCell,std::allocator<oneui::TerminalCell>>”的声明
+E:\project\byname\oneui\include\oneui/controls/terminal_view.h(298): warning C4251: “oneui::TerminalView::fontFamily_”:“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”需要有 dll 接口以供“oneui::TerminalView”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(589): note: 参见“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”的声明
+E:\project\byname\oneui\include\oneui/controls/terminal_view.h(303): warning C4251: “oneui::TerminalView::background_”:“oneui::Color”需要有 dll 接口以供“oneui::TerminalView”的客户端使用
+E:\project\byname\oneui\include\oneui/color.h(7): note: 参见“oneui::Color”的声明
+E:\project\byname\oneui\include\oneui/controls/terminal_view.h(304): warning C4251: “oneui::TerminalView::foreground_”:“oneui::Color”需要有 dll 接口以供“oneui::TerminalView”的客户端使用
+E:\project\byname\oneui\include\oneui/color.h(7): note: 参见“oneui::Color”的声明
+E:\project\byname\oneui\include\oneui/controls/terminal_view.h(305): warning C4251: “oneui::TerminalView::cursorColor_”:“oneui::Color”需要有 dll 接口以供“oneui::TerminalView”的客户端使用
+E:\project\byname\oneui\include\oneui/color.h(7): note: 参见“oneui::Color”的声明
+E:\project\byname\oneui\include\oneui/controls/terminal_view.h(306): warning C4251: “oneui::TerminalView::selectionBackground_”:“oneui::Color”需要有 dll 接口以供“oneui::TerminalView”的客户端使用
+E:\project\byname\oneui\include\oneui/color.h(7): note: 参见“oneui::Color”的声明
+E:\project\byname\oneui\include\oneui/controls/terminal_view.h(318): warning C4251: “oneui::TerminalView::clipboard_”:“std::shared_ptr<oneui::Clipboard>”需要有 dll 接口以供“oneui::TerminalView”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\memory(1588): note: 参见“std::shared_ptr<oneui::Clipboard>”的声明
+E:\project\byname\oneui\include\oneui/controls/terminal_view.h(319): warning C4251: “oneui::TerminalView::onTextInput_”:“std::function<void (const T &)>”需要有 dll 接口以供“oneui::TerminalView”的客户端使用
+        with
+        [
+            T=std::wstring
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (const T &)>”的声明
+        with
+        [
+            T=std::wstring
+        ]
+E:\project\byname\oneui\include\oneui/controls/terminal_view.h(320): warning C4251: “oneui::TerminalView::onPaste_”:“std::function<void (const T &)>”需要有 dll 接口以供“oneui::TerminalView”的客户端使用
+        with
+        [
+            T=std::wstring
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (const T &)>”的声明
+        with
+        [
+            T=std::wstring
+        ]
+E:\project\byname\oneui\include\oneui/controls/terminal_view.h(321): warning C4251: “oneui::TerminalView::onRawKey_”:“std::function<void (const oneui::KeyEvent &)>”需要有 dll 接口以供“oneui::TerminalView”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (const oneui::KeyEvent &)>”的声明
+E:\project\byname\oneui\include\oneui/controls/terminal_view.h(322): warning C4251: “oneui::TerminalView::onScroll_”:“std::function<void (int)>”需要有 dll 接口以供“oneui::TerminalView”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (int)>”的声明
+E:\project\byname\oneui\include\oneui/controls/terminal_view.h(323): warning C4251: “oneui::TerminalView::onPointer_”:“std::function<void (const oneui::TerminalPointerEvent &)>”需要有 dll 接口以供“oneui::TerminalView”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (const oneui::TerminalPointerEvent &)>”的声明
+E:\project\byname\oneui\include\oneui/controls/terminal_view.h(324): warning C4251: “oneui::TerminalView::onHyperlink_”:“std::function<void (uint32_t)>”需要有 dll 接口以供“oneui::TerminalView”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (uint32_t)>”的声明
+E:\project\byname\oneui\include\oneui/controls/terminal_view.h(325): warning C4251: “oneui::TerminalView::onViewportChanged_”:“std::function<void (oneui::TerminalViewport)>”需要有 dll 接口以供“oneui::TerminalView”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (oneui::TerminalViewport)>”的声明
+E:\project\byname\oneui\include\oneui/controls/terminal_view.h(326): warning C4251: “oneui::TerminalView::onFocusChanged_”:“std::function<void (bool)>”需要有 dll 接口以供“oneui::TerminalView”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (bool)>”的声明
+E:\project\byname\oneui\include\oneui/controls/tree_view.h(89): warning C4251: “oneui::TreeView::items_”:“std::vector<oneui::TreeItem,std::allocator<oneui::TreeItem>>”需要有 dll 接口以供“oneui::TreeView”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\vector(442): note: 参见“std::vector<oneui::TreeItem,std::allocator<oneui::TreeItem>>”的声明
+E:\project\byname\oneui\include\oneui/controls/tree_view.h(90): warning C4251: “oneui::TreeView::idToIndex_”:“std::unordered_map<std::wstring,size_t,std::hash<std::wstring>,std::equal_to<std::wstring>,std::allocator<std::pair<const std::wstring,size_t>>>”需要有 dll 接口以供“oneui::TreeView”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\unordered_map(61): note: 参见“std::unordered_map<std::wstring,size_t,std::hash<std::wstring>,std::equal_to<std::wstring>,std::allocator<std::pair<const std::wstring,size_t>>>”的声明
+E:\project\byname\oneui\include\oneui/controls/tree_view.h(91): warning C4251: “oneui::TreeView::children_”:“std::vector<std::vector<size_t,std::allocator<size_t>>,std::allocator<std::vector<size_t,std::allocator<size_t>>>>”需要有 dll 接口以供“oneui::TreeView”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\vector(442): note: 参见“std::vector<std::vector<size_t,std::allocator<size_t>>,std::allocator<std::vector<size_t,std::allocator<size_t>>>>”的声明
+E:\project\byname\oneui\include\oneui/controls/tree_view.h(92): warning C4251: “oneui::TreeView::roots_”:“std::vector<size_t,std::allocator<size_t>>”需要有 dll 接口以供“oneui::TreeView”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\vector(442): note: 参见“std::vector<size_t,std::allocator<size_t>>”的声明
+E:\project\byname\oneui\include\oneui/controls/tree_view.h(93): warning C4251: “oneui::TreeView::expandedIds_”:“std::unordered_set<std::wstring,std::hash<std::wstring>,std::equal_to<std::wstring>,std::allocator<std::wstring>>”需要有 dll 接口以供“oneui::TreeView”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\unordered_set(59): note: 参见“std::unordered_set<std::wstring,std::hash<std::wstring>,std::equal_to<std::wstring>,std::allocator<std::wstring>>”的声明
+E:\project\byname\oneui\include\oneui/controls/tree_view.h(94): warning C4251: “oneui::TreeView::selectedId_”:“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”需要有 dll 接口以供“oneui::TreeView”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(589): note: 参见“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”的声明
+E:\project\byname\oneui\include\oneui/controls/tree_view.h(105): warning C4251: “oneui::TreeView::externalDropTargetId_”:“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”需要有 dll 接口以供“oneui::TreeView”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(589): note: 参见“std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>”的声明
+E:\project\byname\oneui\include\oneui/controls/tree_view.h(106): warning C4251: “oneui::TreeView::styleOverride_”:“std::optional<oneui::ListStyleOverride>”需要有 dll 接口以供“oneui::TreeView”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(227): note: 参见“std::optional<oneui::ListStyleOverride>”的声明
+E:\project\byname\oneui\include\oneui/controls/tree_view.h(107): warning C4251: “oneui::TreeView::onSelectionChanged_”:“std::function<void (const T &)>”需要有 dll 接口以供“oneui::TreeView”的客户端使用
+        with
+        [
+            T=std::wstring
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (const T &)>”的声明
+        with
+        [
+            T=std::wstring
+        ]
+E:\project\byname\oneui\include\oneui/controls/tree_view.h(108): warning C4251: “oneui::TreeView::onExpansionChanged_”:“std::function<void (const std::wstring &,bool)>”需要有 dll 接口以供“oneui::TreeView”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (const std::wstring &,bool)>”的声明
+E:\project\byname\oneui\include\oneui/controls/tree_view.h(109): warning C4251: “oneui::TreeView::onReorderRequested_”:“std::function<void (const std::wstring &,const std::wstring &)>”需要有 dll 接口以供“oneui::TreeView”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (const std::wstring &,const std::wstring &)>”的声明
+E:\project\byname\oneui\include\oneui/layout/app_shell.h(45): warning C4251: “oneui::AppShell::sidebar_”:“std::shared_ptr<oneui::Widget>”需要有 dll 接口以供“oneui::AppShell”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\memory(1588): note: 参见“std::shared_ptr<oneui::Widget>”的声明
+E:\project\byname\oneui\include\oneui/layout/app_shell.h(46): warning C4251: “oneui::AppShell::header_”:“std::shared_ptr<oneui::Widget>”需要有 dll 接口以供“oneui::AppShell”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\memory(1588): note: 参见“std::shared_ptr<oneui::Widget>”的声明
+E:\project\byname\oneui\include\oneui/layout/app_shell.h(47): warning C4251: “oneui::AppShell::content_”:“std::shared_ptr<oneui::Widget>”需要有 dll 接口以供“oneui::AppShell”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\memory(1588): note: 参见“std::shared_ptr<oneui::Widget>”的声明
+E:\project\byname\oneui\include\oneui/layout/app_shell.h(48): warning C4251: “oneui::AppShell::footer_”:“std::shared_ptr<oneui::Widget>”需要有 dll 接口以供“oneui::AppShell”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\memory(1588): note: 参见“std::shared_ptr<oneui::Widget>”的声明
+E:\project\byname\oneui\include\oneui/layout/app_shell.h(49): warning C4251: “oneui::AppShell::padding_”:“oneui::Insets”需要有 dll 接口以供“oneui::AppShell”的客户端使用
+E:\project\byname\oneui\include\oneui/geometry.h(15): note: 参见“oneui::Insets”的声明
+E:\project\byname\oneui\include\oneui/layout/app_shell.h(56): warning C4251: “oneui::AppShell::styleBox_”:“std::optional<oneui::StyleBox>”需要有 dll 接口以供“oneui::AppShell”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(227): note: 参见“std::optional<oneui::StyleBox>”的声明
+E:\project\byname\oneui\include\oneui/layout/dock_view.h(25): warning C4251: “oneui::DockView::top_”:“std::shared_ptr<oneui::Widget>”需要有 dll 接口以供“oneui::DockView”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\memory(1588): note: 参见“std::shared_ptr<oneui::Widget>”的声明
+E:\project\byname\oneui\include\oneui/layout/dock_view.h(26): warning C4251: “oneui::DockView::right_”:“std::shared_ptr<oneui::Widget>”需要有 dll 接口以供“oneui::DockView”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\memory(1588): note: 参见“std::shared_ptr<oneui::Widget>”的声明
+E:\project\byname\oneui\include\oneui/layout/dock_view.h(27): warning C4251: “oneui::DockView::bottom_”:“std::shared_ptr<oneui::Widget>”需要有 dll 接口以供“oneui::DockView”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\memory(1588): note: 参见“std::shared_ptr<oneui::Widget>”的声明
+E:\project\byname\oneui\include\oneui/layout/dock_view.h(28): warning C4251: “oneui::DockView::left_”:“std::shared_ptr<oneui::Widget>”需要有 dll 接口以供“oneui::DockView”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\memory(1588): note: 参见“std::shared_ptr<oneui::Widget>”的声明
+E:\project\byname\oneui\include\oneui/layout/dock_view.h(29): warning C4251: “oneui::DockView::center_”:“std::shared_ptr<oneui::Widget>”需要有 dll 接口以供“oneui::DockView”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\memory(1588): note: 参见“std::shared_ptr<oneui::Widget>”的声明
+E:\project\byname\oneui\include\oneui/layout/dock_view.h(31): warning C4251: “oneui::DockView::padding_”:“oneui::Insets”需要有 dll 接口以供“oneui::DockView”的客户端使用
+E:\project\byname\oneui\include\oneui/geometry.h(15): note: 参见“oneui::Insets”的声明
+E:\project\byname\oneui\include\oneui/layout/grid.h(27): warning C4251: “oneui::Grid::padding_”:“oneui::Insets”需要有 dll 接口以供“oneui::Grid”的客户端使用
+E:\project\byname\oneui\include\oneui/geometry.h(15): note: 参见“oneui::Insets”的声明
+E:\project\byname\oneui\include\oneui/layout/scroll_view.h(57): warning C4251: “oneui::ScrollView::content_”:“std::shared_ptr<oneui::Widget>”需要有 dll 接口以供“oneui::ScrollView”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\memory(1588): note: 参见“std::shared_ptr<oneui::Widget>”的声明
+E:\project\byname\oneui\include\oneui/layout/scroll_view.h(67): warning C4251: “oneui::ScrollView::scrollbarColor_”:“oneui::Color”需要有 dll 接口以供“oneui::ScrollView”的客户端使用
+E:\project\byname\oneui\include\oneui/color.h(7): note: 参见“oneui::Color”的声明
+E:\project\byname\oneui\include\oneui/layout/scroll_view.h(70): warning C4251: “oneui::ScrollView::styleBox_”:“std::optional<oneui::StyleBox>”需要有 dll 接口以供“oneui::ScrollView”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(227): note: 参见“std::optional<oneui::StyleBox>”的声明
+E:\project\byname\oneui\include\oneui/layout/split_view.h(60): warning C4251: “oneui::SplitView::divider_”:“std::shared_ptr<oneui::SplitView::Divider>”需要有 dll 接口以供“oneui::SplitView”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\memory(1588): note: 参见“std::shared_ptr<oneui::SplitView::Divider>”的声明
+E:\project\byname\oneui\include\oneui/layout/split_view.h(65): warning C4251: “oneui::SplitView::first_”:“std::shared_ptr<oneui::Widget>”需要有 dll 接口以供“oneui::SplitView”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\memory(1588): note: 参见“std::shared_ptr<oneui::Widget>”的声明
+E:\project\byname\oneui\include\oneui/layout/split_view.h(66): warning C4251: “oneui::SplitView::second_”:“std::shared_ptr<oneui::Widget>”需要有 dll 接口以供“oneui::SplitView”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\memory(1588): note: 参见“std::shared_ptr<oneui::Widget>”的声明
+E:\project\byname\oneui\include\oneui/layout/split_view.h(72): warning C4251: “oneui::SplitView::padding_”:“oneui::Insets”需要有 dll 接口以供“oneui::SplitView”的客户端使用
+E:\project\byname\oneui\include\oneui/geometry.h(15): note: 参见“oneui::Insets”的声明
+E:\project\byname\oneui\include\oneui/layout/split_view.h(77): warning C4251: “oneui::SplitView::dividerColor_”:“oneui::Color”需要有 dll 接口以供“oneui::SplitView”的客户端使用
+E:\project\byname\oneui\include\oneui/color.h(7): note: 参见“oneui::Color”的声明
+E:\project\byname\oneui\include\oneui/layout/split_view.h(78): warning C4251: “oneui::SplitView::dividerActiveColor_”:“oneui::Color”需要有 dll 接口以供“oneui::SplitView”的客户端使用
+E:\project\byname\oneui\include\oneui/color.h(7): note: 参见“oneui::Color”的声明
+E:\project\byname\oneui\include\oneui/layout/split_view.h(82): warning C4251: “oneui::SplitView::onSplitRatioChanged_”:“std::function<void (float)>”需要有 dll 接口以供“oneui::SplitView”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (float)>”的声明
+E:\project\byname\oneui\include\oneui/layout/split_view.h(83): warning C4251: “oneui::SplitView::onSplitRatioCommitted_”:“std::function<void (float)>”需要有 dll 接口以供“oneui::SplitView”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (float)>”的声明
+E:\project\byname\oneui\include\oneui/layout/stack.h(77): warning C4251: “oneui::Stack::yoga_”:“std::shared_ptr<oneui::Stack::YogaState>”需要有 dll 接口以供“oneui::Stack”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\memory(1588): note: 参见“std::shared_ptr<oneui::Stack::YogaState>”的声明
+E:\project\byname\oneui\include\oneui/layout/stack.h(88): warning C4251: “oneui::Stack::padding_”:“oneui::Insets”需要有 dll 接口以供“oneui::Stack”的客户端使用
+E:\project\byname\oneui\include\oneui/geometry.h(15): note: 参见“oneui::Insets”的声明
+E:\project\byname\oneui\include\oneui/layout/stack.h(91): warning C4251: “oneui::Stack::flex_”:“std::map<std::weak_ptr<_Ty>,oneui::StackFlex,std::owner_less<std::weak_ptr<_Ty>>,std::allocator<std::pair<const std::weak_ptr<_Ty>,oneui::StackFlex>>>”需要有 dll 接口以供“oneui::Stack”的客户端使用
+        with
+        [
+            _Ty=oneui::Widget
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\map(72): note: 参见“std::map<std::weak_ptr<_Ty>,oneui::StackFlex,std::owner_less<std::weak_ptr<_Ty>>,std::allocator<std::pair<const std::weak_ptr<_Ty>,oneui::StackFlex>>>”的声明
+        with
+        [
+            _Ty=oneui::Widget
+        ]
+E:\project\byname\oneui\include\oneui/layout/stack.h(97): warning C4251: “oneui::Stack::layoutItems_”:“std::vector<oneui::Stack::FlexItem,std::allocator<oneui::Stack::FlexItem>>”需要有 dll 接口以供“oneui::Stack”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\vector(442): note: 参见“std::vector<oneui::Stack::FlexItem,std::allocator<oneui::Stack::FlexItem>>”的声明
+E:\project\byname\oneui\include\oneui/layout/stack.h(100): warning C4251: “oneui::Stack::styleBox_”:“std::optional<oneui::StyleBox>”需要有 dll 接口以供“oneui::Stack”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(227): note: 参见“std::optional<oneui::StyleBox>”的声明
+E:\project\byname\oneui\include\oneui/layout/wrap.h(20): warning C4251: “oneui::Wrap::padding_”:“oneui::Insets”需要有 dll 接口以供“oneui::Wrap”的客户端使用
+E:\project\byname\oneui\include\oneui/geometry.h(15): note: 参见“oneui::Insets”的声明
+E:\project\byname\oneui\include\oneui/layout/top_bar.h(34): warning C4251: “oneui::TopBar::leading_”:“std::shared_ptr<oneui::Widget>”需要有 dll 接口以供“oneui::TopBar”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\memory(1588): note: 参见“std::shared_ptr<oneui::Widget>”的声明
+E:\project\byname\oneui\include\oneui/layout/top_bar.h(35): warning C4251: “oneui::TopBar::actions_”:“std::vector<std::shared_ptr<oneui::Widget>,std::allocator<std::shared_ptr<oneui::Widget>>>”需要有 dll 接口以供“oneui::TopBar”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\vector(442): note: 参见“std::vector<std::shared_ptr<oneui::Widget>,std::allocator<std::shared_ptr<oneui::Widget>>>”的声明
+E:\project\byname\oneui\include\oneui/layout/top_bar.h(36): warning C4251: “oneui::TopBar::padding_”:“oneui::Insets”需要有 dll 接口以供“oneui::TopBar”的客户端使用
+E:\project\byname\oneui\include\oneui/geometry.h(15): note: 参见“oneui::Insets”的声明
+E:\project\byname\oneui\include\oneui/layout/top_bar.h(39): warning C4251: “oneui::TopBar::styleBox_”:“std::optional<oneui::StyleBox>”需要有 dll 接口以供“oneui::TopBar”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(227): note: 参见“std::optional<oneui::StyleBox>”的声明
+E:\project\byname\oneui\include\oneui/layout/reorderable_grid.h(73): warning C4251: “oneui::ReorderableGrid::items_”:“std::vector<oneui::ReorderableGridItem,std::allocator<oneui::ReorderableGridItem>>”需要有 dll 接口以供“oneui::ReorderableGrid”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\vector(442): note: 参见“std::vector<oneui::ReorderableGridItem,std::allocator<oneui::ReorderableGridItem>>”的声明
+E:\project\byname\oneui\include\oneui/layout/reorderable_grid.h(74): warning C4251: “oneui::ReorderableGrid::itemIds_”:“std::unordered_set<std::wstring,std::hash<std::wstring>,std::equal_to<std::wstring>,std::allocator<std::wstring>>”需要有 dll 接口以供“oneui::ReorderableGrid”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\unordered_set(59): note: 参见“std::unordered_set<std::wstring,std::hash<std::wstring>,std::equal_to<std::wstring>,std::allocator<std::wstring>>”的声明
+E:\project\byname\oneui\include\oneui/layout/reorderable_grid.h(89): warning C4251: “oneui::ReorderableGrid::onReorderRequested_”:“std::function<void (const std::wstring &,int)>”需要有 dll 接口以供“oneui::ReorderableGrid”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (const std::wstring &,int)>”的声明
+E:\project\byname\oneui\include\oneui/layout/reorderable_grid.h(90): warning C4251: “oneui::ReorderableGrid::onItemDrag_”:“std::function<void (const oneui::ItemDragEvent &)>”需要有 dll 接口以供“oneui::ReorderableGrid”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\functional(1093): note: 参见“std::function<void (const oneui::ItemDragEvent &)>”的声明
+E:\project\byname\oneui\include\oneui/platform/window.h(240): warning C4251: “oneui::Window::commandRoot_”:“std::weak_ptr<_Ty>”需要有 dll 接口以供“oneui::Window”的客户端使用
+        with
+        [
+            _Ty=oneui::Widget
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\memory(3165): note: 参见“std::weak_ptr<_Ty>”的声明
+        with
+        [
+            _Ty=oneui::Widget
+        ]
+E:\project\byname\oneui\include\oneui/ui_template_support.h(112): warning C4456: “pseudo”的声明隐藏了上一个本地声明
+E:\project\byname\oneui\include\oneui/ui_template_support.h(89): note: 参见“pseudo”的声明
+E:\project\byname\oneui\include\oneui/layout/adaptive_panes.h(27): warning C4251: “oneui::AdaptivePanes::layout_”:“std::shared_ptr<oneui::Stack>”需要有 dll 接口以供“oneui::AdaptivePanes”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\memory(1588): note: 参见“std::shared_ptr<oneui::Stack>”的声明
+E:\project\byname\oneui\include\oneui/layout/adaptive_panes.h(28): warning C4251: “oneui::AdaptivePanes::first_”:“std::shared_ptr<oneui::Widget>”需要有 dll 接口以供“oneui::AdaptivePanes”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\memory(1588): note: 参见“std::shared_ptr<oneui::Widget>”的声明
+E:\project\byname\oneui\include\oneui/layout/adaptive_panes.h(28): warning C4251: “oneui::AdaptivePanes::second_”:“std::shared_ptr<oneui::Widget>”需要有 dll 接口以供“oneui::AdaptivePanes”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\memory(1588): note: 参见“std::shared_ptr<oneui::Widget>”的声明
+E:\project\byname\oneui\include\oneui/ui.h(48): warning C4251: “oneui::ui::Builder::sheet_”:“std::shared_ptr<oneui::StyleSheet>”需要有 dll 接口以供“oneui::ui::Builder”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\memory(1588): note: 参见“std::shared_ptr<oneui::StyleSheet>”的声明
+E:\project\byname\oneui\include\oneui/ui_declarative.h(24): warning C4996: 'std::codecvt_utf8_utf16<wchar_t,1114111,(std::codecvt_mode)0>': warning STL4017: std::wbuffer_convert, std::wstring_convert, and the <codecvt> header (containing std::codecvt_mode, std::codecvt_utf8, std::codecvt_utf16, and std::codecvt_utf8_utf16) are deprecated in C++17. (The std::codecvt class template is NOT deprecated.) The C++ Standard doesn't provide equivalent non-deprecated functionality; consider using MultiByteToWideChar() and WideCharToMultiByte() from <Windows.h> instead. You can define _SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING or _SILENCE_ALL_CXX17_DEPRECATION_WARNINGS to suppress this warning.
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\codecvt(442): note: 参见“std::codecvt_utf8_utf16”的声明
+E:\project\byname\oneui\include\oneui/ui_declarative.h(24): warning C4996: 'std::wstring_convert<std::codecvt_utf8_utf16<wchar_t,1114111,(std::codecvt_mode)0>,wchar_t,std::allocator<wchar_t>,std::allocator<char>>': warning STL4017: std::wbuffer_convert, std::wstring_convert, and the <codecvt> header (containing std::codecvt_mode, std::codecvt_utf8, std::codecvt_utf16, and std::codecvt_utf8_utf16) are deprecated in C++17. (The std::codecvt class template is NOT deprecated.) The C++ Standard doesn't provide equivalent non-deprecated functionality; consider using MultiByteToWideChar() and WideCharToMultiByte() from <Windows.h> instead. You can define _SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING or _SILENCE_ALL_CXX17_DEPRECATION_WARNINGS to suppress this warning.
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xlocbuf(303): note: 参见“std::wstring_convert”的声明
+E:\project\byname\oneui\include\oneui/ui_declarative.h(24): warning C4996: 'std::wstring_convert<std::codecvt_utf8_utf16<wchar_t,1114111,(std::codecvt_mode)0>,wchar_t,std::allocator<wchar_t>,std::allocator<char>>::from_bytes': warning STL4017: std::wbuffer_convert, std::wstring_convert, and the <codecvt> header (containing std::codecvt_mode, std::codecvt_utf8, std::codecvt_utf16, and std::codecvt_utf8_utf16) are deprecated in C++17. (The std::codecvt class template is NOT deprecated.) The C++ Standard doesn't provide equivalent non-deprecated functionality; consider using MultiByteToWideChar() and WideCharToMultiByte() from <Windows.h> instead. You can define _SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING or _SILENCE_ALL_CXX17_DEPRECATION_WARNINGS to suppress this warning.
+E:\project\byname\oneui\include\oneui/ui_declarative.h(123): warning C4456: “v”的声明隐藏了上一个本地声明
+E:\project\byname\oneui\include\oneui/ui_declarative.h(121): note: 参见“v”的声明
+E:\project\byname\oneui\include\oneui/ui_declarative.h(128): warning C4456: “v”的声明隐藏了上一个本地声明
+E:\project\byname\oneui\include\oneui/ui_declarative.h(123): note: 参见“v”的声明
+E:\project\byname\oneui\include\oneui/ui_declarative.h(129): warning C4456: “v”的声明隐藏了上一个本地声明
+E:\project\byname\oneui\include\oneui/ui_declarative.h(128): note: 参见“v”的声明
+E:\project\byname\oneui\include\oneui/ui_declarative.h(130): warning C4456: “v”的声明隐藏了上一个本地声明
+E:\project\byname\oneui\include\oneui/ui_declarative.h(129): note: 参见“v”的声明
+E:\project\byname\oneui\include\oneui/ui_declarative.h(131): warning C4456: “v”的声明隐藏了上一个本地声明
+E:\project\byname\oneui\include\oneui/ui_declarative.h(130): note: 参见“v”的声明
+E:\project\byname\oneui\include\oneui/ui_declarative.h(132): warning C4456: “v”的声明隐藏了上一个本地声明
+E:\project\byname\oneui\include\oneui/ui_declarative.h(131): note: 参见“v”的声明
+E:\project\byname\oneui\include\oneui/ui_declarative.h(133): warning C4456: “v”的声明隐藏了上一个本地声明
+E:\project\byname\oneui\include\oneui/ui_declarative.h(132): note: 参见“v”的声明
+E:\project\byname\oneui\include\oneui/ui_declarative.h(134): warning C4456: “v”的声明隐藏了上一个本地声明
+E:\project\byname\oneui\include\oneui/ui_declarative.h(133): note: 参见“v”的声明
+E:\project\byname\oneui\include\oneui/ui_declarative.h(135): warning C4456: “v”的声明隐藏了上一个本地声明
+E:\project\byname\oneui\include\oneui/ui_declarative.h(134): note: 参见“v”的声明
+E:\project\byname\oneui\include\oneui/ui_declarative.h(351): warning C4244: “参数”: 从“int”转换到“float”，可能丢失数据
+E:\project\byname\oneui\include\oneui/ui_declarative.h(399): warning C4456: “content”的声明隐藏了上一个本地声明
+E:\project\byname\oneui\include\oneui/ui_declarative.h(307): note: 参见“content”的声明
+E:\project\byname\oneui\include\oneui/ui_declarative.h(455): warning C4456: “w”的声明隐藏了上一个本地声明
+E:\project\byname\oneui\include\oneui/ui_declarative.h(454): note: 参见“w”的声明
+E:\project\byname\oneui\include\oneui/ui_declarative.h(456): warning C4456: “w”的声明隐藏了上一个本地声明
+E:\project\byname\oneui\include\oneui/ui_declarative.h(455): note: 参见“w”的声明
+E:\project\byname\oneui\include\oneui/ui_declarative.h(457): warning C4456: “w”的声明隐藏了上一个本地声明
+E:\project\byname\oneui\include\oneui/ui_declarative.h(456): note: 参见“w”的声明
+E:\project\byname\oneui\examples\performance_lab\renderer_benchmark.hpp(42): warning C4244: “初始化”: 从“const _Ty”转换到“double”，可能丢失数据
+        with
+        [
+            _Ty=size_t
+        ]
+E:\project\byname\oneui\examples\performance_lab\renderer_benchmark.hpp(42): warning C4244: “初始化”: 从“const _Ty”转换到“const double”，可能丢失数据
+        with
+        [
+            _Ty=size_t
+        ]
+E:\project\byname\oneui\examples\performance_lab\renderer_soak.hpp(30): warning C4244: “初始化”: 从“const _Ty”转换到“double”，可能丢失数据
+        with
+        [
+            _Ty=size_t
+        ]
+E:\project\byname\oneui\examples\performance_lab\renderer_soak.hpp(30): warning C4244: “初始化”: 从“const _Ty”转换到“const double”，可能丢失数据
+        with
+        [
+            _Ty=size_t
+        ]
+E:\project\byname\oneui\include\oneui/layout/panel.h(30): warning C4251: “oneui::Panel::background_”:“oneui::Color”需要有 dll 接口以供“oneui::Panel”的客户端使用
+E:\project\byname\oneui\include\oneui/color.h(7): note: 参见“oneui::Color”的声明
+E:\project\byname\oneui\include\oneui/layout/panel.h(31): warning C4251: “oneui::Panel::border_”:“oneui::Color”需要有 dll 接口以供“oneui::Panel”的客户端使用
+E:\project\byname\oneui\include\oneui/color.h(7): note: 参见“oneui::Color”的声明
+E:\project\byname\oneui\include\oneui/layout/panel.h(37): warning C4251: “oneui::Panel::padding_”:“oneui::Insets”需要有 dll 接口以供“oneui::Panel”的客户端使用
+E:\project\byname\oneui\include\oneui/geometry.h(15): note: 参见“oneui::Insets”的声明
+E:\project\byname\oneui\include\oneui/layout/panel.h(39): warning C4251: “oneui::Panel::styleBox_”:“std::optional<oneui::StyleBox>”需要有 dll 接口以供“oneui::Panel”的客户端使用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(227): note: 参见“std::optional<oneui::StyleBox>”的声明
+E:\project\byname\oneui\examples\performance_lab\main.cpp(582): warning C4996: 'std::codecvt_utf8_utf16<wchar_t,1114111,(std::codecvt_mode)0>': warning STL4017: std::wbuffer_convert, std::wstring_convert, and the <codecvt> header (containing std::codecvt_mode, std::codecvt_utf8, std::codecvt_utf16, and std::codecvt_utf8_utf16) are deprecated in C++17. (The std::codecvt class template is NOT deprecated.) The C++ Standard doesn't provide equivalent non-deprecated functionality; consider using MultiByteToWideChar() and WideCharToMultiByte() from <Windows.h> instead. You can define _SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING or _SILENCE_ALL_CXX17_DEPRECATION_WARNINGS to suppress this warning.
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\codecvt(442): note: 参见“std::codecvt_utf8_utf16”的声明
+E:\project\byname\oneui\examples\performance_lab\main.cpp(582): warning C4996: 'std::wstring_convert<std::codecvt_utf8_utf16<wchar_t,1114111,(std::codecvt_mode)0>,wchar_t,std::allocator<wchar_t>,std::allocator<char>>': warning STL4017: std::wbuffer_convert, std::wstring_convert, and the <codecvt> header (containing std::codecvt_mode, std::codecvt_utf8, std::codecvt_utf16, and std::codecvt_utf8_utf16) are deprecated in C++17. (The std::codecvt class template is NOT deprecated.) The C++ Standard doesn't provide equivalent non-deprecated functionality; consider using MultiByteToWideChar() and WideCharToMultiByte() from <Windows.h> instead. You can define _SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING or _SILENCE_ALL_CXX17_DEPRECATION_WARNINGS to suppress this warning.
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xlocbuf(303): note: 参见“std::wstring_convert”的声明
+E:\project\byname\oneui\examples\performance_lab\main.cpp(582): warning C4996: 'std::wstring_convert<std::codecvt_utf8_utf16<wchar_t,1114111,(std::codecvt_mode)0>,wchar_t,std::allocator<wchar_t>,std::allocator<char>>::from_bytes': warning STL4017: std::wbuffer_convert, std::wstring_convert, and the <codecvt> header (containing std::codecvt_mode, std::codecvt_utf8, std::codecvt_utf16, and std::codecvt_utf8_utf16) are deprecated in C++17. (The std::codecvt class template is NOT deprecated.) The C++ Standard doesn't provide equivalent non-deprecated functionality; consider using MultiByteToWideChar() and WideCharToMultiByte() from <Windows.h> instead. You can define _SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING or _SILENCE_ALL_CXX17_DEPRECATION_WARNINGS to suppress this warning.
+E:\project\byname\oneui\examples\performance_lab\main.cpp(762): warning C4996: 'std::codecvt_utf8_utf16<wchar_t,1114111,(std::codecvt_mode)0>': warning STL4017: std::wbuffer_convert, std::wstring_convert, and the <codecvt> header (containing std::codecvt_mode, std::codecvt_utf8, std::codecvt_utf16, and std::codecvt_utf8_utf16) are deprecated in C++17. (The std::codecvt class template is NOT deprecated.) The C++ Standard doesn't provide equivalent non-deprecated functionality; consider using MultiByteToWideChar() and WideCharToMultiByte() from <Windows.h> instead. You can define _SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING or _SILENCE_ALL_CXX17_DEPRECATION_WARNINGS to suppress this warning.
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\codecvt(442): note: 参见“std::codecvt_utf8_utf16”的声明
+E:\project\byname\oneui\examples\performance_lab\main.cpp(762): warning C4996: 'std::wstring_convert<std::codecvt_utf8_utf16<wchar_t,1114111,(std::codecvt_mode)0>,wchar_t,std::allocator<wchar_t>,std::allocator<char>>': warning STL4017: std::wbuffer_convert, std::wstring_convert, and the <codecvt> header (containing std::codecvt_mode, std::codecvt_utf8, std::codecvt_utf16, and std::codecvt_utf8_utf16) are deprecated in C++17. (The std::codecvt class template is NOT deprecated.) The C++ Standard doesn't provide equivalent non-deprecated functionality; consider using MultiByteToWideChar() and WideCharToMultiByte() from <Windows.h> instead. You can define _SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING or _SILENCE_ALL_CXX17_DEPRECATION_WARNINGS to suppress this warning.
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xlocbuf(303): note: 参见“std::wstring_convert”的声明
+E:\project\byname\oneui\examples\performance_lab\main.cpp(762): warning C4996: 'std::wstring_convert<std::codecvt_utf8_utf16<wchar_t,1114111,(std::codecvt_mode)0>,wchar_t,std::allocator<wchar_t>,std::allocator<char>>::to_bytes': warning STL4017: std::wbuffer_convert, std::wstring_convert, and the <codecvt> header (containing std::codecvt_mode, std::codecvt_utf8, std::codecvt_utf16, and std::codecvt_utf8_utf16) are deprecated in C++17. (The std::codecvt class template is NOT deprecated.) The C++ Standard doesn't provide equivalent non-deprecated functionality; consider using MultiByteToWideChar() and WideCharToMultiByte() from <Windows.h> instead. You can define _SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING or _SILENCE_ALL_CXX17_DEPRECATION_WARNINGS to suppress this warning.
+E:\project\byname\oneui\examples\performance_lab\build-current\views\Gallery.g.h(4): warning C4100: 'slots': 未引用的参数
+E:\project\byname\oneui\examples\performance_lab\build-current\views\Gallery.g.h(4): note: 模板实例化上下文(最早的实例化上下文)为
+E:\project\byname\oneui\examples\performance_lab\component_gallery.hpp(78): note: 查看对正在编译的函数 模板 实例化“oneui::ui::Element build_Gallery<connection_demo::GalleryModel>(VM &,oneui::ui::Mount &,const oneui::ui::Slots &)”的引用
+        with
+        [
+            VM=connection_demo::GalleryModel
+        ]
+E:\project\byname\oneui\examples\performance_lab\build-current\views\Recipes.g.h(4): warning C4100: 'slots': 未引用的参数
+E:\project\byname\oneui\examples\performance_lab\build-current\views\Recipes.g.h(4): note: 模板实例化上下文(最早的实例化上下文)为
+E:\project\byname\oneui\examples\performance_lab\component_gallery.hpp(82): note: 查看对正在编译的函数 模板 实例化“oneui::ui::Element build_Recipes<connection_demo::GalleryModel>(VM &,oneui::ui::Mount &,const oneui::ui::Slots &)”的引用
+        with
+        [
+            VM=connection_demo::GalleryModel
+        ]
+E:/project/byname/oneui/examples/performance_lab/views/Details.one(5): warning C4100: 'slots': 未引用的参数
+E:/project/byname/oneui/examples/performance_lab/views/Details.one(5): note: 模板实例化上下文(最早的实例化上下文)为
+E:\project\byname\oneui\examples\performance_lab\connection_workspace.hpp(257): note: 查看对正在编译的函数 模板 实例化“oneui::ui::Element build_Connections<connection_demo::TemplateModel>(VM &,oneui::ui::Mount &,const oneui::ui::Slots &)”的引用
+        with
+        [
+            VM=connection_demo::TemplateModel
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(166): warning C4244: “=”: 从“_Ty”转换到“_Ty”，可能丢失数据
+        with
+        [
+            _Ty=int
+        ]
+        and
+        [
+            _Ty=float
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(166): note: 模板实例化上下文(最早的实例化上下文)为
+E:\project\byname\oneui\include\oneui/ui_native_theme.h(37): note: 查看对正在编译的函数 模板 实例化“std::optional<float> &std::optional<float>::operator =<int,0>(_Ty2 &&) noexcept”的引用
+        with
+        [
+            _Ty2=int
+        ]
+E:\project\byname\oneui\include\oneui/ui_native_theme.h(37): note: 请参阅 "oneui::ui::applyNativeTheme" 中对 "std::optional<float>::operator =" 的第一个引用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(312): note: 查看对正在编译的函数 模板 实例化“void std::_Optional_construct_base<_Ty>::_Assign<int>(_Ty2 &&) noexcept”的引用
+        with
+        [
+            _Ty=float,
+            _Ty2=int
+        ]
+E:/project/byname/oneui/examples/performance_lab/views/Editor.one(5): warning C4100: 'slots': 未引用的参数
+E:/project/byname/oneui/examples/performance_lab/views/Editor.one(5): note: 模板实例化上下文(最早的实例化上下文)为
+E:\project\byname\oneui\examples\performance_lab\connection_workspace.hpp(257): note: 查看对正在编译的函数 模板 实例化“oneui::ui::Element build_Connections<connection_demo::TemplateModel>(VM &,oneui::ui::Mount &,const oneui::ui::Slots &)”的引用
+        with
+        [
+            VM=connection_demo::TemplateModel
+        ]
+E:/project/byname/oneui/examples/performance_lab/views/Connections.one(37): note: 查看对正在编译的函数 模板 实例化“oneui::ui::Element build_Connections_Details<VM>(VM &,oneui::ui::Mount &,const oneui::ui::Slots &)”的引用
+        with
+        [
+            VM=connection_demo::TemplateModel
+        ]
+E:\project\byname\oneui\examples\performance_lab\build-current\views\Connections.g.h(4): warning C4100: 'slots': 未引用的参数
+E:\project\byname\oneui\examples\performance_lab\build-current\views\Connections.g.h(4): note: 模板实例化上下文(最早的实例化上下文)为
+E:/project/byname/oneui/examples/performance_lab/views/Connections.one(38): note: 查看对正在编译的函数 模板 实例化“oneui::ui::Element build_Connections_Editor<VM>(VM &,oneui::ui::Mount &,const oneui::ui::Slots &)”的引用
+        with
+        [
+            VM=connection_demo::TemplateModel
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(82): warning C4244: “初始化”: 从“_Ty”转换到“float”，可能丢失数据
+        with
+        [
+            _Ty=int
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(82): note: 模板实例化上下文(最早的实例化上下文)为
+E:\project\byname\oneui\include\oneui/ui_native_theme.h(37): note: 查看对正在编译的函数 模板 实例化“std::optional<float>::optional<int,0>(_Ty2 &&) noexcept”的引用
+        with
+        [
+            _Ty2=int
+        ]
+E:\project\byname\oneui\include\oneui/ui_declarative.h(372): note: 请参阅 "oneui::ui::Mount::make" 中对 "std::optional<float>::optional" 的第一个引用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(272): note: 查看对正在编译的函数 模板 实例化“std::_Optional_construct_base<_Ty>::_Optional_construct_base<int>(std::in_place_t,int &&)”的引用
+        with
+        [
+            _Ty=float
+        ]
+E:\project\byname\oneui\examples\performance_lab\main.cpp(1052): note: 查看对正在编译的函数 模板 实例化“std::_Optional_destruct_base<_Ty,true>::_Optional_destruct_base<int>(std::in_place_t,int &&) noexcept”的引用
+        with
+        [
+            _Ty=float
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xutility(4924): warning C4244: “=”: 从“const wchar_t”转换到“char”，可能丢失数据
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xutility(4924): note: 模板实例化上下文(最早的实例化上下文)为
+E:\project\byname\oneui\include\oneui/ui_declarative.h(140): note: 查看对正在编译的函数 模板 实例化“std::basic_string<char,std::char_traits<char>,std::allocator<char>>::basic_string<std::_String_const_iterator<std::_String_val<std::_Simple_types<_Elem>>>,0>(_Iter,_Iter,const _Alloc &)”的引用
+        with
+        [
+            _Elem=wchar_t,
+            _Iter=std::_String_const_iterator<std::_String_val<std::_Simple_types<wchar_t>>>,
+            _Alloc=std::allocator<char>
+        ]
+E:\project\byname\oneui\include\oneui/ui_declarative.h(140): note: 请参阅 "oneui::ui::StyleRegistry::variant" 中对 "std::basic_string<char,std::char_traits<char>,std::allocator<char>>::basic_string" 的第一个引用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(862): note: 查看对正在编译的函数 模板 实例化“void std::basic_string<char,std::char_traits<char>,std::allocator<char>>::_Construct_from_iter<const wchar_t*,const wchar_t*,_Size_type>(_Iter,const _Sent,_Size)”的引用
+        with
+        [
+            _Size_type=unsigned __int64,
+            _Iter=const wchar_t *,
+            _Sent=const wchar_t *,
+            _Size=unsigned __int64
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(1018): note: 查看对正在编译的函数 模板 实例化“_OutIt *std::_Copy_n_unchecked4<const wchar_t*,_Size,char*>(_InIt,_SizeTy,_OutIt)”的引用
+        with
+        [
+            _OutIt=char *,
+            _Size=unsigned __int64,
+            _InIt=const wchar_t *,
+            _SizeTy=unsigned __int64
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xutility(522): warning C4244: “初始化”: 从“_Ty”转换到“_Ty”，可能丢失数据
+        with
+        [
+            _Ty=int
+        ]
+        and
+        [
+            _Ty=float
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xutility(522): note: 模板实例化上下文(最早的实例化上下文)为
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(312): note: 查看对正在编译的函数 模板 实例化“void std::_Optional_construct_base<_Ty>::_Assign<int>(_Ty2 &&) noexcept”的引用
+        with
+        [
+            _Ty=float,
+            _Ty2=int
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(168): note: 查看对正在编译的函数 模板 实例化“_Ty &std::_Optional_construct_base<_Ty>::_Construct<int>(int &&) noexcept”的引用
+        with
+        [
+            _Ty=float
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(156): note: 查看对正在编译的函数 模板 实例化“void std::_Construct_in_place<float,_Ty>(float &,_Ty &&) noexcept”的引用
+        with
+        [
+            _Ty=int
+        ]
+[102/103] Linking CXX executable bin\oneui-performance-lab.exe
+Editor validation, snapshot save, cancellation, layout, input retention and focus reveal tests passed
+Connection workflow tests passed: 300 cycles, 207 widgets, 71 mount subscriptions, 204 style nodes; no growth.
+Connection workflow tests passed: 300 cycles, 207 widgets, 71 mount subscriptions, 204 style nodes; no growth.
+Authoring parity: 84 scenes (themes, densities, widths, list/detail/editor/prompt); hot CSS rollback/removal, scoped blocks, input retention, 50 reloads and debounce passed for both entries.
+Recipes: 240 code/template, theme, density, preset, width and navigation cases; retained state/focus/composition and 300 navigation cycles passed.
+Gallery: 48 theme/density/width/scenes; responsive geometry, state feedback, focus/composition, stable subscriptions and table anchor passed.
+Renderer diagnostics: forced raster, actual surface, monotonic counters and read-only snapshots passed
+Exact geometry/fallback parity: 160 cases
+Raster PNG exact parity: 54 cases; 100/125/150% content scale
+mode=cpu cycles=30 warm_handles=215 end_handles=214 warm_gdi=9 end_gdi=9 warm_user=5 end_user=4
+Default mode, fallback, close and pending callback lifecycle passed
+mode=failed-gpu cycles=30 warm_handles=305 end_handles=304 warm_gdi=11 end_gdi=11 warm_user=7 end_user=7
+Default mode, fallback, close and pending callback lifecycle passed
+Effects: parser, CSS replacement, native adapters, retained Reveal, focus, 1000 retargets, policy, bounds passed.
+geometry engine=0 position=0 errors=0 reversal=0 max_error=1.40714
+geometry engine=0 position=1 errors=0 reversal=0 max_error=1.40714
+geometry engine=0 position=2 errors=0 reversal=0 max_error=1.4071
+geometry engine=1 position=0 errors=0 reversal=0 max_error=1.40714
+geometry engine=1 position=1 errors=0 reversal=0 max_error=1.40714
+geometry engine=1 position=2 errors=0 reversal=0 max_error=1.4071
+Native developer tools: one-call activation, slow widget attribution, report export, Reveal, F12, disable/re-enable and close passed.

@@ -10,6 +10,8 @@ template<> struct Value<schema::ValueType::Integer> { using type=int; };
 template<> struct Value<schema::ValueType::Number> { using type=float; };
 template<> struct Value<schema::ValueType::Strings> { using type=std::vector<std::wstring>; };
 template<> struct Value<schema::ValueType::Columns> { using type=std::vector<TableColumn>; };
+template<> struct Value<schema::ValueType::TabItems> { using type=std::vector<TabItem>; };
+template<> struct Value<schema::ValueType::Series> { using type=std::vector<TimeSeriesChartSeries>; };
 template<> struct Value<schema::ValueType::Rows> { using type=std::vector<TableRow>; };
 template<class T,class=void> struct Observable:std::false_type {};
 template<class T> struct Observable<T,std::void_t<decltype(std::declval<T&>().get())>>:std::true_type {};
@@ -52,6 +54,18 @@ public:
             compose_detail::assign<schema::propertyType(Kind,key)>(*mount_,element_,key,std::forward<V>(value)); \
         return *this; \
     }
+    ONEUI_COMPOSE_PROPERTY(icon,"icon")
+    ONEUI_COMPOSE_PROPERTY(symbol,"symbol")
+    ONEUI_COMPOSE_PROPERTY(orientation,"orientation")
+    ONEUI_COMPOSE_PROPERTY(closable,"closable")
+    ONEUI_COMPOSE_PROPERTY(themed,"themed")
+    ONEUI_COMPOSE_PROPERTY(series,"series")
+    ONEUI_COMPOSE_PROPERTY(align,"align")
+    ONEUI_COMPOSE_PROPERTY(justify,"justify")
+    ONEUI_COMPOSE_PROPERTY(wrap,"wrap")
+    ONEUI_COMPOSE_PROPERTY(variant,"variant")
+    ONEUI_COMPOSE_PROPERTY(appearance,"appearance")
+    ONEUI_COMPOSE_PROPERTY(detailOpen,"detail-open")
     ONEUI_COMPOSE_PROPERTY(open,"open")
     ONEUI_COMPOSE_PROPERTY(preset,"preset")
     ONEUI_COMPOSE_PROPERTY(reducedMotion,"reduced-motion")
@@ -68,6 +82,10 @@ public:
     ONEUI_COMPOSE_PROPERTY(items,"items")
     ONEUI_COMPOSE_PROPERTY(columns,"columns")
     ONEUI_COMPOSE_PROPERTY(disabled,"disabled")
+    ONEUI_COMPOSE_PROPERTY(presentation,"presentation")
+    ONEUI_COMPOSE_PROPERTY(collapsed,"collapsed")
+    ONEUI_COMPOSE_PROPERTY(secondCollapsed,"second-collapsed")
+    ONEUI_COMPOSE_PROPERTY(value,"value")
     ONEUI_COMPOSE_PROPERTY(visible,"visible")
 #undef ONEUI_COMPOSE_PROPERTY
     template<class T> Part& model(State<T>& state) {
@@ -79,8 +97,9 @@ public:
         }
         return *this;
     }
+    Part& onClose(std::function<void(std::wstring)> callback){static_assert(Kind==schema::Kind::Tabs,"onClose requires Tabs");mount_->closeTab(element_,std::move(callback));return *this;}
     Part& onClick(VmCommand& command) {
-        static_assert(Kind==schema::Kind::Button,"Compose onClick requires Button");mount_->click(element_,command);return *this;
+        static_assert((Kind==schema::Kind::Button || Kind==schema::Kind::ToolButton),"Compose onClick requires Button");mount_->click(element_,command);return *this;
     }
     Part& onActivate(VmCommand& command) {
         static_assert(Kind==schema::Kind::DataTable,"Compose onActivate requires DataTable");mount_->tableEvent(element_,"activate",command);return *this;
@@ -93,6 +112,15 @@ public:
     Part& grow(float value=1) {mount_->set(element_,"grow",value);return *this;}
     Part& basis(float value) {mount_->set(element_,"basis",value);return *this;}
     Part& shrink(float value) {mount_->set(element_,"shrink",value);return *this;}
+    Part& breakpoint(float value) {
+        static_assert(Kind==schema::Kind::SidebarLayout || Kind==schema::Kind::MasterDetail,"breakpoint requires a pane layout");mount_->set(element_,"breakpoint",value);return *this;
+    }
+    Part& firstMin(float value) {static_assert(Kind==schema::Kind::SplitView,"firstMin requires SplitView");mount_->set(element_,"first-min",value);return *this;}
+    Part& secondMin(float value) {static_assert(Kind==schema::Kind::SplitView,"secondMin requires SplitView");mount_->set(element_,"second-min",value);return *this;}
+    Part& size(float value) {static_assert(Kind==schema::Kind::Icon,"size requires Icon");mount_->set(element_,"size",value);return *this;}
+    Part& paneWidth(float value) {
+        static_assert(Kind==schema::Kind::SidebarLayout || Kind==schema::Kind::MasterDetail,"paneWidth requires a pane layout");mount_->set(element_,"pane-width",value);return *this;
+    }
     Part& minColumnWidth(float value) {
         static_assert(Kind==schema::Kind::FormGrid,"Compose minColumnWidth requires FormGrid");mount_->set(element_,"min-column-width",value);return *this;
     }
@@ -105,8 +133,24 @@ class Compose {
     }
 public:
     explicit Compose(Mount& mount):mount_(mount) {}
+    auto spacer(){return make<schema::Kind::Spacer>();}
+    template<class V> auto progress(V&& value){return make<schema::Kind::Progress>().value(std::forward<V>(value));}
+    auto toolButton(const std::wstring& icon,VmCommand& command,const std::wstring& label=L""){return make<schema::Kind::ToolButton>().icon(icon).text(label).onClick(command);}
+    auto nativeHost(const std::string& name) { return Part<schema::Kind::NativeHost>(mount_,mount_.nativeHost(name)); }
 #define ONEUI_COMPOSE_CONTAINER(method,kind) \
     auto method(std::vector<Element> children={}) {return make<schema::Kind::kind>(std::move(children));}
+    ONEUI_COMPOSE_CONTAINER(workspace,Workspace)
+    ONEUI_COMPOSE_CONTAINER(titleBar,TitleBar)
+    ONEUI_COMPOSE_CONTAINER(navigationRail,NavigationRail)
+    ONEUI_COMPOSE_CONTAINER(sessionBar,SessionBar)
+    ONEUI_COMPOSE_CONTAINER(workspaceBody,WorkspaceBody)
+    ONEUI_COMPOSE_CONTAINER(statusBar,StatusBar)
+    ONEUI_COMPOSE_CONTAINER(dockPanel,DockPanel)
+    ONEUI_COMPOSE_CONTAINER(panelHeader,PanelHeader)
+    ONEUI_COMPOSE_CONTAINER(panelBody,PanelBody)
+    ONEUI_COMPOSE_CONTAINER(panelFooter,PanelFooter)
+    ONEUI_COMPOSE_CONTAINER(surface,Surface)
+    ONEUI_COMPOSE_CONTAINER(sidebar,Sidebar)
     ONEUI_COMPOSE_CONTAINER(page,Page)
     ONEUI_COMPOSE_CONTAINER(header,Header)
     ONEUI_COMPOSE_CONTAINER(toolbar,Toolbar)
@@ -121,6 +165,12 @@ public:
     ONEUI_COMPOSE_CONTAINER(emptyState,EmptyState)
     ONEUI_COMPOSE_CONTAINER(loadingState,LoadingState)
 #undef ONEUI_COMPOSE_CONTAINER
+    auto sidebarLayout(Part<schema::Kind::Sidebar> navigation,Element content) {return make<schema::Kind::SidebarLayout>({navigation,content});}
+    auto masterDetail(Element list,Element detail) {return make<schema::Kind::MasterDetail>({list,detail});}
+    auto split(Element first,Element second,State<float>& ratio){return make<schema::Kind::SplitView>({first,second}).model(ratio);}
+    template<class Items> auto tabs(Items&& items,State<std::wstring>& selected){return make<schema::Kind::Tabs>().items(std::forward<Items>(items)).model(selected);}
+    template<class Series> auto chart(Series&& series){return make<schema::Kind::TimeSeriesChart>().series(std::forward<Series>(series));}
+    auto icon(const std::wstring& symbol){return make<schema::Kind::Icon>().symbol(symbol);}
     auto reveal(Element child) {return make<schema::Kind::Reveal>({std::move(child)});}
     auto scroll(Element child) {return make<schema::Kind::Scroll>({std::move(child)});}
     auto field(const std::wstring& label,Element control) {return make<schema::Kind::FormRow>({std::move(control)}).label(label);}

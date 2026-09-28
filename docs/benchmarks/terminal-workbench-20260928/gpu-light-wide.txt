@@ -1,0 +1,2 @@
+OneUI GPU rendering enabled (OpenGL+Skia Ganesh, vsync=on)
+PASS: Rust-owned terminal/input, native text route, 100 switch/theme/close/restore cycles, identity/selection/subscription retention, native tab click, composition/focus retention, resize, 42px tabs, exclusive mount, owner lifetime, post-close worker rejection, idle redraw=0.

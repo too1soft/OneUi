@@ -92,6 +92,8 @@ void Menu::addSeparator() {
 void Menu::clearItems() {
     entries_.clear();
     itemCount_ = 0;
+    keyboardEntry_ = -1;
+    lastPointerPosition_.reset();
     hoveredEntry_ = -1;
     pressedEntry_ = -1;
     invalidate();
@@ -215,7 +217,7 @@ void Menu::paint(Canvas& canvas) {
             break;
         }
         case Entry::Kind::Item: {
-            const StyleBox item = resolvedItemStyle(entry, hoveredEntry_ == i, pressedEntry_ == i);
+            const StyleBox item = resolvedItemStyle(entry, (keyboardEntry_ >= 0 ? keyboardEntry_ : hoveredEntry_) == i, pressedEntry_ == i);
             paintStyleBox(canvas, rect, item);
             const Color foreground = item.foreground.value_or(Color{60, 67, 80});
             float textX = rect.x + kItemPaddingX;
@@ -243,7 +245,12 @@ void Menu::paint(Canvas& canvas) {
 
 bool Menu::onMouseMove(const MouseEvent& event) {
     const int next = interactive() ? entryAt(event.position) : -1;
-    if (next == hoveredEntry_) {
+    const bool moved = lastPointerPosition_ &&
+        (lastPointerPosition_->x != event.position.x || lastPointerPosition_->y != event.position.y);
+    lastPointerPosition_ = event.position;
+    const bool keyboardToPointer = next >= 0 && keyboardEntry_ >= 0 && moved;
+    if (keyboardToPointer) keyboardEntry_ = -1;
+    if (next == hoveredEntry_ && !keyboardToPointer) {
         return false;
     }
     hoveredEntry_ = next;
@@ -259,6 +266,7 @@ bool Menu::onMouseDown(const MouseEvent& event) {
     if (entry < 0) {
         return false;
     }
+    keyboardEntry_ = -1;
     pressedEntry_ = entry;
     setFocused(true);
     invalidate();
@@ -295,20 +303,21 @@ bool Menu::onKeyDown(const KeyEvent& event) {
     if (event.key == Key::Down || event.key == Key::Up || event.key == Key::Home || event.key == Key::End) {
         const int count = static_cast<int>(entries_.size());
         const int step = event.key == Key::Up || event.key == Key::End ? -1 : 1;
-        int index = hoveredEntry_;
+        int index = keyboardEntry_ >= 0 ? keyboardEntry_ : hoveredEntry_;
         if (event.key == Key::Home || event.key == Key::End || index < 0) index = step > 0 ? -1 : 0;
         for (int i = 0; i < count; ++i) {
             index = (index + step + count) % count;
             const auto& entry = entries_[static_cast<std::size_t>(index)];
             if (entry.kind == Entry::Kind::Item && !entry.disabled) {
-                hoveredEntry_ = index; pressedEntry_ = -1; invalidate(); break;
+                keyboardEntry_ = index; hoveredEntry_ = -1; pressedEntry_ = -1; invalidate(); break;
             }
         }
         return true;
     }
     if (event.key == Key::Enter || event.key == Key::Space) {
-        if (hoveredEntry_ < 0) return true;
-        const auto& entry = entries_[static_cast<std::size_t>(hoveredEntry_)];
+        const int selected = keyboardEntry_ >= 0 ? keyboardEntry_ : hoveredEntry_;
+        if (selected < 0) return true;
+        const auto& entry = entries_[static_cast<std::size_t>(selected)];
         if (!entry.disabled && entry.kind == Entry::Kind::Item && onItemActivated_) {
             auto callback = onItemActivated_; const int index = entry.itemIndex;
             callback(index);
@@ -316,6 +325,15 @@ bool Menu::onKeyDown(const KeyEvent& event) {
         return true;
     }
     return false;
+}
+
+bool Menu::onFocusChanged(bool focused) {
+    Widget::onFocusChanged(focused);
+    if (!focused && keyboardEntry_ >= 0) {
+        keyboardEntry_ = -1;
+        invalidate();
+    }
+    return true;
 }
 
 bool Menu::hasInteractionState() const {

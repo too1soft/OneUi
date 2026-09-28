@@ -292,6 +292,9 @@ TableStyleOverride tableStyleOverrideFromStyleSheet(const StyleSheet& sheet, Sty
     const StyleBox selected = resolveState(sheet, std::move(node), StyleStateSelected);
 
     TableStyleOverride style;
+    style.checkBackground = normal.checkBackground;
+    style.checkBorder = normal.checkBorder;
+    style.checkRadius = normal.checkRadius;
     style.background = normal.background.color;
     style.border = normal.borderColor;
     style.headerBackground = normal.content.backgroundColor;
@@ -306,6 +309,8 @@ TableStyleOverride tableStyleOverrideFromStyleSheet(const StyleSheet& sheet, Sty
     style.radius = normal.radius;
     style.scrollbarWidth = normal.scrollbarWidth;
     style.cellPadding = normal.padding;
+    style.headerTextInset = normal.textInset;
+    style.cellIconGap = normal.gap;
     style.fontSize = normal.fontSize;
     style.headerFontSize = normal.detailFontSize;
     style.detailFontSize = normal.detailFontSize;

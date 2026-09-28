@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 #include "oneui/ui_component_schema.h"
+#include "oneui/ui_icon_names.h"
 
 namespace oneui::ui::syntax {
 inline std::string trim(std::string s) {
@@ -35,11 +36,18 @@ inline bool layoutNumber(const std::string& key) {
 // Shared by the template compiler and native adapter. Reject values that Yoga
 // would otherwise clamp or reinterpret, while preserving legacy Builder APIs.
 inline void validateLayoutNumber(const std::string& key, float value) {
-    if (!std::isfinite(value) || value < 0 || ((key == "max-width" || key=="min-column-width") && value == 0))
-        throw std::invalid_argument(key + ((key == "max-width" || key=="min-column-width") ? " must be a finite positive number" : " must be a finite nonnegative number"));
+    if(key=="ratio" && (!std::isfinite(value) || value<0 || value>1))throw std::invalid_argument("ratio must be between 0 and 1");
+    if (!std::isfinite(value) || value < 0 || ((key == "max-width" || key=="min-column-width" || key=="breakpoint" || key=="pane-width") && value == 0))
+        throw std::invalid_argument(key + ((key == "max-width" || key=="min-column-width" || key=="breakpoint" || key=="pane-width") ? " must be a finite positive number" : " must be a finite nonnegative number"));
 }
 inline std::string lowerValue(std::string value) { for(auto& ch:value)ch=static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));return value; }
 inline std::set<std::string> cssProperties(const std::string& tag) {
+    if (tag == "progress") return {};
+    if (tag == "icon") return {"color"};
+    if (tag == "tabs" || tag=="split-view") return {}; // semantic native theme
+    if (tag == "chart") return {"color","border-color","font-size","gap"};
+    if (tag == "native-host") return {}; // foreign content owns its styling
+    if (tag == "panes") return {"gap","padding","background-color","border-color","border-width","border-radius","box-shadow"};
     if (tag == "reveal") return {"transition-duration","transition-timing-function"};
     if (tag == "label") return {"color","font-size","font-weight"};
     if (tag == "stack") return {"background","box-shadow","background-color","border-color","border-width","border-radius","padding","gap"};

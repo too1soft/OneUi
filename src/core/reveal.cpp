@@ -1,5 +1,6 @@
 #include "oneui/controls/reveal.h"
 #include "internal/ui_clock.h"
+#include "internal/developer_tools.h"
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
@@ -11,13 +12,18 @@ Reveal::Reveal(std::shared_ptr<Widget> content) {
 }
 void Reveal::setOpen(bool value) {
     if(value==open_)return;
+    ++motionRevision_;
     open_=value;
     if(!value){focusChild(nullptr);clearInteractionState();}
     else Widget::setVisible(true);
     auto spec=spec_;
     if(!hasAnimationScheduler() || reduced_ || !motionEnabled())spec.durationMs=0;
     if(!value)spec.durationMs*=0.75;
-    progress_.animateTo(value?1.0f:0.0f,internal::uiTimeMs(),spec);
+    const double now=internal::uiTimeMs();
+    progress_.animateTo(value?1.0f:0.0f,now,spec);
+    // Color feedback primes its first frame by 8ms. Geometry must start at its
+    // current extent: priming jumps immediately and a fast first tick reverses.
+    progress_.tick(now);
     if(progress_.running())requestAnimationFrame();
     else if(!value)Widget::setVisible(false);
     invalidate();
@@ -55,6 +61,8 @@ Rect Reveal::paintBounds() const {
     return {x,y,(std::max)(a.x+a.width,b.x+b.width)-x,(std::max)(a.y+a.height,b.y+b.height)-y};
 }
 void Reveal::paint(Canvas& canvas) {
+    if(auto* diagnostics=internal::activeDeveloperRecorder())
+        diagnostics->observeMotion(*this,motionRevision_,progress(),open_);
     if(!visible() || progress_.value()<=0)return;
     if(progress_.value()>=1){View::paint(canvas);return;}
     canvas.save();canvas.clipRect(frame());

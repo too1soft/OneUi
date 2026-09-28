@@ -198,5 +198,66 @@ int main(){try{
         m.close();
     }
     {UiMailbox m;auto command=std::make_unique<VmCommand>();std::atomic<bool> completed{false};command->runAsync(m.sender(),[&](auto token){while(!token.cancelled())std::this_thread::yield();completed=true;return std::wstring{};});m.close();command.reset();for(int i=0;i<100 && !completed;++i)std::this_thread::sleep_for(std::chrono::milliseconds(1));CHECK(completed);}
+    { // NativeHost cold theme must not strand a transition before a window exists.
+        Mount ui;applyTheme(ui,true);auto input=std::make_shared<TextField>();
+        input->setText(L"保留输入");input->setSelectionRange(1,3);ui.registerNative("field",input);
+        auto host=ui.nativeHost("field");ui.set(host,"themed",true);input->setFrame({0,0,300,36});
+        oneui::test_support::RecordingCanvas canvas;input->paint(canvas);
+        CHECK(!canvas.fillRects.empty());const auto color=canvas.fillRects.front().color;
+        CHECK(color.r==23 && color.g==30 && color.b==33);
+        CHECK(input->text()==L"保留输入" && input->selectionStart()==1 && input->selectionEnd()==3);
+    }
+    { // Document tabs: no rounded border patch, orphan divider, or foreign focus color.
+        for(bool dark:{false,true}) {
+            Mount ui;applyTheme(ui,dark);auto element=ui.make("Tabs");auto tabs=element.as<Tabs>();
+            tabs->setItems({L"edge-gateway",L"build-node",L"database"});tabs->setFrame({10,20,600,42});
+            const Color accent=dark?Color{196,237,135}:Color{40,97,61};
+            const Color divider=dark?Color{82,100,93}:Color{186,200,191};
+            auto same=[](Color a,Color b){return a.r==b.r && a.g==b.g && a.b==b.b && a.a==b.a;};
+            for(int selected=0;selected<3;++selected) {
+                tabs->setSelectedIndex(selected);oneui::test_support::RecordingCanvas canvas;tabs->paint(canvas);
+                CHECK(canvas.strokeRects.empty());int rules=0,separators=0;
+                for(const auto& fill:canvas.fillRects) {
+                    if(same(fill.color,accent) && fill.rect.height==2){++rules;CHECK(fill.radius==0);}
+                    if(same(fill.color,divider) && fill.rect.width==1){++separators;CHECK(fill.rect.x<tabs->itemFrame(2).x);}
+                }
+                CHECK(rules==1);CHECK(separators==(selected==1?0:1));
+            }
+            tabs->setItems({L"edge-gateway",L"build-node"});tabs->setSelectedIndex(0);
+            oneui::test_support::RecordingCanvas two;tabs->paint(two);CHECK(two.lines.empty());
+            for(const auto& fill:two.fillRects)CHECK(!(same(fill.color,divider) && fill.rect.width==1));
+            tabs->onFocusChanged(true);tabs->setFocusVisible(true);oneui::test_support::RecordingCanvas focused;tabs->paint(focused);
+            CHECK(focused.strokeRects.size()==1);CHECK(same(focused.strokeRects.front().color,accent));
+            CHECK(focused.strokeRects.front().rect.x>tabs->itemFrame(0).x);
+            tabs->setFocusVisible(false);tabs->setDocumentMode(false);
+            oneui::test_support::RecordingCanvas legacy;tabs->paint(legacy);CHECK(!legacy.strokeRects.empty());
+        }
+    }
+    { // Semantic workspace regions retain layout and controls across themes/collapse.
+        Mount mount;mount.styles()->replace(workspaceTheme(true),Density::Compact);Compose ui(mount);
+        VmCommand action;State<float> ratio{0.6f},progress{0.4f};State<bool> collapsed{false};State<std::wstring> text{L"保留中文"};
+        auto input=ui.input(text);auto header=ui.panelHeader({ui.text(L"Files"),ui.spacer(),ui.toolButton(L"folder",action).name(L"Files")});
+        auto body=ui.panelBody({input});auto panel=ui.dockPanel({body,header}).collapsed(collapsed);
+        auto split=ui.split(ui.column({ui.text(L"Terminal")}),panel,ratio).orientation(L"vertical").secondCollapsed(collapsed);
+        auto toolbar=ui.titleBar({ui.text(L"Workbench"),ui.spacer(),ui.toolButton(L"sun",action)});
+        auto rail=ui.navigationRail({ui.toolButton(L"terminal",action),ui.spacer()});
+        auto page=ui.workspace({ui.workspaceBody({split}),toolbar,rail,ui.statusBar({ui.progress(progress).basis(160)})});
+        auto retained=input.widget();const auto count=mount.diagnostics();
+        oneui::test_support::RecordingCanvas canvas;
+        for(float width:{1360.0f,640.0f,1360.0f}) {
+            page.widget()->setFrame({0,0,width,800});page.widget()->paint(canvas);
+            CHECK(rail.widget()->frame().width==56);CHECK(toolbar.widget()->frame().height==38);
+            CHECK(input.widget()->frame().width>width-100 && input.widget()==retained);
+            const float saved=split.element().as<SplitView>()->splitRatio();
+            collapsed.set(true);mount.flush();page.widget()->paint(canvas);
+            CHECK(!body.widget()->visible());CHECK(std::abs(panel.widget()->frame().height-40)<0.1f);
+            collapsed.set(false);mount.flush();page.widget()->paint(canvas);
+            CHECK(body.widget()->visible());CHECK(split.element().as<SplitView>()->splitRatio()==saved);
+            mount.styles()->replace(workspaceTheme(false),Density::Compact);page.widget()->paint(canvas);
+            CHECK(toolbar.widget()->frame().height==38 && input.element().as<TextField>()->text()==L"保留中文");
+        }
+        CHECK(mount.diagnostics().ownedObjects==count.ownedObjects && mount.diagnostics().subscriptions==count.subscriptions);
+        throws([&]{ui.workspace({ui.titleBar({})});});throws([&]{ui.dockPanel({ui.panelBody({})});});
+    }
     mailbox.close();std::cout<<"Declarative runtime, lifetime, input, keyed identity and theme tests passed\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<"\n";return 1;}}

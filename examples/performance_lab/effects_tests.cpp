@@ -61,7 +61,8 @@ static void transitionTests(){
     }
     // Close while focused: Tab routed through the owning View must leave the closed subtree.
     { auto input=std::make_shared<TextField>();auto reveal=std::make_shared<Reveal>(input);auto next=std::make_shared<Button>(L"next");View parent;parent.add(reveal);parent.add(next);parent.setAnimationScheduler([]{});reveal->setFrame({0,0,300,44});CHECK(parent.requestFocus(input.get()));reveal->setOpen(false);KeyEvent tab;tab.key=Key::Tab;parent.onKeyDown(tab);CHECK(!input->focused());CHECK(!reveal->focusFirstLeaf());CHECK(!reveal->focusLastLeaf());CHECK(!reveal->onFocusChanged(true));
-    reveal->setOpen(true);MouseEvent pointer;pointer.position={10,100};CHECK(!reveal->onMouseDown(pointer));CHECK(!reveal->requestFocus(input.get()));reveal->tickAnimations(nowMs()+1000);
+    // Advance a real closing frame before testing an in-flight reversal.
+    reveal->tickAnimations(nowMs()+30);reveal->setOpen(true);MouseEvent pointer;pointer.position={10,100};CHECK(!reveal->onMouseDown(pointer));CHECK(!reveal->requestFocus(input.get()));reveal->tickAnimations(nowMs()+1000);
     // Fully open Select popups retain the standard overflow painting and hit region.
     auto select=std::make_shared<Select>();select->setItems({L"one",L"two",L"three"});Reveal popup(select);popup.setFrame({0,0,240,40});RecordingCanvas base;popup.paint(base);KeyEvent enter;enter.key=Key::Enter;select->onKeyDown(enter);RecordingCanvas opened;popup.paint(opened);CHECK(popup.paintsAboveSiblings());CHECK(popup.hitTest({10,65}));RecordingCanvas direct;select->paint(direct);CHECK(opened.clips.size()==direct.clips.size()); }
     // Replace is transactional; deleting a rule removes the effect without replacing widgets.
@@ -69,15 +70,28 @@ static void transitionTests(){
     bool rejected=false;try{mount.styles()->replace(declarativeTheme()+syntax::css("Input.probe {box-shadow:inset 0px 2px -6px #000000;}"));}catch(...){rejected=true;}CHECK(rejected);RecordingCanvas kept;input.widget()->paint(kept);CHECK(kept.insetShadows.size()==1);
     mount.styles()->replace(declarativeTheme());RecordingCanvas removed;input.widget()->paint(removed);CHECK(removed.insetShadows.empty());
 }
+// Reference keeps the original full outer shadow, including covered pixels.
+static void paintFixtureBox(Canvas& canvas,Rect rect,StyleBox style){
+    if(std::getenv("ONEUI_SHADOW_REFERENCE")){
+        for(const auto& s:style.shadows)if(!s.inset)
+            canvas.drawBoxShadow({rect.x+s.offset.x,rect.y+s.offset.y,rect.width,rect.height},BoxShadow{s.color,{},s.blurRadius,s.spreadRadius},style.radius.value_or(0));
+        style.shadows.erase(std::remove_if(style.shadows.begin(),style.shadows.end(),[](const auto& s){return !s.inset;}),style.shadows.end());
+    }
+    paintStyleBox(canvas,rect,style);
+}
 class Fixture:public Widget {
 public:void paint(Canvas& c)override{
     c.clear({255,255,255});
-    auto linear=box("background:linear-gradient(90deg,#ff0000 0%,#00ff00 50%,#0000ff 100%);border-radius:16px;");paintStyleBox(c,{40,40,300,90},linear);
-    paintStyleBox(c,{40,180,300,90},box("background:radial-gradient(50% at 50% 50%,#ff0000 0%,#00ff00 50%,#0000ff 100%);border-radius:16px;"));
-    paintStyleBox(c,{400,40,180,100},box("background:#ffffff;box-shadow:inset 0px 4px 12px 3px #000000cc;border-radius:16px;"));
-    paintStyleBox(c,{400,210,180,100},box("background:#ffffff;box-shadow:0px 4px 12px 3px #00000099;border-radius:16px;"));
+    auto linear=box("background:linear-gradient(90deg,#ff0000 0%,#00ff00 50%,#0000ff 100%);border-radius:16px;");paintFixtureBox(c,{40,40,300,90},linear);
+    paintFixtureBox(c,{40,180,300,90},box("background:radial-gradient(50% at 50% 50%,#ff0000 0%,#00ff00 50%,#0000ff 100%);border-radius:16px;"));
+    paintFixtureBox(c,{400,40,180,100},box("background:#ffffff;box-shadow:inset 0px 4px 12px 3px #000000cc;border-radius:16px;"));
+    paintFixtureBox(c,{400,210,180,100},box("background:#ffffff;box-shadow:0px 4px 12px 3px #00000099;border-radius:16px;"));
+    paintFixtureBox(c,{640.25f,42.5f,265.5f,162.25f},box("background:#ffffff;box-shadow:3px -2px 14px 2px #224488aa;border-radius:20px;"));
+    paintFixtureBox(c,{645,270,240,24},box("background:#ffffff;box-shadow:0px 2px 12px #00000080;border-radius:12px;"));
+    paintFixtureBox(c,{40,510,520,120},box("background:#ffffff;box-shadow:0px 4px 14px #00000080;border-radius:14px;"));
+    paintFixtureBox(c,{640,355,240,100},box("background:#ffffff40;box-shadow:2px 3px 9px #11223380;border-radius:12px;"));
     c.saveOpacity({40,340,300,90},.5f);c.fillRect({40,340,300,90},{255,0,0},16);c.restore();
-    paintStyleBox(c,{400,370,180,60},box("background:linear-gradient(90deg,#ff0000 50%,#0000ff 50%);border-radius:12px;"));
+    paintFixtureBox(c,{400,370,180,60},box("background:linear-gradient(90deg,#ff0000 50%,#0000ff 50%);border-radius:12px;"));
 }};
 static void rasterTests(bool gpu,const std::filesystem::path& output){
     std::filesystem::create_directories(output);SetEnvironmentVariableW(L"ONEUI_ENABLE_GPU",gpu?L"1":L"0");

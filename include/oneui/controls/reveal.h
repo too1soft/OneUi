@@ -16,6 +16,8 @@ public:
     void setTransition(TransitionSpec spec);
     void setReducedMotion(bool reduced);
     float progress() const { return progress_.value(); }
+    // Column layouts fade the extra gap with expansion, preserving sibling continuity.
+    float layoutWeight() const { return preset_==RevealPreset::Expand?progress_.value():1.f; }
     bool running() const { return progress_.running(); }
     Size measure(Size available) const override;
     Size naturalSize() const override;
@@ -41,6 +43,7 @@ protected:
     void layoutChildren() override;
 private:
     bool acceptsInput() const { return open_ && !running() && visible() && !disabled(); }
+    std::uint64_t motionRevision_=0;
     bool open_=true, reduced_=false;
     RevealPreset preset_=RevealPreset::Expand;
     TransitionSpec spec_{220,EasingCurve::EaseOutCubic};

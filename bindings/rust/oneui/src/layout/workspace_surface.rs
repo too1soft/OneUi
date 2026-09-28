@@ -80,6 +80,7 @@ pub struct DockSurface<K> {
     splits: Vec<Rc<SplitView>>,
     root: Option<Mount>,
     overlays: Vec<K>,
+    floating_in_compact: bool,
 }
 fn transparent_panel() -> Result<Rc<Panel>, Error> {
     let p = Rc::new(Panel::new()?);
@@ -99,10 +100,17 @@ impl<K: Clone + Ord> DockSurface<K> {
             splits: Vec::new(),
             root: None,
             overlays: Vec::new(),
+            floating_in_compact: false,
         })
     }
     pub fn as_widget(&self) -> &Widget {
         self.host.as_widget()
+    }
+    /// Retain explicit floating tools above the selected compact docked pane.
+    /// Selecting a floating pane does not silently convert it to full-screen.
+    /// Configure before mounting; existing callers retain single-pane behavior.
+    pub fn set_floating_in_compact(&mut self, enabled: bool) {
+        self.floating_in_compact = enabled;
     }
     pub fn register(&mut self, id: K, content: &Widget) -> Result<(), Error> {
         let panel = if let Some(panel) = self.panes.get(&id) {
@@ -145,13 +153,19 @@ impl<K: Clone + Ord> DockSurface<K> {
         if compact.is_some_and(|id| !model.visible(id)) {
             return Err(Error::InvalidLayout);
         }
-        let visible = if let Some(id) = compact.or(state.maximized.as_ref()) {
+        let floating_visible = state.maximized.is_none() && (compact.is_none() || self.floating_in_compact);
+        let mut single = compact.or(state.maximized.as_ref()).cloned();
+        if compact.is_some() && floating_visible && single.as_ref().is_some_and(|id| state.floating.contains_key(id)) {
+            single = state.root.as_ref().and_then(|root| root.ids().into_iter().next());
+        }
+        let mut visible = if let Some(id) = single.as_ref() {
             vec![id.clone()]
+        } else if compact.is_some() {
+            Vec::new()
         } else {
-            let mut ids = state.root.as_ref().map(|n| n.ids()).unwrap_or_default();
-            ids.extend(state.floating.keys().cloned());
-            ids
+            state.root.as_ref().map(|n| n.ids()).unwrap_or_default()
         };
+        if floating_visible { visible.extend(state.floating.keys().cloned()); }
         if visible.iter().any(|id| !self.panes.contains_key(id)) {
             return Err(Error::WidgetDestroyed);
         }
@@ -165,7 +179,7 @@ impl<K: Clone + Ord> DockSurface<K> {
         {
             return Err(Error::InvalidLayout);
         }
-        let floats = if compact.is_none() && state.maximized.is_none() {
+        let floats = if floating_visible {
             model
                 .paint_order()
                 .into_iter()
@@ -240,8 +254,10 @@ impl<K: Clone + Ord> DockSurface<K> {
                 }
             }
         }
-        let root = if let Some(id) = compact.or(state.maximized.as_ref()) {
+        let root = if let Some(id) = single.as_ref() {
             Some(Prepared::Pane(Rc::clone(self.panes.get(id).unwrap())))
+        } else if compact.is_some() {
+            None
         } else {
             state
                 .root

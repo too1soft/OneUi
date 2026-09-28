@@ -1,0 +1,14 @@
+source=E:/project/byname/oneui-renderer-check/examples/performance_lab/views/Gallery.one:94
+target_hz=60
+duration_ms=220
+width=1320
+scale=1
+backend=gpu
+samples=532
+geometry_errors=0
+reverse_steps=0
+late_frames=0
+stalls=0
+max_geometry_error=1.43626
+max_interval_ms=6.4725
+max_content_paint_ms=0.4617

@@ -367,6 +367,15 @@ void Popup::paint(Canvas& canvas) {
     content_->paint(canvas);
 }
 
+std::shared_ptr<Widget> Popup::activeFocusChild() const {
+    if (!interactive()) return {};
+    if (isOpen() && isInteractive(content_.get()) && content_->focused() &&
+        focusedChild_ == content_.get()) return content_;
+    if (isInteractive(anchor_.get()) && anchor_->focused() &&
+        focusedChild_ == anchor_.get()) return anchor_;
+    return {};
+}
+
 bool Popup::onMouseMove(const MouseEvent& event) {
     if (!interactive()) {
         clearInteractionState();
@@ -512,17 +521,29 @@ bool Popup::isFocusable() const {
             || (isOpen() && content_ && content_->isFocusable()));
 }
 
+bool Popup::focusFirstLeaf() {
+    if (!isOpen() || !isInteractive(content_.get()) || !content_->isFocusable()) return false;
+    focusChild(content_.get(), true);
+    content_->focusFirstLeaf();
+    return true;
+}
+
+bool Popup::focusLastLeaf() {
+    if (!isOpen() || !isInteractive(content_.get()) || !content_->isFocusable()) return false;
+    focusChild(content_.get(), true);
+    content_->focusLastLeaf();
+    return true;
+}
+
 bool Popup::hitTest(Point point) const {
     if (!interactive()) {
         return false;
     }
-    // A synthetic anchor may intentionally be hidden and used only to position
-    // a context popup. Once that popup closes it must not leave an invisible
-    // pointer blocker behind at the anchor rectangle. Keep hit testing aligned
-    // with onMouseDown(), which only routes input to an interactive anchor.
-    const bool inAnchor = anchor_
-        ? isInteractive(anchor_.get()) && resolvedAnchorRect().contains(point)
-        : contains(point);
+    // Only an actual interactive anchor widget owns a persistent hit target.
+    // Context menus may have only an anchor rectangle and a window-sized frame
+    // for placement. Neither is an input surface after the menu has closed.
+    // Keep this aligned with onMouseDown(), which routes only to a real anchor.
+    const bool inAnchor = isInteractive(anchor_.get()) && resolvedAnchorRect().contains(point);
     const bool inContent = isOpen() && content_ && resolvedContentRect().contains(point);
     return inAnchor || inContent || (isOpen() && outsidePointerPolicy_ != PopupOutsidePointerPolicy::PassThrough);
 }

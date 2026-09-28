@@ -1,5 +1,11 @@
 #pragma once
 #include "oneui/controls/reveal.h"
+#include "oneui/ui_native_host.h"
+#include "oneui/ui_native_theme.h"
+#include "oneui/ui_keyed_tabs.h"
+#include "oneui/controls/icon_view.h"
+#include "oneui/controls/progress_bar.h"
+#include "oneui/layout/adaptive_panes.h"
 #include "oneui/ui.h"
 #include "oneui/ui_density.h"
 #include "oneui/ui_reactive.h"
@@ -68,10 +74,14 @@ public:
 };
 
 struct Element : Node {
+    std::vector<std::shared_ptr<Widget>> collapsible;
     std::string component, classes;
     std::shared_ptr<Label> title, hint, error;
     std::shared_ptr<Widget> fieldControl;
     std::shared_ptr<KeyedTable> table;
+    std::shared_ptr<KeyedTabs> tabs;
+    struct SplitLimits {float first=80,second=80;};
+    std::shared_ptr<SplitLimits> splitLimits;
     std::shared_ptr<Stack> content;
     Element(Node node, std::string type) : Node(std::move(node)), component(std::move(type)) {}
 };
@@ -80,7 +90,7 @@ class StyleRegistry {
 public:
     struct Source { std::string component, file; int line=0; };
 private:
-    struct Entry { std::weak_ptr<Widget> widget; std::string component, classes; std::weak_ptr<Stack> content; std::string tone, file; int line=0; bool invalid=false; };
+    struct Entry { std::weak_ptr<Widget> widget; std::string component, classes; std::weak_ptr<Stack> content; std::string tone, file; int line=0; bool invalid=false; std::string appearance,variant; };
     std::vector<Entry> entries_;
     StyleSheet sheet_;
     Density density_=Density::Comfortable;
@@ -88,6 +98,8 @@ private:
         auto w = entry.widget.lock(); if (!w) return;
         StyleNode n; n.tag = syntax::components().at(entry.component); n.classes.push_back("one-" + entry.component);
         std::istringstream tokens(entry.classes); for (std::string c; tokens >> c;) n.classes.push_back(c);
+        if(!entry.variant.empty())n.classes.push_back(entry.variant);
+        if(!entry.appearance.empty())n.classes.push_back("surface-"+entry.appearance);
         if(!entry.tone.empty()) n.classes.push_back("tone-"+entry.tone);
         if(entry.invalid) n.classes.push_back("invalid");
         if(entry.component=="Input" || entry.component=="SearchInput" || entry.component=="Select") {
@@ -100,6 +112,12 @@ private:
             table->setScrollOffset(row*tableRowHeight(density_));
         }
         auto box = sheet.resolve(n);
+        if(auto host=std::dynamic_pointer_cast<NativeHostView>(w)) {
+            if(host->themed())applyNativeTheme(*host->children().front(),sheet,host->hasCompositionOwner());return;
+        }
+        if(auto icon=std::dynamic_pointer_cast<IconView>(w)) {icon->setColor(box.foreground.value_or(nativePalette(sheet).ink));return;}
+        if(std::dynamic_pointer_cast<Tabs>(w) || std::dynamic_pointer_cast<SplitView>(w) || std::dynamic_pointer_cast<ProgressBar>(w)) {applyNativeTheme(*w,sheet);return;}
+        if(auto chart=std::dynamic_pointer_cast<TimeSeriesChart>(w)) {applyNativeTheme(*w,sheet);if(box.foreground || box.borderColor || box.fontSize || box.gap)chart->setStyleBox(box);return;}
         if (auto v = std::dynamic_pointer_cast<Label>(w)) {
             v->setColor(box.foreground.value_or(Color{30,40,35,255})); v->setFontSize(box.fontSize.value_or(14)); v->setFontWeight(box.fontWeight.value_or(400));
         } else if (auto v = std::dynamic_pointer_cast<Stack>(w)) {
@@ -113,15 +131,25 @@ private:
         else if (auto v = std::dynamic_pointer_cast<Select>(w)) v->setStyleOverride(selectStyleOverrideFromStyleSheet(sheet,n));
         else if (auto v = std::dynamic_pointer_cast<Table>(w)) v->setStyleOverride(tableStyleOverrideFromStyleSheet(sheet,n));
         else if (auto v = std::dynamic_pointer_cast<ScrollView>(w)) v->setStyleBox(box);
+        else if (auto v = std::dynamic_pointer_cast<AdaptivePanes>(w)) v->setStyleBox(box);
         else if (auto v = std::dynamic_pointer_cast<Reveal>(w)) v->setTransition({box.transitionDurationMs.value_or(220),box.transitionEasing.value_or(EasingCurve::EaseOutCubic)});
     }
 public:
+    void variant(const Element& e,const std::wstring& value) {
+        if((e.component!="Button" && e.component!="ToolButton") || (value!=L"normal" && value!=L"primary" && value!=L"danger" && value!=L"ghost"))throw std::invalid_argument("Button variant must be normal, primary or danger");
+        for(auto& entry:entries_)if(entry.widget.lock()==e.widget){entry.variant=std::string(value.begin(),value.end());apply(entry,sheet_);return;}
+    }
+    void appearance(const Element& e,const std::wstring& value) {
+        if(e.component!="Surface" || (value!=L"flat" && value!=L"outlined" && value!=L"raised" && value!=L"tinted"))throw std::invalid_argument("Surface appearance must be flat, outlined, raised or tinted");
+        for(auto& entry:entries_)if(entry.widget.lock()==e.widget){entry.appearance=std::string(value.begin(),value.end());apply(entry,sheet_);return;}
+    }
     void invalid(const std::shared_ptr<Widget>& widget,bool value) {
         for(auto& entry:entries_)if(entry.widget.lock()==widget) {
             if(entry.invalid!=value){entry.invalid=value;apply(entry,sheet_);}return;
         }
     }
     void locate(const Element& e,std::string file,int line) {
+        e.widget->setDiagnosticSource({e.component,file,line});
         for(auto& entry:entries_) if(entry.widget.lock()==e.widget) {entry.file=std::move(file);entry.line=line;return;}
     }
     std::map<const Widget*,Source> sources() const {
@@ -137,6 +165,7 @@ public:
         }
     }
     void add(const Element& e) {
+        if(e.widget->diagnosticSource().file.empty())e.widget->setDiagnosticSource({e.component,{},0});
         entries_.erase(std::remove_if(entries_.begin(),entries_.end(),[](auto& entry){return entry.widget.expired();}),entries_.end());
         for (auto& entry : entries_) if (entry.widget.lock() == e.widget) { entry.component=e.component;entry.classes = e.classes; apply(entry,sheet_); return; }
         entries_.push_back({e.widget,e.component,e.classes,e.content}); apply(entries_.back(),sheet_);
@@ -169,6 +198,9 @@ class Mount {
     std::shared_ptr<StyleRegistry> styles_;
     std::string scope_;
     std::map<std::string,std::weak_ptr<Widget>> references_;
+    struct NativeEntry { std::shared_ptr<Widget> widget; std::shared_ptr<void> owner; };
+    using NativeEntries = std::map<std::string, NativeEntry>;
+    std::shared_ptr<NativeEntries> natives_ = std::make_shared<NativeEntries>();
 public:
     explicit Mount(std::function<void()> schedule = {}, std::shared_ptr<StyleRegistry> styles = std::make_shared<StyleRegistry>())
         : schedule_(std::move(schedule)), styles_(std::move(styles)) {}
@@ -191,6 +223,18 @@ public:
         if(!widget)throw std::invalid_argument("Missing ref: "+name);
         return widget;
     }
+    // Register once before building; no implicit replacement or reparenting.
+    void registerNative(std::string name, std::shared_ptr<Widget> widget, std::shared_ptr<void> owner = {}) {
+        if(name.empty() || !widget) throw std::invalid_argument("NativeHost registration requires a name and widget");
+        if(!natives_->emplace(std::move(name),NativeEntry{std::move(widget),std::move(owner)}).second)
+            throw std::invalid_argument("Duplicate NativeHost registration");
+    }
+    Element nativeHost(const std::string& name) {
+        const auto found=natives_->find(name);
+        if(found==natives_->end())throw std::invalid_argument("Missing NativeHost registration: "+name);
+        Element result(Node(std::make_shared<NativeHostView>(found->second.widget,found->second.owner)),"NativeHost");
+        result.classes=scope_; styles_->add(result); return result;
+    }
     void locate(const Element& e,std::string file,int line) { styles_->locate(e,std::move(file),line); }
     void flush() {
         auto life = life_;
@@ -212,6 +256,29 @@ public:
         }));
     }
     Element make(std::string type, std::vector<Element> children = {}, std::string classes = {}) {
+        if(type=="NativeHost")throw std::invalid_argument("Use nativeHost(name) after registerNative");
+        if(type=="Workspace") {
+            std::map<std::string,Element> slots;
+            for(auto& child:children) {
+                if(child.component!="TitleBar" && child.component!="NavigationRail" && child.component!="SessionBar" && child.component!="WorkspaceBody" && child.component!="StatusBar")throw std::invalid_argument("Workspace requires named workspace regions");
+                if(!slots.emplace(child.component,child).second)throw std::invalid_argument("Duplicate Workspace region");
+            }
+            if(!slots.count("WorkspaceBody"))throw std::invalid_argument("Workspace requires WorkspaceBody");
+            std::vector<Element> center;
+            if(slots.count("SessionBar"))center.push_back(slots.at("SessionBar"));center.push_back(slots.at("WorkspaceBody"));
+            auto column=make("Column",center,"workspace-core");column.basis(0).grow();column.as<Stack>()->setGap(0);
+            std::vector<Element> middle;if(slots.count("NavigationRail"))middle.push_back(slots.at("NavigationRail"));middle.push_back(column);
+            auto row=make("Row",middle,"workspace-core");set(row,"align",L"stretch");set(row,"wrap",false);row.basis(0).grow();row.as<Stack>()->setGap(0);
+            std::vector<Element> shell;if(slots.count("TitleBar"))shell.push_back(slots.at("TitleBar"));shell.push_back(row);if(slots.count("StatusBar"))shell.push_back(slots.at("StatusBar"));
+            auto built=make("Column",shell,classes);Element result(built,type);result.classes=built.classes;result.grow();styles_->add(result);return result;
+        }
+        if(type=="DockPanel") {
+            int headers=0,bodies=0,footers=0;
+            for(auto& child:children){headers+=child.component=="PanelHeader";bodies+=child.component=="PanelBody";footers+=child.component=="PanelFooter";}
+            if(headers!=1 || bodies!=1 || footers>1 || headers+bodies+footers!=int(children.size()))throw std::invalid_argument("DockPanel requires one PanelHeader, one PanelBody and optional PanelFooter");
+            auto rank=[](const Element& e){return e.component=="PanelHeader"?0:e.component=="PanelBody"?1:2;};
+            std::stable_sort(children.begin(),children.end(),[&](const Element& a,const Element& b){return rank(a)<rank(b);});
+        }
         if(syntax::pagePattern(type)) {
             // Optional heading stays outside scrolling; a single ActionBar is
             // pinned below the form/detail body. Tables keep native scrolling.
@@ -245,9 +312,24 @@ public:
         }
         else if (type == "Switch") node = b.native(std::make_shared<Switch>());
         else if (type == "Select") node = b.native(std::make_shared<Select>());
-        else if (type == "Button") node = b.button(L"",{});
+        else if (type == "Button" || type=="ToolButton") node = b.button(L"",{});
+        else if(type=="Progress"){auto progress=std::make_shared<ProgressBar>();progress->setPreferredSize({0,6});node=b.native(progress).shrink(0);}
+        else if(type=="Tabs") {
+            auto tabs=std::make_shared<Tabs>();tabs->setDocumentMode(true);tabs->setSizingMode(TabsSizingMode::Compact);tabs->setItemWidthRange(140,240);tabs->setPreferredSize({0,42});node=b.native(tabs).shrink(0);
+        }
+        else if(type=="Icon") {auto icon=std::make_shared<IconView>();icon->setPreferredSize({20,20});node=b.native(icon).shrink(0);}
+        else if(type=="TimeSeriesChart") {auto chart=std::make_shared<TimeSeriesChart>();chart->setPreferredSize({0,90});chart->setRange(0,100);chart->setGridLines(3);chart->setAxesVisible(false);chart->setLatestPointVisible(true);node=b.native(chart);}
+        else if(type=="SplitView") {
+            if(children.size()!=2)throw std::invalid_argument("SplitView requires exactly two children");
+            auto split=std::make_shared<SplitView>();split->setFirst(children[0].widget);split->setSecond(children[1].widget);split->setGap(5);split->setResizable(true);split->setMinimumPaneExtent(80,80);node=b.native(split).basis(0).grow();
+        }
         else if (type == "DataTable") node = b.native(std::make_shared<Table>()).grow();
         else if (type == "Scroll") { if (nodes.size()!=1) throw std::invalid_argument("Scroll needs one child"); node=b.scroll(nodes.front()).grow(); }
+        else if(type=="SidebarLayout" || type=="MasterDetail") {
+            if(children.size()!=2)throw std::invalid_argument(type+" requires exactly two children");
+            if(type=="SidebarLayout" && children.front().component!="Sidebar")throw std::invalid_argument("SidebarLayout requires Sidebar first");
+            node=b.native(std::make_shared<AdaptivePanes>(type=="SidebarLayout"?PanePattern::Sidebar:PanePattern::MasterDetail,children[0].widget,children[1].widget)).basis(0).grow();
+        }
         else if(type=="Reveal") {
             if(children.size()!=1)throw std::invalid_argument("Reveal needs one child");
             node=b.native(std::make_shared<Reveal>(children.front().widget)).shrink(0);
@@ -256,11 +338,24 @@ public:
             auto body = b.column(nodes); body.basis(880).max(880).grow();
             content = body.as<Stack>(); node = b.row({body}); node.as<Stack>()->setAlign(StackAlign::Start);
         }
-        else if (type == "Toolbar" || type == "ActionBar" || type == "Row" || type == "FormRow" || type == "FormGrid") node = b.flow(nodes);
+        else if (type == "Toolbar" || type == "ActionBar" || type == "Row" || type == "FormRow" || type == "FormGrid" || type=="TitleBar" || type=="SessionBar" || type=="PanelHeader" || type=="PanelFooter" || type=="StatusBar" || type=="WorkspaceBody") node = b.flow(nodes);
         else if (syntax::components().count(type)) node = b.column(nodes);
         else throw std::invalid_argument("Unknown component: " + type);
         Element e(node,type); e.classes = classes + " " + scope_; e.content = std::move(content);
         if (type=="Page") e.grow();
+        if(type=="DockPanel")for(auto& child:children)if(child.component!="PanelHeader")e.collapsible.push_back(child.widget);
+        if(type=="DockPanel" || type=="PanelBody" || type=="WorkspaceBody")e.basis(0).grow();
+        if(type=="PanelBody" || type=="DockPanel")e.as<Stack>()->setGap(0);
+        if(type=="WorkspaceBody"){e.as<Stack>()->setWrap(false);e.as<Stack>()->setAlign(StackAlign::Stretch);}
+        if(type=="TitleBar" || type=="SessionBar" || type=="PanelHeader" || type=="PanelFooter" || type=="StatusBar") {
+            e.as<Stack>()->setWrap(false);e.as<Stack>()->setAlign(StackAlign::Center);e.basis(type=="TitleBar"?38:type=="SessionBar"?42:type=="StatusBar"?38:40).shrink(0);
+        }
+        if(type=="NavigationRail"){e.basis(56).shrink(0);e.as<Stack>()->setAlign(StackAlign::Center);}
+        if(type=="Spacer")e.basis(0).grow();
+        if(type=="ToolButton")e.widget->setPreferredSize({32,32});
+
+        if(type=="Tabs"){e.tabs=std::make_shared<KeyedTabs>(e.as<Tabs>());own(e.tabs);}
+        if(type=="SplitView")e.splitLimits=std::make_shared<Element::SplitLimits>();
         if (type=="SearchInput") e.basis(280).grow();
         if (type=="Select") e.basis(140);
         if (type=="Toolbar" || type=="ActionBar" || type=="Header") e.shrink(0);
@@ -309,10 +404,31 @@ public:
         styles_->add(e); return e;
     }
     void set(Element& e, const std::string& key, const std::wstring& value) {
-        if(key=="align") {
-            if(!e.content || (value!=L"start" && value!=L"center" && value!=L"end")) throw std::invalid_argument("Content align must be start, center or end");
-            e.as<Stack>()->setJustify(value==L"center" ? StackJustify::Center : value==L"end" ? StackJustify::End : StackJustify::Start);
+        if(key=="icon" || key=="symbol") {
+            const auto symbol=namedIcon(std::string(value.begin(),value.end()));
+            if(!symbol)throw std::invalid_argument("Unknown authoring icon");
+            if(key=="icon")e.as<Button>()->setIcon(*symbol);else e.as<IconView>()->setSymbol(*symbol);
+        } else if(key=="presentation") {
+            if(value!=L"document" && value!=L"segmented")throw std::invalid_argument("Tabs presentation must be document or segmented");
+            auto tabs=e.as<Tabs>();tabs->setDocumentMode(value==L"document");tabs->setSizingMode(value==L"document"?TabsSizingMode::Compact:TabsSizingMode::Equal);
+        } else if(key=="orientation") {
+            if(value!=L"horizontal" && value!=L"vertical")throw std::invalid_argument("orientation must be horizontal or vertical");
+            e.as<SplitView>()->setOrientation(value==L"horizontal"?SplitOrientation::Horizontal:SplitOrientation::Vertical);
+        } else if(key=="align") {
+            if(e.content) {
+                if(value!=L"start" && value!=L"center" && value!=L"end")throw std::invalid_argument("Content align must be start, center or end");
+                e.as<Stack>()->setJustify(value==L"center" ? StackJustify::Center : value==L"end" ? StackJustify::End : StackJustify::Start);
+            } else if(e.component=="Row" || e.component=="Column") {
+                if(value!=L"start" && value!=L"center" && value!=L"end" && value!=L"stretch")throw std::invalid_argument("align must be start, center, end or stretch");
+                e.as<Stack>()->setAlign(value==L"start"?StackAlign::Start:value==L"center"?StackAlign::Center:value==L"end"?StackAlign::End:StackAlign::Stretch);
+            } else throw std::invalid_argument("align requires Row, Column or Content");
+        } else if(key=="justify") {
+            if(e.component!="Row" && e.component!="Column")throw std::invalid_argument("justify requires Row or Column");
+            if(value!=L"start" && value!=L"center" && value!=L"end" && value!=L"space-between")throw std::invalid_argument("justify must be start, center, end or space-between");
+            e.as<Stack>()->setJustify(value==L"center"?StackJustify::Center:value==L"end"?StackJustify::End:value==L"space-between"?StackJustify::SpaceBetween:StackJustify::Start);
         }
+        else if(key=="variant") styles_->variant(e,value);
+        else if(key=="appearance") styles_->appearance(e,value);
         else if(key=="tone") {if(e.component!="Status")throw std::invalid_argument("tone requires Status");styles_->tone(e,value);}
         else if(key=="subtitle") {if(!e.hint)throw std::invalid_argument("Component has no subtitle");e.hint->setText(value);e.hint->setVisible(!value.empty());}
         else if(key=="error") {
@@ -321,7 +437,7 @@ public:
             styles_->invalid(e.fieldControl,!value.empty());
             e.fieldControl->setAccessibleDescription(e.hint->text()+(value.empty()?L"":L" "+value));
         }
-        else if(key=="name") e.widget->setAccessibleName(value);
+        else if(key=="name") {e.widget->setAccessibleName(value);if(e.component=="ToolButton")e.widget->setTooltip(value);}
         else if(key=="description") e.widget->setAccessibleDescription(value);
         else if(key=="title" || key=="label") {
             if(!e.title) throw std::invalid_argument("Component has no title"); e.title->setText(value); e.title->setVisible(!value.empty());
@@ -333,10 +449,10 @@ public:
             if(value!=L"fade" && value!=L"expand")throw std::invalid_argument("Reveal preset must be fade or expand");
             e.as<Reveal>()->setPreset(value==L"fade"?RevealPreset::Fade:RevealPreset::Expand);
         } else if(key=="placeholder") e.as<TextField>()->setPlaceholder(value);
-        else if(key=="selectedKey") e.table->select(value);
+        else if(key=="selectedKey") {if(e.tabs)e.tabs->select(value);else e.table->select(value);}
         else if(key=="text") {
             if(auto w=e.as<Label>()) w->setText(value);
-            else if(auto w=e.as<Button>()) w->setText(value);
+            else if(auto w=e.as<Button>()) {w->setText(value);if(e.component=="ToolButton")w->setPreferredSize({value.empty()?32.0f:0.0f,32});}
             else if(auto w=e.as<Switch>()) w->setText(value);
             else if(auto w=e.as<TextField>()) { if(w->text()!=value) w->setText(value); }
             if(e.component=="ValidationMessage") e.widget->setVisible(!value.empty());
@@ -344,17 +460,36 @@ public:
     }
     void set(Element& e,const std::string& key,const wchar_t* value) { set(e,key,std::wstring(value)); }
     void set(Element& e,const std::string& key,const std::string& value) {
-        if(key=="class" || key=="variant") { e.classes += " " + value; styles_->add(e); }
+        if(key=="class") { e.classes += " " + value; styles_->add(e); }
         else set(e,key,wide(value));
     }
     void set(Element& e,const std::string& key,bool value) {
         if(key=="visible") e.widget->setVisible(value); else if(key=="disabled") e.widget->setDisabled(value);
+        else if(key=="collapsed"){for(auto& part:e.collapsible)part->setVisible(!value);}
+        else if(key=="second-collapsed")e.as<SplitView>()->setSecondCollapsed(value);
+        else if(key=="closable")e.as<Tabs>()->setClosable(value);
+        else if(key=="themed"){e.as<NativeHostView>()->setThemed(value);styles_->add(e);}
+        else if(key=="wrap") {
+            if(e.component!="Row" && e.component!="Column")throw std::invalid_argument("wrap requires Row or Column");
+            e.as<Stack>()->setWrap(value);
+        }
+        else if(key=="detail-open") e.as<AdaptivePanes>()->setDetailOpen(value);
         else if(key=="open") e.as<Reveal>()->setOpen(value);
         else if(key=="reduced-motion") e.as<Reveal>()->setReducedMotion(value);
         else if(key=="checked") e.as<Switch>()->setChecked(value); else throw std::invalid_argument("Invalid bool property");
     }
     void set(Element& e,const std::string& key,float value) {
         syntax::validateLayoutNumber(key,value);
+        if(key=="value"){e.as<ProgressBar>()->setValue(std::clamp(value,0.0f,1.0f));return;}
+        if(key=="collapsed-extent"){e.as<SplitView>()->setCollapsedExtent(value);return;}
+        if(key=="size"){e.widget->setPreferredSize({value,value});return;}
+        if(key=="ratio"){e.as<SplitView>()->setSplitRatio(value);return;}
+        if(key=="first-min" || key=="second-min") {
+            if(key=="first-min")e.splitLimits->first=value;else e.splitLimits->second=value;
+            e.as<SplitView>()->setMinimumPaneExtent(e.splitLimits->first,e.splitLimits->second);return;
+        }
+        if(key=="breakpoint") {e.as<AdaptivePanes>()->setBreakpoint(value);return;}
+        if(key=="pane-width") {e.as<AdaptivePanes>()->setPaneWidth(value);return;}
         if(key=="min-column-width") {
             if(e.component!="FormGrid")throw std::invalid_argument("min-column-width requires FormGrid");
             for(auto& child:e.as<Stack>()->children())e.as<Stack>()->setFlex(child,{1,1,value,0});
@@ -370,6 +505,8 @@ public:
     void set(Element& e,const std::string&,const std::vector<std::wstring>& items) { e.as<Select>()->setItems(items); }
     void set(Element& e,const std::string&,const std::vector<TableColumn>& columns) { e.as<Table>()->setColumns(columns); }
     void set(Element& e,const std::string&,const std::vector<TableRow>& rows) { e.table->update(rows); }
+    void set(Element& e,const std::string&,const std::vector<TabItem>& items){e.tabs->update(items);}
+    void set(Element& e,const std::string&,const std::vector<TimeSeriesChartSeries>& series){e.as<TimeSeriesChart>()->setSeries(series);}
     template<class Source> void bind(Element e,const std::string& key,Source& source) {
         watch(source,[this,e,key](const auto& v) mutable { set(e,key,v); });
     }
@@ -378,11 +515,24 @@ public:
         bind(e,key,source);
     }
     void model(Element e,State<std::wstring>& source) {
-        if(e.table) {
+        if(e.tabs) {
+            auto binding=std::make_shared<Binding<std::wstring>>(source);own(binding);
+            e.tabs->selectionValue=[binding]{const std::wstring fallback;return std::wstring(binding->get(fallback));};
+            e.tabs->selected=[binding](std::wstring id){std::wstring fallback;binding->set(std::move(id),fallback);};
+            bind(e,"selectedKey",source);
+        } else if(e.table) {
             auto binding=std::make_shared<Binding<std::wstring>>(source); own(binding);
             e.table->selectionValue=[binding] {const std::wstring fallback; return std::wstring(binding->get(fallback));};
             bind(e,"selectedKey",source); e.table->selected=[binding](std::wstring key) { std::wstring fallback; binding->set(std::move(key),fallback); };
         } else { e.as<TextField>()->bindText(source); }
+    }
+    void model(Element e,State<float>& source) {
+        auto binding=std::make_shared<Binding<float>>(source);own(binding);bind(e,"ratio",source);
+        e.as<SplitView>()->setOnSplitRatioChanged([binding](float value){float fallback=0.5f;binding->set(value,fallback);});
+    }
+    void closeTab(Element e,std::function<void(std::wstring)> callback) {
+        if(!e.tabs)throw std::invalid_argument("close requires Tabs");
+        auto weak=std::weak_ptr<Life>(life_);e.tabs->closed=[weak,callback=std::move(callback)](std::wstring id){if(!weak.expired() && callback)callback(std::move(id));};
     }
     void model(Element e,State<bool>& source) { e.as<Switch>()->bindChecked(source); }
     void model(Element e,State<int>& source) { e.as<Select>()->bindSelectedIndex(source); }
@@ -409,8 +559,8 @@ public:
         using Items=std::decay_t<decltype(source.get())>; using Item=typename Items::value_type;
         struct Row { Item item; std::shared_ptr<Mount> mount; Element element; };
         auto rows=std::make_shared<std::map<std::wstring,Row>>();
-        auto result=make("Column"); auto styles=styles_; auto schedule=schedule_; auto scope=scope_;
-        watch(source,[rows,result,styles,schedule,scope,key,factory](const Items& items) mutable {
+        auto result=make("Column"); auto styles=styles_; auto schedule=schedule_; auto scope=scope_; auto natives=natives_;
+        watch(source,[rows,result,styles,schedule,scope,natives,key,factory](const Items& items) mutable {
             std::set<std::wstring> keys; for(auto& item:items) if(!item || key(item).empty() || !keys.insert(key(item)).second) throw std::invalid_argument("v-for requires nonnull shared items and unique nonempty keys");
             std::map<std::wstring,Row> next; std::vector<std::shared_ptr<Widget>> widgets;
             for(auto& item:items) {
@@ -418,7 +568,7 @@ public:
                 if(found!=rows->end()) {
                     if(found->second.item!=item) throw std::invalid_argument("A retained v-for key must retain its shared item identity; mutate the item's State fields");
                     next.emplace(id,std::move(found->second));
-                } else { auto mount=std::make_shared<Mount>(schedule,styles); mount->setScope(scope); auto element=factory(*mount,item); next.emplace(id,Row{item,mount,element}); }
+                } else { auto mount=std::make_shared<Mount>(schedule,styles); mount->setScope(scope); mount->natives_=natives; auto element=factory(*mount,item); next.emplace(id,Row{item,mount,element}); }
                 auto& row=next.at(id); widgets.push_back(row.element.widget); result.template as<Stack>()->setFlex(row.element.widget,row.element.flex);
             }
             result.template as<Stack>()->reconcileChildren(std::move(widgets)); *rows=std::move(next);

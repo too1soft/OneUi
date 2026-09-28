@@ -89,6 +89,7 @@ public:
     bool tickAnimations(double nowMs) override;
 
 protected:
+    bool hasInteractionState() const override;
     void resetInteractionState() override;
 
 private:
@@ -120,6 +121,7 @@ private:
     Widget* pressedContent_ = nullptr;
     Widget* previousFocusedChild_ = nullptr;
     bool previousFocusVisible_ = false;
+    bool pointerInteraction_ = false;
 };
 
 } // namespace oneui

@@ -551,3 +551,16 @@ Skia 后端复用绘制状态，其他 Canvas 子类默认逐项回退。它不�
 `fillGradient(Rect, const Gradient&, float radius)` 接受2至32个有序色标；`drawInsetShadow(Rect, const BoxShadow&, float radius)` 绘制真实内阴影；`saveOpacity(Rect, float)` 与 restore 配对，为整个内容建立透明度层。Skia 的软件和 GPU 路径均实现；其他 Canvas 子类默认分别退化为两色渐变、无内阴影及普通 save。新增虚函数需同时重建应用与 DLL。
 
 严格声明式 CSS 在容器、Button、Input／SearchInput 上接收 `background` 渐变及 `box-shadow`；输入框和按钮的状态阴影支持过渡，渐变即时替换。`motion-lift` 和 `motion-press` 是共享主题的可选类。`setMotionEnabled(false)` 与 Windows 客户端区域动画偏好约束 FloatTransition／ColorTransition／Reveal，不改变 SmoothScrollMotion 或应用自定义动画。完整语法、可运行例子及边界见[效果与动效](51-effects-and-motion.md)。
+
+## 页面组合与视觉预设
+
+新增 `SidebarLayout`、`Sidebar`、`MasterDetail`、`Surface`，共用 C++／`.one` 适配和 Yoga；`VisualPreset::Standard/Soft` 独立于主题与密度。用法、约束及验证边界见[完整页面组合](52-layout-recipes-and-presets.md)。
+
+## NativeHost（声明式适配）
+
+先调用 `Mount::registerNative(name, widget, owner)`，模板写 `<NativeHost host="name"/>`，Compose 写 `ui.nativeHost("name")`。控件不得已挂在其他父容器；host 委托尺寸测量、保留内容身份和外部所有者，不自动应用内部控件 CSS。`Row`/`Column` 同步支持 `align`、`justify`、`wrap`。完整生命周期、Rust 接入和限制见 [接口说明](55-native-host-and-terminal-workbench.md)。
+
+
+## 工作区布局组件
+
+`Workspace`、`TitleBar`、`NavigationRail`、`SessionBar`、`WorkspaceBody`、`StatusBar`、`DockPanel`、`PanelHeader/Body/Footer`、`Spacer`、`ToolButton`、`Progress` 共用 C++／`.one` 适配层。`SplitView` 增加第二面板收起且保留比例，`Tabs` 支持 segmented 呈现。结构要求、默认尺寸、主题和限制见[工作区快速布局](57-workspace-layout-components.md)。

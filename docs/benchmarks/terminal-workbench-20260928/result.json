@@ -1,0 +1,33 @@
+{
+  "platform": "Windows native",
+  "sha256": {
+    "oneui-terminal-workbench.exe": "6151763B01C8A8A4ABF1D18E5BC772063E0ADEA028A03042994E267D96C9B2B9",
+    "oneui.dll": "B1787A3568F52367FA8B28D877FEAADC6138A63D77D338968C4319694B4F7DE9",
+    "oneui-viewc.exe": "5963535A079EB9D04B52F6178CC25F45BBA377F37F59337693591C16CC8C6B91",
+    "oneui_terminal_demo_owner.dll": "EE6F12C09198C21D2AF3F4A6D2F205BADA01A1C96E5F3C63AB1CBB42A6C9F5E2"
+  },
+  "scope": "Native WM_CHAR/mouse route, synthetic composition, resize and lifetime; not OS IME candidate-window or cross-monitor DPI acceptance.",
+  "date": "2026-09-28T17:09:15.5346030+08:00",
+  "cases": [
+    {
+      "passed": true,
+      "exitCode": 0,
+      "case": "gpu-light-wide"
+    },
+    {
+      "passed": true,
+      "exitCode": 0,
+      "case": "gpu-dark-narrow"
+    },
+    {
+      "passed": true,
+      "exitCode": 0,
+      "case": "cpu-light-wide"
+    },
+    {
+      "passed": true,
+      "exitCode": 0,
+      "case": "cpu-dark-narrow"
+    }
+  ]
+}

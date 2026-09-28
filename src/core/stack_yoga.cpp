@@ -1,5 +1,6 @@
 #include "internal/frame_profile.h"
 #include "oneui/layout/stack.h"
+#include "oneui/controls/reveal.h"
 
 #include <algorithm>
 #include <cmath>
@@ -129,7 +130,13 @@ struct Stack::YogaState {
         YGNodeStyleSetAlignItems(entry.node, align[static_cast<int>(stack->align_)]);
         YGNodeStyleSetAlignContent(entry.node, YGAlignFlexStart);
         YGNodeStyleSetJustifyContent(entry.node, justify[static_cast<int>(stack->justify_)]);
-        YGNodeStyleSetGap(entry.node, YGGutterAll, std::max(0.0f, stack->gap_));
+        // Column reveal gaps participate in the same layout transition as the
+        // content. Native Yoga gap is discrete when a node becomes display:none.
+        const bool weightedGaps=column && !stack->wrap_ && std::any_of(stack->children().begin(),stack->children().end(),[](const auto& child){return dynamic_cast<Reveal*>(child.get())!=nullptr;});
+        const float gap=std::max(0.0f,stack->gap_);
+        YGNodeStyleSetGap(entry.node,YGGutterAll,gap);
+        YGNodeStyleSetGap(entry.node,YGGutterRow,weightedGaps?0:gap);
+        float precedingWeight=0;
         YGNodeStyleSetPadding(entry.node, YGEdgeTop, std::max(0.0f, stack->padding_.top));
         YGNodeStyleSetPadding(entry.node, YGEdgeRight, std::max(0.0f, stack->padding_.right));
         YGNodeStyleSetPadding(entry.node, YGEdgeBottom, std::max(0.0f, stack->padding_.bottom));
@@ -164,6 +171,14 @@ struct Stack::YogaState {
             if (child.content != measureContent) child.revision = ~std::uint64_t{0};
             child.content = measureContent;
             sync(child);
+            float weight=children[i]->visible()?1.f:0.f;
+            if(auto* reveal=dynamic_cast<Reveal*>(children[i].get()))weight*=reveal->layoutWeight();
+            // Round like measured leaf extents. This also keeps integer surface
+            // sizes eligible for the GPU shadow cache during an expansion.
+            const float factor=std::min(precedingWeight,weight);
+            const float before=weightedGaps?(factor==1?gap:std::round(gap*factor)):0;
+            YGNodeStyleSetMargin(child.node,YGEdgeTop,before);
+            precedingWeight=std::max(precedingWeight,weight);
             YGNodeStyleSetFlexGrow(child.node, flex.grow);
             YGNodeStyleSetFlexShrink(child.node, flex.shrink);
             if (flex.basis) YGNodeStyleSetFlexBasis(child.node, *flex.basis);

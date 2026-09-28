@@ -410,7 +410,7 @@ void VirtualList::paint(Canvas& canvas) {
                 itemStyle.titleColor,
                 itemStyle.titleFontSize,
                 TextAlign::Left,
-                std::max(600, itemStyle.titleFontWeight));
+                itemStyle.titleFontWeight);
 
             if (badgeWidth > 0.0f) {
                 const Rect badge{

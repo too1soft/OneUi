@@ -74,6 +74,10 @@ void InteractiveSurface::setOnHoverChanged(std::function<void(bool)> callback) {
     onHoverChanged_ = std::move(callback);
 }
 
+void InteractiveSurface::setOnFocusChanged(std::function<void(bool)> callback) {
+    onFocusChanged_ = std::move(callback);
+}
+
 void InteractiveSurface::setOnContextMenuRequested(
     std::function<void(const MouseEvent&)> callback) {
     onContextMenuRequested_ = std::move(callback);
@@ -284,8 +288,12 @@ bool InteractiveSurface::onKeyDown(const KeyEvent& event) {
 }
 
 bool InteractiveSurface::onFocusChanged(bool focused) {
+    const bool previous = this->focused();
     if (!focused) {
-        return View::onFocusChanged(false);
+        const bool changed = View::onFocusChanged(false);
+        const auto callback = onFocusChanged_;
+        if (previous && callback) callback(false);
+        return changed;
     }
 
     // InteractiveSurface is both a composite container and an action in its
@@ -295,6 +303,8 @@ bool InteractiveSurface::onFocusChanged(bool focused) {
     if (auto* child = focusedChild()) {
         child->onFocusChanged(true);
     }
+    const auto callback = onFocusChanged_;
+    if (!previous && callback) callback(true);
     return changed;
 }
 

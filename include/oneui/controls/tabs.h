@@ -33,6 +33,12 @@ public:
     int itemPaintFontWeight(int index) const;
     TextAlign itemTextAlign(int index) const;
     void setItemIcons(std::vector<std::optional<IconSymbol>> icons);
+    // Document tabs keep close targets reserved and status indicators persistent.
+    // Opt-in: existing segmented tabs retain their default rendering.
+    void setDocumentMode(bool enabled);
+    int overflowItemCount() const;
+    void setOnOverflowChanged(std::function<void(int)> callback);
+    void setItemStatusColors(std::vector<Color> colors);
     void setSelectedIndex(int index);
     int selectedIndex() const;
     void bindSelectedIndex(State<int>& state);
@@ -84,6 +90,7 @@ private:
     Rect itemRect(int index) const;
     Rect textRect(int index) const;
     Rect closeRect(int index) const;
+    bool itemFullyVisible(int index) const;
     int hitIndex(Point point) const;
     int hitCloseIndex(Point point) const;
     void ensureIndexVisible(int index);
@@ -115,7 +122,12 @@ private:
     float minimumItemWidth_ = 96.0f;
     float maximumItemWidth_ = 220.0f;
     std::vector<float> compactItemOffsets_;
+    std::vector<float> documentItemOffsets_;
     float scrollOffset_ = 0.0f;
+    bool documentMode_ = false;
+    int reportedOverflow_ = -1;
+    std::function<void(int)> onOverflowChanged_;
+    std::vector<Color> itemStatusColors_;
     bool closable_ = false;
     bool reorderEnabled_ = false;
     Binding<int> selectedBinding_;

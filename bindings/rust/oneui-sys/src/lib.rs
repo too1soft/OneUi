@@ -50,6 +50,9 @@ pub struct OneUiTableRichCellUtf8 {
     pub font_size: f32,
     pub font_weight: i32,
     pub foreground: OneUiColor,
+    pub badge_foreground: OneUiColor,
+    pub badge_background: OneUiColor,
+    pub badge_color_flags: c_uint,
 }
 #[repr(C)]
 pub struct OneUiTableRichRowUtf8 {
@@ -80,6 +83,9 @@ extern "C" {
         action: i32,
     );
     pub fn oneui_table_set_column_dividers_visible(table: *mut OneUiWidget, visible: c_int);
+    pub fn oneui_table_set_selection_column_visible(table: *mut OneUiWidget, visible: c_int);
+    pub fn oneui_table_set_selection_column_width(table: *mut OneUiWidget, width: c_float);
+    pub fn oneui_table_set_header_sort(table: *mut OneUiWidget, column: i32, descending: i32);
     pub fn oneui_table_set_header_height(table: *mut OneUiWidget, height: f32);
     pub fn oneui_table_set_on_cell_action(
         table: *mut OneUiWidget,
@@ -672,6 +678,14 @@ extern "C" {
     pub fn oneui_stack_set_gap(stack: *mut OneUiWidget, gap: f32);
     pub fn oneui_stack_set_padding(stack: *mut OneUiWidget, insets: OneUiInsets);
     pub fn oneui_stack_set_align(stack: *mut OneUiWidget, align: c_int);
+    pub fn oneui_stack_set_engine(stack: *mut OneUiWidget, engine: c_int) -> c_int;
+    pub fn oneui_stack_set_wrap(stack: *mut OneUiWidget, enabled: c_int) -> c_int;
+    pub fn oneui_widget_measure(widget: *mut OneUiWidget, max_width: f32, max_height: f32, width: *mut f32, height: *mut f32) -> c_int;
+    pub fn oneui_stack_set_justify(stack: *mut OneUiWidget, justify: c_int) -> c_int;
+    pub fn oneui_stack_set_flex(stack: *mut OneUiWidget, child: *mut OneUiWidget,
+        grow: f32, shrink: f32, basis_mode: c_int, basis: f32, min: f32, max: f32) -> c_int;
+    pub fn oneui_stack_clear_flex(stack: *mut OneUiWidget, child: *mut OneUiWidget);
+    pub fn oneui_widget_natural_size(widget: *mut OneUiWidget, width: *mut f32, height: *mut f32) -> c_int;
     pub fn oneui_stack_content_width(stack: *mut OneUiWidget) -> f32;
     pub fn oneui_stack_content_height(stack: *mut OneUiWidget) -> f32;
 
@@ -861,6 +875,11 @@ extern "C" {
         callback: OneUiBoolCallback,
         user_data: *mut c_void,
     );
+    pub fn oneui_interactive_surface_set_on_focus_changed(
+        surface: *mut OneUiWidget,
+        callback: OneUiBoolCallback,
+        user_data: *mut c_void,
+    );
     pub fn oneui_interactive_surface_set_on_context_menu_requested(
         surface: *mut OneUiWidget,
         callback: OneUiPointerCallback,
@@ -961,6 +980,7 @@ extern "C" {
     pub fn oneui_scroll_view_set_content_height(view: *mut OneUiWidget, height: f32);
     pub fn oneui_scroll_view_set_wheel_step(view: *mut OneUiWidget, step: f32);
     pub fn oneui_scroll_view_set_chrome_visible(view: *mut OneUiWidget, visible: c_int);
+    pub fn oneui_scroll_view_set_scrollbar_inset(view: *mut OneUiWidget, inset: f32);
     pub fn oneui_scroll_view_set_scrollbar_style(
         view: *mut OneUiWidget,
         r: u8,
@@ -982,6 +1002,7 @@ extern "C" {
         span_count: usize,
     ) -> c_int;
     pub fn oneui_label_set_color(label: *mut OneUiWidget, r: u8, g: u8, b: u8, a: u8);
+    pub fn oneui_label_set_status_indicator(label: *mut OneUiWidget, diameter: f32, gap: f32);
     pub fn oneui_label_set_font_size(label: *mut OneUiWidget, font_size: f32);
     pub fn oneui_label_natural_text_width(label: *mut OneUiWidget) -> f32;
     pub fn oneui_button_set_trailing_icon(button: *mut OneUiWidget, symbol: c_int);
@@ -1074,6 +1095,7 @@ extern "C" {
         count: usize,
     ) -> i32;
     pub fn oneui_time_series_chart_set_latest_point_visible(chart: *mut OneUiWidget, visible: i32);
+    pub fn oneui_time_series_chart_set_latest_point_size(chart: *mut OneUiWidget, width: f32, height: f32);
     pub fn oneui_time_series_chart_set_thresholds(
         chart: *mut OneUiWidget,
         thresholds: *const OneUiTimeSeriesThreshold,
@@ -1172,6 +1194,10 @@ extern "C" {
         count: usize,
     );
     pub fn oneui_tabs_set_item_icons(tabs: *mut OneUiWidget, symbols: *const c_int, count: usize);
+    pub fn oneui_tabs_set_document_mode(tabs: *mut OneUiWidget, enabled: c_int);
+    pub fn oneui_tabs_overflow_item_count(tabs: *mut OneUiWidget) -> c_int;
+    pub fn oneui_tabs_set_on_overflow_changed(tabs: *mut OneUiWidget, callback: OneUiIntCallback, user_data: *mut c_void);
+    pub fn oneui_tabs_set_item_status_colors(tabs: *mut OneUiWidget, colors: *const OneUiColor, count: usize);
     pub fn oneui_tabs_set_selected_index(tabs: *mut OneUiWidget, index: c_int);
     pub fn oneui_tabs_selected_index(tabs: *mut OneUiWidget) -> c_int;
     pub fn oneui_tabs_set_compact(tabs: *mut OneUiWidget, compact: c_int);
@@ -1326,6 +1352,7 @@ extern "C" {
     pub fn oneui_terminal_view_set_line_height(view: *mut OneUiWidget, multiplier: f32);
     pub fn oneui_terminal_view_set_letter_spacing(view: *mut OneUiWidget, pixels: f32);
     pub fn oneui_terminal_view_set_line_numbers_visible(view: *mut OneUiWidget, visible: c_int);
+    pub fn oneui_terminal_view_set_scrollback(view: *mut OneUiWidget, history_rows: u64, offset: u64);
     pub fn oneui_terminal_view_set_first_visible_line_number(
         view: *mut OneUiWidget,
         line_number: u64,

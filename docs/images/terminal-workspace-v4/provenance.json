@@ -1,0 +1,16 @@
+{
+  "origin": "Original OneUI native client screenshots; not generated images",
+  "source": "examples/terminal_workbench/build-current/bin/oneui-terminal-workbench.exe",
+  "date": "2026-09-28",
+  "renderer": "OpenGL + Skia Ganesh",
+  "capture": "Win32Window::captureFramePng; client region only",
+  "files": {
+    "collapsed-wide.png": "Native app capture",
+    "dark-narrow.png": "Native app capture",
+    "dark-wide.png": "Native app capture",
+    "files-narrow.png": "Native app capture",
+    "light-wide.png": "Native app capture",
+    "processes-wide.png": "Native app capture",
+    "split-wide.png": "Native app capture"
+  }
+}

@@ -1,0 +1,121 @@
+**********************************************************************
+** Visual Studio 2026 Developer Command Prompt v18.0.2
+** Copyright (c) 2025 Microsoft Corporation
+**********************************************************************
+[DEBUG:ext\vcvars.bat] Found potential v145 version file: 'Microsoft.VCToolsVersion.VC.14.50.18.0.txt'
+[DEBUG:ext\vcvars.bat] Testing v145 version file: 'Microsoft.VCToolsVersion.VC.14.50.18.0.txt'
+[vcvarsall.bat] Environment initialized for: 'x64'
+[0/2] Re-checking globbed directories...
+[1/9] Building CXX object sdk\CMakeFiles\oneui_core.dir\src\core\split_view.cpp.obj
+[2/9] Building CXX object sdk\CMakeFiles\oneui-viewc.dir\tools\viewc\main.cpp.obj
+[3/9] Linking CXX executable bin\oneui-viewc.exe
+[4/9] Building CXX object sdk\CMakeFiles\oneui.dir\src\capi\oneui_c_api.cpp.obj
+[5/9] Linking CXX shared library bin\oneui.dll
+[6/9] Generating views/Demo.g.h
+[7/9] Building CXX object CMakeFiles\oneui-declarative-tests.dir\tests.cpp.obj
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(166): warning C4244: “=”: 从“_Ty”转换到“_Ty”，可能丢失数据
+        with
+        [
+            _Ty=int
+        ]
+        and
+        [
+            _Ty=float
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(166): note: 模板实例化上下文(最早的实例化上下文)为
+E:\project\byname\oneui\include\oneui/ui_native_theme.h(37): note: 查看对正在编译的函数 模板 实例化“std::optional<float> &std::optional<float>::operator =<int,0>(_Ty2 &&) noexcept”的引用
+        with
+        [
+            _Ty2=int
+        ]
+E:\project\byname\oneui\include\oneui/ui_native_theme.h(37): note: 请参阅 "oneui::ui::applyNativeTheme" 中对 "std::optional<float>::operator =" 的第一个引用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(312): note: 查看对正在编译的函数 模板 实例化“void std::_Optional_construct_base<_Ty>::_Assign<int>(_Ty2 &&) noexcept”的引用
+        with
+        [
+            _Ty=float,
+            _Ty2=int
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(82): warning C4244: “初始化”: 从“_Ty”转换到“float”，可能丢失数据
+        with
+        [
+            _Ty=int
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(82): note: 模板实例化上下文(最早的实例化上下文)为
+E:\project\byname\oneui\include\oneui/ui_native_theme.h(37): note: 查看对正在编译的函数 模板 实例化“std::optional<float>::optional<int,0>(_Ty2 &&) noexcept”的引用
+        with
+        [
+            _Ty2=int
+        ]
+E:\project\byname\oneui\include\oneui/ui_declarative.h(372): note: 请参阅 "oneui::ui::Mount::make" 中对 "std::optional<float>::optional" 的第一个引用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(272): note: 查看对正在编译的函数 模板 实例化“std::_Optional_construct_base<_Ty>::_Optional_construct_base<int>(std::in_place_t,int &&)”的引用
+        with
+        [
+            _Ty=float
+        ]
+E:\project\byname\oneui\examples\declarative\tests.cpp(264): note: 查看对正在编译的函数 模板 实例化“std::_Optional_destruct_base<_Ty,true>::_Optional_destruct_base<int>(std::in_place_t,int &&) noexcept”的引用
+        with
+        [
+            _Ty=float
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xutility(4924): warning C4244: “=”: 从“const wchar_t”转换到“char”，可能丢失数据
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xutility(4924): note: 模板实例化上下文(最早的实例化上下文)为
+E:\project\byname\oneui\include\oneui/ui_declarative.h(140): note: 查看对正在编译的函数 模板 实例化“std::basic_string<char,std::char_traits<char>,std::allocator<char>>::basic_string<std::_String_const_iterator<std::_String_val<std::_Simple_types<_Elem>>>,0>(_Iter,_Iter,const _Alloc &)”的引用
+        with
+        [
+            _Elem=wchar_t,
+            _Iter=std::_String_const_iterator<std::_String_val<std::_Simple_types<wchar_t>>>,
+            _Alloc=std::allocator<char>
+        ]
+E:\project\byname\oneui\include\oneui/ui_declarative.h(140): note: 请参阅 "oneui::ui::StyleRegistry::variant" 中对 "std::basic_string<char,std::char_traits<char>,std::allocator<char>>::basic_string" 的第一个引用
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(862): note: 查看对正在编译的函数 模板 实例化“void std::basic_string<char,std::char_traits<char>,std::allocator<char>>::_Construct_from_iter<const wchar_t*,const wchar_t*,_Size_type>(_Iter,const _Sent,_Size)”的引用
+        with
+        [
+            _Size_type=std::+::_Size_type,
+            _Iter=const wchar_t *,
+            _Sent=const wchar_t *,
+            _Size=std::+::_Size_type
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xstring(1018): note: 查看对正在编译的函数 模板 实例化“_OutIt *std::_Copy_n_unchecked4<const wchar_t*,_Size,char*>(_InIt,_SizeTy,_OutIt)”的引用
+        with
+        [
+            _OutIt=char *,
+            _Size=std::+::_Size_type,
+            _InIt=const wchar_t *,
+            _SizeTy=std::+::_Size_type
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xutility(522): warning C4244: “初始化”: 从“_Ty”转换到“_Ty”，可能丢失数据
+        with
+        [
+            _Ty=int
+        ]
+        and
+        [
+            _Ty=float
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\xutility(522): note: 模板实例化上下文(最早的实例化上下文)为
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(312): note: 查看对正在编译的函数 模板 实例化“void std::_Optional_construct_base<_Ty>::_Assign<int>(_Ty2 &&) noexcept”的引用
+        with
+        [
+            _Ty=float,
+            _Ty2=int
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(168): note: 查看对正在编译的函数 模板 实例化“_Ty &std::_Optional_construct_base<_Ty>::_Construct<int>(int &&) noexcept”的引用
+        with
+        [
+            _Ty=float
+        ]
+D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\optional(156): note: 查看对正在编译的函数 模板 实例化“void std::_Construct_in_place<float,_Ty>(float &,_Ty &&) noexcept”的引用
+        with
+        [
+            _Ty=int
+        ]
+[8/9] Linking CXX executable bin\oneui-declarative-tests.exe
+Test project E:/project/byname/oneui/examples/declarative/build
+    Start 1: declarative_runtime
+1/2 Test #1: declarative_runtime ..............   Passed    4.29 sec
+    Start 2: declarative_compiler
+2/2 Test #2: declarative_compiler .............   Passed   21.19 sec
+
+100% tests passed, 0 tests failed out of 2
+
+Total Test time (real) =  25.49 sec

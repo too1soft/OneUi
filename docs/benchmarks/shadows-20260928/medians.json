@@ -1,0 +1,90 @@
+[
+  {
+    "scene": "effects",
+    "backend": "raster",
+    "shadow": "reference",
+    "paint_mean_ms": 4.2306751,
+    "content_p95_ms": 14.3282,
+    "cpu_percent": 0.85884805,
+    "working_set_mib": 117.77734,
+    "private_mib": 97.066406,
+    "paint_count": 310.0
+  },
+  {
+    "scene": "effects",
+    "backend": "raster",
+    "shadow": "optimized",
+    "paint_mean_ms": 4.224977,
+    "content_p95_ms": 14.2868,
+    "cpu_percent": 0.89801926,
+    "working_set_mib": 117.49609,
+    "private_mib": 96.714844,
+    "paint_count": 309.0
+  },
+  {
+    "scene": "effects",
+    "backend": "opengl",
+    "shadow": "reference",
+    "paint_mean_ms": 1.0862268,
+    "content_p95_ms": 12.8147,
+    "cpu_percent": 0.37107822,
+    "working_set_mib": 170.41016,
+    "private_mib": 302.80078,
+    "paint_count": 340.0
+  },
+  {
+    "scene": "effects",
+    "backend": "opengl",
+    "shadow": "optimized",
+    "paint_mean_ms": 0.61598101,
+    "content_p95_ms": 0.9549,
+    "cpu_percent": 0.29313936,
+    "working_set_mib": 109.28125,
+    "private_mib": 160.00781,
+    "paint_count": 358.0
+  },
+  {
+    "scene": "effects-idle",
+    "backend": "raster",
+    "shadow": "reference",
+    "paint_mean_ms": 0.0,
+    "content_p95_ms": 0.0,
+    "cpu_percent": 0.0,
+    "working_set_mib": 96.898438,
+    "private_mib": 75.984375,
+    "paint_count": 0.0
+  },
+  {
+    "scene": "effects-idle",
+    "backend": "raster",
+    "shadow": "optimized",
+    "paint_mean_ms": 0.0,
+    "content_p95_ms": 0.0,
+    "cpu_percent": 0.0,
+    "working_set_mib": 96.761719,
+    "private_mib": 75.832031,
+    "paint_count": 0.0
+  },
+  {
+    "scene": "effects-idle",
+    "backend": "opengl",
+    "shadow": "reference",
+    "paint_mean_ms": 0.0,
+    "content_p95_ms": 0.0,
+    "cpu_percent": 0.0,
+    "working_set_mib": 147.3125,
+    "private_mib": 253.46094,
+    "paint_count": 0.0
+  },
+  {
+    "scene": "effects-idle",
+    "backend": "opengl",
+    "shadow": "optimized",
+    "paint_mean_ms": 0.0,
+    "content_p95_ms": 0.0,
+    "cpu_percent": 0.0,
+    "working_set_mib": 103.39844,
+    "private_mib": 153.07812,
+    "paint_count": 0.0
+  }
+]

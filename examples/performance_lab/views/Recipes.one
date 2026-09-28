@@ -1,0 +1,41 @@
+<template>
+  <SidebarLayout ref="recipeShell">
+    <Sidebar>
+      <Text class="section-title">演示工作区</Text>
+      <Button :variant="sample.listVariant" @click="sample.showWorkspaceList">连接管理</Button>
+      <Button :variant="sample.settingsVariant" @click="sample.showWorkspaceSettings">工作区设置</Button>
+    </Sidebar>
+    <Column grow="1" basis="0">
+      <MasterDetail ref="recipePanes" v-if="sample.workspaceList" :detail-open="sample.detailOpen">
+        <ListPage title="连接管理" subtitle="双击或按 Enter 查看详情；窄窗口在列表与详情之间切换。">
+          <Toolbar>
+            <SearchInput ref="recipeSearch" v-model="sample.query" placeholder="搜索节点" name="搜索连接" />
+            <Button :disabled="sample.noSelection" @click="sample.openDetail">查看详情</Button>
+          </Toolbar>
+          <DataTable ref="recipeTable" v-if="sample.hasRows" :columns="sample.columns" :items="sample.rows" v-model="sample.selected" item-key="id" @activate="sample.openDetail" name="连接列表" />
+          <EmptyState v-if="sample.empty" title="没有匹配的节点" subtitle="调整搜索条件，或清除搜索。" grow="1"><Button @click="sample.clear">清除搜索</Button></EmptyState>
+          <ActionBar><Status :text="sample.count" /></ActionBar>
+        </ListPage>
+        <DetailPage title="连接详情">
+          <Surface v-if="sample.hasSelection" :appearance="sample.surfaceAppearance">
+            <FormRow label="名称"><Text :text="sample.nodeName" /></FormRow>
+            <FormRow label="业务 ID"><Text :text="sample.selected" /></FormRow>
+            <FormRow label="表面层次"><Select ref="recipeAppearance" :items="sample.appearances" v-model="sample.appearanceIndex" /></FormRow>
+            <Text class="muted">示例数据仅用于展示。切换外观和窗口尺寸会保留选择与滚动位置。</Text>
+          </Surface>
+          <EmptyState v-if="sample.noSelection" title="先选择一个节点" subtitle="在左侧列表中选择，或双击查看详情。" />
+          <ActionBar><Button ref="recipeBack" @click="sample.closeDetail">返回列表</Button></ActionBar>
+        </DetailPage>
+      </MasterDetail>
+      <SettingsPage ref="recipeSettings" v-if="sample.workspaceSettings" title="工作区设置" subtitle="字段自动分栏；底部操作保持可见。仅修改本次演示。">
+        <Surface appearance="outlined">
+          <FormGrid>
+            <FormRow label="连接名称" hint="清空后应用可查看验证提示" :error="sample.error"><Input ref="recipeName" v-model="sample.name" /></FormRow>
+            <FormRow label="自动重连" hint="本地演示开关"><Switch text="允许重连" v-model="sample.enabled" /></FormRow>
+          </FormGrid>
+        </Surface>
+        <ActionBar><Button variant="primary" @click="sample.applySettings">应用设置</Button><Status :text="sample.saveStatus" /></ActionBar>
+      </SettingsPage>
+    </Column>
+  </SidebarLayout>
+</template>

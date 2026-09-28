@@ -3,6 +3,7 @@
 #include "internal/unicode.h"
 #include "skia_path.h"
 #include "text/text_layout.h"
+#include "text/font_family_list.h"
 #if defined(ONEUI_CIRCLE_MESH_EXPERIMENT)
 #include "circle_mesh_experiment.h"
 #include "include/core/SkMesh.h"
@@ -21,6 +22,7 @@
 #include "include/core/SkMaskFilter.h"
 #include "include/core/SkMilestone.h"
 #include "include/core/SkPaint.h"
+#include "include/core/SkPixmap.h"
 #include "include/core/SkPath.h"
 #if SK_MILESTONE >= 150
 #include "include/core/SkPathBuilder.h"
@@ -40,6 +42,7 @@
 #include <chrono>
 #include <climits>
 #include <cmath>
+#include <cstdlib>
 #include <map>
 #include <mutex>
 #include <tuple>
@@ -172,6 +175,12 @@ class SkiaCanvasImpl final : public Canvas {
         } else {
             clipBounds_ = rect;
         }
+    }
+
+    bool clipOutRect(Rect rect) override {
+        canvas_.clipRect(toSkRect(rect), SkClipOp::kDifference, false);
+        // The remaining region still has the same conservative outer bounds.
+        return true;
     }
 
     std::optional<Rect> clipBounds() const override { return clipBounds_; }
@@ -379,10 +388,41 @@ class SkiaCanvasImpl final : public Canvas {
         paint.setColor(toSkColor(shadow.color));
         const float shadowRadius = std::max(0.0f, radius + spread);
         if (shadow.blurRadius > 0.0f) {
-            const auto cached = shadowImage(shadowRect.width, shadowRect.height, shadowRadius,
+            // Rounded shadow corners and edge falloff do not change when a large
+            // surface grows. Cache one small mask and stretch only its flat center.
+            const float extent = std::ceil(shadowRadius + shadow.blurRadius * 2 + 2);
+            const int edge = std::isfinite(extent) && extent > 0 && extent < 2048 ? static_cast<int>(extent) : 0;
+            const int patchSize = edge * 2 + 1;
+            // The raster center is a constant color; avoid its costly stretched
+            // image sampler and draw only the eight shadow edge/corner patches.
+            bool patch = edge > 0 && patchSize < 4096 && shadowRect.width > patchSize && shadowRect.height > patchSize
+                && shadowRect.width == std::floor(shadowRect.width) && shadowRect.height == std::floor(shadowRect.height);
+#if defined(ONEUI_LAB_RENDER_TESTS)
+            if (std::getenv("ONEUI_SHADOW_REFERENCE")) patch = false;
+#endif
+            const auto cached = shadowImage(patch ? float(patchSize) : shadowRect.width,
+                                            patch ? float(patchSize) : shadowRect.height, shadowRadius,
                                             shadow.blurRadius, shadow.spreadRadius, shadow.color);
             if (cached.image) {
-                canvas_.drawImage(cached.image, shadowRect.x - static_cast<float>(cached.pad),
+                if(patch && !canvas_.recordingContext()) {
+                    SkPixmap pixels;
+                    if(cached.image->peekPixels(&pixels)) {
+                        const float border=float(cached.pad+edge);
+                        const float sx[]={0,border,border+1,float(cached.image->width())};
+                        const float sy[]={0,border,border+1,float(cached.image->height())};
+                        const float dx[]={shadowRect.x-cached.pad,shadowRect.x+edge,shadowRect.x+shadowRect.width-edge,shadowRect.x+shadowRect.width+cached.pad};
+                        const float dy[]={shadowRect.y-cached.pad,shadowRect.y+edge,shadowRect.y+shadowRect.height-edge,shadowRect.y+shadowRect.height+cached.pad};
+                        SkPaint center;center.setColor(pixels.getColor(int(border),int(border)));
+                        for(int y=0;y<3;++y)for(int x=0;x<3;++x) {
+                            const auto dst=SkRect::MakeLTRB(dx[x],dy[y],dx[x+1],dy[y+1]);
+                            if(x==1 && y==1)canvas_.drawRect(dst,center);
+                            else canvas_.drawImageRect(cached.image,SkRect::MakeLTRB(sx[x],sy[y],sx[x+1],sy[y+1]),dst,SkSamplingOptions(),nullptr,SkCanvas::kStrict_SrcRectConstraint);
+                        }
+                    } else canvas_.drawImageNine(cached.image.get(),SkIRect::MakeXYWH(cached.pad+edge,cached.pad+edge,1,1),
+                        toSkRect({shadowRect.x-cached.pad,shadowRect.y-cached.pad,shadowRect.width+cached.pad*2,shadowRect.height+cached.pad*2}),SkFilterMode::kNearest);
+                } else if(patch) canvas_.drawImageNine(cached.image.get(), SkIRect::MakeXYWH(cached.pad+edge,cached.pad+edge,1,1),
+                    toSkRect({shadowRect.x-cached.pad,shadowRect.y-cached.pad,shadowRect.width+cached.pad*2,shadowRect.height+cached.pad*2}), SkFilterMode::kNearest);
+                else canvas_.drawImage(cached.image, shadowRect.x - static_cast<float>(cached.pad),
                                   shadowRect.y - static_cast<float>(cached.pad));
                 ++g_primitivePaintTrace.shadowCalls;
                 g_primitivePaintTrace.shadowMs += currentTimeMs() - traceStartMs;
@@ -651,7 +691,7 @@ class SkiaCanvasImpl final : public Canvas {
         }
 
         const SkFontStyle style(clampedWeight, SkFontStyle::kNormal_Width, SkFontStyle::kUpright_Slant);
-        if (const std::string requested = utf8FontFamily(familyName); !requested.empty()) {
+        for (const auto& requested : text::fontFamilyList(utf8FontFamily(familyName))) {
             const auto embedded = makeEmbeddedFontManager();
             if (auto face = embedded ? embedded->matchFamilyStyle(requested.c_str(), style) : nullptr;
                 face && (family != TextFontFamily::Monospace || face->isFixedPitch())) {
@@ -737,6 +777,16 @@ class SkiaCanvasImpl final : public Canvas {
         }
         const int clampedWeight = std::clamp(weight, 100, 900);
         const SkFontStyle style(clampedWeight, SkFontStyle::kNormal_Width, SkFontStyle::kUpright_Slant);
+        // Use the explicitly configured fallback families before platform fallback,
+        // matching SkParagraph's shaping order for mixed Latin/CJK labels.
+        const auto embedded = makeEmbeddedFontManager();
+        for (const auto& candidate : text::fontFamilyList(utf8FontFamily(familyName))) {
+            for (const auto& manager : {embedded, fontMgr}) {
+                auto face = manager ? manager->matchFamilyStyle(candidate.c_str(), style) : nullptr;
+                if (face && face->unicharToGlyph(codepoint) != 0 &&
+                    (family != TextFontFamily::Monospace || face->isFixedPitch())) return face;
+            }
+        }
         if (family == TextFontFamily::Monospace) {
             for (const char *candidate : {"NSimSun", "Microsoft YaHei Mono"}) {
                 if (auto face = fontMgr->matchFamilyStyle(candidate, style);

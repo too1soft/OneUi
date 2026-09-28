@@ -28,6 +28,30 @@ colors:
   dark-error: "#ffb4a8"
   dark-warning: "#efce88"
   dark-success: "#b2dca4"
+  workspace-light-canvas: "#edf0f3"
+  workspace-light-surface: "#fafbfc"
+  workspace-light-chrome: "#f0f3f6"
+  workspace-light-ink: "#202732"
+  workspace-light-muted: "#596574"
+  workspace-light-line: "#d1d8e0"
+  workspace-light-control: "#e5ebf1"
+  workspace-light-hover: "#e4ebf2"
+  workspace-light-accent: "#0067c7"
+  workspace-light-accent-ink: "#ffffff"
+  workspace-light-selection: "#dceafb"
+  workspace-light-success: "#12825d"
+  workspace-dark-canvas: "#1c2126"
+  workspace-dark-surface: "#1c2228"
+  workspace-dark-chrome: "#282e34"
+  workspace-dark-ink: "#e3e8ed"
+  workspace-dark-muted: "#aebac6"
+  workspace-dark-line: "#3b444e"
+  workspace-dark-control: "#2b343d"
+  workspace-dark-hover: "#333f49"
+  workspace-dark-accent: "#3699ff"
+  workspace-dark-accent-ink: "#ffffff"
+  workspace-dark-selection: "#243e55"
+  workspace-dark-success: "#36d69b"
 typography:
   heading:
     fontSize: "28px"
@@ -59,6 +83,7 @@ typography:
 rounded:
   control: "6px"
   section: "12px"
+  workspace-tool: "4px"
 spacing:
   space-sm: "8px"
   space-md: "16px"
@@ -106,6 +131,18 @@ components:
   read-only-value:
     textColor: "{colors.light-ink}"
     typography: "{typography.field-value}"
+  workspace-tool-dark:
+    backgroundColor: "transparent"
+    textColor: "{colors.workspace-dark-ink}"
+    rounded: "{rounded.workspace-tool}"
+    padding: "6px"
+    height: "32px"
+    width: "32px"
+  workspace-panel-header-dark:
+    backgroundColor: "{colors.workspace-dark-chrome}"
+    textColor: "{colors.workspace-dark-ink}"
+    padding: "0px 12px"
+    height: "40px"
 ---
 
 # Design System: OneUI
@@ -139,11 +176,19 @@ Canvas separates the application background from section surfaces. Ink carries c
 
 **The Semantic Feedback Rule.** Status text must communicate the state in words; color and the native status dot support that meaning.
 
+### Optional workspace palette
+
+`workspaceTheme(dark)` explicitly selects compact density with slate surfaces and blue emphasis. Only `workspace-*` tokens describe that optional palette; the green defaults above remain the authority for ordinary pages. Chrome groups the title, navigation rail, sessions, panel headers, and status bar; surface carries the working content. Selection and accent identify the active area, while success keeps its semantic meaning. Error and warning inherit the corresponding light or dark default roles.
+
+**The Opt-In Workspace Rule.** Apply workspace colors as a complete optional theme; do not promote its blue accent or compact composition into the default green system.
+
 ## Typography
 
 Use the heading, page-title, section-title, body, and supporting roles in the frontmatter. `Page` and `Header` use heading text; the page-pattern components use page-title text; section and empty/loading titles use section-title text. Default field labels are semibold. Read-only labels use muted regular text, while a `Text` field value uses the stronger field-value role. A `Status` field keeps its own status styling.
 
 The theme does not declare a font family, line-height, or tracking token. Preserve the native typography implementation and fallback behavior; no web font or invented font stack is specified here.
+
+The terminal workbench locally uses semibold section labels (13px) and metric values (23px). These belong to that example; they do not redefine the SDK section-title role. Terminal text retains its native terminal font and rendering.
 
 **The Read-Only Hierarchy Rule.** In a read-only field, the label describes the value; the value receives the stronger text role.
 
@@ -157,11 +202,19 @@ The section gap separates major groups; the field gap separates rows and grid ce
 
 `FormGrid` accepts `FormRow` children and places labels above controls. Its default cell basis is (320px), with wrapping and geometry owned by Yoga. `min-column-width` adjusts that layout input; it is not an OS or device breakpoint. Standalone form rows use wrapping label and control groups with bases of (260px) and (300px). Do not infer fixed screen breakpoints from these values. Optional empty titles, subtitles, hints, and errors collapse.
 
+### Optional workspace composition
+
+`Workspace` arranges a content title bar (38px), left navigation rail (56px), session bar (42px), flexible body, and status bar (38px). `DockPanel` arranges its header (40px), flexible body, and optional footer (40px). These are reusable SDK defaults, with narrow line-colored separation (1px), rather than application-calculated child coordinates. The content title bar does not replace operating-system window chrome.
+
+The terminal-workbench example starts with a terminal and SFTP stack taking 70% of the body and monitoring taking 30%. Below its application-specific width (1050px), a segmented terminal/files/monitor switch selects the visible retained region. Split ratios, terminal objects, and input survive region changes. The SDK does not force this breakpoint or ratio onto other workspaces. Application code selects regions and binds state; Yoga and the shared split components allocate geometry.
+
 ## Elevation & Depth
 
 Canvas, surface, control, borders, and selection convey separation. Keep default surfaces flat. The shared theme additionally offers opt-in button feedback: `motion-lift` uses `0px 2px 6px #00000018` at rest and `0px 5px 12px #00000030` on hover, while `motion-press` changes `0px 2px 4px #00000020` to `inset 0px 2px 5px #00000038` on press. Both remove shadows when disabled. These classes communicate interaction without moving the hit target; they do not establish a raised-card default. Focus outlines are interaction feedback rather than surface elevation: controls use an accent outline (2px) with offset (2px); invalid focused input uses the error role.
 
 The effects gallery demonstrates multi-stop linear/radial fills and real inner shadows. Its light green gradient uses a dark foreground in both themes. These are optional demonstrations, not replacement palette tokens; retain readable contrast when applying gradients.
+
+The optional workspace uses flat, connected panes with chrome and line separation. Do not introduce card shadows between its terminal, files, and monitoring regions.
 
 ## Shapes
 
@@ -191,7 +244,15 @@ Compose detail content from `DetailPage`, `Section`, `FormGrid`, `FormRow`, and 
 
 ### Tables and status
 
-`DataTable` uses a surface body, control-colored content background, hover and selection roles, and native scrolling. Status uses muted text by default and semantic tones when requested. The component schema has no standalone navigation or chip primitive; document application-specific navigation separately if introduced.
+`DataTable` uses a surface body, control-colored content background, hover and selection roles, and native scrolling. Status uses muted text by default and semantic tones when requested. `Sidebar` with `SidebarLayout` is the retained native navigation pattern; it becomes a wrapping top row below its 960px container breakpoint. `MasterDetail` switches from two panes to a state-selected single pane below 800px. There is no generic routing/history or chip primitive.
+
+### Workspace regions and tools
+
+Compose workspace areas from `Workspace`, its named regions, `DockPanel`, and `PanelHeader` / `PanelBody` / `PanelFooter` through either `.one` templates or C++ Compose. Both authoring paths retain the same native widgets. `ToolButton` provides a transparent compact control with hover and pressed fills, a small radius, and an accent focus outline (1px). Icon-only tools default to (32px) square; a text tool may grow horizontally. Set `name` to provide its accessible name and tooltip. Use `Spacer` for alignment rather than local coordinates.
+
+`Tabs` supports session documents and equal-width segmented views. `Progress` uses a bound value from 0 to 1. Native tables remain scroll owners. Coordinate `DockPanel.collapsed` with `SplitView.second-collapsed` to retain a header-only region (40px in this example) and restore the original split ratio on expansion. This is an immediate retained layout change; it does not imply animation, floating windows, or arbitrary drag docking.
+
+The [workspace layout guide and native captures](docs/57-workspace-layout-components.md) record the optional palette and wide/narrow composition. Terminal inset color and compact table styling in the example are local choices, not replacements for the default form and table metrics.
 
 The [sidecar](.impeccable/design.json) contains self-contained HTML illustrations of representative native primitives for documentation panels. They are token translations, not native rendering or input-behavior evidence. The [native review record](docs/typed-authoring-design-review.md) links the actual screenshots and states the validation limits.
 
@@ -209,3 +270,7 @@ The [sidecar](.impeccable/design.json) contains self-contained HTML illustration
 - **Don't** introduce a second widget tree or layout engine for typed authoring.
 - **Don't** replace shared default tokens with page-specific coordinates to reproduce a screenshot.
 - **Don't** treat documentation HTML previews as proof of native input, focus, DPI, or IME behavior.
+
+### Page recipes and surface presets
+
+Standard keeps the existing 6px control / 12px surface radii. Soft uses 8px / 14px and a restrained default Surface shadow. Explicit flat, outlined, raised and tinted Surface appearances share theme roles. Settings actions remain outside the scrolling body. Use the [native recipe captures and constraints](docs/52-layout-recipes-and-presets.md); the two authoring entries share widgets and state.

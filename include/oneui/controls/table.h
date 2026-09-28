@@ -37,6 +37,8 @@ struct TableCell {
     float iconSize = 20.0f;
     std::wstring detail;
     std::wstring badge;
+    std::optional<Color> badgeForeground;
+    std::optional<Color> badgeBackground;
 };
 
 class ONEUI_API Table final : public Widget {
@@ -46,6 +48,8 @@ public:
     void setColumns(std::vector<TableColumn> columns);
     void setColumnPresentation(int column, TextAlign alignment, bool action);
     void setHeaderHeight(float height);
+    // Enables sortable headers. Activations use onCellAction(-1, column).
+    void setHeaderSort(int column, bool descending);
     void setOnCellAction(std::function<void(int, int)> callback);
     void setRows(std::vector<std::vector<std::wstring>> rows);
     void setRichRows(std::vector<std::vector<TableCell>> rows);
@@ -64,6 +68,8 @@ public:
     float rowHeight() const;
     void setWheelStep(float step);
     void setColumnDividersVisible(bool visible);
+    void setSelectionColumnVisible(bool visible);
+    void setSelectionColumnWidth(float width);
     bool columnDividersVisible() const;
     void setScrollOffset(float offset);
     float scrollOffset() const;
@@ -118,7 +124,13 @@ private:
     SelectionModel selection_;
     int hoveredIndex_ = -1;
     int pressedIndex_ = -1;
+    int sortColumn_ = -1;
+    bool sortDescending_ = false;
+    int focusedHeader_ = -1;
     int pressedColumn_ = -1;
+    bool draggingScrollbar_ = false;
+    float scrollbarGrab_ = 0.0f;
+    void dragScrollbar(float y);
     std::optional<float> headerHeight_;
     std::function<void(int, int)> onCellAction_;
     int pressedClickCount_ = 1;
@@ -134,6 +146,10 @@ private:
     float rowHeight_ = 0.0f;
     float wheelStep_ = 36.0f;
     bool columnDividersVisible_ = true;
+    bool selectionColumnVisible_ = false;
+    bool pressedSelection_ = false;
+    float selectionColumnWidth_ = 44.0f;
+    float selectionGutter() const { return selectionColumnVisible_ ? selectionColumnWidth_ : 0.0f; }
     float scrollOffset_ = 0.0f;
     SmoothScrollMotion scrollMotion_;
     std::optional<TableStyleOverride> styleOverride_;

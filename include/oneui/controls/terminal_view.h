@@ -148,6 +148,8 @@ public:
     void setCopyOnSelect(bool enabled);
     bool copyOnSelect() const;
     void setScrollRowsPerWheel(float rows);
+    void setScrollback(std::uint64_t historyRows, std::uint64_t offset);
+    Rect scrollbackThumbRect() const;
     void setMouseReporting(bool enabled);
     void setRightButtonAction(TerminalAuxiliaryButtonAction action);
     void setMiddleButtonAction(TerminalAuxiliaryButtonAction action);
@@ -325,6 +327,11 @@ private:
     TerminalViewport viewport_{};
     GridMetrics lastMetrics_{};
     bool hasGridMetrics_ = false;
+    std::uint64_t historyRows_ = 0;
+    std::uint64_t scrollbackOffset_ = 0;
+    bool draggingScrollback_ = false;
+    float scrollbackGrab_ = 0.0f;
+    void dragScrollback(float y);
     float scrollRowsPerWheel_ = 3.0f;
     float wheelRowRemainder_ = 0.0f;
     float pointerWheelRemainder_ = 0.0f;

@@ -1,0 +1,3 @@
+Declarative runtime, lifetime, input, keyed identity and theme tests passed.
+Compiler positive, negative, source mapping, imports, slots and scoped CSS tests passed.
+Compose: 6 positive and 12 negative C++ type/structure/lifetime diagnostics passed.

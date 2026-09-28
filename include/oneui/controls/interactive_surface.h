@@ -53,6 +53,7 @@ public:
     /// Emits both pointer enter and pointer leave without products polling
     /// native geometry or duplicating hover-state bookkeeping.
     void setOnHoverChanged(std::function<void(bool)> callback);
+    void setOnFocusChanged(std::function<void(bool)> callback);
     void setOnContextMenuRequested(std::function<void(const MouseEvent&)> callback);
     /// Pointer drag in window coordinates. A sub-threshold gesture remains a
     /// click; a completed/cancelled drag never also activates the surface.
@@ -103,6 +104,7 @@ private:
     std::function<void(const MouseEvent&)> onPointerActivated_;
     std::function<void(const MouseEvent&)> onPointerMoved_;
     std::function<void(bool)> onHoverChanged_;
+    std::function<void(bool)> onFocusChanged_;
     std::function<void(const MouseEvent&)> onContextMenuRequested_;
 };
 

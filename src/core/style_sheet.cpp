@@ -543,6 +543,12 @@ bool applyDeclaration(
             rule.box.detailOffsetY = *offset;
             return true;
         }
+    } else if (name == "check-background") {
+        if (auto color = parseStyleColor(value)) { rule.box.checkBackground = *color; return true; }
+    } else if (name == "check-border") {
+        if (auto color = parseStyleColor(value)) { rule.box.checkBorder = *color; return true; }
+    } else if (name == "check-radius") {
+        if (auto radius = parsePx(value)) { rule.box.checkRadius = std::clamp(*radius, 0.0f, 8.0f); return true; }
     } else if (name == "scrollbar-color") {
         if (auto color = parseStyleColor(value)) {
             rule.box.scrollbarColor = *color;
@@ -654,7 +660,13 @@ void StyleSheet::addRule(StyleRule rule) {
     if (rule.order == 0) {
         rule.order = static_cast<int>(rules_.size()) + 1;
     }
+    const ParsedSelector parsed = parseSelector(rule.selector);
+    CompiledSelector compiled;
+    compiled.node = StyleNode{parsed.tag, parsed.classes, parsed.pseudos};
+    compiled.valid = parsed.valid;
+    compiled.specificity = selectorSpecificity(rule.selector);
     rules_.push_back(std::move(rule));
+    selectors_.push_back(std::move(compiled));
     resolveCache_.clear();
     ++version_;
 }
@@ -751,10 +763,18 @@ StyleBox StyleSheet::resolve(const StyleNode& node) const {
     };
 
     std::vector<Match> matches;
-    for (const auto& rule : rules_) {
-        if (selectorMatches(rule.selector, node)) {
-            matches.push_back(Match{&rule, selectorSpecificity(rule.selector)});
+    for (std::size_t index = 0; index < rules_.size(); ++index) {
+        const auto& compiled = selectors_[index];
+        if (!compiled.valid ||
+            (!compiled.node.tag.empty() && compiled.node.tag != node.tag) ||
+            (node.state & compiled.node.state) != compiled.node.state) {
+            continue;
         }
+        if (!std::all_of(compiled.node.classes.begin(), compiled.node.classes.end(),
+                [&](const std::string& klass) { return hasClass(node, klass); })) {
+            continue;
+        }
+        matches.push_back(Match{&rules_[index], compiled.specificity});
     }
 
     std::stable_sort(matches.begin(), matches.end(), [](const Match& lhs, const Match& rhs) {
@@ -1027,6 +1047,9 @@ StyleBox mergeStyleBox(StyleBox base, const StyleBox& overlay) {
     if (overlay.scrollbarColor) {
         base.scrollbarColor = overlay.scrollbarColor;
     }
+    if (overlay.checkBackground) base.checkBackground = overlay.checkBackground;
+    if (overlay.checkBorder) base.checkBorder = overlay.checkBorder;
+    if (overlay.checkRadius) base.checkRadius = overlay.checkRadius;
     if (overlay.scrollbarWidth) {
         base.scrollbarWidth = overlay.scrollbarWidth;
     }
@@ -1063,14 +1086,24 @@ void paintStyleBox(Canvas& canvas, Rect rect, const StyleBox& box) {
         if (!shadow.inset) {
             StyleShadow paintedShadow = shadow;
             paintedShadow.color = applyOpacity(paintedShadow.color, box.opacity);
-            canvas.drawBoxShadow(
-                Rect{
-                    rect.x + paintedShadow.offset.x,
-                    rect.y + paintedShadow.offset.y,
-                    rect.width,
-                    rect.height},
-                BoxShadow{paintedShadow.color, Point{0.0f, 0.0f}, paintedShadow.blurRadius, paintedShadow.spreadRadius},
-                radius);
+            const auto drawShadow = [&] {
+                canvas.drawBoxShadow(
+                    Rect{rect.x + paintedShadow.offset.x, rect.y + paintedShadow.offset.y, rect.width, rect.height},
+                    BoxShadow{paintedShadow.color, Point{0.0f, 0.0f}, paintedShadow.blurRadius, paintedShadow.spreadRadius}, radius);
+            };
+            // Do not blend pixels that the following opaque fill overwrites.
+            // Keep a conservative rounded-corner/antialias fringe; transparent
+            // surfaces still receive the complete shadow, including its center.
+            const bool opaque = box.background.color && applyOpacity(*box.background.color, box.opacity).a == 255;
+            const float inset = std::max(1.0f, radius + 1.0f);
+            if (opaque && rect.width > inset * 2 && rect.height > inset * 2) {
+                canvas.save();
+                canvas.clipOutRect(rect.inset(Insets{inset}));
+                drawShadow();
+                canvas.restore();
+            } else {
+                drawShadow();
+            }
         }
     }
 
@@ -1105,7 +1138,16 @@ void paintStyleBox(Canvas& canvas, Rect rect, const StyleBox& box) {
     }
     // border-width: 0 语义为“无边框”：宽度 0 传给 Skia 会画 1px 发丝线（hairline），必须显式跳过。
     if (box.borderColor && box.borderWidth.value_or(1.0f) > 0.0f) {
-        canvas.strokeRect(rect, applyOpacity(*box.borderColor, box.opacity), radius, box.borderWidth.value_or(1.0f));
+        // CSS borders occupy the inside of the border box. Centering a stroke
+        // on its edge clips half of a 1px border and spreads the rest over two
+        // pixels, making translucent workspace outlines visibly too faint.
+        const float width = std::min(box.borderWidth.value_or(1.0f), std::min(rect.width, rect.height));
+        if (width > 0.0f) {
+            const float inset = width * 0.5f;
+            canvas.strokeRect(
+                Rect{rect.x + inset, rect.y + inset, rect.width - width, rect.height - width},
+                applyOpacity(*box.borderColor, box.opacity), std::max(0.0f, radius - inset), width);
+        }
     }
     for (const auto& shadow : box.shadows) {
         if (shadow.inset) {

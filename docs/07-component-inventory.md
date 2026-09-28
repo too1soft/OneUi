@@ -215,3 +215,16 @@ Rust workspace 另外覆盖 safe wrapper、结构化数组、handle 合并更新
 | 按钮反馈预设 | `motion-lift`／`motion-press` 类 | 共享主题中的可选阴影过渡；默认控件保持原外观 |
 
 渐变色标不做动画；Select／Switch／DataTable 的严格声明式样式未扩展上述效果。自定义 Canvas 的默认兼容实现不提供完整内阴影／淡出，需实现新虚函数。详见[语法、代码和验证边界](51-effects-and-motion.md)。
+
+## 页面组合与视觉预设
+
+新增 `SidebarLayout`、`Sidebar`、`MasterDetail`、`Surface`，共用 C++／`.one` 适配和 Yoga；`VisualPreset::Standard/Soft` 独立于主题与密度。用法、约束及验证边界见[完整页面组合](52-layout-recipes-and-presets.md)。
+
+## 声明式原生接入补充（2026-09-28）
+
+`NativeHost` 已加入 C++ Compose / `.one`，通过 Mount 注册现有原生控件及可选外部所有者；不提供终端协议。Row/Column 新增 align、justify、wrap 入口。详见 [NativeHost 与终端工作台](55-native-host-and-terminal-workbench.md)。
+
+
+## 工作区布局组件
+
+`Workspace`、`TitleBar`、`NavigationRail`、`SessionBar`、`WorkspaceBody`、`StatusBar`、`DockPanel`、`PanelHeader/Body/Footer`、`Spacer`、`ToolButton`、`Progress` 共用 C++／`.one` 适配层。`SplitView` 增加第二面板收起且保留比例，`Tabs` 支持 segmented 呈现。结构要求、默认尺寸、主题和限制见[工作区快速布局](57-workspace-layout-components.md)。

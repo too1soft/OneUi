@@ -51,13 +51,15 @@ std::optional<wchar_t> fluentGlyph(IconSymbol symbol) {
 
 float fluentOpticalSize(Rect rect) {
     const float extent = std::max(0.0f, std::min(rect.width, rect.height));
-    if (extent <= 18.0f) return 16.0f;
-    if (extent <= 22.0f) return 20.0f;
-    if (extent <= 28.0f) return 24.0f;
-    if (extent <= 36.0f) return 32.0f;
-    if (extent <= 44.0f) return 40.0f;
-    if (extent <= 56.0f) return 48.0f;
-    return 64.0f;
+    // Optical buckets must fit the allocated box. Small buttons allocate 15
+    // DIPs; drawing a 16-DIP glyph there clips its outer strokes.
+    if (extent <= 18.0f) return std::min(extent, 16.0f);
+    if (extent <= 22.0f) return std::min(extent, 20.0f);
+    if (extent <= 28.0f) return std::min(extent, 24.0f);
+    if (extent <= 36.0f) return std::min(extent, 32.0f);
+    if (extent <= 44.0f) return std::min(extent, 40.0f);
+    if (extent <= 56.0f) return std::min(extent, 48.0f);
+    return std::min(extent, 64.0f);
 }
 
 Point p(Rect rect, float x, float y) {

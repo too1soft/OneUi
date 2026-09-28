@@ -6,6 +6,7 @@
         <Button ref="galleryBack" @click="sample.back">返回连接管理</Button>
         <Select :items="settings.themes" v-model="settings.theme" name="展示页主题" />
         <Select :items="settings.densities" v-model="settings.density" name="界面密度" />
+        <Select v-if="sample.workspaceVisible" :items="sample.visualPresets" v-model="sample.visualPreset" name="视觉预设" />
         <Select :items="sample.scenes" v-model="sample.scene" name="组件分类" />
       </Toolbar>
     </Header>
@@ -81,7 +82,7 @@
           <FormRow label="切换时长"><Select :items="sample.timings" v-model="sample.timing" /></FormRow>
         </FormGrid>
       </Section>
-      <Section class="effect-shadow" title="触碰与输入">
+      <Section ref="effectsSection" class="effect-shadow" title="触碰与输入">
         <FormRow label="内阴影输入框" hint="可输入中文；切换效果保留焦点、光标与内容">
           <Input ref="effectsInput" class="effect-inset" v-model="sample.note" />
         </FormRow>
@@ -99,6 +100,7 @@
         </Reveal>
       </Section>
     </SettingsPage>
+    <Column ref="workspaceHost" v-if="sample.workspaceVisible" grow="1" basis="0" />
   </Page>
 </template>
 

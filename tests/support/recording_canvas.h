@@ -61,6 +61,8 @@ struct OpacityCall { Rect rect; float opacity; };
 
 class RecordingCanvas final : public Canvas {
 public:
+    bool namedFontsSupported = false;
+    bool supportsNamedFont(const std::wstring&) const override { return namedFontsSupported; }
     void drawTextBlock(const std::wstring& text, Rect rect, Color color, const TextBlockStyle& style) override {
         textBlocks.push_back({text, rect, color, style});
         texts.push_back({text, rect, color, style.fontSize, style.fontWeight, style.align});

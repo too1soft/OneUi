@@ -1,4 +1,5 @@
 #include "text/text_layout.h"
+#include "text/font_family_list.h"
 #include "internal/unicode.h"
 #include "test_asset_path.h"
 #include "platform/shared/skia_canvas.h"
@@ -20,7 +21,20 @@ static void require(bool condition, const char* message) {
 
 int main() {
     try {
+        require(oneui::text::fontFamilyList(" 'Family, One', \"Family Two\", , Third ") ==
+                std::vector<std::string>({"Family, One", "Family Two", "Third"}),
+                "font lists preserve quoted commas, order, and discard empty entries");
 #if defined(_WIN32)
+        LayoutOptions segoe;
+        segoe.family = L"Segoe UI";
+        segoe.size = 13;
+        LayoutOptions stack = segoe;
+        stack.family = L"'Missing OneUI Test Font', 'Segoe UI', 'Microsoft YaHei UI', sans-serif";
+        require(std::abs(Layout::make(L"PostgreSQL API 01", segoe)->width() -
+                         Layout::make(L"PostgreSQL API 01", stack)->width()) < 0.01f,
+                "font stacks use the first available family");
+        require(Layout::make(L"生产 API 主库", stack)->unresolvedGlyphs() == 0,
+                "ordered font stacks retain CJK fallback");
         // Exercise the real system fallback BEFORE installing test fonts.
         // A Chinese Windows 7 installation contains Microsoft YaHei/SimSun;
         // Segoe UI alone must not turn these characters into empty boxes.

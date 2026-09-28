@@ -268,6 +268,7 @@ struct StyleSession {
     std::vector<std::pair<std::string,std::string>> sourceFiles=[] {
         auto files=sources_Connections(),gallery=sources_Gallery();files.insert(files.end(),gallery.begin(),gallery.end());return files;
     }();
+    std::function<VisualPreset()> visualPreset;
     std::function<std::string()> effectCss;
     std::string validCss;
     std::size_t applied=0;
@@ -297,7 +298,7 @@ struct StyleSession {
     bool apply() {
         try {
             const auto density=vm.density.get()==1?Density::Compact:Density::Comfortable;
-            auto css=declarativeTheme(vm.theme.get()==1,density);
+            auto css=declarativeTheme(vm.theme.get()==1,density,visualPreset?visualPreset():VisualPreset::Standard);
             if(dev)for(auto& source:sourceFiles)appendInline(css,readStyleFile(source.first),source.second,source.first);
             else css+=styles_Connections()+styles_Gallery();
             if(effectCss)css+=effectCss();
@@ -340,12 +341,14 @@ public:
         mount.watch(vm.theme,[this](int){styles.apply();});
         mount.watch(vm.density,[this](int){styles.apply();});
         // Build this optional showcase once, only when first requested.
-        mount.watch(flow.gallery,[this](bool shown){
+        mount.watch(flow.gallery,[this,useTemplate](bool shown){
             if(shown && !galleryPage) {
                 samples=std::make_unique<Samples>();
-                galleryPage=std::make_unique<Element>(buildGallery(mount,vm,*samples));
+                galleryPage=std::make_unique<Element>(buildGallery(mount,vm,*samples,!useTemplate));
                 page.root.as<Stack>()->add(galleryPage->widget);
                 page.root.as<Stack>()->setFlex(galleryPage->widget,galleryPage->flex);
+                styles.visualPreset=[this]{return samples->visualPreset.get()?VisualPreset::Soft:VisualPreset::Standard;};
+                mount.watch(samples->visualPreset,[this](int){styles.apply();});
                 styles.effectCss=[this]{return samples->effectCss();};
                 mount.watch(samples->strength,[this](int){styles.apply();});
                 mount.watch(samples->timing,[this](int){styles.apply();});

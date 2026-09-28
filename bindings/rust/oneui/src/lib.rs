@@ -25,6 +25,9 @@ pub mod handles;
 pub mod interaction;
 mod latest_signal;
 pub mod layout;
+pub mod ui;
+mod layout_authoring;
+pub use layout_authoring::{Flex, FlexBasis, StackEngine, StackJustify};
 pub use latest_signal::{LatestSignal, LocalSignalSubscription};
 pub mod platform;
 pub use interaction::{
@@ -1602,6 +1605,16 @@ pub struct Widget {
 }
 
 impl Widget {
+    /// Borrow the opaque C ABI widget handle for a native integration.
+    ///
+    /// # Safety
+    /// The receiver/callback owner must outlive every foreign callback use.
+    /// Call only on the UI thread; never destroy this borrowed handle or store
+    /// it beyond `self`. A C++ view may retain the native widget separately,
+    /// but that does not retain this Rust wrapper's callback allocations.
+    pub unsafe fn with_native_handle<R>(&self, f: impl FnOnce(*mut sys::OneUiWidget) -> R) -> R {
+        f(self.as_raw())
+    }
     fn from_raw(raw: *mut sys::OneUiWidget) -> Result<Self, Error> {
         let raw = NonNull::new(raw).ok_or(Error::WidgetCreationFailed)?;
         Ok(Self {
@@ -2956,6 +2969,11 @@ impl ScrollView {
         };
     }
 
+    /// Space between the scrollbar and viewport edge. The default is 5 pixels.
+    pub fn set_scrollbar_inset(&self, inset: f32) {
+        unsafe { sys::oneui_scroll_view_set_scrollbar_inset(self.widget.as_raw(), inset) };
+    }
+
     pub fn set_scroll_offset(&self, offset: f32) {
         unsafe { sys::oneui_scroll_view_set_scroll_offset(self.widget.as_raw(), offset) };
     }
@@ -3235,6 +3253,12 @@ pub struct Label {
 }
 
 impl Label {
+    /// Draw a leading status dot using the text's current foreground color.
+    /// Dimensions are logical pixels; a zero diameter disables it.
+    pub fn set_status_indicator(&self, diameter: f32, gap: f32) {
+        unsafe { sys::oneui_label_set_status_indicator(self.widget.as_raw(), diameter, gap) };
+    }
+
     pub fn new(text: &str) -> Result<Self, Error> {
         let text = sys::OneUiUtf8String::from_str(text);
         let widget = Widget::from_raw(unsafe { sys::oneui_label_create_utf8(text) })?;
@@ -3896,6 +3920,11 @@ impl TimeSeriesChart {
             ) != 0
         }
     }
+    /// Set the endpoint marker dimensions; non-positive or non-finite values are ignored.
+    pub fn set_latest_point_size(&self, width: f32, height: f32) {
+        unsafe { sys::oneui_time_series_chart_set_latest_point_size(self.widget.as_raw(), width, height) };
+    }
+
     pub fn set_latest_point_visible(&self, visible: bool) {
         unsafe {
             sys::oneui_time_series_chart_set_latest_point_visible(
@@ -4023,6 +4052,11 @@ impl Button {
 
     pub fn set_icon(&self, symbol: IconSymbol) {
         unsafe { sys::oneui_button_set_icon(self.widget.as_raw(), symbol as i32) };
+    }
+
+    /// Removes the leading icon while retaining button identity and handlers.
+    pub fn clear_icon(&self) {
+        unsafe { sys::oneui_button_set_icon(self.widget.as_raw(), -1) };
     }
 
     pub fn set_content_align(&self, align: ButtonContentAlign) {
@@ -4596,6 +4630,7 @@ pub struct InteractiveSurface {
     pointer_callback: Option<Box<PointerCallback>>,
     pointer_moved_callback: Option<Box<PointerCallback>>,
     hover_changed_callback: Option<Box<BoolChangedCallback>>,
+    focus_changed_callback: Option<Box<BoolChangedCallback>>,
     context_menu_callback: Option<Box<PointerCallback>>,
     drag_callback: Option<Box<PointerDragCallback>>,
 }
@@ -4609,6 +4644,7 @@ impl InteractiveSurface {
             pointer_callback: None,
             pointer_moved_callback: None,
             hover_changed_callback: None,
+            focus_changed_callback: None,
             context_menu_callback: None,
             drag_callback: None,
         })
@@ -4824,6 +4860,46 @@ impl InteractiveSurface {
     }
 
     #[track_caller]
+    pub fn set_on_focus_changed<F>(&mut self, callback: F)
+    where
+        F: FnMut(bool) + 'static,
+    {
+        let trace = InteractionTrace::at(
+            "InteractiveSurface",
+            "focus_changed",
+            std::panic::Location::caller(),
+        );
+        self.clear_on_focus_changed();
+        self.focus_changed_callback = Some(Box::new(BoolChangedCallback {
+            handler: Box::new(traced_value_callback(trace, callback)),
+        }));
+        let user_data = (self
+            .focus_changed_callback
+            .as_deref_mut()
+            .expect("interactive surface hover callback was just installed")
+            as *mut BoolChangedCallback)
+            .cast();
+        unsafe {
+            sys::oneui_interactive_surface_set_on_focus_changed(
+                self.widget.as_raw(),
+                Some(run_bool_changed_callback),
+                user_data,
+            )
+        };
+    }
+
+    pub fn clear_on_focus_changed(&mut self) {
+        unsafe {
+            sys::oneui_interactive_surface_set_on_focus_changed(
+                self.widget.as_raw(),
+                None,
+                std::ptr::null_mut(),
+            )
+        };
+        self.focus_changed_callback = None;
+    }
+
+    #[track_caller]
     pub fn set_on_context_menu_requested<F>(&mut self, callback: F)
     where
         F: FnMut(PointerEvent) + 'static,
@@ -4875,6 +4951,7 @@ impl Drop for InteractiveSurface {
         self.clear_on_pointer_activated();
         self.clear_on_pointer_moved();
         self.clear_on_hover_changed();
+        self.clear_on_focus_changed();
         self.clear_on_context_menu_requested();
     }
 }
@@ -6142,6 +6219,7 @@ unsafe extern "C" fn run_tab_edit_callback(
 /// Keyboard-accessible tab strip for switching between peer workspace views.
 pub struct Tabs {
     widget: Widget,
+    overflow_callback: Option<Box<IndexChangedCallback>>,
     changed_callback: Option<Box<IndexChangedCallback>>,
     close_requested_callback: Option<Box<IndexChangedCallback>>,
     context_menu_requested_callback: Option<Box<ContextMenuRequestedCallback>>,
@@ -6154,6 +6232,7 @@ impl Tabs {
         let widget = Widget::from_raw(unsafe { sys::oneui_tabs_create() })?;
         let control = Self {
             widget,
+            overflow_callback: None,
             changed_callback: None,
             close_requested_callback: None,
             context_menu_requested_callback: None,
@@ -6221,6 +6300,27 @@ impl Tabs {
         };
     }
 
+    /// Opt in to document chrome: reserved 24px close targets, 13px glyphs,
+    /// persistent status indicators, separators and a selected underline.
+    pub fn set_document_mode(&self, enabled: bool) {
+        unsafe { sys::oneui_tabs_set_document_mode(self.widget.as_raw(), i32::from(enabled)) };
+    }
+    /// Number of items outside the most recently measured viewport.
+    pub fn overflow_item_count(&self) -> usize {
+        unsafe { sys::oneui_tabs_overflow_item_count(self.widget.as_raw()).max(0) as usize }
+    }
+    /// Reports measured overflow after layout; enqueue any geometry mutations.
+    pub fn set_on_overflow_changed<F: FnMut(i32) + 'static>(&mut self, callback: F) {
+        unsafe { sys::oneui_tabs_set_on_overflow_changed(self.widget.as_raw(), None, std::ptr::null_mut()) };
+        self.overflow_callback = Some(Box::new(IndexChangedCallback { handler: Box::new(callback) }));
+        let data = (self.overflow_callback.as_deref_mut().unwrap() as *mut IndexChangedCallback).cast();
+        unsafe { sys::oneui_tabs_set_on_overflow_changed(self.widget.as_raw(), Some(run_index_changed_callback), data) };
+    }
+    /// Per-item status colors; missing or transparent entries draw no dot.
+    pub fn set_item_status_colors(&self, colors: &[Color]) {
+        let values: Vec<sys::OneUiColor> = colors.iter().copied().map(Into::into).collect();
+        unsafe { sys::oneui_tabs_set_item_status_colors(self.widget.as_raw(), values.as_ptr(), values.len()) };
+    }
     pub fn set_selected_index(&self, index: i32) {
         unsafe { sys::oneui_tabs_set_selected_index(self.widget.as_raw(), index) };
     }
@@ -6396,6 +6496,7 @@ impl Tabs {
 
 impl Drop for Tabs {
     fn drop(&mut self) {
+        unsafe { sys::oneui_tabs_set_on_overflow_changed(self.widget.as_raw(), None, std::ptr::null_mut()) };
         self.clear_on_edit_finished();
         self.clear_on_changed();
         self.clear_on_close_requested();
@@ -6543,6 +6644,9 @@ pub struct TerminalFrame {
     /// One-based physical row number for the first visible row. Zero hides
     /// numbers for this frame (for example while using an alternate screen).
     pub first_visible_line_number: u64,
+    /// Retained history rows above the live viewport, and distance from live output.
+    pub history_rows: u64,
+    pub scrollback_offset: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -8789,6 +8893,7 @@ fn apply_terminal_frame(
     unsafe {
         sys::oneui_terminal_view_set_first_visible_line_number(raw, frame.first_visible_line_number)
     };
+    unsafe { sys::oneui_terminal_view_set_scrollback(raw, frame.history_rows, frame.scrollback_offset); }
     let can_update_in_place = previous.is_some_and(|previous| {
         previous.rows == frame.rows
             && previous.columns == frame.columns
@@ -9291,6 +9396,13 @@ impl VirtualListHandle {
     }
 
     fn replace_items(&self, items: Vec<ListItem>, clear_selection: bool) -> Result<(), Error> {
+        self.set_items_with_commit(items, move || !clear_selection)
+    }
+
+    /// Commits the row model and visual revision in one UI task. Return true
+    /// only when row identities are unchanged and selection may be retained.
+    pub fn set_items_with_commit<F>(&self, items: Vec<ListItem>, commit: F) -> Result<(), Error>
+    where F: FnOnce() -> bool + Send + 'static {
         if self.state.raw.load(Ordering::Acquire).is_null() {
             return Err(Error::WidgetDestroyed);
         }
@@ -9313,6 +9425,7 @@ impl VirtualListHandle {
                     detail: sys::OneUiUtf8String::from_str(&item.detail),
                 })
                 .collect::<Vec<_>>();
+            let clear_selection = !commit();
             unsafe {
                 sys::oneui_virtual_list_set_items_utf8(
                     raw,
@@ -10023,6 +10136,44 @@ pub struct TableHandle {
 }
 
 impl TableHandle {
+    pub fn set_header_sort(&self, column: i32, descending: bool) -> Result<(), Error> {
+        if self.state.raw.load(Ordering::Acquire).is_null() { return Err(Error::WidgetDestroyed); }
+        let state = Arc::clone(&self.state);
+        self.dispatcher.dispatch(move || {
+            let raw = state.raw.load(Ordering::Acquire);
+            if !raw.is_null() { unsafe { sys::oneui_table_set_header_sort(raw,column,i32::from(descending)); } }
+        })
+    }
+
+    /// Publishes a rich revision atomically, retaining selection only when row
+    /// identities are unchanged. Cell strings remain owned until the C call returns.
+    pub fn set_rich_rows(&self, rows: Vec<TableRichRow>, preserve_selection: bool) -> Result<(), Error> {
+        self.set_rich_rows_with_commit(rows, move || preserve_selection)
+    }
+
+    /// Commits the associated row model on the UI thread immediately before
+    /// publishing rows. Return true only when selected indices keep identity.
+    /// The callback is not run if the table has been destroyed.
+    pub fn set_rich_rows_with_commit<F>(&self, rows: Vec<TableRichRow>, commit: F) -> Result<(), Error>
+    where F: FnOnce() -> bool + Send + 'static {
+        if self.state.raw.load(Ordering::Acquire).is_null() { return Err(Error::WidgetDestroyed); }
+        let state = Arc::clone(&self.state);
+        self.dispatcher.dispatch(move || {
+            state.pending_rows.lock().expect("table pending rows lock poisoned").clear();
+            let raw = state.raw.load(Ordering::Acquire);
+            if raw.is_null() { return; }
+            let cells = rows.iter().map(rich_table_row_cells).collect::<Vec<_>>();
+            let values = cells.iter().map(|cells| sys::OneUiTableRichRowUtf8 {
+                cells: cells.as_ptr(), count: cells.len(),
+            }).collect::<Vec<_>>();
+            let preserve_selection = commit();
+            unsafe {
+                sys::oneui_table_set_rich_rows_utf8(raw, values.as_ptr(), values.len());
+                if !preserve_selection { sys::oneui_table_set_selected_indices(raw, std::ptr::null(), 0); }
+            }
+        })
+    }
+
     /// Replaces the column model on the window thread. This is useful for
     /// result grids whose schema is produced by a background query.
     pub fn set_columns(&self, columns: Vec<TableColumn>) -> Result<(), Error> {
@@ -10226,6 +10377,8 @@ pub struct TableRichCell {
     pub text: String,
     pub detail: String,
     pub badge: String,
+    pub badge_foreground: Option<Color>,
+    pub badge_background: Option<Color>,
     pub alignment: LabelAlign,
     pub icon: Option<IconSymbol>,
     pub foreground: Option<Color>,
@@ -10235,6 +10388,8 @@ pub struct TableRichCell {
 impl Default for TableRichCell {
     fn default() -> Self {
         Self {
+            badge_foreground: None,
+            badge_background: None,
             text: String::new(),
             detail: String::new(),
             badge: String::new(),
@@ -10257,6 +10412,9 @@ fn rich_table_row_cells(row: &TableRichRow) -> Vec<sys::OneUiTableRichCellUtf8> 
             text: sys::OneUiUtf8String::from_str(&c.text),
             detail: sys::OneUiUtf8String::from_str(&c.detail),
             badge: sys::OneUiUtf8String::from_str(&c.badge),
+            badge_foreground: c.badge_foreground.unwrap_or(Color {r:0,g:0,b:0,a:0}).into(),
+            badge_background: c.badge_background.unwrap_or(Color {r:0,g:0,b:0,a:0}).into(),
+            badge_color_flags: u32::from(c.badge_foreground.is_some()) | (u32::from(c.badge_background.is_some()) << 1),
             alignment: match c.alignment {
                 LabelAlign::Start => 0,
                 LabelAlign::Center => 1,
@@ -10370,6 +10528,19 @@ impl Table {
         unsafe {
             sys::oneui_table_set_column_dividers_visible(self.widget.as_raw(), i32::from(visible))
         };
+    }
+    pub fn set_selection_column_visible(&self, visible: bool) {
+        unsafe {
+            sys::oneui_table_set_selection_column_visible(self.widget.as_raw(), i32::from(visible))
+        };
+    }
+    /// Width of the checkbox gutter; finite values are clamped to 24..128.
+    pub fn set_selection_column_width(&self, width: f32) {
+        unsafe { sys::oneui_table_set_selection_column_width(self.widget.as_raw(), width) };
+    }
+    /// Sortable headers call the cell action callback with row = -1.
+    pub fn set_header_sort(&self, column: i32, descending: bool) {
+        unsafe { sys::oneui_table_set_header_sort(self.widget.as_raw(), column, i32::from(descending)); }
     }
     pub fn set_header_height(&self, height: f32) {
         unsafe { sys::oneui_table_set_header_height(self.widget.as_raw(), height) };

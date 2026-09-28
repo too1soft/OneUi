@@ -1,4 +1,10 @@
 #include "internal/frame_profile.h"
+#include "internal/developer_tools.h"
+#include "internal/unicode.h"
+#include <fstream>
+#include <filesystem>
+#include <sstream>
+#include <iomanip>
 #include "oneui/platform/window.h"
 #include "oneui/platform/dpi.h"
 
@@ -9,6 +15,7 @@
 #include "internal/scroll_trace.h"
 #include "platform/shared/skia_canvas.h"
 #include "platform/win32/compat_win32.h"
+#include "platform/win32/window_shadow.h"
 
 #include <windows.h>
 #include <windowsx.h>
@@ -283,6 +290,8 @@ public:
         , renderTraceEnabled_(renderTraceEnabled())
         , renderTraceFilePath_(renderTraceFilePath())
         , taskbarCreatedMessage_(RegisterWindowMessageW(L"TaskbarCreated")) {
+        wchar_t dev[8]{};
+        if(GetEnvironmentVariableW(L"ONEUI_DEVTOOLS",dev,8)==1 && dev[0]==L'1')developerTools_=std::make_shared<internal::DeveloperRecorder>(DeveloperOptions{});
         accessibilityComResult_ = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
         animationFrameTimer_ = CreateWaitableTimerExW(
             nullptr,
@@ -326,6 +335,24 @@ public:
     }
 
     RendererInfo rendererInfo() const override { return rendererInfo_; }
+    bool setDeveloperTools(DeveloperOptions options) override {
+        if(options.enabled)developerTools_=std::make_shared<internal::DeveloperRecorder>(options);
+        else developerTools_.reset();
+        requestRedraw();return true;
+    }
+    DeveloperSnapshot developerSnapshot() const override {
+        DeveloperSnapshot result=developerTools_?developerTools_->snapshot():DeveloperSnapshot{};
+        result.supported=true;
+        result.backend=rendererInfo_.backend==RenderBackend::OpenGL?"opengl":rendererInfo_.backend==RenderBackend::Software?"software":"unknown";
+        return result;
+    }
+    bool exportDeveloperReport(const std::wstring& path) const override {
+        try {
+            std::ofstream file(std::filesystem::path(path),std::ios::binary);
+            if(!file)return false;
+            file << developerReportJson(developerSnapshot());file.flush();return bool(file);
+        } catch(...) { return false; }
+    }
 
     RendererMemoryInfo rendererMemoryInfo() const override {
         RendererMemoryInfo info;
@@ -784,6 +811,7 @@ public:
         content_->setFrame(Rect{0.0f, 0.0f, logical.width, logical.height});
         content_->paint(canvas);
         paintTooltip(canvas);
+        if(developerTools_ && developerTools_->options.overlay)paintDeveloperOverlay(canvas,*developerTools_,logical.width,logical.height);
         SkPixmap pixels;
         if (!surface->peekPixels(&pixels)) return false;
 
@@ -1100,8 +1128,6 @@ private:
         hasNormalPlacement_ = true;
     }
 
-    // 无边框(WS_POPUP)窗口默认没有 DWM 投影，会像一张贴在桌面上的平面图。
-    // 向客户区扩 1px glass 边即可启用系统标准窗口阴影（内容不透出、不影响命中）。
     // GetSystemMetricsForDpi 在 Win10 运行时存在，但 mingw-w64 头文件未声明，动态解析；
     // Win7 等旧系统没有该接口，退回 GetSystemMetrics（系统 DPI 值）。
     static int frameMetricForDpi(int index, UINT dpi) {
@@ -1115,7 +1141,9 @@ private:
         if (!hwnd_ || !options_.borderless || options_.fullscreen) {
             return;
         }
-        const MARGINS margins{0, 0, 0, 1};
+        // Keep the opaque application client area out of the DWM glass frame.
+        // Rounded-corner/DWM and companion-window shadows are handled separately.
+        const MARGINS margins{0, 0, 0, 0};
         DwmExtendFrameIntoClientArea(hwnd_, &margins);
     }
 
@@ -1242,8 +1270,11 @@ private:
         const int W = mw + margin * 2;
         const int H = mh + margin * 2;
         const POINT ptDst{rc.left - margin, rc.top - margin};
+        const float scale = normalizedDpiScale();
+        const float radius = static_cast<float>(logicalToPhysicalCeil(cornerRadiusLogical_));
 
-        if (mw == shadowBuiltW_ && mh == shadowBuiltH_) {
+        if (mw == shadowBuiltW_ && mh == shadowBuiltH_ &&
+            radius == shadowBuiltRadius_ && scale == shadowBuiltScale_) {
             // 尺寸没变，只需把投影窗挪到新位置并保持在主窗正下方。
             SetWindowPos(shadowHwnd_, hwnd_, ptDst.x, ptDst.y, W, H,
                          SWP_NOACTIVATE | SWP_NOREDRAW | SWP_SHOWWINDOW);
@@ -1251,13 +1282,8 @@ private:
         }
 
         // 构建逐像素预乘 BGRA 位图：主窗圆角轮廓外用有向距离场做柔光衰减。
-        const float radius = static_cast<float>(logicalToPhysicalCeil(cornerRadiusLogical_));
-        const float cx = W * 0.5f;
-        const float cy = H * 0.5f + kShadowDropLogical * normalizedDpiScale();
-        const float halfW = mw * 0.5f;
-        const float halfH = mh * 0.5f;
-        const float rInner = std::max(0.0f, std::min(radius, std::min(halfW, halfH)));
-        const float spread = static_cast<float>(margin);
+        const win32::RoundedWindowShadow shadow(mw, mh, radius, static_cast<float>(margin),
+                                                kShadowDropLogical * scale, kShadowMaxAlpha);
 
         BITMAPINFO bmi{};
         bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
@@ -1277,28 +1303,11 @@ private:
         }
         auto* px = static_cast<uint32_t*>(bits);
         for (int y = 0; y < H; ++y) {
-            const float fy = static_cast<float>(y) + 0.5f;
-            const float qy0 = std::fabs(fy - cy) - (halfH - rInner);
+            const float fy = static_cast<float>(y - margin) + 0.5f;
             for (int x = 0; x < W; ++x) {
-                const float fx = static_cast<float>(x) + 0.5f;
-                const float qx0 = std::fabs(fx - cx) - (halfW - rInner);
-                const float ax = std::max(qx0, 0.0f);
-                const float ay = std::max(qy0, 0.0f);
-                const float d = std::sqrt(ax * ax + ay * ay) + std::min(std::max(qx0, qy0), 0.0f) - rInner;
-                int a;
-                if (d <= 0.0f) {
-                    // 轮廓内部由主窗覆盖：画全透明而非黑，避免主窗某帧未及时覆盖时露出黑块。
-                    a = 0;
-                } else if (d >= spread) {
-                    a = 0;
-                } else {
-                    float t = d / spread;   // 0..1
-                    float f = 1.0f - t;
-                    f = f * f;              // 二次衰减，边缘更柔
-                    a = static_cast<int>(kShadowMaxAlpha * f + 0.5f);
-                }
+                const float fx = static_cast<float>(x - margin) + 0.5f;
                 // 预乘黑色：RGB=0，仅 alpha 生效。
-                px[static_cast<size_t>(y) * W + x] = static_cast<uint32_t>(a) << 24;
+                px[static_cast<size_t>(y) * W + x] = static_cast<uint32_t>(shadow.alphaAt(fx, fy)) << 24;
             }
         }
 
@@ -1316,6 +1325,8 @@ private:
 
         shadowBuiltW_ = mw;
         shadowBuiltH_ = mh;
+        shadowBuiltRadius_ = radius;
+        shadowBuiltScale_ = scale;
         // 压到主窗正下方并显示。
         SetWindowPos(shadowHwnd_, hwnd_, 0, 0, 0, 0,
                      SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
@@ -1688,6 +1699,7 @@ private:
             animationFrameIntervalMs_ = 1000.0 / 60.0;
             return 0;
         case WM_SHOWWINDOW:
+            if(developerTools_)developerTools_->resetCadence();
             updateShadowWindow(); // 显隐（含托盘还原/隐藏）时同步投影窗显隐
             return DefWindowProcW(hwnd_, message, wParam, lParam);
         case WM_GETMINMAXINFO:
@@ -1731,6 +1743,7 @@ private:
             return 0;
         }
         case WM_SIZE:
+            if(developerTools_)developerTools_->resetCadence();
             recordResizeMessage(wParam);
             if (wParam == SIZE_MAXIMIZED) {
                 lastKnownMaximized_ = true;
@@ -2535,9 +2548,45 @@ private:
         flushInteractivePaint();
     }
 
+    RECT developerOverlayPixels(const RECT& client) const {
+        const float scale=normalizedDpiScale();
+        return {std::max<LONG>(0,client.right-LONG(408*scale)),std::max<LONG>(0,client.bottom-LONG(194*scale)),client.right,client.bottom};
+    }
+    void paintDeveloperOverlay(Canvas& canvas,const internal::DeveloperRecorder& tools,float width,float height) {
+        const auto& summary=tools.summary();const auto& f=summary.last;
+        const Rect panel{std::max(4.f,width-400),std::max(4.f,height-186),std::min(392.f,width-8),178};
+        canvas.save();canvas.clipRect(panel);canvas.fillRect(panel,Color{20,29,25,250},10);
+        auto text=[&](const std::wstring& value,float y,Color color=Color{220,230,224}){canvas.drawText(value,{panel.x+14,panel.y+y,panel.width-28,22},color,12,TextAlign::Left);};
+        text(L"OneUI DevTools   F12 显隐 · Ctrl+F12 导出",10,Color{147,222,179});
+        std::wostringstream timing;timing << std::fixed << std::setprecision(2) << L"绘制 " << f.paintMs << L"ms  内容 " << f.contentMs << L"ms  提交 " << f.submitMs+f.blitMs << L"ms";text(timing.str(),36);
+        text(L"慢绘制 "+std::to_wstring(summary.slowPaints)+L"  动画延迟 "+std::to_wstring(summary.animationDelays)+L"  倒退 "+std::to_wstring(summary.motionReversals),60);
+        auto wide=[](const std::string& v){return unicode::fromUtf8(v);};
+        text(L"耗时控件："+wide(f.hottest.component)+L"（自身绘制）",84);
+        if(const auto* issue=tools.latestIssue()) {
+            const auto separator=issue->source.file.find_last_of("/\\");
+            const auto file=wide(issue->source.file.substr(separator==std::string::npos?0:separator+1));
+            text((issue->flags&MotionReversal?std::wstring(L"进度倒退："):issue->flags&SlowPaint?std::wstring(L"慢绘制："):std::wstring(L"动画延迟："))+wide(issue->source.component)+L" "+file+L":"+std::to_wstring(issue->source.line),108,Color{255,196,127});
+        } else text(L"尚未检测到异常 · 按需绘制，无采样定时器",108);
+        text(developerExportStatus_>0?L"已导出工作目录 oneui-devtools.json":developerExportStatus_<0?L"导出失败：检查工作目录写入权限":L"CPU 侧计时；面板和采样本身有开销",140,Color{151,170,158});
+        canvas.restore();
+    }
     void paint() {
-        internal::FrameProfileSession profile(renderTraceEnabled_);
+        const auto diagnostics=developerTools_; // Safe if application disables tools during paint.
+        internal::DiagnosticSession diagnosticSession(diagnostics.get());
+        internal::FrameProfileSession profile(renderTraceEnabled_ || bool(diagnostics));
         const double paintStartMs = currentTimeMs();
+        const double beforeContent=rendererInfo_.contentMs, beforeSubmit=rendererInfo_.submitMs, beforeBlit=rendererInfo_.blitMs;
+        if(diagnostics)diagnostics->beginFrame(paintStartMs);
+        const auto finishDiagnostics=[&] {
+            if(!diagnostics)return;
+            DeveloperFrame frame;
+            frame.contentMs=rendererInfo_.contentMs-beforeContent;
+            frame.submitMs=rendererInfo_.submitMs-beforeSubmit;
+            frame.blitMs=rendererInfo_.blitMs-beforeBlit;
+            frame.layoutMs=profile.data.ms[0];frame.textLayoutMs=profile.data.ms[1];
+            frame.fillMs=profile.data.ms[2];frame.pathMs=profile.data.ms[3];
+            diagnostics->finishFrame(currentTimeMs(),contentAnimationFramePending_,frame);
+        };
         RECT clientRect{};
         GetClientRect(hwnd_, &clientRect);
 
@@ -2552,6 +2601,10 @@ private:
         HDC paintDc = BeginPaint(hwnd_, &paintStruct);
         HDC dc = useGPU ? glDC_ : paintDc;
         RECT dirtyRect = paintStruct.rcPaint;
+        if(diagnostics && diagnostics->options.overlay) {
+            const RECT overlay=developerOverlayPixels(clientRect);
+            RECT combined{};UnionRect(&combined,&dirtyRect,&overlay);dirtyRect=combined;
+        }
         const int width = std::max<LONG>(1, clientRect.right - clientRect.left);
         const int height = std::max<LONG>(1, clientRect.bottom - clientRect.top);
         const float scale = normalizedDpiScale();
@@ -2613,7 +2666,7 @@ private:
             const double contentStartMs = currentTimeMs();
             g_primitivePaintTrace = PrimitivePaintTrace{};
             content_->setFrame(Rect{0.0f, 0.0f, logicalWidth, logicalHeight});
-            content_->paint(canvas);
+            { internal::DiagnosticPaintSpan diagnostic(*content_); content_->paint(canvas); }
             paintTooltip(canvas);
             recordContentPaint(currentTimeMs() - contentStartMs);
             recordPrimitivePaint(g_primitivePaintTrace);
@@ -2623,6 +2676,7 @@ private:
         if (!fullPaint) {
             canvas.restore();
         }
+        if(diagnostics && diagnostics->options.overlay)paintDeveloperOverlay(canvas,*diagnostics,logicalWidth,logicalHeight);
         skCanvas->restore();
 
         if (gpuAvailable_ && grContext_ && windowSurface_) {
@@ -2638,6 +2692,7 @@ private:
             if (swapped) {
                 EndPaint(hwnd_, &paintStruct);
                 recordPaint(width, height, fullPaint, allocatedSurface, surfaceMs, currentTimeMs() - paintStartMs);
+                finishDiagnostics();
                 return;
             }
             rendererInfo_.reason = "swap-buffers-failed";
@@ -2718,6 +2773,7 @@ private:
 
         EndPaint(hwnd_, &paintStruct);
         recordPaint(width, height, fullPaint, allocatedSurface, surfaceMs, currentTimeMs() - paintStartMs);
+        finishDiagnostics();
     }
 
     static int alignedPaintSurfaceSize(int requested) {
@@ -3304,6 +3360,14 @@ private:
         const auto alive = callbackWindowAlive_;
         updateTrackedKeyState(wParam, true);
         KeyEvent event = makeKeyEvent(wParam, lParam, true);
+        if(developerTools_ && event.virtualKey==VK_F12 && !event.shift && !event.alt) {
+            if(!event.repeat) {
+                if(event.control)developerExportStatus_=exportDeveloperReport(L"oneui-devtools.json")?1:-1;
+                else developerTools_->options.overlay=!developerTools_->options.overlay;
+                requestRedraw();
+            }
+            return true;
+        }
         const auto raw = rawKeyHandler_;
         const bool consumed = raw && raw(event);
         if (!alive->load(std::memory_order_acquire)) return true;
@@ -3685,6 +3749,8 @@ private:
         swapIntervalEnabled_ = false;
     }
 
+    std::shared_ptr<internal::DeveloperRecorder> developerTools_;
+    int developerExportStatus_=0;
     RendererInfo rendererInfo_;
     HWND hwnd_ = nullptr;
     const void* imeIdentity_ = nullptr;
@@ -3751,6 +3817,8 @@ private:
     bool shadowActive_ = false; // 当前是否处于“需要伴随投影”的状态（Win10 圆角且未最大化）
     int shadowBuiltW_ = 0;      // 已构建投影位图对应的主窗尺寸，尺寸不变则移动时只重定位不重绘
     int shadowBuiltH_ = 0;
+    float shadowBuiltRadius_ = 0;
+    float shadowBuiltScale_ = 0;
     bool mouseLeaveTracking_ = false;
     bool animationTimerActive_ = false;
     bool animationFramePending_ = false;

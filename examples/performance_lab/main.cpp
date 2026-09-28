@@ -95,10 +95,11 @@ struct Options {
   double sampleSeconds = 5, stabilitySeconds=0;
   bool stabilityExercise=false;
   bool exitAfter = false, snapshotExit = false, traceInput = false;
+  bool layoutSettings=false, layoutDetail=false, softPreset=false;
   bool editor = false, warmEditor = false, editorLight = false, editorDark=false, editorInvalid = false;
   bool connections = false, details=false, gallery=false, compact=false;
   int galleryScene=0;
-  bool templateEntry = false, dev = false;
+  bool templateEntry = false, dev = false, devtools=false;
   std::filesystem::path css = std::filesystem::path(__FILE__).parent_path()/"connections.css";
   int connectionStress = 0;
   std::wstring connectionQuery;
@@ -539,7 +540,7 @@ public:
     rebuildRows();
     controls();
     if(options.warmEditor)ensureEditor();
-    if(options.editor){showEditor();if(options.details){editor->flow.selectedKey.set(L"1");editor->flow.view.execute();}else if(!options.connections && !options.gallery)editor->flow.open(L"1");editor->flow.query.set(options.connectionQuery);editor->vm.theme.set(options.editorLight || ((options.connections || options.details || options.gallery) && !options.editorDark)?0:1);editor->vm.density.set(options.compact?1:0);if(options.editorInvalid){editor->vm.host.set(L"https://bad/path");editor->vm.port.set(L"70000");editor->vm.attempted.set(true);}if(options.gallery){editor->flow.gallery.set(true);editor->mount.flush();editor->samples->scene.set(options.galleryScene);}editor->flush();}
+    if(options.editor){showEditor();if(options.details){editor->flow.selectedKey.set(L"1");editor->flow.view.execute();}else if(!options.connections && !options.gallery)editor->flow.open(L"1");editor->flow.query.set(options.connectionQuery);editor->vm.theme.set(options.editorLight || ((options.connections || options.details || options.gallery) && !options.editorDark)?0:1);editor->vm.density.set(options.compact?1:0);if(options.editorInvalid){editor->vm.host.set(L"https://bad/path");editor->vm.port.set(L"70000");editor->vm.attempted.set(true);}if(options.gallery){editor->flow.gallery.set(true);editor->mount.flush();editor->samples->scene.set(options.galleryScene);if(options.layoutSettings)editor->samples->workspaceMode.set(1);if(options.layoutDetail){editor->samples->selected.set(L"1");editor->samples->detailOpen.set(true);}if(options.softPreset)editor->samples->visualPreset.set(1);}editor->flush();}
   }
   void stressStep() {
     const int cycle=stressStep_/3, phase=stressStep_%3;
@@ -964,8 +965,12 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
       else if (arg == L"--connection-query")o.connectionQuery=next();
       else if (arg == L"--entry") {auto value=next();if(value!=L"code" && value!=L"template")throw std::runtime_error("Invalid entry");o.templateEntry=value==L"template";}
       else if (arg == L"--dev")o.dev=true;
+      else if (arg == L"--devtools")o.devtools=true;
       else if (arg == L"--compact")o.compact=true;
-      else if (arg == L"--component-scene"){o.galleryScene=std::stoi(next());if(o.galleryScene<0 || o.galleryScene>3)throw std::runtime_error("Component scene must be 0, 1, 2 or 3");}
+      else if (arg == L"--layout-settings")o.layoutSettings=true;
+      else if (arg == L"--layout-detail")o.layoutDetail=true;
+      else if (arg == L"--soft-preset")o.softPreset=true;
+      else if (arg == L"--component-scene"){o.galleryScene=std::stoi(next());if(o.galleryScene<0 || o.galleryScene>4)throw std::runtime_error("Component scene must be 0, 1, 2, 3 or 4");}
       else if (arg == L"--css")o.css=std::filesystem::absolute(next());
       else if (arg == L"--connections-stress")o.connectionStress=std::stoi(next());
       else if (arg == L"--scale")o.scale=std::stof(next());
@@ -1024,6 +1029,7 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
     wo.width = o.width;
     wo.height = o.height;
     auto window = Window::create(wo);
+    if(o.devtools)window->enableDeveloperTools();
     window->setDefaultFontFamily(L"Microsoft YaHei UI");
     window->setMinimumClientSize(o.editor?Size{640,560}:Size{1050,720});window->setContentScale(o.scale);
     auto lab = std::make_shared<Lab>(*window, o);

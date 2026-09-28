@@ -3,13 +3,14 @@
 #include "oneui/ui_density.h"
 #include "oneui/ui_declarative.h"
 namespace oneui::ui {
-inline std::string declarativeTheme(bool dark=false,Density density=Density::Comfortable) {
+enum class VisualPreset { Standard, Soft };
+inline std::string declarativeTheme(bool dark=false,Density density=Density::Comfortable,VisualPreset preset=VisualPreset::Standard) {
     const std::string tokens=dark ? R"(:root {
-      --canvas:#101517; --surface:#171e21; --ink:#e5ece8; --muted:#a5b5af;
+      --chrome:#232e29; --canvas:#101517; --surface:#171e21; --ink:#e5ece8; --muted:#a5b5af;
       --line:#52645d; --control:#232e29; --hover:#34473c; --accent:#c4ed87;
       --accent-ink:#16230f; --selection:#36503e; --error:#ffb4a8; --warning:#efce88; --success:#b2dca4;
     })" : R"(:root {
-      --canvas:#f5f7f4; --surface:#ffffff; --ink:#1c2b23; --muted:#54675b;
+      --chrome:#e7eee8; --canvas:#f5f7f4; --surface:#ffffff; --ink:#1c2b23; --muted:#54675b;
       --line:#bac8bf; --control:#e7eee8; --hover:#d5e2d7; --accent:#28613d;
       --accent-ink:#ffffff; --selection:#d5e9d7; --error:#a02b24; --warning:#785315; --success:#28613d;
     })";
@@ -18,8 +19,38 @@ inline std::string declarativeTheme(bool dark=false,Density density=Density::Com
     )":R"(
       :root { --page-pad:28px; --section-pad:24px; --section-gap:24px; --field-gap:20px; --control-pad:10px; }
     )";
-    return syntax::css(tokens+metrics+R"(
+    const std::string material=preset==VisualPreset::Soft
+      ? R"(:root { --control-radius:8px; --surface-radius:14px; --surface-shadow:0px 3px 10px #0000001c; })"
+      : R"(:root { --control-radius:6px; --surface-radius:12px; --surface-shadow:none; })";
+    const std::string elevation=dark?R"(:root { --raised-shadow:0px 5px 14px #00000070; })":R"(:root { --raised-shadow:0px 5px 14px #00000026; })";
+    return syntax::css(tokens+metrics+material+elevation+R"(
       :root { --space-sm:8px; --space-md:16px; --space-lg:24px; --copy-gap:4px; --label-control-gap:8px; }
+      Workspace { background-color:var(--line); gap:1px; }
+      Column.workspace-core { gap:0px; }
+      Row.workspace-core { gap:0px; }
+      TitleBar { background-color:var(--chrome); padding:0px 12px; gap:8px; }
+      NavigationRail { background-color:var(--chrome); padding:12px 6px; gap:12px; }
+      SessionBar { background-color:var(--chrome); padding:0px 8px; gap:4px; }
+      WorkspaceBody { background-color:var(--canvas); gap:1px; }
+      DockPanel { background-color:var(--surface); gap:0px; }
+      PanelHeader { background-color:var(--chrome); padding:0px 12px; gap:8px; }
+      PanelBody { background-color:var(--surface); gap:0px; }
+      PanelFooter { background-color:var(--surface); padding:0px 12px; gap:8px; }
+      StatusBar { background-color:var(--chrome); padding:0px 12px; gap:12px; }
+      ToolButton { background-color:transparent; color:var(--ink); border-width:0px; border-radius:4px; padding:6px; font-size:13px; outline-color:var(--accent); outline-width:1px; outline-offset:0px; }
+      ToolButton:hover { background-color:var(--hover); }
+      ToolButton:pressed { background-color:var(--selection); }
+      ToolButton:disabled { color:var(--muted); }
+      ToolButton.primary { background-color:var(--accent); color:var(--accent-ink); }
+      Button.ghost { background-color:transparent; border-width:0px; }
+      Surface { background-color:var(--surface); padding:var(--section-pad); gap:var(--field-gap); border-radius:var(--surface-radius); box-shadow:var(--surface-shadow); }
+      Surface.surface-flat { box-shadow:none; border-width:0px; }
+      Surface.surface-outlined { box-shadow:none; border-width:1px; border-color:var(--line); }
+      Surface.surface-raised { box-shadow:var(--raised-shadow); border-width:0px; }
+      Surface.surface-tinted { background-color:var(--selection); box-shadow:none; border-width:0px; }
+      Sidebar { gap:8px; padding:16px; background-color:var(--surface); border-radius:var(--surface-radius); }
+      SidebarLayout { gap:var(--section-gap); }
+      MasterDetail { gap:var(--section-gap); }
       Column { gap:var(--space-md); }
       Content { gap:var(--section-gap); }
       SettingsPage { gap:var(--section-gap); }
@@ -28,7 +59,7 @@ inline std::string declarativeTheme(bool dark=false,Density density=Density::Com
       Row { gap:var(--space-md); }
       Page { background-color:var(--canvas); padding:var(--page-pad); gap:var(--section-gap); }
       Header { gap:8px; }
-      Section { background-color:var(--surface); padding:var(--section-pad); gap:var(--field-gap); border-radius:12px; }
+      Section { background-color:var(--surface); padding:var(--section-pad); gap:var(--field-gap); border-radius:var(--surface-radius); }
       Toolbar { gap:8px; }
       ActionBar { gap:12px; padding:12px 0px; }
       FormRow { gap:var(--field-gap); }
@@ -36,8 +67,8 @@ inline std::string declarativeTheme(bool dark=false,Density density=Density::Com
       FormRow.grid-field { gap:var(--label-control-gap); }
       Column.field-copy { gap:var(--copy-gap); }
       Column.field-control { gap:var(--copy-gap); }
-      EmptyState { padding:32px; gap:12px; background-color:var(--surface); border-radius:12px; }
-      LoadingState { padding:32px; gap:12px; background-color:var(--surface); border-radius:12px; }
+      EmptyState { padding:32px; gap:12px; background-color:var(--surface); border-radius:var(--surface-radius); }
+      LoadingState { padding:32px; gap:12px; background-color:var(--surface); border-radius:var(--surface-radius); }
       Scroll { background-color:var(--canvas); }
       Text { color:var(--ink); font-size:14px; font-weight:400; }
       Text.heading { font-size:28px; font-weight:600; }
@@ -54,7 +85,7 @@ inline std::string declarativeTheme(bool dark=false,Density density=Density::Com
       Status.tone-error { color:var(--error); }
       Status.tone-pending { color:var(--accent); }
       Button { color:var(--ink); background-color:var(--control); padding:var(--control-pad) 18px;
-        font-size:14px; font-weight:500; border-width:0; border-radius:6px;
+        font-size:14px; font-weight:500; border-width:0; border-radius:var(--control-radius);
         outline-color:var(--accent); outline-width:2px; outline-offset:2px;
         transition-duration:120ms; }
       Button:hover { background-color:var(--hover); }
@@ -68,7 +99,7 @@ inline std::string declarativeTheme(bool dark=false,Density density=Density::Com
       Button.danger:disabled { color:var(--muted); }
       Input { background-color:var(--surface); color:var(--ink); placeholder-color:var(--muted);
         caret-color:var(--accent); selection-color:var(--selection); border-color:var(--line);
-        border-width:1px; border-radius:6px; padding:var(--control-pad) 12px;
+        border-width:1px; border-radius:var(--control-radius); padding:var(--control-pad) 12px;
         outline-color:var(--accent); outline-width:2px; outline-offset:2px; }
       Input:hover { border-color:var(--accent); }
       Input.invalid { border-color:var(--error); }
@@ -76,10 +107,10 @@ inline std::string declarativeTheme(bool dark=false,Density density=Density::Com
       Input:disabled { background-color:var(--control); color:var(--muted); }
       SearchInput { background-color:var(--surface); color:var(--ink); placeholder-color:var(--muted);
         caret-color:var(--accent); selection-color:var(--selection); border-color:var(--line);
-        border-width:1px; border-radius:6px; padding:var(--control-pad) 12px;
+        border-width:1px; border-radius:var(--control-radius); padding:var(--control-pad) 12px;
         outline-color:var(--accent); outline-width:2px; outline-offset:2px; }
       Select { background-color:var(--surface); color:var(--ink); border-color:var(--line);
-        border-width:1px; border-radius:6px; padding:var(--control-pad) 12px; font-size:14px;
+        border-width:1px; border-radius:var(--control-radius); padding:var(--control-pad) 12px; font-size:14px;
         outline-color:var(--accent); outline-width:2px; outline-offset:2px; }
       Select:selected { background-color:var(--selection); }
       Select:hover { border-color:var(--accent); }
@@ -103,7 +134,19 @@ inline std::string declarativeTheme(bool dark=false,Density density=Density::Com
       DataTable:selected { background-color:var(--selection); }
     )");
 }
-inline void applyTheme(Mount& mount,bool dark=false,Density density=Density::Comfortable) {
-    mount.styles()->replace(declarativeTheme(dark,density),density);
+// Opt-in workbench palette. Existing application defaults remain unchanged.
+inline std::string workspaceTheme(bool dark=true) {
+    return declarativeTheme(dark,Density::Compact)+syntax::css(dark?R"(:root {
+        --canvas:#1c2126; --surface:#1c2228; --chrome:#282e34; --ink:#e3e8ed; --muted:#aebac6;
+        --line:#3b444e; --control:#2b343d; --hover:#333f49; --accent:#3699ff; --accent-ink:#ffffff;
+        --selection:#243e55; --success:#36d69b;
+    })":R"(:root {
+        --canvas:#edf0f3; --surface:#fafbfc; --chrome:#f0f3f6; --ink:#202732; --muted:#596574;
+        --line:#d1d8e0; --control:#e5ebf1; --hover:#e4ebf2; --accent:#0067c7; --accent-ink:#ffffff;
+        --selection:#dceafb; --success:#12825d;
+    })");
+}
+inline void applyTheme(Mount& mount,bool dark=false,Density density=Density::Comfortable,VisualPreset preset=VisualPreset::Standard) {
+    mount.styles()->replace(declarativeTheme(dark,density,preset),density);
 }
 }

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-28T06:31:18.579151+00:00",
+  "generatedAt": "2026-09-28T07:16:14.326366+00:00",
   "title": "Design System: OneUI",
   "extensions": {
     "colorMeta": {
@@ -83,7 +83,182 @@
       "dark-selection": {
         "role": "neutral",
         "displayName": "Dark selection"
+      },
+      "workspace-light-canvas": {
+        "role": "neutral",
+        "displayName": "Workspace light canvas",
+        "purpose": "Opt-in workspaceTheme only; preserves the default green theme."
+      },
+      "workspace-light-surface": {
+        "role": "neutral",
+        "displayName": "Workspace light surface",
+        "purpose": "Opt-in workspaceTheme only; preserves the default green theme."
+      },
+      "workspace-light-chrome": {
+        "role": "neutral",
+        "displayName": "Workspace light chrome",
+        "purpose": "Opt-in workspaceTheme only; preserves the default green theme."
+      },
+      "workspace-light-ink": {
+        "role": "neutral",
+        "displayName": "Workspace light ink",
+        "purpose": "Opt-in workspaceTheme only; preserves the default green theme."
+      },
+      "workspace-light-muted": {
+        "role": "neutral",
+        "displayName": "Workspace light muted",
+        "purpose": "Opt-in workspaceTheme only; preserves the default green theme."
+      },
+      "workspace-light-line": {
+        "role": "neutral",
+        "displayName": "Workspace light line",
+        "purpose": "Opt-in workspaceTheme only; preserves the default green theme."
+      },
+      "workspace-light-control": {
+        "role": "neutral",
+        "displayName": "Workspace light control",
+        "purpose": "Opt-in workspaceTheme only; preserves the default green theme."
+      },
+      "workspace-light-hover": {
+        "role": "neutral",
+        "displayName": "Workspace light hover",
+        "purpose": "Opt-in workspaceTheme only; preserves the default green theme."
+      },
+      "workspace-light-accent": {
+        "role": "primary",
+        "displayName": "Workspace light accent",
+        "purpose": "Opt-in workspaceTheme only; preserves the default green theme."
+      },
+      "workspace-light-accent-ink": {
+        "role": "primary",
+        "displayName": "Workspace light accent ink",
+        "purpose": "Opt-in workspaceTheme only; preserves the default green theme."
+      },
+      "workspace-light-selection": {
+        "role": "neutral",
+        "displayName": "Workspace light selection",
+        "purpose": "Opt-in workspaceTheme only; preserves the default green theme."
+      },
+      "workspace-light-success": {
+        "role": "neutral",
+        "displayName": "Workspace light success",
+        "purpose": "Opt-in workspaceTheme only; preserves the default green theme."
+      },
+      "workspace-dark-canvas": {
+        "role": "neutral",
+        "displayName": "Workspace dark canvas",
+        "purpose": "Opt-in workspaceTheme only; preserves the default green theme."
+      },
+      "workspace-dark-surface": {
+        "role": "neutral",
+        "displayName": "Workspace dark surface",
+        "purpose": "Opt-in workspaceTheme only; preserves the default green theme."
+      },
+      "workspace-dark-chrome": {
+        "role": "neutral",
+        "displayName": "Workspace dark chrome",
+        "purpose": "Opt-in workspaceTheme only; preserves the default green theme."
+      },
+      "workspace-dark-ink": {
+        "role": "neutral",
+        "displayName": "Workspace dark ink",
+        "purpose": "Opt-in workspaceTheme only; preserves the default green theme."
+      },
+      "workspace-dark-muted": {
+        "role": "neutral",
+        "displayName": "Workspace dark muted",
+        "purpose": "Opt-in workspaceTheme only; preserves the default green theme."
+      },
+      "workspace-dark-line": {
+        "role": "neutral",
+        "displayName": "Workspace dark line",
+        "purpose": "Opt-in workspaceTheme only; preserves the default green theme."
+      },
+      "workspace-dark-control": {
+        "role": "neutral",
+        "displayName": "Workspace dark control",
+        "purpose": "Opt-in workspaceTheme only; preserves the default green theme."
+      },
+      "workspace-dark-hover": {
+        "role": "neutral",
+        "displayName": "Workspace dark hover",
+        "purpose": "Opt-in workspaceTheme only; preserves the default green theme."
+      },
+      "workspace-dark-accent": {
+        "role": "primary",
+        "displayName": "Workspace dark accent",
+        "purpose": "Opt-in workspaceTheme only; preserves the default green theme."
+      },
+      "workspace-dark-accent-ink": {
+        "role": "primary",
+        "displayName": "Workspace dark accent ink",
+        "purpose": "Opt-in workspaceTheme only; preserves the default green theme."
+      },
+      "workspace-dark-selection": {
+        "role": "neutral",
+        "displayName": "Workspace dark selection",
+        "purpose": "Opt-in workspaceTheme only; preserves the default green theme."
+      },
+      "workspace-dark-success": {
+        "role": "neutral",
+        "displayName": "Workspace dark success",
+        "purpose": "Opt-in workspaceTheme only; preserves the default green theme."
       }
+    },
+    "workspace": {
+      "scope": "Optional workspaceTheme; compact native workspaces, not the global green defaults.",
+      "source": "include/oneui/ui_theme.h",
+      "colorTokens": [
+        "workspace-light-canvas",
+        "workspace-light-surface",
+        "workspace-light-chrome",
+        "workspace-light-ink",
+        "workspace-light-muted",
+        "workspace-light-line",
+        "workspace-light-control",
+        "workspace-light-hover",
+        "workspace-light-accent",
+        "workspace-light-accent-ink",
+        "workspace-light-selection",
+        "workspace-light-success",
+        "workspace-dark-canvas",
+        "workspace-dark-surface",
+        "workspace-dark-chrome",
+        "workspace-dark-ink",
+        "workspace-dark-muted",
+        "workspace-dark-line",
+        "workspace-dark-control",
+        "workspace-dark-hover",
+        "workspace-dark-accent",
+        "workspace-dark-accent-ink",
+        "workspace-dark-selection",
+        "workspace-dark-success"
+      ],
+      "inheritedRoles": [
+        "error",
+        "warning"
+      ],
+      "metrics": {
+        "navigationRailWidth": "56px",
+        "titleBarHeight": "38px",
+        "sessionBarHeight": "42px",
+        "statusBarHeight": "38px",
+        "panelHeaderHeight": "40px",
+        "panelFooterHeight": "40px",
+        "iconToolSize": "32px",
+        "toolFocusOutline": "1px accent, offset 0px"
+      },
+      "exampleLayout": {
+        "source": "examples/terminal_workbench/views/TerminalWorkbench.one",
+        "wideRatio": "70% terminal/files, 30% monitoring",
+        "breakpoint": "1050px, application-specific",
+        "narrow": "Segmented terminal/files/monitor selection of retained regions"
+      },
+      "evidence": [
+        "docs/images/terminal-workspace-v4/dark-wide.png",
+        "docs/images/terminal-workspace-v4/files-narrow.png"
+      ],
+      "limits": "HTML illustrations are token translations; native captures do not establish IME or cross-monitor DPI behavior."
     },
     "typographyMeta": {
       "read-only-label": {
@@ -115,6 +290,21 @@
         "name": "motion-press-active",
         "value": "inset 0px 2px 5px #00000038",
         "purpose": "Pressed feedback, removed when disabled."
+      },
+      {
+        "name": "soft-surface",
+        "value": "0px 3px 10px #0000001c",
+        "purpose": "Surface default only when VisualPreset::Soft is selected."
+      },
+      {
+        "name": "raised-light",
+        "value": "0px 5px 14px #00000026",
+        "purpose": "Explicit Surface appearance=raised, light theme."
+      },
+      {
+        "name": "raised-dark",
+        "value": "0px 5px 14px #00000070",
+        "purpose": "Explicit Surface appearance=raised, dark theme."
       }
     ],
     "motion": [
@@ -139,7 +329,18 @@
         "purpose": "Optional button inner-shadow press feedback."
       }
     ],
-    "breakpoints": []
+    "breakpoints": [
+      {
+        "name": "sidebar-container",
+        "value": "960px",
+        "purpose": "Navigation changes from a fixed-width side column to a wrapping top row."
+      },
+      {
+        "name": "master-detail-container",
+        "value": "800px",
+        "purpose": "Retained master/detail panes show one state-selected pane below this width."
+      }
+    ]
   },
   "components": [
     {
@@ -189,6 +390,22 @@
       "description": "Illustrative FormGrid label/value hierarchy for a Text field; Status fields retain semantic styling.",
       "html": "<div class=\"ds-read-only\"><div class=\"ds-read-only-label\">主机地址</div><div class=\"ds-read-only-value\">10.24.0.2</div></div>",
       "css": ".ds-read-only{display:flex;flex-direction:column;gap:8px;}.ds-read-only-label{color:#54675b;font-size:13px;font-weight:400;}.ds-read-only-value{color:#1c2b23;font-size:15px;font-weight:500;}"
+    },
+    {
+      "name": "Optional workspace tool",
+      "kind": "button",
+      "refersTo": "workspace-tool-dark",
+      "description": "Dark workspace ToolButton illustration; icon-only native preferred size is 32px and name supplies its tooltip and accessible name.",
+      "html": "<button class=\"ds-workspace-tool\" aria-label=\"打开终端\" title=\"打开终端\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" aria-hidden=\"true\"><rect x=\"2\" y=\"3\" width=\"12\" height=\"10\"/><path d=\"m5 6 2 2-2 2m4 0h2\"/></svg></button>",
+      "css": ".ds-workspace-tool{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;padding:6px;border:0;border-radius:4px;background:transparent;color:#e3e8ed;font-size:13px;}.ds-workspace-tool:hover{background:#333f49;}.ds-workspace-tool:active{background:#243e55;}.ds-workspace-tool:focus-visible{outline:1px solid #3699ff;outline-offset:0;}.ds-workspace-tool:disabled{color:#aebac6;}"
+    },
+    {
+      "name": "Optional workspace panel header",
+      "kind": "custom",
+      "refersTo": "workspace-panel-header-dark",
+      "description": "Flat dark DockPanel header illustration; body fills the remaining native layout space.",
+      "html": "<div class=\"ds-workspace-header\"><span>SFTP</span><span class=\"ds-workspace-path\">/srv/workspace</span></div>",
+      "css": ".ds-workspace-header{display:flex;align-items:center;gap:8px;height:40px;padding:0 12px;background:#282e34;color:#e3e8ed;font-size:14px;}.ds-workspace-path{color:#aebac6;font-size:13px;}"
     }
   ],
   "narrative": {
@@ -215,6 +432,16 @@
         "name": "Flat defaults, purposeful motion",
         "body": "Preserve flat default surfaces. Opt-in shadows indicate interaction; Reveal completes a content transition and stops. Respect reduced motion.",
         "section": "elevation"
+      },
+      {
+        "name": "Retained page recipes",
+        "body": "SidebarLayout and MasterDetail adapt to their own container width. SettingsPage keeps ActionBar outside the scrolling body. Standard preserves existing defaults; Soft and explicit Surface appearances share the same palette and widgets.",
+        "section": "layout"
+      },
+      {
+        "name": "The Opt-In Workspace Rule",
+        "body": "Apply workspace colors as a complete optional theme; do not promote its blue accent or compact composition into the default green system.",
+        "section": "colors"
       }
     ],
     "dos": [

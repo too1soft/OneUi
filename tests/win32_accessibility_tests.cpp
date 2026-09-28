@@ -31,15 +31,26 @@ int main(){
     check(value && std::wstring(value)!=L"secret-value","password value remains masked");SysFreeString(value);
     BSTR replacement=SysAllocString(L"new value");check(SUCCEEDED(accessibleEdit->put_accValue(second,replacement))&&field->text()==L"new value","value edit uses native text replacement");SysFreeString(replacement);
     field->setReadOnly(true);replacement=SysAllocString(L"not allowed");check(FAILED(accessibleEdit->put_accValue(second,replacement))&&field->text()==L"new value","read-only values cannot be overwritten");SysFreeString(replacement);
-    auto title=std::make_shared<WindowTitleBar>(L"Client");title->setFrame({0,0,400,38});root->add(title);
+    auto title=std::make_shared<WindowTitleBar>(L"Client");title->setFrame({0,0,400,38});title->setVariant("terminal");root->add(title);
     int closes=0, maxes=0;title->setOnClose([&]{++closes;});title->setOnMaximize([&]{++maxes;});
     provider->get_accChildCount(&count);check(count==6,"caption exposes three actual window controls");
     VARIANT captionClose{};captionClose.vt=VT_I4;captionClose.lVal=6;
     BSTR name=nullptr;provider->get_accName(captionClose,&name);check(name&&std::wstring(name)==L"关闭窗口","caption has accessible name");SysFreeString(name);
     provider->accLocation(&x,&y,&w,&h,captionClose);check(w==69,"Windows caption bounds use full button width at DPI");
     check(provider->accDoDefaultAction(captionClose)==S_OK&&closes==1,"caption action reaches real close callback");
+    // Skin variants affect paint only; explicit presentation owns geometry.
+    title->setVariant("custom-left");
+    provider->accLocation(&x,&y,&w,&h,captionClose);check(w==69,"skin does not change accessible geometry");
+    TitleBarPresentation leftCaption;
+    leftCaption.buttons[0].frame={32,5,24,28};
+    leftCaption.buttons[1].frame={56,5,24,28};
+    leftCaption.buttons[2].frame={8,5,24,28};
+    check(title->setPresentation(&leftCaption),"custom caption presentation accepted");
+    provider->accLocation(&x,&y,&w,&h,captionClose);
+    POINT clientOrigin{};ClientToScreen(window,&clientOrigin);
+    check(x==clientOrigin.x+12 && w==36 && h==42,"custom caption keeps same identity with left geometry");
     VARIANT captionMax=captionClose;captionMax.lVal=5;title->setMaximized(true);provider->get_accName(captionMax,&name);check(name&&std::wstring(name)==L"还原窗口","maximize action name reflects restore state");SysFreeString(name);
-    check(provider->accDoDefaultAction(captionMax)==S_OK&&maxes==1,"caption uses real maximize callback");
+    check(provider->accDoDefaultAction(captionMax)==S_OK&&maxes==1,"custom caption uses real maximize callback");
     title->setDisabled(true);check(FAILED(provider->accDoDefaultAction(captionClose))&&closes==1,"disabled caption cannot activate");
     auto branch=std::make_shared<View>();branch->setAccessibleName(L"Semantic parent");branch->setFrame({0,100,200,100});
     auto nested=std::make_shared<Button>(L"Focused leaf");nested->setFrame({10,110,100,32});branch->add(nested);root->add(branch);

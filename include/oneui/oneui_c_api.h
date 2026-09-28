@@ -759,6 +759,18 @@ ONEUI_API void oneui_stack_set_direction(OneUiWidget* stack, int direction);
 ONEUI_API void oneui_stack_set_gap(OneUiWidget* stack, float gap);
 ONEUI_API void oneui_stack_set_padding(OneUiWidget* stack, OneUiInsets insets);
 ONEUI_API void oneui_stack_set_align(OneUiWidget* stack, OneUiStackAlign align);
+/* justify: 0=start, 1=center, 2=end, 3=space-between. Returns 0 for invalid input. */
+// engine: 0 legacy, 1 Yoga (requires ONEUI_ENABLE_YOGA). Invalid/unavailable returns 0.
+ONEUI_API int oneui_stack_set_engine(OneUiWidget* stack, int engine);
+ONEUI_API int oneui_stack_set_wrap(OneUiWidget* stack, int enabled);
+// Nonnegative limits, +infinity means unconstrained. Results are logical pixels.
+ONEUI_API int oneui_widget_measure(OneUiWidget* widget, float max_width, float max_height, float* width, float* height);
+ONEUI_API int oneui_stack_set_justify(OneUiWidget* stack, int justify);
+/* basis_mode: 0=preferred, 1=explicit basis, 2=natural content. max may be +infinity. */
+ONEUI_API int oneui_stack_set_flex(OneUiWidget* stack, OneUiWidget* child,
+    float grow, float shrink, int basis_mode, float basis, float min, float max);
+ONEUI_API void oneui_stack_clear_flex(OneUiWidget* stack, OneUiWidget* child);
+ONEUI_API int oneui_widget_natural_size(OneUiWidget* widget, float* width, float* height);
 ONEUI_API float oneui_stack_content_width(OneUiWidget* stack);
 ONEUI_API float oneui_stack_content_height(OneUiWidget* stack);
 
@@ -885,6 +897,7 @@ ONEUI_API void oneui_scroll_view_set_content_width(OneUiWidget* view, float widt
 ONEUI_API void oneui_scroll_view_set_wheel_step(OneUiWidget* view, float step);
 ONEUI_API void oneui_scroll_view_set_chrome_visible(OneUiWidget* view, int visible);
 ONEUI_API void oneui_scroll_view_set_scrollbar_style(OneUiWidget* view, unsigned char r, unsigned char g, unsigned char b, unsigned char a, float thickness);
+ONEUI_API void oneui_scroll_view_set_scrollbar_inset(OneUiWidget* view, float inset);
 ONEUI_API void oneui_scroll_view_set_scroll_offset(OneUiWidget* view, float offset);
 ONEUI_API float oneui_scroll_view_scroll_offset(OneUiWidget* view);
 ONEUI_API float oneui_scroll_view_max_scroll_offset(OneUiWidget* view);
@@ -918,6 +931,7 @@ ONEUI_API int oneui_label_set_rich_text_utf8(
     const OneUiLabelTextSpanUtf8* spans,
     size_t span_count);
 ONEUI_API void oneui_label_set_color(OneUiWidget* label, unsigned char r, unsigned char g, unsigned char b, unsigned char a);
+ONEUI_API void oneui_label_set_status_indicator(OneUiWidget* label, float diameter, float gap);
 ONEUI_API void oneui_label_set_font_size(OneUiWidget* label, float font_size);
 ONEUI_API float oneui_label_natural_text_width(OneUiWidget* label);
 ONEUI_API void oneui_button_set_trailing_icon(OneUiWidget* button, int symbol);
@@ -953,6 +967,8 @@ typedef struct OneUiTableRichCellUtf8 {
     float font_size;
     int font_weight;
     OneUiColor foreground;
+    OneUiColor badge_foreground, badge_background;
+    unsigned int badge_color_flags; /* bit 0: foreground, bit 1: background (including transparent) */
 } OneUiTableRichCellUtf8;
 typedef struct OneUiTableRichRowUtf8 {
     const OneUiTableRichCellUtf8* cells;
@@ -964,6 +980,9 @@ ONEUI_API void oneui_table_set_rich_rows_utf8(OneUiWidget* table, const OneUiTab
 ONEUI_API int oneui_table_update_rich_row_utf8(OneUiWidget* table, size_t index, const OneUiTableRichRowUtf8* row);
 ONEUI_API void oneui_table_set_column_presentation(OneUiWidget* table, int column, int alignment, int action);
 ONEUI_API void oneui_table_set_column_dividers_visible(OneUiWidget* table, int visible);
+ONEUI_API void oneui_table_set_selection_column_visible(OneUiWidget* table, int visible);
+ONEUI_API void oneui_table_set_selection_column_width(OneUiWidget* table, float width);
+ONEUI_API void oneui_table_set_header_sort(OneUiWidget* table, int column, int descending);
 ONEUI_API void oneui_table_set_header_height(OneUiWidget* table, float height);
 ONEUI_API void oneui_table_set_on_cell_action(OneUiWidget* table, OneUiReorderRequestedCallback callback, void* user_data);
 
@@ -1005,6 +1024,7 @@ ONEUI_API void oneui_time_series_chart_set_grid_style(OneUiWidget* chart, int ve
 ONEUI_API void oneui_time_series_chart_set_axis_labels_utf8(OneUiWidget* chart, const OneUiUtf8String* labels, size_t count);
 ONEUI_API int oneui_time_series_chart_set_sample_positions(OneUiWidget* chart, const double* positions, size_t count);
 ONEUI_API void oneui_time_series_chart_set_latest_point_visible(OneUiWidget* chart, int visible);
+ONEUI_API void oneui_time_series_chart_set_latest_point_size(OneUiWidget* chart, float width, float height);
 ONEUI_API void oneui_time_series_chart_set_thresholds(
     OneUiWidget* chart,
     const OneUiTimeSeriesThreshold* thresholds,
@@ -1129,6 +1149,11 @@ ONEUI_API void oneui_tabs_set_item_icons(
     OneUiWidget* tabs,
     const int* symbols,
     size_t count);
+ONEUI_API void oneui_tabs_set_document_mode(OneUiWidget* tabs, int enabled);
+ONEUI_API int oneui_tabs_overflow_item_count(OneUiWidget* tabs);
+ONEUI_API void oneui_tabs_set_on_overflow_changed(OneUiWidget* tabs, OneUiIntCallback callback, void* user_data);
+// A missing or zero-alpha entry suppresses the corresponding status indicator.
+ONEUI_API void oneui_tabs_set_item_status_colors(OneUiWidget* tabs, const OneUiColor* colors, size_t count);
 ONEUI_API void oneui_tabs_set_selected_index(OneUiWidget* tabs, int index);
 ONEUI_API int oneui_tabs_selected_index(OneUiWidget* tabs);
 ONEUI_API void oneui_tabs_set_compact(OneUiWidget* tabs, int compact);
@@ -1419,6 +1444,10 @@ ONEUI_API void oneui_interactive_surface_set_on_hover_changed(
     OneUiWidget* surface,
     OneUiBoolCallback callback,
     void* user_data);
+ONEUI_API void oneui_interactive_surface_set_on_focus_changed(
+    OneUiWidget* surface,
+    OneUiBoolCallback callback,
+    void* user_data);
 ONEUI_API void oneui_interactive_surface_set_on_context_menu_requested(
     OneUiWidget* surface,
     OneUiPointerCallback callback,
@@ -1507,6 +1536,7 @@ ONEUI_API void oneui_terminal_view_set_font_family_utf8(
 ONEUI_API void oneui_terminal_view_set_line_height(OneUiWidget* view, float multiplier);
 ONEUI_API void oneui_terminal_view_set_letter_spacing(OneUiWidget* view, float pixels);
 ONEUI_API void oneui_terminal_view_set_line_numbers_visible(OneUiWidget* view, int visible);
+ONEUI_API void oneui_terminal_view_set_scrollback(OneUiWidget* view, unsigned long long history_rows, unsigned long long offset);
 ONEUI_API void oneui_terminal_view_set_first_visible_line_number(
     OneUiWidget* view,
     unsigned long long line_number);

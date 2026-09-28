@@ -1,0 +1,81 @@
+**********************************************************************
+** Visual Studio 2026 Developer Command Prompt v18.0.2
+** Copyright (c) 2025 Microsoft Corporation
+**********************************************************************
+[DEBUG:ext\vcvars.bat] Found potential v145 version file: 'Microsoft.VCToolsVersion.VC.14.50.18.0.txt'
+[DEBUG:ext\vcvars.bat] Testing v145 version file: 'Microsoft.VCToolsVersion.VC.14.50.18.0.txt'
+[vcvarsall.bat] Environment initialized for: 'x64'
+[0/2] Re-checking globbed directories...
+[1/23] Building CXX object sdk\CMakeFiles\oneui_terminal_raster_tests.dir\src\platform\shared\skia_path.cpp.obj
+[2/23] Building CXX object sdk\CMakeFiles\oneui_developer_tools_tests.dir\tests\developer_tools_tests.cpp.obj
+[3/23] Building CXX object sdk\CMakeFiles\oneui_motion_diagnostics_tests.dir\tests\motion_diagnostics_tests.cpp.obj
+[4/23] Building CXX object sdk\CMakeFiles\oneui_terminal_raster_tests.dir\tests\terminal_raster_tests.cpp.obj
+[5/23] Building CXX object sdk\CMakeFiles\oneui_time_series_chart_behavior_tests.dir\tests\time_series_chart_behavior_tests.cpp.obj
+[6/23] Building CXX object sdk\CMakeFiles\oneui_text_layout_tests.dir\tests\text_layout_tests.cpp.obj
+[7/23] Building CXX object sdk\CMakeFiles\oneui_win32_window_shadow_tests.dir\tests\win32_window_shadow_tests.cpp.obj
+[8/23] Building CXX object sdk\CMakeFiles\oneui_terminal_raster_tests.dir\src\platform\shared\skia_canvas.cpp.obj
+[9/23] Building CXX object sdk\CMakeFiles\oneui_time_series_chart_c_api_tests.dir\tests\time_series_chart_c_api_tests.cpp.obj
+[10/23] Building CXX object sdk\CMakeFiles\oneui_overlay_host_behavior_tests.dir\tests\overlay_host_behavior_tests.cpp.obj
+[11/23] Building CXX object sdk\CMakeFiles\oneui_terminal_view_behavior_tests.dir\tests\terminal_view_behavior_tests.cpp.obj
+[12/23] Linking CXX executable bin\oneui_text_layout_tests.exe
+[13/23] Linking CXX executable bin\oneui_developer_tools_tests.exe
+[14/23] Linking CXX executable bin\oneui_win32_window_shadow_tests.exe
+[15/23] Linking CXX executable bin\oneui_time_series_chart_behavior_tests.exe
+[16/23] Linking CXX executable bin\oneui_time_series_chart_c_api_tests.exe
+[17/23] Linking CXX executable bin\oneui_terminal_raster_tests.exe
+[18/23] Linking CXX executable bin\oneui_motion_diagnostics_tests.exe
+[19/23] Building CXX object sdk\CMakeFiles\oneui_win32_accessibility_tests.dir\tests\win32_accessibility_tests.cpp.obj
+[20/23] Linking CXX executable bin\oneui_overlay_host_behavior_tests.exe
+[21/23] Linking CXX executable bin\oneui_terminal_view_behavior_tests.exe
+[22/23] Linking CXX executable bin\oneui_win32_accessibility_tests.exe
+Test project E:/project/byname/oneui/examples/declarative/build
+      Start  1: declarative_runtime
+ 1/23 Test  #1: declarative_runtime ......................   Passed    3.59 sec
+      Start  2: declarative_compiler
+ 2/23 Test  #2: declarative_compiler .....................   Passed   21.30 sec
+      Start  3: oneui_developer_tools_tests
+ 3/23 Test  #3: oneui_developer_tools_tests ..............   Passed    0.04 sec
+      Start  4: oneui_frame_profile_tests
+ 4/23 Test  #4: oneui_frame_profile_tests ................   Passed    0.02 sec
+      Start  8: oneui_interaction_tests
+ 5/23 Test  #8: oneui_interaction_tests ..................   Passed    0.06 sec
+      Start  9: oneui_reactive_lifetime_tests
+ 6/23 Test  #9: oneui_reactive_lifetime_tests ............   Passed    0.01 sec
+      Start 10: oneui_text_layout_tests
+ 7/23 Test #10: oneui_text_layout_tests ..................   Passed    0.07 sec
+      Start 12: oneui_control_behavior_tests
+ 8/23 Test #12: oneui_control_behavior_tests .............   Passed    0.10 sec
+      Start 14: oneui_time_series_chart_behavior_tests
+ 9/23 Test #14: oneui_time_series_chart_behavior_tests ...   Passed    0.03 sec
+      Start 16: oneui_overlay_host_behavior_tests
+10/23 Test #16: oneui_overlay_host_behavior_tests ........   Passed    0.03 sec
+      Start 17: oneui_scroll_view_behavior_tests
+11/23 Test #17: oneui_scroll_view_behavior_tests .........   Passed    0.03 sec
+      Start 18: oneui_stack_behavior_tests
+12/23 Test #18: oneui_stack_behavior_tests ...............   Passed    0.03 sec
+      Start 19: oneui_authoring_behavior_tests
+13/23 Test #19: oneui_authoring_behavior_tests ...........   Passed    0.06 sec
+      Start 20: oneui_yoga_behavior_tests
+14/23 Test #20: oneui_yoga_behavior_tests ................   Passed    0.06 sec
+      Start 21: oneui_component_behavior_tests
+15/23 Test #21: oneui_component_behavior_tests ...........   Passed    0.06 sec
+      Start 24: oneui_terminal_view_behavior_tests
+16/23 Test #24: oneui_terminal_view_behavior_tests .......   Passed    0.04 sec
+      Start 25: oneui_terminal_raster_tests
+17/23 Test #25: oneui_terminal_raster_tests ..............   Passed    0.14 sec
+      Start 28: oneui_motion_diagnostics_tests
+18/23 Test #28: oneui_motion_diagnostics_tests ...........   Passed    0.03 sec
+      Start 29: oneui_win32_accessibility_tests
+19/23 Test #29: oneui_win32_accessibility_tests ..........   Passed    0.04 sec
+      Start 30: oneui_win32_window_loop_tests
+20/23 Test #30: oneui_win32_window_loop_tests ............   Passed    0.41 sec
+      Start 33: oneui_win32_window_shadow_tests
+21/23 Test #33: oneui_win32_window_shadow_tests ..........   Passed    0.01 sec
+      Start 38: oneui_time_series_chart_c_api_tests
+22/23 Test #38: oneui_time_series_chart_c_api_tests ......   Passed    0.07 sec
+      Start 42: oneui_abi_sync
+23/23 Test #42: oneui_abi_sync ...........................   Passed    0.09 sec
+
+100% tests passed, 0 tests failed out of 23
+
+Total Test time (real) =  26.33 sec
