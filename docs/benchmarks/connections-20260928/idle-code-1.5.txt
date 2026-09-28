@@ -1,0 +1,5 @@
+paint_count=0
+cpu_percent=0
+working_set_mb=81.9805
+dpi_scale=1.5
+styles=204

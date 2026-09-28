@@ -46,6 +46,9 @@ $sdk = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows Kits\Installed Roots'
 
 # Learn: settings, validation, async saving and connection list
 .\examples\declarative\run.ps1 -Build -Dev
+
+# Full workflow: list → details → editor, light by default
+.\examples\performance_lab\run.ps1 -Connections -Entry template -Dev
 ```
 
 Skip the Skia step if the matching dependency already exists in `third_party/skia/out/oneui-win-x64-release`. Initial builds download dependencies from Skia, Chromium and GitHub; Yoga is pinned and hash checked. The Skia script accepts `-Proxy`. See the [build guide](docs/12-getting-started.md) for other toolchains.
@@ -64,6 +67,8 @@ If VS is not found, check the C++ and CMake installation components. Missing `sk
 ```
 
 `ui.make` creates a component; `ui.set` supplies a fixed property; `ui.model` binds both directions; `ui.bind` maps observable state to a property. `SettingsPage` handles content width and scrolling, `FormRow` provides label/help/field layout, and `applyTheme` supplies the default appearance.
+
+Next, run `examples/declarative/build/bin/oneui-details.exe`: [details.cpp](examples/declarative/details.cpp) is a standalone C++ example of responsive fields, read-only text, bottom actions and theme switching without manual field coordinates. The lab now supports list → details → edit, preserving filters and scroll position; saving from details returns to the same record. See the [page recipes](docs/48-connection-page-recipes.md) and [validation limits](docs/49-connection-workflow-validation.md) (Chinese).
 
 For a full application, [manual.h](examples/declarative/manual.h) contains the C++ composition, [Demo.one](examples/declarative/views/Demo.one) contains the equivalent template, and [vm.h](examples/declarative/vm.h) contains shared state, validation and commands. A ViewModel is simply the C++ class that owns this page data and behavior.
 

@@ -19,7 +19,7 @@ if ($Test) {
 }
 cmd.exe /c "call `"$vcvars`" x64 && `"$cmake`" -S `"$PSScriptRoot`" -B `"$buildDir`" -G Ninja -DONEUI_DEMO_SDK_TESTS=$sdkTests -DONEUI_SOURCE_ROOT=`"$OneUiRoot`" -DCMAKE_BUILD_TYPE=Release -DCMAKE_MAKE_PROGRAM=`"$ninja`" -DONEUI_SKIA_MODE=bundled-static -DONEUI_BUNDLED_SKIA_ROOT=`"$skiaRoot`" -DONEUI_BUNDLED_SKIA_OUT=`"$skiaOut`""
 if ($LASTEXITCODE -ne 0) { throw 'Configure failed' }
-$targets = 'oneui-hello oneui-declarative-demo oneui-declarative-tests'
+$targets = 'oneui-hello oneui-details oneui-declarative-demo oneui-declarative-tests'
 if ($Test) { $targets += ' oneui_reactive_lifetime_tests oneui_interaction_tests oneui_component_behavior_tests oneui_yoga_behavior_tests oneui_authoring_behavior_tests oneui_frame_profile_tests oneui_win32_accessibility_tests oneui_win32_window_loop_tests oneui_control_behavior_tests oneui_stack_behavior_tests oneui_scroll_view_behavior_tests' }
 cmd.exe /c "call `"$vcvars`" x64 && `"$cmake`" --build `"$buildDir`" --target $targets --parallel 8"
 if ($LASTEXITCODE -ne 0) { throw 'Build failed' }

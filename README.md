@@ -57,6 +57,9 @@ $sdk = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows Kits\Installed Roots'
 
 # 学习开发：设置、保存校验、连接列表，开启 CSS 热更新
 .\examples\declarative\run.ps1 -Build -Dev
+
+# 完整业务流程：列表 → 详情 → 编辑，默认浅色
+.\examples\performance_lab\run.ps1 -Connections -Entry template -Dev
 ```
 
 `-Build` 重新编译，`-Test` 编译并运行回归，`-Dev` 监听 CSS。结构或 C++ 变更后先关闭窗口再重建，避免 DLL 被占用。示例默认使用本地模拟数据，关闭后丢弃，不连接外部服务器。
@@ -96,6 +99,8 @@ int main() {
 ```
 
 把这个文件作为自己页面的起点。`ui.make` 创建控件，`ui.set` 设置固定属性，`ui.model` 双向绑定，`ui.bind` 将变量映射到界面属性。`SettingsPage` 负责正文限宽和滚动，`FormRow` 负责标签、说明与字段排列，主题提供默认外观。
+
+下一步可直接运行 [details.cpp](examples/declarative/details.cpp)：构建后启动 `examples/declarative/build/bin/oneui-details.exe`，体验只用公共组件完成的自动分栏、长文本、底部操作和主题切换。[从字段到完整页面](docs/48-connection-page-recipes.md) 按“运行 → 改字段 → 组合布局 → 接入业务”说明代码和模板写法。
 
 ## 更喜欢标签和 CSS？
 

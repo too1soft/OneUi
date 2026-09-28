@@ -1,0 +1,39 @@
+<template>
+  <Page>
+    <Header title="连接详情">
+      <Text text="已保存的本地配置 · 状态为固定模拟数据，不发起网络连接。" />
+      <Toolbar>
+        <Button ref="detailBack" @click="list.detailBack">返回连接列表</Button>
+        <Select :items="editor.themes" v-model="editor.theme" name="详情页主题" />
+        <Select :items="editor.densities" v-model="editor.density" name="界面密度" />
+      </Toolbar>
+    </Header>
+    <DetailPage>
+      <Section title="连接信息">
+        <FormGrid>
+          <FormRow label="连接名称"><Text :text="list.detailName" /></FormRow>
+          <FormRow label="连接状态"><Status :text="list.detailStatus" :tone="list.detailTone" /></FormRow>
+          <FormRow label="主机地址"><Text :text="list.detailHost" /></FormRow>
+          <FormRow label="端口"><Text :text="list.detailPort" /></FormRow>
+          <FormRow label="连接协议"><Text :text="list.detailProtocol" /></FormRow>
+          <FormRow label="连接 ID"><Text :text="list.detailKey" /></FormRow>
+        </FormGrid>
+      </Section>
+      <Section title="连接行为">
+        <FormGrid>
+          <FormRow label="连接超时"><Text :text="list.detailTimeout" /></FormRow>
+          <FormRow label="断线处理"><Text :text="list.detailReconnect" /></FormRow>
+        </FormGrid>
+        <FormRow label="备注"><Text :text="list.detailNote" /></FormRow>
+      </Section>
+      <ActionBar>
+        <Button ref="detailEdit" variant="primary" @click="list.edit">编辑连接</Button>
+        <Button variant="danger" @click="list.remove">删除连接</Button>
+        <Status :text="list.message" />
+      </ActionBar>
+    </DetailPage>
+  </Page>
+</template>
+<style scoped>
+/* Optional detail-only overrides. The shared theme supplies all default layout. */
+</style>

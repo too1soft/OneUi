@@ -20,14 +20,20 @@ struct Temporary {
 static void write(const std::filesystem::path& file,const std::string& text){std::ofstream out(file,std::ios::binary);out<<text;}
 int main(){try {
     Fixture code(false),compiled(true);
-    for(bool dark:{false,true})for(float width:{1320.f,640.f,426.f})for(int scene=0;scene<5;++scene) {
+    for(bool dark:{false,true})for(int density:{0,1})for(float width:{1320.f,640.f,426.f})for(int scene=0;scene<7;++scene) {
         for(auto* f:{&code,&compiled}) {
-            f->flow.prompt.set(false);f->flow.form.set(false);f->flow.query.set({});
+            f->flow.prompt.set(false);f->flow.form.set(false);f->flow.detailKey.set({});f->flow.query.set({});
             if(scene==1)f->flow.query.set(L"no results");
             if(scene==2 || scene==3){f->flow.open(L"20");f->vm.port.set(L"70000");f->vm.attempted.set(true);}
             if(scene==3)f->flow.request(Connections::Destination::List);
             if(scene==4){f->flow.selectedKey.set(L"20");f->flow.remove.execute();}
-            f->ui.styles()->replace(declarativeTheme(dark));f->page.root.widget->setFrame({0,0,width,700});
+            if(scene>=5) {
+                auto data=f->flow.records.get();data[19].config.name=std::wstring(64,L'名');data[19].config.note=std::wstring(200,L'注');
+                f->flow.records.set(std::move(data));f->flow.showDetails(L"20");
+                if(scene==6){f->flow.edit.execute();f->vm.note.set(L"详情草稿");f->vm.back.execute();}
+            }
+            const auto spacing=density?Density::Compact:Density::Comfortable;
+            f->ui.styles()->replace(declarativeTheme(dark,spacing),spacing);f->page.root.widget->setFrame({0,0,width,800});
         }
         auto a=code.paint(),b=compiled.paint();CHECK(a.texts.size()==b.texts.size());CHECK(a.fillRects.size()==b.fillRects.size());
         for(size_t i=0;i<a.texts.size();++i){if(a.texts[i].text!=b.texts[i].text){auto utf=[](const std::wstring& s){return std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>>{}.to_bytes(s);};throw std::runtime_error("scene="+std::to_string(scene)+" text="+std::to_string(i)+" code="+utf(a.texts[i].text)+" template="+utf(b.texts[i].text));}equalRect(a.texts[i].rect,b.texts[i].rect);CHECK(sameColor(a.texts[i].color,b.texts[i].color));CHECK(near(a.texts[i].size,b.texts[i].size));}
@@ -66,11 +72,21 @@ int main(){try {
             std::this_thread::sleep_for(std::chrono::milliseconds(250));mailbox.drain();CHECK(notifications==1);
         }mailbox.close();
         bool duplicate=false;try{f->ui.remember("name",input);}catch(const std::invalid_argument&){duplicate=true;}CHECK(duplicate);
+        // Imported detail styles use the same scope in C++ and template entries.
+        f->flow.form.set(false);f->flow.detailKey.set({});f->flow.showDetails(L"20");f->paint();
+        const auto detailFile=std::find_if(styles.sourceFiles.begin(),styles.sourceFiles.end(),[](const auto& source){return source.second=="scope_Connections_Details";})->first;
+        const auto detailOriginal=readStyleFile(detailFile);
+        write(detailFile,detailOriginal+"\n<style scoped>Section { border-radius: 17px; }</style>");CHECK(styles.apply());
+        auto detailCanvas=f->paint();CHECK(std::any_of(detailCanvas.fillRects.begin(),detailCanvas.fillRects.end(),[](auto& rect){return near(rect.radius,17);}));
+        CHECK(f->flow.detailKey.get()==L"20");f->flow.detailBack.execute();auto listCanvas=f->paint();
+        CHECK(std::none_of(listCanvas.fillRects.begin(),listCanvas.fillRects.end(),[](auto& rect){return near(rect.radius,17);}));
+        write(detailFile,detailOriginal);CHECK(styles.apply());
+        CHECK(f->ui.diagnostics().subscriptions==stats.subscriptions);CHECK(f->ui.styles()->size()==nodes);
     }
     // Native activation/delete command adapters do nothing after mount teardown.
     auto table=std::make_shared<Table>();VmCommand event;int calls=0;event.setAction([&]{++calls;});table->setRows({{L"row"}});table->setSelectedIndex(0);
     {Mount mount;Element e(Node(table),"DataTable");mount.tableEvent(e,"activate",event);KeyEvent key;key.key=Key::Enter;table->onKeyDown(key);CHECK(calls==1);}
     KeyEvent key;key.key=Key::Enter;table->onKeyDown(key);CHECK(calls==1);
-    std::cout<<"Authoring parity: 30 scenes; hot CSS rollback/removal, scoped blocks, input retention, 50 reloads and debounce passed for both entries.\n";
+    std::cout<<"Authoring parity: 84 scenes (themes, densities, widths, list/detail/editor/prompt); hot CSS rollback/removal, scoped blocks, input retention, 50 reloads and debounce passed for both entries.\n";
     return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<"\n";return 1;}}

@@ -52,6 +52,27 @@ int main(int argc,char** argv){try {
     flow.remove.execute();paint();CHECK(flow.deleting.get());flow.keep.execute();CHECK(flow.find(newId));
     flow.remove.execute();flow.confirmDelete.execute();paint();CHECK(!flow.find(newId));CHECK(flow.records.get().size()==initialSize);CHECK(!flow.selectedKey.get().empty());
     CHECK(table->scrollOffset()>=0 && table->scrollOffset()<=table->maxScrollOffset());
+    // Native activation opens a stable-ID read-only detail; edits return to their origin.
+    flow.selectedKey.set(L"20");paint();table->setScrollOffset(440);
+    KeyEvent activate;activate.key=Key::Enter;table->onKeyDown(activate);paint();
+    CHECK(flow.showDetail.get());CHECK(!flow.showList.get());CHECK(flow.detailKey.get()==L"20");
+    CHECK(flow.detailName.get()==flow.find(L"20")->config.name);
+    flow.edit.execute();paint();CHECK(flow.form.get());CHECK(vm.backText.get()==L"返回连接详情");
+    vm.name.set(L"详情中保存的名称");vm.save.execute();finish();
+    CHECK(flow.showDetail.get());CHECK(flow.detailName.get()==L"详情中保存的名称");CHECK(!flow.form.get());
+    CHECK(table->scrollOffset()==440);CHECK(flow.selectedKey.get()==L"20");
+    flow.edit.execute();vm.note.set(L"详情未保存草稿");vm.back.execute();paint();CHECK(flow.prompt.get());
+    flow.keep.execute();paint();CHECK(flow.form.get());CHECK(vm.note.get()==L"详情未保存草稿");
+    vm.back.execute();flow.discard.execute();paint();CHECK(flow.showDetail.get());CHECK(flow.detailNote.get()!=L"详情未保存草稿");
+    flow.edit.execute();vm.note.set(L"详情保存失败重试");vm.failNext.execute();vm.save.execute();finish();
+    CHECK(flow.showForm.get());CHECK(!vm.save.error.get().empty());vm.save.execute();finish();CHECK(flow.showDetail.get());
+    flow.remove.execute();paint();flow.keep.execute();paint();CHECK(flow.showDetail.get());
+    // A detail remains addressable even if the edited record leaves the retained filter.
+    flow.query.set(L"详情中保存的名称");paint();flow.edit.execute();vm.name.set(L"已离开筛选的详情");vm.save.execute();finish();
+    CHECK(flow.showDetail.get());CHECK(flow.detailName.get()==L"已离开筛选的详情");CHECK(flow.selectedKey.get().empty());CHECK(flow.empty.get());CHECK(flow.edit.canExecute.get());
+    flow.detailBack.execute();paint();CHECK(flow.showList.get());CHECK(flow.query.get()==L"详情中保存的名称");
+    flow.clear.execute();flow.selectedKey.set(L"21");paint();flow.view.execute();flow.remove.execute();flow.confirmDelete.execute();paint();
+    CHECK(flow.showList.get());CHECK(!flow.find(L"21"));CHECK(flow.detailKey.get().empty());
     // All leaving paths use the same guard; closing while saving is cancellable.
     bool closed=false,back=false;flow.closeWindow=[&]{closed=true;};flow.backToLab=[&]{back=true;};
     flow.open(L"20");vm.note.set(L"未保存");flow.request(Destination::Lab);CHECK(flow.prompt.get());CHECK(!back);flow.keep.execute();
@@ -66,8 +87,8 @@ int main(int argc,char** argv){try {
     for(int i=0;i<300;++i) {
         flow.query.set(i%2?L"节点":L"");flow.filter.set(i%3);paint();
         if(!flow.filtered.get().empty()) {
-            flow.selectedKey.set(flow.filtered.get().front().id);paint();flow.edit.execute();paint();
-            vm.note.set(L"循环草稿 "+std::to_wstring(i));flow.request(Destination::List);paint();flow.discard.execute();paint();
+            flow.selectedKey.set(flow.filtered.get().front().id);paint();flow.view.execute();paint();CHECK(flow.showDetail.get());flow.edit.execute();paint();
+            vm.note.set(L"循环草稿 "+std::to_wstring(i));vm.back.execute();paint();flow.discard.execute();paint();CHECK(flow.showDetail.get());flow.detailBack.execute();paint();
         }
         CHECK(widgets(page.root.widget)==identity);CHECK(ui.styles()->size()==styles);
         CHECK(ui.diagnostics().subscriptions==stats.subscriptions);CHECK(ui.diagnostics().ownedObjects==stats.ownedObjects);CHECK(ui.diagnostics().pendingUpdates==0);

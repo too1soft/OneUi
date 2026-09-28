@@ -7,6 +7,7 @@
 ```powershell
 .\examples\declarative\build.ps1 -Test
 .\examples\declarative\build\bin\oneui-hello.exe
+.\examples\declarative\build\bin\oneui-details.exe
 .\examples\declarative\run.ps1 -Code -Dev
 .\examples\declarative\run.ps1 -Page list -Dark -Dev
 ```
@@ -18,6 +19,7 @@
 | 想做的事 | 文件 |
 |---|---|
 | 最简单的 C++ 双向输入 | [hello.cpp](hello.cpp) |
+| 独立详情页：自动分栏、长文字、底部操作与主题 | [details.cpp](details.cpp) |
 | 用 C++ 增加字段、组合页面 | [manual.h](manual.h) |
 | 用标签写同一页面 | [views/Demo.one](views/Demo.one) |
 | 复用标题组件、默认和具名插槽 | [views/Header.one](views/Header.one) |
@@ -42,3 +44,5 @@
 最省事的方式是复制本目录的完整源码（不复制 build/artifacts），保留 CMake 与构建脚本，再修改 `hello.cpp` 或完整页面。目录在仓库外时运行 `build.ps1 -OneUiRoot C:/你的路径/OneUi`；它会把 `ONEUI_SOURCE_ROOT` 指向 SDK。C++17、`ONEUI_ENABLE_YOGA=ON` 和 `target_link_libraries(app PRIVATE oneui)` 是声明式入口的基本要求。使用模板时额外调用 `oneui_target_view`，生成的头文件由构建自动处理。只用 C++ 的目标不必添加 `.one` 文件。
 
 完整[模板／绑定接口](../../docs/35-declarative-authoring-v1.md)、[页面与布局指南](../../docs/36-declarative-page-patterns.md)。本轮入口为 C++，不代表 Rust 已拥有等价模板接口。
+
+下一步可按[页面组合教程](../../docs/48-connection-page-recipes.md)体验性能实验台中的完整列表 → 详情 → 编辑流程；它与这里的最小程序使用相同的公共布局组件。

@@ -8,11 +8,14 @@
 .\examples\performance_lab\run.ps1 -Build -Test
 .\examples\performance_lab\run.ps1 -Components -Dev
 .\examples\performance_lab\run.ps1 -Connections -Entry template -Dev
+.\examples\performance_lab\run.ps1 -Details -Entry code
 .\examples\performance_lab\run.ps1 -Editor -Entry code -Compact
 .\examples\performance_lab\run.ps1 -Load heavy
 ```
 
-每条运行命令打开一个窗口；对比性能前关闭其他实验台窗口。普通启动不监听文件，`-Dev` 才开启样式热更新。`-Entry code|template` 选择连接列表和编辑页的写法，组件展示页统一使用 `Gallery.one`。`-Compact` 使用紧凑密度。
+每条运行命令打开一个窗口；对比性能前关闭其他实验台窗口。普通启动不监听文件，`-Dev` 才开启样式热更新。`-Entry code|template` 选择连接列表、详情和编辑页的写法，组件展示页统一使用 `Gallery.one`。连接列表与详情默认浅色，页头可切换深色。`-Compact` 使用紧凑密度。
+
+双击或 Enter 查看详情，“编辑选中”直接编辑；从详情编辑后保存或取消返回详情，从列表直接编辑则返回列表。筛选与有效滚动位置保留；Esc 按原路径返回，有未保存修改时先确认。[从字段到页面的复制教程](../../docs/48-connection-page-recipes.md)。
 
 ## 选择 CPU / GPU
 
@@ -40,12 +43,12 @@
 |---|---|---|
 | 综合性能 | 切换场景、负载、暂停，观察 CPU／内存／回调间隔 | [main.cpp](main.cpp)、[plots.hpp](plots.hpp) |
 | 默认外观与自适应 | `-Components`；切主题、密度；缩到 640px；切表单／表格／反馈 | [views/Gallery.one](views/Gallery.one) |
-| 完整列表与编辑流程 | `-Connections`；搜索、筛选、双击编辑、新建、删除、未保存确认 | [connection_workspace.hpp](connection_workspace.hpp) |
+| 列表、详情与编辑流程 | `-Connections`；搜索、筛选、双击查看详情、新建、删除、未保存确认 | [connection_workspace.hpp](connection_workspace.hpp) |
 | C++ 表单与异步保存 | `-Editor -Entry code`；校验错误、保存、失败重试 | [connection_editor.hpp](connection_editor.hpp) |
-| 模板里的同一业务 | `-Connections -Entry template` | [views/Connections.one](views/Connections.one)、[views/Editor.one](views/Editor.one) |
+| 模板里的同一业务 | `-Connections -Entry template` | [views/Connections.one](views/Connections.one)、[views/Details.one](views/Details.one)、[views/Editor.one](views/Editor.one) |
 | 修改外观即时预览 | `-Dev` 后修改外部 CSS 或 `.one` 的 style 块 | [connections.css](connections.css) |
 
-页面使用 SettingsPage/ListPage、FormGrid、FormRow 与 Toolbar。FormGrid 按约 320 逻辑像素列基准自动分栏／换行，字段标签上置；不用逐个 `setFrame`。它不是完整浏览器 Grid，不支持跨列。窄窗口与长中文交由布局和文字测量处理。
+页面使用 SettingsPage/ListPage/DetailPage、FormGrid、FormRow 与 Toolbar。FormGrid 按约 320 逻辑像素列基准自动分栏／换行，字段标签上置；不用逐个 `setFrame`。只读 Text 和编辑 Input 共用 FormRow。它不是完整浏览器 Grid，不支持跨列。窄窗口与长中文交由布局和文字测量处理。
 
 模板结构、事件和 C++ 逻辑变化要重新构建；CSS 错误保留上一次有效样式。组件页的加载外观是模拟状态，完整异步保存请到连接编辑页体验。展示页第一次打开时才创建，之后保留。
 
@@ -55,6 +58,7 @@
 # 关闭所有 oneui-performance-lab / gpui-performance-lab 进程后运行
 .\examples\performance_lab\compare-entries.ps1 -Rounds 3 -Cycles 200
 .\examples\performance_lab\capture-gallery.ps1
+.\examples\performance_lab\capture-connections.ps1
 ```
 
 输出在忽略提交的 `results/` 下。每轮 50 次预热，随后 150 次列表搜索／编辑／取消；代码与模板交替先运行，使用同一 exe/DLL、窗口和数据。测量脚本拒绝与其他实验台同跑。保存的二进制哈希可帮助确认测的是哪个构建。

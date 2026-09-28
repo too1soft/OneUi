@@ -1,0 +1,31 @@
+Editor validation, snapshot save, cancellation, layout, input retention and focus reveal tests passed
+Connection workflow tests passed: 300 cycles, 207 widgets, 71 mount subscriptions, 204 style nodes; no growth.
+Connection workflow tests passed: 300 cycles, 207 widgets, 71 mount subscriptions, 204 style nodes; no growth.
+Authoring parity: 84 scenes (themes, densities, widths, list/detail/editor/prompt); hot CSS rollback/removal, scoped blocks, input retention, 50 reloads and debounce passed for both entries.
+Gallery: 36 theme/density/width/scenes; responsive geometry, state feedback, focus/composition, stable subscriptions and table anchor passed.
+Renderer diagnostics: forced raster, actual surface, monotonic counters and read-only snapshots passed
+Exact geometry/fallback parity: 160 cases
+Raster PNG exact parity: 54 cases; 100/125/150% content scale
+mode=cpu cycles=30 warm_handles=207 end_handles=206 warm_gdi=9 end_gdi=9 warm_user=5 end_user=4
+Default mode, fallback, close and pending callback lifecycle passed
+mode=failed-gpu cycles=30 warm_handles=303 end_handles=302 warm_gdi=11 end_gdi=11 warm_user=7 end_user=7
+Default mode, fallback, close and pending callback lifecycle passed
+Standalone oneui-details: build succeeded; responsive native window; normal close; exit 0.
+Native client captures: 4; all No layout issues.
+Idle details: code/template x content scale 1/1.25/1.5; each 5 s, paint_count=0.
+Real system DPI / cross-monitor / IME candidate UI: NOT VALIDATED (automation kernel startup failure).
+
+Original workspace integration (unrelated changes preserved):
+Editor validation, snapshot save, cancellation, layout, input retention and focus reveal tests passed
+Connection workflow tests passed: 300 cycles, 207 widgets, 71 mount subscriptions, 204 style nodes; no growth.
+Connection workflow tests passed: 300 cycles, 207 widgets, 71 mount subscriptions, 204 style nodes; no growth.
+Authoring parity: 84 scenes (themes, densities, widths, list/detail/editor/prompt); hot CSS rollback/removal, scoped blocks, input retention, 50 reloads and debounce passed for both entries.
+Gallery: 36 theme/density/width/scenes; responsive geometry, state feedback, focus/composition, stable subscriptions and table anchor passed.
+Renderer diagnostics: forced raster, actual surface, monotonic counters and read-only snapshots passed
+Exact geometry/fallback parity: 160 cases
+Raster PNG exact parity: 54 cases; 100/125/150% content scale
+mode=cpu cycles=30 warm_handles=209 end_handles=208 warm_gdi=9 end_gdi=9 warm_user=5 end_user=4
+Default mode, fallback, close and pending callback lifecycle passed
+mode=failed-gpu cycles=30 warm_handles=305 end_handles=304 warm_gdi=11 end_gdi=11 warm_user=7 end_user=7
+Default mode, fallback, close and pending callback lifecycle passed
+Learning examples: original workspace build succeeded.

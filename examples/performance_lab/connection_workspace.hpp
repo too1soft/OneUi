@@ -21,9 +21,9 @@ class Connections {
     std::wstring editingId_, deletingId_;
     bool creating_ = false;
 public:
-    enum class Destination { None, List, Lab, Close, Delete };
+    enum class Destination { None, List, Detail, Lab, Close, Delete };
 private:
-    Destination pending_ = Destination::None, afterSave_ = Destination::List;
+    Destination pending_ = Destination::None, afterSave_ = Destination::List, editorReturn_ = Destination::List;
     static std::wstring lower(std::wstring text) {
         for(auto& c:text)c=static_cast<wchar_t>(std::towlower(c));
         return text;
@@ -32,6 +32,7 @@ private:
         pending_=Destination::None;prompt.set(false);
         if(destination==Destination::Close) { if(closeWindow)closeWindow(); return; }
         form.set(false);
+        if(destination!=Destination::Detail)detailKey.set({});
         if(destination==Destination::Lab && backToLab)backToLab();
     }
     void saved(const Config& snapshot) {
@@ -51,11 +52,11 @@ private:
             promptText.set(editor_.value()==snapshot?L"提交时的配置已保存。可以继续操作，或离开当前页面。":L"提交时的配置已保存；后续输入仍未保存。继续编辑或放弃后续修改。");
         }
         else if(editor_.value()==snapshot)leave(afterSave_);
-        else { afterSave_=Destination::List;editor_.message.set(L"已保存提交时的配置；后续修改尚未保存，请再次保存。"); }
+        else { afterSave_=editorReturn_;editor_.message.set(L"已保存提交时的配置；后续修改尚未保存，请再次保存。"); }
     }
 public:
     State<std::vector<Connection>> records;
-    State<std::wstring> query, selectedKey, message{L"固定种子模拟数据 · 双击或按 Enter 编辑"};
+    State<std::wstring> query, selectedKey, detailKey, message{L"固定种子模拟数据 · 双击或按 Enter 查看详情"};
     State<std::wstring> styleError;
     State<std::vector<std::wstring>> filters{{L"全部状态",L"在线",L"离线"}};
     State<std::vector<TableColumn>> columns{{{L"连接名称",0},{L"地址",0},{L"状态",72}}};
@@ -64,7 +65,7 @@ public:
     State<std::wstring> promptTitle, promptText;
     State<bool> deleting{false};
     VmCommand add, edit, remove, clear, back, keep, discard, saveLeave, confirmDelete;
-    VmCommand showGallery;
+    VmCommand showGallery, view, detailBack;
     std::function<void()> backToLab, closeWindow;
     std::vector<Subscription> subscriptions;
 
@@ -83,16 +84,29 @@ public:
         for(auto& row:records.get())if(matches(row))result.push_back({row.id,{row.config.name,row.config.host+L":"+row.config.port,row.online?L"在线":L"离线"}});
         return result;
     },records,query,filter};
-    Computed<bool> showList{[this]{return !form.get() && !prompt.get() && !gallery.get();},form,prompt,gallery};
+    Computed<bool> showList{[this]{return !form.get() && !prompt.get() && !gallery.get() && detailKey.get().empty();},form,prompt,gallery,detailKey};
+    Computed<bool> showDetail{[this]{return !form.get() && !prompt.get() && !gallery.get() && !detailKey.get().empty();},form,prompt,gallery,detailKey};
     Computed<bool> showForm{[this]{return form.get() && !prompt.get();},form,prompt};
     Computed<bool> empty{[this]{return filtered.get().empty();},filtered};
     Computed<bool> hasRows{[this]{return !filtered.get().empty();},filtered};
     Computed<bool> notDeleting{[this]{return !deleting.get();},deleting};
     Computed<bool> canSavePrompt{[this]{return !deleting.get() && !editor_.save.running.get();},deleting,editor_.save.running};
     Computed<std::wstring> count{[this]{return L"显示 "+std::to_wstring(filtered.get().size())+L" / "+std::to_wstring(records.get().size())+L" 条连接";},filtered,records};
-    Computed<std::wstring> selection{[this]{auto row=find(selectedKey.get());return row?L"已选择："+row->config.name:std::wstring(L"选择一条连接进行编辑");},selectedKey,records};
+    Computed<std::wstring> selection{[this]{auto row=find(selectedKey.get());return row?L"已选择："+row->config.name:std::wstring(L"选择一条连接查看详情或编辑");},selectedKey,records};
     Computed<std::wstring> emptyTitle{[this]{return records.get().empty()?std::wstring(L"还没有连接"):std::wstring(L"没有匹配的连接");},records};
     Computed<std::wstring> emptyText{[this]{return records.get().empty()?std::wstring(L"新建一条本地模拟连接，开始体验编辑流程。"):std::wstring(L"换个名称或地址，或清除搜索与状态筛选。");},records};
+    Computed<bool> hasRecords{[this]{return !records.get().empty();},records};
+    Computed<bool> noRecords{[this]{return records.get().empty();},records};
+    Computed<Config> detailConfig{[this]{auto row=find(detailKey.get());return row?row->config:Config{};},detailKey,records};
+    Computed<std::wstring> detailName{[this]{return detailConfig.get().name;},detailConfig};
+    Computed<std::wstring> detailHost{[this]{return detailConfig.get().host;},detailConfig};
+    Computed<std::wstring> detailPort{[this]{return detailConfig.get().port;},detailConfig};
+    Computed<std::wstring> detailProtocol{[this]{return editor_.protocols.get().at(detailConfig.get().protocol);},detailConfig,editor_.protocols};
+    Computed<std::wstring> detailTimeout{[this]{return detailConfig.get().timeout+L" 秒";},detailConfig};
+    Computed<std::wstring> detailReconnect{[this]{return std::wstring(detailConfig.get().reconnect?L"允许自动重连":L"不自动重连");},detailConfig};
+    Computed<std::wstring> detailNote{[this]{return detailConfig.get().note.empty()?std::wstring(L"未填写备注"):detailConfig.get().note;},detailConfig};
+    Computed<std::wstring> detailStatus{[this]{auto row=find(detailKey.get());return std::wstring(row && row->online?L"在线 · 模拟状态":L"离线 · 模拟状态");},detailKey,records};
+    Computed<std::wstring> detailTone{[this]{auto row=find(detailKey.get());return std::wstring(row && row->online?L"success":L"neutral");},detailKey,records};
 
     explicit Connections(VM& editor):editor_(editor) {
         showGallery.setAction([this]{gallery.set(true);});
@@ -109,18 +123,20 @@ public:
         records.set(std::move(seed));
         editor_.backText.set(L"返回连接列表");editor_.saveLabel.set(L"保存并返回");
         editor_.description.set(L"仅修改本地模拟数据 · 保存后返回列表，保留筛选和滚动位置。");
-        editor_.back.setAction([this]{request(Destination::List);});
+        editor_.back.setAction([this]{request(editorReturn_);});
         editor_.onSaved=[this](const Config& config){saved(config);};
-        editor_.onSaveFailed=[this]{afterSave_=Destination::List;};
-        add.setAction([this]{openNew();});edit.setAction([this]{open(selectedKey.get());});
+        editor_.onSaveFailed=[this]{afterSave_=editorReturn_;};
+        add.setAction([this]{openNew();});edit.setAction([this]{open(detailKey.get().empty()?selectedKey.get():detailKey.get());});
+        view.setAction([this]{showDetails(selectedKey.get());});
+        detailBack.setAction([this]{request(Destination::List);});
         back.setAction([this]{request(Destination::Lab);});
         clear.setAction([this]{Batch batch;query.set({});filter.set(0);});
         remove.setAction([this]{
-            auto row=find(selectedKey.get());if(!row || !matches(*row))return;
+            auto row=find(detailKey.get().empty()?selectedKey.get():detailKey.get());if(!row)return;
             deletingId_=row->id;pending_=Destination::Delete;deleting.set(true);
             promptTitle.set(L"删除这条连接？");promptText.set(L"将从本地模拟列表中删除「"+row->config.name+L"」。此操作无法撤销。");prompt.set(true);
         });
-        keep.setAction([this]{pending_=Destination::None;afterSave_=Destination::List;prompt.set(false);});
+        keep.setAction([this]{pending_=Destination::None;afterSave_=editorReturn_;prompt.set(false);});
         discard.setAction([this]{
             if(editor_.save.running.get() && pending_!=Destination::Close)return;
             auto destination=pending_;if(destination==Destination::None || destination==Destination::Delete)return;
@@ -130,7 +146,7 @@ public:
         saveLeave.setAction([this]{
             if(pending_==Destination::None || pending_==Destination::Delete || editor_.save.running.get())return;
             afterSave_=pending_;pending_=Destination::None;prompt.set(false);editor_.save.execute();
-            if(!editor_.save.running.get())afterSave_=Destination::List;
+            if(!editor_.save.running.get())afterSave_=editorReturn_;
         });
         confirmDelete.setAction([this]{
             if(pending_!=Destination::Delete)return;
@@ -141,21 +157,29 @@ public:
             const auto& remaining=filtered.get();selectedKey.set(remaining.empty()?L"":remaining[std::min(index,remaining.size()-1)].id);
             message.set(L"连接已删除 · 其他连接保持不变");leave(Destination::List);
         });
-        auto enable=[this](const auto&){const auto* row=find(selectedKey.get());const bool valid=row && matches(*row) && !form.get() && !prompt.get();edit.canExecute.set(valid);remove.canExecute.set(valid);};
+        auto enable=[this](const auto&){const auto* row=find(detailKey.get().empty()?selectedKey.get():detailKey.get());const bool valid=row && (!detailKey.get().empty() || matches(*row)) && !form.get() && !prompt.get() && !gallery.get();edit.canExecute.set(valid);remove.canExecute.set(valid);view.canExecute.set(valid && detailKey.get().empty());};
         subscriptions.push_back(selectedKey.subscribeScoped(enable));subscriptions.push_back(filtered.subscribeScoped(enable));
+        subscriptions.push_back(detailKey.subscribeScoped(enable));subscriptions.push_back(gallery.subscribeScoped(enable));
         subscriptions.push_back(form.subscribeScoped(enable));subscriptions.push_back(prompt.subscribeScoped(enable));enable(0);
         subscriptions.push_back(editor_.save.running.subscribeScoped([this](bool busy){discard.canExecute.set(!busy || pending_==Destination::Close);}));
     }
     bool needsGuard() const {return form.get() && (creating_ || !(editor_.value()==editor_.saved.get()) || editor_.save.running.get());}
+    void showDetails(const std::wstring& id) {
+        if(form.get() || prompt.get() || gallery.get() || !find(id))return;
+        detailKey.set(id);message.set(L"配置仅在当前进程有效，关闭应用后丢弃。");
+    }
     void open(const std::wstring& id) {
         if(editor_.save.running.get() || prompt.get())return;
         auto row=find(id);if(!row)return;
-        editingId_=id;creating_=false;afterSave_=Destination::List;
+        editingId_=id;creating_=false;editorReturn_=detailKey.get()==id?Destination::Detail:Destination::List;afterSave_=editorReturn_;
+        editor_.backText.set(editorReturn_==Destination::Detail?L"返回连接详情":L"返回连接列表");
+        editor_.description.set(editorReturn_==Destination::Detail?L"仅修改本地模拟数据 · 保存后返回详情，列表筛选和滚动位置保留。":L"仅修改本地模拟数据 · 保存后返回列表，保留筛选和滚动位置。");
         editor_.load(row->config);editor_.heading.set(L"编辑连接");form.set(true);
     }
     void openNew() {
         if(editor_.save.running.get() || prompt.get())return;
-        editingId_=std::to_wstring(nextId_++);creating_=true;afterSave_=Destination::List;
+        editingId_=std::to_wstring(nextId_++);creating_=true;editorReturn_=afterSave_=Destination::List;detailKey.set({});
+        editor_.backText.set(L"返回连接列表");editor_.description.set(L"仅创建本地模拟数据 · 保存后返回列表；关闭应用后丢弃。");
         Config config;config.name=L"新连接 "+editingId_;editor_.load(config);editor_.heading.set(L"新建连接");form.set(true);
     }
     void request(Destination destination) {
@@ -167,27 +191,57 @@ public:
     }
 };
 
+// The same public layout components handle read-only fields and editable fields.
+inline Page buildDetails(Mount& ui,VM& vm,Connections& flow) {
+    auto button=[&](const wchar_t* label,VmCommand& command,const char* variant="") {
+        auto e=ui.make("Button",{},variant);ui.set(e,"text",label);ui.click(e,command);return e;
+    };
+    auto field=[&](const wchar_t* label,auto& value) {
+        auto text=ui.make("Text");ui.bind(text,"text",value);
+        auto row=ui.make("FormRow",{text});ui.set(row,"label",label);return row;
+    };
+    auto status=ui.make("Status");ui.bind(status,"text",flow.detailStatus);ui.bind(status,"tone",flow.detailTone);
+    auto statusRow=ui.make("FormRow",{status});ui.set(statusRow,"label",L"连接状态");
+    auto info=ui.make("Section",{ui.make("FormGrid",{
+        field(L"连接名称",flow.detailName),statusRow,field(L"主机地址",flow.detailHost),field(L"端口",flow.detailPort),
+        field(L"连接协议",flow.detailProtocol),field(L"连接 ID",flow.detailKey)})});ui.set(info,"title",L"连接信息");
+    auto behavior=ui.make("Section",{ui.make("FormGrid",{field(L"连接超时",flow.detailTimeout),field(L"断线处理",flow.detailReconnect)}),field(L"备注",flow.detailNote)});ui.set(behavior,"title",L"连接行为");
+    auto edit=button(L"编辑连接",flow.edit,"primary"),back=button(L"返回连接列表",flow.detailBack);
+    auto message=ui.make("Status");ui.bind(message,"text",flow.message);
+    auto body=ui.make("DetailPage",{info,behavior,ui.make("ActionBar",{edit,button(L"删除连接",flow.remove,"danger"),message})});
+    auto theme=ui.make("Select");ui.bind(theme,"items",vm.themes);ui.model(theme,vm.theme);ui.set(theme,"name",L"详情页主题");
+    auto density=ui.make("Select");ui.bind(density,"items",vm.densities);ui.model(density,vm.density);ui.set(density,"name",L"界面密度");
+    auto description=ui.make("Text");ui.set(description,"text",L"已保存的本地配置 · 状态为固定模拟数据，不发起网络连接。");
+    auto header=ui.make("Header",{description,ui.make("Toolbar",{back,theme,density})});ui.set(header,"title",L"连接详情");
+    auto root=ui.make("Page",{header,body});ui.locate(root,__FILE__,__LINE__);
+    return {root,{{"$detailEdit",edit.widget},{"$detailBack",back.widget}}};
+}
+
 inline Page buildWorkspace(Mount& ui,VM& vm,Connections& flow) {
     const auto oldScope=ui.scope();ui.setScope("scope_Connections_Editor");
     auto button=[&](const wchar_t* title,VmCommand& command,const char* variant="") {
         auto e=ui.make("Button",{},variant);ui.set(e,"text",title);ui.click(e,command);return e;
     };
     auto form=buildPage(ui,vm);ui.condition(form.root,flow.showForm);
+    ui.setScope("scope_Connections_Details");
+    auto detail=buildDetails(ui,vm,flow);ui.condition(detail.root,flow.showDetail);
     ui.setScope("scope_Connections");
     auto search=ui.make("SearchInput");ui.model(search,flow.query);ui.set(search,"name",L"搜索连接");ui.set(search,"placeholder",L"搜索名称、地址或 ID");
     auto filter=ui.make("Select");ui.bind(filter,"items",flow.filters);ui.model(filter,flow.filter);ui.set(filter,"name",L"连接状态");
     auto theme=ui.make("Select");ui.bind(theme,"items",vm.themes);ui.model(theme,vm.theme);ui.set(theme,"name",L"连接页主题");
     auto table=ui.make("DataTable");ui.bind(table,"columns",flow.columns);
     ui.bind(table,"items",flow.filtered);ui.model(table,flow.selectedKey);ui.set(table,"name",L"连接列表");ui.condition(table,flow.hasRows);
-    ui.tableEvent(table,"activate",flow.edit);ui.tableEvent(table,"delete",flow.remove);
+    ui.tableEvent(table,"activate",flow.view);ui.tableEvent(table,"delete",flow.remove);
     auto count=ui.make("Text",{},"muted");ui.bind(count,"text",flow.count);
     auto selected=ui.make("Text",{},"muted");ui.bind(selected,"text",flow.selection);
     auto status=ui.make("Status");ui.bind(status,"text",flow.message);
-    auto empty=ui.make("EmptyState",{button(L"清除筛选",flow.clear)});ui.bind(empty,"title",flow.emptyTitle);ui.bind(empty,"subtitle",flow.emptyText);ui.condition(empty,flow.empty);empty.grow();
+    auto clear=button(L"清除筛选",flow.clear);ui.condition(clear,flow.hasRecords);
+    auto create=button(L"新建连接",flow.add,"primary");ui.condition(create,flow.noRecords);
+    auto empty=ui.make("EmptyState",{clear,create});ui.bind(empty,"title",flow.emptyTitle);ui.bind(empty,"subtitle",flow.emptyText);ui.condition(empty,flow.empty);empty.grow();
     auto density=ui.make("Select");ui.bind(density,"items",vm.densities);ui.model(density,vm.density);ui.set(density,"name",L"界面密度");
     auto header=ui.make("Header",{ui.make("Toolbar",{button(L"返回性能实验台",flow.back),theme,density,button(L"组件与布局",flow.showGallery)})});ui.set(header,"title",L"连接管理");
     auto list=ui.make("ListPage",{
-        ui.make("Toolbar",{search,filter,button(L"新建连接",flow.add,"primary"),button(L"编辑选中",flow.edit),button(L"删除选中",flow.remove,"danger")}),
+        ui.make("Toolbar",{search,filter,button(L"新建连接",flow.add,"primary"),button(L"查看详情",flow.view),button(L"编辑选中",flow.edit),button(L"删除选中",flow.remove,"danger")}),
         ui.make("Toolbar",{count,selected}),table,empty,ui.make("ActionBar",{status})});
     auto listRoot=ui.make("Page",{header,list});ui.condition(listRoot,flow.showList);
     auto keep=button(L"继续 / 取消",flow.keep);
@@ -198,7 +252,8 @@ inline Page buildWorkspace(Mount& ui,VM& vm,Connections& flow) {
     ui.bind(warning,"title",flow.promptTitle);ui.bind(warning,"subtitle",flow.promptText);
     auto prompt=ui.make("Page",{warning});ui.condition(prompt,flow.prompt);
     auto styleError=ui.make("ValidationMessage");ui.bind(styleError,"text",flow.styleError);
-    auto root=ui.make("Column",{styleError,listRoot,form.root,prompt},"workspace");root.grow();ui.locate(root,__FILE__,__LINE__);ui.locate(list,__FILE__,__LINE__);
+    auto root=ui.make("Column",{styleError,listRoot,detail.root,form.root,prompt},"workspace");root.grow();ui.locate(root,__FILE__,__LINE__);ui.locate(list,__FILE__,__LINE__);
+    form.fields.insert(detail.fields.begin(),detail.fields.end());
     form.fields["$table"]=table.widget;form.fields["$search"]=search.widget;form.fields["$keep"]=keep.widget;
     for(auto& field:form.fields)ui.remember(field.first[0]=='$'?field.first.substr(1):field.first,field.second);
     ui.setScope(oldScope);
@@ -213,7 +268,7 @@ inline Page buildTemplate(Mount& ui,VM& vm,Connections& flow) {
     TemplateModel model{vm,flow};auto root=build_Connections(model,ui);
     std::map<std::string,std::shared_ptr<Widget>> fields;
     for(auto name:{"name","host","port","timeout","note"})fields[name]=ui.find(name);
-    for(auto name:{"table","search","keep"})fields[std::string("$")+name]=ui.find(name);
+    for(auto name:{"table","search","keep","detailEdit","detailBack"})fields[std::string("$")+name]=ui.find(name);
     return {root,std::move(fields)};
 }
 
@@ -270,7 +325,7 @@ class Workspace {
     UiMailbox mailbox_;
     bool scheduled_=false;
     Widget* beforePrompt_=nullptr;
-    bool wasForm_=false, wasPrompt_=false;
+    bool wasForm_=false, wasPrompt_=false, wasDetail_=false;
     bool wasGallery_=false;
     std::unique_ptr<StyleWatcher> watcher_;
     void schedule() {
@@ -310,13 +365,13 @@ public:
     ~Workspace(){close();}
     void close(){watcher_.reset();mailbox_.close();alive_.reset();}
     void flush() {
-        const bool prompt=flow.prompt.get(), form=flow.form.get();
+        const bool prompt=flow.prompt.get(), form=flow.form.get(), detail=!flow.detailKey.get().empty();
         if(prompt && !wasPrompt_)beforePrompt_=focusedField(page.root.widget);
         mount.flush();window_.prepareLayoutSnapshot();
         if(prompt && !wasPrompt_)window_.requestFocus(page.fields.at("$keep").get());
-        else if(!prompt && wasPrompt_ && form==wasForm_ && beforePrompt_)window_.requestFocus(beforePrompt_);
-        else if(form!=wasForm_)window_.requestFocus(page.fields.at(form?"name":"$table").get());
-        wasForm_=form;wasPrompt_=prompt;
+        else if(!prompt && wasPrompt_ && form==wasForm_ && detail==wasDetail_ && beforePrompt_)window_.requestFocus(beforePrompt_);
+        else if(form!=wasForm_ || detail!=wasDetail_)window_.requestFocus(page.fields.at(form?"name":detail?"$detailEdit":"$table").get());
+        wasForm_=form;wasPrompt_=prompt;wasDetail_=detail;
         if(flow.gallery.get()!=wasGallery_) {
             window_.requestFocus(flow.gallery.get()?mount.find("galleryBack").get():page.fields.at("$search").get());
             wasGallery_=flow.gallery.get();

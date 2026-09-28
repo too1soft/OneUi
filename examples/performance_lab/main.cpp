@@ -96,7 +96,7 @@ struct Options {
   bool stabilityExercise=false;
   bool exitAfter = false, snapshotExit = false, traceInput = false;
   bool editor = false, warmEditor = false, editorLight = false, editorDark=false, editorInvalid = false;
-  bool connections = false, gallery=false, compact=false;
+  bool connections = false, details=false, gallery=false, compact=false;
   int galleryScene=0;
   bool templateEntry = false, dev = false;
   std::filesystem::path css = std::filesystem::path(__FILE__).parent_path()/"connections.css";
@@ -538,7 +538,7 @@ public:
     rebuildRows();
     controls();
     if(options.warmEditor)ensureEditor();
-    if(options.editor){showEditor();if(!options.connections && !options.gallery)editor->flow.open(L"1");editor->flow.query.set(options.connectionQuery);editor->vm.theme.set(options.editorLight || (options.gallery && !options.editorDark)?0:1);editor->vm.density.set(options.compact?1:0);if(options.editorInvalid){editor->vm.host.set(L"https://bad/path");editor->vm.port.set(L"70000");editor->vm.attempted.set(true);}if(options.gallery){editor->flow.gallery.set(true);editor->mount.flush();editor->samples->scene.set(options.galleryScene);}editor->mount.flush();}
+    if(options.editor){showEditor();if(options.details){editor->flow.selectedKey.set(L"1");editor->flow.view.execute();}else if(!options.connections && !options.gallery)editor->flow.open(L"1");editor->flow.query.set(options.connectionQuery);editor->vm.theme.set(options.editorLight || ((options.connections || options.details || options.gallery) && !options.editorDark)?0:1);editor->vm.density.set(options.compact?1:0);if(options.editorInvalid){editor->vm.host.set(L"https://bad/path");editor->vm.port.set(L"70000");editor->vm.attempted.set(true);}if(options.gallery){editor->flow.gallery.set(true);editor->mount.flush();editor->samples->scene.set(options.galleryScene);}editor->flush();}
   }
   void stressStep() {
     const int cycle=stressStep_/3, phase=stressStep_%3;
@@ -743,7 +743,7 @@ public:
         if(auto* input=dynamic_cast<TextField*>(focused);input && input->hasTextComposition())return false;
       }
       if(e.control && !e.alt && e.virtualKey=='S') {if(e.pressed && !e.repeat && editor->flow.showForm.get())editor->vm.save.execute();return true;}
-      if(e.virtualKey==VK_ESCAPE && e.pressed) {if(editor->flow.gallery.get())editor->flow.gallery.set(false);else if(editor->flow.prompt.get())editor->flow.keep.execute();else if(editor->flow.form.get())editor->flow.request(connection_demo::Connections::Destination::List);return true;}
+      if(e.virtualKey==VK_ESCAPE && e.pressed) {if(editor->flow.gallery.get())editor->flow.gallery.set(false);else if(editor->flow.prompt.get())editor->flow.keep.execute();else if(editor->flow.form.get())editor->vm.back.execute();else if(editor->flow.showDetail.get())editor->flow.detailBack.execute();return true;}
       if(options.traceInput && e.control && e.shift && e.virtualKey==VK_F12 && e.pressed) {
         window.post([this]{
           std::filesystem::create_directories(options.output);window.prepareLayoutSnapshot();
@@ -931,13 +931,13 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
       } else if (arg == L"--view") {
         auto s = next();
         if (s != L"overview" && s != L"chart" && s != L"particles" &&
-            s != L"list" && s != L"editor" && s != L"connections" && s != L"components")
+            s != L"list" && s != L"editor" && s != L"connections" && s != L"details" && s != L"components")
           throw std::runtime_error("Invalid view");
         o.tab = s == L"chart"       ? 1
                 : s == L"particles" ? 2
                 : s == L"list"      ? 3
                                     : 0;
-        o.connections=s==L"connections";o.gallery=s==L"components";o.editor=s==L"editor" || o.connections || o.gallery;
+        o.connections=s==L"connections";o.details=s==L"details";o.gallery=s==L"components";o.editor=s==L"editor" || o.connections || o.details || o.gallery;
       } else if (arg == L"--benchmark-seconds") {
         o.benchmark = std::stod(next());
         if (!std::isfinite(o.benchmark) || o.benchmark <= 0 ||
@@ -996,14 +996,14 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
     if(!o.rendererBenchmark.empty()) {
       if(o.benchmark>0 || o.dev || !o.snapshot.empty() || o.editorIdle>0 || o.connectionStress>0)throw std::runtime_error("Renderer benchmark must run standalone with dev and capture disabled");
       o.editor=o.connections=o.rendererBenchmark=="idle" || o.rendererBenchmark=="table";
-      o.gallery=false;o.tab=o.rendererBenchmark=="chart"?1:o.rendererBenchmark=="particles"?2:0;
+      o.details=o.gallery=false;o.tab=o.rendererBenchmark=="chart"?1:o.rendererBenchmark=="particles"?2:0;
     }
     if(!std::isfinite(o.stabilitySeconds) || o.stabilitySeconds<0 || o.stabilitySeconds>3600 ||
        (o.stabilityExercise && o.stabilitySeconds<20))throw std::runtime_error("Invalid stability duration");
     if(o.stabilitySeconds>0) {
       if(o.benchmark>0 || !o.rendererBenchmark.empty() || o.dev || !o.snapshot.empty() || o.editorIdle>0 || o.connectionStress>0)
         throw std::runtime_error("Stability diagnostics must run standalone");
-      o.editor=o.connections=o.gallery=false;o.tab=2;
+      o.editor=o.connections=o.details=o.gallery=false;o.tab=2;
     }
     // Auto inherits the process environment. Explicit modes override it before initialization.
     if(o.renderer!="auto" && !SetEnvironmentVariableW(L"ONEUI_ENABLE_GPU",o.renderer=="cpu"?L"0":L"1"))throw std::runtime_error("Unable to select renderer");

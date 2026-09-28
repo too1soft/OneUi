@@ -55,3 +55,5 @@ Demo 的 --dev 在已经发生的绘制后检查；布局 revision/frame 未变�
 校验失败时，先提交绑定并完成布局，再调用 `window.requestFocus(field)` 和 `revealField`。Tab 跳转应在原生焦点处理结束后投递同样的显示操作。异步投递由页面生命周期句柄保护，关闭页面后丢弃；不能捕获已销毁页面的裸引用。`examples/performance_lab/connection_editor.hpp` 展示完整接入，页面只组合公共组件与主题，表单内部无手工坐标。
 
 `Mount::diagnostics()` 只读返回本挂载持有的 subscriptions、ownedObjects 和待提交 pendingUpdates 数量，用于生命周期回归；不包含 State/Computed 自身及子挂载内部的订阅，不能当作全进程订阅总数。完整列表/编辑/未保存确认示例见 `examples/performance_lab/connection_workspace.hpp`：保留原生页面树，按稳定业务 ID 提交记录快照，用 KeyedTable 更新单行并保留有效列表状态。
+
+性能实验台现已加入只读详情：`buildDetails` 与 `views/Details.one` 复用 `DetailPage + FormGrid + FormRow + Text`，没有另写布局规则。从详情进入编辑后返回原详情，列表状态继续保留。可复制的最小程序和逐步组合说明见[页面教程](48-connection-page-recipes.md)。
