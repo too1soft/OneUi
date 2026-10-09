@@ -37,6 +37,12 @@ private:
     Insets padding_;
     BoxShadow shadow_{Color{0, 0, 0, 0}, Point{0.0f, 0.0f}, 0.0f, 0.0f};
     std::optional<StyleBox> styleBox_;
+    // Values set through the setters fill properties a matching style rule
+    // leaves unspecified; rule values still win where both exist.
+    bool explicitBackground_ = false;
+    bool explicitBorder_ = false;
+    bool explicitBorderWidth_ = false;
+    bool explicitRadius_ = false;
 };
 
 } // namespace oneui

@@ -6,21 +6,25 @@ namespace oneui {
 
 void Panel::setBackground(Color color) {
     background_ = color;
+    explicitBackground_ = true;
     invalidate();
 }
 
 void Panel::setBorder(Color color) {
     border_ = color;
+    explicitBorder_ = true;
     invalidate();
 }
 
 void Panel::setBorderWidth(float width) {
     borderWidth_ = width;
+    explicitBorderWidth_ = true;
     invalidate();
 }
 
 void Panel::setRadius(float radius) {
     radius_ = radius;
+    explicitRadius_ = true;
     invalidate();
 }
 
@@ -53,7 +57,25 @@ void Panel::setContent(std::shared_ptr<Widget> child) {
 
 void Panel::paint(Canvas& canvas) {
     const Rect rect = frame();
-    if (styleBox_) {
+    if (styleBox_ && (explicitBackground_ || explicitBorder_ || explicitBorderWidth_ || explicitRadius_)) {
+        // A style rule that matches only by type or class must not silently
+        // discard colors the caller set directly (for example preview swatches).
+        StyleBox box = *styleBox_;
+        const auto& background = box.background;
+        if (explicitBackground_ && !background.color && !background.gradientStart && !background.gradient) {
+            box.background.color = background_;
+        }
+        if (explicitBorder_ && !box.borderColor) {
+            box.borderColor = border_;
+        }
+        if (explicitBorderWidth_ && !box.borderWidth) {
+            box.borderWidth = borderWidth_;
+        }
+        if (explicitRadius_ && !box.radius) {
+            box.radius = radius_;
+        }
+        paintStyleBox(canvas, rect, box);
+    } else if (styleBox_) {
         paintStyleBox(canvas, rect, *styleBox_);
     } else {
         canvas.drawBoxShadow(rect, shadow_, radius_);
