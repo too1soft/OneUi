@@ -207,3 +207,13 @@ void oneui_tabs_set_on_detach_requested(OneUiWidget *tabs, OneUiIndexPointCallba
             }}
                      : nullptr);
 }
+
+void oneui_tabs_set_on_drag_out(OneUiWidget *tabs, OneUiTabDragOutCallback callback, void *data) {
+    if (auto native = asWidget<oneui::Tabs>(tabs))
+        native->setOnTabDragOut(
+            callback ? std::function<void(int, int, oneui::Point)>{
+                           [callback, data](int index, int phase, oneui::Point point) {
+                               callback(index, phase, point.x, point.y, data);
+                           }}
+                     : nullptr);
+}

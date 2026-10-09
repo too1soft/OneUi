@@ -1266,6 +1266,9 @@ ONEUI_API void oneui_tabs_set_on_context_menu_requested(
     void* user_data);
 /* Called once a reorder gesture leaves the tab strip. Coordinates are client-local. */
 ONEUI_API void oneui_tabs_set_on_detach_requested(OneUiWidget*, OneUiIndexPointCallback, void*);
+/* phase: 0 started, 1 moved, 2 dropped, 3 cancelled. */
+typedef void (*OneUiTabDragOutCallback)(int index, int phase, float x, float y, void* user_data);
+ONEUI_API void oneui_tabs_set_on_drag_out(OneUiWidget*, OneUiTabDragOutCallback, void*);
 ONEUI_API void oneui_tabs_set_on_reorder_requested(
     OneUiWidget* tabs,
     OneUiReorderRequestedCallback callback,

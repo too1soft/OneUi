@@ -544,6 +544,10 @@ bool Tabs::onMouseMove(const MouseEvent& event) {
         return false;
     }
     if (editingIndex_ >= 0) { return editor_->onMouseMove(event); }
+    if (dragOutIndex_ >= 0) {
+        if (auto callback = onTabDragOut_) callback(dragOutIndex_, 1, event.position);
+        return true;
+    }
     const int next = hitIndex(event.position);
     const int nextClose = hitCloseIndex(event.position);
     bool interactionChanged = next != hoveredIndex_ || nextClose != hoveredCloseIndex_;
@@ -558,6 +562,19 @@ bool Tabs::onMouseMove(const MouseEvent& event) {
         if (dragging_ && next >= 0 && dragTargetIndex_ != next) {
             dragTargetIndex_ = next;
             interactionChanged = true;
+        }
+        if (dragging_ && onTabDragOut_ && !frame().contains(event.position)) {
+            dragOutIndex_ = dragSourceIndex_;
+            dragging_ = false;
+            dragSourceIndex_ = -1;
+            dragTargetIndex_ = -1;
+            hoveredIndex_ = -1;
+            invalidate();
+            auto callback = onTabDragOut_;
+            const int index = dragOutIndex_;
+            callback(index, 0, event.position);
+            if (dragOutIndex_ == index) callback(index, 1, event.position);
+            return true;
         }
         if (dragging_ && onDetachRequested_ && !frame().contains(event.position)) {
             auto callback = onDetachRequested_;
@@ -577,6 +594,9 @@ bool Tabs::onMouseMove(const MouseEvent& event) {
 }
 void Tabs::setOnDetachRequested(std::function<void(int, Point)> callback) {
     onDetachRequested_ = std::move(callback);
+}
+void Tabs::setOnTabDragOut(std::function<void(int, int, Point)> callback) {
+    onTabDragOut_ = std::move(callback);
 }
 
 bool Tabs::onMouseDown(const MouseEvent& event) {
@@ -624,6 +644,14 @@ bool Tabs::onMouseUp(const MouseEvent& event) {
         return false;
     }
     if (editingIndex_ >= 0) { return editor_->onMouseUp(event); }
+    if (dragOutIndex_ >= 0 && event.button == MouseButton::Left) {
+        const int index = dragOutIndex_;
+        dragOutIndex_ = -1;
+        pressedIndex_ = -1;
+        invalidate();
+        if (auto callback = onTabDragOut_) callback(index, 2, event.position);
+        return true;
+    }
     const int wasClosePressed = pressedCloseIndex_;
     pressedCloseIndex_ = -1;
     const int closeIndex = event.button == MouseButton::Middle
@@ -1044,7 +1072,7 @@ void Tabs::assignSelectedIndex(int index) {
 
 bool Tabs::hasInteractionState() const {
     return editingIndex_ >= 0 || hoveredIndex_ >= 0 || pressedIndex_ >= 0 || hoveredCloseIndex_ >= 0
-        || pressedCloseIndex_ >= 0 || contextPressedIndex_ >= 0 || dragging_;
+        || pressedCloseIndex_ >= 0 || contextPressedIndex_ >= 0 || dragging_ || dragOutIndex_ >= 0;
 }
 
 void Tabs::resetInteractionState() {
@@ -1060,6 +1088,11 @@ void Tabs::resetInteractionState() {
     dragSourceIndex_ = -1;
     dragTargetIndex_ = -1;
     dragging_ = false;
+    if (dragOutIndex_ >= 0) {
+        const int index = dragOutIndex_;
+        dragOutIndex_ = -1;
+        if (auto callback = onTabDragOut_) callback(index, 3, Point{});
+    }
 }
 
 } // namespace oneui

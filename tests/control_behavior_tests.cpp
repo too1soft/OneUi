@@ -944,6 +944,41 @@ void testTabsReorderReportsRequestWithoutMutatingSelection() {
     expectEqual("Tabs reorder keeps controlled selection", tabs.selectedIndex(), 1);
 }
 
+void testTabsDragOutHandsGestureToOwnerUntilRelease() {
+    oneui::Tabs tabs;
+    tabs.setItems({L"One", L"Two", L"Three"});
+    tabs.setFrame(oneui::Rect{0.0f, 0.0f, 300.0f, 32.0f});
+    tabs.setReorderEnabled(true);
+    int reordered = 0;
+    tabs.setOnReorderRequested([&](int, int) { ++reordered; });
+    std::vector<std::pair<int, int>> events;
+    float lastY = 0.0f;
+    tabs.setOnTabDragOut([&](int index, int phase, oneui::Point point) {
+        events.push_back({index, phase});
+        lastY = point.y;
+    });
+
+    tabs.onMouseDown(oneui::MouseEvent{oneui::Point{150.0f, 16.0f}});
+    tabs.onMouseMove(oneui::MouseEvent{oneui::Point{160.0f, 20.0f}});
+    tabs.onMouseMove(oneui::MouseEvent{oneui::Point{160.0f, 120.0f}});
+    tabs.onMouseMove(oneui::MouseEvent{oneui::Point{60.0f, 16.0f}});
+    tabs.onMouseUp(oneui::MouseEvent{oneui::Point{60.0f, 240.0f}});
+
+    expectEqual("Tabs drag-out reports start, moves and drop", static_cast<int>(events.size()), 4);
+    expectEqual("Tabs drag-out source", events.front().first, 1);
+    expectEqual("Tabs drag-out starts", events[0].second, 0);
+    expectEqual("Tabs drag-out keeps reporting inside the strip", events[2].second, 1);
+    expectEqual("Tabs drag-out drops", events.back().second, 2);
+    expectEqual("Tabs drag-out drop position", static_cast<int>(lastY), 240);
+    expectEqual("Tabs drag-out does not reorder", reordered, 0);
+
+    events.clear();
+    tabs.onMouseDown(oneui::MouseEvent{oneui::Point{50.0f, 16.0f}});
+    tabs.onMouseMove(oneui::MouseEvent{oneui::Point{50.0f, 90.0f}});
+    tabs.clearInteractionState();
+    expectEqual("Tabs drag-out cancels on interaction reset", events.back().second, 3);
+}
+
 void testTabsPaintOptionalLeadingIconsWithoutCrowdingText() {
     oneui::Tabs tabs;
     tabs.setItems({L"SSH - production", L"Local shell"});
@@ -9165,6 +9200,7 @@ int main() {
     testTabsCompactOverflowWheelAndKeyboardNavigation();
     testCompactTabsReserveBothTextInsets();
     testTabsContextMenuReportsStableTarget();
+    testTabsDragOutHandsGestureToOwnerUntilRelease();
     testTabsReorderReportsRequestWithoutMutatingSelection();
     testTabsPaintOptionalLeadingIconsWithoutCrowdingText();
     testRadioGroupNoopOnChanged();

@@ -44,6 +44,41 @@ pub struct Tabs {
     reorder_requested_callback: Option<Box<ReorderRequestedCallback>>,
     edit_callback: Option<Box<TabEditCallback>>,
     detach_callback: Option<Box<ContextMenuRequestedCallback>>,
+    drag_out_callback: Option<Box<TabDragOutCallback>>,
+}
+
+/// A tab dragged out of its strip. Coordinates share the window coordinate
+/// space of widget frames, so they can be hit-tested against other widgets.
+#[derive(Clone, Copy, Debug)]
+pub struct TabDragOutEvent {
+    pub index: usize,
+    pub phase: ItemDragPhase,
+    pub x: f32,
+    pub y: f32,
+}
+
+struct TabDragOutCallback {
+    handler: Box<dyn FnMut(TabDragOutEvent)>,
+}
+
+unsafe extern "C" fn run_tab_drag_out_callback(
+    index: std::ffi::c_int,
+    phase: std::ffi::c_int,
+    x: f32,
+    y: f32,
+    data: *mut std::ffi::c_void,
+) {
+    if data.is_null() || index < 0 {
+        return;
+    }
+    let event = TabDragOutEvent {
+        index: index as usize,
+        phase: ItemDragPhase::from_raw(phase),
+        x,
+        y,
+    };
+    let callback = unsafe { &mut *data.cast::<TabDragOutCallback>() };
+    run_callback_guarded("tabs.drag_out", || (callback.handler)(event));
 }
 
 impl Tabs {
@@ -58,6 +93,7 @@ impl Tabs {
             reorder_requested_callback: None,
             edit_callback: None,
             detach_callback: None,
+            drag_out_callback: None,
         };
         control.set_items(items);
         Ok(control)
@@ -347,6 +383,29 @@ impl Tabs {
             );
         }
     }
+    /// Hands a tab dragged outside the strip to the owner until release, for
+    /// docking it inside the window. Takes precedence over detach requests.
+    pub fn set_on_tab_drag_out(&mut self, callback: impl FnMut(TabDragOutEvent) + 'static) {
+        self.clear_on_tab_drag_out();
+        self.drag_out_callback = Some(Box::new(TabDragOutCallback {
+            handler: Box::new(callback),
+        }));
+        let data = (self.drag_out_callback.as_deref_mut().unwrap() as *mut TabDragOutCallback)
+            .cast();
+        unsafe {
+            sys::oneui_tabs_set_on_drag_out(
+                self.widget.as_raw(),
+                Some(run_tab_drag_out_callback),
+                data,
+            );
+        }
+    }
+    pub fn clear_on_tab_drag_out(&mut self) {
+        unsafe {
+            sys::oneui_tabs_set_on_drag_out(self.widget.as_raw(), None, std::ptr::null_mut());
+        }
+        self.drag_out_callback = None;
+    }
     pub fn clear_on_detach_requested(&mut self) {
         unsafe {
             sys::oneui_tabs_set_on_detach_requested(
@@ -373,6 +432,7 @@ impl Drop for Tabs {
             )
         };
         self.clear_on_detach_requested();
+        self.clear_on_tab_drag_out();
         self.clear_on_edit_finished();
         self.clear_on_changed();
         self.clear_on_close_requested();

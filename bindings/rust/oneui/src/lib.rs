@@ -5871,7 +5871,7 @@ impl Drop for SegmentedControl {
 }
 
 mod tabs;
-pub use tabs::{TabEditReason, Tabs};
+pub use tabs::{TabDragOutEvent, TabEditReason, Tabs};
 
 /// RGBA color used by the native terminal grid.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

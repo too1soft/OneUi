@@ -58,6 +58,11 @@ public:
     // Fired once when a document tab is dragged outside its strip. The owner
     // can start a native docking drag; ordinary reordering remains unchanged.
     void setOnDetachRequested(std::function<void(int, Point)> callback);
+    // Hands a tab dragged outside its strip to the owner until release, for
+    // in-window docking. Phases: 0 started, 1 moved, 2 dropped, 3 cancelled.
+    // Points use the coordinate space of frame(). Takes precedence over
+    // setOnDetachRequested.
+    void setOnTabDragOut(std::function<void(int, int, Point)> callback);
     bool beginEdit(int index);
     void cancelEdit();
     int editingIndex() const;
@@ -140,6 +145,8 @@ private:
     std::function<void(int, Point)> onContextMenuRequested_;
     std::function<void(int, int)> onReorderRequested_;
     std::function<void(int, Point)> onDetachRequested_;
+    std::function<void(int, int, Point)> onTabDragOut_;
+    int dragOutIndex_ = -1;
 };
 
 } // namespace oneui

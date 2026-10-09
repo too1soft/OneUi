@@ -33,7 +33,14 @@ pub type OneUiDockTransferCallback =
     Option<unsafe extern "C" fn(*mut c_void, *mut c_void, c_int, *mut c_void) -> c_int>;
 pub type OneUiDockIdsCallback =
     Option<unsafe extern "C" fn(*const c_ulonglong, usize, *mut c_void)>;
+pub type OneUiTabDragOutCallback =
+    Option<unsafe extern "C" fn(c_int, c_int, f32, f32, *mut c_void)>;
 unsafe extern "C" {
+    pub fn oneui_tabs_set_on_drag_out(
+        tabs: *mut crate::OneUiWidget,
+        callback: OneUiTabDragOutCallback,
+        data: *mut c_void,
+    );
     pub fn oneui_tabs_set_on_detach_requested(
         tabs: *mut crate::OneUiWidget,
         callback: crate::OneUiIndexPointCallback,
