@@ -1,0 +1,21 @@
+[Unit]
+Description=OneUI documentation and SDK downloads
+After=network.target
+
+[Service]
+Type=simple
+User=oneui
+Group=oneui
+WorkingDirectory=/opt/oneui
+ExecStartPre=/opt/oneui/oneui-site-linux-amd64 --check --data /opt/oneui
+ExecStart=/opt/oneui/oneui-site-linux-amd64 --listen 0.0.0.0:23187 --data /opt/oneui
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=15
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

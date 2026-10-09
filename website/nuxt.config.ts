@@ -1,9 +1,26 @@
+import { resolve } from 'node:path'
+
 export default defineNuxtConfig({
   modules: ['@nuxt/ui'],
 
   css: ['~/assets/css/main.css'],
 
   devtools: { enabled: false },
+
+  colorMode: { preference: 'light', fallback: 'light' },
+
+  icon: {
+    provider: 'none',
+    serverBundle: false,
+    clientBundle: {
+      scan: true,
+      icons: ['lucide:sun-moon', 'lucide:github', 'lucide:menu', 'lucide:x', 'lucide:copy',
+        'lucide:arrow-down-to-line', 'lucide:arrow-up-right', 'lucide:package-check',
+        'lucide:file-check-2', 'lucide:arrow-right', 'lucide:panels-top-left',
+        'lucide:mouse-pointer-2', 'lucide:monitor', 'lucide:download',
+        'lucide:chevron-down', 'lucide:package-open', 'lucide:info', 'lucide:list', 'lucide:search']
+    }
+  },
 
   fonts: {
     providers: {
@@ -23,8 +40,14 @@ export default defineNuxtConfig({
   compatibilityDate: '2026-05-27',
 
   nitro: {
+    output: {
+      dir: resolve('../out/portal-build/nuxt'),
+      publicDir: resolve('server/web')
+    },
     prerender: {
-      routes: ['/']
+      routes: ['/', '/downloads', '/docs'],
+      crawlLinks: true,
+      failOnError: true
     }
   },
 
@@ -33,7 +56,7 @@ export default defineNuxtConfig({
       htmlAttrs: {
         lang: 'zh-CN'
       },
-      title: 'OneUI 官方文档',
+      title: 'OneUI · 官方文档与 SDK',
       meta: [
         {
           name: 'description',

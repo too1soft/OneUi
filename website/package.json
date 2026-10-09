@@ -3,9 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "nuxt dev --host 127.0.0.1",
+    "dev": "node scripts/prepare-docs.mjs && nuxt dev --host 127.0.0.1",
     "build": "nuxt build",
-    "generate": "nuxt generate",
+    "generate": "node scripts/prepare-docs.mjs && nuxt generate",
     "preview": "nuxt preview --host 127.0.0.1"
   },
   "dependencies": {
@@ -15,6 +15,7 @@
     "vue-router": "5.0.7"
   },
   "devDependencies": {
+    "marked": "17.0.6",
     "@iconify-json/lucide": "^1.2.109",
     "typescript": "6.0.3"
   }

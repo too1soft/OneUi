@@ -1,58 +1,29 @@
-# OneUI 官方文档站点
+# OneUI 官网与 SDK 下载
 
-OneUI 官方文档站点，源码位于 `website/`。功能描述须与公开头、Rust bindings 和仓库文档同步。
+Nuxt 生成静态官网；Go 标准库服务内嵌网站，旁置 releases.json 与 SDK 压缩包。运行时不需要 Node.js 或源码仓库。
 
-## 技术栈
+页面：概览、下载中心、完整 Markdown 文档、组件 API 参考、平台支持与部署说明。发布 API 和页面共用实际文件清单，服务启动时校验全部包的 SHA256。
 
-- Nuxt
-- Nuxt UI
+## 维护入口
 
-站点采用 Nuxt UI 文档组件。页面内容和组件/API 清单分别位于 `app/pages/index.vue` 与
-`app/data/componentReference.ts`，当前不依赖 Nuxt Content。直接依赖及传递依赖通过
-`package.json` / `package-lock.json` 固定，使用 `npm ci` 安装。
-未使用的远程 Google 字体提供方已关闭，构建不需要请求其字体元数据。
+- app/pages：独立页面，组件和样式在 app/components 与 app/assets。
+- scripts/prepare-docs.mjs：仓库 docs/*.md 转为可搜索、有锚点的文档快照；链接指向站内文档或源码。
+- server：Go HTTP 服务、清单验证、下载客户端与测试。
+- ../scripts/package-versioned-sdk.py：从冻结 SDK / 真实 POSIX 构建封装动态和静态包，不复制完整构建树。
+- ../scripts/make-release-catalog.py：校验压缩包并生成官网清单。
+- ../scripts/build-website.ps1：生成网站，测试和编译 Linux / Windows Go 程序。
+- ../scripts/test-versioned-sdk.py：从真实压缩包编译、运行 C/C++ 消费者，完成后回收当前提取目录。
 
-## 本地运行
+依赖由 package-lock.json 固定；首次运行 npm ci。构建执行：
 
 ```powershell
-cd website
-npm ci
-npm run dev
+./scripts/build-website.ps1
 ```
 
-默认访问：
+在仓库根运行。SDK 包和清单应已在 dist/oneui-website，缺少时直接报错，不隐式重编 OneUI。
 
-```text
-http://localhost:3000
-```
+## 开发预览
 
-生产验证使用 `npm run build`。不要提交 `node_modules`、`.nuxt`、`.output` 或截图缓存。
+在 website 下 npm run dev 只运行前端；下载 API 由 Go 程序提供。最终验证必须运行 dist/oneui-website 下的 Go 程序，而不能用开发服务器冒充部署验收。
 
-## 平台状态维护
-
-Win32 当前默认尝试 OpenGL + Skia Ganesh，并保留 raster/GDI 软件回退；不要继续描述为
-纯 CPU 框架。配置与验收边界见[渲染说明](../docs/39-rendering-and-validation.md)。
-组件资料还应包含 ABI v33 Slider、Tabs 原位编辑和 Rust 工作区停靠组合，
-以[组件清单](../docs/07-component-inventory.md)为准。
-
-文字/命令/订阅升级尚未通过完整发布验收。内容与
-[文字引擎状态](../docs/38-text-and-interaction-engine.md) 同步：Unicode 一致性补丁已回归通过，
-MinGW 匹配文字依赖、SDK 审计和原生交互验收仍待完成，不把源码接入写成完整平台支持。
-
-Linux/macOS 源码接入不代表已经通过原生验收。官网的支持矩阵与
-[原生桌面后端状态](../docs/37-native-desktop-backends.md) 对齐，明确区分实现、构建与原生验收。
-WSLg、交叉编译不能替代真实 macOS、国产发行版及 ARM64 桌面验证。
-
-## 内容范围
-
-- OneUI 当前定位与仓库结构
-- 新手快速开始
-- 核心 Widget/View/State/StyleSheet 模型
-- 架构审查
-- 构建、打包和运行时审计
-- C++ API 与 C ABI
-- 组件参考
-- 样式系统
-- 远程会话基础能力
-- 当前测试状态
-- 代码审查报告与后续建议
+最终输出固定在 dist/oneui-website，缓存固定在 out/portal-build。文档与页面将预览、稳定和未验证能力分开；不凭编译成功宣称平台全面验收。部署命令见 docs/portal-deployment.md。
