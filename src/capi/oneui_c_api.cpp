@@ -1708,6 +1708,11 @@ int oneui_window_capture_frame_png_utf8(OneUiWindow* window, const char* path_ut
     return window->window->captureFramePng(utf8OrEmpty({path_utf8, std::strlen(path_utf8)})) ? 1 : 0;
 }
 
+int oneui_window_export_developer_report_utf8(OneUiWindow* window, const char* path_utf8) {
+    if (!window || !window->window || !path_utf8 || !*path_utf8) return 0;
+    return window->window->exportDeveloperReport(utf8OrEmpty({path_utf8, std::strlen(path_utf8)})) ? 1 : 0;
+}
+
 void oneui_window_set_content(OneUiWindow* window, OneUiWidget* widget) {
     if (!window || !window->window || !widget || !widget->widget) {
         return;

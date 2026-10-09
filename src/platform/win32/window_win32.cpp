@@ -32,6 +32,7 @@
 #include <GL/gl.h>
 #include "include/gpu/ganesh/GrDirectContext.h"
 #include "include/gpu/ganesh/gl/GrGLDirectContext.h"
+#include "platform/shared/skia_gl_setup.h"
 #include "include/gpu/ganesh/gl/GrGLInterface.h"
 #include "include/gpu/ganesh/SkSurfaceGanesh.h"
 #include "include/gpu/ganesh/GrBackendSurface.h"
@@ -84,6 +85,7 @@
 #include <mutex>
 #include <queue>
 #include <string>
+#include <thread>
 #include <tuple>
 #include <utility>
 #include <vector>
@@ -92,6 +94,33 @@
 
 namespace oneui {
 namespace {
+
+// NVIDIA's OpenGL driver ("Threaded optimization: Auto") takes a census of
+// the process's threads the first time a thread starts once it has begun
+// observing a context, which happens a couple of presented frames in. The
+// census walks a system-wide CreateToolhelp32Snapshot list on a driver thread
+// while every GL call waits for it: 60-200 ms on a machine running many
+// processes. Left alone it lands on the first user action that starts a
+// thread; in iShell that is the first terminal split, which then drops
+// several animation frames. Starting a no-op thread during the first frames
+// moves the census into startup and glFinish absorbs it there. The census
+// runs once per process, so later checkpoints only cost a thread start and an
+// idle finish, and they keep the fix working if a slower machine needs more
+// frames before the driver starts observing.
+void absorbDriverThreadCensus() {
+    static int presentedFrames = 0;
+    constexpr int kCheckpoints[] = {2, 3, 4, 6, 8, 12, 16};
+    if (presentedFrames > kCheckpoints[std::size(kCheckpoints) - 1]) {
+        return;
+    }
+    ++presentedFrames;
+    if (std::find(std::begin(kCheckpoints), std::end(kCheckpoints), presentedFrames) == std::end(kCheckpoints)) {
+        return;
+    }
+    std::thread([] {}).join();
+    glFinish();
+}
+
 
 using rendering::PrimitivePaintTrace;
 using rendering::g_primitivePaintTrace;
@@ -260,7 +289,14 @@ public:
         , renderTraceFilePath_(runtimeConfig_.renderTraceFile)
         , taskbarCreatedMessage_(RegisterWindowMessageW(L"TaskbarCreated")) {
 #if ONEUI_DEVELOPER_TOOLS
-        if(runtimeConfig_.developerTools)developerTools_=std::make_shared<internal::DeveloperRecorder>(DeveloperOptions{});
+        if(runtimeConfig_.developerTools) {
+            // ONEUI_DEVTOOLS_OVERLAY=0 records without drawing the panel, so
+            // frame measurements exclude the overlay's own text and fallback.
+            DeveloperOptions options;
+            const wchar_t* overlay=_wgetenv(L"ONEUI_DEVTOOLS_OVERLAY");
+            options.overlay=!(overlay && overlay[0]==L'0');
+            developerTools_=std::make_shared<internal::DeveloperRecorder>(options);
+        }
 #endif
         accessibilityComResult_ = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
         animationFrameTimer_ = CreateWaitableTimerExW(
@@ -2671,7 +2707,11 @@ private:
 
         const bool useGPU = gpuAvailable_ && glContext_ && glDC_;
         if (useGPU) {
-            wglMakeCurrent(glDC_, glContext_);
+            // The context stays current between frames; rebinding it every
+            // paint makes the driver synchronize for nothing.
+            if (wglGetCurrentContext() != glContext_ || wglGetCurrentDC() != glDC_) {
+                wglMakeCurrent(glDC_, glContext_);
+            }
             glViewport(0, 0,
                 static_cast<GLsizei>(clientRect.right - clientRect.left),
                 static_cast<GLsizei>(clientRect.bottom - clientRect.top));
@@ -2769,6 +2809,9 @@ private:
             paintSurface_->draw(presentCanvas, 0.0f, 0.0f);
             grContext_->flushAndSubmit();
             const BOOL swapped = SwapBuffers(glDC_);
+            if (swapped && nvidiaDriver_) {
+                absorbDriverThreadCensus();
+            }
             const double submitMs = currentTimeMs() - submitStartMs;
             traceSubmitMs_ += submitMs;
             rendererInfo_.submitMs += submitMs;
@@ -3796,8 +3839,12 @@ private:
 
         if (const auto* device = glGetString(GL_RENDERER))
             rendererInfo_.device = reinterpret_cast<const char*>(device);
+        if (const auto* vendor = glGetString(GL_VENDOR))
+            nvidiaDriver_ = std::strstr(reinterpret_cast<const char*>(vendor), "NVIDIA") != nullptr;
         traceGpu("context-current");
-        grContext_ = GrDirectContexts::MakeGL();
+        GrContextOptions contextOptions;
+        contextOptions.fPersistentCache = rendering::shaderCache();
+        grContext_ = GrDirectContexts::MakeGL(contextOptions);
         if (!grContext_) {
             rendererInfo_.reason = "ganesh-context-failed";
             traceGpu("ganesh-context-failed");
@@ -3881,6 +3928,7 @@ private:
     sk_sp<GrDirectContext> grContext_;
     bool gpuInitializationAttempted_ = false;
     bool gpuAvailable_ = false;
+    bool nvidiaDriver_ = false;
     bool swapIntervalEnabled_ = false;
     std::shared_ptr<Widget> content_;
     RawKeyHandler rawKeyHandler_;

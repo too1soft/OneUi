@@ -644,6 +644,10 @@ extern "C" {
         window: *mut OneUiWindow,
         path_utf8: *const c_char,
     ) -> c_int;
+    pub fn oneui_window_export_developer_report_utf8(
+        window: *mut OneUiWindow,
+        path_utf8: *const c_char,
+    ) -> c_int;
     pub fn oneui_window_request_focus(
         window: *mut OneUiWindow,
         widget: *mut OneUiWidget,

@@ -129,6 +129,7 @@ set(ONEUI_WIN32_SOURCES
     src/platform/win32/monitor_win32.cpp
     src/platform/shared/skia_canvas.cpp
     src/platform/shared/skia_path.cpp
+    src/platform/shared/skia_gl_setup.cpp
     src/platform/win32/window_event_loop_win32.cpp
     src/platform/win32/window_win32.cpp
 )

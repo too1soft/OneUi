@@ -803,6 +803,20 @@ impl UiDispatcher {
             .unwrap_or(false)
     }
 
+    /// Writes the developer-tools frame report (slow paints with their hottest
+    /// component) as JSON. False unless developer tools are compiled in and
+    /// enabled with ONEUI_DEVTOOLS=1.
+    pub fn export_developer_report(&self, path: &Path) -> bool {
+        let Ok(path) = CString::new(path.to_string_lossy().as_bytes()) else {
+            return false;
+        };
+        self.state
+            .with_raw(|raw| unsafe {
+                sys::oneui_window_export_developer_report_utf8(raw, path.as_ptr()) != 0
+            })
+            .unwrap_or(false)
+    }
+
     /// Re-resolves and reapplies the window style sheet after runtime CSS
     /// custom-property changes.
     pub fn refresh_style_sheet(&self) -> Result<(), Error> {

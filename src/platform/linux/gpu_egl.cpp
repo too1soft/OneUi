@@ -2,6 +2,7 @@
 #include "include/core/SkSurface.h"
 #include "include/core/SkColorSpace.h"
 #include "include/gpu/ganesh/GrDirectContext.h"
+#include "platform/shared/skia_gl_setup.h"
 #include "include/gpu/ganesh/GrBackendSurface.h"
 #include "include/gpu/ganesh/SkSurfaceGanesh.h"
 #include "include/gpu/ganesh/gl/GrGLAssembleInterface.h"
@@ -88,7 +89,9 @@ public:
         auto interface = GrGLMakeAssembledGLESInterface(nullptr, [](void*, const char* name) -> GrGLFuncPtr {
             return reinterpret_cast<GrGLFuncPtr>(eglGetProcAddress(name));
         });
-        skia_ = GrDirectContexts::MakeGL(std::move(interface));
+        GrContextOptions contextOptions;
+        contextOptions.fPersistentCache = rendering::shaderCache();
+        skia_ = GrDirectContexts::MakeGL(std::move(interface), contextOptions);
         const auto* renderer = glGetString(GL_RENDERER);
         device_ = renderer ? reinterpret_cast<const char*>(renderer) : "OpenGL ES";
         synced_ = eglSwapInterval(d, 1) == EGL_TRUE;
