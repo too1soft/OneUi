@@ -1,5 +1,14 @@
-pub use crate::{Dialog, Menu, OverlayHost, Panel, Popup, ScrollView, SplitView, Stack, StateView};
+mod scroll_view;
+pub(super) mod split_view;
+mod stack;
+mod shell;
+pub use shell::{AppShell, TopBar};
+pub use crate::{Dialog, Menu, OverlayHost, Panel, Popup, StateView};
+pub use scroll_view::{ScrollView, ScrollViewHandle};
+pub use split_view::{SplitOrientation, SplitView};
+pub use stack::{Stack, StackAlign, StackDirection};
 pub mod floating_frame;
 pub mod workspace;
 pub mod workspace_gesture;
 pub mod workspace_surface;
+pub mod dock_session;

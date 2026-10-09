@@ -10,7 +10,7 @@ pub enum CommandResult {
     Enabled,
 }
 impl CommandResult {
-    fn from_raw(value: u32) -> Self {
+    fn from_raw(value: sys::OneUiCommandResult) -> Self {
         match value {
             1 => Self::Disabled,
             2 => Self::Executed,

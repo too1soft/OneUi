@@ -1,5 +1,11 @@
 use crate::{sys, Window};
 
+/// Double-click arbitration time from Win32, AppKit, or GTK desktop settings.
+/// Linux uses 500ms only when no GTK display is available.
+pub fn double_click_interval() -> std::time::Duration {
+    std::time::Duration::from_millis(unsafe { sys::oneui_double_click_interval_ms() } as u64)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WindowBackend {
     Unknown,
@@ -36,6 +42,12 @@ impl WindowCapabilities {
     }
     pub fn native_dialogs(self) -> bool {
         self.0 & sys::WINDOW_CAPABILITY_NATIVE_DIALOGS != 0
+    }
+    pub fn menu_bar(self) -> bool {
+        self.0 & sys::WINDOW_CAPABILITY_MENU_BAR != 0
+    }
+    pub fn tray_tooltip(self) -> bool {
+        self.0 & sys::WINDOW_CAPABILITY_TRAY_TOOLTIP != 0
     }
     pub fn file_drop(self) -> bool {
         self.0 & sys::WINDOW_CAPABILITY_FILE_DROP != 0

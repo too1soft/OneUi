@@ -14,8 +14,18 @@ name = "oneui-main-thread-tests"
 path = "src/main_thread_tests.rs"
 harness = false
 
+[[test]]
+name = "dock_session"
+path = "tests/dock_session.rs"
+harness = false
+
 [dependencies]
 oneui-sys = { path = "../oneui-sys" }
+
+[[test]]
+name = "shell"
+path = "tests/shell.rs"
+harness = false
 
 [features]
 default = []

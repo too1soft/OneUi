@@ -2,5 +2,10 @@
 members = [
     "oneui-sys",
     "oneui",
+    "oneui-abi-tests",
+    "oneui-lab-examples",
+    "oneui-lab-owner",
+    "oneui-mobile",
 ]
+default-members = ["oneui-sys", "oneui"]
 resolver = "2"

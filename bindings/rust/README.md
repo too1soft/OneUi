@@ -469,6 +469,10 @@ cargo test --manifest-path .\bindings\rust\Cargo.toml
 
 Rust tests 需要加载与 `oneui-sys` ABI 版本相同的真实 `oneui.dll`，不能只做 compile-only。
 
+C/Rust 的函数签名和数据布局另由独立开发工具检查：
+`python scripts/test-rust-abi.py --negative`（在 OneUI 根目录执行）。
+配置、覆盖范围及限制见 [ABI 检查说明](oneui-abi-tests/README.md)。
+
 ## 发布/部署
 
 - Rust executable 旁分发匹配架构的 `oneui.dll`；
@@ -476,3 +480,27 @@ Rust tests 需要加载与 `oneui-sys` ABI 版本相同的真实 `oneui.dll`，�
 - 内部保留 `oneui.pdb` 以诊断 native callback/crash；
 - 升级 OneUI 时同时升级 `oneui-sys`、safe crate 和 DLL；
 - 不支持在同一进程混用不同 ABI 版本的 OneUI DLL。
+
+
+### 托盘与应用菜单栏
+
+ABI 41 新增 `NativeMenuItem`、`MenuCheck`、`Window/UiDispatcher::set_menu_bar`、
+`set_native_tray_menu`、`set_tray_icon_rgba`，以及 `Window::set_on_menu_action`。
+旧的平铺 `TrayMenuItem` 和 `UiDispatcher::set_tray_menu` 保持可用。
+
+```rust,no_run
+# fn configure(window: &mut oneui::Window) -> Result<(), oneui::Error> {
+use oneui::{NativeMenuItem, KeyChord, KeyModifiers};
+let mut save = NativeMenuItem::new(100, "保存");
+save.shortcut = Some(KeyChord { key: "s".into(), modifiers: KeyModifiers::PRIMARY });
+let menu = vec![NativeMenuItem::submenu("文件", vec![save])];
+window.set_on_menu_action(|id| { /* 处理业务命令 */ });
+assert!(window.set_menu_bar(&menu)?);
+assert!(window.set_native_tray_menu(&menu)?);
+# Ok(()) }
+```
+
+空应用菜单移除菜单栏，空托盘菜单恢复默认菜单。图标接口复制 RGBA 数据，
+零宽高和空切片恢复默认图标。调用必须位于 UI 线程；返回 `Ok(false)` 表示原生层拒绝操作，
+不能当作成功。菜单勾选/单选状态由应用持有，回调不会自动改动模型。
+`capabilities().tray_tooltip()` 在 Linux 为 false，因为 indicator title 不能保证悬浮提示。

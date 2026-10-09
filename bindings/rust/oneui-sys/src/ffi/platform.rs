@@ -15,3 +15,12 @@ extern "C" {
     pub fn oneui_window_capabilities(window: *mut OneUiWindow) -> c_uint;
     pub fn oneui_window_initialize_checked(window: *mut OneUiWindow) -> c_int;
 }
+
+pub const WINDOW_CAPABILITY_MENU_BAR: c_uint = 1 << 8;
+pub const WINDOW_CAPABILITY_TRAY_TOOLTIP: c_uint = 1 << 9;
+
+pub const NATIVE_MENU_ENABLED: c_uint = 1;
+pub const NATIVE_MENU_SEPARATOR: c_uint = 2;
+pub const NATIVE_MENU_CHECK: c_uint = 4;
+pub const NATIVE_MENU_RADIO: c_uint = 8;
+pub const NATIVE_MENU_CHECKED: c_uint = 16;

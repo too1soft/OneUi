@@ -71,6 +71,29 @@ fn dock_guides_resolve_central_arrows_and_ignore_floating_targets() {
     )
     .is_none());
 }
+#[test]
+fn shared_guides_reject_nonfinite_geometry() {
+    let panes = BTreeMap::from([("target", rect(0., 0., f32::INFINITY, 100.))]);
+    assert!(dock_guide(
+        &"source",
+        DockPoint { x: 50., y: 50. },
+        &panes,
+        &Default::default(),
+        false
+    )
+    .is_none());
+    let panes = BTreeMap::from([("target", rect(0., 0., 100., 100.))]);
+    for value in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+        assert!(dock_guide(
+            &"source",
+            DockPoint { x: value, y: 50. },
+            &panes,
+            &Default::default(),
+            false
+        )
+        .is_none());
+    }
+}
 
 #[test]
 fn drag_preview_is_non_destructive_until_release() {

@@ -25,16 +25,36 @@ pub mod handles;
 pub mod interaction;
 mod latest_signal;
 pub mod layout;
-pub mod ui;
+pub use layout::{
+    AppShell, TopBar,
+    ScrollView, ScrollViewHandle, SplitOrientation, SplitView, Stack, StackAlign, StackDirection,
+};
 mod layout_authoring;
-pub use layout_authoring::{Flex, FlexBasis, StackEngine, StackJustify};
+pub mod ui;
 pub use latest_signal::{LatestSignal, LocalSignalSubscription};
+pub use layout_authoring::{Flex, FlexBasis, StackEngine, StackJustify};
 pub mod platform;
 pub use interaction::{
     CommandRegistration, CommandResult, KeyChord, KeyModifiers, TextAffinity, TextDirection,
     TextOptions, TextPosition, TextWrapMode,
 };
 pub use platform::{WindowBackend, WindowCapabilities};
+mod application;
+mod desktop_window;
+mod notifications;
+mod toast_host;
+pub use notifications::{NotificationService, Notification, NotificationAction, NotificationResult, NotificationStatus, NotificationPermission, NotificationPermissionResult};
+pub use toast_host::{ToastHost, ToastMessage};
+mod fonts;
+mod localization;
+mod native_error;
+mod window_callbacks;
+mod window_native;
+pub use application::{Application, ApplicationActivation, CloseDecision, QuitPolicy};
+pub use desktop_window::{DesktopWindowState, ModalSession, WindowStateSubscription};
+pub use fonts::{enumerate_system_fonts, FontFamilyInfo};
+pub use localization::{set_builtin_text, BuiltinText, LocalizationError};
+pub use native_error::{clear_native_error, last_native_error, NativeError, NativeErrorCode};
 mod slider;
 mod types;
 pub use slider::{Slider, SliderHandle, SliderInteraction};
@@ -45,10 +65,12 @@ pub use types::{IconSymbol, ListItem, SelectionMode, VirtualListItem, VirtualLis
 pub enum Error {
     AbiVersionMismatch { expected: u32, actual: u32 },
     WindowCreationFailed,
+    ApplicationOperationFailed,
     WidgetCreationFailed,
     WidgetDestroyed,
     CommandRegistrationFailed,
     InvalidTextOptions,
+    InvalidMenu,
     InvalidLayout,
     InvalidTextPosition,
     WindowClosed,
@@ -60,6 +82,7 @@ pub enum Error {
     InvalidRemoteCursor { reason: &'static str },
     InvalidImagePixels { reason: &'static str },
     FontRegistrationFailed,
+    FontEnumerationFailed,
 }
 
 /// Registers an application font directly from memory.
@@ -389,6 +412,18 @@ impl StyleSheet {
         Err(StyleSheetError::ParseFailed(message))
     }
 
+    /// Assigns the palette used by dialogs, popups, menus and select options.
+    /// Keep the variant alive, then refresh the window after changing either sheet.
+    /// Passing None restores the regular palette for transient surfaces.
+    pub fn set_transient_style_sheet(&mut self, transient: Option<&StyleSheet>) {
+        unsafe {
+            sys::oneui_style_sheet_set_transient_style_sheet(
+                self.raw.as_ptr(),
+                transient.map_or(std::ptr::null_mut(), |sheet| sheet.as_raw()),
+            );
+        }
+    }
+
     pub fn set_custom_property(&mut self, name: &str, value: &str) -> Result<(), StyleSheetError> {
         let name = CString::new(name).map_err(|_| StyleSheetError::InteriorNul)?;
         let value = CString::new(value).map_err(|_| StyleSheetError::InteriorNul)?;
@@ -463,6 +498,8 @@ pub struct FileDropEvent {
 }
 
 pub struct Window {
+    tray_action_callback: Option<Box<tray::MenuCallback>>,
+    menu_action_callback: Option<Box<tray::MenuCallback>>,
     state: Arc<WindowState>,
     raw_key_callback: Option<Box<WindowRawKeyCallback>>,
     client_size_changed_callback: Option<Box<WindowClientSizeChangedCallback>>,
@@ -874,11 +911,10 @@ impl UiDispatcher {
         }
     }
 
-    /// Shows an owner-bound multi-file picker on the window thread.
+    /// Shows an owner-bound multi-file or multi-folder picker on the window thread.
     ///
     /// The result preserves the native selection order. A canceled dialog
-    /// returns an empty vector; folders and save dialogs are intentionally not
-    /// accepted by this API.
+    /// returns an empty vector. Save dialogs are not accepted.
     pub fn file_dialog_multiple(
         &self,
         options: FileDialogOptions<'_>,
@@ -886,7 +922,7 @@ impl UiDispatcher {
         if std::thread::current().id() != self.state.ui_thread {
             return Err(Error::WrongThread);
         }
-        if options.mode != FileDialogMode::OpenFile || options.filters.len() > 64 {
+        if options.mode == FileDialogMode::SaveFile || options.filters.len() > 64 {
             return Err(Error::FileDialogFailed);
         }
 
@@ -900,7 +936,11 @@ impl UiDispatcher {
             })
             .collect::<Vec<_>>();
         let native = sys::OneUiFileDialogOptionsUtf8 {
-            mode: sys::FILE_DIALOG_OPEN_FILE,
+            mode: if options.mode == FileDialogMode::SelectFolder {
+                sys::FILE_DIALOG_SELECT_FOLDER
+            } else {
+                sys::FILE_DIALOG_OPEN_FILE
+            },
             title: sys::OneUiUtf8String::from_str(options.title),
             initial_directory: sys::OneUiUtf8String::from_str(&initial_directory),
             default_name: sys::OneUiUtf8String::from_str(options.default_name),
@@ -1030,6 +1070,13 @@ impl UiDispatcher {
             return Err(Error::WindowClosed);
         };
         Ok(())
+    }
+
+    /// System preference for motion in client-area UI, read on the UI thread.
+    pub fn client_area_animations_enabled(&self) -> bool {
+        self.state
+            .with_raw(|raw| unsafe { sys::oneui_window_client_area_animations_enabled(raw) != 0 })
+            .unwrap_or(false)
     }
 
     /// Displays a platform-native confirmation prompt on the window thread
@@ -1276,14 +1323,6 @@ impl UiDispatcher {
     pub fn select_handle(&self, select: &Select) -> SelectHandle {
         SelectHandle {
             state: Arc::clone(&select.state),
-            dispatcher: self.clone(),
-        }
-    }
-
-    /// Creates a thread-safe scroll producer for a mounted scroll view.
-    pub fn scroll_view_handle(&self, scroll_view: &ScrollView) -> ScrollViewHandle {
-        ScrollViewHandle {
-            state: Arc::clone(&scroll_view.state),
             dispatcher: self.clone(),
         }
     }
@@ -1763,18 +1802,6 @@ impl Drop for Widget {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum StackDirection {
-    Column,
-    Row,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SplitOrientation {
-    Horizontal = 0,
-    Vertical = 1,
-}
-
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Insets {
     pub top: f32,
@@ -2024,14 +2051,6 @@ pub enum LabelAlign {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum StackAlign {
-    Start = 0,
-    Center = 1,
-    End = 2,
-    Stretch = 3,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ButtonVariant {
     Primary = 0,
     Secondary = 1,
@@ -2120,228 +2139,6 @@ impl From<Insets> for sys::OneUiInsets {
             bottom: value.bottom,
             left: value.left,
         }
-    }
-}
-
-pub struct Stack {
-    widget: Widget,
-}
-
-impl Stack {
-    pub fn new(direction: StackDirection) -> Result<Self, Error> {
-        let direction = match direction {
-            StackDirection::Column => 0,
-            StackDirection::Row => 1,
-        };
-        let widget = Widget::from_raw(unsafe { sys::oneui_stack_create(direction) })?;
-        Ok(Self { widget })
-    }
-
-    pub fn add(&self, child: &Widget) {
-        unsafe { sys::oneui_stack_add(self.widget.as_raw(), child.as_raw()) };
-    }
-
-    /// Change flow without replacing children or their state.
-    pub fn set_direction(&self, direction: StackDirection) {
-        let direction = match direction {
-            StackDirection::Column => 0,
-            StackDirection::Row => 1,
-        };
-        unsafe { sys::oneui_stack_set_direction(self.widget.as_raw(), direction) };
-    }
-
-    pub fn set_gap(&self, gap: f32) {
-        unsafe { sys::oneui_stack_set_gap(self.widget.as_raw(), gap) };
-    }
-
-    pub fn set_padding(&self, padding: Insets) {
-        unsafe { sys::oneui_stack_set_padding(self.widget.as_raw(), padding.into()) };
-    }
-
-    pub fn set_align(&self, align: StackAlign) {
-        unsafe { sys::oneui_stack_set_align(self.widget.as_raw(), align as i32) };
-    }
-
-    pub fn content_width(&self) -> f32 {
-        unsafe { sys::oneui_stack_content_width(self.widget.as_raw()) }
-    }
-
-    pub fn content_height(&self) -> f32 {
-        unsafe { sys::oneui_stack_content_height(self.widget.as_raw()) }
-    }
-
-    pub fn as_widget(&self) -> &Widget {
-        &self.widget
-    }
-}
-
-struct FloatChangedCallback {
-    handler: Box<dyn FnMut(f32) + 'static>,
-}
-
-unsafe extern "C" fn run_float_changed_callback(value: f32, user_data: *mut std::ffi::c_void) {
-    if user_data.is_null() {
-        return;
-    }
-    let callback = unsafe { &mut *user_data.cast::<FloatChangedCallback>() };
-    run_callback_guarded("value.float_changed", || (callback.handler)(value));
-}
-
-/// Native resizable two-pane layout.
-///
-/// OneUI owns divider hit testing and drag capture. Product code supplies pane
-/// content, minimum extents, and optionally persists ratio changes.
-pub struct SplitView {
-    widget: Widget,
-    ratio_changed_callback: Option<Box<FloatChangedCallback>>,
-    ratio_committed_callback: Option<Box<FloatChangedCallback>>,
-}
-
-impl SplitView {
-    pub fn new(orientation: SplitOrientation) -> Result<Self, Error> {
-        let widget = Widget::from_raw(unsafe { sys::oneui_split_view_create(orientation as i32) })?;
-        Ok(Self {
-            widget,
-            ratio_changed_callback: None,
-            ratio_committed_callback: None,
-        })
-    }
-
-    pub fn set_first(&self, child: &Widget) {
-        unsafe { sys::oneui_split_view_set_first(self.widget.as_raw(), child.as_raw()) };
-    }
-
-    pub fn set_second(&self, child: &Widget) {
-        unsafe { sys::oneui_split_view_set_second(self.widget.as_raw(), child.as_raw()) };
-    }
-
-    pub fn set_orientation(&self, orientation: SplitOrientation) {
-        unsafe { sys::oneui_split_view_set_orientation(self.widget.as_raw(), orientation as i32) };
-    }
-
-    pub fn set_ratio(&self, ratio: f32) {
-        unsafe { sys::oneui_split_view_set_ratio(self.widget.as_raw(), ratio) };
-    }
-
-    pub fn ratio(&self) -> f32 {
-        unsafe { sys::oneui_split_view_ratio(self.widget.as_raw()) }
-    }
-
-    pub fn set_gap(&self, gap: f32) {
-        unsafe { sys::oneui_split_view_set_gap(self.widget.as_raw(), gap) };
-    }
-
-    /// Colors of the divider at rest and while hovered, dragged or keyboard-focused.
-    pub fn set_divider_colors(&self, normal: Color, active: Color) {
-        unsafe {
-            sys::oneui_split_view_set_divider_colors(
-                self.widget.as_raw(),
-                normal.into(),
-                active.into(),
-            )
-        };
-    }
-
-    pub fn set_padding(&self, padding: Insets) {
-        unsafe { sys::oneui_split_view_set_padding(self.widget.as_raw(), padding.into()) };
-    }
-
-    pub fn set_resizable(&self, resizable: bool) {
-        unsafe { sys::oneui_split_view_set_resizable(self.widget.as_raw(), i32::from(resizable)) };
-    }
-
-    pub fn set_minimum_pane_extent(&self, first: f32, second: f32) {
-        unsafe {
-            sys::oneui_split_view_set_minimum_pane_extent(self.widget.as_raw(), first, second)
-        };
-    }
-
-    #[track_caller]
-    pub fn set_on_ratio_changed<F>(&mut self, callback: F)
-    where
-        F: FnMut(f32) + 'static,
-    {
-        let trace =
-            InteractionTrace::at("SplitView", "ratio_changed", std::panic::Location::caller());
-        self.clear_on_ratio_changed();
-        self.ratio_changed_callback = Some(Box::new(FloatChangedCallback {
-            handler: Box::new(traced_value_callback(trace, callback)),
-        }));
-        let user_data = (self
-            .ratio_changed_callback
-            .as_deref_mut()
-            .expect("split ratio callback was just installed")
-            as *mut FloatChangedCallback)
-            .cast();
-        unsafe {
-            sys::oneui_split_view_set_on_ratio_changed(
-                self.widget.as_raw(),
-                Some(run_float_changed_callback),
-                user_data,
-            )
-        };
-    }
-
-    pub fn clear_on_ratio_changed(&mut self) {
-        unsafe {
-            sys::oneui_split_view_set_on_ratio_changed(
-                self.widget.as_raw(),
-                None,
-                std::ptr::null_mut(),
-            )
-        };
-        self.ratio_changed_callback = None;
-    }
-
-    #[track_caller]
-    pub fn set_on_ratio_committed<F>(&mut self, callback: F)
-    where
-        F: FnMut(f32) + 'static,
-    {
-        let trace = InteractionTrace::at(
-            "SplitView",
-            "ratio_committed",
-            std::panic::Location::caller(),
-        );
-        self.clear_on_ratio_committed();
-        self.ratio_committed_callback = Some(Box::new(FloatChangedCallback {
-            handler: Box::new(traced_value_callback(trace, callback)),
-        }));
-        let user_data = (self
-            .ratio_committed_callback
-            .as_deref_mut()
-            .expect("split ratio committed callback was just installed")
-            as *mut FloatChangedCallback)
-            .cast();
-        unsafe {
-            sys::oneui_split_view_set_on_ratio_committed(
-                self.widget.as_raw(),
-                Some(run_float_changed_callback),
-                user_data,
-            )
-        };
-    }
-
-    pub fn clear_on_ratio_committed(&mut self) {
-        unsafe {
-            sys::oneui_split_view_set_on_ratio_committed(
-                self.widget.as_raw(),
-                None,
-                std::ptr::null_mut(),
-            )
-        };
-        self.ratio_committed_callback = None;
-    }
-
-    pub fn as_widget(&self) -> &Widget {
-        &self.widget
-    }
-}
-
-impl Drop for SplitView {
-    fn drop(&mut self) {
-        self.clear_on_ratio_changed();
-        self.clear_on_ratio_committed();
     }
 }
 
@@ -2875,131 +2672,6 @@ impl Panel {
 
     pub fn as_widget(&self) -> &Widget {
         &self.widget
-    }
-}
-
-/// A scroll container whose child remains owned by the Rust composition tree.
-pub struct ScrollView {
-    widget: Widget,
-    state: Arc<ScrollViewState>,
-}
-
-struct ScrollViewState {
-    raw: AtomicPtr<sys::OneUiWidget>,
-}
-
-/// Thread-safe producer for scroll position changes on a mounted scroll view.
-#[derive(Clone)]
-pub struct ScrollViewHandle {
-    state: Arc<ScrollViewState>,
-    dispatcher: UiDispatcher,
-}
-
-impl ScrollViewHandle {
-    pub fn set_scroll_offset(&self, offset: f32) -> Result<(), Error> {
-        if self.state.raw.load(Ordering::Acquire).is_null() {
-            return Err(Error::WidgetDestroyed);
-        }
-        let state = Arc::clone(&self.state);
-        self.dispatcher.dispatch(move || {
-            let raw = state.raw.load(Ordering::Acquire);
-            if !raw.is_null() {
-                unsafe { sys::oneui_scroll_view_set_scroll_offset(raw, offset) };
-            }
-        })
-    }
-
-    pub fn scroll_to_bottom(&self) -> Result<(), Error> {
-        if self.state.raw.load(Ordering::Acquire).is_null() {
-            return Err(Error::WidgetDestroyed);
-        }
-        let state = Arc::clone(&self.state);
-        self.dispatcher.dispatch(move || {
-            let raw = state.raw.load(Ordering::Acquire);
-            if !raw.is_null() {
-                unsafe { sys::oneui_scroll_view_scroll_to_bottom(raw) };
-            }
-        })
-    }
-}
-
-impl ScrollView {
-    pub fn new() -> Result<Self, Error> {
-        let widget = Widget::from_raw(unsafe { sys::oneui_scroll_view_create() })?;
-        Ok(Self {
-            state: Arc::new(ScrollViewState {
-                raw: AtomicPtr::new(widget.as_raw()),
-            }),
-            widget,
-        })
-    }
-
-    pub fn set_content(&self, child: &Widget) {
-        unsafe { sys::oneui_scroll_view_set_content(self.widget.as_raw(), child.as_raw()) };
-    }
-
-    pub fn set_content_width(&self, width: f32) {
-        unsafe { sys::oneui_scroll_view_set_content_width(self.widget.as_raw(), width) };
-    }
-
-    pub fn set_content_height(&self, height: f32) {
-        unsafe { sys::oneui_scroll_view_set_content_height(self.widget.as_raw(), height) };
-    }
-
-    pub fn set_wheel_step(&self, step: f32) {
-        unsafe { sys::oneui_scroll_view_set_wheel_step(self.widget.as_raw(), step) };
-    }
-
-    pub fn set_chrome_visible(&self, visible: bool) {
-        unsafe {
-            sys::oneui_scroll_view_set_chrome_visible(self.widget.as_raw(), i32::from(visible))
-        };
-    }
-
-    pub fn set_scrollbar_style(&self, color: Color, thickness: f32) {
-        unsafe {
-            sys::oneui_scroll_view_set_scrollbar_style(
-                self.widget.as_raw(),
-                color.r,
-                color.g,
-                color.b,
-                color.a,
-                thickness,
-            )
-        };
-    }
-
-    /// Space between the scrollbar and viewport edge. The default is 5 pixels.
-    pub fn set_scrollbar_inset(&self, inset: f32) {
-        unsafe { sys::oneui_scroll_view_set_scrollbar_inset(self.widget.as_raw(), inset) };
-    }
-
-    pub fn set_scroll_offset(&self, offset: f32) {
-        unsafe { sys::oneui_scroll_view_set_scroll_offset(self.widget.as_raw(), offset) };
-    }
-
-    pub fn scroll_offset(&self) -> f32 {
-        unsafe { sys::oneui_scroll_view_scroll_offset(self.widget.as_raw()) }
-    }
-
-    pub fn max_scroll_offset(&self) -> f32 {
-        unsafe { sys::oneui_scroll_view_max_scroll_offset(self.widget.as_raw()) }
-    }
-
-    pub fn scroll_to_bottom(&self) {
-        unsafe { sys::oneui_scroll_view_scroll_to_bottom(self.widget.as_raw()) };
-    }
-
-    pub fn as_widget(&self) -> &Widget {
-        &self.widget
-    }
-}
-
-impl Drop for ScrollView {
-    fn drop(&mut self) {
-        self.state
-            .raw
-            .store(std::ptr::null_mut(), Ordering::Release);
     }
 }
 
@@ -3922,7 +3594,9 @@ impl TimeSeriesChart {
     }
     /// Set the endpoint marker dimensions; non-positive or non-finite values are ignored.
     pub fn set_latest_point_size(&self, width: f32, height: f32) {
-        unsafe { sys::oneui_time_series_chart_set_latest_point_size(self.widget.as_raw(), width, height) };
+        unsafe {
+            sys::oneui_time_series_chart_set_latest_point_size(self.widget.as_raw(), width, height)
+        };
     }
 
     pub fn set_latest_point_visible(&self, visible: bool) {
@@ -6182,328 +5856,8 @@ impl Drop for SegmentedControl {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TabEditReason {
-    Submitted,
-    Cancelled,
-    FocusLost,
-}
-
-struct TabEditCallback {
-    handler: Box<dyn FnMut(i32, String, TabEditReason) + 'static>,
-}
-unsafe extern "C" fn run_tab_edit_callback(
-    index: i32,
-    text: *const std::ffi::c_char,
-    length: usize,
-    reason: i32,
-    user_data: *mut std::ffi::c_void,
-) {
-    if text.is_null() || user_data.is_null() {
-        return;
-    }
-    let reason = match reason {
-        0 => TabEditReason::Submitted,
-        1 => TabEditReason::Cancelled,
-        2 => TabEditReason::FocusLost,
-        _ => return,
-    };
-    let bytes = unsafe { std::slice::from_raw_parts(text.cast::<u8>(), length) };
-    let value = String::from_utf8_lossy(bytes).into_owned();
-    let callback = unsafe { &mut *user_data.cast::<TabEditCallback>() };
-    run_callback_guarded("tabs.edit_finished", || {
-        (callback.handler)(index, value, reason)
-    });
-}
-
-/// Keyboard-accessible tab strip for switching between peer workspace views.
-pub struct Tabs {
-    widget: Widget,
-    overflow_callback: Option<Box<IndexChangedCallback>>,
-    changed_callback: Option<Box<IndexChangedCallback>>,
-    close_requested_callback: Option<Box<IndexChangedCallback>>,
-    context_menu_requested_callback: Option<Box<ContextMenuRequestedCallback>>,
-    reorder_requested_callback: Option<Box<ReorderRequestedCallback>>,
-    edit_callback: Option<Box<TabEditCallback>>,
-}
-
-impl Tabs {
-    pub fn new(items: &[String]) -> Result<Self, Error> {
-        let widget = Widget::from_raw(unsafe { sys::oneui_tabs_create() })?;
-        let control = Self {
-            widget,
-            overflow_callback: None,
-            changed_callback: None,
-            close_requested_callback: None,
-            context_menu_requested_callback: None,
-            reorder_requested_callback: None,
-            edit_callback: None,
-        };
-        control.set_items(items);
-        Ok(control)
-    }
-
-    /// Start editing the visible label. Focus the Tabs widget through Window or
-    /// UiDispatcher after this call. Changed items cancel an outstanding edit.
-    pub fn begin_edit(&self, index: i32) -> bool {
-        unsafe { sys::oneui_tabs_begin_edit(self.widget.as_raw(), index) != 0 }
-    }
-    pub fn cancel_edit(&self) {
-        unsafe { sys::oneui_tabs_cancel_edit(self.widget.as_raw()) };
-    }
-    pub fn editing_index(&self) -> Option<usize> {
-        usize::try_from(unsafe { sys::oneui_tabs_editing_index(self.widget.as_raw()) }).ok()
-    }
-    pub fn set_on_edit_finished<F>(&mut self, callback: F)
-    where
-        F: FnMut(i32, String, TabEditReason) + 'static,
-    {
-        self.clear_on_edit_finished();
-        self.edit_callback = Some(Box::new(TabEditCallback {
-            handler: Box::new(callback),
-        }));
-        let data = (self.edit_callback.as_deref_mut().unwrap() as *mut TabEditCallback).cast();
-        unsafe {
-            sys::oneui_tabs_set_on_edit_finished(
-                self.widget.as_raw(),
-                Some(run_tab_edit_callback),
-                data,
-            )
-        };
-    }
-    pub fn clear_on_edit_finished(&mut self) {
-        unsafe {
-            sys::oneui_tabs_set_on_edit_finished(self.widget.as_raw(), None, std::ptr::null_mut())
-        };
-        self.edit_callback = None;
-    }
-
-    pub fn set_items(&self, items: &[String]) {
-        let views: Vec<sys::OneUiUtf8String> = items
-            .iter()
-            .map(|item| sys::OneUiUtf8String::from_str(item))
-            .collect();
-        unsafe {
-            sys::oneui_tabs_set_items_utf8(self.widget.as_raw(), views.as_ptr(), views.len())
-        };
-    }
-
-    /// Sets an optional leading icon for each tab. Missing entries and `None`
-    /// keep the corresponding tab text-only.
-    pub fn set_item_icons(&self, icons: &[Option<IconSymbol>]) {
-        let symbols = icons
-            .iter()
-            .map(|icon| icon.map_or(-1, |symbol| symbol as i32))
-            .collect::<Vec<_>>();
-        unsafe {
-            sys::oneui_tabs_set_item_icons(self.widget.as_raw(), symbols.as_ptr(), symbols.len())
-        };
-    }
-
-    /// Opt in to document chrome: reserved 24px close targets, 13px glyphs,
-    /// persistent status indicators, separators and a selected underline.
-    pub fn set_document_mode(&self, enabled: bool) {
-        unsafe { sys::oneui_tabs_set_document_mode(self.widget.as_raw(), i32::from(enabled)) };
-    }
-    /// Number of items outside the most recently measured viewport.
-    pub fn overflow_item_count(&self) -> usize {
-        unsafe { sys::oneui_tabs_overflow_item_count(self.widget.as_raw()).max(0) as usize }
-    }
-    /// Reports measured overflow after layout; enqueue any geometry mutations.
-    pub fn set_on_overflow_changed<F: FnMut(i32) + 'static>(&mut self, callback: F) {
-        unsafe { sys::oneui_tabs_set_on_overflow_changed(self.widget.as_raw(), None, std::ptr::null_mut()) };
-        self.overflow_callback = Some(Box::new(IndexChangedCallback { handler: Box::new(callback) }));
-        let data = (self.overflow_callback.as_deref_mut().unwrap() as *mut IndexChangedCallback).cast();
-        unsafe { sys::oneui_tabs_set_on_overflow_changed(self.widget.as_raw(), Some(run_index_changed_callback), data) };
-    }
-    /// Per-item status colors; missing or transparent entries draw no dot.
-    pub fn set_item_status_colors(&self, colors: &[Color]) {
-        let values: Vec<sys::OneUiColor> = colors.iter().copied().map(Into::into).collect();
-        unsafe { sys::oneui_tabs_set_item_status_colors(self.widget.as_raw(), values.as_ptr(), values.len()) };
-    }
-    pub fn set_selected_index(&self, index: i32) {
-        unsafe { sys::oneui_tabs_set_selected_index(self.widget.as_raw(), index) };
-    }
-
-    pub fn selected_index(&self) -> i32 {
-        unsafe { sys::oneui_tabs_selected_index(self.widget.as_raw()) }
-    }
-
-    /// Uses content-oriented tab widths with bounded horizontal overflow.
-    pub fn set_compact(&self, compact: bool) {
-        unsafe { sys::oneui_tabs_set_compact(self.widget.as_raw(), i32::from(compact)) };
-    }
-
-    pub fn set_item_width_range(&self, minimum: f32, maximum: f32) {
-        unsafe { sys::oneui_tabs_set_item_width_range(self.widget.as_raw(), minimum, maximum) };
-    }
-
-    pub fn set_closable(&self, closable: bool) {
-        unsafe { sys::oneui_tabs_set_closable(self.widget.as_raw(), i32::from(closable)) };
-    }
-
-    pub fn set_reorder_enabled(&self, enabled: bool) {
-        unsafe { sys::oneui_tabs_set_reorder_enabled(self.widget.as_raw(), i32::from(enabled)) };
-    }
-
-    pub fn reorder_enabled(&self) -> bool {
-        unsafe { sys::oneui_tabs_reorder_enabled(self.widget.as_raw()) != 0 }
-    }
-
-    #[track_caller]
-    pub fn set_on_changed<F>(&mut self, callback: F)
-    where
-        F: FnMut(i32) + 'static,
-    {
-        let trace = InteractionTrace::at("Tabs", "changed", std::panic::Location::caller());
-        self.clear_on_changed();
-        self.changed_callback = Some(Box::new(IndexChangedCallback {
-            handler: Box::new(traced_value_callback(trace, callback)),
-        }));
-        let user_data = (self
-            .changed_callback
-            .as_deref_mut()
-            .expect("tabs callback was just installed")
-            as *mut IndexChangedCallback)
-            .cast();
-        unsafe {
-            sys::oneui_tabs_set_on_changed(
-                self.widget.as_raw(),
-                Some(run_index_changed_callback),
-                user_data,
-            )
-        };
-    }
-
-    pub fn clear_on_changed(&mut self) {
-        unsafe { sys::oneui_tabs_set_on_changed(self.widget.as_raw(), None, std::ptr::null_mut()) };
-        self.changed_callback = None;
-    }
-
-    #[track_caller]
-    pub fn set_on_close_requested<F>(&mut self, callback: F)
-    where
-        F: FnMut(i32) + 'static,
-    {
-        let trace = InteractionTrace::at("Tabs", "close_requested", std::panic::Location::caller());
-        self.clear_on_close_requested();
-        self.close_requested_callback = Some(Box::new(IndexChangedCallback {
-            handler: Box::new(traced_value_callback(trace, callback)),
-        }));
-        let user_data = (self
-            .close_requested_callback
-            .as_deref_mut()
-            .expect("tabs close callback was just installed")
-            as *mut IndexChangedCallback)
-            .cast();
-        unsafe {
-            sys::oneui_tabs_set_on_close_requested(
-                self.widget.as_raw(),
-                Some(run_index_changed_callback),
-                user_data,
-            )
-        };
-    }
-
-    pub fn clear_on_close_requested(&mut self) {
-        unsafe {
-            sys::oneui_tabs_set_on_close_requested(self.widget.as_raw(), None, std::ptr::null_mut())
-        };
-        self.close_requested_callback = None;
-    }
-
-    #[track_caller]
-    pub fn set_on_context_menu_requested<F>(&mut self, callback: F)
-    where
-        F: FnMut(ContextMenuRequest) + 'static,
-    {
-        let trace = InteractionTrace::at(
-            "Tabs",
-            "context_menu_requested",
-            std::panic::Location::caller(),
-        );
-        self.clear_on_context_menu_requested();
-        self.context_menu_requested_callback = Some(Box::new(ContextMenuRequestedCallback {
-            handler: Box::new(traced_value_callback(trace, callback)),
-        }));
-        let user_data = (self
-            .context_menu_requested_callback
-            .as_deref_mut()
-            .expect("tabs context menu callback was just installed")
-            as *mut ContextMenuRequestedCallback)
-            .cast();
-        unsafe {
-            sys::oneui_tabs_set_on_context_menu_requested(
-                self.widget.as_raw(),
-                Some(run_context_menu_requested_callback),
-                user_data,
-            )
-        };
-    }
-
-    pub fn clear_on_context_menu_requested(&mut self) {
-        unsafe {
-            sys::oneui_tabs_set_on_context_menu_requested(
-                self.widget.as_raw(),
-                None,
-                std::ptr::null_mut(),
-            )
-        };
-        self.context_menu_requested_callback = None;
-    }
-
-    #[track_caller]
-    pub fn set_on_reorder_requested<F>(&mut self, callback: F)
-    where
-        F: FnMut(ReorderRequest) + 'static,
-    {
-        let trace =
-            InteractionTrace::at("Tabs", "reorder_requested", std::panic::Location::caller());
-        self.clear_on_reorder_requested();
-        self.reorder_requested_callback = Some(Box::new(ReorderRequestedCallback {
-            handler: Box::new(traced_value_callback(trace, callback)),
-        }));
-        let user_data = (self
-            .reorder_requested_callback
-            .as_deref_mut()
-            .expect("tabs reorder callback was just installed")
-            as *mut ReorderRequestedCallback)
-            .cast();
-        unsafe {
-            sys::oneui_tabs_set_on_reorder_requested(
-                self.widget.as_raw(),
-                Some(run_reorder_requested_callback),
-                user_data,
-            )
-        };
-    }
-
-    pub fn clear_on_reorder_requested(&mut self) {
-        unsafe {
-            sys::oneui_tabs_set_on_reorder_requested(
-                self.widget.as_raw(),
-                None,
-                std::ptr::null_mut(),
-            )
-        };
-        self.reorder_requested_callback = None;
-    }
-
-    pub fn as_widget(&self) -> &Widget {
-        &self.widget
-    }
-}
-
-impl Drop for Tabs {
-    fn drop(&mut self) {
-        unsafe { sys::oneui_tabs_set_on_overflow_changed(self.widget.as_raw(), None, std::ptr::null_mut()) };
-        self.clear_on_edit_finished();
-        self.clear_on_changed();
-        self.clear_on_close_requested();
-        self.clear_on_context_menu_requested();
-        self.clear_on_reorder_requested();
-    }
-}
+mod tabs;
+pub use tabs::{TabEditReason, Tabs};
 
 /// RGBA color used by the native terminal grid.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -6660,6 +6014,13 @@ pub struct RawKeyEvent {
     pub ctrl: bool,
     pub shift: bool,
     pub win: bool,
+}
+
+impl RawKeyEvent {
+    /// Meta on every backend (Command on macOS); `win` remains for ABI compatibility.
+    pub fn meta(&self) -> bool {
+        self.win
+    }
 }
 
 impl From<sys::OneUiRawKeyEvent> for RawKeyEvent {
@@ -8327,6 +7688,7 @@ pub struct TerminalView {
     pointer_callback: Option<Box<TerminalPointerCallback>>,
     hyperlink_callback: Option<Box<TerminalHyperlinkCallback>>,
     viewport_callback: Option<Box<TerminalViewportCallback>>,
+    cursor_callback: Option<Box<VoidCallback>>,
     focus_callback: Option<Box<BoolChangedCallback>>,
 }
 
@@ -8349,6 +7711,7 @@ impl TerminalView {
             pointer_callback: None,
             hyperlink_callback: None,
             viewport_callback: None,
+            cursor_callback: None,
             focus_callback: None,
         })
     }
@@ -8830,6 +8193,33 @@ impl TerminalView {
         self.hyperlink_callback = None;
     }
 
+    /// UI-thread notification after the terminal cursor moves (including remote echo).
+    pub fn set_on_cursor_changed<F: FnMut() + 'static>(&mut self, callback: F) {
+        self.clear_cursor_callback();
+        self.cursor_callback = Some(Box::new(VoidCallback {
+            handler: Rc::new(RefCell::new(Box::new(callback))),
+        }));
+        let data = (self.cursor_callback.as_deref_mut().unwrap() as *mut VoidCallback).cast();
+        unsafe {
+            sys::oneui_terminal_view_set_on_cursor_changed(
+                self.widget.as_raw(),
+                Some(run_void_callback),
+                data,
+            );
+        }
+    }
+
+    pub fn clear_cursor_callback(&mut self) {
+        unsafe {
+            sys::oneui_terminal_view_set_on_cursor_changed(
+                self.widget.as_raw(),
+                None,
+                std::ptr::null_mut(),
+            );
+        }
+        self.cursor_callback = None;
+    }
+
     pub fn clear_viewport_callback(&mut self) {
         unsafe {
             sys::oneui_terminal_view_set_on_viewport_changed(
@@ -8880,6 +8270,7 @@ impl Drop for TerminalView {
         self.clear_pointer_callback();
         self.clear_hyperlink_callback();
         self.clear_viewport_callback();
+        self.clear_cursor_callback();
         self.clear_focus_callback();
     }
 }
@@ -8893,7 +8284,9 @@ fn apply_terminal_frame(
     unsafe {
         sys::oneui_terminal_view_set_first_visible_line_number(raw, frame.first_visible_line_number)
     };
-    unsafe { sys::oneui_terminal_view_set_scrollback(raw, frame.history_rows, frame.scrollback_offset); }
+    unsafe {
+        sys::oneui_terminal_view_set_scrollback(raw, frame.history_rows, frame.scrollback_offset);
+    }
     let can_update_in_place = previous.is_some_and(|previous| {
         previous.rows == frame.rows
             && previous.columns == frame.columns
@@ -9345,6 +8738,93 @@ pub struct VirtualListHandle {
 }
 
 impl VirtualListHandle {
+    /// Replaces a revision and applies its selected index in the same UI task.
+    pub fn set_items_and_selected_index(
+        &self,
+        items: Vec<ListItem>,
+        index: i32,
+    ) -> Result<(), Error> {
+        if self.state.raw.load(Ordering::Acquire).is_null() {
+            return Err(Error::WidgetDestroyed);
+        }
+        let state = Arc::clone(&self.state);
+        self.dispatcher.dispatch(move || {
+            let raw = state.raw.load(Ordering::Acquire);
+            if raw.is_null() {
+                return;
+            }
+            state
+                .pending_items
+                .lock()
+                .expect("virtual list pending items lock poisoned")
+                .clear();
+            let native = items
+                .iter()
+                .map(|item| sys::OneUiListItemUtf8 {
+                    title: sys::OneUiUtf8String::from_str(&item.title),
+                    detail: sys::OneUiUtf8String::from_str(&item.detail),
+                })
+                .collect::<Vec<_>>();
+            // SAFETY: the UI-thread dispatch owns the widget access; items and
+            // strings live until the synchronous C calls finish copying them.
+            // The native control validates and clamps the selection index.
+            unsafe {
+                sys::oneui_virtual_list_set_items_utf8(raw, native.as_ptr(), native.len());
+                sys::oneui_virtual_list_set_selected_index(raw, index);
+            }
+        })
+    }
+
+    /// Replace a scoped keyed revision without retargeting the selection.
+    pub fn set_items_keyed<F, C, O, K>(
+        &self,
+        items: Vec<ListItem>,
+        old_keys: O,
+        keys: Vec<K>,
+        current: F,
+        commit: C,
+    ) -> Result<(), Error>
+    where
+        F: Fn() -> bool + Send + 'static,
+        C: FnOnce() + Send + 'static,
+        O: FnOnce() -> Vec<K> + Send + 'static,
+        K: Eq + Send + 'static,
+    {
+        let state = Arc::clone(&self.state);
+        self.dispatcher.dispatch(move || {
+            let raw = state.raw.load(Ordering::Acquire);
+            if raw.is_null() || !current() {
+                return;
+            }
+            state
+                .pending_items
+                .lock()
+                .expect("virtual list pending items lock poisoned")
+                .clear();
+            let old_keys = old_keys();
+            let old = unsafe { sys::oneui_virtual_list_selected_index(raw) };
+            let selected = old_keys
+                .get(old as usize)
+                .and_then(|k| keys.iter().position(|v| v == k))
+                .map(|i| i as i32)
+                .unwrap_or(-1);
+            let offset = unsafe { sys::oneui_virtual_list_scroll_offset(raw) };
+            let native = items
+                .iter()
+                .map(|item| sys::OneUiListItemUtf8 {
+                    title: sys::OneUiUtf8String::from_str(&item.title),
+                    detail: sys::OneUiUtf8String::from_str(&item.detail),
+                })
+                .collect::<Vec<_>>();
+            commit();
+            unsafe {
+                sys::oneui_virtual_list_set_items_utf8(raw, native.as_ptr(), native.len());
+                sys::oneui_virtual_list_set_selected_index(raw, selected);
+                sys::oneui_virtual_list_set_scroll_offset(raw, offset);
+            }
+        })
+    }
+
     /// Replaces the complete data revision on the owning window thread.
     ///
     /// Use this for background loads, filters, and directory scans. Incremental
@@ -9402,7 +8882,9 @@ impl VirtualListHandle {
     /// Commits the row model and visual revision in one UI task. Return true
     /// only when row identities are unchanged and selection may be retained.
     pub fn set_items_with_commit<F>(&self, items: Vec<ListItem>, commit: F) -> Result<(), Error>
-    where F: FnOnce() -> bool + Send + 'static {
+    where
+        F: FnOnce() -> bool + Send + 'static,
+    {
         if self.state.raw.load(Ordering::Acquire).is_null() {
             return Err(Error::WidgetDestroyed);
         }
@@ -9687,6 +9169,16 @@ impl VirtualList {
 
     pub fn set_row_height(&self, height: f32) {
         unsafe { sys::oneui_virtual_list_set_row_height(self.widget.as_raw(), height) };
+    }
+
+    /// Opt in to single-click activation for completion menus. Default is double click.
+    pub fn set_activate_on_single_click(&self, enabled: bool) {
+        unsafe {
+            sys::oneui_virtual_list_set_activate_on_single_click(
+                self.widget.as_raw(),
+                i32::from(enabled),
+            )
+        };
     }
 
     pub fn set_rich_metrics(&self, metrics: VirtualListRichMetrics) {
@@ -10116,6 +9608,15 @@ pub struct TableColumn {
     pub width: f32,
 }
 
+/// Rendering is explicit and independent of localized column headings.
+#[derive(Debug, Clone, Copy, Default, Eq, PartialEq)]
+#[repr(i32)]
+pub enum TableCellKind {
+    #[default]
+    Text = 0,
+    Percent = 1,
+}
+
 /// Structured UTF-8 data for one native table row.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TableRow {
@@ -10136,40 +9637,126 @@ pub struct TableHandle {
 }
 
 impl TableHandle {
-    pub fn set_header_sort(&self, column: i32, descending: bool) -> Result<(), Error> {
-        if self.state.raw.load(Ordering::Acquire).is_null() { return Err(Error::WidgetDestroyed); }
+    /// Publishes keyed rows only while the producer is current. Selection is
+    /// remapped by key on the UI thread, never by a stale row index.
+    pub fn set_rich_rows_keyed<F, C, O>(
+        &self,
+        rows: Vec<TableRichRow>,
+        old_keys: O,
+        keys: Vec<String>,
+        current: F,
+        commit: C,
+    ) -> Result<(), Error>
+    where
+        F: Fn() -> bool + Send + 'static,
+        C: FnOnce() + Send + 'static,
+        O: FnOnce() -> Vec<String> + Send + 'static,
+    {
         let state = Arc::clone(&self.state);
         self.dispatcher.dispatch(move || {
             let raw = state.raw.load(Ordering::Acquire);
-            if !raw.is_null() { unsafe { sys::oneui_table_set_header_sort(raw,column,i32::from(descending)); } }
+            if raw.is_null() || !current() {
+                return;
+            }
+            state
+                .pending_rows
+                .lock()
+                .expect("table pending rows lock poisoned")
+                .clear();
+            let old_keys = old_keys();
+            let count = unsafe { sys::oneui_table_selected_indices(raw, std::ptr::null_mut(), 0) };
+            let mut selected = vec![0i32; count];
+            unsafe {
+                sys::oneui_table_selected_indices(raw, selected.as_mut_ptr(), selected.len());
+            }
+            let selected = selected
+                .into_iter()
+                .filter_map(|i| old_keys.get(i as usize))
+                .filter_map(|key| keys.iter().position(|v| v == key))
+                .map(|i| i as i32)
+                .collect::<Vec<_>>();
+            let offset = unsafe { sys::oneui_table_scroll_offset(raw) };
+            let cells = rows.iter().map(rich_table_row_cells).collect::<Vec<_>>();
+            let values = cells
+                .iter()
+                .map(|cells| sys::OneUiTableRichRowUtf8 {
+                    cells: cells.as_ptr(),
+                    count: cells.len(),
+                })
+                .collect::<Vec<_>>();
+            commit();
+            unsafe {
+                sys::oneui_table_set_rich_rows_utf8(raw, values.as_ptr(), values.len());
+                sys::oneui_table_set_selected_indices(raw, selected.as_ptr(), selected.len());
+                sys::oneui_table_set_scroll_offset(raw, offset);
+            }
+        })
+    }
+
+    pub fn set_header_sort(&self, column: i32, descending: bool) -> Result<(), Error> {
+        if self.state.raw.load(Ordering::Acquire).is_null() {
+            return Err(Error::WidgetDestroyed);
+        }
+        let state = Arc::clone(&self.state);
+        self.dispatcher.dispatch(move || {
+            let raw = state.raw.load(Ordering::Acquire);
+            if !raw.is_null() {
+                unsafe {
+                    sys::oneui_table_set_header_sort(raw, column, i32::from(descending));
+                }
+            }
         })
     }
 
     /// Publishes a rich revision atomically, retaining selection only when row
     /// identities are unchanged. Cell strings remain owned until the C call returns.
-    pub fn set_rich_rows(&self, rows: Vec<TableRichRow>, preserve_selection: bool) -> Result<(), Error> {
+    pub fn set_rich_rows(
+        &self,
+        rows: Vec<TableRichRow>,
+        preserve_selection: bool,
+    ) -> Result<(), Error> {
         self.set_rich_rows_with_commit(rows, move || preserve_selection)
     }
 
     /// Commits the associated row model on the UI thread immediately before
     /// publishing rows. Return true only when selected indices keep identity.
     /// The callback is not run if the table has been destroyed.
-    pub fn set_rich_rows_with_commit<F>(&self, rows: Vec<TableRichRow>, commit: F) -> Result<(), Error>
-    where F: FnOnce() -> bool + Send + 'static {
-        if self.state.raw.load(Ordering::Acquire).is_null() { return Err(Error::WidgetDestroyed); }
+    pub fn set_rich_rows_with_commit<F>(
+        &self,
+        rows: Vec<TableRichRow>,
+        commit: F,
+    ) -> Result<(), Error>
+    where
+        F: FnOnce() -> bool + Send + 'static,
+    {
+        if self.state.raw.load(Ordering::Acquire).is_null() {
+            return Err(Error::WidgetDestroyed);
+        }
         let state = Arc::clone(&self.state);
         self.dispatcher.dispatch(move || {
-            state.pending_rows.lock().expect("table pending rows lock poisoned").clear();
+            state
+                .pending_rows
+                .lock()
+                .expect("table pending rows lock poisoned")
+                .clear();
             let raw = state.raw.load(Ordering::Acquire);
-            if raw.is_null() { return; }
+            if raw.is_null() {
+                return;
+            }
             let cells = rows.iter().map(rich_table_row_cells).collect::<Vec<_>>();
-            let values = cells.iter().map(|cells| sys::OneUiTableRichRowUtf8 {
-                cells: cells.as_ptr(), count: cells.len(),
-            }).collect::<Vec<_>>();
+            let values = cells
+                .iter()
+                .map(|cells| sys::OneUiTableRichRowUtf8 {
+                    cells: cells.as_ptr(),
+                    count: cells.len(),
+                })
+                .collect::<Vec<_>>();
             let preserve_selection = commit();
             unsafe {
                 sys::oneui_table_set_rich_rows_utf8(raw, values.as_ptr(), values.len());
-                if !preserve_selection { sys::oneui_table_set_selected_indices(raw, std::ptr::null(), 0); }
+                if !preserve_selection {
+                    sys::oneui_table_set_selected_indices(raw, std::ptr::null(), 0);
+                }
             }
         })
     }
@@ -10412,9 +9999,26 @@ fn rich_table_row_cells(row: &TableRichRow) -> Vec<sys::OneUiTableRichCellUtf8> 
             text: sys::OneUiUtf8String::from_str(&c.text),
             detail: sys::OneUiUtf8String::from_str(&c.detail),
             badge: sys::OneUiUtf8String::from_str(&c.badge),
-            badge_foreground: c.badge_foreground.unwrap_or(Color {r:0,g:0,b:0,a:0}).into(),
-            badge_background: c.badge_background.unwrap_or(Color {r:0,g:0,b:0,a:0}).into(),
-            badge_color_flags: u32::from(c.badge_foreground.is_some()) | (u32::from(c.badge_background.is_some()) << 1),
+            badge_foreground: c
+                .badge_foreground
+                .unwrap_or(Color {
+                    r: 0,
+                    g: 0,
+                    b: 0,
+                    a: 0,
+                })
+                .into(),
+            badge_background: c
+                .badge_background
+                .unwrap_or(Color {
+                    r: 0,
+                    g: 0,
+                    b: 0,
+                    a: 0,
+                })
+                .into(),
+            badge_color_flags: u32::from(c.badge_foreground.is_some())
+                | (u32::from(c.badge_background.is_some()) << 1),
             alignment: match c.alignment {
                 LabelAlign::Start => 0,
                 LabelAlign::Center => 1,
@@ -10524,6 +10128,11 @@ impl Table {
             )
         };
     }
+    pub fn set_column_kind(&self, column: i32, kind: TableCellKind) {
+        // SAFETY: the owned widget stays alive for this synchronous UI-thread
+        // call. The C API validates column bounds and never retains a pointer.
+        unsafe { sys::oneui_table_set_column_kind(self.widget.as_raw(), column, kind as i32) };
+    }
     pub fn set_column_dividers_visible(&self, visible: bool) {
         unsafe {
             sys::oneui_table_set_column_dividers_visible(self.widget.as_raw(), i32::from(visible))
@@ -10540,7 +10149,9 @@ impl Table {
     }
     /// Sortable headers call the cell action callback with row = -1.
     pub fn set_header_sort(&self, column: i32, descending: bool) {
-        unsafe { sys::oneui_table_set_header_sort(self.widget.as_raw(), column, i32::from(descending)); }
+        unsafe {
+            sys::oneui_table_set_header_sort(self.widget.as_raw(), column, i32::from(descending));
+        }
     }
     pub fn set_header_height(&self, height: f32) {
         unsafe { sys::oneui_table_set_header_height(self.widget.as_raw(), height) };
@@ -11290,537 +10901,10 @@ impl Drop for TreeView {
     }
 }
 
-impl Window {
-    pub fn new(options: &WindowOptions) -> Result<Self, Error> {
-        let actual = unsafe { sys::oneui_utf8_abi_version() };
-        if actual != sys::UTF8_ABI_VERSION {
-            return Err(Error::AbiVersionMismatch {
-                expected: sys::UTF8_ABI_VERSION,
-                actual,
-            });
-        }
-
-        let native_options = sys::OneUiWindowOptionsUtf8 {
-            title: sys::OneUiUtf8String::from_str(&options.title),
-            width: options.width,
-            height: options.height,
-            visible: i32::from(options.visible),
-            borderless: i32::from(options.borderless),
-            fullscreen: i32::from(options.fullscreen),
-            topmost: i32::from(options.topmost),
-            resizable: i32::from(options.resizable),
-        };
-        let raw = unsafe { sys::oneui_window_create_utf8(&native_options) };
-        let raw = NonNull::new(raw).ok_or(Error::WindowCreationFailed)?;
-        if unsafe { sys::oneui_window_initialize_checked(raw.as_ptr()) } == 0 {
-            unsafe { sys::oneui_window_destroy(raw.as_ptr()) };
-            return Err(Error::WindowCreationFailed);
-        }
-        Ok(Self {
-            state: Arc::new(WindowState {
-                raw: Mutex::new(Some(raw)),
-                ui_thread: std::thread::current().id(),
-            }),
-            raw_key_callback: None,
-            client_size_changed_callback: None,
-            activation_changed_callback: None,
-            file_drop_callback: None,
-            close_requested_callback: None,
-            _ui_thread: PhantomData,
-        })
-    }
-
-    pub fn set_title(&self, title: &str) {
-        let title = sys::OneUiUtf8String::from_str(title);
-        self.state.with_raw(|raw| unsafe {
-            sys::oneui_window_set_title_utf8(raw, title);
-        });
-    }
-
-    pub fn set_borderless(&self, borderless: bool) {
-        self.state.with_raw(|raw| unsafe {
-            sys::oneui_window_set_borderless(raw, i32::from(borderless));
-        });
-    }
-
-    pub fn set_fullscreen(&self, fullscreen: bool) {
-        self.state.with_raw(|raw| unsafe {
-            sys::oneui_window_set_fullscreen(raw, i32::from(fullscreen));
-        });
-    }
-
-    pub fn is_fullscreen(&self) -> bool {
-        self.state
-            .with_raw(|raw| unsafe { sys::oneui_window_is_fullscreen(raw) != 0 })
-            .unwrap_or(false)
-    }
-
-    pub fn set_minimum_client_size(&self, width: f32, height: f32) {
-        self.state.with_raw(|raw| unsafe {
-            sys::oneui_window_set_minimum_client_size(raw, width.max(0.0), height.max(0.0));
-        });
-    }
-
-    pub fn placement(&self) -> Option<WindowPlacement> {
-        self.state.with_raw(|raw| {
-            let mut native = sys::OneUiWindowPlacement::default();
-            let available = unsafe { sys::oneui_window_get_placement(raw, &mut native) } != 0;
-            available.then_some(WindowPlacement {
-                x: native.x,
-                y: native.y,
-                width: native.width,
-                height: native.height,
-                maximized: native.maximized != 0,
-            })
-        })?
-    }
-
-    pub fn set_placement(&self, placement: WindowPlacement) -> bool {
-        let native = sys::OneUiWindowPlacement {
-            x: placement.x,
-            y: placement.y,
-            width: placement.width,
-            height: placement.height,
-            maximized: i32::from(placement.maximized),
-        };
-        self.state
-            .with_raw(|raw| unsafe { sys::oneui_window_set_placement(raw, &native) != 0 })
-            .unwrap_or(false)
-    }
-
-    /// Sets the logical caption height and trailing client-area width reserved
-    /// for custom window buttons on a borderless window.
-    pub fn set_title_bar_drag_metrics(&self, title_bar_height: f32, reserved_button_width: f32) {
-        self.state.with_raw(|raw| unsafe {
-            sys::oneui_window_set_title_bar_drag_metrics(
-                raw,
-                title_bar_height,
-                reserved_button_width,
-            );
-        });
-    }
-
-    /// Keeps the logical title-bar span between the two insets interactive as
-    /// client content instead of treating it as a native drag caption.
-    pub fn set_title_bar_interactive_insets(&self, leading_width: f32, trailing_width: f32) {
-        self.state.with_raw(|raw| unsafe {
-            sys::oneui_window_set_title_bar_interactive_insets(raw, leading_width, trailing_width);
-        });
-    }
-
-    /// Restores caption dragging across the title bar except for the reserved
-    /// trailing window-button strip.
-    pub fn clear_title_bar_interactive_insets(&self) {
-        self.set_title_bar_interactive_insets(-1.0, -1.0);
-    }
-
-    pub fn set_corner_radius(&self, radius: f32) {
-        self.state.with_raw(|raw| unsafe {
-            sys::oneui_window_set_corner_radius(raw, radius);
-        });
-    }
-
-    /// Chooses whether a normal close request hides this window to its tray
-    /// entry instead of destroying it.
-    pub fn set_close_to_tray(&self, close_to_tray: bool) {
-        self.state.with_raw(|raw| unsafe {
-            sys::oneui_window_set_close_to_tray(raw, i32::from(close_to_tray));
-        });
-    }
-
-    /// Shows or removes the window-owned system tray entry.
-    pub fn set_tray_enabled(&self, enabled: bool) -> bool {
-        self.state
-            .with_raw(|raw| unsafe {
-                sys::oneui_window_set_tray_enabled(raw, i32::from(enabled)) != 0
-            })
-            .unwrap_or(false)
-    }
-
-    pub fn tray_icon_visible(&self) -> bool {
-        self.state
-            .with_raw(|raw| unsafe { sys::oneui_window_tray_icon_visible(raw) != 0 })
-            .unwrap_or(false)
-    }
-
-    /// Shows a non-sensitive informational notification through the current
-    /// tray entry.
-    pub fn notify_tray(&self, title: &str, message: &str) -> bool {
-        let title = wide_null_terminated(title);
-        let message = wide_null_terminated(message);
-        self.state
-            .with_raw(|raw| unsafe {
-                sys::oneui_window_notify_tray(raw, title.as_ptr(), message.as_ptr()) != 0
-            })
-            .unwrap_or(false)
-    }
-
-    pub fn set_content(&self, content: &Widget) {
-        self.state.with_raw(|raw| unsafe {
-            sys::oneui_window_set_content(raw, content.as_raw());
-        });
-    }
-
-    pub fn request_focus(&self, widget: &Widget, focus_visible: bool) -> bool {
-        self.state
-            .with_raw(|raw| unsafe {
-                sys::oneui_window_request_focus(raw, widget.as_raw(), i32::from(focus_visible)) != 0
-            })
-            .unwrap_or(false)
-    }
-
-    /// Installs a window-level key handler that runs before focused widgets.
-    /// Returning `true` consumes the event. Text composition remains routed
-    /// through the normal IME/text-input path.
-    #[track_caller]
-    pub fn set_on_raw_key<F>(&mut self, callback: F)
-    where
-        F: FnMut(RawKeyEvent) -> bool + 'static,
-    {
-        let trace = InteractionTrace::at("Window", "raw_key", std::panic::Location::caller());
-        self.clear_raw_key_callback();
-        self.raw_key_callback = Some(Box::new(WindowRawKeyCallback {
-            handler: Box::new(traced_value_result_callback(trace, callback)),
-        }));
-        let user_data = (self
-            .raw_key_callback
-            .as_deref_mut()
-            .expect("window raw key callback was just installed")
-            as *mut WindowRawKeyCallback)
-            .cast();
-        self.state.with_raw(|raw| unsafe {
-            sys::oneui_window_set_on_raw_key(raw, Some(run_window_raw_key_callback), user_data);
-        });
-    }
-
-    pub fn clear_raw_key_callback(&mut self) {
-        self.state.with_raw(|raw| unsafe {
-            sys::oneui_window_set_on_raw_key(raw, None, std::ptr::null_mut());
-        });
-        self.raw_key_callback = None;
-    }
-
-    /// Installs a coalesced logical client-size callback. The callback runs on
-    /// the window UI thread after the backend has committed the latest resize
-    /// message for the frame.
-    pub fn set_on_client_size_changed<F>(&mut self, callback: F)
-    where
-        F: FnMut(f32, f32) + 'static,
-    {
-        self.clear_client_size_changed_callback();
-        self.client_size_changed_callback = Some(Box::new(WindowClientSizeChangedCallback {
-            handler: Box::new(callback),
-        }));
-        let user_data = (self
-            .client_size_changed_callback
-            .as_deref_mut()
-            .expect("window client-size callback was just installed")
-            as *mut WindowClientSizeChangedCallback)
-            .cast();
-        self.state.with_raw(|raw| unsafe {
-            sys::oneui_window_set_on_client_size_changed(
-                raw,
-                Some(run_window_client_size_changed_callback),
-                user_data,
-            );
-        });
-    }
-
-    pub fn clear_client_size_changed_callback(&mut self) {
-        self.state.with_raw(|raw| unsafe {
-            sys::oneui_window_set_on_client_size_changed(raw, None, std::ptr::null_mut());
-        });
-        self.client_size_changed_callback = None;
-    }
-
-    /// Installs a top-level activation callback. The callback runs on the
-    /// owning UI thread when the native window becomes active or inactive,
-    /// including application switches and minimization.
-    pub fn set_on_activation_changed<F>(&mut self, callback: F)
-    where
-        F: FnMut(bool) + 'static,
-    {
-        self.clear_activation_changed_callback();
-        self.activation_changed_callback = Some(Box::new(WindowActivationChangedCallback {
-            handler: Box::new(callback),
-        }));
-        let user_data = (self
-            .activation_changed_callback
-            .as_deref_mut()
-            .expect("window activation callback was just installed")
-            as *mut WindowActivationChangedCallback)
-            .cast();
-        self.state.with_raw(|raw| unsafe {
-            sys::oneui_window_set_on_activation_changed(
-                raw,
-                Some(run_window_activation_changed_callback),
-                user_data,
-            );
-        });
-    }
-
-    pub fn clear_activation_changed_callback(&mut self) {
-        self.state.with_raw(|raw| unsafe {
-            sys::oneui_window_set_on_activation_changed(raw, None, std::ptr::null_mut());
-        });
-        self.activation_changed_callback = None;
-    }
-
-    /// Installs a native filesystem-drop callback. The event owns every path
-    /// and reports its position in logical window coordinates.
-    #[track_caller]
-    pub fn set_on_file_drop<F>(&mut self, callback: F)
-    where
-        F: FnMut(FileDropEvent) + 'static,
-    {
-        self.clear_file_drop_callback();
-        self.file_drop_callback = Some(Box::new(WindowFileDropCallback {
-            handler: Box::new(callback),
-        }));
-        let user_data = (self
-            .file_drop_callback
-            .as_deref_mut()
-            .expect("window file-drop callback was just installed")
-            as *mut WindowFileDropCallback)
-            .cast();
-        self.state.with_raw(|raw| unsafe {
-            sys::oneui_window_set_on_file_drop(raw, Some(run_window_file_drop_callback), user_data);
-        });
-    }
-
-    pub fn clear_file_drop_callback(&mut self) {
-        self.state.with_raw(|raw| unsafe {
-            sys::oneui_window_set_on_file_drop(raw, None, std::ptr::null_mut());
-        });
-        self.file_drop_callback = None;
-    }
-
-    /// Installs the policy callback for native close requests such as Alt+F4,
-    /// the taskbar close command, and operating-system session shutdown.
-    ///
-    /// Installing this callback replaces OneUI's default immediate-close
-    /// behavior. The application must call [`UiDispatcher::close`] when it has
-    /// decided that closing is safe. `force_exit` is true for system shutdown
-    /// and explicit tray Exit requests.
-    pub fn set_on_close_requested<F>(&mut self, callback: F)
-    where
-        F: FnMut(bool) + 'static,
-    {
-        self.clear_close_requested_callback();
-        self.close_requested_callback = Some(Box::new(WindowCloseRequestedCallback {
-            handler: Box::new(callback),
-        }));
-        let user_data = (self
-            .close_requested_callback
-            .as_deref_mut()
-            .expect("window close callback was just installed")
-            as *mut WindowCloseRequestedCallback)
-            .cast();
-        self.state.with_raw(|raw| unsafe {
-            sys::oneui_window_set_on_close_requested(
-                raw,
-                Some(run_window_close_requested_callback),
-                user_data,
-            );
-        });
-    }
-
-    pub fn clear_close_requested_callback(&mut self) {
-        self.state.with_raw(|raw| unsafe {
-            sys::oneui_window_set_on_close_requested(raw, None, std::ptr::null_mut());
-        });
-        self.close_requested_callback = None;
-    }
-
-    /// Installs the application theme before composing the window tree.
-    /// Widgets created afterwards inherit it, and explicit widget styling can
-    /// still use [`Widget::apply_style_sheet`] where needed.
-    pub fn set_style_sheet(&self, style_sheet: &StyleSheet) {
-        self.state.with_raw(|raw| unsafe {
-            sys::oneui_window_set_style_sheet(raw, style_sheet.as_raw());
-        });
-    }
-
-    /// Sets the font family used by controls that request the standard UI
-    /// font. Passing an empty string restores the platform default. This is a
-    /// window-wide setting and applies without rebuilding the widget tree.
-    pub fn set_default_font_family(&self, family: &str) {
-        let family = sys::OneUiUtf8String::from_str(family.trim());
-        self.state.with_raw(|raw| unsafe {
-            sys::oneui_window_set_default_font_family_utf8(raw, family);
-        });
-    }
-
-    pub fn show(&self) {
-        self.state.with_raw(|raw| unsafe {
-            sys::oneui_window_show(raw);
-        });
-    }
-
-    pub fn center_on_active_monitor(&self) -> bool {
-        self.state
-            .with_raw(|raw| unsafe { sys::oneui_window_center_on_active_monitor(raw) != 0 })
-            .unwrap_or(false)
-    }
-
-    pub fn show_with_fade(&self, duration_ms: u32) {
-        self.state.with_raw(|raw| unsafe {
-            sys::oneui_window_show_with_fade(raw, duration_ms);
-        });
-    }
-
-    pub fn client_area_animations_enabled(&self) -> bool {
-        self.state
-            .with_raw(|raw| unsafe { sys::oneui_window_client_area_animations_enabled(raw) != 0 })
-            .unwrap_or(true)
-    }
-
-    pub fn activate(&self) {
-        self.state.with_raw(|raw| unsafe {
-            sys::oneui_window_activate(raw);
-        });
-    }
-
-    pub fn run(&self) -> i32 {
-        self.state
-            .current_raw()
-            .map(|raw| unsafe { sys::oneui_window_run(raw.as_ptr()) })
-            .unwrap_or(-1)
-    }
-
-    pub fn close(&self) {
-        self.state.with_raw(|raw| unsafe {
-            sys::oneui_window_close(raw);
-        });
-    }
-
-    pub fn dispatcher(&self) -> UiDispatcher {
-        UiDispatcher {
-            state: Arc::clone(&self.state),
-        }
-    }
-
-    pub fn layout_snapshot_json(&self) -> Result<String, Error> {
-        self.dispatcher().layout_snapshot_json()
-    }
-
-    /// Captures the composed client frame in opt-in QA builds.
-    pub fn capture_frame_png(&self, path: &Path) -> bool {
-        self.dispatcher().capture_frame_png(path)
-    }
-
-    pub fn file_dialog(&self, options: FileDialogOptions<'_>) -> Result<Option<PathBuf>, Error> {
-        self.dispatcher().file_dialog(options)
-    }
-
-    pub fn file_dialog_multiple(
-        &self,
-        options: FileDialogOptions<'_>,
-    ) -> Result<Vec<PathBuf>, Error> {
-        self.dispatcher().file_dialog_multiple(options)
-    }
-
-    pub fn confirm(&self, title: &str, message: &str) -> Result<bool, Error> {
-        self.dispatcher().confirm(title, message)
-    }
-
-    pub fn prompt(
-        &self,
-        title: &str,
-        message: &str,
-        options: PromptOptions<'_>,
-    ) -> Result<Option<String>, Error> {
-        self.dispatcher().prompt(title, message, options)
-    }
-
-    /// Returns the only thread-safe update path for a terminal mounted in this
-    /// window. The terminal itself remains UI-thread bound.
-    pub fn terminal_view_handle(&self, terminal: &TerminalView) -> TerminalViewHandle {
-        self.dispatcher().terminal_view_handle(terminal)
-    }
-
-    /// Returns a thread-safe coalescing producer for decoded remote frames.
-    pub fn realtime_frame_view_handle(
-        &self,
-        frame_view: &RealtimeFrameView,
-    ) -> RealtimeFrameViewHandle {
-        self.dispatcher().realtime_frame_view_handle(frame_view)
-    }
-
-    /// Returns a thread-safe coalescing producer for remote dimensions and
-    /// server cursor presentation. The input region remains UI-thread bound.
-    pub fn remote_input_region_handle(
-        &self,
-        input_region: &RemoteInputRegion,
-    ) -> RemoteInputRegionHandle {
-        self.dispatcher().remote_input_region_handle(input_region)
-    }
-
-    /// Returns a thread-safe adaptive-layout handle for a mounted widget.
-    pub fn widget_handle(&self, widget: &Widget) -> WidgetHandle {
-        self.dispatcher().widget_handle(widget)
-    }
-
-    /// Returns the only thread-safe update path for a label mounted in this
-    /// window. Bursts are coalesced to the latest text value.
-    pub fn label_handle(&self, label: &Label) -> LabelHandle {
-        self.dispatcher().label_handle(label)
-    }
-
-    /// Returns the thread-safe update path for a mounted single-line text field.
-    pub fn text_field_handle(&self, text_field: &TextField) -> TextFieldHandle {
-        self.dispatcher().text_field_handle(text_field)
-    }
-
-    /// Returns the thread-safe update path for a mounted multiline editor.
-    pub fn text_area_handle(&self, text_area: &TextArea) -> TextAreaHandle {
-        self.dispatcher().text_area_handle(text_area)
-    }
-
-    /// Returns the thread-safe item producer for a mounted select.
-    pub fn select_handle(&self, select: &Select) -> SelectHandle {
-        self.dispatcher().select_handle(select)
-    }
-
-    /// Returns the thread-safe scroll producer for a mounted scroll view.
-    pub fn scroll_view_handle(&self, scroll_view: &ScrollView) -> ScrollViewHandle {
-        self.dispatcher().scroll_view_handle(scroll_view)
-    }
-
-    /// Returns the only thread-safe update path for a mounted progress bar.
-    pub fn progress_bar_handle(&self, progress_bar: &ProgressBar) -> ProgressBarHandle {
-        self.dispatcher().progress_bar_handle(progress_bar)
-    }
-
-    /// Returns the thread-safe update path for a mounted sparkline.
-    pub fn sparkline_handle(&self, sparkline: &Sparkline) -> SparklineHandle {
-        self.dispatcher().sparkline_handle(sparkline)
-    }
-
-    /// Returns the thread-safe update path for a mounted operational chart.
-    pub fn time_series_chart_handle(&self, chart: &TimeSeriesChart) -> TimeSeriesChartHandle {
-        self.dispatcher().time_series_chart_handle(chart)
-    }
-
-    /// Returns the thread-safe update path for rows in a mounted virtual list.
-    pub fn virtual_list_handle(&self, list: &VirtualList) -> VirtualListHandle {
-        self.dispatcher().virtual_list_handle(list)
-    }
-
-    pub fn table_handle(&self, table: &Table) -> TableHandle {
-        self.dispatcher().table_handle(table)
-    }
-
-    pub fn dispatch<F>(&self, task: F) -> Result<(), Error>
-    where
-        F: FnOnce() + Send + 'static,
-    {
-        self.dispatcher().dispatch(task)
-    }
-}
-
 impl Drop for Window {
     fn drop(&mut self) {
+        self.clear_tray_action_callback();
+        self.clear_menu_action_callback();
         self.clear_close_requested_callback();
         self.clear_file_drop_callback();
         self.clear_activation_changed_callback();
@@ -11841,4 +10925,6 @@ pub fn run_native_tests() -> std::process::ExitCode {
 }
 
 mod title_bar_presentation;
+mod tray;
 pub use title_bar_presentation::*;
+pub use tray::{MenuCheck, NativeMenuItem, TrayMenuItem};

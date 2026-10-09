@@ -48,6 +48,26 @@ macro_rules! native_tests {
 }
 
 native_tests! {
+fn keyed_revisions_preserve_identity_and_reject_inactive_producers() {
+    let _guard=window_test_lock().lock().unwrap();
+    let window=Window::new(&WindowOptions::default()).unwrap();let d=window.dispatcher();
+    let table=Rc::new(Table::new().unwrap());table.set_columns(&[TableColumn{header:"Name".into(),width:0.0}]);
+    let rows=|names:&[&str]|names.iter().map(|name|super::TableRichRow{cells:vec![super::TableRichCell{text:(*name).into(),..Default::default()}]}).collect::<Vec<_>>();
+    table.set_rich_rows(&rows(&["a","b"]));table.set_selected_indices(&[1]);
+    let keys=Arc::new(Mutex::new(vec!["a".to_string(),"b".to_string()]));
+    let previous=keys.clone();let committed=keys.clone();
+    d.table_handle(&table).set_rich_rows_keyed(rows(&["b","a"]),move||previous.lock().unwrap().clone(),vec!["b".into(),"a".into()],||true,move||*committed.lock().unwrap()=vec!["b".into(),"a".into()]).unwrap();
+    let previous=keys.clone();
+    d.table_handle(&table).set_rich_rows_keyed(rows(&["a","b"]),move||previous.lock().unwrap().clone(),vec!["a".into(),"b".into()],||true,||{}).unwrap();
+    let stale=Arc::new(AtomicBool::new(false));let committed=stale.clone();
+    d.table_handle(&table).set_rich_rows_keyed(rows(&["stale"]),Vec::new,vec!["stale".into()],||false,move||committed.store(true,Ordering::Release)).unwrap();
+    let list=Rc::new(VirtualList::new().unwrap());let items=|names:&[&str]|names.iter().map(|s|ListItem{title:(*s).into(),detail:String::new()}).collect::<Vec<_>>();
+    list.set_items(&items(&["a","b"]));list.set_selected_index(1);
+    d.virtual_list_handle(&list).set_items_keyed(items(&["b","a"]),||vec![1,2],vec![2,1],||true,||{}).unwrap();
+    let close=d.clone();d.dispatch_local(move||{assert_eq!(table.selected_indices(),vec![1]);assert_eq!(list.selected_index(),0);assert!(!stale.load(Ordering::Acquire));close.request_close();}).unwrap();
+    assert_eq!(window.run(),0);
+}
+
 fn component_app_owns_callbacks_and_rejects_invalid_size() {
     use super::ui::*;
     let retained = Rc::new(());
@@ -888,27 +908,43 @@ fn round_trips_window_placement_through_the_safe_binding() {
 
 fn window_owned_tray_has_a_safe_rust_lifecycle() {
     let _guard = window_test_lock().lock().expect("window test lock");
-    let window = Window::new(&WindowOptions {
+    let mut window = Window::new(&WindowOptions {
         title: "OneUI Rust tray lifecycle".to_owned(),
         ..WindowOptions::default()
     })
     .expect("window should be created");
 
-    #[cfg(target_os = "windows")]
-    {
+    if window.capabilities().tray() {
         assert!(window.set_tray_enabled(true));
         assert!(window.tray_icon_visible());
         window.set_close_to_tray(true);
         let dispatcher = window.dispatcher();
+        let item=super::TrayMenuItem{id:47,text:"Background task / 通用操作".into(),enabled:true,separator:false};
+        assert!(dispatcher.set_tray_menu(&[item.clone()]).unwrap());
+        assert!(dispatcher.set_tray_tooltip("A generic application · 2 tasks").unwrap());
+        let retained=Rc::new(());let captured=retained.clone();
+        window.set_on_tray_action(move |_|{let _=&captured;});
+        assert_eq!(Rc::strong_count(&retained),2);
+        window.clear_tray_action_callback();assert_eq!(Rc::strong_count(&retained),1);
+        assert!(dispatcher.set_tray_menu(&[]).unwrap());
+        let other=dispatcher.clone();
+        assert!(std::thread::spawn(move||matches!(other.set_tray_menu(&[item]),Err(Error::WrongThread))).join().unwrap());
         assert!(dispatcher.tray_icon_visible().unwrap());
         assert!(dispatcher.set_tray_enabled(false).unwrap());
         assert!(!window.tray_icon_visible());
+        drop(window);
+        assert!(matches!(dispatcher.set_tray_tooltip("closed"),Err(Error::WindowClosed)));
     }
 
-    #[cfg(not(target_os = "windows"))]
-    {
+    else {
         assert!(!window.set_tray_enabled(true));
         assert!(!window.tray_icon_visible());
+        // Menu and tooltip storage still exercise native wchar_t conversion
+        // when the desktop session has no StatusNotifier host.
+        let dispatcher = window.dispatcher();
+        let item = super::TrayMenuItem { id: 47, text: "中文 / 😀".into(), enabled: true, separator: false };
+        assert!(dispatcher.set_tray_menu(&[item]).unwrap());
+        assert!(dispatcher.set_tray_tooltip("中文 / 😀").unwrap());
     }
 }
 
@@ -975,6 +1011,15 @@ fn configures_resizable_split_view_through_safe_binding() {
     assert!((split.ratio() - 0.625).abs() < 0.001);
     split.clear_on_ratio_changed();
     split.clear_on_ratio_committed();
+}
+
+fn split_callback_survives_owner_destruction() {
+    let _guard = window_test_lock().lock().expect("window test lock");
+    super::layout::split_view::tests::callback_survives_owner_destruction();
+}
+
+fn split_callback_reentry_and_panic_are_contained() {
+    super::layout::split_view::tests::callback_reentry_and_panic_are_contained();
 }
 
 fn applies_css_theme_to_semantic_widget_nodes() {

@@ -1,6 +1,17 @@
 use std::ffi::c_int;
 
-use crate::{OneUiColor, OneUiUtf8String};
+use crate::{OneUiColor, OneUiUtf8String, WChar};
+
+pub type OneUiCommandResult = c_int;
+pub type OneUiStackDirection = c_int;
+pub type OneUiStackAlign = c_int;
+pub type OneUiSplitOrientation = c_int;
+pub type OneUiVideoScaleMode = c_int;
+pub type OneUiPixelFormat = c_int;
+pub type OneUiRemoteCursorMode = c_int;
+pub type OneUiButtonVariant = c_int;
+pub type OneUiTerminalCursorStyle = c_int;
+pub type OneUiTerminalAuxiliaryButtonAction = c_int;
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -25,4 +36,23 @@ pub struct OneUiVirtualListRichMetrics {
     pub title_badge_gap: f32,
     pub trailing_width: f32,
     pub trailing_gap: f32,
+}
+#[repr(C)]
+pub struct OneUiTrayMenuItem {
+    pub id: i32,
+    pub text: *const WChar,
+    pub enabled: i32,
+    pub separator: i32,
+}
+
+#[repr(C)]
+pub struct OneUiNativeMenuItemUtf8 {
+    pub id: c_int,
+    pub text: *const std::ffi::c_char,
+    pub flags: std::ffi::c_uint,
+    pub radio_group: std::ffi::c_uint,
+    pub shortcut_key: *const std::ffi::c_char,
+    pub shortcut_modifiers: std::ffi::c_uint,
+    pub children: *const OneUiNativeMenuItemUtf8,
+    pub child_count: usize,
 }

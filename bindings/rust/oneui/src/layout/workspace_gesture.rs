@@ -1,6 +1,8 @@
-//! Deterministic drop hit testing and a non-destructive drag checkpoint.
+//! Compatibility facade over the SDK's shared deterministic hit testing.
 use super::workspace::*;
-use crate::Rect;
+use crate::{sys, Rect};
+use std::collections::{BTreeMap, BTreeSet};
+
 #[derive(Clone, Copy, Debug)]
 pub struct DockPoint {
     pub x: f32,
@@ -17,61 +19,6 @@ pub struct PaneDrop<K> {
     pub placement: PanePlacement,
     pub preview: Rect,
 }
-/// Leaf rearrangement: the inner 44% swaps; the nearest normalized edge
-/// splits the target. Geometry is read-only until the application commits.
-pub fn pane_drop<K: Clone + Ord>(
-    source: &K,
-    point: DockPoint,
-    panes: &BTreeMap<K, Rect>,
-) -> Option<PaneDrop<K>> {
-    if !point.x.is_finite() || !point.y.is_finite() {
-        return None;
-    }
-    for (target, r) in panes {
-        if target == source || r.width <= 0.0 || r.height <= 0.0 || !contains(*r, point) {
-            continue;
-        }
-        let x = (point.x - r.x) / r.width;
-        let y = (point.y - r.y) / r.height;
-        if x > 0.28 && x < 0.72 && y > 0.28 && y < 0.72 {
-            return Some(PaneDrop {
-                target: target.clone(),
-                placement: PanePlacement::Swap,
-                preview: *r,
-            });
-        }
-        let edge = [
-            (DockEdge::Left, x),
-            (DockEdge::Right, 1.0 - x),
-            (DockEdge::Top, y),
-            (DockEdge::Bottom, 1.0 - y),
-        ]
-        .into_iter()
-        .min_by(|a, b| a.1.total_cmp(&b.1))?
-        .0;
-        let mut preview = *r;
-        match edge {
-            DockEdge::Left => preview.width *= 0.5,
-            DockEdge::Right => {
-                preview.width *= 0.5;
-                preview.x += preview.width;
-            }
-            DockEdge::Top => preview.height *= 0.5,
-            DockEdge::Bottom => {
-                preview.height *= 0.5;
-                preview.y += preview.height;
-            }
-        }
-        return Some(PaneDrop {
-            target: target.clone(),
-            placement: PanePlacement::Edge(edge),
-            preview,
-        });
-    }
-    None
-}
-use std::collections::{BTreeMap, BTreeSet};
-
 #[derive(Clone, Debug)]
 pub struct DockDrop<K> {
     pub target: K,
@@ -84,11 +31,88 @@ pub struct DockGuide<K> {
     pub bounds: Rect,
     pub drop: Option<DockDrop<K>>,
 }
-fn contains(r: Rect, p: DockPoint) -> bool {
-    p.x >= r.x && p.y >= r.y && p.x <= r.x + r.width && p.y <= r.y + r.height
+fn rectangle(r: sys::OneUiRect) -> Rect {
+    Rect {
+        x: r.x,
+        y: r.y,
+        width: r.width,
+        height: r.height,
+    }
 }
-/// Floating targets are excluded. Strict mode activates only a 42px target
-/// edge or one of the four central direction buttons.
+fn edge(value: i32) -> Option<DockEdge> {
+    match value {
+        1 => Some(DockEdge::Left),
+        2 => Some(DockEdge::Right),
+        3 => Some(DockEdge::Top),
+        4 => Some(DockEdge::Bottom),
+        _ => None,
+    }
+}
+fn hit<K: Clone + Ord>(
+    source: &K,
+    point: DockPoint,
+    panes: &BTreeMap<K, Rect>,
+    floating: Option<&BTreeSet<K>>,
+    mode: i32,
+) -> Option<(K, sys::OneUiDockHit)> {
+    let keys: Vec<_> = panes.keys().collect();
+    let source_id = keys
+        .iter()
+        .position(|key| *key == source)
+        .map(|i| i as u64 + 1)
+        .unwrap_or(0);
+    let targets: Vec<_> = panes
+        .iter()
+        .enumerate()
+        .map(|(i, (key, r))| sys::OneUiDockHitTarget {
+            pane: i as u64 + 1,
+            bounds: sys::OneUiRect {
+                x: r.x,
+                y: r.y,
+                width: r.width,
+                height: r.height,
+            },
+            floating: i32::from(floating.map(|f| f.contains(key)).unwrap_or(false)),
+        })
+        .collect();
+    let mut result = sys::OneUiDockHit::default();
+    let status = unsafe {
+        sys::oneui_dock_hit_test(
+            source_id,
+            point.x,
+            point.y,
+            targets.as_ptr(),
+            targets.len(),
+            mode,
+            &mut result,
+        )
+    };
+    if status != 1 || result.target == 0 {
+        return None;
+    }
+    Some(((*keys.get(result.target as usize - 1)?).clone(), result))
+}
+/// Leaf rearrangement: the inner 44% swaps; the nearest normalized edge splits.
+/// Invalid geometry is ignored; no model or mounted widget is modified.
+pub fn pane_drop<K: Clone + Ord>(
+    source: &K,
+    point: DockPoint,
+    panes: &BTreeMap<K, Rect>,
+) -> Option<PaneDrop<K>> {
+    let (target, result) = hit(source, point, panes, None, 0)?;
+    let placement = if result.placement == 5 {
+        PanePlacement::Swap
+    } else {
+        PanePlacement::Edge(edge(result.placement)?)
+    };
+    Some(PaneDrop {
+        target,
+        placement,
+        preview: rectangle(result.preview),
+    })
+}
+/// Floating targets are excluded. Strict guides require a 42px target edge or
+/// one of the four central direction buttons. The center may have no drop.
 pub fn dock_guide<K: Clone + Ord>(
     source: &K,
     point: DockPoint,
@@ -96,93 +120,23 @@ pub fn dock_guide<K: Clone + Ord>(
     floating: &BTreeSet<K>,
     strict: bool,
 ) -> Option<DockGuide<K>> {
-    for (target, r) in panes {
-        if target == source || floating.contains(target) || !contains(*r, point) {
-            continue;
-        }
-        let cx = r.x + r.width * 0.5;
-        let cy = r.y + r.height * 0.5;
-        let zones = [
-            (
-                DockEdge::Left,
-                Rect {
-                    x: cx - 68.0,
-                    y: cy - 18.0,
-                    width: 42.0,
-                    height: 36.0,
-                },
-            ),
-            (
-                DockEdge::Right,
-                Rect {
-                    x: cx + 26.0,
-                    y: cy - 18.0,
-                    width: 42.0,
-                    height: 36.0,
-                },
-            ),
-            (
-                DockEdge::Top,
-                Rect {
-                    x: cx - 21.0,
-                    y: cy - 58.0,
-                    width: 42.0,
-                    height: 36.0,
-                },
-            ),
-            (
-                DockEdge::Bottom,
-                Rect {
-                    x: cx - 21.0,
-                    y: cy + 22.0,
-                    width: 42.0,
-                    height: 36.0,
-                },
-            ),
-        ];
-        let edge = zones
-            .iter()
-            .find(|(_, z)| contains(*z, point))
-            .map(|(e, _)| *e)
-            .or_else(|| {
-                let distances = [
-                    (DockEdge::Left, point.x - r.x),
-                    (DockEdge::Right, r.x + r.width - point.x),
-                    (DockEdge::Top, point.y - r.y),
-                    (DockEdge::Bottom, r.y + r.height - point.y),
-                ];
-                distances
-                    .into_iter()
-                    .min_by(|a, b| a.1.total_cmp(&b.1))
-                    .and_then(|(e, d)| (!strict || d <= 42.0).then_some(e))
-            });
-        let drop = edge.map(|edge| {
-            let mut preview = *r;
-            match edge {
-                DockEdge::Left => preview.width *= 0.5,
-                DockEdge::Right => {
-                    preview.x += r.width * 0.5;
-                    preview.width *= 0.5;
-                }
-                DockEdge::Top => preview.height *= 0.5,
-                DockEdge::Bottom => {
-                    preview.y += r.height * 0.5;
-                    preview.height *= 0.5;
-                }
-            }
-            DockDrop {
-                target: target.clone(),
-                edge,
-                preview,
-            }
-        });
-        return Some(DockGuide {
-            target: target.clone(),
-            bounds: *r,
-            drop,
-        });
-    }
-    None
+    let (target, result) = hit(
+        source,
+        point,
+        panes,
+        Some(floating),
+        if strict { 1 } else { 2 },
+    )?;
+    let drop = edge(result.placement).map(|edge| DockDrop {
+        target: target.clone(),
+        edge,
+        preview: rectangle(result.preview),
+    });
+    Some(DockGuide {
+        target,
+        bounds: rectangle(result.bounds),
+        drop,
+    })
 }
 
 pub struct DockDrag<K> {

@@ -153,10 +153,19 @@ impl<K: Clone + Ord> DockSurface<K> {
         if compact.is_some_and(|id| !model.visible(id)) {
             return Err(Error::InvalidLayout);
         }
-        let floating_visible = state.maximized.is_none() && (compact.is_none() || self.floating_in_compact);
+        let floating_visible =
+            state.maximized.is_none() && (compact.is_none() || self.floating_in_compact);
         let mut single = compact.or(state.maximized.as_ref()).cloned();
-        if compact.is_some() && floating_visible && single.as_ref().is_some_and(|id| state.floating.contains_key(id)) {
-            single = state.root.as_ref().and_then(|root| root.ids().into_iter().next());
+        if compact.is_some()
+            && floating_visible
+            && single
+                .as_ref()
+                .is_some_and(|id| state.floating.contains_key(id))
+        {
+            single = state
+                .root
+                .as_ref()
+                .and_then(|root| root.ids().into_iter().next());
         }
         let mut visible = if let Some(id) = single.as_ref() {
             vec![id.clone()]
@@ -165,7 +174,9 @@ impl<K: Clone + Ord> DockSurface<K> {
         } else {
             state.root.as_ref().map(|n| n.ids()).unwrap_or_default()
         };
-        if floating_visible { visible.extend(state.floating.keys().cloned()); }
+        if floating_visible {
+            visible.extend(state.floating.keys().cloned());
+        }
         if visible.iter().any(|id| !self.panes.contains_key(id)) {
             return Err(Error::WidgetDestroyed);
         }

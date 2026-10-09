@@ -1,4 +1,4 @@
-use crate::{OneUiUtf8String, OneUiWidget, OneUiWindow};
+use crate::{OneUiCommandResult, OneUiUtf8String, OneUiWidget, OneUiWindow};
 use std::ffi::{c_int, c_uint, c_void};
 
 #[repr(C)]
@@ -46,18 +46,22 @@ extern "C" {
         destroy: Option<unsafe extern "C" fn(*mut c_void)>,
     ) -> *mut OneUiCommandRegistration;
     pub fn oneui_command_registration_destroy(registration: *mut OneUiCommandRegistration);
-    pub fn oneui_widget_query_command_utf8(widget: *mut OneUiWidget, id: OneUiUtf8String)
-        -> c_uint;
+    pub fn oneui_widget_query_command_utf8(
+        widget: *mut OneUiWidget,
+        id: OneUiUtf8String,
+    ) -> OneUiCommandResult;
     pub fn oneui_widget_execute_command_utf8(
         widget: *mut OneUiWidget,
         id: OneUiUtf8String,
-    ) -> c_uint;
-    pub fn oneui_window_query_command_utf8(window: *mut OneUiWindow, id: OneUiUtf8String)
-        -> c_uint;
+    ) -> OneUiCommandResult;
+    pub fn oneui_window_query_command_utf8(
+        window: *mut OneUiWindow,
+        id: OneUiUtf8String,
+    ) -> OneUiCommandResult;
     pub fn oneui_window_execute_command_utf8(
         window: *mut OneUiWindow,
         id: OneUiUtf8String,
-    ) -> c_uint;
+    ) -> OneUiCommandResult;
     pub fn oneui_widget_set_text_options_utf8(
         widget: *mut OneUiWidget,
         options: *const OneUiTextOptionsUtf8,

@@ -1,0 +1,19 @@
+[package]
+name = "oneui-abi-tests"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.88"
+publish = false
+
+[[bin]]
+name = "oneui-abi-tests"
+path = "src/main.rs"
+test = false
+
+[dependencies]
+oneui-sys = { path = "../oneui-sys" }
+
+[build-dependencies]
+ctest = "=0.5.1"
+cc = "1"
+syn = { version = "2", features = ["full"] }

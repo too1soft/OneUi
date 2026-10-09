@@ -3,9 +3,14 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+mod distribution;
+
 fn main() {
     println!("cargo:rerun-if-env-changed=ONEUI_SDK_DIR");
     if let Some(sdk) = env::var_os("ONEUI_SDK_DIR").map(PathBuf::from) {
+        if distribution::link(&sdk) {
+            return;
+        }
         if cfg!(feature = "static-link") {
             link_sdk(&sdk);
             return;
@@ -258,6 +263,15 @@ fn link_static(lib_dir: &Path) {
                 "wayland-cursor",
                 "xkbcommon",
                 "fontconfig",
+                "gtk-3",
+                "gdk-3",
+                "gobject-2.0",
+                "glib-2.0",
+                "gio-2.0",
+                "ayatana-appindicator3",
+                "EGL",
+                "GLESv2",
+                "wayland-egl",
                 "dl",
                 "pthread",
                 "m",
@@ -267,7 +281,17 @@ fn link_static(lib_dir: &Path) {
         }
         Ok("macos") => {
             println!("cargo:rustc-link-lib=c++");
-            for name in ["Cocoa", "CoreText", "CoreGraphics", "CoreFoundation"] {
+            for name in [
+                "Cocoa",
+                "CoreText",
+                "CoreGraphics",
+                "CoreFoundation",
+                "ApplicationServices",
+                "UniformTypeIdentifiers",
+                "UserNotifications",
+                "Metal",
+                "QuartzCore",
+            ] {
                 println!("cargo:rustc-link-lib=framework={name}");
             }
         }
