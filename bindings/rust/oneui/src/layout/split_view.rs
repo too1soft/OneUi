@@ -74,6 +74,12 @@ impl SplitView {
         unsafe { sys::oneui_split_view_set_gap(self.widget.as_raw(), gap) };
     }
 
+    /// Pointer target across the divider (never below the gap or 8px), so
+    /// a thin visual gap stays easy to grab.
+    pub fn set_divider_hit_extent(&self, extent: f32) {
+        unsafe { sys::oneui_split_view_set_divider_hit_extent(self.widget.as_raw(), extent) };
+    }
+
     /// Colors of the divider at rest and while hovered, dragged or keyboard-focused.
     pub fn set_divider_colors(&self, normal: Color, active: Color) {
         unsafe {

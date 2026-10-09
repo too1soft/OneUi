@@ -866,6 +866,7 @@ ONEUI_API void oneui_split_view_set_orientation(
 ONEUI_API void oneui_split_view_set_ratio(OneUiWidget* split_view, float ratio);
 ONEUI_API float oneui_split_view_ratio(OneUiWidget* split_view);
 ONEUI_API void oneui_split_view_set_gap(OneUiWidget* split_view, float gap);
+ONEUI_API void oneui_split_view_set_divider_hit_extent(OneUiWidget* split_view, float extent);
 ONEUI_API void oneui_split_view_set_divider_colors(OneUiWidget* split_view, OneUiColor normal, OneUiColor active);
 ONEUI_API void oneui_split_view_set_padding(OneUiWidget* split_view, OneUiInsets insets);
 ONEUI_API void oneui_split_view_set_resizable(OneUiWidget* split_view, int resizable);

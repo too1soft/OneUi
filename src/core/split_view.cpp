@@ -85,6 +85,12 @@ void SplitView::setGap(float gap) {
     invalidate();
 }
 
+void SplitView::setDividerHitExtent(float extent) {
+    if (!std::isfinite(extent)) return;
+    dividerHitExtent_ = std::max(0.0f, extent);
+    invalidate();
+}
+
 void SplitView::setDividerColors(Color normal, Color active) {
     dividerColor_ = normal;
     dividerActiveColor_ = active;
@@ -341,7 +347,7 @@ Rect SplitView::dividerHitRect() const {
     const Rect content = contentRect();
     const float available = availableExtent();
     const float firstExtent = available * constrainedRatio(splitRatio_);
-    const float hitExtent = std::max(gap_, kMinimumDividerHitExtent);
+    const float hitExtent = std::max({gap_, kMinimumDividerHitExtent, dividerHitExtent_});
     if (orientation_ == SplitOrientation::Horizontal) {
         const float center = content.x + firstExtent + gap_ * 0.5f;
         return Rect{center - hitExtent * 0.5f, content.y, hitExtent, content.height};

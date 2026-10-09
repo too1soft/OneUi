@@ -26,6 +26,8 @@ public:
     void setSplitRatio(float ratio);
     float splitRatio() const;
     void setGap(float gap);
+    // Pointer target across the divider; at least the gap and 8px.
+    void setDividerHitExtent(float extent);
     void setSecondCollapsed(bool collapsed);
     bool secondCollapsed() const { return secondCollapsed_; }
     void setCollapsedExtent(float extent);
@@ -67,6 +69,7 @@ private:
     SplitOrientation orientation_ = SplitOrientation::Horizontal;
     float splitRatio_ = 0.5f;
     float gap_ = 0.0f;
+    float dividerHitExtent_ = 0.0f;
     bool secondCollapsed_ = false;
     float collapsedExtent_ = 40.0f;
     Insets padding_;

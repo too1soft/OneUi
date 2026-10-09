@@ -778,6 +778,7 @@ extern "C" {
     pub fn oneui_split_view_set_ratio(split_view: *mut OneUiWidget, ratio: f32);
     pub fn oneui_split_view_ratio(split_view: *mut OneUiWidget) -> f32;
     pub fn oneui_split_view_set_gap(split_view: *mut OneUiWidget, gap: f32);
+    pub fn oneui_split_view_set_divider_hit_extent(split_view: *mut OneUiWidget, extent: f32);
     pub fn oneui_split_view_set_divider_colors(
         split_view: *mut OneUiWidget,
         normal: OneUiColor,

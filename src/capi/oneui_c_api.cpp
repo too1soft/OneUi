@@ -2285,6 +2285,10 @@ void oneui_split_view_set_gap(OneUiWidget* split_view, float gap) {
     }
 }
 
+void oneui_split_view_set_divider_hit_extent(OneUiWidget* split_view, float extent) {
+    if (auto* nativeSplit = asWidget<oneui::SplitView>(split_view)) nativeSplit->setDividerHitExtent(extent);
+}
+
 void oneui_split_view_set_divider_colors(OneUiWidget* split_view, OneUiColor normal, OneUiColor active) {
     auto* nativeSplit = asWidget<oneui::SplitView>(split_view);
     if (nativeSplit) nativeSplit->setDividerColors(toNativeColor(normal), toNativeColor(active));
