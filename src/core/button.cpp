@@ -6,6 +6,7 @@
 #include "oneui/style_sheet.h"
 
 #include <algorithm>
+#include <cmath>
 #include "internal/ui_clock.h"
 #include "internal/scroll_trace.h"
 #include <utility>
@@ -369,7 +370,13 @@ void Button::paint(Canvas& canvas) {
     }
 
     // 图标 + 文字作为整体水平居中：图标为字号等大的正方形，随前景色着色。
-    const float iconSide = style.iconSize.value_or(style.fontSize + 2.0f);
+    // An icon-only button fits its glyph inside the padded content box: the
+    // content clip would otherwise shave the strokes on the overflowing side.
+    const bool iconOnly = label.empty() && !trailingIcon_;
+    const float requestedIconSide = style.iconSize.value_or(style.fontSize + 2.0f);
+    const float iconSide = iconOnly
+        ? std::max(0.0f, std::min({requestedIconSide, rect.width, rect.height}))
+        : requestedIconSide;
     const float gap = label.empty() ? 0.0f : style.iconGap.value_or(6.0f);
     const float trailingGap = trailingIcon_ ? 8.0f : 0.0f;
     const float trailingWidth = trailingIcon_ ? iconSide : 0.0f;
@@ -389,7 +396,14 @@ void Button::paint(Canvas& canvas) {
         : contentAlign_ == TextAlign::Right
             ? rect.x + std::max(0.0f, rect.width - total - inset)
             : rect.x + std::max(0.0f, (rect.width - total) / 2.0f);
-    const Rect iconRect{startX, rect.y + (rect.height - iconSide) / 2.0f, iconSide, iconSide};
+    // Whole-pixel origin keeps 1px outline strokes from smearing across two
+    // pixel columns, which reads as a faded or missing edge.
+    const Rect iconRect{
+        iconOnly ? std::round(startX) : startX,
+        iconOnly ? std::round(rect.y + (rect.height - iconSide) / 2.0f)
+                 : rect.y + (rect.height - iconSide) / 2.0f,
+        iconSide,
+        iconSide};
     paintIcon(canvas, *icon_, iconRect, style.foreground, Color{0, 0, 0, 0}, 1.6f);
     if (!fittedLabel.empty()) {
         const Rect textRect{
