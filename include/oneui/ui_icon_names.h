@@ -16,7 +16,7 @@ inline std::optional<IconSymbol> namedIcon(std::string_view name) {
         {"layout",IconSymbol::OutlineWorkbenchLayout},{"cpu",IconSymbol::OutlineWorkbenchCpu},
         {"refresh",IconSymbol::OutlineRefresh},{"sun",IconSymbol::OutlineSun},
         {"copy",IconSymbol::OutlineCopy},{"pause",IconSymbol::Pause},
-        {"up",IconSymbol::OutlineWorkbenchUp},{"link",IconSymbol::OutlineWorkbenchLink},
+        {"up",IconSymbol::OutlineWorkbenchUp},{"link",IconSymbol::OutlineWorkbenchLink},{"broadcast",IconSymbol::OutlineWorkbenchBroadcast},
         {"download",IconSymbol::OutlineWorkbenchDownload},{"settings",IconSymbol::OutlineWorkbenchSettings}
     };
     for(const auto& entry:entries)if(entry.name==name)return entry.symbol;

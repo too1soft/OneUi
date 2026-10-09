@@ -61,7 +61,7 @@ void oneui_tabs_set_item_icons(OneUiWidget *tabs, const int *symbols, std::size_
         values.reserve(count);
         for (std::size_t index = 0; index < count; ++index) {
             const int symbol = symbols[index];
-            if (symbol < 0 || symbol > static_cast<int>(oneui::IconSymbol::OutlineWorkbenchClose)) {
+            if (symbol < 0 || symbol > static_cast<int>(oneui::IconSymbol::OutlineWorkbenchBroadcast)) {
                 values.push_back(std::nullopt);
             } else {
                 values.push_back(static_cast<oneui::IconSymbol>(symbol));

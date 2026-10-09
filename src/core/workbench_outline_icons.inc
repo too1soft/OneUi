@@ -342,3 +342,21 @@
         path.lineTo(p(6.00000000f,18.00000000f));
         canvas.strokePath(path,color,stroke,true); return true;
     }
+    case IconSymbol::OutlineWorkbenchBroadcast: {
+        // Hand-written: a source with two signal arcs on each side.
+        CanvasPath path;
+        path.moveTo(p(13.50000000f,12.00000000f));
+        path.cubicTo(p(13.50000000f,12.82842712f),p(12.82842712f,13.50000000f),p(12.00000000f,13.50000000f));
+        path.cubicTo(p(11.17157288f,13.50000000f),p(10.50000000f,12.82842712f),p(10.50000000f,12.00000000f));
+        path.cubicTo(p(10.50000000f,11.17157288f),p(11.17157288f,10.50000000f),p(12.00000000f,10.50000000f));
+        path.cubicTo(p(12.82842712f,10.50000000f),p(13.50000000f,11.17157288f),p(13.50000000f,12.00000000f));
+        path.moveTo(p(15.18198051f,8.81801949f));
+        path.cubicTo(p(16.93933982f,10.57537879f),p(16.93933982f,13.42462121f),p(15.18198051f,15.18198051f));
+        path.moveTo(p(8.81801949f,8.81801949f));
+        path.cubicTo(p(7.06066018f,10.57537879f),p(7.06066018f,13.42462121f),p(8.81801949f,15.18198051f));
+        path.moveTo(p(17.65685424f,6.34314576f));
+        path.cubicTo(p(20.78104856f,9.46734008f),p(20.78104856f,14.53265992f),p(17.65685424f,17.65685424f));
+        path.moveTo(p(6.34314576f,6.34314576f));
+        path.cubicTo(p(3.21895144f,9.46734008f),p(3.21895144f,14.53265992f),p(6.34314576f,17.65685424f));
+        canvas.strokePath(path,color,stroke,true); return true;
+    }

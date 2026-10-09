@@ -124,7 +124,8 @@ enum class IconSymbol {
     OutlineWorkbenchSearch,
     OutlineWorkbenchPlus,
     OutlineWorkbenchDown,
-    OutlineWorkbenchClose
+    OutlineWorkbenchClose,
+    OutlineWorkbenchBroadcast
 };
 
 enum class IconPrimitiveKind {

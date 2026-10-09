@@ -124,7 +124,7 @@ using oneui::capi::utf8OrEmpty;
 using oneui::capi::wideOrEmpty;
 
 int clampIconSymbol(int symbol) {
-    return std::clamp(symbol, 0, static_cast<int>(oneui::IconSymbol::OutlineWorkbenchClose));
+    return std::clamp(symbol, 0, static_cast<int>(oneui::IconSymbol::OutlineWorkbenchBroadcast));
 }
 
 std::weak_ptr<oneui::StyleSheet> gDefaultStyleSheet;
@@ -2961,7 +2961,7 @@ float oneui_label_natural_text_width(OneUiWidget* label) {
 }
 
 void oneui_button_set_trailing_icon(OneUiWidget* button, int symbol) {
-    if(auto* value=asWidget<oneui::Button>(button)) value->setTrailingIcon(static_cast<oneui::IconSymbol>(std::clamp(symbol,0,static_cast<int>(oneui::IconSymbol::OutlineWorkbenchClose))));
+    if(auto* value=asWidget<oneui::Button>(button)) value->setTrailingIcon(static_cast<oneui::IconSymbol>(std::clamp(symbol,0,static_cast<int>(oneui::IconSymbol::OutlineWorkbenchBroadcast))));
 }
 
 void oneui_text_field_set_focused_placeholder(OneUiWidget* field, int visible) {
@@ -3064,7 +3064,7 @@ static std::vector<oneui::TableCell> copyRichTableRow(const OneUiTableRichRowUtf
         const auto& source = row.cells[i]; oneui::TableCell cell;
         cell.text = utf8OrEmpty(source.text); cell.detail = utf8OrEmpty(source.detail); cell.badge = utf8OrEmpty(source.badge);
         cell.alignment = source.alignment == 2 ? oneui::TextAlign::Right : source.alignment == 1 ? oneui::TextAlign::Center : oneui::TextAlign::Left;
-        if (source.icon >= 0 && source.icon <= static_cast<int>(oneui::IconSymbol::OutlineWorkbenchClose)) cell.leadingIcon = static_cast<oneui::IconSymbol>(source.icon);
+        if (source.icon >= 0 && source.icon <= static_cast<int>(oneui::IconSymbol::OutlineWorkbenchBroadcast)) cell.leadingIcon = static_cast<oneui::IconSymbol>(source.icon);
         if (source.foreground.a) cell.foreground = toNativeColor(source.foreground);
         if (source.badge_color_flags & 1u) cell.badgeForeground = toNativeColor(source.badge_foreground);
         if (source.badge_color_flags & 2u) cell.badgeBackground = toNativeColor(source.badge_background);
@@ -5941,7 +5941,7 @@ void oneui_status_strip_set_primary_action_trailing_icon(OneUiWidget* status_str
             nativeStatusStrip->setPrimaryActionTrailingIcon(std::nullopt);
         } else {
             nativeStatusStrip->setPrimaryActionTrailingIcon(static_cast<oneui::IconSymbol>(
-                std::clamp(symbol, 0, static_cast<int>(oneui::IconSymbol::OutlineWorkbenchClose))));
+                std::clamp(symbol, 0, static_cast<int>(oneui::IconSymbol::OutlineWorkbenchBroadcast))));
         }
     }
 }
