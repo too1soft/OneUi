@@ -7,28 +7,35 @@
 namespace oneui {
 
 std::shared_ptr<Widget> OverlayHost::activeFocusChild() const {
-    if (!interactive()) return {};
-    for (const auto& entry : overlays_)
+    if (!interactive())
+        return {};
+    for (const auto &entry : overlays_)
         if (entry.child.get() == focusedOverlay_ && isInteractive(entry.child.get()) &&
-            entry.child->focused() && isFocusAllowed(entry.child.get())) return entry.child;
-    if (hasActiveFocusTrap()) return {};
-    if (isInteractive(content_.get()) && content_->focused()) return content_;
+            entry.child->focused() && isFocusAllowed(entry.child.get()))
+            return entry.child;
+    if (hasActiveFocusTrap())
+        return {};
+    if (isInteractive(content_.get()) && content_->focused())
+        return content_;
     return View::activeFocusChild();
 }
 
 void OverlayHost::setTextEnvironment(std::wstring family, float scale) {
     View::setTextEnvironment(family, scale);
+    family = textFontFamily();
     auto content = content_;
     const auto overlays = overlays_;
-    if (content) content->setTextEnvironment(family, scale);
-    for (const auto& entry : overlays) entry.child->setTextEnvironment(family, scale);
+    if (content)
+        content->setTextEnvironment(family, scale);
+    for (const auto &entry : overlays)
+        entry.child->setTextEnvironment(family, scale);
 }
 
 OverlayHost::~OverlayHost() {
     if (content_) {
         content_->detachFromOwner(this);
     }
-    for (const auto& entry : overlays_) {
+    for (const auto &entry : overlays_) {
         entry.child->detachFromOwner(this);
     }
 }
@@ -46,9 +53,7 @@ void OverlayHost::setContent(std::shared_ptr<Widget> child) {
     invalidate();
 }
 
-std::shared_ptr<Widget> OverlayHost::content() const {
-    return content_;
-}
+std::shared_ptr<Widget> OverlayHost::content() const { return content_; }
 
 void OverlayHost::addOverlay(std::shared_ptr<Widget> child, int layer) {
     addOverlay(std::move(child), OverlayOptions::modeless(layer));
@@ -69,13 +74,9 @@ void OverlayHost::addOverlay(std::shared_ptr<Widget> child, OverlayOptions optio
     invalidate();
 }
 
-void OverlayHost::addAnchoredOverlay(
-    std::shared_ptr<Widget> child,
-    OverlayOptions options,
-    Size size,
-    Insets margin,
-    int horizontalAlignment,
-    int verticalAlignment) {
+void OverlayHost::addAnchoredOverlay(std::shared_ptr<Widget> child, OverlayOptions options,
+                                     Size size, Insets margin, int horizontalAlignment,
+                                     int verticalAlignment) {
     if (!child) {
         return;
     }
@@ -95,13 +96,9 @@ void OverlayHost::addAnchoredOverlay(
     invalidate();
 }
 
-bool OverlayHost::updateAnchoredOverlay(
-    const Widget* child,
-    Size size,
-    Insets margin,
-    int horizontalAlignment,
-    int verticalAlignment) {
-    auto it = std::find_if(overlays_.begin(), overlays_.end(), [child](const OverlayEntry& entry) {
+bool OverlayHost::updateAnchoredOverlay(const Widget *child, Size size, Insets margin,
+                                        int horizontalAlignment, int verticalAlignment) {
+    auto it = std::find_if(overlays_.begin(), overlays_.end(), [child](const OverlayEntry &entry) {
         return entry.child.get() == child;
     });
     if (it == overlays_.end()) {
@@ -117,8 +114,8 @@ bool OverlayHost::updateAnchoredOverlay(
     return true;
 }
 
-bool OverlayHost::removeOverlay(const Widget* child) {
-    auto it = std::find_if(overlays_.begin(), overlays_.end(), [child](const OverlayEntry& entry) {
+bool OverlayHost::removeOverlay(const Widget *child) {
+    auto it = std::find_if(overlays_.begin(), overlays_.end(), [child](const OverlayEntry &entry) {
         return entry.child.get() == child;
     });
     if (it == overlays_.end()) {
@@ -141,7 +138,7 @@ bool OverlayHost::removeOverlay(const Widget* child) {
 
 void OverlayHost::clearOverlays() {
     focusOverlay(nullptr);
-    for (const auto& entry : overlays_) {
+    for (const auto &entry : overlays_) {
         entry.child->detachFromOwner(this);
     }
     overlays_.clear();
@@ -150,16 +147,14 @@ void OverlayHost::clearOverlays() {
     invalidate();
 }
 
-const std::vector<OverlayEntry>& OverlayHost::overlays() const {
-    return overlays_;
-}
+const std::vector<OverlayEntry> &OverlayHost::overlays() const { return overlays_; }
 
 void OverlayHost::setInvalidator(std::function<void()> invalidator) {
     View::setInvalidator(std::move(invalidator));
     if (content_) {
         content_->attachInvalidatorToOwner(this, [this] { invalidate(); });
     }
-    for (const auto& entry : overlays_) {
+    for (const auto &entry : overlays_) {
         entry.child->attachInvalidatorToOwner(this, [this] { invalidate(); });
     }
 }
@@ -167,32 +162,25 @@ void OverlayHost::setInvalidator(std::function<void()> invalidator) {
 void OverlayHost::setRectInvalidator(std::function<void(Rect)> invalidator) {
     View::setRectInvalidator(std::move(invalidator));
     if (content_) {
-        content_->attachRectInvalidatorToOwner(
-            this,
-            [this](Rect rect) { invalidateRect(rect); });
+        content_->attachRectInvalidatorToOwner(this, [this](Rect rect) { invalidateRect(rect); });
     }
-    for (const auto& entry : overlays_) {
-        entry.child->attachRectInvalidatorToOwner(
-            this,
-            [this](Rect rect) { invalidateRect(rect); });
+    for (const auto &entry : overlays_) {
+        entry.child->attachRectInvalidatorToOwner(this,
+                                                  [this](Rect rect) { invalidateRect(rect); });
     }
 }
 
 void OverlayHost::setAnimationScheduler(std::function<void()> scheduler) {
     View::setAnimationScheduler(std::move(scheduler));
     if (content_) {
-        content_->attachAnimationSchedulerToOwner(
-            this,
-            [this] { requestAnimationFrame(); });
+        content_->attachAnimationSchedulerToOwner(this, [this] { requestAnimationFrame(); });
     }
-    for (const auto& entry : overlays_) {
-        entry.child->attachAnimationSchedulerToOwner(
-            this,
-            [this] { requestAnimationFrame(); });
+    for (const auto &entry : overlays_) {
+        entry.child->attachAnimationSchedulerToOwner(this, [this] { requestAnimationFrame(); });
     }
 }
 
-void OverlayHost::paint(Canvas& canvas) {
+void OverlayHost::paint(Canvas &canvas) {
     if (content_ && content_->visible()) {
         content_->setFrame(frame());
         content_->paint(canvas);
@@ -200,8 +188,8 @@ void OverlayHost::paint(Canvas& canvas) {
     View::paint(canvas);
     layoutAnchoredOverlays();
     for (const std::size_t index : paintOrder()) {
-        const auto& entry = overlays_[index];
-        const auto& child = entry.child;
+        const auto &entry = overlays_[index];
+        const auto &child = entry.child;
         if (child->visible()) {
             if (entry.backdrop.a != 0) {
                 canvas.fillRect(frame(), entry.backdrop);
@@ -219,10 +207,10 @@ bool OverlayHost::hitTest(Point point) const {
     // OverlayHost owns content and overlay layers outside View::children_.
     // Include them in subtree hit testing so a popup extending beyond an
     // intermediate host remains reachable through any number of ancestors.
-    auto* self = const_cast<OverlayHost*>(this);
+    auto *self = const_cast<OverlayHost *>(this);
     self->layoutAnchoredOverlays();
     for (const std::size_t index : hitOrder()) {
-        const auto& child = overlays_[index].child;
+        const auto &child = overlays_[index].child;
         if (child && child->visible() && child->hitTest(point)) {
             return true;
         }
@@ -237,204 +225,12 @@ bool OverlayHost::paintsAboveSiblings() const {
     if (content_ && content_->visible() && content_->paintsAboveSiblings()) {
         return true;
     }
-    return std::any_of(overlays_.begin(), overlays_.end(), [](const OverlayEntry& entry) {
+    return std::any_of(overlays_.begin(), overlays_.end(), [](const OverlayEntry &entry) {
         return entry.child && entry.child->visible() && entry.child->paintsAboveSiblings();
     });
 }
 
-bool OverlayHost::onMouseMove(const MouseEvent& event) {
-    if (!interactive()) {
-        clearInteractionState();
-        return false;
-    }
-
-    // Content and overlays are owned outside View::children_. Remember that
-    // they received pointer events so an ancestor leaving this host cannot
-    // skip resetInteractionState() via View's empty-child fast path.
-    pointerInteraction_ = true;
-
-    // Preserve pointer capture across the overlay boundary.  Content controls
-    // such as TerminalView and TextField use move events after mouse-down to
-    // extend a selection.  Re-running overlay hit testing here would clear the
-    // pressed content state and turn a drag into a one-cell click.
-    if (pressedOverlay_ && isInteractive(pressedOverlay_)) {
-        return pressedOverlay_->onMouseMove(event);
-    }
-    if (pressedContent_ && isInteractive(pressedContent_)) {
-        return pressedContent_->onMouseMove(event);
-    }
-
-    layoutAnchoredOverlays();
-    for (const std::size_t index : hitOrder()) {
-        const auto& entry = overlays_[index];
-        auto& child = overlays_[index].child;
-        if (!isInteractive(child.get())) {
-            continue;
-        }
-        if (!child->hitTest(event.position)) {
-            if (entry.blocksOutsidePointer) {
-                bool changed = false;
-                for (const auto& overlay : overlays_) {
-                    if (overlay.child->visible() && !overlay.child->paintsAboveSiblings()) {
-                        changed = overlay.child->clearInteractionState() || changed;
-                    }
-                }
-                return changed;
-            }
-            continue;
-        }
-
-        // 命中的最上层可交互 overlay 独占指针：无论其内部状态是否变化，事件都
-        // 不再下落。否则指针静置在 overlay 内时，第二次 move 会落到下面的
-        // “清空全部 overlay 交互态”，把刚设置的 hover 清掉，造成 hover 逐帧闪烁。
-        bool changed = child->onMouseMove(event);
-        for (const auto& other : overlays_) {
-            if (other.child.get() != child.get() &&
-                other.child->visible() &&
-                !other.child->paintsAboveSiblings()) {
-                changed = other.child->clearInteractionState() || changed;
-            }
-        }
-        if (content_ && content_->visible() && !child->paintsAboveSiblings()) {
-            changed = content_->clearInteractionState() || changed;
-        }
-        return changed;
-    }
-
-    bool changed = false;
-    for (const auto& entry : overlays_) {
-        if (entry.child->visible() && !entry.child->paintsAboveSiblings()) {
-            changed = entry.child->clearInteractionState() || changed;
-        }
-    }
-    if (content_ && content_->visible() && content_->hitTest(event.position)) {
-        return content_->onMouseMove(event) || changed;
-    }
-    return View::onMouseMove(event) || changed;
-}
-
-bool OverlayHost::onMouseDown(const MouseEvent& event) {
-    if (!interactive()) {
-        clearInteractionState();
-        focusOverlay(nullptr);
-        return false;
-    }
-
-    pointerInteraction_ = true;
-
-    layoutAnchoredOverlays();
-    for (const std::size_t index : hitOrder()) {
-        const auto& entry = overlays_[index];
-        auto& child = overlays_[index].child;
-        if (!isInteractive(child.get())) {
-            continue;
-        }
-        if (!child->hitTest(event.position)) {
-            if (entry.blocksOutsidePointer) {
-                pressedOverlay_ = nullptr;
-                return true;
-            }
-            continue;
-        }
-
-        // 同 onMouseMove：命中 overlay 即消费按下事件，绝不下落到视觉上被
-        // 遮住的 content（否则点击会穿透遮罩打到弹窗下面的控件）。
-        pressedOverlay_ = child.get();
-        const bool handled = child->onMouseDown(event);
-        if (handled || child->isFocusable()) {
-            focusOverlay(child.get(), false);
-        }
-        return true;
-    }
-
-    pressedOverlay_ = nullptr;
-    if (content_ && content_->visible() && !content_->disabled() && content_->hitTest(event.position)) {
-        pressedContent_ = content_.get();
-        if (focusedOverlay_) {
-            focusedOverlay_->onFocusChanged(false);
-            focusedOverlay_ = nullptr;
-            overlayFocusHistory_.clear();
-            previousFocusedChild_ = nullptr;
-            previousFocusVisible_ = false;
-        }
-        const bool handled = content_->onMouseDown(event);
-        if (handled || content_->isFocusable()) {
-            content_->onFocusChanged(true);
-            content_->setFocusVisible(false);
-        }
-        return handled || content_->isFocusable();
-    }
-    pressedContent_ = nullptr;
-    focusOverlay(nullptr);
-    return View::onMouseDown(event);
-}
-
-bool OverlayHost::onMouseUp(const MouseEvent& event) {
-    if (!interactive()) {
-        pressedOverlay_ = nullptr;
-        pressedContent_ = nullptr;
-        return false;
-    }
-
-    if (pressedOverlay_) {
-        Widget* child = pressedOverlay_;
-        pressedOverlay_ = nullptr;
-        return isInteractive(child) ? child->onMouseUp(event) : false;
-    }
-
-    if (pressedContent_) {
-        Widget* child = pressedContent_;
-        pressedContent_ = nullptr;
-        return isInteractive(child) ? child->onMouseUp(event) : false;
-    }
-
-    layoutAnchoredOverlays();
-    for (const std::size_t index : hitOrder()) {
-        const auto& entry = overlays_[index];
-        auto& child = overlays_[index].child;
-        if (!isInteractive(child.get())) {
-            continue;
-        }
-        if (child->hitTest(event.position)) {
-            return child->onMouseUp(event);
-        }
-        if (entry.blocksOutsidePointer) {
-            return true;
-        }
-    }
-
-    return View::onMouseUp(event);
-}
-
-bool OverlayHost::onMouseWheel(const MouseWheelEvent& event) {
-    if (!interactive()) {
-        return false;
-    }
-
-    layoutAnchoredOverlays();
-    for (const std::size_t index : hitOrder()) {
-        const auto& entry = overlays_[index];
-        auto& child = overlays_[index].child;
-        if (!isInteractive(child.get())) {
-            continue;
-        }
-        if (child->hitTest(event.position)) {
-            if (child->onMouseWheel(event)) {
-                return true;
-            }
-            continue;
-        }
-        if (entry.blocksOutsidePointer) {
-            return true;
-        }
-    }
-    if (content_ && content_->visible() && !content_->disabled() && content_->hitTest(event.position)) {
-        return content_->onMouseWheel(event);
-    }
-    return View::onMouseWheel(event);
-}
-
-bool OverlayHost::onKeyDown(const KeyEvent& event) {
+bool OverlayHost::onKeyDown(const KeyEvent &event) {
     if (!interactive()) {
         return false;
     }
@@ -446,9 +242,11 @@ bool OverlayHost::onKeyDown(const KeyEvent& event) {
     if (event.key == Key::Escape) {
         for (const auto index : hitOrder()) {
             const auto child = overlays_[index].child;
-            auto* popup = dynamic_cast<Popup*>(child.get());
-            if (popup && popup->isOpen() && isInteractive(child.get()) && isFocusAllowed(child.get())) {
-                if (popup->onKeyDown(event)) return true;
+            auto *popup = dynamic_cast<Popup *>(child.get());
+            if (popup && popup->isOpen() && isInteractive(child.get()) &&
+                isFocusAllowed(child.get())) {
+                if (popup->onKeyDown(event))
+                    return true;
                 break;
             }
         }
@@ -457,9 +255,10 @@ bool OverlayHost::onKeyDown(const KeyEvent& event) {
     // A modal may be added while a native window retains its previous focus.
     // Route the first key (especially Escape) to the modal without requiring a
     // mouse click first; lower overlays must not keep receiving input.
-    if (hasActiveFocusTrap() && (!focusedOverlay_ || !isInteractive(focusedOverlay_) || !isFocusAllowed(focusedOverlay_))) {
+    if (hasActiveFocusTrap() &&
+        (!focusedOverlay_ || !isInteractive(focusedOverlay_) || !isFocusAllowed(focusedOverlay_))) {
         for (const auto index : hitOrder()) {
-            const auto& entry = overlays_[index];
+            const auto &entry = overlays_[index];
             if (entry.trapsFocus && isInteractive(entry.child.get())) {
                 focusOverlay(entry.child.get(), true);
                 entry.child->focusFirstLeaf();
@@ -476,18 +275,24 @@ bool OverlayHost::onKeyDown(const KeyEvent& event) {
             // Composite light-dismiss popups contain real form controls too.
             // Traverse that subtree before moving to another overlay.
             const auto life = lifetimeToken();
-            if (focusedOverlay_->onKeyDown(event)) return true;
-            if (life.expired()) return true;
+            if (focusedOverlay_->onKeyDown(event))
+                return true;
+            if (life.expired())
+                return true;
             if (hasActiveFocusTrap() && focusedOverlay_) {
-                if (event.shift) focusedOverlay_->focusLastLeaf();
-                else focusedOverlay_->focusFirstLeaf();
+                if (event.shift)
+                    focusedOverlay_->focusLastLeaf();
+                else
+                    focusedOverlay_->focusFirstLeaf();
                 return true;
             }
         }
         if (focusNextOverlay(event.shift, true)) {
             if (focusedOverlay_) {
-                if (event.shift) focusedOverlay_->focusLastLeaf();
-                else focusedOverlay_->focusFirstLeaf();
+                if (event.shift)
+                    focusedOverlay_->focusLastLeaf();
+                else
+                    focusedOverlay_->focusFirstLeaf();
             }
             return true;
         }
@@ -511,163 +316,12 @@ bool OverlayHost::onKeyDown(const KeyEvent& event) {
     if (focusedOverlay_ && focusedOverlay_->onKeyDown(event)) {
         return true;
     }
-    if (hasActiveFocusTrap()) return true;
+    if (hasActiveFocusTrap())
+        return true;
     if (content_ && content_->visible() && !content_->disabled() && content_->onKeyDown(event)) {
         return true;
     }
     return View::onKeyDown(event);
-}
-
-bool OverlayHost::focusFirstLeaf() {
-    if (!hasActiveFocusTrap() && content_ && content_->visible() && !content_->disabled() && content_->focusFirstLeaf()) {
-        focusOverlay(nullptr);
-        return true;
-    }
-    const auto overlays = focusableOverlays();
-    if (!overlays.empty()) {
-        focusOverlay(overlays.front(), true);
-        overlays.front()->focusFirstLeaf();
-        return true;
-    }
-    return false;
-}
-
-bool OverlayHost::focusLastLeaf() {
-    const auto overlays = focusableOverlays();
-    if (!overlays.empty()) {
-        focusOverlay(overlays.back(), true);
-        overlays.back()->focusLastLeaf();
-        return true;
-    }
-    if (!hasActiveFocusTrap() && content_ && content_->visible() && !content_->disabled() && content_->focusLastLeaf()) {
-        focusOverlay(nullptr);
-        return true;
-    }
-    return false;
-}
-
-bool OverlayHost::requestFocus(Widget* descendant, bool focusVisible) {
-    if (!descendant || !descendant->visible() || descendant->disabled()) {
-        return false;
-    }
-
-    for (const auto& entry : overlays_) {
-        Widget* overlay = entry.child.get();
-        if (!isInteractive(overlay) || !isFocusAllowed(overlay)) {
-            continue;
-        }
-        bool found = false;
-        if (overlay == descendant) {
-            found = descendant->isFocusable();
-        } else if (auto* view = dynamic_cast<View*>(overlay)) {
-            found = view->requestFocus(descendant, focusVisible);
-        } else if (auto* popup = dynamic_cast<Popup*>(overlay)) {
-            found = popup->requestFocus(descendant, focusVisible);
-        }
-        if (found) {
-            focusOverlay(overlay, focusVisible);
-            invalidate();
-            return true;
-        }
-    }
-
-    if (hasActiveFocusTrap() || !isInteractive(content_.get())) {
-        return false;
-    }
-    bool found = false;
-    if (content_.get() == descendant) {
-        found = descendant->isFocusable();
-    } else if (auto* view = dynamic_cast<View*>(content_.get())) {
-        found = view->requestFocus(descendant, focusVisible);
-    }
-    if (!found) {
-        return false;
-    }
-
-    focusOverlay(nullptr);
-    content_->onFocusChanged(true);
-    content_->setFocusVisible(focusVisible);
-    invalidate();
-    return true;
-}
-
-bool OverlayHost::onKeyUp(const KeyEvent& event) { auto child = activeFocusChild(); return child && child->onKeyUp(event); }
-
-bool OverlayHost::onTextInput(wchar_t character) { auto child = activeFocusChild(); return child && child->onTextInput(character); }
-
-bool OverlayHost::onTextInputText(const std::wstring& text) { auto child = activeFocusChild(); return child && child->onTextInputText(text); }
-
-bool OverlayHost::onFocusChanged(bool focused) {
-    if (!focused) {
-        focusOverlay(nullptr);
-        if (content_) {
-            content_->onFocusChanged(false);
-        }
-        return View::onFocusChanged(false);
-    }
-
-    Widget::onFocusChanged(true);
-    if (focusedOverlay_ && !isInteractive(focusedOverlay_)) {
-        focusOverlay(nullptr);
-    }
-    if (focusedOverlay_) {
-        return true;
-    }
-
-    if (!hasActiveFocusTrap() && content_ && content_->visible() && !content_->disabled() && content_->isFocusable()) {
-        content_->onFocusChanged(true);
-        content_->setFocusVisible(false);
-        return true;
-    }
-
-    if (!focusedOverlay_ && focusNextOverlay(false, false)) {
-        return true;
-    }
-    return View::onFocusChanged(true);
-}
-
-bool OverlayHost::isFocusable() const {
-    if (content_ && content_->visible() && !content_->disabled() && content_->isFocusable()) {
-        return true;
-    }
-    if (View::isFocusable()) {
-        return true;
-    }
-    return std::any_of(overlays_.begin(), overlays_.end(), [](const OverlayEntry& entry) {
-        return isInteractive(entry.child.get()) && entry.child->isFocusable();
-    });
-}
-
-CursorKind OverlayHost::cursor(Point point) const {
-    if (!interactive() || !hitTest(point)) {
-        return CursorKind::Default;
-    }
-
-    // OverlayHost owns a content layer plus optional floating overlays instead
-    // of storing them as regular View children, so cursor hit testing follows
-    // the same generic overlay-first order as pointer event dispatch.
-    const_cast<OverlayHost*>(this)->layoutAnchoredOverlays();
-    for (const std::size_t index : hitOrder()) {
-        const auto& entry = overlays_[index];
-        const auto& child = entry.child;
-        if (!isInteractive(child.get())) {
-            continue;
-        }
-        if (child->hitTest(point)) {
-            return child->cursor(point);
-        }
-        if (entry.blocksOutsidePointer) {
-            return CursorKind::Default;
-        }
-    }
-
-    if (content_ && content_->visible() && !content_->disabled()) {
-        const_cast<Widget*>(content_.get())->setFrame(frame());
-        if (content_->hitTest(point)) {
-            return content_->cursor(point);
-        }
-    }
-    return Widget::cursor(point);
 }
 
 void OverlayHost::setFocusVisible(bool visible) {
@@ -682,7 +336,7 @@ bool OverlayHost::tickAnimations(double nowMs) {
     if (content_ && content_->visible()) {
         running = content_->tickAnimations(nowMs) || running;
     }
-    for (const auto& entry : overlays_) {
+    for (const auto &entry : overlays_) {
         if (entry.child && entry.child->visible()) {
             running = entry.child->tickAnimations(nowMs) || running;
         }
@@ -691,8 +345,8 @@ bool OverlayHost::tickAnimations(double nowMs) {
 }
 
 bool OverlayHost::hasInteractionState() const {
-    return pointerInteraction_ || pressedOverlay_ || pressedContent_ ||
-        focusedOverlay_ || View::hasInteractionState();
+    return pointerInteraction_ || pressedOverlay_ || pressedContent_ || focusedOverlay_ ||
+           View::hasInteractionState();
 }
 
 void OverlayHost::resetInteractionState() {
@@ -703,7 +357,7 @@ void OverlayHost::resetInteractionState() {
     if (content_) {
         content_->clearInteractionState();
     }
-    for (const auto& entry : overlays_) {
+    for (const auto &entry : overlays_) {
         entry.child->clearInteractionState();
     }
 }
@@ -727,7 +381,7 @@ std::vector<std::size_t> OverlayHost::hitOrder() const {
 
 void OverlayHost::layoutAnchoredOverlays() {
     const Rect host = frame();
-    for (auto& entry : overlays_) {
+    for (auto &entry : overlays_) {
         if (!entry.child) {
             continue;
         }
@@ -741,12 +395,12 @@ void OverlayHost::layoutAnchoredOverlays() {
         const float bottom = host.y + std::max(0.0f, host.height - entry.margin.bottom);
         const float availableWidth = std::max(0.0f, right - left);
         const float availableHeight = std::max(0.0f, bottom - top);
-        float width = entry.size.width < 0.0f ? availableWidth
-                          : entry.size.width > 0.0f ? entry.size.width
-                                                     : std::max(0.0f, preferred.width);
-        float height = entry.size.height < 0.0f ? availableHeight
-                           : entry.size.height > 0.0f ? entry.size.height
-                                                       : std::max(0.0f, preferred.height);
+        float width = entry.size.width < 0.0f   ? availableWidth
+                      : entry.size.width > 0.0f ? entry.size.width
+                                                : std::max(0.0f, preferred.width);
+        float height = entry.size.height < 0.0f   ? availableHeight
+                       : entry.size.height > 0.0f ? entry.size.height
+                                                  : std::max(0.0f, preferred.height);
         // Modal dialogs must keep their body and fixed action bar inside the viewport.
         // Modeless overlays retain their explicitly requested geometry.
         if (entry.trapsFocus && entry.blocksOutsidePointer) {
@@ -769,173 +423,24 @@ void OverlayHost::layoutAnchoredOverlays() {
     }
 }
 
-Widget* OverlayHost::focusedOverlay() const {
-    return focusedOverlay_;
+void OverlayHost::styleScopeChanged() {
+    View::styleScopeChanged();
+    if (content_)
+        content_->inheritStyleScope(styleScope(), this);
+    const auto overlays = overlays_;
+    for (const auto &entry : overlays)
+        entry.child->inheritStyleScope(styleScope(), this);
 }
 
-void OverlayHost::focusOverlay(Widget* child, bool focusVisible) {
-    if (focusedOverlay_ == child) {
-        if (focusedOverlay_) {
-            focusedOverlay_->setFocusVisible(focusVisible);
-        } else if (previousFocusedChild_) {
-            Widget* previous = previousFocusedChild_;
-            const bool previousFocusVisible = previousFocusVisible_;
-            previousFocusedChild_ = nullptr;
-            previousFocusVisible_ = false;
-            if (isInteractive(previous) && previous->isFocusable()) {
-                focusChild(previous, previousFocusVisible);
-            }
-        }
-        return;
-    }
-
-    if (child) {
-        if (focusedOverlay_ && focusedOverlay_ != child) {
-            OverlayFocusRecord record{focusedOverlay_, focusedOverlay_->focusVisible()};
-            if (!overlayFocusHistory_.empty() && overlayFocusHistory_.back().child == focusedOverlay_) {
-                overlayFocusHistory_.back() = record;
-            } else {
-                overlayFocusHistory_.push_back(record);
-            }
-        }
-        if (!focusedOverlay_ && !previousFocusedChild_) {
-            previousFocusedChild_ = focusedChild();
-            if (!previousFocusedChild_) {
-                for (const auto& viewChild : children()) {
-                    if (viewChild && viewChild->focused()) {
-                        previousFocusedChild_ = viewChild.get();
-                        break;
-                    }
-                }
-            }
-            previousFocusVisible_ = previousFocusedChild_ ? previousFocusedChild_->focusVisible() : false;
-        }
-        focusChild(nullptr);
-    }
-    if (focusedOverlay_) {
-        focusedOverlay_->onFocusChanged(false);
-    }
-    focusedOverlay_ = child;
-    if (focusedOverlay_) {
-        focusedOverlay_->onFocusChanged(true);
-        focusedOverlay_->setFocusVisible(focusVisible);
-    } else {
-        Widget* previous = previousFocusedChild_;
-        const bool focusVisible = previousFocusVisible_;
-        previousFocusedChild_ = nullptr;
-        previousFocusVisible_ = false;
-        if (isInteractive(previous) && previous->isFocusable()) {
-            focusChild(previous, focusVisible);
-        }
-    }
-}
-
-bool OverlayHost::focusNextOverlay(bool reverse, bool focusVisible) {
-    const auto focusable = focusableOverlays();
-    if (focusable.empty()) {
-        focusOverlay(nullptr);
-        return false;
-    }
-
-    auto it = std::find(focusable.begin(), focusable.end(), focusedOverlay_);
-    int index = it == focusable.end() ? -1 : static_cast<int>(it - focusable.begin());
-    index += reverse ? -1 : 1;
-
-    if (index < 0) {
-        index = static_cast<int>(focusable.size()) - 1;
-    } else if (index >= static_cast<int>(focusable.size())) {
-        index = 0;
-    }
-
-    focusOverlay(focusable[static_cast<std::size_t>(index)], focusVisible);
-    return true;
-}
-
-std::vector<Widget*> OverlayHost::focusableOverlays() const {
-    std::vector<Widget*> result;
-    for (const std::size_t index : hitOrder()) {
-        Widget* child = overlays_[index].child.get();
-        if (isInteractive(child) && child->tabStop() && child->isFocusable() && isFocusAllowed(child)) {
-            result.push_back(child);
-        }
-    }
-    return result;
-}
-
-bool OverlayHost::restorePreviousOverlayFocus() {
-    while (!overlayFocusHistory_.empty()) {
-        OverlayFocusRecord record = overlayFocusHistory_.back();
-        overlayFocusHistory_.pop_back();
-        if (record.child && record.child != focusedOverlay_ && containsOverlay(record.child) && isInteractive(record.child) &&
-            record.child->isFocusable() && isFocusAllowed(record.child)) {
-            focusOverlay(record.child, record.focusVisible);
-            return true;
-        }
-    }
-    return false;
-}
-
-bool OverlayHost::containsOverlay(const Widget* child) const {
-    return std::any_of(overlays_.begin(), overlays_.end(), [child](const OverlayEntry& entry) {
-        return entry.child.get() == child;
-    });
-}
-
-bool OverlayHost::hasActiveFocusTrap() const {
-    return std::any_of(overlays_.begin(), overlays_.end(), [](const OverlayEntry& entry) {
-        return entry.trapsFocus && isInteractive(entry.child.get());
-    });
-}
-
-bool OverlayHost::isFocusAllowed(const Widget* child) const {
-    const auto order = hitOrder();
-    auto trapIt = std::find_if(order.begin(), order.end(), [this](std::size_t index) {
-        const auto& entry = overlays_[index];
-        return entry.trapsFocus && isInteractive(entry.child.get());
-    });
-    if (trapIt == order.end()) {
-        return true;
-    }
-
-    return std::find_if(order.begin(), std::next(trapIt), [this, child](std::size_t index) {
-        return overlays_[index].child.get() == child;
-    }) != std::next(trapIt);
-}
-
-void OverlayHost::clearOverlayReferences(Widget* child, bool restorePreviousFocus) {
-    if (focusedOverlay_ == child) {
-        if (restorePreviousFocus) {
-            focusOverlay(nullptr);
-        } else {
-            focusedOverlay_->onFocusChanged(false);
-            focusedOverlay_ = nullptr;
-        }
-    }
-    if (pressedOverlay_ == child) {
-        pressedOverlay_ = nullptr;
-    }
-    overlayFocusHistory_.erase(std::remove_if(overlayFocusHistory_.begin(),
-                                             overlayFocusHistory_.end(),
-                                             [child](const OverlayFocusRecord& record) {
-                                                 return record.child == child;
-                                             }),
-                               overlayFocusHistory_.end());
-    if (previousFocusedChild_ == child) {
-        previousFocusedChild_ = nullptr;
-        previousFocusVisible_ = false;
-    }
-}
-
-void OverlayHost::installOverlayHostCallbacks(Widget& child) {
+void OverlayHost::installOverlayHostCallbacks(Widget &child) {
+    child.inheritStyleScope(styleScope(), this);
     child.setTextEnvironment(textFontFamily(), textDpiScale());
     child.attachToOwner(
-        this,
-        [this] { invalidate(); },
-        [this](Rect rect) { invalidateRect(rect); },
+        this, [this] { invalidate(); }, [this](Rect rect) { invalidateRect(rect); },
         [this] { requestAnimationFrame(); });
 }
 
-bool OverlayHost::isInteractive(const Widget* child) {
+bool OverlayHost::isInteractive(const Widget *child) {
     return child && child->visible() && !child->disabled();
 }
 

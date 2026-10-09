@@ -39,9 +39,9 @@ struct Key {
         const auto& b = other.options;
         return value == other.value &&
             std::tie(a.family, a.fallbackFamily, a.size, a.weight, a.width, a.lineHeight,
-                     a.scale, a.align, a.maxLines, a.ellipsis, a.text.direction, a.text.wrap, a.text.locale) ==
+                     a.scale, a.align, a.maxLines, a.ellipsis, a.text.direction, a.text.wrap, a.text.locale, a.text.letterSpacing, a.text.tabularNumbers) ==
             std::tie(b.family, b.fallbackFamily, b.size, b.weight, b.width, b.lineHeight,
-                     b.scale, b.align, b.maxLines, b.ellipsis, b.text.direction, b.text.wrap, b.text.locale) &&
+                     b.scale, b.align, b.maxLines, b.ellipsis, b.text.direction, b.text.wrap, b.text.locale, b.text.letterSpacing, b.text.tabularNumbers) &&
             a.spans == b.spans;
     }
 };
@@ -155,6 +155,8 @@ struct Layout::Impl {
         style.setFontFamilies(families);
         if (testFonts && options.family.empty()) style.setFontFamilies(testFontFamilies);
         style.setFontSize(options.size);
+        style.setLetterSpacing(options.text.letterSpacing);
+        if (options.text.tabularNumbers) style.addFontFeature(SkString("tnum"), 1);
         style.setFontStyle(SkFontStyle(options.weight, SkFontStyle::kNormal_Width, SkFontStyle::kUpright_Slant));
         style.setLocale(SkString(options.text.locale.c_str()));
         if (options.lineHeight > 0) { style.setHeight(options.lineHeight / options.size); style.setHeightOverride(true); }
@@ -265,7 +267,7 @@ std::shared_ptr<Layout> Layout::make(const std::wstring& value, const LayoutOpti
     internal::FrameSpan span(internal::FrameStage::TextLayout);
     LayoutOptions options = requested;
     if (!std::isfinite(options.size) || options.size <= 0 || !std::isfinite(options.width) || options.width < 0 ||
-        !std::isfinite(options.lineHeight) || options.lineHeight < 0 || !std::isfinite(options.scale) || options.scale <= 0)
+        !std::isfinite(options.lineHeight) || options.lineHeight < 0 || !std::isfinite(options.scale) || options.scale <= 0 || !std::isfinite(options.text.letterSpacing))
         throw std::invalid_argument("Invalid OneUI text layout metrics");
     std::size_t previousSpanEnd = 0;
     for (const auto& span : options.spans) {
@@ -302,6 +304,10 @@ std::shared_ptr<Layout> Layout::make(const std::wstring& value, const LayoutOpti
             if (textEnd > start && value[textEnd - 1] == L'\r') --textEnd;
             auto paragraphOptions = options;
             paragraphOptions.maxLines = 0;
+            // Unlimited SkParagraph lines plus ellipsis collapse a paragraph to
+            // one visual line. Shape full paragraphs first; only the final
+            // visible paragraph may truncate to the remaining line budget.
+            if (options.text.wrap == TextWrapMode::WordWrap) paragraphOptions.ellipsis = false;
             auto part = make(value.substr(start, textEnd - start), paragraphOptions);
             bool lastVisible = false;
             if (options.maxLines) {
@@ -311,6 +317,7 @@ std::shared_ptr<Layout> Layout::make(const std::wstring& value, const LayoutOpti
                     // let SkParagraph place its ellipsis. Earlier hard paragraphs
                     // retain independent Auto directions and cache identities.
                     paragraphOptions.maxLines = remaining;
+                    paragraphOptions.ellipsis = options.ellipsis;
                     auto limited = std::make_unique<Impl>(value.substr(start), paragraphOptions);
                     limited->shape();
                     part = std::shared_ptr<Layout>(new Layout(std::move(limited)));

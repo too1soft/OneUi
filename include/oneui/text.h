@@ -19,6 +19,9 @@ struct TextOptions {
     TextDirection direction = TextDirection::Auto;
     TextWrapMode wrap = TextWrapMode::NoWrap;
     std::string locale = "und";
+    // Logical pixels, applied by shaping (including measurement and hit testing).
+    float letterSpacing = 0.0f;
+    bool tabularNumbers = false;
 };
 
 } // namespace oneui

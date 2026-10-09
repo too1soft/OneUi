@@ -35,7 +35,10 @@ int main(){
     int closes=0, maxes=0;title->setOnClose([&]{++closes;});title->setOnMaximize([&]{++maxes;});
     provider->get_accChildCount(&count);check(count==6,"caption exposes three actual window controls");
     VARIANT captionClose{};captionClose.vt=VT_I4;captionClose.lVal=6;
-    BSTR name=nullptr;provider->get_accName(captionClose,&name);check(name&&std::wstring(name)==L"关闭窗口","caption has accessible name");SysFreeString(name);
+    setBuiltinText(BuiltinText::CloseWindow, L"Close window");
+    BSTR name=nullptr;provider->get_accName(captionClose,&name);check(name&&std::wstring(name)==L"Close window","caption uses the application language");SysFreeString(name);
+    setBuiltinText(BuiltinText::CloseWindow, L"关闭窗口");
+    provider->get_accName(captionClose,&name);check(name&&std::wstring(name)==L"关闭窗口","existing caption reflects a language change");SysFreeString(name);
     provider->accLocation(&x,&y,&w,&h,captionClose);check(w==69,"Windows caption bounds use full button width at DPI");
     check(provider->accDoDefaultAction(captionClose)==S_OK&&closes==1,"caption action reaches real close callback");
     // Skin variants affect paint only; explicit presentation owns geometry.
@@ -49,7 +52,8 @@ int main(){
     provider->accLocation(&x,&y,&w,&h,captionClose);
     POINT clientOrigin{};ClientToScreen(window,&clientOrigin);
     check(x==clientOrigin.x+12 && w==36 && h==42,"custom caption keeps same identity with left geometry");
-    VARIANT captionMax=captionClose;captionMax.lVal=5;title->setMaximized(true);provider->get_accName(captionMax,&name);check(name&&std::wstring(name)==L"还原窗口","maximize action name reflects restore state");SysFreeString(name);
+    setBuiltinText(BuiltinText::RestoreWindow, L"Restore window");
+    VARIANT captionMax=captionClose;captionMax.lVal=5;title->setMaximized(true);provider->get_accName(captionMax,&name);check(name&&std::wstring(name)==L"Restore window","maximize action name reflects restore state and language");SysFreeString(name);
     check(provider->accDoDefaultAction(captionMax)==S_OK&&maxes==1,"custom caption uses real maximize callback");
     title->setDisabled(true);check(FAILED(provider->accDoDefaultAction(captionClose))&&closes==1,"disabled caption cannot activate");
     auto branch=std::make_shared<View>();branch->setAccessibleName(L"Semantic parent");branch->setFrame({0,100,200,100});

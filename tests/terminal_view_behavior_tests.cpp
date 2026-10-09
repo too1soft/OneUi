@@ -1,4 +1,7 @@
+#include "oneui/error.h"
+#include <stdexcept>
 #include "oneui/controls/terminal_view.h"
+#include "support/platform_keys.h"
 
 #include <algorithm>
 #include <cmath>
@@ -723,6 +726,29 @@ void testStyleBoxControlsTerminalVisualTokens() {
         1);
 }
 
+void testClipboardFailureKeepsTerminalSelectionAndDoesNotSendInput() {
+    struct FailingClipboard final : oneui::Clipboard {
+        void setText(std::wstring) override { throw std::runtime_error("clipboard is busy"); }
+        std::wstring text() const override { throw 7; }
+    };
+    oneui::TerminalView terminal;
+    terminal.setGrid(1, 2, {oneui::TerminalCell{L"A"}, oneui::TerminalCell{L"B"}});
+    terminal.selectAll();
+    terminal.setClipboard(std::make_shared<FailingClipboard>());
+    int sent = 0;
+    terminal.setOnPaste([&](const std::wstring&) { ++sent; });
+    oneui::clearError();
+    expectEqual("clipboard copy fails", terminal.copySelectionToClipboard(), 0);
+    expectEqual("clipboard copy is inspectable", static_cast<int>(oneui::lastErrorCode()), static_cast<int>(oneui::ErrorCode::OperationFailed));
+    expectEqual("clipboard copy retains selection", terminal.hasSelection(), 1);
+    oneui::clearError();
+    expectEqual("clipboard paste fails", terminal.pasteFromClipboard(), 0);
+    expectEqual("nonstandard clipboard failure classified", static_cast<int>(oneui::lastErrorCode()), static_cast<int>(oneui::ErrorCode::UnknownException));
+    expectEqual("clipboard paste does not send input", sent, 0);
+    expectEqual("clipboard paste retains selection", terminal.hasSelection(), 1);
+    oneui::clearError();
+}
+
 void testSelectionCopyPasteAndTerminalShortcuts() {
     oneui::TerminalView terminal;
     terminal.setFrame(oneui::Rect{0.0f, 0.0f, 240.0f, 80.0f});
@@ -764,10 +790,7 @@ void testSelectionCopyPasteAndTerminalShortcuts() {
     expectEqual("terminal drag creates selection", terminal.hasSelection() ? 1 : 0, 1);
     expectEqual("terminal selection skips wide continuation", terminal.selectedText() == L"A中" ? 1 : 0, 1);
 
-    oneui::KeyEvent copy;
-    copy.key = oneui::Key::C;
-    copy.control = true;
-    copy.shift = true;
+    auto copy = oneui::test::terminalClipboardKey(oneui::Key::C);
     terminal.onKeyDown(copy);
     expectEqual("terminal copy shortcut writes clipboard", clipboard->text() == L"A中" ? 1 : 0, 1);
     expectEqual("terminal copy shortcut is not forwarded", rawKeyCount, 0);
@@ -779,10 +802,7 @@ void testSelectionCopyPasteAndTerminalShortcuts() {
     expectEqual("terminal ctrl-c remains a raw terminal key", rawKeyCount, 1);
 
     clipboard->setText(L"echo 你好");
-    oneui::KeyEvent paste;
-    paste.key = oneui::Key::V;
-    paste.control = true;
-    paste.shift = true;
+    auto paste = oneui::test::terminalClipboardKey(oneui::Key::V);
     terminal.onKeyDown(paste);
     expectEqual("terminal paste uses dedicated callback", pasted == L"echo 你好" ? 1 : 0, 1);
     expectEqual("terminal paste shortcut is not forwarded", rawKeyCount, 1);
@@ -810,11 +830,8 @@ void testInputClearsSelectionWithoutBreakingModifierShortcuts() {
     terminal.onKeyDown(control);
     expectEqual("terminal modifier keeps selection available for copy", terminal.hasSelection() ? 1 : 0, 1);
 
-    oneui::KeyEvent copy;
-    copy.key = oneui::Key::C;
+    auto copy = oneui::test::terminalClipboardKey(oneui::Key::C);
     copy.virtualKey = 0x43;
-    copy.control = true;
-    copy.shift = true;
     terminal.onKeyDown(copy);
     expectEqual("terminal modifier sequence still copies selection", clipboard->text() == L"test" ? 1 : 0, 1);
 
@@ -1107,6 +1124,7 @@ int main() {
     testFontSizeMatrixKeepsViewportCaretAndWideCellsAligned();
     testLargeGridPaintingRemainsBoundedByTheDirtyClip();
     testStyleBoxControlsTerminalVisualTokens();
+    testClipboardFailureKeepsTerminalSelectionAndDoesNotSendInput();
     testSelectionCopyPasteAndTerminalShortcuts();
     testInputClearsSelectionWithoutBreakingModifierShortcuts();
     testDoubleClickWordTripleClickLineAndCopyOnSelect();

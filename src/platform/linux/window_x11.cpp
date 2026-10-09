@@ -10,8 +10,10 @@
 #include <X11/cursorfont.h>
 #include <X11/extensions/Xrandr.h>
 #include <X11/keysym.h>
+#include "window_properties_x11.h"
 #undef None
 #undef Status
+#include "drag_drop_x11.h"
 #include <algorithm>
 #include <cerrno>
 #include <clocale>
@@ -61,6 +63,9 @@ class X11Connection final : public Connection {
     Atom atom(const char *name) { return XInternAtom(display, name, False); }
     std::unique_ptr<Window> create(WindowOptions options) override;
     void pump(int timeout);
+    std::shared_ptr<platform::NativeDockDrag> dockDrag(Window &window, platform::DockDragCallbacks callbacks) override {
+        return makeX11DockDrag(window, display, std::move(callbacks));
+    }
     void wake() {
         const char c = 1;
         const auto ignored = ::write(wakeup[1], &c, 1);
@@ -214,11 +219,11 @@ unsigned int virtualKey(KeySym symbol) {
 class X11Window final : public platform::DesktopWindow {
   public:
     X11Window(X11Connection &c, WindowOptions o) : DesktopWindow(std::move(o)), c_(c) {}
-    ~X11Window() override { close(); }
+    ~X11Window() override { setCloseToTray(false); close(); }
     WindowBackend backend() const override { return WindowBackend::X11; }
     unsigned int capabilities() const override {
         return WindowCapabilityClipboard | WindowCapabilityPlacement | WindowCapabilityActivation |
-               WindowCapabilityTopmost | (ic_ ? WindowCapabilityIme : 0);
+               WindowCapabilityTopmost | WindowCapabilityFileDrop | (ic_ ? WindowCapabilityIme : 0) | serviceCapabilities();
     }
     void initialize() override {
         assertUiThread();
@@ -234,13 +239,17 @@ class X11Window final : public platform::DesktopWindow {
         gc_ = XCreateGC(d, id_, 0, nullptr);
         XSelectInput(d, id_,
                      ExposureMask | StructureNotifyMask | KeyPressMask | KeyReleaseMask | ButtonPressMask |
-                         ButtonReleaseMask | PointerMotionMask | FocusChangeMask | LeaveWindowMask);
+                         ButtonReleaseMask | PointerMotionMask | FocusChangeMask | LeaveWindowMask | PropertyChangeMask);
         deleteAtom_ = c_.atom("WM_DELETE_WINDOW");
         XSetWMProtocols(d, id_, &deleteAtom_, 1);
         setTitle(options_.title);
         setBorderless(options_.borderless);
         setMinimumClientSize(minimum_);
         initializeIme();
+        drop_ = std::make_unique<X11DropTarget>(d, id_, *this);
+        fileDropChanged(acceptsFileDrop());
+        initializeGpu(d, nativeHandle());
+        initializeAccessibility();
         if (options_.visible)
             show();
     }
@@ -267,6 +276,31 @@ class X11Window final : public platform::DesktopWindow {
         e.xclient.data.l[1] = CurrentTime;
         sendRoot(e);
     }
+    bool centerOnActiveMonitor() override {
+        assertUiThread(); initialize();
+        if (isClosed() || options_.fullscreen) return false;
+        ::Window root = 0, child = 0; int rootX = 0, rootY = 0, x = 0, y = 0; unsigned int mask = 0;
+        XQueryPointer(c_.display, DefaultRootWindow(c_.display), &root, &child, &rootX, &rootY, &x, &y, &mask);
+        auto monitors = c_.monitors();
+        if (monitors.empty()) return false;
+        auto monitor = std::find_if(monitors.begin(), monitors.end(), [&](const auto& m) {
+            return rootX >= m.bounds.x && rootX < m.bounds.x + m.bounds.width && rootY >= m.bounds.y && rootY < m.bounds.y + m.bounds.height;
+        });
+        if (monitor == monitors.end()) monitor = monitors.begin();
+        WindowPlacement placement;
+        if (!getWindowPlacement(placement)) return false;
+        placement.x = monitor->workArea.x + (monitor->workArea.width - placement.width) / 2;
+        placement.y = monitor->workArea.y + (monitor->workArea.height - placement.height) / 2;
+        return setWindowPlacement(placement);
+    }
+    void showWithFade(unsigned int duration) override {
+        initialize();
+        const auto compositor = c_.atom(("_NET_WM_CM_S" + std::to_string(DefaultScreen(c_.display))).c_str());
+        if (!duration || !clientAreaAnimationsEnabled() || !XGetSelectionOwner(c_.display, compositor)) { show(); return; }
+        opacity(0); show();
+        fadeStart_ = nowMs(); fadeDuration_ = std::min(duration, 10000u);
+        fadeStep();
+    }
     int run() override {
         initialize();
         auto& connection = c_;
@@ -274,10 +308,18 @@ class X11Window final : public platform::DesktopWindow {
             connection.pump(1000);
         return 0;
     }
+    void pumpNativeEvents(int timeout) override { c_.pump(timeout); }
+    void hideNative() override {
+        assertUiThread();
+        if (id_) XUnmapWindow(c_.display, id_);
+        shown_ = false;queueStateChange();
+    }
     void close() override {
         if (isClosed())
             return;
         assertUiThread();
+        if (hideForTray()) return;
+        drop_.reset();
         finishClose();
         if (ic_) {
             XDestroyIC(ic_);
@@ -293,6 +335,7 @@ class X11Window final : public platform::DesktopWindow {
             XFreeCursor(c_.display, item.second);
         cursors_.clear();
         wake();
+        publishClosed();
     }
     void minimize() override {
         initialize();
@@ -300,6 +343,15 @@ class X11Window final : public platform::DesktopWindow {
     }
     NativeWindowHandle nativeHandle() const override {
         return reinterpret_cast<void *>(static_cast<std::uintptr_t>(id_));
+    }
+    std::optional<Rect> accessibilityScreenBounds(Rect rect) const override {
+        if (!id_ || isClosed()) return std::nullopt;
+        int x = 0, y = 0;
+        ::Window child = 0;
+        if (!XTranslateCoordinates(c_.display, id_, DefaultRootWindow(c_.display), 0, 0, &x, &y, &child))
+            return std::nullopt;
+        return Rect{x + rect.x * dpiScale(), y + (rect.y * contentScale_ + chromeHeight()) * scale_,
+                    rect.width * dpiScale(), rect.height * dpiScale()};
     }
     void setTitle(std::wstring title) override {
         options_.title = std::move(title);
@@ -334,20 +386,33 @@ class X11Window final : public platform::DesktopWindow {
         maximized_ = !maximized_;
         state("_NET_WM_STATE_MAXIMIZED_VERT", maximized_, "_NET_WM_STATE_MAXIMIZED_HORZ");
     }
+    WindowState state() const override { assertUiThread();return queryX11State(c_.display,id_,Window::state()); }
+    bool restore() override { initialize();if(!id_)return false;state("_NET_WM_STATE_FULLSCREEN",false);state("_NET_WM_STATE_MAXIMIZED_VERT",false,"_NET_WM_STATE_MAXIMIZED_HORZ");show();return true; }
+    bool maximize() override { initialize();if(!id_)return false;state("_NET_WM_STATE_MAXIMIZED_VERT",true,"_NET_WM_STATE_MAXIMIZED_HORZ");return true; }
+    bool setTopmost(bool enabled) override { initialize();if(!id_)return false;options_.topmost=enabled;state("_NET_WM_STATE_ABOVE",enabled);return true; }
+    bool setResizable(bool enabled) override { assertUiThread();if(isClosed())return false;options_.resizable=enabled;setMinimumClientSize(minimum_);queueStateChange();return true; }
+    bool setClientSize(Size size) override {
+        if(!std::isfinite(size.width)||!std::isfinite(size.height)||size.width<=0||size.height<=0||size.width>32767||size.height>32767)return false;
+        initialize();if(!id_)return false;XResizeWindow(c_.display,id_,unsigned(size.width*dpiScale()),unsigned(size.height*dpiScale()));return true;
+    }
+    bool setMaximumClientSize(Size size) override { assertUiThread();if(!std::isfinite(size.width)||!std::isfinite(size.height))return false;maximum_=size;setMinimumClientSize(minimum_);return true; }
+    bool setOwner(Window* owner) override {
+        if(owner==this||(owner&&(owner->backend()!=backend()||owner->closed())))return false;
+        initialize();if(!id_)return false;
+        if(owner){owner->initialize();XSetTransientForHint(c_.display,id_,reinterpret_cast<std::uintptr_t>(owner->nativeHandle()));}
+        else XDeleteProperty(c_.display,id_,XA_WM_TRANSIENT_FOR);
+        return true;
+    }
     void setMinimumClientSize(Size size) override {
-        minimum_ = size;
-        if (!id_)
-            return;
-        XSizeHints hints{};
-        hints.flags = PMinSize;
-        hints.min_width = std::max(1, static_cast<int>(size.width * scale_));
-        hints.min_height = std::max(1, static_cast<int>(size.height * scale_));
-        if (!options_.resizable) {
-            hints.flags |= PMaxSize;
-            hints.min_width = hints.max_width = clientPixelSize().width;
-            hints.min_height = hints.max_height = clientPixelSize().height;
+        minimum_=size;setX11SizeConstraints(c_.display,id_,minimum_,maximum_,clientPixelSize(),dpiScale(),options_.resizable);
+    }
+    bool prepareContentTransfer(Widget* subtree) override {
+        assertUiThread();
+        if (subtree && subtree->focused() && ic_) {
+            if (auto pending = Xutf8ResetIC(ic_)) XFree(pending);
+            composition({}, 0);
         }
-        XSetWMNormalHints(c_.display, id_, &hints);
+        return Window::prepareContentTransfer(subtree);
     }
     bool getWindowPlacement(WindowPlacement &p) const override {
         if ((!shown_ || maximized_ || options_.fullscreen) && restoredPlacement_) {
@@ -355,16 +420,9 @@ class X11Window final : public platform::DesktopWindow {
             p.maximized = maximized_;
             return true;
         }
-        if (!id_)
-            return false;
-        XWindowAttributes a{};
-        XGetWindowAttributes(c_.display, id_, &a);
-        int x = 0, y = 0;
-        ::Window child{};
-        XTranslateCoordinates(c_.display, id_, DefaultRootWindow(c_.display), 0, 0, &x, &y, &child);
-        p = {x, y, a.width, a.height, maximized_};
-        return true;
+        return queryX11Placement(c_.display,id_,maximized_,p);
     }
+
     bool setWindowPlacement(const WindowPlacement &p) override {
         if (p.width <= 0 || p.height <= 0)
             return false;
@@ -387,33 +445,20 @@ class X11Window final : public platform::DesktopWindow {
     void paint() {
         if (!shown_ || !needsPaint() || !id_)
             return;
-        const auto &pixels = render();
-        auto size = clientPixelSize();
-        Display *d = c_.display;
-        auto *image =
-            XCreateImage(d, DefaultVisual(d, DefaultScreen(d)), DefaultDepth(d, DefaultScreen(d)), ZPixmap, 0,
-                         reinterpret_cast<char *>(const_cast<std::uint32_t *>(pixels.data())), size.width,
-                         size.height, 32, static_cast<int>(size.width) * 4);
-        if (!image)
-            throw std::runtime_error("OneUI XCreateImage failed");
-        if (image->bits_per_pixel != 32 || image->byte_order != LSBFirst ||
-            image->red_mask != 0xFF0000 || image->green_mask != 0xFF00 || image->blue_mask != 0xFF) {
-            image->data = nullptr;
-            XDestroyImage(image);
-            throw std::runtime_error("OneUI X11 requires a 32-bit BGRA-compatible TrueColor visual");
-        }
-        XPutImage(d, id_, gc_, image, 0, 0, 0, 0, size.width, size.height);
-        image->data = nullptr;
-        XDestroyImage(image);
+        if (paintGpu()) return;
+        const auto& pixels=render();paintX11Pixels(c_.display,id_,gc_,pixels,clientPixelSize());
     }
+
     void event(XEvent &event) {
+        if(event.type==PropertyNotify||event.type==MapNotify||event.type==UnmapNotify||event.type==ConfigureNotify)queueStateChange();
         const auto alive = lifetime_;
+        if (drop_ && drop_->event(event)) return;
         if (XFilterEvent(&event, id_))
             return;
         switch (event.type) {
         case ClientMessage:
             if (static_cast<Atom>(event.xclient.data.l[0]) == deleteAtom_)
-                close();
+                requestClose();
             break;
         case Expose:
             requestRedraw();
@@ -466,8 +511,29 @@ class X11Window final : public platform::DesktopWindow {
 
   protected:
     void wake() override { c_.wake(); }
+    void contentScaleChanged() override { setMinimumClientSize(minimum_); }
+    void fileDropChanged(bool enabled) override { if (drop_) drop_->enableFiles(enabled); }
+
+  public:
+    bool expireDrop() { return drop_ && drop_->expire(); }
 
   private:
+    double fadeStart_ = 0;
+    unsigned int fadeDuration_ = 0;
+    void opacity(float value) {
+        unsigned long opacity = static_cast<unsigned long>(std::clamp(double(value), 0., 1.) * 0xfffffffful);
+        XChangeProperty(c_.display, id_, c_.atom("_NET_WM_WINDOW_OPACITY"), XA_CARDINAL, 32, PropModeReplace,
+            reinterpret_cast<const unsigned char*>(&opacity), 1);
+    }
+    void fadeStep() {
+        requestAnimationFrame([this](double now) {
+            const float progress = std::clamp((now - fadeStart_) / fadeDuration_, 0., 1.);
+            opacity(progress);
+            if (progress < 1) fadeStep();
+            else XDeleteProperty(c_.display, id_, c_.atom("_NET_WM_WINDOW_OPACITY"));
+        });
+    }
+    std::unique_ptr<X11DropTarget> drop_;
     void sendRoot(XEvent &e) {
         XSendEvent(c_.display, DefaultRootWindow(c_.display), False,
                    SubstructureRedirectMask | SubstructureNotifyMask, &e);
@@ -646,6 +712,7 @@ class X11Window final : public platform::DesktopWindow {
     GC gc_ = nullptr;
     Atom deleteAtom_ = 0;
     XIC ic_ = nullptr;
+    Size maximum_{};
     Size minimum_{};
     bool maximized_ = false;
     std::wstring preedit_;
@@ -734,17 +801,20 @@ void X11Connection::selection(XEvent &event) {
     }
 }
 void X11Connection::pump(int timeout) {
+    platform::dispatchNativeServices();
     char bytes[128];
     while (::read(wakeup[0], bytes, sizeof(bytes)) > 0) {
     }
     while (XPending(display)) {
         XEvent e{};
         XNextEvent(display, &e);
+        if (x11DockEvent(display, e)) continue;
         selection(e);
         auto it = windows.find(e.xany.window);
         if (it != windows.end())
             it->second->event(e);
     }
+    if (pollX11DockDrag(display)) timeout = std::min(timeout, 20);
     auto snapshot = windows;
     for (auto pair : snapshot) {
         if (!windows.count(pair.first))
@@ -754,6 +824,7 @@ void X11Connection::pump(int timeout) {
         if (!windows.count(pair.first))
             continue;
         window->paint();
+        if (window->expireDrop()) timeout = std::min(timeout, 20);
         if (window->hasWork())
             timeout = std::min(timeout, 16);
     }
@@ -769,7 +840,7 @@ void X11Connection::pump(int timeout) {
     if (XPending(display) || windows.empty())
         timeout = 0;
     pollfd fds[]{{ConnectionNumber(display), POLLIN, 0}, {wakeup[0], POLLIN, 0}};
-    if (::poll(fds, 2, timeout) < 0 && errno != EINTR)
+    if (platform::pollNativeServices(fds, 2, timeout) < 0 && errno != EINTR)
         throw std::runtime_error("OneUI X11 poll failed");
 }
 } // namespace

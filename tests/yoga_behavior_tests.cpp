@@ -102,8 +102,12 @@ void paragraphsAndNested() {
     const auto old = label->frame().height;
     label->setFontSize(24); page.paint(canvas);
     check(label->frame().height > old, "font changes invalidate Yoga measure cache");
+    const auto unlimitedHeight = label->frame().height;
+    label->setMaxLines(1); page.paint(canvas);
+    const auto singleLineHeight = label->frame().height;
     label->setMaxLines(2); page.paint(canvas);
-    check(label->frame().height <= 68, "max-lines limits measured height");
+    check(label->frame().height <= singleLineHeight * 2 + 0.1f &&
+          label->frame().height < unlimitedHeight, "max-lines limits measured height with native font metrics");
     page.setTextEnvironment(L"Microsoft YaHei UI", 1.5f); page.paint(canvas);
     check(std::isfinite(after->frame().y), "DPI environment change remains finite");
     page.setFrame({0, 0, 0, 0}); page.paint(canvas);

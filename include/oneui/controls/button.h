@@ -59,6 +59,7 @@ private:
     void beginVisualTransition(ButtonStyle from, ButtonStyle target);
     bool hasInteractionState() const override;
     void resetInteractionState() override;
+    void styleScopeChanged() override;
 
     std::wstring text_;
     Binding<std::wstring> textBinding_;

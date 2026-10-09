@@ -77,6 +77,18 @@ void Label::setFontWeight(int weight) {
     invalidate();
 }
 
+void Label::setLetterSpacing(float spacing) {
+    if (!std::isfinite(spacing) || textOptions_.letterSpacing == spacing) return;
+    textOptions_.letterSpacing = spacing;
+    invalidate();
+}
+
+void Label::setTabularNumbers(bool enabled) {
+    if (textOptions_.tabularNumbers == enabled) return;
+    textOptions_.tabularNumbers = enabled;
+    invalidate();
+}
+
 void Label::setAlign(TextAlign align) {
     align_ = align;
     invalidate();

@@ -1,5 +1,8 @@
+#include "window_event_loop_win32.h"
 #include "internal/frame_profile.h"
 #include "internal/developer_tools.h"
+#include "internal/runtime_config.h"
+#include "internal/application_menu.h"
 #include "internal/unicode.h"
 #include <fstream>
 #include <filesystem>
@@ -118,19 +121,6 @@ using WglSwapIntervalExtProc = BOOL(WINAPI*)(int);
 #define DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 reinterpret_cast<HANDLE>(-4)
 #endif
 
-// HWND ownership and WM_QUIT are thread-local. A window on another UI thread
-// must not keep this thread's loop alive, and destroying a layout-only window
-// outside run() must not leave an exit message for a future window.
-thread_local int g_liveWindowCount = 0;
-thread_local unsigned int g_runLoopDepth = 0;
-
-struct RunLoopScope {
-    RunLoopScope() { ++g_runLoopDepth; }
-    ~RunLoopScope() { --g_runLoopDepth; }
-    RunLoopScope(const RunLoopScope&) = delete;
-    RunLoopScope& operator=(const RunLoopScope&) = delete;
-};
-
 using SetProcessDpiAwarenessContextFn = BOOL(WINAPI*)(HANDLE);
 using SetProcessDpiAwarenessFn = HRESULT(WINAPI*)(int);
 using SetProcessDPIAwareFn = BOOL(WINAPI*)();
@@ -221,27 +211,6 @@ double currentTimeMs() {
     return std::chrono::duration<double, std::milli>(now).count();
 }
 
-bool renderTraceEnabled() {
-    wchar_t value[8]{};
-    const DWORD length = GetEnvironmentVariableW(L"ONEUI_RENDER_TRACE", value, static_cast<DWORD>(std::size(value)));
-    return length > 0 && value[0] != L'0';
-}
-
-bool gpuRenderingEnabled() {
-    wchar_t value[8]{};
-    const DWORD length = GetEnvironmentVariableW(L"ONEUI_ENABLE_GPU", value, static_cast<DWORD>(std::size(value)));
-    return length == 0 || value[0] != L'0';
-}
-
-std::wstring renderTraceFilePath() {
-    wchar_t value[MAX_PATH]{};
-    const DWORD length = GetEnvironmentVariableW(L"ONEUI_RENDER_TRACE_FILE", value, static_cast<DWORD>(std::size(value)));
-    if (length == 0 || length >= MAX_PATH) {
-        return {};
-    }
-    return std::wstring(value, value + length);
-}
-
 HCURSOR cursorForKind(CursorKind kind) {
     static HCURSOR arrow = LoadCursor(nullptr, IDC_ARROW);
     static HCURSOR hand = LoadCursor(nullptr, IDC_HAND);
@@ -282,16 +251,17 @@ public:
     unsigned int capabilities() const override {
         return WindowCapabilityClipboard | WindowCapabilityIme | WindowCapabilityPlacement |
             WindowCapabilityActivation | WindowCapabilityTopmost | WindowCapabilityTray |
-            WindowCapabilityNativeDialogs | WindowCapabilityFileDrop;
+            WindowCapabilityNativeDialogs | WindowCapabilityFileDrop | WindowCapabilityMenuBar | WindowCapabilityTrayTooltip;
     }
     explicit Win32Window(WindowOptions options)
         : options_(std::move(options))
         , dpiScale_(dpiScaleForWindowHandle(nullptr))
-        , renderTraceEnabled_(renderTraceEnabled())
-        , renderTraceFilePath_(renderTraceFilePath())
+        , renderTraceEnabled_(runtimeConfig_.renderTrace)
+        , renderTraceFilePath_(runtimeConfig_.renderTraceFile)
         , taskbarCreatedMessage_(RegisterWindowMessageW(L"TaskbarCreated")) {
-        wchar_t dev[8]{};
-        if(GetEnvironmentVariableW(L"ONEUI_DEVTOOLS",dev,8)==1 && dev[0]==L'1')developerTools_=std::make_shared<internal::DeveloperRecorder>(DeveloperOptions{});
+#if ONEUI_DEVELOPER_TOOLS
+        if(runtimeConfig_.developerTools)developerTools_=std::make_shared<internal::DeveloperRecorder>(DeveloperOptions{});
+#endif
         accessibilityComResult_ = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
         animationFrameTimer_ = CreateWaitableTimerExW(
             nullptr,
@@ -300,6 +270,10 @@ public:
             TIMER_ALL_ACCESS);
         if (!animationFrameTimer_) {
             animationFrameTimer_ = CreateWaitableTimerW(nullptr, FALSE, nullptr);
+        }
+        if (animationFrameTimer_) {
+            win32::registerFrameSource({animationFrameTimer_, callbackWindowAlive_,
+                [this] { runAnimationFrameCallbacks(); }});
         }
     }
 
@@ -312,6 +286,7 @@ public:
             content_->detachFromOwner(this);
         }
         hideInternalTrayIcon();
+        if (trayCustomIcon_) DestroyIcon(trayCustomIcon_);
         if (hwnd_) {
             DestroyWindow(hwnd_);
         }
@@ -336,22 +311,34 @@ public:
 
     RendererInfo rendererInfo() const override { return rendererInfo_; }
     bool setDeveloperTools(DeveloperOptions options) override {
+#if ONEUI_DEVELOPER_TOOLS
         if(options.enabled)developerTools_=std::make_shared<internal::DeveloperRecorder>(options);
         else developerTools_.reset();
         requestRedraw();return true;
+#else
+        (void)options;return false;
+#endif
     }
     DeveloperSnapshot developerSnapshot() const override {
+#if ONEUI_DEVELOPER_TOOLS
         DeveloperSnapshot result=developerTools_?developerTools_->snapshot():DeveloperSnapshot{};
         result.supported=true;
+#else
+        DeveloperSnapshot result;
+#endif
         result.backend=rendererInfo_.backend==RenderBackend::OpenGL?"opengl":rendererInfo_.backend==RenderBackend::Software?"software":"unknown";
         return result;
     }
     bool exportDeveloperReport(const std::wstring& path) const override {
+#if ONEUI_DEVELOPER_TOOLS
         try {
             std::ofstream file(std::filesystem::path(path),std::ios::binary);
             if(!file)return false;
             file << developerReportJson(developerSnapshot());file.flush();return bool(file);
         } catch(...) { return false; }
+#else
+        (void)path;return false;
+#endif
     }
 
     RendererMemoryInfo rendererMemoryInfo() const override {
@@ -377,6 +364,8 @@ public:
     }
 
     void setContent(std::shared_ptr<Widget> widget) override {
+        applicationContent_ = widget;
+        if (menuHost_) { menuHost_->setApplicationContent(std::move(widget)); widget = menuHost_; }
         if (content_) {
             content_->detachFromOwner(this);
         }
@@ -433,6 +422,13 @@ public:
         return true;
     }
 
+    bool prepareContentTransfer(Widget* subtree) override {
+        if (!subtree || closed()) return false;
+        if (subtree->focused()) cancelImeComposition();
+        if (hwnd_ && GetCapture() == hwnd_) ReleaseCapture();
+        return Window::prepareContentTransfer(subtree);
+    }
+
     void setRawKeyHandler(RawKeyHandler handler) override {
         rawKeyHandler_ = std::move(handler);
     }
@@ -452,6 +448,35 @@ public:
             DragAcceptFiles(hwnd_, fileDropHandler_ ? TRUE : FALSE);
         }
     }
+
+    WindowState state() const override {
+        auto result=Window::state();if(!hwnd_)return result;
+        result.knownFields=127;
+        result.visible=IsWindowVisible(hwnd_)!=FALSE;
+        result.active=GetForegroundWindow()==hwnd_;
+        result.minimized=IsIconic(hwnd_)!=FALSE;
+        result.maximized=borderlessMaximized_||IsZoomed(hwnd_)!=FALSE;
+        result.fullscreen=options_.fullscreen;
+        result.topmost=(GetWindowLongPtrW(hwnd_,GWL_EXSTYLE)&WS_EX_TOPMOST)!=0;
+        result.resizable=options_.resizable;return result;
+    }
+    bool hide() override { if(!hwnd_)return false;ShowWindow(hwnd_,SW_HIDE);return true; }
+    bool restore() override { ensureCreated();if(!hwnd_)return false;if(options_.fullscreen)setFullscreen(false);if(borderlessMaximized_)applyBorderlessMaximize(false);ShowWindow(hwnd_,SW_RESTORE);return true; }
+    bool maximize() override { ensureCreated();if(!hwnd_)return false;if(options_.borderless)applyBorderlessMaximize(true);else ShowWindow(hwnd_,SW_MAXIMIZE);return true; }
+    bool setTopmost(bool enabled) override { ensureCreated();if(!hwnd_)return false;auto ok=SetWindowPos(hwnd_,enabled?HWND_TOPMOST:HWND_NOTOPMOST,0,0,0,0,SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE);if(ok)options_.topmost=enabled;return ok!=FALSE; }
+    bool setResizable(bool enabled) override { if(closed())return false;options_.resizable=enabled;if(hwnd_)applyWindowState();queueStateChange();return true; }
+    bool setClientSize(Size size) override {
+        if(!std::isfinite(size.width)||!std::isfinite(size.height)||size.width<=0||size.height<=0||size.width>32767||size.height>32767)return false;
+        ensureCreated();if(!hwnd_)return false;RECT frame{},client{};GetWindowRect(hwnd_,&frame);GetClientRect(hwnd_,&client);
+        return SetWindowPos(hwnd_,nullptr,0,0,LONG(std::ceil(size.width*dpiScale()))+frame.right-frame.left-client.right,LONG(std::ceil(size.height*dpiScale()))+frame.bottom-frame.top-client.bottom,SWP_NOMOVE|SWP_NOZORDER|SWP_NOACTIVATE)!=FALSE;
+    }
+    bool setMaximumClientSize(Size size) override { if(!std::isfinite(size.width)||!std::isfinite(size.height))return false;maximumClientSize_={std::max(0.f,size.width),std::max(0.f,size.height)};return true; }
+    bool setOwner(Window* owner) override {
+        if(owner==this||(owner&&(owner->backend()!=backend()||owner->closed())))return false;
+        ensureCreated();if(!hwnd_)return false;if(owner)owner->initialize();
+        SetLastError(0);auto previous=SetWindowLongPtrW(hwnd_,GWLP_HWNDPARENT,reinterpret_cast<LONG_PTR>(owner?owner->nativeHandle():nullptr));return previous!=0||GetLastError()==0;
+    }
+    bool setInputEnabled(bool enabled) override { if(!hwnd_)return false;EnableWindow(hwnd_,enabled?TRUE:FALSE);return IsWindowEnabled(hwnd_)==BOOL(enabled); }
 
     void setMinimumClientSize(Size size) override {
         minimumClientSize_.width = std::max(0.0f, size.width);
@@ -576,56 +601,11 @@ public:
         if (!hwnd_) {
             return acceptingPostedCallbacks_.load(std::memory_order_acquire) ? -1 : 0;
         }
-        const RunLoopScope loopScope;
-        MSG message{};
-        while (true) {
-            // Win7's non-composited paint path can continuously enqueue paint
-            // messages. Draining until empty starves the waitable frame timer,
-            // freezing animations despite an otherwise responsive message loop.
-            // Bound each batch so input and animation handles both get service.
-            const ULONGLONG batchStarted = GetTickCount64();
-            unsigned int dispatched = 0;
-            while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE)) {
-                if (message.message == WM_QUIT) {
-                    // A nested loop must pass the thread's exit request back
-                    // to its caller instead of consuming it on its behalf.
-                    if (g_runLoopDepth > 1) PostQuitMessage(static_cast<int>(message.wParam));
-                    return static_cast<int>(message.wParam);
-                }
-                TranslateMessage(&message);
-                DispatchMessageW(&message);
-                if (++dispatched >= 64 || GetTickCount64() - batchStarted >= 8) break;
-            }
-
-            const DWORD handleCount = animationFrameTimer_ ? 1u : 0u;
-            HANDLE handles[1]{animationFrameTimer_};
-            // The message queue may already be signaled. Check a ready frame
-            // explicitly before a combined message wait to prevent starvation.
-            if (animationFrameTimer_ && WaitForSingleObject(animationFrameTimer_, 0) == WAIT_OBJECT_0) {
-                runAnimationFrameCallbacks();
-                continue;
-            }
-            const DWORD waitResult = MsgWaitForMultipleObjectsEx(
-                handleCount,
-                handleCount > 0 ? handles : nullptr,
-                INFINITE,
-                QS_ALLINPUT,
-                MWMO_INPUTAVAILABLE);
-            if (handleCount > 0 && waitResult == WAIT_OBJECT_0) {
-                runAnimationFrameCallbacks();
-                continue;
-            }
-            if (waitResult == WAIT_OBJECT_0 + handleCount) {
-                continue;
-            }
-            return -1;
-        }
+        return win32::runWindowLoop();
     }
 
     void close() override {
-        if (!hwnd_) {
-            return;
-        }
+        if (!hwnd_) { publishClosed(); return; }
         // 开启“关闭到托盘”时，点击关闭仅隐藏窗口，程序继续在托盘后台运行。
         if (closeToTray_) {
             if (showInternalTrayIcon()) ShowWindow(hwnd_, SW_HIDE);
@@ -666,6 +646,50 @@ public:
         onCloseRequested_ = std::move(callback);
     }
 
+    bool setTrayMenu(const std::vector<TrayMenuItem>& items) override {
+        if (GetCurrentThreadId()!=menuUiThread_ || !callbackWindowAlive_->load() || !validateNativeMenu(items)) return false;
+        trayMenu_ = items;
+        return true;
+    }
+    bool setMenuBar(const std::vector<NativeMenuItem>& items) override {
+        if (GetCurrentThreadId()!=menuUiThread_ || !callbackWindowAlive_->load() || !validateNativeMenu(items)) return false;
+        if (!menuHost_) {
+            if (items.empty()) return true;
+            menuHost_=std::make_shared<internal::ApplicationMenuHost>();
+            auto alive=callbackWindowAlive_;
+            menuHost_->setAction([this,alive](int id){if(alive->load()){auto callback=onMenuAction_;if(callback)callback(id);}});
+            setContent(applicationContent_);
+        }
+        menuHost_->setItems(items);requestRedraw();return true;
+    }
+    void setOnMenuAction(std::function<void(int)> action) override { onMenuAction_=std::move(action); }
+    bool setTrayIcon(const TrayIcon& icon) override {
+        if (GetCurrentThreadId()!=menuUiThread_ || !callbackWindowAlive_->load() || !validateTrayIcon(icon)) return false;
+        HICON replacement=nullptr;
+        if (!icon.rgba.empty()) {
+            BITMAPINFO info{};info.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);
+            info.bmiHeader.biWidth=icon.width;info.bmiHeader.biHeight=-int(icon.height);
+            info.bmiHeader.biPlanes=1;info.bmiHeader.biBitCount=32;info.bmiHeader.biCompression=BI_RGB;
+            void* pixels=nullptr;
+            HBITMAP bitmap=CreateDIBSection(nullptr,&info,DIB_RGB_COLORS,&pixels,nullptr,0);
+            if(!bitmap)return false;
+            auto* out=static_cast<unsigned char*>(pixels);
+            for(std::size_t i=0;i<icon.rgba.size();i+=4){const unsigned a=icon.rgba[i+3];out[i]=(icon.rgba[i+2]*a+127)/255;out[i+1]=(icon.rgba[i+1]*a+127)/255;out[i+2]=(icon.rgba[i]*a+127)/255;out[i+3]=a;}
+            std::vector<unsigned char> mask(((icon.width+15)/16)*2*icon.height,0);
+            HBITMAP monochrome=CreateBitmap(icon.width,icon.height,1,1,mask.data());
+            if(monochrome){ICONINFO data{};data.fIcon=TRUE;data.hbmColor=bitmap;data.hbmMask=monochrome;replacement=CreateIconIndirect(&data);DeleteObject(monochrome);}
+            DeleteObject(bitmap);if(!replacement)return false;
+        }
+        const auto old=trayCustomIcon_;trayCustomIcon_=replacement;
+        if(internalTrayVisible_ && !showInternalTrayIcon()){trayCustomIcon_=old;if(replacement)DestroyIcon(replacement);return false;}
+        if(old)DestroyIcon(old);return true;
+    }
+    bool setTrayTooltip(const std::wstring& text) override {
+        trayTooltip_ = text;
+        return !internalTrayVisible_ || showInternalTrayIcon();
+    }
+    void setOnTrayAction(std::function<void(int)> callback) override { onTrayAction_ = std::move(callback); }
+
     bool notifyTray(const std::wstring& title, const std::wstring& message) override {
         if (!internalTrayVisible_) return false;
         NOTIFYICONDATAW data{};
@@ -686,7 +710,8 @@ public:
         data.uID = kInternalTrayIconId;
         data.uFlags = NIF_ICON | NIF_TIP | NIF_MESSAGE | NIF_SHOWTIP;
         data.uCallbackMessage = oneui::kTrayCallbackMessage;
-        data.hIcon = reinterpret_cast<HICON>(SendMessageW(hwnd_, WM_GETICON, ICON_SMALL, 0));
+        data.hIcon = trayCustomIcon_;
+        if (!data.hIcon) data.hIcon = reinterpret_cast<HICON>(SendMessageW(hwnd_, WM_GETICON, ICON_SMALL, 0));
         if (!data.hIcon) data.hIcon = LoadIconW(GetModuleHandleW(nullptr), MAKEINTRESOURCEW(1));
         if (!data.hIcon) {
             data.hIcon = reinterpret_cast<HICON>(GetClassLongPtrW(hwnd_, GCLP_HICONSM));
@@ -694,7 +719,7 @@ public:
         if (!data.hIcon) {
             data.hIcon = LoadIconW(nullptr, IDI_APPLICATION);
         }
-        wcsncpy_s(data.szTip, options_.title.c_str(), _TRUNCATE);
+        wcsncpy_s(data.szTip, (trayTooltip_.empty() ? options_.title : trayTooltip_).c_str(), _TRUNCATE);
 
         if (internalTrayVisible_) {
             if (Shell_NotifyIconW(NIM_MODIFY, &data)) return true;
@@ -737,16 +762,51 @@ public:
         if (!menu) {
             return;
         }
-        AppendMenuW(menu, MF_STRING, oneui::kTrayCommandShow, L"显示主界面");
+        if (!trayMenu_.empty()) {
+            // Capture IDs before entering the native menu loop: timer-driven
+            // updates must not change the meaning of an already visible row.
+            const auto items = trayMenu_;
+            std::vector<std::pair<int,bool>> actions;
+            const auto append=[&](const auto& self,HMENU target,const std::vector<NativeMenuItem>& entries,bool enabled)->void {
+                for(const auto& item:entries){
+                    if(item.separator){AppendMenuW(target,MF_SEPARATOR,0,nullptr);continue;}
+                    const bool active=enabled && item.enabled;
+                    std::wstring text;for(auto c:item.text){text+=c;if(c==L'&')text+=c;}auto shortcut=menuShortcutLabel(item.shortcut);if(!shortcut.empty())text+=L"\t"+shortcut;
+                    MENUITEMINFOW info{};info.cbSize=sizeof(info);info.fMask=MIIM_STRING|MIIM_STATE|MIIM_FTYPE;
+                    info.dwTypeData=text.data();info.fState=(active?MFS_ENABLED:MFS_DISABLED)|(item.checked?MFS_CHECKED:MFS_UNCHECKED);
+                    info.fType=item.check==MenuCheck::Radio?MFT_RADIOCHECK:MFT_STRING;
+                    if(!item.children.empty()){info.hSubMenu=CreatePopupMenu();if(!info.hSubMenu)continue;self(self,info.hSubMenu,item.children,active);info.fMask|=MIIM_SUBMENU;}
+                    else {actions.emplace_back(item.id,active);info.wID=static_cast<UINT>(actions.size());info.fMask|=MIIM_ID;}
+                    if(!InsertMenuItemW(target,GetMenuItemCount(target),TRUE,&info) && info.hSubMenu)DestroyMenu(info.hSubMenu);
+                }
+            };append(append,menu,items,true);
+            const auto alive = callbackWindowAlive_;
+            const auto callback = onTrayAction_;
+            const auto handle = hwnd_;
+            POINT point{}; GetCursorPos(&point); SetForegroundWindow(handle);
+            const UINT command = TrackPopupMenu(menu, TPM_RETURNCMD | TPM_NONOTIFY | TPM_RIGHTBUTTON,
+                point.x, point.y, 0, handle, nullptr);
+            if (alive->load()) PostMessageW(handle, WM_NULL, 0, 0);
+            DestroyMenu(menu);
+            if (alive->load() && command > 0 && command <= actions.size() && actions[command - 1].second && callback) {
+                callback(actions[command - 1].first);
+            }
+            return;
+        }
+        const auto showText = oneui::builtinText(oneui::BuiltinText::ShowMainWindow);
+        const auto quitText = oneui::builtinText(oneui::BuiltinText::QuitApplication);
+        AppendMenuW(menu, MF_STRING, oneui::kTrayCommandShow, showText.c_str());
         AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-        AppendMenuW(menu, MF_STRING, oneui::kTrayCommandExit, L"退出程序");
+        AppendMenuW(menu, MF_STRING, oneui::kTrayCommandExit, quitText.c_str());
         SetMenuDefaultItem(menu, oneui::kTrayCommandShow, FALSE);
         POINT pt{};
         GetCursorPos(&pt);
         // 经典托盘菜单收尾：置前台并在弹出后补一条空消息，避免菜单不消失。
         SetForegroundWindow(hwnd_);
-        TrackPopupMenu(menu, TPM_RIGHTBUTTON, pt.x, pt.y, 0, hwnd_, nullptr);
-        PostMessageW(hwnd_, WM_NULL, 0, 0);
+        const auto alive = callbackWindowAlive_;
+        const auto handle = hwnd_;
+        TrackPopupMenu(menu, TPM_RIGHTBUTTON, pt.x, pt.y, 0, handle, nullptr);
+        if (alive->load()) PostMessageW(handle, WM_NULL, 0, 0);
         DestroyMenu(menu);
     }
 
@@ -811,7 +871,9 @@ public:
         content_->setFrame(Rect{0.0f, 0.0f, logical.width, logical.height});
         content_->paint(canvas);
         paintTooltip(canvas);
+#if ONEUI_DEVELOPER_TOOLS
         if(developerTools_ && developerTools_->options.overlay)paintDeveloperOverlay(canvas,*developerTools_,logical.width,logical.height);
+#endif
         SkPixmap pixels;
         if (!surface->peekPixels(&pixels)) return false;
 
@@ -1429,7 +1491,7 @@ private:
             window = reinterpret_cast<Win32Window*>(createStruct->lpCreateParams);
             SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(window));
             window->hwnd_ = hwnd;
-            ++g_liveWindowCount;
+            win32::registerNativeWindow();
         }
 
         if (!window) {
@@ -1440,6 +1502,7 @@ private:
     }
 
     LRESULT handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
+        if(message==WM_SHOWWINDOW||message==WM_SIZE||message==WM_ACTIVATE||message==WM_WINDOWPOSCHANGED||message==WM_STYLECHANGED||message==WM_DPICHANGED)queueStateChange();
         if (taskbarCreatedMessage_ != 0 && message == taskbarCreatedMessage_) {
             internalTrayVisible_ = false;
             if (closeToTray_ || trayEnabled_) {
@@ -1524,8 +1587,9 @@ private:
         }
         case WM_SETTINGCHANGE:
             setPlatformMotionEnabled(clientAreaAnimationsEnabled());
-            break;
+            return DefWindowProcW(hwnd_, message, wParam, lParam);
         case WM_CLOSE:
+            if(dispatchCloseRequest())return 0;
             if (onCloseRequested_) { auto callback = onCloseRequested_; callback(false); }
             else close();
             return 0;
@@ -1699,7 +1763,9 @@ private:
             animationFrameIntervalMs_ = 1000.0 / 60.0;
             return 0;
         case WM_SHOWWINDOW:
+#if ONEUI_DEVELOPER_TOOLS
             if(developerTools_)developerTools_->resetCadence();
+#endif
             updateShadowWindow(); // 显隐（含托盘还原/隐藏）时同步投影窗显隐
             return DefWindowProcW(hwnd_, message, wParam, lParam);
         case WM_GETMINMAXINFO:
@@ -1729,6 +1795,8 @@ private:
                         static_cast<LONG>(std::ceil(options_.height * dpiScale_)) + nonClientHeight + 32);
                 }
 #endif
+                if(maximumClientSize_.width>0)info->ptMaxTrackSize.x=std::max(info->ptMinTrackSize.x,LONG(std::ceil(maximumClientSize_.width*dpiScale_))+nonClientWidth);
+                if(maximumClientSize_.height>0)info->ptMaxTrackSize.y=std::max(info->ptMinTrackSize.y,LONG(std::ceil(maximumClientSize_.height*dpiScale_))+nonClientHeight);
                 if (minimumClientSize_.width > 0.0f) {
                     info->ptMinTrackSize.x = std::max<LONG>(
                         info->ptMinTrackSize.x,
@@ -1743,7 +1811,9 @@ private:
             return 0;
         }
         case WM_SIZE:
+#if ONEUI_DEVELOPER_TOOLS
             if(developerTools_)developerTools_->resetCadence();
+#endif
             recordResizeMessage(wParam);
             if (wParam == SIZE_MAXIMIZED) {
                 lastKnownMaximized_ = true;
@@ -1872,7 +1942,10 @@ private:
             return dispatchImeComposition(wParam, lParam);
         case WM_IME_ENDCOMPOSITION:
             endImeComposition();
-            return 0;
+            // The system owns the preedit window for controls such as the
+            // terminal. It must receive END as well as START, or the final
+            // composition text can remain floating after Enter.
+            return content_ && content_->textInputState().drawsPreedit ? 0 : DefWindowProcW(hwnd_, message, wParam, lParam);
         case WM_IME_SETCONTEXT:
             if (content_ && content_->textInputState().drawsPreedit) lParam &= ~ISC_SHOWUICOMPOSITIONWINDOW;
             updateImePosition();
@@ -1894,9 +1967,8 @@ private:
             HWND destroyedHwnd = hwnd_;
             SetWindowLongPtrW(hwnd_, GWLP_USERDATA, 0);
             hwnd_ = nullptr;
-            if (--g_liveWindowCount == 0 && g_runLoopDepth > 0) {
-                PostQuitMessage(0);
-            }
+            win32::unregisterNativeWindow();
+            publishClosed();
             return DefWindowProcW(destroyedHwnd, message, wParam, lParam);
         }
         default:
@@ -2548,6 +2620,7 @@ private:
         flushInteractivePaint();
     }
 
+#if ONEUI_DEVELOPER_TOOLS
     RECT developerOverlayPixels(const RECT& client) const {
         const float scale=normalizedDpiScale();
         return {std::max<LONG>(0,client.right-LONG(408*scale)),std::max<LONG>(0,client.bottom-LONG(194*scale)),client.right,client.bottom};
@@ -2570,11 +2643,13 @@ private:
         text(developerExportStatus_>0?L"已导出工作目录 oneui-devtools.json":developerExportStatus_<0?L"导出失败：检查工作目录写入权限":L"CPU 侧计时；面板和采样本身有开销",140,Color{151,170,158});
         canvas.restore();
     }
+#endif
     void paint() {
+        const double paintStartMs = currentTimeMs();
+#if ONEUI_DEVELOPER_TOOLS
         const auto diagnostics=developerTools_; // Safe if application disables tools during paint.
         internal::DiagnosticSession diagnosticSession(diagnostics.get());
         internal::FrameProfileSession profile(renderTraceEnabled_ || bool(diagnostics));
-        const double paintStartMs = currentTimeMs();
         const double beforeContent=rendererInfo_.contentMs, beforeSubmit=rendererInfo_.submitMs, beforeBlit=rendererInfo_.blitMs;
         if(diagnostics)diagnostics->beginFrame(paintStartMs);
         const auto finishDiagnostics=[&] {
@@ -2587,6 +2662,10 @@ private:
             frame.fillMs=profile.data.ms[2];frame.pathMs=profile.data.ms[3];
             diagnostics->finishFrame(currentTimeMs(),contentAnimationFramePending_,frame);
         };
+#else
+        internal::FrameProfileSession profile(renderTraceEnabled_);
+        const auto finishDiagnostics=[] {};
+#endif
         RECT clientRect{};
         GetClientRect(hwnd_, &clientRect);
 
@@ -2601,10 +2680,12 @@ private:
         HDC paintDc = BeginPaint(hwnd_, &paintStruct);
         HDC dc = useGPU ? glDC_ : paintDc;
         RECT dirtyRect = paintStruct.rcPaint;
+#if ONEUI_DEVELOPER_TOOLS
         if(diagnostics && diagnostics->options.overlay) {
             const RECT overlay=developerOverlayPixels(clientRect);
             RECT combined{};UnionRect(&combined,&dirtyRect,&overlay);dirtyRect=combined;
         }
+#endif
         const int width = std::max<LONG>(1, clientRect.right - clientRect.left);
         const int height = std::max<LONG>(1, clientRect.bottom - clientRect.top);
         const float scale = normalizedDpiScale();
@@ -2676,7 +2757,9 @@ private:
         if (!fullPaint) {
             canvas.restore();
         }
+#if ONEUI_DEVELOPER_TOOLS
         if(diagnostics && diagnostics->options.overlay)paintDeveloperOverlay(canvas,*diagnostics,logicalWidth,logicalHeight);
+#endif
         skCanvas->restore();
 
         if (gpuAvailable_ && grContext_ && windowSurface_) {
@@ -3360,6 +3443,10 @@ private:
         const auto alive = callbackWindowAlive_;
         updateTrackedKeyState(wParam, true);
         KeyEvent event = makeKeyEvent(wParam, lParam, true);
+        // Composition keys belong to the IME, not application commands or the
+        // PTY. Committed text arrives atomically via GCS_RESULTSTR.
+        if (imeTargetCurrent() || wParam == VK_PROCESSKEY) return false;
+#if ONEUI_DEVELOPER_TOOLS
         if(developerTools_ && event.virtualKey==VK_F12 && !event.shift && !event.alt) {
             if(!event.repeat) {
                 if(event.control)developerExportStatus_=exportDeveloperReport(L"oneui-devtools.json")?1:-1;
@@ -3368,6 +3455,7 @@ private:
             }
             return true;
         }
+#endif
         const auto raw = rawKeyHandler_;
         const bool consumed = raw && raw(event);
         if (!alive->load(std::memory_order_acquire)) return true;
@@ -3401,6 +3489,7 @@ private:
         const auto alive = callbackWindowAlive_;
         updateTrackedKeyState(wParam, false);
         KeyEvent event = makeKeyEvent(wParam, lParam, false);
+        if (imeTargetCurrent() || wParam == VK_PROCESSKEY) return false;
         const auto raw = rawKeyHandler_;
         const bool consumed = raw && raw(event);
         if (!alive->load(std::memory_order_acquire)) return true;
@@ -3656,7 +3745,7 @@ private:
             return;
         }
         gpuInitializationAttempted_ = true;
-        if (!gpuRenderingEnabled()) {
+        if (!runtimeConfig_.gpuEnabled) {
             rendererInfo_.reason = "disabled-by-environment";
             return;
         }
@@ -3733,12 +3822,20 @@ private:
     }
 
     void shutdownGPU() {
+        // Each top-level window owns an independent GL context. Destruction
+        // can arrive while a different window was the last one to paint.
+        const HGLRC previousContext = wglGetCurrentContext();
+        const HDC previousDC = wglGetCurrentDC();
+        const bool bound = glContext_ && wglMakeCurrent(glDC_, glContext_);
+        if (grContext_ && glContext_ && !bound) grContext_->abandonContext();
         windowSurface_.reset();
         paintSurface_.reset();
         grContext_.reset();
         if (glContext_) {
             wglMakeCurrent(nullptr, nullptr);
             wglDeleteContext(glContext_);
+            if (previousContext && previousContext != glContext_)
+                wglMakeCurrent(previousDC, previousContext);
             glContext_ = nullptr;
         }
         if (glDC_) {
@@ -3749,8 +3846,11 @@ private:
         swapIntervalEnabled_ = false;
     }
 
+    const internal::RuntimeConfig runtimeConfig_ = internal::RuntimeConfig::fromEnvironment();
+#if ONEUI_DEVELOPER_TOOLS
     std::shared_ptr<internal::DeveloperRecorder> developerTools_;
     int developerExportStatus_=0;
+#endif
     RendererInfo rendererInfo_;
     HWND hwnd_ = nullptr;
     const void* imeIdentity_ = nullptr;
@@ -3772,6 +3872,7 @@ private:
     ClientSizeChangedHandler clientSizeChangedHandler_;
     ActivationChangedHandler activationChangedHandler_;
     FileDropHandler fileDropHandler_;
+    Size maximumClientSize_{};
     Size minimumClientSize_{};
     bool clientSizeChangedFramePending_ = false;
     bool windowActive_ = false;
@@ -3807,6 +3908,14 @@ private:
     float cornerRadiusLogical_ = 0.0f;
     bool closeToTray_ = false;
     bool trayEnabled_ = false;
+    std::vector<TrayMenuItem> trayMenu_;
+    DWORD menuUiThread_=GetCurrentThreadId();
+    HICON trayCustomIcon_ = nullptr;
+    std::shared_ptr<internal::ApplicationMenuHost> menuHost_;
+    std::shared_ptr<Widget> applicationContent_;
+    std::function<void(int)> onMenuAction_;
+    std::wstring trayTooltip_;
+    std::function<void(int)> onTrayAction_;
     std::function<void(bool)> onCloseRequested_;
     bool internalTrayVisible_ = false;
     UINT taskbarCreatedMessage_ = 0;
@@ -3900,3 +4009,4 @@ std::unique_ptr<Window> Window::create(WindowOptions options) {
 }
 
 } // namespace oneui
+#include "oneui/localization.h"

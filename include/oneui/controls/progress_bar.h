@@ -37,6 +37,7 @@ public:
     bool indeterminate() const;
     void setAnimationsEnabled(bool enabled);
     bool animationsEnabled() const;
+    void setAnimationScheduler(std::function<void()> scheduler) override;
     void setStyleOverride(ProgressBarStyleOverride style);
     void clearStyleOverride();
 

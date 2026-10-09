@@ -1,4 +1,5 @@
 #pragma once
+#include "oneui/localization.h"
 #include "oneui/controls/reveal.h"
 #include "oneui/ui_native_host.h"
 #include "oneui/ui_native_theme.h"
@@ -398,7 +399,7 @@ public:
                 auto hint=make("Text",{},"muted");hint.widget->setVisible(false);e.hint=hint.as<Label>();
                 std::vector<std::shared_ptr<Widget>> content{title.widget,hint.widget};for(auto& child:children)content.push_back(child.widget);
                 stack->reconcileChildren(std::move(content));stack->setFlex(hint.widget,hint.flex);
-                if(type=="LoadingState") {e.title->setText(L"正在加载…");e.title->setVisible(true);}
+                if(type=="LoadingState") {e.title->setText(builtinText(BuiltinText::Loading));e.title->setVisible(true);}
             }
         }
         styles_->add(e); return e;

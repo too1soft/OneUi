@@ -144,6 +144,10 @@ bool SplitView::onMouseMove(const MouseEvent& event) {
         return true;
     }
 
+    if (pressedChild()) {
+        if (dividerHovered_) { dividerHovered_ = false; invalidate(); }
+        return View::onMouseMove(event);
+    }
     const bool hovered = hasResizableDivider() && dividerHitRect().contains(event.position);
     if (dividerHovered_ != hovered) {
         dividerHovered_ = hovered;

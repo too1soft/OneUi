@@ -1,6 +1,7 @@
 #include "oneui/platform/window.h"
 
 #include <windows.h>
+#include <gl/GL.h>
 #include <chrono>
 #include <future>
 #include <iostream>
@@ -23,6 +24,16 @@ auto hiddenWindow() {
     auto window = oneui::Window::create(options);
     window->initialize();
     return window;
+}
+
+void testSettingChangeHasDefinedResult() {
+    auto window = hiddenWindow();
+    const auto hwnd = static_cast<HWND>(window->nativeHandle());
+    expectTrue("Settings change returns the default window result",
+        SendMessageW(hwnd, WM_SETTINGCHANGE, SPI_SETCLIENTAREAANIMATION, 0) == 0);
+    bool completed = false;
+    window->post([&] { completed = true; window->close(); });
+    expectTrue("Settings change leaves the message loop usable", window->run() == 0 && completed);
 }
 
 void testDestroyWithoutRunDoesNotQuitNextWindow() {
@@ -104,13 +115,50 @@ void testExplicitQuitIsPreserved() {
                PeekMessageW(&message, nullptr, WM_QUIT, WM_QUIT, PM_REMOVE) == FALSE);
 }
 
+void testSecondaryWindowAnimation() {
+    expectWorkerFinishes("Secondary window animates and survives primary close", [](oneui::Window& primary) {
+        auto secondary = hiddenWindow();
+        int frames = 0;
+        std::function<void(double)> next;
+        next = [&](double) {
+            ++frames;
+            if (frames == 2) primary.close();
+            if (frames == 4) secondary->close();
+            else secondary->requestAnimationFrame(next);
+        };
+        secondary->requestAnimationFrame(next);
+        return primary.run() == 0 && frames == 4;
+    });
+}
+
+void testCloseRestoresOtherWindowsGpuContext() {
+    auto primary = hiddenWindow();
+    primary->show();
+    const auto primaryContext = wglGetCurrentContext();
+    const auto primaryDC = wglGetCurrentDC();
+    auto secondary = hiddenWindow();
+    secondary->show();
+    if (primaryContext && wglGetCurrentContext()) {
+        wglMakeCurrent(primaryDC, primaryContext);
+        secondary->close();
+        expectTrue("Closing secondary preserves primary GL context",
+                   wglGetCurrentContext() == primaryContext);
+    } else {
+        secondary->close();
+    }
+    primary->close();
+}
+
 } // namespace
 
 int main() {
     testDestroyWithoutRunDoesNotQuitNextWindow();
+    testSettingChangeHasDefinedResult();
     testOtherThreadDoesNotPreventExit();
     testAlreadyClosedWindowReturns();
     testNestedLoopPropagatesQuit();
     testExplicitQuitIsPreserved();
+    testSecondaryWindowAnimation();
+    testCloseRestoresOtherWindowsGpuContext();
     return failures == 0 ? 0 : 1;
 }

@@ -4,6 +4,8 @@
 #include "oneui/export.h"
 #include "oneui/geometry.h"
 #include "oneui/widget.h"
+#include "oneui/native_menu.h"
+#include "oneui/platform/window_state.h"
 
 #include <cstdint>
 #include <functional>
@@ -24,10 +26,13 @@ enum WindowCapability : unsigned int {
     WindowCapabilityTopmost = 1u << 4,
     WindowCapabilityTray = 1u << 5,
     WindowCapabilityNativeDialogs = 1u << 6,
-    WindowCapabilityFileDrop = 1u << 7
+    WindowCapabilityFileDrop = 1u << 7,
+    WindowCapabilityMenuBar = 1u << 8,
+    // Guaranteed native hover tooltip, not merely an indicator title.
+    WindowCapabilityTrayTooltip = 1u << 9
 };
 
-enum class RenderBackend { Unknown, Software, OpenGL };
+enum class RenderBackend { Unknown, Software, OpenGL, Metal };
 // UI-thread snapshot. Counters are cumulative CPU wall times, not GPU timestamps.
 // Unknown means no render surface has been established (or backend unsupported).
 struct RendererInfo {
@@ -78,13 +83,35 @@ struct WindowPlacement {
 };
 
 class ONEUI_API Window {
+    friend class ModalSession;
 public:
     using RawKeyHandler = std::function<bool(const KeyEvent&)>;
     using ClientSizeChangedHandler = std::function<void(Size)>;
     using ActivationChangedHandler = std::function<void(bool)>;
     using FileDropHandler = std::function<void(std::vector<std::wstring>, Point)>;
 
-    virtual ~Window() = default;
+    Window();
+    virtual ~Window();
+    Window(const Window&)=delete;
+    Window& operator=(const Window&)=delete;
+    virtual WindowState state() const;
+    virtual bool hide() { return false; }
+    virtual bool restore() { return false; }
+    virtual bool maximize() { return false; }
+    virtual bool setTopmost(bool) { return false; }
+    virtual bool setResizable(bool) { return false; }
+    virtual bool setClientSize(Size) { return false; }
+    virtual bool setMaximumClientSize(Size) { return false; }
+    virtual bool setOwner(Window*) { return false; }
+    virtual bool setInputEnabled(bool) { return false; }
+    // Independent subscriptions let applications observe lifecycle without
+    // replacing existing activation/size/close-policy callbacks.
+    using EventSubscription=std::shared_ptr<void>;
+    EventSubscription observeState(std::function<void(const WindowState&)> callback);
+    EventSubscription observeClosed(std::function<void()> callback);
+    bool closed() const;
+    // Application close policy is independent of legacy window callbacks.
+    EventSubscription interceptCloseRequest(std::function<bool(bool)> callback);
     CommandScope& commands() { return commands_; }
     CommandResult queryCommand(const std::string& id) const {
         return oneui::queryCommand(commandRoot_.lock(), const_cast<CommandScope*>(&commands_), id);
@@ -112,6 +139,14 @@ public:
         (void)widget;
         (void)focusVisible;
         return false;
+    }
+    // End source-window pointer/IME interaction before a subtree crosses native
+    // hosts. This cancels preedit (never commits it into a different editor).
+    virtual bool prepareContentTransfer(Widget* subtree) {
+        if (!subtree || closed()) return false;
+        subtree->setTextComposition({}, 0);
+        subtree->clearInteractionState();
+        return true;
     }
     // Runs before focused-widget key routing. Returning true consumes the key
     // event, which lets applications implement global shortcuts without
@@ -218,6 +253,14 @@ public:
     // Explicit window-owned tray; independent of the close preference. Legacy
     // setCloseToTray callers retain their implicit tray behaviour.
     virtual bool setTrayEnabled(bool enabled) { (void)enabled; return false; }
+    virtual bool setTrayMenu(const std::vector<TrayMenuItem>& items) { (void)items; return false; }
+    // Menu/icon operations and callbacks belong to the owning UI thread.
+    virtual bool setTrayIcon(const TrayIcon& icon) { (void)icon; return false; }
+    // macOS: system menu bar; Windows/Linux: a menu bar inside the client area.
+    virtual bool setMenuBar(const std::vector<NativeMenuItem>& items) { (void)items; return false; }
+    virtual void setOnMenuAction(std::function<void(int)> callback) { (void)callback; }
+    virtual bool setTrayTooltip(const std::wstring& text) { (void)text; return false; }
+    virtual void setOnTrayAction(std::function<void(int)> callback) { (void)callback; }
     virtual bool notifyTray(const std::wstring& title, const std::wstring& message) {
         (void)title; (void)message; return false;
     }
@@ -234,8 +277,14 @@ public:
     // backends return false availability flags, not a measured zero usage.
     virtual RendererMemoryInfo rendererMemoryInfo() const { return {}; }
 protected:
+    void queueStateChange();
+    bool dispatchCloseRequest(bool forced=false);
+    void publishState();
+    void publishClosed();
     void setCommandRoot(const std::shared_ptr<Widget>& root) { commandRoot_ = root; }
 private:
+    struct Events;
+    std::shared_ptr<Events> events_;
     CommandScope commands_;
     std::weak_ptr<Widget> commandRoot_;
 };

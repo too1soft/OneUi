@@ -1,4 +1,6 @@
 #include "oneui/oneui_c_api.h"
+#include "../capi/oneui_c_api_error.h"
+#include "oneui/localization.h"
 #include "../capi/oneui_c_api_internal.h"
 #include "../capi/oneui_c_api_window_internal.h"
 #include <algorithm>
@@ -7,6 +9,11 @@
 #include <cwchar>
 #include <mutex>
 #include <vector>
+#ifndef _WIN32
+#include "shared/native_desktop_services.h"
+#include "shared/desktop_window.h"
+#include <filesystem>
+#endif
 
 #ifdef _WIN32
 #include <windows.h>
@@ -21,6 +28,9 @@ struct OneUiTray {
     UINT id = 0;
     bool visible = false;
     std::wstring tooltip;
+#else
+    std::shared_ptr<oneui::platform::NativeTray> native;
+    std::weak_ptr<std::atomic<bool>> ownerLifetime;
 #endif
 };
 
@@ -135,14 +145,6 @@ bool ensurePromptWindowClass() {
     return registered;
 }
 
-const wchar_t* promptAcceptLabel() {
-    return PRIMARYLANGID(GetUserDefaultUILanguage()) == LANG_CHINESE ? L"确定" : L"OK";
-}
-
-const wchar_t* promptCancelLabel() {
-    return PRIMARYLANGID(GetUserDefaultUILanguage()) == LANG_CHINESE ? L"取消" : L"Cancel";
-}
-
 int promptDpi(HWND owner) {
     using GetDpiForWindowFn = UINT(WINAPI*)(HWND);
     const auto getDpiForWindow = reinterpret_cast<GetDpiForWindowFn>(
@@ -184,7 +186,7 @@ static int windowFileDialogUtf8Impl(
         (options->filter_count > 0 && !options->filters)) {
         return -1;
     }
-    if (allowMultiple && options->mode != OneUiFileDialogOpenFile) {
+    if (allowMultiple && options->mode != OneUiFileDialogOpenFile && options->mode != OneUiFileDialogSelectFolder) {
         return -1;
     }
 
@@ -258,6 +260,7 @@ static int windowFileDialogUtf8Impl(
                 }
             } else if (options->mode == OneUiFileDialogSelectFolder) {
                 flags |= FOS_PICKFOLDERS | FOS_PATHMUSTEXIST;
+                if (allowMultiple) { flags |= FOS_ALLOWMULTISELECT; }
             } else if (options->confirm_overwrite) {
                 flags |= FOS_OVERWRITEPROMPT;
             }
@@ -432,18 +435,49 @@ static int windowFileDialogUtf8Impl(
 
         return result;
     } catch (...) {
+        oneui::capi::recordCurrentException(__func__);
         return -1;
     }
 #else
-    (void)window;
-    (void)options;
-    (void)buffer;
-    (void)bufferLength;
-    (void)allowMultiple;
-    if (requiredLength) {
-        *requiredLength = 0;
-    }
-    return -1;
+    if (requiredLength) *requiredLength = 0;
+    if (buffer && bufferLength) buffer[0] = '\0';
+    if (!options || options->filter_count > 64 || (options->filter_count && !options->filters) ||
+        options->mode < OneUiFileDialogOpenFile || options->mode > OneUiFileDialogSelectFolder ||
+        (allowMultiple && options->mode == OneUiFileDialogSaveFile)) return -1;
+    try {
+        oneui::platform::NativeFileRequest request;
+        request.mode = options->mode;
+        request.title = utf8OrEmpty(options->title);
+        request.directory = utf8OrEmpty(options->initial_directory);
+        request.name = utf8OrEmpty(options->default_name);
+        request.extension = utf8OrEmpty(options->default_extension);
+        request.multiple = allowMultiple;
+        request.confirmOverwrite = options->confirm_overwrite != 0;
+        if (!request.directory.empty() && !std::filesystem::is_directory(std::filesystem::u8path(utf8FromWide(request.directory)))) return -1;
+        for (std::size_t i = 0; i < options->filter_count; ++i) {
+            auto name = utf8OrEmpty(options->filters[i].name), pattern = utf8OrEmpty(options->filters[i].pattern);
+            if (name.empty() || pattern.empty()) return -1;
+            request.filters.push_back({std::move(name), std::move(pattern)});
+        }
+        const auto result = oneui::platform::nativeFileDialog(window ? window->window.get() : nullptr, request);
+        if (result.status != 1) return result.status;
+        std::string bytes;
+        for (const auto& path : result.paths) { bytes += utf8FromWide(path); bytes.push_back('\0'); if (!allowMultiple) break; }
+        if (bytes.empty()) return -1;
+        if (allowMultiple) bytes.push_back('\0');
+        if (requiredLength) *requiredLength = bytes.size();
+        if (!buffer || bufferLength < bytes.size()) return -2;
+        std::memcpy(buffer, bytes.data(), bytes.size());
+        return 1;
+    } catch (...) { oneui::capi::recordCurrentException(__func__); return -1; }
+#endif
+}
+
+unsigned int oneui_double_click_interval_ms(void) {
+#ifdef _WIN32
+    return std::max(1u, static_cast<unsigned int>(GetDoubleClickTime()));
+#else
+    return oneui::platform::nativeDoubleClickInterval();
 #endif
 }
 
@@ -517,11 +551,18 @@ int oneui_window_pick_folder(OneUiWindow* window, const wchar_t* title, wchar_t*
     }
     return picked;
 #else
-    (void)window;
-    (void)title;
-    (void)out;
-    (void)outLen;
-    return 0;
+    if (!out || outLen <= 0) return 0;
+    out[0] = L'\0';
+    try {
+        oneui::platform::NativeFileRequest request;
+        request.mode = 2;
+        request.title = wideOrEmpty(title);
+        const auto result = oneui::platform::nativeFileDialog(window ? window->window.get() : nullptr, request);
+        if (result.status != 1 || result.paths.empty() || result.paths.front().size() >= static_cast<std::size_t>(outLen)) return 0;
+        std::copy(result.paths.front().begin(), result.paths.front().end(), out);
+        out[result.paths.front().size()] = L'\0';
+        return 1;
+    } catch (...) { oneui::capi::recordCurrentException(__func__); return 0; }
 #endif
 }
 
@@ -540,10 +581,8 @@ int oneui_window_confirm(OneUiWindow* window, const wchar_t* title, const wchar_
         MB_ICONQUESTION | MB_YESNO | MB_DEFBUTTON2 | MB_APPLMODAL);
     return result == IDYES ? 1 : 0;
 #else
-    (void)window;
-    (void)title;
-    (void)message;
-    return 0;
+    try { return oneui::platform::nativeConfirm(window ? window->window.get() : nullptr, wideOrEmpty(title), wideOrEmpty(message)); }
+    catch (...) { oneui::capi::recordCurrentException(__func__); return 0; }
 #endif
 }
 
@@ -647,7 +686,7 @@ int oneui_window_prompt_text(
     HWND acceptButton = CreateWindowExW(
         0,
         L"BUTTON",
-        promptAcceptLabel(),
+        oneui::builtinText(oneui::BuiltinText::Accept).c_str(),
         WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
         width - margin - buttonWidth * 2 - scaled(10),
         buttonTop,
@@ -660,7 +699,7 @@ int oneui_window_prompt_text(
     HWND cancelButton = CreateWindowExW(
         0,
         L"BUTTON",
-        promptCancelLabel(),
+        oneui::builtinText(oneui::BuiltinText::Cancel).c_str(),
         WS_CHILD | WS_VISIBLE | WS_TABSTOP,
         width - margin - buttonWidth,
         buttonTop,
@@ -716,15 +755,18 @@ int oneui_window_prompt_text(
 
     return accepted ? 1 : 0;
 #else
-    (void)window;
-    (void)title;
-    (void)message;
-    (void)initialValue;
-    (void)placeholder;
-    (void)password;
-    (void)out;
-    (void)outLen;
-    return 0;
+    if (!out || outLen <= 0) return 0;
+    out[0] = L'\0';
+    try {
+        std::wstring value;
+        const bool accepted = oneui::platform::nativePrompt(window ? window->window.get() : nullptr,
+            wideOrEmpty(title), wideOrEmpty(message), wideOrEmpty(initialValue), wideOrEmpty(placeholder), password != 0, value);
+        if (!accepted || value.size() >= static_cast<std::size_t>(outLen)) return 0;
+        std::copy(value.begin(), value.end(), out);
+        out[value.size()] = L'\0';
+        std::fill(value.begin(), value.end(), L'\0');
+        return 1;
+    } catch (...) { oneui::capi::recordCurrentException(__func__); return 0; }
 #endif
 }
 
@@ -744,9 +786,23 @@ OneUiTray* oneui_tray_create(OneUiWindow* window, const wchar_t* tooltip) {
     tray->tooltip = wideOrEmpty(tooltip);
     return tray.release();
 #else
-    (void)window;
-    (void)tooltip;
-    return nullptr;
+    if (!window || !window->window) return nullptr;
+    auto* desktop = dynamic_cast<oneui::platform::DesktopWindow*>(window->window.get());
+    if (!desktop || desktop->isClosed()) return nullptr;
+    try {
+        auto tray = std::make_unique<OneUiTray>();
+        tray->ownerLifetime = desktop->nativeLifetime();
+        tray->native = oneui::platform::makeNativeTray([desktop, weak = tray->ownerLifetime](int action) {
+            const auto alive = weak.lock();
+            if (!alive || !*alive || desktop->isClosed()) return;
+            if (action == static_cast<int>(oneui::kTrayCommandShow)) desktop->activate();
+            else if (action == static_cast<int>(oneui::kTrayCommandExit)) desktop->requestTrayExit();
+        });
+        if (!tray->native) return nullptr;
+        tray->native->setTooltip(wideOrEmpty(tooltip));
+        desktop->trackTray(tray->native);
+        return tray.release();
+    } catch (...) { oneui::capi::recordCurrentException(__func__); return nullptr; }
 #endif
 }
 
@@ -785,8 +841,10 @@ int oneui_tray_show(OneUiTray* tray) {
     tray->visible = true;
     return 1;
 #else
-    (void)tray;
-    return 0;
+    if (!tray || !tray->native) return 0;
+    const auto alive = tray->ownerLifetime.lock();
+    if (!alive || !*alive) return 0;
+    try { return tray->native->show(); } catch (...) { oneui::capi::recordCurrentException(__func__); return 0; }
 #endif
 }
 
@@ -803,8 +861,8 @@ int oneui_tray_hide(OneUiTray* tray) {
     tray->visible = false;
     return 1;
 #else
-    (void)tray;
-    return 0;
+    if (!tray || !tray->native) return 0;
+    try { tray->native->hide(); return 1; } catch (...) { oneui::capi::recordCurrentException(__func__); return 0; }
 #endif
 }
 
@@ -823,8 +881,7 @@ void oneui_tray_set_tooltip(OneUiTray* tray, const wchar_t* tooltip) {
     copyWideField(data.szTip, tray->tooltip.c_str());
     Shell_NotifyIconW(NIM_MODIFY, &data);
 #else
-    (void)tray;
-    (void)tooltip;
+    try { if (tray && tray->native) tray->native->setTooltip(wideOrEmpty(tooltip)); } catch (...) { oneui::capi::recordCurrentException(__func__); }
 #endif
 }
 
@@ -844,9 +901,7 @@ int oneui_tray_show_notification(OneUiTray* tray, const wchar_t* title, const wc
     copyWideField(data.szInfo, message);
     return Shell_NotifyIconW(NIM_MODIFY, &data) ? 1 : 0;
 #else
-    (void)tray;
-    (void)title;
-    (void)message;
-    return 0;
+    try { return tray && tray->native && oneui_tray_show(tray) && tray->native->notify(wideOrEmpty(title), wideOrEmpty(message)); }
+    catch (...) { oneui::capi::recordCurrentException(__func__); return 0; }
 #endif
 }

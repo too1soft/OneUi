@@ -1,3 +1,4 @@
+#include "internal/runtime_error.h"
 #include "oneui/controls/text_field.h"
 
 #include "oneui/icon.h"
@@ -151,17 +152,11 @@ CommandResult TextField::executeBuiltinCommand(const std::string& id) {
 }
 CommandResult TextField::dispatchBuiltinCommandKey(const KeyEvent& event, const std::string& logicalKey) {
     if (!event.pressed || !event.editShortcut() || event.alt || hasTextComposition()) return CommandResult::NotFound;
-#ifdef __APPLE__
-    if (event.control) return CommandResult::NotFound;
-#else
-    if (event.win) return CommandResult::NotFound;
-#endif
+    if (platform::primaryUsesMeta ? event.control : event.meta()) return CommandResult::NotFound;
     auto key = logicalKey.empty() ? logicalKeyName(event) : logicalKey;
     for (auto& c : key) if (c >= 'A' && c <= 'Z') c = static_cast<char>(c + 32);
     if (key == "z") return executeBuiltinCommand(event.shift ? "edit.redo" : "edit.undo");
-#ifndef __APPLE__
-    if (key == "y" && !event.shift) return executeBuiltinCommand("edit.redo");
-#endif
+    if (!platform::primaryUsesMeta && key == "y" && !event.shift) return executeBuiltinCommand("edit.redo");
     if (event.shift) return CommandResult::NotFound;
     if (key == "a") return executeBuiltinCommand("edit.select_all");
     if (key == "c") return executeBuiltinCommand("edit.copy");
@@ -391,6 +386,34 @@ void TextField::selectAll() {
     setSelectionRange(0, value().size());
 }
 
+std::vector<Rect> TextField::textRangeRects(std::size_t start, std::size_t end) const {
+    if (passwordMode_ || start > end || end > value().size()) return {};
+    ensureTextLayout();
+    auto content = frame().inset(resolvedStyle().padding);
+    if (prefixIcon_) content.x += AffixIconSize + AffixIconGap;
+    const auto origin = textOrigin(content);
+    const auto a = toDisplayOffset(start);
+    auto rects = start == end ? std::vector<Rect>{textLayout_->display->caret({a, TextAffinity::Downstream})}
+                              : textLayout_->display->selection(a, toDisplayOffset(textLayout_->logical->ceil(end)));
+    for (auto& rect : rects) { rect.x += origin.x; rect.y += origin.y; }
+    return rects;
+}
+std::optional<std::size_t> TextField::textOffsetAtPoint(Point point) const {
+    if (passwordMode_ || !std::isfinite(point.x) || !std::isfinite(point.y)) return std::nullopt;
+    ensureTextLayout();
+    auto content = frame().inset(resolvedStyle().padding);
+    if (prefixIcon_) content.x += AffixIconSize + AffixIconGap;
+    const auto origin = textOrigin(content);
+    return fromDisplayOffset(textLayout_->display->hitTest({point.x - origin.x, point.y - origin.y}).offset);
+}
+std::vector<std::pair<std::size_t, std::size_t>> TextField::textLineRanges() const {
+    if (passwordMode_) return {};
+    ensureTextLayout();
+    std::vector<std::pair<std::size_t, std::size_t>> result;
+    for (const auto& line : textLayout_->display->lines())
+        result.emplace_back(fromDisplayOffset(line.start), fromDisplayOffset(line.end));
+    return result;
+}
 void TextField::clearSelection() {
     if (!hasSelection_) {
         return;
@@ -404,7 +427,7 @@ bool TextField::copySelectionToClipboard(Clipboard& clipboard) const {
     if (!hasSelection() || passwordMode_) {
         return false;
     }
-    try { clipboard.setText(selectedText()); } catch (...) { return false; }
+    try { clipboard.setText(selectedText()); } catch (...) { detail::recordCurrentException(__func__); return false; }
     return true;
 }
 
@@ -424,7 +447,7 @@ bool TextField::pasteFromClipboard(const Clipboard& clipboard) {
     }
 
     std::wstring pastedText;
-    try { pastedText = clipboard.text(); } catch (...) { return false; }
+    try { pastedText = clipboard.text(); } catch (...) { detail::recordCurrentException(__func__); return false; }
     if (pastedText.empty()) {
         return false;
     }

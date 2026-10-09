@@ -1,3 +1,4 @@
+#include "internal/runtime_error.h"
 #include "oneui/controls/terminal_view.h"
 
 #include <algorithm>
@@ -11,7 +12,6 @@ namespace oneui {
 namespace {
 
 constexpr std::size_t kMaximumCells = 2'000'000;
-constexpr unsigned int kVirtualKeyInsert = 0x2D;
 constexpr unsigned int kVirtualKeyShift = 0x10;
 constexpr unsigned int kVirtualKeyControl = 0x11;
 constexpr unsigned int kVirtualKeyAlt = 0x12;
@@ -51,21 +51,11 @@ bool sameTerminalCell(const TerminalCell& left, const TerminalCell& right) {
 }
 
 bool isCopyShortcut(const KeyEvent& event) {
-#ifdef __APPLE__
-    return event.editShortcut() && event.key == Key::C;
-#else
-    return (event.control && event.shift && event.key == Key::C) ||
-           (event.control && !event.shift && event.virtualKey == kVirtualKeyInsert);
-#endif
+    return platform::terminalCopyShortcut(event);
 }
 
 bool isPasteShortcut(const KeyEvent& event) {
-#ifdef __APPLE__
-    return event.editShortcut() && event.key == Key::V;
-#else
-    return (event.control && event.shift && event.key == Key::V) ||
-           (!event.control && event.shift && event.virtualKey == kVirtualKeyInsert);
-#endif
+    return platform::terminalPasteShortcut(event);
 }
 
 bool isModifierKey(const KeyEvent& event) {
@@ -310,6 +300,7 @@ void TerminalView::setCursor(TerminalCursor cursor) {
         invalidateCell(TextPosition{cursor_.row, cursor_.column});
     }
     restartCursorBlink();
+    if (onCursorChanged_) onCursorChanged_();
 }
 
 TerminalCursor TerminalView::cursorState() const {
@@ -603,7 +594,7 @@ bool TerminalView::copySelectionToClipboard() {
     if (!clipboard_ || !hasSelection()) {
         return false;
     }
-    try { clipboard_->setText(selectedText()); } catch (...) { return false; }
+    try { clipboard_->setText(selectedText()); } catch (...) { detail::recordCurrentException(__func__); return false; }
     return true;
 }
 
@@ -612,7 +603,7 @@ bool TerminalView::pasteFromClipboard() {
         return false;
     }
     std::wstring text;
-    try { text = clipboard_->text(); } catch (...) { return false; }
+    try { text = clipboard_->text(); } catch (...) { detail::recordCurrentException(__func__); return false; }
     if (text.empty()) {
         return false;
     }
@@ -713,7 +704,12 @@ void TerminalView::paint(Canvas& canvas) {
 
     const GridMetrics metrics = gridMetrics(canvas);
     const Rect terminalBounds = contentBounds(bounds, metrics);
+    const bool caretMetricsChanged = lastMetrics_.cellWidth != metrics.cellWidth ||
+                                    lastMetrics_.cellHeight != metrics.cellHeight;
     lastMetrics_ = metrics;
+    // The first cursor update can arrive before font metrics are available.
+    // Notify anchored UI again after real cell measurements replace defaults.
+    if (caretMetricsChanged && onCursorChanged_) onCursorChanged_();
     hasGridMetrics_ = true;
     reportViewport(bounds, metrics);
     canvas.save();

@@ -1,5 +1,8 @@
 #include "oneui/canvas.h"
 #include "oneui/layout/scroll_view.h"
+#include "oneui/layout/stack.h"
+#include "oneui/controls/table.h"
+#include "oneui/controls/virtual_list.h"
 
 #include <cmath>
 #include <iostream>
@@ -139,6 +142,83 @@ void testWheelKeepsExistingVerticalBehavior() {
     scroll.onMouseWheel(oneui::MouseWheelEvent{oneui::Point{20.0f, 20.0f}, 10.0f});
     scroll.tickAnimations(1.0e15);
     expectNear("ScrollView wheel clamps top", scroll.scrollOffset(), 0.0f);
+}
+
+template <typename Control>
+void checkNestedWheelRouting(const char* kind, const std::shared_ptr<Control>& child) {
+    const auto check = [kind](const char* behavior, bool pass) {
+        expectEqual((std::string(kind) + " " + behavior).c_str(), pass ? 1 : 0, 1);
+    };
+    child->setPreferredSize({0.0f, 120.0f});
+    auto content = std::make_shared<oneui::Stack>(oneui::StackDirection::Column);
+    content->add(child);
+    content->add(std::make_shared<LayoutProbe>(oneui::Size{0.0f, 300.0f}));
+    oneui::ScrollView outer;
+    outer.setFrame({0.0f, 0.0f, 240.0f, 180.0f});
+    outer.setContent(content);
+    outer.setContentHeight(420.0f);
+    NullCanvas canvas;
+    outer.paint(canvas);
+
+    check("receives fractional wheel before overflowing parent", outer.onMouseWheel(wheelEvent(-0.25f, 1000.0)));
+    outer.tickAnimations(1.0e15);
+    check("moves child only", child->scrollOffset() > 0.0f && outer.scrollOffset() == 0.0f);
+
+    child->setScrollOffset(child->maxScrollOffset());
+    check("bubbles at lower boundary", outer.onMouseWheel(wheelEvent(-1.0f, 2000.0)));
+    outer.tickAnimations(1.0e15);
+    check("scrolls parent after child reaches end", outer.scrollOffset() > 0.0f);
+
+    outer.setScrollOffset(20.0f);
+    child->setScrollOffset(0.0f);
+    outer.paint(canvas);
+    check("bubbles at upper boundary", outer.onMouseWheel(wheelEvent(1.0f, 3000.0)));
+    outer.tickAnimations(1.0e15);
+    check("parent reaches top while child stays at top", outer.scrollOffset() == 0.0f && child->scrollOffset() == 0.0f);
+
+    outer.setContentHeight(180.0f);
+    outer.paint(canvas);
+    check("receives wheel through a non-overflowing parent", outer.onMouseWheel(wheelEvent(-1.0f, 4000.0)));
+    outer.tickAnimations(1.0e15);
+    check("scrolls inside fitted parent", child->scrollOffset() > 0.0f && outer.scrollOffset() == 0.0f);
+
+    const float beforeOutside = child->scrollOffset();
+    auto outside = wheelEvent(-1.0f, 5000.0);
+    outside.position = {20.0f, 200.0f};
+    check("rejects input outside clipping viewport", !outer.onMouseWheel(outside));
+    outer.tickAnimations(1.0e15);
+    check("off-viewport input does not move child", child->scrollOffset() == beforeOutside);
+
+    outer.setContentHeight(420.0f);
+    outer.paint(canvas);
+    auto blank = wheelEvent(-1.0f, 6000.0);
+    blank.position = {20.0f, 150.0f};
+    check("scrolls outer blank area", outer.onMouseWheel(blank));
+    outer.tickAnimations(1.0e15);
+    check("blank area does not scroll child", outer.scrollOffset() > 0.0f && child->scrollOffset() == beforeOutside);
+
+    outer.setScrollOffset(0.0f);
+    outer.paint(canvas);
+    child->setDisabled(true);
+    check("disabled child allows parent scroll", outer.onMouseWheel(wheelEvent(-1.0f, 7000.0)));
+    outer.tickAnimations(1.0e15);
+    check("disabled child stays still", outer.scrollOffset() > 0.0f && child->scrollOffset() == beforeOutside);
+}
+
+void testNestedScrollablesReceiveWheelBeforeTheirParent() {
+    auto list = std::make_shared<oneui::VirtualList>();
+    list->setItems(std::vector<oneui::ListItem>(40, {L"item", L"detail"}));
+    checkNestedWheelRouting("VirtualList", list);
+
+    auto table = std::make_shared<oneui::Table>();
+    table->setColumns({{L"Name", 0.0f}});
+    table->setRowHeight(30.0f);
+    table->setRows(std::vector<std::vector<std::wstring>>(40, {L"row"}));
+    checkNestedWheelRouting("Table", table);
+
+    auto scroll = std::make_shared<oneui::ScrollView>();
+    scroll->setContent(std::make_shared<LayoutProbe>(oneui::Size{0.0f, 800.0f}));
+    checkNestedWheelRouting("ScrollView", scroll);
 }
 
 void testWheelRetargetsContinuousMotionAndAcceptsPrecisionDelta() {
@@ -379,6 +459,7 @@ void testCssStyleBoxPaintsWhenDefaultChromeIsHidden() {
 int main() {
     testOffsetsClampToContentBounds();
     testWheelKeepsExistingVerticalBehavior();
+    testNestedScrollablesReceiveWheelBeforeTheirParent();
     testWheelRetargetsContinuousMotionAndAcceptsPrecisionDelta();
     testBatchedWheelDeltaIsDistributedAcrossFrames();
     testWheelDirectionChangeDropsOpposingQueuedMotion();

@@ -74,7 +74,7 @@ void AppShell::setSidebarVisible(bool visible) {
         return;
     }
     sidebarVisible_ = visible;
-    invalidate();
+    rebuildChildren();
 }
 
 void AppShell::setStyleBox(StyleBox style) {
@@ -156,19 +156,22 @@ void AppShell::layoutChildren() {
 }
 
 void AppShell::rebuildChildren() {
-    clearChildren();
-    if (sidebar_) {
-        add(sidebar_);
+    std::vector<std::shared_ptr<Widget>> children;
+    if (sidebar_ && sidebarVisible_) {
+        children.push_back(sidebar_);
     }
     if (header_) {
-        add(header_);
+        children.push_back(header_);
     }
     if (content_) {
-        add(content_);
+        children.push_back(content_);
     }
     if (footer_) {
-        add(footer_);
+        children.push_back(footer_);
     }
+    // Removed slots stop drawing and receiving input. Keep surviving slots
+    // attached so responsive sidebar changes do not reset content focus/IME.
+    reconcileChildren(std::move(children));
     invalidate();
 }
 

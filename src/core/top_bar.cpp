@@ -97,15 +97,17 @@ void TopBar::layoutChildren() {
 }
 
 void TopBar::rebuildChildren() {
-    clearChildren();
+    std::vector<std::shared_ptr<Widget>> children;
     if (leading_) {
-        add(leading_);
+        children.push_back(leading_);
     }
     for (const auto& action : actions_) {
         if (action) {
-            add(action);
+            children.push_back(action);
         }
     }
+    // Adding/removing actions must not reset focus in an unchanged search field.
+    reconcileChildren(std::move(children));
     invalidate();
 }
 

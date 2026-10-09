@@ -56,6 +56,7 @@ public:
     void setSelectedIndices(std::vector<int> indices);
     const std::vector<int>& selectedIndices() const;
     void setRowHeight(float height);
+    void setActivateOnSingleClick(bool enabled) { activateOnSingleClick_ = enabled; }
     float rowHeight() const;
     void setRichMetrics(VirtualListRichMetrics metrics);
     const VirtualListRichMetrics& richMetrics() const;
@@ -112,6 +113,7 @@ private:
     int hoveredIndex_ = -1;
     int pressedIndex_ = -1;
     int pressedClickCount_ = 1;
+    bool activateOnSingleClick_ = false;
     bool reorderEnabled_ = false;
     bool reordering_ = false;
     bool externalDragging_ = false;

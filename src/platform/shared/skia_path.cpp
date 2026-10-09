@@ -2,11 +2,36 @@
 
 #include "include/core/SkMilestone.h"
 #include "include/core/SkPath.h"
+#include <array>
+#include <utility>
 #if SK_MILESTONE >= 150
 #include "include/core/SkPathBuilder.h"
 #endif
 
 namespace oneui::rendering {
+
+namespace {
+SkPath reuseSmallPath(SkPath path) {
+    // Stable native identities let Ganesh reuse the rasterized masks of static
+    // icons/rings. CanvasPath's public command vector can change directly, so
+    // compare geometry, never the caller's address. Large animated charts bypass
+    // this cache; the per-thread cache holds at most 16 paths of 512 points.
+    if (path.isEmpty() || !path.isFinite() || path.countPoints() > 512 || path.countVerbs() > 512)
+        return path;
+    static thread_local std::array<SkPath, 16> cache;
+    for (std::size_t i = 0; i < cache.size(); ++i) {
+        if (cache[i] == path) {
+            SkPath hit = cache[i];
+            for (; i > 0; --i) cache[i] = std::move(cache[i-1]);
+            cache[0] = hit;
+            return hit;
+        }
+    }
+    for (std::size_t i = cache.size()-1; i > 0; --i) cache[i] = std::move(cache[i-1]);
+    cache[0] = path;
+    return path;
+}
+} // namespace
 
 SkPath toSkPath(const CanvasPath &path) {
 #if SK_MILESTONE >= 150
@@ -49,9 +74,9 @@ SkPath toSkPath(const CanvasPath &path) {
         }
     }
 #if SK_MILESTONE >= 150
-    return builder.detach();
+    return reuseSmallPath(builder.detach());
 #else
-    return native;
+    return reuseSmallPath(std::move(native));
 #endif
 }
 

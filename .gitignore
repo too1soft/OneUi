@@ -30,6 +30,9 @@ website/.nuxt/
 website/.output/
 website/.data/
 website/.screenshots/
+website/server/web/
+website/app/data/docs.generated.json
+.impeccable/review/
 
 # 构建/运行日志
 ninja.out

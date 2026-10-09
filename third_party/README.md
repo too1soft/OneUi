@@ -35,8 +35,10 @@ bash scripts/build-skia-posix.sh
 ```
 
 Do not run the clone over an existing checkout or discard local third-party
-changes. Linux is currently tested with Clang/LLVM 18; macOS toolchain/build
-verification is pending. See `../docs/37-native-desktop-backends.md`.
+changes. Linux is currently tested with Clang/LLVM 18. The Apple Silicon build
+passed on Apple M1 / macOS 15.5 / Xcode 16.4 (Apple Clang 17), including Metal
+rendering and the full CTest suite. Intel and the macOS 13 runtime baseline still
+need validation. See `../docs/37-native-desktop-backends.md`.
 
 The pinned DEPS provides ICU 74.2 / Unicode 15.1 and HarfBuzz commit
 `9cb1fee51069b206effb4736e443b038d230789d`. Windows embeds ICU data; deployment must

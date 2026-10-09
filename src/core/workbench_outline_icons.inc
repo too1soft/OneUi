@@ -215,20 +215,14 @@
         canvas.strokePath(path,color,stroke,true); return true;
     }
     case IconSymbol::OutlineWorkbenchGrip: {
-        CanvasPath path;
-        path.moveTo(p(8.00000000f,5.00000000f));
-        path.lineTo(p(8.01000000f,5.00000000f));
-        path.moveTo(p(8.00000000f,12.00000000f));
-        path.lineTo(p(8.01000000f,12.00000000f));
-        path.moveTo(p(8.00000000f,19.00000000f));
-        path.lineTo(p(8.01000000f,19.00000000f));
-        path.moveTo(p(16.00000000f,5.00000000f));
-        path.lineTo(p(16.01000000f,5.00000000f));
-        path.moveTo(p(16.00000000f,12.00000000f));
-        path.lineTo(p(16.01000000f,12.00000000f));
-        path.moveTo(p(16.00000000f,19.00000000f));
-        path.lineTo(p(16.01000000f,19.00000000f));
-        canvas.strokePath(path,color,stroke,true); return true;
+        const float diameter=std::max(1.4f,2.0f*std::min(rect.width,rect.height)/24.0f);
+        { const auto center=p(8.00000000f,5.00000000f); canvas.fillEllipse(Rect{center.x-diameter/2,center.y-diameter/2,diameter,diameter},color); }
+        { const auto center=p(8.00000000f,12.00000000f); canvas.fillEllipse(Rect{center.x-diameter/2,center.y-diameter/2,diameter,diameter},color); }
+        { const auto center=p(8.00000000f,19.00000000f); canvas.fillEllipse(Rect{center.x-diameter/2,center.y-diameter/2,diameter,diameter},color); }
+        { const auto center=p(16.00000000f,5.00000000f); canvas.fillEllipse(Rect{center.x-diameter/2,center.y-diameter/2,diameter,diameter},color); }
+        { const auto center=p(16.00000000f,12.00000000f); canvas.fillEllipse(Rect{center.x-diameter/2,center.y-diameter/2,diameter,diameter},color); }
+        { const auto center=p(16.00000000f,19.00000000f); canvas.fillEllipse(Rect{center.x-diameter/2,center.y-diameter/2,diameter,diameter},color); }
+        return true;
     }
     case IconSymbol::OutlineWorkbenchRight: {
         CanvasPath path;
@@ -308,14 +302,11 @@
         canvas.strokePath(path,color,stroke,true); return true;
     }
     case IconSymbol::OutlineWorkbenchMore: {
-        CanvasPath path;
-        path.moveTo(p(4.00000000f,12.00000000f));
-        path.lineTo(p(4.01000000f,12.00000000f));
-        path.moveTo(p(12.00000000f,12.00000000f));
-        path.lineTo(p(12.01000000f,12.00000000f));
-        path.moveTo(p(20.00000000f,12.00000000f));
-        path.lineTo(p(20.01000000f,12.00000000f));
-        canvas.strokePath(path,color,stroke,true); return true;
+        const float diameter=std::max(1.8f,2.0f*std::min(rect.width,rect.height)/24.0f);
+        { const auto center=p(4.00000000f,12.00000000f); canvas.fillEllipse(Rect{center.x-diameter/2,center.y-diameter/2,diameter,diameter},color); }
+        { const auto center=p(12.00000000f,12.00000000f); canvas.fillEllipse(Rect{center.x-diameter/2,center.y-diameter/2,diameter,diameter},color); }
+        { const auto center=p(20.00000000f,12.00000000f); canvas.fillEllipse(Rect{center.x-diameter/2,center.y-diameter/2,diameter,diameter},color); }
+        return true;
     }
     case IconSymbol::OutlineWorkbenchSearch: {
         CanvasPath path;

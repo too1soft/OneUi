@@ -5,20 +5,26 @@
 #include "include/core/SkTypeface.h"
 #include "modules/skparagraph/include/TypefaceFontProvider.h"
 
+#include "oneui/fonts.h"
+#include <algorithm>
+#include <stdexcept>
 #include <array>
 #include <mutex>
 #include <string>
 #include <unordered_set>
 #if defined(_WIN32)
 #include "include/ports/SkTypeface_win.h"
-#if defined(ONEUI_PORTABLE_FONT_LOADER)
-#include "include/ports/SkFontMgr_empty.h"
-#endif
 #elif defined(__APPLE__)
 #include "include/ports/SkFontMgr_mac_ct.h"
+#elif defined(__ANDROID__)
+#include "include/ports/SkFontMgr_android.h"
+#include "include/ports/SkFontScanner_FreeType.h"
 #else
 #include "include/ports/SkFontMgr_fontconfig.h"
 #include "include/ports/SkFontScanner_FreeType.h"
+#endif
+#if defined(ONEUI_PORTABLE_FONT_LOADER)
+#include "include/ports/SkFontMgr_empty.h"
 #endif
 
 namespace oneui::rendering {
@@ -47,6 +53,8 @@ sk_sp<SkFontMgr> makePlatformFontManager() {
     return manager ? manager : SkFontMgr_New_GDI();
 #elif defined(__APPLE__)
     return SkFontMgr_New_CoreText(nullptr);
+#elif defined(__ANDROID__)
+    return SkFontMgr_New_Android(nullptr, SkFontScanner_Make_FreeType());
 #else
     return SkFontMgr_New_FontConfig(nullptr, SkFontScanner_Make_FreeType());
 #endif
@@ -61,7 +69,8 @@ sk_sp<SkTypeface> makeTypefaceFromData(sk_sp<SkData> data) {
     auto platform = makePlatformFontManager();
     auto face = platform ? platform->makeFromData(data) : nullptr;
 #if defined(ONEUI_PORTABLE_FONT_LOADER)
-    // Win7 DirectWrite cannot open CBDT/color and some newer font formats.
+    // CoreText and Win7 DirectWrite cannot open some application font formats,
+    // including the pinned CBDT color-emoji acceptance font.
     // Keep native rendering for supported fonts, and decode application font
     // bytes with the pinned static FreeType backend only when native loading
     // fails. Never install fonts or change modern system font discovery.
@@ -111,3 +120,28 @@ bool registerFontFromMemory(const void* data, std::size_t size, const std::strin
     return true;
 }
 } // namespace oneui::rendering
+
+namespace oneui {
+std::vector<FontFamilyInfo> enumerateSystemFonts() {
+    auto manager = rendering::makePlatformFontManager();
+    if (!manager) throw std::runtime_error("System font manager unavailable");
+    std::vector<FontFamilyInfo> result;
+    const int count = manager->countFamilies();
+    result.reserve(static_cast<std::size_t>(std::max(count, 0)));
+    for (int i = 0; i < count; ++i) {
+        SkString name;
+        manager->getFamilyName(i, &name);
+        if (name.isEmpty()) continue;
+        auto styles = manager->createStyleSet(i);
+        auto face = styles ? styles->matchStyle(SkFontStyle::Normal()) : nullptr;
+        result.push_back({std::string(name.c_str(), name.size()), face && face->isFixedPitch()});
+    }
+    std::sort(result.begin(), result.end(), [](const auto& a, const auto& b) {
+        return a.family < b.family;
+    });
+    result.erase(std::unique(result.begin(), result.end(), [](const auto& a, const auto& b) {
+        return a.family == b.family;
+    }), result.end());
+    return result;
+}
+} // namespace oneui

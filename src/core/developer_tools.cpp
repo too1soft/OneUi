@@ -9,7 +9,9 @@
 
 namespace oneui {
 namespace {
+#if ONEUI_DEVELOPER_TOOLS
 double nowMs(){return std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count();}
+#endif
 std::string quoted(const std::string& text) {
     std::ostringstream out; out << '"';
     for(unsigned char c:text) {
@@ -47,6 +49,7 @@ std::string developerReportJson(const DeveloperSnapshot& s) {
     out << "]}\n";return out.str();
 }
 namespace internal {
+#if ONEUI_DEVELOPER_TOOLS
 namespace { thread_local DeveloperRecorder* active=nullptr; }
 DeveloperRecorder* activeDeveloperRecorder(){return active;}
 DiagnosticSession::DiagnosticSession(DeveloperRecorder* recorder):previous_(active){active=recorder;}
@@ -115,5 +118,6 @@ DiagnosticPaintSpan::~DiagnosticPaintSpan() {
     if(parent_)parent_->childrenMs_+=elapsed;
     recorder_->top=parent_;
 }
+#endif
 }
 }

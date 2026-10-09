@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.16)
 
+# Set the deployment baseline before compiler checks and target creation.
+# Setting it in OneUIDesktop.cmake leaves core/text targets on another baseline.
+include(cmake/OneUIMacOS.cmake)
 project(oneui VERSION 0.1.0 LANGUAGES CXX)
 
 if(POLICY CMP0091)
@@ -15,6 +18,25 @@ if(MSVC)
 endif()
 
 include(CTest)
+option(ONEUI_BUILD_MOBILE_RUNTIME "Build the experimental mobile runtime" OFF)
+option(ONEUI_MOBILE_RUNTIME_ONLY "Build only the mobile foundation (no UI renderer)" OFF)
+option(ONEUI_BUILD_ANDROID_LAB "Build experimental Android unified workbench host" OFF)
+if(ONEUI_BUILD_MOBILE_RUNTIME OR ONEUI_MOBILE_RUNTIME_ONLY OR ONEUI_BUILD_ANDROID_LAB)
+    include(cmake/OneUIMobile.cmake)
+endif()
+if(ONEUI_BUILD_ANDROID_LAB)
+    if(NOT ANDROID OR ONEUI_MOBILE_RUNTIME_ONLY)
+        message(FATAL_ERROR "Android workbench requires the NDK and ONEUI_MOBILE_RUNTIME_ONLY=OFF")
+    endif()
+    include(cmake/OneUIAndroid.cmake)
+    return()
+endif()
+if(ONEUI_MOBILE_RUNTIME_ONLY)
+    return()
+endif()
+if(ANDROID OR CMAKE_SYSTEM_NAME STREQUAL "iOS" OR CMAKE_SYSTEM_NAME STREQUAL "OHOS")
+    message(FATAL_ERROR "The full OneUI mobile renderer/host is not available yet. Use ONEUI_MOBILE_RUNTIME_ONLY=ON for the experimental foundation. Desktop backends cannot be used on this target.")
+endif()
 include(cmake/OneUIWindows.cmake)
 include(cmake/OneUISources.cmake)
 include(cmake/OneUITests.cmake)
@@ -22,6 +44,10 @@ option(ONEUI_BUILD_PLATFORM_WIN32 "Build the Win32 platform renderer and gallery
 option(ONEUI_BUILD_PLATFORM_DESKTOP "Build native Linux/macOS backends" ON)
 option(ONEUI_BUILD_STATIC "Build the OneUI static library alongside the DLL" ON)
 option(ONEUI_ENABLE_TEST_FRAME_CAPTURE "Enable test-only native frame PNG capture" OFF)
+option(ONEUI_ENABLE_DEVELOPER_TOOLS "Include developer tools in non-Debug QA builds (never for delivery)" OFF)
+# Debug includes diagnostics. Release/RelWithDebInfo/MinSizeRel omit recorders,
+# overlays, shortcuts, and activation code unless a QA build opts in explicitly.
+add_compile_definitions(ONEUI_DEVELOPER_TOOLS=$<IF:$<OR:$<CONFIG:Debug>,$<BOOL:${ONEUI_ENABLE_DEVELOPER_TOOLS}>>,1,0>)
 option(ONEUI_BUILD_VIEWC "Build the native .one template compiler" ON)
 if(ONEUI_BUILD_VIEWC)
     include(cmake/OneUIView.cmake)
@@ -212,7 +238,6 @@ if(WIN32 AND ONEUI_BUILD_PLATFORM_WIN32)
         )
 
         add_library(OneUI::oneui_static ALIAS oneui_static)
-        include(cmake/OneUISDKManifest.cmake)
     endif()
 
     add_subdirectory(examples/gallery)
@@ -273,4 +298,13 @@ endif()
 
 if(TARGET oneui_static AND ONEUI_ENABLE_YOGA)
     target_link_libraries(oneui_static PUBLIC yogacore)
+endif()
+
+if(TARGET oneui AND TARGET oneui_mobile_runtime)
+    include(cmake/OneUIMobileWidgets.cmake)
+endif()
+
+# Record the complete static closure after optional backends are attached.
+if(TARGET oneui_static)
+    include(cmake/OneUISDKManifest.cmake)
 endif()

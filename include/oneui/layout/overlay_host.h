@@ -85,6 +85,7 @@ public:
     bool focusLastLeaf() override;
     bool requestFocus(Widget* descendant, bool focusVisible = true) override;
     CursorKind cursor(Point point) const override;
+    const std::wstring* tooltipAt(Point point) const override;
     void setFocusVisible(bool visible) override;
     bool tickAnimations(double nowMs) override;
 
@@ -100,6 +101,7 @@ private:
 
     std::vector<std::size_t> paintOrder() const;
     std::vector<std::size_t> hitOrder() const;
+    std::vector<OverlayEntry> pointerOrder() const;
     void layoutAnchoredOverlays();
     Widget* focusedOverlay() const;
     void focusOverlay(Widget* child, bool focusVisible = false);
@@ -110,6 +112,7 @@ private:
     bool hasActiveFocusTrap() const;
     bool isFocusAllowed(const Widget* child) const;
     void clearOverlayReferences(Widget* child, bool restorePreviousFocus = true);
+    void styleScopeChanged() override;
     void installOverlayHostCallbacks(Widget& child);
     static bool isInteractive(const Widget* child);
 

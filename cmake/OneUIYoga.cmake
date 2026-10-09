@@ -15,6 +15,11 @@ if(ONEUI_ENABLE_YOGA)
     # Use only the core; upstream's root also configures its own tests/tools.
     add_subdirectory("${oneui_yoga_SOURCE_DIR}/yoga" "${oneui_yoga_BINARY_DIR}" EXCLUDE_FROM_ALL)
     set_target_properties(yogacore PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    if(APPLE)
+        # Yoga's hidden visibility + -fno-rtti emits private copies of libc++
+        # exception typeinfo. Those break typed catches in OneUI and its hosts.
+        target_compile_options(yogacore PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-frtti>)
+    endif()
     target_link_libraries(oneui_core PUBLIC yogacore)
     target_compile_definitions(oneui_core PUBLIC ONEUI_HAS_YOGA=1)
 endif()

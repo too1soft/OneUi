@@ -339,7 +339,14 @@ void Popup::installAnchorCallbacks() {
     anchor_->attachInvalidatorToOwner(this, [this] { invalidate(); });
 }
 
+void Popup::styleScopeChanged() {
+    Widget::styleScopeChanged();
+    // The anchor belongs to the underlying page, not to the popup material.
+    if (content_) content_->inheritStyleScope(styleScope(), this);
+}
+
 void Popup::installContentCallbacks() {
+    content_->inheritStyleScope(styleScope(), this);
     content_->attachInvalidatorToOwner(this, [this] { invalidate(); });
 }
 
@@ -557,6 +564,17 @@ void Popup::setFocusVisible(bool visible) {
     if (focusedChild_) {
         focusedChild_->setFocusVisible(visible);
     }
+}
+
+bool Popup::tickAnimations(double nowMs) {
+    bool running = Widget::tickAnimations(nowMs);
+    if (anchor_ && anchor_->visible()) {
+        running = anchor_->tickAnimations(nowMs) || running;
+    }
+    if (isOpen() && content_ && content_->visible()) {
+        running = content_->tickAnimations(nowMs) || running;
+    }
+    return running;
 }
 
 Rect Popup::resolvedAnchorRect() const {

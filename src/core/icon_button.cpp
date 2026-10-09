@@ -1,7 +1,7 @@
 #include "oneui/controls/icon_button.h"
 
-#include <algorithm>
 #include "internal/ui_clock.h"
+#include <algorithm>
 #include <utility>
 
 namespace oneui {
@@ -33,16 +33,18 @@ StyleSheet defaultIconButtonSheet() {
             border-color: #00000000;
             color: #777984;
         }
-    )css", &error);
+        .icon-button:focus { border-color: #68a48b; }
+    )css",
+                          &error);
     return sheet;
 }
 
-const StyleSheet& fallbackSheet() {
+const StyleSheet &fallbackSheet() {
     static const StyleSheet sheet = defaultIconButtonSheet();
     return sheet;
 }
 
-void paintIconPrimitive(Canvas& canvas, const IconPrimitive& primitive) {
+void paintIconPrimitive(Canvas &canvas, const IconPrimitive &primitive) {
     switch (primitive.kind) {
     case IconPrimitiveKind::Line:
         canvas.drawLine(primitive.from, primitive.to, primitive.color, primitive.strokeWidth);
@@ -58,7 +60,8 @@ void paintIconPrimitive(Canvas& canvas, const IconPrimitive& primitive) {
         if (primitive.filled) {
             canvas.fillRect(primitive.rect, primitive.color, primitive.radius);
         } else {
-            canvas.strokeRect(primitive.rect, primitive.color, primitive.radius, primitive.strokeWidth);
+            canvas.strokeRect(primitive.rect, primitive.color, primitive.radius,
+                              primitive.strokeWidth);
         }
         break;
     case IconPrimitiveKind::Circle:
@@ -71,34 +74,23 @@ void paintIconPrimitive(Canvas& canvas, const IconPrimitive& primitive) {
     case IconPrimitiveKind::Polyline:
     case IconPrimitiveKind::Polygon:
         for (int i = 1; i < primitive.pointCount; ++i) {
-            canvas.drawLine(
-                primitive.points[static_cast<std::size_t>(i - 1)],
-                primitive.points[static_cast<std::size_t>(i)],
-                primitive.color,
-                primitive.strokeWidth);
+            canvas.drawLine(primitive.points[static_cast<std::size_t>(i - 1)],
+                            primitive.points[static_cast<std::size_t>(i)], primitive.color,
+                            primitive.strokeWidth);
         }
         if (primitive.closed && primitive.pointCount > 2) {
-            canvas.drawLine(
-                primitive.points[static_cast<std::size_t>(primitive.pointCount - 1)],
-                primitive.points[0],
-                primitive.color,
-                primitive.strokeWidth);
+            canvas.drawLine(primitive.points[static_cast<std::size_t>(primitive.pointCount - 1)],
+                            primitive.points[0], primitive.color, primitive.strokeWidth);
         }
         break;
     }
 }
 
-double currentTimeMs() {
-    return internal::uiTimeMs();
-}
+double currentTimeMs() { return internal::uiTimeMs(); }
 
-void prewarmIconButtonStyles(const StyleSheet& sheet, const StyleNode& node) {
-    for (StylePseudoMask state : {
-             StyleStateNone,
-             StyleStateHover,
-             StyleStateActive,
-             StyleStateFocus,
-             StyleStateDisabled}) {
+void prewarmIconButtonStyles(const StyleSheet &sheet, const StyleNode &node) {
+    for (StylePseudoMask state :
+         {StyleStateNone, StyleStateHover, StyleStateActive, StyleStateFocus, StyleStateDisabled}) {
         StyleNode warmed = node;
         warmed.state = state;
         sheet.resolve(warmed);
@@ -107,8 +99,7 @@ void prewarmIconButtonStyles(const StyleSheet& sheet, const StyleNode& node) {
 
 } // namespace
 
-IconButton::IconButton(IconSymbol symbol)
-    : symbol_(symbol) {
+IconButton::IconButton(IconSymbol symbol) : symbol_(symbol) {
     setPreferredSize(Size{32.0f, 32.0f});
     setAccessibleRole(AccessibilityRole::Button);
     updateAccessibility();
@@ -119,9 +110,7 @@ void IconButton::setSymbol(IconSymbol symbol) {
     invalidate();
 }
 
-IconSymbol IconButton::symbol() const {
-    return symbol_;
-}
+IconSymbol IconButton::symbol() const { return symbol_; }
 
 void IconButton::setStyleSheet(std::shared_ptr<StyleSheet> sheet, StyleNode node) {
     const StyleBox previous = resolvedStyle();
@@ -134,11 +123,9 @@ void IconButton::setStyleSheet(std::shared_ptr<StyleSheet> sheet, StyleNode node
     invalidate();
 }
 
-void IconButton::setOnClick(std::function<void()> callback) {
-    onClick_ = std::move(callback);
-}
+void IconButton::setOnClick(std::function<void()> callback) { onClick_ = std::move(callback); }
 
-void IconButton::paint(Canvas& canvas) {
+void IconButton::paint(Canvas &canvas) {
     const Rect rect = frame();
     const StyleBox box = visualStyle(resolvedStyle());
     paintStyleBox(canvas, rect, box);
@@ -147,19 +134,17 @@ void IconButton::paint(Canvas& canvas) {
     const float contentWidth = std::max(0.0f, rect.width - iconPadding.horizontal());
     const float contentHeight = std::max(0.0f, rect.height - iconPadding.vertical());
     const float iconSize = std::max(8.0f, std::min(contentWidth, contentHeight));
-    const Rect iconRect{
-        rect.x + (rect.width - iconSize) * 0.5f,
-        rect.y + (rect.height - iconSize) * 0.5f,
-        iconSize,
-        iconSize};
+    const Rect iconRect{rect.x + (rect.width - iconSize) * 0.5f,
+                        rect.y + (rect.height - iconSize) * 0.5f, iconSize, iconSize};
     const Color color = box.foreground.value_or(Color{201, 203, 211});
     const float stroke = box.borderWidth.value_or(1.5f);
-    for (const auto& primitive : buildIconPrimitives(symbol_, iconRect, color, Color{0, 0, 0, 0}, stroke)) {
+    for (const auto &primitive :
+         buildIconPrimitives(symbol_, iconRect, color, Color{0, 0, 0, 0}, stroke)) {
         paintIconPrimitive(canvas, primitive);
     }
 }
 
-bool IconButton::onMouseMove(const MouseEvent& event) {
+bool IconButton::onMouseMove(const MouseEvent &event) {
     const bool next = interactive() && contains(event.position);
     if (hovered_ == next) {
         return false;
@@ -174,7 +159,7 @@ bool IconButton::onMouseMove(const MouseEvent& event) {
     return true;
 }
 
-bool IconButton::onMouseDown(const MouseEvent& event) {
+bool IconButton::onMouseDown(const MouseEvent &event) {
     if (!interactive() || !contains(event.position)) {
         return false;
     }
@@ -186,7 +171,7 @@ bool IconButton::onMouseDown(const MouseEvent& event) {
     return true;
 }
 
-bool IconButton::onMouseUp(const MouseEvent& event) {
+bool IconButton::onMouseUp(const MouseEvent &event) {
     if (!pressed_) {
         return false;
     }
@@ -195,8 +180,19 @@ bool IconButton::onMouseUp(const MouseEvent& event) {
     beginVisualTransition(previous, resolvedStyle());
     invalidate();
     if (interactive() && contains(event.position) && onClick_) {
-        onClick_();
+        auto callback = onClick_;
+        callback();
     }
+    return true;
+}
+
+bool IconButton::onKeyDown(const KeyEvent &event) {
+    if (!interactive() || (event.key != Key::Enter && event.key != Key::Space)) {
+        return false;
+    }
+    auto callback = onClick_;
+    if (callback)
+        callback();
     return true;
 }
 
@@ -214,9 +210,7 @@ CursorKind IconButton::cursor(Point point) const {
     return interactive() && contains(point) ? CursorKind::Pointer : CursorKind::Default;
 }
 
-bool IconButton::isFocusable() const {
-    return !disabled();
-}
+bool IconButton::isFocusable() const { return !disabled(); }
 
 void IconButton::setDisabled(bool disabled) {
     const StyleBox previous = resolvedStyle();
@@ -227,7 +221,7 @@ void IconButton::setDisabled(bool disabled) {
 }
 
 StyleBox IconButton::resolvedStyle() const {
-    const StyleSheet& sheet = styleSheet_ ? *styleSheet_ : fallbackSheet();
+    const StyleSheet &sheet = styleSheet_ ? *styleSheet_ : fallbackSheet();
     StyleNode node = styleNode_;
     node.state = StyleStateNone;
     if (disabled()) {
@@ -236,9 +230,9 @@ StyleBox IconButton::resolvedStyle() const {
         node.state = StyleStateActive;
     } else if (hovered_) {
         node.state = StyleStateHover;
-    } else if (focusVisible()) {
-        node.state = StyleStateFocus;
     }
+    if (!disabled() && focused() && focusVisible())
+        node.state |= StyleStateFocus;
     return sheet.resolve(node);
 }
 
@@ -273,9 +267,7 @@ void IconButton::updateAccessibility() {
     setAccessibilityState(state);
 }
 
-bool IconButton::hasInteractionState() const {
-    return hovered_ || pressed_;
-}
+bool IconButton::hasInteractionState() const { return hovered_ || pressed_; }
 
 void IconButton::resetInteractionState() {
     hovered_ = false;

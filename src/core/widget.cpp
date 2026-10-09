@@ -8,6 +8,36 @@ namespace oneui {
 namespace { std::atomic<std::uint64_t> nextInputSession{1}; }
 Widget::Widget() : textInputSession_(nextInputSession.fetch_add(1, std::memory_order_relaxed)) {}
 
+std::shared_ptr<StyleSheet> Widget::styleScope() const {
+    return localStyleScope_ ? localStyleScope_ : inheritedStyleScope_;
+}
+void Widget::setStyleScope(std::shared_ptr<StyleSheet> sheet) {
+    const auto previous = styleScope();
+    localStyleScope_ = std::move(sheet);
+    if (styleScope() != previous) styleScopeChanged();
+}
+void Widget::inheritStyleScope(std::shared_ptr<StyleSheet> sheet, const void* owner) {
+    const auto previous = styleScope();
+    inheritedStyleScope_ = std::move(sheet);
+    styleScopeOwner_ = owner;
+    if (styleScope() != previous) styleScopeChanged();
+}
+void Widget::setOnStyleScopeChanged(std::function<void()> callback) {
+    onStyleScopeChanged_ = std::move(callback);
+}
+void Widget::styleScopeChanged() {
+    if (onStyleScopeChanged_) onStyleScopeChanged_();
+    invalidate();
+}
+
+void Widget::setFontFamily(std::wstring family) {
+    if (fontFamilyOverride_ == family) return;
+    fontFamilyOverride_ = std::move(family);
+    // Virtual dispatch refreshes mounted descendants with the effective family.
+    setTextEnvironment(textFontFamily_, textDpiScale_);
+    invalidate();
+}
+
 void Widget::setTextEnvironment(std::wstring family, float scale) {
     if (!(scale > 0.0f)) scale = 1.0f;
     if (textFontFamily_ == family && textDpiScale_ == scale) return;
@@ -176,6 +206,7 @@ void Widget::detachFromOwner(const void* owner) {
     if (animationSchedulerOwner_ == owner) {
         setAnimationScheduler({});
     }
+    if (styleScopeOwner_ == owner) inheritStyleScope({}, nullptr);
 }
 
 bool Widget::onMouseMove(const MouseEvent&) {

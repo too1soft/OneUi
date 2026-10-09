@@ -51,6 +51,20 @@ void testSliderAbiIsNullSafeAndSeparatesInputFromSetters() {
     oneui_widget_destroy(slider);
 }
 
+void testBuiltinTextRejectsInvalidInputAndCanRestoreDefaults() {
+    expectTrue("Builtin labels accept application English", oneui_set_builtin_text_utf8(3, "Close window") == 1);
+    expectTrue("Builtin labels accept application Chinese", oneui_set_builtin_text_utf8(3, "关闭窗口") == 1);
+    expectTrue("Builtin labels reject an unknown key", oneui_set_builtin_text_utf8(9, "Unknown") == 0);
+    expectTrue("Tray show label accepts application English", oneui_set_builtin_text_utf8(6, "Show main window") == 1);
+    expectTrue("Tray quit label accepts application English", oneui_set_builtin_text_utf8(7, "Quit") == 1);
+    expectTrue("Loading label accepts application English", oneui_set_builtin_text_utf8(8, "Loading") == 1);
+    for (int key = 6; key <= 8; ++key) oneui_set_builtin_text_utf8(key, nullptr);
+    expectTrue("Builtin labels reject empty accessible names", oneui_set_builtin_text_utf8(3, "") == 0);
+    expectTrue("Builtin labels reject invalid UTF-8", oneui_set_builtin_text_utf8(3, "\xff") == 0);
+    expectTrue("Builtin labels can restore platform defaults", oneui_set_builtin_text_utf8(3, nullptr) == 1);
+    oneui_table_set_column_kind(nullptr, 0, 1);
+}
+
 void testTabInlineEditAbiIsNullSafeAndReportsUtf8() {
     expectTrue("null tabs cannot edit", oneui_tabs_begin_edit(nullptr, 0) == 0);
     expectTrue("null tabs are not editing", oneui_tabs_editing_index(nullptr) == -1);
@@ -543,7 +557,14 @@ void testUtf8AbiRoundTripsUnicodeText() {
     OneUiWindow* window = oneui_window_create_utf8(&options);
     expectTrue("utf8 window create", window != nullptr);
     if (window) {
-        expectTrue("hidden window centers on active monitor", oneui_window_center_on_active_monitor(window) == 1);
+        const int centered = oneui_window_center_on_active_monitor(window);
+#ifdef _WIN32
+        expectTrue("hidden window centers on active monitor", centered == 1);
+#else
+        // This optional API explicitly permits unsupported backends to return
+        // false; Wayland does not expose absolute window placement at all.
+        expectTrue("center operation returns a boolean", centered == 0 || centered == 1);
+#endif
         const int animationsEnabled = oneui_window_client_area_animations_enabled(window);
         expectTrue("client animation preference is boolean", animationsEnabled == 0 || animationsEnabled == 1);
         oneui_window_set_title_utf8(window, utf8View(text));
@@ -1791,6 +1812,7 @@ void testScrollViewOffsetAbiIsAdditiveAndNullSafe() {
 
 int main() {
     testSliderAbiIsNullSafeAndSeparatesInputFromSetters();
+    testBuiltinTextRejectsInvalidInputAndCanRestoreDefaults();
     testTabInlineEditAbiIsNullSafeAndReportsUtf8();
     expectTrue("version exported", std::strcmp(oneui_version(), "0.1.0") == 0);
     testOwnedWindowPostCleansUpCancelledWork();

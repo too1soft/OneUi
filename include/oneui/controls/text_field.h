@@ -15,6 +15,7 @@
 #include <optional>
 #include <string>
 #include <vector>
+#include <utility>
 
 namespace oneui {
 
@@ -38,6 +39,11 @@ public:
     std::size_t selectionEnd() const;
     bool hasSelection() const;
     std::wstring selectedText() const;
+    // Read-only geometry in window content coordinates, from the same layout
+    // used for painting. Password fields never expose text geometry.
+    std::vector<Rect> textRangeRects(std::size_t start, std::size_t end) const;
+    std::optional<std::size_t> textOffsetAtPoint(Point point) const;
+    std::vector<std::pair<std::size_t, std::size_t>> textLineRanges() const;
     void selectAll();
     void clearSelection();
     bool copySelectionToClipboard(Clipboard& clipboard) const;

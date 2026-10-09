@@ -53,8 +53,12 @@ public:
     bool tickAnimations(double nowMs) override;
 
 protected:
+    void styleScopeChanged() override;
     virtual void layoutChildren();
     Widget* focusedChild() const;
+    // Descendant currently owns a pointer gesture. Container hover affordances
+    // must not intercept its moves while crossing their hit regions.
+    Widget* pressedChild() const { return pressedChild_; }
     void focusChild(Widget* child, bool focusVisible = false);
     bool focusNext(bool reverse, bool focusVisible = true);
     bool hasInteractionState() const override;

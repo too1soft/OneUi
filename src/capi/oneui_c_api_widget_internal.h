@@ -5,6 +5,10 @@
 #include <string>
 #include <vector>
 
+struct OneUiStyleSheet {
+    std::shared_ptr<oneui::StyleSheet> sheet = std::make_shared<oneui::StyleSheet>();
+};
+
 struct OneUiWidgetStyleBinding {
     std::weak_ptr<oneui::Widget> widget;
     std::weak_ptr<oneui::StyleSheet> styleSheet;

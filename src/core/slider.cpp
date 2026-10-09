@@ -254,18 +254,31 @@ bool Slider::onKeyDown(const KeyEvent& event) {
     case Key::End: target = maximum_; break;
     default: return false;
     }
+    return setValueFromInput(target);
+}
+
+bool Slider::setValueFromInput(double target) {
+    if (!interactive() || pressed_ || !std::isfinite(target)) return false;
     beginValue_ = value();
     pressed_ = true;
-    notifyInteraction(SliderInteraction::Begin);
-    if (!pressed_ || !interactive()) { return true; }
-    assignValue(target);
-    if (!pressed_) { return true; }
-    notifyInteraction(SliderInteraction::Update);
-    if (!pressed_) { return true; }
-    pressed_ = false;
-    notifyInteraction(SliderInteraction::Commit);
-    invalidate();
-    return true;
+    try {
+        notifyInteraction(SliderInteraction::Begin);
+        if (!pressed_ || !interactive()) { return true; }
+        assignValue(target);
+        if (!pressed_) { return true; }
+        notifyInteraction(SliderInteraction::Update);
+        if (!pressed_) { return true; }
+        pressed_ = false;
+        notifyInteraction(SliderInteraction::Commit);
+        invalidate();
+        return true;
+    } catch (...) {
+        // A native accessibility boundary may catch application exceptions.
+        // Do not leave a phantom drag that blocks all subsequent input.
+        pressed_ = false;
+        invalidate();
+        throw;
+    }
 }
 
 bool Slider::isFocusable() const {

@@ -1,5 +1,11 @@
 #include "oneui/oneui_c_api.h"
+#include "oneui_c_api_error.h"
+#include "../internal/unicode.h"
+#include <cstring>
+#include <stdexcept>
 #include "oneui/native_interop.h"
+#include "oneui/fonts.h"
+#include "oneui/localization.h"
 #include "oneui_c_api_internal.h"
 #include "oneui_c_api_window_internal.h"
 #include "oneui_c_api_widget_internal.h"
@@ -79,9 +85,6 @@ std::shared_ptr<oneui::Widget> oneui::retainNativeWidget(const OneUiWidget* hand
     return handle ? handle->widget : nullptr;
 }
 
-struct OneUiStyleSheet {
-    std::shared_ptr<oneui::StyleSheet> sheet = std::make_shared<oneui::StyleSheet>();
-};
 struct OneUiFocusBookmark {
     std::weak_ptr<oneui::Widget> target;
     bool focusVisible = false;
@@ -426,6 +429,16 @@ OneUiWidget* wrap(std::shared_ptr<oneui::Widget> widget) {
     wrapper->styleBinding = std::make_shared<OneUiWidgetStyleBinding>();
     wrapper->styleBinding->widget = wrapper->widget;
     wrapper->styleBinding->styleSheet = wrapper->styleSheet;
+    const std::weak_ptr<OneUiWidgetStyleBinding> weakBinding = wrapper->styleBinding;
+    wrapper->widget->setOnStyleScopeChanged([weakBinding] {
+        const auto binding = weakBinding.lock();
+        if (!binding) return;
+        const auto widget = binding->widget.lock();
+        const auto declared = binding->styleSheet.lock();
+        if (!widget || !declared) return;
+        OneUiWidget mounted{widget, declared, binding->tag, binding->classes, binding};
+        applyStyleSheet(&mounted, declared);
+    });
     OneUiWidget* raw = wrapper.release();
     {
         std::lock_guard<std::mutex> lock(gWidgetRegistryMutex);
@@ -565,7 +578,7 @@ DebugStyleMap debugStyleBindings() {
             bindingsByWidget[mounted.get()] = DebugStyleBinding{
                 binding->tag,
                 binding->classes,
-                binding->styleSheet.lock(),
+                mounted->styleScope() ? mounted->styleScope() : binding->styleSheet.lock(),
             };
         }
     }
@@ -842,6 +855,14 @@ void appendDebugNode(
     appendJsonString(stream, accessibilityRoleName(accessibility.role));
     stream << ",\"name\":";
     appendJsonString(stream, utf8FromWide(accessibility.name));
+    if (const auto* state=dynamic_cast<const oneui::StateView*>(widget)) {
+        stream << ",\"stateAction\":"; appendJsonString(stream,utf8FromWide(state->actionText()));
+        const auto action=state->actionFrame();
+        stream << ",\"stateActionFrame\":{\"x\":"; appendJsonNumber(stream,action.x);
+        stream << ",\"y\":"; appendJsonNumber(stream,action.y);
+        stream << ",\"width\":"; appendJsonNumber(stream,action.width);
+        stream << ",\"height\":"; appendJsonNumber(stream,action.height); stream << "}";
+    }
     stream << ",\"description\":";
     appendJsonString(stream, utf8FromWide(accessibility.description));
     stream << ",\"valueLength\":" << accessibility.value.size();
@@ -1004,19 +1025,29 @@ void applyStyleSheet(OneUiWidget* wrapper, std::shared_ptr<oneui::StyleSheet> sh
     }
     wrapper->styleSheet = std::move(sheet);
     syncStyleBinding(wrapper);
+    // Transient surfaces own a palette boundary; normal descendants inherit it.
+    if (dynamic_cast<oneui::Dialog*>(wrapper->widget.get()) ||
+        dynamic_cast<oneui::Popup*>(wrapper->widget.get()) ||
+        dynamic_cast<oneui::Menu*>(wrapper->widget.get())) {
+        wrapper->widget->setStyleScope(wrapper->styleSheet->transientStyleSheet());
+    }
+    const auto effectiveSheet = wrapper->widget->styleScope()
+        ? wrapper->widget->styleScope() : wrapper->styleSheet;
     const oneui::StyleNode node = styleNodeFor(wrapper);
-    applyPreferredSizeFromStyle(*wrapper->widget, wrapper->styleSheet->resolve(node));
+    const auto resolvedBox = effectiveSheet->resolve(node);
+    applyPreferredSizeFromStyle(*wrapper->widget, resolvedBox);
+    wrapper->widget->setFontFamily(resolvedBox.fontFamily.value_or(L""));
 
     if (auto* chart = dynamic_cast<oneui::TimeSeriesChart*>(wrapper->widget.get())) {
-        chart->setStyleBox(wrapper->styleSheet->resolve(node));
+        chart->setStyleBox(effectiveSheet->resolve(node));
         return;
     }
     if (auto* button = dynamic_cast<oneui::Button*>(wrapper->widget.get())) {
-        button->setStyleOverride(oneui::buttonStyleOverrideFromStyleSheet(*wrapper->styleSheet, node));
+        button->setStyleOverride(oneui::buttonStyleOverrideFromStyleSheet(*effectiveSheet, node));
         return;
     }
     if (auto* badge = dynamic_cast<oneui::Badge*>(wrapper->widget.get())) {
-        const oneui::StyleBox box = wrapper->styleSheet->resolve(node);
+        const oneui::StyleBox box = effectiveSheet->resolve(node);
         oneui::BadgeStyleOverride style;
         style.background = box.background.color;
         style.foreground = box.foreground;
@@ -1029,7 +1060,7 @@ void applyStyleSheet(OneUiWidget* wrapper, std::shared_ptr<oneui::StyleSheet> sh
         return;
     }
     if (auto* card = dynamic_cast<oneui::Card*>(wrapper->widget.get())) {
-        const oneui::StyleBox box = wrapper->styleSheet->resolve(node);
+        const oneui::StyleBox box = effectiveSheet->resolve(node);
         if (box.padding) {
             card->setPadding(*box.padding);
         }
@@ -1037,28 +1068,28 @@ void applyStyleSheet(OneUiWidget* wrapper, std::shared_ptr<oneui::StyleSheet> sh
         return;
     }
     if (auto* iconBadge = dynamic_cast<oneui::IconBadge*>(wrapper->widget.get())) {
-        iconBadge->setStyleBox(wrapper->styleSheet->resolve(node));
+        iconBadge->setStyleBox(effectiveSheet->resolve(node));
         return;
     }
     if (auto* popup = dynamic_cast<oneui::Popup*>(wrapper->widget.get())) {
         popup->setStyleOverride(
-            oneui::popupStyleOverrideFromStyleSheet(*wrapper->styleSheet, node));
+            oneui::popupStyleOverrideFromStyleSheet(*effectiveSheet, node));
         return;
     }
     if (auto* menu = dynamic_cast<oneui::Menu*>(wrapper->widget.get())) {
-        menu->setStyleSheet(wrapper->styleSheet, node);
+        menu->setStyleSheet(effectiveSheet, node);
         return;
     }
     if (auto* dialog = dynamic_cast<oneui::Dialog*>(wrapper->widget.get())) {
-        dialog->setStyleSheet(wrapper->styleSheet, node);
+        dialog->setStyleSheet(effectiveSheet, node);
         return;
     }
     if (auto* tile = dynamic_cast<oneui::Tile*>(wrapper->widget.get())) {
-        tile->setStyleSheet(wrapper->styleSheet, node);
+        tile->setStyleSheet(effectiveSheet, node);
         return;
     }
     if (auto* toast = dynamic_cast<oneui::Toast*>(wrapper->widget.get())) {
-        toast->setStyleSheet(wrapper->styleSheet, node);
+        toast->setStyleSheet(effectiveSheet, node);
         return;
     }
     if (auto* radio = dynamic_cast<oneui::RadioGroup*>(wrapper->widget.get())) {
@@ -1075,11 +1106,11 @@ void applyStyleSheet(OneUiWidget* wrapper, std::shared_ptr<oneui::StyleSheet> sh
             return state;
         };
         oneui::RadioGroupStyleOverride style;
-        style.normal = stateOverride(wrapper->styleSheet->resolve(oneui::StyleNode{node.tag, node.classes, oneui::StyleStateNone}));
-        style.hovered = stateOverride(wrapper->styleSheet->resolve(oneui::StyleNode{node.tag, node.classes, oneui::StyleStateHover}));
-        style.pressed = stateOverride(wrapper->styleSheet->resolve(oneui::StyleNode{node.tag, node.classes, oneui::StyleStateActive}));
-        style.selected = stateOverride(wrapper->styleSheet->resolve(oneui::StyleNode{node.tag, node.classes, oneui::StyleStateSelected}));
-        style.disabled = stateOverride(wrapper->styleSheet->resolve(oneui::StyleNode{node.tag, node.classes, oneui::StyleStateDisabled}));
+        style.normal = stateOverride(effectiveSheet->resolve(oneui::StyleNode{node.tag, node.classes, oneui::StyleStateNone}));
+        style.hovered = stateOverride(effectiveSheet->resolve(oneui::StyleNode{node.tag, node.classes, oneui::StyleStateHover}));
+        style.pressed = stateOverride(effectiveSheet->resolve(oneui::StyleNode{node.tag, node.classes, oneui::StyleStateActive}));
+        style.selected = stateOverride(effectiveSheet->resolve(oneui::StyleNode{node.tag, node.classes, oneui::StyleStateSelected}));
+        style.disabled = stateOverride(effectiveSheet->resolve(oneui::StyleNode{node.tag, node.classes, oneui::StyleStateDisabled}));
         radio->setStyleOverride(style);
         return;
     }
@@ -1095,20 +1126,20 @@ void applyStyleSheet(OneUiWidget* wrapper, std::shared_ptr<oneui::StyleSheet> sh
             return state;
         };
         oneui::CheckboxStyleOverride style;
-        style.normal = stateOverride(wrapper->styleSheet->resolve(oneui::StyleNode{node.tag, node.classes, oneui::StyleStateNone}));
-        style.hovered = stateOverride(wrapper->styleSheet->resolve(oneui::StyleNode{node.tag, node.classes, oneui::StyleStateHover}));
-        style.pressed = stateOverride(wrapper->styleSheet->resolve(oneui::StyleNode{node.tag, node.classes, oneui::StyleStateActive}));
-        style.selected = stateOverride(wrapper->styleSheet->resolve(oneui::StyleNode{node.tag, node.classes, oneui::StyleStateSelected}));
-        style.disabled = stateOverride(wrapper->styleSheet->resolve(oneui::StyleNode{node.tag, node.classes, oneui::StyleStateDisabled}));
+        style.normal = stateOverride(effectiveSheet->resolve(oneui::StyleNode{node.tag, node.classes, oneui::StyleStateNone}));
+        style.hovered = stateOverride(effectiveSheet->resolve(oneui::StyleNode{node.tag, node.classes, oneui::StyleStateHover}));
+        style.pressed = stateOverride(effectiveSheet->resolve(oneui::StyleNode{node.tag, node.classes, oneui::StyleStateActive}));
+        style.selected = stateOverride(effectiveSheet->resolve(oneui::StyleNode{node.tag, node.classes, oneui::StyleStateSelected}));
+        style.disabled = stateOverride(effectiveSheet->resolve(oneui::StyleNode{node.tag, node.classes, oneui::StyleStateDisabled}));
         checkbox->setStyleOverride(style);
         return;
     }
     if (auto* statusStrip = dynamic_cast<oneui::StatusStrip*>(wrapper->widget.get())) {
-        statusStrip->setStyleSheet(wrapper->styleSheet, node);
+        statusStrip->setStyleSheet(effectiveSheet, node);
         return;
     }
     if (auto* stateView = dynamic_cast<oneui::StateView*>(wrapper->widget.get())) {
-        stateView->setStyleSheet(wrapper->styleSheet, node);
+        stateView->setStyleSheet(effectiveSheet, node);
         return;
     }
     if (auto* tabs = dynamic_cast<oneui::Tabs*>(wrapper->widget.get())) {
@@ -1126,6 +1157,11 @@ void applyStyleSheet(OneUiWidget* wrapper, std::shared_ptr<oneui::StyleSheet> sh
             state.itemRadius = box.content.radius ? box.content.radius : box.radius;
             state.itemBorderWidth = box.borderWidth;
             state.textInset = box.textInset;
+            state.indicatorColor = box.tabIndicatorColor;
+            state.indicatorInset = box.tabIndicatorInset;
+            state.indicatorHeight = box.tabIndicatorHeight;
+            state.documentOutlineWidth = box.tabOutlineWidth;
+            state.trailingInset = box.tabTrailingInset;
             state.fontSize = box.fontSize;
             state.fontWeight = box.fontWeight;
             if (box.padding) {
@@ -1143,18 +1179,18 @@ void applyStyleSheet(OneUiWidget* wrapper, std::shared_ptr<oneui::StyleSheet> sh
             return state;
         };
         oneui::TabsStyleOverride style;
-        style.normal = stateOverride(wrapper->styleSheet->resolve(oneui::StyleNode{node.tag, node.classes, oneui::StyleStateNone}));
-        style.hovered = stateOverride(wrapper->styleSheet->resolve(oneui::StyleNode{node.tag, node.classes, oneui::StyleStateHover}));
-        style.pressed = stateOverride(wrapper->styleSheet->resolve(oneui::StyleNode{node.tag, node.classes, oneui::StyleStateActive}));
-        style.selected = stateOverride(wrapper->styleSheet->resolve(oneui::StyleNode{node.tag, node.classes, oneui::StyleStateSelected}));
-        style.disabled = stateOverride(wrapper->styleSheet->resolve(oneui::StyleNode{node.tag, node.classes, oneui::StyleStateDisabled}));
-        style.focusVisible = stateOverride(wrapper->styleSheet->resolve(oneui::StyleNode{node.tag, node.classes, oneui::StyleStateFocus}));
+        style.normal = stateOverride(effectiveSheet->resolve(oneui::StyleNode{node.tag, node.classes, oneui::StyleStateNone}));
+        style.hovered = stateOverride(effectiveSheet->resolve(oneui::StyleNode{node.tag, node.classes, oneui::StyleStateHover}));
+        style.pressed = stateOverride(effectiveSheet->resolve(oneui::StyleNode{node.tag, node.classes, oneui::StyleStateActive}));
+        style.selected = stateOverride(effectiveSheet->resolve(oneui::StyleNode{node.tag, node.classes, oneui::StyleStateSelected}));
+        style.disabled = stateOverride(effectiveSheet->resolve(oneui::StyleNode{node.tag, node.classes, oneui::StyleStateDisabled}));
+        style.focusVisible = stateOverride(effectiveSheet->resolve(oneui::StyleNode{node.tag, node.classes, oneui::StyleStateFocus}));
         tabs->setStyleOverride(style);
         return;
     }
     if (auto* select = dynamic_cast<oneui::Select*>(wrapper->widget.get())) {
         select->setStyleOverride(
-            oneui::selectStyleOverrideFromStyleSheet(*wrapper->styleSheet, node));
+            oneui::selectStyleOverrideFromStyleSheet(*effectiveSheet, node));
         return;
     }
     if (auto* slider = dynamic_cast<oneui::Slider*>(wrapper->widget.get())) {
@@ -1175,49 +1211,49 @@ void applyStyleSheet(OneUiWidget* wrapper, std::shared_ptr<oneui::StyleSheet> sh
             return state;
         };
         oneui::SliderStyleOverride style;
-        style.normal = stateOverride(wrapper->styleSheet->resolve({node.tag, node.classes, oneui::StyleStateNone}));
-        style.hovered = stateOverride(wrapper->styleSheet->resolve({node.tag, node.classes, oneui::StyleStateHover}));
-        style.pressed = stateOverride(wrapper->styleSheet->resolve({node.tag, node.classes, oneui::StyleStateActive}));
-        style.disabled = stateOverride(wrapper->styleSheet->resolve({node.tag, node.classes, oneui::StyleStateDisabled}));
-        style.focusVisible = stateOverride(wrapper->styleSheet->resolve({node.tag, node.classes, oneui::StyleStateFocus}));
+        style.normal = stateOverride(effectiveSheet->resolve({node.tag, node.classes, oneui::StyleStateNone}));
+        style.hovered = stateOverride(effectiveSheet->resolve({node.tag, node.classes, oneui::StyleStateHover}));
+        style.pressed = stateOverride(effectiveSheet->resolve({node.tag, node.classes, oneui::StyleStateActive}));
+        style.disabled = stateOverride(effectiveSheet->resolve({node.tag, node.classes, oneui::StyleStateDisabled}));
+        style.focusVisible = stateOverride(effectiveSheet->resolve({node.tag, node.classes, oneui::StyleStateFocus}));
         slider->setStyleOverride(style);
         return;
     }
     if (auto* progress = dynamic_cast<oneui::ProgressBar*>(wrapper->widget.get())) {
         progress->setStyleOverride(
-            oneui::progressBarStyleOverrideFromStyleSheet(*wrapper->styleSheet, node));
+            oneui::progressBarStyleOverrideFromStyleSheet(*effectiveSheet, node));
         return;
     }
     if (auto* sparkline = dynamic_cast<oneui::Sparkline*>(wrapper->widget.get())) {
-        sparkline->setStyleBox(wrapper->styleSheet->resolve(node));
+        sparkline->setStyleBox(effectiveSheet->resolve(node));
         return;
     }
     if (auto* virtualList = dynamic_cast<oneui::VirtualList*>(wrapper->widget.get())) {
-        virtualList->setStyleOverride(oneui::listStyleOverrideFromStyleSheet(*wrapper->styleSheet, node));
+        virtualList->setStyleOverride(oneui::listStyleOverrideFromStyleSheet(*effectiveSheet, node));
         return;
     }
     if (auto* list = dynamic_cast<oneui::List*>(wrapper->widget.get())) {
-        list->setStyleOverride(oneui::listStyleOverrideFromStyleSheet(*wrapper->styleSheet, node));
+        list->setStyleOverride(oneui::listStyleOverrideFromStyleSheet(*effectiveSheet, node));
         return;
     }
     if (auto* table = dynamic_cast<oneui::Table*>(wrapper->widget.get())) {
-        table->setStyleOverride(oneui::tableStyleOverrideFromStyleSheet(*wrapper->styleSheet, node));
+        table->setStyleOverride(oneui::tableStyleOverrideFromStyleSheet(*effectiveSheet, node));
         return;
     }
     if (auto* tree = dynamic_cast<oneui::TreeView*>(wrapper->widget.get())) {
-        tree->setStyleOverride(oneui::treeViewStyleOverrideFromStyleSheet(*wrapper->styleSheet, node));
+        tree->setStyleOverride(oneui::treeViewStyleOverrideFromStyleSheet(*effectiveSheet, node));
         return;
     }
     if (auto* textField = dynamic_cast<oneui::TextField*>(wrapper->widget.get())) {
-        textField->setStyleOverride(oneui::textFieldStyleOverrideFromStyleSheet(*wrapper->styleSheet, node));
+        textField->setStyleOverride(oneui::textFieldStyleOverrideFromStyleSheet(*effectiveSheet, node));
         return;
     }
     if (auto* terminal = dynamic_cast<oneui::TerminalView*>(wrapper->widget.get())) {
-        terminal->setStyleBox(wrapper->styleSheet->resolve(node));
+        terminal->setStyleBox(effectiveSheet->resolve(node));
         return;
     }
     if (auto* scrollView = dynamic_cast<oneui::ScrollView*>(wrapper->widget.get())) {
-        const oneui::StyleBox box = wrapper->styleSheet->resolve(node);
+        const oneui::StyleBox box = effectiveSheet->resolve(node);
         scrollView->setStyleBox(box);
         if (box.foreground || box.borderWidth) {
             scrollView->setScrollbarStyle(
@@ -1227,19 +1263,19 @@ void applyStyleSheet(OneUiWidget* wrapper, std::shared_ptr<oneui::StyleSheet> sh
         return;
     }
     if (auto* grid = dynamic_cast<oneui::ReorderableGrid*>(wrapper->widget.get())) {
-        grid->setStyleBox(wrapper->styleSheet->resolve(node));
+        grid->setStyleBox(effectiveSheet->resolve(node));
         return;
     }
     if (auto* surface = dynamic_cast<oneui::InteractiveSurface*>(wrapper->widget.get())) {
-        const oneui::StyleBox box = wrapper->styleSheet->resolve(node);
-        surface->setStyle(oneui::interactiveSurfaceStyleFromStyleSheet(*wrapper->styleSheet, node));
+        const oneui::StyleBox box = effectiveSheet->resolve(node);
+        surface->setStyle(oneui::interactiveSurfaceStyleFromStyleSheet(*effectiveSheet, node));
         if (box.padding) {
             surface->setPadding(*box.padding);
         }
         return;
     }
     if (auto* panel = dynamic_cast<oneui::Panel*>(wrapper->widget.get())) {
-        const oneui::StyleBox box = wrapper->styleSheet->resolve(node);
+        const oneui::StyleBox box = effectiveSheet->resolve(node);
         if (box.padding) {
             panel->setPadding(*box.padding);
         }
@@ -1247,7 +1283,7 @@ void applyStyleSheet(OneUiWidget* wrapper, std::shared_ptr<oneui::StyleSheet> sh
         return;
     }
     if (auto* label = dynamic_cast<oneui::Label*>(wrapper->widget.get())) {
-        const oneui::StyleBox box = wrapper->styleSheet->resolve(node);
+        const oneui::StyleBox box = effectiveSheet->resolve(node);
         if (box.foreground) {
             label->setColor(*box.foreground);
         }
@@ -1257,10 +1293,12 @@ void applyStyleSheet(OneUiWidget* wrapper, std::shared_ptr<oneui::StyleSheet> sh
         if (box.fontWeight) {
             label->setFontWeight(*box.fontWeight);
         }
+        label->setLetterSpacing(box.letterSpacing.value_or(0.0f));
+        label->setTabularNumbers(box.tabularNumbers.value_or(false));
         return;
     }
     if (auto* icon = dynamic_cast<oneui::IconView*>(wrapper->widget.get())) {
-        const oneui::StyleBox box = wrapper->styleSheet->resolve(node);
+        const oneui::StyleBox box = effectiveSheet->resolve(node);
         if (box.foreground) {
             icon->setColor(*box.foreground);
         }
@@ -1273,23 +1311,23 @@ void applyStyleSheet(OneUiWidget* wrapper, std::shared_ptr<oneui::StyleSheet> sh
         return;
     }
     if (auto* iconButton = dynamic_cast<oneui::IconButton*>(wrapper->widget.get())) {
-        iconButton->setStyleSheet(wrapper->styleSheet, node);
+        iconButton->setStyleSheet(effectiveSheet, node);
         return;
     }
     if (auto* switchWidget = dynamic_cast<oneui::Switch*>(wrapper->widget.get())) {
-        switchWidget->setStyleOverride(oneui::switchStyleOverrideFromStyleSheet(*wrapper->styleSheet, node));
+        switchWidget->setStyleOverride(oneui::switchStyleOverrideFromStyleSheet(*effectiveSheet, node));
         return;
     }
     if (auto* titleBar = dynamic_cast<oneui::WindowTitleBar*>(wrapper->widget.get())) {
-        titleBar->setStyleSheet(wrapper->styleSheet);
+        titleBar->setStyleSheet(effectiveSheet);
         return;
     }
     if (auto* navItem = dynamic_cast<oneui::NavItem*>(wrapper->widget.get())) {
-        navItem->setStyleSheet(wrapper->styleSheet);
+        navItem->setStyleSheet(effectiveSheet);
         return;
     }
     if (auto* appShell = dynamic_cast<oneui::AppShell*>(wrapper->widget.get())) {
-        const oneui::StyleBox box = wrapper->styleSheet->resolve(node);
+        const oneui::StyleBox box = effectiveSheet->resolve(node);
         if (box.padding) {
             appShell->setPadding(*box.padding);
         }
@@ -1300,7 +1338,7 @@ void applyStyleSheet(OneUiWidget* wrapper, std::shared_ptr<oneui::StyleSheet> sh
         return;
     }
     if (auto* topBar = dynamic_cast<oneui::TopBar*>(wrapper->widget.get())) {
-        const oneui::StyleBox box = wrapper->styleSheet->resolve(node);
+        const oneui::StyleBox box = effectiveSheet->resolve(node);
         if (box.padding) {
             topBar->setPadding(*box.padding);
         }
@@ -1315,7 +1353,7 @@ void applyStyleSheet(OneUiWidget* wrapper, std::shared_ptr<oneui::StyleSheet> sh
         return;
     }
     if (auto* stack = dynamic_cast<oneui::Stack*>(wrapper->widget.get())) {
-        const oneui::StyleBox box = wrapper->styleSheet->resolve(node);
+        const oneui::StyleBox box = effectiveSheet->resolve(node);
         if (box.padding) {
             stack->setPadding(*box.padding);
         }
@@ -1352,195 +1390,6 @@ oneui::TerminalAuxiliaryButtonAction terminalAuxiliaryButtonAction(
 }
 
 } // namespace
-
-OneUiWindow* oneui_window_create(const OneUiWindowOptions* options) {
-    try {
-        oneui::WindowOptions nativeOptions;
-        nativeOptions.title = options && options->title ? wideOrEmpty(options->title) : L"OneUI";
-        nativeOptions.width = options && options->width > 0 ? options->width : 1280;
-        nativeOptions.height = options && options->height > 0 ? options->height : 800;
-        nativeOptions.visible = options ? options->visible != 0 : false;
-        nativeOptions.borderless = options ? options->borderless != 0 : false;
-        nativeOptions.fullscreen = options ? options->fullscreen != 0 : false;
-        nativeOptions.topmost = options ? options->topmost != 0 : false;
-        nativeOptions.resizable = options ? options->resizable != 0 : true;
-
-        auto wrapper = std::make_unique<OneUiWindow>();
-        wrapper->window = oneui::Window::create(std::move(nativeOptions));
-        if (!wrapper->window) {
-            return nullptr;
-        }
-        return wrapper.release();
-    } catch (...) {
-        return nullptr;
-    }
-}
-
-OneUiWindow* oneui_window_create_utf8(const OneUiWindowOptionsUtf8* options) {
-    try {
-        oneui::WindowOptions nativeOptions;
-        nativeOptions.title = options ? utf8OrEmpty(options->title) : L"OneUI";
-        nativeOptions.width = options && options->width > 0 ? options->width : 1280;
-        nativeOptions.height = options && options->height > 0 ? options->height : 800;
-        nativeOptions.visible = options ? options->visible != 0 : false;
-        nativeOptions.borderless = options ? options->borderless != 0 : false;
-        nativeOptions.fullscreen = options ? options->fullscreen != 0 : false;
-        nativeOptions.topmost = options ? options->topmost != 0 : false;
-        nativeOptions.resizable = options ? options->resizable != 0 : true;
-
-        auto wrapper = std::make_unique<OneUiWindow>();
-        wrapper->window = oneui::Window::create(std::move(nativeOptions));
-        if (!wrapper->window) {
-            return nullptr;
-        }
-        return wrapper.release();
-    } catch (...) {
-        return nullptr;
-    }
-}
-
-void oneui_window_destroy(OneUiWindow* window) {
-    delete window;
-}
-
-void oneui_window_initialize(OneUiWindow* window) {
-    (void)oneui_window_initialize_checked(window);
-}
-
-int oneui_window_initialize_checked(OneUiWindow* window) {
-    if (!window || !window->window) {
-        return 0;
-    }
-    try {
-        window->window->initialize();
-        return window->window->nativeHandle() ? 1 : 0;
-    } catch (...) {
-        return 0;
-    }
-}
-
-void oneui_window_show(OneUiWindow* window) {
-    if (!window || !window->window) {
-        return;
-    }
-    window->window->show();
-}
-
-int oneui_window_center_on_active_monitor(OneUiWindow* window) {
-    return window && window->window && window->window->centerOnActiveMonitor() ? 1 : 0;
-}
-
-void oneui_window_show_with_fade(OneUiWindow* window, unsigned int duration_ms) {
-    if (!window || !window->window) {
-        return;
-    }
-    window->window->showWithFade(duration_ms);
-}
-
-int oneui_window_client_area_animations_enabled(OneUiWindow* window) {
-    return window && window->window && window->window->clientAreaAnimationsEnabled() ? 1 : 0;
-}
-
-void oneui_window_activate(OneUiWindow* window) {
-    if (!window || !window->window) {
-        return;
-    }
-    window->window->activate();
-}
-
-int oneui_window_run(OneUiWindow* window) {
-    if (!window || !window->window) {
-        return -1;
-    }
-    try {
-        return window->window->run();
-    } catch (...) {
-        return -1;
-    }
-}
-
-void oneui_window_close(OneUiWindow* window) {
-    if (!window || !window->window) {
-        return;
-    }
-    window->window->close();
-}
-
-void oneui_window_request_close(OneUiWindow* window) {
-    if (!window || !window->window) {
-        return;
-    }
-    window->window->post([window] {
-        if (window->window) {
-            window->window->requestClose();
-        }
-    });
-}
-
-void oneui_window_minimize(OneUiWindow* window) {
-    if (!window || !window->window) {
-        return;
-    }
-    window->window->minimize();
-}
-
-void oneui_window_toggle_maximize(OneUiWindow* window) {
-    if (!window || !window->window) {
-        return;
-    }
-    window->window->toggleMaximize();
-}
-
-int oneui_window_get_placement(OneUiWindow* window, OneUiWindowPlacement* placement) {
-    if (!window || !window->window || !placement) {
-        return 0;
-    }
-    oneui::WindowPlacement nativePlacement;
-    if (!window->window->getWindowPlacement(nativePlacement)) {
-        return 0;
-    }
-    placement->x = nativePlacement.x;
-    placement->y = nativePlacement.y;
-    placement->width = nativePlacement.width;
-    placement->height = nativePlacement.height;
-    placement->maximized = nativePlacement.maximized ? 1 : 0;
-    return 1;
-}
-
-int oneui_window_set_placement(OneUiWindow* window, const OneUiWindowPlacement* placement) {
-    if (!window || !window->window || !placement) {
-        return 0;
-    }
-    return window->window->setWindowPlacement(oneui::WindowPlacement{
-        placement->x,
-        placement->y,
-        placement->width,
-        placement->height,
-        placement->maximized != 0})
-        ? 1
-        : 0;
-}
-
-void oneui_window_set_borderless(OneUiWindow* window, int borderless) {
-    if (!window || !window->window) {
-        return;
-    }
-    window->window->setBorderless(borderless != 0);
-}
-
-void oneui_window_set_title_bar_drag_metrics(OneUiWindow* window, float title_bar_height, float reserved_button_width) {
-    if (!window || !window->window) {
-        return;
-    }
-    window->window->setTitleBarDragMetrics(title_bar_height, reserved_button_width);
-}
-
-void oneui_window_set_title_bar_interactive_insets(OneUiWindow* window, float leading_width, float trailing_width) {
-    if (!window || !window->window) {
-        return;
-    }
-    window->window->setTitleBarInteractiveInsets(leading_width, trailing_width);
-}
 
 void oneui_window_set_on_client_size_changed(
     OneUiWindow* window,
@@ -1619,6 +1468,69 @@ void oneui_window_set_close_to_tray(OneUiWindow* window, int close_to_tray) {
 
 int oneui_window_set_tray_enabled(OneUiWindow* window, int enabled) {
     return window && window->window && window->window->setTrayEnabled(enabled != 0);
+}
+namespace {
+std::string menuString(const char* value,std::size_t limit) {
+    if(!value)return {};
+    std::size_t n=0;while(n<=limit && value[n])++n;
+    if(n>limit)throw std::invalid_argument("Menu string exceeds limit");
+    std::string text(value,n);
+    if(oneui::unicode::toUtf8(oneui::unicode::fromUtf8(text))!=text)throw std::invalid_argument("Invalid menu UTF-8");
+    return text;
+}
+std::vector<oneui::NativeMenuItem> copyMenu(const OneUiNativeMenuItemUtf8* items,std::size_t count,std::size_t& total,unsigned depth=1) {
+    if(depth>8 || count>1024-total || (count&&!items))throw std::invalid_argument("Invalid menu tree");
+    total+=count;std::vector<oneui::NativeMenuItem> result;result.reserve(count);
+    for(std::size_t i=0;i<count;++i){const auto& in=items[i];
+        if((in.flags&~31u) || (in.flags&12u)==12u)throw std::invalid_argument("Invalid menu flags");
+        oneui::NativeMenuItem item;item.id=in.id;item.text=oneui::unicode::fromUtf8(menuString(in.text,16384));
+        item.enabled=in.flags&1;item.separator=in.flags&2;item.check=(in.flags&8)?oneui::MenuCheck::Radio:(in.flags&4)?oneui::MenuCheck::Check:oneui::MenuCheck::Normal;
+        item.checked=in.flags&16;item.radioGroup=in.radio_group;item.shortcut={menuString(in.shortcut_key,16),in.shortcut_modifiers};
+        if(in.child_count)item.children=copyMenu(in.children,in.child_count,total,depth+1);
+        result.push_back(std::move(item));
+    }return result;
+}
+}
+int oneui_window_set_tray_menu_utf8(OneUiWindow* window,const OneUiNativeMenuItemUtf8* items,size_t count) {
+    try {if(!window||!window->window)return 0;std::size_t total=0;auto menu=copyMenu(items,count,total);return window->window->setTrayMenu(menu);}
+    catch(...){oneui::capi::recordCurrentException(__func__);return 0;}
+}
+int oneui_window_set_menu_bar_utf8(OneUiWindow* window,const OneUiNativeMenuItemUtf8* items,size_t count) {
+    try {if(!window||!window->window)return 0;std::size_t total=0;auto menu=copyMenu(items,count,total);return window->window->setMenuBar(menu);}
+    catch(...){oneui::capi::recordCurrentException(__func__);return 0;}
+}
+void oneui_window_set_on_menu_action(OneUiWindow* window,OneUiIntCallback callback,void* data) {
+    try {if(window&&window->window)window->window->setOnMenuAction(callback?std::function<void(int)>([callback,data](int id){callback(id,data);}):std::function<void(int)>{});}
+    catch(...){oneui::capi::recordCurrentException(__func__);}
+}
+int oneui_window_set_tray_icon_rgba(OneUiWindow* window,const unsigned char* pixels,unsigned int width,unsigned int height,size_t stride,int templateImage) {
+    try {
+        if(!window||!window->window)return 0;
+        oneui::TrayIcon icon;icon.width=width;icon.height=height;icon.templateImage=templateImage!=0;
+        if(width==0 && height==0){if(pixels||stride)return 0;}
+        else {
+            if(!pixels || !width || !height || width>256 || height>256 || stride<width*4 || stride>16*1024*1024)return 0;
+            icon.rgba.resize(std::size_t(width)*height*4);
+            for(unsigned y=0;y<height;++y)std::memcpy(icon.rgba.data()+y*width*4,pixels+y*stride,width*4);
+        }
+        return window->window->setTrayIcon(icon);
+    }catch(...){oneui::capi::recordCurrentException(__func__);return 0;}
+}
+int oneui_window_set_tray_menu(OneUiWindow* window, const OneUiTrayMenuItem* items, size_t count) {
+    try {
+    if (!window || !window->window || count > 1024 || (count && !items)) return 0;
+    std::vector<oneui::TrayMenuItem> converted; converted.reserve(count);
+    for (size_t i = 0; i < count; ++i)
+        converted.push_back({items[i].id, items[i].text ? items[i].text : L"", items[i].enabled != 0, items[i].separator != 0});
+    return window->window->setTrayMenu(converted);
+    } catch (...) { oneui::capi::recordCurrentException(__func__); return 0; }
+}
+int oneui_window_set_tray_tooltip(OneUiWindow* window, const wchar_t* text) {
+    return window && window->window && window->window->setTrayTooltip(text ? text : L"");
+}
+void oneui_window_set_on_tray_action(OneUiWindow* window, OneUiIntCallback callback, void* user_data) {
+    if (!window || !window->window) return;
+    window->window->setOnTrayAction(callback ? std::function<void(int)>([callback, user_data](int id) { callback(id, user_data); }) : std::function<void(int)>{});
 }
 int oneui_window_tray_icon_visible(OneUiWindow* window) {
     return window && window->window && window->window->trayIconVisible();
@@ -1873,6 +1785,7 @@ void oneui_window_refresh_style_sheet(OneUiWindow* window) {
             OneUiWidget mountedWidget;
             mountedWidget.widget = std::move(widget);
             mountedWidget.styleSheet = std::move(styleSheet);
+            mountedWidget.styleBinding = binding;
             mountedWidget.tag = binding->tag;
             mountedWidget.classes = binding->classes;
             applyStyleSheet(&mountedWidget, window->styleSheet);
@@ -1888,6 +1801,19 @@ void oneui_window_set_default_font_family_utf8(
         return;
     }
     window->window->setDefaultFontFamily(utf8OrEmpty(family));
+}
+
+int oneui_enumerate_system_fonts(OneUiFontFamilyCallback callback, void* user_data) {
+    try {
+        const auto fonts = oneui::enumerateSystemFonts();
+        if (fonts.size() > static_cast<std::size_t>(INT_MAX)) return -1;
+        if (callback) {
+            for (const auto& font : fonts) {
+                callback({font.family.data(), font.family.size()}, font.monospaced ? 1 : 0, user_data);
+            }
+        }
+        return static_cast<int>(fonts.size());
+    } catch (...) { oneui::capi::recordCurrentException(__func__); return -1; }
 }
 
 int oneui_font_register_memory(
@@ -1908,6 +1834,7 @@ int oneui_font_register_memory(
         }
         return oneui::rendering::registerFontFromMemory(data, size, alias) ? 1 : 0;
     } catch (...) {
+        oneui::capi::recordCurrentException(__func__);
         return 0;
     }
 }
@@ -2041,6 +1968,12 @@ void oneui_style_sheet_destroy(OneUiStyleSheet* style_sheet) {
     delete style_sheet;
 }
 
+void oneui_style_sheet_set_transient_style_sheet(OneUiStyleSheet* style_sheet, OneUiStyleSheet* transient) {
+    if (style_sheet && style_sheet->sheet) {
+        style_sheet->sheet->setTransientStyleSheet(transient ? transient->sheet : nullptr);
+    }
+}
+
 void oneui_style_sheet_set_custom_property(OneUiStyleSheet* style_sheet, const char* name, const char* value) {
     if (!style_sheet || !style_sheet->sheet || !name || !value) {
         return;
@@ -2076,6 +2009,7 @@ int oneui_style_sheet_replace_css(OneUiStyleSheet* style_sheet, const char* css,
     }
     // Widget bindings and controls keep shared/weak references to this object.
     // Replace its contents, never its identity; invalid CSS leaves it intact.
+    replacement.setTransientStyleSheet(style_sheet->sheet->transientStyleSheet());
     *style_sheet->sheet = std::move(replacement);
     copyError("", error_buffer, error_buffer_len);
     return 1;
@@ -2106,6 +2040,7 @@ int oneui_clipboard_set_text(const wchar_t* text) {
         clipboard.setText(value);
         return clipboard.text() == value ? 1 : 0;
     } catch (...) {
+        oneui::capi::recordCurrentException(__func__);
         return 0;
     }
 }
@@ -2122,6 +2057,7 @@ int oneui_clipboard_get_text(wchar_t* buffer, int buffer_len) {
         }
         return required;
     } catch (...) {
+        oneui::capi::recordCurrentException(__func__);
         if (buffer && buffer_len > 0) {
             buffer[0] = L'\0';
         }
@@ -2136,6 +2072,7 @@ int oneui_clipboard_set_text_utf8(OneUiUtf8String text) {
         clipboard.setText(value);
         return clipboard.text() == value ? 1 : 0;
     } catch (...) {
+        oneui::capi::recordCurrentException(__func__);
         return 0;
     }
 }
@@ -2147,6 +2084,7 @@ std::size_t oneui_clipboard_get_text_utf8(char* buffer, std::size_t buffer_len) 
         copyUtf8Field(value, buffer, buffer_len);
         return value.size() + 1;
     } catch (...) {
+        oneui::capi::recordCurrentException(__func__);
         if (buffer && buffer_len > 0) {
             buffer[0] = '\0';
         }
@@ -2221,7 +2159,7 @@ int oneui_stack_set_engine(OneUiWidget* stack, int engine) {
     auto* native = asWidget<oneui::Stack>(stack);
     if (!native || engine < 0 || engine > 1) return 0;
     try { return native->setEngine(static_cast<oneui::StackEngine>(engine)) ? 1 : 0; }
-    catch (...) { return 0; }
+    catch (...) { oneui::capi::recordCurrentException(__func__); return 0; }
 }
 int oneui_stack_set_wrap(OneUiWidget* stack, int enabled) {
     auto* native = asWidget<oneui::Stack>(stack);
@@ -2237,7 +2175,7 @@ int oneui_widget_measure(OneUiWidget* widget, float max_width, float max_height,
         const auto size = widget->widget->measure({max_width, max_height});
         *width = size.width; *height = size.height;
         return 1;
-    } catch (...) { return 0; }
+    } catch (...) { oneui::capi::recordCurrentException(__func__); return 0; }
 }
 
 int oneui_stack_set_justify(OneUiWidget* stack, int justify) {
@@ -2260,7 +2198,7 @@ int oneui_stack_set_flex(OneUiWidget* stack, OneUiWidget* child,
         if (basis_mode == 1) flex.basis = basis;
         native->setFlex(child->widget, flex);
         return 1;
-    } catch (...) { return 0; }
+    } catch (...) { oneui::capi::recordCurrentException(__func__); return 0; }
 }
 
 void oneui_stack_clear_flex(OneUiWidget* stack, OneUiWidget* child) {
@@ -2276,7 +2214,7 @@ int oneui_widget_natural_size(OneUiWidget* widget, float* width, float* height) 
         const auto size = widget->widget->naturalSize();
         *width = size.width; *height = size.height;
         return 1;
-    } catch (...) { return 0; }
+    } catch (...) { oneui::capi::recordCurrentException(__func__); return 0; }
 }
 
 float oneui_stack_content_height(OneUiWidget* stack) {
@@ -2987,6 +2925,7 @@ int oneui_label_set_rich_text_utf8(
         nativeLabel->setRichText(utf8OrEmpty(text), std::move(nativeSpans));
         return 1;
     } catch (...) {
+        oneui::capi::recordCurrentException(__func__);
         return 0;
     }
 }
@@ -3146,6 +3085,12 @@ void oneui_table_set_column_presentation(OneUiWidget* table, int column, int ali
 }
 void oneui_table_set_column_dividers_visible(OneUiWidget* table, int visible) {
     if (auto* value = asWidget<oneui::Table>(table)) value->setColumnDividersVisible(visible != 0);
+}
+void oneui_table_set_column_kind(OneUiWidget* table, int column, int kind) {
+    if (kind != 0 && kind != 1) return;
+    if (auto* native = asWidget<oneui::Table>(table)) {
+        native->setColumnKind(column, kind == 1 ? oneui::TableCellKind::Percent : oneui::TableCellKind::Text);
+    }
 }
 void oneui_table_set_selection_column_visible(OneUiWidget* table, int visible) {
     if (auto* value = asWidget<oneui::Table>(table)) value->setSelectionColumnVisible(visible != 0);
@@ -3688,7 +3633,7 @@ int oneui_title_bar_set_presentation(OneUiWidget* title_bar, const OneUiTitleBar
             target.fill=color(source.fill); target.pressedFill=color(source.pressed_fill); target.glyphColor=color(source.glyph_color);
         }
         return bar->setPresentation(&p) ? 1 : 0;
-    } catch (...) { return 0; }
+    } catch (...) { oneui::capi::recordCurrentException(__func__); return 0; }
 }
 
 void oneui_title_bar_set_leading(OneUiWidget* title_bar, OneUiWidget* leading) {
@@ -4026,190 +3971,8 @@ OneUiWidget* oneui_tabs_create() {
     return wrap(std::make_shared<oneui::Tabs>());
 }
 
-int oneui_tabs_begin_edit(OneUiWidget* tabs, int index) {
-    auto* native = asWidget<oneui::Tabs>(tabs);
-    return native && native->beginEdit(index) ? 1 : 0;
-}
-void oneui_tabs_cancel_edit(OneUiWidget* tabs) {
-    if (auto* native = asWidget<oneui::Tabs>(tabs)) { native->cancelEdit(); }
-}
-int oneui_tabs_editing_index(OneUiWidget* tabs) {
-    auto* native = asWidget<oneui::Tabs>(tabs);
-    return native ? native->editingIndex() : -1;
-}
-void oneui_tabs_set_on_edit_finished(OneUiWidget* tabs, OneUiTabEditCallback callback, void* user_data) {
-    if (auto* native = asWidget<oneui::Tabs>(tabs)) {
-        native->setOnEditFinished(callback ? std::function<void(int, const std::wstring&, oneui::TabEditReason)>{
-            [callback, user_data](int index, const std::wstring& value, oneui::TabEditReason reason) {
-                const auto text = utf8FromWide(value);
-                callback(index, text.data(), text.size(), static_cast<int>(reason), user_data);
-            }} : nullptr);
-    }
-}
-
-void oneui_tabs_set_items_utf8(
-    OneUiWidget* tabs,
-    const OneUiUtf8String* items,
-    std::size_t count) {
-    auto* nativeTabs = asWidget<oneui::Tabs>(tabs);
-    if (!nativeTabs) {
-        return;
-    }
-    std::vector<std::wstring> values;
-    if (items && count > 0) {
-        values.reserve(count);
-        for (std::size_t index = 0; index < count; ++index) {
-            values.push_back(utf8OrEmpty(items[index]));
-        }
-    }
-    nativeTabs->setItems(std::move(values));
-}
-
-void oneui_tabs_set_item_icons(OneUiWidget* tabs, const int* symbols, std::size_t count) {
-    auto* nativeTabs = asWidget<oneui::Tabs>(tabs);
-    if (!nativeTabs) {
-        return;
-    }
-    std::vector<std::optional<oneui::IconSymbol>> values;
-    if (symbols && count > 0) {
-        values.reserve(count);
-        for (std::size_t index = 0; index < count; ++index) {
-            const int symbol = symbols[index];
-            if (symbol < 0 || symbol > static_cast<int>(oneui::IconSymbol::OutlineWorkbenchClose)) {
-                values.push_back(std::nullopt);
-            } else {
-                values.push_back(static_cast<oneui::IconSymbol>(symbol));
-            }
-        }
-    }
-    nativeTabs->setItemIcons(std::move(values));
-}
-
-void oneui_tabs_set_document_mode(OneUiWidget* tabs, int enabled) {
-    if (auto* nativeTabs = asWidget<oneui::Tabs>(tabs)) nativeTabs->setDocumentMode(enabled != 0);
-}
 void oneui_scroll_view_set_scrollbar_inset(OneUiWidget* view, float inset) {
     if (auto* nativeView = asWidget<oneui::ScrollView>(view)) nativeView->setScrollbarInset(inset);
-}
-int oneui_tabs_overflow_item_count(OneUiWidget* tabs) {
-    auto* nativeTabs = asWidget<oneui::Tabs>(tabs);
-    return nativeTabs ? nativeTabs->overflowItemCount() : 0;
-}
-void oneui_tabs_set_on_overflow_changed(OneUiWidget* tabs, OneUiIntCallback callback, void* user_data) {
-    if (auto* nativeTabs = asWidget<oneui::Tabs>(tabs)) {
-        if (!callback) nativeTabs->setOnOverflowChanged(nullptr);
-        else nativeTabs->setOnOverflowChanged([callback,user_data](int n){callback(n,user_data);});
-    }
-}
-void oneui_tabs_set_item_status_colors(OneUiWidget* tabs, const OneUiColor* colors, size_t count) {
-    if (auto* nativeTabs = asWidget<oneui::Tabs>(tabs)) {
-        std::vector<oneui::Color> values;
-        if (colors) { for (size_t i=0; i<count; ++i) values.push_back(toNativeColor(colors[i])); }
-        nativeTabs->setItemStatusColors(std::move(values));
-    }
-}
-void oneui_tabs_set_selected_index(OneUiWidget* tabs, int index) {
-    if (auto* nativeTabs = asWidget<oneui::Tabs>(tabs)) {
-        nativeTabs->setSelectedIndex(index);
-    }
-}
-
-int oneui_tabs_selected_index(OneUiWidget* tabs) {
-    if (auto* nativeTabs = asWidget<oneui::Tabs>(tabs)) {
-        return nativeTabs->selectedIndex();
-    }
-    return 0;
-}
-
-void oneui_tabs_set_compact(OneUiWidget* tabs, int compact) {
-    if (auto* nativeTabs = asWidget<oneui::Tabs>(tabs)) {
-        nativeTabs->setSizingMode(
-            compact != 0 ? oneui::TabsSizingMode::Compact : oneui::TabsSizingMode::Equal);
-    }
-}
-
-void oneui_tabs_set_item_width_range(OneUiWidget* tabs, float minimum, float maximum) {
-    if (auto* nativeTabs = asWidget<oneui::Tabs>(tabs)) {
-        nativeTabs->setItemWidthRange(minimum, maximum);
-    }
-}
-
-void oneui_tabs_set_closable(OneUiWidget* tabs, int closable) {
-    if (auto* nativeTabs = asWidget<oneui::Tabs>(tabs)) {
-        nativeTabs->setClosable(closable != 0);
-    }
-}
-
-void oneui_tabs_set_reorder_enabled(OneUiWidget* tabs, int enabled) {
-    if (auto* nativeTabs = asWidget<oneui::Tabs>(tabs)) {
-        nativeTabs->setReorderEnabled(enabled != 0);
-    }
-}
-
-int oneui_tabs_reorder_enabled(OneUiWidget* tabs) {
-    if (auto* nativeTabs = asWidget<oneui::Tabs>(tabs)) {
-        return nativeTabs->reorderEnabled() ? 1 : 0;
-    }
-    return 0;
-}
-
-void oneui_tabs_set_on_changed(OneUiWidget* tabs, OneUiIntCallback callback, void* user_data) {
-    auto* nativeTabs = asWidget<oneui::Tabs>(tabs);
-    if (!nativeTabs) {
-        return;
-    }
-    if (!callback) {
-        nativeTabs->setOnChanged(nullptr);
-        return;
-    }
-    nativeTabs->setOnChanged([callback, user_data](int value) {
-        callback(value, user_data);
-    });
-}
-
-void oneui_tabs_set_on_close_requested(
-    OneUiWidget* tabs,
-    OneUiIntCallback callback,
-    void* user_data) {
-    auto* nativeTabs = asWidget<oneui::Tabs>(tabs);
-    if (!nativeTabs) {
-        return;
-    }
-    if (!callback) {
-        nativeTabs->setOnCloseRequested(nullptr);
-        return;
-    }
-    nativeTabs->setOnCloseRequested([callback, user_data](int value) {
-        callback(value, user_data);
-    });
-}
-
-void oneui_tabs_set_on_context_menu_requested(
-    OneUiWidget* tabs,
-    OneUiIndexPointCallback callback,
-    void* user_data) {
-    auto* nativeTabs = asWidget<oneui::Tabs>(tabs);
-    if (!nativeTabs) {
-        return;
-    }
-    nativeTabs->setOnContextMenuRequested(
-        callback ? std::function<void(int, oneui::Point)>{[callback, user_data](int index, oneui::Point point) {
-            callback(index, point.x, point.y, user_data);
-        }} : nullptr);
-}
-
-void oneui_tabs_set_on_reorder_requested(
-    OneUiWidget* tabs,
-    OneUiReorderRequestedCallback callback,
-    void* user_data) {
-    auto* nativeTabs = asWidget<oneui::Tabs>(tabs);
-    if (!nativeTabs) {
-        return;
-    }
-    nativeTabs->setOnReorderRequested(
-        callback ? std::function<void(int, int)>{[callback, user_data](int source, int target) {
-            callback(source, target, user_data);
-        }} : nullptr);
 }
 
 OneUiWidget* oneui_select_create() {
@@ -4426,6 +4189,10 @@ void oneui_virtual_list_set_row_height(OneUiWidget* list, float height) {
     if (auto* nativeList = asWidget<oneui::VirtualList>(list)) {
         nativeList->setRowHeight(height);
     }
+}
+
+void oneui_virtual_list_set_activate_on_single_click(OneUiWidget* list, int enabled) {
+    if (auto* nativeList = asWidget<oneui::VirtualList>(list)) nativeList->setActivateOnSingleClick(enabled != 0);
 }
 
 void oneui_virtual_list_set_rich_metrics(
@@ -6032,6 +5799,13 @@ void oneui_terminal_view_set_on_hyperlink(
     }
 }
 
+void oneui_terminal_view_set_on_cursor_changed(OneUiWidget* view, OneUiVoidCallback callback, void* user_data) {
+    if (auto* nativeView = asWidget<oneui::TerminalView>(view)) {
+        if (!callback) nativeView->setOnCursorChanged(nullptr);
+        else nativeView->setOnCursorChanged([callback, user_data] { callback(user_data); });
+    }
+}
+
 void oneui_terminal_view_set_on_viewport_changed(
     OneUiWidget* view,
     OneUiTerminalViewportCallback callback,
@@ -6700,4 +6474,21 @@ void oneui_button_clear_style(OneUiWidget* button) {
         return;
     }
     nativeButton->clearStyleOverride();
+}
+
+int oneui_set_builtin_text_utf8(int key, const char* text) {
+    try {
+        if (key < 0 || key > static_cast<int>(oneui::BuiltinText::Loading)) throw std::invalid_argument("Unknown built-in text key");
+        if (!text) return oneui::setBuiltinText(static_cast<oneui::BuiltinText>(key), std::nullopt);
+        const auto length = std::char_traits<char>::length(text);
+        if (length == 0 || length > 4096) throw std::invalid_argument("Built-in text must contain 1 to 4096 UTF-8 bytes");
+        const auto wide = utf8OrEmpty(OneUiUtf8String{text, length});
+        if (utf8FromWide(wide) != std::string(text, length)) throw std::invalid_argument("Invalid UTF-8 built-in text");
+        if (!oneui::setBuiltinText(static_cast<oneui::BuiltinText>(key), wide))
+            throw std::invalid_argument("Built-in text was rejected");
+        return 1;
+    } catch (...) {
+        oneui::capi::recordCurrentException(__func__);
+        return 0;
+    }
 }

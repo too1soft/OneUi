@@ -34,6 +34,7 @@ public:
     bool onMouseMove(const MouseEvent& event) override;
     bool onMouseDown(const MouseEvent& event) override;
     bool onMouseUp(const MouseEvent& event) override;
+    bool onKeyDown(const KeyEvent& event) override;
     bool onFocusChanged(bool focused) override;
     CursorKind cursor(Point point) const override;
     bool isFocusable() const override;

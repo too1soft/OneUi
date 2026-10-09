@@ -16,6 +16,30 @@ typedef struct OneUiFocusBookmark OneUiFocusBookmark;
 typedef struct OneUiStyleSheet OneUiStyleSheet;
 typedef struct OneUiTray OneUiTray;
 
+typedef enum OneUiErrorCode {
+    OneUiErrorNone = 0,
+    OneUiErrorInvalidArgument = 1,
+    OneUiErrorOutOfMemory = 2,
+    OneUiErrorOperationFailed = 3,
+    OneUiErrorUnknownException = 4
+} OneUiErrorCode;
+
+/* Per-thread diagnostic for caught native exceptions and documented validation
+   failures. Successful calls do not clear it. Clear before the operation being
+   diagnosed, then inspect its normal return value and this diagnostic on failure.
+   The UTF-8 message is at most 1023 bytes, with invalid bytes replaced by '?'.
+   Its borrowed pointer is valid on this thread until another error, clear, or
+   thread exit; copy before then. Query/clear never allocate or invoke callbacks.
+   Legacy failure returns may have no diagnostic; None does not imply success. */
+ONEUI_API const char* oneui_last_error(void);
+ONEUI_API OneUiErrorCode oneui_last_error_code(void);
+ONEUI_API void oneui_clear_error(void);
+
+/* Builtin text keys: 0=minimize, 1=maximize, 2=restore, 3=close, 4=accept, 5=cancel,
+   6=show main window, 7=quit application, 8=loading.
+   UTF-8 text is copied. NULL resets to the platform default. Returns 0 for invalid input. */
+ONEUI_API int oneui_set_builtin_text_utf8(int key, const char* text);
+
 typedef void (*OneUiVoidCallback)(void* user_data);
 typedef void (*OneUiDestroyCallback)(void* user_data);
 typedef void (*OneUiFrameCallback)(double now_ms, void* user_data);
@@ -517,7 +541,7 @@ enum {
     OneUiTerminalCellOverline = 1u << 11
 };
 
-#define ONEUI_UTF8_ABI_VERSION 39u
+#define ONEUI_UTF8_ABI_VERSION 43u
 
 /*
  * Copies and registers a process-local font under family_alias. Call before
@@ -528,6 +552,13 @@ ONEUI_API int oneui_font_register_memory(
     const uint8_t* data,
     size_t size,
     OneUiUtf8String family_alias);
+
+/* Synchronous snapshot; callback strings are borrowed only until it returns.
+ * No UI thread/window needed. A null callback queries the family count.
+ * Returns total families, or -1 on failure. Callback must not throw/unwind.
+ * Worker-thread use is recommended; see oneui/fonts.h for platform semantics. */
+typedef void (*OneUiFontFamilyCallback)(OneUiUtf8String family, int monospaced, void* user_data);
+ONEUI_API int oneui_enumerate_system_fonts(OneUiFontFamilyCallback callback, void* user_data);
 
 typedef enum OneUiWindowBackend {
     OneUiWindowBackendUnknown = 0,
@@ -544,7 +575,9 @@ enum OneUiWindowCapability {
     OneUiWindowCapabilityTopmost = 1u << 4,
     OneUiWindowCapabilityTray = 1u << 5,
     OneUiWindowCapabilityNativeDialogs = 1u << 6,
-    OneUiWindowCapabilityFileDrop = 1u << 7
+    OneUiWindowCapabilityFileDrop = 1u << 7,
+    OneUiWindowCapabilityMenuBar = 1u << 8,
+    OneUiWindowCapabilityTrayTooltip = 1u << 9
 };
 ONEUI_API unsigned int oneui_window_backend(OneUiWindow* window);
 ONEUI_API unsigned int oneui_window_capabilities(OneUiWindow* window);
@@ -561,6 +594,8 @@ ONEUI_API void oneui_window_show(OneUiWindow* window);
 ONEUI_API int oneui_window_center_on_active_monitor(OneUiWindow* window);
 ONEUI_API void oneui_window_show_with_fade(OneUiWindow* window, unsigned int duration_ms);
 ONEUI_API int oneui_window_client_area_animations_enabled(OneUiWindow* window);
+/* Native Windows double-click timing; portable 500ms fallback on other backends. */
+ONEUI_API unsigned int oneui_double_click_interval_ms(void);
 ONEUI_API void oneui_window_activate(OneUiWindow* window);
 ONEUI_API int oneui_window_run(OneUiWindow* window);
 ONEUI_API void oneui_window_close(OneUiWindow* window);
@@ -618,6 +653,47 @@ ONEUI_API void oneui_window_set_minimum_client_size(
 ONEUI_API void oneui_window_set_corner_radius(OneUiWindow* window, float radius);
 ONEUI_API void oneui_window_set_close_to_tray(OneUiWindow* window, int close_to_tray);
 ONEUI_API int oneui_window_set_tray_enabled(OneUiWindow* window, int enabled);
+typedef struct OneUiTrayMenuItem {
+    int id;
+    const wchar_t* text;
+    int enabled;
+    int separator;
+} OneUiTrayMenuItem;
+ONEUI_API int oneui_window_set_tray_menu(OneUiWindow* window, const OneUiTrayMenuItem* items, size_t count);
+/* Tree is copied during the call. Maximum 1024 nodes / 8 levels. Duplicate
+ * leaf IDs/shortcuts, invalid UTF-8 or conflicting radio selections fail
+ * without replacing the current menu. Check states are application-controlled.
+ * flags: enabled=1, separator=2, check=4, radio=8, checked=16.
+ * shortcut_modifiers uses OneUiKeyModifier (Primary = Ctrl / macOS Command).
+ * Tray shortcuts are labels, not system-wide hotkeys. Menu bar shortcuts are
+ * active only in the owning application. Empty tray restores its default menu;
+ * empty menu bar removes it. IDs 0xE001/0xE002 are reserved. */
+typedef enum OneUiNativeMenuFlags {
+    OneUiNativeMenuEnabled = 1u << 0,
+    OneUiNativeMenuSeparator = 1u << 1,
+    OneUiNativeMenuCheck = 1u << 2,
+    OneUiNativeMenuRadio = 1u << 3,
+    OneUiNativeMenuChecked = 1u << 4
+} OneUiNativeMenuFlags;
+typedef struct OneUiNativeMenuItemUtf8 {
+    int id;
+    const char* text;
+    unsigned int flags;
+    unsigned int radio_group;
+    const char* shortcut_key;
+    unsigned int shortcut_modifiers;
+    const struct OneUiNativeMenuItemUtf8* children;
+    size_t child_count;
+} OneUiNativeMenuItemUtf8;
+ONEUI_API int oneui_window_set_tray_menu_utf8(OneUiWindow* window, const OneUiNativeMenuItemUtf8* items, size_t count);
+ONEUI_API int oneui_window_set_menu_bar_utf8(OneUiWindow* window, const OneUiNativeMenuItemUtf8* items, size_t count);
+ONEUI_API void oneui_window_set_on_menu_action(OneUiWindow* window, OneUiIntCallback callback, void* user_data);
+/* Straight-alpha RGBA8, copied; 1..256 pixels per dimension. Null data and zero
+ * dimensions/stride restore the default. Template is a macOS rendering hint. */
+ONEUI_API int oneui_window_set_tray_icon_rgba(OneUiWindow* window, const unsigned char* pixels,
+    unsigned int width, unsigned int height, size_t row_stride, int template_image);
+ONEUI_API int oneui_window_set_tray_tooltip(OneUiWindow* window, const wchar_t* text);
+ONEUI_API void oneui_window_set_on_tray_action(OneUiWindow* window, OneUiIntCallback callback, void* user_data);
 ONEUI_API int oneui_window_tray_icon_visible(OneUiWindow* window);
 ONEUI_API int oneui_window_notify_tray(OneUiWindow* window, const wchar_t* title, const wchar_t* message);
 // force_exit is 1 for tray Exit / system session ending, 0 for window close.
@@ -649,9 +725,9 @@ ONEUI_API int oneui_window_file_dialog_utf8(
     size_t buffer_len,
     size_t* required_len);
 /*
- * Shows an owner-bound multi-file open dialog. The selected UTF-8 paths are
+ * Shows an owner-bound multi-file or multi-folder open dialog. The selected UTF-8 paths are
  * returned as a double-NUL-terminated sequence. This entry point only accepts
- * OneUiFileDialogOpenFile; all other modes fail with -1. Return codes and
+ * OneUiFileDialogOpenFile or OneUiFileDialogSelectFolder; save mode fails with -1. Return codes and
  * required_len semantics match oneui_window_file_dialog_utf8.
  */
 ONEUI_API int oneui_window_file_dialog_multiple_utf8(
@@ -741,6 +817,8 @@ ONEUI_API void oneui_widget_apply_style_sheet(OneUiWidget* widget, OneUiStyleShe
 
 ONEUI_API OneUiStyleSheet* oneui_style_sheet_create(void);
 ONEUI_API void oneui_style_sheet_destroy(OneUiStyleSheet* style_sheet);
+// Retain the transient sheet in the application; NULL clears the palette boundary.
+ONEUI_API void oneui_style_sheet_set_transient_style_sheet(OneUiStyleSheet* style_sheet, OneUiStyleSheet* transient);
 ONEUI_API void oneui_style_sheet_set_custom_property(OneUiStyleSheet* style_sheet, const char* name, const char* value);
 ONEUI_API int oneui_style_sheet_add_css(OneUiStyleSheet* style_sheet, const char* css, char* error_buffer, int error_buffer_len);
 /* Atomically replace rules while preserving the shared sheet identity. */
@@ -979,6 +1057,8 @@ ONEUI_API int oneui_progress_bar_set_segments_utf8(OneUiWidget* bar, const OneUi
 ONEUI_API void oneui_table_set_rich_rows_utf8(OneUiWidget* table, const OneUiTableRichRowUtf8* rows, size_t count);
 ONEUI_API int oneui_table_update_rich_row_utf8(OneUiWidget* table, size_t index, const OneUiTableRichRowUtf8* row);
 ONEUI_API void oneui_table_set_column_presentation(OneUiWidget* table, int column, int alignment, int action);
+/* kind: 0 = text (default), 1 = percent. Unknown values are ignored. */
+ONEUI_API void oneui_table_set_column_kind(OneUiWidget* table, int column, int kind);
 ONEUI_API void oneui_table_set_column_dividers_visible(OneUiWidget* table, int visible);
 ONEUI_API void oneui_table_set_selection_column_visible(OneUiWidget* table, int visible);
 ONEUI_API void oneui_table_set_selection_column_width(OneUiWidget* table, float width);
@@ -1044,7 +1124,7 @@ ONEUI_API void oneui_icon_set_accent(OneUiWidget* icon, unsigned char r, unsigne
 ONEUI_API void oneui_icon_set_stroke_width(OneUiWidget* icon, float width);
 
 /* ImageView copies the RGBA buffer before returning. content_mode: 0=contain, 1=cover, 2=stretch, 3=actual size. */
-ONEUI_API OneUiWidget* oneui_image_view_create();
+ONEUI_API OneUiWidget* oneui_image_view_create(void);
 ONEUI_API int oneui_image_view_set_rgba(
     OneUiWidget* image,
     const unsigned char* pixels,
@@ -1180,6 +1260,8 @@ ONEUI_API void oneui_tabs_set_on_context_menu_requested(
     OneUiWidget* tabs,
     OneUiIndexPointCallback callback,
     void* user_data);
+/* Called once a reorder gesture leaves the tab strip. Coordinates are client-local. */
+ONEUI_API void oneui_tabs_set_on_detach_requested(OneUiWidget*, OneUiIndexPointCallback, void*);
 ONEUI_API void oneui_tabs_set_on_reorder_requested(
     OneUiWidget* tabs,
     OneUiReorderRequestedCallback callback,
@@ -1235,6 +1317,7 @@ ONEUI_API size_t oneui_virtual_list_selected_indices(
     int* buffer,
     size_t buffer_len);
 ONEUI_API void oneui_virtual_list_set_row_height(OneUiWidget* list, float height);
+ONEUI_API void oneui_virtual_list_set_activate_on_single_click(OneUiWidget* list, int enabled);
 ONEUI_API void oneui_virtual_list_set_rich_metrics(
     OneUiWidget* list,
     float indicator_space,
@@ -1391,7 +1474,7 @@ ONEUI_API void oneui_table_set_on_item_drag_utf8(
     OneUiItemDragCallback callback,
     void* user_data);
 
-ONEUI_API OneUiWidget* oneui_card_create();
+ONEUI_API OneUiWidget* oneui_card_create(void);
 ONEUI_API void oneui_card_set_content(OneUiWidget* card, OneUiWidget* child);
 
 ONEUI_API OneUiWidget* oneui_reorderable_grid_create(void);
@@ -1424,7 +1507,7 @@ ONEUI_API void oneui_reorderable_grid_set_on_item_drag_utf8(
     OneUiItemDragCallback callback,
     void* user_data);
 
-ONEUI_API OneUiWidget* oneui_interactive_surface_create();
+ONEUI_API OneUiWidget* oneui_interactive_surface_create(void);
 ONEUI_API void oneui_interactive_surface_set_content(OneUiWidget* surface, OneUiWidget* child);
 ONEUI_API void oneui_interactive_surface_set_padding(OneUiWidget* surface, OneUiInsets padding);
 ONEUI_API void oneui_interactive_surface_set_style(OneUiWidget* surface, const OneUiInteractiveSurfaceStyle* style);
@@ -1618,6 +1701,7 @@ ONEUI_API void oneui_terminal_view_set_on_hyperlink(
     OneUiWidget* view,
     OneUiTerminalHyperlinkCallback callback,
     void* user_data);
+ONEUI_API void oneui_terminal_view_set_on_cursor_changed(OneUiWidget* view, OneUiVoidCallback callback, void* user_data);
 ONEUI_API void oneui_terminal_view_set_on_viewport_changed(
     OneUiWidget* view,
     OneUiTerminalViewportCallback callback,
@@ -1668,7 +1752,7 @@ ONEUI_API void oneui_toast_set_on_primary_action(OneUiWidget* toast, OneUiVoidCa
 ONEUI_API void oneui_toast_set_on_secondary_action(OneUiWidget* toast, OneUiVoidCallback callback, void* user_data);
 ONEUI_API void oneui_toast_set_on_close(OneUiWidget* toast, OneUiVoidCallback callback, void* user_data);
 
-ONEUI_API OneUiWidget* oneui_radio_group_create();
+ONEUI_API OneUiWidget* oneui_radio_group_create(void);
 ONEUI_API void oneui_radio_group_set_items(OneUiWidget* radio_group, const wchar_t* items);
 ONEUI_API void oneui_radio_group_set_selected_index(OneUiWidget* radio_group, int index);
 ONEUI_API int oneui_radio_group_selected_index(OneUiWidget* radio_group);
@@ -1721,8 +1805,86 @@ ONEUI_API void oneui_button_set_on_click(OneUiWidget* button, OneUiVoidCallback 
 ONEUI_API void oneui_button_set_style(OneUiWidget* button, const OneUiButtonStyle* style);
 ONEUI_API void oneui_button_clear_style(OneUiWidget* button);
 
+/* Desktop lifecycle API. New structures do not extend legacy window options.
+ * UI-thread only unless explicitly stated. Registered windows stay caller-owned.
+ * Callback data is owned by the callee on every path, including failure. */
+typedef struct OneUiApplication OneUiApplication;
+typedef struct OneUiCloseDecision OneUiCloseDecision;
+typedef struct OneUiWindowSubscription OneUiWindowSubscription;
+typedef struct OneUiModalSession OneUiModalSession;
+typedef struct OneUiWindowState {
+    uint32_t known_fields, flags;
+    float width, height, pixel_width, pixel_height, dpi_scale;
+} OneUiWindowState;
+/* bits: visible=1, active=2, minimized=4, maximized=8, fullscreen=16,
+ * topmost=32, resizable=64. Unknown fields must not be treated as false. */
+typedef void (*OneUiWindowStateCallback)(const OneUiWindowState*, void*);
+typedef void (*OneUiCloseGuardCallback)(OneUiCloseDecision*, void*);
+typedef void (*OneUiApplicationActivationCallback)(OneUiUtf8String notification_id, OneUiUtf8String action_id, OneUiUtf8String parameter, void*);
+ONEUI_API OneUiApplication* oneui_application_create_utf8(OneUiUtf8String id, OneUiUtf8String name);
+ONEUI_API void oneui_application_destroy(OneUiApplication* application);
+ONEUI_API int oneui_application_add_window(OneUiApplication*, OneUiWindow*, int main_window);
+ONEUI_API int oneui_application_remove_window(OneUiApplication*, OneUiWindow*);
+/* 0=last window closes, 1=main window closes, 2=explicit quit. */
+ONEUI_API int oneui_application_set_quit_policy(OneUiApplication*, int policy);
+ONEUI_API int oneui_application_run(OneUiApplication*);
+ONEUI_API int oneui_application_request_quit(OneUiApplication*);
+ONEUI_API int oneui_application_set_close_guard(OneUiApplication*, OneUiWindow*, OneUiCloseGuardCallback, void*, OneUiDestroyCallback);
+ONEUI_API int oneui_application_set_on_activation(OneUiApplication*, OneUiApplicationActivationCallback, void*, OneUiDestroyCallback);
+/* A guard owns its decision. Resolve consumes it; destroy rejects and consumes it. */
+ONEUI_API void oneui_close_decision_resolve(OneUiCloseDecision*, int accept);
+ONEUI_API void oneui_close_decision_destroy(OneUiCloseDecision*);
+ONEUI_API int oneui_window_get_state(OneUiWindow*, OneUiWindowState*);
+ONEUI_API int oneui_window_hide(OneUiWindow*);
+ONEUI_API int oneui_window_restore(OneUiWindow*);
+ONEUI_API int oneui_window_maximize(OneUiWindow*);
+ONEUI_API int oneui_window_set_topmost(OneUiWindow*, int enabled);
+ONEUI_API int oneui_window_set_resizable(OneUiWindow*, int enabled);
+ONEUI_API int oneui_window_set_client_size(OneUiWindow*, float width, float height);
+ONEUI_API int oneui_window_set_maximum_client_size(OneUiWindow*, float width, float height);
+ONEUI_API int oneui_window_set_owner(OneUiWindow*, OneUiWindow* owner);
+ONEUI_API OneUiWindowSubscription* oneui_window_observe_state(OneUiWindow*, OneUiWindowStateCallback, void*, OneUiDestroyCallback);
+ONEUI_API void oneui_window_subscription_destroy(OneUiWindowSubscription*);
+ONEUI_API OneUiModalSession* oneui_modal_show(OneUiWindow* child, OneUiWindow* parent, OneUiIntCallback, void*, OneUiDestroyCallback);
+ONEUI_API void oneui_modal_finish(OneUiModalSession*, int result);
+ONEUI_API void oneui_modal_destroy(OneUiModalSession*);
+
+typedef struct OneUiNotificationService OneUiNotificationService;
+typedef struct OneUiNotificationActionUtf8 { OneUiUtf8String id, title; } OneUiNotificationActionUtf8;
+typedef struct OneUiNotificationUtf8 {
+    OneUiUtf8String id, title, body, parameter;
+    const OneUiNotificationActionUtf8* actions;
+    size_t action_count;
+} OneUiNotificationUtf8;
+/* Status: 0 accepted, 1 permission denied, 2 service unavailable, 3 unsupported,
+ * 4 failed. Permission: 0 unknown, 1 not determined, 2 granted, 3 denied, 4 unsupported.
+ * Callback strings are borrowed only for the callback. Cleanup runs exactly once,
+ * including invalid input, cancelled callbacks, service destruction and shutdown. */
+typedef void (*OneUiNotificationResultCallback)(int status, OneUiUtf8String id, OneUiUtf8String detail, void*);
+typedef void (*OneUiNotificationPermissionCallback)(int permission, int status, OneUiUtf8String detail, void*);
+ONEUI_API OneUiNotificationService* oneui_notification_service_create(OneUiApplication*);
+ONEUI_API void oneui_notification_service_destroy(OneUiNotificationService*);
+ONEUI_API int oneui_notification_permission(OneUiNotificationService*, int request, OneUiNotificationPermissionCallback, void*, OneUiDestroyCallback);
+ONEUI_API int oneui_notification_send_utf8(OneUiNotificationService*, const OneUiNotificationUtf8*, OneUiNotificationResultCallback, void*, OneUiDestroyCallback);
+ONEUI_API int oneui_notification_withdraw_utf8(OneUiNotificationService*, OneUiUtf8String id, OneUiNotificationResultCallback, void*, OneUiDestroyCallback);
+ONEUI_API int oneui_application_is_primary(OneUiApplication*);
+/* Installer operation: reports its result synchronously; no Application is required. */
+ONEUI_API int oneui_application_register_desktop_utf8(OneUiUtf8String id, OneUiUtf8String name, OneUiUtf8String executable, int install, OneUiNotificationResultCallback, void*, OneUiDestroyCallback);
+typedef struct OneUiToastMessageUtf8 {
+    OneUiUtf8String id, title, message, primary_action, secondary_action;
+    double timeout_ms;
+} OneUiToastMessageUtf8;
+ONEUI_API OneUiWidget* oneui_toast_host_create(size_t capacity);
+ONEUI_API int oneui_toast_host_push_utf8(OneUiWidget*, const OneUiToastMessageUtf8*, OneUiUtf8TextCallback, void*, OneUiDestroyCallback);
+ONEUI_API int oneui_toast_host_dismiss_utf8(OneUiWidget*, OneUiUtf8String id);
+ONEUI_API int oneui_toast_host_clear(OneUiWidget*);
+ONEUI_API int oneui_toast_host_set_active(OneUiWidget*, int active);
+ONEUI_API size_t oneui_toast_host_pending_count(OneUiWidget*);
+
 #ifdef __cplusplus
 }
 #endif
 
 #include "oneui/title_bar_presentation_c.h"
+#include "oneui/dock_model_c.h"
+#include "oneui/dock_session_c.h"

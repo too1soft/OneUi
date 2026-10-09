@@ -8,6 +8,7 @@ using namespace oneui::internal;
 #define CHECK(x) do{if(!(x))throw std::runtime_error("Failed: " #x);}while(0)
 struct Probe:Widget {void paint(Canvas&)override{}};
 int main(){try {
+#if ONEUI_DEVELOPER_TOOLS
     Probe widget;widget.setDiagnosticSource({"Slow\"Widget","fixture\n.one",17});
     DeveloperRecorder recorder({});
     recorder.beginFrame(0);recorder.observePaint(widget,40);recorder.finishFrame(45,false,{});
@@ -50,5 +51,13 @@ int main(){try {
     auto transient=std::make_unique<Probe>();recorder.observeMotion(*transient,1,.1,true);transient.reset();
     bool rejected=false;try{DeveloperRecorder invalid({true,true,0});}catch(const std::invalid_argument&){rejected=true;}CHECK(rejected);
     std::cout<<"Developer tools: frame budgets, idle boundaries, source ownership, reversal, bounded history and sessions passed.\n";
+#else
+    DeveloperSnapshot snapshot;
+    CHECK(!snapshot.supported && !snapshot.enabled);
+    CHECK(developerReportJson(snapshot).find("\"supported\":false") != std::string::npos);
+    Probe widget;
+    DiagnosticPaintSpan disabled(widget);
+    std::cout<<"Developer tools omitted; unsupported snapshot remains serializable.\n";
+#endif
     return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

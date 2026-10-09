@@ -109,7 +109,9 @@ void ProgressBar::setIndeterminate(bool indeterminate) {
     }
     indeterminate_ = indeterminate;
     indeterminateStartedMs_ = currentTimeMs();
-    indeterminatePhase_ = 0.0;
+    // Reduced-motion callers may disable animation before entering busy mode.
+    // Keep the static segment visible regardless of setter order.
+    indeterminatePhase_ = animationsEnabled_ ? 0.0 : 0.38;
     if (indeterminate_ && animationsEnabled_ && hasAnimationScheduler()) {
         requestAnimationFrame();
     }
@@ -139,6 +141,15 @@ bool ProgressBar::animationsEnabled() const {
     return animationsEnabled_;
 }
 
+void ProgressBar::setAnimationScheduler(std::function<void()> scheduler) {
+    Widget::setAnimationScheduler(std::move(scheduler));
+    // Declarative builders configure the busy state before mounting the
+    // control. Start it when its owner supplies the native scheduler.
+    if (indeterminate_ && animationsEnabled_ && hasAnimationScheduler()) {
+        requestAnimationFrame();
+    }
+}
+
 void ProgressBar::setStyleOverride(ProgressBarStyleOverride style) {
     styleOverride_ = std::move(style);
     invalidate();
@@ -157,6 +168,10 @@ void ProgressBar::paint(Canvas& canvas) {
     canvas.fillRect(rect, style.trackBackground, style.radius);
     const Color fill = disabled() ? style.disabledFill : style.fill;
     if (indeterminate_) {
+        // The segment intentionally travels beyond either end of the track.
+        // Clip here: parent layouts need not clip every child to its frame.
+        canvas.save();
+        canvas.clipRect(rect);
         const float fraction = 0.28f;
         const float position = static_cast<float>(indeterminatePhase_);
         if (rect.height > rect.width * 1.5f) {
@@ -170,6 +185,7 @@ void ProgressBar::paint(Canvas& canvas) {
             const float x = rect.x - fillWidth + travel * position;
             canvas.fillRect(Rect{x, rect.y, fillWidth, rect.height}, fill, style.radius);
         }
+        canvas.restore();
         return;
     }
     if (progress <= 0.0f) {

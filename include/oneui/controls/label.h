@@ -27,6 +27,8 @@ public:
     void setStatusIndicator(float diameter, float gap);
     void setFontSize(float size);
     void setFontWeight(int weight);
+    void setLetterSpacing(float spacing);
+    void setTabularNumbers(bool enabled);
     void setAlign(TextAlign align);
     TextAlign textAlign() const { return align_; }
     float fontSize() const { return fontSize_; }

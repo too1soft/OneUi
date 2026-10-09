@@ -4,6 +4,7 @@
 #include "oneui/style.h"
 
 #include <algorithm>
+#include <cmath>
 #include <utility>
 
 namespace oneui {
@@ -90,6 +91,7 @@ void Menu::addSeparator() {
 }
 
 void Menu::clearItems() {
+    scrollOffset_ = 0.0f;
     entries_.clear();
     itemCount_ = 0;
     keyboardEntry_ = -1;
@@ -153,6 +155,7 @@ StyleBox Menu::resolvedSurface() const {
 StyleBox Menu::resolvedItemStyle(const Entry& entry, bool hovered, bool pressed) const {
     const StyleSheet& sheet = styleSheet_ ? *styleSheet_ : fallbackSheet();
     StyleNode node{"button", {"menu-item"}, StyleStateNone};
+    node.classes.insert(node.classes.end(), styleNode_.classes.begin(), styleNode_.classes.end());
     if (entry.danger) {
         node.classes.push_back("danger");
     }
@@ -168,7 +171,7 @@ StyleBox Menu::resolvedItemStyle(const Entry& entry, bool hovered, bool pressed)
 
 Rect Menu::entryRect(int entryIndex) const {
     const Rect content = frame().inset(surfacePadding());
-    float y = content.y;
+    float y = content.y - std::clamp(scrollOffset_,0.0f,maxScrollOffset());
     for (int i = 0; i < static_cast<int>(entries_.size()); ++i) {
         const float height = entryHeight(entries_[static_cast<std::size_t>(i)]);
         if (i == entryIndex) {
@@ -180,6 +183,7 @@ Rect Menu::entryRect(int entryIndex) const {
 }
 
 int Menu::entryAt(Point point) const {
+    if (!frame().inset(surfacePadding()).contains(point)) return -1;
     for (int i = 0; i < static_cast<int>(entries_.size()); ++i) {
         const Entry& entry = entries_[static_cast<std::size_t>(i)];
         if (entry.kind != Entry::Kind::Item || entry.disabled) {
@@ -193,11 +197,14 @@ int Menu::entryAt(Point point) const {
 }
 
 void Menu::paint(Canvas& canvas) {
+    scrollOffset_ = std::clamp(scrollOffset_,0.0f,maxScrollOffset());
     const StyleBox surface = resolvedSurface();
     paintStyleBox(canvas, frame(), surface);
 
     const Color headerTitle = surface.foreground.value_or(Color{32, 33, 36});
     const Color headerSubtitle = surface.placeholderColor.value_or(theme().textMuted);
+    canvas.save();
+    canvas.clipRect(frame().inset(surfacePadding()));
 
     for (int i = 0; i < static_cast<int>(entries_.size()); ++i) {
         const Entry& entry = entries_[static_cast<std::size_t>(i)];
@@ -241,6 +248,29 @@ void Menu::paint(Canvas& canvas) {
         }
         }
     }
+    canvas.restore();
+    if (maxScrollOffset() > 0.0f) {
+        const Rect area=frame().inset(surfacePadding());
+        const float thumb=std::max(18.0f,area.height*area.height/std::max(area.height,preferredHeight()-surfacePadding().vertical()));
+        canvas.fillRect({area.x+area.width-3.0f,area.y+(area.height-thumb)*scrollOffset_/maxScrollOffset(),3.0f,thumb},headerSubtitle,1.5f);
+    }
+}
+
+float Menu::maxScrollOffset() const { return std::max(0.0f,preferredHeight()-frame().height); }
+void Menu::revealEntry(int index) {
+    const auto area=frame().inset(surfacePadding());
+    const auto item=entryRect(index);
+    if(item.y<area.y) scrollOffset_-=area.y-item.y;
+    else if(item.y+item.height>area.y+area.height) scrollOffset_+=item.y+item.height-area.y-area.height;
+    scrollOffset_=std::clamp(scrollOffset_,0.0f,maxScrollOffset());
+}
+bool Menu::onMouseWheel(const MouseWheelEvent& event) {
+    if(!interactive() || !contains(event.position) || maxScrollOffset()<=0 || !std::isfinite(event.deltaY)) return false;
+    scrollOffset_=std::clamp(scrollOffset_-event.deltaY*kItemHeight,0.0f,maxScrollOffset());
+    keyboardEntry_=hoveredEntry_=pressedEntry_=-1;
+    lastPointerPosition_.reset();
+    invalidate();
+    return true;
 }
 
 bool Menu::onMouseMove(const MouseEvent& event) {
@@ -309,7 +339,7 @@ bool Menu::onKeyDown(const KeyEvent& event) {
             index = (index + step + count) % count;
             const auto& entry = entries_[static_cast<std::size_t>(index)];
             if (entry.kind == Entry::Kind::Item && !entry.disabled) {
-                keyboardEntry_ = index; hoveredEntry_ = -1; pressedEntry_ = -1; invalidate(); break;
+                keyboardEntry_ = index; hoveredEntry_ = -1; pressedEntry_ = -1; revealEntry(index); invalidate(); break;
             }
         }
         return true;

@@ -20,6 +20,11 @@ public:
     void setStep(double step);
     void setValue(double value);
     double value() const;
+    double minimum() const { return minimum_; }
+    double maximum() const { return maximum_; }
+    double step() const { return step_; }
+    // Discrete user input (keyboard/accessibility) shares interaction callbacks.
+    bool setValueFromInput(double value);
     void bindValue(State<double>& state);
     void setStyleOverride(SliderStyleOverride style);
     void clearStyleOverride();

@@ -16,11 +16,7 @@ std::string canonical(std::string value) {
 unsigned int modifiers(unsigned int flags) {
     if (flags & KeyModifierPrimary) {
         flags &= ~KeyModifierPrimary;
-#ifdef __APPLE__
-        flags |= KeyModifierMeta;
-#else
-        flags |= KeyModifierControl;
-#endif
+        flags |= platform::primaryUsesMeta ? KeyModifierMeta : KeyModifierControl;
     }
     return flags;
 }

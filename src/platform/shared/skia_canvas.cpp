@@ -8,6 +8,7 @@
 #include "circle_mesh_experiment.h"
 #include "include/core/SkMesh.h"
 #include "include/core/SkBlender.h"
+#include "include/gpu/ganesh/GrRecordingContext.h"
 #endif
 
 #include "include/core/SkBlurTypes.h"
@@ -145,6 +146,28 @@ class SkiaCanvasImpl final : public Canvas {
     void clear(Color color) override { canvas_.clear(toSkColor(color)); }
 #if defined(ONEUI_CIRCLE_MESH_EXPERIMENT)
     experimental::CircleMeshResult tryCircleMesh(const RoundedRectFill* items, std::size_t count) {
+        // Ganesh's mesh scissor and analytic rrect clip disagree on fractional
+        // device edges on Metal. Fall back before drawing any part of a batch
+        // that reaches those edges; wholly interior batches cannot be affected.
+        if (clipBounds_ && canvas_.recordingContext() &&
+            canvas_.recordingContext()->backend() == GrBackendApi::kMetal) {
+            const auto clip = canvas_.getTotalMatrix().mapRect(toSkRect(*clipBounds_));
+            for (float edge : {clip.left(), clip.top(), clip.right(), clip.bottom()}) {
+                if (!std::isfinite(edge)) return {false, "fractional-device-clip", 0, 0};
+                if (std::abs(edge-std::round(edge)) > 0.0001f) {
+                    // The clip cannot affect circles wholly inside it. Include
+                    // the AA fringe and a pixel of floating-point rounding margin.
+                    if (!items || count > 16384) return {false, "unsupported-count", 0, 0};
+                    for (std::size_t i = 0; i < count; ++i) {
+                        auto bounds = canvas_.getTotalMatrix().mapRect(toSkRect(items[i].rect));
+                        bounds.outset(1.5f, 1.5f);
+                        if (!bounds.isFinite() || !clip.contains(bounds))
+                            return {false, "fractional-device-clip", 0, 0};
+                    }
+                    break;
+                }
+            }
+        }
         return drawCircleMesh(canvas_, items, count);
     }
 #endif
@@ -165,7 +188,10 @@ class SkiaCanvasImpl final : public Canvas {
     }
 
     void clipRect(Rect rect) override {
-        canvas_.clipRect(toSkRect(rect), true);
+        // Rectangular damage/viewport clips are pixel scissors. Antialiased
+        // coverage blends an unchanged repaint with its previous edge pixels
+        // at fractional DPI, leaving seams after repeated partial updates.
+        canvas_.clipRect(toSkRect(rect), false);
         if (clipBounds_) {
             const float left = std::max(clipBounds_->x, rect.x);
             const float top = std::max(clipBounds_->y, rect.y);

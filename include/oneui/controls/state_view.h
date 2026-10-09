@@ -25,6 +25,8 @@ public:
     /// Offsets the centered content group on the vertical axis, clamped to content bounds.
     void setContentOffsetY(float offset);
     void setAction(std::wstring text);
+    const std::wstring& actionText() const { return action_; }
+    Rect actionFrame() const { return layout().action; }
     void setOnAction(std::function<void()> callback);
     void setStyleSheet(std::shared_ptr<StyleSheet> sheet, StyleNode node);
 
@@ -32,6 +34,7 @@ public:
     bool onMouseMove(const MouseEvent& event) override;
     bool onMouseDown(const MouseEvent& event) override;
     bool onMouseUp(const MouseEvent& event) override;
+    bool onKeyDown(const KeyEvent& event) override;
     bool isFocusable() const override;
     bool onFocusChanged(bool focused) override;
 

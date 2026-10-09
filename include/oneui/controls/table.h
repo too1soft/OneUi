@@ -15,11 +15,14 @@
 
 namespace oneui {
 
+enum class TableCellKind { Text, Percent };
+
 struct TableColumn {
     std::wstring header;
     float width = 0.0f;
     TextAlign alignment = TextAlign::Left;
     bool action = false;
+    TableCellKind kind = TableCellKind::Text;
 };
 
 // Optional visual metadata for product tables. Plain string rows remain fully
@@ -47,6 +50,9 @@ public:
 
     void setColumns(std::vector<TableColumn> columns);
     void setColumnPresentation(int column, TextAlign alignment, bool action);
+    // Percent accepts a finite decimal in 0..100 with an optional '%' suffix.
+    // Invalid values retain their text and do not imply a zero measurement.
+    void setColumnKind(int column, TableCellKind kind);
     void setHeaderHeight(float height);
     // Enables sortable headers. Activations use onCellAction(-1, column).
     void setHeaderSort(int column, bool descending);

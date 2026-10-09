@@ -1,5 +1,15 @@
+set(ONEUI_WINDOW_SERVICE_SOURCES
+    src/core/window_events.cpp
+    src/core/notification_payload.cpp
+    src/core/modal_session.cpp
+)
+
 set(ONEUI_CORE_SOURCES
+    src/core/native_menu.cpp
+    src/core/application_menu.cpp
+    src/platform/shared/localization.cpp
     src/core/developer_tools.cpp
+    src/core/runtime_config.cpp
     src/core/animation.cpp
     src/core/adaptive_panes.cpp
     src/core/reveal.cpp
@@ -11,8 +21,13 @@ set(ONEUI_CORE_SOURCES
     src/core/checkbox.cpp
     src/core/dialog.cpp
     src/core/clipboard.cpp
+    src/core/runtime_error.cpp
     src/core/command.cpp
     src/core/dock_view.cpp
+    src/core/dock_node.cpp
+    src/core/dock_workspace.cpp
+    src/core/dock_geometry.cpp
+    src/core/dock_hit_test.cpp
     src/core/form_field.cpp
     src/core/grid.cpp
     src/core/icon.cpp
@@ -28,6 +43,8 @@ set(ONEUI_CORE_SOURCES
     src/core/menu.cpp
     src/core/nav_item.cpp
     src/core/overlay_host.cpp
+    src/core/overlay_host_pointer.cpp
+    src/core/overlay_host_focus.cpp
     src/core/panel.cpp
     src/core/popup.cpp
     src/core/product_shell.cpp
@@ -62,6 +79,7 @@ set(ONEUI_CORE_SOURCES
     src/core/tile.cpp
     src/core/time_series_chart.cpp
     src/core/title_bar_bridge.cpp
+    src/core/toast_host.cpp
     src/core/toast.cpp
     src/core/top_bar.cpp
     src/core/tree_view.cpp
@@ -74,18 +92,43 @@ set(ONEUI_CORE_SOURCES
 )
 
 set(ONEUI_C_API_SOURCES
+    src/core/application.cpp
+    src/core/dock_session.cpp
+    src/core/dock_session_model.cpp
+    src/core/dock_session_view.cpp
+    src/core/dock_session_theme.cpp
+    src/core/dock_session_drag.cpp
+    src/platform/shared/native_dock_drag.cpp
+    src/core/notification_service.cpp
     src/platform/native_services.cpp
     src/capi/oneui_c_api.cpp
+    src/capi/oneui_c_api_window.cpp
+    src/capi/oneui_c_api_application.cpp
+    src/capi/oneui_c_api_notifications.cpp
+    src/capi/oneui_c_api_dock_model.cpp
+    src/capi/oneui_c_api_dock_gesture.cpp
+    src/capi/oneui_c_api_dock_session.cpp
+    src/capi/oneui_c_api_dock_snapshot.cpp
+    src/capi/oneui_c_api_tabs.cpp
+    src/capi/oneui_c_api_toast_host.cpp
+    src/capi/oneui_c_api_window_state.cpp
     src/capi/oneui_c_api_internal.cpp
     src/capi/oneui_c_api_interaction.cpp
     src/capi/oneui_c_api_runtime.cpp
 )
 
 set(ONEUI_WIN32_SOURCES
+    ${ONEUI_WINDOW_SERVICE_SOURCES}
+    src/platform/win32/dock_drag_win32.cpp
+    src/platform/win32/notifications_win32.cpp
+    src/platform/win32/notification_identity_win32.cpp
+    src/platform/win32/notification_activation_win32.cpp
+    src/platform/win32/application_registration_win32.cpp
     src/platform/win32/compat_win32.cpp
     src/platform/win32/clipboard_win32.cpp
     src/platform/win32/monitor_win32.cpp
     src/platform/shared/skia_canvas.cpp
     src/platform/shared/skia_path.cpp
+    src/platform/win32/window_event_loop_win32.cpp
     src/platform/win32/window_win32.cpp
 )

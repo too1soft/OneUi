@@ -117,7 +117,7 @@ void StateView::paint(Canvas& canvas) {
     const Layout l = layout();
 
     const StyleBox iconStyle = sheet.resolve(childStyleNode({"state-view-icon"}, StyleStateNone));
-    paintIcon(
+    if (l.icon.width > 0.0f && l.icon.height > 0.0f) paintIcon(
         canvas,
         icon_,
         l.icon,
@@ -126,7 +126,7 @@ void StateView::paint(Canvas& canvas) {
         1.6f);
 
     const StyleBox titleStyle = sheet.resolve(childStyleNode({"state-view-title"}, StyleStateNone));
-    canvas.drawTextStyledEllipsized(
+    if (l.title.height > 0.0f) canvas.drawTextStyledEllipsized(
         title_,
         l.title,
         titleStyle.foreground.value_or(box.foreground.value_or(Color{238, 239, 245})),
@@ -135,13 +135,20 @@ void StateView::paint(Canvas& canvas) {
         titleStyle.fontWeight.value_or(600));
 
     const StyleBox messageStyle = sheet.resolve(childStyleNode({"state-view-message"}, StyleStateNone));
-    canvas.drawTextStyledEllipsized(
-        message_,
-        l.message,
-        messageStyle.foreground.value_or(Color{174, 177, 188}),
-        messageStyle.fontSize.value_or(13.0f),
-        TextAlign::Center,
-        messageStyle.fontWeight.value_or(400));
+    if (l.message.height > 0.0f) {
+        TextBlockStyle text;
+        text.fontSize = messageStyle.fontSize.value_or(13.0f);
+        text.fontWeight = messageStyle.fontWeight.value_or(400);
+        text.lineHeight = text.fontSize * 1.3f;
+        text.align = TextAlign::Center;
+        text.options.wrap = TextWrapMode::WordWrap;
+        text.maxLines = std::max<std::size_t>(1, static_cast<std::size_t>(l.message.height / text.lineHeight));
+        text.ellipsis = true;
+        canvas.save();
+        canvas.clipRect(l.message);
+        canvas.drawTextBlock(message_, l.message, messageStyle.foreground.value_or(Color{174, 177, 188}), text);
+        canvas.restore();
+    }
 
     if (!action_.empty()) {
         const StyleBox actionStyle = resolvedActionStyle();
@@ -192,6 +199,13 @@ bool StateView::onMouseUp(const MouseEvent& event) {
     return true;
 }
 
+bool StateView::onKeyDown(const KeyEvent& event) {
+    if (!interactive() || action_.empty() || (event.key != Key::Enter && event.key != Key::Space)) return false;
+    const auto callback = onAction_;
+    if (callback) callback();
+    return true;
+}
+
 bool StateView::isFocusable() const {
     return !disabled() && !action_.empty();
 }
@@ -205,10 +219,33 @@ bool StateView::onFocusChanged(bool focused) {
 }
 
 StateView::Layout StateView::layout() const {
-    const Rect content = frame().inset(resolvedStyle().padding.value_or(Insets{24.0f, 24.0f, 24.0f, 24.0f}));
+    Insets padding=resolvedStyle().padding.value_or(Insets{24.0f, 24.0f, 24.0f, 24.0f});
+    if(frame().height<220.0f){padding.top=std::min(padding.top,frame().height*0.08f);padding.bottom=std::min(padding.bottom,frame().height*0.08f);}
+    const Rect content = frame().inset(padding);
     const float width = std::min(520.0f, std::max(0.0f, content.width));
     const float x = content.x + (content.width - width) * 0.5f;
     const float groupHeight = iconSize_.height + (action_.empty() ? 82.0f : 132.0f);
+    // Secondary panes can be much shorter than a full-page state. Prioritize
+    // the recovery action and title, then supporting copy; never paint outside
+    // the allocated surface or leave an offscreen hit target.
+    if (content.height < groupHeight) {
+        const float h = std::max(0.0f, content.height);
+        const float actionHeight = action_.empty() ? 0.0f : std::min(32.0f, h);
+        const float titleRoom = h - actionHeight - (actionHeight > 0 ? 6.0f : 0.0f);
+        const float titleHeight = titleRoom >= 24.0f ? 24.0f : 0.0f;
+        const float remaining = h - titleHeight - actionHeight - 12.0f;
+        const float messageHeight = remaining >= 18.0f ? std::min(40.0f, remaining) : 0.0f;
+        const float firstGap = titleHeight > 0 && messageHeight > 0 ? 6.0f : 0.0f;
+        const float lastGap = actionHeight > 0 && titleHeight > 0 ? 6.0f : 0.0f;
+        const float total = titleHeight + messageHeight + actionHeight + firstGap + lastGap;
+        const float top = content.y + std::max(0.0f, (h - total) * 0.5f);
+        const float actionWidth = std::min(160.0f, width);
+        Layout compact;
+        compact.title = Rect{x, top, width, titleHeight};
+        compact.message = Rect{x, top + titleHeight + firstGap, width, messageHeight};
+        compact.action = Rect{content.x + (content.width-actionWidth)*0.5f, top+titleHeight+firstGap+messageHeight+lastGap, actionWidth, actionHeight};
+        return compact;
+    }
     const float centeredY = content.y + std::max(0.0f, (content.height - groupHeight) * 0.5f);
     const float y = std::clamp(
         centeredY + contentOffsetY_,
@@ -219,7 +256,7 @@ StateView::Layout StateView::layout() const {
     result.icon = Rect{content.x + (content.width - iconSize_.width) * 0.5f, y, iconSize_.width, iconSize_.height};
     result.title = Rect{x, y + iconSize_.height + 12.0f, width, 28.0f};
     result.message = Rect{x, y + iconSize_.height + 44.0f, width, 34.0f};
-    result.action = Rect{content.x + (content.width - 120.0f) * 0.5f, y + iconSize_.height + 96.0f, 120.0f, 36.0f};
+    result.action = Rect{content.x + (content.width - std::min(160.0f, width)) * 0.5f, y + iconSize_.height + 96.0f, std::min(160.0f, width), 36.0f};
     return result;
 }
 
@@ -256,7 +293,7 @@ StyleNode StateView::childStyleNode(const std::vector<std::string>& classes, Sty
 }
 
 bool StateView::actionAt(Point point) const {
-    return !action_.empty() && layout().action.contains(point);
+    return !action_.empty() && frame().contains(point) && layout().action.contains(point);
 }
 
 bool StateView::hasInteractionState() const {

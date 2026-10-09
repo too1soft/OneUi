@@ -101,10 +101,12 @@ public:
     bool hitTest(Point point) const override;
     bool paintsAboveSiblings() const override;
     void setFocusVisible(bool visible) override;
+    bool tickAnimations(double nowMs) override;
 
 private:
     void installAnchorCallbacks();
     void installContentCallbacks();
+    void styleScopeChanged() override;
     Rect resolvedAnchorRect() const;
     Rect resolvedViewport() const;
     void layoutAnchor();

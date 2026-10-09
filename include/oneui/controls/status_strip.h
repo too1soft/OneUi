@@ -37,6 +37,9 @@ public:
     bool onMouseMove(const MouseEvent& event) override;
     bool onMouseDown(const MouseEvent& event) override;
     bool onMouseUp(const MouseEvent& event) override;
+    // Tab enters/leaves the strip; arrows/Home/End choose an action,
+    // Enter/Space invoke it. Hidden actions are excluded.
+    bool onKeyDown(const KeyEvent& event) override;
     bool isFocusable() const override;
     bool onFocusChanged(bool focused) override;
 
@@ -56,6 +59,8 @@ private:
     StyleBox resolvedActionStyle(Action action) const;
     StyleNode childStyleNode(const std::vector<std::string>& classes, StylePseudoMask state) const;
     Action actionAt(Point point) const;
+    Action keyboardAction() const;
+    void invokeAction(Action action);
     bool hasInteractionState() const override;
     void resetInteractionState() override;
 
@@ -72,6 +77,7 @@ private:
     StyleNode styleNode_{"status-strip", {"status-strip"}, StyleStateNone};
     Action hoveredAction_ = Action::None;
     Action pressedAction_ = Action::None;
+    Action keyboardAction_ = Action::None;
 };
 
 } // namespace oneui

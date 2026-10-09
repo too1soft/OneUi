@@ -68,6 +68,11 @@ void applyTabsStateOverride(TabsStyle& style, const TabsStateStyleOverride& over
     if (override.fontWeight) {
         style.fontWeight = *override.fontWeight;
     }
+    if (override.indicatorColor) style.indicatorColor = override.indicatorColor;
+    if (override.indicatorInset && std::isfinite(*override.indicatorInset)) style.indicatorInset = std::max(0.0f, *override.indicatorInset);
+    if (override.indicatorHeight && std::isfinite(*override.indicatorHeight)) style.indicatorHeight = std::max(0.0f, *override.indicatorHeight);
+    if (override.documentOutlineWidth && std::isfinite(*override.documentOutlineWidth)) style.documentOutlineWidth = std::max(0.0f, *override.documentOutlineWidth);
+    if (override.trailingInset && std::isfinite(*override.trailingInset)) style.trailingInset = std::max(0.0f, *override.trailingInset);
     if (override.textInset) style.textInset = std::max(0.0f, *override.textInset);
     if (override.itemInset) {
         style.itemInset = *override.itemInset;
@@ -422,17 +427,37 @@ void Tabs::paint(Canvas& canvas) {
         if (documentMode_ && !itemFullyVisible(i)) continue;
         const TabsStyle itemStyle = resolvedItemStyle(i);
         const Rect itemCell = itemRect(i);
-        const Rect itemRect = documentMode_ ? itemCell : itemCell.inset(itemStyle.itemInset);
+        Rect itemRect = documentMode_ ? itemCell : itemCell.inset(itemStyle.itemInset);
+        if (documentMode_) itemRect.width = std::max(0.0f, itemRect.width - itemStyle.trailingInset);
         const bool active = i == selected;
-        if (itemStyle.itemBackground.a > 0) {
-            canvas.fillRect(itemRect, itemStyle.itemBackground, documentMode_ ? 0.0f : itemStyle.itemRadius);
+        const bool outlined = documentMode_ && active && itemStyle.documentOutlineWidth > 0;
+        if (outlined) {
+            // Extend below the clip to round only the top corners. The outline
+            // and indicator are independent, and neither changes hit geometry.
+            canvas.save(); canvas.clipRect(itemRect);
+            auto topRounded = itemRect;
+            topRounded.height += itemStyle.itemRadius;
+            canvas.fillRect(topRounded, itemStyle.itemBackground, itemStyle.itemRadius);
+            const float half = itemStyle.documentOutlineWidth / 2;
+            canvas.strokeRect(topRounded.inset(Insets{half}), itemStyle.selectedItemBorder,
+                itemStyle.itemRadius, itemStyle.documentOutlineWidth);
+            canvas.restore();
+        } else if (itemStyle.itemBackground.a > 0) {
+            // Unoutlined document tabs paint an inset pill (item padding +
+            // item radius); hit geometry and text placement are unchanged.
+            canvas.fillRect(documentMode_ ? itemRect.inset(itemStyle.itemInset) : itemRect,
+                itemStyle.itemBackground, itemStyle.itemRadius);
         }
         if (documentMode_) {
             // Document tabs use one selection rule, not a rounded button border
             // painted over at the bottom. Selection and keyboard focus are distinct.
             if (active) {
-                canvas.fillRect(Rect{itemRect.x, itemRect.y + itemRect.height - 2.0f,
-                    itemRect.width, 2.0f}, itemStyle.selectedItemBorder);
+                const float inset = std::min(itemStyle.indicatorInset, itemRect.width / 2);
+                const float height = std::min(itemStyle.indicatorHeight, itemRect.height);
+                if (height > 0 && itemRect.width > inset * 2) {
+                    canvas.fillRect(Rect{itemRect.x + inset, itemRect.y + itemRect.height - height,
+                        itemRect.width - inset * 2, height}, itemStyle.indicatorColor.value_or(itemStyle.selectedItemBorder));
+                }
                 if (focusVisible() && !disabled() && containerStyle.focusRing.visible) {
                     canvas.strokeRect(itemRect.inset(Insets{4.0f}), containerStyle.focusRing.color,
                         3.0f, containerStyle.focusRing.width);
@@ -534,6 +559,13 @@ bool Tabs::onMouseMove(const MouseEvent& event) {
             dragTargetIndex_ = next;
             interactionChanged = true;
         }
+        if (dragging_ && onDetachRequested_ && !frame().contains(event.position)) {
+            auto callback = onDetachRequested_;
+            const auto index = dragSourceIndex_;
+            clearInteractionState();
+            callback(index, event.position);
+            return true;
+        }
     }
     if (!interactionChanged) {
         return false;
@@ -542,6 +574,9 @@ bool Tabs::onMouseMove(const MouseEvent& event) {
     hoveredCloseIndex_ = nextClose;
     invalidate();
     return true;
+}
+void Tabs::setOnDetachRequested(std::function<void(int, Point)> callback) {
+    onDetachRequested_ = std::move(callback);
 }
 
 bool Tabs::onMouseDown(const MouseEvent& event) {
@@ -721,8 +756,11 @@ int Tabs::hitIndex(Point point) const {
         return -1;
     }
     if (documentMode_ && sizingMode_ == TabsSizingMode::Compact) {
-        for (int i = 0; i < static_cast<int>(items_.size()); ++i)
-            if (itemFullyVisible(i) && itemRect(i).contains(point)) return i;
+        for (int i = 0; i < static_cast<int>(items_.size()); ++i) {
+            auto hit = itemRect(i);
+            hit.width = std::max(0.0f, hit.width - resolvedItemStyle(i).trailingInset);
+            if (itemFullyVisible(i) && hit.contains(point)) return i;
+        }
         return -1;
     }
 

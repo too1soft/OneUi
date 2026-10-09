@@ -21,6 +21,7 @@ bool View::hasTextComposition() const {
 
 void View::setTextEnvironment(std::wstring family, float scale) {
     Widget::setTextEnvironment(family, scale);
+    family = textFontFamily();
     const auto children = children_;
     for (const auto& child : children) child->setTextEnvironment(family, scale);
 }
@@ -118,7 +119,14 @@ void View::setAnimationScheduler(std::function<void()> scheduler) {
     }
 }
 
+void View::styleScopeChanged() {
+    Widget::styleScopeChanged();
+    const auto children = children_;
+    for (const auto& child : children) child->inheritStyleScope(styleScope(), this);
+}
+
 void View::installChildCallbacks(Widget& child) {
+    child.inheritStyleScope(styleScope(), this);
     child.setTextEnvironment(textFontFamily(), textDpiScale());
     child.attachToOwner(
         this,

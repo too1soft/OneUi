@@ -12,6 +12,7 @@
 #include "oneui/controls/popup.h"
 #include "oneui/controls/text_field.h"
 #include "oneui/controls/window_title_bar.h"
+#include "oneui/localization.h"
 #include <unordered_set>
 
 namespace oneui::win32_accessibility {
@@ -104,9 +105,9 @@ public:
         if(self(child)){wchar_t name[512]{};GetWindowTextW(context_->window,name,512);return string(name,out);}
         auto w=resolve(child);if(!w)return missing(out);
         const auto button=caption(child);
-        if(button==TitleBarButtonId::Minimize)return string(L"最小化窗口",out);
-        if(button==TitleBarButtonId::Close)return string(L"关闭窗口",out);
-        if(button==TitleBarButtonId::Maximize)return string(std::static_pointer_cast<WindowTitleBar>(w)->maximized()?L"还原窗口":L"最大化窗口",out);
+        if(button==TitleBarButtonId::Minimize)return string(builtinText(BuiltinText::MinimizeWindow),out);
+        if(button==TitleBarButtonId::Close)return string(builtinText(BuiltinText::CloseWindow),out);
+        if(button==TitleBarButtonId::Maximize)return string(builtinText(std::static_pointer_cast<WindowTitleBar>(w)->maximized()?BuiltinText::RestoreWindow:BuiltinText::MaximizeWindow),out);
         return string(w->accessibilityInfo().name,out);
     }
     HRESULT STDMETHODCALLTYPE get_accValue(VARIANT child,BSTR* out) override {

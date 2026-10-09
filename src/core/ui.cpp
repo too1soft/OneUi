@@ -39,6 +39,7 @@ void Builder::style(const std::shared_ptr<Widget>& widget, std::string classes) 
     } else if (auto toggle = std::dynamic_pointer_cast<Switch>(widget)) {
         node.tag = "switch"; toggle->setStyleOverride(switchStyleOverrideFromStyleSheet(*sheet_, node));
     }
+    widget->setFontFamily(sheet_->resolve(node).fontFamily.value_or(L""));
 }
 Node Builder::native(std::shared_ptr<Widget> value) const { if (!value) throw std::invalid_argument("Null component"); return Node{std::move(value)}; }
 Node Builder::text(std::wstring value, std::string role) const {

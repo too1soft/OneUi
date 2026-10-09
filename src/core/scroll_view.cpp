@@ -223,7 +223,17 @@ bool ScrollView::onMouseUp(const MouseEvent& event) {
 }
 
 bool ScrollView::onMouseWheel(const MouseWheelEvent& event) {
-    if (!interactive() || !hitTest(event.position) || !hasVerticalOverflow()) {
+    if (!interactive() || !hitTest(event.position)) {
+        return false;
+    }
+
+    // Route through the hovered subtree first, even when this viewport fits
+    // its content. Nested lists/tables own their wheel until they return false
+    // at a boundary; only then may this scroll view consume the same event.
+    if (View::onMouseWheel(event)) {
+        return true;
+    }
+    if (!hasVerticalOverflow()) {
         return false;
     }
 

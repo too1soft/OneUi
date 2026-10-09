@@ -1,3 +1,5 @@
+#include "window_operations_macos.h"
+#include "dock_drag_macos.h"
 #include "include/core/SkFontMgr.h"
 #include "include/ports/SkFontMgr_mac_ct.h"
 #include "internal/unicode.h"
@@ -5,6 +7,7 @@
 #include "platform/shared/desktop_window.h"
 #include "platform/shared/key_mapping.h"
 #include "platform/shared/skia_canvas.h"
+#include "platform/shared/text_input.h"
 #import <Cocoa/Cocoa.h>
 #include <algorithm>
 #include <stdexcept>
@@ -22,7 +25,7 @@ class CocoaWindow;
     return YES;
 }
 @end
-@interface OneUiNativeView : NSView <NSTextInputClient>
+@interface OneUiNativeView : NSView <NSTextInputClient, NSDraggingDestination>
 @property(nonatomic, assign) oneui::macos::CocoaWindow *owner;
 @property(nonatomic, copy) NSString *preedit;
 @property(nonatomic) NSRange compositionReplacement;
@@ -30,6 +33,7 @@ class CocoaWindow;
 @property(nonatomic, assign) const void* compositionIdentity;
 @property(nonatomic) uint64_t compositionSession;
 @property(nonatomic, strong) NSTrackingArea *tracking;
+- (void)clearMarkedText;
 - (void)cancelComposition;
 - (void)syncTextInput;
 @end
@@ -102,6 +106,9 @@ static unsigned int virtualKey(NSEvent *event) {
     default:
         break;
     }
+    // Fn and other flagsChanged events do not provide key-event characters.
+    if (event.type != NSEventTypeKeyDown && event.type != NSEventTypeKeyUp)
+        return 0;
     NSString *chars = event.charactersIgnoringModifiers.uppercaseString;
     if (!chars.length)
         return 0;
@@ -116,11 +123,11 @@ class CocoaWindow final : public platform::DesktopWindow {
         if (![NSThread isMainThread])
             throw std::logic_error("Cocoa windows require the process main thread");
     }
-    ~CocoaWindow() override { close(); }
+    ~CocoaWindow() override { setCloseToTray(false); close(); }
     WindowBackend backend() const override { return WindowBackend::Cocoa; }
     unsigned int capabilities() const override {
         return WindowCapabilityClipboard | WindowCapabilityIme | WindowCapabilityPlacement |
-               WindowCapabilityActivation | WindowCapabilityTopmost;
+               WindowCapabilityActivation | WindowCapabilityTopmost | WindowCapabilityFileDrop | serviceCapabilities();
     }
     void initialize() override {
         assertUiThread();
@@ -149,15 +156,20 @@ class CocoaWindow final : public platform::DesktopWindow {
         delegate_.owner = this;
         native_.delegate = delegate_;
         native_.contentView = view_;
+        setMinimumClientSize(minimum_);
+        fileDropChanged(acceptsFileDrop());
         native_.acceptsMouseMovedEvents = YES;
         [native_ center];
         [native_ makeFirstResponder:view_];
         windows.push_back(this);
         resized();
+        initializeGpu(nullptr, (__bridge void*)view_);
+        initializeAccessibility((__bridge void*)view_);
         if (options_.visible)
             show();
     }
     void show() override {
+        queueStateChange();
         initialize();
         if (!native_)
             return;
@@ -167,15 +179,46 @@ class CocoaWindow final : public platform::DesktopWindow {
             [native_ toggleFullScreen:nil];
         requestRedraw();
     }
+    std::optional<Rect> accessibilityScreenBounds(Rect rect) const override {
+        if (!native_ || !view_ || isClosed()) return std::nullopt;
+        NSRect local = NSMakeRect(rect.x * contentScale_, rect.y * contentScale_ + chromeHeight(),
+                                  rect.width * contentScale_, rect.height * contentScale_);
+        NSRect screen = [native_ convertRectToScreen:[view_ convertRect:local toView:nil]];
+        return Rect{static_cast<float>(screen.origin.x), static_cast<float>(screen.origin.y),
+                    static_cast<float>(screen.size.width), static_cast<float>(screen.size.height)};
+    }
     void activate() override {
         show();
+        if (!native_) return;
+        if (native_.miniaturized) [native_ deminiaturize:nil];
         [NSApp activateIgnoringOtherApps:YES];
+    }
+    bool centerOnActiveMonitor() override {
+        assertUiThread(); initialize();
+        if (!native_ || options_.fullscreen) return false;
+        NSScreen* target = native_.screen ?: NSScreen.mainScreen;
+        for (NSScreen* screen in NSScreen.screens)
+            if (NSPointInRect(NSEvent.mouseLocation, screen.frame)) { target = screen; break; }
+        if (!target) return false;
+        const auto area = target.visibleFrame;
+        [native_ setFrameOrigin:NSMakePoint(NSMidX(area) - native_.frame.size.width / 2, NSMidY(area) - native_.frame.size.height / 2)];
+        return true;
+    }
+    void showWithFade(unsigned int duration) override {
+        assertUiThread(); initialize();
+        if (!native_ || !duration || !clientAreaAnimationsEnabled()) { show(); return; }
+        native_.alphaValue = 0;
+        show();
+        NSWindow* window = native_;
+        [NSAnimationContext runAnimationGroup:^(NSAnimationContext* context) {
+            context.duration = std::min(duration, 10000u) / 1000.0;
+            [[window animator] setAlphaValue:1];
+        } completionHandler:nil];
     }
     int run() override {
         initialize();
         while (!windows.empty()) {
             @autoreleasepool {
-                bool pending = false;
                 const auto snapshot = windows;
                 for (auto *item : snapshot) {
                     if (std::find(windows.begin(), windows.end(), item) == windows.end())
@@ -188,13 +231,19 @@ class CocoaWindow final : public platform::DesktopWindow {
                         continue;
                     if (item->needsPaint() && item->shown_)
                         [item->view_ setNeedsDisplay:YES];
-                    pending |= item->hasWork();
                 }
                 if (windows.empty())
                     break;
                 [NSApp updateWindows];
-                NSDate *deadline =
-                    pending ? [NSDate dateWithTimeIntervalSinceNow:0.016] : [NSDate distantFuture];
+                NSDate *deadline = [NSDate distantFuture];
+                // Account for time already spent dispatching and rendering.
+                // A fresh 16 ms sleep after each iteration loses display ticks.
+                for (auto* item : windows) {
+                    if (auto delay = item->workDelayMs()) {
+                        NSDate* due = [NSDate dateWithTimeIntervalSinceNow:*delay / 1000.0];
+                        if ([due compare:deadline] == NSOrderedAscending) deadline = due;
+                    }
+                }
                 NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny
                                                     untilDate:deadline
                                                        inMode:NSDefaultRunLoopMode
@@ -209,6 +258,7 @@ class CocoaWindow final : public platform::DesktopWindow {
         assertUiThread();
         if (isClosed())
             return;
+        if (hideForTray()) return;
         finishClose();
         windows.erase(std::remove(windows.begin(), windows.end(), this), windows.end());
         view_.owner = nullptr;
@@ -219,22 +269,43 @@ class CocoaWindow final : public platform::DesktopWindow {
         view_ = nil;
         delegate_ = nil;
         wake();
+        publishClosed();
     }
     void minimize() override {
         initialize();
         [native_ miniaturize:nil];
     }
+    void hideNative() override { assertUiThread(); shown_ = false; [native_ orderOut:nil];queueStateChange(); }
+    void pumpNativeEvents(int timeout) override {
+        const auto snapshot = windows;
+        for (auto* item : snapshot) {
+            if (std::find(windows.begin(), windows.end(), item) == windows.end()) continue;
+            item->dispatchWork();
+            if (std::find(windows.begin(), windows.end(), item) == windows.end()) continue;
+            [item->view_ syncTextInput];
+            if (std::find(windows.begin(), windows.end(), item) == windows.end()) continue;
+            if (item->needsPaint() && item->shown_) [item->view_ setNeedsDisplay:YES];
+        }
+        [NSApp updateWindows];
+        NSEvent* event = [NSApp nextEventMatchingMask:NSEventMaskAny
+            untilDate:[NSDate dateWithTimeIntervalSinceNow:std::max(0, timeout) / 1000.0]
+            inMode:NSDefaultRunLoopMode dequeue:YES];
+        if (event) [NSApp sendEvent:event];
+    }
     NativeWindowHandle nativeHandle() const override { return (__bridge void *)native_; }
     void setTitle(std::wstring title) override {
+        assertUiThread();
         options_.title = std::move(title);
         native_.title = nativeText(options_.title);
     }
     void setFullscreen(bool value) override {
+        assertUiThread();
         options_.fullscreen = value;
         if (native_ && value != bool(native_.styleMask & NSWindowStyleMaskFullScreen))
             [native_ toggleFullScreen:nil];
     }
     void setBorderless(bool value) override {
+        assertUiThread();
         options_.borderless = value;
         if (native_)
             native_.styleMask = styleMask();
@@ -244,34 +315,32 @@ class CocoaWindow final : public platform::DesktopWindow {
         [native_ zoom:nil];
     }
     void setMinimumClientSize(Size size) override {
-        initialize();
-        native_.contentMinSize = NSMakeSize(std::max(0.f, size.width), std::max(0.f, size.height));
+        assertUiThread(); minimum_ = size;
+        native_.contentMinSize = NSMakeSize(std::max(0.f, size.width * contentScale_), std::max(0.f, size.height * contentScale_));
     }
-    bool getWindowPlacement(WindowPlacement &p) const override {
-        if (!native_)
-            return false;
-        NSRect r = native_.frame;
-        p = {static_cast<int>(r.origin.x), static_cast<int>(r.origin.y), static_cast<int>(r.size.width),
-             static_cast<int>(r.size.height), bool(native_.zoomed)};
-        return true;
+    WindowState state() const override { assertUiThread();return nativeWindowState(nativeHandle(),Window::state()); }
+    bool restore() override { initialize();return restoreWindow(nativeHandle()); }
+    bool maximize() override { initialize();return maximizeWindow(nativeHandle()); }
+    bool setTopmost(bool enabled) override { initialize();if(!topmostWindow(nativeHandle(),enabled))return false;options_.topmost=enabled;queueStateChange();return true; }
+    bool setResizable(bool enabled) override { assertUiThread();if(isClosed())return false;options_.resizable=enabled;if(native_)native_.styleMask=styleMask();queueStateChange();return true; }
+    bool setClientSize(Size size) override { initialize();return resizeWindow(nativeHandle(),size,contentScale_); }
+    bool setMaximumClientSize(Size size) override { initialize();return constrainWindow(nativeHandle(),size,contentScale_); }
+    bool setOwner(Window* owner) override {
+        if(owner&&(owner->backend()!=backend()||owner->closed()))return false;
+        initialize();if(owner)owner->initialize();return ownerWindow(nativeHandle(),owner?owner->nativeHandle():nullptr);
     }
-    bool setWindowPlacement(const WindowPlacement &p) override {
-        if (p.width <= 0 || p.height <= 0)
-            return false;
-        initialize();
-        NSRect frame = NSMakeRect(p.x, p.y, p.width, p.height);
-        bool intersects = false;
-        for (NSScreen *screen in NSScreen.screens)
-            intersects |= NSIntersectsRect(frame, screen.visibleFrame);
-        if (!intersects)
-            return false;
-        [native_ setFrame:frame display:YES];
-        if (bool(native_.zoomed) != p.maximized)
-            [native_ zoom:nil];
-        return true;
-    }
+    bool getWindowPlacement(WindowPlacement& p) const override { assertUiThread();return windowPlacement(nativeHandle(),p); }
+    bool setWindowPlacement(const WindowPlacement& p) override { initialize();return restorePlacement(nativeHandle(),p); }
     void resized() {
+        queueStateChange();
         const NSSize size = view_.bounds.size;
+        NSScreen* screen = native_.screen ?: NSScreen.mainScreen;
+        NSNumber* screenNumber = screen.deviceDescription[@"NSScreenNumber"];
+        CGDisplayModeRef mode = screenNumber ? CGDisplayCopyDisplayMode(screenNumber.unsignedIntValue) : nullptr;
+        double refresh = mode ? CGDisplayModeGetRefreshRate(mode) : 0.0;
+        if (mode) CGDisplayModeRelease(mode);
+        if (refresh <= 0) refresh = screen ? screen.maximumFramesPerSecond : 60.0;
+        setFrameIntervalMs(1000.0 / std::max(1.0, refresh));
         resize({static_cast<float>(size.width), static_cast<float>(size.height)}, native_.backingScaleFactor);
         [view_.inputContext invalidateCharacterCoordinates];
     }
@@ -280,7 +349,13 @@ class CocoaWindow final : public platform::DesktopWindow {
         if (!value) [view_ cancelComposition];
         if (*alive && !isClosed()) focus(value);
     }
+    bool prepareContentTransfer(Widget* subtree) override {
+        assertUiThread();
+        if (subtree && subtree->focused()) [view_ cancelComposition];
+        return Window::prepareContentTransfer(subtree);
+    }
     void draw() {
+        if (paintGpu()) return;
         const auto &data = render();
         const auto size = clientPixelSize();
         CGDataProviderRef provider =
@@ -306,7 +381,8 @@ class CocoaWindow final : public platform::DesktopWindow {
         e.scanCode = event.keyCode;
         e.key = platform::logicalKey(e.virtualKey);
         e.pressed = pressed;
-        e.repeat = event.isARepeat;
+        // AppKit raises NSInternalInconsistencyException for flagsChanged.
+        e.repeat = event.type == NSEventTypeKeyDown && event.isARepeat;
         e.shift = flags & NSEventModifierFlagShift;
         e.control = flags & NSEventModifierFlagControl;
         e.alt = flags & NSEventModifierFlagOption;
@@ -314,6 +390,7 @@ class CocoaWindow final : public platform::DesktopWindow {
         return key(e);
     }
     void pointer(NSEvent *event, int action) {
+        if (nativeModal()) return;
         const auto alive = lifetime_;
         NSPoint p = [view_ convertPoint:event.locationInWindow fromView:nil];
         MouseEvent e;
@@ -358,6 +435,10 @@ class CocoaWindow final : public platform::DesktopWindow {
     }
 
   protected:
+    void contentScaleChanged() override { setMinimumClientSize(minimum_); }
+    void fileDropChanged(bool enabled) override {
+        updateDraggedTypes(view_, enabled);
+    }
     void wake() override {
         @autoreleasepool {
             if (!NSApp)
@@ -383,6 +464,7 @@ class CocoaWindow final : public platform::DesktopWindow {
                (options_.resizable ? NSWindowStyleMaskResizable : 0);
     }
     NSWindow *native_ = nil;
+    Size minimum_{};
     OneUiNativeView *view_ = nil;
     OneUiNativeDelegate *delegate_ = nil;
 };
@@ -392,7 +474,7 @@ class CocoaWindow final : public platform::DesktopWindow {
 - (BOOL)windowShouldClose:(NSWindow *)sender {
     (void)sender;
     if (_owner)
-        _owner->close();
+        _owner->requestClose();
     return NO;
 }
 - (void)windowDidResize:(NSNotification *)n {
@@ -404,6 +486,10 @@ class CocoaWindow final : public platform::DesktopWindow {
     (void)n;
     if (_owner)
         _owner->resized();
+}
+- (void)windowDidChangeScreen:(NSNotification *)n {
+    (void)n;
+    if (_owner) _owner->resized();
 }
 - (void)windowDidBecomeKey:(NSNotification *)n {
     (void)n;
@@ -418,6 +504,20 @@ class CocoaWindow final : public platform::DesktopWindow {
 @end
 
 @implementation OneUiNativeView
+- (id)accessibilityFocusedUIElement {
+    for (id child in self.accessibilityChildren) {
+        id focused = [child accessibilityFocusedUIElement];
+        if (focused) return focused;
+    }
+    return [super accessibilityFocusedUIElement];
+}
+- (id)accessibilityHitTest:(NSPoint)point {
+    for (id child in [self.accessibilityChildren reverseObjectEnumerator]) {
+        id hit = [child accessibilityHitTest:point];
+        if (hit) return hit;
+    }
+    return [super accessibilityHitTest:point];
+}
 - (BOOL)isFlipped {
     return YES;
 }
@@ -446,7 +546,17 @@ class CocoaWindow final : public platform::DesktopWindow {
     if (_owner)
         _owner->draw();
 }
+- (NSDragOperation)draggingEntered:(id<NSDraggingInfo>)sender {
+    return oneui::macos::draggingOffer(self, _owner, sender);
+}
+- (NSDragOperation)draggingUpdated:(id<NSDraggingInfo>)sender { return [self draggingEntered:sender]; }
+- (BOOL)performDragOperation:(id<NSDraggingInfo>)sender {
+    return oneui::macos::performDrop(self, _owner, sender);
+}
+- (void)draggingExited:(id<NSDraggingInfo>)sender { oneui::macos::leaveDockDrag(self); }
+- (BOOL)wantsPeriodicDraggingUpdates { return NO; }
 - (void)keyDown:(NSEvent *)e {
+    if (!_owner || _owner->nativeModal()) return;
     [self syncTextInput];
     if (_owner && ![self hasMarkedText]) {
         const bool consumed = _owner->keyboard(e, true);
@@ -468,6 +578,8 @@ class CocoaWindow final : public platform::DesktopWindow {
     if (!_owner)
         return;
     const auto key = oneui::macos::virtualKey(e);
+    if (key != 16 && key != 17 && key != 18 && key != 20 && key != 91 && key != 92)
+        return;
     const auto mask = key == 16   ? NSEventModifierFlagShift
                       : key == 17 ? NSEventModifierFlagControl
                       : key == 18 ? NSEventModifierFlagOption
@@ -479,6 +591,7 @@ class CocoaWindow final : public platform::DesktopWindow {
     (void)s;
 }
 - (void)mouseDown:(NSEvent *)e {
+    oneui::macos::recordDockMouseDown(self, e);
     [self.window makeFirstResponder:self];
     if (_owner)
         _owner->pointer(e, 1);
@@ -502,6 +615,9 @@ class CocoaWindow final : public platform::DesktopWindow {
     if (_owner)
         _owner->pointer(e, 2);
 }
+- (void)rightMouseDragged:(NSEvent *)e {
+    [self mouseMoved:e];
+}
 - (void)otherMouseDown:(NSEvent *)e {
     if (_owner)
         _owner->pointer(e, 1);
@@ -509,6 +625,9 @@ class CocoaWindow final : public platform::DesktopWindow {
 - (void)otherMouseUp:(NSEvent *)e {
     if (_owner)
         _owner->pointer(e, 2);
+}
+- (void)otherMouseDragged:(NSEvent *)e {
+    [self mouseMoved:e];
 }
 - (void)scrollWheel:(NSEvent *)e {
     if (!_owner)
@@ -537,40 +656,53 @@ class CocoaWindow final : public platform::DesktopWindow {
         return NSMakeRange(self.compositionReplacement.location + self.compositionSelection.location,
                            self.compositionSelection.length);
     auto s = _owner->inputState();
-    NSUInteger start = oneui::macos::nativeText(s.text.substr(0, std::min(s.anchor, s.caret))).length;
-    NSUInteger end = oneui::macos::nativeText(s.text.substr(0, std::max(s.anchor, s.caret))).length;
+    NSUInteger start = oneui::platform::wideToUtf16Offset(s.text, std::min(s.anchor, s.caret));
+    NSUInteger end = oneui::platform::wideToUtf16Offset(s.text, std::max(s.anchor, s.caret));
     return NSMakeRange(start, end - start);
 }
 - (NSArray<NSAttributedStringKey> *)validAttributesForMarkedText {
     return @[];
 }
 - (void)setMarkedText:(id)value selectedRange:(NSRange)selection replacementRange:(NSRange)replacement {
-    if (!_owner || !_owner->inputState().editable)
+    if (!_owner || _owner->nativeModal() || !_owner->inputState().editable)
         return;
     [self syncTextInput];
-    if (!_owner) return;
+    if (!_owner || !_owner->inputState().editable) return;
     self.compositionIdentity = _owner->inputState().identity;
     self.compositionSession = _owner->inputState().session;
-    if (![self hasMarkedText])
-        self.compositionReplacement = replacement.location == NSNotFound ? [self selectedRange] : replacement;
+    if (![self hasMarkedText]) {
+        const auto state = _owner->inputState();
+        const NSRange requested = replacement.location == NSNotFound ? [self selectedRange] : replacement;
+        const auto range = oneui::platform::utf16ReplacementRange(state.text, requested.location, requested.length);
+        const NSUInteger start = oneui::platform::wideToUtf16Offset(state.text, range.first);
+        self.compositionReplacement = NSMakeRange(start, oneui::platform::wideToUtf16Offset(state.text, range.second) - start);
+    }
     self.preedit = [value isKindOfClass:NSAttributedString.class] ? [value string] : value;
-    self.compositionSelection = NSIntersectionRange(selection, NSMakeRange(0, self.preedit.length));
+    const auto preedit = oneui::macos::wideText(self.preedit);
+    const auto range = oneui::platform::utf16ReplacementRange(preedit, selection.location, selection.length);
+    const NSUInteger caret = oneui::platform::wideToUtf16Offset(preedit, range.first);
+    self.compositionSelection = NSMakeRange(caret, oneui::platform::wideToUtf16Offset(preedit, range.second) - caret);
     if (_owner)
         _owner->composition(
-            oneui::macos::wideText(self.preedit),
-            oneui::macos::wideText(
-                [self.preedit substringToIndex:std::min(selection.location, self.preedit.length)])
-                .size());
+            preedit, range.first);
 }
 - (void)unmarkText {
+    // AppKit unmark accepts the composition. Focus loss/cancellation use the
+    // separate clear path so they never commit text into a different editor.
+    if ([self hasMarkedText])
+        [self insertText:self.preedit replacementRange:self.compositionReplacement];
+}
+- (void)clearMarkedText {
     self.preedit = @"";
     self.compositionIdentity = nullptr;
+    self.compositionSession = 0;
+    self.compositionSelection = NSMakeRange(0, 0);
     self.compositionReplacement = NSMakeRange(NSNotFound, 0);
     if (_owner)
         _owner->composition({}, 0);
 }
 - (void)cancelComposition {
-    [self unmarkText];
+    [self clearMarkedText];
     [self.inputContext discardMarkedText];
 }
 - (void)syncTextInput {
@@ -581,6 +713,7 @@ class CocoaWindow final : public platform::DesktopWindow {
         [self.inputContext invalidateCharacterCoordinates];
 }
 - (void)insertText:(id)value replacementRange:(NSRange)replacement {
+    if (!_owner || _owner->nativeModal()) return;
     if ([self hasMarkedText] && (!_owner || self.compositionIdentity != _owner->inputState().identity ||
                                 self.compositionSession != _owner->inputState().session)) {
         [self cancelComposition];
@@ -590,28 +723,36 @@ class CocoaWindow final : public platform::DesktopWindow {
     if ([self hasMarkedText] &&
         (replacement.location == NSNotFound || NSEqualRanges(replacement, [self markedRange])))
         replacement = self.compositionReplacement;
-    [self unmarkText];
-    if (!_owner)
+    if (!_owner || !_owner->inputState().editable)
+        return;
+    const auto state = _owner->inputState();
+    [self clearMarkedText];
+    if (!_owner || _owner->inputState().identity != state.identity ||
+        _owner->inputState().session != state.session || !_owner->inputState().editable)
         return;
     if (replacement.location == NSNotFound || NSEqualRanges(replacement, [self selectedRange]))
         _owner->text(oneui::macos::wideText(string));
     else {
-        NSString *existing = oneui::macos::nativeText(_owner->inputState().text);
-        NSUInteger start = std::min(replacement.location, existing.length);
-        NSUInteger end = std::min(NSMaxRange(replacement), existing.length);
-        _owner->replaceText(oneui::macos::wideText([existing substringToIndex:start]).size(),
-                            oneui::macos::wideText([existing substringToIndex:end]).size(),
-                            oneui::macos::wideText(string));
+        const auto range = oneui::platform::utf16ReplacementRange(state.text, replacement.location, replacement.length);
+        _owner->replaceText(range.first, range.second, oneui::macos::wideText(string));
     }
 }
 - (NSAttributedString *)attributedSubstringForProposedRange:(NSRange)range
                                                 actualRange:(NSRangePointer)actual {
+    if (actual)
+        *actual = NSMakeRange(NSNotFound, 0);
     if (!_owner || _owner->inputState().sensitive)
         return nil;
     NSMutableString *text = [oneui::macos::nativeText(_owner->inputState().text) mutableCopy];
-    if ([self hasMarkedText] && NSMaxRange(self.compositionReplacement) <= text.length)
+    if ([self hasMarkedText] && self.compositionReplacement.location <= text.length &&
+        self.compositionReplacement.length <= text.length - self.compositionReplacement.location)
         [text replaceCharactersInRange:self.compositionReplacement withString:self.preedit];
-    NSRange valid = NSIntersectionRange(range, NSMakeRange(0, text.length));
+    if (range.location == NSNotFound || range.location > text.length)
+        return nil;
+    const auto wide = oneui::macos::wideText(text);
+    const auto span = oneui::platform::utf16ReplacementRange(wide, range.location, range.length);
+    const NSUInteger start = oneui::platform::wideToUtf16Offset(wide, span.first);
+    NSRange valid = NSMakeRange(start, oneui::platform::wideToUtf16Offset(wide, span.second) - start);
     if (actual)
         *actual = valid;
     return [[NSAttributedString alloc] initWithString:[text substringWithRange:valid]];

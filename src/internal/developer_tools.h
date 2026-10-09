@@ -1,10 +1,12 @@
 #pragma once
+#include "build_features.h"
 #include "oneui/developer_tools.h"
 #include "oneui/widget.h"
 #include <array>
 #include <memory>
 
 namespace oneui::internal {
+#if ONEUI_DEVELOPER_TOOLS
 class DiagnosticPaintSpan;
 class ONEUI_API DeveloperRecorder {
 public:
@@ -53,4 +55,11 @@ public:
     ~DiagnosticPaintSpan();
     DiagnosticPaintSpan(const DiagnosticPaintSpan&)=delete;
 };
+#else
+// Empty instrumentation is inlined away; the recorder and TLS are not compiled.
+class DiagnosticPaintSpan {
+public:
+    explicit DiagnosticPaintSpan(const Widget&) noexcept {}
+};
+#endif
 }

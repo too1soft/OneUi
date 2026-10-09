@@ -59,7 +59,12 @@ if(WIN32)
     target_link_libraries(oneui_text PUBLIC dwrite gdi32 user32 ole32 oleaut32 uuid windowscodecs fontsub usp10 advapi32)
     target_compile_definitions(oneui_text PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
 elseif(APPLE)
+    target_compile_definitions(oneui_text PRIVATE ONEUI_PORTABLE_FONT_LOADER=1)
     target_link_libraries(oneui_text PUBLIC "-framework CoreText" "-framework CoreGraphics" "-framework CoreFoundation")
+elseif(ANDROID)
+    # Skia's Android font manager reads system font configuration with FreeType.
+    # ICU data is embedded in the pinned Android archive; no desktop fontconfig.
+    target_link_libraries(oneui_text PUBLIC log)
 else()
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(ONEUI_TEXT_FONTCONFIG REQUIRED IMPORTED_TARGET fontconfig)

@@ -6,14 +6,52 @@
 #include "reorder_internal.h"
 
 #include <algorithm>
+#include <charconv>
 #include "internal/ui_clock.h"
 #include <cmath>
+#if defined(__APPLE__) && defined(_LIBCPP_VERSION)
+#include <locale>
+#include <sstream>
+#endif
 #include <string>
 #include <unordered_set>
 #include <utility>
 
 namespace oneui {
 namespace {
+
+std::optional<float> percentValue(const std::wstring& text) {
+    std::string ascii;
+    ascii.reserve(text.size());
+    for (const auto character : text) {
+        if (character > 127 || character < 0) return {};
+        ascii.push_back(static_cast<char>(character));
+    }
+    const auto first = ascii.find_first_not_of(" \t\r\n");
+    if (first == std::string::npos) return {};
+    auto last = ascii.find_last_not_of(" \t\r\n") + 1;
+    if (ascii[last - 1] == '%') --last;
+    while (last > first && (ascii[last - 1] == ' ' || ascii[last - 1] == '\t')) --last;
+    auto begin = ascii.data() + first;
+    const auto end = ascii.data() + last;
+    if (begin < end && *begin == '+') ++begin;
+    float value = 0;
+#if defined(__APPLE__) && defined(_LIBCPP_VERSION)
+    // Apple SDK libc++ does not always provide floating-point from_chars.
+    // Keep decimal parsing independent of the application's global locale.
+    if (begin == end || *begin == '+') return {};
+    const std::string number(begin, end);
+    if (number.find_first_not_of("0123456789.eE+-") != std::string::npos) return {};
+    std::istringstream input{number};
+    input.imbue(std::locale::classic());
+    if (!(input >> std::noskipws >> value) || input.peek() != std::char_traits<char>::eof() ||
+        !std::isfinite(value)) return {};
+#else
+    const auto result = std::from_chars(begin, end, value);
+    if (result.ec != std::errc{} || result.ptr != end || !std::isfinite(value)) return {};
+#endif
+    return std::clamp(value, 0.0f, 100.0f);
+}
 
 double currentTimeMs() {
     return internal::uiTimeMs();
@@ -61,6 +99,11 @@ void Table::setColumnPresentation(int column, TextAlign alignment, bool action) 
     if (column < 0 || column >= static_cast<int>(columns_.size())) return;
     columns_[column].alignment = alignment;
     columns_[column].action = action;
+    invalidate();
+}
+void Table::setColumnKind(int column, TableCellKind kind) {
+    if (column < 0 || column >= static_cast<int>(columns_.size())) return;
+    columns_[column].kind = kind;
     invalidate();
 }
 void Table::setHeaderHeight(float height) {
@@ -419,29 +462,28 @@ void Table::paint(Canvas& canvas) {
             const auto& cell = columnIndex < static_cast<int>(values.size())
                 ? values[static_cast<std::size_t>(columnIndex)] : empty;
             const auto& text = cell.text;
-            const bool usageColumn = columns_[static_cast<std::size_t>(columnIndex)].header == L"使用率"
-                && !text.empty() && text.back() == L'%';
-            if (usageColumn) {
+            const auto percentage = columns_[static_cast<std::size_t>(columnIndex)].kind == TableCellKind::Percent
+                ? percentValue(text) : std::optional<float>{};
+            if (percentage) {
+                const auto content = Rect{x, row.y, width, row.height}.inset(style.cellPadding);
+                const float textWidth = std::min(std::max(0.0f, content.width),
+                    canvas.measureTextWidth(text, style.fontSize, cell.fontWeight));
                 canvas.drawTextEllipsized(
                     text,
-                    Rect{x, row.y, std::min(54.0f, width), row.height}.inset(style.cellPadding),
-                    style.cellForeground,
-                    theme().fontMd,
+                    Rect{content.x, content.y, textWidth, content.height},
+                    cell.foreground.value_or(style.cellForeground),
+                    style.fontSize,
                     TextAlign::Left);
-                float percentage = 0.0f;
-                try {
-                    percentage = std::clamp(std::stof(text), 0.0f, 100.0f);
-                } catch (...) {
-                    percentage = 0.0f;
-                }
-                const float barX = x + std::min(64.0f, width * 0.34f);
-                const float barWidth = std::max(0.0f, width - (barX - x) - 12.0f);
-                const Rect track{barX, row.y + row.height * 0.5f - 2.0f, barWidth, 4.0f};
-                canvas.fillRect(track, Color{31, 40, 50}, 1.0f);
+                const float gap = style.cellPadding.right;
+                const float barX = content.x + std::min(std::max(0.0f, content.width), textWidth + gap);
+                const float barWidth = std::max(0.0f, content.width - textWidth - gap);
+                const float barHeight = std::min(style.scrollbarWidth, std::max(0.0f, content.height));
+                const Rect track{barX, content.y + (content.height - barHeight) * 0.5f, barWidth, barHeight};
+                canvas.fillRect(track, style.gridLine, barHeight * 0.5f);
                 canvas.fillRect(
-                    Rect{track.x, track.y, track.width * percentage / 100.0f, track.height},
-                    theme().warning,
-                    1.0f);
+                    Rect{track.x, track.y, track.width * *percentage / 100.0f, track.height},
+                    cell.indicator.value_or(disabled() ? style.scrollbarColor : theme().primary),
+                    barHeight * 0.5f);
                 x += width;
                 continue;
             }

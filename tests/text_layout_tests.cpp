@@ -104,6 +104,21 @@ int main() {
         auto ellipsized = Layout::make(L"abc\n\u05d0\u05d1\u05d2\nhidden", wrapped);
         require(ellipsized->lines().size() == 2 && ellipsized->width() <= wrapped.width + 1, "narrow paragraph ellipsis obeys max lines");
 
+        LayoutOptions paragraphWrap;
+        paragraphWrap.text.wrap = oneui::TextWrapMode::WordWrap;
+        paragraphWrap.width = 80;
+        const auto paragraphText = L"one two three four five six seven\nsecond paragraph with several words";
+        auto measuredParagraphs = Layout::make(paragraphText, paragraphWrap);
+        paragraphWrap.maxLines = 100;
+        paragraphWrap.ellipsis = true;
+        auto paintedParagraphs = Layout::make(paragraphText, paragraphWrap);
+        require(measuredParagraphs->lines().size() > 2 &&
+                paintedParagraphs->lines().size() == measuredParagraphs->lines().size(),
+                "ellipsis must not collapse each hard paragraph into one clipped line");
+        paragraphWrap.maxLines = 2;
+        require(Layout::make(paragraphText, paragraphWrap)->lines().size() == 2,
+                "wrapped hard paragraphs still honor the final visible line limit");
+
         LayoutOptions richOptions;
         richOptions.width = 180;
         richOptions.text.wrap = oneui::TextWrapMode::WordWrap;
@@ -160,6 +175,21 @@ int main() {
         }
         require(greenPixels > 0 && redPixels == 0, "cached text must use this draw's color, not its first paint color");
         require(Layout::stats().layouts == shapes, "color changes must not re-shape");
+        LayoutOptions tracking; tracking.family = L"Segoe UI"; tracking.size = 22;
+        const auto untracked = Layout::make(L"22.5", tracking);
+        tracking.text.letterSpacing = -0.44f;
+        const auto tracked = Layout::make(L"22.5", tracking);
+        require(tracked->width() < untracked->width(), "negative tracking changes natural measurement");
+        require(Layout::make(L"22.5", tracking) == tracked, "tracking participates in cache identity");
+        tracking.text.letterSpacing = 1.0f;
+        require(Layout::make(L"22.5", tracking)->width() > untracked->width(), "positive tracking is not a stale cached layout");
+        tracking.text.letterSpacing = 0;
+        tracking.text.tabularNumbers = true;
+        require(std::abs(Layout::make(L"1111", tracking)->width() - Layout::make(L"8888", tracking)->width()) < 0.1f,
+                "tabular digits use equal advances from the font, not synthetic padding");
+        auto tabular = Layout::make(L"22.5", tracking);
+        tracking.text.tabularNumbers = false;
+        require(Layout::make(L"22.5", tracking) != tabular, "numeric features participate in cache identity");
         LayoutOptions sensitive; sensitive.sensitive = true;
         const auto cacheBefore = Layout::stats().cachedTextBytes;
         auto secret = Layout::make(L"test-only secret", sensitive);

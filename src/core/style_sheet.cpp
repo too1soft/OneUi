@@ -1,4 +1,5 @@
 #include "oneui/style_sheet.h"
+#include "internal/unicode.h"
 
 #include <algorithm>
 #include <cctype>
@@ -453,6 +454,19 @@ bool applyDeclaration(
             rule.box.outlineOffset = *offset;
             return true;
         }
+    } else if (name == "background-opacity" || name == "content-background-opacity") {
+        std::string number = trim(value);
+        const bool percentage = !number.empty() && number.back() == '%';
+        if (percentage) number.pop_back();
+        if (trim(number).empty()) return false;
+        if (auto opacity = parseNumber(number); opacity && std::isfinite(*opacity)) {
+            const float amount = clampOpacity(*opacity / (percentage ? 100.0f : 1.0f));
+            if (name == "background-opacity") rule.box.backgroundOpacity = amount;
+            else rule.box.contentBackgroundOpacity = amount;
+            return true;
+        }
+        if (error) *error = "Invalid background opacity: expected a finite number or percentage";
+        return false;
     } else if (name == "opacity") {
         if (auto opacity = parseNumber(value)) {
             rule.box.opacity = clampOpacity(*opacity);
@@ -503,6 +517,11 @@ bool applyDeclaration(
             rule.box.gridMinColumnWidth = *width;
             return true;
         }
+    } else if (name == "font-family") {
+        if (!value.empty()) {
+            rule.box.fontFamily = value == "inherit" ? std::wstring{} : unicode::fromUtf8(value);
+            return true;
+        }
     } else if (name == "font-size") {
         if (auto fontSize = parsePx(value)) {
             rule.box.fontSize = *fontSize;
@@ -526,6 +545,27 @@ bool applyDeclaration(
     } else if (name == "icon-size") {
         if (auto size = parsePx(value); size && *size >= 0.0f) {
             rule.box.iconSize = *size;
+            return true;
+        }
+    } else if (name == "font-variant-numeric") {
+        const auto numeric = lower(trim(value));
+        if (numeric == "tabular-nums" || numeric == "normal" || numeric == "proportional-nums") {
+            rule.box.tabularNumbers = numeric == "tabular-nums"; return true;
+        }
+    } else if (name == "letter-spacing") {
+        if (lower(trim(value)) == "normal") { rule.box.letterSpacing = 0.0f; return true; }
+        if (auto spacing = parsePx(value); spacing && std::isfinite(*spacing)) {
+            rule.box.letterSpacing = *spacing; return true;
+        }
+    } else if (name == "tab-indicator-color") {
+        if (auto color = parseStyleColor(value)) { rule.box.tabIndicatorColor = *color; return true; }
+    } else if (name == "tab-indicator-inset" || name == "tab-indicator-height" ||
+               name == "tab-outline-width" || name == "tab-trailing-inset") {
+        if (auto size = parsePx(value); size && std::isfinite(*size) && *size >= 0.0f) {
+            if (name == "tab-indicator-inset") rule.box.tabIndicatorInset = *size;
+            else if (name == "tab-indicator-height") rule.box.tabIndicatorHeight = *size;
+            else if (name == "tab-outline-width") rule.box.tabOutlineWidth = *size;
+            else rule.box.tabTrailingInset = *size;
             return true;
         }
     } else if (name == "text-inset") {
@@ -621,7 +661,9 @@ ParsedSelector parseSelector(const std::string& selector) {
         }
     }
 
-    if (parsed.tag.empty() && parsed.classes.empty()) {
+    const bool universal = parsed.tag == "*";
+    if (universal) parsed.tag.clear();
+    if (parsed.tag.empty() && parsed.classes.empty() && !universal) {
         return parsed;
     }
 
@@ -803,6 +845,7 @@ StyleBox StyleSheet::resolve(const StyleNode& node) const {
         }
         resolved = mergeStyleBox(std::move(resolved), current);
     }
+    resolved = resolveBackgroundOpacity(std::move(resolved));
     resolveCache_.emplace(cacheKey, resolved);
     return resolved;
 }
@@ -962,6 +1005,8 @@ int selectorSpecificity(const std::string& selector) {
 }
 
 StyleBox mergeStyleBox(StyleBox base, const StyleBox& overlay) {
+    if (overlay.backgroundOpacity) base.backgroundOpacity = overlay.backgroundOpacity;
+    if (overlay.contentBackgroundOpacity) base.contentBackgroundOpacity = overlay.contentBackgroundOpacity;
     if (overlay.background.color || overlay.background.gradient || overlay.background.gradientStart) {
         base.background=overlay.background;
     }
@@ -1025,6 +1070,9 @@ StyleBox mergeStyleBox(StyleBox base, const StyleBox& overlay) {
     if (overlay.fontSize) {
         base.fontSize = overlay.fontSize;
     }
+    if (overlay.fontFamily) {
+        base.fontFamily = overlay.fontFamily;
+    }
     if (overlay.fontWeight) {
         base.fontWeight = overlay.fontWeight;
     }
@@ -1035,6 +1083,13 @@ StyleBox mergeStyleBox(StyleBox base, const StyleBox& overlay) {
         base.detailFontWeight = overlay.detailFontWeight;
     }
     if (overlay.iconSize) base.iconSize = overlay.iconSize;
+    if (overlay.letterSpacing) base.letterSpacing = overlay.letterSpacing;
+    if (overlay.tabularNumbers) base.tabularNumbers = overlay.tabularNumbers;
+    if (overlay.tabIndicatorColor) base.tabIndicatorColor = overlay.tabIndicatorColor;
+    if (overlay.tabIndicatorInset) base.tabIndicatorInset = overlay.tabIndicatorInset;
+    if (overlay.tabIndicatorHeight) base.tabIndicatorHeight = overlay.tabIndicatorHeight;
+    if (overlay.tabOutlineWidth) base.tabOutlineWidth = overlay.tabOutlineWidth;
+    if (overlay.tabTrailingInset) base.tabTrailingInset = overlay.tabTrailingInset;
     if (overlay.textInset) {
         base.textInset = overlay.textInset;
     }
@@ -1066,6 +1121,24 @@ StyleBox mergeStyleBox(StyleBox base, const StyleBox& overlay) {
     return base;
 }
 
+StyleBox resolveBackgroundOpacity(StyleBox box) {
+    auto multiply = [](std::optional<Color>& color, std::optional<float> opacity) {
+        if (color && opacity) color = applyOpacity(*color, opacity);
+    };
+    multiply(box.background.color, box.backgroundOpacity);
+    multiply(box.background.gradientStart, box.backgroundOpacity);
+    multiply(box.background.gradientEnd, box.backgroundOpacity);
+    multiply(box.checkBackground, box.backgroundOpacity);
+    if (box.background.gradient && box.backgroundOpacity) {
+        for (auto& stop : box.background.gradient->stops)
+            stop.color = applyOpacity(stop.color, box.backgroundOpacity);
+    }
+    multiply(box.content.backgroundColor, box.contentBackgroundOpacity);
+    box.backgroundOpacity.reset();
+    box.contentBackgroundOpacity.reset();
+    return box;
+}
+
 Rect styleContentRect(Rect rect, const StyleBox& box) {
     return box.content.inset ? rect.inset(*box.content.inset) : rect;
 }
@@ -1080,7 +1153,12 @@ Rect stylePaintBounds(Rect rect,const StyleBox& box) {
     return {rect.x-left,rect.y-top,rect.width+left+right,rect.height+top+bottom};
 }
 
-void paintStyleBox(Canvas& canvas, Rect rect, const StyleBox& box) {
+void paintStyleBox(Canvas& canvas, Rect rect, const StyleBox& input) {
+    if (input.backgroundOpacity || input.contentBackgroundOpacity) {
+        paintStyleBox(canvas, rect, resolveBackgroundOpacity(input));
+        return;
+    }
+    const auto& box = input;
     const float radius = box.radius.value_or(0.0f);
     for (const auto& shadow : box.shadows) {
         if (!shadow.inset) {

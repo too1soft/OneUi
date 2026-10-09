@@ -607,7 +607,7 @@ bool VirtualList::onMouseUp(const MouseEvent& event) {
         notifySelectionChanged(previousIndices, previousSelectedIndex);
         if (event.button == MouseButton::Right && onContextMenuRequested_) {
             onContextMenuRequested_(pressed, event.position);
-        } else if (event.button == MouseButton::Left && clickCount == 2 && onActivated_) {
+        } else if (event.button == MouseButton::Left && (activateOnSingleClick_ || clickCount == 2) && onActivated_) {
             onActivated_(pressed);
         }
     }

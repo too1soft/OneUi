@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include "internal/ui_clock.h"
+#include "internal/scroll_trace.h"
 #include <utility>
 
 namespace oneui {
@@ -31,6 +32,7 @@ void applyFocusRingOverride(FocusRingStyle& style, const FocusRingStyleOverride&
 }
 
 void applyButtonStateOverride(ButtonStyle& style, const ButtonStateStyleOverride& override) {
+    if (override.opacity) style.opacity = std::clamp(*override.opacity, 0.0f, 1.0f);
     if (override.iconSize) style.iconSize = override.iconSize;
     if (override.iconGap) style.iconGap = override.iconGap;
     if (override.padding) {
@@ -256,6 +258,14 @@ void Button::paint(Canvas& canvas) {
     auto rect = frame();
     const ButtonStyle target = resolvedStyle();
     const ButtonStyle style = visualStyle(target);
+    struct OpacityLayer {
+        Canvas* canvas = nullptr;
+        ~OpacityLayer() { if (canvas) canvas->restore(); }
+    } opacityLayer;
+    if (style.opacity < 1.0f) {
+        canvas.saveOpacity(rect, style.opacity);
+        opacityLayer.canvas = &canvas;
+    }
 
     if (focusVisible() && style.focusRing.visible) {
         const float offset = style.focusRing.offset;
@@ -432,7 +442,20 @@ bool Button::onMouseDown(const MouseEvent& event) {
     pressed_ = true;
     beginVisualTransition(previous, resolvedStyle());
     invalidate();
+    if (internal::scrollTraceEnabled()) {
+        internal::writeScrollTrace(internal::ScrollTraceEvent{
+            "button", "pointer_down", reinterpret_cast<std::uintptr_t>(this),
+            0,0,0,0,0,0,0,event.position.x,event.position.y});
+    }
     return true;
+}
+
+void Button::styleScopeChanged() {
+    Widget::styleScopeChanged();
+    // Reparenting into a different palette must not draw cached ink from the
+    // former surface. Interaction transitions resume within the new scope.
+    visualInitialized_ = false;
+    invalidate();
 }
 
 bool Button::onMouseUp(const MouseEvent& event) {
@@ -446,6 +469,12 @@ bool Button::onMouseUp(const MouseEvent& event) {
     beginVisualTransition(previous, resolvedStyle());
     invalidate();
 
+    if (internal::scrollTraceEnabled()) {
+        internal::writeScrollTrace(internal::ScrollTraceEvent{
+            "button", wasPressed && contains(event.position) ? "pointer_activate" : "pointer_cancel",
+            reinterpret_cast<std::uintptr_t>(this),wasPressed ? 1.0 : 0.0,
+            0,0,0,0,0,0,event.position.x,event.position.y});
+    }
     if (wasPressed && contains(event.position)) {
         click();
     }
@@ -553,6 +582,10 @@ bool Button::hasInteractionState() const {
 }
 
 void Button::resetInteractionState() {
+    if (pressed_ && internal::scrollTraceEnabled()) {
+        internal::writeScrollTrace(internal::ScrollTraceEvent{
+            "button", "pressed_reset", reinterpret_cast<std::uintptr_t>(this)});
+    }
     hovered_ = false;
     pressed_ = false;
     const ButtonStyle target = resolvedStyle();

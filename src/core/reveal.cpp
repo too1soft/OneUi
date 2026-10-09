@@ -61,8 +61,10 @@ Rect Reveal::paintBounds() const {
     return {x,y,(std::max)(a.x+a.width,b.x+b.width)-x,(std::max)(a.y+a.height,b.y+b.height)-y};
 }
 void Reveal::paint(Canvas& canvas) {
+#if ONEUI_DEVELOPER_TOOLS
     if(auto* diagnostics=internal::activeDeveloperRecorder())
         diagnostics->observeMotion(*this,motionRevision_,progress(),open_);
+#endif
     if(!visible() || progress_.value()<=0)return;
     if(progress_.value()>=1){View::paint(canvas);return;}
     canvas.save();canvas.clipRect(frame());

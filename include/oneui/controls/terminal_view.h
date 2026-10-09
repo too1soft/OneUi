@@ -122,6 +122,7 @@ public:
     const TerminalCell* cellAt(std::uint16_t row, std::uint16_t column) const;
 
     void setCursor(TerminalCursor cursor);
+    void setOnCursorChanged(std::function<void()> callback) { onCursorChanged_ = std::move(callback); }
     TerminalCursor cursorState() const;
     void setCursorStyle(TerminalCursorStyle style);
     TerminalCursorStyle cursorStyle() const;
@@ -322,6 +323,7 @@ private:
     ScrollCallback onScroll_;
     PointerCallback onPointer_;
     HyperlinkCallback onHyperlink_;
+    std::function<void()> onCursorChanged_;
     ViewportChangedCallback onViewportChanged_;
     FocusChangedCallback onFocusChanged_;
     TerminalViewport viewport_{};

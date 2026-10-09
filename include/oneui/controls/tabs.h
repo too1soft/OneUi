@@ -55,6 +55,9 @@ public:
     void setOnCloseRequested(std::function<void(int)> callback);
     void setOnContextMenuRequested(std::function<void(int, Point)> callback);
     void setOnReorderRequested(std::function<void(int, int)> callback);
+    // Fired once when a document tab is dragged outside its strip. The owner
+    // can start a native docking drag; ordinary reordering remains unchanged.
+    void setOnDetachRequested(std::function<void(int, Point)> callback);
     bool beginEdit(int index);
     void cancelEdit();
     int editingIndex() const;
@@ -136,6 +139,7 @@ private:
     std::function<void(int)> onCloseRequested_;
     std::function<void(int, Point)> onContextMenuRequested_;
     std::function<void(int, int)> onReorderRequested_;
+    std::function<void(int, Point)> onDetachRequested_;
 };
 
 } // namespace oneui

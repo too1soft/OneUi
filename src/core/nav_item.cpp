@@ -1,7 +1,7 @@
 #include "oneui/controls/nav_item.h"
 
-#include <algorithm>
 #include "internal/ui_clock.h"
+#include <algorithm>
 
 namespace oneui {
 namespace {
@@ -30,20 +30,20 @@ StyleSheet defaultNavItemSheet() {
             border-color: #484451;
             color: #ff3870;
         }
-    )css", &error);
+        .nav-item:focus { border-color: #68a48b; }
+    )css",
+                          &error);
     return sheet;
 }
 
-const StyleSheet& fallbackSheet() {
+const StyleSheet &fallbackSheet() {
     static const StyleSheet sheet = defaultNavItemSheet();
     return sheet;
 }
 
-double currentTimeMs() {
-    return internal::uiTimeMs();
-}
+double currentTimeMs() { return internal::uiTimeMs(); }
 
-void prewarmNavItemStyles(const StyleSheet& sheet) {
+void prewarmNavItemStyles(const StyleSheet &sheet) {
     sheet.resolve(StyleNode{"button", {"nav-item"}, StyleStateNone});
     sheet.resolve(StyleNode{"button", {"nav-item"}, StyleStateHover});
     sheet.resolve(StyleNode{"button", {"nav-item"}, StyleStateActive});
@@ -53,9 +53,7 @@ void prewarmNavItemStyles(const StyleSheet& sheet) {
 
 } // namespace
 
-NavItem::NavItem(std::wstring text, IconSymbol symbol)
-    : text_(std::move(text))
-    , symbol_(symbol) {
+NavItem::NavItem(std::wstring text, IconSymbol symbol) : text_(std::move(text)), symbol_(symbol) {
     setPreferredSize(Size{0.0f, 38.0f});
     setAccessibleRole(AccessibilityRole::Button);
     updateAccessibility();
@@ -83,12 +81,11 @@ void NavItem::setSelected(bool selected) {
     invalidate();
 }
 
-bool NavItem::selected() const {
-    return selected_;
-}
+bool NavItem::selected() const { return selected_; }
 
 void NavItem::setSelectionIndicatorVisible(bool visible) {
-    if (selectionIndicatorVisible_ == visible) return;
+    if (selectionIndicatorVisible_ == visible)
+        return;
     selectionIndicatorVisible_ = visible;
     invalidate();
 }
@@ -100,7 +97,7 @@ void NavItem::setSelectionIndicatorColor(std::optional<Color> color) {
     invalidate();
 }
 
-const std::optional<Color>& NavItem::selectionIndicatorColor() const {
+const std::optional<Color> &NavItem::selectionIndicatorColor() const {
     return selectionIndicatorColor_;
 }
 
@@ -126,9 +123,7 @@ void NavItem::setStyleSheet(std::shared_ptr<StyleSheet> sheet) {
     invalidate();
 }
 
-void NavItem::setOnClick(std::function<void()> callback) {
-    onClick_ = std::move(callback);
-}
+void NavItem::setOnClick(std::function<void()> callback) { onClick_ = std::move(callback); }
 
 SidebarNavItemBridgeLayout NavItem::layout() const {
     const Rect bounds = frame();
@@ -138,13 +133,11 @@ SidebarNavItemBridgeLayout NavItem::layout() const {
     item.icon = Rect{bounds.x + iconInset_, bounds.y + 11.0f, 16.0f, 16.0f};
     item.symbol = symbol_;
     item.style = visualItemStyle(targetStyle);
-    item.label = Rect{
-        bounds.x + labelInset_,
-        bounds.y,
-        std::max(0.0f, bounds.width - labelInset_ - 9.0f),
-        bounds.height};
-    const Color fallback = disabled() ? Color{139, 145, 158} :
-        selected_ ? Color{255, 47, 105} : Color{202, 205, 214};
+    item.label = Rect{bounds.x + labelInset_, bounds.y,
+                      std::max(0.0f, bounds.width - labelInset_ - 9.0f), bounds.height};
+    const Color fallback = disabled()  ? Color{139, 145, 158}
+                           : selected_ ? Color{255, 47, 105}
+                                       : Color{202, 205, 214};
     item.foreground = item.style.foreground.value_or(targetStyle.foreground.value_or(fallback));
     if (item.foreground.a == 0) {
         item.foreground = targetStyle.foreground.value_or(fallback);
@@ -154,20 +147,19 @@ SidebarNavItemBridgeLayout NavItem::layout() const {
     return item;
 }
 
-void NavItem::paint(Canvas& canvas) {
+void NavItem::paint(Canvas &canvas) {
     const auto item = layout();
     paintStyleBox(canvas, item.frame, item.style);
     if (selected_ && selectionIndicatorVisible_) {
-        canvas.fillRect(
-            Rect{item.frame.x, item.frame.y + 6.0f, 4.0f, std::max(0.0f, item.frame.height - 12.0f)},
-            selectionIndicatorColor_.value_or(item.foreground),
-            2.0f);
+        canvas.fillRect(Rect{item.frame.x, item.frame.y + 6.0f, 4.0f,
+                             std::max(0.0f, item.frame.height - 12.0f)},
+                        selectionIndicatorColor_.value_or(item.foreground), 2.0f);
     }
     paintIcon(canvas, item.symbol, item.icon, item.foreground);
     canvas.drawTextEllipsized(text_, item.label, item.foreground, 13.0f, TextAlign::Left);
 }
 
-bool NavItem::onMouseMove(const MouseEvent& event) {
+bool NavItem::onMouseMove(const MouseEvent &event) {
     const bool next = interactive() && contains(event.position);
     if (hovered_ == next) {
         return false;
@@ -179,7 +171,7 @@ bool NavItem::onMouseMove(const MouseEvent& event) {
     return true;
 }
 
-bool NavItem::onMouseDown(const MouseEvent& event) {
+bool NavItem::onMouseDown(const MouseEvent &event) {
     if (!interactive() || !contains(event.position)) {
         return false;
     }
@@ -191,7 +183,7 @@ bool NavItem::onMouseDown(const MouseEvent& event) {
     return true;
 }
 
-bool NavItem::onMouseUp(const MouseEvent& event) {
+bool NavItem::onMouseUp(const MouseEvent &event) {
     if (!pressed_) {
         return false;
     }
@@ -200,8 +192,20 @@ bool NavItem::onMouseUp(const MouseEvent& event) {
     beginVisualTransition(previous, resolvedItemStyle());
     invalidate();
     if (interactive() && contains(event.position) && onClick_) {
-        onClick_();
+        auto callback = onClick_;
+        callback();
     }
+    return true;
+}
+
+bool NavItem::onKeyDown(const KeyEvent &event) {
+    if (!interactive() || (event.key != Key::Enter && event.key != Key::Space)) {
+        return false;
+    }
+    // The callback may replace itself or destroy this widget.
+    auto callback = onClick_;
+    if (callback)
+        callback();
     return true;
 }
 
@@ -219,9 +223,7 @@ CursorKind NavItem::cursor(Point point) const {
     return interactive() && contains(point) ? CursorKind::Pointer : CursorKind::Default;
 }
 
-bool NavItem::isFocusable() const {
-    return !disabled();
-}
+bool NavItem::isFocusable() const { return !disabled(); }
 
 void NavItem::setDisabled(bool disabled) {
     const StyleBox previous = resolvedItemStyle();
@@ -231,12 +233,10 @@ void NavItem::setDisabled(bool disabled) {
     invalidate();
 }
 
-StyleBox NavItem::resolvedItemStyle() const {
-    return cachedItemStyle(currentStateMask());
-}
+StyleBox NavItem::resolvedItemStyle() const { return cachedItemStyle(currentStateMask()); }
 
 StyleBox NavItem::cachedItemStyle(StylePseudoMask state) const {
-    const StyleSheet& sheet = styleSheet_ ? *styleSheet_ : fallbackSheet();
+    const StyleSheet &sheet = styleSheet_ ? *styleSheet_ : fallbackSheet();
     if (styleCacheVersion_ != sheet.version()) {
         clearStyleCache();
         styleCacheVersion_ = sheet.version();
@@ -248,8 +248,8 @@ StyleBox NavItem::cachedItemStyle(StylePseudoMask state) const {
     }
 
     StyleNode node = (state & StyleStateSelected) != 0
-        ? StyleNode{"button", {"nav-item", "selected"}, StyleStateSelected}
-        : StyleNode{"button", {"nav-item"}, StyleStateNone};
+                         ? StyleNode{"button", {"nav-item", "selected"}, StyleStateSelected}
+                         : StyleNode{"button", {"nav-item"}, StyleStateNone};
     node.state |= state;
     StyleBox style = sheet.resolve(node);
     styleCache_.emplace(key, style);
@@ -270,12 +270,13 @@ StylePseudoMask NavItem::currentStateMask() const {
     if (disabled()) {
         state |= StyleStateDisabled;
     }
+    if (!disabled() && focused() && focusVisible()) {
+        state |= StyleStateFocus;
+    }
     return state;
 }
 
-void NavItem::clearStyleCache() const {
-    styleCache_.clear();
-}
+void NavItem::clearStyleCache() const { styleCache_.clear(); }
 
 StyleBox NavItem::visualItemStyle(StyleBox target) const {
     return visualTransition_.applyTo(std::move(target));
@@ -309,9 +310,7 @@ void NavItem::updateAccessibility() {
     setAccessibilityState(state);
 }
 
-bool NavItem::hasInteractionState() const {
-    return hovered_ || pressed_;
-}
+bool NavItem::hasInteractionState() const { return hovered_ || pressed_; }
 
 void NavItem::resetInteractionState() {
     hovered_ = false;

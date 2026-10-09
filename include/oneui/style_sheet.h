@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <optional>
 #include <map>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -73,10 +74,18 @@ struct StyleBox {
     std::optional<float> height;
     std::optional<float> gridMinColumnWidth;
     std::optional<float> fontSize;
+    std::optional<std::wstring> fontFamily;
     std::optional<int> fontWeight;
     std::optional<float> detailFontSize;
     std::optional<int> detailFontWeight;
     std::optional<float> textInset;
+    std::optional<float> letterSpacing;
+    std::optional<bool> tabularNumbers;
+    std::optional<Color> tabIndicatorColor;
+    std::optional<float> tabIndicatorInset;
+    std::optional<float> tabIndicatorHeight;
+    std::optional<float> tabOutlineWidth;
+    std::optional<float> tabTrailingInset;
     std::optional<float> iconSize;
     std::optional<float> titleOffsetY;
     std::optional<float> detailOffsetY;
@@ -89,6 +98,10 @@ struct StyleBox {
     std::optional<EasingCurve> transitionEasing;
     std::vector<StyleShadow> shadows;
     bool shadowsSpecified = false;
+    // Background-only multipliers, consumed after the complete cascade. They
+    // never dim text, icons, borders, focus rings or child widgets.
+    std::optional<float> backgroundOpacity;
+    std::optional<float> contentBackgroundOpacity;
 };
 
 struct StyleRule {
@@ -110,6 +123,10 @@ struct StyleNode {
 class ONEUI_API StyleSheet {
 public:
     void addRule(StyleRule rule);
+    // Optional palette for transient surfaces (dialogs/popups and select menus).
+    // Weak reference: the application retains the variant, avoiding sheet cycles.
+    void setTransientStyleSheet(const std::shared_ptr<StyleSheet>& sheet) { transient_ = sheet; }
+    std::shared_ptr<StyleSheet> transientStyleSheet() const { return transient_.lock(); }
     void setCustomProperty(std::string name, std::string value);
     std::optional<std::string> customProperty(const std::string& name) const;
     bool addRulesFromCss(const std::string& css, std::string* error = nullptr);
@@ -124,6 +141,7 @@ private:
         bool valid = false;
         int specificity = 0;
     };
+    std::weak_ptr<StyleSheet> transient_;
     std::vector<StyleRule> rules_;
     // Selector syntax is independent of theme tokens and node pseudo-state.
     // Compile it once, instead of allocating strings for every cold resolve.
@@ -138,6 +156,9 @@ ONEUI_API std::optional<Color> parseStyleColor(const std::string& value);
 ONEUI_API bool selectorMatches(const std::string& selector, const StyleNode& node);
 ONEUI_API int selectorSpecificity(const std::string& selector);
 ONEUI_API StyleBox mergeStyleBox(StyleBox base, const StyleBox& overlay);
+// Bake background multipliers into color/gradient alpha, clearing the
+// multipliers so adapters, caches and repeated painting cannot apply them twice.
+ONEUI_API StyleBox resolveBackgroundOpacity(StyleBox box);
 ONEUI_API Rect stylePaintBounds(Rect rect, const StyleBox& box);
 ONEUI_API Rect styleContentRect(Rect rect, const StyleBox& box);
 ONEUI_API void paintStyleBox(Canvas& canvas, Rect rect, const StyleBox& box);

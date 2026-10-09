@@ -42,11 +42,13 @@ StyleSheet defaultStatusStripSheet() {
             border-width: 0px;
             color: #3158d4;
         }
-    )css", &error);
+        .status-strip-action:focus { border-color: #68a48b; border-width: 1px; }
+    )css",
+                          &error);
     return sheet;
 }
 
-const StyleSheet& fallbackSheet() {
+const StyleSheet &fallbackSheet() {
     static const StyleSheet sheet = defaultStatusStripSheet();
     return sheet;
 }
@@ -54,8 +56,7 @@ const StyleSheet& fallbackSheet() {
 } // namespace
 
 StatusStrip::StatusStrip(std::wstring title, std::wstring message)
-    : title_(std::move(title))
-    , message_(std::move(message)) {
+    : title_(std::move(title)), message_(std::move(message)) {
     setPreferredSize(Size{0.0f, 62.0f});
     setAccessibleRole(AccessibilityRole::Custom);
 }
@@ -118,7 +119,7 @@ void StatusStrip::setStyleSheet(std::shared_ptr<StyleSheet> sheet, StyleNode nod
     invalidate();
 }
 
-void StatusStrip::paint(Canvas& canvas) {
+void StatusStrip::paint(Canvas &canvas) {
     const StyleBox box = resolvedStyle();
     const Color foreground = box.foreground.value_or(Color{238, 239, 245});
     const int fontWeight = box.fontWeight.value_or(400);
@@ -126,12 +127,13 @@ void StatusStrip::paint(Canvas& canvas) {
 
     const Layout l = layout();
     paintIcon(canvas, iconSymbol_, l.icon, Color{49, 88, 212}, Color{0, 0, 0, 0}, 1.4f);
-    canvas.drawTextStyledEllipsized(title_, l.title, foreground, 13.0f, TextAlign::Left, std::max(500, fontWeight));
+    canvas.drawTextStyledEllipsized(title_, l.title, foreground, 13.0f, TextAlign::Left,
+                                    std::max(500, fontWeight));
     // Follow the caller's foreground on light as well as dark surfaces. A
     // fixed pale gray made actionable error details nearly invisible in WYC.
     canvas.drawTextEllipsized(message_, l.message, foreground, 12.0f, TextAlign::Left);
 
-    auto paintAction = [&](Rect rect, const std::wstring& text, Action action) {
+    auto paintAction = [&](Rect rect, const std::wstring &text, Action action) {
         if (text.empty()) {
             return;
         }
@@ -140,27 +142,20 @@ void StatusStrip::paint(Canvas& canvas) {
         Rect textRect = rect;
         if (action == Action::Primary && primaryActionTrailingIcon_) {
             textRect.width = std::max(0.0f, rect.width - 18.0f);
-            paintIcon(
-                canvas,
-                *primaryActionTrailingIcon_,
-                Rect{rect.x + rect.width - 16.0f, rect.y + (rect.height - 14.0f) / 2.0f, 14.0f, 14.0f},
-                actionStyle.foreground.value_or(foreground),
-                Color{0, 0, 0, 0},
-                1.2f);
+            paintIcon(canvas, *primaryActionTrailingIcon_,
+                      Rect{rect.x + rect.width - 16.0f, rect.y + (rect.height - 14.0f) / 2.0f,
+                           14.0f, 14.0f},
+                      actionStyle.foreground.value_or(foreground), Color{0, 0, 0, 0}, 1.2f);
         }
-        canvas.drawTextStyledEllipsized(
-            text,
-            textRect,
-            actionStyle.foreground.value_or(foreground),
-            actionStyle.fontSize.value_or(12.0f),
-            TextAlign::Center,
-            actionStyle.fontWeight.value_or(500));
+        canvas.drawTextStyledEllipsized(text, textRect, actionStyle.foreground.value_or(foreground),
+                                        actionStyle.fontSize.value_or(12.0f), TextAlign::Center,
+                                        actionStyle.fontWeight.value_or(500));
     };
     paintAction(l.primary, primaryAction_, Action::Primary);
     paintAction(l.secondary, secondaryAction_, Action::Secondary);
 }
 
-bool StatusStrip::onMouseMove(const MouseEvent& event) {
+bool StatusStrip::onMouseMove(const MouseEvent &event) {
     const Action next = interactive() ? actionAt(event.position) : Action::None;
     if (hoveredAction_ == next) {
         return false;
@@ -173,18 +168,19 @@ bool StatusStrip::onMouseMove(const MouseEvent& event) {
     return true;
 }
 
-bool StatusStrip::onMouseDown(const MouseEvent& event) {
+bool StatusStrip::onMouseDown(const MouseEvent &event) {
     const Action action = interactive() ? actionAt(event.position) : Action::None;
     if (action == Action::None) {
         return false;
     }
     pressedAction_ = action;
+    keyboardAction_ = action;
     setFocused(true);
     invalidate();
     return true;
 }
 
-bool StatusStrip::onMouseUp(const MouseEvent& event) {
+bool StatusStrip::onMouseUp(const MouseEvent &event) {
     if (pressedAction_ == Action::None) {
         return false;
     }
@@ -192,23 +188,56 @@ bool StatusStrip::onMouseUp(const MouseEvent& event) {
     pressedAction_ = Action::None;
     invalidate();
     if (interactive() && actionAt(event.position) == pressed) {
-        if (pressed == Action::Primary && onPrimaryAction_) {
-            onPrimaryAction_();
-        } else if (pressed == Action::Secondary && onSecondaryAction_) {
-            onSecondaryAction_();
-        }
+        invokeAction(pressed);
     }
     return true;
 }
 
 bool StatusStrip::isFocusable() const {
-    return !disabled();
+    return !disabled() && (!primaryAction_.empty() || !secondaryAction_.empty());
+}
+
+StatusStrip::Action StatusStrip::keyboardAction() const {
+    if (keyboardAction_ == Action::Secondary && !secondaryAction_.empty()) {
+        return Action::Secondary;
+    }
+    if (!primaryAction_.empty())
+        return Action::Primary;
+    return secondaryAction_.empty() ? Action::None : Action::Secondary;
+}
+
+void StatusStrip::invokeAction(Action action) {
+    auto callback = action == Action::Primary     ? onPrimaryAction_
+                    : action == Action::Secondary ? onSecondaryAction_
+                                                  : std::function<void()>{};
+    if (callback)
+        callback();
+}
+
+bool StatusStrip::onKeyDown(const KeyEvent &event) {
+    if (!interactive() || keyboardAction() == Action::None)
+        return false;
+    if (event.key == Key::Enter || event.key == Key::Space) {
+        invokeAction(keyboardAction());
+        return true;
+    }
+    if (event.key == Key::Left || event.key == Key::Up || event.key == Key::Home) {
+        keyboardAction_ = primaryAction_.empty() ? Action::Secondary : Action::Primary;
+    } else if (event.key == Key::Right || event.key == Key::Down || event.key == Key::End) {
+        keyboardAction_ = secondaryAction_.empty() ? Action::Primary : Action::Secondary;
+    } else {
+        return false; // Tab continues through the containing window's focus order.
+    }
+    invalidate();
+    return true;
 }
 
 bool StatusStrip::onFocusChanged(bool focused) {
     if (!Widget::onFocusChanged(focused)) {
         return false;
     }
+    if (!focused)
+        keyboardAction_ = Action::None;
     invalidate();
     return true;
 }
@@ -219,7 +248,7 @@ StatusStrip::Layout StatusStrip::layout() const {
     const Insets padding = box.padding.value_or(Insets{12.0f, 18.0f, 12.0f, 18.0f});
     const Rect content = rect.inset(padding);
     const float actionHeight = std::min(28.0f, std::max(22.0f, content.height));
-    const auto actionWidth = [](const std::wstring& text, bool link, bool hasIcon) {
+    const auto actionWidth = [](const std::wstring &text, bool link, bool hasIcon) {
         if (text.empty()) {
             return 0.0f;
         }
@@ -228,26 +257,31 @@ StatusStrip::Layout StatusStrip::layout() const {
         // CJK link actions need roughly one em per code point.  The previous
         // seven-pixel estimate was tuned for Latin labels and clipped actions
         // such as "查看历史监控" before the trailing chevron.
-        return std::clamp(chrome + icon + static_cast<float>(text.size()) * (link ? 12.0f : 10.0f), 40.0f, 148.0f);
+        return std::clamp(chrome + icon + static_cast<float>(text.size()) * (link ? 12.0f : 10.0f),
+                          40.0f, 148.0f);
     };
     const float secondaryWidth = actionWidth(secondaryAction_, false, false);
     const bool primaryLink = primaryActionPresentation_ == StatusStripActionPresentation::Link;
-    const float primaryWidth = actionWidth(primaryAction_, primaryLink, primaryActionTrailingIcon_.has_value());
+    const float primaryWidth =
+        actionWidth(primaryAction_, primaryLink, primaryActionTrailingIcon_.has_value());
     const float secondaryX = content.x + content.width - secondaryWidth;
-    const float primaryX = secondaryX - (secondaryWidth > 0.0f && primaryWidth > 0.0f ? 8.0f : 0.0f) - primaryWidth;
+    const float primaryX =
+        secondaryX - (secondaryWidth > 0.0f && primaryWidth > 0.0f ? 8.0f : 0.0f) - primaryWidth;
     const float textRight = std::max(content.x, primaryX - 14.0f);
 
     Layout result;
     result.icon = Rect{content.x, content.y + 8.0f, 16.0f, 16.0f};
-    result.title = Rect{content.x + 26.0f, content.y, std::max(0.0f, textRight - content.x - 26.0f), 20.0f};
-    result.message = Rect{content.x + 26.0f, content.y + 22.0f, std::max(0.0f, textRight - content.x - 26.0f), 20.0f};
+    result.title =
+        Rect{content.x + 26.0f, content.y, std::max(0.0f, textRight - content.x - 26.0f), 20.0f};
+    result.message = Rect{content.x + 26.0f, content.y + 22.0f,
+                          std::max(0.0f, textRight - content.x - 26.0f), 20.0f};
     result.primary = Rect{primaryX, content.y + 2.0f, primaryWidth, actionHeight};
     result.secondary = Rect{secondaryX, content.y + 2.0f, secondaryWidth, actionHeight};
     return result;
 }
 
 StyleBox StatusStrip::resolvedStyle() const {
-    const StyleSheet& sheet = styleSheet_ ? *styleSheet_ : fallbackSheet();
+    const StyleSheet &sheet = styleSheet_ ? *styleSheet_ : fallbackSheet();
     StyleNode node = styleNode_;
     node.state = disabled() ? StyleStateDisabled : StyleStateNone;
     return sheet.resolve(node);
@@ -260,7 +294,7 @@ StyleBox StatusStrip::resolvedActionStyle(Action action) const {
     } else if (!disabled() && hoveredAction_ == action) {
         state |= StyleStateHover;
     }
-    if (focused() && focusVisible()) {
+    if (focused() && focusVisible() && keyboardAction() == action) {
         state |= StyleStateFocus;
     }
 
@@ -281,9 +315,10 @@ StyleBox StatusStrip::resolvedActionStyle(Action action) const {
     return {};
 }
 
-StyleNode StatusStrip::childStyleNode(const std::vector<std::string>& classes, StylePseudoMask state) const {
+StyleNode StatusStrip::childStyleNode(const std::vector<std::string> &classes,
+                                      StylePseudoMask state) const {
     StyleNode node{"button", {}, state};
-    for (const auto& klass : styleNode_.classes) {
+    for (const auto &klass : styleNode_.classes) {
         if (klass != styleNode_.tag) {
             node.classes.push_back(klass);
         }

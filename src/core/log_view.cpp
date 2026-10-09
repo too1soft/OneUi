@@ -1,3 +1,4 @@
+#include "internal/runtime_error.h"
 #include "oneui/controls/log_view.h"
 
 #include "oneui/canvas.h"
@@ -111,7 +112,7 @@ bool LogView::copySelectionToClipboard(Clipboard& clipboard) const {
         return false;
     }
     try { clipboard.setText(selectedText()); return true; }
-    catch (...) { return false; }
+    catch (...) { detail::recordCurrentException(__func__); return false; }
 }
 
 void LogView::paint(Canvas& canvas) {

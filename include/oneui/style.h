@@ -60,6 +60,7 @@ struct ButtonStyle {
     std::optional<float> iconSize;
     std::optional<float> iconGap;
     std::optional<Gradient> gradient;
+    float opacity = 1.0f;
 };
 
 struct ButtonStateStyleOverride {
@@ -77,6 +78,7 @@ struct ButtonStateStyleOverride {
     std::optional<float> iconSize;
     std::optional<float> iconGap;
     std::optional<Gradient> gradient;
+    std::optional<float> opacity;
 };
 
 struct ButtonStyleOverride {
@@ -332,6 +334,12 @@ struct TabsStyle {
     int fontWeight = 400;
     Insets itemInset{2.0f};
     float textInset = 8.0f;
+    // Document mode only. Defaults preserve existing document tab rendering.
+    std::optional<Color> indicatorColor;
+    float indicatorInset = 0.0f;
+    float indicatorHeight = 2.0f;
+    float documentOutlineWidth = 0.0f;
+    float trailingInset = 0.0f;
     FocusRingStyle focusRing{};
 };
 
@@ -351,6 +359,11 @@ struct TabsStateStyleOverride {
     std::optional<int> fontWeight;
     std::optional<Insets> itemInset;
     std::optional<float> textInset;
+    std::optional<Color> indicatorColor;
+    std::optional<float> indicatorInset;
+    std::optional<float> indicatorHeight;
+    std::optional<float> documentOutlineWidth;
+    std::optional<float> trailingInset;
     std::optional<FocusRingStyleOverride> focusRing;
 };
 

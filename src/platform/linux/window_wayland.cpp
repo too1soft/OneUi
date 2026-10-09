@@ -1,13 +1,14 @@
 #include "internal/unicode.h"
 #include "linux_runtime.h"
 #include "oneui/controls/window_title_bar.h"
-#include "pipe_write.h"
+#include "data_device_wayland.h"
 #include "platform/shared/desktop_window.h"
 #include "platform/shared/key_mapping.h"
 #include "platform/shared/text_input.h"
 #include "text-input-unstable-v3-client-protocol.h"
 #include "viewporter-client-protocol.h"
 #include "xdg-shell-client-protocol.h"
+#include "xdg-foreign-unstable-v2-client-protocol.h"
 #ifdef ONEUI_HAVE_FRACTIONAL_SCALE
 #include "fractional-scale-v1-client-protocol.h"
 #endif
@@ -48,23 +49,19 @@ struct Output {
     MonitorInfo info;
     int scale = 1;
 };
-struct Offer {
-    wl_data_offer *object = nullptr;
-    bool utf8 = false, plain = false;
-};
-struct ClipboardSend {
-    int fd;
-    std::string text;
-    std::size_t offset = 0;
-    double deadline;
-};
 class WaylandConnection final : public Connection {
   public:
     WaylandConnection();
     ~WaylandConnection() override;
     std::unique_ptr<Window> create(WindowOptions options) override;
-    void setClipboard(const std::wstring &value) override;
-    std::wstring clipboard() override;
+    void setClipboard(const std::wstring &value) override {
+        if (!data) throw std::runtime_error("Wayland clipboard service unavailable");
+        data->setClipboard(value, serial);
+    }
+    std::wstring clipboard() override { return data ? data->clipboard() : std::wstring{}; }
+    std::shared_ptr<platform::NativeDockDrag> dockDrag(Window &window, platform::DockDragCallbacks callbacks) override {
+        return data ? data->dockDrag(window, std::move(callbacks)) : nullptr;
+    }
     std::vector<MonitorInfo> monitors() override;
     void pump(int timeout);
     void wake() {
@@ -85,22 +82,19 @@ class WaylandConnection final : public Connection {
     wl_keyboard *keyboardObject = nullptr;
     wl_pointer *pointerObject = nullptr;
     wl_data_device_manager *dataManager = nullptr;
-    wl_data_device *dataDevice = nullptr;
+    std::shared_ptr<WaylandDataDevice> data;
     zwp_text_input_manager_v3 *textManager = nullptr;
     zwp_text_input_v3 *textInput = nullptr;
     wp_viewporter *viewporter = nullptr;
+    zxdg_exporter_v2* exporter = nullptr;
 #ifdef ONEUI_HAVE_FRACTIONAL_SCALE
     wp_fractional_scale_manager_v1 *fractionalManager = nullptr;
 #endif
     std::map<wl_surface *, WaylandWindow *> windows;
     std::map<uint32_t, std::unique_ptr<Output>> outputs;
-    std::map<wl_data_offer *, std::unique_ptr<Offer>> offers;
     WaylandWindow *keyFocus = nullptr;
     WaylandWindow *pointerFocus = nullptr;
     WaylandWindow *textFocus = nullptr;
-    wl_data_offer *selection = nullptr;
-    wl_data_source *source = nullptr;
-    std::string ownedText;
     Point pointerPosition{};
     uint32_t serial = 0, pointerSerial = 0;
     xkb_context *xkb = nullptr;
@@ -118,7 +112,6 @@ class WaylandConnection final : public Connection {
     wl_cursor_theme *cursorTheme = nullptr;
     wl_surface *cursorSurface = nullptr;
     std::string inputSignature;
-    std::vector<ClipboardSend> sends;
     uint32_t inputSerial = 0;
     uint32_t inputSessionSerial = 0;
     std::uint64_t inputSession = 0;
@@ -133,7 +126,6 @@ class WaylandConnection final : public Connection {
 
   private:
     void release() noexcept;
-    void flushClipboardSends();
     static void global(void *, wl_registry *, uint32_t, const char *, uint32_t);
     static void globalRemove(void *, wl_registry *, uint32_t);
     static void seatCapabilities(void *, wl_seat *, uint32_t);
@@ -157,11 +149,12 @@ class WaylandWindow final : public platform::DesktopWindow {
     WaylandWindow(WaylandConnection &c, WindowOptions o) : DesktopWindow(std::move(o)), c_(c) {
         logicalSize_.height += chromeHeight();
     }
-    ~WaylandWindow() override { close(); }
+    ~WaylandWindow() override { setCloseToTray(false); close(); }
     WindowBackend backend() const override { return WindowBackend::Wayland; }
     unsigned int capabilities() const override {
-        return (c_.dataDevice && c_.serial ? WindowCapabilityClipboard : 0) |
-               (c_.textInput ? WindowCapabilityIme : 0);
+        return (c_.data && c_.serial ? WindowCapabilityClipboard : 0) |
+               (c_.data ? WindowCapabilityFileDrop : 0) |
+               (c_.textInput ? WindowCapabilityIme : 0) | serviceCapabilities();
     }
     void initialize() override {
         assertUiThread();
@@ -197,16 +190,27 @@ class WaylandWindow final : public platform::DesktopWindow {
                 auto *self = static_cast<WaylandWindow *>(d);
                 self->pendingSize_ = {w > 0 ? float(w) : self->logicalSize_.width,
                                       h > 0 ? float(h) : self->logicalSize_.height};
-                self->maximized_ = false;
-                for (std::size_t i = 0; i < states->size / sizeof(uint32_t); ++i)
-                    if (static_cast<uint32_t *>(states->data)[i] == XDG_TOPLEVEL_STATE_MAXIMIZED)
-                        self->maximized_ = true;
+                self->maximized_ = false;self->actualFullscreen_=false;self->active_=false;
+                for (std::size_t i = 0; i < states->size / sizeof(uint32_t); ++i) {
+                    const auto state=static_cast<uint32_t *>(states->data)[i];
+                    if(state==XDG_TOPLEVEL_STATE_MAXIMIZED)self->maximized_=true;
+                    if(state==XDG_TOPLEVEL_STATE_FULLSCREEN)self->actualFullscreen_=true;
+                    if(state==XDG_TOPLEVEL_STATE_ACTIVATED)self->active_=true;
+                }
+                self->queueStateChange();
                 if (self->chrome_)
                     self->chrome_->setMaximized(self->maximized_);
             },
-            [](void *d, xdg_toplevel *) { static_cast<WaylandWindow *>(d)->close(); }};
+            [](void *d, xdg_toplevel *) { static_cast<WaylandWindow *>(d)->requestClose(); }};
         xdg_toplevel_add_listener(toplevel_, &topListener, this);
         xdg_toplevel_set_app_id(toplevel_, "org.oneui.application");
+        if (c_.exporter) {
+            exported_ = zxdg_exporter_v2_export_toplevel(c_.exporter, surface_);
+            static const zxdg_exported_v2_listener listener{[](void* data, zxdg_exported_v2*, const char* handle) {
+                static_cast<WaylandWindow*>(data)->exportHandle_ = handle ? handle : "";
+            }};
+            zxdg_exported_v2_add_listener(exported_, &listener, this);
+        }
         pendingSize_ = logicalSize_;
         setTitle(options_.title);
         setMinimumClientSize(minimum_);
@@ -226,6 +230,8 @@ class WaylandWindow final : public platform::DesktopWindow {
             wp_fractional_scale_v1_add_listener(fractional_, &scaleListener, this);
         }
 #endif
+        initializeGpu(c_.display, surface_);
+        initializeAccessibility();
         wl_surface_commit(surface_);
         wl_display_flush(c_.display);
         if (options_.visible)
@@ -237,6 +243,10 @@ class WaylandWindow final : public platform::DesktopWindow {
     }
     void show() override {
         initialize();
+        if (!shown_ && surface_) {
+            wl_surface_commit(surface_);
+            wl_display_flush(c_.display);
+        }
         shown_ = true;
         requestRedraw();
     }
@@ -247,11 +257,25 @@ class WaylandWindow final : public platform::DesktopWindow {
             connection.pump(1000);
         return 0;
     }
+    void pumpNativeEvents(int timeout) override { c_.pump(timeout); }
+    std::string exportDialogParent() override { return exportHandle_; }
+    void hideNative() override {
+        assertUiThread();
+        if (!surface_) return;
+        shown_ = false;
+        configured_ = false;
+        if (frame_) { wl_callback_destroy(frame_); frame_ = nullptr; }
+        wl_surface_attach(surface_, nullptr, 0, 0);
+        wl_surface_commit(surface_);
+        wl_display_flush(c_.display);
+    }
     void close() override {
         if (isClosed())
             return;
         assertUiThread();
+        if (hideForTray()) return;
         finishClose();
+        if (exported_) { zxdg_exported_v2_destroy(exported_); exported_ = nullptr; }
         if (chrome_)
             chrome_->detachFromOwner(this);
         if (c_.keyFocus == this) {
@@ -285,6 +309,7 @@ class WaylandWindow final : public platform::DesktopWindow {
         }
         buffers_.clear();
         wake();
+        publishClosed();
     }
     void minimize() override {
         initialize();
@@ -319,16 +344,47 @@ class WaylandWindow final : public platform::DesktopWindow {
         else
             xdg_toplevel_set_maximized(toplevel_);
     }
-    void setMinimumClientSize(Size size) override {
-        minimum_ = size;
-        if (!toplevel_)
-            return;
-        xdg_toplevel_set_min_size(toplevel_, std::max(0, static_cast<int>(size.width)),
-                                  std::max(0, static_cast<int>(size.height + chromeHeight())));
-        if (!options_.resizable) {
-            xdg_toplevel_set_min_size(toplevel_, logicalSize_.width, logicalSize_.height);
-            xdg_toplevel_set_max_size(toplevel_, logicalSize_.width, logicalSize_.height);
+    WindowState state() const override {
+        assertUiThread();auto value=Window::state();
+        // xdg-shell does not confirm minimization or support arbitrary topmost.
+        value.knownFields=1|2|8|16|64;value.visible=shown_&&configured_;
+        value.active=active_;value.maximized=maximized_;value.fullscreen=actualFullscreen_;value.resizable=options_.resizable;return value;
+    }
+    bool restore() override { initialize();if(!toplevel_)return false;xdg_toplevel_unset_maximized(toplevel_);xdg_toplevel_unset_fullscreen(toplevel_);show();return true; }
+    bool maximize() override { initialize();if(!toplevel_)return false;xdg_toplevel_set_maximized(toplevel_);return true; }
+    bool setResizable(bool value) override { assertUiThread();if(isClosed())return false;options_.resizable=value;setMinimumClientSize(minimum_);queueStateChange();return true; }
+    bool setClientSize(Size size) override {
+        assertUiThread();if(isClosed()||actualFullscreen_||maximized_||!std::isfinite(size.width)||!std::isfinite(size.height)||size.width<=0||size.height<=0||size.width>32767||size.height>32767)return false;
+        pendingSize_={size.width*contentScale_,size.height*contentScale_+chromeHeight()};resize(pendingSize_,scale_);return true;
+    }
+    bool setMaximumClientSize(Size size) override { assertUiThread();if(!std::isfinite(size.width)||!std::isfinite(size.height))return false;maximum_=size;setMinimumClientSize(minimum_);return true; }
+    bool prepareContentTransfer(Widget* subtree) override {
+        assertUiThread();
+        if (subtree && subtree->focused() && c_.textFocus == this && c_.textInput) {
+            zwp_text_input_v3_disable(c_.textInput);
+            zwp_text_input_v3_commit(c_.textInput);
+            ++c_.inputSerial;
+            c_.inputEnabled = false; c_.inputIdentity = nullptr;
+            c_.resetPendingInput();
+            composition({}, 0);
         }
+        return Window::prepareContentTransfer(subtree);
+    }
+    bool setOwner(Window* owner) override {
+        auto parent=dynamic_cast<WaylandWindow*>(owner);
+        if(owner==this||(owner&&(!parent||parent->isClosed())))return false;
+        initialize();if(!toplevel_)return false;if(parent)parent->initialize();xdg_toplevel_set_parent(toplevel_,parent?parent->toplevel_:nullptr);return true;
+    }
+    void setMinimumClientSize(Size size) override {
+        minimum_ = size;if(!toplevel_)return;
+        if(!options_.resizable) {
+            xdg_toplevel_set_min_size(toplevel_,logicalSize_.width,logicalSize_.height);
+            xdg_toplevel_set_max_size(toplevel_,logicalSize_.width,logicalSize_.height);return;
+        }
+        const int minW=std::max(0,int(size.width*contentScale_));
+        const int minH=std::max(0,int(size.height*contentScale_+chromeHeight()));
+        xdg_toplevel_set_min_size(toplevel_,minW,minH);
+        xdg_toplevel_set_max_size(toplevel_,maximum_.width>0?std::max(minW,int(maximum_.width*contentScale_)):0,maximum_.height>0?std::max(minH,int(maximum_.height*contentScale_+chromeHeight())):0);
     }
     void updateScale() {
         float scale = 1;
@@ -337,10 +393,18 @@ class WaylandWindow final : public platform::DesktopWindow {
                 scale = std::max(scale, float(pair.second->scale));
         resize(logicalSize_, fractionalScale_ > 0 ? fractionalScale_ : scale);
     }
+    Point dockPoint(Point point) const { return clientPoint(point); }
     void paint() {
         if (!shown_ || !configured_ || frame_ || !needsPaint() || !surface_)
             return;
         const auto size = surfacePixelSize();
+        if (hasGpu()) {
+            wl_surface_set_buffer_scale(surface_, viewport_ ? 1 : static_cast<int>(scale_));
+            if (viewport_) wp_viewport_set_destination(viewport_, logicalSize_.width, logicalSize_.height);
+            requestFrame();
+            if (paintGpu()) return; // EGL attaches, damages and commits the native buffer.
+            if (frame_) { wl_callback_destroy(frame_); frame_ = nullptr; }
+        }
         buffers_.erase(std::remove_if(buffers_.begin(), buffers_.end(),
                                       [&](const auto &b) {
                                           return !b->busy &&
@@ -390,6 +454,10 @@ class WaylandWindow final : public platform::DesktopWindow {
             wp_viewport_set_destination(viewport_, logicalSize_.width, logicalSize_.height);
         wl_surface_attach(surface_, buffer->object, 0, 0);
         wl_surface_damage_buffer(surface_, 0, 0, buffer->width, buffer->height);
+        requestFrame();
+        wl_surface_commit(surface_);
+    }
+    void requestFrame() {
         frame_ = wl_surface_frame(surface_);
         static const wl_callback_listener listener{[](void *d, wl_callback *cb, uint32_t) {
             auto *self = static_cast<WaylandWindow *>(d);
@@ -397,9 +465,9 @@ class WaylandWindow final : public platform::DesktopWindow {
             self->frame_ = nullptr;
         }};
         wl_callback_add_listener(frame_, &listener, this);
-        wl_surface_commit(surface_);
     }
     void button(uint32_t serial, uint32_t button, bool pressed) {
+        if (nativeModal()) return;
         const Point p = c_.pointerPosition;
         if (pressed && button == BTN_LEFT) {
             uint32_t edge = 0;
@@ -432,6 +500,7 @@ class WaylandWindow final : public platform::DesktopWindow {
 
   protected:
     void wake() override { c_.wake(); }
+    void contentScaleChanged() override { setMinimumClientSize(minimum_); }
     float chromeHeight() const override { return !options_.borderless && !options_.fullscreen ? 36.f : 0.f; }
     void paintChrome(Canvas &canvas) override {
         if (chrome_) {
@@ -442,6 +511,7 @@ class WaylandWindow final : public platform::DesktopWindow {
 
   public:
     void mouse(const MouseEvent &event, int action) override {
+        if (nativeModal()) return;
         const auto alive = lifetime_;
         auto title = chrome_;
         if (title) {
@@ -470,7 +540,7 @@ class WaylandWindow final : public platform::DesktopWindow {
             chrome_ = std::make_shared<WindowTitleBar>(options_.title);
             chrome_->setOnMinimize([this] { minimize(); });
             chrome_->setOnMaximize([this] { toggleMaximize(); });
-            chrome_->setOnClose([this] { close(); });
+            chrome_->setOnClose([this] { requestClose(); });
             chrome_->attachToOwner(
                 this, [this] { requestRedraw(); }, [this](Rect rect) { redrawRect(rect); },
                 [this] { animateChrome(); });
@@ -479,6 +549,8 @@ class WaylandWindow final : public platform::DesktopWindow {
         requestRedraw();
     }
     WaylandConnection &c_;
+    zxdg_exported_v2* exported_ = nullptr;
+    std::string exportHandle_;
     wl_surface *surface_ = nullptr;
     xdg_surface *xdgSurface_ = nullptr;
     xdg_toplevel *toplevel_ = nullptr;
@@ -489,9 +561,9 @@ class WaylandWindow final : public platform::DesktopWindow {
 #endif
     std::vector<std::unique_ptr<Buffer>> buffers_;
     std::set<wl_output *> entered_;
-    Size pendingSize_{}, minimum_{};
+    Size pendingSize_{}, minimum_{},maximum_{};
     float fractionalScale_ = 0;
-    bool configured_ = false, maximized_ = false;
+    bool configured_ = false, maximized_ = false, actualFullscreen_=false;
     std::shared_ptr<WindowTitleBar> chrome_;
 };
 
@@ -526,6 +598,8 @@ void WaylandConnection::global(void *data, wl_registry *registry, uint32_t name,
     else if (!std::strcmp(interface, wp_viewporter_interface.name))
         c.viewporter =
             static_cast<wp_viewporter *>(wl_registry_bind(registry, name, &wp_viewporter_interface, 1));
+    else if (!std::strcmp(interface, zxdg_exporter_v2_interface.name))
+        c.exporter = static_cast<zxdg_exporter_v2*>(wl_registry_bind(registry, name, &zxdg_exporter_v2_interface, 1));
 #ifdef ONEUI_HAVE_FRACTIONAL_SCALE
     else if (!std::strcmp(interface, wp_fractional_scale_manager_v1_interface.name))
         c.fractionalManager = static_cast<wp_fractional_scale_manager_v1 *>(
@@ -692,6 +766,9 @@ void WaylandConnection::seatCapabilities(void *data, wl_seat *seat, uint32_t cap
             [](void *d, wl_pointer *, uint32_t serial, uint32_t, uint32_t button, uint32_t state) {
                 auto &c = *static_cast<WaylandConnection *>(d);
                 c.serial = serial;
+                if (c.data && button == BTN_LEFT) c.data->pointerButton(
+                    c.pointerFocus ? static_cast<wl_surface *>(c.pointerFocus->nativeHandle()) : nullptr,
+                    serial, state == WL_POINTER_BUTTON_STATE_PRESSED);
                 if (c.pointerFocus)
                     c.pointerFocus->button(serial, button, state == WL_POINTER_BUTTON_STATE_PRESSED);
                 c.syncInput();
@@ -998,44 +1075,9 @@ WaylandConnection::WaylandConnection() {
         cursorSurface = wl_compositor_create_surface(compositor);
         installTextInput();
         if (dataManager && seat) {
-            dataDevice = wl_data_device_manager_get_data_device(dataManager, seat);
-            static const wl_data_device_listener dataListener{
-                [](void *d, wl_data_device *, wl_data_offer *object) {
-                    auto &c = *static_cast<WaylandConnection *>(d);
-                    auto offer = std::make_unique<Offer>();
-                    offer->object = object;
-                    static const wl_data_offer_listener listener{
-                        [](void *d, wl_data_offer *, const char *mime) {
-                            auto &o = *static_cast<Offer *>(d);
-                            o.utf8 |= !std::strcmp(mime, "text/plain;charset=utf-8");
-                            o.plain |= !std::strcmp(mime, "text/plain");
-                        },
-                        [](void *, wl_data_offer *, uint32_t) {}, [](void *, wl_data_offer *, uint32_t) {}};
-                    wl_data_offer_add_listener(object, &listener, offer.get());
-                    c.offers[object] = std::move(offer);
-                },
-                [](void *d, wl_data_device *, uint32_t serial, wl_surface *, wl_fixed_t, wl_fixed_t,
-                   wl_data_offer *object) {
-                    // Drag and drop is not advertised in this backend. Reject
-                    // its offer explicitly and do not retain it as a selection.
-                    if (!object) return;
-                    auto& c = *static_cast<WaylandConnection*>(d);
-                    wl_data_offer_accept(object, serial, nullptr);
-                    wl_data_offer_destroy(object);
-                    c.offers.erase(object);
-                },
-                [](void *, wl_data_device *) {},
-                [](void *, wl_data_device *, uint32_t, wl_fixed_t, wl_fixed_t) {},
-                [](void *, wl_data_device *) {},
-                [](void *d, wl_data_device *, wl_data_offer *object) {
-                    auto &c = *static_cast<WaylandConnection *>(d);
-                    if (c.selection && c.selection != object) {
-                        wl_data_offer_destroy(c.selection);
-                        c.offers.erase(c.selection);
-                    }
-                    c.selection = object;
-                }};
-            wl_data_device_add_listener(dataDevice, &dataListener, this);
+            data = std::make_shared<WaylandDataDevice>(display, dataManager, seat,
+                [this](wl_surface *surface) -> platform::DesktopWindow * { return find(surface); },
+                [this](wl_surface *surface, Point point) { auto window = find(surface); return window ? window->dockPoint(point) : point; });
         }
     } catch (...) {
         release();
@@ -1044,19 +1086,10 @@ WaylandConnection::WaylandConnection() {
 }
 WaylandConnection::~WaylandConnection() { release(); }
 void WaylandConnection::release() noexcept {
-    for (auto &send : sends)
-        ::close(send.fd);
-    for (auto &item : offers)
-        wl_data_offer_destroy(item.first);
-    if (source)
-        wl_data_source_destroy(source);
+    data.reset();
+    if (exporter) zxdg_exporter_v2_destroy(exporter);
     if (textInput)
         zwp_text_input_v3_destroy(textInput);
-    if (dataDevice) {
-        if (wl_data_device_get_version(dataDevice) >= WL_DATA_DEVICE_RELEASE_SINCE_VERSION)
-            wl_data_device_release(dataDevice);
-        else wl_data_device_destroy(dataDevice);
-    }
     if (keyboardObject)
         releaseKeyboard(keyboardObject);
     if (pointerObject)
@@ -1110,106 +1143,8 @@ std::vector<MonitorInfo> WaylandConnection::monitors() {
         result.push_back(item.second->info);
     return result;
 }
-void WaylandConnection::setClipboard(const std::wstring &value) {
-    if (!dataDevice || !serial)
-        throw std::runtime_error("Wayland clipboard requires a seat and a user-input serial");
-    auto bytes = unicode::toUtf8(value);
-    if (bytes.size() > 16u * 1024u * 1024u)
-        throw std::runtime_error("Wayland clipboard exceeds 16 MiB");
-    if (source)
-        wl_data_source_destroy(source);
-    ownedText = std::move(bytes);
-    source = wl_data_device_manager_create_data_source(dataManager);
-    static const wl_data_source_listener listener{
-        [](void *, wl_data_source *, const char *) {},
-        [](void *d, wl_data_source *, const char *, int32_t fd) {
-            auto &c = *static_cast<WaylandConnection *>(d);
-            if (c.sends.size() >= 16 || fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK) < 0) {
-                ::close(fd);
-                return;
-            }
-            c.sends.push_back({fd, c.ownedText, 0, platform::DesktopWindow::nowMs() + 5000});
-        },
-        [](void *d, wl_data_source *source) {
-            auto &c = *static_cast<WaylandConnection *>(d);
-            if (c.source == source)
-                c.source = nullptr;
-            wl_data_source_destroy(source);
-        },
-        [](void *, wl_data_source *) {},
-        [](void *, wl_data_source *) {},
-        [](void *, wl_data_source *, uint32_t) {}};
-    wl_data_source_add_listener(source, &listener, this);
-    wl_data_source_offer(source, "text/plain;charset=utf-8");
-    wl_data_source_offer(source, "text/plain");
-    wl_data_device_set_selection(dataDevice, source, serial);
-    wl_display_flush(display);
-}
-std::wstring WaylandConnection::clipboard() {
-    if (source)
-        return unicode::fromUtf8(ownedText);
-    auto it = offers.find(selection);
-    if (it == offers.end() || (!it->second->utf8 && !it->second->plain))
-        return {};
-    int fds[2];
-    if (pipe2(fds, O_CLOEXEC) < 0)
-        throw std::runtime_error("Wayland clipboard pipe failed");
-    // Only our reader is nonblocking. Other applications own the writer and
-    // may legitimately use blocking writes for selections larger than a pipe.
-    if (fcntl(fds[0], F_SETFL, O_NONBLOCK) < 0) {
-        ::close(fds[0]);
-        ::close(fds[1]);
-        throw std::runtime_error("Wayland clipboard reader configuration failed");
-    }
-    wl_data_offer_receive(selection, it->second->utf8 ? "text/plain;charset=utf-8" : "text/plain", fds[1]);
-    ::close(fds[1]);
-    wl_display_flush(display);
-    std::string value;
-    char bytes[4096];
-    const double deadline = platform::DesktopWindow::nowMs() + 1500;
-    bool done = false;
-    while (platform::DesktopWindow::nowMs() < deadline) {
-        const auto n = ::read(fds[0], bytes, sizeof(bytes));
-        if (n == 0) {
-            done = true;
-            break;
-        }
-        if (n > 0) {
-            value.append(bytes, n);
-            if (value.size() > 16 * 1024 * 1024)
-                break;
-        } else if (errno != EAGAIN && errno != EINTR)
-            break;
-        else {
-            pollfd p{fds[0], POLLIN, 0};
-            poll(&p, 1, 20);
-        }
-    }
-    ::close(fds[0]);
-    if (!done)
-        throw std::runtime_error("Wayland clipboard transfer timed out or exceeded 16 MiB");
-    return unicode::fromUtf8(value);
-}
-void WaylandConnection::flushClipboardSends() {
-    for (auto it = sends.begin(); it != sends.end();) {
-        bool finished = it->offset == it->text.size() || platform::DesktopWindow::nowMs() >= it->deadline;
-        if (!finished) {
-            const auto n = writePipe(it->fd, it->text.data() + it->offset,
-                                     std::min<std::size_t>(65536, it->text.size() - it->offset));
-            if (n > 0)
-                it->offset += n;
-            else if (n < 0 && errno != EAGAIN && errno != EINTR)
-                finished = true;
-            finished |= it->offset == it->text.size();
-        }
-        if (finished) {
-            ::close(it->fd);
-            it = sends.erase(it);
-        } else
-            ++it;
-    }
-}
 void WaylandConnection::pump(int timeout) {
+    platform::dispatchNativeServices();
     char bytes[128];
     while (::read(wakeup[0], bytes, sizeof(bytes)) > 0) {
     }
@@ -1227,9 +1162,7 @@ void WaylandConnection::pump(int timeout) {
             timeout = std::min(timeout, 16);
     }
     syncInput();
-    flushClipboardSends();
-    for (const auto &send : sends)
-        timeout = std::min(timeout, std::max(0, int(send.deadline - platform::DesktopWindow::nowMs())));
+    if (data) timeout = data->pump(timeout);
     if (repeatedKey && repeatRate > 0) {
         const auto now = platform::DesktopWindow::nowMs();
         if (now >= repeatAt) {
@@ -1248,9 +1181,8 @@ void WaylandConnection::pump(int timeout) {
     std::vector<pollfd> fds{
         {wl_display_get_fd(display), static_cast<short>(POLLIN | (blocked ? POLLOUT : 0)), 0},
         {wakeup[0], POLLIN, 0}};
-    for (const auto &send : sends)
-        fds.push_back({send.fd, POLLOUT, 0});
-    int result = poll(fds.data(), fds.size(), timeout);
+    if (data) data->pollDescriptors(fds);
+    int result = platform::pollNativeServices(fds.data(), fds.size(), timeout);
     if (result > 0 && (fds[0].revents & POLLIN)) {
         if (wl_display_read_events(display) < 0)
             throw std::runtime_error("Wayland read failed");

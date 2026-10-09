@@ -1,4 +1,5 @@
 #pragma once
+#include "oneui/platform/key_mapping.h"
 
 #include "oneui/canvas.h"
 #include "oneui/developer_tools.h"
@@ -87,13 +88,8 @@ struct KeyEvent {
     bool win = false;
     // The legacy 'win' field carries the physical Meta/Command modifier on
     // non-Windows backends. Raw Control remains independent.
-    bool editShortcut() const {
-#ifdef __APPLE__
-        return win;
-#else
-        return control;
-#endif
-    }
+    bool meta() const { return win; }
+    bool editShortcut() const { return platform::primaryModifier(control, meta()); }
 };
 
 struct TextInputState {
@@ -151,9 +147,18 @@ struct AccessibilityInfo {
     AccessibilityState state;
 };
 
+class StyleSheet;
+
 class ONEUI_API Widget {
 public:
     Widget();
+    // Inherited presentation scope; retained children and later insertions share
+    // the same context. An explicit local scope wins over its parent's scope.
+    void setStyleScope(std::shared_ptr<StyleSheet> sheet);
+    void inheritStyleScope(std::shared_ptr<StyleSheet> sheet, const void* owner);
+    std::shared_ptr<StyleSheet> styleScope() const;
+    void setOnStyleScopeChanged(std::function<void()> callback);
+
     void setDiagnosticSource(DiagnosticSource source) { diagnosticSource_=std::make_unique<DiagnosticSource>(std::move(source)); }
     const DiagnosticSource& diagnosticSource() const {
         static const DiagnosticSource anonymous{"Widget",{},0};
@@ -274,10 +279,15 @@ public:
     virtual AccessibilityInfo accessibilityInfo() const;
     // Inherited presentation context, installed by the owning native window.
     virtual void setTextEnvironment(std::wstring family, float scale);
-    const std::wstring& textFontFamily() const { return textFontFamily_; }
+    // An empty override restores the inherited window/container font.
+    void setFontFamily(std::wstring family);
+    const std::wstring& textFontFamily() const {
+        return fontFamilyOverride_.empty() ? textFontFamily_ : fontFamilyOverride_;
+    }
     float textDpiScale() const { return textDpiScale_; }
 
 protected:
+    virtual void styleScopeChanged();
     std::uint64_t textInputSession() const { return textInputSession_; }
     std::weak_ptr<int> lifetimeToken() const { return lifetime_; }
     void invalidate();
@@ -292,9 +302,14 @@ protected:
 
 private:
     friend class internal::DeveloperRecorder;
+    std::shared_ptr<StyleSheet> localStyleScope_;
+    std::shared_ptr<StyleSheet> inheritedStyleScope_;
+    const void* styleScopeOwner_ = nullptr;
+    std::function<void()> onStyleScopeChanged_;
     std::unique_ptr<DiagnosticSource> diagnosticSource_;
     CommandScope commands_;
     std::wstring textFontFamily_;
+    std::wstring fontFamilyOverride_;
     float textDpiScale_ = 1.0f;
     Rect frame_;
     std::function<void(Size)> onSizeChanged_;

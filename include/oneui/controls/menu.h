@@ -38,6 +38,7 @@ public:
     bool onMouseMove(const MouseEvent& event) override;
     bool onMouseDown(const MouseEvent& event) override;
     bool onMouseUp(const MouseEvent& event) override;
+    bool onMouseWheel(const MouseWheelEvent& event) override;
     CursorKind cursor(Point point) const override;
     bool isFocusable() const override;
     bool onKeyDown(const KeyEvent& event) override;
@@ -65,6 +66,8 @@ private:
     StyleBox resolvedItemStyle(const Entry& entry, bool hovered, bool pressed) const;
     int entryAt(Point point) const; // 命中的可交互条目在 entries_ 中的下标，无则 -1
     Rect entryRect(int entryIndex) const;
+    float maxScrollOffset() const;
+    void revealEntry(int entryIndex);
 
     std::vector<Entry> entries_;
     int itemCount_ = 0;
@@ -72,6 +75,7 @@ private:
     int keyboardEntry_ = -1;
     std::optional<Point> lastPointerPosition_;
     int pressedEntry_ = -1;
+    float scrollOffset_ = 0.0f;
     std::function<void(int)> onItemActivated_;
     std::shared_ptr<StyleSheet> styleSheet_;
     StyleNode styleNode_{"menu", {}, StyleStateNone};

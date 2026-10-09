@@ -58,8 +58,10 @@ StyleBox resolveState(const StyleSheet& sheet, StyleNode node, StylePseudoMask s
 
 } // namespace
 
-ButtonStateStyleOverride buttonStateStyleOverrideFromStyleBox(const StyleBox& box) {
+ButtonStateStyleOverride buttonStateStyleOverrideFromStyleBox(const StyleBox& input) {
+    const auto box = resolveBackgroundOpacity(input);
     ButtonStateStyleOverride override;
+    override.opacity = box.opacity;
     override.padding = box.padding;
     override.iconSize = box.iconSize;
     override.iconGap = box.gap;
@@ -81,7 +83,8 @@ ButtonStateStyleOverride buttonStateStyleOverrideFromStyleBox(const StyleBox& bo
     return override;
 }
 
-TextFieldStateStyleOverride textFieldStateStyleOverrideFromStyleBox(const StyleBox& box) {
+TextFieldStateStyleOverride textFieldStateStyleOverrideFromStyleBox(const StyleBox& input) {
+    const auto box = resolveBackgroundOpacity(input);
     TextFieldStateStyleOverride override;
     override.background = box.background.color;
     override.gradient = box.background.gradient;
@@ -103,7 +106,8 @@ TextFieldStateStyleOverride textFieldStateStyleOverrideFromStyleBox(const StyleB
     return override;
 }
 
-SwitchStateStyleOverride switchStateStyleOverrideFromStyleBox(const StyleBox& box) {
+SwitchStateStyleOverride switchStateStyleOverrideFromStyleBox(const StyleBox& input) {
+    const auto box = resolveBackgroundOpacity(input);
     SwitchStateStyleOverride override;
     override.trackBackground = box.background.color;
     override.thumbBackground = box.content.backgroundColor;
@@ -117,7 +121,8 @@ SwitchStateStyleOverride switchStateStyleOverrideFromStyleBox(const StyleBox& bo
     return override;
 }
 
-SelectStateStyleOverride selectStateStyleOverrideFromStyleBox(const StyleBox& box) {
+SelectStateStyleOverride selectStateStyleOverrideFromStyleBox(const StyleBox& input) {
+    const auto box = resolveBackgroundOpacity(input);
     SelectStateStyleOverride override;
     override.fontSize = box.fontSize;
     override.background = box.background.color;
@@ -141,7 +146,8 @@ SelectStateStyleOverride selectStateStyleOverrideFromStyleBox(const StyleBox& bo
     return override;
 }
 
-ListStateStyleOverride listStateStyleOverrideFromStyleBox(const StyleBox& box) {
+ListStateStyleOverride listStateStyleOverrideFromStyleBox(const StyleBox& input) {
+    const auto box = resolveBackgroundOpacity(input);
     ListStateStyleOverride override;
     override.background = box.background.color;
     override.border = box.borderColor;
@@ -171,7 +177,8 @@ ListStateStyleOverride listStateStyleOverrideFromStyleBox(const StyleBox& box) {
     return override;
 }
 
-InteractiveSurfaceStateStyle interactiveSurfaceStateStyleFromStyleBox(const StyleBox& box) {
+InteractiveSurfaceStateStyle interactiveSurfaceStateStyleFromStyleBox(const StyleBox& input) {
+    const auto box = resolveBackgroundOpacity(input);
     InteractiveSurfaceStateStyle style;
     if (box.background.color) {
         style.background = *box.background.color;
@@ -229,13 +236,28 @@ SwitchStyleOverride switchStyleOverrideFromStyleSheet(const StyleSheet& sheet, S
 }
 
 SelectStyleOverride selectStyleOverrideFromStyleSheet(const StyleSheet& sheet, StyleNode node) {
+    const auto transient = sheet.transientStyleSheet();
+    const auto resolve = [&](unsigned state) {
+        auto result = selectStateStyleOverrideFromStyleBox(resolveState(sheet, node, state));
+        if (transient) {
+            const auto menu = selectStateStyleOverrideFromStyleBox(resolveState(*transient, node, state));
+            result.popupBackground = menu.popupBackground;
+            result.popupBorder = menu.popupBorder;
+            result.popupShadow = menu.popupShadow;
+            result.optionBackground = menu.optionBackground;
+            result.optionForeground = menu.optionForeground;
+            result.selectedOptionBackground = menu.selectedOptionBackground;
+            result.selectedOptionForeground = menu.selectedOptionForeground;
+        }
+        return result;
+    };
     SelectStyleOverride override;
-    override.normal = selectStateStyleOverrideFromStyleBox(resolveState(sheet, node, StyleStateNone));
-    override.hovered = selectStateStyleOverrideFromStyleBox(resolveState(sheet, node, StyleStateHover));
-    override.pressed = selectStateStyleOverrideFromStyleBox(resolveState(sheet, node, StyleStateActive));
-    override.disabled = selectStateStyleOverrideFromStyleBox(resolveState(sheet, node, StyleStateDisabled));
-    override.selected = selectStateStyleOverrideFromStyleBox(resolveState(sheet, node, StyleStateSelected));
-    override.focusVisible = selectStateStyleOverrideFromStyleBox(resolveState(sheet, std::move(node), StyleStateFocus));
+    override.normal = resolve(StyleStateNone);
+    override.hovered = resolve(StyleStateHover);
+    override.pressed = resolve(StyleStateActive);
+    override.disabled = resolve(StyleStateDisabled);
+    override.selected = resolve(StyleStateSelected);
+    override.focusVisible = resolve(StyleStateFocus);
     return override;
 }
 
