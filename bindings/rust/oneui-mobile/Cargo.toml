@@ -1,0 +1,10 @@
+[package]
+name = "oneui-mobile"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Experimental OneUI mobile lifecycle and touch runtime (no platform renderer)"
+links = "oneui_mobile_runtime"
+build = "build.rs"
+
+[dependencies]
