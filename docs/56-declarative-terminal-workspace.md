@@ -1,11 +1,13 @@
 # 声明式终端工作区
 
+> 2026-10-08：本示例已迁入 [OneUI 试验台](../examples/performance_lab/README.md) 的 `features/terminal`；历史截图与验证记录保留，最新验收见[统一记录](unified-lab-implementation.md)。
+
 2026-09-28。接续 NativeHost 最小接入，提供一个能够实际操作的完整页面，并把通用入口留在 SDK。它是本地模拟工作区，不是 iShellPro、SSH 客户端或完整终端模拟器。
 
 ## 运行与效果
 
 ```powershell
-.\examples\terminal_workbench\build.ps1 -Test -Run
+.\examples\performance_lab\build.ps1 -Test -Run
 ```
 
 ![浅色工作区](images/terminal-workspace/light-wide.png)

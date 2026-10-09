@@ -1,13 +1,13 @@
 # OneUI C ABI 接入
 
 OneUI 使用版本化 C ABI 为 Rust、Go、C#、Python FFI 和不同 C++ ABI 的产品提供边界。本文说明
-当前 ABI v39 的形状、所有权、线程和迁移规则；完整函数签名只以
+当前 ABI v40 的形状、所有权、线程和迁移规则；完整函数签名只以
 `include/oneui/oneui_c_api.h` 为准。
 
 ## 当前版本
 
 ```c
-#define ONEUI_UTF8_ABI_VERSION 39u
+#define ONEUI_UTF8_ABI_VERSION 40u
 ```
 
 运行时检查：
@@ -20,6 +20,35 @@ if (oneui_utf8_abi_version() != ONEUI_UTF8_ABI_VERSION) {
 ```
 
 safe Rust `Window::new` 自动执行同一检查并返回 `AbiVersionMismatch`。
+
+ABI v40 增加 `oneui_last_error()`、`oneui_last_error_code()` 和 `oneui_clear_error()`。
+现有返回值与结构布局不变；头文件、导入库、DLL 和 Rust 绑定应一起升级。
+
+### 原生错误诊断
+
+所有现存 C ABI `catch (...)` 现在记录捕获到的异常，仍返回原有失败值。
+命令注册、文字选项、文字位置和内置文案接口也记录参数校验失败。
+错误码区分参数错误、内存分配失败、普通异常和未知异常。记录使用线程局部的
+固定缓冲区，不分配内存、不写日志、不触发回调。消息最多 1023 字节，非法 UTF-8
+字节替换为 `?`，过长消息在 Unicode scalar 边界截断。
+
+错误不会被成功调用自动清空。诊断某次操作时，在同一线程先清空，检查原有返回值，
+失败后立即复制错误；嵌套调用或回调可能写入更新的错误。返回的消息指针只在当前线程
+有效，直到下一次错误、显式清空或线程退出，调用方不得释放它。空错误不等于操作成功：
+尚未补齐的旧接口校验/平台失败可能只返回失败值，部分旧 C 导出还需补齐异常保护。
+这些接口不能替代进程崩溃、访问违规或调用方传入无效指针的诊断。
+
+```c
+oneui_clear_error();
+if (!oneui_set_builtin_text_utf8(4, text)) {
+    /* Copy the borrowed text now, before another operation can replace it. */
+    report_error(oneui_last_error_code(), oneui_last_error());
+}
+```
+
+safe Rust 导出 `clear_native_error()` / `last_native_error()` 和拥有消息副本的
+`NativeError { code, message }`，保留既有 `Error` / `LocalizationError` 返回类型。
+查询不会消费错误；保存的 Rust 副本可跨越后续清空和线程退出。
 
 开发阶段在同一 ABI 版本内也有增量符号，例如 Tabs 原位编辑与弱焦点书签。
 版本常量相同不保证旧 DLL 拥有新增导出；头文件、导入库、DLL 与 Rust 绑定必须来自同一构建。
@@ -39,7 +68,7 @@ ABI v31 为 `ImageView` 增加原始尺寸内容模式和水平/垂直内容对�
 不预裁剪像素的前提下实现 `cover / contain / auto / stretch` 与边缘定位。
 
 ABI v30 增加 `oneui_window_file_dialog_multiple_utf8`，为原生上传工作流提供有宿主窗口的
-多文件选择。结果以双 NUL 结尾的 UTF-8 路径序列返回；取消、缓冲区不足和错误仍沿用单路径
+多文件或多文件夹选择（分别使用 OpenFile / SelectFolder，不接受 SaveFile）。结果以双 NUL 结尾的 UTF-8 路径序列返回；取消、缓冲区不足和错误仍沿用单路径
 文件对话框的返回约定。safe Rust 使用 `file_dialog_multiple` 将其转换为有序 `Vec<PathBuf>`。
 
 ABI v29 为只读 `Label` 增加原子富文本入口 `oneui_label_set_rich_text_utf8`。每个
@@ -427,3 +456,16 @@ C ABI 没有统一 `errno` 对象；每个函数使用下列之一：
 - 不要从 worker 直接调用普通 widget setter；
 - 不要在产品层用 raw Win32 控件补一个应当属于 OneUI 的通用组件；
 - 不要在 ABI 版本不匹配时“尝试继续”。
+
+
+### ABI 41：原生菜单树和托盘图标
+
+新增 `OneUiNativeMenuItemUtf8`（NUL 结尾 UTF-8 字符串）及
+`oneui_window_set_tray_menu_utf8`、`oneui_window_set_menu_bar_utf8`、
+`oneui_window_set_on_menu_action`、`oneui_window_set_tray_icon_rgba`。
+`OneUiNativeMenuFlags` 的 Enabled 必须显式设置；0 表示禁用。
+树节点的 `children/child_count`、字符串和图标缓冲仅须在调用期间有效；原生层负责复制。
+Check 与 Radio 标志互斥，Checked 必须搭配其中一种；Radio 必须设置非零 `radio_group`。
+快捷键使用 `OneUiKeyModifier`。旧的 `OneUiTrayMenuItem` 布局没有变化。
+菜单回调在 UI 线程报告叶子 ID；图标行跨度允许 padding，但必须至少为 `width * 4`。
+函数返回 0 表示失败；异常不穿过这组 C 接口。升级时同步头文件、Rust 绑定和运行库 ABI 版本。

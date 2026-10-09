@@ -28,8 +28,9 @@ if ($Mode -eq 'product' -and $MinimumWindows -eq 'win7') {
 }
 
 . (Join-Path $PSScriptRoot "runtime-dependencies.ps1")
+. (Join-Path $PSScriptRoot "windows-build-profile.ps1")
 
-$toolchainBin = "C:\msys64\$Toolchain\bin"
+$toolchainBin = Resolve-OneUIMsysBin $Toolchain
 $objdump = Join-Path $toolchainBin "objdump.exe"
 
 if (!(Test-Path $Binary)) {

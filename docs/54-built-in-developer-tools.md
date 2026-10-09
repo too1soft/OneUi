@@ -2,12 +2,23 @@
 
 这项能力位于 OneUI SDK 的窗口、View 和 Reveal 中。应用无需手动计时、指定所有待测控件，也不需要启动 PowerShell 脚本。
 
+## 构建范围
+
+Debug 构建包含开发诊断，但仍需运行时主动开启。Release、RelWithDebInfo 和 MinSizeRel
+默认不编译采集器、线程局部会话、控件计时、诊断面板及 F12 拦截；环境变量和 API
+不能在这些构建中恢复该能力。`setDeveloperTools` / 导出报告返回 false，
+`developerSnapshot().supported` 为 false。普通渲染和应用自己的 F12 处理继续工作。
+
+需要测量优化构建时，仅为 QA 显式配置 `-DONEUI_ENABLE_DEVELOPER_TOOLS=ON`。
+该构建不可交付；完成诊断后必须改回 OFF 并重建 DLL/静态库。该选项默认 OFF，
+不能把运行时的“当前未开启”当作“已从交付物移除”。测试构建两种策略时复用既有构建目录。
+
 ## 一行开启
 
 ```cpp
 #include <oneui/platform/window.h>
 auto window = oneui::Window::create(L"My app", 1280, 800);
-window->enableDeveloperTools(); // 当前 Windows 后端支持；其他后端返回 false。
+window->enableDeveloperTools(); // 仅包含诊断的构建可开启；应检查返回值。
 ```
 
 开启后右下角显示原生诊断面板：
@@ -18,7 +29,11 @@ window->enableDeveloperTools(); // 当前 Windows 后端支持；其他后端返
 
 这两个快捷键只在诊断开启时占用，不占用 Shift+F12 或 Ctrl+Shift+F12。面板是只读绘制层，不抢键盘焦点；窄窗口遮住内容时用 F12 隐藏。
 
-对已经使用新版 SDK 的应用，也可以在启动前设置环境变量 `ONEUI_DEVTOOLS=1`，无需修改业务代码。默认关闭，不因 Release／Debug 配置而偷偷改变行为。旧 C++ 应用及自定义 Widget／Window 子类应随 SDK 重新编译；本轮没有增加或修改 C ABI。
+对包含诊断的 SDK，也可以在启动前设置环境变量 `ONEUI_DEVTOOLS=1`，无需修改业务代码。
+Release 默认忽略该变量。`ONEUI_RENDER_TRACE` 及其 Unicode 输出路径也只在包含诊断的构建中读取。
+窗口创建时通过同一个 `RuntimeConfig` 快照读取上述配置、`ONEUI_ENABLE_GPU` 和
+`ONEUI_RENDERER=software`；环境修改对后续创建的窗口生效。GPU 关闭和软件后端选择在生产构建中仍有效。
+旧 C++ 应用及自定义 Widget／Window 子类应随 SDK 重新编译。
 
 ## 在实验台体验
 
@@ -50,7 +65,7 @@ options.enabled = false;
 window->setDeveloperTools(options);    // 关闭并释放记录
 ```
 
-这些接口在窗口所属 UI 线程调用。`supported=false` 表示平台未接入，不能解释为测得 0 个问题。重新开启会建立新会话；窗口销毁时记录随之释放。
+这些接口在窗口所属 UI 线程调用。`supported=false` 表示构建未包含诊断或平台未接入，不能解释为测得 0 个问题。重新开启会建立新会话；窗口销毁时记录随之释放。
 
 `.one` 组件自动携带文件和行号；C++ Compose 自动记录组件类型。原生自定义控件可提供源码位置：
 
@@ -82,9 +97,10 @@ widget->setDiagnosticSource({"MyChart", __FILE__, __LINE__});
 
 框架并不知道每个自定义页面的正确位置轨迹，因此本轮没有宣称通用自动检测所有布局跳变：旧 `MotionAudit` 及场景轨迹断言仍保留。自定义动画若完全绕过控件动画调度，窗口只保证绘制耗时检测；手写容器绕过 View 的子项绘制时，耗时归入最近受追踪祖先。GPU 数值是 CPU 提交／等待时间，不是 GPU 时间戳或显示器呈现帧率。
 
-Windows 已接入原生窗口；采集器、报告和 View／Reveal 插桩为可移植 C++。其他平台当前明确返回不支持，本轮没有把它们计入验收。
+Windows 和共享桌面后端均有诊断接入；采集器、报告和 View／Reveal 插桩为可移植 C++。
+本次编译策略修改在 Windows 实测，Linux/macOS 仍需对应平台的构建与原生运行验证。
 
-## 验证
+## 原有功能验证记录（编译策略修改前）
 
 - SDK 37/37 测试通过；实验台完整回归通过。
 - CPU／GPU 原生窗口只开启 SDK 开关，注入 40ms 慢绘制，自动定位 `SlowFixture` 的第 17 行，并成功导出带中文／引号路径的 JSON。

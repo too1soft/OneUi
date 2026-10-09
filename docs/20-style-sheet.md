@@ -24,6 +24,41 @@ The API intentionally starts with the subset needed by desktop product shells:
 - outer and inset shadows
 - deterministic merging by selector specificity and rule order
 
+### Background-only transparency
+
+`background-opacity` and `content-background-opacity` accept a number from 0 to
+1 or a percentage (values outside the range are clamped). They multiply the
+resolved fill alpha **after** the state cascade, including every gradient stop.
+They do not fade text, icons, selection ink, borders, focus rings or descendants.
+The two properties are independent: for a select, the content fill controls its
+popup; for a table it controls its header. The universal selector `*` has zero
+specificity and can establish a material policy for all styled controls:
+
+```css
+* { background-opacity: 20%; content-background-opacity: 20%; }
+button { background: #303033; }
+button:hover { background: #404045; }
+select { background: #303033; content-background: #303033;
+         content-background-opacity: 96%; }
+```
+
+Declare the relevant background colors in the stylesheet; unspecified fills
+still belong to the control's native theme. To make content fully transparent,
+set both multipliers to zero. Existing RGBA alpha remains multiplicative.
+Dynamic custom-property updates invalidate the resolved cache. Switching the
+material stylesheet off restores ordinary opaque styles. These properties are
+available through the same C++, C and Rust stylesheet APIs on every backend;
+no OS compositing/window-opacity API is involved.
+
+C++ `StyleBox` also exposes `backgroundOpacity` and
+`contentBackgroundOpacity`. `resolveBackgroundOpacity()` bakes and consumes
+them once; stylesheet resolution, primitive painting and direct control-style
+adapters use the same normalization. Native child renderers (e.g. embedded
+Scintilla) remain responsible for their own canvas and are not made transparent
+by a OneUI surface rule. The existing `opacity` property's behavior is unchanged.
+Rebuild C++ consumers after upgrading because `StyleBox` has new fields; the C
+ABI uses opaque stylesheet handles and has no layout change.
+
 Example:
 
 ```cpp
@@ -155,9 +190,55 @@ Single-line controls use measured ellipsis rendering when their text exceeds
 the assigned content rectangle. Products should provide semantic dimensions
 through CSS and must not pre-truncate labels or replace the ellipsis contract.
 
+### Text shaping and document tabs
+
+Label supports `letter-spacing: normal | <px>` (including negative spacing) and
+`font-variant-numeric: normal | proportional-nums | tabular-nums`. These properties
+are applied by the C API style adapter to Label; they do not imply CSS inheritance
+or support on every control. Measurement and drawing share the shaped layout.
+
+Document-mode Tabs supports `tab-indicator-color`, `tab-indicator-inset`,
+`tab-indicator-height`, `tab-outline-width`, and `tab-trailing-inset`.
+The selected item's border color controls its outline independently of the
+indicator color. The trailing inset reserves a non-clickable gutter inside each
+item's allocated frame; it does not add layout spacing. All lengths are
+nonnegative logical pixels. Defaults preserve the previous full-width indicator
+and omit the outline. Use `content-radius` for the item's top corner radius.
+
 This is not a complete browser CSS engine yet. The intended growth path is:
 
 1. add design-token variables,
 2. add font and layout properties,
 3. add native backend painters for gradients, blur, and high-quality shadows,
 4. support separate external `.oui.css` files and live reload for designers.
+
+
+### Transient palette and inherited style scopes
+
+A wallpaper-backed page can keep light foreground text while its dialogs and
+menus follow the application's light theme. Use two retained `StyleSheet`s;
+register the transient variant with `setTransientStyleSheet`, the C API
+`oneui_style_sheet_set_transient_style_sheet`, or Rust
+`set_transient_style_sheet(Some(&variant))`. The registration is weak: keep the
+variant alive in the application. `replace_css` preserves the registration.
+
+The C API applies the variant at Dialog, Popup and Menu boundaries. Retained
+children, dynamically inserted controls and nested containers inherit that
+sheet. Popup anchors remain in the page palette. Select uses the variant only
+for its popup/options; the closed trigger retains the page palette. Refresh the
+owning window after changing tokens on either sheet; mounted widget bindings
+continue to refer to the declared window stylesheet for refresh ownership.
+
+Native C++ containers expose `Widget::setStyleScope` for subtree context. A local
+scope wins over an inherited one; clearing it restores the inherited scope.
+View, OverlayHost and Popup propagate the context through their owned content.
+Custom containers must propagate it too. Native C++ clients can use
+`setOnStyleScopeChanged` to reapply their style adapter; C API clients receive
+that binding automatically. This is presentation context, not CSS ancestor
+selector support. Detach/reparent clears inherited scope, while explicit scope
+survives. Owner callbacks are disconnected before restyling detached content.
+
+Regression coverage: `oneui_style_scope_tests` exercises nested scopes, dynamic
+insertion, reparenting, scope removal, owner destruction, anchor isolation and
+Select popup state palettes. Product render fixtures should additionally test
+actual photo backgrounds and the application's transient CSS.

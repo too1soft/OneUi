@@ -6,8 +6,8 @@ param(
     [string]$OutDir = "",
     [ValidateSet("x64", "x86")]
     [string]$TargetCpu = "x64",
-    [string]$WinSdk = "D:/Windows Kits/10",
-    [string]$WinVc = "D:/Program Files/Microsoft Visual Studio/18/Community/VC",
+    [string]$WinSdk = "",
+    [string]$WinVc = "",
     [ValidateSet("win7", "win10")]
     [string]$MinimumWindows = "win10",
     [string]$Revision = "1f26101197bff9fcd939a791beb3094297436d59",
@@ -24,6 +24,12 @@ param(
 $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot "windows-build-profile.ps1")
 $windowsBuildProfile = Get-OneUIWindowsBuildProfile -MinimumWindows $MinimumWindows
+if ($Generate -or $Build) {
+    $WinSdk = (Resolve-OneUIWindowsSdk $WinSdk).Replace('\', '/')
+    if (-not $WinVc) { $WinVc = Join-Path (Resolve-OneUIVisualStudio) 'VC' }
+    $WinVc = [IO.Path]::GetFullPath($WinVc).Replace('\', '/')
+    if (-not (Test-Path -LiteralPath $WinVc)) { throw "Visual C++ directory not found: $WinVc" }
+}
 
 $root = Split-Path -Parent $PSScriptRoot
 $skiaPath = Resolve-OneUIBuildPath $SkiaSource

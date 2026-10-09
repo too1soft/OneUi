@@ -8,7 +8,24 @@ $root = Split-Path -Parent $PSScriptRoot
 $headerPath = Join-Path $root $Header
 $rustPath = Join-Path $root $RustBindings
 
-$headerText = Get-Content -LiteralPath $headerPath -Raw
+$includeRoot = [IO.Path]::GetFullPath((Join-Path $root 'include'))
+$pending = [Collections.Generic.Queue[string]]::new()
+$seen = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+$pending.Enqueue([IO.Path]::GetFullPath($headerPath))
+$headerText = ''
+while ($pending.Count) {
+    $path = $pending.Dequeue()
+    if (!$seen.Add($path)) { continue }
+    $source = Get-Content -LiteralPath $path -Raw
+    $headerText += "`n" + $source
+    foreach ($match in [regex]::Matches($source, '(?m)^\s*#\s*include\s+"(oneui/[^"\r\n]+)"')) {
+        $child = [IO.Path]::GetFullPath((Join-Path $includeRoot $match.Groups[1].Value))
+        if (!$child.StartsWith($includeRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+            throw 'Public header include escapes the include directory'
+        }
+        $pending.Enqueue($child)
+    }
+}
 $rustFiles = if (Test-Path -LiteralPath $rustPath -PathType Container) {
     Get-ChildItem -LiteralPath $rustPath -Filter *.rs -File -Recurse | Sort-Object FullName
 } else {

@@ -6,9 +6,10 @@ param(
 $ErrorActionPreference = "Stop"
 
 . (Join-Path $PSScriptRoot "runtime-dependencies.ps1")
+. (Join-Path $PSScriptRoot "windows-build-profile.ps1")
 
 $root = Split-Path -Parent $PSScriptRoot
-$toolchainBin = if ($Toolchain.StartsWith("msvc-bundled-static")) { "C:\msys64\mingw64\bin" } else { "C:\msys64\$Toolchain\bin" }
+$toolchainBin = Resolve-OneUIMsysBin $(if ($Toolchain.StartsWith("msvc-bundled-static")) { "mingw64" } else { $Toolchain })
 $objdump = Join-Path $toolchainBin "objdump.exe"
 $build = Join-Path $root "build\$Toolchain"
 $sdkRoot = Join-Path $root "dist\OneUI-SDK-$Toolchain"

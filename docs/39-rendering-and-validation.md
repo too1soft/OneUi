@@ -1,6 +1,6 @@
 # 渲染路径与验证边界
 
-本文依据当前 Win32 后端实现，区分渲染能力、运行时选择和验收证据。
+本文的 Win32 细节区分渲染能力、运行时选择和验收证据；Linux/macOS 新增 EGL/Metal 路径与验证边界见[原生桌面状态](37-native-desktop-backends.md)。
 早期文档中的“仅 Skia raster”不再代表当前 Win32 实现。
 
 ## 当前路径
@@ -9,9 +9,9 @@
 | --- | --- | --- |
 | Win32 GPU | WGL/OpenGL + Skia Ganesh；保留绘制 surface，提交窗口 surface 后 SwapBuffers | 依赖宿主驱动；代码已实现不等于全部硬件验收 |
 | Win32 软件 | Skia raster；GDI 提交完整或局部像素 | GPU 不可用时的回退，也可显式选择 |
-| X11 | 共享 Skia Canvas / raster，XImage 呈现 | 已有 WSLg 记录；真机与发行版验收仍待完成 |
-| Wayland | 共享 Skia Canvas / raster，shm 缓冲呈现 | 协议能力依 compositor；WSLg 不替代原生验收 |
-| Cocoa | 共享 Skia Canvas / raster，Cocoa 呈现实现 | 源码已接入，尚待 Mac 构建与运行 |
+| X11 | EGL/OpenGL ES + Skia Ganesh；raster/XImage 回退 | WSLg llvmpipe 路径通过；真实 GPU 与发行版验收待完成 |
+| Wayland | EGL/wayland-egl + Skia Ganesh；raster/shm 回退 | 协议能力依 compositor；WSLg llvmpipe 不替代硬件验收 |
+| Cocoa | Metal/CAMetalLayer + Skia Ganesh；raster/CoreGraphics 回退 | 源码已接入，尚待 Mac 构建与运行 |
 
 Win32 `gpuRenderingEnabled()` 默认返回启用；`initGPU()` 尝试创建 OpenGL 上下文和
 `GrDirectContext`。可用时启用交换间隔；初始化失败保留软件路径。

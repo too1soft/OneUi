@@ -1,6 +1,8 @@
 # 工作区快速布局：从网页原型到原生组件
 
-本轮以终端工作区网页原型为布局参考，将重复的区域结构补到 OneUI SDK。示例位于 `examples/terminal_workbench`，仍由 `.one` + C++ ViewModel + Rust 原生终端组成，没有嵌入网页，也没有复制其他产品的业务实现。
+> 2026-10-08：本示例已迁入 [OneUI 试验台](../examples/performance_lab/README.md) 的 `features/terminal`；历史截图与验证记录保留，最新验收见[统一记录](unified-lab-implementation.md)。
+
+本轮以终端工作区网页原型为布局参考，将重复的区域结构补到 OneUI SDK。示例位于 `examples/performance_lab/terminal`，仍由 `.one` + C++ ViewModel + Rust 原生终端组成，没有嵌入网页，也没有复制其他产品的业务实现。
 
 ![原生深色工作区](images/terminal-workspace-v4/dark-wide.png)
 
@@ -8,10 +10,10 @@
 
 ```powershell
 # 仓库根目录；需要 VS C++、已构建的 Skia、Rust MSVC 工具链
-.\examples\terminal_workbench\build.ps1 -Test
-.\examples\terminal_workbench\build-current\bin\oneui-terminal-workbench.exe --dark
+.\examples\performance_lab\build.ps1 -Test
+.\examples\performance_lab\run.ps1 -Page features/terminal
 # 窄窗口，直接打开文件区域
-.\examples\terminal_workbench\build-current\bin\oneui-terminal-workbench.exe --dark --narrow --scene files
+.\examples\performance_lab\build-current\bin\oneui-performance-lab.exe --page features/terminal --width 640 --height 820
 ```
 
 ## 写区域，不算坐标

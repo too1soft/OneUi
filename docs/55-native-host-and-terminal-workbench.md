@@ -1,5 +1,7 @@
 # NativeHost 与最小终端工作台
 
+> 2026-10-08：本示例已迁入 [OneUI 试验台](../examples/performance_lab/README.md) 的 `features/terminal`；历史截图与验证记录保留，最新验收见[统一记录](unified-lab-implementation.md)。
+
 后续工作区已扩展连接侧栏、文件表格、图表和声明式 Tabs / SplitView，见[阶段56](56-declarative-terminal-workspace.md)。本页保留最小接入阶段的范围与验证记录。
 
 2026-09-28。范围：补通声明式页面中的原生控件接入，验证 C++ 模板与 Rust 控件所有者协作。不是完整终端模拟器，也不是终端工作区清单所有 P0 项的完成声明。
@@ -57,14 +59,14 @@ mount.registerNative("terminal", nativeWidget, foreignOwner);
 
 ## Rust 接入路径
 
-[可运行示例](../examples/terminal_workbench/README.md)选择 **C++ 模板页面 + Rust 原生对象所有者 + 示例 v1 C ABI**。C++ 可执行程序负责窗口，Rust DLL 持有终端、输入框和回调。
+[可运行示例](../examples/performance_lab/README.md)选择 **C++ 模板页面 + Rust 原生对象所有者 + 示例 v1 C ABI**。C++ 可执行程序负责窗口，Rust DLL 持有终端、输入框和回调。
 
 1. Rust 的 `Widget::with_native_handle` 在明确的 unsafe 契约下借出 `OneUiWidget*`。借出的句柄不允许被 C++ 销毁，也不允许跨 UI 线程使用。
 2. C++ `oneui::retainNativeWidget` 从这个有效句柄取得原生对象的共享持有；它是 C++ 适配函数，不是 C ABI。
 3. C++ 创建一个调用 Rust destroy 函数的所有者，并将其传给 `registerNative`。C ABI 从不传 `shared_ptr`、Rust 引用、String 或 trait object。
 4. 主题/标签变化使用同一控件树。销毁外部所有者时，Rust 包装器先注销回调；即使其他 C++ 引用暂时保留像素对象，也不再调用已经释放的 Rust 回调。
 
-示例 ABI v1 的版本只属于 `bridge.h` 中的演示协议，不改变 SDK 全局 C ABI 版本。这里只打通显式命令与原生事件；尚未提供任意 Rust State 自动绑定 `.one`、生成 Rust 源码、通用自定义组件属性/事件注册。
+示例 ABI v1 的版本只属于 `examples/performance_lab/terminal/bridge.hpp` 中的演示协议，不改变 SDK 全局 C ABI 版本。这里只打通显式命令与原生事件；尚未提供任意 Rust State 自动绑定 `.one`、生成 Rust 源码、通用自定义组件属性/事件注册。
 
 ## 本轮布局接口
 
@@ -83,7 +85,7 @@ mount.registerNative("terminal", nativeWidget, foreignOwner);
 构建：Windows、MSVC Release、Rust MSVC、同一个 OneUI DLL，Yoga 布局。运行：
 
 ```powershell
-.\examples\terminal_workbench\build.ps1 -Test
+.\examples\performance_lab\build.ps1 -Test
 ```
 
 四组：GPU/软件 × 浅色宽窗口/深色640px窗口。每组覆盖：

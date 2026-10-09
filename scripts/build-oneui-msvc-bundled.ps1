@@ -1,5 +1,5 @@
 param(
-    [string]$VsInstall = "D:\Program Files\Microsoft Visual Studio\18\Community",
+    [string]$VsInstall = "",
     [ValidateSet("x64", "x86")]
     [string]$Arch = "x64",
     [ValidateSet("Debug", "Release", "RelWithDebInfo")]
@@ -16,9 +16,10 @@ $ErrorActionPreference = "Stop"
 $windowsBuildProfile = Get-OneUIWindowsBuildProfile -MinimumWindows $MinimumWindows
 
 $root = Split-Path -Parent $PSScriptRoot
+$VsInstall = Resolve-OneUIVisualStudio $VsInstall
 $vcvars = Join-Path $VsInstall "VC\Auxiliary\Build\vcvarsall.bat"
-$cmake = Join-Path $VsInstall "Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
-$ninja = Join-Path $VsInstall "Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja\ninja.exe"
+$cmake = Resolve-OneUIBuildTool cmake $VsInstall
+$ninja = Resolve-OneUIBuildTool ninja $VsInstall
 
 if ($BuildDir -eq "") {
     $BuildDir = if ($Arch -eq "x86") { "build/msvc-bundled-static-x86" } else { "build/msvc-bundled-static" }

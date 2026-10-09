@@ -1,18 +1,18 @@
-# OneUI 入门指南
+# OneUI 源码构建指南
 
-第一次体验默认主题、自适应表单和声明式写法，建议先按[README 的三步运行](../README.md#运行-demowindows)，然后打开 [hello.cpp](../examples/declarative/hello.cpp)。完整[学习示例](../examples/declarative/README.md)和[性能实验台](../examples/performance_lab/README.md)已随仓库提供，不需要相邻工程。下文保留底层 SDK、旧 Gallery、C ABI 与 Rust 的接入方式。
+业务项目接入请先使用[预编译 SDK](sdk-quick-start.md)，不需要构建 OneUI 或 Skia。本文用于框架开发及源码排查；当前统一 Demo 为 [OneUI 试验台](../examples/performance_lab/README.md)。下文较早的 Gallery、独立声明式示例和构建目录属于历史参考，以当前仓库入口和 SDK 接入文档为准。
 
 本文介绍 Win32 主线构建；Linux/macOS 的依赖、构建命令、SDK 和待验收边界见
 [原生桌面后端指南](37-native-desktop-backends.md)。C++ 控件、C ABI 和 Rust API 复用同一底座。
 
 ## 1. 当前支持范围
 
-- 可运行平台：Windows / Win32；
+- 桌面后端：Windows / Win32、macOS / Cocoa、Linux X11/Wayland；
 - 语言：C++17、版本化 UTF-8 C ABI、Rust 2021；
 - 渲染：Skia；Win32 默认尝试 OpenGL + Ganesh，失败后回退 raster / GDI；
 - 推荐产品构建：MSVC + vendored static Skia + static MSVC runtime；
 - 开发预设：MSYS2 MINGW64/UCRT64；
-- Linux X11/Wayland 已在 WSLg 构建运行，仍待目标桌面原生验收；Cocoa 源码已接入，尚待 Mac 构建。
+- Linux 已在 WSLg/Xvfb 构建运行，仍待真实桌面完整验收；macOS arm64 已完成原生构建及消费者测试。具体版本、系统基线和未测项见[SDK 平台矩阵](sdk-platforms.md)。
 
 ## 2. 获取源码
 

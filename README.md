@@ -6,13 +6,15 @@
 
 你可以直接组合 C++ 控件，也可以用 `.one` 标签描述页面。两种写法共用 C++ 业务逻辑，最终都是保留在内存中的原生控件树：改状态就更新对应属性，不会每帧重新创建页面。底层使用 Skia 绘制，不需要 JavaScript 或 WebView。
 
-适合设置工具、连接管理器、运维控制台，以及包含大量表格、图表和表单的桌面应用。当前新增开发入口以 **Windows + C++17** 验收；API 仍在演进，不是稳定版承诺。
+适合设置工具、连接管理器、运维控制台，以及包含大量表格、图表和表单的桌面应用。当前提供 Windows、macOS arm64 和 Linux x64 的预编译预览 SDK；API 仍在演进，不是稳定版承诺。[各平台支持与验收范围](docs/sdk-platforms.md)。
+
+**业务项目优先使用预编译 SDK。** 按[接入指南](docs/sdk-quick-start.md)下载匹配版本，通过 CMake 或 Rust 绑定直接链接；无须在每个项目中编译 OneUI 或 Skia。版本锁与用户缓存支持多个项目复用。[官网部署与下载服务](docs/portal-deployment.md)提供内嵌文档的 Go 单程序。
 
 现在可以直接组合导航、列表＋详情和底部固定操作的设置页，并选择标准／柔和视觉预设。运行 `./examples/performance_lab/run.ps1 -Layouts`，或看[完整页面组合教程](docs/52-layout-recipes-and-presets.md)。
 
 最近的阴影优化实测：同一 GPU 效果场景的平均绘制 **1.09→0.62ms**、内容 P95 **12.81→0.95ms**、工作集 **170→109MiB**；软件路径保持不变。[环境、原始数据与限制](docs/52-layout-recipes-and-presets.md#最终同机实测2026-09-28)。
 
-原生连接工作区：导航栏、稳定 ID 标签、终端分屏、可收起文件区和监控页签，支持浅色/深色与窄窗口。`.one` 写页面，Rust 持有终端；连接、命令和指标为本地模拟。运行 `./examples/terminal_workbench/build.ps1 -Test -Run`（额外需要 Rust MSVC 工具链）。[体验步骤与源码入口](examples/terminal_workbench/README.md) · [工作区快速布局与验收](docs/57-workspace-layout-components.md)。
+OneUI 试验台统一展示布局、性能与桌面能力。终端工作区位于“功能 / 终端与日志”：稳定 ID 标签、终端分屏、模拟文件、监控与日志支持浅深主题及窄窗口，Rust 持有终端对象。运行 `./examples/performance_lab/build.ps1 -Test`，再运行 `./examples/performance_lab/run.ps1 -Page features/terminal`（Demo 需要 Rust 工具链，独立 SDK 不需要）。[试验台入口](examples/performance_lab/README.md) · [迁移和验收状态](docs/unified-lab-implementation.md)。
 
 `Workspace` 声明页面区域，`DockPanel` 声明面板头／正文／页脚，`ToolButton` 统一工具按钮样式；共用 C++／`.one` 入口，不必手工计算位置。
 
@@ -40,7 +42,9 @@
 
 以上是仓库示例实际生成的原生客户端截图。更多[窄窗口与错误状态截图](docs/40-declarative-stage-validation.md#截图)，以及[可复现的截图脚本](examples/performance_lab/capture-gallery.ps1)。
 
-## 运行 Demo（Windows）
+## 从源码开发与运行 Demo（Windows）
+
+下面的完整工具链只用于开发 OneUI 或修改试验台。业务程序接入请先看[预编译 SDK](docs/sdk-quick-start.md)。
 
 需要 Git、Python 3、PowerShell，以及 Visual Studio / Build Tools 的“使用 C++ 的桌面开发”（包含 Windows SDK、CMake、Ninja）。示例要求 CMake 3.20+。**首次下载和编译 Skia 最耗时；以后修改页面只需增量构建。** 不必安装 Node.js。
 

@@ -6,10 +6,11 @@ param(
 $ErrorActionPreference = "Stop"
 
 . (Join-Path $PSScriptRoot "runtime-dependencies.ps1")
+. (Join-Path $PSScriptRoot "windows-build-profile.ps1")
 
 $root = Split-Path -Parent $PSScriptRoot
-$toolchainRoot = "C:\msys64\$Toolchain"
-$toolchainBin = Join-Path $toolchainRoot "bin"
+$toolchainBin = Resolve-OneUIMsysBin $Toolchain
+$toolchainRoot = Split-Path -Parent $toolchainBin
 $objdump = Join-Path $toolchainBin "objdump.exe"
 $exe = Join-Path $root "build\$Toolchain\examples\gallery\oneui_gallery.exe"
 $oneuiDll = Join-Path $root "build\$Toolchain\oneui.dll"

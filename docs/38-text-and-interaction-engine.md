@@ -192,6 +192,13 @@ C++ 消费者需与头文件一起重编译，C ABI 及 Rust 调用方式不变�
 
 ### Label 实际文字尺寸审计
 
+`TextOptions::letterSpacing` 指定逻辑像素字距，支持负值；
+`TextOptions::tabularNumbers` 启用字体的 OpenType `tnum` 特性。
+二者均进入布局缓存键，并由 SkParagraph 统一执行测量、命中与绘制。
+Label 提供 `setLetterSpacing` / `setTabularNumbers`；非有限字距不接受。
+字体没有 `tnum` 特性时仍使用字体自身字形，不人为缩放或补空格。
+新增 C++ 结构字段后需要重编译 C++ 消费者；C ABI 结构未扩展。
+
 布局快照的 Label 节点增加 `naturalTextSize`、`paintFontSize`、
 `paintFontWeight` 和 `textAlign`。自然尺寸沿用该 Label 的字体族、字号、字重、
 富文本跨度及 DPI，但关闭换行和省略，以判断文字是否真的放得下；仅比较控件

@@ -1,20 +1,22 @@
 param(
     [string]$SdkRoot = "dist/OneUI-SDK-msvc-bundled-static",
-    [string]$VsInstall = "D:\Program Files\Microsoft Visual Studio\18\Community",
+    [string]$VsInstall = "",
     [string]$BuildDir = "build/sdk-consumer",
     [ValidateSet("x64", "x86")]
     [string]$Arch = "x64"
 )
 
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot 'windows-build-profile.ps1')
+$VsInstall = Resolve-OneUIVisualStudio $VsInstall
 
 $root = Split-Path -Parent $PSScriptRoot
 $sdkPath = Join-Path $root $SdkRoot
 $buildPath = Join-Path $root $BuildDir
 $sourcePath = Join-Path $buildPath "src"
 $vcvars = Join-Path $VsInstall "VC\Auxiliary\Build\vcvarsall.bat"
-$cmake = "C:\msys64\mingw64\bin\cmake.exe"
-$ninja = "C:\msys64\mingw64\bin\ninja.exe"
+$cmake = Resolve-OneUIBuildTool cmake $VsInstall
+$ninja = Resolve-OneUIBuildTool ninja $VsInstall
 
 foreach ($path in @($sdkPath, $vcvars, $cmake, $ninja)) {
     if (!(Test-Path $path)) {
@@ -22,10 +24,7 @@ foreach ($path in @($sdkPath, $vcvars, $cmake, $ninja)) {
     }
 }
 
-if (Test-Path $buildPath) {
-    Remove-Item -LiteralPath $buildPath -Recurse -Force
-}
-
+# Reuse the configured consumer build; CMake rebuilds changed source in place.
 New-Item -ItemType Directory -Force -Path $sourcePath | Out-Null
 
 $sdkForCMake = (Resolve-Path $sdkPath).Path.Replace("\", "/")
