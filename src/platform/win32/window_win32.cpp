@@ -128,6 +128,7 @@ using rendering::g_primitivePaintTrace;
 constexpr UINT kOneUiRunPostedCallbacks = WM_APP + 1;
 constexpr UINT kOneUiFinishWindowStatePaint = WM_APP + 2;
 constexpr UINT kOneUiDeferredFullPaint = WM_APP + 3;
+constexpr UINT kOneUiFlushInvalidations = WM_APP + 4;
 constexpr UINT kOneUiDpiChanged = 0x02E0;
 constexpr UINT_PTR kOneUiAnimationTimer = 0x4f10;
 constexpr UINT_PTR kOneUiInteractivePaintTimer = 0x4f11;
@@ -451,8 +452,13 @@ public:
         }
         ensureCreated();
         if (hwnd_) {
-            SetFocus(hwnd_);
-            updateImePosition();
+            if (GetFocus() != hwnd_) {
+                SetFocus(hwnd_);
+            }
+            // The focused widget's caret is only known after the next layout,
+            // and the IME round trip must not delay the frame that shows the
+            // focus change. Paint positions the IME once it has laid out.
+            imePositionAfterPaint_ = true;
         }
         requestRedraw();
         return true;
@@ -856,7 +862,44 @@ public:
     void requestRedraw() override {
         if (internal::activeFrameProfile) ++tracePaintInvalidations_;
         if (hwnd_) {
-            InvalidateRect(hwnd_, nullptr, FALSE);
+            queueInvalidation(nullptr);
+        }
+    }
+
+    // Widget invalidations arrive by the hundred when a pane remounts, and
+    // each InvalidateRect is a win32k call that can wait on the session-wide
+    // USER lock (20-50 ms observed while a new console host started). They
+    // are merged here and submitted once per message turn; anything that
+    // paints or reads the update region submits the pending rect first.
+    void queueInvalidation(const RECT* rect) {
+        if (rect) {
+            if (!invalidateAll_) {
+                if (invalidationPending_) {
+                    UnionRect(&pendingInvalidation_, &pendingInvalidation_, rect);
+                } else {
+                    pendingInvalidation_ = *rect;
+                }
+            }
+        } else {
+            invalidateAll_ = true;
+        }
+        if (!invalidationPending_) {
+            invalidationPending_ = true;
+            if (!PostMessageW(hwnd_, kOneUiFlushInvalidations, 0, 0)) {
+                submitInvalidations();
+            }
+        }
+    }
+
+    void submitInvalidations() {
+        if (!invalidationPending_) {
+            return;
+        }
+        invalidationPending_ = false;
+        const bool all = invalidateAll_;
+        invalidateAll_ = false;
+        if (hwnd_) {
+            InvalidateRect(hwnd_, all ? nullptr : &pendingInvalidation_, FALSE);
         }
     }
 
@@ -1641,7 +1684,11 @@ private:
         case WM_ERASEBKGND:
             return 1;
         case WM_PAINT:
+            submitInvalidations();
             paint();
+            return 0;
+        case kOneUiFlushInvalidations:
+            submitInvalidations();
             return 0;
         case oneui::kTrayCallbackMessage:
             switch (LOWORD(lParam)) {
@@ -1972,7 +2019,7 @@ private:
             return 0;
         case WM_IME_STARTCOMPOSITION:
             beginImeComposition();
-            updateImePosition();
+            updateImePosition(true);
             return content_ && content_->textInputState().drawsPreedit ? 0 : DefWindowProcW(hwnd_, message, wParam, lParam);
         case WM_IME_COMPOSITION:
             return dispatchImeComposition(wParam, lParam);
@@ -1984,7 +2031,7 @@ private:
             return content_ && content_->textInputState().drawsPreedit ? 0 : DefWindowProcW(hwnd_, message, wParam, lParam);
         case WM_IME_SETCONTEXT:
             if (content_ && content_->textInputState().drawsPreedit) lParam &= ~ISC_SHOWUICOMPOSITIONWINDOW;
-            updateImePosition();
+            updateImePosition(true);
             return DefWindowProcW(hwnd_, message, wParam, lParam);
         case WM_DESTROY:
             return 0;
@@ -2645,7 +2692,7 @@ private:
             return;
         }
 
-        InvalidateRect(hwnd_, &dirty, FALSE);
+        queueInvalidation(&dirty);
     }
 
     void requestInteractiveRedraw() {
@@ -2818,6 +2865,7 @@ private:
             if (swapped) {
                 EndPaint(hwnd_, &paintStruct);
                 recordPaint(width, height, fullPaint, allocatedSurface, surfaceMs, currentTimeMs() - paintStartMs);
+                flushDeferredImePosition();
                 finishDiagnostics();
                 return;
             }
@@ -2899,6 +2947,7 @@ private:
 
         EndPaint(hwnd_, &paintStruct);
         recordPaint(width, height, fullPaint, allocatedSurface, surfaceMs, currentTimeMs() - paintStartMs);
+        flushDeferredImePosition();
         finishDiagnostics();
     }
 
@@ -3313,6 +3362,7 @@ private:
         if (!hwnd_) {
             return;
         }
+        submitInvalidations();
         RECT updateRect{};
         if (GetUpdateRect(hwnd_, &updateRect, FALSE)) {
             UpdateWindow(hwnd_);
@@ -3672,7 +3722,14 @@ private:
         return clientPreedit || (flags & GCS_RESULTSTR) ? 0 : DefWindowProcW(window, WM_IME_COMPOSITION, wParam, flags);
     }
 
-    void updateImePosition() {
+    void flushDeferredImePosition() {
+        if (imePositionAfterPaint_) {
+            imePositionAfterPaint_ = false;
+            updateImePosition();
+        }
+    }
+
+    void updateImePosition(bool force = false) {
         const auto alive = callbackWindowAlive_;
         if (imeActive_ && !imeTargetCurrent()) cancelImeComposition();
         if (!alive->load(std::memory_order_acquire)) return;
@@ -3687,10 +3744,20 @@ private:
         const LONG right = static_cast<LONG>(std::lround((logical.x + logical.width) * scale));
         const LONG bottom = static_cast<LONG>(std::lround((logical.y + logical.height) * scale));
 
+        // Key presses and every mouse event re-report the caret. Each report
+        // is a round trip into the IME (milliseconds with some Chinese IMEs),
+        // so only a moved caret or a new IME context sends one.
+        const RECT caret{left, top, right, bottom};
+        if (!force && imeRectSent_ && EqualRect(&caret, &lastImeRect_)) {
+            return;
+        }
+
         HIMC context = ImmGetContext(hwnd_);
         if (!context) {
             return;
         }
+        lastImeRect_ = caret;
+        imeRectSent_ = true;
 
         COMPOSITIONFORM composition{};
         composition.dwStyle = CFS_POINT;
@@ -3929,6 +3996,12 @@ private:
     bool gpuInitializationAttempted_ = false;
     bool gpuAvailable_ = false;
     bool nvidiaDriver_ = false;
+    bool imePositionAfterPaint_ = false;
+    bool invalidationPending_ = false;
+    bool invalidateAll_ = false;
+    RECT pendingInvalidation_{};
+    bool imeRectSent_ = false;
+    RECT lastImeRect_{};
     bool swapIntervalEnabled_ = false;
     std::shared_ptr<Widget> content_;
     RawKeyHandler rawKeyHandler_;

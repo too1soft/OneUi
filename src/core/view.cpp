@@ -388,7 +388,18 @@ bool View::onFocusChanged(bool focused) {
 }
 
 bool View::isFocusable() const {
-    return interactive() && !focusableChildren().empty();
+    if (!interactive()) {
+        return false;
+    }
+    // Stop at the first focusable child. Building the full list recursed
+    // through every descendant at every level of a focus walk, which made
+    // focusing into a freshly mounted pane cost 15-25 ms in a large tree.
+    for (const auto& child : children_) {
+        if (child->visible() && !child->disabled() && child->tabStop() && child->isFocusable()) {
+            return true;
+        }
+    }
+    return false;
 }
 
 CursorKind View::cursor(Point point) const {
@@ -569,19 +580,20 @@ bool View::requestFocus(Widget* descendant, bool focusVisible) {
         if (!isChildInteractive(child.get())) {
             continue;
         }
+        // No invalidate() here: widgets whose focus state changes invalidate
+        // themselves, and invalidating every ancestor recomputed the paint
+        // bounds of its whole subtree (15-40 ms focusing a new split pane).
         if (child.get() == descendant) {
             if (!descendant->isFocusable()) {
                 return false;
             }
             focusChild(descendant, focusVisible);
-            invalidate();
             return true;
         }
 
         auto* childView = dynamic_cast<View*>(child.get());
         if (childView && childView->requestFocus(descendant, focusVisible)) {
             focusChild(child.get(), focusVisible);
-            invalidate();
             return true;
         }
     }
