@@ -1,0 +1,8 @@
+<template>
+  <SettingsPage title="设置">
+    <FormGrid>
+      <FormRow label="名称"><Input placeholder="输入名称" /></FormRow>
+      <FormRow label="说明"><Input placeholder="输入说明" /></FormRow>
+    </FormGrid>
+  </SettingsPage>
+</template>

@@ -1,0 +1,1040 @@
+{
+  "version": 1,
+  "description": "公开头文件的能力归属和实际迁移状态。归属不等于全部交互已迁移或原生验收完成。",
+  "groups": [
+    {
+      "page": "layout/basic",
+      "name": "Stack / Grid / Wrap / Panel / ScrollView",
+      "headers": [
+        "include/oneui/layout/stack.h",
+        "include/oneui/layout/grid.h",
+        "include/oneui/layout/wrap.h",
+        "include/oneui/layout/panel.h",
+        "include/oneui/layout/scroll_view.h",
+        "include/oneui/geometry.h",
+        "include/oneui/color.h"
+      ],
+      "interactions": [
+        "主轴与空间分配",
+        "网格列数",
+        "缩窄自动换行",
+        "横纵滚动"
+      ],
+      "tests": [
+        "tests/yoga_behavior_tests.cpp",
+        "tests/scroll_view_behavior_tests.cpp"
+      ],
+      "languages": {
+        "cpp": "available",
+        "c": "partial",
+        "rust": "partial",
+        "one": "not_applicable"
+      },
+      "note": "Grid/Wrap 目前只有 C++ 入口；C/Rust 示例演示 Stack。",
+      "migration": "partial",
+      "examples": [
+        {
+          "language": "cpp",
+          "path": "examples/performance_lab/snippets/cpp/basic_layout.cpp"
+        },
+        {
+          "language": "c",
+          "path": "examples/performance_lab/snippets/c/basic_layout.c"
+        },
+        {
+          "language": "rust",
+          "path": "examples/performance_lab/snippets/rust/basic_layout.rs"
+        }
+      ]
+    },
+    {
+      "page": "layout/forms",
+      "name": "表单与自适应",
+      "headers": [
+        "include/oneui/controls/form_field.h",
+        "include/oneui/controls/validation_message.h",
+        "include/oneui/layout/adaptive_panes.h"
+      ],
+      "interactions": [
+        "校验与提交",
+        "窄窗口重排",
+        "焦点与草稿保留"
+      ],
+      "tests": [
+        "examples/performance_lab/gallery_tests.cpp",
+        "examples/performance_lab/workspace_lifecycle_tests.cpp"
+      ],
+      "languages": {
+        "cpp": "available",
+        "c": "partial",
+        "rust": "partial",
+        "one": "available"
+      },
+      "note": "FormGrid/FormRow 组合由 C++ Compose 和 .one 提供。",
+      "migration": "partial",
+      "examples": [
+        {
+          "language": "cpp",
+          "path": "examples/performance_lab/snippets/cpp/forms.cpp"
+        },
+        {
+          "language": "one",
+          "path": "examples/performance_lab/snippets/one/FormSnippet.one"
+        }
+      ]
+    },
+    {
+      "page": "layout/pages",
+      "name": "完整页面组合",
+      "headers": [
+        "include/oneui/layout/app_shell.h",
+        "include/oneui/layout/product_shell.h",
+        "include/oneui/layout/top_bar.h",
+        "include/oneui/layout/sidebar_nav_bridge.h",
+        "include/oneui/controls/nav_item.h",
+        "include/oneui/controls/tile.h",
+        "include/oneui/controls/card.h",
+        "include/oneui/ui_compose.h",
+        "include/oneui/ui_declarative.h",
+        "include/oneui/ui_template_support.h",
+        "include/oneui/ui_component_schema.h"
+      ],
+      "interactions": [
+        "列表/详情往返",
+        "表单提交",
+        "保留选择及焦点",
+        "侧栏响应式",
+        "应用外壳工具栏/状态栏/分段导航",
+        "本地设备筛选与无结果状态",
+        "临时识别码与模拟连接反馈",
+        "主题和窄宽切换保留编辑状态",
+        "导航/图标按钮键盘触发、状态动作方向键选择"
+      ],
+      "tests": [
+        "examples/performance_lab/gallery_tests.cpp",
+        "examples/performance_lab/workspace_lifecycle_tests.cpp",
+        "examples/performance_lab/product_tests.cpp",
+        "bindings/rust/oneui/tests/shell.rs"
+      ],
+      "languages": {
+        "cpp": "available",
+        "c": "partial",
+        "rust": "partial",
+        "one": "available"
+      },
+      "note": "AppShell/TopBar 的 C++、UTF-8 C 与安全 Rust 示例参与编译；高级 Compose/.one 页面组合为 C++。所有连接数据均为本地模拟。",
+      "migration": "partial",
+      "examples": [
+        {
+          "language": "cpp",
+          "path": "examples/performance_lab/snippets/cpp/product.cpp"
+        },
+        {
+          "language": "c",
+          "path": "examples/performance_lab/snippets/c/product.c"
+        },
+        {
+          "language": "rust",
+          "path": "examples/performance_lab/snippets/rust/product.rs"
+        },
+        {
+          "language": "one",
+          "path": "examples/performance_lab/snippets/one/FormSnippet.one"
+        }
+      ]
+    },
+    {
+      "page": "layout/workspace",
+      "name": "工作区分栏",
+      "headers": [
+        "include/oneui/layout/dock_view.h",
+        "include/oneui/layout/split_view.h",
+        "include/oneui/controls/tabs.h",
+        "include/oneui/ui_keyed_tabs.h"
+      ],
+      "interactions": [
+        "分栏方向与比例",
+        "键盘调整及撤销",
+        "标签重排/关闭/编辑",
+        "原终端工作区迁移"
+      ],
+      "tests": [
+        "tests/control_behavior_tests.cpp"
+      ],
+      "languages": {
+        "cpp": "available",
+        "c": "partial",
+        "rust": "partial",
+        "one": "not_applicable"
+      },
+      "note": "基础控件有三种语言入口；完整终端工作区仍在迁移。",
+      "migration": "partial",
+      "examples": [
+        {
+          "language": "cpp",
+          "path": "examples/performance_lab/snippets/cpp/workspace.cpp"
+        }
+      ]
+    },
+    {
+      "page": "layout/docking",
+      "name": "停靠与浮动",
+      "headers": [
+        "include/oneui/layout/dock_model.h",
+        "include/oneui/layout/dock_session.h",
+        "include/oneui/dock_model_c.h",
+        "include/oneui/dock_session_c.h"
+      ],
+      "interactions": [
+        "同一控件拆出/合并",
+        "边缘分栏",
+        "拖放取消及回滚",
+        "宿主关闭与所有者保留"
+      ],
+      "tests": [
+        "tests/dock_session_tests.cpp",
+        "bindings/rust/oneui/tests/dock_session.rs",
+        "tests/dock_gesture_tests.cpp"
+      ],
+      "languages": {
+        "cpp": "available",
+        "c": "available",
+        "rust": "available",
+        "one": "not_applicable"
+      },
+      "note": "DockSession 与共享模型有 C++/C/Rust；原 Rust 手势模型尚待提升。 共享手势命中与浮动窗口主题同步已接入；14 项 Rust 布局测试覆盖兼容门面。",
+      "migration": "partial",
+      "examples": [
+        {
+          "language": "cpp",
+          "path": "examples/performance_lab/snippets/cpp/docking.cpp"
+        },
+        {
+          "language": "c",
+          "path": "examples/performance_lab/snippets/c/docking.c"
+        },
+        {
+          "language": "rust",
+          "path": "examples/performance_lab/snippets/rust/docking.rs"
+        }
+      ]
+    },
+    {
+      "page": "performance/overview",
+      "name": "综合性能",
+      "headers": [
+        "include/oneui/platform/dpi.h"
+      ],
+      "interactions": [
+        "固定原场景",
+        "绘制与回调采样",
+        "负载切换"
+      ],
+      "tests": [
+        "examples/performance_lab/renderer_tests.cpp"
+      ],
+      "languages": {
+        "cpp": "available",
+        "c": "partial",
+        "rust": "partial",
+        "one": "not_applicable"
+      },
+      "note": "原场景 CLI 独立运行；普通页面不承担自动基准。",
+      "migration": "partial",
+      "examples": [
+        {
+          "language": "cpp",
+          "path": "examples/performance_lab/snippets/cpp/renderer.cpp"
+        }
+      ]
+    },
+    {
+      "page": "performance/charts",
+      "name": "图表",
+      "headers": [
+        "include/oneui/controls/time_series_chart.h",
+        "include/oneui/controls/sparkline.h"
+      ],
+      "interactions": [
+        "追加采样",
+        "暂停及恢复",
+        "隐藏页停止采样"
+      ],
+      "tests": [
+        "tests/control_behavior_tests.cpp"
+      ],
+      "languages": {
+        "cpp": "available",
+        "c": "partial",
+        "rust": "partial",
+        "one": "not_applicable"
+      },
+      "note": "TimeSeriesChart 主要为 C++；Sparkline 有 C/Rust。",
+      "migration": "partial",
+      "examples": [
+        {
+          "language": "cpp",
+          "path": "examples/performance_lab/snippets/cpp/charts.cpp"
+        }
+      ]
+    },
+    {
+      "page": "performance/particles",
+      "name": "图元与批量绘制",
+      "headers": [
+        "include/oneui/canvas.h"
+      ],
+      "interactions": [
+        "不同图元路径",
+        "负载调整",
+        "绘制耗时"
+      ],
+      "tests": [
+        "examples/performance_lab/particle_tests.cpp"
+      ],
+      "languages": {
+        "cpp": "available",
+        "c": "partial",
+        "rust": "partial",
+        "one": "not_applicable"
+      },
+      "note": "Canvas 是 C++ API；不为 C/Rust 展示不存在的绘图接口。",
+      "migration": "partial",
+      "examples": [
+        {
+          "language": "cpp",
+          "path": "examples/performance_lab/snippets/cpp/particles.cpp"
+        }
+      ]
+    },
+    {
+      "page": "performance/lists",
+      "name": "虚拟化",
+      "headers": [
+        "include/oneui/controls/virtual_list.h"
+      ],
+      "interactions": [
+        "万行滚动",
+        "可见区域绘制",
+        "稳定 ID 与选择"
+      ],
+      "tests": [
+        "tests/control_behavior_tests.cpp"
+      ],
+      "languages": {
+        "cpp": "available",
+        "c": "partial",
+        "rust": "partial",
+        "one": "not_applicable"
+      },
+      "note": "虚拟列表有 C++/C/Rust。",
+      "migration": "partial",
+      "examples": [
+        {
+          "language": "cpp",
+          "path": "examples/performance_lab/snippets/cpp/lists.cpp"
+        }
+      ]
+    },
+    {
+      "page": "performance/materials",
+      "name": "文字与材质",
+      "headers": [
+        "include/oneui/text.h",
+        "include/oneui/style.h",
+        "include/oneui/style_adapter.h"
+      ],
+      "interactions": [
+        "渐变与阴影",
+        "段落排版",
+        "材质参数"
+      ],
+      "tests": [
+        "examples/performance_lab/effects_tests.cpp",
+        "tests/text_layout_tests.cpp"
+      ],
+      "languages": {
+        "cpp": "available",
+        "c": "partial",
+        "rust": "partial",
+        "one": "not_applicable"
+      },
+      "note": "底层 Canvas/TextLayout 为 C++；控件样式经 C/Rust 设置。",
+      "migration": "partial",
+      "examples": [
+        {
+          "language": "cpp",
+          "path": "examples/performance_lab/snippets/cpp/materials.cpp"
+        }
+      ]
+    },
+    {
+      "page": "performance/idle",
+      "name": "动效与空闲",
+      "headers": [
+        "include/oneui/animation.h",
+        "include/oneui/effect_transition.h",
+        "include/oneui/style_transition.h",
+        "include/oneui/controls/reveal.h",
+        "include/oneui/ui_motion_diagnostics.h"
+      ],
+      "interactions": [
+        "有限动效",
+        "减少动态效果",
+        "空闲停止重绘"
+      ],
+      "tests": [
+        "examples/performance_lab/motion_tests.cpp"
+      ],
+      "languages": {
+        "cpp": "available",
+        "c": "partial",
+        "rust": "partial",
+        "one": "not_applicable"
+      },
+      "note": "高级动画组合为 C++/.one；C/Rust 可驱动基础控件。",
+      "migration": "partial",
+      "examples": [
+        {
+          "language": "cpp",
+          "path": "examples/performance_lab/snippets/cpp/idle.cpp"
+        }
+      ]
+    },
+    {
+      "page": "performance/renderers",
+      "name": "CPU/GPU 对照",
+      "headers": [
+        "include/oneui/native_interop.h"
+      ],
+      "interactions": [
+        "CPU/GPU 独立子进程",
+        "实际后端及回退",
+        "相同物理尺寸",
+        "取消及子进程回收"
+      ],
+      "tests": [
+        "examples/performance_lab/process_tests.cpp",
+        "tests/desktop_renderer_tests.cpp"
+      ],
+      "languages": {
+        "cpp": "available",
+        "c": "partial",
+        "rust": "partial",
+        "one": "not_applicable"
+      },
+      "note": "原生互操作平台相关；不把 CPU 绘制耗时当作呈现帧率。",
+      "migration": "partial",
+      "examples": [
+        {
+          "language": "cpp",
+          "path": "examples/performance_lab/snippets/cpp/renderer.cpp"
+        }
+      ]
+    },
+    {
+      "page": "performance/stability",
+      "name": "稳定性",
+      "headers": [
+        "include/oneui/subscription.h"
+      ],
+      "interactions": [
+        "场景切换",
+        "有界资源采样",
+        "停止后台任务"
+      ],
+      "tests": [
+        "examples/performance_lab/lifecycle_tests.cpp"
+      ],
+      "languages": {
+        "cpp": "available",
+        "c": "partial",
+        "rust": "partial",
+        "one": "not_applicable"
+      },
+      "note": "短时完成不能替代长时间泄漏验收。",
+      "migration": "partial",
+      "examples": [
+        {
+          "language": "cpp",
+          "path": "examples/performance_lab/snippets/cpp/renderer.cpp"
+        }
+      ]
+    },
+    {
+      "page": "features/controls",
+      "name": "基础控件",
+      "headers": [
+        "include/oneui/controls/button.h",
+        "include/oneui/controls/button_bridge.h",
+        "include/oneui/controls/icon_button.h",
+        "include/oneui/controls/checkbox.h",
+        "include/oneui/controls/switch.h",
+        "include/oneui/controls/radio_group.h",
+        "include/oneui/controls/slider.h",
+        "include/oneui/controls/select.h",
+        "include/oneui/controls/progress_bar.h",
+        "include/oneui/controls/interactive_surface.h",
+        "include/oneui/controls/separator.h"
+      ],
+      "interactions": [
+        "点击/禁用",
+        "选择与键盘",
+        "进度联动",
+        "交互 Begin/Commit/Cancel"
+      ],
+      "tests": [
+        "tests/control_behavior_tests.cpp",
+        "tests/interaction_c_api_tests.cpp"
+      ],
+      "languages": {
+        "cpp": "available",
+        "c": "partial",
+        "rust": "partial",
+        "one": "not_applicable"
+      },
+      "note": "ButtonBridge 是 C++ 产品组合 helper；RadioGroup 的 Rust 入口目前为 raw。",
+      "migration": "partial",
+      "examples": [
+        {
+          "language": "cpp",
+          "path": "examples/performance_lab/snippets/cpp/controls.cpp"
+        },
+        {
+          "language": "c",
+          "path": "examples/performance_lab/snippets/c/controls.c"
+        },
+        {
+          "language": "rust",
+          "path": "examples/performance_lab/snippets/rust/controls.rs"
+        }
+      ]
+    },
+    {
+      "page": "features/text",
+      "name": "文字输入与字体",
+      "headers": [
+        "include/oneui/controls/text_field.h",
+        "include/oneui/controls/text_input_bridge.h",
+        "include/oneui/controls/label.h",
+        "include/oneui/fonts.h"
+      ],
+      "interactions": [
+        "中文/Emoji/双向文字",
+        "选区/撤销/重做",
+        "密码及多行",
+        "字体枚举"
+      ],
+      "tests": [
+        "tests/text_layout_tests.cpp",
+        "tests/system_fonts_tests.cpp"
+      ],
+      "languages": {
+        "cpp": "available",
+        "c": "partial",
+        "rust": "partial",
+        "one": "not_applicable"
+      },
+      "note": "系统 IME 仍须原生验收；TextInputBridge 为 C++ helper。",
+      "migration": "partial",
+      "examples": [
+        {
+          "language": "cpp",
+          "path": "examples/performance_lab/snippets/cpp/text.cpp"
+        },
+        {
+          "language": "c",
+          "path": "examples/performance_lab/snippets/c/text.c"
+        },
+        {
+          "language": "rust",
+          "path": "examples/performance_lab/snippets/rust/text.rs"
+        }
+      ]
+    },
+    {
+      "page": "features/data",
+      "name": "列表/表格/树及重排",
+      "headers": [
+        "include/oneui/controls/list.h",
+        "include/oneui/controls/table.h",
+        "include/oneui/controls/tree_view.h",
+        "include/oneui/selection_model.h",
+        "include/oneui/input/item_drag.h",
+        "include/oneui/layout/reorderable_grid.h"
+      ],
+      "interactions": [
+        "稳定 ID",
+        "多选与范围选择",
+        "展开/折叠",
+        "内部重排与外部 ID 拖放"
+      ],
+      "tests": [
+        "tests/control_behavior_tests.cpp",
+        "tests/interaction_c_api_tests.cpp"
+      ],
+      "languages": {
+        "cpp": "available",
+        "c": "partial",
+        "rust": "partial",
+        "one": "not_applicable"
+      },
+      "note": "SelectionModel 为 C++，C/Rust 通过控件选择接口。",
+      "migration": "partial",
+      "examples": [
+        {
+          "language": "cpp",
+          "path": "examples/performance_lab/snippets/cpp/data.cpp"
+        }
+      ]
+    },
+    {
+      "page": "features/drawing",
+      "name": "图片、图标与 Canvas 绘制",
+      "headers": [
+        "include/oneui/controls/image_view.h",
+        "include/oneui/controls/icon_view.h",
+        "include/oneui/icon.h",
+        "include/oneui/ui_icon_names.h"
+      ],
+      "interactions": [
+        "RGBA 图像",
+        "缩放与双轴对齐",
+        "圆角",
+        "图标",
+        "像素更新、清空与恢复",
+        "曲线、透明度、线性/径向渐变与裁剪"
+      ],
+      "tests": [
+        "tests/control_behavior_tests.cpp",
+        "examples/performance_lab/media_tests.cpp"
+      ],
+      "languages": {
+        "cpp": "available",
+        "c": "partial",
+        "rust": "partial",
+        "one": "not_applicable"
+      },
+      "note": "ImageView 有 C++/C/Rust；Canvas 自绘只有 C++，页面提供真实片段，性能对照见粒子页。",
+      "migration": "partial",
+      "examples": [
+        {
+          "language": "cpp",
+          "path": "examples/performance_lab/snippets/cpp/image.cpp"
+        },
+        {
+          "language": "c",
+          "path": "examples/performance_lab/snippets/c/image.c"
+        },
+        {
+          "language": "rust",
+          "path": "examples/performance_lab/snippets/rust/image.rs"
+        }
+      ]
+    },
+    {
+      "page": "features/notifications",
+      "name": "弹层/Toast/系统通知",
+      "headers": [
+        "include/oneui/notification.h",
+        "include/oneui/controls/toast_host.h",
+        "include/oneui/controls/toast.h",
+        "include/oneui/controls/dialog.h",
+        "include/oneui/controls/popup.h",
+        "include/oneui/controls/state_view.h",
+        "include/oneui/controls/badge.h",
+        "include/oneui/controls/icon_badge.h",
+        "include/oneui/controls/status_strip.h",
+        "include/oneui/layout/overlay_host.h"
+      ],
+      "interactions": [
+        "权限查询/请求",
+        "同 ID 替换/撤销",
+        "默认点击/操作按钮",
+        "Toast 队列/超时/关闭",
+        "弹层焦点约束",
+        "弹层外部点击放行/关闭/阻止",
+        "Esc 策略与状态绑定",
+        "位置翻转/嵌套焦点恢复",
+        "切页关闭弹层并保留编辑状态"
+      ],
+      "tests": [
+        "tests/application_lifecycle_tests.cpp",
+        "tests/win32_notification_activation_tests.cpp",
+        "tests/overlay_host_behavior_tests.cpp",
+        "tests/overlay_host_lifetime_tests.cpp",
+        "examples/performance_lab/popup_tests.cpp"
+      ],
+      "languages": {
+        "cpp": "available",
+        "c": "available",
+        "rust": "available",
+        "one": "not_applicable"
+      },
+      "note": "系统服务及权限依赖平台；Accepted 不等于已显示。 三种 Popup 模式、状态绑定、位置翻转和双层焦点已迁入；C/C++/Rust 片段参与编译。C/Rust 暂无独立 Esc 策略 setter。",
+      "migration": "partial",
+      "examples": [
+        {
+          "language": "cpp",
+          "path": "examples/performance_lab/snippets/cpp/notifications.cpp"
+        },
+        {
+          "language": "c",
+          "path": "examples/performance_lab/snippets/c/notifications.c"
+        },
+        {
+          "language": "rust",
+          "path": "examples/performance_lab/snippets/rust/notifications.rs"
+        }
+      ]
+    },
+    {
+      "page": "features/menus",
+      "name": "菜单与托盘",
+      "headers": [
+        "include/oneui/native_menu.h",
+        "include/oneui/controls/menu.h",
+        "include/oneui/command.h"
+      ],
+      "interactions": [
+        "应用菜单栏",
+        "多级/勾选/单选",
+        "托盘隐藏恢复",
+        "快捷键"
+      ],
+      "tests": [
+        "tests/native_menu_tests.cpp",
+        "tests/native_menu_c_api_tests.cpp"
+      ],
+      "languages": {
+        "cpp": "available",
+        "c": "partial",
+        "rust": "partial",
+        "one": "not_applicable"
+      },
+      "note": "Mac 顶部菜单；Windows/Linux 窗口内菜单。托盘依赖桌面环境。",
+      "migration": "partial",
+      "examples": [
+        {
+          "language": "cpp",
+          "path": "examples/performance_lab/snippets/cpp/menus.cpp"
+        }
+      ]
+    },
+    {
+      "page": "features/windows",
+      "name": "窗口行为",
+      "headers": [
+        "include/oneui/platform/window.h",
+        "include/oneui/platform/window_state.h",
+        "include/oneui/platform/monitor.h",
+        "include/oneui/controls/window_title_bar.h",
+        "include/oneui/layout/title_bar_bridge.h",
+        "include/oneui/title_bar_presentation_c.h"
+      ],
+      "interactions": [
+        "实际/请求状态",
+        "全屏/置顶/调整尺寸",
+        "尺寸约束/位置恢复",
+        "关闭取消/异步确认"
+      ],
+      "tests": [
+        "tests/application_lifecycle_tests.cpp",
+        "tests/desktop_input_tests.cpp"
+      ],
+      "languages": {
+        "cpp": "available",
+        "c": "partial",
+        "rust": "partial",
+        "one": "not_applicable"
+      },
+      "note": "系统可能拒绝位置、聚焦及窗口状态请求；Wayland 限制需呈现。",
+      "migration": "partial",
+      "examples": [
+        {
+          "language": "cpp",
+          "path": "examples/performance_lab/snippets/cpp/windows.cpp"
+        }
+      ]
+    },
+    {
+      "page": "features/multiwindow",
+      "name": "应用生命周期/多窗口",
+      "headers": [
+        "include/oneui/application.h",
+        "include/oneui/modal_session.h"
+      ],
+      "interactions": [
+        "退出策略",
+        "所属窗口/异步模态",
+        "类型化共享状态",
+        "关闭后无失效投递",
+        "通知冷启动"
+      ],
+      "tests": [
+        "tests/application_lifecycle_tests.cpp",
+        "tests/dock_session_tests.cpp"
+      ],
+      "languages": {
+        "cpp": "available",
+        "c": "available",
+        "rust": "available",
+        "one": "not_applicable"
+      },
+      "note": "三种语言 API 已有；真实通知点击与跨屏/IME 验收仍待完成。",
+      "migration": "partial",
+      "examples": [
+        {
+          "language": "cpp",
+          "path": "examples/performance_lab/snippets/cpp/application.cpp"
+        },
+        {
+          "language": "c",
+          "path": "examples/performance_lab/snippets/c/application.c"
+        },
+        {
+          "language": "rust",
+          "path": "examples/performance_lab/snippets/rust/application.rs"
+        }
+      ]
+    },
+    {
+      "page": "features/files",
+      "name": "剪贴板与文件交互",
+      "headers": [
+        "include/oneui/clipboard.h"
+      ],
+      "interactions": [
+        "复制粘贴",
+        "打开/保存/目录",
+        "系统文件拖入"
+      ],
+      "tests": [
+        "tests/file_drop_tests.cpp",
+        "tests/x11_file_drop_tests.cpp"
+      ],
+      "languages": {
+        "cpp": "available",
+        "c": "partial",
+        "rust": "partial",
+        "one": "not_applicable"
+      },
+      "note": "对话框与剪贴板依赖原生桌面会话。",
+      "migration": "partial",
+      "examples": [
+        {
+          "language": "cpp",
+          "path": "examples/performance_lab/snippets/cpp/files.cpp"
+        }
+      ]
+    },
+    {
+      "page": "features/terminal",
+      "name": "终端与日志",
+      "headers": [
+        "include/oneui/controls/terminal_view.h",
+        "include/oneui/controls/log_view.h"
+      ],
+      "interactions": [
+        "四组 Rust 所有者终端；关闭重开保留原对象和内容",
+        "主副终端分屏、可见文字搜索、模拟命令与日志",
+        "内存文件多选、筛选、目录、上传下载和删除",
+        "窄屏终端／文件／监控／日志切换；分栏与折叠保留比例",
+        "显式采样、离页取消、返回保留状态且不自动恢复采样"
+      ],
+      "tests": [
+        "tests/terminal_view_behavior_tests.cpp",
+        "examples/performance_lab/terminal_tests.cpp",
+        "examples/performance_lab/terminal_dock_tests.cpp"
+      ],
+      "languages": {
+        "cpp": "available",
+        "c": "partial",
+        "rust": "partial",
+        "one": "not_applicable"
+      },
+      "note": "终端工作区已迁入本页：C++ 模板宿主 + Rust 控件所有者，所有连接、文件和监控均为内存模拟。Windows、Mac 与 Linux/Xvfb 已通过对象状态、100 次循环、跨窗所有者迁移和隐藏页生命周期回归；实际系统输入法、跨屏 DPI 与打包后装载仍需独立验收。",
+      "migration": "partial",
+      "examples": [
+        {
+          "language": "cpp",
+          "path": "examples/performance_lab/snippets/cpp/terminal.cpp"
+        },
+        {
+          "language": "c",
+          "path": "examples/performance_lab/snippets/c/terminal.c"
+        },
+        {
+          "language": "rust",
+          "path": "examples/performance_lab/snippets/rust/terminal.rs"
+        },
+        {
+          "language": "one",
+          "path": "examples/performance_lab/snippets/one/TerminalSnippet.one"
+        }
+      ]
+    },
+    {
+      "page": "features/remote",
+      "name": "远程画面与输入",
+      "headers": [
+        "include/oneui/controls/realtime_frame_view.h",
+        "include/oneui/controls/remote_input_region.h",
+        "include/oneui/platform/key_mapping.h"
+      ],
+      "interactions": [
+        "RGBA/BGRA 全帧与共享缓冲所有者",
+        "局部更新与 NV12 明确拒绝",
+        "缩放与远程坐标映射",
+        "默认/隐藏/位图光标",
+        "文字、原始键码、滚轮和释放事件",
+        "按需播放，离页停止且不自动重启"
+      ],
+      "tests": [
+        "tests/control_behavior_tests.cpp",
+        "tests/desktop_input_tests.cpp",
+        "examples/performance_lab/remote_tests.cpp",
+        "examples/performance_lab/remote_page_tests.cpp"
+      ],
+      "languages": {
+        "cpp": "available",
+        "c": "partial",
+        "rust": "partial",
+        "one": "not_applicable"
+      },
+      "note": "全部数据本地模拟，无网络和解码器。NV12 是保留枚举，目前提交会被拒绝；共享所有者、局部更新、播放离页停止和输入释放已验证。真实系统 IME 输入仍需原生验收。",
+      "migration": "partial",
+      "examples": [
+        {
+          "language": "cpp",
+          "path": "examples/performance_lab/snippets/cpp/remote.cpp"
+        },
+        {
+          "language": "c",
+          "path": "examples/performance_lab/snippets/c/remote.c"
+        },
+        {
+          "language": "rust",
+          "path": "examples/performance_lab/snippets/rust/remote.rs"
+        }
+      ]
+    },
+    {
+      "page": "features/reactive",
+      "name": "状态绑定与异步",
+      "headers": [
+        "include/oneui/reactive.h",
+        "include/oneui/ui_reactive.h",
+        "include/oneui/ui_native_host.h",
+        "include/oneui/ui_app.h",
+        "include/oneui/ui_declarative_app.h"
+      ],
+      "interactions": [
+        "State/Computed/Binding",
+        "UI dispatcher",
+        "取消后台任务",
+        "NativeHost 所有权"
+      ],
+      "tests": [
+        "tests/reactive_lifetime_tests.cpp"
+      ],
+      "languages": {
+        "cpp": "available",
+        "c": "partial",
+        "rust": "partial",
+        "one": "not_applicable"
+      },
+      "note": "C++ 响应式层与 Rust 自有状态；C 使用 setter/callback。",
+      "migration": "partial",
+      "examples": [
+        {
+          "language": "cpp",
+          "path": "examples/performance_lab/snippets/cpp/reactive.cpp"
+        }
+      ]
+    },
+    {
+      "page": "features/theme",
+      "name": "主题与本地化",
+      "headers": [
+        "include/oneui/style_sheet.h",
+        "include/oneui/localization.h",
+        "include/oneui/material3_tokens.h",
+        "include/oneui/ui_density.h",
+        "include/oneui/ui_native_theme.h",
+        "include/oneui/ui_theme.h"
+      ],
+      "interactions": [
+        "浅深主题",
+        "密度",
+        "本地化",
+        "继承与状态样式"
+      ],
+      "tests": [
+        "tests/style_scope_tests.cpp"
+      ],
+      "languages": {
+        "cpp": "available",
+        "c": "partial",
+        "rust": "partial",
+        "one": "not_applicable"
+      },
+      "note": "高层主题组合为 C++/.one；C/Rust 可设置样式与本地化。",
+      "migration": "partial",
+      "examples": [
+        {
+          "language": "cpp",
+          "path": "examples/performance_lab/snippets/cpp/theme.cpp"
+        }
+      ]
+    },
+    {
+      "page": "features/diagnostics",
+      "name": "运行时/无障碍/诊断/互操作",
+      "headers": [
+        "include/oneui/widget.h",
+        "include/oneui/view.h",
+        "include/oneui/developer_tools.h",
+        "include/oneui/error.h",
+        "include/oneui/export.h",
+        "include/oneui/oneui.h",
+        "include/oneui/oneui_c_api.h",
+        "include/oneui/capi/base.h",
+        "include/oneui/capi/controls.h",
+        "include/oneui/capi/data.h",
+        "include/oneui/capi/layout.h",
+        "include/oneui/capi/remote.h",
+        "include/oneui/capi/window.h",
+        "include/oneui/ui.h",
+        "include/oneui/ui_dev.h",
+        "include/oneui/ui_focus.h",
+        "include/oneui/ui_layout_diagnostics.h"
+      ],
+      "interactions": [
+        "焦点链与语义",
+        "布局快照",
+        "开发工具",
+        "ABI/错误语义",
+        "稳定 UI 所有权"
+      ],
+      "tests": [
+        "tests/developer_tools_tests.cpp",
+        "tests/c_api_behavior_tests.cpp"
+      ],
+      "languages": {
+        "cpp": "available",
+        "c": "partial",
+        "rust": "partial",
+        "one": "not_applicable"
+      },
+      "note": "开发工具可在 SDK 构建时关闭；原生辅助技术须分别验收。",
+      "migration": "partial",
+      "examples": [
+        {
+          "language": "cpp",
+          "path": "examples/performance_lab/snippets/cpp/diagnostics.cpp"
+        }
+      ]
+    }
+  ]
+}

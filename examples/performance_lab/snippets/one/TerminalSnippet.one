@@ -1,0 +1,6 @@
+<template>
+  <Column>
+    <Text>终端由宿主注册；此处只负责布局与所有者保留。</Text>
+    <NativeHost host="terminal" grow="1" basis="0"/>
+  </Column>
+</template>

@@ -23,9 +23,16 @@ struct RendererSoak {
   void sample(oneui::Window& window,const Model& model,double seconds) {
     auto info=window.rendererInfo();const double interval=seconds-previousSeconds;
     if(interval<=0)return;
-    PROCESS_MEMORY_COUNTERS_EX memory{};memory.cb=sizeof(memory);DWORD handles=0;
-    if(!GetProcessMemoryInfo(GetCurrentProcess(),reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&memory),sizeof(memory)) ||
-       !GetProcessHandleCount(GetCurrentProcess(),&handles)) throw std::runtime_error("Stability counters unavailable");
+    const auto memory = labProcessMemory();
+#ifdef _WIN32
+    DWORD handles=0;
+    if (!GetProcessHandleCount(GetCurrentProcess(), &handles))
+      throw std::runtime_error("Stability counters unavailable");
+    const auto gdi=GetGuiResources(GetCurrentProcess(),GR_GDIOBJECTS);
+    const auto user=GetGuiResources(GetCurrentProcess(),GR_USEROBJECTS);
+#else
+    const double handles=std::numeric_limits<double>::quiet_NaN(), gdi=handles, user=handles;
+#endif
     const auto caches=window.rendererMemoryInfo();const auto paints=info.paints-previous.paints;
     const double divisor=std::max<std::uint64_t>(1,paints),cpu=labProcessCpuMs();
     csv<<std::setprecision(10)<<seconds<<','<<interval<<','<<backendName(info.backend)<<','
@@ -34,7 +41,7 @@ struct RendererSoak {
       <<(info.submitMs-previous.submitMs)/divisor<<','
       <<(cpu-previousCpu)/interval/10/std::max(1u,std::thread::hardware_concurrency())<<','
       <<memory.WorkingSetSize/1048576.0<<','<<memory.PrivateUsage/1048576.0<<','<<caches.gpuCacheBytes/1048576.0<<','
-      <<handles<<','<<GetGuiResources(GetCurrentProcess(),GR_GDIOBJECTS)<<','<<GetGuiResources(GetCurrentProcess(),GR_USEROBJECTS)<<','
+      <<handles<<','<<gdi<<','<<user<<','
       <<model.meshDraws-previousDraws<<','<<model.meshFallbacks-previousFallbacks<<','
       <<window.clientSize().width<<','<<window.clientSize().height<<','<<window.dpiScale()<<'\n';
     csv.flush();previous=info;previousSeconds=seconds;previousCpu=cpu;

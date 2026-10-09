@@ -1,0 +1,12 @@
+[package]
+name = "oneui-lab-examples"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+oneui = { path = "../oneui" }
+
+[lib]
+test = false
+doctest = false

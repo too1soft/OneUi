@@ -38,6 +38,7 @@ inline ParticleConstants particleConstants(int i) {
           i % 11 == 0 ? ORANGE : i % 3 == 0 ? ACCENT : color(0x4b9f98)};
 }
 struct Model {
+  explicit Model(bool monitorActive = true) : telemetry(monitorActive) {}
   ParticleMode particleMode = DEFAULT_PARTICLE_MODE;
   std::uint64_t meshDraws = 0, meshFallbacks = 0, meshVertices = 0;
   const char* meshReason = "not-requested";
@@ -172,7 +173,11 @@ public:
         }
         bool meshDrawn = false;
         if (m.particleMode == ParticleMode::Mesh) {
+#if defined(_WIN32) || defined(ONEUI_LAB_MESH_AVAILABLE)
           const auto result = oneui::rendering::experimental::tryCircleMesh(c,particleRects_.data(),particleRects_.size());
+#else
+          const oneui::rendering::experimental::CircleMeshResult result{false, "mesh-experiment-not-enabled-on-this-platform", 0, 0};
+#endif
           m.meshReason=result.reason;meshDrawn=result.drawn;
           if(meshDrawn){m.meshDraws+=result.draws;m.meshVertices+=result.vertices;}
           else {++m.meshFallbacks;m.meshLastFallback=result.reason;}

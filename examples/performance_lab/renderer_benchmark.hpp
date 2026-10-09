@@ -4,23 +4,19 @@
 
 inline const char* backendName(oneui::RenderBackend backend) {
   switch (backend) {
+  case oneui::RenderBackend::Metal: return "metal";
   case oneui::RenderBackend::OpenGL: return "opengl";
   case oneui::RenderBackend::Software: return "raster";
   default: return "unknown";
   }
-}
-inline double labProcessCpuMs() {
-  FILETIME created{}, ended{}, kernel{}, user{};
-  if (!GetProcessTimes(GetCurrentProcess(), &created, &ended, &kernel, &user))
-    throw std::runtime_error("GetProcessTimes failed");
-  return (Monitor::ticks(kernel) + Monitor::ticks(user)) / 10000.0;
 }
 struct RendererBenchmark {
   bool active = false;
   Clock::time_point started;
   double cpuStart = 0;
   oneui::RendererInfo initial;
-  std::vector<double> contentSamples;
+  std::vector<double> contentSamples, frameIntervals;
+  Clock::time_point previousPaint{};
   std::uint64_t initialMeshDraws=0, initialMeshFallbacks=0, initialMeshVertices=0;
   void begin(oneui::Window& window, std::uint64_t meshDraws, std::uint64_t meshFallbacks, std::uint64_t meshVertices) {
     initialMeshDraws=meshDraws;initialMeshFallbacks=meshFallbacks;initialMeshVertices=meshVertices;
@@ -28,6 +24,7 @@ struct RendererBenchmark {
     cpuStart = labProcessCpuMs();
     started = Clock::now();
     contentSamples.clear();
+    frameIntervals.clear(); previousPaint={};
     active = true;
   }
   void finish(oneui::Window& window, const std::filesystem::path& output,
@@ -40,10 +37,7 @@ struct RendererBenchmark {
     const auto info = window.rendererInfo();
     const auto paints = info.paints - initial.paints;
     const double divisor = std::max<std::uint64_t>(1, paints);
-    PROCESS_MEMORY_COUNTERS_EX memory{};
-    memory.cb = sizeof(memory);
-    if (!GetProcessMemoryInfo(GetCurrentProcess(), reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&memory), sizeof(memory)))
-      throw std::runtime_error("GetProcessMemoryInfo failed");
+    const auto memory = labProcessMemory();
     const auto caches = window.rendererMemoryInfo();
     std::filesystem::create_directories(output);
     std::ofstream out(output / "renderer-performance.txt");
@@ -78,6 +72,13 @@ struct RendererBenchmark {
         << "\npaint_mean_ms=" << (info.paintMs - initial.paintMs) / divisor
         << "\ncontent_mean_ms=" << (info.contentMs - initial.contentMs) / divisor
         << "\ncontent_p95_ms=" << summarize(contentSamples).p95
+        << "\ncontent_p99_ms=" << summarize(contentSamples).p99
+        << "\nframe_interval_mean_ms=" << summarize(frameIntervals).mean
+        << "\nframe_interval_p95_ms=" << summarize(frameIntervals).p95
+        << "\nframe_interval_p99_ms=" << summarize(frameIntervals).p99
+        << "\nframe_callback_hz=" << summarize(frameIntervals).fps
+        << "\nphysical_width=" << window.clientSize().width * window.dpiScale()
+        << "\nphysical_height=" << window.clientSize().height * window.dpiScale()
         << "\nsubmit_mean_ms=" << (info.submitMs - initial.submitMs) / divisor
         << "\nblit_mean_ms=" << (info.blitMs - initial.blitMs) / divisor
         << "\nwidth=" << window.clientSize().width << "\nheight=" << window.clientSize().height
@@ -91,7 +92,12 @@ struct RendererBenchmark {
     RendererBenchmark& owner;
     bool enabled;
     Clock::time_point start;
-    explicit PaintSample(RendererBenchmark& value) : owner(value), enabled(value.active), start(enabled ? Clock::now() : Clock::time_point{}) {}
+    explicit PaintSample(RendererBenchmark& value) : owner(value), enabled(value.active), start(enabled ? Clock::now() : Clock::time_point{}) {
+      if (enabled) {
+        if (owner.previousPaint != Clock::time_point{}) owner.frameIntervals.push_back(ms(start-owner.previousPaint));
+        owner.previousPaint=start;
+      }
+    }
     ~PaintSample() { if (enabled) owner.contentSamples.push_back(ms(Clock::now() - start)); }
   };
 };

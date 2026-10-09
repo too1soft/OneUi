@@ -1,0 +1,14 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="net.too1.oneui.lab">
+  <uses-feature android:glEsVersion="0x00030000" android:required="true" />
+  <application android:label="OneUI 试验台" android:theme="@android:style/Theme.Material.Light.NoActionBar"
+      android:allowBackup="false" android:debuggable="true" android:extractNativeLibs="true"
+      android:enableOnBackInvokedCallback="true">
+    <activity android:name=".LabActivity" android:exported="true" android:launchMode="singleTop"
+        android:configChanges="orientation|screenSize|keyboardHidden">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+      </intent-filter>
+    </activity>
+  </application>
+</manifest>

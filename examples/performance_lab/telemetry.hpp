@@ -1,15 +1,17 @@
 #pragma once
-#include <windows.h>
+#include "platform_metrics.hpp"
 #include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cmath>
 #include <deque>
+#include <condition_variable>
+#include <mutex>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <numeric>
-#include <psapi.h>
+
 #include <sstream>
 #include <thread>
 #include <vector>
@@ -34,52 +36,41 @@ inline Summary summarize(std::vector<double> values) {
   return s;
 }
 struct Monitor {
-  std::atomic<bool> stop{false};
+  std::atomic<bool> stop{true};
   std::atomic<double> cpu{0}, memory{0};
   std::thread worker;
-  static unsigned long long ticks(FILETIME t) {
-    return (static_cast<unsigned long long>(t.dwHighDateTime) << 32) |
-           t.dwLowDateTime;
+  std::mutex mutex;
+  std::condition_variable wake;
+  explicit Monitor(bool active = true) { setActive(active); }
+  void setActive(bool active) {
+    if(active && worker.joinable())return;
+    if(!active) { stop=true;wake.notify_all();if(worker.joinable())worker.join();return; }
+    stop=false;
+    worker=std::thread([this]{
+      double previous=0;auto previousTime=Clock::now();bool first=true;
+      const double cores=std::max(1u,std::thread::hardware_concurrency());
+      while(!stop.load()) {
+        const auto now=Clock::now();
+        try {
+          const double total=labProcessCpuMs();
+          if(!first)cpu=(total-previous)/ms(now-previousTime)/cores*100.;
+          previous=total;previousTime=now;first=false;
+          memory=labProcessMemory().WorkingSetSize/1048576.;
+        } catch(...) {cpu=memory=std::numeric_limits<double>::quiet_NaN();first=true;}
+        std::unique_lock<std::mutex> lock(mutex);
+        wake.wait_for(lock,std::chrono::seconds(1),[this]{return stop.load();});
+      }
+    });
   }
-  Monitor()
-      : worker([this] {
-          unsigned long long previous = 0;
-          auto previousTime = Clock::now();
-          bool first = true;
-          const double cores =
-              std::max(1u, std::thread::hardware_concurrency());
-          while (!stop.load()) {
-            FILETIME created, exit, kernel, user;
-            const auto now = Clock::now();
-            if (GetProcessTimes(GetCurrentProcess(), &created, &exit, &kernel,
-                                &user)) {
-              auto total = ticks(kernel) + ticks(user);
-              if (!first)
-                cpu = (total - previous) / 10000. / ms(now - previousTime) /
-                      cores * 100.;
-              previous = total;
-              previousTime = now;
-              first = false;
-            }
-            PROCESS_MEMORY_COUNTERS info{};
-            info.cb = sizeof(info);
-            if (GetProcessMemoryInfo(GetCurrentProcess(), &info, sizeof(info)))
-              memory = info.WorkingSetSize / 1048576.;
-            for (int i = 0; i < 10 && !stop.load(); ++i)
-              std::this_thread::sleep_for(std::chrono::milliseconds(100));
-          }
-        }) {}
-  ~Monitor() {
-    stop = true;
-    if (worker.joinable())
-      worker.join();
-  }
+  ~Monitor(){setActive(false);}
 };
+
 struct Sample {
   double dt, cpu, memory;
 };
 struct Telemetry {
   Monitor monitor;
+  explicit Telemetry(bool monitorActive = true) : monitor(monitorActive) {}
   std::deque<double> recent;
   std::vector<Sample> capture;
   Clock::time_point previous{}, started = Clock::now(), recordStart{};
@@ -125,10 +116,9 @@ struct Telemetry {
                              int view, int particles, int points, float speed,
                              float width, float height, float dpi) {
     std::filesystem::create_directories(output);
-    const auto stamp = std::chrono::duration_cast<std::chrono::milliseconds>(
-                           std::chrono::system_clock::now().time_since_epoch())
-                           .count();
-    auto csv = output / ("oneui-" + std::to_string(stamp) + ".csv");
+    // A recording replaces the current result; user-selected output directories
+    // remain supported without accumulating a new pair on every click.
+    auto csv = output / "oneui-current.csv";
     std::ofstream f(csv);
     f.exceptions(std::ios::failbit | std::ios::badbit);
     f << "frame,frame_interval_ms,process_cpu_percent_total_machine,working_"

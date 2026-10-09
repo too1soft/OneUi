@@ -1,6 +1,34 @@
-# OneUI 性能实验台
+# OneUI 试验台
 
-同一个 Windows 原生应用里体验图表、粒子、虚拟列表、连接管理和默认组件。所有连接与保存均为本地模拟，不访问服务器。初次使用先按[仓库 README](../../README.md#运行-demowindows)准备依赖。
+终端工作区现位于 `features/terminal`，不再需要独立终端 Demo。
+它复用 Rust 所有者、四组模拟会话、文件/监控区域，并增加日志；
+页面离开时停止采样和模拟传输。C++、C、Rust 与 `.one` 接入片段均参与编译检查。
+跨窗终端所有权可在 `layout/docking` 的“Rust 终端会话”体验。
+
+针对该迁移的测试目标为 `oneui-lab-terminal-tests`；Windows `build.ps1 -Test` 会运行。
+Mac/Linux 复用已构建 SDK，以相同 CMake 目标构建 Rust 动态库与 Demo。
+
+统一入口包含“布局 / 性能 / 功能”两级导航，默认进入基础布局。Windows、Mac、Linux 复用同一套页面；所有终端、远程画面与连接流程使用本地模拟数据。迁移和原生验收仍在进行，当前不能视为全部上线就绪。详见[能力目录](../../docs/unified-lab-capabilities.md)和[本轮验收记录](../../docs/unified-lab-implementation.md)。
+
+Android、iOS、原生 HarmonyOS 的最终验收也以这套试验台为准，按全部能力组和关键交互对齐 PC 完整度。
+手机/平板调整导航和布局，但保留同一页面 ID、控件与业务状态；当前 27 页及后续新增能力均不能静默省略。
+系统限制须有证据并由用户验收，基础 GPU/生命周期测试程序不算移动试验台完成。
+完整条件见[移动端统一试验台验收基线](../../docs/mobile-support.md#最终验收基线统一试验台与-pc-同等完整度)。
+
+Android 实验宿主已复用共享 `layout/basic` 操作区与 Skia GPU 控件，入口在 `mobile/android`。
+目前尚无完整导航/代码面板，其余页面与 IME/无障碍仍待接入；不能视为移动端验收完成。
+构建、debug APK 和模拟器回归见[Android 接入记录](../../docs/mobile-support.md#android-统一试验台基础布局接入)。
+
+```powershell
+.\examples\performance_lab\run.ps1 -Build
+.\examples\performance_lab\run.ps1 -Page layout/docking
+.\examples\performance_lab\run.ps1 -Page features/multiwindow
+.\examples\performance_lab\run.ps1 -Page performance/renderers
+```
+
+可执行文件也接受 `--page <稳定页面 ID>`。代码面板直接嵌入 `snippets/` 中参与构建的源码；C++、UTF-8 C、Rust 以及适用的 `.one` 均有编译检查。完整 Demo 构建需要 Rust 工具链，单独构建 SDK 不依赖它。使用 `generate-lab-catalog.py --strict` 检查尚未完成的发布覆盖。
+
+原性能场景参数保持兼容，并使用独立场景排除导航与代码面板开销。以下命令明确进入兼容模式；不要与 `-Page` 混用。
 
 在仓库根目录执行：
 
@@ -108,3 +136,69 @@ CPU 百分比是整机逻辑处理器归一化后的进程 CPU；paint 是 CPU �
 `./run.ps1 -Effects -DevTools` 开启 SDK 自带诊断面板。F12 显隐、Ctrl+F12 导出工作目录的 `oneui-devtools.json`；正常使用即可发现慢绘制、动画延迟及 Reveal 倒退。它独立于 `-Dev` 样式热更新，也不依赖回归脚本。[完整接入与限制](../../docs/54-built-in-developer-tools.md)。
 
 字体：正式实验台和动效回归窗口统一指定 `Microsoft YaHei UI`。该 Demo 目前使用系统字体，没有随包默认中文字体；SDK 支持注册应用字体数据。
+
+
+## macOS 实机运行
+
+2026-10-08 已在 Apple M1 / macOS 15.5 上编译运行。复用与源码头文件匹配的 Release OneUI
+原生构建目录，不重新编译 Skia。先使 CMake、Ninja 可用，再执行：
+
+```sh
+cmake -S examples/performance_lab -B "$HOME/.cache/oneui-release-review/performance-lab" -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DONEUI_EXISTING_BUILD_DIR="$HOME/.cache/oneui-release-review/build"
+cmake --build "$HOME/.cache/oneui-release-review/performance-lab" --target oneui-performance-lab
+open "$HOME/.cache/oneui-release-review/performance-lab/oneui-performance-lab.app" --args \
+  --renderer gpu --output "$HOME/.cache/oneui-release-review/performance-lab/results"
+```
+
+此 `.app` 是依赖上述现有 dylib 的开发程序，不是可独立分发的安装包。Mac 的 CPU 采样使用
+`getrusage`，内存显示 Mach resident size（RSS）；Windows private commit、GDI、USER 和句柄数
+在 Mac 报表中标为 `nan`，不能跨平台直接比较。实际渲染后端可显示 Metal / Apple M1。
+实验性 circle mesh 已接入 Mac，并通过 Metal 像素对比；但当前短测没有证明稳定的 CPU 收益，默认仍使用保序批量绘制回退。
+本次通过遥测自检并启动交互窗口，不代表完成长时间性能对比或全部页面人工验收。
+
+
+## Mac 性能回归（2026-10-08）
+
+已修复指标字体在每次绘制时切换继承环境、导致隐藏指标也不断触发重绘的问题；使用控件自身的
+字体覆盖属性保留等宽字体。Mac 事件循环按剩余动画截止时间等待，并读取所在显示器的刷新周期，
+避免每轮工作后重新等待完整的 16 ms。高刷新率及跨屏切换仍需相应设备验收。
+
+统一采样入口为 `benchmark-native.py`，使用固定 `current-case` 目录，成功后只保留 baseline/candidate
+汇总和二进制哈希，不为每轮复制应用。关闭其他 Demo 后，给出匹配的 `--exe`、`--library`、
+`--output` 与 `--phase baseline|candidate`；默认每个场景预热 3 秒、采样 5 秒、正反顺序各一轮，
+包含标准/高压的静止页、表格滚动、图表与粒子。`--min-frame-hz 55` 可用于当前 60 Hz 环境的回归门槛；
+候选的静止页如果持续重绘，采样会直接失败。报告包含物理尺寸、每帧 CPU 耗时、P95/P99 回调间隔、
+后端、内存和缓存，回调频率不等于显示呈现帧数。跨平台比较必须另行对齐实际物理尺寸和负载。
+
+私有 mesh 实验需要 SDK 配置 `ONEUI_ENABLE_CIRCLE_MESH_EXPERIMENT=ON`，Demo 同时配置
+`ONEUI_LAB_MESH_AVAILABLE=ON`；两个选项默认均关闭。新增 Metal 测试验证 GPU/raster 图形与窗口尺寸变化，
+以及 18 组粒子规模、透明叠加、缩放和裁剪组合。Metal 小数像素裁剪明确回退，避免边缘缺失；
+当前 18 组 mesh/回退结果与参考绘制逐像素相同。默认 SDK 不自动启用这项私有实验。
+全局 MSAA 候选未采用：虽然曲线 CPU 绘制耗时降低，但粒子成本及画质一致性不满足本轮门槛。
+实测数据和边界见 `docs/37-native-desktop-backends.md` 文末。
+
+
+### Mac 路径采样与缓存验证（2026-10-08）
+
+对当前进程使用 macOS `sample` 验证：动态图表主要耗时在复杂描边及
+`SoftwarePathRenderer`；粒子主要耗时在逐个圆形的 Ganesh 指令构建/合批。
+这不代表整个窗口使用软件渲染，窗口后端仍是 Apple M1 Metal。
+
+共享路径适配器现在保留最多 16 个、各不超过 512 点/512 命令的小型路径，
+按完整几何相等复用原生路径身份，帮助静态图形复用 Skia 缓存。公开命令数组
+直接修改后不会复用旧几何；大路径绕过缓存。该机制不保证所有动画的总 CPU 降低。
+
+Mac 私有粒子 mesh 对小数裁剪增加安全内区检查：仅在整批粒子连同抗锯齿边缘
+完全位于裁剪框内时继续批量绘制；触及边界仍整体回退。27 组裁剪/缩放/数量
+对比通过，不构成所有变换、裁剪形状或所有 GPU 的保证。默认 mesh 仍关闭。
+
+复杂描边的局部 MSAA 和 mesh 顶点写入试验没有证明稳定的总 CPU 收益，均未保留。
+固定的 baseline/candidate CSV 与环境哈希记录本轮对比；上一轮汇总表保留在
+`docs/37-native-desktop-backends.md`。不能将 CPU 墙钟绘制时间当成 GPU 执行时间或功耗。
+
+
+`--desktop-menus` 打开统一桌面菜单示例：场景和负载使用单选菜单，实时运行使用勾选项，
+支持快捷键和托盘菜单。Mac 显示系统顶部菜单，Windows/Linux 显示窗口内菜单。
+该参数默认关闭，以保持性能基准的原始布局和测试条件。
