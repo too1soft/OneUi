@@ -1,27 +1,6 @@
+#include "internal/view_profile.h"
 #include "runtime.h"
 namespace oneui::views {
-namespace {
-void applyDelta(std::vector<std::string> &keys, const Delta &d) {
-    check(d.index <= keys.size(), ONEUI_VIEW_STALE_CHANGE, "Delta index");
-    if (d.kind == ONEUI_LIST_INSERT) {
-        for (const auto &key : d.keys)
-            check(std::find(keys.begin(), keys.end(), key) == keys.end(), ONEUI_VIEW_BAD_KEY,
-                  "Inserted key exists");
-        keys.insert(keys.begin() + size_t(d.index), d.keys.begin(), d.keys.end());
-        return;
-    }
-    check(d.count <= keys.size() - size_t(d.index), ONEUI_VIEW_STALE_CHANGE, "Delta range");
-    check(std::equal(d.keys.begin(), d.keys.end(), keys.begin() + size_t(d.index)),
-          ONEUI_VIEW_STALE_CHANGE, "Delta key range mismatch");
-    if (d.kind == ONEUI_LIST_UPDATE)
-        return;
-    keys.erase(keys.begin() + size_t(d.index), keys.begin() + size_t(d.index + d.count));
-    if (d.kind == ONEUI_LIST_MOVE) {
-        check(d.to <= keys.size(), ONEUI_VIEW_STALE_CHANGE, "MOVE destination");
-        keys.insert(keys.begin() + size_t(d.to), d.keys.begin(), d.keys.end());
-    }
-}
-} // namespace
 void Runtime::auditListIdentity(const std::shared_ptr<Scope> &scope, uint32_t property,
                                 const ListState &state, const std::vector<std::string> &keys) {
     std::map<std::string, std::shared_ptr<Scope>> old;
@@ -33,6 +12,7 @@ void Runtime::auditListIdentity(const std::shared_ptr<Scope> &scope, uint32_t pr
         int result;
         {
             Callback guard(*this, Phase::Read);
+            ONEUI_VIEW_TIME(Vm);
             result = scope->table.list_key(scope->vm, property, i, &borrowed);
             if (!result)
                 key = Value::copy(borrowed);
@@ -46,6 +26,7 @@ void Runtime::auditListIdentity(const std::shared_ptr<Scope> &scope, uint32_t pr
         OneUiViewModelRef ref{};
         {
             Callback guard(*this, Phase::Read);
+            ONEUI_VIEW_TIME(Vm);
             result = scope->table.list_acquire(scope->vm, property, i, &ref);
         }
         const bool equal = ref.vm == found->second->vm && ref.vtable == found->second->identity;
@@ -67,12 +48,14 @@ ListState &Runtime::list(const std::shared_ptr<Scope> &scope, uint32_t property)
 }
 void Runtime::refreshList(const std::shared_ptr<Scope> &scope, uint32_t property,
                           ListState &state) {
+    ONEUI_VIEW_TIME(Delta);
     alive();
     const auto &p = image.schema.model(scope->table.model_id).property(property);
     OneUiViewListInfo info{};
     int result;
     {
         Callback guard(*this, Phase::Read);
+            ONEUI_VIEW_TIME(Vm);
         result = scope->table.list_info(scope->vm, property, &info);
     }
     alive();
@@ -80,26 +63,9 @@ void Runtime::refreshList(const std::shared_ptr<Scope> &scope, uint32_t property
     check(info.length <= 100000, ONEUI_VIEW_LIMIT, "List item limit");
     check(!state.initialized || info.revision >= state.revision, ONEUI_VIEW_STALE_CHANGE,
           "List revision decreased");
+    if (state.initialized && !state.reset && refreshDelta(scope, property, state, info)) return;
     auto keys = state.keys;
     bool reset = state.reset || !state.initialized;
-    if (!reset) {
-        auto revision = state.revision;
-        try {
-            for (const auto &d : state.pending) {
-                check(d.before == revision, ONEUI_VIEW_STALE_CHANGE, "Delta revision gap");
-                applyDelta(keys, d);
-                revision = d.after;
-            }
-            check(revision == info.revision && keys.size() == info.length, ONEUI_VIEW_STALE_CHANGE,
-                  "Delta final snapshot mismatch");
-#ifndef NDEBUG
-            auditListIdentity(scope, property, state, keys);
-#endif
-        } catch (const Failure &e) {
-            fail(e.result, e.what());
-            reset = true;
-        }
-    }
     if (reset) {
         keys.clear();
         std::set<std::string> unique;
@@ -108,6 +74,7 @@ void Runtime::refreshList(const std::shared_ptr<Scope> &scope, uint32_t property
             Value key;
             {
                 Callback guard(*this, Phase::Read);
+            ONEUI_VIEW_TIME(Vm);
                 result = scope->table.list_key(scope->vm, property, i, &borrowed);
                 if (!result)
                     key = Value::copy(borrowed);
@@ -133,6 +100,7 @@ void Runtime::refreshList(const std::shared_ptr<Scope> &scope, uint32_t property
             OneUiViewModelRef ref{};
             {
                 Callback guard(*this, Phase::Read);
+            ONEUI_VIEW_TIME(Vm);
                 result = scope->table.list_acquire(scope->vm, property, i, &ref);
             }
             if (closing && result == 0 && ref.vm && ref.vtable && ref.vtable->release) {
@@ -218,6 +186,9 @@ void Runtime::refreshList(const std::shared_ptr<Scope> &scope, uint32_t property
                 retired.push_back(oldItem);
             else
                 closeScope(oldItem);
+    state.applied = state.pending;
+    state.lastReset = reset;
+    ++state.serial;
     state.keys = std::move(keys);
     state.items = std::move(next);
     state.revision = info.revision;

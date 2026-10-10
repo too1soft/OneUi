@@ -33,6 +33,7 @@ pub fn run(
             for slot in 0..2 {
                 let ir = (round + slot) % 2 == 0;
                 let name = if ir { "ir" } else { "manual" };
+                std::env::set_var("ONEUI_PROFILE_CASE", format!("{name}-{}", group));
                 let start = Instant::now();
                 super::diagnostics::reset();
                 let window = Window::new(&WindowOptions {

@@ -59,6 +59,11 @@ public:
     void setOnCellAction(std::function<void(int, int)> callback);
     void setRows(std::vector<std::vector<std::wstring>> rows);
     void setRichRows(std::vector<std::vector<TableCell>> rows);
+    // Structural deltas preserve selection, keyboard anchor and pixel scroll.
+    // MOVE destination is measured after removal, matching OneView's protocol.
+    bool insertRows(std::size_t index, std::vector<std::vector<std::wstring>> rows);
+    bool eraseRows(std::size_t index, std::size_t count);
+    bool moveRows(std::size_t index, std::size_t count, std::size_t to);
     bool updateRow(std::size_t index, std::vector<std::wstring> row);
     bool updateRichRow(std::size_t index, std::vector<TableCell> row);
     const std::vector<TableColumn>& columns() const;
@@ -107,6 +112,7 @@ public:
     AccessibilityInfo accessibilityInfo() const override;
 
 private:
+    void remapRowsState(const std::vector<int>& oldToNew);
     TableStyle resolvedStyle() const;
     float columnWidth(int index, float remainingWidth, int flexibleCount) const;
     float effectiveRowHeight(float contentHeight) const;

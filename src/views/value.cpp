@@ -1,4 +1,6 @@
 #include "runtime.h"
+#include "internal/unicode.h"
+#include "internal/view_profile.h"
 #include <cmath>
 #include <limits>
 namespace oneui::views {
@@ -78,7 +80,14 @@ void setScalar(ui::Mount &factory, ui::Element &e, const std::string &name, cons
         check(std::abs(v.number) <= std::numeric_limits<float>::max(), ONEUI_VIEW_TYPE,
               "Component float range");
         factory.set(e, name, float(v.number));
-    } else
-        factory.set(e, name, v.text);
+    } else if (name == "class")
+        factory.set(e, name, v.text); // Class tokens stay UTF-8 in StyleRegistry.
+    else {
+        // IR strings and foreign values have already passed strict UTF-8
+        // validation. Reuse the native C ABI converter without a locale facet.
+        std::wstring text;
+        { ONEUI_VIEW_TIME(Conversion); text = unicode::fromUtf8(v.text); }
+        factory.set(e, name, text);
+    }
 }
 } // namespace oneui::views

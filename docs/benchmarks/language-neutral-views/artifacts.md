@@ -1,9 +1,9 @@
-# WP3 final artifact audit
+# WP3 list-performance artifact audit
 
 Budget: 30 GiB through the S6 checkpoint, explicitly approved by Claude.
 
-Readable build artifacts: 21,111,523,487 bytes (19.66 GiB).
-Free E drive: 66,153,598,976 bytes. Eight prior ACL fixtures are unreadable; their sizes are unknown.
+Readable build artifacts: 21,817,885,544 bytes (20.32 GiB).
+Free E drive: 65,446,723,584 bytes. Eight prior ACL fixtures are unreadable; their sizes are unknown.
 
 No new CMake configuration directory. capture cache was not reconfigured.
 Retain capture, cargo-target and codex-views until normal-terminal final review.
@@ -14,21 +14,21 @@ The original OneUI worktree remains read-only; its build tree is a dependency in
 | Absolute path | Readable bytes |
 |---|---:|
 | E:\project\byname\oneui\build | 16,368,840,570 |
-| E:\project\byname\oneui-views\build | 4,742,682,917 |
+| E:\project\byname\oneui-views\build | 5,449,044,974 |
 
 ## Blocked reproducible cleanup
 
 Automatic approval review rejected deletion with `blocked by policy`; no alternate deletion tool was tried.
 Manual deletion requires the relevant compiler/linker/test to be stopped and an account with access.
-The two new diagnostic directories are superseded by the final raw samples and counters in this report directory.
+The two reused diagnostic directories are superseded by the final raw samples and counters in this report directory.
 
 | Absolute path | Bytes | Reason |
 |---|---:|---|
 | E:\project\byname\oneui-views\build\capture\wp3-obj | 51450957 | automatic approval review: blocked by policy |
 | E:/project/byname/oneui-views/build/capture/wp3-menu-probe.exe | 11385344 | Completed diagnostic copy; removal rejected by automatic approval review: blocked by policy |
 | E:/project/byname/oneui-views/build/capture/wp3-menu-probe.obj | 2994878 | Completed diagnostic copy; removal rejected by automatic approval review: blocked by policy |
-| E:/project/byname/oneui-views/build/codex-views/diagnostics | 1782323 | Superseded benchmark diagnostic artifacts; native PowerShell deletion rejected by automatic approval review (blocked by policy). No retry through another tool. |
-| E:/project/byname/oneui-views/build/codex-views/bench-smoke | 890226 | Superseded benchmark diagnostic artifacts; native PowerShell deletion rejected by automatic approval review (blocked by policy). No retry through another tool. |
+| E:/project/byname/oneui-views/build/codex-views/diagnostics | 1782302 | Superseded benchmark diagnostic artifacts; native PowerShell deletion rejected by automatic approval review (blocked by policy). No retry through another tool. |
+| E:/project/byname/oneui-views/build/codex-views/bench-smoke | 1548880 | Superseded benchmark diagnostic artifacts; native PowerShell deletion rejected by automatic approval review (blocked by policy). No retry through another tool. |
 | E:/project/byname/oneui-views/build/capture/wp3-menu-probe.cpp | 9012 | Completed diagnostic copy; removal rejected by automatic approval review: blocked by policy |
 | E:/project/byname/oneui-views/build/capture/wp3-menu-probe.rsp | 6504 | Completed diagnostic copy; removal rejected by automatic approval review: blocked by policy |
 | E:/project/byname/oneui-views/build/capture/wp3-menu-probe.py | 1525 | Completed diagnostic copy; removal rejected by automatic approval review: blocked by policy |
@@ -65,3 +65,7 @@ The 58 top-level ILK files deleted by Claude have not been recreated by this tas
 - E:\project\byname\oneui-views\build\capture\viewc-tests\viewc-9qim1tkb: [WinError 5] 拒绝访问。: 'E:\\project\\byname\\oneui-views\\build\\capture\\viewc-tests\\viewc-9qim1tkb'
 
 New compiler and watcher fixtures use automatic cleanup. Formal raw CSV/JSON and two PNGs are requested deliverables, not temporary duplicates.
+
+This run removed five temporary screenshot/CSS experiment files and six superseded replay helper/response files from build/codex-views.
+The readable starting total was 24,584,825,374 bytes; the final total above includes both worktrees.
+Current replay scripts/response files are retained for review and reuse; no new configuration tree was created.

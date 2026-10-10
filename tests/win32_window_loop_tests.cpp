@@ -1,4 +1,7 @@
 #include "oneui/platform/window.h"
+#include "oneui/controls/button.h"
+#include "oneui/view.h"
+#include "support/recording_canvas.h"
 
 #include <windows.h>
 #include <gl/GL.h>
@@ -149,6 +152,40 @@ void testCloseRestoresOtherWindowsGpuContext() {
     primary->close();
 }
 
+void testPreMountStyleAnimationResumes() {
+    expectWorkerFinishes("Pre-mount style animation reaches its target", [](oneui::Window& window) {
+        oneui::setMotionEnabled(true);
+        auto root = std::make_shared<oneui::View>();
+        auto button = std::make_shared<oneui::Button>(L"pre-mount");
+        root->add(button);
+        button->setFrame({0, 0, 100, 32});
+        oneui::ButtonStyleOverride style;
+        style.normal.emplace();
+        style.normal->border = oneui::Color{198, 208, 200};
+        style.normal->transition = oneui::TransitionSpec{100};
+        // The child can schedule through its parent, but the parent has no
+        // window yet. That request cannot reach the native frame pump.
+        button->setStyleOverride(style);
+        window.setContent(root);
+        const auto start = std::chrono::steady_clock::now();
+        bool settled = false;
+        std::function<void(double)> next;
+        next = [&](double) {
+            if (std::chrono::steady_clock::now() - start < std::chrono::milliseconds(350)) {
+                window.requestAnimationFrame(next);
+                return;
+            }
+            oneui::test_support::RecordingCanvas canvas;
+            button->paint(canvas);
+            const auto color = canvas.strokeRects.front().color;
+            settled = color.r == 198 && color.g == 208 && color.b == 200;
+            window.close();
+        };
+        window.requestAnimationFrame(next);
+        return window.run() == 0 && settled;
+    });
+}
+
 } // namespace
 
 int main() {
@@ -160,5 +197,6 @@ int main() {
     testExplicitQuitIsPreserved();
     testSecondaryWindowAnimation();
     testCloseRestoresOtherWindowsGpuContext();
+    testPreMountStyleAnimationResumes();
     return failures == 0 ? 0 : 1;
 }

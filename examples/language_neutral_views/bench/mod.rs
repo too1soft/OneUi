@@ -59,6 +59,7 @@ pub fn run(
     diagnostics::disable_motion();
     #[cfg(feature = "bench-diagnostics")]
     fs::write(directory.join("callback-counters.txt"), "")?;
+    if std::env::var_os("ONEUI_PROFILE_TABLE_ONLY").is_some() { return table::run(directory, count, rounds); }
     let mut raw =
         std::io::BufWriter::new(fs::File::create(directory.join("settings-samples.csv"))?);
     writeln!(raw, "round,path,case,sample,elapsed_ns")?;
@@ -73,6 +74,7 @@ pub fn run(
                 let ir = (round + slot) % 2 == 0;
                 let name = if ir { "ir" } else { "manual" };
                 diagnostics::reset();
+                std::env::set_var("ONEUI_PROFILE_CASE", format!("{name}-{}", case));
                 let start = Instant::now();
                 let window = Window::new(&WindowOptions {
                     title: format!("OneUI paired {name} {case}"),

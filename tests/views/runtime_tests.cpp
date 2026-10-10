@@ -19,6 +19,19 @@ int main(int argc, char **argv) {
             expect(c.vm.reads[c.title] == 2, "no polling");
             expect(c.runtime->hosts.count("terminal") == 1, "empty native host");
             expect(c.runtime->hosts.at("terminal")->naturalSize().width == 0, "empty host size");
+            c.vm.text(c.title, "\xe4\xb8\xad\xf0\x9f\x9a\x80");
+            c.runtime->notify(c.runtime->rootScope, c.title);
+            c.runtime->flush();
+            expect(label->text() == L"\u4e2d\U0001f680", "native converter keeps supplementary Unicode");
+            c.vm.text(c.title, "\xc0\x80");
+            c.runtime->notify(c.runtime->rootScope, c.title);
+            try {
+                c.runtime->flush();
+                expect(false, "invalid UTF8 accepted by converter");
+            } catch (const Failure& e) {
+                expect(e.result == ONEUI_VIEW_TYPE && label->text() == L"\u4e2d\U0001f680",
+                       "UTF8 rejection precedes native conversion");
+            }
             c.runtime->close();
             expect(c.vm.retains == 1 && c.vm.releases == 1, "root lease");
             expect(c.a.retains == c.a.releases && c.b.retains == c.b.releases,

@@ -109,16 +109,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .map_err(|e| format!("{e:?}"))?;
     }
     if let Some(path) = capture {
-        let capture_dispatcher = dispatcher.clone();
-        dispatcher
-            .request_animation_frame_local(move |_| {
-                assert!(
-                    capture_dispatcher.capture_frame_png(&path),
-                    "capture failed"
-                );
-                capture_dispatcher.close().unwrap();
-            })
-            .map_err(|e| format!("{e:?}"))?;
+        presentation::capture_settled(dispatcher.clone(), path, std::time::Instant::now());
     }
     let code = window.run();
     drop(view);

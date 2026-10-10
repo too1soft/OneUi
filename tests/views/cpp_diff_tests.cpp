@@ -24,11 +24,31 @@ template<class T> std::shared_ptr<T> find(const std::shared_ptr<Widget> &widget)
     if(auto view=std::dynamic_pointer_cast<View>(widget))for(auto &child:view->children())if(auto result=find<T>(child))return result;
     return {};
 }
+void buttonBorderDifferential() {
+    DiffVm a,b; Mount legacy,ir;
+    const std::string css="button { background-color:#e7eee8; color:#21302b; padding:8px; border-radius:6px; }";
+    legacy.styles()->replace(css);ir.styles()->replace(css);
+    auto old=build_DiffLegacy(a,legacy),next=build_DiffIr(b,ir);
+    auto left=find<Button>(old.widget),right=find<Button>(next.widget);
+    left->setFrame({0,0,160,40});right->setFrame({0,0,160,40});
+    auto compare=[&](Color color) {
+        test_support::RecordingCanvas x,y;left->paint(x);right->paint(y);
+        check(!left->focusVisible() && !right->focusVisible(),"idle buttons are not focused");
+        check(x.strokeRects.size()==1 && y.strokeRects.size()==1,"idle border is not a focus ring");
+        for(auto c:{x.strokeRects.front().color,y.strokeRects.front().color})
+            check(c.r==color.r && c.g==color.g && c.b==color.b,"legacy/IR idle border color");
+    };
+    compare(colors::Primary); // The native default variant supplies the blue border.
+    legacy.styles()->replace(css+"button { border-color:#c6d0c8; border-width:1px; }");
+    ir.styles()->replace(css+"button { border-color:#c6d0c8; border-width:1px; }");
+    compare({198,208,200});
+}
 int main() {
     try {
         DiffVm a,b;
         Mount oldMount,newMount;
         setMotionEnabled(false);
+        buttonBorderDifferential();
         // Legacy imports lack the caller's CSS scope. Use the same external
         // class rule for that newly-supported CALL case; scoped button rules
         // are still compared against the expanded legacy root below.

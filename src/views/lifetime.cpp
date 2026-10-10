@@ -1,3 +1,4 @@
+#include "internal/view_profile.h"
 #include "runtime.h"
 #include <cstring>
 namespace oneui::views {
@@ -190,6 +191,7 @@ Value Runtime::read(const std::shared_ptr<Scope> &scope, uint32_t id) {
     int result;
     {
         Callback guard(*this, Phase::Read);
+            ONEUI_VIEW_TIME(Vm);
         result = scope->table.get(scope->vm, id, &borrowed);
         if (result == 0)
             owned = Value::copy(borrowed); // Before guard epilogue can release VM.

@@ -817,3 +817,20 @@ S6 是本地模拟设置页，遵循 D8 的行为/数据流同构。性能以同
 小型等价页面及 1,000 行表格配对，避免借更慢整页稀释适配成本；真实 WM_PAINT 返回
 作为后端提交终点，不声称屏幕呈现。完整数据、未达标项与可复现命令保存在
 `docs/benchmarks/language-neutral-views/`；检查点结果以 S4/S5/S6 报告为准。
+
+# WP3 列表性能补充实现（ABI 44）
+
+本次在冻结协议内补齐 D7 的增量记录适配。列表状态保存最近提交的 delta/serial，
+DataTable 按稳定 key 缓存类型化 TableRow、UTF-16、Scope 身份及字段版本；多个消费者
+共享 VM 的 get 缓存，但各自比较字段版本，不依赖读取后会清除的 dirty 标志。
+精确 delta 每个被刷新属性一次 list_info，已有 key 不重新 list_key/list_acquire；
+RESET 和 debug 身份审计例外保持原约定。内部 Table 的插入/删除/移动接口不进入 C ABI，
+维持选择、独立键盘焦点、Shift 锚点和像素滚动；删除超出范围时夹取滚动值。
+热重载复用 Table 时重建类型化缓存和观察关系。
+v-for 使用列表来源与提交 serial 区分结构变化和子属性通知；后者复用行树，只更新脏后代。
+严格校验过的文本复用原生 C ABI 的 Unicode 转换器，class token 保持 UTF-8。
+
+纯记录 Scope 仍保留 connect：冻结协议允许独立通知 Row.cells/StringItem.value，
+不能仅因没有子 Widget 就丢弃通知。连接只随租约建立/断开；未来若另立只接受父列表
+通知的记录契约，才能省去它们。本次性能不以新增契约或 bulk ABI 为前提。
+测量、回归、最终性能表见 [列表性能修正报告](benchmarks/language-neutral-views/listperf.md)。

@@ -3,6 +3,7 @@ name = "oneui-view-tests"
 version = "0.1.0"
 edition = "2021"
 publish = false
+autotests = false
 
 [dependencies]
 oneui = { path = "../oneui" }

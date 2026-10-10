@@ -1,5 +1,6 @@
 #include "fixture.h"
 using namespace viewtest;
+void tableRecordTests(const std::filesystem::path&);
 namespace {
 #ifdef NDEBUG
 constexpr int debugProbe = 0;
@@ -202,6 +203,7 @@ int main(int argc, char **argv) {
                    "debug probe balances lease and preserves original VM");
             c.runtime->close();
         }
+        tableRecordTests(std::filesystem::path(argv[1]).parent_path()/"TableRecords.oneview");
         std::cout << "8 list scenarios passed\n";
         return 0;
     } catch (const std::exception &e) {

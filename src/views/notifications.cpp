@@ -1,3 +1,4 @@
+#include "internal/view_profile.h"
 #include "runtime.h"
 namespace oneui::views {
 void Runtime::observe(const std::shared_ptr<Scope> &scope, uint32_t id) {
@@ -13,12 +14,15 @@ void Runtime::observe(const std::shared_ptr<Scope> &scope, uint32_t id) {
         observers.push_back(node);
 }
 void Runtime::mark(const std::shared_ptr<Scope> &scope, uint32_t id) {
+    ++scope->versions[id];
     auto found = scope->observers.find(id);
     if (found == scope->observers.end())
         return;
-    for (auto &weak : found->second)
+    for (auto &weak : found->second) {
+        if (auto node=weak.lock(); node && node->tableCache) node->recordDirty.insert(scope.get());
         for (auto node = weak.lock(); node; node = node->parent.lock())
             node->dirty = true;
+    }
 }
 void Runtime::enqueue() {
     if (building || closing || scheduled)
@@ -141,6 +145,7 @@ void Runtime::notifyList(const std::shared_ptr<Scope> &scope, uint32_t property,
     enqueue();
 }
 void Runtime::flush() {
+    ONEUI_VIEW_TIME(Flush);
     for(unsigned pass=0;pass<32;++pass) {
         flushPass();
         auto writes=std::move(modelWrites);modelWrites.clear();

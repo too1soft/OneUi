@@ -71,6 +71,7 @@ set(ONEUI_CORE_SOURCES
     src/core/style_sheet.cpp
     src/core/style_transition.cpp
     src/core/switch.cpp
+    src/core/table_rows.cpp
     src/core/table.cpp
     src/core/tabs.cpp
     src/core/terminal_view.cpp

@@ -1,0 +1,90 @@
+{
+  "before": {
+    "update1000": {
+      "samples": 200,
+      "paint_samples": 200,
+      "mean_exclusive_ms": {
+        "delta": 0.6233605,
+        "vm": 0.008131,
+        "conversion": 17.5196715,
+        "rows": 0.550934,
+        "keyed": 0.1568675,
+        "flush": 0.011428,
+        "layout": 0.000105,
+        "paint": 1.79315
+      }
+    },
+    "insert_remove10": {
+      "samples": 400,
+      "paint_samples": 400,
+      "mean_exclusive_ms": {
+        "delta": 0.66912575,
+        "vm": 0.0126185,
+        "conversion": 19.88091275,
+        "rows": 0.74141625,
+        "keyed": 0.44830225,
+        "flush": 0.0285605,
+        "layout": 0.00017275,
+        "paint": 2.08554
+      }
+    },
+    "move10": {
+      "samples": 200,
+      "paint_samples": 200,
+      "mean_exclusive_ms": {
+        "delta": 0.6357245,
+        "vm": 0.0060435,
+        "conversion": 17.990905,
+        "rows": 0.6334135,
+        "keyed": 0.420874,
+        "flush": 0.012933,
+        "layout": 0.0001185,
+        "paint": 2.041893
+      }
+    }
+  },
+  "after": {
+    "update1000": {
+      "samples": 200,
+      "paint_samples": 200,
+      "mean_exclusive_ms": {
+        "delta": 0.0209835,
+        "vm": 0.003431,
+        "conversion": 0.0002835,
+        "rows": 0.008159,
+        "keyed": 0.0014245,
+        "flush": 0.0098365,
+        "layout": 4.3e-05,
+        "paint": 1.755801
+      }
+    },
+    "insert_remove10": {
+      "samples": 400,
+      "paint_samples": 400,
+      "mean_exclusive_ms": {
+        "delta": 0.04854125,
+        "vm": 0.00662525,
+        "conversion": 0.00090375,
+        "rows": 0.01350225,
+        "keyed": 0.05189475,
+        "flush": 0.0159155,
+        "layout": 5.125e-05,
+        "paint": 1.9554075
+      }
+    },
+    "move10": {
+      "samples": 200,
+      "paint_samples": 200,
+      "mean_exclusive_ms": {
+        "delta": 0.0335345,
+        "vm": 0.0018135,
+        "conversion": 0.0001065,
+        "rows": 0.0067825,
+        "keyed": 0.0845045,
+        "flush": 0.010027,
+        "layout": 5.1e-05,
+        "paint": 1.9151575
+      }
+    }
+  }
+}

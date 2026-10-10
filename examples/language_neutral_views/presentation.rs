@@ -5,6 +5,31 @@ use std::{
     rc::Rc,
 };
 
+// Capture the settled native frame, not the first frame of the initial palette
+// transition. Keep pumping the UI; never block its animation scheduler.
+pub fn capture_settled(
+    dispatcher: UiDispatcher,
+    path: std::path::PathBuf,
+    start: std::time::Instant,
+) {
+    let next = dispatcher.clone();
+    dispatcher
+        .request_animation_frame_local(move |_| {
+            if start.elapsed() < std::time::Duration::from_millis(350) {
+                capture_settled(next, path, start);
+            } else {
+                std::fs::write(
+                    path.with_extension("json"),
+                    next.layout_snapshot_json().unwrap(),
+                )
+                .unwrap();
+                assert!(next.capture_frame_png(&path), "capture failed");
+                next.close().unwrap();
+            }
+        })
+        .expect("schedule capture");
+}
+
 pub fn css(index: usize) -> String {
     let accents = [
         "#28613d", "#536270", "#806246", "#227565", "#286881", "#966238", "#84c49a", "#a6b5c4",

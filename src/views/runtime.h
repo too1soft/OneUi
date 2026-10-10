@@ -35,10 +35,13 @@ struct Delta {
 };
 struct ListState {
     uint64_t revision = 0;
+    uint64_t serial = 0;
     bool initialized = false, reset = true;
+    bool lastReset = true;
     std::vector<std::string> keys;
     std::vector<std::shared_ptr<Scope>> items;
     std::vector<Delta> pending;
+    std::vector<Delta> applied;
     size_t queuedBytes = 0;
 };
 struct Scope {
@@ -49,6 +52,7 @@ struct Scope {
     bool retained = false, connected = false, closed = false, mutating = false;
     std::set<uint32_t> dirty;
     std::map<uint32_t, Value> values;
+    std::map<uint32_t, uint64_t> versions;
     std::map<uint32_t, ListState> lists;
     std::map<uint32_t, std::vector<std::weak_ptr<Instance>>> observers;
 };
@@ -86,6 +90,11 @@ struct Instance {
     bool dirty = true;
     std::weak_ptr<Instance> parent;
     std::map<std::string, std::vector<std::wstring>> stringLists;
+    struct TableCache;
+    std::shared_ptr<TableCache> tableCache;
+    std::set<const Scope*> recordDirty;
+    const ListState* repeatSource = nullptr;
+    uint64_t repeatSerial = 0;
 };
 enum class Phase { Idle, Read, Mutate, Connect, Cleanup };
 extern thread_local Runtime *callbackRuntime;
@@ -150,6 +159,8 @@ struct Runtime : std::enable_shared_from_this<Runtime> {
     void set(const std::shared_ptr<Scope> &, uint32_t, const Value &);
     ListState &list(const std::shared_ptr<Scope> &, uint32_t);
     void refreshList(const std::shared_ptr<Scope> &, uint32_t, ListState &);
+    bool refreshDelta(const std::shared_ptr<Scope> &, uint32_t, ListState &,
+                      const OneUiViewListInfo &);
     void auditListIdentity(const std::shared_ptr<Scope> &, uint32_t, const ListState &,
                            const std::vector<std::string> &);
     std::shared_ptr<Instance> build(uint32_t node, const Scopes &, const Slots & = {});
@@ -157,6 +168,7 @@ struct Runtime : std::enable_shared_from_this<Runtime> {
     void wire(const std::shared_ptr<Instance> &);
     void repeat(const std::shared_ptr<Instance> &);
     void applyList(Instance &, const std::string &, ListState &);
+    void applyTableRows(Instance &, ListState &);
 };
 std::string narrow(const std::wstring &);
 struct Observation {

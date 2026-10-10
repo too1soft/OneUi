@@ -14,6 +14,8 @@ struct Vm {
     std::map<uint32_t, Value> values;
     std::map<uint32_t, int> reads;
     std::vector<Vm *> items;
+    std::map<uint32_t,std::vector<Vm*>> lists;
+    std::map<uint32_t,int> infos,keys,leases;
     std::string scratch;
     int retains = 0, releases = 0, connects = 0, disconnects = 0, sets = 0, invokes = 0,
         acquires = 0;
@@ -83,23 +85,27 @@ struct Vm {
                 v.onInvoke();
             return 0;
         };
-        table.list_info = [](void *p, uint32_t, OneUiViewListInfo *out) {
+        table.list_info = [](void *p, uint32_t property, OneUiViewListInfo *out) {
             auto &v = *static_cast<Vm *>(p);
-            *out = {v.revision, v.items.size()};
+            ++v.infos[property];
+            *out = {v.revision, v.lists.count(property) ? v.lists.at(property).size() : v.items.size()};
             return 0;
         };
-        table.list_key = [](void *p, uint32_t, uint64_t i, OneUiValue *out) {
+        table.list_key = [](void *p, uint32_t property, uint64_t i, OneUiValue *out) {
             auto &v = *static_cast<Vm *>(p);
-            v.scratch = v.items.at(size_t(i))->values.at(v.items.at(size_t(i))->key).text;
+            ++v.keys[property];
+            auto& items=v.lists.count(property) ? v.lists.at(property) : v.items;
+            v.scratch = items.at(size_t(i))->values.at(items.at(size_t(i))->key).text;
             *out = {};
             out->tag = 4;
             out->as.utf8 = {v.scratch.data(), v.scratch.size()};
             return 0;
         };
-        table.list_acquire = [](void *p, uint32_t, uint64_t i, OneUiViewModelRef *out) {
+        table.list_acquire = [](void *p, uint32_t property, uint64_t i, OneUiViewModelRef *out) {
             auto &v = *static_cast<Vm *>(p);
             ++v.acquires;
-            auto *item = v.items.at(size_t(i));
+            ++v.leases[property];
+            auto *item = (v.lists.count(property) ? v.lists.at(property) : v.items).at(size_t(i));
             ++item->retains;
             *out = {&item->table, item};
             return 0;

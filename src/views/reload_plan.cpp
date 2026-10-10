@@ -155,6 +155,7 @@ std::shared_ptr<Instance> ReloadPlan::adopt(const std::shared_ptr<Instance> &can
         for(auto &widget:element.collapsible)widget=mapped(widget);
         *result=*candidate;
         result->element=std::move(element);
+        result->tableCache.reset(); // Candidate cache has not been published to the retained Table.
     }
     result->owner=old.weak_from_this();
     for(auto &child:result->children) {child=adopt(child);child->parent=result;}

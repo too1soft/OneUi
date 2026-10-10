@@ -19,6 +19,7 @@ class ONEUI_API SelectionModel {
 public:
     void setItemCount(int count);
     int itemCount() const;
+    void remapItems(int count, const std::vector<int>& oldToNew);
 
     void setMode(SelectionMode mode);
     SelectionMode mode() const;

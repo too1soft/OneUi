@@ -29,6 +29,15 @@ void SelectionModel::setItemCount(int count) {
     }
 }
 
+void SelectionModel::remapItems(int count, const std::vector<int>& oldToNew) {
+    auto remap=[&](int i) { return i>=0 && i<int(oldToNew.size()) ? oldToNew[i] : -1; };
+    auto indices=selectedIndices_;
+    for (auto& i : indices) i=remap(i);
+    auto active=remap(activeIndex_), anchor=remap(anchorIndex_);
+    itemCount_=std::max(0,count);
+    setState(std::move(indices),active,anchor);
+}
+
 int SelectionModel::itemCount() const {
     return itemCount_;
 }

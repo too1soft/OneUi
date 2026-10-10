@@ -1,3 +1,4 @@
+#include "internal/view_profile.h"
 #include "window_event_loop_win32.h"
 #include "internal/frame_profile.h"
 #include "internal/developer_tools.h"
@@ -416,6 +417,9 @@ public:
                 [this] { requestRedraw(); },
                 [this](Rect rect) { requestRedrawRect(rect); },
                 [this] { scheduleContentAnimationFrame(); });
+            // Children may start style transitions before the root has a
+            // window scheduler. Resume those otherwise lost frame requests.
+            scheduleContentAnimationFrame();
         }
         requestRedraw();
     }
@@ -2728,6 +2732,7 @@ private:
     }
 #endif
     void paint() {
+        ONEUI_VIEW_TIME(Paint);
         const double paintStartMs = currentTimeMs();
 #if ONEUI_DEVELOPER_TOOLS
         const auto diagnostics=developerTools_; // Safe if application disables tools during paint.
@@ -2833,7 +2838,7 @@ private:
         if (content_ && content_->visible()) {
             const double contentStartMs = currentTimeMs();
             g_primitivePaintTrace = PrimitivePaintTrace{};
-            content_->setFrame(Rect{0.0f, 0.0f, logicalWidth, logicalHeight});
+            { ONEUI_VIEW_TIME(Layout); content_->setFrame(Rect{0.0f, 0.0f, logicalWidth, logicalHeight}); }
             { internal::DiagnosticPaintSpan diagnostic(*content_); content_->paint(canvas); }
             paintTooltip(canvas);
             recordContentPaint(currentTimeMs() - contentStartMs);

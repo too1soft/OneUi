@@ -118,7 +118,7 @@ void Runtime::reload(oneview::Image replacement) {
         // Rebuild dependency observers against adopted nodes, not staging instances.
         for(auto &scope:scopes)scope->observers.clear();
         std::function<void(const std::shared_ptr<Instance>&)> dependencies=[&](const auto &n) {
-            n->dirty=true;for(auto &c:n->children)dependencies(c);for(auto &[_,row]:n->rows)dependencies(row);
+            n->dirty=true;n->tableCache.reset();for(auto &c:n->children)dependencies(c);for(auto &[_,row]:n->rows)dependencies(row);
         };
         dependencies(root);update(root);
         // List caches are leases, not permanent VM ownership. Retain only the

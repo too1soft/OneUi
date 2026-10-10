@@ -13,8 +13,8 @@ Surface { background-color:var(--surface); padding:12px; border-radius:8px; bord
 Column { gap:8px; }
 Toolbar { gap:8px; }
 ActionBar { gap:12px; padding:12px; }
-Button { background-color:#e7eee8; color:var(--ink); padding:8px; border-radius:6px; }
-Button.primary { background-color:var(--accent); color:#ffffff; }
+Button { border-color:var(--line); border-width:1px; outline-color:var(--accent); background-color:#e7eee8; color:var(--ink); padding:8px; border-radius:6px; }
+Button.primary { border-color:var(--accent); background-color:var(--accent); color:#ffffff; }
 Button:hover { background-color:#d5e2d7; }
 Input { color:var(--ink); background-color:var(--surface); border-color:var(--line); border-width:1px; padding:8px; }
 Select { color:var(--ink); background-color:var(--surface); padding:8px; }

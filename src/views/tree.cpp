@@ -192,6 +192,14 @@ void Runtime::repeat(const std::shared_ptr<Instance> &instance) {
     Observation observation(*this, instance);
     const auto &r = image.records[REPT][image.records[NODE][instance->node][9]];
     auto &items = list(instance->scopes.at(r[3] & 0xffff), r[1]);
+    // Child-property notifications do not change list identity or order.
+    // Keep their widget tree and only visit dirty descendants. A shared list
+    // consumer may have refreshed first, so compare serials, not dirty bits.
+    if (instance->repeatSource == &items && instance->repeatSerial == items.serial) {
+        for (auto &row : instance->rows)
+            update(row.second);
+        return;
+    }
     std::map<std::string, std::shared_ptr<Instance>> next;
     std::vector<std::shared_ptr<Widget>> widgets;
     auto stack = instance->element.as<Stack>();
@@ -210,8 +218,11 @@ void Runtime::repeat(const std::shared_ptr<Instance> &instance) {
         update(row);
         next.emplace(items.keys[i], std::move(row));
     }
-    if (stack->children() == widgets && instance->rows == next)
+    if (stack->children() == widgets && instance->rows == next) {
+        instance->repeatSource = &items;
+        instance->repeatSerial = items.serial;
         return;
+    }
     auto cleanupFlex = [stack, widgets] {
         for (const auto &widget : widgets)
             if (std::find(stack->children().begin(), stack->children().end(), widget) ==
@@ -225,7 +236,8 @@ void Runtime::repeat(const std::shared_ptr<Instance> &instance) {
                       row.second->element.widget) == stack->children().end())
             stack->setFlex(row.second->element.widget, row.second->element.flex);
     auto prepared = stack->prepareChildren(std::move(widgets));
-    auto commit = [instance, stack, prepared, next = std::move(next)]() mutable {
+    auto commit = [instance, stack, prepared, source=&items, serial=items.serial,
+                   next = std::move(next)]() mutable {
         for (const auto &row : instance->rows)
             if (!next.count(row.first) || next.at(row.first) != row.second)
                 try {
@@ -234,6 +246,8 @@ void Runtime::repeat(const std::shared_ptr<Instance> &instance) {
                 }
         prepared->commit();
         instance->rows.swap(next);
+        instance->repeatSource = source;
+        instance->repeatSerial = serial;
         if (instance->published)
             activate(instance);
     };

@@ -1,0 +1,6 @@
+<template view-model="Records">
+  <Column>
+    <DataTable :columns="columns" :items="rows" item-key="id"/>
+    <DataTable :columns="columns" :items="rows" item-key="id"/>
+  </Column>
+</template>

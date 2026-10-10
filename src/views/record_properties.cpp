@@ -1,7 +1,11 @@
+#include "internal/view_profile.h"
+#include "internal/unicode.h"
 #include "runtime.h"
 namespace oneui::views {
 void Runtime::applyList(Instance &instance, const std::string &property, ListState &state) {
+    ONEUI_VIEW_TIME(Rows);
     auto &e = instance.element;
+    auto wide = [](const std::string &s) { ONEUI_VIEW_TIME(Conversion); return unicode::fromUtf8(s); };
     auto field = [&](const std::shared_ptr<Scope> &scope, const char *name) {
         return read(scope, image.schema.model(scope->table.model_id).properties.at(name).id);
     };
@@ -25,7 +29,7 @@ void Runtime::applyList(Instance &instance, const std::string &property, ListSta
     if (e.component == "Select") {
         std::vector<std::wstring> values;
         for (const auto &item : state.items)
-            values.push_back(ui::wide(field(item, "value").text));
+            values.push_back(wide(field(item, "value").text));
         auto found = instance.stringLists.find(property);
         if (found == instance.stringLists.end() || found->second != values) {
             factory.set(e, property, values);
@@ -35,23 +39,15 @@ void Runtime::applyList(Instance &instance, const std::string &property, ListSta
         std::vector<ui::TabItem> values;
         for (size_t i = 0; i < state.items.size(); ++i)
             values.push_back(
-                {ui::wide(state.keys[i]), ui::wide(field(state.items[i], "title").text)});
+                {wide(state.keys[i]), wide(field(state.items[i], "title").text)});
         factory.set(e, property, values);
     } else if (e.component == "DataTable" && property == "items") {
-        std::vector<ui::TableRow> rows;
-        for (size_t i = 0; i < state.items.size(); ++i) {
-            ui::TableRow row;
-            row.id = ui::wide(state.keys[i]);
-            for (const auto &cell : nested(state.items[i], "cells").items)
-                row.cells.push_back(ui::wide(field(cell, "value").text));
-            rows.push_back(std::move(row));
-        }
-        factory.set(e, property, rows);
+        applyTableRows(instance, state);
     } else if (e.component == "DataTable" && property == "columns") {
         std::vector<TableColumn> columns;
         for (const auto &item : state.items) {
             TableColumn c;
-            c.header = ui::wide(field(item, "header").text);
+            c.header = wide(field(item, "header").text);
             c.width = float(field(item, "width").number);
             auto align = field(item, "alignment").integer, kind = field(item, "kind").integer;
             check(c.width >= 0 && align >= 0 && align <= 2 && kind >= 0 && kind <= 1,
@@ -66,7 +62,7 @@ void Runtime::applyList(Instance &instance, const std::string &property, ListSta
         std::vector<TimeSeriesChartSeries> series;
         for (const auto &item : state.items) {
             TimeSeriesChartSeries s;
-            s.name = ui::wide(field(item, "name").text);
+            s.name = wide(field(item, "name").text);
             auto rgba = uint32_t(field(item, "rgba").integer);
             s.color = {uint8_t(rgba >> 24), uint8_t(rgba >> 16), uint8_t(rgba >> 8), uint8_t(rgba)};
             for (const auto &value : nested(item, "values").items)

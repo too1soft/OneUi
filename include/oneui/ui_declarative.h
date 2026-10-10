@@ -4,6 +4,7 @@
 #include "oneui/ui_native_host.h"
 #include "oneui/ui_native_theme.h"
 #include "oneui/ui_keyed_tabs.h"
+#include "oneui/ui_keyed_table.h"
 #include "oneui/controls/icon_view.h"
 #include "oneui/controls/progress_bar.h"
 #include "oneui/layout/adaptive_panes.h"
@@ -23,57 +24,6 @@
 
 namespace oneui::ui {
 inline std::wstring wide(const std::string& s) { return std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>>{}.from_bytes(s); }
-struct TableRow {
-    std::wstring id;
-    std::vector<std::wstring> cells;
-    bool operator==(const TableRow& r) const { return id == r.id && cells == r.cells; }
-};
-
-class KeyedTable {
-    std::shared_ptr<Table> table_;
-    std::vector<TableRow> rows_;
-    bool updating_ = false;
-public:
-    std::function<void(std::wstring)> selected;
-    std::function<std::wstring()> selectionValue;
-    explicit KeyedTable(std::shared_ptr<Table> table) : table_(std::move(table)) {
-        table_->setOnChanged([this](int i) { if (!updating_ && selected) selected(i >= 0 && i < int(rows_.size()) ? rows_[i].id : L""); });
-    }
-    ~KeyedTable() { table_->setOnChanged({}); }
-    void select(const std::wstring& id) {
-        const auto found = std::find_if(rows_.begin(), rows_.end(), [&](auto& row) { return row.id == id; });
-        updating_ = true; table_->setSelectedIndex(found == rows_.end() ? -1 : int(found - rows_.begin())); updating_ = false;
-    }
-    void update(const std::vector<TableRow>& rows) {
-        std::set<std::wstring> keys;
-        for (auto& r : rows) if (r.id.empty() || !keys.insert(r.id).second) throw std::invalid_argument("DataTable requires unique nonempty row IDs");
-        if (rows == rows_) return;
-        const auto offset = table_->scrollOffset();
-        std::vector<std::wstring> selectedKeys;
-        for (int i : table_->selectedIndices()) if (i >= 0 && i < int(rows_.size())) selectedKeys.push_back(rows_[i].id);
-        bool sameKeys = rows.size() == rows_.size();
-        if (sameKeys) for (std::size_t i = 0; i < rows.size(); ++i) if (rows[i].id != rows_[i].id) { sameKeys = false; break; }
-        updating_ = true;
-        if (sameKeys) {
-            for (std::size_t i = 0; i < rows.size(); ++i) if (rows[i].cells != rows_[i].cells) table_->updateRow(i, rows[i].cells);
-        } else {
-            std::vector<std::vector<std::wstring>> cells; cells.reserve(rows.size());
-            for (auto& r : rows) cells.push_back(r.cells);
-            table_->setRows(std::move(cells));
-        }
-        rows_ = rows;
-        if (!sameKeys) {
-            std::vector<int> indices;
-            for (std::size_t i = 0; i < rows.size(); ++i)
-                if (std::find(selectedKeys.begin(), selectedKeys.end(), rows[i].id) != selectedKeys.end()) indices.push_back(int(i));
-            table_->setSelectedIndices(std::move(indices)); table_->setScrollOffset(offset);
-        }
-        if (selectionValue) { select(selectionValue()); table_->setScrollOffset(offset); }
-        updating_ = false;
-        if (selected) { const int i = table_->selectedIndex(); selected(i >= 0 && i < int(rows.size()) ? rows[i].id : L""); }
-    }
-};
-
 struct Element : Node {
     std::vector<std::shared_ptr<Widget>> collapsible;
     std::string component, classes;

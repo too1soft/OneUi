@@ -17,6 +17,8 @@ set(ONEUI_VIEW_RUNTIME_SOURCES
     src/views/lifetime.cpp
     src/views/tree.cpp
     src/views/notifications.cpp
+    src/views/list_delta.cpp
+    src/views/table_records.cpp
     src/views/lists.cpp
     src/views/record_properties.cpp
     src/views/events.cpp
