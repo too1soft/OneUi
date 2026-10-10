@@ -1,0 +1,22 @@
+:root { --ink:#21302b; --muted:#62716a; --surface:#ffffff; --canvas:#f3f6f3; --line:#c6d0c8; --accent:#28613d; }
+Page { background-color:var(--canvas); padding:24px; gap:16px; }
+Header { gap:6px; }
+Text { color:var(--ink); font-size:14px; }
+Text.heading { font-size:24px; font-weight:700; }
+Text.section-title { font-size:17px; font-weight:600; }
+Text.muted { color:var(--muted); font-size:12px; }
+Section { gap:12px; padding:16px; }
+SettingsPage { gap:20px; }
+FormGrid { gap:16px; }
+FormRow { gap:6px; }
+Surface { background-color:var(--surface); padding:12px; border-radius:8px; border-color:var(--line); border-width:1px; }
+Column { gap:8px; }
+Toolbar { gap:8px; }
+ActionBar { gap:12px; padding:12px; }
+Button { background-color:#e7eee8; color:var(--ink); padding:8px; border-radius:6px; }
+Button.primary { background-color:var(--accent); color:#ffffff; }
+Button:hover { background-color:#d5e2d7; }
+Input { color:var(--ink); background-color:var(--surface); border-color:var(--line); border-width:1px; padding:8px; }
+Select { color:var(--ink); background-color:var(--surface); padding:8px; }
+Status { color:var(--muted); font-size:13px; }
+ValidationMessage { color:#a02b24; font-size:13px; }

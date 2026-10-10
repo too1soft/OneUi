@@ -1,4 +1,4 @@
-<template>
+<template view-model="LabVm">
   <Page>
     <Header title="组件与布局">
       <Text class="muted">同一套原生组件，体验两种密度、主题与自适应布局。示例数据仅在本次运行中保留。</Text>

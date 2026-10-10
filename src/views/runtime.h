@@ -59,18 +59,25 @@ struct Binding {
     uint32_t kind;
     std::optional<Value> previous;
 };
+struct ModelWrite {
+    std::weak_ptr<Scope> scope;
+    uint32_t property;
+    Value expected, replacement;
+};
 struct SlotBody {
     uint32_t body;
     Scopes scopes;
 };
 using Slots = std::map<std::string, SlotBody>;
 struct Instance {
+    std::weak_ptr<Runtime> owner;
     uint32_t node = 0;
     ui::Element element{ui::Node(nullptr), ""};
     Scopes scopes;
     std::vector<std::shared_ptr<Instance>> children;
     std::vector<Binding> bindings;
     std::vector<oneview::Record> events;
+    std::vector<uint32_t> owners;
     std::map<std::string, std::shared_ptr<Instance>> rows;
     std::vector<ui::Element> conditions;
     bool applying = false;
@@ -102,15 +109,20 @@ struct Runtime : std::enable_shared_from_this<Runtime> {
     std::vector<std::shared_ptr<Scope>> scopes;
     std::map<std::string, std::shared_ptr<Widget>> hosts;
     std::function<void()> schedule, detach;
+    std::function<void()> republish;
+    std::string externalCss;
+    ui::Density density = ui::Density::Comfortable;
     bool closing = false, closed = false, building = true, flushing = false, scheduled = false;
     unsigned depth = 0;
     bool staging = false;
     std::vector<std::function<void()>> commits, rollbacks;
     std::vector<std::shared_ptr<Scope>> retired;
+    std::vector<ModelWrite> modelWrites;
     std::weak_ptr<Instance> observing;
     std::vector<std::weak_ptr<Runtime>> deferredSchedules;
     OneUiViewError error{};
-    Runtime(oneview::Image image, std::shared_ptr<Clipboard> clipboard = {});
+    Runtime(oneview::Image image, std::shared_ptr<Clipboard> clipboard = {},
+            std::shared_ptr<ui::StyleRegistry> sharedStyles = {});
     ~Runtime();
     void fail(int result, const char *message, uint32_t span = oneview::none);
     void alive() const;
@@ -121,7 +133,8 @@ struct Runtime : std::enable_shared_from_this<Runtime> {
     void closeScope(const std::shared_ptr<Scope> &);
     void close();
     void finishClose();
-    void initialize(const OneUiViewModelVTable *, void *);
+    void initialize(const OneUiViewModelVTable *, void *, bool sharedStyles = false);
+    void reload(oneview::Image);
     Value read(const std::shared_ptr<Scope> &, uint32_t property);
     Value constant(uint32_t index) const;
     void notify(const std::shared_ptr<Scope> &, uint32_t property);
@@ -130,6 +143,7 @@ struct Runtime : std::enable_shared_from_this<Runtime> {
     void observe(const std::shared_ptr<Scope> &, uint32_t);
     void mark(const std::shared_ptr<Scope> &, uint32_t);
     void flush();
+    void flushPass();
     void update(const std::shared_ptr<Instance> &);
     void apply(const std::shared_ptr<Instance> &, Binding &);
     void invoke(const std::shared_ptr<Instance> &, const oneview::Record &, std::vector<Value>);

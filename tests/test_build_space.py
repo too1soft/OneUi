@@ -4,7 +4,7 @@ import io
 import json
 from pathlib import Path
 import subprocess
-import tempfile
+from workspace_fixture import temporary_workspace
 import unittest
 from unittest.mock import Mock, patch
 
@@ -15,9 +15,9 @@ spec.loader.exec_module(space)
 
 class BuildSpaceTests(unittest.TestCase):
     def setUp(self):
-        self.directory = tempfile.TemporaryDirectory()
-        self.addCleanup(self.directory.cleanup)
-        self.path = Path(self.directory.name)
+        self.directory = temporary_workspace()
+        self.path = Path(self.directory.__enter__())
+        self.addCleanup(self.directory.__exit__, None, None, None)
         redirects = contextlib.ExitStack()
         self.addCleanup(redirects.close)
         redirects.enter_context(contextlib.redirect_stdout(io.StringIO()))

@@ -224,7 +224,12 @@ ONEUI_API OneUiViewResult oneui_view_host_attach(OneUiWidget *host, OneUiWidget 
                                                  void *owner, OneUiVoidCallback retain_owner,
                                                  OneUiDestroyCallback release_owner);
 ONEUI_API OneUiViewResult oneui_view_host_detach(OneUiWidget *host);
-/* IR reload is added at S5; protocol v1 has no reload entrypoint yet. */
+/* Development reload, UI thread. Same schema required. BUSY during callbacks or
+ * when an attached Host would be removed/renamed/moved. The input buffer is
+ * borrowed for this call only. Failed validation keeps the previous view.
+ * After success, reacquire borrowed root/host handles; do not retain those
+ * handles across reload even when the underlying native Widget survives. */
+ONEUI_API OneUiViewResult oneui_view_reload(OneUiView *view, const uint8_t *ir_bytes, size_t len);
 
 #ifdef __cplusplus
 }

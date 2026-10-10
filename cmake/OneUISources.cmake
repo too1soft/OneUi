@@ -75,6 +75,8 @@ set(ONEUI_CORE_SOURCES
     src/core/tabs.cpp
     src/core/terminal_view.cpp
     src/core/text_field.cpp
+    src/core/text_field_composition.cpp
+    src/core/composition_references.cpp
     src/core/text_input_bridge.cpp
     src/core/tile.cpp
     src/core/time_series_chart.cpp
@@ -118,6 +120,7 @@ set(ONEUI_C_API_SOURCES
     src/capi/oneui_c_api_interaction.cpp
     src/capi/oneui_c_api_runtime.cpp
     src/capi/oneui_c_api_view.cpp
+    src/capi/oneui_c_api_view_reload.cpp
     src/capi/oneui_c_api_view_mount.cpp
     src/capi/oneui_c_api_view_notifier.cpp
     src/capi/oneui_c_api_view_host.cpp

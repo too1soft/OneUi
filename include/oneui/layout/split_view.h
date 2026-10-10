@@ -21,6 +21,7 @@ public:
 
     void setFirst(std::shared_ptr<Widget> child);
     void setSecond(std::shared_ptr<Widget> child);
+    void syncPreparedContent() noexcept;
     void setOrientation(SplitOrientation orientation);
     SplitOrientation orientation() const;
     void setSplitRatio(float ratio);

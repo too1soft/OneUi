@@ -31,3 +31,4 @@ harness = false
 default = []
 static-link = ["oneui-sys/static-link"]
 bundled-fonts = []
+view-diagnostics = []

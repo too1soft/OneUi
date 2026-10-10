@@ -1,0 +1,4 @@
+model TableProbe {
+    r columns: list<oneui.v1.Column>
+    r rows: list<oneui.v1.Row>
+}

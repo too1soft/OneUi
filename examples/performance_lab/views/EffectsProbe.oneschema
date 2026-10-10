@@ -1,0 +1,7 @@
+// Explicit VM contract for the shared OneView IR.
+model LabVm {
+    r open: bool
+    r preset: utf8
+    r reduced: bool
+    rw text: utf8
+}

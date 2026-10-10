@@ -1,5 +1,6 @@
 #include "compiler.h"
-#include "legacy.h"
+#include "emit_rust.h"
+#include "emit_cpp.h"
 
 namespace
 {
@@ -32,7 +33,7 @@ int main(int argc, char **argv)
     {
         std::map<std::string, std::string> args;
         const std::set<std::string> options = {"--input", "--output", "--name",   "--vm-header", "--depfile",
-                                               "--emit",  "--schema", "--verify", "--roundtrip"};
+                                               "--emit",  "--schema", "--verify", "--roundtrip", "--ir-output"};
         for (int i = 1; i < argc; i += 2)
         {
             if (i + 1 >= argc || !options.count(argv[i]) || !args.emplace(argv[i], argv[i + 1]).second)
@@ -65,31 +66,26 @@ int main(int argc, char **argv)
         auto name = args.count("--name") ? args.at("--name") : fs::path(args.at("--input")).stem().string();
         if (!std::regex_match(name, std::regex("[A-Za-z_][A-Za-z0-9_]*")))
             throw std::runtime_error("Invalid generated name");
-        auto emit = args.count("--emit") ? args.at("--emit") : "cpp-legacy";
+        auto emit = args.count("--emit") ? args.at("--emit") : "cpp";
         std::vector<fs::path> dependencies;
         std::string generated;
-        if (emit == "ir")
+        if (emit == "ir" || emit == "rust" || emit == "cpp")
         {
-            if (!args.count("--schema") || args.count("--vm-header"))
+            if (!args.count("--schema") || (emit != "cpp" && args.count("--vm-header")))
                 throw std::runtime_error("CLI: ir requires --schema and does not accept --vm-header");
             oneview::ViewCompiler compiler;
             auto image = compiler.compile(args.at("--input"), args.at("--schema"), name);
             auto bytes = oneview::writeImage(image);
-            generated.assign(bytes.begin(), bytes.end());
+            if (emit == "cpp") generated = oneview::emitCpp(image, bytes, name, args["--vm-header"],
+                fs::weakly_canonical(args.at("--input")).parent_path());
+            else if (emit == "rust") generated = oneview::emitRust(image, bytes);
+            else generated.assign(bytes.begin(), bytes.end());
+            if (args.count("--ir-output"))
+                output(args.at("--ir-output"), std::string(bytes.begin(), bytes.end()));
             dependencies = compiler.dependencies;
         }
-        else if (emit == "cpp-legacy")
-        {
-            if (args.count("--schema"))
-                throw std::runtime_error("CLI: cpp-legacy does not consume --schema");
-            Compiler compiler;
-            compiler.load(args.at("--input"), name);
-            generated = compiler.generate(args["--vm-header"]);
-            for (auto &d : compiler.docs)
-                dependencies.push_back(d.file);
-        }
         else
-            throw std::runtime_error("CLI: S1 supports --emit ir or cpp-legacy; Rust/C++ IR adapters arrive in S4/S5");
+            throw std::runtime_error("CLI: supported emitters: ir, rust, cpp");
         output(args.at("--output"), generated);
         if (args.count("--depfile"))
         {

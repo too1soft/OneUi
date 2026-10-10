@@ -3,11 +3,11 @@ namespace oneui::views {
 void Runtime::wire(const std::shared_ptr<Instance> &instance) {
     if (image.records[oneview::NODE][instance->node][0] != 1)
         return;
-    auto weak = weak_from_this();
+    instance->owner = weak_from_this();
     auto node = std::weak_ptr<Instance>(instance);
-    auto mutate = [weak, node](uint32_t id, Value value) {
-        auto runtime = weak.lock();
+    auto mutate = [node](uint32_t id, Value value) {
         auto item = node.lock();
+        auto runtime = item ? item->owner.lock() : nullptr;
         if (!runtime || !item || runtime->closing || item->applying)
             return;
         try {
@@ -24,11 +24,7 @@ void Runtime::wire(const std::shared_ptr<Instance> &instance) {
     auto &element = instance->element;
     auto rootNode = oneview::componentRoot(image, instance->node);
     const auto &contract = image.components[image.records[oneview::NODE][rootNode][1]];
-    bool hasModel =
-        std::any_of(instance->bindings.begin(), instance->bindings.end(), [](const Binding &b) {
-            return b.kind == oneview::BIND && (b.record[3] >> 16) == 2;
-        });
-    if (hasModel) {
+    if (contract.modelProperty) {
         auto id = contract.modelProperty;
         if (element.component == "Input" || element.component == "SearchInput")
             element.as<TextField>()->setOnChanged([mutate, id](const std::wstring &text) {
@@ -71,13 +67,17 @@ void Runtime::wire(const std::shared_ptr<Instance> &instance) {
                 element.table->selected = selection;
         }
     }
-    for (const auto &event : instance->events) {
-        auto name = contract.event(event[1]).name;
-        auto fire = [weak, node, event](std::vector<Value> args) {
-            auto runtime = weak.lock();
+    for (const auto &event : contract.events) {
+        auto name = event.name;
+        auto fire = [node, id=event.id](std::vector<Value> args) {
             auto item = node.lock();
+            auto runtime = item ? item->owner.lock() : nullptr;
             if (!runtime || !item || runtime->closing || item->applying)
                 return;
+            const auto found=std::find_if(item->events.begin(),item->events.end(),
+                [&](const auto &e) { return e[1]==id; });
+            if(found==item->events.end())return;
+            auto event=*found;
             try {
                 runtime->invoke(item, event, std::move(args));
             } catch (const Failure &e) {

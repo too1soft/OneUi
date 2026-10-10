@@ -65,6 +65,10 @@ std::string narrow(const std::wstring &text) {
 void setScalar(ui::Mount &factory, ui::Element &e, const std::string &name, const Value &v) {
     if (name == "host")
         return; // Identity belongs to the HOST table, never a widget setter.
+    if (name == "item-key") {
+        check(v.tag==4 && v.text=="id",ONEUI_VIEW_TYPE,"Builtin records use id keys");
+        return; // Validated schema identity, not a Table display property.
+    }
     if (v.tag == 1)
         factory.set(e, name, bool(v.integer));
     else if (v.tag == 2) {

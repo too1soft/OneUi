@@ -1,0 +1,27 @@
+// Explicit VM contract for the shared OneView IR.
+model LabVm {
+    r editor.densities: list<oneui.v1.StringItem>
+    rw editor.density: i64
+    rw editor.theme: i64
+    r editor.themes: list<oneui.v1.StringItem>
+    r list.detailBack.canExecute: bool
+    r list.detailBack.running: bool
+    r list.detailHost: utf8
+    r list.detailKey: utf8
+    r list.detailName: utf8
+    r list.detailNote: utf8
+    r list.detailPort: utf8
+    r list.detailProtocol: utf8
+    r list.detailReconnect: utf8
+    r list.detailStatus: utf8
+    r list.detailTimeout: utf8
+    r list.detailTone: utf8
+    r list.edit.canExecute: bool
+    r list.edit.running: bool
+    r list.message: utf8
+    r list.remove.canExecute: bool
+    r list.remove.running: bool
+    command list.detailBack() when list.detailBack.canExecute busy list.detailBack.running
+    command list.edit() when list.edit.canExecute busy list.edit.running
+    command list.remove() when list.remove.canExecute busy list.remove.running
+}

@@ -6,6 +6,7 @@ members = [
     "oneui-lab-examples",
     "oneui-lab-owner",
     "oneui-mobile",
+    "oneui-view-tests",
 ]
 default-members = ["oneui-sys", "oneui"]
 resolver = "2"

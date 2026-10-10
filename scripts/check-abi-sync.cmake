@@ -45,16 +45,6 @@ foreach(declaration IN LISTS declarations)
     endif()
 endforeach()
 list(REMOVE_DUPLICATES actual)
-# S3 publishes native symbols before the explicitly deferred S4 Rust adapter.
-# Every pending entry must already be a C export and must not claim a Rust FFI.
-file(STRINGS "${root}/bindings/rust/oneui-sys/pending-view-symbols.txt" pending_view REGEX "^oneui_")
-foreach(symbol IN LISTS pending_view)
-    if(NOT symbol MATCHES "^oneui_view_" OR NOT symbol IN_LIST expected OR symbol IN_LIST actual
-       OR NOT header MATCHES "${symbol}[ \t\r\n]*\\(")
-        message(FATAL_ERROR "Invalid staged S4 symbol: ${symbol}")
-    endif()
-    list(APPEND actual "${symbol}")
-endforeach()
 list(SORT actual)
 list(SORT expected)
 if(NOT "${actual}" STREQUAL "${expected}")

@@ -188,6 +188,25 @@ public:
         for (auto& entry : entries_) apply(entry,sheet_);
     }
     std::size_t size() const { return std::count_if(entries_.begin(),entries_.end(),[](const auto& e){return !e.widget.expired();}); }
+    void appendScoped(const std::string& css) {
+        auto next=sheet_;std::string error;
+        if(!next.addRulesFromCss(css,&error))throw std::invalid_argument(error);
+        sheet_=std::move(next);
+        for(auto& entry:entries_)apply(entry,sheet_);
+    }
+    void remapWidgets(const std::map<const Widget*,std::shared_ptr<Widget>>& replacements) {
+        for(auto& entry:entries_) {
+            if(auto widget=entry.widget.lock()) {
+                auto found=replacements.find(widget.get());
+                if(found!=replacements.end())entry.widget=found->second;
+            }
+            if(auto content=entry.content.lock()) {
+                auto found=replacements.find(content.get());
+                if(found!=replacements.end())entry.content=std::dynamic_pointer_cast<Stack>(found->second);
+            }
+        }
+    }
+    void applyAll() { for(auto& entry:entries_)apply(entry,sheet_); }
 };
 
 // Implemented by the desktop host, evaluated only by legacy callers that omit
@@ -216,6 +235,12 @@ public:
     void setScope(std::string scope) { scope_ = std::move(scope); }
     std::string scope() const { return scope_; }
     auto styles() const { return styles_; }
+    auto clipboard() const { return clipboard_; }
+    auto scheduler() const { return schedule_; }
+    void attachNative(const std::string& name,const std::shared_ptr<NativeHostView>& host) {
+        const auto found=natives_->find(name);
+        if(found!=natives_->end())host->attach(found->second.widget,found->second.owner);
+    }
     struct Diagnostics { std::size_t subscriptions, ownedObjects, pendingUpdates; };
     Diagnostics diagnostics() const { return {subscriptions_.size(),owned_.size(),life_->pending.size()}; }
     void remember(const std::string& name,const std::shared_ptr<Widget>& widget) {
@@ -252,6 +277,11 @@ public:
     }
     std::vector<std::function<void()>> childFlush_;
     template<class T> void own(std::shared_ptr<T> object) { owned_.push_back(std::move(object)); }
+    // Runtime Elements retain active adapters; retire adapters whose node vanished.
+    void collectUnusedOwned() {
+        owned_.erase(std::remove_if(owned_.begin(),owned_.end(),
+            [](const auto& object){return object.use_count()==1;}),owned_.end());
+    }
     template<class Source, class F> void watch(Source& source, F apply) {
         apply(source.get());
         const auto id = ++life_->next; auto weak = std::weak_ptr<Life>(life_); auto schedule = schedule_;

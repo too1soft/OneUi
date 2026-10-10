@@ -1,0 +1,14 @@
+model DiffVm {
+    rw title: utf8
+    rw enabled: bool
+    rw choice: i64
+    r choices: list<oneui.v1.StringItem>
+    r rows: list<DiffRow>
+    r run.canExecute: bool
+    r run.running: bool
+    command run() when run.canExecute busy run.running
+}
+model DiffRow key id {
+    r id: utf8
+    r text: utf8
+}

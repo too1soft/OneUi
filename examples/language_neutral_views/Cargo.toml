@@ -1,0 +1,17 @@
+[package]
+name = "language-neutral-views"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+oneui = { path = "../../bindings/rust/oneui" }
+
+[features]
+bench-diagnostics = ["oneui/view-diagnostics"]
+
+[[bin]]
+name = "language-neutral-views"
+path = "main.rs"

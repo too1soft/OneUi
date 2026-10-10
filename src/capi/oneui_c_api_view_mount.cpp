@@ -47,6 +47,18 @@ void Mount::publish(const std::shared_ptr<Runtime> &view) {
     if (!destination)
         windowRoot = view->root->element.widget;
     auto weak = weak_from_this();
+    view->republish=[weak,runtime=std::weak_ptr<Runtime>(view)] {
+        auto mount=weak.lock();auto value=runtime.lock();
+        oneui::views::check(bool(mount) && bool(value),ONEUI_VIEW_CLOSED,"Reload mount closed");
+        mount->check();
+        auto root=value->root->element.widget;
+        if(mount->destination) {
+            if(mount->destination->children().empty() || mount->destination->children().front()!=root)
+                mount->destination->setContent(root);
+        } else if(mount->windowRoot!=root) {
+            mount->window->window->setContent(root);mount->window->rootContent=root;mount->windowRoot=root;
+        }
+    };
     view->detach = [weak] {
         if (auto mount = weak.lock()) {
             if (mount->destination)
@@ -167,5 +179,6 @@ OneUiViewResult oneui_view_mount_set_styles(OneUiViewMount *handle, OneUiUtf8Str
             view->styles->replace(combined, nativeDensity);
         mount->externalCss = std::move(external);
         mount->density = nativeDensity;
+        if(view) {view->externalCss=mount->externalCss;view->density=nativeDensity;}
     });
 }

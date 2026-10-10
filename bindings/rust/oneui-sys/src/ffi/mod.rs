@@ -16,3 +16,5 @@ pub mod dock_session;
 pub use dock_session::*;
 pub mod shell;
 pub use shell::*;
+pub mod view;
+pub use view::*;

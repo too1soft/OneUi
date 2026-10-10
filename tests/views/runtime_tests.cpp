@@ -111,7 +111,9 @@ int main(int argc, char **argv) {
             auto child = runtime->root->children.front();
             expect(child->element.as<oneui::Button>()->text() == L"overlay",
                    "CALL binding overrides root static");
-            expect(child->element.classes.find("inner outer") != std::string::npos,
+            expect(child->element.classes.find("inner") != std::string::npos &&
+                   child->element.classes.find("outer") != std::string::npos &&
+                   child->element.classes.find("inner") < child->element.classes.find("outer"),
                    "CALL class order");
             runtime->invoke(child, child->events.front(), {});
             expect(vm.invokes == 1, "CALL event");

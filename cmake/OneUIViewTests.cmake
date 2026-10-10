@@ -30,6 +30,27 @@ target_compile_definitions(oneui_view_list_tests PRIVATE ONEUI_BUILDING_DLL)
 target_include_directories(oneui_view_list_tests PRIVATE src)
 add_dependencies(oneui_view_list_tests oneui_view_test_ir)
 add_test(NAME oneui_view_list_tests COMMAND oneui_view_list_tests "${CMAKE_CURRENT_BINARY_DIR}/Runtime.oneview")
+add_executable(oneui_view_reload_tests tests/views/reload_tests.cpp)
+target_link_libraries(oneui_view_reload_tests PRIVATE oneui_views oneui_core)
+target_compile_definitions(oneui_view_reload_tests PRIVATE ONEUI_BUILDING_DLL)
+target_include_directories(oneui_view_reload_tests PRIVATE src)
+add_dependencies(oneui_view_reload_tests oneui_view_test_ir)
+foreach(fixture Reload ReloadRemoved ReloadEmpty)
+    add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/${fixture}.oneview"
+        COMMAND oneui-viewc --emit ir --input "${PROJECT_SOURCE_DIR}/tests/views/${fixture}.one"
+            --schema "${PROJECT_SOURCE_DIR}/tests/views/Runtime.oneschema" --name "${fixture}"
+            --output "${CMAKE_CURRENT_BINARY_DIR}/${fixture}.oneview"
+        DEPENDS oneui-viewc "tests/views/${fixture}.one" tests/views/Runtime.oneschema VERBATIM)
+endforeach()
+add_custom_target(oneui_view_reload_ir DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/Reload.oneview" "${CMAKE_CURRENT_BINARY_DIR}/ReloadRemoved.oneview" "${CMAKE_CURRENT_BINARY_DIR}/ReloadEmpty.oneview")
+add_dependencies(oneui_view_reload_tests oneui_view_reload_ir)
+add_test(NAME oneui_view_reload_tests COMMAND oneui_view_reload_tests "${CMAKE_CURRENT_BINARY_DIR}/Reload.oneview" "${CMAKE_CURRENT_BINARY_DIR}/ReloadRemoved.oneview" "${CMAKE_CURRENT_BINARY_DIR}/ReloadEmpty.oneview")
+add_executable(oneui_view_cpp_diff_tests tests/views/cpp_diff_tests.cpp)
+target_link_libraries(oneui_view_cpp_diff_tests PRIVATE oneui)
+target_include_directories(oneui_view_cpp_diff_tests PRIVATE tests/views tests)
+oneui_target_view(oneui_view_cpp_diff_tests NAME DiffIr SOURCE tests/views/Diff.one
+    SCHEMA tests/views/Diff.oneschema VM_HEADER diff_vm.h)
+add_test(NAME oneui_view_cpp_diff_tests COMMAND oneui_view_cpp_diff_tests)
 set(view_c_smoke "${CMAKE_CURRENT_BINARY_DIR}/oneui_view_c_header_tests${CMAKE_EXECUTABLE_SUFFIX}")
 if(MSVC)
     add_custom_command(OUTPUT "${view_c_smoke}"

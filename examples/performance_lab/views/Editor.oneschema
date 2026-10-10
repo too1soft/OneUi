@@ -1,0 +1,38 @@
+// Explicit VM contract for the shared OneView IR.
+model LabVm {
+    r editor.back.canExecute: bool
+    r editor.back.running: bool
+    r editor.backText: utf8
+    r editor.densities: list<oneui.v1.StringItem>
+    rw editor.density: i64
+    r editor.description: utf8
+    r editor.failNext.canExecute: bool
+    r editor.failNext.running: bool
+    r editor.heading: utf8
+    rw editor.host: utf8
+    r editor.hostError: utf8
+    rw editor.name: utf8
+    r editor.nameError: utf8
+    rw editor.note: utf8
+    r editor.noteError: utf8
+    rw editor.port: utf8
+    r editor.portError: utf8
+    rw editor.protocol: i64
+    r editor.protocols: list<oneui.v1.StringItem>
+    rw editor.reconnect: bool
+    r editor.reset.canExecute: bool
+    r editor.reset.running: bool
+    r editor.save.canExecute: bool
+    r editor.save.running: bool
+    r editor.saveText: utf8
+    r editor.status: utf8
+    rw editor.theme: i64
+    r editor.themes: list<oneui.v1.StringItem>
+    rw editor.timeout: utf8
+    r editor.timeoutError: utf8
+    r editor.tone: utf8
+    command editor.back() when editor.back.canExecute busy editor.back.running
+    command editor.failNext() when editor.failNext.canExecute busy editor.failNext.running
+    command editor.reset() when editor.reset.canExecute busy editor.reset.running
+    command editor.save() when editor.save.canExecute busy editor.save.running
+}

@@ -2,6 +2,13 @@
 
 实现日期：2026-09-27。Windows / C++17 / Yoga 验证入口位于仓库内 `examples/declarative`。
 
+WP3 更新：C++ 和 Rust 现在共享 `.oneschema` 契约及 `.oneview` 二进制运行时，
+不再生成逐节点 C++ 控件构造代码。下面的 `build_X(vm, ui)` 接口保留，VM 必须活到
+Mount 销毁；短期组合 VM 请传 `shared_ptr<VM>`。`oneui_target_view` 默认读取模板旁的
+同名 `.oneschema`，也可传 `SCHEMA path`。CLI 使用 `--emit cpp|rust|ir --schema path`；
+旧的 `cpp-legacy` emitter 已删除。生成器提供 `scope_X("relative.one")`，不要硬编码
+旧 `scope_X` CSS 类名。迁移和生命周期见 [语言无关声明式层](59-language-neutral-views.md)。
+
 ## 最小接入
 
 业务逻辑使用 `State<T>`、`ui::Computed<T>`、`ui::VmCommand`。原生代码组合和 `.one` 模板都使用 `ui::Mount`，构建后保留同一棵控件树。

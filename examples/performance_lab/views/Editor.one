@@ -1,4 +1,4 @@
-<template>
+<template view-model="LabVm">
   <Page>
     <Header :title="editor.heading">
       <Text :text="editor.description" />

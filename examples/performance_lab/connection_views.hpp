@@ -1,5 +1,6 @@
 #pragma once
 #include "connection_models.hpp"
+#include "Connections.g.h"
 
 namespace connection_demo {
 // The same public layout components handle read-only fields and editable fields.
@@ -34,13 +35,13 @@ inline Page buildDetails(Mount &mount, VM &vm, Connections &flow) {
 inline Page buildWorkspace(Mount &mount, VM &vm, Connections &flow) {
     Compose ui(mount);
     const auto oldScope = mount.scope();
-    mount.setScope("scope_Connections_Editor");
+    mount.setScope(scope_Connections("Editor.one"));
     auto form = buildPage(mount, vm);
     mount.condition(form.root, flow.showForm);
-    mount.setScope("scope_Connections_Details");
+    mount.setScope(scope_Connections("Details.one"));
     auto detail = buildDetails(mount, vm, flow);
     mount.condition(detail.root, flow.showDetail);
-    mount.setScope("scope_Connections");
+    mount.setScope(scope_Connections("Connections.one"));
     auto search = ui.search(flow.query).name(L"搜索连接").placeholder(L"搜索名称、地址或 ID");
     auto table = ui.table(flow.columns, flow.filtered, flow.selectedKey)
                      .name(L"连接列表")
@@ -102,7 +103,7 @@ struct TemplateModel {
     Connections &list;
 };
 inline Page buildTemplate(Mount &ui, VM &vm, Connections &flow) {
-    TemplateModel model{vm, flow};
+    auto model=std::make_shared<TemplateModel>(TemplateModel{vm, flow});
     auto root = build_Connections(model, ui);
     std::map<std::string, std::shared_ptr<Widget>> fields;
     for (auto name : {"name", "host", "port", "timeout", "note"})

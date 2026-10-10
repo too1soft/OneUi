@@ -1,0 +1,18 @@
+<import name="Box" src="DiffBox.one" />
+<import name="Action" src="DiffAction.one" />
+<template view-model="DiffVm">
+  <Column>
+    <Box class="caller" visible="true"><Text text="slot" /></Box>
+    <Input v-model="title" ref="input" />
+    <Switch v-model="enabled" />
+    <Button @click="run" :text="title" />
+    <Text v-for="row in rows" :key="row.id" :text="row.text" />
+    <Select :items="choices" v-model="choice" />
+    <Scroll><Text text="scroll content" /></Scroll>
+    <Action class="caller-action" :text="title" @click="run" />
+  </Column>
+</template>
+<style scoped>
+Column.caller { padding: 7px; }
+Button.caller-action { font-size: 19px; }
+</style>

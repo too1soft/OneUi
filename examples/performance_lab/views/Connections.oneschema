@@ -1,0 +1,109 @@
+// Explicit VM contract for the shared OneView IR.
+model LabVm {
+    r editor.back.canExecute: bool
+    r editor.back.running: bool
+    r editor.backText: utf8
+    r editor.densities: list<oneui.v1.StringItem>
+    rw editor.density: i64
+    r editor.description: utf8
+    r editor.failNext.canExecute: bool
+    r editor.failNext.running: bool
+    r editor.heading: utf8
+    rw editor.host: utf8
+    r editor.hostError: utf8
+    rw editor.name: utf8
+    r editor.nameError: utf8
+    rw editor.note: utf8
+    r editor.noteError: utf8
+    rw editor.port: utf8
+    r editor.portError: utf8
+    rw editor.protocol: i64
+    r editor.protocols: list<oneui.v1.StringItem>
+    rw editor.reconnect: bool
+    r editor.reset.canExecute: bool
+    r editor.reset.running: bool
+    r editor.save.canExecute: bool
+    r editor.save.running: bool
+    r editor.saveText: utf8
+    r editor.status: utf8
+    rw editor.theme: i64
+    r editor.themes: list<oneui.v1.StringItem>
+    rw editor.timeout: utf8
+    r editor.timeoutError: utf8
+    r editor.tone: utf8
+    r list.add.canExecute: bool
+    r list.add.running: bool
+    r list.back.canExecute: bool
+    r list.back.running: bool
+    r list.canSavePrompt: bool
+    r list.clear.canExecute: bool
+    r list.clear.running: bool
+    r list.columns: list<oneui.v1.Column>
+    r list.confirmDelete.canExecute: bool
+    r list.confirmDelete.running: bool
+    r list.count: utf8
+    r list.deleting: bool
+    r list.detailBack.canExecute: bool
+    r list.detailBack.running: bool
+    r list.detailHost: utf8
+    r list.detailKey: utf8
+    r list.detailName: utf8
+    r list.detailNote: utf8
+    r list.detailPort: utf8
+    r list.detailProtocol: utf8
+    r list.detailReconnect: utf8
+    r list.detailStatus: utf8
+    r list.detailTimeout: utf8
+    r list.detailTone: utf8
+    r list.discard.canExecute: bool
+    r list.discard.running: bool
+    r list.edit.canExecute: bool
+    r list.edit.running: bool
+    r list.empty: bool
+    r list.emptyText: utf8
+    r list.emptyTitle: utf8
+    rw list.filter: i64
+    r list.filtered: list<oneui.v1.Row>
+    r list.filters: list<oneui.v1.StringItem>
+    r list.hasRecords: bool
+    r list.hasRows: bool
+    r list.keep.canExecute: bool
+    r list.keep.running: bool
+    r list.message: utf8
+    r list.noRecords: bool
+    r list.notDeleting: bool
+    r list.prompt: bool
+    r list.promptText: utf8
+    r list.promptTitle: utf8
+    rw list.query: utf8
+    r list.remove.canExecute: bool
+    r list.remove.running: bool
+    r list.saveLeave.canExecute: bool
+    r list.saveLeave.running: bool
+    rw list.selectedKey: utf8
+    r list.selection: utf8
+    r list.showDetail: bool
+    r list.showForm: bool
+    r list.showGallery.canExecute: bool
+    r list.showGallery.running: bool
+    r list.showList: bool
+    r list.styleError: utf8
+    r list.view.canExecute: bool
+    r list.view.running: bool
+    command editor.back() when editor.back.canExecute busy editor.back.running
+    command editor.failNext() when editor.failNext.canExecute busy editor.failNext.running
+    command editor.reset() when editor.reset.canExecute busy editor.reset.running
+    command editor.save() when editor.save.canExecute busy editor.save.running
+    command list.add() when list.add.canExecute busy list.add.running
+    command list.back() when list.back.canExecute busy list.back.running
+    command list.clear() when list.clear.canExecute busy list.clear.running
+    command list.confirmDelete() when list.confirmDelete.canExecute busy list.confirmDelete.running
+    command list.detailBack() when list.detailBack.canExecute busy list.detailBack.running
+    command list.discard() when list.discard.canExecute busy list.discard.running
+    command list.edit() when list.edit.canExecute busy list.edit.running
+    command list.keep() when list.keep.canExecute busy list.keep.running
+    command list.remove() when list.remove.canExecute busy list.remove.running
+    command list.saveLeave() when list.saveLeave.canExecute busy list.saveLeave.running
+    command list.showGallery() when list.showGallery.canExecute busy list.showGallery.running
+    command list.view() when list.view.canExecute busy list.view.running
+}

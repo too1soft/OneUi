@@ -200,6 +200,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "oneui-view-tests"
+version = "0.1.0"
+dependencies = [
+ "oneui",
+]
+
+[[package]]
 name = "percent-encoding"
 version = "2.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

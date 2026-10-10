@@ -4,6 +4,7 @@
 // Compile the same source used by the generator, including isolated negative
 // fixtures. The dependency still supplies the actual product runtime linkage.
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
+mod view_value;
 
 mod layout {
     use crate::*;
@@ -22,6 +23,7 @@ fn main() {
         "linked OneUI ABI version"
     );
     layout::run();
+    view_value::run();
     extern "C" {
         fn oneui_abi_checked_signatures() -> usize;
     }

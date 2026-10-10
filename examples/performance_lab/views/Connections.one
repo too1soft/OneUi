@@ -1,6 +1,6 @@
 <import name="Editor" src="Editor.one" />
 <import name="Details" src="Details.one" />
-<template>
+<template view-model="LabVm">
   <Column class="workspace" grow="1">
     <ValidationMessage :text="list.styleError" />
     <Page v-if="list.showList">

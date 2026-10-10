@@ -1,0 +1,13 @@
+model RustPage {
+    rw title: utf8
+    rw enabled: bool
+    r status: utf8
+    r rows: list<RustRow>
+    command run()
+    command choose(target: utf8)
+}
+model RustRow key id {
+    r id: utf8
+    r text: utf8
+    command select()
+}

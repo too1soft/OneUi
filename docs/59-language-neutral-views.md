@@ -787,3 +787,33 @@ S2/S3 实测范围与构建限制分别见 `59-language-neutral-views-s2-report.
 Runtime 的构造服务参数为 shared_ptr<Clipboard>，工厂调用 TextField::setClipboard；列表子 Mount 继承服务。旧 Mount 缺省服务通过宿主实现的 defaultMountClipboard() 返回 SystemClipboard，新 runtime 必须显式传服务（可空），因此不产生平台符号依赖。窗口的 observeClosed/post/detach 只在 C ABI 适配中转换为 weak 控制块和函数接口。公共声明式头不包含 Window。
 
 prepareChildren 限制新加入节点尚未挂载，提供事务所需保证；reconcileChildren 保持既有菜单等调用者的直接重挂载行为，两者不可混同。热重载以后只能选择有明确异常保证的准备入口。
+
+## 16. S4–S6 实现对照与最终检查点
+
+Rust 生成器输出 trait、属性常量、命令 enum、ModelSpec/define_view_adapter 和嵌入 IR，
+IR 字节与独立 `--emit ir` 相同。实际入口是
+`View::instantiate<Vm>(&ViewMount, ViewSpec<Vm>, Rc<RefCell<Vm>>) -> VmResult<View>`；
+notifier() 返回 VmResult，View/HostRef/notifier 均为 UI 线程所有。回调 scratch 和
+RefCell 借用由 adapter 管理，VM 保留 Rc 所有权；HostRef 持有完整外部 owner lease。
+dispatcher 和任务回收迁到 dispatcher.rs，公开 API 由 lib.rs re-export 保持。
+
+C++ 默认 emitter 也只生成 VM adapter + IR。`.oneschema` 成为必要契约；CMake 默认
+读取相邻同名文件，可显式 SCHEMA。`build_X(VM&, Mount&)` 的 VM 必须活到 Mount 之后；
+推荐 `build_X(shared_ptr<VM>, Mount&)`。旧逐节点 emitter 已删除，仅在差分测试保留
+冻结 oracle。源 CSS scope 现在由路径与模板名散列，手写对照通过生成的 scope_X 查询。
+
+S5 新增原草案已定义、S3 延期的 oneui_view_reload。分支尚未合入主线（主线为 43），
+整个 WP3 合并时只升一次，因此仍为 **ABI 44**；已有 POD/签名不改。View::reload(&mut self, &[u8]) 防止安全 Rust
+在 HostRef 借用期间重载；开发 watcher 200 ms 合并通知并在 Drop 时 join。
+匹配节点保留真实 Widget；消失的输入节点先提交 composition，Host BUSY 先于提交检查。
+附着 Host 改名/删除/父级或兄弟位置变更均拒绝。50 次保留重载和 50 次列表删除恢复已测。
+
+强异常保证的实际边界：解析、schema、Host BUSY 和读/准备阶段错误保留旧 View；
+发布后原生 setter 的系统性 OOM 尚无完整旧值回滚证明。C++ Mount 旧 CSS 热更新保留，
+结构重载由独立 C View/Rust View 入口提供。两项边界在 S5 报告列出，待最终评审，
+不能把设计草案的完整事务目标当成已经验证的结果。
+
+S6 是本地模拟设置页，遵循 D8 的行为/数据流同构。性能以同一 release exe、同一 VM 的
+小型等价页面及 1,000 行表格配对，避免借更慢整页稀释适配成本；真实 WM_PAINT 返回
+作为后端提交终点，不声称屏幕呈现。完整数据、未达标项与可复现命令保存在
+`docs/benchmarks/language-neutral-views/`；检查点结果以 S4/S5/S6 报告为准。

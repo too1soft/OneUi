@@ -597,6 +597,7 @@ oneui_view_destroy
 oneui_view_disconnect
 oneui_view_find_host
 oneui_view_flush
+oneui_view_reload
 oneui_view_get_error
 oneui_view_host_attach
 oneui_view_host_detach

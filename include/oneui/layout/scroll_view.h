@@ -15,6 +15,8 @@ public:
     ScrollView();
 
     void setContent(std::shared_ptr<Widget> content);
+    // Synchronize cached content after a prepared native-tree transaction.
+    void syncPreparedContent() noexcept;
     void setContentWidth(float width);
     void setContentHeight(float height);
     void setWheelStep(float step);

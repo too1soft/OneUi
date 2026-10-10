@@ -2,6 +2,12 @@
 
 日期：2026-09-28。状态：**C++／`.one` 声明式开发第一阶段完成，可作为继续开发应用的基线；仍为 0.1 开发版。**
 
+WP3 后续更新：本页保留早期阶段记录。当前 `.one` 需配 `.oneschema`，C++/Rust
+均由同一 IR runtime 创建控件树。开发模式可通过 `oneui_view_reload` 或 Rust
+`ViewReloadWatcher` 替换编译后的 IR；附着 Host 的结构变更返回 BUSY，schema
+变化要求重建 View。细节及最终检查点证据见 [设计稿](59-language-neutral-views.md)、
+[S5 报告](59-language-neutral-views-s5-report.md) 和 [S6 报告](59-language-neutral-views-s6-report.md)。
+
 ## 完成到什么程度
 
 - C++ Compose 和 `.one` 共用 ViewModel、原生组件与保留控件树，包含属性绑定、双向输入、事件、条件、稳定 key、模板组件与插槽。

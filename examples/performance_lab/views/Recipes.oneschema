@@ -1,0 +1,43 @@
+// Explicit VM contract for the shared OneView IR.
+model LabVm {
+    rw sample.appearanceIndex: i64
+    r sample.appearances: list<oneui.v1.StringItem>
+    r sample.applySettings.canExecute: bool
+    r sample.applySettings.running: bool
+    r sample.clear.canExecute: bool
+    r sample.clear.running: bool
+    r sample.closeDetail.canExecute: bool
+    r sample.closeDetail.running: bool
+    r sample.columns: list<oneui.v1.Column>
+    r sample.count: utf8
+    r sample.detailOpen: bool
+    r sample.empty: bool
+    rw sample.enabled: bool
+    r sample.error: utf8
+    r sample.hasRows: bool
+    r sample.hasSelection: bool
+    r sample.listVariant: utf8
+    rw sample.name: utf8
+    r sample.noSelection: bool
+    r sample.nodeName: utf8
+    r sample.openDetail.canExecute: bool
+    r sample.openDetail.running: bool
+    rw sample.query: utf8
+    r sample.rows: list<oneui.v1.Row>
+    r sample.saveStatus: utf8
+    rw sample.selected: utf8
+    r sample.settingsVariant: utf8
+    r sample.showWorkspaceList.canExecute: bool
+    r sample.showWorkspaceList.running: bool
+    r sample.showWorkspaceSettings.canExecute: bool
+    r sample.showWorkspaceSettings.running: bool
+    r sample.surfaceAppearance: utf8
+    r sample.workspaceList: bool
+    r sample.workspaceSettings: bool
+    command sample.applySettings() when sample.applySettings.canExecute busy sample.applySettings.running
+    command sample.clear() when sample.clear.canExecute busy sample.clear.running
+    command sample.closeDetail() when sample.closeDetail.canExecute busy sample.closeDetail.running
+    command sample.openDetail() when sample.openDetail.canExecute busy sample.openDetail.running
+    command sample.showWorkspaceList() when sample.showWorkspaceList.canExecute busy sample.showWorkspaceList.running
+    command sample.showWorkspaceSettings() when sample.showWorkspaceSettings.canExecute busy sample.showWorkspaceSettings.running
+}

@@ -1,0 +1,55 @@
+<template view-model="SettingsBasic">
+  <Page>
+    <Header title="设置 → 基础">
+      <Text text="当前进程内的模拟设置" class="muted" />
+      <Text :text="selected_theme" />
+    </Header>
+      <SettingsPage grow="1" basis="0">
+        <Section title="主题画廊">
+          <Column>
+            <Surface v-for="theme in themes" :key="theme.id" appearance="outlined">
+              <Text :text="theme.group" />
+              <Button :text="theme.title" @click="theme.select" />
+              <Status v-if="theme.selected" text="已选择" tone="success" />
+            </Surface>
+          </Column>
+        </Section>
+        <Section title="界面与启动">
+          <FormGrid>
+            <FormRow label="语言"><Select :items="languages" v-model="language" /></FormRow>
+            <FormRow label="标题栏风格"><Select :items="titlebars" v-model="titlebar" /></FormRow>
+            <FormRow label="紧凑密度"><Switch v-model="compact" /></FormRow>
+            <FormRow label="关闭动作"><Select :items="close_actions" v-model="close_action" /></FormRow>
+            <FormRow label="开机启动"><Switch v-model="launch_at_login" /></FormRow>
+            <FormRow label="启动时最小化"><Switch v-model="start_minimized" /></FormRow>
+          </FormGrid>
+        </Section>
+        <Section title="字体与背景">
+          <FormGrid>
+            <FormRow label="字体族"><Input v-model="font_family" /></FormRow>
+            <FormRow label="界面比例" hint="0.75–2.00"><Input v-model="scale" /></FormRow>
+            <FormRow label="背景路径" hint="仅模拟选择，不读取文件"><Input v-model="background_path" /></FormRow>
+            <FormRow label="背景强度" hint="0–100"><Input v-model="background_strength" /></FormRow>
+            <FormRow label="内容不透明度" hint="0–100"><Input v-model="content_opacity" /></FormRow>
+          </FormGrid>
+          <Toolbar>
+            <Button @click="choose_background">模拟选择背景</Button>
+            <Button @click="cancel_background">模拟取消</Button>
+            <Button @click="clear_background">清除背景</Button>
+          </Toolbar>
+        </Section>
+      </SettingsPage>
+    <ValidationMessage :text="error" />
+    <ActionBar>
+      <Status :text="status" />
+      <Text v-if="busy" text="正在处理…" />
+      <Button @click="reset">恢复默认</Button>
+      <Button @click="fail_next">下次模拟失败</Button>
+      <Button variant="primary" @click="save">保存设置</Button>
+    </ActionBar>
+  </Page>
+</template>
+<style scoped>
+Section { gap: 12px; }
+Surface { padding: 12px; gap: 8px; }
+</style>

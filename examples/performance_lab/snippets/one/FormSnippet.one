@@ -1,4 +1,4 @@
-<template>
+<template view-model="FormSnippet">
   <SettingsPage title="设置">
     <FormGrid>
       <FormRow label="名称"><Input placeholder="输入名称" /></FormRow>

@@ -1,0 +1,3 @@
+// Explicit VM contract for the shared OneView IR.
+model TerminalSnippet {
+}

@@ -141,6 +141,20 @@ void Runtime::notifyList(const std::shared_ptr<Scope> &scope, uint32_t property,
     enqueue();
 }
 void Runtime::flush() {
+    for(unsigned pass=0;pass<32;++pass) {
+        flushPass();
+        auto writes=std::move(modelWrites);modelWrites.clear();
+        bool changed=false;
+        for(auto &write:writes)if(auto scope=write.scope.lock()) {
+            if(!scope->closed && read(scope,write.property)==write.expected) {
+                set(scope,write.property,write.replacement);changed=true;
+            }
+        }
+        if(!changed)return;
+    }
+    throw Failure(ONEUI_VIEW_LIMIT,"Selection normalization failed to converge");
+}
+void Runtime::flushPass() {
     onThread();
     alive();
     check(!depth && !flushing && callbackPhase == Phase::Idle, ONEUI_VIEW_REENTRANT,
@@ -169,11 +183,13 @@ void Runtime::flush() {
         scopes.erase(
             std::remove_if(scopes.begin(), scopes.end(), [](const auto &s) { return s->closed; }),
             scopes.end());
+        factory.collectUnusedOwned();
         flushing = false;
         alive();
         if (error.sequence != sequence)
             throw Failure(error.result, "Reentrant callback rejected during flush");
     } catch (...) {
+        modelWrites.clear();
         commits.clear();
         for (auto it = rollbacks.rbegin(); it != rollbacks.rend(); ++it)
             (*it)();

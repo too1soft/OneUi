@@ -1,4 +1,4 @@
-<template>
+<template view-model="TerminalWorkbench">
   <Workspace>
     <TitleBar>
       <Icon symbol="terminal" size="16"/><Text class="brand">OneUI / 终端工作台</Text><Text v-if="wide" class="muted">交互示例 · 模拟会话</Text><Spacer/>

@@ -1,0 +1,34 @@
+model SettingsBasic {
+    r themes: list<ThemeItem>
+    r languages: list<oneui.v1.StringItem>
+    r titlebars: list<oneui.v1.StringItem>
+    r close_actions: list<oneui.v1.StringItem>
+    rw language: i64
+    rw titlebar: i64
+    rw compact: bool
+    rw close_action: i64
+    rw launch_at_login: bool
+    rw start_minimized: bool
+    rw font_family: utf8
+    rw scale: utf8
+    rw background_path: utf8
+    rw background_strength: utf8
+    rw content_opacity: utf8
+    r status: utf8
+    r error: utf8
+    r busy: bool
+    r selected_theme: utf8
+    command reset()
+    command save() busy busy
+    command fail_next()
+    command choose_background() busy busy
+    command cancel_background()
+    command clear_background()
+}
+model ThemeItem key id {
+    r id: utf8
+    r title: utf8
+    r group: utf8
+    r selected: bool
+    command select()
+}

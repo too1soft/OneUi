@@ -11,6 +11,7 @@ public:
     void setBreakpoint(float width);
     void setPaneWidth(float width);
     void setDetailOpen(bool open);
+    void syncPreparedContent() noexcept;
     // Explicit navigation also moves keyboard focus in the two-pane layout.
     bool activatePane(bool detail);
     bool detailOpen() const { return detailOpen_; }

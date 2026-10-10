@@ -1,0 +1,62 @@
+// Explicit VM contract for the shared OneView IR.
+model LabVm {
+    rw sample.address: utf8
+    r sample.back.canExecute: bool
+    r sample.back.running: bool
+    r sample.clear.canExecute: bool
+    r sample.clear.running: bool
+    r sample.columns: list<oneui.v1.Column>
+    r sample.count: utf8
+    r sample.effectPreset: utf8
+    r sample.effectsVisible: bool
+    r sample.empty: bool
+    rw sample.enabled: bool
+    r sample.error: utf8
+    r sample.expandText: utf8
+    r sample.expanded: bool
+    r sample.formVisible: bool
+    rw sample.gradient: i64
+    r sample.gradients: list<oneui.v1.StringItem>
+    r sample.hasRows: bool
+    r sample.loading: bool
+    r sample.loadingText: utf8
+    r sample.message: utf8
+    rw sample.motion: i64
+    r sample.motions: list<oneui.v1.StringItem>
+    rw sample.name: utf8
+    rw sample.note: utf8
+    rw sample.protocol: i64
+    rw sample.query: utf8
+    rw sample.reducedMotion: bool
+    r sample.rows: list<oneui.v1.Row>
+    rw sample.scene: i64
+    r sample.scenes: list<oneui.v1.StringItem>
+    rw sample.selected: utf8
+    r sample.selection: utf8
+    r sample.statesVisible: bool
+    rw sample.strength: i64
+    r sample.strengths: list<oneui.v1.StringItem>
+    r sample.tableVisible: bool
+    rw sample.timing: i64
+    r sample.timings: list<oneui.v1.StringItem>
+    r sample.toggleExpanded.canExecute: bool
+    r sample.toggleExpanded.running: bool
+    r sample.toggleLoading.canExecute: bool
+    r sample.toggleLoading.running: bool
+    r sample.tone: utf8
+    r sample.validate.canExecute: bool
+    r sample.validate.running: bool
+    rw sample.visualPreset: i64
+    r sample.visualPresets: list<oneui.v1.StringItem>
+    r sample.workspaceVisible: bool
+    r settings.densities: list<oneui.v1.StringItem>
+    rw settings.density: i64
+    r settings.protocols: list<oneui.v1.StringItem>
+    rw settings.theme: i64
+    r settings.themes: list<oneui.v1.StringItem>
+    command sample.back() when sample.back.canExecute busy sample.back.running
+    command sample.clear() when sample.clear.canExecute busy sample.clear.running
+    command sample.toggleExpanded() when sample.toggleExpanded.canExecute busy sample.toggleExpanded.running
+    command sample.toggleLoading() when sample.toggleLoading.canExecute busy sample.toggleLoading.running
+    command sample.validate() when sample.validate.canExecute busy sample.validate.running
+}

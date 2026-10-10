@@ -1,5 +1,6 @@
 #pragma once
 #include "connection_editor.hpp"
+#include "Gallery.g.h"
 
 namespace connection_demo {
 struct Samples {
@@ -44,7 +45,7 @@ struct Samples {
         return syntax::css("Section.effect-shadow { box-shadow: 0px 4px "+std::to_string(blur)+"px #00000026; }\n"
           "Input.effect-inset { box-shadow: inset 0px 2px "+std::to_string(blur/2)+"px #00000040; }\n"
           "Section.effect-gradient { background: "+std::string(gradient.get()==0?"linear-gradient(110deg, #d9f5e5 0%, #9ddfd0 48%, #c3e5f5 100%)":"radial-gradient(80% at 25% 30%, #e8f7cf 0%, #9ddfd0 48%, #c3e5f5 100%)")+"; }\n"
-          "Reveal.effect-reveal { transition-duration: "+std::to_string(duration)+"ms; }","scope_Gallery");
+          "Reveal.effect-reveal { transition-duration: "+std::to_string(duration)+"ms; }",scope_Gallery("Gallery.one"));
     }
     Computed<bool> formVisible{[this]{return scene.get()==0;},scene};
     Computed<bool> tableVisible{[this]{return scene.get()==1;},scene};
@@ -75,10 +76,10 @@ struct GalleryModel { VM& settings; Samples& sample; };
 #include "recipe_code.hpp"
 namespace connection_demo {
 inline Element buildGallery(Mount& ui,VM& settings,Samples& samples,bool codeRecipes=false) {
-    GalleryModel model{settings,samples};auto root=build_Gallery(model,ui);
+    auto model=std::make_shared<GalleryModel>(GalleryModel{settings,samples});auto root=build_Gallery(model,ui);
     auto built=std::make_shared<bool>(false);
     ui.watch(samples.scene,[&ui,&settings,&samples,built,codeRecipes](int scene){
-        if(scene!=4 || *built)return;*built=true;GalleryModel model{settings,samples};
+        if(scene!=4 || *built)return;*built=true;auto model=std::make_shared<GalleryModel>(GalleryModel{settings,samples});
         auto page=codeRecipes?buildRecipeCode(ui,settings,samples):build_Recipes(model,ui);
         std::weak_ptr<AdaptivePanes> panes=std::dynamic_pointer_cast<AdaptivePanes>(ui.find("recipePanes"));
         samples.navigatePane=[panes](bool detail){if(auto live=panes.lock())live->activatePane(detail);};

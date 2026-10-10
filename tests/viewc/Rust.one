@@ -1,0 +1,9 @@
+<template view-model="RustPage">
+  <Column>
+    <Input v-model="title"/>
+    <Switch v-model="enabled"/>
+    <Button :text="title" @click="run"/>
+    <Text v-for="row in rows" :key="row.id" :text="row.text"/>
+    <NativeHost host="content"/>
+  </Column>
+</template>

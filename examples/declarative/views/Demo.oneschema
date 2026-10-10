@@ -1,0 +1,60 @@
+// Explicit VM contract for the shared OneView IR.
+model DemoVM {
+    r add.canExecute: bool
+    r add.running: bool
+    rw autoRefresh: bool
+    r columns: list<oneui.v1.Column>
+    r connections: bool
+    r count: utf8
+    r details: bool
+    r failNext.canExecute: bool
+    r failNext.running: bool
+    rw filter: i64
+    r filtered: list<oneui.v1.Row>
+    r filters: list<oneui.v1.StringItem>
+    rw interval: utf8
+    r intervalError: utf8
+    rw name: utf8
+    r nameError: utf8
+    rw query: utf8
+    r reload.canExecute: bool
+    r reload.running: bool
+    r remove.canExecute: bool
+    r remove.running: bool
+    r save.canExecute: bool
+    r save.running: bool
+    r saveText: utf8
+    r selectedAddress: utf8
+    rw selectedKey: utf8
+    r selectedLatency: utf8
+    r selectedName: utf8
+    r selectedStatus: utf8
+    r selectedTone: utf8
+    r settings: bool
+    r showConnections.canExecute: bool
+    r showConnections.running: bool
+    r showDetails.canExecute: bool
+    r showDetails.running: bool
+    r showEmpty: bool
+    r showSettings.canExecute: bool
+    r showSettings.running: bool
+    r showTable: bool
+    r status: utf8
+    r statusTone: utf8
+    r styleError: utf8
+    rw theme: i64
+    r themes: list<oneui.v1.StringItem>
+    r tips: list<DemoVM_Tip>
+    command add() when add.canExecute busy add.running
+    command failNext() when failNext.canExecute busy failNext.running
+    command reload() when reload.canExecute busy reload.running
+    command remove() when remove.canExecute busy remove.running
+    command save() when save.canExecute busy save.running
+    command showConnections() when showConnections.canExecute busy showConnections.running
+    command showDetails() when showDetails.canExecute busy showDetails.running
+    command showSettings() when showSettings.canExecute busy showSettings.running
+}
+model DemoVM_Tip key id {
+    r id: utf8
+    r text: utf8
+}

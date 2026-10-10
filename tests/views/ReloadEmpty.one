@@ -1,0 +1,6 @@
+<template view-model="Root">
+  <Column view-id="root">
+    <Text view-id="title" :text="title"/>
+    <NativeHost view-id="host" host="terminal"/>
+  </Column>
+</template>

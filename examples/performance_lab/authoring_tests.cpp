@@ -19,6 +19,9 @@ struct Temporary {
 };
 static void write(const std::filesystem::path& file,const std::string& text){std::ofstream out(file,std::ios::binary);out<<text;}
 int main(int argc,char** argv){try {
+    // Compare settled styles, not different elapsed construction-time animations.
+    // Motion behavior has its own retained-input and retarget regression suite.
+    oneui::setMotionEnabled(false);
     if(argc==2 && std::string(argv[1])=="--construction-benchmark") {
         std::cout<<"round,entry,build_ms,widgets,subscriptions,styles\n";
         for(int round=0;round<12;++round)for(int index=0;index<2;++index) {
@@ -48,11 +51,14 @@ int main(int argc,char** argv){try {
             f->ui.styles()->replace(declarativeTheme(dark,spacing),spacing);f->page.root.widget->setFrame({0,0,width,800});
         }
         auto a=code.paint(),b=compiled.paint();CHECK(a.texts.size()==b.texts.size());CHECK(a.fillRects.size()==b.fillRects.size());
-        for(size_t i=0;i<a.texts.size();++i){if(a.texts[i].text!=b.texts[i].text){auto utf=[](const std::wstring& s){return std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>>{}.to_bytes(s);};throw std::runtime_error("scene="+std::to_string(scene)+" text="+std::to_string(i)+" code="+utf(a.texts[i].text)+" template="+utf(b.texts[i].text));}equalRect(a.texts[i].rect,b.texts[i].rect);CHECK(sameColor(a.texts[i].color,b.texts[i].color));CHECK(near(a.texts[i].size,b.texts[i].size));}
+        for(size_t i=0;i<a.texts.size();++i){if(a.texts[i].text!=b.texts[i].text){auto utf=[](const std::wstring& s){return std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>>{}.to_bytes(s);};throw std::runtime_error("scene="+std::to_string(scene)+" text="+std::to_string(i)+" code="+utf(a.texts[i].text)+" template="+utf(b.texts[i].text));}equalRect(a.texts[i].rect,b.texts[i].rect);if(!sameColor(a.texts[i].color,b.texts[i].color))throw std::runtime_error("color text="+oneui::ui::view::utf8(a.texts[i].text)+" scene="+std::to_string(scene)+" dark="+std::to_string(dark)+" text="+std::to_string(i)+" red="+std::to_string(a.texts[i].color.r)+"/"+std::to_string(b.texts[i].color.r));CHECK(near(a.texts[i].size,b.texts[i].size));}
         for(size_t i=0;i<a.fillRects.size();++i){equalRect(a.fillRects[i].rect,b.fillRects[i].rect);CHECK(sameColor(a.fillRects[i].color,b.fillRects[i].color));CHECK(near(a.fillRects[i].radius,b.fillRects[i].radius));}
         CHECK(inspectLayout(code.page.root.widget,*code.ui.styles()).empty());CHECK(inspectLayout(compiled.page.root.widget,*compiled.ui.styles()).empty());
     }
-    CHECK(code.ui.diagnostics().subscriptions==compiled.ui.diagnostics().subscriptions);
+    // IR shares one subscription per VM property; handwritten bindings may
+    // subscribe repeatedly. Retention is checked independently for both paths.
+    CHECK(code.ui.diagnostics().subscriptions>0);
+    CHECK(compiled.ui.diagnostics().ownedObjects>0);
     CHECK(code.ui.styles()->size()==compiled.ui.styles()->size());
     // Scoped names and component references are shared by both entry points.
     for(auto* f:{&code,&compiled}) {
@@ -69,11 +75,11 @@ int main(int argc,char** argv){try {
         write(css,"\n\nInput { background-color: var(--missing-token); }");CHECK(!styles.apply());CHECK(styles.validCss==valid);CHECK(f->flow.styleError.get().find(L"live.css:3:1:")!=std::wstring::npos);
         write(css,"");CHECK(styles.apply());auto restored=f->paint();CHECK(restored.fillRects.size()==baseline.fillRects.size());
         for(size_t i=0;i<baseline.fillRects.size();++i){CHECK(near(restored.fillRects[i].radius,baseline.fillRects[i].radius));equalRect(restored.fillRects[i].rect,baseline.fillRects[i].rect);}
-        const auto inlineFile=std::find_if(styles.sourceFiles.begin(),styles.sourceFiles.end(),[](const auto& source){return source.second=="scope_Connections_Editor";})->first;
+        const auto inlineFile=std::find_if(styles.sourceFiles.begin(),styles.sourceFiles.end(),[](const auto& source){return source.second==scope_Connections("Editor.one");})->first;
         const auto original=readStyleFile(inlineFile);write(inlineFile,original+"\n<style scoped>Button { border-radius: 13px; }</style>");CHECK(styles.apply());
         auto scopedForm=f->paint();CHECK(std::any_of(scopedForm.fillRects.begin(),scopedForm.fillRects.end(),[](auto& rect){return near(rect.radius,13);}));
         f->flow.form.set(false);auto scopedList=f->paint();CHECK(std::none_of(scopedList.fillRects.begin(),scopedList.fillRects.end(),[](auto& rect){return near(rect.radius,13);}));f->flow.form.set(true);
-        CHECK(styles.validCss.find("scope_Connections_Editor")!=std::string::npos);write(inlineFile,original);CHECK(styles.apply());
+        CHECK(styles.validCss.find(scope_Connections("Editor.one"))!=std::string::npos);write(inlineFile,original);CHECK(styles.apply());
         for(int i=0;i<50;++i){write(css,i%2?"":"Text { font-size: 15px; }\n");CHECK(styles.apply());f->paint();}
         CHECK(f->ui.styles()->size()==nodes);CHECK(f->ui.diagnostics().subscriptions==stats.subscriptions);CHECK(f->ui.diagnostics().ownedObjects==stats.ownedObjects);
         // Test the actual debounced background watcher against isolated files.
@@ -86,7 +92,7 @@ int main(int argc,char** argv){try {
         bool duplicate=false;try{f->ui.remember("name",input);}catch(const std::invalid_argument&){duplicate=true;}CHECK(duplicate);
         // Imported detail styles use the same scope in C++ and template entries.
         f->flow.form.set(false);f->flow.detailKey.set({});f->flow.showDetails(L"20");f->paint();
-        const auto detailFile=std::find_if(styles.sourceFiles.begin(),styles.sourceFiles.end(),[](const auto& source){return source.second=="scope_Connections_Details";})->first;
+        const auto detailFile=std::find_if(styles.sourceFiles.begin(),styles.sourceFiles.end(),[](const auto& source){return source.second==scope_Connections("Details.one");})->first;
         const auto detailOriginal=readStyleFile(detailFile);
         write(detailFile,detailOriginal+"\n<style scoped>Section { border-radius: 17px; }</style>");CHECK(styles.apply());
         auto detailCanvas=f->paint();CHECK(std::any_of(detailCanvas.fillRects.begin(),detailCanvas.fillRects.end(),[](auto& rect){return near(rect.radius,17);}));

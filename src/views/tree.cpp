@@ -11,14 +11,15 @@ void activate(const std::shared_ptr<Instance> &node) noexcept {
         activate(row.second);
 }
 } // namespace
-void Runtime::initialize(const OneUiViewModelVTable *table, void *vm) {
+void Runtime::initialize(const OneUiViewModelVTable *table, void *vm, bool sharedStyles) {
     try {
         checkTable(table, image.schema.root); // No foreign callback before schema verification.
         rootScope = acquire({table, vm}, image.schema.root, false);
-        std::string css = ui::declarativeTheme();
+        std::string css = sharedStyles ? "" : ui::declarativeTheme();
         for (const auto &r : image.records[CSS])
             css += '\n' + image.strings[r[2]];
-        styles->replace(css);
+        if (sharedStyles) styles->appendScoped(css);
+        else styles->replace(css);
         root = build(image.records[TMPL][image.root][1], {rootScope});
         update(root);
         activate(root);
@@ -99,6 +100,7 @@ std::shared_ptr<Instance> Runtime::build(uint32_t node, const Scopes &context, c
 }
 void Runtime::install(const std::shared_ptr<Instance> &instance, uint32_t owner,
                       const Scopes &context) {
+    instance->owners.push_back(owner);
     auto overrideProperty = [&](uint32_t property) {
         instance->bindings.erase(
             std::remove_if(
@@ -260,7 +262,11 @@ void Runtime::update(const std::shared_ptr<Instance> &instance) {
         repeat(instance);
         return;
     }
-    if (!instance->events.empty()) {
+    // A table's disabled command must not disable row selection itself.
+    // Button clicks use command availability as their enabled state; other
+    // events are gated individually in invoke(), matching Mount::tableEvent.
+    if (!instance->events.empty() && (instance->element.component=="Button" ||
+                                     instance->element.component=="ToolButton")) {
         bool gated = instance->authoredDisabled;
         for (auto &e : instance->events) {
             const auto &cmd = image.schema.model(e[4]).command(e[2]);

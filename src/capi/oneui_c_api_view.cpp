@@ -27,6 +27,8 @@ OneUiViewResult oneui_view_instantiate(OneUiViewMount *mountHandle, const uint8_
             check(!mount->window->rootContent, ONEUI_VIEW_BUSY, "Window content occupied");
         auto image = oneview::readImage(oneview::Bytes(bytes, bytes + length));
         auto view = std::make_shared<Runtime>(std::move(image), std::make_shared<oneui::SystemClipboard>());
+        view->externalCss=mount->externalCss;
+        view->density=mount->density;
         mount->reserved = true;
         mount->active = view;
         try {

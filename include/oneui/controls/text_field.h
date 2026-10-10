@@ -96,6 +96,8 @@ public:
     bool onTextCommitted(const std::wstring& text) override;
     TextInputState textInputState() const override;
     void setTextComposition(std::wstring text, std::size_t caret) override;
+    // Developer reload submits preedit before removing this input. No layout change.
+    bool commitPendingComposition();
     bool replaceTextRange(std::size_t start, std::size_t end, const std::wstring& text) override;
     Rect textInputCaretRect() const override;
     bool onFocusChanged(bool focused) override;

@@ -1,0 +1,138 @@
+// Explicit VM contract for the shared OneView IR.
+model LabVm {
+    r appendLog.canExecute: bool
+    r appendLog.running: bool
+    r clear.canExecute: bool
+    r clear.running: bool
+    r clearLog.canExecute: bool
+    r clearLog.running: bool
+    r collapseFiles.canExecute: bool
+    r collapseFiles.running: bool
+    r commandVisible: bool
+    rw compactTab: utf8
+    r compactTabs: list<oneui.v1.TabItem>
+    r connectionNames: list<oneui.v1.StringItem>
+    rw connectionQuery: utf8
+    r connectionVisible: bool
+    r cpu: utf8
+    r cpuSeries: list<oneui.v1.Series>
+    r diskValue: f64
+    r download.canExecute: bool
+    r download.running: bool
+    r empty: bool
+    r fileCollapseIcon: utf8
+    rw fileQuery: utf8
+    rw fileRatio: f64
+    r fileSummary: utf8
+    r filesCollapsed: bool
+    r filesVisible: bool
+    r first: bool
+    r fourth: bool
+    r logVisible: bool
+    r mainVisible: bool
+    r memory: utf8
+    r memoryValue: f64
+    rw monitorRatio: f64
+    rw monitorTab: utf8
+    r monitorTabs: list<oneui.v1.TabItem>
+    r monitorVisible: bool
+    r narrow: bool
+    r network: utf8
+    r networkSeries: list<oneui.v1.Series>
+    r newFolder.canExecute: bool
+    r newFolder.running: bool
+    r newSession.canExecute: bool
+    r newSession.running: bool
+    r pane0: bool
+    r pane1: bool
+    r pane2: bool
+    r pane3: bool
+    rw paneRatio0: f64
+    rw paneRatio1: f64
+    rw paneRatio2: f64
+    rw paneRatio3: f64
+    r path: utf8
+    r processDetail: utf8
+    r processVisible: bool
+    rw quickConnection: i64
+    r removeFile.canExecute: bool
+    r removeFile.running: bool
+    r resourceVisible: bool
+    r restore.canExecute: bool
+    r restore.running: bool
+    r samplingLabel: utf8
+    r samplingStatus: utf8
+    r searchNext.canExecute: bool
+    r searchNext.running: bool
+    r searchResult: utf8
+    r searchVisible: bool
+    r second: bool
+    rw selected: utf8
+    r send.canExecute: bool
+    r send.running: bool
+    r sessionInfo: utf8
+    r showFiles.canExecute: bool
+    r showFiles.running: bool
+    r showLogs.canExecute: bool
+    r showLogs.running: bool
+    r showMonitor.canExecute: bool
+    r showMonitor.running: bool
+    r showProcesses.canExecute: bool
+    r showProcesses.running: bool
+    r showStatus.canExecute: bool
+    r showStatus.running: bool
+    r showTerminal.canExecute: bool
+    r showTerminal.running: bool
+    r sidebarVisible: bool
+    r tabs: list<oneui.v1.TabItem>
+    rw terminalQuery: utf8
+    r terminalVisible: bool
+    r third: bool
+    r toggleCommand.canExecute: bool
+    r toggleCommand.running: bool
+    r toggleMonitor.canExecute: bool
+    r toggleMonitor.running: bool
+    r toggleSampling.canExecute: bool
+    r toggleSampling.running: bool
+    r toggleSearch.canExecute: bool
+    r toggleSearch.running: bool
+    r toggleSidebar.canExecute: bool
+    r toggleSidebar.running: bool
+    r toggleSplit.canExecute: bool
+    r toggleSplit.running: bool
+    r transferLabel: utf8
+    r transferValue: f64
+    r transferring: bool
+    r up.canExecute: bool
+    r up.running: bool
+    r upload.canExecute: bool
+    r upload.running: bool
+    r wide: bool
+    r workspaceVisible: bool
+    command appendLog() when appendLog.canExecute busy appendLog.running
+    command clear() when clear.canExecute busy clear.running
+    command clearLog() when clearLog.canExecute busy clearLog.running
+    command closeSession(key: utf8)
+    command collapseFiles() when collapseFiles.canExecute busy collapseFiles.running
+    command download() when download.canExecute busy download.running
+    command newFolder() when newFolder.canExecute busy newFolder.running
+    command newSession() when newSession.canExecute busy newSession.running
+    command removeFile() when removeFile.canExecute busy removeFile.running
+    command restore() when restore.canExecute busy restore.running
+    command searchNext() when searchNext.canExecute busy searchNext.running
+    command send() when send.canExecute busy send.running
+    command showFiles() when showFiles.canExecute busy showFiles.running
+    command showLogs() when showLogs.canExecute busy showLogs.running
+    command showMonitor() when showMonitor.canExecute busy showMonitor.running
+    command showProcesses() when showProcesses.canExecute busy showProcesses.running
+    command showStatus() when showStatus.canExecute busy showStatus.running
+    command showTerminal() when showTerminal.canExecute busy showTerminal.running
+    command toggleCommand() when toggleCommand.canExecute busy toggleCommand.running
+    command toggleMonitor() when toggleMonitor.canExecute busy toggleMonitor.running
+    command toggleSampling() when toggleSampling.canExecute busy toggleSampling.running
+    command toggleSearch() when toggleSearch.canExecute busy toggleSearch.running
+    command toggleSidebar() when toggleSidebar.canExecute busy toggleSidebar.running
+    command toggleSplit() when toggleSplit.canExecute busy toggleSplit.running
+    command up() when up.canExecute busy up.running
+    command upload() when upload.canExecute busy upload.running
+}

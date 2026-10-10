@@ -1,0 +1,3 @@
+<template view-model="TableProbe">
+  <DataTable :columns="columns" :items="rows" item-key="id"/>
+</template>

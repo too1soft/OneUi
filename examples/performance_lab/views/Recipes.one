@@ -1,4 +1,4 @@
-<template>
+<template view-model="LabVm">
   <SidebarLayout ref="recipeShell">
     <Sidebar>
       <Text class="section-title">演示工作区</Text>

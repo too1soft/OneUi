@@ -1,0 +1,13 @@
+<template view-model="SettingsBasic">
+  <Column>
+    <Input v-model="font_family"/>
+    <Switch v-model="compact"/>
+    <Text :text="status"/>
+    <Text :text="error"/>
+    <Text :text="selected_theme"/>
+    <Column v-for="theme in themes" :key="theme.id">
+      <Text :text="theme.title"/>
+      <Text v-if="theme.selected" text="Selected"/>
+    </Column>
+  </Column>
+</template>

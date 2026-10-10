@@ -20,6 +20,10 @@ set(ONEUI_VIEW_RUNTIME_SOURCES
     src/views/lists.cpp
     src/views/record_properties.cpp
     src/views/events.cpp
+    src/views/cpp_mount.cpp
+    src/views/reload.cpp
+    src/views/reload_plan.cpp
+    src/views/reload_properties.cpp
 )
 
 # Optional language-neutral composition layer, never part of the core widgets.

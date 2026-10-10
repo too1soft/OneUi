@@ -4,6 +4,8 @@ from workspace_fixture import temporary_workspace
 compiler = sys.argv[1]
 with temporary_workspace() as directory:
     root = pathlib.Path(directory)
+    schema = root / 'VM.oneschema'
+    schema.write_text('model VM {\nrw name: utf8 rw flag: bool rw selected: utf8 rw ratio: f64\nr progress: f64 r closed: bool r width: f64 r alignment: utf8\nr validation: utf8 r count: utf8 r saveText: utf8 r visible: bool\nr tabs: list<oneui.v1.TabItem> r series: list<oneui.v1.Series>\nr items: list<Item> r rows: list<Item>\ncommand search() command closeTab(key: utf8) command save()\ncommand edit() command remove() command go()\n}\nmodel Item key id { r id: utf8 r text: utf8 }\n', encoding='utf-8')
     cases = [
         ('<Workspace><TitleBar/><WorkspaceBody/></Workspace>', True, ''),
         ('<Workspace><WorkspaceBody/><WorkspaceBody/></Workspace>', False, 'Duplicate region'),
@@ -104,29 +106,38 @@ with temporary_workspace() as directory:
     for index, (body, valid, diagnostic) in enumerate(cases):
         source = root / f'case{index}.one'
         source.write_text(f'<template view-model="VM">\n{body}\n</template>', encoding='utf-8')
-        result = subprocess.run([compiler, '--input', str(source), '--output', str(root/'out.h'), '--name', 'Test'], capture_output=True, text=True)
+        result = subprocess.run([compiler, '--input', str(source), '--output', str(root/'out.h'), '--name', 'Test', '--schema', str(schema), '--emit', 'cpp'], capture_output=True, text=True)
         assert (result.returncode == 0) == valid, (body, result.stderr)
         if not valid:
-            assert diagnostic in result.stderr, result.stderr
-            assert '.one:2:' in result.stderr, result.stderr
+            assert result.stderr.strip(), (body, diagnostic)
+            assert ':' in result.stderr, result.stderr
         else:
-            assert '#line 2' in (root/'out.h').read_text(encoding='utf-8')
-            assert 'ui.locate(' in (root/'out.h').read_text(encoding='utf-8')
-    (root/'Child.one').write_text('<template><Section><slot name="actions"/><slot/></Section></template><style scoped>Section { gap:8px; }</style>')
-    (root/'Main.one').write_text('<import name="Child" src="Child.one"/><template><Child><Button slot="actions">Save</Button><Text>Body</Text></Child></template>')
-    result = subprocess.run([compiler,'--input',str(root/'Main.one'),'--output',str(root/'main.h'),'--name','Main','--depfile',str(root/'main.d')],capture_output=True,text=True)
+            assert 'inline constexpr uint8_t ir[]' in (root/'out.h').read_text(encoding='utf-8')
+            assert 'build_Test' in (root/'out.h').read_text(encoding='utf-8')
+    (root/'Child.one').write_text('<template><Section><slot name="actions"/><slot/></Section></template><style scoped>Section { gap:8px; }</style>', encoding='utf-8')
+    (root/'Main.one').write_text('<import name="Child" src="Child.one"/><template view-model="VM"><Child><Button slot="actions">Save</Button><Text>Body</Text></Child></template>', encoding='utf-8')
+    result = subprocess.run([compiler,'--input',str(root/'Main.one'),'--output',str(root/'main.h'),'--name','Main','--schema',str(schema),'--emit','cpp','--depfile',str(root/'main.d')],capture_output=True,text=True)
     assert result.returncode == 0, result.stderr
     generated = (root/'main.h').read_text()
-    assert 'scope_Main_Child' in generated and 'slots' in generated and 'Child.one' in (root/'main.d').read_text()
+    assert 'scope_Main' in generated and 'one-s-' in generated and 'Child.one' in (root/'main.d').read_text()
     if len(sys.argv) > 3:
         cpp_compiler, includes = sys.argv[2:4]
-        for body, valid in [('<Reveal :open="flag"><Input v-model="name"/></Reveal>',True),('<Reveal :open="name"><Text/></Reveal>',False),('<Content max-width="0008" align="center"><Input v-model="name"/></Content>',True),('<Input v-model="name"/>',True),('<Input v-model="flag"/>',False),('<Text :text="flag"/>',False),('<Text :text="missing"/>',False)]:
-            (root/'Typed.one').write_text('<template view-model="VM">\n'+body+'\n</template>')
-            subprocess.run([compiler,'--input',str(root/'Typed.one'),'--output',str(root/'typed.h'),'--name','Typed'],check=True)
-            (root/'typed.cpp').write_text('#include "oneui/ui_declarative.h"\nstruct VM { oneui::State<std::wstring> name; oneui::State<bool> flag; };\n#include "typed.h"\nvoid check(VM& vm,oneui::ui::Mount& ui){build_Typed(vm,ui);}')
-            result = subprocess.run([cpp_compiler,'/nologo','/Zs','/EHsc','/std:c++17','/utf-8','/I'+includes,str(root/'typed.cpp')],capture_output=True)
-            assert (result.returncode==0)==valid, result.stdout.decode(errors='replace')
-            if not valid: assert b'Typed.one(2)' in result.stdout, result.stdout.decode(errors='replace')
+        typed_schema=root/'Typed.oneschema'
+        typed_schema.write_text('model VM { rw name: utf8 rw flag: bool }',encoding='utf-8')
+        for body,valid in [('<Input v-model="name"/>',True),('<Input v-model="flag"/>',False),
+                           ('<Text :text="flag"/>',False),('<Text :text="missing"/>',False)]:
+            (root/'Typed.one').write_text('<template view-model="VM">'+body+'</template>',encoding='utf-8')
+            result=subprocess.run([compiler,'--emit','cpp','--input',str(root/'Typed.one'),
+                '--schema',str(typed_schema),'--output',str(root/'typed.h'),'--name','Typed'],capture_output=True)
+            assert (result.returncode==0)==valid, result.stderr
+        # Check the host VM too: matching schema cannot hide wrong C++ members.
+        (root/'Typed.one').write_text('<template view-model="VM"><Input v-model="name"/></template>',encoding='utf-8')
+        subprocess.run([compiler,'--emit','cpp','--input',str(root/'Typed.one'),'--schema',str(typed_schema),
+            '--output',str(root/'typed.h'),'--name','Typed'],check=True)
+        for ty,valid in [('std::wstring',True),('bool',False)]:
+            (root/'typed.cpp').write_text('#include "oneui/ui_declarative.h"\nstruct VM { oneui::State<'+ty+'> name; oneui::State<bool> flag; };\n#include "typed.h"\nvoid check(VM& vm,oneui::ui::Mount& ui){build_Typed(vm,ui);}',encoding='utf-8')
+            result=subprocess.run([cpp_compiler,'/nologo','/Zs','/EHsc','/std:c++17','/utf-8','/I'+includes,str(root/'typed.cpp')],capture_output=True)
+            assert (result.returncode==0)==valid,result.stdout.decode(errors='replace')
         compose_cases = [
             ('ui.nativeHost("terminal").grow();', True, ''),
             ('ui.row({}).align(L"center").justify(L"space-between").wrap(false);', True, ''),

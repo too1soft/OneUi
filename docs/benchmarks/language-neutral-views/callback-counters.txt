@@ -1,0 +1,16 @@
+ir,ui_event,Snapshot { callbacks: 326, gets: 206, sets: 55, invokes: 0, list_info: 1, list_keys: 12, list_acquires: 12, notifies: 165, live_connections: 0, peak_connections: 13 }
+manual,ui_event,Snapshot { callbacks: 0, gets: 0, sets: 0, invokes: 0, list_info: 0, list_keys: 0, list_acquires: 0, notifies: 0, live_connections: 0, peak_connections: 0 }
+ir,dispatcher,Snapshot { callbacks: 161, gets: 96, sets: 0, invokes: 0, list_info: 1, list_keys: 12, list_acquires: 12, notifies: 55, live_connections: 0, peak_connections: 13 }
+manual,dispatcher,Snapshot { callbacks: 0, gets: 0, sets: 0, invokes: 0, list_info: 0, list_keys: 0, list_acquires: 0, notifies: 0, live_connections: 0, peak_connections: 0 }
+ir,scalar,Snapshot { callbacks: 161, gets: 96, sets: 0, invokes: 0, list_info: 1, list_keys: 12, list_acquires: 12, notifies: 55, live_connections: 0, peak_connections: 13 }
+manual,scalar,Snapshot { callbacks: 0, gets: 0, sets: 0, invokes: 0, list_info: 0, list_keys: 0, list_acquires: 0, notifies: 0, live_connections: 0, peak_connections: 0 }
+ir,text,Snapshot { callbacks: 161, gets: 96, sets: 0, invokes: 0, list_info: 1, list_keys: 12, list_acquires: 12, notifies: 55, live_connections: 0, peak_connections: 13 }
+manual,text,Snapshot { callbacks: 0, gets: 0, sets: 0, invokes: 0, list_info: 0, list_keys: 0, list_acquires: 0, notifies: 0, live_connections: 0, peak_connections: 0 }
+ir,themes12,Snapshot { callbacks: 821, gets: 756, sets: 0, invokes: 0, list_info: 1, list_keys: 12, list_acquires: 12, notifies: 715, live_connections: 0, peak_connections: 13 }
+manual,themes12,Snapshot { callbacks: 0, gets: 0, sets: 0, invokes: 0, list_info: 0, list_keys: 0, list_acquires: 0, notifies: 0, live_connections: 0, peak_connections: 0 }
+ir,update1000,Snapshot { callbacks: 14347, gets: 3061, sets: 0, invokes: 0, list_info: 1112, list_keys: 2056, list_acquires: 2056, notifies: 55, live_connections: 0, peak_connections: 2002 }
+manual,update1000,Snapshot { callbacks: 0, gets: 0, sets: 0, invokes: 0, list_info: 0, list_keys: 0, list_acquires: 0, notifies: 0, live_connections: 0, peak_connections: 0 }
+ir,insert_remove10,Snapshot { callbacks: 21277, gets: 4656, sets: 0, invokes: 0, list_info: 1662, list_keys: 2551, list_acquires: 3101, notifies: 1100, live_connections: 0, peak_connections: 2022 }
+manual,insert_remove10,Snapshot { callbacks: 0, gets: 0, sets: 0, invokes: 0, list_info: 0, list_keys: 0, list_acquires: 0, notifies: 0, live_connections: 0, peak_connections: 0 }
+ir,move10,Snapshot { callbacks: 14072, gets: 3006, sets: 0, invokes: 0, list_info: 1057, list_keys: 2001, list_acquires: 2001, notifies: 550, live_connections: 0, peak_connections: 2002 }
+manual,move10,Snapshot { callbacks: 0, gets: 0, sets: 0, invokes: 0, list_info: 0, list_keys: 0, list_acquires: 0, notifies: 0, live_connections: 0, peak_connections: 0 }

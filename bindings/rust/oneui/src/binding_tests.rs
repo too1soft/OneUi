@@ -42,7 +42,9 @@ macro_rules! native_tests {
     ($(fn $name:ident() $body:block)*) => {
         $(fn $name() $body)*
         pub(super) fn run() -> std::process::ExitCode {
-            super::test_runner::run(&[$((stringify!($name), $name)),*])
+            let mut cases: Vec<(&str, fn())> = vec![$((stringify!($name), $name)),*];
+            cases.extend(super::view::adapter_tests::cases());
+            super::test_runner::run(&cases)
         }
     };
 }

@@ -1,16 +1,17 @@
 #pragma once
 #include "vm.h"
+#include "Demo.g.h"
 // Intentionally authored by hand, not generated: same adapters, VM and tree.
 inline Element buildManual(DemoVM& vm,Mount& ui) {
-    ui.setScope("scope_Demo");
+    ui.setScope(scope_Demo("Demo.one"));
     auto text=[&](std::wstring value,std::string cls="") { auto e=ui.make("Text",{},cls);ui.set(e,"text",value);return e; };
     auto button=[&](std::wstring value,VmCommand& cmd,std::string variant="") {auto e=ui.make("Button",{},variant);ui.set(e,"text",value);ui.click(e,cmd);return e;};
     auto nav=ui.make("Toolbar",{button(L"偏好设置",vm.showSettings),button(L"连接管理",vm.showConnections)});
     auto styleError=ui.make("ValidationMessage"); ui.bind(styleError,"text",vm.styleError);
     auto navSlot=ui.make("Column",{nav}); auto defaultSlot=ui.make("Column",{styleError});
-    ui.setScope("scope_Demo_WorkspaceHeader");
+    ui.setScope(scope_Demo("Header.one"));
     auto header=ui.make("Header",{text(L"配置工作习惯，管理连接。所有数据均为本地模拟。","muted"),navSlot,defaultSlot});ui.set(header,"title",L"工作空间");
-    ui.setScope("scope_Demo");
+    ui.setScope(scope_Demo("Demo.one"));
     auto name=ui.make("Input");ui.model(name,vm.name);ui.set(name,"placeholder",L"输入工作空间名称");
     auto toggle=ui.make("Switch");ui.model(toggle,vm.autoRefresh);ui.set(toggle,"text",L"启用自动刷新");
     auto interval=ui.make("Input");ui.model(interval,vm.interval);ui.set(interval,"placeholder",L"30");

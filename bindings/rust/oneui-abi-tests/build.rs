@@ -75,8 +75,16 @@ fn main() {
                     | "OneUiNotificationService"
                     | "OneUiDockModel"
                     | "OneUiDockSession"
+                    | "OneUiView"
+                    | "OneUiViewMount"
+                    | "OneUiViewNotifier"
+                    | "OneUiValueUtf8"
             )
         })
+        // C's anonymous union/UTF-8 struct have no typedef names. The explicit
+        // cross-language roundtrip below checks their full layout and values.
+        .skip_union(|item| item.ident() == "OneUiValueData")
+        .skip_struct_field(|item, field| item.ident() == "OneUiValue" && field.ident() == "data")
         .rename_type(|name| match name {
             "WChar" => Some("wchar_t".into()),
             _ => None,
@@ -119,11 +127,13 @@ fn main() {
     let mut compiler = cc::Build::new();
     compiler
         .file(signature_file)
+        .file("build_support/view_value.c")
         .include(root.join("include"))
         .warnings_into_errors(true);
     if std::env::var("CARGO_CFG_TARGET_ENV").as_deref() == Ok("msvc") {
         compiler.flag("/utf-8");
     }
     compiler.compile("oneui_signatures");
+    println!("cargo:rerun-if-changed=build_support/view_value.c");
     println!("cargo:rustc-env=ONEUI_ABI_SIGNATURE_COUNT={count}");
 }

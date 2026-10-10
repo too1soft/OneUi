@@ -26,19 +26,22 @@ Callback::~Callback() {
             }
     }
 }
-Runtime::Runtime(oneview::Image im, std::shared_ptr<Clipboard> clipboard)
+Runtime::Runtime(oneview::Image im, std::shared_ptr<Clipboard> clipboard,
+                 std::shared_ptr<ui::StyleRegistry> sharedStyles)
     : image(std::move(im)), hash(oneview::sha256(image.schema.encode())),
+      styles(sharedStyles ? std::move(sharedStyles) : std::make_shared<ui::StyleRegistry>()),
       factory({}, styles, std::move(clipboard)) {
     error.struct_size = sizeof(error);
     error.record_index = oneview::none;
     error.source_map_index = oneview::none;
-    for (const auto &record : image.records[oneview::CSS]) {
-        const auto &file = image.strings[record[3]];
+    for (const auto &record : image.records[oneview::NODE]) {
+        if(record[10]==oneview::none || scopeClasses.count(record[8]))continue;
+        const auto &file = image.strings[image.records[oneview::SMAP][record[10]][0]];
         oneview::Bytes bytes(file.begin(), file.end());
         bytes.push_back(0);
         auto stem = std::filesystem::path(file).stem().generic_string();
         bytes.insert(bytes.end(), stem.begin(), stem.end());
-        scopeClasses[record[0]] = "one-s-" + oneview::hex(oneview::sha256(bytes)).substr(0, 16);
+        scopeClasses[record[8]] = "one-s-" + oneview::hex(oneview::sha256(bytes)).substr(0, 16);
     }
 }
 Runtime::~Runtime() { close(); }

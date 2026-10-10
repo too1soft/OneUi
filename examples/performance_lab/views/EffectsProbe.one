@@ -1,4 +1,4 @@
-<template>
+<template view-model="LabVm">
   <Reveal ref="reveal" :open="open" :preset="preset" :reduced-motion="reduced">
     <Input ref="input" v-model="text" class="effect-inset" />
   </Reveal>
