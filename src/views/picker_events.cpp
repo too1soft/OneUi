@@ -8,6 +8,14 @@ Value number(double n){Value v;v.tag=3;v.number=n;return v;}
 void Runtime::wirePicker(const std::shared_ptr<Instance>& instance) {
     std::weak_ptr<Instance> weak=instance;auto& e=instance->element;
     if(e.component=="FontPicker") {
+        e.as<FontPicker>()->setPopupViewportProvider([weak]{
+            auto item=weak.lock();Rect viewport{};
+            for(auto parent=item?item->parent.lock():nullptr;parent;parent=parent->parent.lock()) {
+                if(parent->element.widget&&parent->element.widget->frame().height>0)viewport=parent->element.widget->frame();
+                if(parent->element.component=="Scroll")break;
+            }
+            return viewport;
+        });
         e.as<FontPicker>()->setOnSelectionRequested([weak](std::string key){emitComponentEvent(weak,"selectionRequested",{string(std::move(key))});});
         e.as<FontPicker>()->setOnRetryRequested([weak]{emitComponentEvent(weak,"retryRequested",{});});
     } else if(e.component=="MediaPicker")e.as<MediaPicker>()->setOnIntent([weak](MediaPickerAction action){

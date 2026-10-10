@@ -223,8 +223,8 @@ void validateImage(const Image &im)
     }
     for (auto &r : im.records[SLOT])
     {
-        require(r[3] <= 1 && r[4] == 0 && r[7] == 0, "BAD_IR: slot flags/capture");
-        index(r[3] ? CALL : TMPL, r[0]);
+        require(!(r[3] & ~(slotSupplied | slotSingleRoot)) && r[4] == 0 && r[7] == 0, "BAD_IR: slot flags/capture");
+        index((r[3] & slotSupplied) ? CALL : TMPL, r[0]);
         sid(r[1]);
         require(!im.strings[r[1]].empty(), "BAD_IR: slot name");
         if (r[2] != none)

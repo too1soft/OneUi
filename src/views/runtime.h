@@ -66,6 +66,9 @@ struct Binding {
     std::weak_ptr<Scope> scope;
     uint32_t kind;
     std::optional<Value> previous;
+    // Static author classes plus generated scope tokens. Dynamic classes are
+    // replaced against this base, never accumulated across notifications.
+    std::optional<std::string> baseClasses;
 };
 struct ModelWrite {
     std::weak_ptr<Scope> scope;
@@ -170,6 +173,7 @@ struct Runtime : std::enable_shared_from_this<Runtime> {
     void flush();
     void flushPass();
     void update(const std::shared_ptr<Instance> &);
+    void refreshRepeatLayouts(const std::shared_ptr<Instance>&);
     void apply(const std::shared_ptr<Instance> &, Binding &);
     void invoke(const std::shared_ptr<Instance> &, const oneview::Record &, std::vector<Value>);
     void set(const std::shared_ptr<Scope> &, uint32_t, const Value &);

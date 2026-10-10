@@ -10,8 +10,30 @@ void activate(const std::shared_ptr<Instance> &node) noexcept {
         activate(row);
 }
 } // namespace
+void Runtime::refreshRepeatLayouts(const std::shared_ptr<Instance>& instance) {
+    if(!instance)return;
+    if(image.records[NODE][instance->node][0]==2&&!instance->transparent)
+        if(auto parent=instance->parent.lock())
+            if(auto flow=parent->element.content?parent->element.content:parent->element.as<Stack>()) {
+                auto group=instance->element.as<Stack>();
+                group->setDirection(flow->direction());group->setGap(flow->gap());group->setAlign(flow->align());
+            }
+    for(auto& child:instance->children)refreshRepeatLayouts(child);
+    for(auto& [_,row]:instance->rows)refreshRepeatLayouts(row);
+}
 void Runtime::repeat(const std::shared_ptr<Instance> &instance) {
     Observation observation(*this, instance);
+    // A normal repeat is an implementation group in its authored stack.
+    // Preserve the surrounding flow and spacing across keyed item instances.
+    if (!instance->transparent)
+        if (auto parent = instance->parent.lock())
+            if (auto flow = parent->element.content ? parent->element.content :
+                            parent->element.as<Stack>()) {
+                auto group = instance->element.as<Stack>();
+                group->setDirection(flow->direction());
+                group->setGap(flow->gap());
+                group->setAlign(flow->align());
+            }
     const auto &r = image.records[REPT][image.records[NODE][instance->node][9]];
     auto &items = list(instance->scopes.at(r[3] & 0xffff), r[1]);
     // Child-property notifications do not change list identity or order.

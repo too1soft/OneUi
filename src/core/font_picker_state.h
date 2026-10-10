@@ -3,6 +3,8 @@
 #include "oneui/controls/text_field.h"
 #include "oneui/controls/button.h"
 #include "oneui/controls/label.h"
+#include "oneui/controls/checkbox.h"
+#include <set>
 namespace oneui {
 // A specialized viewport renderer: visible rows use their actual font family.
 // Item count changes never allocate a native Widget per font.
@@ -37,7 +39,15 @@ struct FontPicker::State {
     std::shared_ptr<Label> status=std::make_shared<Label>();
     std::shared_ptr<Button> retry=std::make_shared<Button>(L"Retry");
     std::shared_ptr<FontPickerRows> rows=std::make_shared<FontPickerRows>();
+    std::shared_ptr<Checkbox> mono=std::make_shared<Checkbox>();
+    std::shared_ptr<Button> apply=std::make_shared<Button>(L"Apply");
+    std::shared_ptr<Button> cancel=std::make_shared<Button>(L"Cancel");
+    std::set<std::string> monospaceKeys;
+    std::string pending;
+    bool confirmation=false,filterVisible=false,initialMono=false;
+    std::function<Rect()> viewport;
     std::wstring rememberedLabel;
+    std::wstring triggerLabel;
     bool open=false;
     std::function<void(std::string)> selectionRequested;
     std::function<void()> retryRequested;

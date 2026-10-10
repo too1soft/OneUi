@@ -17,13 +17,15 @@ void Runtime::initialize(const OneUiViewModelVTable *table, void *vm, bool share
     try {
         checkTable(table, image.schema.root); // No foreign callback before schema verification.
         rootScope = acquire({table, vm}, image.schema.root, false);
-        std::string css = sharedStyles ? "" : ui::declarativeTheme();
+        std::string css = sharedStyles ? "" :
+            (externalCss.empty() ? ui::declarativeTheme() : externalCss);
         for (const auto &r : image.records[CSS])
             css += '\n' + image.strings[r[2]];
         if (sharedStyles) styles->appendScoped(css);
-        else styles->replace(css);
+        else styles->replace(css, density);
         root = build(image.records[TMPL][image.root][1], {rootScope});
         update(root);
+        styles->applyBaseLayouts();
         prepareWorkspaceIndex();
         activate(root);
         connect(rootScope);
@@ -155,7 +157,9 @@ void Runtime::install(const std::shared_ptr<Instance> &instance, uint32_t owner,
         if (r[0] == owner) {
             overrideProperty(r[1]);
             Binding binding{r, context.at(r[3] & 0xffff), BIND};
-            apply(instance, binding);
+            const auto& contract = image.components[image.records[NODE][componentRoot(image, owner)][1]];
+            if (!(instance->element.component == "Text" && contract.property(r[1]).name == "spans"))
+                apply(instance, binding);
             instance->bindings.push_back(std::move(binding));
         }
     for (const auto &r : image.records[COND])
@@ -202,8 +206,18 @@ void Runtime::apply(const std::shared_ptr<Instance> &instance, Binding &binding)
             auto value = read(scope, property.id);
             if (name == "disabled")
                 instance->authoredDisabled = bool(value.integer);
-            if (!binding.previous || !(value == *binding.previous))
-                if(!workspaceScalar(*instance,name,value))setScalar(factory, instance->element, name, value);
+            if (!binding.previous || !(value == *binding.previous)) {
+                if (name == "class") {
+                    if (!binding.baseClasses) binding.baseClasses = instance->element.classes;
+                    instance->element.classes = *binding.baseClasses;
+                    factory.set(instance->element, "class", value.text);
+                } else if(!workspaceScalar(*instance,name,value))
+                    setScalar(factory, instance->element, name, value);
+                if (name == "basis")
+                    if (auto parent = instance->parent.lock())
+                        if (auto stack = parent->element.as<Stack>())
+                            stack->setFlex(instance->element.widget, instance->element.flex);
+            }
             binding.previous = std::move(value);
         }
     } catch (const Failure &error) {
@@ -228,8 +242,15 @@ void Runtime::update(const std::shared_ptr<Instance> &instance) {
         return;
     instance->dirty = false;
     Observation observation(*this, instance);
-    for (auto &b : instance->bindings)
-        apply(instance, b);
+    // Rich spans refer to the final text of this transaction, independent of
+    // authored attribute order. Resolve scalar text before its UTF-8 ranges.
+    const auto isSpanList = [&](const Binding& b) {
+        if (b.kind != BIND || instance->element.component != "Text") return false;
+        auto c = componentRoot(image, b.record[0]);
+        return image.components[image.records[NODE][c][1]].property(b.record[1]).name == "spans";
+    };
+    for (auto &b : instance->bindings) if (!isSpanList(b)) apply(instance, b);
+    for (auto &b : instance->bindings) if (isSpanList(b)) apply(instance, b);
     bool conditionVisible = true;
     for (auto &b : instance->bindings)
         if (b.kind == COND && b.previous)
@@ -246,7 +267,8 @@ void Runtime::update(const std::shared_ptr<Instance> &instance) {
     // Button clicks use command availability as their enabled state; other
     // events are gated individually in invoke(), matching Mount::tableEvent.
     if (!instance->events.empty() && (instance->element.component=="Button" ||
-                                     instance->element.component=="ToolButton")) {
+                                     instance->element.component=="ToolButton" ||
+                                     instance->element.component=="InteractiveSurface")) {
         bool gated = instance->authoredDisabled;
         for (auto &e : instance->events) {
             const auto &cmd = image.schema.model(e[4]).command(e[2]);

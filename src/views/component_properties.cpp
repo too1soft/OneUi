@@ -1,7 +1,18 @@
 #include "oneui/ui_declarative.h"
 namespace oneui::ui {
 void Mount::set(Element &e, const std::string &key, const std::wstring &value) {
+    if(e.component=="FontPicker" && key=="trigger-label") {e.as<FontPicker>()->setTriggerLabel(value);return;}
+    if(e.component=="MediaPicker") {
+        if(key=="choose-label"){e.as<MediaPicker>()->setChooseLabel(value);return;}
+        if(key=="clear-label"){e.as<MediaPicker>()->setClearLabel(value);return;}
+        if(key=="cancel-label"){e.as<MediaPicker>()->setCancelLabel(value);return;}
+    }
     if (key == "icon" || key == "symbol") {
+        if (value.empty()) {
+            if (key == "icon") e.as<Button>()->clearIcon();
+            else e.as<IconView>()->setSymbol(IconSymbol::RemoteAssist);
+            return;
+        }
         const auto symbol = namedIcon(std::string(value.begin(), value.end()));
         if (!symbol)
             throw std::invalid_argument("Unknown authoring icon");
@@ -129,6 +140,12 @@ void Mount::set(Element &e, const std::string &key, bool value) {
         e.widget->setVisible(value);
     else if (key == "disabled")
         e.widget->setDisabled(value);
+    else if (key == "password")
+        e.as<TextField>()->setPasswordMode(value);
+    else if (key == "read-only")
+        e.as<TextField>()->setReadOnly(value);
+    else if (key == "chrome-visible")
+        e.as<ScrollView>()->setChromeVisible(value);
     else if (key == "collapsed") {
         for (auto &part : e.collapsible)
             part->setVisible(!value);
@@ -140,6 +157,7 @@ void Mount::set(Element &e, const std::string &key, bool value) {
         e.as<NativeHostView>()->setThemed(value);
         styles_->add(e);
     } else if (key == "wrap") {
+        if (auto label = e.as<Label>()) { label->setTextWrapping(value); return; }
         if (e.component != "Row" && e.component != "Column")
             throw std::invalid_argument("wrap requires Row or Column");
         e.as<Stack>()->setWrap(value);
@@ -156,6 +174,14 @@ void Mount::set(Element &e, const std::string &key, bool value) {
 }
 void Mount::set(Element &e, const std::string &key, float value) {
     syntax::validateLayoutNumber(key, value);
+    if (key == "content-height") { e.as<ScrollView>()->setContentHeight(value); return; }
+    if (key == "wheel-step") { e.as<ScrollView>()->setWheelStep(value); return; }
+    if (key == "scroll-offset") {
+        if (e.component == "VirtualList") e.as<VirtualList>()->setScrollOffset(value);
+        else e.as<ScrollView>()->setScrollOffset(value);
+        return;
+    }
+    if (key == "row-height") { e.as<VirtualList>()->setRowHeight(value); return; }
     if (key == "value") {
         e.as<ProgressBar>()->setValue(std::clamp(value, 0.0f, 1.0f));
         return;
@@ -215,13 +241,26 @@ void Mount::set(Element &e, const std::string &key, float value) {
         throw std::invalid_argument("Invalid layout property");
 }
 void Mount::set(Element &e, const std::string &key, int value) {
-    if (key == "selectedIndex")
-        e.as<Select>()->setSelectedIndex(value);
+    if (key == "max-lines") {
+        if (value < 0) throw std::invalid_argument("max-lines must be nonnegative");
+        e.as<Label>()->setMaxLines(value);
+    }
+    else if (key == "selectedIndex") {
+        if (e.component == "List") e.as<List>()->setSelectedIndex(value);
+        else if (e.component == "VirtualList") e.as<VirtualList>()->setSelectedIndex(value);
+        else if (e.component == "SegmentedControl") e.as<Tabs>()->setSelectedIndex(value);
+        else e.as<Select>()->setSelectedIndex(value);
+    }
     else
         set(e, key, float(value));
 }
 void Mount::set(Element &e, const std::string &, const std::vector<std::wstring> &items) {
-    e.as<Select>()->setItems(items);
+    if (e.component == "SegmentedControl") e.as<Tabs>()->setItems(items);
+    else e.as<Select>()->setItems(items);
+}
+void Mount::set(Element &e, const std::string &, const std::vector<ListItem> &items) {
+    if (e.component == "List") e.as<List>()->setItems(items);
+    else e.as<VirtualList>()->setItems(items);
 }
 void Mount::set(Element &e, const std::string &, const std::vector<TableColumn> &columns) {
     e.as<Table>()->setColumns(columns);

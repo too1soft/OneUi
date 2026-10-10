@@ -6,6 +6,7 @@
 #include "oneui/controls/text_field.h"
 #include "../internal/unicode.h"
 #include <stdexcept>
+#include <cmath>
 
 struct OneUiCommandRegistration { oneui::Subscription subscription; };
 namespace {
@@ -102,3 +103,5 @@ int oneui_text_field_set_position_utf8(OneUiWidget* widget, OneUiTextPositionUtf
     } catch (...) { oneui::capi::recordCurrentException(__func__); return 0; }
 }
 }
+
+#include "oneui_c_api_test_input.inc"

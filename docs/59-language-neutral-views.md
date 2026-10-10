@@ -188,7 +188,7 @@ TMPL 包括根、导入组件、repeat body 和 slot body；每个 template 的�
 
 词法 depth=0 是当前 scope，1 是直接词法父 scope，以此类推；import CALL 不新建 VM 层，REPEAT 的 body 新建 item scope、父为发起 repeat 的 scope；slot body 在调用者捕获 scope 下实例化，fallback 在被调用模板当前 scope。TMPL.model_id 必须等于其实际 scope 的 schema model；BIND/EVNT/COND/REPT 中 model_id 必须等于沿 depth 找到的模型，否则 BAD_IR。这同时约束嵌套列表引用外层 item 和 slot 的捕获，不能靠运行时猜测。
 
-SLOT.flags bit0=0 时为模板的 outlet 声明，owner_index 是 TMPL；body_template 是 fallback 或 NONE。bit0=1 时为 CALL 的供给，owner_index 是 CALL；body_template 是调用者内容，捕获调用者 VM lexical context。TMPL.slot_start/count 只指声明，CALL.slot_start/count 只指供给；NODE opcode SLOT 的 aux 指 outlet 声明。同名供给按原顺序合成一个 body，不重复消费同一个 widget。slot 运行时保留旧编译器的 Column 包装；未知供给名、重复 outlet 名编译时报错。该收紧与旧行为的差异纳入迁移诊断，不静默丢内容。
+SLOT.flags bit0=0 时为模板的 outlet 声明，owner_index 是 TMPL；body_template 是 fallback 或 NONE。bit0=1 时为 CALL 的供给，owner_index 是 CALL；body_template 是调用者内容，捕获调用者 VM lexical context。TMPL.slot_start/count 只指声明，CALL.slot_start/count 只指供给；NODE opcode SLOT 的 aux 指 outlet 声明。同名供给按原顺序合成一个 body，不重复消费同一个 widget。未标记的 slot 保留旧编译器的 Column 包装；未知供给名、重复 outlet 名编译时报错。WP5 显式 `root="single"` 使用同一 flags 的 bit1（值2），契约与 IR 1.1 兼容规则见章末增补；capture_depth 字段保持零，不重新解释或移动。
 
 scope_id 引用 CSS 中出现的非零 scope 编号（同 scope 可多条 CSS），没有样式仍分配该模板的稳定 scope。生成类为 `one-s-` + SHA-256(规范相对路径、模板名) 前 16 hex；编译时检测截断碰撞，碰撞即报错。lowered_text 为经现有 `syntax::css` 消费校验和 scope 转换后的 UTF-8；加载仍验证支持的 CSS，不直接信任 blob。主题变量仍来自外部 :root，不新增浏览器继承语义。
 
@@ -834,3 +834,60 @@ v-for 使用列表来源与提交 serial 区分结构变化和子属性通知；
 不能仅因没有子 Widget 就丢弃通知。连接只随租约建立/断开；未来若另立只接受父列表
 通知的记录契约，才能省去它们。本次性能不以新增契约或 bulk ABI 为前提。
 测量、回归、最终性能表见 [列表性能修正报告](benchmarks/language-neutral-views/listperf.md)。
+
+### WP5 设置页契约扩展
+
+`Surface` v2、`Text` v3 支持 `:class="property"`，属性类型为只读 UTF-8。
+绑定值包含该节点全部业务类名；同一节点不能同时声明 `class` 和 `:class`。
+通知会替换上一次业务类名，保留编译器生成的作用域类名，空字符串会清除业务类名。
+动态类名的样式规则应写明确组件类型，例如 `Surface.settings-focus-target`，
+以便严格 CSS 校验确定属性消费者。主题令牌规则沿用挂载样式表；页面 scoped 样式负责布局。
+
+设置页同时使用 `Text.wrap/max-lines`、`Input.password/read-only/submit`、
+`Scroll.content-height/wheel-step/chrome-visible/scroll-offset` 和 `SegmentedControl`。
+`Input`、`Scroll` 契约为 v2；`SegmentedControl` 为 v1。IR 与绑定须由同版本 viewc 重生成。
+图标名称新增 `key-dots`、`check-circle`、`notebook`，对应已有原生图标枚举。
+
+`Column` 支持动态 class，`Surface` / `Column` 支持绑定 flex basis。
+`List` / `VirtualList` 接受结构化 `@list.item` 列表（id/title/detail），
+选择变更通过生成的 VM 属性写回；列表行身份沿用稳定 key。
+`Text.spans` 接受 `@text.span` 列表（id/start/end/rgba/monospace）：
+start/end 是 UTF-8 字节偏移，必须落在字符边界，区间不能为空且不能越界。
+原生 UTF-16 偏移由运行时转换；无效更新返回 TYPE，保留之前的已绘制跨度。
+
+`InteractiveSurface` 允许可点击的声明式卡片。空动态图标字符串表示无图标。
+只有被调用方显式声明 `root="single"` 的 slot 才保留内容根的父级布局关系；未标记的 slot 始终保留合成 Column。重复片段继承容器的方向、gap 和 Surface 内容布局。
+
+### WP5 增补：显式单根插槽（Claude 已裁决）
+
+被调用模板在插槽声明上使用静态属性 `<slot name="content" root="single"/>`。
+调用方用普通 `slot="content"` 提供恰好一个根节点；提供零个或两个以上根节点时，
+viewc 在调用点报告 `SLOT_ROOT`。调用方不能通过属性覆盖该契约，动态 `:root` 和
+其他 `root` 值均拒绝。根数按模板直接子节点计数，条件和重复仍遵循自身的既有语义。
+
+带有 fallback 的声明也必须恰好包含一个 fallback 根；调用方未提供内容时使用它。
+自闭合声明表示必填插槽，缺少供给时编译失败。直接编译的入口模板没有调用方，
+因此其单根插槽必须有 fallback。非法多根 fallback 在导入调用点报错并保留声明位置。
+
+单根内容（含 fallback）直接成为插槽位置上的子节点，不合成 Column，原有 grow、
+basis、flex 和父布局规则直接适用。**未标记的插槽继续始终使用 Column 包装**，
+即使只有一个根也不展开。C++ 和 Rust 生成器嵌入相同 IR，使用同一运行时。
+标记变更是结构热重载：重新构建/移除包装节点，保留 VM 连接与原有生命周期约束。
+
+编码使用现有 32 字节 SLOT 记录的 flags 字段（offset 12）的 bit 1：
+清零为默认包装，置位为 single；同字段的 bit 0 仍为 `0=TMPL 声明`、
+`1=CALL 供给`。原 offset 16 的 capture_depth 保持零。供给的 single 位由声明派生，
+loader 要求同名声明与供给一致，并拒绝缺失的必填供给和任何未知 flags 位。
+不新增段、不改变 stride。使用 single 的文件写为 **IR 1.1**，其余仍为 **IR 1.0**；
+loader 拒绝将 single 标记放入 minor 0 文件。
+
+本扩展使用旧 reader 已强制为零的 SLOT flags 未知位 作为必需语义能力标记，按本次裁决
+不新增 required 段，也不升 major。旧 reader 即使忽略 minor，也会因未知 flags 拒绝，
+不会错误显示；这是第 3.4 节 required capability 规则在既有记录标志上的具体应用。
+不含插槽的 Basic 黄金字节保持本轮组件契约更新后的独立参考结果不变。
+
+Rust `ViewMount::from_dispatcher` 可将声明式页面挂入当前窗口中的空 Panel。
+挂载验证遍历 OverlayHost 和 Popup，仍拒绝其他窗口的节点。外部 CSS 在首次实例化前
+安装；替换样式沿用宿主的 transient 样式，使图片背景上的 Select 弹出项保留应用主题。
+开发工具构建的布局快照包含声明式 CSS 类名与已解析样式；诊断使用弱引用，不保留退役控件。
+测试捕获构建提供 `Widget::test_freeze_caret`，用于固定输入框光标，生产构建不启用该入口。

@@ -44,6 +44,18 @@ void Runtime::wire(const std::shared_ptr<Instance> &instance) {
                 v.integer = value;
                 mutate(id, v);
             });
+        else if (element.component == "List")
+            element.as<List>()->setOnChanged([mutate, id](int value) {
+                Value v; v.tag = 2; v.integer = value; mutate(id, v);
+            });
+        else if (element.component == "VirtualList")
+            element.as<VirtualList>()->setOnChanged([mutate, id](int value) {
+                Value v; v.tag = 2; v.integer = value; mutate(id, v);
+            });
+        else if (element.component == "SegmentedControl")
+            element.as<Tabs>()->setOnChanged([mutate, id](int value) {
+                Value v; v.tag = 2; v.integer = value; mutate(id, v);
+            });
         else if (element.component == "Select")
             element.as<Select>()->setOnChanged([mutate, id](int value) {
                 Value v;
@@ -91,8 +103,12 @@ void Runtime::wire(const std::shared_ptr<Instance> &instance) {
                               event[7]);
             }
         };
-        if (name == "click")
-            element.as<Button>()->setOnClick([fire] { fire({}); });
+        if (name == "click") {
+            if(auto surface=element.as<InteractiveSurface>())surface->setOnClick([fire]{fire({});});
+            else element.as<Button>()->setOnClick([fire] { fire({}); });
+        }
+        else if (name == "submit")
+            element.as<TextField>()->setOnSubmitted([fire](const std::wstring &) { fire({}); });
         else if (name == "close")
             element.tabs->closed = [fire](std::wstring key) {
                 Value v;

@@ -775,6 +775,13 @@ ONEUI_API void oneui_window_set_content(OneUiWindow* window, OneUiWidget* widget
 /* Explicit renderer capture for opt-in QA builds. Call on the UI thread.
  * Returns 0 when ONEUI_ENABLE_TEST_FRAME_CAPTURE is disabled. No screen capture. */
 ONEUI_API int oneui_window_capture_frame_png_utf8(OneUiWindow* window, const char* path_utf8);
+/* Opt-in renderer QA input. UI thread only, coordinates in the root's space.
+ * Dispatches to the supplied widget tree; never sends OS input. Returns 0 in
+ * builds without ONEUI_ENABLE_TEST_FRAME_CAPTURE or for unhandled input. */
+ONEUI_API int oneui_widget_test_click(OneUiWidget* root, float x, float y);
+ONEUI_API int oneui_widget_test_wheel(OneUiWidget* root, float x, float y, float delta);
+ONEUI_API int oneui_widget_test_freeze_caret(OneUiWidget* root, int enabled);
+ONEUI_API int oneui_widget_test_text_utf8(OneUiWidget* root, OneUiUtf8String text, int replace);
 /* Writes the developer-tools frame report (slow paints, animation delays and
  * their hottest components) as JSON. Returns 0 when developer tools are not
  * compiled in or not enabled (ONEUI_DEVTOOLS=1). Call on the UI thread. */

@@ -117,6 +117,9 @@ if(ONEUI_ENABLE_TEST_FRAME_CAPTURE)
 endif()
 add_library(oneui SHARED ${ONEUI_C_API_SOURCES}
     $<TARGET_OBJECTS:oneui_platform_desktop>)
+if(ONEUI_ENABLE_TEST_FRAME_CAPTURE)
+    target_compile_definitions(oneui PRIVATE ONEUI_ENABLE_TEST_FRAME_CAPTURE=1)
+endif()
 # Linking the object target also carries its usage requirements (e.g. Yoga).
 # TARGET_OBJECTS alone silently drops those dependencies on desktop builds.
 target_link_libraries(oneui PRIVATE oneui_views oneui_core ${_oneui_desktop_libraries})

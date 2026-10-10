@@ -4,6 +4,10 @@ namespace oneui::views {
 struct Instance::PickerCache {
     FontPickerConfig font;
     MediaPickerConfig media;
+    std::wstring triggerLabel,chooseLabel,clearLabel,cancelLabel;
+    std::wstring applyLabel,filterLabel,searchLabel,retryLabel;
+    std::vector<std::string> monospaceKeys;
+    bool confirmSelection=false,monospaceOnly=false;
     std::string source,fit="contain",position="center";
     double opacity=1,minimum=0,maximum=1,step=.01,value=0;
     std::vector<ThemeColorToken> colors;

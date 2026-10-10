@@ -1,6 +1,6 @@
 <template view-model="Root">
   <Column>
-    <Text :text="title"/>
+    <Text :class="title" :text="title"/>
     <Input v-model="title"/>
     <Button text="Run" @click="click"/>
     <Text v-if="visible" text="conditional"/>
@@ -8,3 +8,5 @@
     <NativeHost host="terminal"/>
   </Column>
 </template>
+
+<style scoped>Text { font-size: 13px; }</style>

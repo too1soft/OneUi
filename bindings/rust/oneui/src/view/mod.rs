@@ -80,11 +80,16 @@ impl ViewMount {
     /// Mount in an empty window, or an empty Panel already in that window.
     /// The native control invalidates on window close; no Rust borrow is retained.
     pub fn new(window: &Window, destination: Option<&Widget>) -> VmResult<Self> {
-        if std::thread::current().id() != window.state.ui_thread {
+        Self::from_dispatcher(&window.dispatcher(), destination)
+    }
+    /// Mount from an application's retained dispatcher on its owning UI thread.
+    /// Destination must still be an empty Panel attached to that window.
+    pub fn from_dispatcher(dispatcher: &crate::UiDispatcher, destination: Option<&Widget>) -> VmResult<Self> {
+        if std::thread::current().id() != dispatcher.state.ui_thread {
             return Err(ViewError::WRONG_THREAD);
         }
         let mut raw = std::ptr::null_mut();
-        let code = window
+        let code = dispatcher
             .state
             .with_raw(|w| unsafe {
                 sys::oneui_view_mount_create(

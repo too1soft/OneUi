@@ -47,6 +47,23 @@ const std::map<std::string, ComponentContract> &registry()
 #undef E
 #undef P
 #undef C
+        for (const auto *name : {"Input", "Text", "Scroll", "FontPicker", "MediaPicker"}) r.at(name).version = 2;
+        ++r.at("Text").version;
+        ++r.at("FontPicker").version;
+        // Read-only class bindings preserve static and scoped classes. Keep the
+        // reviewed extension limited to the presentation nodes that need it.
+        for (const auto *name : {"Surface", "Text", "Column"}) {
+            auto &contract = r.at(name);
+            ++contract.version;
+            for (auto &property : contract.properties)
+                if (property.name == "class") property.flags |= 2;
+        }
+        for (const auto *name : {"Surface", "Column"}) {
+            auto &contract = r.at(name);
+            ++contract.version;
+            for (auto &property : contract.properties)
+                if (property.name == "basis") property.flags |= 2;
+        }
         // Detect authoring metadata drift before publishing a contract hash.
         // Intentional changes require a reviewed registry/version update.
         using namespace oneui::ui::schema;
@@ -65,7 +82,7 @@ const std::map<std::string, ComponentContract> &registry()
                 contract.property(name);
                 ++count;
             }
-            require(count == contract.properties.size(), "REGISTRY: property set drift");
+            require(count == contract.properties.size(), "REGISTRY: property set drift for " + contract.name);
             uint32_t previous = 0;
             for (const auto &p : contract.properties)
             {
@@ -93,7 +110,9 @@ void validateRecord(const Model& model, const std::string& projection) {
         return;
     }
     std::string fields;
-    if(projection=="@workspace.node") fields="id:4 kind:4 axis:4 ratio:3 first:4 second:4 pane:4";
+    if(projection=="@list.item") fields="id:4 title:4 detail:4";
+    else if(projection=="@text.span") fields="id:4 start:2 end:2 rgba:2 monospace:1";
+    else if(projection=="@workspace.node") fields="id:4 kind:4 axis:4 ratio:3 first:4 second:4 pane:4";
     else if(projection=="@workspace.placement") fields="id:4 mode:4 x:3 y:3 width:3 height:3 pinned:1 order:2";
     else if(projection=="@picker.font") fields="id:4 family:4 label:4 available:1";
     else if(projection=="@picker.color") fields="id:4 rgba:2";

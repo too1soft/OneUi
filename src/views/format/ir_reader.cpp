@@ -10,7 +10,7 @@ Image readImage(const Bytes &b)
     Cursor h(b, 0, 128);
     require(h.get(8) == 0x0057454956454e4full, "BAD_IR: magic");
     require(h.get(2) == 1, "VERSION: major");
-    h.get(2);
+    const auto minor = h.get(2);
     auto header = h.u32();
     require(header >= 128 && header <= b.size(), "BAD_IR: header length");
     require(h.get(8) == b.size(), "BAD_IR: file length");
@@ -126,6 +126,8 @@ Image readImage(const Bytes &b)
             }
     }
     validateImage(image);
+    for (const auto& slot : image.records[SLOT])
+        require(!(slot[3] & slotSingleRoot) || minor >= 1, "VERSION: single-root slot requires minor 1");
     validateGraph(image);
     return image;
 }

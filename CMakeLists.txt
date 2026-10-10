@@ -134,6 +134,9 @@ if(WIN32 AND ONEUI_BUILD_PLATFORM_WIN32)
         $<TARGET_OBJECTS:oneui_views>
         $<TARGET_OBJECTS:oneui_platform_win32>
     )
+    if(ONEUI_ENABLE_TEST_FRAME_CAPTURE)
+        target_compile_definitions(oneui PRIVATE ONEUI_ENABLE_TEST_FRAME_CAPTURE=1)
+    endif()
 
     target_link_libraries(oneui
         PRIVATE

@@ -9,12 +9,13 @@ enum class ValueType { None, Text, Boolean, Integer, Number, Strings, Columns, R
     X(Pane, "workspace-item", "pane-key closing close-request min-width min-height", None) \
     X(PaneHeader, "pane-header", "pane-key number title path active broadcast-role broadcast-hint broadcast-label viewing-history can-close can-split can-maximize", None) \
     X(HeaderSlot, "stack", "slot-name", None) \
-    X(FontPicker, "font-picker", "items selected loading error preview-text size", None) \
-    X(MediaPicker, "media-picker", "asset label loading error accept", None) \
+    X(FontPicker, "font-picker", "items selected loading error preview-text size trigger-label confirm-selection monospace-only monospace-items apply-label cancel-label filter-label search-label retry-label", None) \
+    X(MediaPicker, "media-picker", "asset label loading error accept choose-label clear-label cancel-label", None) \
     X(MediaPreview, "media-preview", "source fit position opacity", None) \
     X(MediaSlot, "stack", "slot-name", None) \
     X(Slider, "slider", "minimum maximum step value", Number) \
     X(Card, "card", "", None) \
+    X(InteractiveSurface, "interactive-surface", "", None) \
     X(ThemeScope, "theme-scope", "tokens", None) \
     X(ContainerPage, "container-page", "selected", None) \
     X(DragHandle, "drag-handle", "source domain kind threshold", None) \
@@ -59,16 +60,19 @@ enum class ValueType { None, Text, Boolean, Integer, Number, Strings, Columns, R
     X(FormRow, "stack", "label hint error", None) \
     X(FormGrid, "stack", "min-column-width", None) \
     X(EmptyState, "stack", "title subtitle", None) \
-    X(Scroll, "scroll-view", "", None) \
+    X(Scroll, "scroll-view", "content-height wheel-step chrome-visible scroll-offset", None) \
     X(Reveal, "reveal", "open preset reduced-motion", None) \
-    X(Text, "label", "text", None) \
+    X(Text, "label", "text wrap max-lines spans", None) \
     X(ValidationMessage, "label", "text", None) \
-    X(Input, "input", "text placeholder", Text) \
+    X(Input, "input", "text placeholder password read-only", Text) \
     X(SearchInput, "input", "text placeholder", Text) \
     X(Switch, "switch", "text checked", Boolean) \
     X(Select, "select", "items selectedIndex", Integer) \
+    X(SegmentedControl, "tabs", "items selectedIndex", Integer) \
     X(Button, "button", "text variant icon", None) \
-    X(DataTable, "table", "items columns selectedKey item-key", Text)
+    X(DataTable, "table", "items columns selectedKey item-key", Text) \
+    X(List, "list", "items selectedIndex", Integer) \
+    X(VirtualList, "virtual-list", "items selectedIndex row-height scroll-offset", Integer)
 
 enum class Kind {
 #define ONEUI_KIND(name, tag, props, model) name,
@@ -112,11 +116,14 @@ constexpr bool layoutNumber(std::string_view key) {
 constexpr ValueType propertyType(Kind kind,std::string_view key) {
     if(!supports(kind,key))return ValueType::None;
     if(kind==Kind::FontPicker&&key=="selected")return ValueType::Text;
-    if(contains("disabled visible selected checked open reduced-motion detail-open wrap closable themed second-collapsed collapsed closing ack-accepted motion active viewing-history can-close can-split can-maximize reorderable hideable loading",key))return ValueType::Boolean;
-    if(contains("selectedIndex revision ack-request close-request navigation-serial number",key))return ValueType::Integer;
-    if(contains("nodes groups drag-sources placements tokens",key))return ValueType::Rows;
+    if(kind==Kind::FontPicker&&(key=="confirm-selection"||key=="monospace-only"))return ValueType::Boolean;
+    if(kind==Kind::FontPicker&&key=="monospace-items")return ValueType::Rows;
+    if(contains("disabled visible selected checked open reduced-motion detail-open wrap closable themed second-collapsed collapsed closing ack-accepted motion active viewing-history can-close can-split can-maximize reorderable hideable loading password read-only chrome-visible",key))return ValueType::Boolean;
+    if(contains("selectedIndex revision ack-request close-request navigation-serial number max-lines",key))return ValueType::Integer;
+    if(contains("nodes groups drag-sources placements tokens spans",key))return ValueType::Rows;
     if(contains("gap divider-hit motion-ms resize-idle-ms min-width min-height threshold dock-min-width dock-min-height float-min-width float-min-height minimum maximum step opacity",key))return ValueType::Number;
-    if(key=="items")return kind==Kind::Select?ValueType::Strings:kind==Kind::Tabs?ValueType::TabItems:ValueType::Rows;
+    if(contains("content-height wheel-step scroll-offset row-height",key))return ValueType::Number;
+    if(key=="items")return kind==Kind::Select||kind==Kind::SegmentedControl?ValueType::Strings:kind==Kind::Tabs?ValueType::TabItems:ValueType::Rows;
     if(key=="series")return ValueType::Series;
     if(key=="columns")return ValueType::Columns;
     if(layoutNumber(key))return ValueType::Number;

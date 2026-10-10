@@ -17,7 +17,8 @@ class DiagnosticTests(CompilerCase):
             ('<Switch v-model="input"/>', 'BIND_TYPE'), ('<Text v-model="input"/>', 'MODEL_TYPE'),
             ('<Text @click="click"/>', 'COMPONENT_EVENT'), ('<Button @click="close"/>', 'COMMAND_SIGNATURE'),
             ('<Tabs @close="wrong"/>', 'COMMAND_SIGNATURE'), ('<Button @click="missing"/>', 'VM_COMMAND'),
-            ('<Text :text="input + title"/>', 'EXPRESSION'), ('<Text :class="title"/>', 'BIND_STATIC'),
+            ('<Text :text="input + title"/>', 'EXPRESSION'), ('<Button :class="title"/>', 'BIND_STATIC'),
+            ('<Text :class="flag"/>', 'BIND_TYPE'),
             ('<Text text="a" :text="title"/>', 'PROPERTY_DUPLICATE'), ('<Text text="a">b</Text>', 'PROPERTY_DUPLICATE'),
             ('<Input text="a" v-model="input"/>', 'PROPERTY_DUPLICATE'),
             ('<Text visible="yes"/>', 'STATIC_TYPE'), ('<Text grow="-1"/>', 'STATIC_TYPE'),
@@ -35,6 +36,12 @@ class DiagnosticTests(CompilerCase):
         for one, code in cases:
             with self.subTest(one=one):
                 self.compile(one, SCHEMA, error=code)
+
+    def test_presentation_class_bindings(self):
+        for component in ('Text', 'Surface', 'Column'):
+            with self.subTest(component=component):
+                data = self.compile(f'<{component} :class="title"/>', SCHEMA)
+                self.assertEqual(len(section(data, 9)), 36)
 
     def test_list_errors(self):
         cases = [
@@ -108,6 +115,8 @@ class DiagnosticTests(CompilerCase):
         depths = [struct.unpack_from('<H', records, at+12)[0] for at in range(0,len(records),36)]
         self.assertEqual(sorted(depths), [0,0,1])
 
+
+from test_slots import SlotTests
 
 if __name__ == '__main__':
     unittest.main()

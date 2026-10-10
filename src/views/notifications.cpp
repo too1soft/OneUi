@@ -186,6 +186,7 @@ void Runtime::flushPass() {
             retired.clear();
         }
         staging = false;
+        styles->applyBaseLayouts();
         scopes.erase(
             std::remove_if(scopes.begin(), scopes.end(), [](const auto &s) { return s->closed; }),
             scopes.end());

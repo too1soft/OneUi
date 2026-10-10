@@ -1,0 +1,22 @@
+<template view-model="Root">
+  <Column>
+    <List :items="rows" v-model="selected"/>
+    <VirtualList :items="rows" v-model="selected" row-height="42"/>
+    <Row class="row-flow" wrap="false">
+      <Text v-for="item in rows" :key="item.id" :text="item.title"/>
+    </Row>
+    <Surface class="surface-flow" :basis="height" shrink="0">
+      <Text v-for="item in rows" :key="item.id" :text="item.title"/>
+    </Surface>
+    <Column :class="title" :basis="height" shrink="0"/>
+    <InteractiveSurface @click="click"><Text text="Choose"/></InteractiveSurface>
+    <Text :spans="spans" :text="title"/>
+  </Column>
+</template>
+<style scoped>
+List { background-color:#18201b; color:#e3eae5; }
+VirtualList { background-color:#18201b; color:#e3eae5; }
+VirtualList:selected { content-background-color:#35453b; }
+Row.row-flow { gap:12px; }
+Surface.surface-flow { gap:8px; }
+</style>

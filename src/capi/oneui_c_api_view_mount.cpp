@@ -1,4 +1,6 @@
 #include "oneui/ui_theme.h"
+#include "oneui/layout/overlay_host.h"
+#include "oneui/controls/popup.h"
 #include "oneui_c_api_view_internal.h"
 namespace oneui::capi::views {
 std::string text(OneUiUtf8String s) {
@@ -12,6 +14,14 @@ bool contains(const std::shared_ptr<Widget> &root, const Widget *target) {
         return false;
     if (root.get() == target)
         return true;
+    if (auto host = std::dynamic_pointer_cast<OverlayHost>(root)) {
+        if (contains(host->content(), target)) return true;
+        for (auto &entry : host->overlays())
+            if (contains(entry.child, target)) return true;
+    }
+    if (auto popup = std::dynamic_pointer_cast<Popup>(root))
+        if (contains(popup->anchor(), target) || contains(popup->content(), target))
+            return true;
     if (auto view = std::dynamic_pointer_cast<View>(root))
         for (auto &child : view->children())
             if (contains(child, target))
@@ -43,6 +53,7 @@ void Mount::close(bool windowClosed) {
 }
 void Mount::publish(const std::shared_ptr<Runtime> &view) {
     check();
+    view->styles->inheritTransient(window->styleSheet ? window->styleSheet->transientStyleSheet() : nullptr);
     active = view;
     if (!destination)
         windowRoot = view->root->element.widget;
@@ -175,8 +186,11 @@ OneUiViewResult oneui_view_mount_set_styles(OneUiViewMount *handle, OneUiUtf8Str
             density ? oneui::ui::Density::Compact : oneui::ui::Density::Comfortable;
         oneui::ui::StyleRegistry validation;
         validation.replace(combined, nativeDensity);
-        if (view)
+        if (view) {
             view->styles->replace(combined, nativeDensity);
+            view->styles->inheritTransient(mount->window->styleSheet ? mount->window->styleSheet->transientStyleSheet() : nullptr);
+            view->refreshRepeatLayouts(view->root);
+        }
         mount->externalCss = std::move(external);
         mount->density = nativeDensity;
         if(view) {view->externalCss=mount->externalCss;view->density=nativeDensity;}

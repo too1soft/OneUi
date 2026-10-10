@@ -1,0 +1,18 @@
+model Root {
+    rw title: utf8
+    r visible: bool
+    r enabled: bool
+    r busy: bool
+    r rows: list<Item>
+    rw selected: i64
+    r height: f64
+    r spans: list<Span>
+    command click() when enabled busy busy
+}
+model Item key id {
+    r id: utf8
+    r text: utf8
+    r title: utf8
+    r detail: utf8
+}
+model Span key id {r id:utf8 r start:i64 r end:i64 r rgba:i64 r monospace:bool}

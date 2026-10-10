@@ -9,6 +9,7 @@
 #include "oneui/controls/reveal.h"
 #include "oneui/ui_native_host.h"
 #include "oneui/ui_native_theme.h"
+#include "oneui/tabs_style_adapter.h"
 #include "oneui/ui_keyed_tabs.h"
 #include "oneui/ui_keyed_table.h"
 #include "oneui/controls/icon_view.h"
@@ -21,6 +22,7 @@
 #include "oneui/ui_reactive.h"
 #include "oneui/ui_template_support.h"
 #include "oneui/style_adapter.h"
+#include "oneui/ui_style_diagnostics.h"
 #include "oneui/controls/text_field.h"
 #include "oneui/controls/switch.h"
 #include "oneui/controls/select.h"
@@ -47,6 +49,9 @@ struct Element : Node {
 
 class StyleRegistry {
 public:
+    // Resolve authored CSS dimensions into the parent's Yoga constraints after
+    // assembly. Native leaf measurement must not override explicit CSS sizes.
+    void applyBaseLayouts();
     struct Source { std::string component, file; int line=0; };
 private:
     struct Entry { std::weak_ptr<Widget> widget; std::string component, classes; std::weak_ptr<Stack> content; std::string tone, file; int line=0; bool invalid=false; std::string appearance,variant; };
@@ -93,6 +98,7 @@ private:
             table->setScrollOffset(row*tableRowHeight(density_));
         }
         auto box = sheet.resolve(n);
+        rememberStyleDiagnostic(w,n,box);
         configureQuery(w,box);
         if(auto page=std::dynamic_pointer_cast<ContainerPage>(w))page->setDisplay(box.display);
         else if(box.display)w->setLayoutVisible(*box.display);
@@ -108,10 +114,27 @@ private:
             if(host->themed() && !host->children().empty())applyNativeTheme(*host->children().front(),sheet,host->hasCompositionOwner());return;
         }
         if(auto card=std::dynamic_pointer_cast<Card>(w)){card->setStyleBox(box);return;}
+        if(auto surface=std::dynamic_pointer_cast<InteractiveSurface>(w)) {
+            surface->setStyle(interactiveSurfaceStyleFromStyleSheet(sheet,n));
+            surface->setPadding(box.padding.value_or(Insets{}));return;
+        }
         if(auto slider=std::dynamic_pointer_cast<Slider>(w)){applyNativeTheme(*slider,sheet);return;}
         if(std::dynamic_pointer_cast<FontPicker>(w)||std::dynamic_pointer_cast<MediaPicker>(w)||std::dynamic_pointer_cast<MediaPreview>(w)){w->setStyleScope(std::make_shared<StyleSheet>(sheet));return;}
         if(auto icon=std::dynamic_pointer_cast<IconView>(w)) {icon->setColor(box.foreground.value_or(nativePalette(sheet).ink));return;}
-        if(std::dynamic_pointer_cast<Tabs>(w) || std::dynamic_pointer_cast<SplitView>(w) || std::dynamic_pointer_cast<ProgressBar>(w)) {applyNativeTheme(*w,sheet);return;}
+        if(auto tabs=std::dynamic_pointer_cast<Tabs>(w)) {
+            bool authored=false;
+            for(auto state:{StyleStateNone,StyleStateHover,StyleStateActive,StyleStateSelected,StyleStateDisabled,StyleStateFocus}) {
+                auto node=n;node.state=state;const auto value=sheet.resolve(node);
+                authored|=value.background.color.has_value() || value.foreground.has_value() || value.borderColor.has_value() ||
+                    value.borderWidth.has_value() || value.radius.has_value() || value.content.backgroundColor.has_value() ||
+                    value.content.radius.has_value() || value.padding.has_value() || value.fontSize.has_value() ||
+                    value.fontWeight.has_value() || value.outlineColor.has_value() || value.outlineWidth.has_value() || value.outlineOffset.has_value();
+            }
+            if(authored)tabs->setStyleOverride(tabsStyleOverrideFromStyleSheet(sheet,n));
+            else applyNativeTheme(*tabs,sheet);
+            return;
+        }
+        if(std::dynamic_pointer_cast<SplitView>(w) || std::dynamic_pointer_cast<ProgressBar>(w)) {applyNativeTheme(*w,sheet);return;}
         if(auto chart=std::dynamic_pointer_cast<TimeSeriesChart>(w)) {applyNativeTheme(*w,sheet);if(box.foreground || box.borderColor || box.fontSize || box.gap)chart->setStyleBox(box);return;}
         if (auto v = std::dynamic_pointer_cast<Label>(w)) {
             v->setColor(box.foreground.value_or(Color{30,40,35,255})); v->setFontSize(box.fontSize.value_or(14)); v->setFontWeight(box.fontWeight.value_or(400));
@@ -123,16 +146,26 @@ private:
             // belongs to its vertical body. Neither changes the authored tree.
             if (auto body = entry.content.lock()) { v->setGap(0); body->setGap(box.gap.value_or(0)); }
         } else if (auto v = std::dynamic_pointer_cast<Button>(w)) v->setStyleOverride(buttonStyleOverrideFromStyleSheet(sheet,n));
-        else if (auto v = std::dynamic_pointer_cast<TextField>(w)) v->setStyleOverride(textFieldStyleOverrideFromStyleSheet(sheet,n));
+        else if (auto v = std::dynamic_pointer_cast<TextField>(w)) {
+            v->setStyleOverride(textFieldStyleOverrideFromStyleSheet(sheet,n));
+            v->setFontSize(box.fontSize.value_or(14));
+        }
         else if (auto v = std::dynamic_pointer_cast<Switch>(w)) v->setStyleOverride(switchStyleOverrideFromStyleSheet(sheet,n));
         else if (auto v = std::dynamic_pointer_cast<Select>(w)) v->setStyleOverride(selectStyleOverrideFromStyleSheet(sheet,n));
+        else if (auto v = std::dynamic_pointer_cast<List>(w)) v->setStyleOverride(listStyleOverrideFromStyleSheet(sheet,n));
+        else if (auto v = std::dynamic_pointer_cast<VirtualList>(w)) v->setStyleOverride(listStyleOverrideFromStyleSheet(sheet,n));
         else if (auto v = std::dynamic_pointer_cast<Table>(w)) v->setStyleOverride(tableStyleOverrideFromStyleSheet(sheet,n));
-        else if (auto v = std::dynamic_pointer_cast<ScrollView>(w)) v->setStyleBox(box);
+        else if (auto v = std::dynamic_pointer_cast<ScrollView>(w)) {
+            v->setStyleBox(box);
+            v->setScrollbarStyle(box.scrollbarColor.value_or(box.foreground.value_or(Color{148,163,184,180})),
+                                 box.scrollbarWidth.value_or(4.0f));
+        }
         else if (auto v = std::dynamic_pointer_cast<AdaptivePanes>(w)) v->setStyleBox(box);
         else if (auto v = std::dynamic_pointer_cast<Reveal>(w)) v->setTransition({box.transitionDurationMs.value_or(220),box.transitionEasing.value_or(EasingCurve::EaseOutCubic)});
     }
 public:
     const std::vector<std::string>& queryDiagnostics() const{return queryDiagnostics_;}
+    ONEUI_API void inheritTransient(const std::shared_ptr<StyleSheet>& sheet);
     void variant(const Element& e,const std::wstring& value) {
         if((e.component!="Button" && e.component!="ToolButton") || (value!=L"normal" && value!=L"primary" && value!=L"danger" && value!=L"ghost"))throw std::invalid_argument("Button variant must be normal, primary or danger");
         for(auto& entry:entries_)if(entry.widget.lock()==e.widget){entry.variant=std::string(value.begin(),value.end());apply(entry,sheet_);return;}
@@ -183,6 +216,7 @@ public:
         }
         // Force variable resolution before committing the sheet.
         for (auto& entry : entries_) { StyleNode n{syntax::components().at(entry.component), {"one-"+entry.component},0}; next.resolve(n); }
+        next.setTransientStyleSheet(sheet_.transientStyleSheet());
         sheet_ = std::move(next);density_=density;queries_.clear();localThemes_.clear();themeParents_.clear();
         restoreQueryLayouts();
         entries_.erase(std::remove_if(entries_.begin(),entries_.end(),[](auto& e) { return e.widget.expired(); }),entries_.end());
@@ -208,7 +242,7 @@ public:
             }
         }
     }
-    void applyAll() { localThemes_.clear();themeParents_.clear();for(auto& entry:entries_)apply(entry,sheet_);refreshLocalThemes(); }
+    void applyAll() { localThemes_.clear();themeParents_.clear();for(auto& entry:entries_)apply(entry,sheet_);refreshLocalThemes();applyBaseLayouts(); }
 };
 
 // Implemented by the desktop host, evaluated only by legacy callers that omit
@@ -302,6 +336,7 @@ public:
     ONEUI_API void set(Element& e,const std::string& key,float value);
     ONEUI_API void set(Element& e,const std::string& key,int value);
     ONEUI_API void set(Element& e,const std::string&,const std::vector<std::wstring>& items);
+    ONEUI_API void set(Element& e,const std::string&,const std::vector<ListItem>& items);
     ONEUI_API void set(Element& e,const std::string&,const std::vector<TableColumn>& columns);
     ONEUI_API void set(Element& e,const std::string&,const std::vector<TableRow>& rows);
     ONEUI_API void set(Element& e,const std::string&,const std::vector<TabItem>& items);
@@ -337,7 +372,10 @@ public:
     void model(Element e,State<int>& source) { e.as<Select>()->bindSelectedIndex(source); }
     template<class T> void modelTyped(Element e,State<T>& source) { model(e,source); }
     void click(Element e,VmCommand& command) {
-        auto weak=std::weak_ptr<Life>(life_); e.as<Button>()->setOnClick([weak,&command] { if(!weak.expired()) command.execute(); });
+        auto weak=std::weak_ptr<Life>(life_);
+        auto invoke=[weak,&command] { if(!weak.expired()) command.execute(); };
+        if(auto surface=e.as<InteractiveSurface>())surface->setOnClick(invoke);
+        else e.as<Button>()->setOnClick(invoke);
         auto enabled=std::make_shared<Computed<bool>>([&command] { return !command.canExecute.get() || command.running.get(); },command.canExecute,command.running);
         bind(e,"disabled",*enabled); own(enabled);
     }

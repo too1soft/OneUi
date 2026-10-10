@@ -34,10 +34,6 @@ OneUiViewResult oneui_view_instantiate(OneUiViewMount *mountHandle, const uint8_
         try {
             view->initialize(table, vm);
             mount->check();
-            std::string css = mount->externalCss;
-            for (const auto &r : view->image.records[oneview::CSS])
-                css += '\n' + view->image.strings[r[2]];
-            view->styles->replace(css, mount->density);
             auto handle = std::make_unique<OneUiView>();
             handle->value = view;
             handle->root.widget = view->root->element.widget;

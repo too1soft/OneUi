@@ -27,6 +27,7 @@ use dispatcher::{WindowState, trace_ui_task};
 pub mod controls;
 pub mod handles;
 pub mod interaction;
+mod qa_input;
 mod latest_signal;
 pub mod layout;
 pub use layout::{

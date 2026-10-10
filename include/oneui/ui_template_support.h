@@ -45,21 +45,25 @@ inline std::string lowerValue(std::string value) { for(auto& ch:value)ch=static_
 inline std::set<std::string> cssProperties(const std::string& tag) {
     if (tag == "progress"||tag=="slider"||tag=="font-picker"||tag=="media-picker"||tag=="media-preview"||tag=="theme-scope") return {};
     if (tag == "card") return {"background-color","background","border-color","border-width","border-radius","padding","box-shadow","opacity"};
+    if (tag == "interactive-surface") return {"background-color","background","border-color","border-width","border-radius","padding","transition-duration","transition-timing-function"};
     if (tag == "icon") return {"color"};
-    if (tag == "tabs" || tag=="split-view") return {}; // semantic native theme
+    if (tag=="split-view") return {}; // semantic native theme
+    if (tag == "list" || tag == "virtual-list") return {"background-color","content-background-color","color","placeholder-color","border-color","border-width","border-radius","content-radius","padding","font-size","font-weight","detail-font-size","detail-font-weight","text-inset","title-offset-y","detail-offset-y","scrollbar-color","scrollbar-width","outline-color","outline-width","outline-offset"};
     if (tag == "chart") return {"color","border-color","font-size","gap"};
     if (tag == "native-host") return {}; // foreign content owns its styling
     if (tag == "panes") return {"gap","padding","background-color","border-color","border-width","border-radius","box-shadow"};
     if (tag == "reveal") return {"transition-duration","transition-timing-function"};
     if (tag == "label") return {"color","font-size","font-weight"};
     if (tag == "stack") return {"background","box-shadow","background-color","border-color","border-width","border-radius","padding","gap"};
-    if (tag == "scroll-view") return {"background","box-shadow","background-color","border-color","border-width","border-radius","padding"};
+    if (tag == "scroll-view") return {"background","box-shadow","background-color","border-color","border-width","border-radius","padding","color","scrollbar-color","scrollbar-width"};
     std::set<std::string> keys = {"color","background-color","border-color","border-width","border-radius","outline-color","outline-width","outline-offset"};
     if (tag != "switch") keys.insert("padding");
-    if (tag == "button" || tag == "select" || tag == "table") keys.insert("font-size");
-    if (tag == "button") keys.insert("font-weight");
+    if (tag == "button" || tag == "input" || tag == "tabs" || tag == "select" || tag == "table") keys.insert("font-size");
+    if (tag == "button" || tag == "tabs") keys.insert("font-weight");
+    if (tag == "tabs") { keys.insert("content-background-color"); keys.insert("content-radius"); }
     if (tag == "button" || tag == "input") { keys.insert("background"); keys.insert("box-shadow"); keys.insert("transition-duration"); keys.insert("transition-timing-function"); }
     if (tag == "input") { keys.insert("placeholder-color"); keys.insert("caret-color"); keys.insert("selection-color"); }
+    if (tag == "select") keys.insert("content-radius");
     if (tag == "switch" || tag == "select" || tag == "table") keys.insert("content-background-color");
     if (tag == "table") { keys.insert("scrollbar-color"); keys.insert("scrollbar-width"); keys.insert("placeholder-color"); keys.erase("outline-color"); keys.erase("outline-width"); keys.erase("outline-offset"); }
     return keys;
@@ -116,10 +120,11 @@ inline std::string css(std::string source, const std::string& scope = {}, const 
             if(colon!=selector.npos) {
                 pseudo=selector.substr(colon+1);
                 std::set<std::string> states;
-                if(tag=="button")states={"hover","pressed","focus","disabled"};
+                if(tag=="button"||tag=="interactive-surface")states={"hover","pressed","focus","disabled"};
                 else if(tag=="input")states={"hover","focus","disabled","read-only"};
-                else if(tag=="switch" || tag=="select")states={"hover","pressed","focus","disabled","selected"};
-            else if(tag=="table")states={"hover","pressed","selected"};
+                else if(tag=="switch" || tag=="select" || tag=="tabs")states={"hover","pressed","focus","disabled","selected"};
+            else if(tag=="table" || tag=="list" || tag=="virtual-list")states={"hover","pressed","selected"};
+                if(tag=="switch")states.insert("checked");
                 if(!states.count(pseudo))fail("State is not consumed by "+tag+": "+pseudo);
             }
             if (!scope.empty()) { const auto pseudo = mapped.find(':'); mapped.insert(pseudo == mapped.npos ? mapped.size() : pseudo, "." + scope); }

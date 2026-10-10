@@ -533,6 +533,16 @@ IR推荐保持major1，新增**必需能力段** `WSC1`（目录kind=19、flags=
 
 ## 11. design-1阶段核验（历史记录）
 
+### WP5 设置页接入补充
+
+FontPicker 的 `trigger-label` 可本地化按钮文案，已选字体仍通过 accessibility value 暴露。
+MediaPicker 支持 `choose-label`、`clear-label`、`cancel-label`，32px 紧凑布局可用于表单行。
+其内部按钮分别使用 `media-picker-choose`、`media-picker-clear`、`media-picker-cancel` 样式类，
+字体按钮使用 `font-picker-trigger`；主题切换重新解析内部按钮样式。
+MediaPreview 的既有本地静态图片契约不变，视频导入和全局视频播放仍由应用服务承担。
+
+以下为早期设计记录，不能替代上述能力的实现验证；WP5 测试结果在 iShell 交接报告中列明。
+
 已完成只读现状调查与可实施契约；没有运行编译、运行时交互、性能或截图测试，因此本稿的性能与验收均为待执行计划。图MCP索引查询和MyStudio ensure_project被禁止审批策略拒绝，未继续调用受限工具，未换HTTP绕过；workspace_context已读，agent_kit.version=5与本地相同。MyStudio **未同步**（无task/execution/handoff写入）。版本状态：files_updated=false，http_verified=未单独执行，client_loaded=本会话已读取v5且workspace_context可用；未声称已上报回执。
 
 本任务不产生构建/实验/截图临时文件，仅保留正式设计稿及 `WP-4-design-commit-msg.txt`。不触碰既有capture配置和原工作区产物；WP3历史受阻项见 `docs/benchmarks/language-neutral-views/artifacts.md`，本次未把历史数字冒充新审计或宣称清理。进入实现前按9.2执行全项目产物审计。UI技能读取到 `.impeccable/design.json` 比 DESIGN.md 旧；它不是本任务视觉权威，未顺带重建，后续可单独document刷新。
@@ -540,3 +550,17 @@ IR推荐保持major1，新增**必需能力段** `WSC1`（目录kind=19、flags=
 交付文件已检查UTF-8无BOM、无连续四问号乱码、无替换字符/U+200B、代码围栏配对；I/O前缀的具体引用路径存在。Git分支仍为codex/workspace-components，状态仅上述两个新增文件，源码无diff；未写Git索引或提交。此为文档静态核验，不替代实现后的编译与行为验收。
 
 提交由Claude代为执行，提交信息附文件清单和Co-Authored-By。此记录仅对应design-1；design-2已获准S1→S2，实施证据另见S1/S2报告。每步提交信息用WP-4-S<N>-commit-msg.txt，交叉文件则合并并说明原因。
+
+WP5 settings FontPicker extension: `confirm-selection` keeps a candidate as a
+local preview until Apply; Cancel/Escape leave the VM value unchanged. Optional
+`monospace-items` is a `oneui.v1.StringItem` list of OS-reported fixed-pitch keys;
+`monospace-only` sets the initial filter and the user may disable it. The
+`apply-label`, `cancel-label`, `filter-label`, `search-label`, and `retry-label`
+properties localize the popup. `retryRequested` remains available after success
+so newly installed fonts can be enumerated again. The component never discovers
+fonts or persists preferences itself. Existing callers keep immediate selection
+unless they opt into confirmation.
+
+The popup paints an opaque surface inside its enclosing scroll viewport. Search,
+selection and secondary buttons inherit the active semantic palette when their
+optional component tokens are absent; this includes partial dark palettes.

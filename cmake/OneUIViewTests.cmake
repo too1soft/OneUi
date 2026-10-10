@@ -18,6 +18,30 @@ add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/Advanced.oneview"
     DEPENDS oneui-viewc tests/views/Advanced.one tests/views/Slotted.one tests/views/Runtime.oneschema VERBATIM)
 add_custom_target(oneui_view_advanced_ir DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/Advanced.oneview")
 add_dependencies(oneui_view_test_ir oneui_view_advanced_ir)
+add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/Lists.oneview"
+    COMMAND oneui-viewc --emit ir --input "${PROJECT_SOURCE_DIR}/tests/views/Lists.one"
+        --schema "${PROJECT_SOURCE_DIR}/tests/views/Lists.oneschema" --name Lists
+        --output "${CMAKE_CURRENT_BINARY_DIR}/Lists.oneview"
+    DEPENDS oneui-viewc tests/views/Lists.one tests/views/Lists.oneschema VERBATIM)
+add_custom_target(oneui_view_settings_lists_ir DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/Lists.oneview")
+add_dependencies(oneui_view_test_ir oneui_view_settings_lists_ir)
+add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/ExternalTheme.oneview"
+    COMMAND oneui-viewc --emit ir --input "${PROJECT_SOURCE_DIR}/tests/views/ExternalTheme.one"
+        --schema "${PROJECT_SOURCE_DIR}/tests/views/Runtime.oneschema" --name ExternalTheme
+        --output "${CMAKE_CURRENT_BINARY_DIR}/ExternalTheme.oneview"
+    DEPENDS oneui-viewc tests/views/ExternalTheme.one tests/views/Runtime.oneschema VERBATIM)
+add_custom_target(oneui_view_external_theme_ir DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/ExternalTheme.oneview")
+add_dependencies(oneui_view_test_ir oneui_view_external_theme_ir)
+foreach(fixture SlotSingle SlotWrapped SlotFallback)
+    add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/${fixture}.oneview"
+        COMMAND oneui-viewc --emit ir --input "${PROJECT_SOURCE_DIR}/tests/views/${fixture}.one"
+            --schema "${PROJECT_SOURCE_DIR}/tests/views/Runtime.oneschema" --name ${fixture}
+            --output "${CMAKE_CURRENT_BINARY_DIR}/${fixture}.oneview"
+        DEPENDS oneui-viewc "tests/views/${fixture}.one" tests/views/Runtime.oneschema
+            tests/views/SlotSingle.partial.one tests/views/SlotWrapped.partial.one VERBATIM)
+    add_custom_target(oneui_view_${fixture}_ir DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/${fixture}.oneview")
+    add_dependencies(oneui_view_test_ir oneui_view_${fixture}_ir)
+endforeach()
 add_executable(oneui_view_runtime_tests tests/views/runtime_tests.cpp)
 add_executable(oneui_pane_motion_tests tests/workspace/pane_motion_tests.cpp)
 target_link_libraries(oneui_pane_motion_tests PRIVATE oneui_core)

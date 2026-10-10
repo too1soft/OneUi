@@ -10,6 +10,9 @@ class ONEUI_API MediaPicker final : public View {
 public:
     MediaPicker();
     void setConfig(MediaPickerConfig);
+    void setChooseLabel(std::wstring);
+    void setClearLabel(std::wstring);
+    void setCancelLabel(std::wstring);
     const MediaPickerConfig& config() const{return config_;}
     void setOnIntent(std::function<void(MediaPickerAction)> callback){callback_=std::move(callback);}
     void setSlot(std::string,std::shared_ptr<Widget>);

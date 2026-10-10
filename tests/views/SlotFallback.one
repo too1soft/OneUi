@@ -1,0 +1,1 @@
+<template view-model="Root"><Column view-id="frame"><slot name="body" root="single"><Text view-id="content" grow="1" basis="0" :text="title"/></slot></Column></template>

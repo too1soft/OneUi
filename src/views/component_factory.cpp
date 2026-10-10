@@ -104,9 +104,15 @@ Element Mount::make(std::string type, std::vector<Element> children, std::string
     Builder b(StackEngine::Yoga, "");
     Node node = b.column({});
     std::shared_ptr<Stack> content;
-    if(type=="FontPicker")node=b.native(std::make_shared<FontPicker>());
+    if(type=="List")node=b.native(std::make_shared<List>());
+    else if(type=="VirtualList")node=b.native(std::make_shared<VirtualList>());
+    else if(type=="FontPicker")node=b.native(std::make_shared<FontPicker>());
     else if(type=="Slider")node=b.native(std::make_shared<Slider>());
-    else if(type=="Card") {
+    else if(type=="InteractiveSurface") {
+        auto surface=std::make_shared<InteractiveSurface>();
+        if(children.size()!=1)throw std::invalid_argument("InteractiveSurface requires one child");
+        surface->setContent(children[0].widget);node=b.native(surface);
+    } else if(type=="Card") {
         auto card=std::make_shared<Card>();if(children.size()!=1)throw std::invalid_argument("Card requires one child");card->setContent(children[0].widget);node=b.native(card);
     } else if(type=="ThemeScope") {
         auto scope=std::make_shared<ThemeScope>();if(children.size()!=1)throw std::invalid_argument("ThemeScope requires one child");scope->add(children[0].widget);node=b.native(scope);
@@ -155,7 +161,7 @@ Element Mount::make(std::string type, std::vector<Element> children, std::string
         auto progress = std::make_shared<ProgressBar>();
         progress->setPreferredSize({0, 6});
         node = b.native(progress).shrink(0);
-    } else if (type == "Tabs") {
+    } else if (type == "Tabs" || type == "SegmentedControl") {
         auto tabs = std::make_shared<Tabs>();
         tabs->setDocumentMode(true);
         tabs->setSizingMode(TabsSizingMode::Compact);
@@ -256,6 +262,10 @@ Element Mount::make(std::string type, std::vector<Element> children, std::string
     if (type == "ToolButton")
         e.widget->setPreferredSize({32, 32});
 
+    if (type == "SegmentedControl") {
+        e.as<Tabs>()->setDocumentMode(false);
+        e.as<Tabs>()->setSizingMode(TabsSizingMode::Equal);
+    }
     if (type == "Tabs") {
         e.tabs = std::make_shared<KeyedTabs>(e.as<Tabs>());
         own(e.tabs);
@@ -264,8 +274,8 @@ Element Mount::make(std::string type, std::vector<Element> children, std::string
         e.splitLimits = std::make_shared<Element::SplitLimits>();
     if (type == "SearchInput")
         e.basis(280).grow();
-    if (type == "Select")
-        e.basis(140);
+    // Native Select supplies a width preference. A main-axis basis would turn
+    // that width into a 140px height inside an imported slot's column wrapper.
     if (type == "Toolbar" || type == "ActionBar" || type == "Header")
         e.shrink(0);
     if (type == "Status")
@@ -357,3 +367,36 @@ Element Mount::make(std::string type, std::vector<Element> children, std::string
     return e;
 }
 } // namespace oneui::ui
+
+namespace oneui::ui {
+void StyleRegistry::inheritTransient(const std::shared_ptr<StyleSheet>& sheet) {
+    sheet_.setTransientStyleSheet(sheet);
+    // Only Select consumes the separate popup palette. Leave repeat flow intact.
+    for(const auto& entry:entries_)if(entry.component=="Select")apply(entry,sheet_);
+}
+namespace {
+#if ONEUI_DEVELOPER_TOOLS
+thread_local std::map<const Widget*,StyleDiagnostic> diagnostics;
+#endif
+}
+void rememberStyleDiagnostic(const std::shared_ptr<Widget>& widget,const StyleNode& node,const StyleBox& box) {
+#if ONEUI_DEVELOPER_TOOLS
+    if(diagnostics.size()%256==0) {
+        for(auto it=diagnostics.begin();it!=diagnostics.end();) {
+            if(it->second.widget.expired())it=diagnostics.erase(it);else ++it;
+        }
+    }
+    diagnostics[widget.get()]={widget,node,box};
+#endif
+}
+std::vector<StyleDiagnostic> styleDiagnostics() {
+    std::vector<StyleDiagnostic> result;
+#if ONEUI_DEVELOPER_TOOLS
+    for(auto it=diagnostics.begin();it!=diagnostics.end();) {
+        if(it->second.widget.expired())it=diagnostics.erase(it);
+        else {result.push_back(it->second);++it;}
+    }
+#endif
+    return result;
+}
+}

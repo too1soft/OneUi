@@ -1,5 +1,7 @@
 #include "fixture.h"
 using namespace viewtest;
+#include "settings_lists.inc"
+#include "slot_contracts.inc"
 int main(int argc, char **argv) {
     if (argc != 2)
         return 2;
@@ -9,12 +11,20 @@ int main(int argc, char **argv) {
             c.start();
             auto label = c.runtime->root->children[0]->element.as<oneui::Label>();
             expect(label->text() == L"initial", "initial UTF8");
+            const auto initialClasses = c.runtime->root->children[0]->element.classes;
+            expect(initialClasses.size() > std::string("initial ").size() &&
+                   initialClasses.find("initial") != std::string::npos, "scope plus bound classes");
             expect(c.vm.reads[c.title] == 1, "one get per property across bindings");
             c.vm.text(c.title, "changed");
             for (int i = 0; i < 100; ++i)
                 c.runtime->notify(c.runtime->rootScope, c.title);
             c.runtime->flush();
             expect(label->text() == L"changed" && c.vm.reads[c.title] == 2, "coalesced change");
+            const auto changedClasses = c.runtime->root->children[0]->element.classes;
+            expect(changedClasses.substr(0, changedClasses.size() - 7) == initialClasses.substr(0, initialClasses.size() - 7) &&
+                   changedClasses.find("changed") != std::string::npos &&
+                   changedClasses.find("initial") == std::string::npos,
+                   "class updates remove obsolete values and retain scope tokens");
             c.runtime->flush();
             expect(c.vm.reads[c.title] == 2, "no polling");
             expect(c.runtime->hosts.count("terminal") == 1, "empty native host");
@@ -41,6 +51,11 @@ int main(int argc, char **argv) {
             Case c(argv[1]);
             c.start();
             auto repeat = c.runtime->root->children[4];
+            c.runtime->factory.set(c.runtime->root->element,"class",std::string("flow-parent"));
+            c.runtime->styles->replace(oneui::ui::syntax::css("Column.flow-parent { gap:17px; }"));
+            c.runtime->refreshRepeatLayouts(c.runtime->root);
+            expect(repeat->element.as<oneui::Stack>()->gap()==17,
+                   "CSS replacement restores inherited repeat spacing");
             auto old = repeat->rows.at("a")->element.widget;
             c.vm.items = {&c.b, &c.a};
             ++c.vm.revision;
@@ -176,7 +191,9 @@ int main(int argc, char **argv) {
             expect(field->clipboard() == clipboard, "legacy repeat propagates clipboard service");
             c.runtime->close();
         }
-        std::cout << "9 runtime scenarios passed\n";
+        settingsLists(argv[1]);
+        slotContracts(argv[1]);
+        std::cout << "11 runtime scenarios passed\n";
         return 0;
     } catch (const std::exception &e) {
         std::cerr << e.what() << '\n';

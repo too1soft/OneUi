@@ -1,3 +1,5 @@
+#include "oneui/tabs_style_adapter.h"
+#include "oneui/ui_style_diagnostics.h"
 #include "oneui/oneui_c_api.h"
 #include "oneui_c_api_error.h"
 #include "../internal/unicode.h"
@@ -561,12 +563,17 @@ struct DebugStyleBinding {
     std::string tag;
     std::vector<std::string> classes;
     std::shared_ptr<oneui::StyleSheet> styleSheet;
+    std::optional<oneui::StyleBox> resolved;
 };
 
 using DebugStyleMap = std::unordered_map<const oneui::Widget*, DebugStyleBinding>;
 
 DebugStyleMap debugStyleBindings() {
     DebugStyleMap bindingsByWidget;
+    for(const auto& entry:oneui::ui::styleDiagnostics()) {
+        if(const auto widget=entry.widget.lock())
+            bindingsByWidget[widget.get()]={entry.node.tag,entry.node.classes,{},entry.box};
+    }
     std::lock_guard<std::mutex> lock(gWidgetRegistryMutex);
     bindingsByWidget.reserve(gWidgetRegistry.size());
     for (const auto& binding : gWidgetRegistry) {
@@ -833,7 +840,7 @@ void appendDebugNode(
     if (accessibility.state.focused) state |= oneui::StyleStateFocus;
     if (accessibility.state.selected || accessibility.state.checked) state |= oneui::StyleStateSelected;
     const std::string tag = debugTagFor(widget, binding);
-    const oneui::StyleBox style = binding.styleSheet
+    const oneui::StyleBox style = binding.resolved ? *binding.resolved : binding.styleSheet
         ? binding.styleSheet->resolve(oneui::StyleNode{tag, binding.classes, state})
         : oneui::StyleBox{};
     const oneui::Rect frame = widget->frame();
@@ -1143,48 +1150,7 @@ void applyStyleSheet(OneUiWidget* wrapper, std::shared_ptr<oneui::StyleSheet> sh
         return;
     }
     if (auto* tabs = dynamic_cast<oneui::Tabs*>(wrapper->widget.get())) {
-        auto stateOverride = [](const oneui::StyleBox& box) {
-            oneui::TabsStateStyleOverride state;
-            state.background = box.background.color;
-            state.border = box.borderColor;
-            state.itemBackground = box.content.backgroundColor ? box.content.backgroundColor : box.background.color;
-            state.itemForeground = box.foreground;
-            state.selectedItemBackground = box.content.backgroundColor ? box.content.backgroundColor : box.background.color;
-            state.selectedItemForeground = box.foreground;
-            state.selectedItemBorder = box.borderColor;
-            state.borderWidth = box.borderWidth;
-            state.radius = box.radius;
-            state.itemRadius = box.content.radius ? box.content.radius : box.radius;
-            state.itemBorderWidth = box.borderWidth;
-            state.textInset = box.textInset;
-            state.indicatorColor = box.tabIndicatorColor;
-            state.indicatorInset = box.tabIndicatorInset;
-            state.indicatorHeight = box.tabIndicatorHeight;
-            state.documentOutlineWidth = box.tabOutlineWidth;
-            state.trailingInset = box.tabTrailingInset;
-            state.fontSize = box.fontSize;
-            state.fontWeight = box.fontWeight;
-            if (box.padding) {
-                state.itemInset = *box.padding;
-            }
-            if (box.outlineColor || box.outlineWidth || box.outlineOffset || box.radius) {
-                oneui::FocusRingStyleOverride ring;
-                ring.color = box.outlineColor;
-                ring.width = box.outlineWidth;
-                ring.offset = box.outlineOffset;
-                ring.radius = box.radius;
-                ring.visible = true;
-                state.focusRing = ring;
-            }
-            return state;
-        };
-        oneui::TabsStyleOverride style;
-        style.normal = stateOverride(effectiveSheet->resolve(oneui::StyleNode{node.tag, node.classes, oneui::StyleStateNone}));
-        style.hovered = stateOverride(effectiveSheet->resolve(oneui::StyleNode{node.tag, node.classes, oneui::StyleStateHover}));
-        style.pressed = stateOverride(effectiveSheet->resolve(oneui::StyleNode{node.tag, node.classes, oneui::StyleStateActive}));
-        style.selected = stateOverride(effectiveSheet->resolve(oneui::StyleNode{node.tag, node.classes, oneui::StyleStateSelected}));
-        style.disabled = stateOverride(effectiveSheet->resolve(oneui::StyleNode{node.tag, node.classes, oneui::StyleStateDisabled}));
-        style.focusVisible = stateOverride(effectiveSheet->resolve(oneui::StyleNode{node.tag, node.classes, oneui::StyleStateFocus}));
+        auto style = oneui::tabsStyleOverrideFromStyleSheet(*effectiveSheet, node);
         tabs->setStyleOverride(style);
         return;
     }

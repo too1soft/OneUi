@@ -1,5 +1,6 @@
 mod compile_fail;
 mod model;
+mod slots;
 mod watcher;
 mod workspace;
 use model::*;
@@ -11,6 +12,7 @@ use std::{
 
 fn main() {
     let cases: &[(&str, fn())] = &[
+        ("single-root slots and 50 bidirectional reloads", slots::run),
         ("dynamic scope and content lease", workspace::run),
         ("generated IR matches standalone IR", identical_ir),
         ("Rust VM lifecycle and two views", lifecycle),

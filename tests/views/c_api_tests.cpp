@@ -1,5 +1,6 @@
 #include "capi/oneui_c_api_view_internal.h"
 #include "fixture.h"
+#include "oneui/layout/overlay_host.h"
 #include <thread>
 using namespace viewtest;
 namespace {
@@ -65,6 +66,41 @@ int main(int argc, char **argv) {
     try {
         expect(oneui_utf8_abi_version() == 44 && oneui_view_protocol_version() == 1,
                "ABI and protocol versions");
+        {
+            OneUiWindow window;
+            window.window = std::make_unique<Window>();
+            auto host = std::make_shared<oneui::OverlayHost>();
+            auto destination = std::make_shared<oneui::Panel>();
+            host->setContent(destination);
+            window.rootContent = host;
+            window.window->setContent(host);
+            OneUiWidget handle;
+            handle.widget = destination;
+            OneUiViewMount *mount = nullptr;
+            expect(oneui_view_mount_create(&window, &handle, &mount) == ONEUI_VIEW_OK,
+                   "mount panel under overlay host content");
+            oneui_view_mount_destroy(mount);
+            handle.widget = std::make_shared<oneui::Panel>();
+            expect(oneui_view_mount_create(&window, &handle, &mount) == ONEUI_VIEW_INVALID_ARGUMENT,
+                   "reject panel outside this window");
+            host->addOverlay(handle.widget);
+            expect(oneui_view_mount_create(&window, &handle, &mount) == ONEUI_VIEW_OK,
+                   "mount panel under overlay entry");
+            oneui_view_mount_destroy(mount);
+        }
+        {
+            auto path = std::filesystem::path(argv[1]).parent_path() / "ExternalTheme.oneview";
+            ApiCase c(path.string().c_str());
+            // Scoped declarations may reference application tokens that are absent
+            // from the SDK default theme, including on the very first mount.
+            const std::string applicationCss = ":root { --application-ink:#123456; }";
+            expect(oneui_view_mount_set_styles(c.mount,
+                       {applicationCss.data(), applicationCss.size()}, 0) == 0,
+                   "application token stylesheet");
+            c.start();
+            expect(oneui_view_root(c.view) != nullptr,
+                   "initial scoped CSS resolves application tokens");
+        }
         {
             ApiCase c(argv[1]);
             c.start();

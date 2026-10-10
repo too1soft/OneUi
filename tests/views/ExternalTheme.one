@@ -1,0 +1,2 @@
+<template view-model="Root"><Text text="Application theme"/></template>
+<style scoped>Text {color:var(--application-ink);}</style>

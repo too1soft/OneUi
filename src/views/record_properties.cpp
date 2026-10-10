@@ -27,7 +27,33 @@ void Runtime::applyList(Instance &instance, const std::string &property, ListSta
             }
         }
     }
-    if (e.component == "Select") {
+    if (e.component == "Text" && property == "spans") {
+        auto label = e.as<Label>();
+        const auto bytes = unicode::toUtf8(label->text());
+        auto boundary = [&](int64_t offset) {
+            return offset >= 0 && uint64_t(offset) <= bytes.size() &&
+                (size_t(offset) == bytes.size() || (uint8_t(bytes[size_t(offset)]) & 0xc0u) != 0x80u);
+        };
+        std::vector<TextStyleSpan> spans;
+        int64_t previousEnd = 0;
+        for (const auto& item : state.items) {
+            const auto start = field(item, "start").integer, end = field(item, "end").integer;
+            const auto rgba = field(item, "rgba").integer;
+            check(start >= previousEnd && end > start && boundary(start) && boundary(end) &&
+                  rgba >= 0 && uint64_t(rgba) <= 0xffffffffu, ONEUI_VIEW_TYPE, "Text span range/color");
+            TextStyleSpan span;
+            span.start = wide(bytes.substr(0, size_t(start))).size();
+            span.end = wide(bytes.substr(0, size_t(end))).size();
+            span.foreground = {uint8_t(rgba >> 24), uint8_t(rgba >> 16), uint8_t(rgba >> 8), uint8_t(rgba)};
+            span.monospace = bool(field(item, "monospace").integer);
+            spans.push_back(span); previousEnd = end;
+        }
+        label->setRichText(label->text(), std::move(spans));
+    } else if (e.component == "List" || e.component == "VirtualList") {
+        std::vector<ListItem> values;
+        for (const auto &item : state.items) values.push_back({wide(field(item, "title").text), wide(field(item, "detail").text)});
+        factory.set(e, property, values);
+    } else if (e.component == "Select" || e.component == "SegmentedControl") {
         std::vector<std::wstring> values;
         for (const auto &item : state.items)
             values.push_back(wide(field(item, "value").text));

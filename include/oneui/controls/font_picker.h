@@ -15,6 +15,12 @@ public:
     FontPicker();
     ~FontPicker() override;
     void setConfig(FontPickerConfig);
+    void setTriggerLabel(std::wstring);
+    void setConfirmation(bool, std::wstring applyLabel, std::wstring cancelLabel);
+    void setMonospaceFilter(std::vector<std::string> keys, bool initiallyChecked, std::wstring label);
+    void setSearchLabel(std::wstring);
+    void setRetryLabel(std::wstring);
+    void setPopupViewportProvider(std::function<Rect()>);
     const FontPickerConfig& config() const;
     void setOnSelectionRequested(std::function<void(std::string)>);
     void setOnRetryRequested(std::function<void()>);
@@ -40,5 +46,6 @@ private:
     std::shared_ptr<State> state_;
     void filter();
     void select(int);
+    Rect popupRect() const;
 };
 } // namespace oneui

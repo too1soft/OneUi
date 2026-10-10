@@ -53,6 +53,7 @@ public:
     StackEngine engine() const { return engine_; }
     StackDirection direction() const { return direction_; }
     StackAlign align() const {return align_;}
+    float gap() const {return gap_;}
     bool wrap() const {return wrap_;}
     void setSizeContainment(bool value){if(sizeContained_!=value){sizeContained_=value;invalidate();}}
     bool sizeContained() const {return sizeContained_;}

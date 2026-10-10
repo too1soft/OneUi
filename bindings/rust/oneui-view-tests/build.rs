@@ -41,4 +41,14 @@ fn main() {
         .arg("--output").arg(out.join("workspace.oneview"))
         .status().expect("run workspace viewc");
     assert!(status.success(), "workspace viewc failed");
+    for mode in ["Single", "Wrapped"] {
+        let input = root.join(format!("tests/viewc/RustSlot{mode}.one"));
+        println!("cargo:rerun-if-changed={}", input.display());
+        println!("cargo:rerun-if-changed={}", root.join(format!("tests/views/Slot{mode}.partial.one")).display());
+        let status = Command::new(&viewc).args(["--emit", "ir", "--input"])
+            .arg(input).arg("--schema").arg(root.join("tests/viewc/Rust.oneschema"))
+            .arg("--output").arg(out.join(format!("slot-{mode}.oneview")))
+            .status().expect("run slot viewc");
+        assert!(status.success(), "slot viewc failed");
+    }
 }

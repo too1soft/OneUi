@@ -1,0 +1,2 @@
+<import name="Frame" src="../views/SlotWrapped.partial.one"/>
+<template view-model="RustPage"><Frame><Text view-id="content" slot="body" grow="1" basis="0" :text="title"/></Frame></template>

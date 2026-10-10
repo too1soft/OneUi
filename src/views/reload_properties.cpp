@@ -37,6 +37,9 @@ std::function<void()> resetProperty(ui::Mount &factory,ui::Element &target,
     if(key=="grow" || key=="shrink" || key=="basis" || key=="min" || key=="max")return []{};
     if(key=="items") {
         if(target.component=="Select")return [w=target.as<Select>()]{w->setItems({});};
+        if(target.component=="SegmentedControl")return [w=target.as<Tabs>()]{w->setItems({});};
+        if(target.component=="List")return [w=target.as<List>()]{w->setItems({});};
+        if(target.component=="VirtualList")return [w=target.as<VirtualList>()]{w->setItems({});};
         if(target.table)return [w=target.table]{w->update({});};
         if(target.tabs)return [w=target.tabs]{w->update({});};
     }
@@ -52,12 +55,18 @@ std::function<void()> resetProperty(ui::Mount &factory,ui::Element &target,
             target.component=="FormGrid" || target.component=="Toolbar" || target.component=="ActionBar";
         if(key=="open")value.integer=fresh.as<Reveal>()->open();
     }
-    if(value.tag==2)value.integer=key=="selectedIndex" ? fresh.as<Select>()->selectedIndex() : 0;
+    if(value.tag==2 && key=="selectedIndex") {
+        if(target.component=="List")value.integer=fresh.as<List>()->selectedIndex();
+        else if(target.component=="VirtualList")value.integer=fresh.as<VirtualList>()->selectedIndex();
+        else if(target.component=="SegmentedControl")value.integer=fresh.as<Tabs>()->selectedIndex();
+        else value.integer=fresh.as<Select>()->selectedIndex();
+    }
     if(value.tag==3) {
         const std::map<std::string,double> numbers={{"ratio",0.5},{"first-min",80},{"second-min",80},
             {"collapsed-extent",0},{"min-column-width",320},{"max-width",880},
             {"breakpoint",target.component=="SidebarLayout" ? 960 : 800},
-            {"pane-width",target.component=="SidebarLayout" ? 208 : 380},{"value",0}};
+            {"pane-width",target.component=="SidebarLayout" ? 208 : 380},{"value",0},
+            {"row-height",42},{"content-height",0},{"wheel-step",48},{"scroll-offset",0}};
         auto found=numbers.find(key);
         check(found!=numbers.end(),ONEUI_VIEW_TYPE,"Missing reload numeric default");
         value.number=found->second;

@@ -2,6 +2,23 @@
 // Included after ui_declarative.h's definitions. Query application belongs to
 // declarative composition; the parser/evaluator and isolated layout are core.
 namespace oneui::ui {
+inline void StyleRegistry::applyBaseLayouts() {
+    std::map<const Widget*,std::shared_ptr<Stack>> parents;
+    for (const auto& entry : entries_)
+        if (auto stack = std::dynamic_pointer_cast<Stack>(entry.widget.lock()))
+            for (const auto& child : stack->children()) parents[child.get()] = stack;
+    for (const auto& entry : entries_) if (auto widget = entry.widget.lock()) {
+        auto parent = parents.find(widget.get());
+        if (parent == parents.end()) continue;
+        StyleNode node{syntax::components().at(entry.component), {"one-"+entry.component}, 0};
+        std::istringstream words(entry.classes);
+        for (std::string word; words >> word;) node.classes.push_back(word);
+        const auto box = sheet_.resolve(node);
+        if (box.width || box.height || box.minWidth || box.minHeight ||
+            box.flexBasis || box.flexGrow || box.flexShrink)
+            applyLayout(entry, box, parent->second);
+    }
+}
 inline void StyleRegistry::restoreQueryLayouts() {
     for(const auto& entry:entries_)if(auto widget=entry.widget.lock()) {
         auto found=layoutDefaults_.find(widget.get());if(found==layoutDefaults_.end())continue;

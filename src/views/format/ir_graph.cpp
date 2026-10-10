@@ -163,16 +163,25 @@ void validateGraph(const Image &im)
             {
                 auto ix = r[2] + i;
                 auto &slot = rs[SLOT][ix];
-                require(slot[0] == n[9] && slot[3] == 1 && slot[5] == scopes[0] &&
+                require(slot[0] == n[9] && (slot[3] & slotSupplied) && slot[5] == scopes[0] &&
                             supplied.insert(im.strings[slot[1]]).second && claim(auxiliary[2], ix, fresh),
                         "BAD_IR: supplied slot");
                 auto &target = rs[TMPL][r[1]];
                 bool found = false;
                 for (uint32_t j = 0; j < target[5]; ++j)
                     if (im.strings[rs[SLOT][target[4] + j][1]] == im.strings[slot[1]])
+                    {
+                        require((rs[SLOT][target[4] + j][3] & slotSingleRoot) == (slot[3] & slotSingleRoot), "BAD_IR: slot contract mismatch");
                         found = true;
+                    }
                 require(found && slot[2] != none, "BAD_IR: unknown/empty supplied slot");
                 visitTemplate(slot[2], scopes, depth + 1);
+            }
+            const auto& target = rs[TMPL][r[1]];
+            for (uint32_t j = 0; j < target[5]; ++j) {
+                const auto& outlet = rs[SLOT][target[4] + j];
+                require(!(outlet[3] & slotSingleRoot) || outlet[2] != none ||
+                            supplied.count(im.strings[outlet[1]]), "BAD_IR: missing single-root slot");
             }
             explicitCalls.pop_back();
         }
@@ -180,7 +189,7 @@ void validateGraph(const Image &im)
         {
             auto &r = rs[SLOT][n[9]];
             auto &t = rs[TMPL][tmpl];
-            require(r[0] == tmpl && r[3] == 0 && r[5] == scopes[0] && n[9] >= t[4] && n[9] - t[4] < t[5] &&
+            require(r[0] == tmpl && !(r[3] & slotSupplied) && r[5] == scopes[0] && n[9] >= t[4] && n[9] - t[4] < t[5] &&
                         claim(auxiliary[2], n[9], fresh),
                     "BAD_IR: outlet ownership");
             if (r[2] != none)
@@ -198,7 +207,9 @@ void validateGraph(const Image &im)
         for (uint32_t i = 0; i < rs[TMPL][t][5]; ++i)
         {
             auto &r = rs[SLOT][rs[TMPL][t][4] + i];
-            require(r[0] == t && r[3] == 0 && outletNames.insert(im.strings[r[1]]).second, "BAD_IR: duplicate outlet");
+            require(r[0] == t && !(r[3] & slotSupplied) && outletNames.insert(im.strings[r[1]]).second, "BAD_IR: duplicate outlet");
+            require(t != im.root || !(r[3] & slotSingleRoot) || r[2] != none,
+                    "BAD_IR: missing root-template single-root slot");
         }
         visitNode(rs[TMPL][t][1], t, none, scopes, depth, ids);
         activeTemplates.erase(t);

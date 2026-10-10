@@ -55,7 +55,8 @@ int main(int argc, char **argv)
             auto data = read(args.at("--verify"));
             oneview::Bytes bytes(data.begin(), data.end());
             auto image = oneview::readImage(bytes);
-            std::cout << "OneView 1.0 nodes=" << image.count(oneview::NODE)
+            std::cout << "OneView 1." << (unsigned(bytes[10]) | (unsigned(bytes[11]) << 8))
+                      << " nodes=" << image.count(oneview::NODE)
                       << " templates=" << image.count(oneview::TMPL)
                       << " schema=" << oneview::hex(oneview::sha256(image.schema.encode())) << "\n";
             return 0;

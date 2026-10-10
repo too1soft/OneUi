@@ -4,6 +4,7 @@
 #include "oneui/controls/font_picker.h"
 #include "oneui/controls/media_picker.h"
 #include "../../src/core/picker_styles.h"
+#include "../../src/internal/ui_clock.h"
 #include "../support/recording_canvas.h"
 #include <iostream>
 #include <stdexcept>
@@ -117,5 +118,7 @@ void themes() {
     check(canvas.texts.back().color.r==28,"global theme unchanged");
     first->setTokens({});canvas.texts.clear();scopes[0].widget->paint(canvas);check(canvas.texts.back().color.r==28,"empty local tokens inherit parent");
 }
+#include "settings_controls.inc"
+#include "font_confirmation.inc"
 }
-int main(){try{fonts();mediaGeneration();localDecode();themes();std::cout<<"pickers: 4 scenario groups passed\n";}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}
+int main(){try{fonts();mediaGeneration();localDecode();themes();settingsControls();fontConfirmation();std::cout<<"pickers: 6 scenario groups passed\n";}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

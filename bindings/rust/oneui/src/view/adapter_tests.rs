@@ -138,6 +138,18 @@ fn stable_list_deltas() {
     list.reset(vec![("a".into(), replacement.clone())]).unwrap();
     assert!(Rc::ptr_eq(list.get(0).unwrap(), &replacement));
 }
+fn dispatcher_mount_checks_lifetime_and_thread() {
+    use std::sync::{Arc, Mutex};
+    let dispatcher = crate::UiDispatcher { state: Arc::new(super::super::dispatcher::WindowState {
+        raw: Mutex::new(None), ui_thread: std::thread::current().id(),
+    }) };
+    assert!(matches!(ViewMount::from_dispatcher(&dispatcher, None), Err(ViewError::CLOSED)));
+    let result = std::thread::spawn(move || {
+        ViewMount::from_dispatcher(&dispatcher, None).err().unwrap()
+    }).join().unwrap();
+    assert_eq!(result, ViewError::WRONG_THREAD);
+}
+
 pub(crate) fn cases() -> Vec<(&'static str, fn())> {
     vec![
         ("view.values_and_borrowing", values_and_borrowing),
@@ -145,5 +157,6 @@ pub(crate) fn cases() -> Vec<(&'static str, fn())> {
         ("view.callback_reentry", callback_reentry),
         ("view.leases_release_once", leases_release_once),
         ("view.stable_list_deltas", stable_list_deltas),
+        ("view.dispatcher_mount_checks_lifetime_and_thread", dispatcher_mount_checks_lifetime_and_thread),
     ]
 }
