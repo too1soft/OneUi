@@ -1,4 +1,6 @@
 #include "reload_plan.h"
+#include "oneui/layout/pane_grid.h"
+#include "oneui/layout/dock_workspace_view.h"
 namespace oneui::views {
 std::map<std::string,Value> authored(Runtime &runtime,const Instance &node) {
     std::map<std::string,Value> result;
@@ -14,6 +16,22 @@ std::map<std::string,Value> authored(Runtime &runtime,const Instance &node) {
 }
 std::function<void()> resetProperty(ui::Mount &factory,ui::Element &target,
                                     const ui::Element &fresh,const std::string &key) {
+    if(target.component=="FontPicker"||target.component=="MediaPicker"||target.component=="MediaPreview"||target.component=="Slider"||target.component=="ThemeScope") {
+        auto spec=ui::schema::component(target.component);if(spec&&ui::schema::contains(spec->properties,key))return []{};
+    }
+    if(target.component=="DockWorkspace" && ui::schema::contains(ui::schema::component(ui::schema::Kind::DockWorkspace).properties,key))return []{};
+    if(target.component=="DockItem" && ui::schema::contains(ui::schema::component(ui::schema::Kind::DockItem).properties,key))
+        return [w=target.as<DockItemView>(),n=fresh.as<DockItemView>()]{w->key=n->key;w->dockMinimum=n->dockMinimum;w->floatMinimum=n->floatMinimum;w->hideable=n->hideable;};
+    if(target.component=="PaneGrid" && ui::schema::contains(ui::schema::component(ui::schema::Kind::PaneGrid).properties,key))return []{};
+    if(target.component=="Pane" && ui::schema::contains(ui::schema::component(ui::schema::Kind::Pane).properties,key))
+        return [w=target.as<PaneView>(),n=fresh.as<PaneView>()]{w->key=n->key;w->minimum=n->minimum;w->closing=n->closing;w->closeRequest=n->closeRequest;};
+    if(target.component=="NativeHost" && key=="resize-policy")
+        return [w=target.as<ui::NativeHostView>(),n=fresh.as<ui::NativeHostView>()]{w->setSettledViewport(n->settledViewport());};
+    if(target.component=="PaneHeader" && ui::schema::contains(ui::schema::component(ui::schema::Kind::PaneHeader).properties,key))
+        return [w=target.as<PaneHeader>(),n=fresh.as<PaneHeader>()]{w->setConfig(n->config());};
+    if(target.component=="Tabs" && (key=="drag-domain"||key=="drag-kind"||key=="drag-sources"))return []{};
+    if(target.component=="Tabs" && key=="reorderable")return [w=target.as<Tabs>()]{w->setReorderEnabled(false);};
+    if(target.component=="ContainerPage"&&key=="selected")return [w=target.as<ContainerPage>()]{w->setSelected(false);};
     if(key=="icon")return [w=target.as<Button>()]{w->clearIcon();};
     if(key=="symbol")return [w=target.as<IconView>()]{w->setSymbol(IconSymbol::RemoteAssist);};
     if(key=="grow" || key=="shrink" || key=="basis" || key=="min" || key=="max")return []{};

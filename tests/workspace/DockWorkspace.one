@@ -1,0 +1,10 @@
+<template view-model="Root">
+  <DockWorkspace view-id="tools" :nodes="nodes" :root="root" :placements="placements"
+                 :revision="revision" @dockRequested="dock" @floatRequested="floatPane"
+                 @boundsRequested="bounds" @raiseRequested="raisePane">
+    <DockItem view-id="toolsPool" v-for="p in panes" :key="p.id" :pane-key="p.id">
+      <PanelHeader><DragHandle :source="p.id" domain="tools" kind="dock" threshold="7"/></PanelHeader>
+      <PanelBody><NativeHost host="content"/></PanelBody>
+    </DockItem>
+  </DockWorkspace>
+</template>

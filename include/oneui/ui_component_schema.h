@@ -5,10 +5,22 @@
 namespace oneui::ui::schema {
 enum class ValueType { None, Text, Boolean, Integer, Number, Strings, Columns, Rows, TabItems, Series };
 #define ONEUI_AUTHORING_COMPONENTS(X) \
-    X(PaneGrid, "workspace-collection", "", None) \
-    X(Pane, "workspace-item", "pane-key", None) \
-    X(DockWorkspace, "workspace-collection", "", None) \
-    X(DockItem, "workspace-item", "pane-key", None) \
+    X(PaneGrid, "workspace-collection", "nodes groups active-group active-pane maximized revision ack-request ack-accepted navigation-serial navigation-edge navigation-mode drag-domain gap divider-hit motion-ms resize-idle-ms motion", None) \
+    X(Pane, "workspace-item", "pane-key closing close-request min-width min-height", None) \
+    X(PaneHeader, "pane-header", "pane-key number title path active broadcast-role broadcast-hint broadcast-label viewing-history can-close can-split can-maximize", None) \
+    X(HeaderSlot, "stack", "slot-name", None) \
+    X(FontPicker, "font-picker", "items selected loading error preview-text size", None) \
+    X(MediaPicker, "media-picker", "asset label loading error accept", None) \
+    X(MediaPreview, "media-preview", "source fit position opacity", None) \
+    X(MediaSlot, "stack", "slot-name", None) \
+    X(Slider, "slider", "minimum maximum step value", Number) \
+    X(Card, "card", "", None) \
+    X(ThemeScope, "theme-scope", "tokens", None) \
+    X(ContainerPage, "container-page", "selected", None) \
+    X(DragHandle, "drag-handle", "source domain kind threshold", None) \
+    X(DropSurface, "drop-surface", "domain role", None) \
+    X(DockWorkspace, "workspace-collection", "nodes root placements revision maximized compact-active ack-request ack-accepted gap divider-hit", None) \
+    X(DockItem, "workspace-item", "pane-key dock-min-width dock-min-height float-min-width float-min-height hideable", None) \
     X(Workspace, "stack", "", None) \
     X(TitleBar, "stack", "", None) \
     X(NavigationRail, "stack", "", None) \
@@ -36,11 +48,11 @@ enum class ValueType { None, Text, Boolean, Integer, Number, Strings, Columns, R
     X(ActionBar, "stack", "", None) \
     X(LoadingState, "stack", "title subtitle", None) \
     X(Status, "label", "text tone", None) \
-    X(Tabs, "tabs", "items selectedKey closable presentation", Text) \
+    X(Tabs, "tabs", "items selectedKey closable presentation reorderable drag-domain drag-kind drag-sources", Text) \
     X(SplitView, "split-view", "orientation ratio first-min second-min second-collapsed collapsed-extent", Number) \
     X(TimeSeriesChart, "chart", "series", None) \
     X(Icon, "icon", "symbol size", None) \
-    X(NativeHost, "native-host", "host themed", None) \
+    X(NativeHost, "native-host", "host themed resize-policy", None) \
     X(Column, "stack", "align justify wrap", None) \
     X(Row, "stack", "align justify wrap", None) \
     X(Content, "stack", "max-width align", None) \
@@ -99,8 +111,11 @@ constexpr bool layoutNumber(std::string_view key) {
 }
 constexpr ValueType propertyType(Kind kind,std::string_view key) {
     if(!supports(kind,key))return ValueType::None;
-    if(contains("disabled visible checked open reduced-motion detail-open wrap closable themed second-collapsed collapsed",key))return ValueType::Boolean;
-    if(key=="selectedIndex")return ValueType::Integer;
+    if(kind==Kind::FontPicker&&key=="selected")return ValueType::Text;
+    if(contains("disabled visible selected checked open reduced-motion detail-open wrap closable themed second-collapsed collapsed closing ack-accepted motion active viewing-history can-close can-split can-maximize reorderable hideable loading",key))return ValueType::Boolean;
+    if(contains("selectedIndex revision ack-request close-request navigation-serial number",key))return ValueType::Integer;
+    if(contains("nodes groups drag-sources placements tokens",key))return ValueType::Rows;
+    if(contains("gap divider-hit motion-ms resize-idle-ms min-width min-height threshold dock-min-width dock-min-height float-min-width float-min-height minimum maximum step opacity",key))return ValueType::Number;
     if(key=="items")return kind==Kind::Select?ValueType::Strings:kind==Kind::Tabs?ValueType::TabItems:ValueType::Rows;
     if(key=="series")return ValueType::Series;
     if(key=="columns")return ValueType::Columns;

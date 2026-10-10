@@ -1,0 +1,41 @@
+model Workspace {
+ r nodes:list<Node>; r groups:list<Group>; r panes:list<PaneModel>; r tabs:list<oneui.v1.TabItem>; r tabSources:list<TabModel>
+ r activeGroup:utf8; r activePane:utf8; r maximized:utf8; r revision:i64; r ack:i64
+ r navigationSerial:i64; r navigationEdge:utf8; r navigationMode:utf8; r motion:bool
+ rw selectedTab:utf8; r status:utf8; r settings:bool; r showPickers:bool; r menu:bool; r confirmPaste:bool
+ r toolNodes:list<Node>; r placements:list<Placement>; r toolRoot:utf8; r toolRevision:i64
+ r toolMax:utf8; r compact:utf8
+ r fonts:list<Font>; r themes:list<Theme>; r font:utf8; r asset:utf8; r error:utf8; r loading:bool
+ rw mediaPath:utf8; rw level:f64; r treeSelected:bool; r browserSelected:bool; r detailsSelected:bool
+ command one(); command two(); command four(); command sixteen(); command balance(); command restore()
+ command settingsToggle(); command left(); command right(); command up(); command down(); command swapRight()
+ command history(); command disconnect(); command paste(); command acceptPaste(); command cancelPaste()
+ command sftpTree(); command sftpBrowser(); command sftpDetails(); command compactToggle()
+ command toolFloat(); command toolPin(); command toolHide(); command toolShow(); command toolRedock()
+ command toolSave(); command toolRestore(); command toolMaximize()
+ command activate(pane:utf8); command split(pane:utf8,edge:utf8); command maximize(pane:utf8)
+ command close(pane:utf8); command broadcast(pane:utf8); command live(pane:utf8)
+ command menuOpen(pane:utf8,x:f64,y:f64)
+ command dropPane(source:utf8,target:utf8,edge:utf8,request:i64,revision:i64)
+ command ratio(split:utf8,ratio:f64,request:i64,revision:i64)
+ command focus(from:utf8,target:utf8,request:i64,revision:i64)
+ command swap(source:utf8,target:utf8,request:i64,revision:i64)
+ command resize(pane:utf8,cols:i64,rows:i64,generation:i64)
+ command settled(pane:utf8,request:i64,revision:i64)
+ command reorder(source:utf8,before:utf8)
+ command dock(source:utf8,target:utf8,edge:utf8,request:i64,revision:i64)
+ command toolRatio(split:utf8,ratio:f64,request:i64,revision:i64)
+ command floatTool(pane:utf8,x:f64,y:f64,width:f64,height:f64,request:i64,revision:i64)
+ command bounds(pane:utf8,x:f64,y:f64,width:f64,height:f64,request:i64,revision:i64)
+ command raise(pane:utf8,request:i64,revision:i64)
+ command selectFont(key:utf8); command retryFont(); command choose(); command clear(); command cancel()
+ command failed(source:utf8,code:utf8,message:utf8); command adjust(phase:i64,value:f64)
+}
+model Node key id {r id:utf8;r kind:utf8;r axis:utf8;r ratio:f64;r first:utf8;r second:utf8;r pane:utf8}
+model Group key id {r id:utf8;r root:utf8}
+model PaneModel key id {r id:utf8;r title:utf8;r path:utf8;r active:bool;r role:utf8;r hint:utf8;r history:bool;r closing:bool;r closeRequest:i64;r headerVisible:bool;r number:i64;r canClose:bool}
+model TabModel key id {r id:utf8;r title:utf8;r pane:utf8;r enabled:bool}
+model Placement key id {r id:utf8;r mode:utf8;r x:f64;r y:f64;r width:f64;r height:f64;r pinned:bool;r order:i64}
+model Font key id {r id:utf8;r family:utf8;r label:utf8;r available:bool}
+model Color key id {r id:utf8;r rgba:i64}
+model Theme key id {r id:utf8;r title:utf8;r tokens:list<Color>}

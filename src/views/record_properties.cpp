@@ -4,6 +4,7 @@
 namespace oneui::views {
 void Runtime::applyList(Instance &instance, const std::string &property, ListState &state) {
     ONEUI_VIEW_TIME(Rows);
+    if(workspaceList(instance,property,state))return;
     auto &e = instance.element;
     auto wide = [](const std::string &s) { ONEUI_VIEW_TIME(Conversion); return unicode::fromUtf8(s); };
     auto field = [&](const std::shared_ptr<Scope> &scope, const char *name) {

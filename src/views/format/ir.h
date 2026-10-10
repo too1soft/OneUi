@@ -43,7 +43,7 @@ struct Image
         return uint32_t(records[section].size());
     }
 };
-inline constexpr uint32_t workspaceHosts = 1, workspaceCollections = 2;
+inline constexpr uint32_t workspaceHosts = 1, workspaceCollections = 2, workspaceQueries = 4;
 inline constexpr uint32_t repeatTransparent = 1u << 16, repeatExplicit = 1u << 17;
 void requireWorkspace(Image &, uint32_t bits);
 Bytes writeImage(const Image &image);

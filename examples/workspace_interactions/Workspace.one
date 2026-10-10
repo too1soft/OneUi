@@ -1,0 +1,112 @@
+<template view-model="Workspace">
+ <Column class="app">
+  <Row class="topbar"><Text text="ONEUI / 工作区" class="brand"/><Text text="本地模拟会话 · 交互组件实验台" class="muted" grow="1"/><Button text="外观设置" name="settings" @click="settingsToggle"/></Row>
+  <Row class="toolbar" wrap="true">
+   <Button text="1" name="one" @click="one"/><Button text="2" name="two" @click="two"/><Button text="4" name="four" @click="four"/><Button text="16" name="sixteen" @click="sixteen"/>
+   <Button text="均分" name="balance" @click="balance"/><Button text="还原" name="restore" @click="restore"/>
+   <Button text="←" @click="left"/><Button text="→" @click="right"/><Button text="↑" @click="up"/><Button text="↓" @click="down"/><Button text="向右交换" @click="swapRight"/>
+   <Button text="SFTP 浮动" name="float" @click="toolFloat"/><Button text="置顶" @click="toolPin"/><Button text="返回原位" @click="toolRedock"/>
+   <Button text="收起" @click="toolHide"/><Button text="显示" @click="toolShow"/><Button text="专注" @click="compactToggle"/>
+  </Row>
+  <Row class="menu" :visible="menu"><Text text="当前会话"/><Button text="历史输出" @click="history"/><Button text="连接 / 断开" @click="disconnect"/><Button text="模拟多行粘贴" @click="paste"/><Button text="保存布局" @click="toolSave"/><Button text="恢复布局" @click="toolRestore"/><Button text="最大化工具" @click="toolMaximize"/></Row>
+  <Row :visible="confirmPaste" class="confirm"><Text text="将多行输入广播到接收者？" grow="1"/><Button text="取消" @click="cancelPaste"/><Button text="确认发送" @click="acceptPaste"/></Row>
+  <Row grow="1" basis="0" align="stretch" wrap="false">
+   <DockWorkspace view-id="tools" grow="1" basis="0" :nodes="toolNodes" :root="toolRoot" :placements="placements" :revision="toolRevision" :maximized="toolMax" :compact-active="compact"
+    @dockRequested="dock" @ratioRequested="toolRatio" @floatRequested="floatTool" @boundsRequested="bounds" @raiseRequested="raise">
+    <DockItem pane-key="terminal" hideable="false" dock-min-width="300" dock-min-height="220">
+     <PanelHeader><DragHandle source="terminal" domain="tools" kind="dock" threshold="7" grow="1"><Text text="终端 / 本地会话"/></DragHandle></PanelHeader>
+     <PanelBody>
+      <Column grow="1" basis="0">
+       <Tabs view-id="sessions" name="sessions" :items="tabs" v-model="selectedTab" drag-domain="terminal" drag-kind="single-pane-tab" :drag-sources="tabSources" reorderable="true" @reorderRequested="reorder" basis="34"/>
+       <Scroll grow="1" basis="0">
+        <PaneGrid name="panes" :nodes="nodes" :groups="groups" :active-group="activeGroup" :active-pane="activePane" :maximized="maximized" :revision="revision" :ack-request="ack" :motion="motion"
+         :navigation-serial="navigationSerial" :navigation-edge="navigationEdge" :navigation-mode="navigationMode" drag-domain="terminal"
+         @dropRequested="dropPane" @ratioRequested="ratio" @focusRequested="focus" @swapRequested="swap" @resizeSettled="resize" @transitionSettled="settled">
+         <Pane view-id="pool" v-for="p in panes" :key="p.id" :pane-key="p.id" :closing="p.closing" :close-request="p.closeRequest">
+          <PaneHeader :visible="p.headerVisible" :number="p.number" :can-close="p.canClose" :pane-key="p.id" :title="p.title" :path="p.path" :active="p.active" :broadcast-role="p.role" :broadcast-hint="p.hint" :viewing-history="p.history"
+           @activateRequested="activate" @splitRequested="split" @maximizeRequested="maximize" @closeRequested="close" @broadcastRequested="broadcast" @liveRequested="live" @menuRequested="menuOpen"/>
+          <NativeHost host="terminal" resize-policy="settled"/>
+         </Pane>
+        </PaneGrid>
+       </Scroll>
+      </Column>
+     </PanelBody>
+    </DockItem>
+    <DockItem pane-key="sftp">
+     <PanelHeader><DragHandle source="sftp" domain="tools" kind="dock" threshold="7" grow="1"><Text text="文件 / SFTP 布局预览"/></DragHandle></PanelHeader>
+     <PanelBody>
+      <Column class="sftp" grow="1" basis="0">
+       <Row class="sftp-switch"><Button text="目录" @click="sftpTree"/><Button text="文件" @click="sftpBrowser"/><Button text="详情" @click="sftpDetails"/></Row>
+       <Column class="sftp-columns" grow="1" basis="0">
+        <ContainerPage class="tree" :selected="treeSelected"><Column><Text text="本地模拟目录"/><Text text="⌂ workspace"/><Text text="  ▸ src"/><Text text="  ▸ docs"/></Column></ContainerPage>
+        <ContainerPage class="browser" :selected="browserSelected"><Column><Text text="名称                         大小" class="muted"/><Text text="workspace.one             8.2 KB"/><Text text="session.log                 2.4 KB"/><Text text="README.md                 1.1 KB"/></Column></ContainerPage>
+        <ContainerPage class="details" :selected="detailsSelected"><Column><Text text="workspace.one"/><Text text="声明式视图 · UTF-8"/><Text text="只展示模拟内容" class="muted"/></Column></ContainerPage>
+       </Column>
+      </Column>
+     </PanelBody>
+    </DockItem>
+    <DockItem pane-key="monitor">
+     <PanelHeader><DragHandle source="monitor" domain="tools" kind="dock" threshold="7" grow="1"><Text text="监控 / 模拟指标"/></DragHandle></PanelHeader>
+     <PanelBody><Scroll grow="1"><Column class="monitor" grow="1" basis="0"><Column class="metrics" wrap="false"><Card class="metric"><Column><Text text="CPU" class="muted"/><Text text="18.4 %" class="metric-value"/><Text text="8 核 · 本地模拟"/></Column></Card><Card class="metric"><Column><Text text="内存" class="muted"/><Text text="4.8 GB" class="metric-value"/><Text text="总计 32 GB"/></Column></Card><Card class="metric"><Column><Text text="网络" class="muted"/><Text text="12.6 MB/s" class="metric-value"/><Text text="接收 / 发送"/></Column></Card></Column></Column></Scroll></PanelBody>
+    </DockItem>
+    <DockItem pane-key="notes">
+     <PanelHeader><DragHandle source="notes" domain="tools" kind="dock" threshold="7" grow="1"><Text text="交互指南"/></DragHandle></PanelHeader>
+     <PanelBody><Column class="notes"><Text text="拖动标题：移动窗格"/><Text text="中央交换 · 边缘分屏"/><Text text="拖向标签栏：独立标签"/><Text text="Alt + 拖动工具：浮动"/><Text text="右键窗格：会话操作"/></Column></PanelBody>
+    </DockItem>
+   </DockWorkspace>
+   <Scroll :visible="settings" basis="370" min="370" max="370" shrink="0" class="settings">
+    <Column>
+     <Text text="外观与内容" class="brand"/>
+     <Column :visible="showPickers">
+     <FontPicker :items="fonts" :selected="font" @selectionRequested="selectFont" @retryRequested="retryFont"/>
+     <Input v-model="mediaPath" placeholder="本地静态图片路径"/>
+     <MediaPicker :asset="asset" :loading="loading" :error="error" @chooseRequested="choose" @clearRequested="clear" @cancelRequested="cancel" basis="180"/>
+     <Slider minimum="0" maximum="1" step="0.01" v-model="level" @interaction="adjust"/>
+     <MediaPreview :source="asset" :opacity="level" fit="cover" basis="100" @loadFailed="failed"/>
+     </Column>
+     <Text text="逐项主题预览" class="brand"/>
+     <ThemeScope v-for="t in themes" :key="t.id" :tokens="t.tokens"><Card><Row><Text :text="t.title" grow="1"/><Button text="预览"/></Row></Card></ThemeScope>
+    </Column>
+   </Scroll>
+  </Row>
+  <Row class="status"><Text :text="status" grow="1"/><Text text="ABI 44 · 本地模拟，无网络连接" class="muted"/></Row>
+ </Column>
+</template>
+<style scoped>
+Column.app {background-color:var(--canvas);padding:12px;gap:10px;}
+Row.topbar {height:42px;gap:12px;}
+Text.brand {font-size:18px;font-weight:600;}
+Text.muted {color:var(--muted);}
+Row.toolbar {gap:6px;}
+Row.menu {padding:8px;gap:8px;background-color:var(--surface);}
+Row.confirm {padding:8px;gap:8px;background-color:var(--surface);}
+Row.status {height:28px;gap:16px;}
+Scroll.settings {padding:12px;background-color:var(--surface);}
+Column.notes {padding:16px;gap:10px;}
+Column.sftp {container-name:sftp;container-type:size;}
+Row.sftp-switch {gap:6px;height:36px;}
+ContainerPage.tree {padding:12px;}
+ContainerPage.browser {padding:12px;}
+ContainerPage.details {padding:12px;}
+Column.monitor {container-name:monitor;container-type:size;}
+Column.metrics {gap:12px;flex-direction:column;}
+Card.metric {flex-basis:120px;flex-shrink:0;}
+Text.metric-value {font-size:25px;font-weight:600;}
+@container sftp (width >= 860px) and (height > 0px) and (aspect-ratio >= 8/5) {
+ Row.sftp-switch {display:none;}
+ .sftp-columns {flex-direction:row;gap:12px;}
+ ContainerPage.tree {display:flex;flex-basis:224px;flex-shrink:0;}
+ ContainerPage.browser {display:flex;flex-basis:0px;flex-grow:1;}
+ ContainerPage.details {display:none;}
+}
+@container sftp (width >= 1100px) and (height > 0px) and (aspect-ratio >= 8/5) {
+ ContainerPage.details {display:flex;flex-basis:292px;flex-shrink:0;}
+}
+@container monitor (width >= 1100px) {
+ Column.metrics {flex-direction:row;flex-wrap:wrap;}
+ Card.metric {flex-basis:520px;flex-grow:1;}
+}
+@container monitor (width >= 1600px) {
+ Card.metric {flex-basis:360px;}
+}
+</style>

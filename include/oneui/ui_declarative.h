@@ -1,5 +1,11 @@
 #pragma once
 #include "oneui/localization.h"
+#include "oneui/controls/font_picker.h"
+#include "oneui/controls/media_picker.h"
+#include "oneui/controls/card.h"
+#include "oneui/layout/theme_scope.h"
+#include "oneui/controls/pane_header.h"
+#include "oneui/controls/drag_handle.h"
 #include "oneui/controls/reveal.h"
 #include "oneui/ui_native_host.h"
 #include "oneui/ui_native_theme.h"
@@ -8,6 +14,8 @@
 #include "oneui/controls/icon_view.h"
 #include "oneui/controls/progress_bar.h"
 #include "oneui/layout/adaptive_panes.h"
+#include "oneui/layout/container_page.h"
+#include "oneui/layout/container_query.h"
 #include "oneui/ui.h"
 #include "oneui/ui_density.h"
 #include "oneui/ui_reactive.h"
@@ -45,8 +53,30 @@ private:
     std::vector<Entry> entries_;
     StyleSheet sheet_;
     Density density_=Density::Comfortable;
-    void apply(const Entry& entry, const StyleSheet& sheet) {
+    struct QueryState {std::vector<bool> matches;std::size_t version=~size_t{},treeVersion=0;Size measured{-1,-1};};
+    struct LayoutDefaults {Size size;StackDirection direction=StackDirection::Column;bool wrap=false;std::optional<StackFlex> flex;std::weak_ptr<Stack> parent;std::weak_ptr<Widget> widget;};
+    size_t treeVersion_=0;
+    std::map<const Widget*,QueryState> queries_;
+    std::map<const Widget*,LayoutDefaults> layoutDefaults_;
+    std::shared_ptr<int> queryLifetime_=std::make_shared<int>(0);
+    std::vector<std::string> queryDiagnostics_;
+    std::map<const Widget*,std::shared_ptr<StyleSheet>> localThemes_;
+    std::map<const ThemeScope*,std::shared_ptr<StyleSheet>> themeParents_;
+    void applyLocalTheme(const std::shared_ptr<ThemeScope>&,const StyleSheet&);
+    void refreshLocalThemes();
+    void configureQuery(const std::shared_ptr<Widget>&,const StyleBox&);
+    bool evaluateQuery(const std::shared_ptr<Stack>&);
+    void applyLayout(const Entry&,const StyleBox&,const std::shared_ptr<Stack>&);
+    void restoreQueryLayouts();
+    void apply(const Entry& entry, const StyleSheet& supplied) {
         auto w = entry.widget.lock(); if (!w) return;
+        std::optional<StyleSheet> filtered;
+        const StyleSheet* effective=&supplied;
+        if(auto local=localThemes_.find(w.get());local!=localThemes_.end()) {
+            if(&supplied==&sheet_)effective=local->second.get();
+            else {filtered=supplied;for(auto token:semanticColorTokens)if(auto v=local->second->customProperty(std::string("--")+token))filtered->setCustomProperty(std::string("--")+token,*v);effective=&*filtered;}
+        }
+        const auto& sheet=*effective;
         StyleNode n; n.tag = syntax::components().at(entry.component); n.classes.push_back("one-" + entry.component);
         std::istringstream tokens(entry.classes); for (std::string c; tokens >> c;) n.classes.push_back(c);
         if(!entry.variant.empty())n.classes.push_back(entry.variant);
@@ -63,9 +93,23 @@ private:
             table->setScrollOffset(row*tableRowHeight(density_));
         }
         auto box = sheet.resolve(n);
+        configureQuery(w,box);
+        if(auto page=std::dynamic_pointer_cast<ContainerPage>(w))page->setDisplay(box.display);
+        else if(box.display)w->setLayoutVisible(*box.display);
+        if(box.width||box.height) {auto size=w->preferredSize();w->setPreferredSize({box.width.value_or(size.width),box.height.value_or(size.height)});}
+        if(auto header=std::dynamic_pointer_cast<PaneHeader>(w)) {
+            auto palette=nativePalette(sheet);
+            if(!box.foreground)box.foreground=palette.ink;
+            if(!box.background.color)box.background.color=palette.surface;
+            if(!box.borderColor)box.borderColor=palette.accent;
+            header->setStyleBox(box);return;
+        }
         if(auto host=std::dynamic_pointer_cast<NativeHostView>(w)) {
             if(host->themed() && !host->children().empty())applyNativeTheme(*host->children().front(),sheet,host->hasCompositionOwner());return;
         }
+        if(auto card=std::dynamic_pointer_cast<Card>(w)){card->setStyleBox(box);return;}
+        if(auto slider=std::dynamic_pointer_cast<Slider>(w)){applyNativeTheme(*slider,sheet);return;}
+        if(std::dynamic_pointer_cast<FontPicker>(w)||std::dynamic_pointer_cast<MediaPicker>(w)||std::dynamic_pointer_cast<MediaPreview>(w)){w->setStyleScope(std::make_shared<StyleSheet>(sheet));return;}
         if(auto icon=std::dynamic_pointer_cast<IconView>(w)) {icon->setColor(box.foreground.value_or(nativePalette(sheet).ink));return;}
         if(std::dynamic_pointer_cast<Tabs>(w) || std::dynamic_pointer_cast<SplitView>(w) || std::dynamic_pointer_cast<ProgressBar>(w)) {applyNativeTheme(*w,sheet);return;}
         if(auto chart=std::dynamic_pointer_cast<TimeSeriesChart>(w)) {applyNativeTheme(*w,sheet);if(box.foreground || box.borderColor || box.fontSize || box.gap)chart->setStyleBox(box);return;}
@@ -73,6 +117,8 @@ private:
             v->setColor(box.foreground.value_or(Color{30,40,35,255})); v->setFontSize(box.fontSize.value_or(14)); v->setFontWeight(box.fontWeight.value_or(400));
         } else if (auto v = std::dynamic_pointer_cast<Stack>(w)) {
             v->setStyleBox(box); v->setGap(box.gap.value_or(0)); v->setPadding(box.padding.value_or(Insets{}));
+            if(box.flexDirection)v->setDirection(*box.flexDirection=="row"?StackDirection::Row:StackDirection::Column);
+            if(box.flexWrap&&!v->setWrap(*box.flexWrap))throw std::invalid_argument("CSS flex-wrap requires Yoga");
             // Content's horizontal shell owns decoration/padding, while gap
             // belongs to its vertical body. Neither changes the authored tree.
             if (auto body = entry.content.lock()) { v->setGap(0); body->setGap(box.gap.value_or(0)); }
@@ -86,6 +132,7 @@ private:
         else if (auto v = std::dynamic_pointer_cast<Reveal>(w)) v->setTransition({box.transitionDurationMs.value_or(220),box.transitionEasing.value_or(EasingCurve::EaseOutCubic)});
     }
 public:
+    const std::vector<std::string>& queryDiagnostics() const{return queryDiagnostics_;}
     void variant(const Element& e,const std::wstring& value) {
         if((e.component!="Button" && e.component!="ToolButton") || (value!=L"normal" && value!=L"primary" && value!=L"danger" && value!=L"ghost"))throw std::invalid_argument("Button variant must be normal, primary or danger");
         for(auto& entry:entries_)if(entry.widget.lock()==e.widget){entry.variant=std::string(value.begin(),value.end());apply(entry,sheet_);return;}
@@ -116,10 +163,13 @@ public:
         }
     }
     void add(const Element& e) {
+        ++treeVersion_;
         if(e.widget->diagnosticSource().file.empty())e.widget->setDiagnosticSource({e.component,{},0});
         entries_.erase(std::remove_if(entries_.begin(),entries_.end(),[](auto& entry){return entry.widget.expired();}),entries_.end());
         for (auto& entry : entries_) if (entry.widget.lock() == e.widget) { entry.component=e.component;entry.classes = e.classes; apply(entry,sheet_); return; }
+        localThemes_.erase(e.widget.get()); // A new widget may reuse a retired address.
         entries_.push_back({e.widget,e.component,e.classes,e.content}); apply(entries_.back(),sheet_);
+        if(auto scope=std::dynamic_pointer_cast<ThemeScope>(e.widget)){refreshLocalThemes();}
     }
     void replace(const std::string& validatedCss,Density density=Density::Comfortable) {
         StyleSheet next; std::string error;
@@ -128,23 +178,25 @@ public:
         // strict entry's component consumption checks.
         for(const auto& rule:next.rules()) if(rule.box.background.gradient || rule.box.background.gradientStart) {
             const auto tag=rule.selector.substr(0,rule.selector.find_first_of(".:"));
-            if(tag!="stack" && tag!="scroll-view" && tag!="button" && tag!="input")
+            if(tag!="stack" && tag!="scroll-view" && tag!="button" && tag!="input" && tag!="card")
                 throw std::invalid_argument("Gradient is not consumed by "+tag+" in "+rule.selector);
         }
         // Force variable resolution before committing the sheet.
         for (auto& entry : entries_) { StyleNode n{syntax::components().at(entry.component), {"one-"+entry.component},0}; next.resolve(n); }
-        sheet_ = std::move(next);density_=density;
+        sheet_ = std::move(next);density_=density;queries_.clear();localThemes_.clear();themeParents_.clear();
+        restoreQueryLayouts();
         entries_.erase(std::remove_if(entries_.begin(),entries_.end(),[](auto& e) { return e.widget.expired(); }),entries_.end());
-        for (auto& entry : entries_) apply(entry,sheet_);
+        applyAll();
     }
     std::size_t size() const { return std::count_if(entries_.begin(),entries_.end(),[](const auto& e){return !e.widget.expired();}); }
     void appendScoped(const std::string& css) {
         auto next=sheet_;std::string error;
         if(!next.addRulesFromCss(css,&error))throw std::invalid_argument(error);
-        sheet_=std::move(next);
+        sheet_=std::move(next);queries_.clear();
         for(auto& entry:entries_)apply(entry,sheet_);
     }
     void remapWidgets(const std::map<const Widget*,std::shared_ptr<Widget>>& replacements) {
+        queries_.clear();layoutDefaults_.clear();++treeVersion_;
         for(auto& entry:entries_) {
             if(auto widget=entry.widget.lock()) {
                 auto found=replacements.find(widget.get());
@@ -156,7 +208,7 @@ public:
             }
         }
     }
-    void applyAll() { for(auto& entry:entries_)apply(entry,sheet_); }
+    void applyAll() { localThemes_.clear();themeParents_.clear();for(auto& entry:entries_)apply(entry,sheet_);refreshLocalThemes(); }
 };
 
 // Implemented by the desktop host, evaluated only by legacy callers that omit
@@ -325,3 +377,6 @@ public:
 };
 using Slots = std::map<std::string,std::function<std::vector<Element>(Mount&)>>;
 } // namespace oneui::ui
+#include "oneui/ui_container_styles.h"
+
+#include "oneui/ui_local_theme_styles.h"

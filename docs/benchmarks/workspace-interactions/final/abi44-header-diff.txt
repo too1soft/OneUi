@@ -1,0 +1,4 @@
+Base: b48df20
+C ABI version: 44 (unchanged)
+Command: git diff b48df20 -- include/oneui/oneui_c_api.h include/oneui/oneui_view_c_api.h bindings/rust/oneui-sys bindings/rust/oneui-abi-tests
+Result: empty diff; no new C export or VTable layout change.

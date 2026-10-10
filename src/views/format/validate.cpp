@@ -7,6 +7,8 @@ void validateChildren(const Node &n, const ComponentContract &c, const Location 
 {
     auto rule = c.childRule;
     auto count = n.children.size();
+    if(rule=="header-slots")for(const auto& child:n.children)
+        if(child.tag!="HeaderSlot")at.fail("HEADER_SLOT: invalid native slot");
     if (rule == "pane-collection" || rule == "dock-collection") {
         const auto expected = rule == "pane-collection" ? "Pane" : "DockItem";
         for (const auto &child : n.children)
@@ -17,6 +19,8 @@ void validateChildren(const Node &n, const ComponentContract &c, const Location 
         at.fail("CHILDREN: leaf component");
     if (rule == "one" && count != 1)
         at.fail("CHILDREN: exactly one child required");
+    if (rule == "optional-one" && count > 1)
+        at.fail("CHILDREN: at most one child required");
     if ((rule == "two" || rule == "two-sidebar-first") && count != 2)
         at.fail("CHILDREN: exactly two children required");
     if (rule == "two-sidebar-first" && n.children[0].tag != "Sidebar")
@@ -71,6 +75,11 @@ void validateStatic(const std::string &component, const std::string &key, const 
         {"tone", {"neutral", "success", "warning", "error", "pending"}},
         {"appearance", {"flat", "outlined", "raised", "tinted"}},
         {"item-key", {"id"}}};
+    if(key=="resize-policy")require(text=="settled"||text=="immediate","STATIC_ENUM: resize-policy");
+    if(key=="slot-name") {
+        if(component=="MediaSlot")require(text=="empty"||text=="preview"||text=="error","MEDIA_SLOT: unknown slot");
+        else require(text=="identity"||text=="actions"||text=="menu","HEADER_SLOT: unknown slot");
+    }
     if (enums.count(key))
         require(enums.at(key).count(text) != 0, "STATIC_ENUM: invalid " + key);
     if (key == "align")

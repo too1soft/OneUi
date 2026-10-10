@@ -36,6 +36,7 @@ void View::ChildrenUpdate::commit() noexcept {
     if (owner_.children_ == next_) return;
     for (const auto& child : removed_) {
         if (owner_.focusedChild_ == child.get()) {
+            try {child->commitTextComposition();} catch (...) {}
             owner_.focusedChild_ = nullptr;
             try { child->onFocusChanged(false); } catch (...) {}
         }

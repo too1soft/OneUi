@@ -5,6 +5,7 @@ set(ONEUI_WINDOW_SERVICE_SOURCES
 )
 
 set(ONEUI_CORE_SOURCES
+    src/core/workspace_frame_probe.cpp
     src/core/native_menu.cpp
     src/core/application_menu.cpp
     src/platform/shared/localization.cpp
@@ -17,6 +18,12 @@ set(ONEUI_CORE_SOURCES
     src/core/badge.cpp
     src/core/button.cpp
     src/core/button_bridge.cpp
+    src/core/font_picker.cpp
+    src/core/font_picker_rows.cpp
+    src/core/media_preview.cpp
+    src/core/media_loader.cpp
+    src/core/media_picker.cpp
+    src/core/theme_scope.cpp
     src/core/card.cpp
     src/core/checkbox.cpp
     src/core/dialog.cpp
@@ -28,6 +35,31 @@ set(ONEUI_CORE_SOURCES
     src/core/dock_workspace.cpp
     src/core/workspace_tree_validate.cpp
     src/core/workspace_tree_layout.cpp
+    src/core/dock_workspace_view.cpp
+    src/core/dock_workspace_prepare.cpp
+    src/core/dock_workspace_drag.cpp
+    src/core/dock_workspace_pointer.cpp
+    src/core/pane_grid_view.cpp
+    src/core/pane_grid_prepare.cpp
+    src/core/pane_grid_motion.cpp
+    src/core/pane_grid_divider.cpp
+    src/core/pane_header.cpp
+    src/core/pane_header_pointer.cpp
+    src/core/drag_handle.cpp
+    src/core/pane_navigation.cpp
+    src/core/pane_preview.cpp
+    src/core/workspace_drag_domain.cpp
+    src/core/tabs_edit.cpp
+    src/core/tabs_pointer.cpp
+    src/core/tabs_geometry.cpp
+    src/core/tabs_style.cpp
+    src/core/tabs_paint.cpp
+    src/core/terminal_selection.cpp
+    src/core/terminal_paint.cpp
+    src/core/terminal_pointer.cpp
+    src/core/terminal_input.cpp
+    src/core/terminal_animation.cpp
+    src/core/terminal_viewport.cpp
     src/core/dock_geometry.cpp
     src/core/dock_hit_test.cpp
     src/core/form_field.cpp
@@ -71,6 +103,17 @@ set(ONEUI_CORE_SOURCES
     src/core/status_strip.cpp
     src/core/style_adapter.cpp
     src/core/style_sheet.cpp
+    src/core/style_rule_parser.cpp
+    src/core/container_query_parse.cpp
+    src/core/container_query_evaluate.cpp
+    src/core/widget_layout_visibility.cpp
+    src/core/text_field_composition_commit.cpp
+    src/core/style_css_values.cpp
+    src/core/style_declarations.cpp
+    src/core/style_selectors.cpp
+    src/core/style_color.cpp
+    src/core/style_box.cpp
+    src/core/stack_children.cpp
     src/core/style_transition.cpp
     src/core/switch.cpp
     src/core/table_rows.cpp
@@ -147,3 +190,9 @@ set(ONEUI_WIN32_SOURCES
     src/platform/win32/window_event_loop_win32.cpp
     src/platform/win32/window_win32.cpp
 )
+
+# Modern SkCodec headers contain C++20 designated initializers. Keep this
+# implementation-only requirement local; public headers remain C++17.
+set_property(SOURCE src/core/media_loader.cpp APPEND PROPERTY COMPILE_OPTIONS
+    "$<$<CXX_COMPILER_ID:MSVC>:/std:c++20>"
+    "$<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-std=c++20>")

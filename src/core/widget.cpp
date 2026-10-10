@@ -109,7 +109,7 @@ bool Widget::disabled() const {
 }
 
 void Widget::setVisible(bool visible) {
-    if (this->visible() == visible) {
+    if (authoredVisible() == visible) {
         return;
     }
     const auto alive = lifetimeToken();
@@ -138,7 +138,7 @@ void Widget::bindVisible(State<bool>& state) {
 }
 
 bool Widget::visible() const {
-    return visibleBinding_.get(visible_);
+    return layoutVisible_ && authoredVisible();
 }
 
 bool Widget::clearInteractionState() {

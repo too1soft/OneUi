@@ -1,0 +1,5 @@
+model QueryRoot {
+  r treeSelected: bool
+  r browserSelected: bool
+  r detailsSelected: bool
+}

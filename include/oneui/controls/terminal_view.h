@@ -1,6 +1,7 @@
 #pragma once
 
 #include "oneui/clipboard.h"
+#include "oneui/content_viewport.h"
 #include "oneui/color.h"
 #include "oneui/export.h"
 #include "oneui/style_sheet.h"
@@ -102,7 +103,7 @@ struct TerminalPointerEvent {
 // TerminalView is an ANSI-terminal renderer, not a log viewer. The terminal
 // emulator owns escape-sequence parsing and supplies a structured cell grid;
 // this control owns pixel rendering, focus, and native input delivery.
-class ONEUI_API TerminalView final : public Widget {
+class ONEUI_API TerminalView final : public Widget, public ContentViewportSource {
 public:
     using TextInputCallback = std::function<void(const std::wstring&)>;
     using PasteCallback = std::function<void(const std::wstring&)>;
@@ -176,6 +177,8 @@ public:
     void setOnPointer(PointerCallback callback);
     void setOnHyperlink(HyperlinkCallback callback);
     void setOnViewportChanged(ViewportChangedCallback callback);
+    void holdViewportNotifications(bool hold) override;
+    void setWorkspaceViewportObserver(std::function<void(ContentViewport)> callback) override;
     void setOnFocusChanged(FocusChangedCallback callback);
     void setAnimationScheduler(std::function<void()> scheduler) override;
 
@@ -325,6 +328,9 @@ private:
     HyperlinkCallback onHyperlink_;
     std::function<void()> onCursorChanged_;
     ViewportChangedCallback onViewportChanged_;
+    std::function<void(ContentViewport)> workspaceViewportObserver_;
+    bool viewportHeld_ = false;
+    bool workspaceViewportPending_ = false;
     FocusChangedCallback onFocusChanged_;
     TerminalViewport viewport_{};
     GridMetrics lastMetrics_{};

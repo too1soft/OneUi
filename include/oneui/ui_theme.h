@@ -25,6 +25,7 @@ inline std::string declarativeTheme(bool dark=false,Density density=Density::Com
     const std::string elevation=dark?R"(:root { --raised-shadow:0px 5px 14px #00000070; })":R"(:root { --raised-shadow:0px 5px 14px #00000026; })";
     return syntax::css(tokens+metrics+material+elevation+R"(
       :root { --space-sm:8px; --space-md:16px; --space-lg:24px; --copy-gap:4px; --label-control-gap:8px; }
+      Card { background-color:var(--surface); border-color:var(--line); border-width:1px; border-radius:8px; padding:12px; box-shadow:none; }
       Workspace { background-color:var(--line); gap:1px; }
       Column.workspace-core { gap:0px; }
       Row.workspace-core { gap:0px; }

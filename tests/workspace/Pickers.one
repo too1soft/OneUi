@@ -1,0 +1,16 @@
+<template view-model="Root">
+  <Column>
+    <FontPicker :items="fonts" :selected="font" :loading="loading" :error="error"
+                @selectionRequested="selectFont" @retryRequested="retry"/>
+    <MediaPicker :asset="asset" :label="label" :loading="loading" :error="error"
+                 @chooseRequested="choose" @clearRequested="clear" @cancelRequested="cancel">
+      <Text slot="empty" text="Choose a local image"/>
+      <Text slot="error" :text="error"/>
+    </MediaPicker>
+    <MediaPreview :source="asset" fit="cover" position="bottom-right" :opacity="level" @loadFailed="failed">
+      <Text slot="empty" text="No image"/>
+    </MediaPreview>
+    <Slider :minimum="minimum" :maximum="maximum" step="0.01" v-model="level" @interaction="adjust"/>
+    <ThemeScope :tokens="colors"><Card><Text text="Scoped sample"/></Card></ThemeScope>
+  </Column>
+</template>

@@ -1,0 +1,259 @@
+{
+  "build": {
+    "kind": "build",
+    "logical_bytes": 9101918847,
+    "files": 5075,
+    "roots": [
+      {
+        "path": "E:\\project\\byname\\oneui-views\\build",
+        "exists": true,
+        "files": 5075,
+        "logical_bytes": 9101918847
+      }
+    ],
+    "volumes": [
+      {
+        "root": "E:\\",
+        "free_bytes": 60004524032,
+        "total_bytes": 599843782656
+      }
+    ],
+    "violations": [],
+    "incomplete": [
+      "E:\\project\\byname\\oneui-views\\build\\capture\\viewc-tests\\viewc-_ztlfb0p: [WinError 5] 拒绝访问。: 'E:\\\\project\\\\byname\\\\oneui-views\\\\build\\\\capture\\\\viewc-tests\\\\viewc-_ztlfb0p'",
+      "E:\\project\\byname\\oneui-views\\build\\capture\\viewc-tests\\viewc-vpiz1tj5: [WinError 5] 拒绝访问。: 'E:\\\\project\\\\byname\\\\oneui-views\\\\build\\\\capture\\\\viewc-tests\\\\viewc-vpiz1tj5'",
+      "E:\\project\\byname\\oneui-views\\build\\capture\\viewc-tests\\viewc-rt5_3vb7: [WinError 5] 拒绝访问。: 'E:\\\\project\\\\byname\\\\oneui-views\\\\build\\\\capture\\\\viewc-tests\\\\viewc-rt5_3vb7'",
+      "E:\\project\\byname\\oneui-views\\build\\capture\\viewc-tests\\viewc-nrqse2kj: [WinError 5] 拒绝访问。: 'E:\\\\project\\\\byname\\\\oneui-views\\\\build\\\\capture\\\\viewc-tests\\\\viewc-nrqse2kj'",
+      "E:\\project\\byname\\oneui-views\\build\\capture\\viewc-tests\\viewc-n80amp14: [WinError 5] 拒绝访问。: 'E:\\\\project\\\\byname\\\\oneui-views\\\\build\\\\capture\\\\viewc-tests\\\\viewc-n80amp14'",
+      "E:\\project\\byname\\oneui-views\\build\\capture\\viewc-tests\\viewc-fr3kdbgg: [WinError 5] 拒绝访问。: 'E:\\\\project\\\\byname\\\\oneui-views\\\\build\\\\capture\\\\viewc-tests\\\\viewc-fr3kdbgg'",
+      "E:\\project\\byname\\oneui-views\\build\\capture\\viewc-tests\\viewc-akgnxd9z: [WinError 5] 拒绝访问。: 'E:\\\\project\\\\byname\\\\oneui-views\\\\build\\\\capture\\\\viewc-tests\\\\viewc-akgnxd9z'",
+      "E:\\project\\byname\\oneui-views\\build\\capture\\viewc-tests\\viewc-9qim1tkb: [WinError 5] 拒绝访问。: 'E:\\\\project\\\\byname\\\\oneui-views\\\\build\\\\capture\\\\viewc-tests\\\\viewc-9qim1tkb'"
+    ],
+    "limits": {
+      "total_gib": 30.0,
+      "minimum_free_gib": 20
+    },
+    "extensions": {
+      ".pdb": {
+        "files": 250,
+        "bytes": 3250421760
+      },
+      ".ilk": {
+        "files": 46,
+        "bytes": 1696704952
+      },
+      ".obj": {
+        "files": 466,
+        "bytes": 1605797895
+      },
+      ".exe": {
+        "files": 197,
+        "bytes": 844310528
+      },
+      ".lib": {
+        "files": 52,
+        "bytes": 753511004
+      },
+      ".rlib": {
+        "files": 83,
+        "bytes": 249455038
+      },
+      ".bin": {
+        "files": 96,
+        "bytes": 248030355
+      },
+      ".o": {
+        "files": 2043,
+        "bytes": 197996036
+      },
+      ".rmeta": {
+        "files": 95,
+        "bytes": 106440297
+      },
+      ".dll": {
+        "files": 8,
+        "bytes": 85972992
+      },
+      ".cpp": {
+        "files": 5,
+        "bytes": 28604003
+      },
+      ".exp": {
+        "files": 44,
+        "bytes": 19670099
+      },
+      ".json": {
+        "files": 267,
+        "bytes": 4429707
+      },
+      ".log": {
+        "files": 60,
+        "bytes": 2518564
+      },
+      ".rs": {
+        "files": 21,
+        "bytes": 2288387
+      },
+      ".h": {
+        "files": 26,
+        "bytes": 1766892
+      },
+      ".ninja": {
+        "files": 6,
+        "bytes": 840041
+      },
+      ".c": {
+        "files": 6,
+        "bytes": 593527
+      },
+      ".d": {
+        "files": 163,
+        "bytes": 535751
+      },
+      ".a": {
+        "files": 2,
+        "bytes": 494174
+      },
+      "[none]": {
+        "files": 470,
+        "bytes": 464454
+      },
+      ".oneview": {
+        "files": 28,
+        "bytes": 225320
+      },
+      ".py": {
+        "files": 63,
+        "bytes": 161215
+      },
+      ".csv": {
+        "files": 14,
+        "bytes": 125579
+      },
+      ".png": {
+        "files": 2,
+        "bytes": 113572
+      },
+      ".cmake": {
+        "files": 18,
+        "bytes": 90952
+      },
+      ".yaml": {
+        "files": 1,
+        "bytes": 88950
+      },
+      ".rsp": {
+        "files": 12,
+        "bytes": 82444
+      },
+      ".txt": {
+        "files": 13,
+        "bytes": 67605
+      },
+      ".manifest": {
+        "files": 128,
+        "bytes": 50368
+      },
+      ".res": {
+        "files": 64,
+        "bytes": 30208
+      },
+      ".rc": {
+        "files": 64,
+        "bytes": 12439
+      },
+      ".cmd": {
+        "files": 23,
+        "bytes": 10264
+      },
+      ".timestamp": {
+        "files": 196,
+        "bytes": 9408
+      },
+      ".tcl": {
+        "files": 1,
+        "bytes": 2826
+      },
+      ".one": {
+        "files": 1,
+        "bytes": 728
+      },
+      ".check_cache": {
+        "files": 3,
+        "bytes": 258
+      },
+      ".tag": {
+        "files": 1,
+        "bytes": 177
+      },
+      ".verify_globs": {
+        "files": 1,
+        "bytes": 78
+      },
+      ".lock": {
+        "files": 36,
+        "bytes": 0
+      }
+    },
+    "manual_checks": [
+      "Verify ownership, retention age, active processes, unique configurations, video duration and log rotation separately."
+    ],
+    "status": "incomplete"
+  },
+  "evidence": {
+    "kind": "evidence",
+    "logical_bytes": 20364114,
+    "files": 102,
+    "roots": [
+      {
+        "path": "E:\\project\\byname\\oneui-views\\docs\\benchmarks\\workspace-interactions\\final",
+        "exists": true,
+        "files": 102,
+        "logical_bytes": 20364114
+      }
+    ],
+    "volumes": [
+      {
+        "root": "E:\\",
+        "free_bytes": 60004524032,
+        "total_bytes": 599843782656
+      }
+    ],
+    "violations": [],
+    "incomplete": [],
+    "limits": {
+      "total_gib": 1,
+      "minimum_free_gib": 20
+    },
+    "extensions": {
+      ".csv": {
+        "files": 28,
+        "bytes": 16943951
+      },
+      ".json": {
+        "files": 18,
+        "bytes": 2629387
+      },
+      ".png": {
+        "files": 13,
+        "bytes": 725461
+      },
+      ".log": {
+        "files": 40,
+        "bytes": 48255
+      },
+      ".md": {
+        "files": 2,
+        "bytes": 16807
+      },
+      ".txt": {
+        "files": 1,
+        "bytes": 253
+      }
+    },
+    "manual_checks": [
+      "Verify ownership, retention age, active processes, unique configurations, video duration and log rotation separately."
+    ],
+    "status": "pass"
+  }
+}

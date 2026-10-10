@@ -80,7 +80,7 @@ void Slider::setRange(double minimum, double maximum) {
         || !std::isfinite(maximum - minimum)) {
         return;
     }
-    const double upper = std::max(minimum + 0.0001, maximum);
+    const double upper = maximum > minimum ? maximum : minimum + 0.0001;
     if (!std::isfinite(upper) || upper <= minimum) { return; }
     if (minimum_ == minimum && maximum_ == upper) { return; }
     cancelInteraction();
@@ -94,7 +94,7 @@ void Slider::setStep(double step) {
     if (!std::isfinite(step)) {
         return;
     }
-    const double next = std::max(0.0001, step);
+    const double next = step > 0 ? step : 0.0001;
     if (step_ == next) { return; }
     step_ = next;
     invalidate();

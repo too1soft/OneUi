@@ -42,6 +42,8 @@ const std::map<std::string, ComponentContract> &registry()
 #define E(component, id, name, key)                                                                                    \
     r.at(component).events.push_back({id, name, key ? std::vector<Argument>{{"key", 4}} : std::vector<Argument>{}});
 #include "component_registry.inc"
+#include "component_registry_panes.inc"
+#include "component_registry_dock.inc"
 #undef E
 #undef P
 #undef C
@@ -84,6 +86,28 @@ const std::map<std::string, ComponentContract> &registry()
         return r;
     }();
     return value;
+}
+void validateRecord(const Model& model, const std::string& projection) {
+    if (projection.empty() || projection[0]!='@') {
+        require(model.name==projection,"BIND_RECORD: component requires "+projection);
+        return;
+    }
+    std::string fields;
+    if(projection=="@workspace.node") fields="id:4 kind:4 axis:4 ratio:3 first:4 second:4 pane:4";
+    else if(projection=="@workspace.placement") fields="id:4 mode:4 x:3 y:3 width:3 height:3 pinned:1 order:2";
+    else if(projection=="@picker.font") fields="id:4 family:4 label:4 available:1";
+    else if(projection=="@picker.color") fields="id:4 rgba:2";
+    else if(projection=="@workspace.group") fields="id:4 root:4";
+    else if(projection=="@workspace.tab-source") fields="id:4 pane:4 enabled:1";
+    else throw Error("BIND_RECORD: unknown projection "+projection);
+    require(model.keyName=="id","BIND_RECORD: workspace key must be id");
+    std::istringstream stream(fields);std::string field;
+    while(stream>>field) {
+        auto separator=field.find(':');auto name=field.substr(0,separator);
+        auto found=model.properties.find(name);
+        require(found!=model.properties.end() && found->second.tag==uint32_t(field.back()-'0'),
+                "BIND_RECORD: missing or incompatible "+name);
+    }
 }
 Bytes encodeComponents(const std::vector<ComponentContract> &components)
 {

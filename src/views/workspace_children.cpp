@@ -22,13 +22,22 @@ void Runtime::workspaceChildren(const std::shared_ptr<Instance> &instance) {
                 widgets.push_back(rows.at(key)->element.widget);
         }
     }
-    auto parent = std::dynamic_pointer_cast<View>(instance->element.widget);
-    if (parent->children() == widgets)
+    // Identity-only workspaces (including ABI 44 scope fixtures) have no dock
+    // projection. Keep their structural children usable without inventing a
+    // geometry snapshot; authored geometry still validates transactionally.
+    if (type == "DockWorkspace" && instance->workspaceCache) {
+        prepareDock(instance, widgets);
         return;
-    auto plan = parent->prepareChildren(std::move(widgets));
+    }
+    auto parent = std::dynamic_pointer_cast<View>(instance->element.widget);
+    auto plan = parent->children()==widgets ? nullptr : parent->prepareChildren(widgets);
+    if(plan) {
     if (staging && instance->published)
         commits.push_back([plan] { plan->commit(); });
     else
         plan->commit();
+    }
+    if (type == "PaneGrid")
+        prepareWorkspace(instance,widgets);
 }
 } // namespace oneui::views

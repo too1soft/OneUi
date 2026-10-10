@@ -44,48 +44,6 @@ const StyleSheet &fallbackSheet() {
     return sheet;
 }
 
-void paintIconPrimitive(Canvas &canvas, const IconPrimitive &primitive) {
-    switch (primitive.kind) {
-    case IconPrimitiveKind::Line:
-        canvas.drawLine(primitive.from, primitive.to, primitive.color, primitive.strokeWidth);
-        break;
-    case IconPrimitiveKind::Rect:
-        if (primitive.filled) {
-            canvas.fillRect(primitive.rect, primitive.color);
-        } else {
-            canvas.strokeRect(primitive.rect, primitive.color, 0.0f, primitive.strokeWidth);
-        }
-        break;
-    case IconPrimitiveKind::RoundRect:
-        if (primitive.filled) {
-            canvas.fillRect(primitive.rect, primitive.color, primitive.radius);
-        } else {
-            canvas.strokeRect(primitive.rect, primitive.color, primitive.radius,
-                              primitive.strokeWidth);
-        }
-        break;
-    case IconPrimitiveKind::Circle:
-        if (primitive.filled) {
-            canvas.fillEllipse(primitive.rect, primitive.color);
-        } else {
-            canvas.strokeEllipse(primitive.rect, primitive.color, primitive.strokeWidth);
-        }
-        break;
-    case IconPrimitiveKind::Polyline:
-    case IconPrimitiveKind::Polygon:
-        for (int i = 1; i < primitive.pointCount; ++i) {
-            canvas.drawLine(primitive.points[static_cast<std::size_t>(i - 1)],
-                            primitive.points[static_cast<std::size_t>(i)], primitive.color,
-                            primitive.strokeWidth);
-        }
-        if (primitive.closed && primitive.pointCount > 2) {
-            canvas.drawLine(primitive.points[static_cast<std::size_t>(primitive.pointCount - 1)],
-                            primitive.points[0], primitive.color, primitive.strokeWidth);
-        }
-        break;
-    }
-}
-
 double currentTimeMs() { return internal::uiTimeMs(); }
 
 void prewarmIconButtonStyles(const StyleSheet &sheet, const StyleNode &node) {
@@ -138,10 +96,7 @@ void IconButton::paint(Canvas &canvas) {
                         rect.y + (rect.height - iconSize) * 0.5f, iconSize, iconSize};
     const Color color = box.foreground.value_or(Color{201, 203, 211});
     const float stroke = box.borderWidth.value_or(1.5f);
-    for (const auto &primitive :
-         buildIconPrimitives(symbol_, iconRect, color, Color{0, 0, 0, 0}, stroke)) {
-        paintIconPrimitive(canvas, primitive);
-    }
+    paintIcon(canvas, symbol_, iconRect, color, Color{0, 0, 0, 0}, stroke);
 }
 
 bool IconButton::onMouseMove(const MouseEvent &event) {

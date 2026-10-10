@@ -33,6 +33,9 @@ template <class F> int call(const char *operation, F action) noexcept {
     } catch (const oneview::Error &e) {
         recordError(OneUiErrorInvalidArgument, operation, e.what());
         return std::strstr(e.what(), "VERSION:") ? ONEUI_VIEW_VERSION : ONEUI_VIEW_BAD_IR;
+    } catch (const std::exception &e) {
+        recordError(OneUiErrorOperationFailed, operation, e.what());
+        return ONEUI_VIEW_FOREIGN_FAILURE;
     } catch (...) {
         recordError(OneUiErrorOperationFailed, operation, "View operation failed");
         return ONEUI_VIEW_FOREIGN_FAILURE;

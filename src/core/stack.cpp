@@ -66,14 +66,24 @@ void Stack::clearFlex(const std::shared_ptr<Widget>& child) {
 
 StackFlex Stack::itemFlex(const std::shared_ptr<Widget>& child, float preferred) const {
     const auto it = flex_.find(child);
-    if (it != flex_.end()) return it->second;
+    if (it != flex_.end()) {
+        auto flex=it->second;
+        flex.min=std::max(flex.min,direction_==StackDirection::Column?flex.minHeight:flex.minWidth);
+        if(!flex.basis)flex.basis=direction_==StackDirection::Column?flex.height:flex.width;
+        return flex;
+    }
     return StackFlex{preferred <= 0.0f ? 1.0f : 0.0f, 0.0f, std::max(0.0f, preferred)};
 }
 
 Size Stack::itemSize(const std::shared_ptr<Widget>& child) const {
     const auto it = flex_.find(child);
-    if (it == flex_.end() || !it->second.contentBasis) return child->preferredSize();
-    const auto size = child->naturalSize();
+    auto size=it==flex_.end()||!it->second.contentBasis?child->preferredSize():child->naturalSize();
+    if(it!=flex_.end()) {
+        const auto& flex=it->second;
+        size.width=std::max(flex.width.value_or(size.width),flex.minWidth);
+        size.height=std::max(flex.height.value_or(size.height),flex.minHeight);
+    }
+    if(it==flex_.end()||!it->second.contentBasis)return size;
     // Reserve complete logical pixels so fractional glyph advances do not
     // become an accidental ellipsis when the text is shaped under a width.
     return {std::ceil(std::max(0.0f, size.width)), std::ceil(std::max(0.0f, size.height))};
@@ -90,6 +100,7 @@ void Stack::clearStyleBox() {
 }
 
 Size Stack::naturalSize() const {
+    if(sizeContained_)return {};
     if (engine_ == StackEngine::Yoga) return measureYoga({INFINITY, INFINITY});
     Size result{};
     float precedingWeight=0,gaps=0;
@@ -123,6 +134,7 @@ float Stack::contentHeight() const { return naturalSize().height; }
 
 void Stack::paint(Canvas& canvas) {
     if (engine_ == StackEngine::Yoga) { paintYoga(canvas); return; }
+    if(query_){layoutChildren();query_();}
     if (styleBox_) {
         paintStyleBox(canvas, frame(), *styleBox_);
     }
@@ -153,7 +165,8 @@ void Stack::layoutChildren() {
         const float before=weightedGap(gap,std::min(precedingWeight,weight));
         precedingWeight=std::max(precedingWeight,weight);gaps+=before;
         layoutItems_.push_back({child.get(), size, flex.grow, flex.shrink * basis, flex.min, flex.max,
-                               column ? preferred.width : preferred.height,before});
+                               column ? preferred.width : preferred.height,before,
+                               bool(column?flex.width:flex.height),column?flex.minWidth:flex.minHeight});
         occupied += size;
     }
     if (layoutItems_.empty()) return;
@@ -192,8 +205,8 @@ void Stack::layoutChildren() {
     for (const auto& item : layoutItems_) {
         cursor+=item.gapBefore+(firstItem?0:spacing);firstItem=false;
         const float preferredCross = item.cross;
-        const float crossSize = align_ == StackAlign::Stretch || preferredCross <= 0.0f
-            ? availableCross : std::min(preferredCross, availableCross);
+        const float crossSize = std::max(item.minCross,item.fixedCross?preferredCross:
+            align_ == StackAlign::Stretch || preferredCross <= 0.0f ? availableCross : std::min(preferredCross, availableCross));
         float cross = column ? content.x : content.y;
         if (align_ == StackAlign::Center) cross += (availableCross - crossSize) / 2.0f;
         if (align_ == StackAlign::End) cross += availableCross - crossSize;

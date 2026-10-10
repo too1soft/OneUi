@@ -186,6 +186,10 @@ public:
     virtual void setVisible(bool visible);
     void bindVisible(State<bool>& state);
     bool visible() const;
+    // CSS display is independent of authored visibility; it cannot unhide a
+    // widget explicitly disabled by the VM.
+    void setLayoutVisible(bool visible);
+    bool authoredVisible() const {return visibleBinding_.get(visible_);}
     bool clearInteractionState();
     virtual void setInvalidator(std::function<void()> invalidator);
     virtual void setRectInvalidator(std::function<void(Rect)> invalidator);
@@ -224,6 +228,7 @@ public:
     virtual std::shared_ptr<Widget> activeFocusChild() const { return {}; }
     virtual bool isCommandBoundary() const { return false; }
     virtual bool hasTextComposition() const { return false; }
+    virtual bool commitTextComposition();
     virtual CommandResult queryBuiltinCommand(const std::string&) const { return CommandResult::NotFound; }
     virtual CommandResult executeBuiltinCommand(const std::string&) { return CommandResult::NotFound; }
     virtual CommandResult dispatchBuiltinCommandKey(const KeyEvent&, const std::string&) { return CommandResult::NotFound; }
@@ -327,6 +332,7 @@ private:
     bool focusVisible_ = false;
     bool disabled_ = false;
     bool visible_ = true;
+    bool layoutVisible_ = true;
     bool tabStop_ = true;
     AccessibilityRole accessibilityRole_ = AccessibilityRole::None;
     std::wstring accessibleName_;

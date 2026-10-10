@@ -1,0 +1,25 @@
+model Root {
+  r nodes: list<ApplicationNode>
+  r groups: list<ApplicationGroup>
+  r panes: list<ApplicationPane>
+  r activeGroup: utf8
+  r activePane: utf8
+  r revision: i64
+  r motion: bool
+  command ratio(split:utf8, ratio:f64, request:i64, revision:i64)
+  command resize(pane:utf8, cols:i64, rows:i64, generation:i64)
+}
+model ApplicationNode key id {
+  r id: utf8
+  r kind: utf8
+  r axis: utf8
+  r ratio: f64
+  r first: utf8
+  r second: utf8
+  r pane: utf8
+}
+model ApplicationGroup key id {
+  r id: utf8
+  r root: utf8
+}
+model ApplicationPane key id { r id: utf8; command activate(pane:utf8) }

@@ -1,0 +1,117 @@
+{
+  "oneui_picker_tests": {
+    "exit": 0,
+    "stdout": "pickers: 4 scenario groups passed\r\n",
+    "stderr": ""
+  },
+  "oneui_dock_workspace_tests": {
+    "exit": 0,
+    "stdout": "dock workspace: 4 scenario groups passed\r\n",
+    "stderr": ""
+  },
+  "oneui_container_query_tests": {
+    "exit": 0,
+    "stdout": "PASS container queries and Stack: 5 groups\r\n",
+    "stderr": ""
+  },
+  "oneui_stack_behavior_tests": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "oneui_yoga_behavior_tests": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "oneui_background_opacity_tests": {
+    "exit": 0,
+    "stdout": "background opacity contracts passed\r\n",
+    "stderr": ""
+  },
+  "oneui_style_scope_tests": {
+    "exit": 0,
+    "stdout": "style scopes passed\r\n",
+    "stderr": ""
+  },
+  "oneui_authoring_behavior_tests": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "oneui_pane_interaction_tests": {
+    "exit": 0,
+    "stdout": "PASS workspace interactions: 5 groups\r\n",
+    "stderr": ""
+  },
+  "oneui_pane_motion_tests": {
+    "exit": 0,
+    "stdout": "Pane motion: 8 groups passed\r\n",
+    "stderr": ""
+  },
+  "oneui_terminal_view_behavior_tests": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "oneui_control_behavior_tests": {
+    "exit": 0,
+    "stdout": "Control behavior tests passed.\r\n",
+    "stderr": ""
+  },
+  "oneui_interaction_tests": {
+    "exit": 0,
+    "stdout": "Interaction tests passed\r\n",
+    "stderr": ""
+  },
+  "oneui_workspace_tree_tests": {
+    "exit": 0,
+    "stdout": "workspace tree: PASS\r\n",
+    "stderr": ""
+  },
+  "oneui_picker_runtime_tests": {
+    "exit": 0,
+    "stdout": "picker runtime: projections/events, slider model, local token delta and reload passed\r\n",
+    "stderr": ""
+  },
+  "oneui_dock_runtime_tests": {
+    "exit": 0,
+    "stdout": "dock runtime: typed projection/events, hidden restore, identity and lease passed\r\n",
+    "stderr": ""
+  },
+  "oneui_container_runtime_tests": {
+    "exit": 0,
+    "stdout": "PASS container query IR + VM integration\r\n",
+    "stderr": ""
+  },
+  "oneui_pane_runtime_tests": {
+    "exit": 0,
+    "stdout": "Pane runtime: schema, events, authority, invalid snapshot, identity passed\r\n",
+    "stderr": ""
+  },
+  "oneui_workspace_scope_tests": {
+    "exit": 0,
+    "stdout": "workspace scope/host: PASS\r\n",
+    "stderr": ""
+  },
+  "oneui_view_runtime_tests": {
+    "exit": 0,
+    "stdout": "9 runtime scenarios passed\r\n",
+    "stderr": ""
+  },
+  "oneui_view_list_tests": {
+    "exit": 0,
+    "stdout": "11 typed record/delta/reload scenarios passed\r\n8 list scenarios passed\r\n",
+    "stderr": ""
+  },
+  "oneui_view_reload_tests": {
+    "exit": 0,
+    "stdout": "PASS reload: 50 retained and 50 remove/restore cycles, leases/subscriptions/IME, schema/Host/reentry rollback\r\n",
+    "stderr": ""
+  },
+  "oneui_view_c_api_tests": {
+    "exit": 0,
+    "stdout": "11 C ABI lifetime scenarios passed\r\n",
+    "stderr": ""
+  }
+}

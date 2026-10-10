@@ -96,6 +96,10 @@ struct Instance {
     std::map<std::string, std::vector<std::wstring>> stringLists;
     struct TableCache;
     std::shared_ptr<TableCache> tableCache;
+    struct PickerCache;
+    std::shared_ptr<PickerCache> pickerCache;
+    struct WorkspaceCache;
+    std::shared_ptr<WorkspaceCache> workspaceCache;
     std::set<const Scope*> recordDirty;
     const ListState* repeatSource = nullptr;
     uint64_t repeatSerial = 0;
@@ -127,6 +131,8 @@ struct Runtime : std::enable_shared_from_this<Runtime> {
     using ScopePath = std::vector<std::pair<std::string, std::string>>;
     std::map<ScopePath, std::shared_ptr<Scope>> renderScopes;
     std::string callPrefix;
+    struct WorkspaceDomains;
+    std::shared_ptr<WorkspaceDomains> workspaceDomains;
     std::function<void()> schedule, detach;
     std::function<void()> republish;
     std::string externalCss;
@@ -179,6 +185,23 @@ struct Runtime : std::enable_shared_from_this<Runtime> {
     void repeat(const std::shared_ptr<Instance> &);
     void prepareWorkspaceIndex();
     void workspaceChildren(const std::shared_ptr<Instance> &);
+    bool pickerScalar(Instance&, const std::string&, const Value&);
+    bool pickerList(Instance&, const std::string&, ListState&);
+    void preparePicker(const std::shared_ptr<Instance>&);
+    void wirePicker(const std::shared_ptr<Instance>&);
+    bool dockScalar(Instance&, const std::string&, const Value&);
+    bool dockList(Instance&, const std::string&, ListState&);
+    void prepareDock(const std::shared_ptr<Instance>&, const std::vector<std::shared_ptr<Widget>>&);
+    void wireDock(const std::shared_ptr<Instance>&);
+    bool workspaceScalar(Instance&, const std::string&, const Value&);
+    bool paneHeaderScalar(Instance&, const std::string&, const Value&);
+    bool dragScalar(Instance&, const std::string&, const Value&);
+    bool dragList(Instance&, const std::string&, ListState&);
+    void wireDrag(const std::shared_ptr<Instance>&);
+    std::function<void()> prepareDragGrid(const std::shared_ptr<Instance>&);
+    bool workspaceList(Instance&, const std::string&, ListState&);
+    void prepareWorkspace(const std::shared_ptr<Instance>&, const std::vector<std::shared_ptr<Widget>>&);
+    void wireWorkspace(const std::shared_ptr<Instance>&);
     std::shared_ptr<Scope> renderScope(const std::shared_ptr<Scope> &, const std::shared_ptr<Instance> &,
                                      const std::string &key);
     static std::string hostKey(const ScopePath &, const std::string &);
@@ -196,6 +219,7 @@ struct Observation {
     ~Observation() { runtime.observing = previous; }
 };
 void setScalar(ui::Mount &, ui::Element &, const std::string &, const Value &);
+void emitComponentEvent(const std::weak_ptr<Instance>&, const std::string&, std::vector<Value>);
 } // namespace oneui::views
 
 // Notifier owns no VM reference. It may safely outlive its runtime on any thread.

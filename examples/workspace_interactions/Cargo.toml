@@ -1,0 +1,13 @@
+[package]
+name = "workspace-interactions"
+version = "0.1.0"
+edition = "2021"
+publish = false
+[workspace]
+[dependencies]
+oneui = { path = "../../bindings/rust/oneui" }
+[features]
+acceptance = ["oneui/view-diagnostics"]
+[[bin]]
+name = "workspace-interactions"
+path = "main.rs"

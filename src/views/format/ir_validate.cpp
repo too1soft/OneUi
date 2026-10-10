@@ -154,7 +154,7 @@ void validateImage(const Image &im)
                 "BAD_IR: binding");
         last = r[0];
         if (v.tag == 5)
-            require(im.schema.model(v.item).name == p.record, "BAD_IR: record model");
+            validateRecord(im.schema.model(v.item), p.record);
         require(assigned.emplace(r[0], r[1]).second, "BAD_IR: duplicate binding/property");
         span(r[6]);
     }
@@ -247,13 +247,15 @@ void validateImage(const Image &im)
         auto scope = "one-s-" + hex(sha256(scopeBytes)).substr(0, 16);
         require(oneui::ui::syntax::css(im.strings[r[1]], scope, file, 1) == im.strings[r[2]],
                 "BAD_IR: lowered CSS/scope mismatch");
+        if(im.strings[r[2]].find("@container")!=std::string::npos)
+            require(im.count(WSC1)&&(im.records[WSC1][0][1]&workspaceQueries),"VERSION: container query capability");
         require(std::any_of(im.records[TMPL].begin(), im.records[TMPL].end(), [&](auto &t) { return t[3] == r[0]; }),
                 "BAD_IR: unused CSS scope");
     }
     require(im.count(WSC1) <= 1, "VERSION: WSC1 count");
     if (im.count(WSC1)) {
         const auto &w = im.records[WSC1][0];
-        require(w[0] == 1 && w[1] && !(w[1] & ~3u) && !w[2] && !w[3], "VERSION: WSC1 capabilities");
+        require(w[0] == 1 && w[1] && !(w[1] & ~7u) && !w[2] && !w[3], "VERSION: WSC1 capabilities");
     }
     std::set<std::string> hosts;
     for (auto &r : im.records[HOST])

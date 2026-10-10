@@ -1,0 +1,13 @@
+// Retained visibility for container-query pages.
+C("ContainerPage", "one", 0)
+P("ContainerPage", 1, "basis", 3, 1, "")
+P("ContainerPage", 2, "class", 4, 1, "")
+P("ContainerPage", 3, "description", 4, 3, "")
+P("ContainerPage", 4, "disabled", 1, 3, "")
+P("ContainerPage", 5, "grow", 3, 1, "")
+P("ContainerPage", 6, "max", 3, 1, "")
+P("ContainerPage", 7, "min", 3, 1, "")
+P("ContainerPage", 8, "name", 4, 3, "")
+P("ContainerPage", 9, "shrink", 3, 1, "")
+P("ContainerPage", 10, "visible", 1, 3, "")
+P("ContainerPage", 11, "selected", 1, 3, "")

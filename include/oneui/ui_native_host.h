@@ -8,6 +8,7 @@ namespace oneui::ui {
 class NativeHostView final : public View {
     std::shared_ptr<void> owner_;
     bool themed_=false;
+    bool settledViewport_=false;
 public:
     NativeHostView() = default;
     NativeHostView(std::shared_ptr<Widget> content, std::shared_ptr<void> owner = {})
@@ -22,10 +23,13 @@ public:
     } // detach before releasing foreign callbacks
     void setThemed(bool value){themed_=value;}
     bool themed() const{return themed_;}
+    void setSettledViewport(bool value){settledViewport_=value;}
+    bool settledViewport() const{return settledViewport_;}
     void attach(std::shared_ptr<Widget> content, std::shared_ptr<void> owner) {
         if (!content || !children().empty() || content->hasCompositionOwner())
             throw std::invalid_argument("NativeHost requires empty host and detached content");
         add(std::move(content)); owner_ = std::move(owner);
+        requestAnimationFrame(); // Wake a workspace waiting for this content.
     }
     void detach() { clearChildren(); owner_.reset(); }
     Size naturalSize() const override { return children().empty() ? Size{} : children().front()->naturalSize(); }

@@ -29,4 +29,5 @@ const std::map<std::string, ComponentContract> &registry();
 Bytes encodeComponents(const std::vector<ComponentContract> &components);
 std::vector<ComponentContract> decodeComponents(const Bytes &bytes);
 void addBuiltins(Schema &schema);
+void validateRecord(const Model&, const std::string& projection);
 } // namespace oneview

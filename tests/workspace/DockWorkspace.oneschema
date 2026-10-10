@@ -1,0 +1,31 @@
+model Root {
+  r nodes: list<ToolNode>
+  r root: utf8
+  r placements: list<Placement>
+  r panes: list<Tool>
+  r revision: i64
+  command dock(source:utf8,target:utf8,edge:utf8,request:i64,revision:i64)
+  command floatPane(pane:utf8,x:f64,y:f64,width:f64,height:f64,request:i64,revision:i64)
+  command bounds(pane:utf8,x:f64,y:f64,width:f64,height:f64,request:i64,revision:i64)
+  command raisePane(pane:utf8,request:i64,revision:i64)
+}
+model ToolNode key id {
+  r id: utf8
+  r kind: utf8
+  r axis: utf8
+  r ratio: f64
+  r first: utf8
+  r second: utf8
+  r pane: utf8
+}
+model Placement key id {
+  r id: utf8
+  r mode: utf8
+  r x: f64
+  r y: f64
+  r width: f64
+  r height: f64
+  r pinned: bool
+  r order: i64
+}
+model Tool key id {r id:utf8}

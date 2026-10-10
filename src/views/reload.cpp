@@ -53,7 +53,8 @@ void refresh(Runtime &r,const std::shared_ptr<Instance> &node) {
         const auto &contract=r.image.components[r.image.records[oneview::NODE][root][1]];
         for(auto &p:r.image.records[oneview::PROP])
             if(p[0]==owner && contract.property(p[1]).name!="class")
-                setScalar(r.factory,node->element,contract.property(p[1]).name,r.constant(p[2]));
+                if(!r.workspaceScalar(*node,contract.property(p[1]).name,r.constant(p[2])))
+                    setScalar(r.factory,node->element,contract.property(p[1]).name,r.constant(p[2]));
     }
     node->applying=false;
     for(auto &child:node->children)refresh(r,child);

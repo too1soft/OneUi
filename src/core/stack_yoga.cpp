@@ -32,6 +32,7 @@ bool Stack::setWrap(bool enabled) {
 }
 
 Size Stack::measure(Size available) const {
+    if(sizeContained_)return {};
     return engine_ == StackEngine::Yoga ? measureYoga(available) : naturalSize();
 }
 
@@ -108,7 +109,7 @@ struct Stack::YogaState {
 
     void sync(Entry& entry) {
         auto* stack = dynamic_cast<Stack*>(entry.widget);
-        const bool container = stack && stack->engine_ == StackEngine::Yoga;
+        const bool container = stack && stack->engine_ == StackEngine::Yoga && (!stack->sizeContained_ || &entry==root.get());
         if (container != entry.container) {
             YGNodeRemoveAllChildren(entry.node);
             entry.children.clear();
@@ -163,7 +164,12 @@ struct Stack::YogaState {
         for (size_t i = 0; i < children.size(); ++i) {
             auto& child = *entry.children[i];
             const auto preferred = children[i]->preferredSize();
-            const auto flex = stack->itemFlex(children[i], column ? preferred.height : preferred.width);
+            auto flex = stack->itemFlex(children[i], column ? preferred.height : preferred.width);
+            if(auto* childStack=dynamic_cast<Stack*>(children[i].get());childStack&&childStack->styleBox_) {
+                if(!flex.width)flex.width=childStack->styleBox_->width;
+                if(!flex.height)flex.height=childStack->styleBox_->height;
+                if(!flex.basis)flex.basis=column?flex.height:flex.width;
+            }
             // An explicit main-axis basis must not replace cross-axis text
             // measurement with the widget's legacy preferred height.
             const bool measureContent = flex.contentBasis ||
@@ -184,8 +190,10 @@ struct Stack::YogaState {
             if (flex.basis) YGNodeStyleSetFlexBasis(child.node, *flex.basis);
             else if (flex.contentBasis) YGNodeStyleSetFlexBasisAuto(child.node);
             else YGNodeStyleSetFlexBasis(child.node, std::max(0.0f, column ? preferred.height : preferred.width));
-            YGNodeStyleSetMinWidth(child.node, column ? YGUndefined : flex.min);
-            YGNodeStyleSetMinHeight(child.node, column ? flex.min : YGUndefined);
+            YGNodeStyleSetWidth(child.node,flex.width.value_or(YGUndefined));
+            YGNodeStyleSetHeight(child.node,flex.height.value_or(YGUndefined));
+            YGNodeStyleSetMinWidth(child.node, std::max(flex.minWidth,column?0.f:flex.min));
+            YGNodeStyleSetMinHeight(child.node, std::max(flex.minHeight,column?flex.min:0.f));
             YGNodeStyleSetMaxWidth(child.node, column ? YGUndefined : limit(flex.max));
             YGNodeStyleSetMaxHeight(child.node, column ? limit(flex.max) : YGUndefined);
         }
@@ -247,11 +255,17 @@ void Stack::paintYoga(Canvas& canvas) {
         internal::FrameSpan span(internal::FrameStage::Layout);
         state->calculate({frame().width, frame().height}, true);
         state->assign(*state->root, frame().x, frame().y);
+        if(query_ && query_()) {
+            state->clearAssigned();
+            state->calculate({frame().width,frame().height},true);
+            state->assign(*state->root,frame().x,frame().y);
+        }
     }
     struct Guard {
         std::shared_ptr<YogaState> state;
         ~Guard() { if (state) state->clearAssigned(); }
     } guard{state};
+    if(!outer && query_)query_(); // Revalidate a previously rejected auto-size container.
     if (styleBox_) paintStyleBox(canvas, frame(), *styleBox_);
     View::paint(canvas);
 }

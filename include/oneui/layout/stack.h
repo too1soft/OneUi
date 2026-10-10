@@ -36,6 +36,8 @@ struct StackFlex {
     float min = 0.0f;
     float max = std::numeric_limits<float>::infinity();
     bool contentBasis = false;
+    std::optional<float> width,height;
+    float minWidth=0,minHeight=0;
 };
 
 struct StackLayoutStats { std::uint64_t calculations = 0, measureCacheHits = 0, arrangeCacheHits = 0; };
@@ -43,11 +45,18 @@ struct StackLayoutStats { std::uint64_t calculations = 0, measureCacheHits = 0, 
 class ONEUI_API Stack final : public View {
 public:
     explicit Stack(StackDirection direction = StackDirection::Column);
+    void insert(size_t index,std::shared_ptr<Widget> child);
+    bool remove(const std::shared_ptr<Widget>& child);
 
     // Opt-in. Returns false without changing state when Yoga was not built.
     bool setEngine(StackEngine engine);
     StackEngine engine() const { return engine_; }
     StackDirection direction() const { return direction_; }
+    StackAlign align() const {return align_;}
+    bool wrap() const {return wrap_;}
+    void setSizeContainment(bool value){if(sizeContained_!=value){sizeContained_=value;invalidate();}}
+    bool sizeContained() const {return sizeContained_;}
+    void setContainerQuery(std::function<bool()> evaluate){query_=std::move(evaluate);}
     std::optional<StackFlex> explicitFlex(const std::shared_ptr<Widget>& child) const {
         auto found=flex_.find(child);return found==flex_.end()?std::optional<StackFlex>{}:found->second;
     }
@@ -79,6 +88,8 @@ private:
     bool layoutCacheEnabled_ = true;
     StackEngine engine_ = StackEngine::Legacy;
     bool wrap_ = false;
+    bool sizeContained_ = false;
+    std::function<bool()> query_;
     bool yogaArranged_ = false;
     Size measureYoga(Size available) const;
     void paintYoga(Canvas& canvas);
@@ -92,6 +103,8 @@ private:
     struct FlexItem {
         Widget* child;
         float size, grow, shrinkWeight, min, max, cross, gapBefore;
+        bool fixedCross=false;
+        float minCross=0;
     };
     // Reuse storage during animation instead of allocating on each paint.
     std::vector<FlexItem> layoutItems_;

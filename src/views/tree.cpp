@@ -1,5 +1,7 @@
 #include "oneui/ui_theme.h"
 #include "runtime.h"
+#include "oneui/layout/pane_grid.h"
+#include "oneui/layout/dock_workspace_view.h"
 namespace oneui::views {
 using namespace oneview;
 namespace {
@@ -96,13 +98,29 @@ std::shared_ptr<Instance> Runtime::build(uint32_t node, const Scopes &context, c
         const auto &record = image.records[HOST][n[9]];
         if (!(record[2] & 2)) hosts.emplace(image.strings[record[1]], host);
     } else if (type == "PaneGrid" || type == "DockWorkspace") {
-        result->element = ui::Element(ui::Node(std::make_shared<View>()), type);
+        std::shared_ptr<View> container = type=="PaneGrid" ? std::static_pointer_cast<View>(std::make_shared<PaneGrid>()) : std::make_shared<DockWorkspaceView>();
+        result->element = ui::Element(ui::Node(container), type);
         result->element.classes = classes;
         styles->add(result->element);
-        workspaceChildren(result);
-    } else if (type == "Pane" || type == "DockItem") {
-        result->element = factory.make("Column", children, classes);
-        result->element.component = type;
+    } else if (type == "Pane") {
+        auto pane=std::make_shared<PaneView>();
+        for(auto& child:children) {
+            pane->add(child.widget);
+            if(child.component=="PaneHeader")pane->header=child.widget;
+        }
+        result->element=ui::Element(ui::Node(pane),type);
+        result->element.classes=classes;
+        styles->add(result->element);
+    } else if (type == "DockItem") {
+        auto item=std::make_shared<DockItemView>();
+        for(auto& child:children) {
+            item->add(child.widget);
+            if(child.component=="PanelHeader")item->header=child.widget;
+            if(child.component=="PanelBody")item->body=child.widget;
+            if(child.component=="PanelFooter")item->footer=child.widget;
+        }
+        result->element=ui::Element(ui::Node(item),type);
+        result->element.classes=classes;styles->add(result->element);
     } else
         result->element = factory.make(type, children, classes);
     if (n[10] != none) {
@@ -128,7 +146,8 @@ void Runtime::install(const std::shared_ptr<Instance> &instance, uint32_t owner,
             const auto &contract =
                 image.components[image.records[NODE][componentRoot(image, owner)][1]];
             overrideProperty(r[1]);
-            setScalar(factory, instance->element, contract.property(r[1]).name, constant(r[2]));
+            if(!workspaceScalar(*instance,contract.property(r[1]).name,constant(r[2])))
+                setScalar(factory, instance->element, contract.property(r[1]).name, constant(r[2]));
             if (contract.property(r[1]).name == "disabled")
                 instance->authoredDisabled = bool(constant(r[2]).integer);
         }
@@ -184,7 +203,7 @@ void Runtime::apply(const std::shared_ptr<Instance> &instance, Binding &binding)
             if (name == "disabled")
                 instance->authoredDisabled = bool(value.integer);
             if (!binding.previous || !(value == *binding.previous))
-                setScalar(factory, instance->element, name, value);
+                if(!workspaceScalar(*instance,name,value))setScalar(factory, instance->element, name, value);
             binding.previous = std::move(value);
         }
     } catch (const Failure &error) {
@@ -249,5 +268,6 @@ void Runtime::update(const std::shared_ptr<Instance> &instance) {
     for (auto &row : instance->rows)
         update(row.second);
     workspaceChildren(instance);
+    preparePicker(instance);
 }
 } // namespace oneui::views

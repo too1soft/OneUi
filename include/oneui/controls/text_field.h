@@ -89,6 +89,7 @@ public:
     bool onMouseWheel(const MouseWheelEvent& event) override;
     bool onKeyDown(const KeyEvent& event) override;
     bool hasTextComposition() const override { return !composition_.empty(); }
+    bool commitTextComposition() override;
     CommandResult queryBuiltinCommand(const std::string& id) const override;
     CommandResult executeBuiltinCommand(const std::string& id) override;
     CommandResult dispatchBuiltinCommandKey(const KeyEvent& event, const std::string& logicalKey) override;

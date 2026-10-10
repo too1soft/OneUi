@@ -1,0 +1,21 @@
+model Root {
+  r fonts: list<FontItem>
+  r colors: list<ColorToken>
+  r font: utf8
+  r asset: utf8
+  r label: utf8
+  r loading: bool
+  r error: utf8
+  r minimum: f64
+  r maximum: f64
+  rw level: f64
+  command selectFont(key:utf8)
+  command retry()
+  command choose()
+  command clear()
+  command cancel()
+  command failed(source:utf8,code:utf8,message:utf8)
+  command adjust(phase:i64,value:f64)
+}
+model FontItem key id {r id:utf8;r family:utf8;r label:utf8;r available:bool}
+model ColorToken key id {r id:utf8;r rgba:i64}

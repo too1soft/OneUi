@@ -1,0 +1,45 @@
+{
+  "timestamp_utc": "2026-10-10T14:33:23.798932+00:00",
+  "baseline": "b48df20",
+  "branch": "codex/workspace-components",
+  "gpu": "NVIDIA GeForce RTX 5080",
+  "driver": "581.80",
+  "backend": "OpenGL+Skia Ganesh; vsync=on",
+  "refresh_hz": 200,
+  "dpi": 96,
+  "system_client_area_animation": true,
+  "client_size": [
+    1600,
+    1000
+  ],
+  "font": "Consolas",
+  "native_flags": "/O2 /DNDEBUG; release code; direct MSVC replay of capture compdb",
+  "rust_profile": "release",
+  "rustc": "rustc 1.91.1 (ed61e7d7e 2025-11-07)",
+  "ir_sha256": "79f19d34c936924304f31432ff2100ff5b258dc28c98ecbe71ff7a2ce8b0afca",
+  "ir_bytes": 60176,
+  "ir_embedded_offset": 623984,
+  "generated_rust": "build/cargo-target/release/build/workspace-interactions-ac4d8df4ca8ee1b3/out/workspace.rs",
+  "files": {
+    "build/cargo-target/release/workspace-interactions.exe": {
+      "bytes": 930304,
+      "sha256": "8290e43465775c1091032eda7db0fed9d5fd492c6493a8229af0eaf63e2644bc"
+    },
+    "build/capture/oneui.dll": {
+      "bytes": 15472128,
+      "sha256": "186f77a06599e77aeada15630a85635a2998e0dbb5ccc3a21e0e8deb404ee394"
+    },
+    "build/capture/oneui-viewc.exe": {
+      "bytes": 694784,
+      "sha256": "f09c850fb5d6cf45328f399ceef12654aec0314c6d3280a0a79c67ca7b41bbc1"
+    },
+    "examples/workspace_interactions/Workspace.one": {
+      "bytes": 9298,
+      "sha256": "087f2fb0297e85b3bbf8bd156b398f878c62e856df945963ed3d5bf1f9ca37a7"
+    },
+    "examples/workspace_interactions/Workspace.oneschema": {
+      "bytes": 3274,
+      "sha256": "b17e90eb9d456c66b30fd2ffb8bab0b7a321b00b59c659a7c171dff403ebe702"
+    }
+  }
+}

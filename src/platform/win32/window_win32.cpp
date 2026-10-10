@@ -34,6 +34,7 @@
 #include "include/gpu/ganesh/GrDirectContext.h"
 #include "include/gpu/ganesh/gl/GrGLDirectContext.h"
 #include "platform/shared/skia_gl_setup.h"
+#include "internal/workspace_frame_probe.h"
 #include "include/gpu/ganesh/gl/GrGLInterface.h"
 #include "include/gpu/ganesh/SkSurfaceGanesh.h"
 #include "include/gpu/ganesh/GrBackendSurface.h"
@@ -2654,7 +2655,10 @@ private:
                 return;
             }
 
-            if (content_->tickAnimations(nowMs)) {
+            const double workspaceUpdateStarted = internal::workspaceFrameProbe ? currentTimeMs() : 0;
+            const bool stillAnimating = content_->tickAnimations(nowMs);
+            if (workspaceUpdateStarted) internal::workspaceUpdateMs += currentTimeMs() - workspaceUpdateStarted;
+            if (stillAnimating) {
                 scheduleContentAnimationFrame();
             }
         });
@@ -2860,9 +2864,13 @@ private:
             presentCanvas->clear(SK_ColorBLACK);
             paintSurface_->draw(presentCanvas, 0.0f, 0.0f);
             grContext_->flushAndSubmit();
+            const double presentStarted = currentTimeMs();
             const BOOL swapped = SwapBuffers(glDC_);
+            internal::workspacePresentMs = currentTimeMs() - presentStarted;
             if (swapped && nvidiaDriver_) {
+                const double censusStarted = internal::workspaceFrameProbe ? currentTimeMs() : 0;
                 absorbDriverThreadCensus();
+                if (censusStarted) internal::workspaceCensusMs = currentTimeMs() - censusStarted;
             }
             const double submitMs = currentTimeMs() - submitStartMs;
             traceSubmitMs_ += submitMs;
@@ -3079,6 +3087,7 @@ private:
     }
 
     void recordPaint(int width, int height, bool fullPaint, bool allocatedSurface, double surfaceMs, double elapsedMs) {
+        internal::recordWorkspaceFrame(elapsedMs);
         ++rendererInfo_.paints;
         rendererInfo_.paintMs += elapsedMs;
         const double nowMs = currentTimeMs();

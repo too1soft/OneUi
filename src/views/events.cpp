@@ -4,6 +4,8 @@ void Runtime::wire(const std::shared_ptr<Instance> &instance) {
     if (image.records[oneview::NODE][instance->node][0] != 1)
         return;
     instance->owner = weak_from_this();
+    wireWorkspace(instance);
+    wirePicker(instance);
     auto node = std::weak_ptr<Instance>(instance);
     auto mutate = [node](uint32_t id, Value value) {
         auto item = node.lock();
@@ -33,6 +35,8 @@ void Runtime::wire(const std::shared_ptr<Instance> &instance) {
                 v.text = narrow(text);
                 mutate(id, v);
             });
+        else if (element.component == "Slider")
+            element.as<Slider>()->setOnChanged([mutate,id](double value){Value v;v.tag=3;v.number=value;mutate(id,v);});
         else if (element.component == "Switch")
             element.as<Switch>()->setOnChanged([mutate, id](bool value) {
                 Value v;

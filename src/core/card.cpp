@@ -58,8 +58,14 @@ void Card::paint(Canvas& canvas) {
     View::paint(canvas);
 }
 
+Size Card::naturalSize() const {
+    auto size=children().empty()?Size{}:children()[0]->naturalSize();
+    auto padding=styleBox_?styleBox_->padding.value_or(padding_):padding_;
+    return {size.width+padding.left+padding.right,size.height+padding.top+padding.bottom};
+}
+
 void Card::layoutChildren() {
-    const Rect content = frame().inset(padding_);
+    const Rect content = frame().inset(styleBox_?styleBox_->padding.value_or(padding_):padding_);
     for (const auto& child : children()) {
         if (!child->visible()) {
             continue;

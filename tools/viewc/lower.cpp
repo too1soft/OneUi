@@ -175,6 +175,26 @@ uint32_t ViewCompiler::lower(Source &s, Node n, const std::vector<Scope> &scopes
     if (entry == registry().end())
         at.fail("COMPONENT: unknown component " + n.tag);
     const auto &c = entry->second;
+    if(c.name=="PaneHeader") {
+        std::set<std::string> names;
+        for(auto& child:n.children) {
+            auto slot=child.attrs.find("slot");
+            if(slot==child.attrs.end() || !std::set<std::string>{"identity","actions","menu"}.count(slot->second.value) ||
+               !names.insert(slot->second.value).second)at.fail("HEADER_SLOT: explicit unique identity/actions/menu slot required");
+            auto attribute=slot->second;child.attrs.erase(slot);
+            Node wrapper=child;wrapper.tag="HeaderSlot";wrapper.text.clear();wrapper.attrs.clear();
+            wrapper.attrs["slot-name"]=attribute;wrapper.children={std::move(child)};child=std::move(wrapper);
+        }
+    }
+    if(c.name=="MediaPicker"||c.name=="MediaPreview") {
+        std::set<std::string> names;
+        for(auto& child:n.children) {
+            auto slot=child.attrs.find("slot");
+            if(slot==child.attrs.end()||!(slot->second.value=="empty"||slot->second.value=="error"||(c.name=="MediaPicker"&&slot->second.value=="preview"))||!names.insert(slot->second.value).second)at.fail("MEDIA_SLOT: unique empty/preview/error slots required");
+            auto attribute=slot->second;child.attrs.erase(slot);
+            Node wrapper=child;wrapper.tag="MediaSlot";wrapper.text.clear();wrapper.attrs.clear();wrapper.attrs["slot-name"]=attribute;wrapper.children={std::move(child)};child=std::move(wrapper);
+        }
+    }
     validateChildren(n, c, at);
     auto ci = std::find_if(image.components.begin(), image.components.end(), [&](auto &v) { return v.name == c.name; });
     if (ci == image.components.end())

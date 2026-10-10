@@ -20,6 +20,7 @@ public:
     void setContent(std::shared_ptr<Widget> child);
 
     void paint(Canvas& canvas) override;
+    Size naturalSize() const override;
 
 private:
     void layoutChildren() override;

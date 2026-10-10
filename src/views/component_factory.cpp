@@ -104,7 +104,42 @@ Element Mount::make(std::string type, std::vector<Element> children, std::string
     Builder b(StackEngine::Yoga, "");
     Node node = b.column({});
     std::shared_ptr<Stack> content;
-    if (type == "Text" || type == "Status" || type == "ValidationMessage")
+    if(type=="FontPicker")node=b.native(std::make_shared<FontPicker>());
+    else if(type=="Slider")node=b.native(std::make_shared<Slider>());
+    else if(type=="Card") {
+        auto card=std::make_shared<Card>();if(children.size()!=1)throw std::invalid_argument("Card requires one child");card->setContent(children[0].widget);node=b.native(card);
+    } else if(type=="ThemeScope") {
+        auto scope=std::make_shared<ThemeScope>();if(children.size()!=1)throw std::invalid_argument("ThemeScope requires one child");scope->add(children[0].widget);node=b.native(scope);
+    } else if(type=="MediaSlot") {
+        auto slot=std::make_shared<MediaSlotView>();for(auto& child:children)slot->add(child.widget);node=b.native(slot);
+    } else if(type=="MediaPicker"||type=="MediaPreview") {
+        std::set<std::string> slots;
+        auto picker=type=="MediaPicker"?std::make_shared<MediaPicker>():nullptr;
+        auto preview=type=="MediaPreview"?std::make_shared<MediaPreview>():nullptr;
+        for(auto& child:children) {
+            auto slot=child.as<MediaSlotView>();if(!slot||!slots.insert(slot->name).second)throw std::invalid_argument("Unique named media slots required");
+            if(picker)picker->setSlot(slot->name,slot);else preview->setSlot(slot->name,slot);
+        }
+        node=picker?b.native(picker):b.native(preview);
+    } else if(type=="ContainerPage") {
+        auto page=std::make_shared<ContainerPage>();for(auto& child:children)page->add(child.widget);node=b.native(page);
+    } else if(type=="DragHandle" || type=="DropSurface") {
+        std::shared_ptr<View> surface=type=="DragHandle"?std::static_pointer_cast<View>(std::make_shared<DragHandle>()):std::static_pointer_cast<View>(std::make_shared<DropSurface>());
+        for(auto& child:children)surface->add(child.widget);
+        node=b.native(surface);
+    } else if(type=="HeaderSlot") {
+        auto slot=std::make_shared<PaneHeaderSlot>();
+        for(auto& child:children)slot->add(child.widget);
+        node=b.native(slot);
+    } else if(type=="PaneHeader") {
+        auto header=std::make_shared<PaneHeader>();std::set<std::string> names;
+        for(auto& child:children) {
+            auto slot=child.as<PaneHeaderSlot>();
+            if(!names.insert(slot->name).second)throw std::invalid_argument("Duplicate PaneHeader slot");
+            header->setSlot(slot->name,slot);
+        }
+        node=b.native(header);
+    } else if (type == "Text" || type == "Status" || type == "ValidationMessage")
         node = b.paragraph(L"");
     else if (type == "Input" || type == "SearchInput") {
         auto field = std::make_shared<TextField>();

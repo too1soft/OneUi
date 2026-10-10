@@ -65,6 +65,7 @@ Source &ViewCompiler::load(const fs::path &path, uint32_t importSpan)
     for (auto &n : stored.styles)
     {
         auto lowered = oneui::ui::syntax::css(n.text, scope, stored.relative, n.line);
+        if(lowered.find("@container")!=std::string::npos)requireWorkspace(image,workspaceQueries);
         image.add(
             CSS, {stored.scope, image.sid(n.text), image.sid(lowered), image.sid(stored.relative), span(stored, n), 0});
     }

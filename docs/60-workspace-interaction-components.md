@@ -1,12 +1,12 @@
 # WP4：工作区交互组件设计
 
-状态：**design-2，已评审，按裁决实施 S1→S2**。日期：2026-10-10。评审基线：7257eb4；权威裁决见 `I/docs/codex/reports/WP-4-design-review.md`。
+状态：**design-2，已评审；S2 验收通过、ABI 44 冻结；S3→S8 实施结果另见各步报告**。日期：2026-10-10。评审基线：7257eb4；S2 基线：b48df20；权威裁决见 `I/docs/codex/reports/WP-4-design-review.md`。
 
 OneUI 基线 `ee52acbee6a3a387bf875325026a177f1203ea77`，工作树 `E:/project/byname/oneui-views`，分支 `codex/workspace-components`。iShell 只读基线 `61d784be647dc828004ab3865d37d0b6eafbd706`。本文所有行号对应这两个快照；`I/` 表示 `E:/project/tauri/ishellpro-arch/`，`O/` 表示当前 OneUI 工作树。
 
 依据：任务书第 0–3 节、第 5 节 WP4/WP6、第 9 节，`I/docs/codex/reports/WP-3-design-review.md` 的 D6/D8，以及 `WP-3-review.md`。已阅读 OneUI 文档 55–59、S1–S6 报告及 `docs/benchmarks/language-neutral-views/` 的 README、results、listperf。旧 S4–S6 报告中的 ABI 45、列表性能失败属于历史候选记录；以最终验收和当前源码为准：**ABI 44，列表性能已通过**。
 
-本轮先落实设计裁决，再实施 S1→S2，并在 S2 ABI 冻结检查点停止。不得重配置 capture、启动 iShell 或修改原 OneUI 工作区。本文 S3–S8 的组件、语法和测试仍是后续契约，不能当作已实施能力。第 10 节为已确认裁决。
+S2 检查点已经通过，Claude 授权连续实施 S3→S8，完成后停在最终检查点。不得重配置 capture、启动 iShell 或修改原 OneUI 工作区。本文记录设计契约；各步报告区分实际实现、测试证据及未达标项。第 10 节为已确认裁决。产物预算按 S2 后续裁决，仅统计本工作树 build/，上限 30 GiB，不统计或清理主仓库其他会话的目录。
 
 ## 1. 现状调查
 

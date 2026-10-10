@@ -15,6 +15,7 @@
 #include <vector>
 
 namespace oneui {
+struct ContainerQuery;
 
 enum StylePseudoState : unsigned int {
     StyleStateNone = 0,
@@ -55,6 +56,9 @@ struct StyleContentBox {
 };
 
 struct StyleBox {
+    std::optional<std::string> containerName,flexDirection;
+    std::optional<bool> sizeContainment,display,flexWrap;
+    std::optional<float> flexBasis,flexGrow,flexShrink,minWidth,minHeight;
     StyleBackground background;
     StyleContentBox content;
     std::optional<Color> foreground;
@@ -112,6 +116,7 @@ struct StyleRule {
     // Programmatically constructed rules may continue to populate `box` only.
     std::vector<std::pair<std::string, std::string>> declarations;
     int order = 0;
+    std::shared_ptr<const ContainerQuery> query;
 };
 
 struct StyleNode {
@@ -134,6 +139,7 @@ public:
     const std::vector<StyleRule>& rules() const;
     const std::map<std::string, std::string>& customProperties() const;
     std::size_t version() const;
+    StyleSheet forContainers(const std::map<std::string,Size>& sizes) const;
 
 private:
     struct CompiledSelector {
