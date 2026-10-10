@@ -1,6 +1,8 @@
 import pathlib, subprocess, sys, tempfile
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / 'tests'))
+from workspace_fixture import temporary_workspace
 compiler = sys.argv[1]
-with tempfile.TemporaryDirectory() as directory:
+with temporary_workspace() as directory:
     root = pathlib.Path(directory)
     cases = [
         ('<Workspace><TitleBar/><WorkspaceBody/></Workspace>', True, ''),

@@ -1,5 +1,13 @@
 if(NOT TARGET oneui-viewc)
-    add_executable(oneui-viewc "${CMAKE_CURRENT_LIST_DIR}/../tools/viewc/main.cpp")
+    set(viewc_root "${CMAKE_CURRENT_LIST_DIR}/../tools/viewc")
+    add_executable(oneui-viewc
+        "${viewc_root}/main.cpp" "${viewc_root}/binary.cpp"
+        "${viewc_root}/schema.cpp" "${viewc_root}/schema_parser.cpp"
+        "${viewc_root}/component_contract.cpp" "${viewc_root}/compiler.cpp"
+        "${viewc_root}/lower.cpp" "${viewc_root}/lower_attributes.cpp"
+        "${viewc_root}/validate.cpp" "${viewc_root}/ir_writer.cpp"
+        "${viewc_root}/ir_reader.cpp" "${viewc_root}/ir_validate.cpp"
+        "${viewc_root}/ir_graph.cpp")
     target_include_directories(oneui-viewc PRIVATE "${CMAKE_CURRENT_LIST_DIR}/../include")
     target_compile_features(oneui-viewc PRIVATE cxx_std_17)
     if(MSVC)

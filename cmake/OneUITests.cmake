@@ -13,6 +13,18 @@ endfunction()
 
 function(oneui_register_core_tests)
     find_package(Python3 COMPONENTS Interpreter REQUIRED)
+    if(TARGET oneui-viewc)
+        foreach(suite schema diagnostics binary)
+            add_test(NAME oneui_viewc_${suite}_tests COMMAND "${Python3_EXECUTABLE}" -B
+                "${PROJECT_SOURCE_DIR}/tests/viewc/test_${suite}.py"
+                "$<TARGET_FILE:oneui-viewc>" "${CMAKE_CURRENT_BINARY_DIR}/viewc-tests")
+        endforeach()
+        add_test(NAME oneui_viewc_legacy_tests COMMAND "${Python3_EXECUTABLE}" -B
+            "${PROJECT_SOURCE_DIR}/examples/declarative/test_compiler.py"
+            "$<TARGET_FILE:oneui-viewc>" "${CMAKE_CXX_COMPILER}" "${PROJECT_SOURCE_DIR}/include")
+        set_tests_properties(oneui_viewc_legacy_tests PROPERTIES
+            ENVIRONMENT "ONEUI_VIEWC_TEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/viewc-tests")
+    endif()
     add_test(NAME oneui_build_space_tests COMMAND "${Python3_EXECUTABLE}"
         "${PROJECT_SOURCE_DIR}/tests/test_build_space.py")
     add_test(NAME oneui_macos_configuration_tests COMMAND "${CMAKE_COMMAND}"
