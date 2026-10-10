@@ -6,11 +6,6 @@ OneUiViewResult oneui_view_reload(OneUiView *view,const uint8_t *bytes,size_t le
         auto value=runtime(view);
         value->reload(oneview::readImage(oneview::Bytes(bytes,bytes+length)));
         view->root.widget=value->root->element.widget;
-        for(auto it=view->hosts.begin();it!=view->hosts.end();) {
-            auto current=value->hosts.find(it->first);
-            if(current==value->hosts.end() || current->second!=it->second->widget) {
-                unbindHostHandle(it->second.get());it=view->hosts.erase(it);
-            } else ++it;
-        }
+        pruneHostHandles(view);
     });
 }

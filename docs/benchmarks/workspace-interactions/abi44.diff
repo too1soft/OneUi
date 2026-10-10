@@ -1,0 +1,33 @@
+diff --git a/include/oneui/oneui_view_c_api.h b/include/oneui/oneui_view_c_api.h
+index e76328b..9ef1497 100644
+--- a/include/oneui/oneui_view_c_api.h
++++ b/include/oneui/oneui_view_c_api.h
+@@ -215,10 +215,26 @@ ONEUI_API OneUiViewResult oneui_view_notifier_notify_list(OneUiViewNotifier *not
+                                                           uint32_t property_id,
+                                                           const OneUiViewListChange *change);
+ 
+-/* Borrowed host handle. Do not call oneui_widget_destroy on it. */
++typedef struct OneUiViewScopeSegment {
++    OneUiUtf8String instance_id; /* Slash-free repeat view-id, qualified by slash-free call-id/ prefixes. */
++    OneUiUtf8String key;         /* Exact stable UTF-8 key, never a slash-separated path. */
++} OneUiViewScopeSegment;
++/* UI thread, outside callbacks. Inputs borrowed through return. At most 64
++ * segments / 1 MiB of UTF-8; IDs and keys must be nonempty. Zero segments returns
++ * the root. Success owns one notifier reference; release with notifier_release.
++ * Missing path is NOT_FOUND. Removed/replaced scopes remain CLOSED permanently.
++ * Only stable Pane/DockItem collection instances are addressable in this version. */
++ONEUI_API OneUiViewResult oneui_view_resolve_scope(OneUiView *view,
++    const OneUiViewScopeSegment *segments, size_t segment_count, OneUiViewNotifier **out_scope);
++/* Borrowed host handle. Do not call oneui_widget_destroy on it. Re-find after
++ * structural flush/reload. NULL scope denotes root; non-NULL must be a live
++ * root/workspace render notifier belonging to this View; data-only scopes are
++ * INVALID_ARGUMENT. Same name in different render row scopes is valid.
++ * Removed handles return CLOSED until View destruction; handles must not outlive
++ * their View. At most 100000 issued host identities per View (LIMIT beyond that). */
+ ONEUI_API OneUiViewResult
+ oneui_view_find_host(OneUiView *view, OneUiViewNotifier *scope, OneUiUtf8String name,
+-                     OneUiWidget **out); /* WP3 scope must be NULL (root); reserved for WP4 */
++                     OneUiWidget **out);
+ /* Owner lease retains the foreign widget's callback owner. */
+ ONEUI_API OneUiViewResult oneui_view_host_attach(OneUiWidget *host, OneUiWidget *content,
+                                                  void *owner, OneUiVoidCallback retain_owner,

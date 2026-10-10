@@ -89,11 +89,13 @@ void ViewCompiler::attributes(Source &s, const Node &n, const std::vector<Scope>
     image.records[NODE][index][6] = image.count(PROP) - staticStart;
     if (c.name == "NativeHost" && !ownerKind)
     {
-        require(scopes.size() == 1, "HOST_DYNAMIC: WP3 only supports static hosts");
+        const bool dynamic = scopes.size() > 1;
+        require(!dynamic || scopes.front().workspace, "HOST_DYNAMIC: stable workspace item required");
         auto h = n.attrs.find("host");
         require(h != n.attrs.end() && !h->second.value.empty(), "HOST_NAME: static nonempty host required");
-        require(hostNames.insert(h->second.value).second, "HOST_NAME: duplicate host");
+        require((dynamic ? rowHostNames.back() : hostNames).insert(h->second.value).second, "HOST_NAME: duplicate host");
         auto flags = n.attrs.count("themed") && n.attrs.at("themed").value == "true" ? 1u : 0u;
+        if (dynamic) { flags |= 2u; requireWorkspace(image, workspaceHosts); }
         image.records[NODE][index][9] = image.add(HOST, {index, image.sid(h->second.value), flags, span(s, h->second)});
     }
 }

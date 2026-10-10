@@ -15,6 +15,9 @@ set(ONEUI_VIEW_RUNTIME_SOURCES
     src/views/component_properties.cpp
     src/views/value.cpp
     src/views/lifetime.cpp
+    src/views/repeat.cpp
+    src/views/workspace_scope.cpp
+    src/views/workspace_children.cpp
     src/views/tree.cpp
     src/views/notifications.cpp
     src/views/list_delta.cpp

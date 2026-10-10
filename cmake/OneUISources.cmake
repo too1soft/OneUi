@@ -26,6 +26,8 @@ set(ONEUI_CORE_SOURCES
     src/core/dock_view.cpp
     src/core/dock_node.cpp
     src/core/dock_workspace.cpp
+    src/core/workspace_tree_validate.cpp
+    src/core/workspace_tree_layout.cpp
     src/core/dock_geometry.cpp
     src/core/dock_hit_test.cpp
     src/core/form_field.cpp
@@ -120,6 +122,7 @@ set(ONEUI_C_API_SOURCES
     src/capi/oneui_c_api_internal.cpp
     src/capi/oneui_c_api_interaction.cpp
     src/capi/oneui_c_api_runtime.cpp
+    src/capi/oneui_c_api_view_scope.cpp
     src/capi/oneui_c_api_view.cpp
     src/capi/oneui_c_api_view_reload.cpp
     src/capi/oneui_c_api_view_mount.cpp

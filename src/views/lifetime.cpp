@@ -167,11 +167,10 @@ void Runtime::finishClose() {
         w->setRectInvalidator({});
         w->setAnimationScheduler({});
     }
-    for (auto it = scopes.rbegin(); it != scopes.rend(); ++it)
-        closeScope(*it);
     for (auto &entry : hosts)
-        if (auto host = std::dynamic_pointer_cast<ui::NativeHostView>(entry.second))
-            host->detach();
+        if (auto host = std::dynamic_pointer_cast<ui::NativeHostView>(entry.second)) host->detach();
+    for (auto it = scopes.rbegin(); it != scopes.rend(); ++it) closeScope(*it);
+    renderScopes.clear();
     root.reset();
     rootScope.reset();
     scopes.clear();

@@ -9,6 +9,7 @@ struct Scope
 {
     std::string variable;
     uint32_t model;
+    bool workspace = false;
 };
 struct Source
 {
@@ -32,6 +33,7 @@ class ViewCompiler
 
   private:
     fs::path base;
+    std::vector<std::set<std::string>> rowHostNames{1};
     std::map<std::string, Source> sources;
     std::set<std::string> active, hostNames, scopeNames;
     std::map<uint32_t, std::set<std::string>> stableIds, slots, references;

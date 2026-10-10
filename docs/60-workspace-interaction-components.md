@@ -1,12 +1,12 @@
 # WP4：工作区交互组件设计
 
-状态：**design-1，待 Claude 评审；未实施**。日期：2026-10-10。
+状态：**design-2，已评审，按裁决实施 S1→S2**。日期：2026-10-10。评审基线：7257eb4；权威裁决见 `I/docs/codex/reports/WP-4-design-review.md`。
 
 OneUI 基线 `ee52acbee6a3a387bf875325026a177f1203ea77`，工作树 `E:/project/byname/oneui-views`，分支 `codex/workspace-components`。iShell 只读基线 `61d784be647dc828004ab3865d37d0b6eafbd706`。本文所有行号对应这两个快照；`I/` 表示 `E:/project/tauri/ishellpro-arch/`，`O/` 表示当前 OneUI 工作树。
 
 依据：任务书第 0–3 节、第 5 节 WP4/WP6、第 9 节，`I/docs/codex/reports/WP-3-design-review.md` 的 D6/D8，以及 `WP-3-review.md`。已阅读 OneUI 文档 55–59、S1–S6 报告及 `docs/benchmarks/language-neutral-views/` 的 README、results、listperf。旧 S4–S6 报告中的 ABI 45、列表性能失败属于历史候选记录；以最终验收和当前源码为准：**ABI 44，列表性能已通过**。
 
-本阶段交付设计和代提交说明，不修改源码、不配置 capture、不构建、不启动 iShell、不改原 OneUI 工作区。本文的新组件、语法、导出、测试名称均为拟议契约，不能当作 ee52acb 已有能力。取舍在第 10 节集中提交裁决。
+本轮先落实设计裁决，再实施 S1→S2，并在 S2 ABI 冻结检查点停止。不得重配置 capture、启动 iShell 或修改原 OneUI 工作区。本文 S3–S8 的组件、语法和测试仍是后续契约，不能当作已实施能力。第 10 节为已确认裁决。
 
 ## 1. 现状调查
 
@@ -211,7 +211,7 @@ PaneGrid绑定属性的类型与schema一一对应。`gap/divider-hit/motion-ms/
 | 最终落点 | `dropRequested(source:utf8,target:utf8,edge:utf8,request:i64,revision:i64)`。edge=left/right/top/bottom/center/tab-strip；center=交换，tab-strip时target为Tabs的view-id，其他为pane key。源来自tab时用TabSource.pane转为内容key，edge永不center；从pane到tab-strip仅当前group多叶允许。VM用权威membership复核，不相信拖动缓存。 |
 | Tabs独立对外事件 | 可选 `@dragOut="onDragOut"` 签名 `(key:utf8,phase:i64,x:f64,y:f64)`，坐标为所在window逻辑坐标。已接drag-domain时这是观察事件，不应另发一次drop。`@reorderRequested(source:utf8,before:utf8)`，before空=末尾；VM决定列表MOVE。关闭沿用 `@close(key:utf8)`。无自定义槽。 |
 | DragHandle独立观察 | 可选 `@dragStateChanged(source:utf8,phase:i64)`，phase0开始/1移动/2释放/3取消；默认不接入VM热路径。DropSurface `@dropRequested`使用相同五参数，仅未被域协调器消费时发，确保一个释放只有一个请求。 |
-| 方向导航 | core暴露 `focusAdjacent(edge)`、`swapAdjacent(edge)`，只查已布局的可见叶并产生上表事件，不直接改active/tree。模板通过navigationSerial/Edge/Mode驱动它们：VM收到应用可配置快捷键后设置三属性，serial最后递增；相同serial幂等。从而无需应用取得普通Widget或新增通用“任意控件调用”ABI。无邻居不发事件，最大化忽略；按1.1评分、DFS tie-break。 |
+| 方向导航 | core暴露 `focusAdjacent(edge)`、`swapAdjacent(edge)`，只查已布局的可见叶并产生上表事件，不直接改active/tree。模板通过navigationSerial/Edge/Mode驱动：同一帧内逐次执行，最多8次，超出丢弃并记录诊断；相同serial幂等。VM在每次命令回调退出/flush边界发布完整三元组，运行时入队而不等到paint覆盖；同一回调内未发布的中间值不可观察，不能由serial差值猜测方向。无邻居不发事件，最大化忽略；按1.1评分、DFS tie-break。 |
 
 DragHandle的schema只需 `r id:utf8` 和可选 `command dragStateChanged(source:utf8,phase:i64)`；DropSurface事件绑定到所属工作区VM的dropRequested。domain/view-id/kind/role为静态字符串，不是业务类型注册。作用域限定同一View、同一window，禁止跨进程/跨窗口/文件拖入，也不调用OS拖放。不同域互不命中。单个域同一时刻只有一个drag，新的Started先取消旧手势。
 
@@ -354,7 +354,7 @@ ONEUI_API OneUiViewResult oneui_view_find_host(
 
 ```c
 typedef struct OneUiViewScopeSegment {
-    OneUiUtf8String instance_id; /* explicit v-for view-id, relative to parent scope */
+    OneUiUtf8String instance_id; /* slash-free v-for view-id, qualified by call-id/ prefixes */
     OneUiUtf8String key;         /* exact stable list key; no path escaping */
 } OneUiViewScopeSegment;
 
@@ -365,11 +365,11 @@ ONEUI_API OneUiViewResult oneui_view_resolve_scope(
     OneUiViewNotifier **out_scope);
 ```
 
-UI线程、回调外调用，输入数组/UTF-8仅借到返回；成功输出一个owned notifier reference，用现有notifier_release释放。0段返回root scope；失败清NULL。非法UTF-8/空段/无显式view-id=INVALID_ARGUMENT；无匹配=NOT_FOUND；view或旧scope已关闭=CLOSED；跨view scope=INVALID_ARGUMENT。segment_count≤64（模板词法嵌套预算，**不是分屏树深度**），总路径bytes≤1MiB；不使用字符串斜杠拼接，因此key内的 `/`、Unicode无需自造转义。
+UI线程、回调外调用，输入数组/UTF-8仅借到返回；成功输出一个owned notifier reference，用现有notifier_release释放。0段返回root scope；失败清NULL。非法UTF-8/空段=INVALID_ARGUMENT；无显式view-id在编译期拒绝；无匹配=NOT_FOUND；view或旧scope已关闭=CLOSED；跨view scope=INVALID_ARGUMENT。segment_count≤64（模板词法嵌套预算，**不是分屏树深度**），总路径bytes≤1MiB；不使用字符串斜杠拼接业务key，因此key内的 `/`、Unicode无需自造转义。组成instance_id的原始repeat/call view-id禁止含 `/`；限定名前缀属于编译器命名空间，不由业务key推导。带工作区集合的导入及其供给槽都必须声明稳定call view-id，IR reader独立验证能力位与调用标记。
 
 示例路径 `[("panes","session-A")]`，再 `find_host(view, scope, "terminal")`。嵌套v-for可为 `[("workspaces","W"),("panes","A")]`。同一parent scope内repeat的显式view-id唯一；导入调用点必须显式稳定view-id并参与路径命名空间（限定名使用编译器展开的 `call-id/repeat-id`，此处斜杠只在instance_id定义中，不解析业务key）。组件树的slot路径不等于Dock几何的left/right路径，交换/跨group移动不会改变以上路径。
 
-每个渲染row实例拥有独立scope connection，即使两个repeat引用同一个VM；不能仅用(vm,property,key)合并notifier。host map改为 `(scope identity, static host name)`，同scope重名编译诊断；host名称仍静态、不可CALL改名。scope移动只更新逻辑位置，VM identity换代则旧scope关闭，旧notifier永远不重新指向新row。不得返回悬空widget句柄：borrowed host限当前稳定结构期使用，结构flush/reload后重新find；Rust HostRef需generation检查，不能提供可长存的裸host Widget。
+每个渲染row实例拥有独立scope connection，即使两个repeat引用同一个VM；不能仅用(vm,property,key)合并notifier。host map改为 `(scope identity, static host name)`，同scope重名编译诊断；host名称仍静态、不可CALL改名。scope移动只更新逻辑位置，VM identity换代则旧scope关闭，旧notifier永远不重新指向新row。不得返回悬空widget句柄：borrowed host限当前稳定结构期使用，结构flush/reload后重新find；Rust HostRef不能提供可长存的裸host Widget。S2采用C侧身份检查和失效句柄墓碑提供同等失效保护：移除后立即解除内容租约，显式flush/reload/下一次lookup清掉句柄的native共享引用，旧句柄返回CLOSED且地址不得复用给新host，直至View销毁。每View最多发行100000个host身份（包括失效墓碑），超限返回LIMIT；不把墓碑当作内容停车场。Rust引用仍不能越过View寿命。这个上限及无新增release-host导出的取舍列入S2冻结报告。
 
 ### 5.2 复用内容租约，不增host-move导出
 
@@ -410,9 +410,9 @@ PaneGrid的扁平内容池使以下操作**无需detach/attach**：
 
 默认窄模式由三页容器的 `:selected`/保留式条件与VM selectedPane控制；宽模式只覆盖**布局可见性**。必须有一个专用 `ContainerPage :selected="selected"`（bool、default槽、无事件，schema仅r selected:bool）：它把selected产生的默认display作为低优先级样式，而不是通用 `visible=false` 的硬禁用，宽查询才能恢复全部页。另一可行写法是每页 `:container-selected`布局属性；推荐前者，避免全局改变visible的优先级。功能属性visible/disabled仍为硬约束，不被CSS强制开启。ContainerPage是容器查询的小型配套组件，纳入S5。
 
-仅支持命名容器、size或inline-size、width/height/aspect-ratio比较、px数值、有限正整数比值、and；不支持JS、任意calc、style query、or/not与浏览器全语法。严格诊断未知语法/属性，包含CSS源行列。width/height测量容器**内边框尺寸**（border-box减border，不减padding），单位逻辑px，选择器作用于最近同名祖先的后代；容器本身不能查询自身后改变自己的被测尺寸。这个明确的OneUI语义使SFTP的W=frame.width-2精确可表达；容器height须按参考传给size的相同frame口径，iShell模板用无垂直边框的测量壳与既有边框绘制层，避免误减2改变1.6边界。border/padding不应重复扣除。
+仅支持命名容器、size、width/height/aspect-ratio比较、px数值、有限正整数比值、and；不支持JS、任意calc、style query、or/not与浏览器全语法。严格诊断未知语法/属性，包含CSS源行列。width/height测量容器**内边框尺寸**（border-box减border，不减padding），单位逻辑px，选择器作用于最近同名祖先的后代；容器本身不能查询自身后改变自己的被测尺寸。这个明确的OneUI语义使SFTP的W=frame.width-2精确可表达；容器height须按参考传给size的相同frame口径，iShell模板用无垂直边框的测量壳与既有边框绘制层，避免误减2改变1.6边界。border/padding不应重复扣除。
 
-`container-type:size`要求父布局能独立分配两轴（basis/grow/固定约束）；inline-size只允许width查询。内容驱动高度的容器不能查询height或ratio，编译可判定时拒绝，运行时不满足独立尺寸条件则诊断并使用无条件样式。查询不发VM事件；媒体/monitor布局也使用同一机制，不把尺寸通知送回Rust计算分支。
+`container-type:size`要求父布局能独立分配两轴（basis/grow/固定约束）。内容驱动高度的容器不能查询height或ratio，编译可判定时拒绝，运行时不满足独立尺寸条件则诊断并使用无条件样式。查询不发VM事件；媒体/monitor布局也使用同一机制，不把尺寸通知送回Rust计算分支。
 
 支持的查询内布局输出：display:none/flex、flex-direction、flex-wrap、flex-basis/grow/shrink、gap、width/height/min-width/min-height，以及现有绘制/文字属性；同步实现严格消费检查与Yoga/style_adapter应用，不能只解析不应用。`display:none`保留Widget与VM，但不参与布局/命中/可访问树；移出正在编辑节点前按正常隐藏政策提交composition并迁焦点到切换控件。
 
@@ -456,24 +456,15 @@ FinalLayout后必须等待**最终rect对应的viewport观测**（layout epoch�
 
 - Windows x64、NVIDIA OpenGL与软件后端分开，固定字体/DPI/1600×1000及900以下窄窗口；使用优化release二进制（原生/O2 /DNDEBUG，Rust --release），记录exe/DLL/IR hash、GPU/驱动、显示刷新率和系统motion设置。
 - DevTools `ONEUI_DEVTOOLS=1 ONEUI_DEVTOOLS_OVERLAY=0`，逐帧记录schedule、update/layout/query/paint/submit、帧间隔、motion epoch、phase、是否预热、resize计数。正式报告不把CPU paint当屏幕present延迟；VSync等待和实际工作耗时分别列。
-- 预算为每个非预热的运动帧work/submit完整耗时≤16.0ms，max和慢帧数是门槛，P50/P95/P99辅助；rAF间隔/丢呈现帧另列，60Hz的16.67ms不是工作耗时。每场景100次、5轮，暖身结束后100%保留原始有界记录，首次分屏另用20个全新进程，不能用已分屏进程代表首次。
+- 门槛以后续iShell默认后端为准（本机NVIDIA OpenGL），软件后端仅参考。预算为每个非预热的运动帧work/submit完整耗时≤16.0ms，max和慢帧数是门槛，P50/P95/P99辅助；rAF间隔/丢呈现帧另列，60Hz的16.67ms不是工作耗时。每场景100次、5轮，暖身结束后100%保留原始有界记录，首次分屏另用20个全新进程，不能用已分屏进程代表首次。
 - 启动标记记录驱动吸收checkpoint；首次操作在启动ready后立即执行。另测用户在第16次present之前请求分屏的竞态，若仍卡顿列失败，不把60–200ms任意标成“预热”排除。不新增glFinish到普通交互热路径。
 - 源/目标TerminalView地址、owner retain/release、创建次数、VM acquire/连接数、session resize数作非计时诊断；动画结束一次、取消零次或最终变化一次，500次拆并闭循环计数归零。停止采样和光标后稳定500ms无新增动画帧。
 
 ## 8. ABI、IR和兼容策略
 
-ABI44的OneUiValue/VTable/ListChange/字符串借用规则保持；多参数事件无需新ABI。启用非NULL scope属于预留语义实现。**新增导出仍需ABI版本管理**：推荐在WP4统一冻结为下一可用全局版本（候选45，实施前再核对main与移动端并行分支，由Claude裁决），不在每一步反复加号，也不再次把未验收候选号当既定版本。
+ABI44的OneUiValue/VTable/ListChange/字符串借用规则保持。按Q1裁决，唯一新增导出oneui_view_resolve_scope直接并入ABI 44，不升45；WP3/WP4一起合入main。合入时若main已占用44，由Claude统一取main+1。S2检查点冻结ABI。
 
-除5.1的resolve_scope，Stack补齐两项普通布局C接口，完整签名为：
-
-```c
-/* UI thread; 1=changed, 0=valid no-op, -1=error + oneui_last_error.
- * Inputs borrowed. Parent keeps native child alive after success. */
-ONEUI_API int oneui_stack_insert(OneUiWidget *stack, size_t index, OneUiWidget *child);
-ONEUI_API int oneui_stack_remove(OneUiWidget *stack, OneUiWidget *child);
-```
-
-index越界、非Stack、空child、别的composition owner、线程错误都返回-1；insert当前同位置=0，remove不存在=0。它们供SDK原生用户/内部适配，不赋予L4手工构造页面的许可；Rust薄包装返回Result<bool>。新声明式组件不逐个增加create/set回调C导出，统一走IR；ContentViewportSource为引擎内部适配接口，无需外语实现它。
+除5.1的resolve_scope外不新增C导出。Stack insert/remove仅为引擎内部C++能力，供声明式运行时使用；不增加Rust layout/stack.rs增删API。ContentViewportSource为引擎内部接口，后续组件统一经IR接入。
 
 IR推荐保持major1，新增**必需能力段** `WSC1`（目录kind=19、flags=1，固定记录16bytes：version:u32=1、feature_bits:u32、reserved0:u32=0、reserved1:u32=0）。bits分别0动态scope host、1透明Pane/DockItem集合、2容器查询；未知bit或未知version拒绝。使用相关功能才写该段，旧IR字节不变。旧reader对未知required kind拒绝（ir_reader.cpp:54–55），不能仅升被旧reader忽略的minor（:13）。HOST现有字段布局不改，flags增加bit1=scope-local；编译器/reader一致校验其只能出现在受支持的稳定key集合下，原static实例规则继续执行。COMP新增组件/属性/事件完整契约；所有语言重新生成与schema/COMP hash严格匹配。
 
@@ -483,7 +474,7 @@ IR推荐保持major1，新增**必需能力段** `WSC1`（目录kind=19、flags=
 
 ### 9.1 试验台“终端工作区”
 
-扩展已有 `examples/performance_lab` 的 `features/terminal` 路由，新增独立的workspace-interactions领域目录；页面 `.one` + `.oneschema`，Rust模拟VM通过WP3生成trait，C++实验台入口只负责挂载IR。不得新增应用普通UI桥接C++。终端内容模块创建TerminalView一次，模拟本地会话支持输入echo、连续计数输出、历史/实时切换、连接/断开、resize计数；不启动真实shell或SSH、不读写用户工作区配置。
+新增独立 `examples/workspace_interactions/` 目录和独立exe，完全不修改 `examples/performance_lab/`；页面 `.one` + `.oneschema`，Rust模拟VM通过WP3生成trait，C++实验台入口只负责挂载IR。不得新增应用普通UI桥接C++。终端内容模块创建TerminalView一次，模拟本地会话支持输入echo、连续计数输出、历史/实时切换、连接/断开、resize计数；不启动真实shell或SSH、不读写用户工作区配置。
 
 同一页提供1/2/4/16窗格、分屏方向与目标选择、header所有操作、pane↔tab、最大化/还原/均分、方向focus/swap、广播源/接收/暂停、Dock四工具、float/8向resize/置顶/返回原位/收起/compact，以及容器SFTP和监控多列。设置抽屉包含FontPicker、MediaPicker/Preview、Slider、12项ThemeScope/Card，不为D8另造不接VM的静态截图。
 
@@ -512,10 +503,10 @@ IR推荐保持major1，新增**必需能力段** `WSC1`（目录kind=19、flags=
 | S2 动态scope与内容租约 | `src/views/workspace_{scope,children}.cpp`、`src/capi/oneui_c_api_view_scope.cpp`；修改tree/lists/reload与HOST reader/lower；Rust `view/scope.rs`、host.rs；WSC1和sys符号表 | A7、旧WP3生命周期/reload/黄金IR回归、C11/ABI/Rust签名同步；**Claude检查点：ABI冻结**。 |
 | S3 PaneGrid与尺寸运动 | `include/oneui/layout/pane_grid.h`、`src/core/pane_grid_{layout,motion,resize}.cpp`、`split_divider_interaction.*`；`src/views/workspace_properties.cpp`；TerminalView viewport观察逻辑抽到`terminal_viewport.cpp` | A1/A2、7.1确定性clock、真实viewport结算；hold一进一出与新pane初始化失败。先完成性能冒烟及明确数据，未达标不得进下步掩盖。 |
 | S4 PaneHeader/drag/navigation | `include/oneui/controls/pane_header.h`、`src/core/pane_{header,drag,navigation}.cpp`、`workspace_drag_domain.*`；从既有Tabs提取拖动领域实现；`src/views/workspace_events.cpp` | A3/A4/A5；声明式端到端和语义trace，tab/pane对象身份；参考轨迹/文案/阈值矩阵。 |
-| S5 Stack与容器查询 | `src/core/stack_children.cpp`、`src/capi/oneui_c_api_stack_children.cpp`、Rust layout/stack.rs；`src/core/container_query_{parse,evaluate}.cpp`、`container_page.cpp`；style_sheet/style_adapter/stack_yoga接入 | A8；先拆出既有style_sheet选择器解析/规则块扫描至独立领域文件，再新增query；编译诊断、布局pass计数、循环拒绝和CSS热重载。 |
+| S5 Stack与容器查询 | `src/core/stack_children.cpp`、`src/core/container_query_{parse,evaluate}.cpp`、`container_page.cpp`；style_sheet/style_adapter/stack_yoga接入 | A8；先拆出既有style_sheet选择器解析/规则块扫描至独立领域文件，再新增query；编译诊断、布局pass计数、循环拒绝和CSS热重载。 |
 | S6 DockWorkspace | `include/oneui/layout/dock_workspace_view.h`、`src/core/dock_workspace_{view,gesture,placement}.cpp`；`src/views/dock_properties.cpp`、注册表/工厂接入 | A6、锚点roundtrip、事件拒绝/过期、compact/8向resize；和既有DockSession/DockView无行为干扰。 |
 | S7 D8补齐 | `font_picker.*`、`media_picker.*`、`media_preview.*`、`theme_scope.*`按core/views职责目录；`src/views/control_picker_events.cpp`；既有slider/card注册 | A9、各组件独立.one/schema例子、C++/Rust共IR，空/错/取消/异步/无障碍；无业务文件管理代码。 |
-| S8 实验台与全套验收 | `examples/performance_lab/workspace_interactions/`内拆模板/schema、Rust vm/content/fixtures；`tests/workspace/`按A组拆；`docs/benchmarks/workspace-interactions/`固定报告 | A1–A10、release原始数据/截图/计数、CPP core独立链接、WP3回归；最终报告review后停止，WP6迁移另授权。 |
+| S8 实验台与全套验收 | `examples/workspace_interactions/`内拆模板/schema、Rust vm/content/fixtures；`tests/workspace/`按A组拆；`docs/benchmarks/workspace-interactions/`固定报告 | A1–A10、release原始数据/截图/计数、CPP core独立链接、WP3回归；最终报告review后停止，WP6迁移另授权。 |
 
 注册接入共同涉及 `include/oneui/ui_component_schema.h`、`src/views/format/component_registry.inc`、`src/views/component_factory.cpp`、`component_properties.cpp`、`events.cpp`、viewc validator/lower、`cmake/OneUISources.cmake`/`OneUIViewTests.cmake`及Rust sys/supported-symbols。数据表可以分领域include，不能对不同入口维护两份组件真相。新文件按职责每个≤500物理行（含注释空行）；不是拆成part1/part2。超过500重新划边界，超过1000必须拆；`.one`≤400行。
 
@@ -523,22 +514,24 @@ IR推荐保持major1，新增**必需能力段** `WSC1`（目录kind=19、flags=
 
 构建规则：不在沙箱重配 `build/capture`，需新配置仅 `build/codex-workspace` 一个固定用途目录且先检查预算。公共include成员/布局变化后capture和release都clean后重编，正常终端由Claude复核；直接MSVC仅重放真实配置，不伪称Ninja通过。项目跨盘30GiB，相关旧产物的核查、占用确认、清理按build-artifact-hygiene；无法删除的按绝对路径/大小/原因列报告，不停工。截图≤20/100MiB，日志≤50MiB，固定基准目录覆盖更新，fixture在finally回收。
 
-## 10. 风险与待决问题（均请Claude裁决）
+## 10. 已确认裁决（Claude，WP-4-design-review）
 
-| ID | 问题 | 推荐及理由 |
-|---|---|---|
-| Q1 | 新导出与ABI编号 | 同意新增resolve_scope及Stack两导出；不改VTable、不增host-move。全局候选45，实施S2前核对并行分支后一次冻结；避免重演WP3候选号漂移。 |
-| Q2 | 任意深度与已有DockNode≤64冲突 | 采用扁平schema+迭代DockTreeIndex和平铺Pane，资源上限约束总量、无几何深度64限制；旧ABI行为不改。明确两者共用纯规则，避免扩展递归schema和递归原生树。 |
-| Q3 | 关闭与业务session释放时机 | VM确认→closing→collapse settled→VM delta删除→卸载后释放session。推荐此两阶段契约，原生动画不自行删除业务；非动画外部断开路径显式区分。 |
-| Q4 | divider参考120ms静止可多次resize；SplitView capture loss当前commit；动画并发未有统一epoch | 200ms运动严格最终一次；divider保留120ms静止语义，每次静止算独立epoch。新PaneGrid capture loss建议cancel，旧SplitView保持兼容；并发动画重定向并共享hold。后两项是行为规范补充，需要批准，不能以“行为完全一致”隐去。若要求pointer整个按住期间仅一次resize，应另裁决改变参考规则。 |
-| Q5 | 16ms门槛与负载/呈现口径 | 以16可见pane参考场景、release逐帧work+submit≤16ms为门槛；另列rAF/present间隔与启动checkpoint。仅排除一个明确WarmFrame，不排除随机慢帧；深度压力仅结构正确性。请确认负载与VSync口径。 |
-| Q6 | 监控整页超宽多列未在参考找到 | SDK/试验台先演示内容宽≥1100两列、≥1600三列，min basis约360、gap12（**拟议示例值**）；iShell WP5阈值/排序由Claude指定或补充权威实现。现有文本自适应保持，不擅自声称像素一致。 |
-| Q7 | 容器宽高测量口径、防振荡与可见性 | 采用命名size隔离+布局后最多一次重算，精确阈值无默认滞回；首期拒绝祖先query会改变后代被查询尺寸的依赖式嵌套，避免伪称一次Yoga重算能解任意级联。SFTP测量壳复现W减2与既有H，ContainerPage让selected默认显示可被宽布局覆盖，功能visible仍硬约束。 |
-| Q8 | D8媒体范围、主题预览权限 | 第一版本地静态图片，VM服务负责选择/导入，Preview异步解码；视频/远程媒体另列范围。ThemeScope仅颜色token白名单，不开放任意CSS。覆盖实际背景图与12主题需求，保持层次。 |
-| Q9 | 组件级强事务与旧runtime标量setter异常保证不同 | 新workspace只准备后commit，注入OOM/读失败/children失败证明旧场景与租约保留；不宣称全页任意setter都有强保证。扩大到整个引擎的OOM治理不属于本次，复用旧事务时必须逐条核查。 |
-| Q10 | 首次分屏早于启动预热完成 | 保留现有驱动吸收，不人为延迟用户输入；新进程测试覆盖早期操作。如竞态失败，提交实际trace再由Claude决定是否引入startup-ready门控；禁止用shader/resource假说绕回已排除方向。 |
+| ID | 裁决与执行约束 |
+|---|---|
+| Q1 | 仅新增resolve_scope，并入ABI44；不改VTable、不增host-move和Stack C导出/Rust增删API；S2冻结。 |
+| Q2 | 扁平schema、迭代DockTreeIndex、平铺Pane；只限总量，不限几何深度；旧DockNode ABI不变，共用纯规则。 |
+| Q3 | VM确认→closing→折叠settled→VM delta删除→内容卸载后释放session；外部断开独立紧急路径。 |
+| Q4 | **行为规范补充**：divider保留120ms静止结算，每次静止独立epoch；PaneGrid capture loss按cancel，旧SplitView不变；并发动画重定向并共享hold，最终epoch一次结算。 |
+| Q5 | 16个可见pane，release每个非预热运动帧work+submit≤16.0ms，仅排除一个WarmFrame；以iShell默认后端（本机NVIDIA OpenGL）为门槛，软件仅参考；另列rAF/present间隔。 |
+| Q6 | SDK示例≥1100两列、≥1600三列、basis约360、gap12；监控多列不属于既有行为一致性要求。WP5由Claude决定iShell是否启用，默认保持单列。 |
+| Q7 | 仅命名size隔离，布局后最多重算一次，精确阈值无默认滞回，拒绝依赖式嵌套；ContainerPage纳入S5。 |
+| Q8 | 本地静态图片，VM选择/导入、异步预览；ThemeScope仅白名单颜色token；无视频/远程媒体。 |
+| Q9 | 强事务只保证workspace组件一级，用故障注入验证，不泛称整个引擎具有强保证。 |
+| Q10 | 保留驱动吸收，不延迟输入；覆盖预热完成前分屏，若卡顿提交trace，由Claude裁决startup-ready门控。 |
 
-## 11. 本阶段核验与交接
+其他裁决：navigation同帧逐次执行最多8次并诊断溢出（发布边界见3.2）；透明集合由children-kind决定，S1加负例；动态host仅PaneGrid/Pane、DockWorkspace/DockItem；大文件分别在S3/S4/S5按职责拆分并记录前后行数；新示例独立exe，完全不碰performance_lab。
+
+## 11. design-1阶段核验（历史记录）
 
 已完成只读现状调查与可实施契约；没有运行编译、运行时交互、性能或截图测试，因此本稿的性能与验收均为待执行计划。图MCP索引查询和MyStudio ensure_project被禁止审批策略拒绝，未继续调用受限工具，未换HTTP绕过；workspace_context已读，agent_kit.version=5与本地相同。MyStudio **未同步**（无task/execution/handoff写入）。版本状态：files_updated=false，http_verified=未单独执行，client_loaded=本会话已读取v5且workspace_context可用；未声称已上报回执。
 
@@ -546,4 +539,4 @@ IR推荐保持major1，新增**必需能力段** `WSC1`（目录kind=19、flags=
 
 交付文件已检查UTF-8无BOM、无连续四问号乱码、无替换字符/U+200B、代码围栏配对；I/O前缀的具体引用路径存在。Git分支仍为codex/workspace-components，状态仅上述两个新增文件，源码无diff；未写Git索引或提交。此为文档静态核验，不替代实现后的编译与行为验收。
 
-提交由Claude代为执行，提交信息附文件清单和Co-Authored-By。评审Q1–Q10后再开始S1；本阶段停止在设计评审。
+提交由Claude代为执行，提交信息附文件清单和Co-Authored-By。此记录仅对应design-1；design-2已获准S1→S2，实施证据另见S1/S2报告。每步提交信息用WP-4-S<N>-commit-msg.txt，交叉文件则合并并说明原因。

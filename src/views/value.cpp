@@ -65,7 +65,7 @@ std::string narrow(const std::wstring &text) {
     return std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>>{}.to_bytes(text);
 }
 void setScalar(ui::Mount &factory, ui::Element &e, const std::string &name, const Value &v) {
-    if (name == "host")
+    if (name == "host" || name == "pane-key")
         return; // Identity belongs to the HOST table, never a widget setter.
     if (name == "item-key") {
         check(v.tag==4 && v.text=="id",ONEUI_VIEW_TYPE,"Builtin records use id keys");

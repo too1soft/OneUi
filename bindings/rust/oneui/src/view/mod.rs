@@ -5,6 +5,8 @@ mod callbacks;
 #[cfg(feature = "view-diagnostics")]
 pub mod diagnostics;
 mod host;
+mod scope;
+pub use scope::ScopeSegment;
 mod list;
 mod model;
 mod notifier;

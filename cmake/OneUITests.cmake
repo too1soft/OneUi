@@ -15,7 +15,7 @@ function(oneui_register_core_tests)
     find_package(Python3 COMPONENTS Interpreter REQUIRED)
     if(TARGET oneui-viewc)
         include(${PROJECT_SOURCE_DIR}/cmake/OneUIViewTests.cmake)
-        foreach(suite schema diagnostics binary overlay rust)
+        foreach(suite schema diagnostics binary overlay rust workspace)
             add_test(NAME oneui_viewc_${suite}_tests COMMAND "${Python3_EXECUTABLE}" -B
                 "${PROJECT_SOURCE_DIR}/tests/viewc/test_${suite}.py"
                 "$<TARGET_FILE:oneui-viewc>" "${CMAKE_CURRENT_BINARY_DIR}/viewc-tests")

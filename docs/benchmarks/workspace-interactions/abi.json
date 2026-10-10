@@ -1,0 +1,17 @@
+{
+  "passed": true,
+  "target": "E:\\project\\byname\\oneui-views\\build\\cargo-target",
+  "library": "E:\\project\\byname\\oneui-views\\build\\capture",
+  "negative_tests_requested": false,
+  "results": [
+    {
+      "name": "baseline",
+      "passed": true,
+      "exit_code": 0,
+      "seconds": 3.532,
+      "layout_checks": 1237,
+      "function_signatures": 617,
+      "diagnostic": "   Compiling oneui-sys v0.1.0 (E:\\project\\byname\\oneui-views\\bindings\\rust\\oneui-sys)\n   Compiling oneui-abi-tests v0.1.0 (E:\\project\\byname\\oneui-views\\bindings\\rust\\oneui-abi-tests)\nwarning: oneui-abi-tests@0.1.0: cl: 命令行 warning D9025 :正在重写“/W4”(用“/W3”)\n    Finished `dev` profile [unoptimized] target(s) in 3.37s\nRUNNING ALL TESTS\nPASSED 1237 tests\nPASSED view union layout and four-tag roundtrip\nPASSED 617 compiler-checked function signatures\n"
+    }
+  ]
+}

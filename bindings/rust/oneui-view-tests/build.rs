@@ -19,7 +19,7 @@ fn main() {
             root.join(format!("tests/viewc/Rust.{extension}")).display()
         );
     }
-    let status = Command::new(viewc)
+    let status = Command::new(&viewc)
         .arg("--emit")
         .arg("rust")
         .arg("--input")
@@ -33,4 +33,12 @@ fn main() {
         .status()
         .expect("run host viewc");
     assert!(status.success(), "viewc failed");
+    println!("cargo:rerun-if-changed={}", root.join("tests/viewc/RustWorkspace.one").display());
+    let status = Command::new(&viewc)
+        .args(["--emit", "ir", "--input"])
+        .arg(root.join("tests/viewc/RustWorkspace.one"))
+        .arg("--schema").arg(root.join("tests/viewc/Rust.oneschema"))
+        .arg("--output").arg(out.join("workspace.oneview"))
+        .status().expect("run workspace viewc");
+    assert!(status.success(), "workspace viewc failed");
 }

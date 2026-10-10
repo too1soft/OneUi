@@ -44,6 +44,7 @@ std::string text(OneUiUtf8String);
 bool contains(const std::shared_ptr<Widget> &root, const Widget *target);
 void bindHostHandle(OneUiWidget *, const std::shared_ptr<Runtime> &);
 void unbindHostHandle(OneUiWidget *);
+void pruneHostHandles(OneUiView *);
 std::shared_ptr<Runtime> hostRuntime(OneUiWidget *);
 void registerMount(OneUiWindow *, const std::shared_ptr<Mount> &);
 bool closeWindowMounts(OneUiWindow *) noexcept;
@@ -54,7 +55,8 @@ struct OneUiViewMount {
 struct OneUiView {
     std::shared_ptr<oneui::views::Runtime> value;
     OneUiWidget root;
-    std::map<std::string, std::unique_ptr<OneUiWidget>> hosts;
+    std::map<const oneui::Widget *, std::unique_ptr<OneUiWidget>> hosts;
+    std::vector<std::unique_ptr<OneUiWidget>> retiredHosts;
     ~OneUiView() {
         for (auto &entry : hosts)
             oneui::capi::views::unbindHostHandle(entry.second.get());

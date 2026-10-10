@@ -1,0 +1,440 @@
+{
+  "kind": "build",
+  "logical_bytes": 32731569658,
+  "files": 32295,
+  "roots": [
+    {
+      "path": "E:\\project\\byname\\oneui\\build",
+      "exists": true,
+      "files": 7064,
+      "logical_bytes": 16368840570
+    },
+    {
+      "path": "E:\\project\\byname\\oneui\\out",
+      "exists": true,
+      "files": 12488,
+      "logical_bytes": 4801360816
+    },
+    {
+      "path": "E:\\project\\byname\\oneui\\bindings\\rust\\target",
+      "exists": true,
+      "files": 3336,
+      "logical_bytes": 2669014169
+    },
+    {
+      "path": "E:\\project\\byname\\oneui\\third_party\\skia\\out",
+      "exists": true,
+      "files": 5140,
+      "logical_bytes": 539832314
+    },
+    {
+      "path": "E:\\project\\byname\\oneui-views\\build",
+      "exists": true,
+      "files": 4267,
+      "logical_bytes": 8352521789
+    }
+  ],
+  "volumes": [
+    {
+      "root": "E:\\",
+      "free_bytes": 62549901312,
+      "total_bytes": 599843782656
+    }
+  ],
+  "violations": [
+    "Total logical size exceeds budget"
+  ],
+  "incomplete": [
+    "Skipped link: E:\\project\\byname\\oneui\\out\\x11-test-tools\\usr\\lib\\x86_64-linux-gnu\\libXfont2.so.2",
+    "E:\\project\\byname\\oneui-views\\build\\capture\\viewc-tests\\viewc-_ztlfb0p: [WinError 5] 拒绝访问。: 'E:\\\\project\\\\byname\\\\oneui-views\\\\build\\\\capture\\\\viewc-tests\\\\viewc-_ztlfb0p'",
+    "E:\\project\\byname\\oneui-views\\build\\capture\\viewc-tests\\viewc-vpiz1tj5: [WinError 5] 拒绝访问。: 'E:\\\\project\\\\byname\\\\oneui-views\\\\build\\\\capture\\\\viewc-tests\\\\viewc-vpiz1tj5'",
+    "E:\\project\\byname\\oneui-views\\build\\capture\\viewc-tests\\viewc-rt5_3vb7: [WinError 5] 拒绝访问。: 'E:\\\\project\\\\byname\\\\oneui-views\\\\build\\\\capture\\\\viewc-tests\\\\viewc-rt5_3vb7'",
+    "E:\\project\\byname\\oneui-views\\build\\capture\\viewc-tests\\viewc-nrqse2kj: [WinError 5] 拒绝访问。: 'E:\\\\project\\\\byname\\\\oneui-views\\\\build\\\\capture\\\\viewc-tests\\\\viewc-nrqse2kj'",
+    "E:\\project\\byname\\oneui-views\\build\\capture\\viewc-tests\\viewc-n80amp14: [WinError 5] 拒绝访问。: 'E:\\\\project\\\\byname\\\\oneui-views\\\\build\\\\capture\\\\viewc-tests\\\\viewc-n80amp14'",
+    "E:\\project\\byname\\oneui-views\\build\\capture\\viewc-tests\\viewc-fr3kdbgg: [WinError 5] 拒绝访问。: 'E:\\\\project\\\\byname\\\\oneui-views\\\\build\\\\capture\\\\viewc-tests\\\\viewc-fr3kdbgg'",
+    "E:\\project\\byname\\oneui-views\\build\\capture\\viewc-tests\\viewc-akgnxd9z: [WinError 5] 拒绝访问。: 'E:\\\\project\\\\byname\\\\oneui-views\\\\build\\\\capture\\\\viewc-tests\\\\viewc-akgnxd9z'",
+    "E:\\project\\byname\\oneui-views\\build\\capture\\viewc-tests\\viewc-9qim1tkb: [WinError 5] 拒绝访问。: 'E:\\\\project\\\\byname\\\\oneui-views\\\\build\\\\capture\\\\viewc-tests\\\\viewc-9qim1tkb'"
+  ],
+  "limits": {
+    "total_gib": 30.0,
+    "minimum_free_gib": 20
+  },
+  "extensions": {
+    ".pdb": {
+      "files": 533,
+      "bytes": 6888353792
+    },
+    ".pack": {
+      "files": 100,
+      "bytes": 6328247146
+    },
+    ".ilk": {
+      "files": 113,
+      "bytes": 4519634672
+    },
+    ".exe": {
+      "files": 529,
+      "bytes": 2618730025
+    },
+    ".obj": {
+      "files": 5387,
+      "bytes": 2506558530
+    },
+    "[none]": {
+      "files": 8552,
+      "bytes": 2358406253
+    },
+    ".lib": {
+      "files": 342,
+      "bytes": 2323418368
+    },
+    ".rlib": {
+      "files": 187,
+      "bytes": 1818906744
+    },
+    ".o": {
+      "files": 7840,
+      "bytes": 717420618
+    },
+    ".bin": {
+      "files": 252,
+      "bytes": 514226990
+    },
+    ".a": {
+      "files": 124,
+      "bytes": 445647274
+    },
+    ".dll": {
+      "files": 32,
+      "bytes": 376245696
+    },
+    ".cpp": {
+      "files": 384,
+      "bytes": 325970988
+    },
+    ".rmeta": {
+      "files": 247,
+      "bytes": 250547312
+    },
+    ".so": {
+      "files": 9,
+      "bytes": 182159656
+    },
+    ".exp": {
+      "files": 191,
+      "bytes": 78204779
+    },
+    ".tmp": {
+      "files": 1,
+      "bytes": 69206016
+    },
+    ".log": {
+      "files": 332,
+      "bytes": 52121415
+    },
+    ".s": {
+      "files": 2,
+      "bytes": 47591796
+    },
+    ".yaml": {
+      "files": 36,
+      "bytes": 46433429
+    },
+    ".idx": {
+      "files": 100,
+      "bytes": 32521344
+    },
+    ".ttf": {
+      "files": 8,
+      "bytes": 29464448
+    },
+    ".txt": {
+      "files": 308,
+      "bytes": 23352085
+    },
+    ".apk": {
+      "files": 6,
+      "bytes": 22172441
+    },
+    ".gz": {
+      "files": 7,
+      "bytes": 21720774
+    },
+    ".dat": {
+      "files": 3,
+      "bytes": 20936456
+    },
+    ".png": {
+      "files": 82,
+      "bytes": 19487047
+    },
+    ".otf": {
+      "files": 1,
+      "bytes": 16437364
+    },
+    ".json": {
+      "files": 681,
+      "bytes": 14573835
+    },
+    ".ninja": {
+      "files": 431,
+      "bytes": 10047690
+    },
+    ".tar": {
+      "files": 4,
+      "bytes": 8260887
+    },
+    ".zip": {
+      "files": 5,
+      "bytes": 7122601
+    },
+    ".h": {
+      "files": 917,
+      "bytes": 6929857
+    },
+    ".rev": {
+      "files": 100,
+      "bytes": 4635792
+    },
+    ".rs": {
+      "files": 89,
+      "bytes": 4335170
+    },
+    ".java": {
+      "files": 144,
+      "bytes": 3591996
+    },
+    ".ts": {
+      "files": 96,
+      "bytes": 3221934
+    },
+    ".sample": {
+      "files": 1388,
+      "bytes": 2558117
+    },
+    ".hpp": {
+      "files": 3,
+      "bytes": 1845301
+    },
+    ".c": {
+      "files": 67,
+      "bytes": 1778259
+    },
+    ".d": {
+      "files": 400,
+      "bytes": 1234576
+    },
+    ".lock": {
+      "files": 79,
+      "bytes": 1091784
+    },
+    ".deb": {
+      "files": 3,
+      "bytes": 996426
+    },
+    ".cmake": {
+      "files": 334,
+      "bytes": 933718
+    },
+    ".svg": {
+      "files": 28,
+      "bytes": 691586
+    },
+    ".html": {
+      "files": 51,
+      "bytes": 551813
+    },
+    ".patch": {
+      "files": 2,
+      "bytes": 413362
+    },
+    ".md": {
+      "files": 39,
+      "bytes": 343710
+    },
+    ".jar": {
+      "files": 6,
+      "bytes": 243453
+    },
+    ".out": {
+      "files": 20,
+      "bytes": 225936
+    },
+    ".qcow2": {
+      "files": 1,
+      "bytes": 197120
+    },
+    ".0": {
+      "files": 1,
+      "bytes": 182152
+    },
+    ".oneview": {
+      "files": 22,
+      "bytes": 128560
+    },
+    ".js": {
+      "files": 18,
+      "bytes": 125054
+    },
+    ".class": {
+      "files": 30,
+      "bytes": 124693
+    },
+    ".manifest": {
+      "files": 300,
+      "bytes": 118050
+    },
+    ".py": {
+      "files": 41,
+      "bytes": 117984
+    },
+    ".aar": {
+      "files": 2,
+      "bytes": 117166
+    },
+    ".idsig": {
+      "files": 3,
+      "bytes": 77961
+    },
+    ".dex": {
+      "files": 2,
+      "bytes": 76116
+    },
+    ".rsp": {
+      "files": 12,
+      "bytes": 72308
+    },
+    ".mdx": {
+      "files": 38,
+      "bytes": 71880
+    },
+    ".res": {
+      "files": 150,
+      "bytes": 70800
+    },
+    ".csv": {
+      "files": 14,
+      "bytes": 69352
+    },
+    ".tcl": {
+      "files": 23,
+      "bytes": 63892
+    },
+    ".tsx": {
+      "files": 12,
+      "bytes": 31450
+    },
+    ".rc": {
+      "files": 150,
+      "bytes": 30224
+    },
+    ".yml": {
+      "files": 38,
+      "bytes": 29392
+    },
+    ".timestamp": {
+      "files": 454,
+      "bytes": 21792
+    },
+    ".cjs": {
+      "files": 14,
+      "bytes": 20858
+    },
+    ".css": {
+      "files": 13,
+      "bytes": 19066
+    },
+    ".cmd": {
+      "files": 22,
+      "bytes": 10131
+    },
+    ".kts": {
+      "files": 4,
+      "bytes": 8526
+    },
+    ".bat": {
+      "files": 4,
+      "bytes": 6936
+    },
+    ".check_cache": {
+      "files": 48,
+      "bytes": 4116
+    },
+    ".gn": {
+      "files": 5,
+      "bytes": 3038
+    },
+    ".podspec": {
+      "files": 2,
+      "bytes": 2856
+    },
+    ".stamp": {
+      "files": 229,
+      "bytes": 2197
+    },
+    ".ps1": {
+      "files": 1,
+      "bytes": 2143
+    },
+    ".gradle": {
+      "files": 2,
+      "bytes": 2122
+    },
+    ".swift": {
+      "files": 2,
+      "bytes": 1600
+    },
+    ".sh": {
+      "files": 2,
+      "bytes": 1037
+    },
+    ".properties": {
+      "files": 4,
+      "bytes": 1028
+    },
+    ".modulemap": {
+      "files": 2,
+      "bytes": 1022
+    },
+    ".toml": {
+      "files": 3,
+      "bytes": 1009
+    },
+    ".tag": {
+      "files": 5,
+      "bytes": 885
+    },
+    ".xml": {
+      "files": 4,
+      "bytes": 792
+    },
+    ".pro": {
+      "files": 2,
+      "bytes": 780
+    },
+    ".one": {
+      "files": 1,
+      "bytes": 728
+    },
+    ".in": {
+      "files": 2,
+      "bytes": 562
+    },
+    ".verify_globs": {
+      "files": 7,
+      "bytes": 543
+    },
+    ".version": {
+      "files": 2,
+      "bytes": 476
+    },
+    ".err": {
+      "files": 9,
+      "bytes": 0
+    }
+  },
+  "manual_checks": [
+    "Verify ownership, retention age, active processes, unique configurations, video duration and log rotation separately."
+  ],
+  "status": "incomplete"
+}

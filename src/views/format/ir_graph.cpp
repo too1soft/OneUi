@@ -14,6 +14,9 @@ void validateGraph(const Image &im)
     auxiliary[3].resize(im.count(HOST));
     std::map<uint32_t, std::set<std::string>> references;
     uint32_t expandedNodes = 0;
+    std::vector<bool> workspaceScope{false};
+    std::vector<bool> explicitCalls;
+    std::vector<std::set<std::string>> scopeHosts(1);
     std::vector<uint32_t> hostInstances(im.count(HOST));
     auto claim = [](std::vector<uint32_t> &counts, uint32_t index, bool fresh) {
         return !fresh || ++counts[index] == 1;
@@ -95,6 +98,11 @@ void validateGraph(const Image &im)
                 auto &ch = rs[NODE][e[1]];
                 Node child;
                 child.tag = ch[0] == 1 ? im.components[ch[1]].name : "<structural>";
+                if (ch[0] == 2 && (rs[REPT][ch[9]][3] & repeatTransparent)) {
+                    auto body = rs[TMPL][rs[REPT][ch[9]][5]][1];
+                    require(rs[NODE][body][0] == 1, "BAD_IR: workspace item root");
+                    child.tag = im.components[rs[NODE][body][1]].name;
+                }
                 if (ch[0] == 2)
                     child.attrs["v-for"] = {};
                 logical.children.push_back(child);
@@ -103,7 +111,12 @@ void validateGraph(const Image &im)
             validateChildren(logical, c, {"<IR>", 1, 1});
             if (c.name == "NativeHost")
             {
-                require(scopes.size() == 1 && rs[HOST][n[9]][0] == node && claim(auxiliary[3], n[9], fresh) &&
+                const bool dynamic = scopes.size() > 1;
+                require(!dynamic || (std::all_of(explicitCalls.begin(), explicitCalls.end(), [](bool v) { return v; }) && workspaceScope.back() && im.count(WSC1) &&
+                            (rs[WSC1][0][1] & workspaceHosts)), "BAD_IR: dynamic host scope/capability");
+                require(bool(rs[HOST][n[9]][2] & 2) == dynamic &&
+                            scopeHosts.back().insert(im.strings[rs[HOST][n[9]][1]]).second &&
+                            rs[HOST][n[9]][0] == node && claim(auxiliary[3], n[9], fresh) &&
                             ++hostInstances[n[9]] == 1,
                         "BAD_IR: dynamic/duplicate host");
                 bool matched = false;
@@ -120,12 +133,30 @@ void validateGraph(const Image &im)
             lexical(scopes, r[3], r[2]);
             auto nested = scopes;
             nested.insert(nested.begin(), r[4]);
+            const bool transparent = r[3] & repeatTransparent;
+            if (transparent) {
+                require(im.strings[n[11]].find('/') == std::string::npos,
+                    "BAD_IR: workspace view-id contains slash");
+                require(std::all_of(explicitCalls.begin(), explicitCalls.end(), [](bool v) { return v; }),
+                    "BAD_IR: workspace import requires explicit view-id");
+                require(im.count(WSC1) && (rs[WSC1][0][1] & workspaceCollections) && parent != none &&
+                    rs[NODE][parent][0] == 1, "BAD_IR: transparent collection parent");
+                const auto &rule = im.components[rs[NODE][parent][1]].childRule;
+                require(rule == "pane-collection" || rule == "dock-collection", "BAD_IR: transparent collection rule");
+            }
+            workspaceScope.push_back(transparent);
+            scopeHosts.emplace_back();
             visitTemplate(r[5], nested, depth + 1);
+            scopeHosts.pop_back();
+            workspaceScope.pop_back();
         }
         else if (n[0] == 3)
         {
             auto &r = rs[CALL][n[9]];
             require(r[0] == node && claim(auxiliary[1], n[9], fresh), "BAD_IR: call ownership");
+            require(!r[5] || im.strings[n[11]].find('/') == std::string::npos,
+                "BAD_IR: workspace call-id contains slash");
+            explicitCalls.push_back(r[5] == 1);
             visitTemplate(r[1], scopes, depth + 1);
             std::set<std::string> supplied;
             for (uint32_t i = 0; i < r[3]; ++i)
@@ -143,6 +174,7 @@ void validateGraph(const Image &im)
                 require(found && slot[2] != none, "BAD_IR: unknown/empty supplied slot");
                 visitTemplate(slot[2], scopes, depth + 1);
             }
+            explicitCalls.pop_back();
         }
         else
         {

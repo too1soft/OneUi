@@ -1,6 +1,7 @@
 mod compile_fail;
 mod model;
 mod watcher;
+mod workspace;
 use model::*;
 use oneui::{view::*, Window, WindowOptions};
 use std::{
@@ -10,6 +11,7 @@ use std::{
 
 fn main() {
     let cases: &[(&str, fn())] = &[
+        ("dynamic scope and content lease", workspace::run),
         ("generated IR matches standalone IR", identical_ir),
         ("Rust VM lifecycle and two views", lifecycle),
         ("get/connect panic contains unwind", panics),

@@ -39,9 +39,13 @@ uint32_t Image::add(Section section, Record record)
     records[section].push_back(std::move(record));
     return count(section) - 1;
 }
+void requireWorkspace(Image &image, uint32_t bits) {
+    if (!image.count(WSC1)) image.add(WSC1, {1, bits, 0, 0});
+    else image.records[WSC1][0][1] |= bits;
+}
 Bytes writeImage(const Image &image)
 {
-    std::array<Bytes, 19> sections;
+    std::array<Bytes, 20> sections;
     Bytes strings;
     uint64_t offset = 0;
     for (const auto &s : image.strings)
@@ -54,17 +58,18 @@ Bytes writeImage(const Image &image)
     sections[STRS].insert(sections[STRS].end(), strings.begin(), strings.end());
     sections[SCHM] = image.schema.encode();
     sections[COMP] = encodeComponents(image.components);
-    for (uint32_t k = TMPL; k <= HOST; ++k)
+    const uint32_t last = image.count(WSC1) ? WSC1 : HOST;
+    for (uint32_t k = TMPL; k <= last; ++k)
         for (auto &r : image.records[k])
             for (auto v : r)
                 put(sections[k], v);
-    Bytes b(128 + 18 * 32, 0);
+    Bytes b(128 + last * 32, 0);
     const char magic[] = "ONEVIEW";
     std::copy(magic, magic + 8, b.begin());
     patch(b, 8, 1, 2);
     patch(b, 12, 128);
     patch(b, 24, 128, 8);
-    patch(b, 32, 18);
+    patch(b, 32, last);
     patch(b, 40, 1);
     patch(b, 44, image.root);
     auto sh = sha256(sections[SCHM]), ch = sha256(sections[COMP]);
@@ -72,7 +77,7 @@ Bytes writeImage(const Image &image)
     std::copy(ch.begin(), ch.end(), b.begin() + 80);
     patch(b, 112, 1);
     patch(b, 116, image.schema.root);
-    for (uint32_t k = STRS; k <= HOST; ++k)
+    for (uint32_t k = STRS; k <= last; ++k)
     {
         align(b);
         auto d = 128 + (k - 1) * 32;

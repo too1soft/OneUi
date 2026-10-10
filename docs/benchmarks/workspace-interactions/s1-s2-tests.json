@@ -1,0 +1,142 @@
+[
+  {
+    "name": "workspace IR",
+    "exit_code": 0,
+    "passed": true,
+    "seconds": 0.0,
+    "output": ""
+  },
+  {
+    "name": "compiler workspace",
+    "exit_code": 0,
+    "passed": true,
+    "seconds": 0.25,
+    "output": ".........\n----------------------------------------------------------------------\nRan 9 tests in 0.184s\n\nOK\n"
+  },
+  {
+    "name": "compiler binary",
+    "exit_code": 0,
+    "passed": true,
+    "seconds": 0.657,
+    "output": "...........\n----------------------------------------------------------------------\nRan 11 tests in 0.593s\n\nOK\n"
+  },
+  {
+    "name": "compiler diagnostics",
+    "exit_code": 0,
+    "passed": true,
+    "seconds": 0.421,
+    "output": "......\n----------------------------------------------------------------------\nRan 6 tests in 0.357s\n\nOK\n"
+  },
+  {
+    "name": "compiler overlay",
+    "exit_code": 0,
+    "passed": true,
+    "seconds": 0.11,
+    "output": "....\n----------------------------------------------------------------------\nRan 4 tests in 0.047s\n\nOK\n"
+  },
+  {
+    "name": "compiler schema",
+    "exit_code": 0,
+    "passed": true,
+    "seconds": 0.453,
+    "output": "........\n----------------------------------------------------------------------\nRan 8 tests in 0.396s\n\nOK\n"
+  },
+  {
+    "name": "compiler rust",
+    "exit_code": 0,
+    "passed": true,
+    "seconds": 0.109,
+    "output": "....\n----------------------------------------------------------------------\nRan 4 tests in 0.045s\n\nOK\n"
+  },
+  {
+    "name": "workspace_tree",
+    "exit_code": 0,
+    "passed": true,
+    "seconds": 0.032,
+    "output": "workspace tree: PASS\n"
+  },
+  {
+    "name": "workspace_scope",
+    "exit_code": 0,
+    "passed": true,
+    "seconds": 0.047,
+    "output": "workspace scope/host: PASS\n"
+  },
+  {
+    "name": "view_runtime",
+    "exit_code": 0,
+    "passed": true,
+    "seconds": 0.079,
+    "output": "9 runtime scenarios passed\n"
+  },
+  {
+    "name": "view_list",
+    "exit_code": 0,
+    "passed": true,
+    "seconds": 0.125,
+    "output": "11 typed record/delta/reload scenarios passed\n8 list scenarios passed\n"
+  },
+  {
+    "name": "view_reload",
+    "exit_code": 0,
+    "passed": true,
+    "seconds": 0.218,
+    "output": "PASS reload: 50 retained and 50 remove/restore cycles, leases/subscriptions/IME, schema/Host/reentry rollback\n"
+  },
+  {
+    "name": "view_c_api",
+    "exit_code": 0,
+    "passed": true,
+    "seconds": 0.14,
+    "output": "11 C ABI lifetime scenarios passed\n"
+  },
+  {
+    "name": "view_cpp_diff",
+    "exit_code": 0,
+    "passed": true,
+    "seconds": 0.046,
+    "output": "PASS C++ shared IR differential: tree/defaults/slot/CALL/input/IME/selection/events/lists\n"
+  },
+  {
+    "name": "dock_gesture",
+    "exit_code": 0,
+    "passed": true,
+    "seconds": 0.063,
+    "output": "PASS: shared dock hit geometry, strict guide exclusion, native tab zones, invalid geometry and C ABI parity.\n"
+  },
+  {
+    "name": "view_c_header",
+    "exit_code": 0,
+    "passed": true,
+    "seconds": 1.766,
+    "output": "c_header.c\n'vswhere.exe' is not recognized as an internal or external command,\noperable program or batch file.\n"
+  },
+  {
+    "name": "old WP3 reader rejects WSC1",
+    "exit_code": 1,
+    "passed": true,
+    "seconds": 0.016,
+    "output": "VERSION: unknown required section\n"
+  },
+  {
+    "name": "ABI sync",
+    "exit_code": 0,
+    "passed": true,
+    "seconds": 0.109,
+    "output": "-- OneUI C/Rust ABI and explicit FFI symbol manifest agree\n"
+  },
+  {
+    "name": "Rust view integration and ABI",
+    "exit_code": 0,
+    "passed": true,
+    "seconds": 8.047,
+    "output": "PASS dynamic scope and content lease\nPASS generated IR matches standalone IR\nPASS Rust VM lifecycle and two views\nPASS get/connect panic contains unwind\nPASS disconnect/drop panic releases once\nPASS host retains complete Rust owner\nPASS list RESET preserves/replaces identity\nPASS 50 IR reloads retain Rust VM connections\nPASS watcher debounces partial writes and joins on drop\nPASS compiler fixture positive\nPASS compiler fixture wrong_type\nPASS compiler fixture readonly\nPASS compiler fixture command_argument\nPASS compiler fixture view_send\nPASS compiler fixture notifier_sync\nPASS type/readonly/command/Send compile failures\n10 Rust view integration scenarios passed\nbaseline: PASS\n'vswhere.exe' is not recognized as an internal or external command,\noperable program or batch file.\n   Compiling oneui-sys v0.1.0 (E:\\project\\byname\\oneui-views\\bindings\\rust\\oneui-sys)\n   Compiling oneui v0.1.0 (E:\\project\\byname\\oneui-views\\bindings\\rust\\oneui)\n   Compiling oneui-view-tests v0.1.0 (E:\\project\\byname\\oneui-views\\bindings\\rust\\oneui-view-tests)\nwarning: constant `STATUS` is never used\n   --> E:\\project\\byname\\oneui-views\\build\\cargo-target\\debug\\build\\oneui-view-tests-3114a582c7faf685\\out/page.rs:214:15\n    |\n214 |     pub const STATUS: oneui::view::PropertyId = oneui::view::PropertyId::new(3);\n    |               ^^^^^^\n    |\n    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default\n\nwarning: constant `ID` is never used\n   --> E:\\project\\byname\\oneui-views\\build\\cargo-target\\debug\\build\\oneui-view-tests-3114a582c7faf685\\out/page.rs:231:15\n    |\n231 |     pub const ID: oneui::view::PropertyId = oneui::view::PropertyId::new(1);\n    |               ^^\n\nwarning: constant `TEXT` is never used\n   --> E:\\project\\byname\\oneui-views\\build\\cargo-target\\debug\\build\\oneui-view-tests-3114a582c7faf685\\out/page.rs:232:15\n    |\n232 |     pub const TEXT: oneui::view::PropertyId = oneui::view::PropertyId::new(2);\n    |               ^^^^\n\nwarning: `oneui-view-tests` (test \"views\") generated 3 warnings\n    Finished `test` profile [unoptimized] target(s) in 1.86s\n     Running tests\\main.rs (build\\cargo-target\\debug\\deps\\views-888ad40df0f2d4a1.exe)\n\nthread 'main' (39748) panicked at oneui-view-tests\\tests\\model.rs:71:9:\nassertion `left != right` failed: get panic\n  left: 1\n right: 1\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\nthread 'main' (39748) panicked at oneui-view-tests\\tests\\model.rs:100:9:\nassertion `left != right` failed: connect panic\n  left: 2\n right: 2\n\nthread 'main' (39748) panicked at oneui-view-tests\\tests\\model.rs:105:9:\nassertion `left != right` failed: disconnect panic\n  left: 3\n right: 3\n\nthread 'main' (39748) panicked at oneui-view-tests\\tests\\model.rs:65:9:\nassertion `left != right` failed: drop panic\n  left: 4\n right: 4\nOneUI GPU rendering enabled (OpenGL+Skia Ganesh, vsync=on)\n"
+  },
+  {
+    "name": "ordinary cargo test",
+    "exit_code": 1,
+    "passed": false,
+    "seconds": 3.672,
+    "output": "Rust dock owner retention and release passed\n\nrunning 1 test\ntest native_error_is_owned_sticky_and_thread_local ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\nrunning 108 tests on the process main thread\ntest keyed_revisions_preserve_identity_and_reject_inactive_producers ... ok\ntest component_app_owns_callbacks_and_rejects_invalid_size ... ok\ntest yoga_width_measurement_and_composition ... ok\ntest authoring_content_flex_and_owned_composition ... ok\ntest authoring_theme_replacement_remeasures_and_preserves_explicit_gap ... ok\ntest latest_signal_coalesces_and_cancels_on_the_window_thread ... ok\ntest popup_closed_callback_is_edge_triggered_and_can_unregister ... ok\ntest widget_size_callback_can_clear_its_own_registration ... ok\ntest floating_frame_keyboard_resize_is_scoped_and_disabled_while_docked ... ok\ntest dock_surface_reparents_native_content_and_preserves_float_input_focus ... ok\ntest focus_bookmarks_are_weak_and_reject_hidden_or_unmounted_targets ... ok\ntest slider_worker_progress_is_coalesced_and_lifetime_safe ... ok\ntest slider_values_and_input_callbacks_have_independent_lifetimes ... ok\ntest slider_callback_ignores_unknown_phases_and_contains_panics ... ok\ntest scoped_commands_release_contexts_and_preserve_utf8_positions ... ok\ntest command_callback_can_drop_its_own_registration ... ok\ntest application_cursor_style_requires_both_user_consent_and_an_application_frame ... ok\ntest client_size_callback_preserves_logical_dimensions ... ok\ntest activation_callback_preserves_native_active_state ... ok\ntest file_drop_callback_owns_utf8_paths_and_logical_point ... ok\ntest programmatic_terminal_paste_uses_native_paste_callback ... ok\ntest time_series_inspection_callback_preserves_index_and_pin_state ... ok\ntest time_series_chart_safe_binding_keeps_gaps_thresholds_and_handle_lifetime_safe ... ok\ntest remote_text_input_callback_preserves_committed_utf8 ... ok\ntest window_default_font_can_be_changed_through_window_and_dispatcher ... ok\ntest reports_panics_caught_at_callback_boundaries ... ok\ntest interaction_trace_observer_reports_callbacks_without_changing_behavior ... ok\ntest application_interaction_trace_uses_the_same_isolated_observer ... ok\ntest interaction_trace_observer_panics_are_isolated_from_value_callbacks ... ok\ntest nested_void_command_is_ignored_instead_of_panicking ... ok\ntest window_raw_key_callback_reports_consumption_and_preserves_event_data ... ok\ntest window_raw_key_callback_does_not_consume_null_or_panicking_handlers ... ok\ntest creates_hidden_window_through_utf8_abi ... ok\ntest runtime_fullscreen_and_minimum_client_size_round_trip_through_v21 ... ok\ntest file_dialog_options_have_safe_platform_defaults ... ok\ntest parses_double_nul_terminated_multi_file_dialog_paths ... ok\ntest round_trips_window_placement_through_the_safe_binding ... ok\ntest window_owned_tray_has_a_safe_rust_lifecycle ... FAILED\ntest close_callback_intercepts_close_to_tray_before_window_destruction ... FAILED\ntest mounts_rust_composed_content_into_a_hidden_window ... FAILED\ntest configures_resizable_split_view_through_safe_binding ... FAILED\ntest split_callback_survives_owner_destruction ... FAILED\ntest split_callback_reentry_and_panic_are_contained ... ok\ntest applies_css_theme_to_semantic_widget_nodes ... FAILED\ntest mounts_a_styled_interactive_surface_with_native_hover_states ... FAILED\ntest configures_a_native_reorderable_grid_without_product_geometry ... ok\ntest reports_stack_content_extent_for_scroll_view_composition ... ok\ntest mounts_safe_inventory_controls_with_structured_utf8_list_items ... FAILED\ntest retains_text_field_change_callbacks_through_programmatic_updates ... FAILED\ntest mounts_stateful_native_setting_controls ... FAILED\ntest mounts_utf8_workspace_tabs_and_reports_selection_changes ... FAILED\ntest tab_inline_edit_binding_retains_utf8_reason_and_releases_callback ... ok\ntest mounts_utf8_select_and_reports_selection_changes ... FAILED\ntest select_handle_replaces_background_choices_and_selection ... FAILED\ntest select_handle_rejects_updates_after_widget_destruction ... FAILED\ntest scroll_view_handle_updates_background_position_and_lifetime ... FAILED\ntest reports_native_list_selection_changes_to_rust ... FAILED\ntest supports_an_explicit_unselected_list_state ... FAILED\ntest mounts_virtual_list_with_large_structured_data_without_widget_per_row ... FAILED\ntest mounts_rich_virtual_list_rows_and_title_bar_leading_content ... FAILED\ntest mounts_multiline_log_view_with_structured_colored_lines ... FAILED\ntest mounts_and_removes_a_modal_dialog_from_an_overlay_host ... FAILED\ntest mounts_a_light_dismiss_native_context_menu ... FAILED\ntest mounts_native_tree_with_structured_id_based_items ... FAILED\ntest terminal_dirty_ranges_preserve_sparse_updates ... ok\ntest terminal_cells_preserve_extended_attributes_across_the_c_abi ... ok\ntest terminal_dirty_ranges_collapse_pathological_fragmentation ... ok\ntest mounts_terminal_grid_with_wide_cells_and_cursor ... FAILED\ntest exposes_terminal_caret_geometry_for_native_overlays ... FAILED\ntest terminal_handle_submits_a_worker_frame_on_the_window_thread ... FAILED\ntest terminal_handle_rejects_updates_after_the_view_is_destroyed ... FAILED\ntest remote_frame_normalizes_stride_and_rejects_short_buffers ... ok\ntest remote_frame_damage_normalizes_patches_and_rejects_invalid_batches ... ok\ntest remote_cursor_image_normalizes_stride_and_rejects_invalid_metadata ... ok\ntest remote_input_handle_submits_worker_cursor_updates_on_the_window_thread ... FAILED\ntest remote_input_handle_rejects_updates_after_region_destruction ... FAILED\ntest realtime_frame_handle_submits_worker_frames_on_the_window_thread ... FAILED\ntest realtime_frame_handle_rejects_updates_after_view_destruction ... FAILED\ntest label_handle_coalesces_worker_updates_on_the_window_thread ... FAILED\ntest scoped_labels_keep_background_status_without_replacing_foreground_pending_text ... FAILED\ntest scoped_label_checks_selection_at_paint_and_generation_before_retaining ... FAILED\ntest scoped_label_retention_does_not_extend_widget_lifetime ... ok\ntest label_rich_text_validates_utf8_ranges_and_coalesces_worker_revisions ... FAILED\ntest label_handle_rejects_updates_after_the_label_is_destroyed ... FAILED\ntest text_area_handle_coalesces_worker_updates_on_the_window_thread ... FAILED\ntest text_area_handle_rejects_updates_after_the_editor_is_destroyed ... FAILED\ntest progress_bar_clamps_values_and_worker_handle_is_lifetime_safe ... FAILED\ntest progress_bar_handle_rejects_updates_after_widget_destruction ... FAILED\ntest widget_handle_rejects_layout_updates_after_widget_destruction ... FAILED\ntest virtual_list_handle_coalesces_row_updates_on_the_window_thread ... FAILED\ntest virtual_list_handle_replaces_a_background_data_revision ... FAILED\ntest virtual_list_handle_rejects_updates_after_the_list_is_destroyed ... FAILED\ntest table_preserves_utf8_selection_and_coalesces_background_row_updates ... FAILED\ntest table_handle_replaces_rows_and_clears_selection_atomically ... FAILED\ntest row_models_commit_with_the_visual_revision_on_the_ui_thread ... FAILED\ntest rich_table_handle_publishes_selection_policy_on_window_thread ... FAILED\ntest table_handle_replaces_rows_and_selects_requested_index_atomically ... FAILED\ntest virtual_list_full_reset_discards_row_patches_from_the_previous_revision ... FAILED\ntest dispatcher_runs_work_on_the_window_thread ... FAILED\ntest dispatcher_defers_non_send_ui_work_without_crossing_threads ... FAILED\ntest window_state_allows_reentrant_ui_thread_raw_access ... ok\ntest dispatcher_runs_one_shot_animation_frame_on_the_window_thread ... FAILED\ntest dispatcher_cancels_queued_work_when_window_closes ... FAILED\ntest view.values_and_borrowing ... ok\ntest view.panics_and_zero_outputs ... ok\ntest view.callback_reentry ... ok\ntest view.leases_release_once ... ok\ntest view.stable_list_deltas ... ok\n\ntest result: FAILED. 54 passed; 54 failed; 0 ignored; 0 filtered out\n'vswhere.exe' is not recognized as an internal or external command,\noperable program or batch file.\n   Compiling oneui-sys v0.1.0 (E:\\project\\byname\\oneui-views\\bindings\\rust\\oneui-sys)\n   Compiling oneui v0.1.0 (E:\\project\\byname\\oneui-views\\bindings\\rust\\oneui)\nwarning: unused import: `super::*`\n   --> oneui\\src\\tray.rs:299:9\n    |\n299 |     use super::*;\n    |         ^^^^^^^^\n    |\n    = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default\n\nwarning: `oneui` (test \"oneui-main-thread-tests\") generated 1 warning (run `cargo fix --test \"oneui-main-thread-tests\"` to apply 1 suggestion)\n    Finished `test` profile [unoptimized] target(s) in 2.11s\n     Running tests\\dock_session.rs (build\\cargo-target\\debug\\deps\\dock_session-ad24b8b55fb13c9e.exe)\n     Running tests\\native_error.rs (build\\cargo-target\\debug\\deps\\native_error-1b788642180cf5e9.exe)\n     Running src\\main_thread_tests.rs (build\\cargo-target\\debug\\deps\\oneui_main_thread_tests-aaf1c64a47bae842.exe)\nOneUI GPU rendering enabled (OpenGL+Skia Ganesh, vsync=on)\nOneUI GPU rendering enabled (OpenGL+Skia Ganesh, vsync=on)\nOneUI GPU rendering enabled (OpenGL+Skia Ganesh, vsync=on)\nOneUI GPU rendering enabled (OpenGL+Skia Ganesh, vsync=on)\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:385:39:\nslider test callback\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:644:59:\ncallback failed\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:721:39:\ntrace observer failed\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:818:31:\nwindow shortcut failed\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:920:9:\nassertion failed: window.set_tray_enabled(true)\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:954:44:\nwindow test lock: PoisonError { .. }\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:976:44:\nwindow test lock: PoisonError { .. }\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:992:44:\nwindow test lock: PoisonError { .. }\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:1019:44:\nwindow test lock: PoisonError { .. }\n\nthread 'main' (60540) panicked at oneui\\src\\layout\\split_view.rs:263:21:\nexpected split callback panic\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:1028:44:\nwindow test lock: PoisonError { .. }\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:1054:44:\nwindow test lock: PoisonError { .. }\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:1144:44:\nwindow test lock: PoisonError { .. }\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:1174:44:\nwindow test lock: PoisonError { .. }\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:1203:44:\nwindow test lock: PoisonError { .. }\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:1224:44:\nwindow test lock: PoisonError { .. }\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:1262:44:\nwindow test lock: PoisonError { .. }\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:1281:44:\nwindow test lock: PoisonError { .. }\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:1312:44:\nwindow test lock: PoisonError { .. }\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:1330:44:\nwindow test lock: PoisonError { .. }\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:1368:44:\nwindow test lock: PoisonError { .. }\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:1391:44:\nwindow test lock: PoisonError { .. }\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:1412:44:\nwindow test lock: PoisonError { .. }\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:1458:44:\nwindow test lock: PoisonError { .. }\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:1486:44:\nwindow test lock: PoisonError { .. }\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:1511:44:\nwindow test lock: PoisonError { .. }\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:1541:44:\nwindow test lock: PoisonError { .. }\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:1584:44:\nwindow test lock: PoisonError { .. }\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:1707:44:\nwindow test lock: PoisonError { .. }\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:1761:44:\nwindow test lock: PoisonError { .. }\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:1780:44:\nwindow test lock: PoisonError { .. }\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:1819:44:\nwindow test lock: PoisonError { .. }\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:1912:44:\nwindow test lock: PoisonError { .. }\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:1950:44:\nwindow test lock: PoisonError { .. }\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:1971:44:\nwindow test lock: PoisonError { .. }\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:2017:44:\nwindow test lock: PoisonError { .. }\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:2032:44:\nwindow test lock: PoisonError { .. }\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:2055:44:\ncalled `Result::unwrap()` on an `Err` value: PoisonError { .. }\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:2080:44:\ncalled `Result::unwrap()` on an `Err` value: PoisonError { .. }\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:2123:44:\nwindow test lock: PoisonError { .. }\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:2158:44:\nwindow test lock: PoisonError { .. }\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:2172:44:\nwindow test lock: PoisonError { .. }\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:2195:44:\nwindow test lock: PoisonError { .. }\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:2209:44:\nwindow test lock: PoisonError { .. }\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:2234:44:\nwindow test lock: PoisonError { .. }\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:2244:44:\nwindow test lock: PoisonError { .. }\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:2265:44:\nwindow test lock: PoisonError { .. }\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:2323:44:\nwindow test lock: PoisonError { .. }\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:2353:44:\nwindow test lock: PoisonError { .. }\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:2373:44:\nwindow test lock: PoisonError { .. }\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:2427:44:\nwindow test lock: PoisonError { .. }\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:2458:44:\ncalled `Result::unwrap()` on an `Err` value: PoisonError { .. }\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:2497:44:\nwindow test lock: PoisonError { .. }\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:2520:44:\nwindow test lock: PoisonError { .. }\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:2553:44:\nwindow test lock: PoisonError { .. }\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:2591:44:\nwindow test lock: PoisonError { .. }\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:2617:44:\nwindow test lock: PoisonError { .. }\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:2647:44:\nwindow test lock: PoisonError { .. }\n\nthread 'main' (60540) panicked at oneui\\src\\binding_tests.rs:2667:44:\nwindow test lock: PoisonError { .. }\n\nthread 'main' (60540) panicked at oneui\\src\\view\\adapter_tests.rs:20:13:\ngetter panic\n\nthread 'main' (60540) panicked at oneui\\src\\view\\adapter_tests.rs:24:13:\nsetter panic\n\nthread 'main' (60540) panicked at oneui\\src\\view\\adapter_tests.rs:32:13:\ncommand panic\nerror: test failed, to rerun pass `-p oneui --test oneui-main-thread-tests`\n\nCaused by:\n  process didn't exit successfully: `E:\\project\\byname\\oneui-views\\build\\cargo-target\\debug\\deps\\oneui_main_thread_tests-aaf1c64a47bae842.exe` (exit code: 1)\n"
+  }
+]

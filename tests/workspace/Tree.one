@@ -1,0 +1,7 @@
+<template view-model="TerminalWorkspace">
+    <PaneGrid view-id="grid">
+        <Pane view-id="panes" v-for="p in panes" :key="p.id" :pane-key="p.id">
+            <NativeHost host="terminal"/>
+        </Pane>
+    </PaneGrid>
+</template>

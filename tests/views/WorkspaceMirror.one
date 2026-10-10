@@ -1,0 +1,8 @@
+<template view-model="Root">
+  <DockWorkspace view-id="mirrorGrid">
+    <DockItem view-id="mirrors" v-for="p in rows" :key="p.id" :pane-key="p.id">
+      <PanelHeader/>
+      <PanelBody><NativeHost host="terminal"/></PanelBody>
+    </DockItem>
+  </DockWorkspace>
+</template>

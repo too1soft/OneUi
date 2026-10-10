@@ -22,6 +22,7 @@ void Runtime::initialize(const OneUiViewModelVTable *table, void *vm, bool share
         else styles->replace(css);
         root = build(image.records[TMPL][image.root][1], {rootScope});
         update(root);
+        prepareWorkspaceIndex();
         activate(root);
         connect(rootScope);
         building = false;
@@ -44,7 +45,11 @@ std::shared_ptr<Instance> Runtime::build(uint32_t node, const Scopes &context, c
             const auto &slot = image.records[SLOT][call[2] + i];
             supplied.emplace(image.strings[slot[1]], SlotBody{slot[2], context});
         }
-        result = build(image.records[TMPL][call[1]][1], context, supplied);
+        auto savedPrefix = callPrefix;
+        if (image.count(WSC1)) callPrefix += image.strings[n[11]] + "/";
+        try { result = build(image.records[TMPL][call[1]][1], context, supplied); }
+        catch (...) { callPrefix = std::move(savedPrefix); throw; }
+        callPrefix = std::move(savedPrefix);
         if (scopeClasses.count(n[8]))
             factory.set(result->element, "class", scopeClasses.at(n[8]));
         install(result, node, context);
@@ -68,6 +73,8 @@ std::shared_ptr<Instance> Runtime::build(uint32_t node, const Scopes &context, c
     result->node = node;
     result->scopes = context;
     if (n[0] == 2) {
+        result->transparent = image.records[REPT][n[9]][3] & repeatTransparent;
+        result->repeatId = callPrefix + image.strings[n[11]];
         result->element = factory.make("Column");
         repeat(result);
         return result;
@@ -75,7 +82,7 @@ std::shared_ptr<Instance> Runtime::build(uint32_t node, const Scopes &context, c
     std::vector<ui::Element> children;
     for (uint32_t i = 0; i < n[4]; ++i) {
         auto child = build(image.records[EDGE][n[3] + i][1], context, slots);
-        children.push_back(child->element);
+        if (!child->transparent) children.push_back(child->element);
         child->parent = result;
         result->children.push_back(child);
     }
@@ -87,7 +94,15 @@ std::shared_ptr<Instance> Runtime::build(uint32_t node, const Scopes &context, c
         result->element.classes = classes;
         styles->add(result->element);
         const auto &record = image.records[HOST][n[9]];
-        hosts.emplace(image.strings[record[1]], host);
+        if (!(record[2] & 2)) hosts.emplace(image.strings[record[1]], host);
+    } else if (type == "PaneGrid" || type == "DockWorkspace") {
+        result->element = ui::Element(ui::Node(std::make_shared<View>()), type);
+        result->element.classes = classes;
+        styles->add(result->element);
+        workspaceChildren(result);
+    } else if (type == "Pane" || type == "DockItem") {
+        result->element = factory.make("Column", children, classes);
+        result->element.component = type;
     } else
         result->element = factory.make(type, children, classes);
     if (n[10] != none) {
@@ -188,74 +203,6 @@ void Runtime::apply(const std::shared_ptr<Instance> &instance, Binding &binding)
     }
     instance->applying = false;
 }
-void Runtime::repeat(const std::shared_ptr<Instance> &instance) {
-    Observation observation(*this, instance);
-    const auto &r = image.records[REPT][image.records[NODE][instance->node][9]];
-    auto &items = list(instance->scopes.at(r[3] & 0xffff), r[1]);
-    // Child-property notifications do not change list identity or order.
-    // Keep their widget tree and only visit dirty descendants. A shared list
-    // consumer may have refreshed first, so compare serials, not dirty bits.
-    if (instance->repeatSource == &items && instance->repeatSerial == items.serial) {
-        for (auto &row : instance->rows)
-            update(row.second);
-        return;
-    }
-    std::map<std::string, std::shared_ptr<Instance>> next;
-    std::vector<std::shared_ptr<Widget>> widgets;
-    auto stack = instance->element.as<Stack>();
-    for (size_t i = 0; i < items.keys.size(); ++i) {
-        auto found = instance->rows.find(items.keys[i]);
-        std::shared_ptr<Instance> row;
-        if (found != instance->rows.end() && found->second->scopes.front() == items.items[i])
-            row = found->second;
-        else {
-            auto nested = instance->scopes;
-            nested.insert(nested.begin(), items.items[i]);
-            row = build(image.records[TMPL][r[5]][1], nested);
-        }
-        widgets.push_back(row->element.widget);
-        row->parent = instance;
-        update(row);
-        next.emplace(items.keys[i], std::move(row));
-    }
-    if (stack->children() == widgets && instance->rows == next) {
-        instance->repeatSource = &items;
-        instance->repeatSerial = items.serial;
-        return;
-    }
-    auto cleanupFlex = [stack, widgets] {
-        for (const auto &widget : widgets)
-            if (std::find(stack->children().begin(), stack->children().end(), widget) ==
-                stack->children().end())
-                stack->clearFlex(widget);
-    };
-    if (staging)
-        rollbacks.push_back(cleanupFlex);
-    for (const auto &row : next)
-        if (std::find(stack->children().begin(), stack->children().end(),
-                      row.second->element.widget) == stack->children().end())
-            stack->setFlex(row.second->element.widget, row.second->element.flex);
-    auto prepared = stack->prepareChildren(std::move(widgets));
-    auto commit = [instance, stack, prepared, source=&items, serial=items.serial,
-                   next = std::move(next)]() mutable {
-        for (const auto &row : instance->rows)
-            if (!next.count(row.first) || next.at(row.first) != row.second)
-                try {
-                    stack->clearFlex(row.second->element.widget);
-                } catch (...) {
-                }
-        prepared->commit();
-        instance->rows.swap(next);
-        instance->repeatSource = source;
-        instance->repeatSerial = serial;
-        if (instance->published)
-            activate(instance);
-    };
-    if (staging && instance->published)
-        commits.push_back(std::move(commit));
-    else
-        commit();
-}
 void Runtime::update(const std::shared_ptr<Instance> &instance) {
     alive();
     if (!instance->dirty)
@@ -301,5 +248,6 @@ void Runtime::update(const std::shared_ptr<Instance> &instance) {
         update(child);
     for (auto &row : instance->rows)
         update(row.second);
+    workspaceChildren(instance);
 }
 } // namespace oneui::views

@@ -1,0 +1,7 @@
+<template view-model="RustPage">
+  <PaneGrid view-id="grid">
+    <Pane view-id="panes" v-for="row in rows" :key="row.id" :pane-key="row.id">
+      <NativeHost host="terminal"/>
+    </Pane>
+  </PaneGrid>
+</template>

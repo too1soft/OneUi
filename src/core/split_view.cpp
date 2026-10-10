@@ -1,4 +1,5 @@
 #include "oneui/layout/split_view.h"
+#include "internal/split_geometry.h"
 
 #include <algorithm>
 #include <cmath>
@@ -329,14 +330,8 @@ float SplitView::constrainedRatio(float ratio) const {
         return ratio;
     }
 
-    const float totalMinimum = firstMinimumExtent_ + secondMinimumExtent_;
-    if (totalMinimum > available && totalMinimum > 0.0f) {
-        return firstMinimumExtent_ / totalMinimum;
-    }
-
-    const float minimumRatio = firstMinimumExtent_ / available;
-    const float maximumRatio = 1.0f - secondMinimumExtent_ / available;
-    return std::clamp(ratio, minimumRatio, maximumRatio);
+    return detail::splitAmount(available, ratio, firstMinimumExtent_, secondMinimumExtent_,
+                               detail::SplitShortage::MinimumShare) / available;
 }
 
 Rect SplitView::dividerHitRect() const {

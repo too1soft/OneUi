@@ -209,7 +209,7 @@ void validateImage(const Image &im)
         auto &p = im.schema.model(r[2]).property(r[1]);
         auto &m = im.schema.model(r[4]);
         index(TMPL, r[5]);
-        require(p.tag == 5 && p.item == m.id && m.key == r[6] && (r[3] >> 16) == 0 && im.records[TMPL][r[5]][2] == m.id,
+        require(p.tag == 5 && p.item == m.id && m.key == r[6] && ((r[3] >> 16) == 0 || ((r[3] >> 16) == 3 && im.count(WSC1))) && im.records[TMPL][r[5]][2] == m.id,
                 "BAD_IR: repeat model/key");
         span(r[7]);
     }
@@ -219,7 +219,7 @@ void validateImage(const Image &im)
         index(TMPL, r[1]);
         range(SLOT, r[2], r[3]);
         span(r[4]);
-        require(r[5] == 0, "BAD_IR: call flags");
+        require(r[5] == 0 || (r[5] == 1 && im.count(WSC1)), "BAD_IR: call flags");
     }
     for (auto &r : im.records[SLOT])
     {
@@ -250,12 +250,17 @@ void validateImage(const Image &im)
         require(std::any_of(im.records[TMPL].begin(), im.records[TMPL].end(), [&](auto &t) { return t[3] == r[0]; }),
                 "BAD_IR: unused CSS scope");
     }
+    require(im.count(WSC1) <= 1, "VERSION: WSC1 count");
+    if (im.count(WSC1)) {
+        const auto &w = im.records[WSC1][0];
+        require(w[0] == 1 && w[1] && !(w[1] & ~3u) && !w[2] && !w[3], "VERSION: WSC1 capabilities");
+    }
     std::set<std::string> hosts;
     for (auto &r : im.records[HOST])
     {
-        require(component(r[0]).name == "NativeHost" && r[2] <= 1, "BAD_IR: host");
+        require(component(r[0]).name == "NativeHost" && r[2] <= 3, "BAD_IR: host");
         sid(r[1]);
-        require(!im.strings[r[1]].empty() && hosts.insert(im.strings[r[1]]).second, "BAD_IR: host name");
+        require(!im.strings[r[1]].empty() && ((r[2] & 2) || hosts.insert(im.strings[r[1]]).second), "BAD_IR: host name");
         span(r[3]);
     }
     Schema builtins;

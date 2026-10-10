@@ -23,7 +23,7 @@ struct Candidate {
     Candidate(Runtime &r,oneview::Image image):owner(r),
         value(std::make_shared<Runtime>(std::move(image),r.factory.clipboard())),previous(r.scopes.size()) {
         for(auto &scope:r.scopes)snapshots.emplace_back(scope);
-        value->rootScope=r.rootScope;value->scopes=r.scopes;
+        value->rootScope=r.rootScope;value->scopes=r.scopes;value->renderScopes=r.renderScopes;
     }
     ~Candidate() {
         if(!committed) {
@@ -41,6 +41,7 @@ struct Candidate {
         for(auto &scope:value->scopes) {scope->values.clear();scope->observers.clear();scope->dirty.clear();}
         value->root=value->build(value->image.records[oneview::TMPL][value->image.root][1],{value->rootScope});
         value->update(value->root);
+        value->prepareWorkspaceIndex();
         owner.alive();
         check(owner.error.sequence==errors,owner.error.result,"Callback failed during reload staging");
     }
@@ -101,6 +102,7 @@ void Runtime::reload(oneview::Image replacement) {
         scopeClasses=std::move(candidate.value->scopeClasses);
         root=std::move(nextRoot);hosts=std::move(candidate.value->hosts);
         scopes=std::move(candidate.value->scopes);
+        renderScopes=std::move(candidate.value->renderScopes);
         modelWrites=std::move(candidate.value->modelWrites);
         *styles=std::move(*candidate.value->styles);
         candidate.committed=true;
@@ -134,6 +136,7 @@ void Runtime::reload(oneview::Image replacement) {
             }
         };
         visit(rootScope);
+        for (const auto &[_, scope] : renderScopes) visit(scope);
         for(auto &scope:scopes)if(!reachable.count(scope.get()))closeScope(scope);
         scopes.erase(std::remove_if(scopes.begin(),scopes.end(),
             [](const auto &scope){return scope->closed;}),scopes.end());

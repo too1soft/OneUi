@@ -81,6 +81,7 @@ OneUiViewResult oneui_view_flush(OneUiView *view) {
         const auto sequence = value->error.sequence;
         try {
             value->flush();
+            pruneHostHandles(view);
         } catch (const Failure &e) {
             if (value->error.sequence == sequence)
                 value->fail(e.result, e.what());

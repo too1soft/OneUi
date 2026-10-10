@@ -51,7 +51,7 @@ Image readImage(const Bytes &b)
         require(e.offset % 8 == 0 && e.offset >= dir + uint64_t(nd) * 32 && e.offset <= b.size() &&
                     e.length <= b.size() - e.offset,
                 "BAD_IR: section range/alignment");
-        if (e.kind < STRS || e.kind > HOST)
+        if (e.kind < STRS || e.kind > WSC1)
             require(!e.flags, "VERSION: unknown required section");
         else
         {
@@ -78,7 +78,7 @@ Image readImage(const Bytes &b)
     require(end == b.size(), "BAD_IR: undeclared trailing data");
     for (auto e : entries)
     {
-        if (e.kind < STRS || e.kind > HOST)
+        if (e.kind < STRS || e.kind > WSC1)
             continue;
         Cursor c(b, size_t(e.offset), size_t(e.length));
         if (e.kind == STRS)

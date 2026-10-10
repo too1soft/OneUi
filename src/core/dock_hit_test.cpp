@@ -1,5 +1,6 @@
 #include "oneui/layout/dock_model.h"
 #include <algorithm>
+#include "internal/split_geometry.h"
 #include <array>
 #include <cmath>
 
@@ -53,9 +54,7 @@ std::optional<DockHit> dockHitTest(DockId source, Point point,
             if (x > .28f && x < .72f && y > .28f && y < .72f)
                 placement = DockHitPlacement::Swap;
             else {
-                const std::array<float, 4> distance{x, 1 - x, y, 1 - y};
-                placement = direction(std::size_t(
-                    std::min_element(distance.begin(), distance.end()) - distance.begin()));
+                placement = direction(detail::nearestNormalizedEdge(x, y));
             }
         } else if (mode == DockHitMode::TabMerge) {
             // Preserve the native tab-session's established 20% edge targets.

@@ -614,3 +614,5 @@ oneui_view_notify
 oneui_view_notify_list
 oneui_view_protocol_version
 oneui_view_root
+
+oneui_view_resolve_scope

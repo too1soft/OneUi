@@ -5,6 +5,10 @@
 namespace oneui::ui::schema {
 enum class ValueType { None, Text, Boolean, Integer, Number, Strings, Columns, Rows, TabItems, Series };
 #define ONEUI_AUTHORING_COMPONENTS(X) \
+    X(PaneGrid, "workspace-collection", "", None) \
+    X(Pane, "workspace-item", "pane-key", None) \
+    X(DockWorkspace, "workspace-collection", "", None) \
+    X(DockItem, "workspace-item", "pane-key", None) \
     X(Workspace, "stack", "", None) \
     X(TitleBar, "stack", "", None) \
     X(NavigationRail, "stack", "", None) \

@@ -1,5 +1,6 @@
 #include "oneui/layout/dock_model.h"
 #include <algorithm>
+#include "internal/split_geometry.h"
 #include <cmath>
 
 namespace oneui {
@@ -26,22 +27,9 @@ void geometry(const DockNode &node, Rect bounds, float gap, const DockMinimum &m
                secondMin = dockMinimum(*node.second, gap, minimum);
     const auto a = horizontal ? firstMin.width : firstMin.height,
                b = horizontal ? secondMin.width : secondMin.height;
-    const auto amount = a + b <= available ? std::clamp(available * node.ratio, a, available - b)
-                                           : available * node.ratio;
-    auto first = bounds, second = bounds, divider = bounds;
-    if (horizontal) {
-        first.width = amount;
-        second.x += amount + gap;
-        second.width = available - amount;
-        divider.x += amount;
-        divider.width = gap;
-    } else {
-        first.height = amount;
-        second.y += amount + gap;
-        second.height = available - amount;
-        divider.y += amount;
-        divider.height = gap;
-    }
+    const auto amount = detail::splitAmount(available, node.ratio, a, b);
+    auto rects = detail::splitRects(bounds, gap, amount, horizontal);
+    auto first = rects.first, second = rects.second, divider = rects.divider;
     result.dividers.push_back({path, node.axis, divider});
     path.push_back(false);
     geometry(*node.first, first, gap, minimum, path, result);
@@ -56,9 +44,7 @@ Size dockMinimum(const DockNode &node, float gap, const DockMinimum &minimum) {
         return {};
     const auto a = dockMinimum(*node.first, gap, minimum),
                b = dockMinimum(*node.second, gap, minimum);
-    return node.axis == DockAxis::Horizontal
-               ? Size{a.width + b.width + gap, std::max(a.height, b.height)}
-               : Size{std::max(a.width, b.width), a.height + b.height + gap};
+    return detail::splitMinimum(a, b, gap, node.axis == DockAxis::Horizontal);
 }
 DockError dockGeometry(const DockNode &root, Rect bounds, float gap, const DockMinimum &minimum,
                        DockGeometry &result) {

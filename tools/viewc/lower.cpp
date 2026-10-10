@@ -20,6 +20,7 @@ uint32_t ViewCompiler::lower(Source &s, Node n, const std::vector<Scope> &scopes
         at.fail("REF: static identifier outside repeat required");
     auto index =
         image.add(NODE, {1, none, parent, 0, 0, 0, 0, image.sid(ref), s.scope, none, sourceSpan, image.sid(stable)});
+    const bool explicitId = n.attrs.count("view-id") != 0;
     n.attrs.erase("ref");
     n.attrs.erase("view-id");
     if (n.attrs.count("v-for"))
@@ -46,12 +47,23 @@ uint32_t ViewCompiler::lower(Source &s, Node n, const std::vector<Scope> &scopes
         for (auto &scope : scopes)
             if (scope.variable == variable)
                 at.fail("REPEAT_SCOPE: shadowed item variable");
+        bool transparent = false;
+        if (parent != none && image.records[NODE][parent][0] == 1) {
+            const auto &rule = image.components[image.records[NODE][parent][1]].childRule;
+            transparent = rule == "pane-collection" || rule == "dock-collection";
+        }
+        if (transparent && !explicitId) at.fail("WORKSPACE_SCOPE: explicit view-id required");
+        if (transparent && stable.find('/') != std::string::npos)
+            at.fail("WORKSPACE_SCOPE: view-id must not contain '/'");
         auto childScopes = scopes;
-        childScopes.insert(childScopes.begin(), {variable, item.id});
+        childScopes.insert(childScopes.begin(), {variable, item.id, transparent});
         n.attrs.erase("v-for");
         n.attrs.erase(":key");
+        rowHostNames.emplace_back();
         auto body = makeTemplate(s, n, childScopes, s.relative + ":" + path + ":repeat");
-        auto aux = image.add(REPT, {index, list.id, list.model, list.depth, item.id, body, item.key, span(s, keyAttr)});
+        rowHostNames.pop_back();
+        auto aux = image.add(REPT, {index, list.id, list.model, list.depth | (transparent ? repeatTransparent | repeatExplicit : 0u), item.id, body, item.key, span(s, keyAttr)});
+        if (transparent) requireWorkspace(image, workspaceCollections);
         image.records[NODE][index][0] = 2;
         image.records[NODE][index][9] = aux;
         return index;
@@ -89,9 +101,15 @@ uint32_t ViewCompiler::lower(Source &s, Node n, const std::vector<Scope> &scopes
             at.fail("CALL_MODEL: imported template must share current model");
         auto calleeScopes = scopes;
         calleeScopes.front().variable.clear();
+        const auto beginNodes = image.count(NODE);
         auto target = makeTemplate(child, child.root, calleeScopes, child.relative + ":" + path);
         active.erase(key);
-        auto call = image.add(CALL, {index, target, 0, 0, sourceSpan, 0});
+        const bool workspaceCall = scopes.front().workspace || std::any_of(
+            image.records[NODE].begin() + beginNodes, image.records[NODE].end(), [&](const auto &node) {
+                return node[0] == 2 && (image.records[REPT][node[9]][3] & repeatTransparent);
+            });
+        if (workspaceCall && !explicitId) at.fail("WORKSPACE_SCOPE: import requires explicit view-id");
+        auto call = image.add(CALL, {index, target, 0, 0, sourceSpan, workspaceCall ? 1u : 0u});
         std::map<std::string, std::vector<Node>> groups;
         for (auto ch : n.children)
         {
@@ -115,6 +133,16 @@ uint32_t ViewCompiler::lower(Source &s, Node n, const std::vector<Scope> &scopes
         }
         image.records[NODE][index][0] = 3;
         image.records[NODE][index][9] = call;
+        // Supplied slots can introduce workspace collections as well as the callee.
+        const bool slotWorkspace = std::any_of(image.records[NODE].begin() + beginNodes,
+            image.records[NODE].end(), [&](const auto &node) {
+                return node[0] == 2 && (image.records[REPT][node[9]][3] & repeatTransparent);
+            });
+        if (workspaceCall || slotWorkspace) {
+            if (!explicitId || stable.find('/') != std::string::npos)
+                at.fail("WORKSPACE_SCOPE: explicit slash-free import view-id required");
+            image.records[CALL][call][5] = 1;
+        }
         if (!n.attrs.empty())
         {
             try {

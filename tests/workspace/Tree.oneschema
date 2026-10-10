@@ -1,0 +1,22 @@
+model TerminalWorkspace {
+    r nodes: list<WorkspaceNode>
+    r groups: list<WorkspaceGroup>
+    r panes: list<TerminalPane>
+    r activeGroup: utf8
+    r activePane: utf8
+    r revision: i64
+    command dropRequested(source:utf8,target:utf8,edge:utf8,request:i64,revision:i64)
+    command ratioRequested(split:utf8,ratio:f64,request:i64,revision:i64)
+    command resizeSettled(pane:utf8,cols:i64,rows:i64,generation:i64)
+}
+model WorkspaceNode key id {
+    r id: utf8
+    r kind: utf8
+    r axis: utf8
+    r ratio: f64
+    r first: utf8
+    r second: utf8
+    r pane: utf8
+}
+model WorkspaceGroup key id { r id:utf8 r root:utf8 }
+model TerminalPane key id { r id:utf8 r closing:bool r closeRequest:i64 }

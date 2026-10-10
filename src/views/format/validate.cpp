@@ -7,6 +7,12 @@ void validateChildren(const Node &n, const ComponentContract &c, const Location 
 {
     auto rule = c.childRule;
     auto count = n.children.size();
+    if (rule == "pane-collection" || rule == "dock-collection") {
+        const auto expected = rule == "pane-collection" ? "Pane" : "DockItem";
+        for (const auto &child : n.children)
+            if (child.tag != expected)
+                at.fail("WORKSPACE_CHILDREN: expected direct stable item");
+    }
     if (rule == "leaf" && count)
         at.fail("CHILDREN: leaf component");
     if (rule == "one" && count != 1)

@@ -75,3 +75,24 @@ else()
 endif()
 add_custom_target(oneui_view_c_header_build ALL DEPENDS "${view_c_smoke}")
 add_test(NAME oneui_view_c_header_tests COMMAND "${view_c_smoke}")
+
+add_executable(oneui_workspace_tree_tests tests/workspace/tree_tests.cpp)
+target_link_libraries(oneui_workspace_tree_tests PRIVATE oneui_core)
+target_include_directories(oneui_workspace_tree_tests PRIVATE src)
+target_compile_definitions(oneui_workspace_tree_tests PRIVATE ONEUI_BUILDING_DLL)
+add_test(NAME oneui_workspace_tree_tests COMMAND oneui_workspace_tree_tests)
+
+add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/Workspace.oneview"
+    COMMAND oneui-viewc --emit ir --input "${PROJECT_SOURCE_DIR}/tests/views/Workspace.one"
+        --schema "${PROJECT_SOURCE_DIR}/tests/views/Runtime.oneschema"
+        --output "${CMAKE_CURRENT_BINARY_DIR}/Workspace.oneview"
+    DEPENDS oneui-viewc tests/views/Workspace.one tests/views/WorkspaceMirror.one tests/views/Runtime.oneschema VERBATIM)
+add_custom_target(oneui_workspace_scope_ir DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/Workspace.oneview")
+if(ONEUI_BUILD_STATIC)
+    add_executable(oneui_workspace_scope_tests tests/views/workspace_scope_tests.cpp)
+    target_link_libraries(oneui_workspace_scope_tests PRIVATE oneui_static)
+    target_include_directories(oneui_workspace_scope_tests PRIVATE src)
+    target_compile_definitions(oneui_workspace_scope_tests PRIVATE ONEUI_STATIC)
+    add_dependencies(oneui_workspace_scope_tests oneui_workspace_scope_ir)
+    add_test(NAME oneui_workspace_scope_tests COMMAND oneui_workspace_scope_tests "${CMAKE_CURRENT_BINARY_DIR}/Workspace.oneview")
+endif()

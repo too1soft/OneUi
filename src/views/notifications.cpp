@@ -174,6 +174,7 @@ void Runtime::flushPass() {
         {
             Callback transaction(*this, Phase::Read);
             update(root);
+            prepareWorkspaceIndex();
             alive();
             for (auto &commit : commits)
                 commit();

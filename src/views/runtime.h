@@ -55,6 +55,10 @@ struct Scope {
     std::map<uint32_t, uint64_t> versions;
     std::map<uint32_t, ListState> lists;
     std::map<uint32_t, std::vector<std::weak_ptr<Instance>>> observers;
+    // Render connections have instance identity independent of list-data leases.
+    bool renderScope = false;
+    std::vector<std::pair<std::string, std::string>> path;
+    std::weak_ptr<Scope> sourceScope;
 };
 using Scopes = std::vector<std::shared_ptr<Scope>>;
 struct Binding {
@@ -95,6 +99,9 @@ struct Instance {
     std::set<const Scope*> recordDirty;
     const ListState* repeatSource = nullptr;
     uint64_t repeatSerial = 0;
+    bool transparent = false;
+    std::string repeatId;
+    std::shared_ptr<std::map<std::string, std::shared_ptr<Instance>>> pendingRows;
 };
 enum class Phase { Idle, Read, Mutate, Connect, Cleanup };
 extern thread_local Runtime *callbackRuntime;
@@ -117,6 +124,9 @@ struct Runtime : std::enable_shared_from_this<Runtime> {
     std::shared_ptr<Instance> root;
     std::vector<std::shared_ptr<Scope>> scopes;
     std::map<std::string, std::shared_ptr<Widget>> hosts;
+    using ScopePath = std::vector<std::pair<std::string, std::string>>;
+    std::map<ScopePath, std::shared_ptr<Scope>> renderScopes;
+    std::string callPrefix;
     std::function<void()> schedule, detach;
     std::function<void()> republish;
     std::string externalCss;
@@ -167,6 +177,11 @@ struct Runtime : std::enable_shared_from_this<Runtime> {
     void install(const std::shared_ptr<Instance> &, uint32_t owner, const Scopes &);
     void wire(const std::shared_ptr<Instance> &);
     void repeat(const std::shared_ptr<Instance> &);
+    void prepareWorkspaceIndex();
+    void workspaceChildren(const std::shared_ptr<Instance> &);
+    std::shared_ptr<Scope> renderScope(const std::shared_ptr<Scope> &, const std::shared_ptr<Instance> &,
+                                     const std::string &key);
+    static std::string hostKey(const ScopePath &, const std::string &);
     void applyList(Instance &, const std::string &, ListState &);
     void applyTableRows(Instance &, ListState &);
 };

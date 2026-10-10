@@ -110,7 +110,15 @@ pub struct OneUiViewError {
     pub message: [c_char; 512],
 }
 
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct OneUiViewScopeSegment {
+    pub instance_id: OneUiUtf8String,
+    pub key: OneUiUtf8String,
+}
 extern "C" {
+    pub fn oneui_view_resolve_scope(view: *mut OneUiView, segments: *const OneUiViewScopeSegment,
+        segment_count: usize, out_scope: *mut *mut OneUiViewNotifier) -> i32;
     pub fn oneui_view_protocol_version() -> u32;
     pub fn oneui_view_mount_create(
         window: *mut OneUiWindow,

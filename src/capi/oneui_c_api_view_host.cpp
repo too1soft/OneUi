@@ -32,6 +32,14 @@ void unbindHostHandle(OneUiWidget *host) {
     std::lock_guard<std::mutex> lock(hostMutex);
     hostOwners.erase(host);
 }
+void pruneHostHandles(OneUiView *view) {
+    for (const auto &[_, handle] : view->hosts)
+        if (handle->widget && !std::any_of(view->value->hosts.begin(), view->value->hosts.end(),
+            [&](const auto &entry) { return entry.second == handle->widget; })) {
+            unbindHostHandle(handle.get());
+            handle->widget.reset();
+        }
+}
 std::shared_ptr<Runtime> hostRuntime(OneUiWidget *host) {
     std::shared_ptr<Runtime> value;
     {
@@ -43,6 +51,9 @@ std::shared_ptr<Runtime> hostRuntime(OneUiWidget *host) {
     check(bool(value), ONEUI_VIEW_CLOSED, "Host is not a live view host");
     value->onThread();
     value->alive();
+    check(std::any_of(value->hosts.begin(), value->hosts.end(),
+        [host](const auto &entry) { return entry.second == host->widget; }),
+        ONEUI_VIEW_CLOSED, "Host instance was removed");
     check(callbackPhase == Phase::Idle, ONEUI_VIEW_REENTRANT, "Host change during callback");
     return value;
 }
@@ -53,13 +64,29 @@ OneUiViewResult oneui_view_find_host(OneUiView *view, OneUiViewNotifier *scope,
     if (out)
         *out = nullptr;
     return call(__func__, [&] {
-        check(out && !scope, ONEUI_VIEW_INVALID_ARGUMENT, "WP3 supports only root host scope");
+        check(out, ONEUI_VIEW_INVALID_ARGUMENT, "Host output required");
         auto value = runtime(view);
         value->alive();
+        check(callbackPhase == Phase::Idle, ONEUI_VIEW_REENTRANT, "Host lookup during callback");
         auto key = text(name);
+        if (scope) {
+            auto [owner, row] = notifier(scope);
+            check(owner == value, ONEUI_VIEW_INVALID_ARGUMENT, "Scope belongs to another View");
+            check(row == value->rootScope || row->renderScope, ONEUI_VIEW_INVALID_ARGUMENT,
+                  "Host lookup requires root or workspace render scope");
+            key = Runtime::hostKey(row->path, key);
+        }
         auto found = value->hosts.find(key);
         check(found != value->hosts.end(), ONEUI_VIEW_NOT_FOUND, "Host not found");
-        auto &handle = view->hosts[key];
+        pruneHostHandles(view);
+        check(view->hosts.count(found->second.get()) || view->retiredHosts.size() + view->hosts.size() < 100000,
+            ONEUI_VIEW_LIMIT, "Host handle budget; recreate the View");
+        auto &handle = view->hosts[found->second.get()];
+        if (handle && !handle->widget) {
+            check(view->retiredHosts.size() + view->hosts.size() < 100000,
+                ONEUI_VIEW_LIMIT, "Retired host handle limit; recreate the View");
+            view->retiredHosts.push_back(std::move(handle));
+        }
         if (!handle) {
             handle = std::make_unique<OneUiWidget>();
             handle->widget = found->second;
