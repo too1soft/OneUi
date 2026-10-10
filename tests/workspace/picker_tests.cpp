@@ -1,4 +1,5 @@
 #include "oneui/ui_theme.h"
+#include "oneui/ui_native_theme.h"
 #include "oneui/layout/theme_scope.h"
 #include "oneui/controls/font_picker.h"
 #include "oneui/controls/media_picker.h"
@@ -20,6 +21,25 @@ void fonts() {
     check(palette.foreground && palette.foreground->r == 227 &&
           palette.background.color && palette.background.color->r == 24,
           "partial dark palette retains colors without selection/line tokens");
+    const auto native = ui::nativePalette(partial);
+    check(native.surface.r == 24 && native.ink.r == 227,
+          "native palette retains dark colors when optional tokens are absent");
+    for (const bool dark : {false, true}) {
+        StyleSheet sheet;
+        sheet.setCustomProperty("--surface", dark ? "#18201b" : "#ffffff");
+        sheet.setCustomProperty("--ink", dark ? "#e3eae5" : "#21302b");
+        sheet.setCustomProperty("--selection", dark ? "#35453b" : "#e7eee8");
+        Tabs tabs;
+        tabs.setItems({L"Active", L"Inactive"});
+        tabs.setFrame({0, 0, 300, 34});
+        ui::applyNativeTheme(tabs, sheet, false);
+        test_support::RecordingCanvas painted;
+        tabs.paint(painted);
+        check(!painted.fillRects.empty() && painted.fillRects.front().color.r == (dark ? 24 : 255),
+              "Tabs strip uses resolved light/dark surface through native theme adapter");
+        check(painted.fillRects.size() > 1 && painted.fillRects[1].color.r == (dark ? 53 : 231),
+              "Tabs selected item uses light/dark selection token");
+    }
     View root;root.setFrame({0,0,900,700});auto picker=std::make_shared<FontPicker>();root.add(picker);picker->setFrame({20,20,300,36});
     FontPickerConfig config;config.selected="missing";
     for(int i=0;i<1000;++i)config.items.push_back({"font"+std::to_string(i),L"Consolas",L"Font "+std::to_wstring(i),i!=0});

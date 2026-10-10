@@ -27,11 +27,17 @@ inline NativePalette nativePalette(const StyleSheet &sheet) {
     for (const auto &item : sheet.customProperties())
         tokens.setCustomProperty(item.first, item.second);
     std::string error;
-    if (!tokens.addRulesFromCss("native { background-color:var(--surface); color:var(--ink); "
-                                "placeholder-color:var(--muted); border-color:var(--line); "
-                                "selection-color:var(--selection); caret-color:var(--accent); "
-                                "content-background-color:var(--hover); }",
-                                &error))
+    // A partial palette is valid. One absent token must not discard all other
+    // resolved colors and silently turn native controls back to light defaults.
+    std::string css = "native {";
+    for (const auto &entry : {std::pair{"--surface", "background-color"},
+                             {"--ink", "color"}, {"--muted", "placeholder-color"},
+                             {"--line", "border-color"}, {"--selection", "selection-color"},
+                             {"--accent", "caret-color"}, {"--hover", "content-background-color"}}) {
+        if (sheet.customProperty(entry.first))
+            css += std::string(entry.second) + ":var(" + entry.first + ");";
+    }
+    if (!tokens.addRulesFromCss(css + "}", &error))
         return {};
     const auto box = tokens.resolve({"native", {}, 0});
     NativePalette p;
