@@ -1,10 +1,10 @@
 # 与语言无关的声明式视图：WP3 设计稿
 
-状态：**待 Claude 评审，仅设计，未实现**。版本：design-1，2026-10-10。
+状态：**design-2，Claude 有条件通过后的已裁决设计**。2026-10-10；design-1 提交 f393c5e。R1–R7 与 D1–D8 按 WP-3-design-review.md 落实；本轮仅实施 S1，S1 完成即暂停验收。
 
 本稿以 OneUI `2aa15e9be3fab90316bfa6c5447ee099e177aa55`、工作树 `E:/project/byname/oneui-views`、分支 `codex/language-neutral-views` 为依据。iShell 只读调查时 HEAD 为 `b4509dee67aca9fe74c39dbaefd8670b9079c89c`；其另一路 WP2b 可能继续移动文件，以下行号指本次读到的版本。
 
-任务依据：`E:/project/tauri/ishellpro-arch/docs/codex/工程整治与界面模板化-任务书.md` 第 0、2、3 节，第 5 节 WP3/WP4，第 9 节设计评审门禁。本稿的“必须”均为**推荐协议内部约束**，不是已获批准的实现决策；第 12 节列出需 Claude 裁决的事项。评审通过后才进入实现。
+任务依据：`E:/project/tauri/ishellpro-arch/docs/codex/工程整治与界面模板化-任务书.md` 第 0、2、3 节，第 5 节 WP3/WP4，第 9 节设计评审门禁。本稿的“必须”为经评审裁决的设计约束；第 12 节记录全部裁决。C ABI 在 S3 检查点冻结，本轮不实现运行时或语言绑定。
 
 ## 1. 现状调查与可复用边界
 
@@ -69,7 +69,7 @@
 ## 2. 目标管线与类型契约
 
 ```text
-.one + scoped CSS + .one.schema.json
+.one + scoped CSS + .oneschema
         │ 解析 / import 展开 / 组件和 VM 类型校验
         ▼
       typed IR ───────► .oneview（唯一可执行的视图描述）
@@ -84,43 +84,34 @@
 
 IR 没有语言源码、函数地址或可执行字节码。L4 只提供数据与命令，复杂计算在 VM；L5 不依赖 OneUI。WP4 注册新组件/语义事件，不能把 PaneGrid 的布局算法塞进 IR 或 VM。IR runtime 与现有 Mount 共用组件工厂、属性应用器和绘前队列，不引入每帧遍历的虚拟 DOM。
 
-### 2.1 schema 来源（待决 D1）
+### 2.1 schema 来源与语法（R5/R6，D1）
 
-推荐显式、语言无关 JSON sidecar：`SettingsBasic.one.schema.json`，由 `--schema` 指定；根 `.one` 的 view-model 是 schema 名称。import 默认继承调用者的契约；导入文件可声明同名契约或要求显式匹配的契约，不能以 C++ 类型名推断类型。不能从使用位置猜测可写性、命令参数、未使用字段或列表项结构。v1 不做 C++/Rust 源码反射。
+使用语言无关 sidecar `X.oneschema`，由 `--schema` 指定；根 `.one` 的 view-model 选择根 model。不解析 C++/Rust 代码，不从使用位置猜测字段或命令签名。import 默认共享调用者契约，重复模型名即诊断。
 
-```json
-{
-  "schema_version": 1,
-  "root": "SettingsBasic",
-  "models": [
-    {"name":"SettingsBasic", "properties":[
-      {"id":1,"name":"language","type":"i64","access":"rw"},
-      {"id":2,"name":"compact","type":"bool","access":"rw"},
-      {"id":3,"name":"status","type":"utf8","access":"r"},
-      {"id":4,"name":"themes","type":{"list":"ThemeItem"},"access":"r"}
-    ], "commands":[
-      {"id":1,"name":"reset","args":[],"result":"void"}
-    ]},
-    {"name":"ThemeItem", "key":"id", "properties":[
-      {"id":1,"name":"id","type":"utf8","access":"r"},
-      {"id":2,"name":"title","type":"utf8","access":"r"},
-      {"id":3,"name":"selected","type":"bool","access":"r"}
-    ], "commands":[
-      {"id":1,"name":"select","args":[],"result":"void"}
-    ]}
-  ]
+```text
+import "Common.oneschema"
+model SettingsBasic {
+  rw language: i64
+  rw compact: bool
+  r status: utf8
+  r themes: list<ThemeItem>
+  command reset()
+}
+model ThemeItem key id {
+  r id: utf8
+  r title: utf8
+  r selected: bool
+  command select()
 }
 ```
 
-ID 是显式非零 u32，属性和命令分开命名空间，各 model 内唯一；废弃 ID 不复用。模型 ID 按 UTF-8 名称字节序从 1 编号，仅在本份 schema 内使用；增删模型可能重排 ID，哈希必变化。属性名可为 `settings.language` 这种静态点分路径，整体对应一个 ID；运行期不查字符串、不沿指针反射。列表变量仅改变词法 VM 上下文，`item.title` 对应 ThemeItem 的 title；外层变量用 lexical depth 定位。非法/模糊捕获编译失败。
+语法：file = (import | model)*；import = `import "relative.oneschema"`；model = `model Name [key property] { member* }`；property = `(r|rw) name : type`；command = `command name ( [arg:type (,arg:type)*] ) [when boolProperty] [busy boolProperty]`。类型为 bool/i64/f64/utf8/list<Model>；命令参数只允许标量、结果固定 void。支持空白、可选分号和 `//` 行注释；名称限 ASCII 标识符，模型名可点分（内置 oneui.v1.*），属性名可点分表达静态路径。import 相对声明文件解析，检测循环、重复声明、未知类型、重复参数、无效 key/门控并报告行列。模板根必显式指定 view-model；schema import 允许共享多组 model，规范输出只包括选定根经 list 可达的闭包，未使用但可达字段全部参与哈希。
 
-属性标量为 bool/i64/f64/utf8，集合统一 list<model>。没有隐式 nullable，void 只供命令结果；需要“可选值”用显式 hasX + X。v-model 必须 rw 且类型精确匹配。i64→原生 int、f64→float 在边界检查范围/有限性，禁止静默截断整数。类型检查由编译器完成，运行时仍验证恶意或错误的 VM 返回。
+源文件不写 ID。编译器对可达 model 名按 UTF-8 字节序从 1 编号；每个 model 的属性名和命令名分别排序从 1 编号。属性/命令/模型是不同命名空间。任何契约变化需重生成，允许排序后的编号变化；禁止把 ID 当跨 schema 版本的永久身份。语言绑定从同一规范结果生成常量。
 
-v1 list 属性只允许 r；替换集合由 VM 自己完成并通知 RESET，不接受来源不明的 list 输入值。`true/false` 用在条件时进入 COND 常量，用在单向布尔属性时降为静态 PROP，不能用于 v-model 或命令。property 和 key 名解析后的 ID 进入 IR，原表达式只留源码映射。
+点分属性整体对应一个 ID，运行期不反射。列表变量引入 item VM 词法 scope，外层引用按 depth 定位。属性 bool/i64/f64/utf8；集合统一 list<model>、只读，替换后 RESET；没有 nullable，void 只作命令结果。v-model 必须 rw 且精确匹配。原生 int/float 转换检查范围和有限性；true/false 单向绑定降为静态 PROP，条件使用 COND 常量，不允许用于 v-model/命令。
 
-命令参数必须与组件事件签名完全匹配；v1 click/activate/delete 为无参、Tabs.close 为 utf8 key。新事件由注册表声明参数序列；不允许 IR 随意调用 VM 任意函数。命令同步返回协议状态，没有跨 ABI 的 Future；异步结果通过 VM 属性和 notify 送回。
-
-每个命令可在 schema 指定 `can_execute`、`running` 两个只读 bool 属性 ID（缺省分别 true/false），计入哈希。runtime 每次调用前检查缓存状态；Button.disabled 为显式 disabled OR !can_execute OR running。这保留 VmCommand 行为，C++ adapter 不再重复挂 click 订阅。`invoke` 执行期间同一 VM scope 的另一条可变回调也不能嵌套。
+命令签名须与事件一致；click/activate/delete 无参，Tabs.close 一个 utf8 key。门控示例 `command connect() when canConnect busy connecting`，两字段必须只读 bool，缺省分别 true/false。Button.disabled 为显式 disabled OR !can_execute OR running。invoke 同步返回协议状态，异步结果通过 VM 属性与 notify 回 UI。
 
 ### 2.2 复合属性映射
 
@@ -207,19 +198,19 @@ SMAP 行列从 1 开始，列以 UTF-8 字节计，end 为开区间；file 是�
 
 **schema 哈希用于契约一致性，不是模板文件校验或安全签名。** 修改 CSS、静态文字、节点结构不会改变 VM schema 哈希；修改属性/命令/列表项契约一定改变。loader 重新计算 SCHM/COMP 哈希，不信任头部声明；VM vtable 的 32 字节 schema_hash 必须与 SCHM 完全相等，所有 child vtable 也携带同一完整 schema 哈希和各自 model_id。
 
-SCHM canonical 格式（不依赖 JSON key 顺序或空白，不引用 STRS）：
+SCHM canonical 格式（不依赖 源声明顺序或空白，不引用 STRS）：
 
 1. 前缀 8 字节 ASCII `OVSCHM1` + NUL，随后 `root_model_id:U, model_count:U`。
 2. 模型按 UTF-8 名称字节序：`model_id:U, name:S, key_property_id:U, property_count:U, command_count:U`；S=`byte_len:U + UTF-8 原字节`，无 padding。名称限 ASCII 标识符/点分标识符，大小写敏感，不做 Unicode 归一化。
-3. 属性按显式 ID 升序：`id:U, name:S, tag:U, access:U, item_model_id:U`。tag=1 bool/2 i64/3 f64/4 utf8/5 list；access=1 r/3 rw；非 list 的 item_model_id=0；key 必为只读 utf8。
+3. 属性按编译器分配的 ID 升序：`id:U, name:S, tag:U, access:U, item_model_id:U`。tag=1 bool/2 i64/3 f64/4 utf8/5 list；access=1 r/3 rw；非 list 的 item_model_id=0；key 必为只读 utf8。
 4. 命令按 ID 升序：`id:U, name:S, result_tag:U(0=void), can_execute_id:U(0=缺省), running_id:U(0=缺省), argc:U`；再按参数顺序写 `name:S, tag:U, item_model_id:U`。v1 参数只允许四种标量，item_model_id=0；事件复杂记录扩展时需协议/组件契约新版本。
-5. 所有声明模型均纳入，包括当前模板未引用但根契约可达的模型；不可达模型编译时报错。递归 list schema v1 拒绝；嵌套非递归 list 支持。model 名、key 字段、读写性、参数顺序/名/类型、命令门控关系、增删字段、显式 ID 变化均改变哈希。注释、JSON 排版和声明顺序不改变哈希。
+5. 纳入选定根的可达模型闭包，包括模板未引用但根契约可达的字段；共享 import 中其他根的不可达模型不纳入本 IR。递归 list schema v1 拒绝；嵌套非递归 list 支持。model 名、key 字段、读写性、参数顺序/名/类型、命令门控关系、增删字段、排序导致的 ID 变化均改变哈希。注释、空白、注释和声明顺序不改变哈希。
 
 COMP 前缀同样 8 字节 `OVCOMP1` + NUL，随后 count:U。按组件名 UTF-8 序写 `name:S, semantic_version:U, property_count:U, event_count:U`，属性按固定注册 ID 排序写 `id:U,name:S,tag:U,flags:U,record_model_name:S`，flags bit0 static/bit1 bind/bit2 model；事件写 `id:U,name:S,argc:U` 后接各参数 `name:S,tag:U`。record_model_name 仅 list 使用。末尾写 `child_rule:S, model_property_id:U`；child_rule 是注册表固定版本的规范结构规则串，不是执行脚本。固定值域（如 selectedIndex≥-1）、默认行为改变时必须提升 semantic_version。只纳入本 IR 使用组件的**完整**契约；普通新组件加入 SDK 不使旧 IR 失效。运行时逐项比较注册表，禁止仅比较一个全 SDK 哈希而拒绝所有旧文件。
 
 注册属性/事件 ID 各自从 1 起、组件内唯一。S1 将当前每个组件的完整属性名（含通用属性）和事件名按 ASCII 序生成初始 ID 清单后作为版本化注册数据保存；此后追加非零 ID、废弃不复用，不再每次排序重编号。kind、组件索引、property ID、VM property ID 是不同命名空间，loader 必须分别查验。COMP 的顺序定义 component_index，不暴露 native Kind enum。
 
-两份规范使用 SHA-256 全 32 字节，无截断、无 salt，生成 Rust/C++ 常量来自同一结果。S1 必须提交独立黄金字节/哈希用例，并证明调换 JSON 排序保持哈希、每类契约变化改变哈希；本稿不捏造尚未生成的样例 hash。
+两份规范使用 SHA-256 全 32 字节，无截断、无 salt，生成 Rust/C++ 常量来自同一结果。S1 必须提交独立黄金字节/哈希用例，并证明调换 声明排序保持哈希、每类契约变化改变哈希；本稿不捏造尚未生成的样例 hash。
 
 ### 3.4 前向与后向兼容
 
@@ -230,7 +221,7 @@ COMP 前缀同样 8 字节 `OVCOMP1` + NUL，随后 count:U。按组件名 UTF-8
 
 ## 4. C 协议完整草案
 
-推荐保留任务书的 `OneUiWidget*` 返回形状，view 是带 ViewControl 的根 widget handle；不把 VM 指针作为 widget。新增 `OneUiViewMount` 管理挂载目的地/窗口调度，`OneUiViewNotifier` 是可失效的 scope 通知令牌。下面拟放进 `include/oneui/oneui_view_c_api.h`，主 C 头包含它，ABI 检查器随之扩展到该头。所有函数采用既有 C 默认调用约定（Windows x86 为 cdecl），不使用编译器 enum/bool 作为 POD 字段。
+按 R3 使用独立 OneUiView，不改变 Widget 布局或 oneui_widget_destroy。root/host 是借用 Widget；有失败的创建/查询使用返回码与 out，输出失败时清零。以下为 S3 冻结前的完整草案，C 默认调用约定（Windows x86 cdecl）。
 
 ```c
 #ifndef ONEUI_VIEW_C_API_H
@@ -264,28 +255,25 @@ typedef int32_t OneUiViewResult;
 #define ONEUI_VIEW_NOT_FOUND        -16
 #define ONEUI_VIEW_BUSY             -17
 
+typedef struct OneUiView OneUiView;
 typedef struct OneUiViewMount OneUiViewMount;
 typedef struct OneUiViewNotifier OneUiViewNotifier;
 typedef struct OneUiViewModelVTable OneUiViewModelVTable;
-typedef void* OneUiViewList; /* language-owned opaque list lease */
 
 #define ONEUI_VALUE_BOOL  1u
 #define ONEUI_VALUE_I64   2u
 #define ONEUI_VALUE_F64   3u
 #define ONEUI_VALUE_UTF8  4u
-#define ONEUI_VALUE_LIST  5u
-#define ONEUI_VALUE_LEASED 1u
+#define ONEUI_SCHEMA_LIST 5u /* schema only; never returned by get */
 typedef struct OneUiValue {
     uint32_t tag;
-    uint32_t flags;
+    uint32_t reserved; /* zero */
     union {
         uint32_t boolean; /* exactly 0 or 1 */
         int64_t integer;
         double number;
         struct { const char* data; size_t length; } utf8;
-        OneUiViewList list;
     } as;
-    void* lease; /* only interpreted by producer.release_value */
 } OneUiValue;
 
 typedef struct OneUiViewModelRef {
@@ -328,18 +316,15 @@ struct OneUiViewModelVTable {
     OneUiViewResult (*connect)(void* vm, OneUiViewNotifier* notifier);
     void (*disconnect)(void* vm, OneUiViewNotifier* notifier);
     OneUiViewResult (*get)(void* vm, uint32_t property_id, OneUiValue* out);
-    void (*release_value)(void* vm, OneUiValue* value);
     OneUiViewResult (*set)(void* vm, uint32_t property_id,
                          const OneUiValue* value);
     OneUiViewResult (*invoke)(void* vm, uint32_t command_id,
                             const OneUiValue* args, size_t argc);
-    void (*list_retain)(void* vm, OneUiViewList list);
-    void (*list_release)(void* vm, OneUiViewList list);
-    OneUiViewResult (*list_info)(void* vm, OneUiViewList list,
+    OneUiViewResult (*list_info)(void* vm, uint32_t property_id,
                                OneUiViewListInfo* out);
-    OneUiViewResult (*list_key)(void* vm, OneUiViewList list,
+    OneUiViewResult (*list_key)(void* vm, uint32_t property_id,
                               uint64_t index, OneUiValue* out_utf8);
-    OneUiViewResult (*list_acquire)(void* vm, OneUiViewList list,
+    OneUiViewResult (*list_acquire)(void* vm, uint32_t property_id,
                                   uint64_t index, OneUiViewModelRef* out);
 };
 
@@ -356,32 +341,32 @@ typedef struct OneUiViewError {
 
 ONEUI_API uint32_t oneui_view_protocol_version(void);
 /* Borrow window/destination during call; see lifetime rules below. */
-ONEUI_API OneUiViewMount* oneui_view_mount_create(
-    OneUiWindow* window, OneUiWidget* destination);
+ONEUI_API OneUiViewResult oneui_view_mount_create(
+    OneUiWindow* window, OneUiWidget* destination, OneUiViewMount** out);
 ONEUI_API void oneui_view_mount_destroy(OneUiViewMount* mount);
 /* density: 0 comfortable, 1 compact. Replaces external theme/CSS atomically. */
 ONEUI_API OneUiViewResult oneui_view_mount_set_styles(
     OneUiViewMount* mount, OneUiUtf8String css, uint32_t density);
 
-ONEUI_API OneUiWidget* oneui_view_instantiate(
+ONEUI_API OneUiViewResult oneui_view_instantiate(
     OneUiViewMount* mount, const uint8_t* ir_bytes, size_t len,
-    const OneUiViewModelVTable* vtable, void* vm);
-/* Pointer-returning functions expose the precise failure here, same thread. */
-ONEUI_API OneUiViewResult oneui_view_last_result(void);
+    const OneUiViewModelVTable* vtable, void* vm, OneUiView** out);
+/* Pure accessor, borrowed root; requires a live view handle. */
+ONEUI_API OneUiWidget* oneui_view_root(OneUiView* view);
 ONEUI_API OneUiViewResult oneui_view_notify(
-    OneUiWidget* view, uint32_t property_id);
+    OneUiView* view, uint32_t property_id);
 ONEUI_API OneUiViewResult oneui_view_notify_list(
-    OneUiWidget* view, uint32_t property_id,
+    OneUiView* view, uint32_t property_id,
     const OneUiViewListChange* change);
-ONEUI_API OneUiViewResult oneui_view_flush(OneUiWidget* view);
-ONEUI_API OneUiViewResult oneui_view_disconnect(OneUiWidget* view);
+ONEUI_API OneUiViewResult oneui_view_flush(OneUiView* view);
+ONEUI_API OneUiViewResult oneui_view_disconnect(OneUiView* view);
 /* Consumes the owned view handle; NULL permitted; UI thread only. */
-ONEUI_API void oneui_view_destroy(OneUiWidget* view);
+ONEUI_API void oneui_view_destroy(OneUiView* view);
 ONEUI_API OneUiViewResult oneui_view_get_error(
-    OneUiWidget* view, OneUiViewError* out);
+    OneUiView* view, OneUiViewError* out);
 
-/* Returned notifier owns one reference. Null on failure. */
-ONEUI_API OneUiViewNotifier* oneui_view_notifier(OneUiWidget* view);
+/* On success out owns one notifier reference. */
+ONEUI_API OneUiViewResult oneui_view_notifier(OneUiView* view, OneUiViewNotifier** out);
 ONEUI_API void oneui_view_notifier_retain(OneUiViewNotifier* notifier);
 ONEUI_API void oneui_view_notifier_release(OneUiViewNotifier* notifier);
 ONEUI_API OneUiViewResult oneui_view_notifier_notify(
@@ -391,15 +376,16 @@ ONEUI_API OneUiViewResult oneui_view_notifier_notify_list(
     const OneUiViewListChange* change);
 
 /* Borrowed host handle. Do not call oneui_widget_destroy on it. */
-ONEUI_API OneUiWidget* oneui_view_find_host(
-    OneUiWidget* view, OneUiUtf8String name);
+ONEUI_API OneUiViewResult oneui_view_find_host(
+    OneUiView* view, OneUiViewNotifier* scope, OneUiUtf8String name,
+    OneUiWidget** out); /* WP3 scope must be NULL (root); reserved for WP4 */
 /* Owner lease retains the foreign widget's callback owner. */
 ONEUI_API OneUiViewResult oneui_view_host_attach(
     OneUiWidget* host, OneUiWidget* content, void* owner,
     OneUiVoidCallback retain_owner, OneUiDestroyCallback release_owner);
 ONEUI_API OneUiViewResult oneui_view_host_detach(OneUiWidget* host);
 ONEUI_API OneUiViewResult oneui_view_reload(
-    OneUiWidget* view, const uint8_t* ir_bytes, size_t len);
+    OneUiView* view, const uint8_t* ir_bytes, size_t len);
 
 #ifdef __cplusplus
 }
@@ -413,46 +399,42 @@ ONEUI_API OneUiViewResult oneui_view_reload(
 
 mount 初始使用现有浅色 Comfortable 声明式主题。mount_set_styles 复制并严格校验外部 theme/CSS，以“外部 CSS + 当前 IR scoped CSS”的顺序构造完整新样式表，成功才替换，density 同步原生几何；空 css 表示空外部规则，不暗中补另一主题。错误保持旧表，回调内调用 REENTRANT。应用入口可切全局主题/密度，L4 不取得逐控件样式权限。safe Rust 对应 `ViewMount::set_styles(&self, css: &str, density: Density) -> Result<(), ViewError>`；watcher 和用户主题切换共用此入口。
 
-instantiate 先完整解析 IR、匹配组件/VM 契约，再建立未发布树、读取初值、连接 scope；全部成功后一次挂入目的地并请求布局。失败返回 NULL，目的地保持原样，平衡已获取的所有租约。输入 IR 在调用中复制为 runtime-owned 不可变 buffer；返回后调用方可释放。vtable 复制已知前缀到控制块，**其函数所在动态库仍必须活到所有 release 返回**。只要用户提供的 VM 指针/vtable 本身有效，schema 不匹配应在任何 VM 回调前返回。
+instantiate 先完整解析 IR、匹配组件/VM 契约，再建立未发布树、读取初值、连接 scope；全部成功后一次挂入目的地并请求布局。失败返回具体错误码且 *out=NULL，目的地保持原样，平衡已获取的所有租约。输入 IR 在调用中复制为 runtime-owned 不可变 buffer；返回后调用方可释放。vtable 复制已知前缀到控制块，**其函数所在动态库仍必须活到所有 release 返回**。只要用户提供的 VM 指针/vtable 本身有效，schema 不匹配应在任何 VM 回调前返回。
 
-`struct_size` 小于协议 v1 完整前缀返回 VERSION；较大只接受未知尾部为零。不能把 size 当成任意混用 ABI 的许可。必选回调 retain/release/connect/disconnect/get/release_value 非空；schema 有 rw、命令、列表时相应 set/invoke/全部 list 回调非空；无该能力可 NULL。未知 flags、ID、model_id 均明确拒绝。
+`struct_size` 小于协议 v1 完整前缀返回 VERSION；较大只接受未知尾部为零。不能把 size 当成任意混用 ABI 的许可。必选回调 retain/release/connect/disconnect/get 非空；schema 有 rw、命令、列表时相应 set/invoke/全部 list 回调非空；无该能力可 NULL。未知 flags、ID、model_id 均明确拒绝。
 
 `oneui_view_notify(view, 0)` 表示根 scope 全部属性脏；指定 ID 仅标记该属性，不提供新值，不修改 VM。list 属性用 notify 会按 RESET 处理；notify_list 必须指向 list 属性。notify 返回 OK 只保证排队，不能当作已绘制。notify 的子 scope 等价入口是 notifier_notify；列表项不用可变 index 来标识通知目标。
 
-`oneui_view_last_result` 是线程局部最近一次 pointer-returning view API 的状态，成功写 OK，失败写具体负值；失败同时设置既有 `oneui_last_error()` 文本。status-returning API 以返回值为准，也更新错误文本；其成功不清除既有 last_error。`get_error` 拷贝实例最近一次异步错误及递增 sequence；无错误时 result=OK、sequence=0。错误信息含 section/record/span，禁止自动打印 VM 字符串值、凭证或文档内容。入参非法映射既有 InvalidArgument，OOM 映射 OutOfMemory，其他映射 OperationFailed；细分以 OneUiViewResult 为准。
+所有可失败操作直接返回 OneUiViewResult；失败还更新既有 oneui_last_error 文本。成功不清除该线程局部诊断，调用方以返回码为准。get_error 拷贝实例最近一次异步错误/sequence，禁止打印 VM 敏感值。root 是纯借用访问器，Closed view 返回 NULL；有效 view handle 可直到 view_destroy 后才失效。
 
 本协议不能验证释放后的任意裸地址；销毁后再传 view 指针仍是调用方错误。跨生命周期只能持 notifier；它在 ViewControl 失效后返回 CLOSED，不能复活 VM。
 
-### 4.2 OneUiValue 的内存与转换
+### 4.2 OneUiValue、字符串和集合（R1/R2）
 
-- ABI 中 OneUiValue 使用平台 C 默认对齐，不等同磁盘 VALU；x86/x64/ARM 必须做 sizeof/align/offsetof 对照。flags 只有 0（调用中借用输入）或 LEASED（VM 返回）；所有未用 union 字节和 lease 初始为零。
-- set/invoke 输入 flags=0，字符串/参数数组仅在回调内有效，VM 要持久保存必须复制。utf8 允许 length=0/data=NULL；非空必须有效 UTF-8，v1 拒绝内含 NUL。key 除此之外必须非空。runtime 不调用 release_value 释放输入。
-- get/list_key 成功输出 flags=LEASED。其字符串/list 对象有效期延续至 runtime 调用该 VM 的 release_value，**不是仅到 get 返回**。VM 可把借用稳定缓冲或独立分配封装成 lease；runtime 先验证/复制字符串或取得列表租约，再恰好调用一次 release_value，即便后来类型校验失败也要释放。scalar 也走一次 no-op release_value，避免按标签遗漏资源。
-- get/list_key 失败须保持 out 为零、未转移租约；适配器自行清理中间分配。release_value 必须不抛异常、不通知、不进入事件循环，返回后 runtime 不再读 value。runtime 绝不跨语言 free。
-- get 返回 list 时，先 `list_retain(vm,list)`，再 release_value；缓存换成另一 list 或 scope 关闭时 list_release。每份持有独立配对，且 list_release 之前 vm 本身仍被租约保活。list 本身是稳定可查询的集合对象，不把 vector 地址/元素地址当句柄；结构版本由 list_info 描述。
-- `list_acquire` 成功转移**一个**子 VM 租约（已 retain），runtime 不再额外 retain；out.vtable 必须符合该列表 item_model 及完整 schema hash。失败无租约。最终 `out.vtable->release(out.vm)` 配对。get 值借用、列表租约、子 VM 租约三者分开，不能靠一个含糊的 free 回调处理。
+OneUiValue 仅携带 bool/i64/f64/utf8；reserved 和未用 union 字节置零，ABI 默认 C 对齐，与磁盘 VALU 无关。UTF-8 指针/长度必须合法，空串允许 NULL/0，拒绝嵌入 NUL。bool 仅 0/1，f64 必须有限。
 
-### 4.3 VTable 每个成员的语义
+get/list_key 的 UTF-8 指针有效至**下一次对同一 vm 调用任意 vtable 函数之前**。runtime 在回调返回后立即验证并复制，复制之前不得调用 retain、其他 get 或任何 vtable 成员。绑定可每 vm 使用一个可复用 scratch 缓冲，没有 release_value、值租约或跨语言 free。失败 out 必须清零。set/invoke 入参仅回调期间借用，业务要留存则复制。
 
-| 成员 | 调用时机与约束 |
+list 属性不调用 get。list_info/list_key/list_acquire 直接用 property_id 查询 VM 当前集合；整集合替换后 RESET。只有 list_acquire 转移一个子 VM 强引用，需要最终 child.release；没有 list 句柄及 list 引用计数。
+
+### 4.3 VTable 每个成员
+
+| 成员 | 契约 |
 |---|---|
-| retain / release | 根 instantiate 接受后 retain 一次，最终 release 一次；child 使用 acquire 返回的租约。纯引用计数/销毁，不得失败或触发业务通知；所有 VM 释放在 UI 线程 |
-| connect | 控件未发布时传入当前 scope 的借用 notifier；适配器若保存需 retain。用于 C++ 订阅/Rust 记录通知上下文，不读取/修改控件。允许标脏但不立即刷新。返回非 OK 导致创建回滚 |
-| disconnect | 对每次**已进入**的 connect 恰好调用一次，包括 connect 失败；notifier 已标记 CLOSED。解除订阅、清 adapter 保存的 notifier；不得再调用业务方法 |
-| get | 无副作用读取一个已声明属性；不轮询未脏属性。不能在其中 notify、set、invoke、flush、reload 或 pump 消息。返回 ID/类型/资源错误时保持旧属性值 |
-| release_value | 对成功 get/list_key 的输出租约清理；不能依赖 View 仍 active |
-| set | 只接受 schema rw 属性，通常由 v-model 输入触发；先更新 VM，再返回状态。OK 后 runtime 自动标该属性脏，以重新读取被规范化的实际值；派生/其他字段仍由 VM notify。拒绝时下轮恢复原 VM 值，错误显示由 VM 状态负责 |
-| invoke | 只调注册事件对应的命令，检查 argc/类型和门控；不返回业务数据；业务可修改 VM 并 notify，异步命令立即返回，结果随后投递 |
-| list_retain / list_release | 建立/解除 list 查询对象租约；不改变集合内容；不得调用 list 读取时已释放的 parent VM |
-| list_info | 返回 length 和单调 revision；同一次提交的读取期间不能改变；revision 从 1 开始，不允许回绕，达到上限需新 list 对象 + RESET |
-| list_key | 读取当前 index 的非空 UTF-8 稳定 key；以 OneUiValue 租约返回，不用 index 字符串代替业务身份 |
-| list_acquire | 按当前 index 获取对应 child VM。对连续存在的 key，必须返回相同 vm/vtable 身份；成功即转移 +1 租约，移除后可被释放 |
+| retain / release | 根接受后 retain，最终 release；child acquire 已转移 +1，不额外 retain。UI 线程，不得抛出或通知 |
+| connect / disconnect | 每 scope 配对，包括已进入但失败的 connect；notifier 借用，保存须 retain。disconnect 前 notifier 已 CLOSED；解除订阅，不改业务 |
+| get | 无副作用读取标量属性；list ID 返回 TYPE；不得 notify/pump/flush。字符串立即复制后才调下一函数 |
+| set | schema rw 标量；成功自动标本字段 dirty，其他/派生字段须 notify；输入规范化后下轮读取实际值 |
+| invoke | 检查命令 ID、门控、参数和类型；同步返回状态，异步结果通过 dispatcher/notify；允许 notify，仅排队 |
+| list_info | property_id 必须 list，返回 length/单调 revision；UI 事务内不改变 |
+| list_key | 按当前 index 返回 utf8 OneUiValue，runtime 立即复制；key 非空且唯一 |
+| list_acquire | 按 property_id/index 返回 child VM +1 强引用；失败 out 清零。完整 schema_hash 和 item model_id 必须匹配 |
 
-没有 polling、subscribe 函数或 VM 主动回调 raw widget 的要求。多视图共享同一 VM 时 connect/disconnect 按 notifier 区分；VM adapter 为每个连接管理订阅，notify 广播到需要的连接，不能只保存“最后一个 view”。
+多视图共享 VM 时 connect/disconnect 按 notifier 区分。get 不读取未脏属性；没有 polling 或外语直接访问 widget 的要求。任意回调异常均不能跨 C 边界。
 
 ### 4.4 NativeHost
 
-instantiate 创建空 Host 占位，布局可存在，空时 naturalSize=0。`find_host(view,name)` 只查根实例域的静态 host 名，返回由 ViewControl 持有的借用 OneUiWidget；不存在 NOT_FOUND，已关闭 CLOSED。全展开后重名编译失败；v1 禁止 repeat 内 NativeHost（动态 pane host 能力留给 WP4 组件的独立契约，待决 D6）。不要把通用 ref 暴露成 L4 构建普通 UI 的后门。
+instantiate 创建空 Host 占位，布局可存在，空时 naturalSize=0。`find_host(view,scope,name,&out)` 只查根实例域的静态 host 名，返回由 ViewControl 持有的借用 OneUiWidget；不存在 NOT_FOUND，已关闭 CLOSED。全展开后重名编译失败；v1 禁止 repeat 内 NativeHost（D6：scope 参数位置已预留，WP3 只接受 NULL；动态 pane host 留给 WP4）。不要把通用 ref 暴露成 L4 构建普通 UI 的后门。
 
 host_attach 要求 content 未被挂载、owner 和 retain/release 均非空，先 retain owner，成功后原生树持 content；失败回退 retain。Rust owner 包含实际 `TerminalView` 等包装及回调分配。它仍拥有 content C handle，框架只保留原生对象。host_detach 先断开树的事件/invalidator/焦点和输入路由，再释放原生持有，最后 release_owner。每 host 至多一个 content，不隐式偷取或替换别人的 parent。
 
@@ -462,7 +444,7 @@ host_attach 要求 content 未被挂载、owner 和 retain/release 均非空，�
 
 ### 5.1 刷新事务
 
-所有 VM、list、retain/release/connect/disconnect/host-owner 回调在所属 UI 线程。除 notifier_retain/release 可跨线程（它们只管理独立控制块，不释放 VM）外，本稿所有 view API 都限 UI 线程；查询 protocol_version/last_result 是无 UI 的例外。错误线程返回 WRONG_THREAD 且不触发 VM。void 销毁接口在错误线程记录错误且不释放，绑定必须预防这种使用。
+所有 VM、list、retain/release/connect/disconnect/host-owner 回调在所属 UI 线程。除 notifier_retain/release 可跨线程（它们只管理独立控制块，不释放 VM）外，本稿所有 view API 都限 UI 线程；查询 protocol_version 是无 UI 的例外。错误线程返回 WRONG_THREAD 且不触发 VM。void 销毁接口在错误线程记录错误且不释放，绑定必须预防这种使用。
 
 后台工作只产生 owned 数据，通过既有 dispatcher 投递到 UI。在 UI 闭包内校验弱 scope 存活、修改 VM，再 notify。禁止从后台先改 UI 所有的 VM、随后仅投递 notify；这会让读取竞态。C 使用有效 window 的 post_owned 和保留 notifier；Rust 后台只发送结果到 UI mailbox，不能捕获 `Rc<Vm>` 进 Send 闭包，也不能把不 Send VM 包装成 unsafe Send。
 
@@ -484,20 +466,20 @@ UI 输入 → set/invoke（callback depth +1）→ VM 状态更新 / notify 仅�
 | get/list_info/list_key/list_acquire | REENTRANT，不入队 | REENTRANT | REENTRANT | 标 Closing，读完返回前不释放当前 VM |
 | set/invoke | 允许入队 | 同 scope 拒绝；不自动重放点击 | REENTRANT | 立即封门，释放延后至外层回调退出 |
 | connect | 允许入队 | 未发布树，无事件 | REENTRANT | 标 Closing，创建回滚 |
-| disconnect/release/release_value/list_release | CLOSED 或 REENTRANT | 禁止 | 禁止 | 对已 Closing 幂等封门，不再进入用户回调 |
+| disconnect/release | CLOSED 或 REENTRANT | 禁止 | 禁止 | 对已 Closing 幂等封门，不再进入用户回调 |
 
 特别地，**在 get 里调用 notify 返回 REENTRANT，不能安排下一帧偷偷重试**，否则 getter 可能制造无限刷新。读 phase 标志是 view runtime 事务级的，跨 scope 也不能借 get 修改另一 scope。开发诊断记下这一错误；当前 get 若仍返回有效值可用于当前提交，但整体 flush 返回首个错误。嵌套 modal 消息循环对当前 scope 的可变事件拒绝；其他实例也不能插入正在进行的读/提交事务。没有“持 Rust RefCell 可变借用时重进 FFI”的路径。
 
 ### 5.3 销毁顺序与回调内自毁
 
-ViewControl 状态为 Building → Active → Closing → Closed，generation 单调变化。树上所有事件桥、脏任务、dispatcher continuation 只持 weak control + generation，不捕获裸 vm/view。进入回调前临时持强 control/VM 租约并增加 active depth。
+ViewControl 状态为 Building → Active → Closing → Closed，generation 单调变化。树上所有事件桥、脏任务、dispatcher continuation 只持 weak control + generation，不捕获裸 vm/view。进入回调前临时持强 control/VM 强引用并增加 active depth。
 
 1. UI 上 disconnect 先将 control 置 Closing，使所有 notifier 立即 CLOSED，禁止新业务回调；清 dirty 和待执行事件。
 2. 从目的地拆除 view；停止/断开树的输入、动画、焦点、invalidator 和事件桥。保留本次正在执行的回调栈，不提前释放它的 token。
 3. active depth>0 时返回 OK（表示封门完成，**不表示 VM 已释放**），将剩余清理安排在该回调最外层 epilogue；无需消息循环继续运行。depth=0 则立即继续。
-4. 对 child scopes 从叶到根 disconnect，清语言订阅；释放临时 value、子 VM 租约、list 租约，再根 VM release。parent VM 租约必须覆盖 list_release；已 connect 的失败创建同样走此清理。
+4. 对 child scopes 从叶到根 disconnect，清语言订阅；清标量副本并释放子 VM 强引用，再根 VM release。parent VM 必须覆盖所有 list 查询；已 connect 的失败创建同样走此清理。
 5. NativeHost 内容先拆除再释放外语 owner；清样式/source 注册、控件和 control。仍由其他原生树引用的控件也只能是已脱离事件桥的对象。
-6. oneui_view_destroy 最后消费根 C handle。建议同时让已有 oneui_widget_destroy 检测 view control 并调用同一关闭路径，防止按一般 Widget drop 释放时遗留 VM。这需要修改公共类布局时按任务书 clean 全量重编，当前设计阶段不执行。
+6. oneui_view_destroy 消费独立 OneUiView handle 并使借用 root/host 失效。原生控件/Widget handle 的既有布局及 oneui_widget_destroy 均不改动；C++/Rust 包装不能销毁借用 root。回调内自毁可延迟 control 回收，但调用方立即失去该 view 的使用权。
 
 正常外部 disconnect 返回后，不再有 get/set/invoke/list 查询/新 connect；只可能存在回调内自毁所约定的当前回调和其 cleanup。该回调返回后 release 是最后一个 VM 回调；release 返回后 native 不再持 VM 指针。调用方不能在 disconnect 返回后自行 free VM，因为回调内自毁可能尚未完成；**统一由租约 release 决定回收**。
 
@@ -517,22 +499,20 @@ ViewControl 状态为 Building → Active → Closing → Closed，generation �
 | MOVE | index/count 为旧区间，to_index 是移走区间之后的目标边界；keys 为源区间；properties 为空 | 例如 `[A,B,C,D]` 的 index=1,count=2,to=2 → `[A,D,B,C]`；to=1 为 no-op，不换 VM/控件 |
 | UPDATE | index/count 为当前范围；keys 对应该范围；properties 为 item 字段 ID（空表示全部），to_index=0 | key 与 item 身份不变，只标这些 child 属性脏，不重建条目 |
 
-所有增量的 key_count=count，properties 仅 UPDATE 可非空。单条 index/count 上界在 flush 按版本序列校验，直接可判的参数错误在 notify 时拒绝。root notify(list_id) 相当于未给精确 delta 的 RESET；list 对象换新必须 RESET，不能偷偷发送 INSERT。业务不能遗漏通知；调试模式可额外全量核对，release 不逐帧扫列表。
+所有增量的 key_count=count，properties 仅 UPDATE 可非空。单条 index/count 上界在 flush 按版本序列校验，直接可判的参数错误在 notify 时拒绝。root notify(list_id) 相当于未给精确 delta 的 RESET；集合整体换新必须 RESET，不能偷偷发送 INSERT。业务不能遗漏通知；调试模式可额外全量核对，release 不逐帧扫列表。
 
-单 list 在一次提交前最多缓存 4,096 条 delta 或 1 MiB key/字段数据，超过后折叠为一次 RESET dirty，释放已复制 delta，不丢最终状态；单次 change 超过文件/字符串/项数限制直接 LIMIT。折叠后同帧 REMOVE+INSERT 的身份历史必须保留为有界的 retired-key 集合；若集合也达到上限，则明确返回 LIMIT 并要求调用方先提交，不允许因折叠而错误复用已退休 scope。
+单 list 每提交前最多缓存 4,096 条 delta 或 1 MiB key/字段数据，超过直接折叠 RESET，释放 delta。没有 retired-key 集合或它的 LIMIT 状态；RESET 从最终 key/VM 身份决定复用或替换。
 
 ### 6.2 提交算法与失败原子性
 
-1. 首次 get(list) 取得 list 租约，list_info 得 `(revision,n)`，按 index 读取 key，构建 `ordered_keys` 和 `key→RowControl`。只对新 key acquire 子 VM、connect notifier、构建 body；重复/空 key 在发布前 BAD_KEY。
+1. 首次按 property_id 调 list_info 得 `(revision,n)`，按 index 读取 key，构建 `ordered_keys` 和 `key→RowControl`。只对新 key acquire 子 VM、connect notifier、构建 body；重复/空 key 在发布前 BAD_KEY。
 2. 每帧对该 list 的已复制 delta 以 arrival 顺序检查 revision 链，从上次 applied revision 起在**暂存的 key 序列**上执行 INSERT/REMOVE/MOVE/UPDATE。keys 同时校验旧范围和新增唯一性；积累 dirty 子字段、移除集合和新增集合。不立即改真实树。
 3. 最后调用 list_info。若 revision/length 与 delta 链终点一致，则只对最终新增 key 的最终 index 做 list_key 校验和 acquire，复用仍存活 key 的 RowControl。已存在 child 的 UPDATE 读取其属性；不每次重新 acquire 全部子 VM。
 4. revision 链断裂、VM 已进一步变化、普通 notify 或出现 RESET 时，放弃 delta 暂存，重新读取**当前**完整 key 快照，按 key reconcile。记录 STALE_CHANGE 诊断，成功恢复后 flush 返回 OK；它是可观察的恢复事件而非错误数据静默应用。非法/重复 key、acquire 失败则保持旧树，flush 返回对应错误，等待新的 notify 修正，不无限安排重试帧。
 5. 全部读取、类型检查、组件创建、容量预留成功后一次 commit：移除旧 scope、调整父 children/flex、连接新节点并应用 dirty 值。commit 阶段不再调可失败的业务 get/acquire；结构暂存失败不得破坏可见旧树。现有 `reconcileChildren` 若不能提供所需异常保证，S2 必须补一个预分配的 no-throw commit 边界并测试 OOM。
 6. 移除 scope 立即失效 notifier，再断事件、释放 child；MOVE 不 connect/disconnect、不改焦点链。先保留 key 的 selection/focus/scroll anchor，再恢复仍存在 key；删除焦点项由组件默认策略移交。业务选择 ID 不随 index 移位。
 
-连续存在的 key 必须是同一 child 对象。RESET 可以换 list 容器但不能以同 key 换 VM 身份；需要换对象要发 REMOVE+INSERT，通知链中即使同一帧重新插入相同 key也记为新的 generation，原 scope 必须退休。对 RESET 没有可靠移除历史，若 acquire 校验发现同 key 不同 VM则 BAD_KEY，不猜测替换。UPDATE 禁止修改 key 属性；key 变化是 REMOVE+INSERT。
-
-RESET 路径对保留 key 也逐项 acquire 一次以验证 vm/vtable 身份，匹配后立即 release 这次额外租约，不重复 connect；新 key 的租约转给新 RowControl。精确 delta 路径的保留项不重新 acquire，身份稳定是 provider 的责任。验证所用 vtable 身份是原始 provider 的稳定表身份（以及协议/hash/model），不是 runtime 复制前缀的内部地址。
+精确 delta 路径要求连续存在 key 的 vm/vtable 身份稳定；debug 验证发现变化则断言并记录诊断。RESET（含 delta 折叠）对全部 key acquire：身份相同即复用并 release 额外引用，身份不同按移除旧 scope/创建新 scope 处理，不报 BAD_KEY；重复/空 key 仍 BAD_KEY。UPDATE 不能修改 key，key 改变发 REMOVE+INSERT。比较 provider 原始 vtable 身份，而非 runtime 的拷贝地址。
 
 复杂度：普通属性更新 O(该属性依赖数)；结构暂存/数组 children 重排可为 O(n+k)，新增/删除的**控件和 VM 工作量**为 O(k)，不是承诺所有 MOVE 都 O(1)。v-for 当前是实体控件列表，不承诺百万条虚拟化；DataTable/VirtualList 使用它们的数据适配能力。表格结构改动可沿用一次 setRows，字段 UPDATE 用 updateRow；不能将此称为底层零复制插入。
 
@@ -542,11 +522,11 @@ RESET 路径对保留 key 也逐项 acquire 一次以验证 vm/vtable 身份，�
 
 ### 7.1 C++ 迁移：同一 IR，适配现有 State
 
-推荐正式交付时只有一个 runtime。`--emit cpp` 生成：IR byte array、schema hash/ID、State/Computed/VmCommand 的 C VTable adapter、`build_X(vm,ui)` 兼容包装、styles/sources 元信息；**不再生成逐节点 ui.make/bind 的执行代码**。adapter 的 get 读取 State/Computed，set 写 State，invoke 调命令；connect 保存作用域订阅，将旧 State 的变化转成 notifier dirty，disconnect 清订阅。legacy float/int/wstring 在 adapter 里显式转换。列表 adapter 为 stable shared item 保持租约；不得把 C++ shared_ptr 的对象布局传到 C。
+推荐正式交付时只有一个 runtime。`--emit cpp` 生成：IR byte array、schema hash/自动 ID、State/Computed/VmCommand 的 C VTable adapter、`build_X(vm,ui)` 兼容包装、styles/sources 元信息；**不再生成逐节点 ui.make/bind 的执行代码**。adapter 的 get 读取 State/Computed，set 写 State，invoke 调命令；connect 保存作用域订阅，将旧 State 的变化转成 notifier dirty，disconnect 清订阅。legacy float/int/wstring 在 adapter 里显式转换。列表 adapter 为 stable shared item 保持租约；不得把 C++ shared_ptr 的对象布局传到 C。
 
 `build_X` 的返回 Element 仍可供旧作者 API 使用，但其底层来自 oneui_view_instantiate。SDK 内部为 `ui::Mount` 提供 C mount 的互操作入口：分享该 Mount 的组件服务、StyleRegistry 和 schedule，子 view control 由 Mount 持有，返回根 native widget 包成 Element。普通 C/Rust 消费者看不到这些 C++ 类型。已有 `build_X(VM&, Mount&)` 的 vm 必须比 Mount 活得久的约束保留；推荐新增共享所有权 C++ 接入采用 `shared_ptr<VM>`。兼容 adapter 自身 retain/release，但不能凭空延长借用 VM 的寿命；它必须在 Mount teardown 前断订阅，提供文档和生命周期测试。
 
-旧 Slots 函数对象无法序列化。`.one` import/slot 全部编译进 IR；外部 C++ `Slots` 回调入口属于兼容问题（待决 D3）：推荐正式新入口只接受模板插槽，旧动态 Slots 调用在迁移期明确编译错误并给出替代模板，不能把 native 创建 lambda 藏进语言无关 IR。确需外语提供画面只走 NativeHost，不提供“动态普通控件插槽”绕过分层。
+旧 Slots 函数对象无法序列化。`.one` import/slot 全部编译进 IR；外部 C++ `Slots` 回调入口属于兼容问题（D3 已裁决）：推荐正式新入口只接受模板插槽，旧动态 Slots 调用在迁移期明确编译错误并给出替代模板，不能把 native 创建 lambda 藏进语言无关 IR。确需外语提供画面只走 NativeHost，不提供“动态普通控件插槽”绕过分层。
 
 分两步切换，且旧执行路径仅作短期测试 oracle：
 
@@ -560,9 +540,9 @@ RESET 路径对保留 key 也逐项 acquire 一次以验证 vm/vtable 身份，�
 拟定命令（均为未来接口）：
 
 ```text
-oneui-viewc --input SettingsBasic.one --schema SettingsBasic.one.schema.json \
+oneui-viewc --input SettingsBasic.one --schema SettingsBasic.oneschema \
   --name SettingsBasic --emit ir --output SettingsBasic.oneview --depfile SettingsBasic.d
-oneui-viewc --input SettingsBasic.one --schema SettingsBasic.one.schema.json \
+oneui-viewc --input SettingsBasic.one --schema SettingsBasic.oneschema \
   --name SettingsBasic --emit rust --output settings_basic.g.rs --ir-output SettingsBasic.oneview
 ```
 
@@ -611,7 +591,7 @@ spec 参数解决一个 VM 实现多个页面 trait 时的选择/blanket impl �
 </template>
 ```
 
-为使这个模板闭合，在第 2.1 节根模型中增加 `id=5,name=languageOptions,type=list<oneui.v1.StringItem>,access=r` 及 StringItem 内置模型声明。这是契约变化，必须重算 hash；生成器不能仅依靠 template 推导第 5 项而令 VM 漏实现。
+为使这个模板闭合，在第 2.1 节根模型中增加 `r languageOptions: list<oneui.v1.StringItem>` 及 StringItem 内置模型声明。这是契约变化，必须重算 hash；生成器不能仅依靠 template 推导该字段而令 VM 漏实现。
 
 拟生成的 Rust API 示意（`define_view_adapter!` 是计划在绑定内提供的生成辅助宏；宏展开负责完整 trampoline，不是让应用填写 TODO）：
 
@@ -619,11 +599,11 @@ spec 参数解决一个 VM 实现多个页面 trait 时的选择/blanket impl �
 // settings_basic.g.rs -- generated; do not edit
 use oneui::view::{PropertyId, StableList, StringItem, ViewSpec, VmContext, VmResult};
 
-pub const LANGUAGE: PropertyId = PropertyId::new(1);
-pub const COMPACT: PropertyId = PropertyId::new(2);
-pub const STATUS: PropertyId = PropertyId::new(3);
-pub const THEMES: PropertyId = PropertyId::new(4);
-pub const LANGUAGE_OPTIONS: PropertyId = PropertyId::new(5);
+pub const LANGUAGE: PropertyId = PropertyId::new(2);
+pub const COMPACT: PropertyId = PropertyId::new(1);
+pub const STATUS: PropertyId = PropertyId::new(4);
+pub const THEMES: PropertyId = PropertyId::new(5);
+pub const LANGUAGE_OPTIONS: PropertyId = PropertyId::new(3);
 pub const IR: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/SettingsBasic.oneview"));
 // 文件由同次 viewc 生成，内容是完整的 [u8; 32] Rust 表达式。
 pub const SCHEMA_HASH: [u8; 32] = include!(concat!(env!("OUT_DIR"), "/SettingsBasic.schema_hash.rs"));
@@ -662,14 +642,14 @@ oneui::view::define_view_adapter! {
     command 1: SettingsBasicCommand::Reset => V::invoke;
     child ThemeItem: ThemeItemVm {
         key 1 => id;
-        read_only 2: utf8 => title;
-        read_only 3: bool => selected;
+        read_only 3: utf8 => title;
+        read_only 2: bool => selected;
         command 1: ThemeItemCommand::Select => invoke;
     }
 }
 ```
 
-生成宏从同份 schema descriptor 取得 model 编号、内置模型和命令参数信息；不得按 Rust trait 名自行计算第二个 schema 哈希。若命令有参数，如 Tabs.close，则生成 `enum Commands { Close { key: String } }`，解析 argc/类型后才进入业务。字串 getters 的 &str 在退出 RefCell 借用前复制到 adapter 的可复用值租约缓冲，直到 release_value 才可重用；不能把 Ref<'_,Vm> 或 VM 内存借用带出外语回调。
+生成宏从同份 schema descriptor 取得 model 编号、内置模型和命令参数信息；不得按 Rust trait 名自行计算第二个 schema 哈希。若命令有参数，如 Tabs.close，则生成 `enum Commands { Close { key: String } }`，解析 argc/类型后才进入业务。字串 getters 的 &str 在退出 RefCell 借用前复制到每 vm 的可复用 scratch 缓冲，在下一次同 vm vtable 调用前保持有效；不能把 Ref<'_,Vm> 或 VM 内存借用带出外语回调。
 
 应用入口示意（所有 Widget 构造均在 runtime；VmImpl 按生成 trait 实现状态/业务）：
 
@@ -682,7 +662,7 @@ view.notifier().notify(settings_basic::STATUS)?;
 // 窗口或页面 owner 持有 view；drop(view) 断开并释放适配器的 Rc 租约。
 ```
 
-适配器 Box/Rc 持 VM、各连接弱通知令牌、可复用 UTF-8 lease、list/child adapters。每个 extern C trampoline 先持本地 Rc 再进入业务，try_borrow/try_borrow_mut 失败返回 REENTRANT；catch_unwind 转 FOREIGN_FAILURE，不跨 FFI unwind。retain/release/connect/disconnect 的 panic 同样隔离；cleanup panic 必须保证控制块不再使用该 VM，记录错误，不能带着失效指针继续运行。编译为 panic=abort 时进程 abort 不能被 catch，绑定文档不声称可恢复。
+适配器 Box/Rc 持 VM、各连接弱通知令牌、可复用 UTF-8 scratch、child adapters。每个 extern C trampoline 先持本地 Rc 再进入业务，try_borrow/try_borrow_mut 失败返回 REENTRANT；catch_unwind 转 FOREIGN_FAILURE，不跨 FFI unwind。retain/release/connect/disconnect 的 panic 同样隔离；cleanup panic 必须保证控制块不再使用该 VM，记录错误，不能带着失效指针继续运行。编译为 panic=abort 时进程 abort 不能被 catch，绑定文档不声称可恢复。
 
 `View::drop` 在 UI 上失效其共享状态，调用 view_destroy，C teardown 的 release 释放 adapter 持有的 Rc；应用手里的 Rc 可继续保存业务状态。回调内 drop 由第 5.3 节的 active lease 延迟回收；不得 drop View 后再手工 Box::from_raw 第二次释放。mount/window 可以先关闭而 View 后 drop，后者只收尾失效 handle。`HostRef` 借用 + generation 检查，NativeContentOwner 强持外语控件包装，View drop 时先拆 host 再释放 owner。
 
@@ -698,11 +678,11 @@ view.notifier().notify(settings_basic::STATUS)?;
 2. 在未发布的计划中按 `(template instance path, stable_id, component contract, list key path, lexical capture)` 匹配旧节点。匹配的节点保留原生对象；新增节点离屏建立，删除节点只记录。所有必要 get/新 child acquire/connect 完成后才进入 commit。
 3. 比较新旧静态属性集合：删除的属性恢复组件默认值；绑定/事件先准备新边表，不能只加不删。样式原子换表；一个字段从绑定变静态按新定义覆盖，写入前检查类型/值域。
 4. commit 不调用业务代码，一次交换树关系、依赖索引/事件 generation 和 stylesheet；旧 generation 的事件任务丢弃。保留 scope 的 notifier **不失效**，VM 身份未变；新增 scope connect，移除 scope disconnect。事务期间已排队 notify 在提交后读当前 VM，不因 reload 丢状态。
-5. 兼容的 Input/Scroll/Tabs 等保持焦点、选区、滚动/IME；删除或换类型的节点不承诺控件局部状态保留，焦点按现有规则回退。若会移除/替换正在 IME composition 的节点，返回 BUSY，等 composition 结束再重载，不强制提交用户输入。
+5. 兼容的 Input/Scroll/Tabs 等保持焦点、选区、滚动/IME；删除或换类型的节点不承诺控件局部状态保留，焦点按现有规则回退。开发热重载若移除/替换正在 IME composition 的节点，先 commit 当前 composition，再重新读取受影响 VM 值并重载；不维护 IME BUSY/重试状态机（R7）。commit 是用户输入提交，若后续重载失败，旧树保留而已提交输入不撤回。
 
 VM 是状态真源，reload 从不重置或反序列化覆盖 VM。结构插入使自动生成结构路径 ID 变化时，相关控件可能重建，故需要保留编辑状态的节点推荐显式 view-id；源码行号不作为身份。
 
-**NativeHost 的保守事务边界（待决 D4）**：已附着内容的 host 必须以相同名字、component 和实例路径保留；若新 IR 删除/改名/跨 scope 移动该 host，返回 BUSY 并保留旧页，要求应用显式 detach 后重试。允许 host 外围布局节点变化，commit 才重新接入同一 host；不能在预构建时把其 content 同时挂两棵树。这避免热重载无声销毁终端/编辑器会话。
+**NativeHost 的保守事务边界（D4 已裁决）**：已附着内容的 host 必须以相同名字、component 和实例路径保留；若新 IR 删除/改名/跨 scope 移动该 host，返回 BUSY 并保留旧页，要求应用显式 detach 后重试。允许 host 外围布局节点变化，commit 才重新接入同一 host；不能在预构建时把其 content 同时挂两棵树。这避免热重载无声销毁终端/编辑器会话。
 
 CSS-only 更新无需重建 IR 树，继续走现有 StyleRegistry 原子 replace、错误回滚、删除声明恢复默认；本稿不另造 CSS 运行时。独立 CSS 热更新也受同一事务边界保护。实现不得以整页销毁重建冒充全部状态保留。
 
@@ -724,8 +704,8 @@ CSS-only 更新无需重建 IR 树，继续走现有 StyleRegistry 原子 replac
 1. 同一 release 测试 exe/DLL、同 VM 初值、CSS/字体/DPI/主题/窗口尺寸、相同输入序列；关闭 watcher、追踪、采样动画。手写 Rust 参考页属于 OneUI 测试夹具，不进入 iShell 产品 L4。
 2. t0 为 UI 线程状态修改前；t1 为携带该 update sequence 的首次实际重绘结束/后端提交完成。异步调度等待包含在 t1−t0，不能只测 notify 函数或 get。若能获取 presentation 完成另报，不把 CPU paint 等同屏幕呈现；已提供平台 frame marker 的口径两路径保持一致。
 3. 固定 UI event→VM mutation、dispatcher→UI、单 scalar、文本、12 主题选择、list 1,000 项中单项 UPDATE/批量 INSERT/REMOVE/MOVE 六类用例。确定时钟/光标/采样/等待条件，不能靠固定“睡几帧”。
-4. 预热 50 次，每组 1,000 次，至少 5 个交替顺序配对轮次，保存原始样本/环境/二进制及 IR hash；报告 median、P95、空闲额外帧、FFI/get/set 次数、控件/租约峰值及稳定后数量。冷加载/首帧单列，不混入热更新。
-5. 以配对轮次聚合 median 和 P95 的 `(IR−manual)/manual` 落在 [-10%,+10%] 为门槛；显著快于 -10% 也先核对工作是否等价再由 Claude 确认，不私自放宽验收。极短基线接近计时分辨率时先增加样本/成批测量并保留端到端结果，不能改用更慢页面稀释开销（待决 D5）。
+4. 预热 50 次，每组 1,000 次，至少 5 个交替顺序配对轮次，保存原始样本/环境/二进制及 IR hash；报告 median、P95、空闲额外帧、FFI/get/set 次数、控件/强引用峰值及稳定后数量。冷加载/首帧单列，不混入热更新。
+5. 以配对轮次聚合 median 和 P95 的 `(IR−manual)/manual` ≤+10% 为不退化门槛；快于 -10% 核对工作量等价后接受，不算失败。极短基线接近计时分辨率时先增加样本/成批测量并保留端到端结果，不能改用更慢页面稀释开销（D5 已裁决）。
 
 列表批量变化和图表数据复制可能达不到标量预算，须逐类报告，不能只挑 paint 主导的大页面宣称全部通过。若超过预算，先减少重复 get/转换/申请、预编译 setter 分发表；不删除 schema 校验或关闭生命周期保护。不要在本阶段承诺零拷贝集合；必要的 bulk value 扩展需单独评审协议。
 
@@ -733,8 +713,8 @@ CSS-only 更新无需重建 IR 树，继续走现有 StyleRegistry 原子 replac
 
 两者共享 `.oneview`、schema/组件验证、C vtable；不得重新实现控件工厂或解释 `.one`。应提供与 Rust 相同的 typed schema generator、UI scope、错误值、列表租约和显式 Close/Dispose。v1 只交文档契约，不把新增完整 Go/C# 包列作本次实现交付。
 
-- Go：不要让 C 长期保存含 Go 指针的 VM/字符串地址。用 `runtime/cgo.Handle` 保活 Go adapter，C 分配的小 context 存 uintptr_t handle，再把 context 指针作为 vm；release 在 UI 上 Delete handle 并释放 C context。跨回调存活的值租约可复制到 C 分配缓冲，release_value 配对释放；callback shim 属于 OneUI Go 绑定包，应用仓库无需 C++。显式 Close 经 UI dispatcher 完成；finalizer 只能兜底安排关闭，不能直接调用 UI API。handle 的有效期/删除规则参见 [Go runtime/cgo.Handle 官方说明](https://pkg.go.dev/runtime/cgo#Handle)。
-- C#：用 GCHandle 保活 adapter，静态 Cdecl trampoline 或被强引用的 delegate 与 vtable 同寿命；不能只保存临时 delegate 地址。UTF-8 明确编码并保持租约缓冲直到 release_value；长度映射 nuint，i64 映射 long，bool 用 uint 的 0/1。用 IDisposable 在 UI 线程关闭，SafeHandle/finalizer 的线程不能直接释放 UI VM，应先安排 UI 关闭后才回收纯句柄资源。布局/指针/回调寿命按 [Microsoft 原生互操作实践](https://learn.microsoft.com/en-us/dotnet/standard/native-interop/best-practices) 核查，异常转换为 FOREIGN_FAILURE。
+- Go：不要让 C 长期保存含 Go 指针的 VM/字符串地址。用 `runtime/cgo.Handle` 保活 Go adapter，C 分配的小 context 存 uintptr_t handle，再把 context 指针作为 vm；release 在 UI 上 Delete handle 并释放 C context。每 vm 使用可复用 C 分配 scratch 缓冲，下一次 vtable 调用才覆盖，vm.release 回收；callback shim 属于 OneUI Go 绑定包，应用仓库无需 C++。显式 Close 经 UI dispatcher 完成；finalizer 只能兜底安排关闭，不能直接调用 UI API。handle 的有效期/删除规则参见 [Go runtime/cgo.Handle 官方说明](https://pkg.go.dev/runtime/cgo#Handle)。
+- C#：用 GCHandle 保活 adapter，静态 Cdecl trampoline 或被强引用的 delegate 与 vtable 同寿命；不能只保存临时 delegate 地址。UTF-8 明确编码并保持 scratch 缓冲直到同 vm 的下一次 vtable 调用；长度映射 nuint，i64 映射 long，bool 用 uint 的 0/1。用 IDisposable 在 UI 线程关闭，SafeHandle/finalizer 的线程不能直接释放 UI VM，应先安排 UI 关闭后才回收纯句柄资源。布局/指针/回调寿命按 [Microsoft 原生互操作实践](https://learn.microsoft.com/en-us/dotnet/standard/native-interop/best-practices) 核查，异常转换为 FOREIGN_FAILURE。
 - 两种绑定都必须测试 callback 内关闭、窗口先关、队列取消、重复 key、失效 notifier、UTF-8 非 ASCII、x86/x64 struct offset。保活与 pinning 不是一回事；本协议不依赖 GC 地址长期固定。Go goroutine/C# Task 的后台结果只通过 UI 投递修改 VM。
 
 ## 11. 实现步骤、文件边界与验收产物
@@ -743,11 +723,11 @@ CSS-only 更新无需重建 IR 树，继续走现有 StyleRegistry 原子 replac
 
 | 步骤 | 交付与预计文件 | 可独立验收的测试 |
 |---|---|---|
-| **S1 契约与编译器** | `tools/viewc/{ast,parser,schema,validate,ir_writer,emit_rust,emit_cpp}.{h,cpp}` 按实际职责拆分；`main.cpp` 只 CLI；`include/oneui/view/{ir_format,component_contract}.h`；共享注册表；JSON schema 格式和黄金 `.oneview` | 旧 parser 正反例；独立 VM 未知字段/类型/可写性/事件参数/key/import/slot/CSS 诊断；规范 hash、跨路径可重复字节、每段 roundtrip、损坏文件/溢出/未知必需段/版本/循环测试；独立 golden bytes 避免 writer/reader 同错 |
+| **S1 契约与编译器** | `tools/viewc/{ast,parser,schema,validate,ir_writer,emit_rust,emit_cpp}.{h,cpp}` 按实际职责拆分；`main.cpp` 只 CLI；`include/oneui/view/{ir_format,component_contract}.h`；共享注册表；oneschema 语法和黄金 `.oneview` | 旧 parser 正反例；独立 VM 未知字段/类型/可写性/事件参数/key/import/slot/CSS 诊断；规范 hash、跨路径可重复字节、每段 roundtrip、损坏文件/溢出/未知必需段/版本/循环测试；独立 golden bytes 避免 writer/reader 同错 |
 | **S2 核心 runtime** | `src/view/{ir_reader,component_adapter,instance,binding,scope,keyed_list,style_scope}.cpp` 及私有头；从 `ui_declarative.h` 抽组件工厂/属性应用共享服务；不新增布局引擎 | 以 C++ mock VTable 驱动属性/双向绑定/命令门控、if/else 保留、嵌套列表、slot 捕获；keyed 增删改移/同 key 换对象拒绝、选择焦点、失败事务/OOM、无效 notify、无空闲额外帧 |
-| **S3 C ABI 与生命周期** | `include/oneui/oneui_view_c_api.h`、主 C 头接入；`src/capi/oneui_c_api_view.cpp` + `oneui_c_api_view_lifetime.cpp`；widget/window 控制块接入；`tests/view_c_api_tests.cpp` | 真 C 消费者、不匹配 schema 零 VM 调用、每个租约的成功/失败配对、get 内 notify、invoke 内 notify/self-destroy、关闭窗口取消、错误线程、list 删除后 child 通知、host owner 生命周期；ABI POD/导出/版本检查 |
-| **S4 Rust 绑定** | `oneui-sys/src/ffi/view.rs` 与类型/符号清单；`oneui/src/view/{mod,model,value,list,notifier,host}.rs`；生成宏/辅助描述；`oneui/tests/view_*.rs` | trait 类型/命令参数 compile-fail；!Send/!Sync；panic/重入/lease/drop 次数；双视图共享 VM；异步结果在 View drop 后被拒；真正 Rust VM 无 C++ 胶水创建页面、child command 路由 |
-| **S5 C++ 统一与开发重载** | `include/oneui/view/cpp_adapter.h`；`cmake/OneUIView.cmake`；旧示例 schema 与新生成入口；`src/view/reload.cpp`、开发 watcher 接入；移除 cpp-legacy emitter | 旧/IR C++ 的控件树及绘制/交互差分，再测 IR C++/Rust；原有 declarative runtime/compiler 全回归；热 reload 增删节点/属性删除/插槽捕获/出错回滚/IME BUSY/host BUSY；50 次重载无 lease/订阅增长 |
+| **S3 C ABI 与生命周期** | `include/oneui/oneui_view_c_api.h`、主 C 头接入；`src/capi/oneui_c_api_view.cpp` + `oneui_c_api_view_lifetime.cpp`；widget/window 控制块接入；`tests/view_c_api_tests.cpp` | 真 C 消费者、不匹配 schema 零 VM 调用、每个 VM 强引用的成功/失败配对、get 内 notify、invoke 内 notify/self-destroy、关闭窗口取消、错误线程、list 删除后 child 通知、host owner 生命周期；ABI POD/导出/版本检查 |
+| **S4 Rust 绑定** | `oneui-sys/src/ffi/view.rs` 与类型/符号清单；`oneui/src/view/{mod,model,value,list,notifier,host}.rs`；生成宏/辅助描述；`oneui/tests/view_*.rs` | trait 类型/命令参数 compile-fail；!Send/!Sync；panic/重入/drop 次数；双视图共享 VM；异步结果在 View drop 后被拒；真正 Rust VM 无 C++ 胶水创建页面、child command 路由 |
+| **S5 C++ 统一与开发重载** | `include/oneui/view/cpp_adapter.h`；`cmake/OneUIView.cmake`；旧示例 schema 与新生成入口；`src/view/reload.cpp`、开发 watcher 接入；移除 cpp-legacy emitter | 旧/IR C++ 的控件树及绘制/交互差分，再测 IR C++/Rust；原有 declarative runtime/compiler 全回归；热 reload 增删节点/属性删除/插槽捕获/出错回滚/IME commit/host BUSY；50 次重载无 强引用/订阅增长 |
 | **S6 设置示例与性能交付** | `examples/language_neutral_views/` 下 `.one`/CSS/schema、Rust VM、测试专用手写参考；`tests/view_performance*`；固定 `docs/benchmarks/language-neutral-views/` 报告 | 基础设置示例 12 主题、语言/标题栏/密度/关闭动作/启动项、字体/背景及状态/错误、异步结果；两主题/宽窄窗口、输入及列表动作、真实截图；release ±10% 测量与所有现有声明式/ABI/Rust 测试；59 项基线既有审计失败单列 |
 
 S6 示例是本地模拟设置模型，禁止真实写用户配置或网络；操作行为/模板能力与产品基础页同构。标题栏风格/背景/字体和主题画廊等若现有注册组件表达不足，必须在 S1 能力清单中逐项暴露并由 Claude 确定补齐边界，不能用普通 UI NativeHost 偷渡，也不能只交上面四属性示例宣称完整同构。iShell 真实 CSS/持久化/12 主题像素迁移仍属 WP5-B1，示例不是产品验收替代品。
@@ -758,27 +738,26 @@ S6 示例是本地模拟设置模型，禁止真实写用户配置或网络；�
 
 构建与产物：实施前读取 build-artifact-hygiene，复用本工作树 `build/capture`；release 性能使用 Claude 确认的固定输出位置，不能另按日期建副本。更改 include 类布局先 clean 再全量编译；现有主仓库 third_party/skia、out/text-assets、Yoga 仅只读输入，绝不 clean 或改动主仓库工作区。每步记录实际命令/结果/失败，不把预定拆分批次声称为已验证提交。报告/截图用固定目录替换并按项目合计预算清理。
 
-## 12. 风险与待决问题（请 Claude 裁决）
+## 12. 已裁决事项与检查点
 
-| ID | 需要决定的问题 | 推荐与理由；未同意时的影响 |
-|---|---|---|
-| **D1** | schema 来源和严格匹配范围 | 采用显式 `.one.schema.json`、ID 固定、完整契约 SHA-256（包括未用但可达字段）；避免从 C++ 或模板推断导致 Rust/Go 类型分叉。代价是加字段也需重生成全契约绑定。若要内嵌 schema 语法，应在 S1 前统一输入方式 |
-| **D2** | view 根继续用 OneUiWidget*，还是独立 OneUiView* | 本稿遵循任务书返回 Widget，要求 widget_destroy 接入 ViewControl；优点是既有树接口兼容。独立 View 句柄更容易防误销毁，但改变任务书签名。请确认 Widget 方案和 mount/window 主动关闭语义，不能等绑定写完才换所有权 |
-| **D3** | C++ 旧 VM/header/Slots 的迁移程度 | 采用单 runtime，短期 legacy emitter 只作差分 oracle，S5 删除；借用 VM 的 build_X 保留既有寿命要求，推荐新代码共享所有权；外部动态 Slots 显式迁移为模板/NativeHost。若必须无损保留动态 Slots，需另定受控 SDK 作者接口，不能混入中立 IR |
-| **D4** | 热重载对 NativeHost/IME 的边界 | 保留同名 attached host；删除/移动该 host 或替换 composition 节点时 BUSY、整次回滚。推荐优先保证会话/输入不丢；不要承诺跨类型无条件保留全部 widget 状态 |
-| **D5** | ±10% 的具体测量与低于 -10% 的处理 | 采用 UI mutation→对应重绘提交完成、配对 median/P95，按第 9 节固定场景；性能明显更快先核对等价性，由 Claude 确认是否按“不退化”接受。CPU paint 历史数据不能代替这一门槛 |
-| **D6** | WP3 与 WP4 的动态 host/复杂事件接口 | v1 静态 host 名唯一、repeat 内 host 拒绝；PaneGrid 动态窗格/host 由 WP4 组件拥有并提出 typed 语义事件，必要时扩协议。请确认是否 WP3 就要 keyed host 查询；若要，须设计 `(scope/key path,name)` API 和内容租约，不以全局名字拼接凑合 |
-| **D7** | 当前复合集合先用通用 list，是否立即增加 bulk ABI | 推荐先统一可验证语义和每次提交缓存；S6 专门测 Series/Rows，若因逐项回调超预算再评审 bulk。不要同时发两套未经测量的数据协议，也不保证通用 list 的图表吞吐已足够 |
-| **D8** | “基础设置同构示例”的首期控件补齐范围 | 推荐覆盖实际行为矩阵，现有 Select/Switch/模板主题列表先验证协议；缺失的主题卡/字体/背景控件列入 OneUI 注册组件补齐，不回退普通 NativeHost。完整像素/产品 CSS 在 WP5。请确认 S6 同构粒度及这些通用组件是否计入 WP3 |
+评审依据：`E:/project/tauri/ishellpro-arch/docs/codex/reports/WP-3-design-review.md`，Claude 对 design-1 f393c5e 有条件通过。本 design-2 已落实：
 
-其他已识别风险：C ABI 默认对齐必须跨目标实测；恶意 IR 必须先限额校验再分配；reconcile/热 reload 的 no-throw commit 需要真实故障注入；旧 C++ 字符串/浮点与新 utf8/f64 的边界可能造成布局差异；语言 VM 在 connect/disconnect 自行修改业务状态会破坏回滚，因此协议禁止。以上均列入对应 S1–S6 测试，不以“异常很少”略过。
+| 条目 | 最终规则 |
+|---|---|
+| R1 | 删除值租约/release_value；UTF-8 有效至下一次同 vm vtable 调用，runtime 立即复制 |
+| R2 | 删除列表句柄/retain/release；list 回调直接用 property_id |
+| R3 / D2 | 独立 OneUiView，返回码+out；root 借用；不改 Widget 销毁/布局 |
+| R4 | RESET 同 key 新 VM 替换；delta 折叠直接 RESET；精确 delta 身份稳定，debug 诊断 |
+| R5 / R6 / D1 | .oneschema、import、when/busy；按名排序自动 ID；完整可达契约 SHA-256 |
+| R7 / D4 | 热重载先 commit composition；附着 host 删除/改名/移动仍 BUSY、回滚 |
+| D3 | 单 runtime；cpp-legacy 仅 S1–S4 对照，S5 删除；外部动态 Slots 迁移 |
+| D5 | 接受第 9 节口径；快超过 10% 在工作等价核验后接受；短计时批量测 |
+| D6 | WP3 静态 host，查询预留 scope；WP4 再定 (key path,name) 动态 host |
+| D7 | 不提前加 bulk ABI；S6 Series/Rows 超预算另评审 |
+| D8 | S6 行为/数据流同构，不要求像素；主题用 v-for+现有组件；S1 列通用组件缺口，交 WP4 补齐，WP3 不实现 |
 
-## 13. 本次设计交付与验证记录
+S1、S3、S6 为暂停验收点。本轮只 S1；S3 实施前重新核对 main ABI、使用下一个未占号。include 下既有类布局变更须 clean capture 后全量编译。当前无待裁决 design-1 项，不自动开展 S2。
 
-- 本次设计交付仅新增本文件；未改源码、include 布局、iShell、主仓库工作区或构建输入，未构建、未运行 CTest、未测量性能、未生成截图。文中的头文件/Rust 是拟议接口，不能当作已编译通过的 SDK。
-- 已只读核对任务书、WP0–WP2 验收、七份声明式文档、viewc/运行时/C ABI/Rust/iShell 三个模板；文档内列明对应路径与行号。知识图谱只读 `list_projects` 因当前审批策略拒绝，不再调用该 MCP，改用本地只读检索。
-- 文档检查：JSON schema 示例可解析，代码围栏成对，引用的本地文件/行号范围已核对，固定 IR 记录尺寸已按字段复核；`git diff --check` 用于提交前空白检查。没有把这些文档检查称作 C/Rust 编译或 runtime 测试。
-- MyStudio workspace/project/blueprint 上下文已读；本机技能和服务 agent kit 均为 5，无更新。按本任务及 WP0 验收的约束，未调用写入工具，**本次任务/交接/文档未同步 MyStudio**，以 Git 文档为交付。
-- 本次不产生可再生构建/测试临时产物，不清理其他会话正在使用的既有构建目录；保留项仅本设计文档。后续实现必须按第 11 节独立记录真实证据。
-- Git 暂存实际被 `E:/project/byname/oneui/.git/worktrees/oneui-views/index.lock` 权限拒绝，未提交。按 Claude 指示另留根目录 `WP-3-design-commit-msg.txt`（UTF-8 无 BOM，含 Co-Authored-By），供代提交本设计文档；该提交信息文件不是源码或测试产物。
-- 当前待执行事项：Claude 评审 D1–D8、确定推荐协议是否接受；通过后才实施 S1。没有把设计方案或历史测试计作 WP3 功能通过。
+## 13. design-2 交付边界
+
+本次先修改本设计稿，再实施 S1。S1 新接口为编译/验证工具，不实现 C View runtime 或 Rust VM 运行。C/C++/Rust 样例是后续接口设计，不能作为已编译 SDK 证明。MyStudio 只读上下文，不写同步；交接以仓库文档为准。Git 写入失败时分别留 design2、S1 提交信息和文件清单，不合并成未验证的历史批次。
