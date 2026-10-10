@@ -76,24 +76,6 @@ const std::vector<std::shared_ptr<Widget>>& View::children() const {
     return children_;
 }
 
-void View::reconcileChildren(std::vector<std::shared_ptr<Widget>> children) {
-    std::unordered_set<Widget*> keep;
-    for (const auto& child : children)
-        if (!child || !keep.insert(child.get()).second) throw std::invalid_argument("Duplicate or null child");
-    if (children == children_) return;
-    if (focusedChild_ && !keep.count(focusedChild_)) { focusedChild_->onFocusChanged(false); focusedChild_ = nullptr; }
-    if (pressedChild_ && !keep.count(pressedChild_)) pressedChild_ = nullptr;
-    if (hoveredChild_ && !keep.count(hoveredChild_)) hoveredChild_ = nullptr;
-    std::unordered_set<Widget*> previous;
-    for (const auto& child : children_) {
-        previous.insert(child.get());
-        if (!keep.count(child.get())) child->detachFromOwner(this);
-    }
-    for (const auto& child : children) if (!previous.count(child.get())) installChildCallbacks(*child);
-    children_ = std::move(children);
-    invalidate();
-}
-
 void View::setInvalidator(std::function<void()> invalidator) {
     Widget::setInvalidator(std::move(invalidator));
     for (const auto& child : children_) {

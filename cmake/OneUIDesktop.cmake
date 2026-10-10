@@ -119,7 +119,7 @@ add_library(oneui SHARED ${ONEUI_C_API_SOURCES}
     $<TARGET_OBJECTS:oneui_platform_desktop>)
 # Linking the object target also carries its usage requirements (e.g. Yoga).
 # TARGET_OBJECTS alone silently drops those dependencies on desktop builds.
-target_link_libraries(oneui PRIVATE oneui_core ${_oneui_desktop_libraries})
+target_link_libraries(oneui PRIVATE oneui_views oneui_core ${_oneui_desktop_libraries})
 target_include_directories(oneui PUBLIC include PRIVATE src)
 target_compile_definitions(oneui PRIVATE ONEUI_BUILDING_DLL)
 if(APPLE)
@@ -150,7 +150,7 @@ add_library(OneUI::oneui ALIAS oneui)
 if(ONEUI_BUILD_STATIC)
     add_library(oneui_static STATIC ${ONEUI_C_API_SOURCES}
         $<TARGET_OBJECTS:oneui_platform_desktop>)
-    target_link_libraries(oneui_static PUBLIC oneui_core ${_oneui_desktop_libraries})
+    target_link_libraries(oneui_static PUBLIC oneui_views oneui_core ${_oneui_desktop_libraries})
     target_include_directories(oneui_static PUBLIC include PRIVATE src)
     target_compile_definitions(oneui_static PUBLIC ONEUI_STATIC)
     add_library(OneUI::oneui_static ALIAS oneui_static)

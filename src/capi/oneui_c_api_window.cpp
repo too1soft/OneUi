@@ -2,6 +2,7 @@
 #include "oneui_c_api_error.h"
 #include "oneui_c_api_internal.h"
 #include "oneui_c_api_window_internal.h"
+#include "oneui_c_api_view_window.h"
 using oneui::capi::utf8OrEmpty;
 using oneui::capi::wideOrEmpty;
 
@@ -53,7 +54,9 @@ OneUiWindow *oneui_window_create_utf8(const OneUiWindowOptionsUtf8 *options) {
     }
 }
 
-void oneui_window_destroy(OneUiWindow *window) { delete window; }
+void oneui_window_destroy(OneUiWindow *window) {
+    if (oneui::capi::views::closeWindowMounts(window)) delete window;
+}
 
 void oneui_window_initialize(OneUiWindow *window) { (void)oneui_window_initialize_checked(window); }
 

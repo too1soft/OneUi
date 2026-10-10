@@ -3,6 +3,21 @@
 
 namespace oneview
 {
+uint32_t componentRoot(const Image &image, uint32_t node)
+{
+    for (unsigned depth = 0; depth < 64; ++depth)
+    {
+        require(node < image.count(NODE), "BAD_IR: overlay node");
+        const auto &n = image.records[NODE][node];
+        if (n[0] == 1)
+            return node;
+        require(n[0] == 3 && n[9] < image.count(CALL), "CALL_ROOT: a component root is required");
+        auto target = image.records[CALL][n[9]][1];
+        require(target < image.count(TMPL), "BAD_IR: overlay template");
+        node = image.records[TMPL][target][1];
+    }
+    throw Error("BAD_IR: overlay root cycle/depth");
+}
 uint32_t Image::sid(const std::string &text)
 {
     require(utf8(text) && text.size() <= 1024 * 1024, "UTF8/LIMIT: string");

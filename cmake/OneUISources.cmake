@@ -85,6 +85,7 @@ set(ONEUI_CORE_SOURCES
     src/core/tree_view.cpp
     src/core/validation_message.cpp
     src/core/view.cpp
+    src/core/view_reconcile.cpp
     src/core/virtual_list.cpp
     src/core/widget.cpp
     src/core/window_title_bar.cpp
@@ -92,6 +93,7 @@ set(ONEUI_CORE_SOURCES
 )
 
 set(ONEUI_C_API_SOURCES
+    src/platform/shared/declarative_mount.cpp
     src/core/application.cpp
     src/core/dock_session.cpp
     src/core/dock_session_model.cpp
@@ -115,6 +117,11 @@ set(ONEUI_C_API_SOURCES
     src/capi/oneui_c_api_internal.cpp
     src/capi/oneui_c_api_interaction.cpp
     src/capi/oneui_c_api_runtime.cpp
+    src/capi/oneui_c_api_view.cpp
+    src/capi/oneui_c_api_view_mount.cpp
+    src/capi/oneui_c_api_view_notifier.cpp
+    src/capi/oneui_c_api_view_host.cpp
+    src/capi/oneui_c_api_view_window.cpp
 )
 
 set(ONEUI_WIN32_SOURCES

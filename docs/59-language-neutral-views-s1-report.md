@@ -71,7 +71,7 @@ WP4 的 PaneGrid/DockWorkspace/CommandBar/容器查询与 `(key path,name)` 动�
 
 ## 4. 边界与需要 Claude 裁决的差异
 
-1. **导入组件调用点的普通属性**：旧 emitter 把 `class/grow/...` 直接应用到导入模板返回的根；已批准 IR 的 CALL 节点 component=NONE，PROP 又要求组件属性 ID，无法无歧义承载这条旧捷径。S1 明确报 `CALL_ATTRIBUTES`，没有静默忽略。推荐要求源模板显式 wrapper，或在 S2 前单独规定“对实际子根应用属性”的 CALL overlay 契约；推荐前者使组件边界清晰。需要确认迁移策略，不能宣称这部分已经与 legacy 树一致。
+1. **导入组件调用点的普通属性（已裁决）**：S1 的 CALL_ATTRIBUTES 限制已由 Claude 关闭。S2 采用调用点透传，不增加包装节点；PROP/BIND/EVNT 增加 owner_kind，按被调用根组件校验并保持调用者绑定作用域。见设计稿 S2 增补与 S2 报告。
 2. **Slider/Card 的 D8 表述**：它们是现有原生控件，尚非现有 `.one` 组件。推荐按 G3/G4 处理：WP3 使用已注册 Input/Select/Surface/Button，WP4 补注册与交互契约。本次没有擅自扩展组件实现。
 3. **验收环境**：标准 Ninja 在此限制令牌环境下无法完成子进程退出等待，连 echo 探针都可复现。需在正常开发终端重跑已配置 capture 的 `ninja` 和 `ctest -j 8`，才能补齐标准构建证据；不能把手工编译说成 Ninja 成功。无需改 ABI 或业务代码解决此问题。
 
@@ -79,72 +79,76 @@ WP4 的 PaneGrid/DockWorkspace/CommandBar/容器查询与 `(key path,name)` 动�
 
 ## 5. 实际验证与文件清单
 
-此节在本轮验证结束后填写最终结果。无公共 include 类布局变更，无需 clean；原仓库及 iShell 文件始终只读。所有临时构建与测试证据复用 `build/capture`。
+S1 的正常终端最终验证为 62/63 通过，唯一既有 audit 失败；详见第 6 节验收补记。无公共 include 类布局变更，无需 clean；原仓库及 iShell 文件始终只读。所有临时构建与测试证据复用 `build/capture`。
 
-- `docs/59-language-neutral-views-s1-report.md`?
-- `tests/viewc/Basic.one`?
-- `tests/viewc/Basic.oneschema`?
-- `tests/viewc/Basic.oneview.hex`?
-- `tests/viewc/golden_reference.py`?
-- `tests/viewc/support.py`?
-- `tests/viewc/test_binary.py`?
-- `tests/viewc/test_diagnostics.py`?
-- `tests/viewc/test_schema.py`?
-- `tests/workspace_fixture.py`?
-- `tools/viewc/ast.h`?
-- `tools/viewc/binary.cpp`?
-- `tools/viewc/binary.h`?
-- `tools/viewc/compiler.cpp`?
-- `tools/viewc/compiler.h`?
-- `tools/viewc/component_contract.cpp`?
-- `tools/viewc/component_contract.h`?
-- `tools/viewc/component_registry.inc`?
-- `tools/viewc/ir.h`?
-- `tools/viewc/ir_graph.cpp`?
-- `tools/viewc/ir_reader.cpp`?
-- `tools/viewc/ir_validate.cpp`?
-- `tools/viewc/ir_writer.cpp`?
-- `tools/viewc/legacy.h`?
-- `tools/viewc/lower.cpp`?
-- `tools/viewc/lower_attributes.cpp`?
-- `tools/viewc/schema.cpp`?
-- `tools/viewc/schema.h`?
-- `tools/viewc/schema_parser.cpp`?
-- `tools/viewc/validate.cpp`?
+- `docs/59-language-neutral-views-s1-report.md`
+- `tests/viewc/Basic.one`
+- `tests/viewc/Basic.oneschema`
+- `tests/viewc/Basic.oneview.hex`
+- `tests/viewc/golden_reference.py`
+- `tests/viewc/support.py`
+- `tests/viewc/test_binary.py`
+- `tests/viewc/test_diagnostics.py`
+- `tests/viewc/test_schema.py`
+- `tests/workspace_fixture.py`
+- `tools/viewc/ast.h`
+- `tools/viewc/binary.cpp`
+- `tools/viewc/binary.h`
+- `tools/viewc/compiler.cpp`
+- `tools/viewc/compiler.h`
+- `tools/viewc/component_contract.cpp`
+- `tools/viewc/component_contract.h`
+- `tools/viewc/component_registry.inc`
+- `tools/viewc/ir.h`
+- `tools/viewc/ir_graph.cpp`
+- `tools/viewc/ir_reader.cpp`
+- `tools/viewc/ir_validate.cpp`
+- `tools/viewc/ir_writer.cpp`
+- `tools/viewc/legacy.h`
+- `tools/viewc/lower.cpp`
+- `tools/viewc/lower_attributes.cpp`
+- `tools/viewc/schema.cpp`
+- `tools/viewc/schema.h`
+- `tools/viewc/schema_parser.cpp`
+- `tools/viewc/validate.cpp`
 
-## 6. ???????
+## 6. 产物清理与验收补记
 
-??????? 8 ???????? `.ilk` ????????????? **609 MiB** ????????????????????????????? build ?? **19.86 GiB**?E: ??? **61.37 GiB**????? 22 GiB ???????????????????`build/artifact-state.json` ????
+S1 曾清理 8 个可再生测试增量链接缓存及临时对象，共约 609 MiB。该轮结束时项目 build 合计约 19.86 GiB，E: 空闲约 61.37 GiB；这些数字是 S1 历史测量，不代表 S2/S3 当前占用。
 
-??? 24 ??????????????? creator-only ACL ????/???**????**?????????????/???????? 8 ??????????? 16 ?????? build-space ???Python ???? PermissionError?????? 8 ??????????????????????????????????????????????????????????? fixture ??????????????????????????????????
+Claude 已在正常终端复核：Ninja 构建通过，完整 CTest 共 63 项，62 项通过；唯一失败为既有的 `oneui_windows_runtime_audit_tests`（外部 windows-compat 文件哈希）。此前沙箱出现的另外 5 项失败已确认属于环境限制。S1 新增三组 Python 测试实际有 25 个 unittest 方法；第 2 节的 22 个为早期统计，按本补记更正。
 
-| ???? | ?? | ?????/???? |
+S2 开始时再次尝试回收 S1 遗留的 24 个测试目录，不修改 ACL、不申请提权。新的 viewc 测试只能在 `build/capture/viewc-tests/` 内创建临时目录，并通过上下文 finally 和 unittest addCleanup 自动清理，包括测试失败路径。使用继承工作树 ACL 的 mkdir，避免 Python 3.13+ mkdtemp 的 creator-only ACL。
+
+本次已清除或确认不存在 0 个；仍受阻 24 个。受阻项无法读取大小，均标为未知，不能计作零或声称已清理。
+
+| 绝对路径 | 大小 | 不合规原因、受阻原因与手动清理前提 |
 |---|---|---|
-| `E:/project/byname/oneui-views/build/capture/viewc-tests/viewc-9qim1tkb` | ???????? | ACL ??????????? fixture ??? |
-| `E:/project/byname/oneui-views/build/capture/viewc-tests/viewc-_ztlfb0p` | ???????? | ACL ??????????? fixture ??? |
-| `E:/project/byname/oneui-views/build/capture/viewc-tests/viewc-akgnxd9z` | ???????? | ACL ??????????? fixture ??? |
-| `E:/project/byname/oneui-views/build/capture/viewc-tests/viewc-fr3kdbgg` | ???????? | ACL ??????????? fixture ??? |
-| `E:/project/byname/oneui-views/build/capture/viewc-tests/viewc-n80amp14` | ???????? | ACL ??????????? fixture ??? |
-| `E:/project/byname/oneui-views/build/capture/viewc-tests/viewc-nrqse2kj` | ???????? | ACL ??????????? fixture ??? |
-| `E:/project/byname/oneui-views/build/capture/viewc-tests/viewc-rt5_3vb7` | ???????? | ACL ??????????? fixture ??? |
-| `E:/project/byname/oneui-views/build/capture/viewc-tests/viewc-vpiz1tj5` | ???????? | ACL ??????????? fixture ??? |
-| `C:/Users/Administrator/AppData/Local/Temp/tmp0zs9n4ut` | ???????? | ACL ??????????? fixture ??? |
-| `C:/Users/Administrator/AppData/Local/Temp/tmp2xxbtxup` | ???????? | ACL ??????????? fixture ??? |
-| `C:/Users/Administrator/AppData/Local/Temp/tmp3eqchuch` | ???????? | ACL ??????????? fixture ??? |
-| `C:/Users/Administrator/AppData/Local/Temp/tmp9510j384` | ???????? | ACL ??????????? fixture ??? |
-| `C:/Users/Administrator/AppData/Local/Temp/tmp9d5r0h4x` | ???????? | ACL ??????????? fixture ??? |
-| `C:/Users/Administrator/AppData/Local/Temp/tmp_w6yg580` | ???????? | ACL ??????????? fixture ??? |
-| `C:/Users/Administrator/AppData/Local/Temp/tmpazzv83db` | ???????? | ACL ??????????? fixture ??? |
-| `C:/Users/Administrator/AppData/Local/Temp/tmpbcoxzqqc` | ???????? | ACL ??????????? fixture ??? |
-| `C:/Users/Administrator/AppData/Local/Temp/tmpc7doitpp` | ???????? | ACL ??????????? fixture ??? |
-| `C:/Users/Administrator/AppData/Local/Temp/tmpd39h5q3c` | ???????? | ACL ??????????? fixture ??? |
-| `C:/Users/Administrator/AppData/Local/Temp/tmpdgo37424` | ???????? | ACL ??????????? fixture ??? |
-| `C:/Users/Administrator/AppData/Local/Temp/tmpel3vsqp0` | ???????? | ACL ??????????? fixture ??? |
-| `C:/Users/Administrator/AppData/Local/Temp/tmpg88kqbfh` | ???????? | ACL ??????????? fixture ??? |
-| `C:/Users/Administrator/AppData/Local/Temp/tmpmhrvlftl` | ???????? | ACL ??????????? fixture ??? |
-| `C:/Users/Administrator/AppData/Local/Temp/tmpni6u6mk3` | ???????? | ACL ??????????? fixture ??? |
-| `C:/Users/Administrator/AppData/Local/Temp/tmppoldlpm_` | ???????? | ACL ??????????? fixture ??? |
+| [C:/Users/Administrator/AppData/Local/Temp/tmp0zs9n4ut](C:/Users/Administrator/AppData/Local/Temp/tmp0zs9n4ut) | 未知（ACL 拒绝读取） | 过期测试 fixture；删除被 ACL 拒绝。需有权访问该目录的创建身份处理，且确认没有测试占用。 |
+| [C:/Users/Administrator/AppData/Local/Temp/tmp2xxbtxup](C:/Users/Administrator/AppData/Local/Temp/tmp2xxbtxup) | 未知（ACL 拒绝读取） | 过期测试 fixture；删除被 ACL 拒绝。需有权访问该目录的创建身份处理，且确认没有测试占用。 |
+| [C:/Users/Administrator/AppData/Local/Temp/tmp3eqchuch](C:/Users/Administrator/AppData/Local/Temp/tmp3eqchuch) | 未知（ACL 拒绝读取） | 过期测试 fixture；删除被 ACL 拒绝。需有权访问该目录的创建身份处理，且确认没有测试占用。 |
+| [C:/Users/Administrator/AppData/Local/Temp/tmp9510j384](C:/Users/Administrator/AppData/Local/Temp/tmp9510j384) | 未知（ACL 拒绝读取） | 过期测试 fixture；删除被 ACL 拒绝。需有权访问该目录的创建身份处理，且确认没有测试占用。 |
+| [C:/Users/Administrator/AppData/Local/Temp/tmp9d5r0h4x](C:/Users/Administrator/AppData/Local/Temp/tmp9d5r0h4x) | 未知（ACL 拒绝读取） | 过期测试 fixture；删除被 ACL 拒绝。需有权访问该目录的创建身份处理，且确认没有测试占用。 |
+| [C:/Users/Administrator/AppData/Local/Temp/tmp_w6yg580](C:/Users/Administrator/AppData/Local/Temp/tmp_w6yg580) | 未知（ACL 拒绝读取） | 过期测试 fixture；删除被 ACL 拒绝。需有权访问该目录的创建身份处理，且确认没有测试占用。 |
+| [C:/Users/Administrator/AppData/Local/Temp/tmpazzv83db](C:/Users/Administrator/AppData/Local/Temp/tmpazzv83db) | 未知（ACL 拒绝读取） | 过期测试 fixture；删除被 ACL 拒绝。需有权访问该目录的创建身份处理，且确认没有测试占用。 |
+| [C:/Users/Administrator/AppData/Local/Temp/tmpbcoxzqqc](C:/Users/Administrator/AppData/Local/Temp/tmpbcoxzqqc) | 未知（ACL 拒绝读取） | 过期测试 fixture；删除被 ACL 拒绝。需有权访问该目录的创建身份处理，且确认没有测试占用。 |
+| [C:/Users/Administrator/AppData/Local/Temp/tmpc7doitpp](C:/Users/Administrator/AppData/Local/Temp/tmpc7doitpp) | 未知（ACL 拒绝读取） | 过期测试 fixture；删除被 ACL 拒绝。需有权访问该目录的创建身份处理，且确认没有测试占用。 |
+| [C:/Users/Administrator/AppData/Local/Temp/tmpd39h5q3c](C:/Users/Administrator/AppData/Local/Temp/tmpd39h5q3c) | 未知（ACL 拒绝读取） | 过期测试 fixture；删除被 ACL 拒绝。需有权访问该目录的创建身份处理，且确认没有测试占用。 |
+| [C:/Users/Administrator/AppData/Local/Temp/tmpdgo37424](C:/Users/Administrator/AppData/Local/Temp/tmpdgo37424) | 未知（ACL 拒绝读取） | 过期测试 fixture；删除被 ACL 拒绝。需有权访问该目录的创建身份处理，且确认没有测试占用。 |
+| [C:/Users/Administrator/AppData/Local/Temp/tmpel3vsqp0](C:/Users/Administrator/AppData/Local/Temp/tmpel3vsqp0) | 未知（ACL 拒绝读取） | 过期测试 fixture；删除被 ACL 拒绝。需有权访问该目录的创建身份处理，且确认没有测试占用。 |
+| [C:/Users/Administrator/AppData/Local/Temp/tmpg88kqbfh](C:/Users/Administrator/AppData/Local/Temp/tmpg88kqbfh) | 未知（ACL 拒绝读取） | 过期测试 fixture；删除被 ACL 拒绝。需有权访问该目录的创建身份处理，且确认没有测试占用。 |
+| [C:/Users/Administrator/AppData/Local/Temp/tmpmhrvlftl](C:/Users/Administrator/AppData/Local/Temp/tmpmhrvlftl) | 未知（ACL 拒绝读取） | 过期测试 fixture；删除被 ACL 拒绝。需有权访问该目录的创建身份处理，且确认没有测试占用。 |
+| [C:/Users/Administrator/AppData/Local/Temp/tmpni6u6mk3](C:/Users/Administrator/AppData/Local/Temp/tmpni6u6mk3) | 未知（ACL 拒绝读取） | 过期测试 fixture；删除被 ACL 拒绝。需有权访问该目录的创建身份处理，且确认没有测试占用。 |
+| [C:/Users/Administrator/AppData/Local/Temp/tmppoldlpm_](C:/Users/Administrator/AppData/Local/Temp/tmppoldlpm_) | 未知（ACL 拒绝读取） | 过期测试 fixture；删除被 ACL 拒绝。需有权访问该目录的创建身份处理，且确认没有测试占用。 |
+| [E:/project/byname/oneui-views/build/capture/viewc-tests/viewc-9qim1tkb](E:/project/byname/oneui-views/build/capture/viewc-tests/viewc-9qim1tkb) | 未知（ACL 拒绝读取） | 过期测试 fixture；删除被 ACL 拒绝。需有权访问该目录的创建身份处理，且确认没有测试占用。 |
+| [E:/project/byname/oneui-views/build/capture/viewc-tests/viewc-_ztlfb0p](E:/project/byname/oneui-views/build/capture/viewc-tests/viewc-_ztlfb0p) | 未知（ACL 拒绝读取） | 过期测试 fixture；删除被 ACL 拒绝。需有权访问该目录的创建身份处理，且确认没有测试占用。 |
+| [E:/project/byname/oneui-views/build/capture/viewc-tests/viewc-akgnxd9z](E:/project/byname/oneui-views/build/capture/viewc-tests/viewc-akgnxd9z) | 未知（ACL 拒绝读取） | 过期测试 fixture；删除被 ACL 拒绝。需有权访问该目录的创建身份处理，且确认没有测试占用。 |
+| [E:/project/byname/oneui-views/build/capture/viewc-tests/viewc-fr3kdbgg](E:/project/byname/oneui-views/build/capture/viewc-tests/viewc-fr3kdbgg) | 未知（ACL 拒绝读取） | 过期测试 fixture；删除被 ACL 拒绝。需有权访问该目录的创建身份处理，且确认没有测试占用。 |
+| [E:/project/byname/oneui-views/build/capture/viewc-tests/viewc-n80amp14](E:/project/byname/oneui-views/build/capture/viewc-tests/viewc-n80amp14) | 未知（ACL 拒绝读取） | 过期测试 fixture；删除被 ACL 拒绝。需有权访问该目录的创建身份处理，且确认没有测试占用。 |
+| [E:/project/byname/oneui-views/build/capture/viewc-tests/viewc-nrqse2kj](E:/project/byname/oneui-views/build/capture/viewc-tests/viewc-nrqse2kj) | 未知（ACL 拒绝读取） | 过期测试 fixture；删除被 ACL 拒绝。需有权访问该目录的创建身份处理，且确认没有测试占用。 |
+| [E:/project/byname/oneui-views/build/capture/viewc-tests/viewc-rt5_3vb7](E:/project/byname/oneui-views/build/capture/viewc-tests/viewc-rt5_3vb7) | 未知（ACL 拒绝读取） | 过期测试 fixture；删除被 ACL 拒绝。需有权访问该目录的创建身份处理，且确认没有测试占用。 |
+| [E:/project/byname/oneui-views/build/capture/viewc-tests/viewc-vpiz1tj5](E:/project/byname/oneui-views/build/capture/viewc-tests/viewc-vpiz1tj5) | 未知（ACL 拒绝读取） | 过期测试 fixture；删除被 ACL 拒绝。需有权访问该目录的创建身份处理，且确认没有测试占用。 |
 
-Git ???????? `E:/project/byname/oneui/.git/worktrees/oneui-views/index.lock: Permission denied`???????????????? `WP-3-design2-commit-msg.txt`?`WP-3-S1-commit-msg.txt`??????????? Co-Authored-By?????????????????????
+design-2 与 S1 已由 Claude 分别代为提交为 `bdaa390`、`daf38b4`。CALL 调用点属性的待决事项也已关闭：使用根组件契约透传，无包装节点，具体编码及测试归 S2。其余 D8 组件缺口仍归 WP4。
 
-MyStudio ????????????????**???**??S1 ????????? Claude ??????????????? S2?
+MyStudio 只读上下文已读取；因本任务禁止审批型写入，执行与交接未同步。

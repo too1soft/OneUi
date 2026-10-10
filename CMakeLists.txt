@@ -74,6 +74,8 @@ target_compile_definitions(oneui_core
         ONEUI_BUILDING_DLL
 )
 
+include(cmake/OneUIViewRuntime.cmake)
+
 if(BUILD_TESTING)
     oneui_register_core_tests()
 endif()
@@ -129,6 +131,7 @@ if(WIN32 AND ONEUI_BUILD_PLATFORM_WIN32)
     add_library(oneui SHARED
         ${ONEUI_C_API_SOURCES}
         $<TARGET_OBJECTS:oneui_core>
+        $<TARGET_OBJECTS:oneui_views>
         $<TARGET_OBJECTS:oneui_platform_win32>
     )
 
@@ -192,6 +195,7 @@ if(WIN32 AND ONEUI_BUILD_PLATFORM_WIN32)
         add_library(oneui_static STATIC
             ${ONEUI_C_API_SOURCES}
             $<TARGET_OBJECTS:oneui_core>
+            $<TARGET_OBJECTS:oneui_views>
             $<TARGET_OBJECTS:oneui_platform_win32>
         )
 

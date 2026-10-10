@@ -1,0 +1,2 @@
+<import name="Imported" src="Imported.one"/>
+<template view-model="Root"><Column><Imported :text="title" class="outer" @click="click"/></Column></template>

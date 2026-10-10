@@ -24,7 +24,8 @@ enum Section : uint32_t
     SMAP,
     HOST
 };
-inline constexpr uint32_t strides[] = {0, 0, 0, 0, 32, 48, 8, 24, 16, 32, 32, 16, 24, 32, 24, 32, 24, 24, 16};
+// PROP/BIND/EVNT end with owner_kind: 0 component NODE, 1 CALL NODE.
+inline constexpr uint32_t strides[] = {0, 0, 0, 0, 32, 48, 8, 24, 20, 36, 36, 16, 24, 32, 24, 32, 24, 24, 16};
 using Record = std::vector<uint32_t>;
 struct Image
 {
@@ -45,4 +46,5 @@ Bytes writeImage(const Image &image);
 Image readImage(const Bytes &bytes);
 void validateImage(const Image &image);
 void validateGraph(const Image &image);
+uint32_t componentRoot(const Image &image, uint32_t node);
 } // namespace oneview

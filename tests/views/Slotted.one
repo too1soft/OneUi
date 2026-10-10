@@ -1,0 +1,1 @@
+<template><Column><Text :text="text"/><slot name="body"/><Text v-for="leaf in children" :key="leaf.id" :text="leaf.text"/></Column></template>

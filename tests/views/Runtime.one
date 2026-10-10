@@ -1,0 +1,10 @@
+<template view-model="Root">
+  <Column>
+    <Text :text="title"/>
+    <Input v-model="title"/>
+    <Button text="Run" @click="click"/>
+    <Text v-if="visible" text="conditional"/>
+    <Text v-for="item in rows" :key="item.id" :text="item.text"/>
+    <NativeHost host="terminal"/>
+  </Column>
+</template>

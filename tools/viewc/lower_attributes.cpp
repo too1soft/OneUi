@@ -6,6 +6,9 @@ void ViewCompiler::attributes(Source &s, const Node &n, const std::vector<Scope>
                               const ComponentContract &c)
 {
     auto staticStart = image.count(PROP);
+    const auto ownerKind = image.records[NODE][index][0] == 3 ? 1u : 0u;
+    if (ownerKind && c.name == "NativeHost" && n.attrs.count("host"))
+        Location{s.relative, uint32_t(n.line), uint32_t(n.column)}.fail("HOST_NAME: CALL cannot rename host");
     std::set<uint32_t> written;
     auto claim = [&](uint32_t id, const Attribute &a) {
         if (!written.insert(id).second)
@@ -18,7 +21,7 @@ void ViewCompiler::attributes(Source &s, const Node &n, const std::vector<Scope>
         auto &p = c.property("text");
         validateStatic(c.name, p.name, n.text);
         written.insert(p.id);
-        image.add(PROP, {index, p.id, value(p.tag, n.text), span(s, n)});
+        image.add(PROP, {index, p.id, value(p.tag, n.text), span(s, n), ownerKind});
     }
     if (n.attrs.count("min") && n.attrs.count("max"))
         require(std::stod(n.attrs.at("min").value) <= std::stod(n.attrs.at("max").value), "STATIC_RANGE: min > max");
@@ -41,7 +44,7 @@ void ViewCompiler::attributes(Source &s, const Node &n, const std::vector<Scope>
                     require(e.args[i].tag == cmd.args[i].tag, "COMMAND_SIGNATURE: argument type");
                     image.add(EARG, {1, i, e.args[i].tag, span(s, a)});
                 }
-                image.add(EVNT, {index, e.id, cmd.id, r.depth, r.model, start, uint32_t(e.args.size()), span(s, a)});
+                image.add(EVNT, {index, e.id, cmd.id, r.depth, r.model, start, uint32_t(e.args.size()), span(s, a), ownerKind});
                 continue;
             }
             bool model = key == "v-model", bound = model || key[0] == ':';
@@ -60,7 +63,7 @@ void ViewCompiler::attributes(Source &s, const Node &n, const std::vector<Scope>
                 if ((a.value == "true" || a.value == "false") && !model)
                 {
                     require(p.tag == 1, "BIND_TYPE: bool literal");
-                    image.add(PROP, {index, p.id, value(1, a.value), span(s, a)});
+                    image.add(PROP, {index, p.id, value(1, a.value), span(s, a), ownerKind});
                     continue;
                 }
                 auto r = resolve(s, a, scopes);
@@ -69,12 +72,12 @@ void ViewCompiler::attributes(Source &s, const Node &n, const std::vector<Scope>
                     require(r.access == 3, "MODEL_READ_ONLY: v-model requires rw property");
                 if (r.tag == 5)
                     require(image.schema.model(r.item).name == p.record, "BIND_RECORD: component requires " + p.record);
-                image.add(BIND, {index, p.id, r.id, r.depth | ((model ? 2u : 1u) << 16), r.model, 0, span(s, a), 0});
+                image.add(BIND, {index, p.id, r.id, r.depth | ((model ? 2u : 1u) << 16), r.model, 0, span(s, a), 0, ownerKind});
             }
             else
             {
                 validateStatic(c.name, key, a.value);
-                image.add(PROP, {index, p.id, value(p.tag, a.value), span(s, a)});
+                image.add(PROP, {index, p.id, value(p.tag, a.value), span(s, a), ownerKind});
             }
         }
         catch (const std::exception &e)
@@ -84,7 +87,7 @@ void ViewCompiler::attributes(Source &s, const Node &n, const std::vector<Scope>
     }
     image.records[NODE][index][5] = staticStart;
     image.records[NODE][index][6] = image.count(PROP) - staticStart;
-    if (c.name == "NativeHost")
+    if (c.name == "NativeHost" && !ownerKind)
     {
         require(scopes.size() == 1, "HOST_DYNAMIC: WP3 only supports static hosts");
         auto h = n.attrs.find("host");

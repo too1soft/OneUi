@@ -4,14 +4,13 @@ from pathlib import Path
 import struct
 import subprocess
 import sys
-import tempfile
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from workspace_fixture import temporary_workspace
+from workspace_fixture import temporary_workspace, SCRATCH
 
 COMPILER = Path(sys.argv.pop(1)).resolve()
-SCRATCH = Path(sys.argv.pop(1)).resolve() if len(sys.argv) > 1 else Path(tempfile.gettempdir())
+SCRATCH = Path(sys.argv.pop(1)).resolve() if len(sys.argv) > 1 else SCRATCH
 FIXTURES = Path(__file__).parent
 
 

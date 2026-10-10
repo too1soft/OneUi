@@ -1,10 +1,10 @@
 # 与语言无关的声明式视图：WP3 设计稿
 
-状态：**design-2，Claude 有条件通过后的已裁决设计**。2026-10-10；design-1 提交 f393c5e。R1–R7 与 D1–D8 按 WP-3-design-review.md 落实；本轮仅实施 S1，S1 完成即暂停验收。
+状态：**design-2，Claude 有条件通过后的已裁决设计**。2026-10-10；design-1 提交 f393c5e。R1–R7 与 D1–D8 按 WP-3-design-review.md 落实；S1 已验收（daf38b4）；本次按授权连续实施 S2/S3，S3 后暂停。
 
 本稿以 OneUI `2aa15e9be3fab90316bfa6c5447ee099e177aa55`、工作树 `E:/project/byname/oneui-views`、分支 `codex/language-neutral-views` 为依据。iShell 只读调查时 HEAD 为 `b4509dee67aca9fe74c39dbaefd8670b9079c89c`；其另一路 WP2b 可能继续移动文件，以下行号指本次读到的版本。
 
-任务依据：`E:/project/tauri/ishellpro-arch/docs/codex/工程整治与界面模板化-任务书.md` 第 0、2、3 节，第 5 节 WP3/WP4，第 9 节设计评审门禁。本稿的“必须”为经评审裁决的设计约束；第 12 节记录全部裁决。C ABI 在 S3 检查点冻结，本轮不实现运行时或语言绑定。
+任务依据：`E:/project/tauri/ishellpro-arch/docs/codex/工程整治与界面模板化-任务书.md` 第 0、2、3 节，第 5 节 WP3/WP4，第 9 节设计评审门禁。本稿的“必须”为经评审裁决的设计约束；第 12 节记录全部裁决。C ABI 在 S3 检查点冻结，本次实现运行时与原生协议，Rust 安全绑定留到 S4。
 
 ## 1. 现状调查与可复用边界
 
@@ -170,9 +170,9 @@ model ThemeItem key id {
 | 5 NODE | 48 | `opcode H, flags H, component_index U, parent U, edge_start U, edge_count U, static_start U, static_count U, ref_sid U, scope_id U, aux U, span U, stable_id_sid U` |
 | 6 EDGE | 8 | `parent_node U, child_node U`，同一 parent 按源顺序连续；树校验同时核对 NODE.parent |
 | 7 VALU | 24 | `tag U, flags U, payload0 Q, payload1 Q`；静态 bool=1/i64=2/f64=3/utf8=4，flags=0；bool payload0 为 0/1，i64 为补码，f64 为位模式，utf8 payload0 为 SID，未使用 payload 必须 0 |
-| 8 PROP | 16 | `node U, component_property_id U, value_index U, span U` |
-| 9 BIND | 32 | `node U, component_property_id U, vm_property_id U, depth H, mode H, model_id U, flags U, span U, reserved U`；mode=1 单向/2 双向，flags/reserved=0 |
-| 10 EVNT | 32 | `node U, component_event_id U, command_id U, depth H, flags H, model_id U, arg_start U, arg_count U, span U` |
+| 8 PROP | 20 | `node U, component_property_id U, value_index U, span U, owner_kind U` |
+| 9 BIND | 36 | `node U, component_property_id U, vm_property_id U, depth H, mode H, model_id U, flags U, span U, reserved U, owner_kind U`；mode=1 单向/2 双向，flags/reserved=0 |
+| 10 EVNT | 36 | `node U, component_event_id U, command_id U, depth H, flags H, model_id U, arg_start U, arg_count U, span U, owner_kind U` |
 | 11 EARG | 16 | `source_kind U, source_index U, type_tag U, span U`；kind=1 事件参数位置/2 VALU 索引，严格对应命令签名，不支持任意表达式 |
 | 12 COND | 24 | `node U, property_or_value U, model_id U, depth H, mode H, span U, reserved U`；mode bit0=inverse、bit1=常量（指向 bool VALU），其他位 0；否则引用 bool property |
 | 13 REPT | 32 | `node U, list_property_id U, parent_model U, depth H, flags H, item_model U, body_template U, key_property_id U, span U` |
@@ -220,6 +220,12 @@ COMP 前缀同样 8 字节 `OVCOMP1` + NUL，随后 count:U。按组件名 UTF-8
 - C ABI 43→**下一可用版本（基线预计 44）**，合并前核对主线是否已占用。IR 1.0、VTable protocol 1、组件 semantic_version 与 SDK ABI 分别演进。头/库/Rust/符号清单同批升级，老 ABI 43 SDK 不加载新 view 功能。
 
 ## 4. C 协议完整草案
+
+### S2 增补：CALL 调用点透传（Claude 已裁决）
+
+未发布的 IR 1.0 在 PROP、BIND、EVNT 记录末尾各追加 `owner_kind:u32`，stride 分别为 20、36、36 字节。原首字段仍为 NODE 索引；owner_kind=0 要求该 NODE 是组件，=1 要求是 CALL。其属性/事件 ID 按递归解析后的被调用模板根组件契约解释。其他值拒绝。原各字段偏移不变，不另建 overlay 段，IR minor 不升级；S1 的冻结黄金字节随这次经批准的格式修订更新。
+
+透传支持静态值、绑定、事件和 v-model；所有表达式在调用者词法作用域解析。调用点属性覆盖根同名属性（包括其动态来源），事件覆盖根同名事件；class 按根、内层 CALL、外层 CALL 顺序合并。根到 CALL 的链不增添原生节点，条件作用于同一实际根。没有唯一组件根的结构模板不能接受 overlay，错误定位调用点。NativeHost 的 host 身份仍由根模板声明，调用点不得重新命名 host。不支持的属性在编译时失败。S5 差分必须覆盖静态覆盖、绑定、事件、class 顺序、嵌套 CALL 和列表调用者作用域。
 
 按 R3 使用独立 OneUiView，不改变 Widget 布局或 oneui_widget_destroy。root/host 是借用 Widget；有失败的创建/查询使用返回码与 out，输出失败时清零。以下为 S3 冻结前的完整草案，C 默认调用约定（Windows x86 cdecl）。
 
@@ -724,7 +730,7 @@ CSS-only 更新无需重建 IR 树，继续走现有 StyleRegistry 原子 replac
 | 步骤 | 交付与预计文件 | 可独立验收的测试 |
 |---|---|---|
 | **S1 契约与编译器** | `tools/viewc/{ast,parser,schema,validate,ir_writer,emit_rust,emit_cpp}.{h,cpp}` 按实际职责拆分；`main.cpp` 只 CLI；`include/oneui/view/{ir_format,component_contract}.h`；共享注册表；oneschema 语法和黄金 `.oneview` | 旧 parser 正反例；独立 VM 未知字段/类型/可写性/事件参数/key/import/slot/CSS 诊断；规范 hash、跨路径可重复字节、每段 roundtrip、损坏文件/溢出/未知必需段/版本/循环测试；独立 golden bytes 避免 writer/reader 同错 |
-| **S2 核心 runtime** | `src/view/{ir_reader,component_adapter,instance,binding,scope,keyed_list,style_scope}.cpp` 及私有头；从 `ui_declarative.h` 抽组件工厂/属性应用共享服务；不新增布局引擎 | 以 C++ mock VTable 驱动属性/双向绑定/命令门控、if/else 保留、嵌套列表、slot 捕获；keyed 增删改移/同 key 换对象拒绝、选择焦点、失败事务/OOM、无效 notify、无空闲额外帧 |
+| **S2 核心 runtime** | `src/view/{ir_reader,component_adapter,instance,binding,scope,keyed_list,style_scope}.cpp` 及私有头；从 `ui_declarative.h` 抽组件工厂/属性应用共享服务；不新增布局引擎 | 以 C++ mock VTable 驱动属性/双向绑定/命令门控、if/else 保留、嵌套列表、slot 捕获；keyed 增删改移/RESET 同 key 换对象替换、选择焦点、失败事务/OOM、无效 notify、无空闲额外帧 |
 | **S3 C ABI 与生命周期** | `include/oneui/oneui_view_c_api.h`、主 C 头接入；`src/capi/oneui_c_api_view.cpp` + `oneui_c_api_view_lifetime.cpp`；widget/window 控制块接入；`tests/view_c_api_tests.cpp` | 真 C 消费者、不匹配 schema 零 VM 调用、每个 VM 强引用的成功/失败配对、get 内 notify、invoke 内 notify/self-destroy、关闭窗口取消、错误线程、list 删除后 child 通知、host owner 生命周期；ABI POD/导出/版本检查 |
 | **S4 Rust 绑定** | `oneui-sys/src/ffi/view.rs` 与类型/符号清单；`oneui/src/view/{mod,model,value,list,notifier,host}.rs`；生成宏/辅助描述；`oneui/tests/view_*.rs` | trait 类型/命令参数 compile-fail；!Send/!Sync；panic/重入/drop 次数；双视图共享 VM；异步结果在 View drop 后被拒；真正 Rust VM 无 C++ 胶水创建页面、child command 路由 |
 | **S5 C++ 统一与开发重载** | `include/oneui/view/cpp_adapter.h`；`cmake/OneUIView.cmake`；旧示例 schema 与新生成入口；`src/view/reload.cpp`、开发 watcher 接入；移除 cpp-legacy emitter | 旧/IR C++ 的控件树及绘制/交互差分，再测 IR C++/Rust；原有 declarative runtime/compiler 全回归；热 reload 增删节点/属性删除/插槽捕获/出错回滚/IME commit/host BUSY；50 次重载无 强引用/订阅增长 |
@@ -756,8 +762,28 @@ S6 示例是本地模拟设置模型，禁止真实写用户配置或网络；�
 | D7 | 不提前加 bulk ABI；S6 Series/Rows 超预算另评审 |
 | D8 | S6 行为/数据流同构，不要求像素；主题用 v-for+现有组件；S1 列通用组件缺口，交 WP4 补齐，WP3 不实现 |
 
-S1、S3、S6 为暂停验收点。本轮只 S1；S3 实施前重新核对 main ABI、使用下一个未占号。include 下既有类布局变更须 clean capture 后全量编译。当前无待裁决 design-1 项，不自动开展 S2。
+S1、S3、S6 为暂停验收点。S1 已通过；S3 实施前已重新核对 main ABI 43，采用 44。include 下既有类布局变更须 clean capture 后全量编译。当前无待裁决 design-1 项；本次 S2/S3 有用户明确授权。
 
-## 13. design-2 交付边界
+## 13. design-2 初次交付边界（S1 历史）
 
 本次先修改本设计稿，再实施 S1。S1 新接口为编译/验证工具，不实现 C View runtime 或 Rust VM 运行。C/C++/Rust 样例是后续接口设计，不能作为已编译 SDK 证明。MyStudio 只读上下文，不写同步；交接以仓库文档为准。Git 写入失败时分别留 design2、S1 提交信息和文件清单，不合并成未验证的历史批次。
+
+## 14. S2/S3 实现对照（2026-10-10）
+
+最终原生协议以 `include/oneui/oneui_view_c_api.h` 为准，主 C 头包含它。相对第 6 节草案，类型布局、借用 UTF-8、按属性 ID 列表、独立 View、回调签名不变。新增的协议宏/说明不改变结构布局。`oneui_view_reload` 留待 S5 实现后加入，S3 不导出空实现；协议 v1 与全局 ABI 44 分别检查。main HEAD 仍为 2aa15e9，main ABI 为 43。本地 oneui-sys 只同步版本及符号清单；20 个新 C 符号在 pending-view-symbols.txt 显式记录，ABI 检查仍核验它们存在于 C 头/清单，S4 逐项生成 Rust 声明并移除 pending 项，不永久放宽全量检查。
+
+二进制契约已移至 `src/views/format/`，编译器与运行时共享同一 reader/validator/注册表。`Mount::make/set` 从既有声明式头拆为两个领域实现文件，新旧入口使用同一工厂。View、NativeHostView 没有新增实例数据或虚函数槽；View 的 ChildrenUpdate 是独立的临时事务对象。S3 分层修正为 Mount 增加 Clipboard 服务成员，已先 clean capture 再重编。
+
+运行时建立属性到实例的反向依赖，通知合并到 UI dispatcher；更新只遍历 dirty 分支，getter 返回的 UTF-8 在任何后续 VM 调用前复制。读阶段禁止 notify/flush，写回和 invoke 可以通知；嵌套消息循环抢先执行的刷新在最外层回调退出后重新投递。关闭先使事件/notifier 失效并拆挂载，回调栈退出后按子到父 disconnect/release；排队任务只捕获弱引用。
+
+列表先验证 revision/key 并取得新快照，构建新行、准备 native children 事务后提交；准备失败释放新 VM、恢复缓存并保留旧行/VM。MOVE/UPDATE 复用已取得的子 VM，RESET 比较 key 与 VM/vtable 身份，变化即替换。过期精确 delta 记录错误后退化 RESET；错误码可与已经成功提交的恢复快照并存，不能因返回诊断而释放已挂载的新 VM。此事务保证针对列表结构；普通属性 setter 的刷新并非整个页面的值回滚事务。S5 热重载仍须额外实现整个 composition 的 prepare/commit。
+
+S2/S3 实测范围与构建限制分别见 `59-language-neutral-views-s2-report.md` 和 `59-language-neutral-views-s3-report.md`。S5 必须保留 CALL overlay 新旧树差分门禁，S6 才验收 ±10% 性能预算；本阶段没有宣称达成性能预算、完成热重载或 Rust 安全绑定。
+
+## 15. S3 分层修正裁定的实现边界
+
+依赖方向为 core ← views ← C ABI/宿主。oneui_views 是独立 OBJECT；core 不含 IR/runtime/声明式工厂对象。普通 core 测试不因视图而新增平台依赖，视图测试只链接 views+core；聚合 DLL/static SDK 包含两层及窗口平台。具体目标依赖图与 26 项独立链接证据见 S3 报告第 3 节。
+
+Runtime 的构造服务参数为 shared_ptr<Clipboard>，工厂调用 TextField::setClipboard；列表子 Mount 继承服务。旧 Mount 缺省服务通过宿主实现的 defaultMountClipboard() 返回 SystemClipboard，新 runtime 必须显式传服务（可空），因此不产生平台符号依赖。窗口的 observeClosed/post/detach 只在 C ABI 适配中转换为 weak 控制块和函数接口。公共声明式头不包含 Window。
+
+prepareChildren 限制新加入节点尚未挂载，提供事务所需保证；reconcileChildren 保持既有菜单等调用者的直接重挂载行为，两者不可混同。热重载以后只能选择有明确异常保证的准备入口。

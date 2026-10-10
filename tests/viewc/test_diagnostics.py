@@ -55,7 +55,7 @@ class DiagnosticTests(CompilerCase):
         self.write('Child.one', '<template><Column><slot name="body"/></Column></template>')
         prefix = '<import name="Child" src="Child.one"/><template view-model="Basic">'
         self.compile(prefix + '<Child><Text slot="wrong"/></Child></template>', SCHEMA, error='SLOT_NAME', raw=True)
-        self.compile(prefix + '<Child class="x"/></template>', SCHEMA, error='CALL_ATTRIBUTES', raw=True)
+        self.compile(prefix + '<Child class="x"/></template>', SCHEMA, raw=True)
         self.write('Child.one', '<import name="Root" src="Basic.one"/><template><Root/></template>')
         self.compile(prefix + '<Child/></template>', SCHEMA, error='TEMPLATE_CYCLE', raw=True)
         self.compile('<Column><slot/><slot/></Column>', SCHEMA, error='SLOT_NAME')
@@ -87,7 +87,7 @@ class DiagnosticTests(CompilerCase):
         spans = section(data, 17)
         self.assertTrue(any(u32(spans, at+20) != 0xffffffff for at in range(0,len(spans),24)))
         binds = section(data, 9)
-        depths = [struct.unpack_from('<H', binds, at + 12)[0] for at in range(0, len(binds), 32)]
+        depths = [struct.unpack_from('<H', binds, at + 12)[0] for at in range(0, len(binds), 36)]
         self.assertIn(2, depths)
         self.assertIn(1, depths)
 
@@ -105,7 +105,7 @@ class DiagnosticTests(CompilerCase):
 </Column></template>'''
         data = self.compile(source, SCHEMA, raw=True)
         records = section(data, 9)
-        depths = [struct.unpack_from('<H', records, at+12)[0] for at in range(0,len(records),32)]
+        depths = [struct.unpack_from('<H', records, at+12)[0] for at in range(0,len(records),36)]
         self.assertEqual(sorted(depths), [0,0,1])
 
 

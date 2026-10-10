@@ -6,16 +6,17 @@ permissions are intentional. Never change existing directory permissions.
 """
 from contextlib import contextmanager
 from pathlib import Path
-import os
 import shutil
-import tempfile
 import uuid
+
+SCRATCH = Path(__file__).resolve().parents[1] / 'build/capture/viewc-tests'
 
 
 @contextmanager
 def temporary_workspace(root=None):
-    root = Path(root or os.environ.get('ONEUI_VIEWC_TEST_ROOT') or
-                (Path(tempfile.gettempdir()) / 'oneui-viewc-tests')).resolve()
+    root = Path(root or SCRATCH).resolve()
+    if root != SCRATCH.resolve():
+        raise ValueError('viewc fixtures must use build/capture/viewc-tests')
     root.mkdir(parents=True, exist_ok=True)
     directory = root / ('viewc-' + uuid.uuid4().hex)
     directory.mkdir()  # Inherit the ACL; no chmod or permission escalation.

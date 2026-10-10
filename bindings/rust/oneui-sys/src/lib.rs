@@ -11,7 +11,7 @@ mod types;
 pub use ffi::*;
 pub use types::*;
 
-pub const UTF8_ABI_VERSION: c_uint = 43;
+pub const UTF8_ABI_VERSION: c_uint = 44;
 
 // C enums remain integer aliases so unknown values can be handled without
 // creating an invalid Rust enum discriminant. The ABI suite checks their layout.

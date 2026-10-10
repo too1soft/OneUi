@@ -1,0 +1,4 @@
+<import name="Slotted" src="Slotted.one"/>
+<template view-model="Root">
+  <Column><Slotted v-for="item in rows" :key="item.id"><Text slot="body" :text="title"/></Slotted></Column>
+</template>

@@ -1,14 +1,14 @@
 if(NOT TARGET oneui-viewc)
     set(viewc_root "${CMAKE_CURRENT_LIST_DIR}/../tools/viewc")
     add_executable(oneui-viewc
-        "${viewc_root}/main.cpp" "${viewc_root}/binary.cpp"
-        "${viewc_root}/schema.cpp" "${viewc_root}/schema_parser.cpp"
-        "${viewc_root}/component_contract.cpp" "${viewc_root}/compiler.cpp"
+        "${viewc_root}/main.cpp" "${CMAKE_CURRENT_LIST_DIR}/../src/views/format/binary.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/../src/views/format/schema.cpp" "${viewc_root}/schema_parser.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/../src/views/format/component_contract.cpp" "${viewc_root}/compiler.cpp"
         "${viewc_root}/lower.cpp" "${viewc_root}/lower_attributes.cpp"
-        "${viewc_root}/validate.cpp" "${viewc_root}/ir_writer.cpp"
-        "${viewc_root}/ir_reader.cpp" "${viewc_root}/ir_validate.cpp"
-        "${viewc_root}/ir_graph.cpp")
-    target_include_directories(oneui-viewc PRIVATE "${CMAKE_CURRENT_LIST_DIR}/../include")
+        "${CMAKE_CURRENT_LIST_DIR}/../src/views/format/validate.cpp" "${CMAKE_CURRENT_LIST_DIR}/../src/views/format/ir_writer.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/../src/views/format/ir_reader.cpp" "${CMAKE_CURRENT_LIST_DIR}/../src/views/format/ir_validate.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/../src/views/format/ir_graph.cpp")
+    target_include_directories(oneui-viewc PRIVATE "${CMAKE_CURRENT_LIST_DIR}/../src/views/format" "${CMAKE_CURRENT_LIST_DIR}/../include")
     target_compile_features(oneui-viewc PRIVATE cxx_std_17)
     if(MSVC)
         target_compile_options(oneui-viewc PRIVATE /utf-8)

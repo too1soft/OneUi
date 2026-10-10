@@ -9,6 +9,7 @@ class NativeHostView final : public View {
     std::shared_ptr<void> owner_;
     bool themed_=false;
 public:
+    NativeHostView() = default;
     NativeHostView(std::shared_ptr<Widget> content, std::shared_ptr<void> owner = {})
         : owner_(std::move(owner)) {
         if (!content) throw std::invalid_argument("NativeHost requires nonnull content");
@@ -21,9 +22,15 @@ public:
     } // detach before releasing foreign callbacks
     void setThemed(bool value){themed_=value;}
     bool themed() const{return themed_;}
-    Size naturalSize() const override { return children().front()->naturalSize(); }
-    Size measure(Size available) const override { return children().front()->measure(available); }
+    void attach(std::shared_ptr<Widget> content, std::shared_ptr<void> owner) {
+        if (!content || !children().empty() || content->hasCompositionOwner())
+            throw std::invalid_argument("NativeHost requires empty host and detached content");
+        add(std::move(content)); owner_ = std::move(owner);
+    }
+    void detach() { clearChildren(); owner_.reset(); }
+    Size naturalSize() const override { return children().empty() ? Size{} : children().front()->naturalSize(); }
+    Size measure(Size available) const override { return children().empty() ? Size{} : children().front()->measure(available); }
 protected:
-    void layoutChildren() override { children().front()->setFrame(frame()); }
+    void layoutChildren() override { if (!children().empty()) children().front()->setFrame(frame()); }
 };
 } // namespace oneui::ui

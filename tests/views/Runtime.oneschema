@@ -1,0 +1,14 @@
+model Root {
+    rw title: utf8
+    r visible: bool
+    r enabled: bool
+    r busy: bool
+    r rows: list<Item>
+    command click() when enabled busy busy
+}
+model Item key id {
+    r children: list<Leaf>
+    r id: utf8
+    r text: utf8
+}
+model Leaf key id { r id: utf8 r text: utf8 }

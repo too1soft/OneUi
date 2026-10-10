@@ -1,4 +1,4 @@
-#include "compiler.h"
+#include "validation.h"
 #include <cmath>
 
 namespace oneview
@@ -17,7 +17,7 @@ void validateImage(const Image &im)
     };
     auto component = [&](uint32_t node) -> const ComponentContract & {
         index(NODE, node);
-        auto &n = im.records[NODE][node];
+        auto &n = im.records[NODE][componentRoot(im, node)];
         require(n[0] == 1 && n[1] < im.components.size(), "BAD_IR: component node");
         return im.components[n[1]];
     };
@@ -71,8 +71,10 @@ void validateImage(const Image &im)
             index(HOST, r[9]);
         else
             require(r[9] == none, "BAD_IR: component aux");
-        if (r[0] != 1)
+        if (r[0] != 1 && r[0] != 3)
             require(r[4] == 0 && r[6] == 0, "BAD_IR: structural node has children/properties");
+        if (r[0] == 3)
+            require(r[4] == 0, "BAD_IR: call has physical children");
     }
     require(usedComponents.size() == im.components.size(), "BAD_IR: unused component contract");
     for (auto &r : im.records[EDGE])
@@ -99,6 +101,15 @@ void validateImage(const Image &im)
         }
     }
     std::set<std::pair<uint32_t, uint32_t>> assigned;
+    for (auto kind : {PROP, BIND, EVNT})
+        for (auto &r : im.records[kind])
+        {
+            index(NODE, r[0]);
+            require(r.back() <= 1 && im.records[NODE][r[0]][0] == (r.back() ? 3u : 1u),
+                    "BAD_IR: property/event owner_kind");
+            if (r.back() && kind == PROP && component(r[0]).name == "NativeHost")
+                require(component(r[0]).property(r[1]).name != "host", "HOST_NAME: CALL cannot rename host");
+        }
     for (auto &r : im.records[PROP])
     {
         auto &c = component(r[0]);

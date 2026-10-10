@@ -78,8 +78,8 @@ uint32_t ViewCompiler::lower(Source &s, Node n, const std::vector<Scope> &scopes
         at.fail("CONDITION: v-else must immediately follow v-if");
     if (s.imports.count(n.tag))
     {
-        if (!n.attrs.empty() || !n.text.empty())
-            at.fail("CALL_ATTRIBUTES: put properties/ref on an explicit wrapper around an imported component");
+        if (!n.text.empty())
+            at.fail("CALL_TEXT: use a supplied slot for text content");
         auto child = load(s.imports.at(n.tag), sourceSpan);
         child.importSpan = sourceSpan;
         auto key = child.path.generic_string();
@@ -115,6 +115,14 @@ uint32_t ViewCompiler::lower(Source &s, Node n, const std::vector<Scope> &scopes
         }
         image.records[NODE][index][0] = 3;
         image.records[NODE][index][9] = call;
+        if (!n.attrs.empty())
+        {
+            try {
+                const auto rootNode = componentRoot(image, index);
+                const auto contract = image.components.at(image.records[NODE][rootNode][1]);
+                attributes(s, n, scopes, index, contract);
+            } catch (const Error& e) { at.fail(e.what()); }
+        }
         return index;
     }
     if (n.tag == "slot")

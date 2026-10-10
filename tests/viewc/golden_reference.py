@@ -47,10 +47,10 @@ def basic_image():
     sections[3] = component
     sections[4] = words(1, 0, 1, 1, 0, 0, 0, 0)
     sections[5] = words(1, 0, no, 0, 0, 0, 0, 0, 1, no, 1, 3)
-    sections[9] = words(0, 10, 1, 1 << 16, 1, 0, 2, 0)
+    sections[9] = words(0, 10, 1, 1 << 16, 1, 0, 2, 0, 0)
     sections[17] = (words(2, 1, node_start, 1, node_end, no) * 2
                     + words(2, 1, attr_start, 1, attr_end, no))
-    stride = [0, 0, 0, 0, 32, 48, 8, 24, 16, 32, 32, 16, 24, 32, 24, 32, 24, 24, 16]
+    stride = [0, 0, 0, 0, 32, 48, 8, 24, 20, 36, 36, 16, 24, 32, 24, 32, 24, 24, 16]
     counts = {i: len(sections[i]) // stride[i] for i in range(4, 19)}
     counts.update({1: 4, 2: 1, 3: 1})
     data = bytearray(128 + 18 * 32)

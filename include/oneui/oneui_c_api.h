@@ -541,7 +541,7 @@ enum {
     OneUiTerminalCellOverline = 1u << 11
 };
 
-#define ONEUI_UTF8_ABI_VERSION 43u
+#define ONEUI_UTF8_ABI_VERSION 44u
 
 /*
  * Copies and registers a process-local font under family_alias. Call before
@@ -1896,3 +1896,5 @@ ONEUI_API size_t oneui_toast_host_pending_count(OneUiWidget*);
 #include "oneui/title_bar_presentation_c.h"
 #include "oneui/dock_model_c.h"
 #include "oneui/dock_session_c.h"
+
+#include "oneui/oneui_view_c_api.h"

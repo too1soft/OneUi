@@ -15,6 +15,20 @@ public:
     void clearChildren();
     // Reorders retained children without discarding focus/IME in surviving nodes.
     void reconcileChildren(std::vector<std::shared_ptr<Widget>> children);
+    // Preparation allocates and attaches only unpublished children. The owner
+    // must outlive the plan. Commit never allocates container storage or throws.
+    class ONEUI_API ChildrenUpdate {
+    public:
+        ~ChildrenUpdate();
+        void commit() noexcept;
+    private:
+        friend class View;
+        explicit ChildrenUpdate(View& owner) : owner_(owner) {}
+        View& owner_;
+        std::vector<std::shared_ptr<Widget>> next_, added_, removed_;
+        bool committed_ = false;
+    };
+    std::shared_ptr<ChildrenUpdate> prepareChildren(std::vector<std::shared_ptr<Widget>> children);
     const std::vector<std::shared_ptr<Widget>>& children() const;
     void setInvalidator(std::function<void()> invalidator) override;
     void setRectInvalidator(std::function<void(Rect)> invalidator) override;
