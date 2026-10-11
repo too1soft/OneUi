@@ -87,3 +87,6 @@ P("PaneHeader", 24, "maximize-label", 4, 3, "")
 P("PaneHeader", 25, "close-label", 4, 3, "")
 P("PaneHeader", 26, "live-label", 4, 3, "")
 P("PaneHeader", 27, "menu-label", 4, 3, "")
+
+P("PaneHeader", 28, "tooltip", 4, 3, "")
+++r.at("PaneHeader").version; // Authored session tooltip.

@@ -12,7 +12,7 @@ enum class ValueType { None, Text, Boolean, Integer, Number, Strings, Columns, R
     X(Dialog, "dialog", "title subtitle icon close-visible", None) \
     X(PaneGrid, "workspace-collection", "nodes groups active-group active-pane maximized revision ack-request ack-accepted navigation-serial navigation-edge navigation-mode drag-domain gap divider-hit motion-ms resize-idle-ms motion", None) \
     X(Pane, "workspace-item", "pane-key closing close-request min-width min-height", None) \
-    X(PaneHeader, "pane-header", "pane-key number title path active broadcast-role broadcast-hint broadcast-label viewing-history can-close can-split can-maximize split-label maximize-label close-label live-label menu-label", None) \
+    X(PaneHeader, "pane-header", "pane-key number title path active broadcast-role broadcast-hint broadcast-label viewing-history can-close can-split can-maximize split-label maximize-label close-label live-label menu-label tooltip", None) \
     X(HeaderSlot, "stack", "slot-name", None) \
     X(FontPicker, "font-picker", "items selected loading error preview-text size trigger-label confirm-selection monospace-only monospace-items apply-label cancel-label filter-label search-label retry-label", None) \
     X(MediaPicker, "media-picker", "asset label loading error accept choose-label clear-label cancel-label", None) \

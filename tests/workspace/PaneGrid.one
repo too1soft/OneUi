@@ -3,7 +3,7 @@
             :active-pane="activePane" :revision="revision" :motion="motion"
             drag-domain="terminal" @ratioRequested="ratio" @resizeSettled="resize">
     <Pane view-id="panes" v-for="p in panes" :key="p.id" :pane-key="p.id">
-      <PaneHeader split-label="Divide right" :close-label="activePane" :pane-key="p.id" :title="p.id" @activateRequested="p.activate">
+      <PaneHeader :tooltip="activePane" split-label="Divide right" :close-label="activePane" :pane-key="p.id" :title="p.id" @activateRequested="p.activate">
         <Text slot="identity" :text="p.id"/>
       </PaneHeader>
       <NativeHost host="terminal" resize-policy="settled"/>

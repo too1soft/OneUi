@@ -574,3 +574,12 @@ optional component tokens are absent; this includes partial dark palettes.
 PaneHeader retains the separate left drag handle and right menu action. The right actions follow broadcast / split / maximize / menu / close / live order; the 29px header is followed by a 1px active rule. Header parts consume the inherited style scope through `pane-header-part` selectors: `pane-header-button`, `pane-header-broadcast-on`, `pane-header-grip`, `pane-header-number`, `pane-header-title`, and `pane-header-path`. The number/title/path nodes also expose `pane-header-active` or `pane-header-inactive`. Part colors, font size/weight/family and number radius are authored by the application and refresh on theme replacement. `menu-label` applies to both menu entry points. No C ABI or wire-format change.
 
 PaneGrid divider paint can be themed with `pane-grid-part.pane-grid-divider` background and `:hover`, `:pressed`, `:focus` states. PaneHeader exposes `pane-header-part.pane-header-rule` for the full-width bottom rule; its grip remains visible on inactive panes. Neither styling changes geometry or content ownership.
+
+### PaneHeader session tooltip
+
+`tooltip` accepts literal or bound UTF-8 text independently of the visible title,
+path and broadcast hint. The declaration runtime preserves an explicitly authored
+tooltip (including an empty one) when active, title, path or other header settings
+change. Omitted tooltips retain the component's title/path default. Session privacy
+and connection-state wording remain application model/VM policy. This adds no
+public class layout or C ABI change.

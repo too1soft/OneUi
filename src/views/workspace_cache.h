@@ -4,6 +4,7 @@
 #include "oneui/layout/dock_workspace_view.h"
 namespace oneui::views {
 struct Instance::WorkspaceCache {
+    std::optional<std::wstring> headerTooltip;
     PaneGridSnapshot grid;
     DockWorkspaceSnapshot dock;
     int64_t navigation = 0;

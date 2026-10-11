@@ -32,6 +32,7 @@ int main(int argc,char** argv) {
         auto header=std::dynamic_pointer_cast<PaneHeader>(pane->children()[0]);
         expect(header->children()[0]->accessibleName()==L"Divide right","authored pane action label");
         expect(header->children()[4]->accessibleName()==L"A","bound pane action label");
+        expect(header->tooltip()==L"A","bound header tooltip");
         auto host=std::dynamic_pointer_cast<ui::NativeHostView>(pane->children()[1]);
         auto terminal=std::make_shared<TerminalView>();terminal->setGrid(24,80,std::vector<TerminalCell>(1920));
         host->attach(terminal,{});grid->tickAnimations(0);
@@ -51,6 +52,12 @@ int main(int argc,char** argv) {
         expect(pane->children()[1]==host && host->children()[0]==terminal,"content address retained");
         string(root,"activePane","B");runtime->notify(runtime->rootScope,id(image,"Root","activePane"));runtime->flush();
         expect(header->children()[4]->accessibleName()==L"B","pane action label notification");
+        expect(header->tooltip()==L"B","header tooltip notification");
+        auto headerInstance=runtime->root->children[0]->rows.at("A")->children[0];
+        Value active;active.tag=1;active.integer=1;
+        runtime->paneHeaderScalar(*headerInstance,"active",active);
+        expect(header->tooltip()==L"B","active updates preserve explicit tooltip");
+
         string(split,"first","s");for(auto& scope:runtime->scopes)if(scope->vm==&split)runtime->notify(scope,0);
         try{runtime->flush();expect(false,"cycle accepted");}catch(const std::invalid_argument&){}
         expect(grid->snapshot().nodes[2].first=="a","invalid graph keeps published snapshot");
