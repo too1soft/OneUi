@@ -53,6 +53,9 @@ void PaneGrid::layoutChildren() {
 void PaneGrid::arrange(float progress,bool minimums) {
     auto& s=*state_;
     if(s.root==State::none)return;
+    // Collapsed siblings must not reserve invisible dividers. Keep the gap
+    // on the same motion clock, including redirects and restoration.
+    s.currentGap=s.fromGap+(s.toGap-s.fromGap)*progress;
     auto bounds=frame();
     if(minimums && s.snapshot.maximized.empty()) {
         const auto size=s.index.minimum(s.snapshot.activeGroup);
@@ -67,7 +70,7 @@ void PaneGrid::arrange(float progress,bool minimums) {
             continue;
         }
         const bool horizontal=s.snapshot.nodes[work.node].axis==DockAxis::Horizontal;
-        const auto gap=std::min(s.snapshot.gap,horizontal?work.rect.width:work.rect.height);
+        const auto gap=std::min(s.currentGap,horizontal?work.rect.width:work.rect.height);
         const auto extent=std::max(0.f,(horizontal?work.rect.width:work.rect.height)-gap);
         n.current=n.from+(n.to-n.from)*progress;
         if(s.divider==work.node)n.current=n.to;

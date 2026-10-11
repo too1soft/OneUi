@@ -56,7 +56,10 @@ std::function<void()> PaneGrid::prepare(PaneGridSnapshot snapshot,
     for(const auto& group:model.groups)if(group.id==model.activeGroup && !group.root.empty())s.root=s.nodeIds.at(group.root);
     if(!model.activeGroup.empty() && std::none_of(model.groups.begin(),model.groups.end(),[&](const auto& g){return g.id==model.activeGroup;}))
         throw std::invalid_argument("Active workspace group missing");
-    bool animate=false;
+    s.toGap=model.maximized.empty()?model.gap:0.f;
+    s.fromGap=previous.root==State::none?s.toGap:previous.currentGap;
+    s.currentGap=s.fromGap;
+    bool animate=std::abs(s.fromGap-s.toGap)>.00001f;
     for(size_t i=0;i<model.nodes.size();++i) {
         const auto& node=model.nodes[i];auto& n=s.nodes[i];
         n.from=n.to=n.current=node.ratio;

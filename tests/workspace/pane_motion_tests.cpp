@@ -73,6 +73,7 @@ void motion() {
     f.snapshot.maximized="1";f.grid.setSnapshot(f.snapshot,f.panes);f.finish();
     check(near(f.snapshot.nodes[2].ratio,.5f),"maximize keeps saved ratio");
     check(!f.panes[0]->visible() && f.panes[1]->visible(),"maximize hides sibling after motion");
+    check(near(f.panes[1]->frame().x,0) && near(f.panes[1]->frame().width,1000),"maximize consumes divider gap");
     f.snapshot.maximized.clear();f.grid.setSnapshot(f.snapshot,f.panes);f.finish();
     check(near(f.panes[0]->frame().width,497.5f),"restore saved ratio");
 }
@@ -87,6 +88,32 @@ void redirect() {
     f.snapshot.nodes[2].first="s";
     try {f.grid.setSnapshot(f.snapshot,f.panes);check(false,"cycle accepted");}catch(const std::invalid_argument&){}
     check(f.grid.snapshot().revision==before && near(f.panes[0]->frame().width,696.5f),"invalid candidate keeps scene");
+}
+void nestedMaximize() {
+    for(bool motion:{false,true}) {
+        Fixture f(3);f.grid.setMotionEnabled(motion);f.split();f.finish();
+        f.snapshot.nodes.push_back({"c","2"});
+        f.snapshot.nodes.push_back({"v","","b","c",DockAxis::Vertical,.4f});
+        f.snapshot.nodes[2].second="v";
+        f.grid.setSnapshot(f.snapshot,f.panes);f.finish();
+        for(int pane=0;pane<3;++pane) {
+            auto terminal=f.terminals[pane].get();
+            f.snapshot.maximized=std::to_string(pane);f.grid.setSnapshot(f.snapshot,f.panes);f.finish();
+            auto rect=f.panes[pane]->frame();
+            check(near(rect.x,0)&&near(rect.y,0)&&near(rect.width,1000)&&near(rect.height,600),"nested maximized pane fills grid on both axes");
+            check(f.terminals[pane].get()==terminal,"maximize retains terminal");
+            f.snapshot.maximized.clear();f.grid.setSnapshot(f.snapshot,f.panes);f.finish();
+            check(near(f.panes[0]->frame().width,497.5f)&&near(f.panes[1]->frame().height,238),"restore recovers both divider gaps and ratios");
+        }
+    }
+    Fixture f;f.split();f.finish();
+    f.snapshot.maximized="1";f.grid.setSnapshot(f.snapshot,f.panes);
+    f.frame(now+1);f.frame(now+1);f.frame(now+100);
+    auto before=f.panes[1]->frame();
+    f.snapshot.maximized.clear();f.grid.setSnapshot(f.snapshot,f.panes);
+    auto after=f.panes[1]->frame();
+    check(near(before.x,after.x)&&near(before.width,after.width),"redirect retains interpolated gap without a jump");
+    f.finish();check(near(f.panes[1]->frame().x,502.5f),"redirect restores divider");
 }
 void paintBeforeFirstTick() {
     now=3900;Fixture f;f.split();f.paint();
@@ -170,5 +197,5 @@ void idleAndDividerBoundaries() {
     check(requested==0,"500ms idle schedules no animation frames with cursor/output stopped");
 }
 }
-int main(){try{internal::ScopedUiClock clock(timeNow);motion();paintBeforeFirstTick();redirect();divider();delayedContent();closingAndKeyboard();allocationRollback();idleAndDividerBoundaries();std::cout<<"Pane motion: 8 groups passed\n";return 0;}
+int main(){try{internal::ScopedUiClock clock(timeNow);motion();paintBeforeFirstTick();redirect();nestedMaximize();divider();delayedContent();closingAndKeyboard();allocationRollback();idleAndDividerBoundaries();std::cout<<"Pane motion: 9 groups passed\n";return 0;}
 catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

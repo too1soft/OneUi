@@ -54,5 +54,6 @@ struct PaneGrid::State {
     bool warmPainted = false;
     double started = 0, idleAt = 0;
     float grab = 0, beginRatio = .5f;
+    float fromGap = 0, toGap = 0, currentGap = 0;
 };
 } // namespace oneui
