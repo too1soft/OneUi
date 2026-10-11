@@ -54,7 +54,7 @@ enum class ValueType { None, Text, Boolean, Integer, Number, Strings, Columns, R
     X(ActionBar, "stack", "", None) \
     X(LoadingState, "stack", "title subtitle", None) \
     X(Status, "label", "text tone", None) \
-    X(Tabs, "tabs", "items selectedKey closable presentation reorderable drag-domain drag-kind drag-sources", Text) \
+    X(Tabs, "tabs", "items selectedKey closable presentation reorderable drag-domain drag-kind drag-sources decorations item-min item-max edit-key", Text) \
     X(SplitView, "split-view", "orientation ratio first-min second-min second-collapsed collapsed-extent", Number) \
     X(TimeSeriesChart, "chart", "series", None) \
     X(Icon, "icon", "symbol size", None) \
@@ -143,6 +143,8 @@ constexpr ValueType propertyType(Kind kind,std::string_view key) {
     if(contains("gap divider-hit motion-ms resize-idle-ms min-width min-height threshold dock-min-width dock-min-height float-min-width float-min-height minimum maximum step opacity",key))return ValueType::Number;
     if(contains("content-height content-width wheel-step scroll-offset row-height line-height minimum-width header-height horizontal-offset overlay-width overlay-height inset-left inset-right inset-top inset-bottom",key))return ValueType::Number;
     if(key=="overlay-visible")return ValueType::Boolean;
+    if(kind==Kind::Tabs && key=="decorations")return ValueType::Rows;
+    if(kind==Kind::Tabs && (key=="item-min"||key=="item-max"))return ValueType::Number;
     if(key=="items")return kind==Kind::Select||kind==Kind::SegmentedControl?ValueType::Strings:kind==Kind::Tabs?ValueType::TabItems:ValueType::Rows;
     if(key=="series")return ValueType::Series;
     if(key=="columns")return ValueType::Columns;

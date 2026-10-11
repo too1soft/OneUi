@@ -123,14 +123,10 @@ float Tabs::maximumScrollOffset() const {
 Rect Tabs::itemRect(int index) const {
     const Rect rect = frame();
     const float width = itemWidth(index);
-    if (documentMode_ && sizingMode_ == TabsSizingMode::Compact && documentItemOffsets_.size() == items_.size()) {
-        if (index < 0 || index >= static_cast<int>(documentItemOffsets_.size()) || documentItemOffsets_[index] < 0.0f) return Rect{};
-        return Rect{rect.x + documentItemOffsets_[index], rect.y, std::min(width, rect.width), rect.height};
-    }
     return Rect{
         rect.x + itemOffset(index) - scrollOffset_,
         rect.y,
-        width,
+        std::min(width, rect.width),
         rect.height};
 }
 
@@ -184,31 +180,6 @@ int Tabs::hitCloseIndex(Point point) const {
 }
 
 void Tabs::ensureIndexVisible(int index) {
-    if (documentMode_ && sizingMode_ == TabsSizingMode::Compact && !items_.empty()) {
-        documentItemOffsets_.assign(items_.size(), -1.0f);
-        const float available = std::max(0.0f, frame().width);
-        float used = 0.0f;
-        std::vector<int> shown;
-        for (int i = 0; i < static_cast<int>(items_.size()); ++i) {
-            if (used + itemWidth(i) <= available) {
-                documentItemOffsets_[i] = used;
-                used += itemWidth(i);
-                shown.push_back(i);
-            }
-        }
-        const int active = std::clamp(index, 0, static_cast<int>(items_.size()) - 1);
-        if (documentItemOffsets_[active] < 0.0f) {
-            const float width = std::min(itemWidth(active), available);
-            while (!shown.empty() && used + width > available) {
-                const int last = shown.back(); shown.pop_back();
-                used -= itemWidth(last);
-                documentItemOffsets_[last] = -1.0f;
-            }
-            documentItemOffsets_[active] = used;
-        }
-        scrollOffset_ = 0.0f;
-        return;
-    }
     if (sizingMode_ != TabsSizingMode::Compact || items_.empty()) {
         scrollOffset_ = 0.0f;
         return;

@@ -264,7 +264,7 @@ ONEUI_API OneUiViewResult oneui_view_element_metrics(OneUiView *view,
  * Call outside VM callbacks; out_focused reports native focus eligibility. */
 ONEUI_API OneUiViewResult oneui_view_mount_focus_element(OneUiViewMount *mount,
     OneUiUtf8String name, int focus_visible, int *out_focused);
-/* Join existing native Tabs to the active View's WP4 drag domain. UI thread,
+/* Join native Tabs or a declarative Tabs host Panel to the active View's WP4 drag domain. UI thread,
  * outside VM callbacks, same window only. The domain stores a weak reference;
  * it does not reparent the Tabs or replace their existing callbacks. */
 ONEUI_API OneUiViewResult oneui_view_mount_register_workspace_tabs(OneUiViewMount *mount,

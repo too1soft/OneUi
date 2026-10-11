@@ -604,3 +604,22 @@ preview. These C API additions do not change public class layout.
 Named element metrics and mount focus lookup include content nested inside
 Popup. Native View focus requests route through Popup to its content, allowing
 an anchored DataMenu to receive keyboard input after it opens.
+
+### Declarative session Tabs (T11/T12)
+
+Tabs v3 appends `decorations` (keyed rows: `id`, `icon`, packed RGBA `rgba`),
+`item-min`, `item-max` and `edit-key`. It appends keyed `contextRequested`,
+`overflowChanged` and `editFinished` events without changing earlier IDs or
+`oneui.v1.TabItem`. Decoration rows follow item order. Compact document tabs
+keep logical order, allow wheel scrolling to every item and bring a newly
+activated or edited item into view; repaint preserves the user's scroll offset.
+
+`ViewMount::register_workspace_tab_surface` also accepts the declarative host
+Panel, retaining the existing same-window and drag-domain checks. Forward drag
+events outside VM callbacks, preserving phase order and release coordinates.
+Reject a changed model revision while deferring Started; WP4 rejects revisions
+changed during the gesture. Pure model merging inserts an external leaf in a
+half split at the nearest edge; it does not replace either session.
+
+The public Tabs layout replaces obsolete compact packing storage with viewport
+width state. Consumers must clean and rebuild their existing SDK configuration.

@@ -129,6 +129,7 @@ void validateRecord(const Model& model, const std::string& projection) {
     else if(projection=="@menu.item") fields="id:4 parent:4 text:4 icon:4 shortcut:4 disabled:1 checked:1 danger:1 separator:1";
     else if(projection=="@workspace.group") fields="id:4 root:4";
     else if(projection=="@workspace.tab-source") fields="id:4 pane:4 enabled:1";
+    else if(projection=="@workspace.tab-decoration") fields="id:4 icon:2 rgba:2";
     else throw Error("BIND_RECORD: unknown projection "+projection);
     require(model.keyName=="id","BIND_RECORD: workspace key must be id");
     std::istringstream stream(fields);std::string field;
@@ -230,7 +231,7 @@ void addBuiltins(Schema &schema)
     };
     model("StringItem", "id:utf8 value:utf8");
     model("NumberItem", "id:utf8 value:f64");
-    model("TabItem", "id:utf8 title:utf8");
+    model("TabItem", "id:utf8 title:utf8"); // Decorations use a separate optional keyed projection.
     model("Row", "id:utf8 cells:StringItem");
     model("Column", "id:utf8 header:utf8 width:f64 alignment:i64 action:bool kind:i64");
     model("Series", "id:utf8 name:utf8 rgba:i64 values:NumberItem");

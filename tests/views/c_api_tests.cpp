@@ -2,6 +2,7 @@
 #include "fixture.h"
 #include "oneui/layout/overlay_host.h"
 #include "oneui/controls/tabs.h"
+#include "oneui/layout/panel.h"
 #include "oneui/controls/popup.h"
 #include <thread>
 using namespace viewtest;
@@ -92,6 +93,12 @@ int main(int argc, char **argv) {
                 == ONEUI_VIEW_NOT_FOUND,"workspace drag rejects unknown domain");
             expect(oneui_view_workspace_tab_drag(c.view,str("missing"),str("a"),99,0,0)
                 == ONEUI_VIEW_INVALID_ARGUMENT,"workspace drag validates phase");
+            OneUiWidget stripHost;stripHost.widget=std::make_shared<oneui::Panel>();
+            expect(oneui_view_mount_register_workspace_tabs(c.mount,str("terminal"),str("host"),&stripHost)
+                == ONEUI_VIEW_INVALID_ARGUMENT,"declarative strip rejects a foreign host");
+            std::dynamic_pointer_cast<oneui::View>(c.view->value->root->element.widget)->add(stripHost.widget);
+            expect(oneui_view_mount_register_workspace_tabs(c.mount,str("terminal"),str("host"),&stripHost)
+                == ONEUI_VIEW_NOT_FOUND,"same-window declarative host passes validation and requires an existing domain");
             expect(oneui_view_element_metrics(c.view, name, &metrics) == 0 &&
                 metrics.x == 12 && metrics.y == 24 && metrics.width == 160 &&
                 metrics.height == 28 && !metrics.scrollable, "read-only element metrics");

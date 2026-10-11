@@ -6,6 +6,14 @@ P("Tabs", 17, "drag-kind", 4, 1, "")
 P("Tabs", 18, "drag-sources", 5, 2, "@workspace.tab-source")
 r.at("Tabs").events.push_back({2,"dragOut",{{"key",4},{"phase",2},{"x",3},{"y",3}}});
 r.at("Tabs").events.push_back({3,"reorderRequested",{{"source",4},{"before",4}}});
+r.at("Tabs").version=3;
+P("Tabs", 19, "decorations", 5, 2, "@workspace.tab-decoration")
+P("Tabs", 20, "item-min", 3, 3, "")
+P("Tabs", 21, "item-max", 3, 3, "")
+P("Tabs", 22, "edit-key", 4, 3, "")
+r.at("Tabs").events.push_back({4,"contextRequested",{{"key",4},{"x",3},{"y",3}}});
+r.at("Tabs").events.push_back({5,"overflowChanged",{{"count",2}}});
+r.at("Tabs").events.push_back({6,"editFinished",{{"key",4},{"text",4},{"reason",2}}});
 C("PaneHeader", "header-slots", 0)
 P("PaneHeader", 1, "basis", 3, 1, "")
 P("PaneHeader", 2, "class", 4, 1, "")

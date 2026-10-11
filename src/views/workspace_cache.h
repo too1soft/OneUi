@@ -12,5 +12,6 @@ struct Instance::WorkspaceCache {
     struct TabSource {std::string pane;bool enabled=false;};
     std::map<std::string,TabSource> tabSources;
     std::string dragKind="single-pane-tab";
+    float tabMinimum=96, tabMaximum=240;
 };
 } // namespace oneui::views

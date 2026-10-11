@@ -1,12 +1,16 @@
 use super::{check, View, ViewMount, VmResult};
-use crate::{sys, ItemDragPhase, Tabs};
+use crate::{sys, ItemDragPhase, Tabs, Widget};
 
 impl ViewMount {
     /// Register native shell tabs as a WP4 drop target in this mount's window.
     /// The domain borrows the native widget weakly and retains no Rust callbacks.
     pub fn register_workspace_tabs(&self, domain: &str, id: &str, tabs: &Tabs) -> VmResult {
+        self.register_workspace_tab_surface(domain,id,tabs.as_widget())
+    }
+    /// Register a declarative tab host in another mounted view's drag domain.
+    pub fn register_workspace_tab_surface(&self, domain: &str, id: &str, tabs: &Widget) -> VmResult {
         check(unsafe {
-            tabs.as_widget().with_native_handle(|widget| {
+            tabs.with_native_handle(|widget| {
                 sys::oneui_view_mount_register_workspace_tabs(
                     self.raw.as_ptr(),
                     sys::OneUiUtf8String::from_str(domain),
