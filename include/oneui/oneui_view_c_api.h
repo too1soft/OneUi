@@ -259,6 +259,11 @@ typedef struct OneUiViewElementMetrics {
 } OneUiViewElementMetrics;
 ONEUI_API OneUiViewResult oneui_view_element_metrics(OneUiView *view,
     OneUiUtf8String name, OneUiViewElementMetrics *out);
+/** Read a named element's own resolved visibility after layout (including
+ * container-query display). Ancestor/window visibility is not included.
+ * UI thread only; does not flush, lay out or expose a widget handle. */
+ONEUI_API OneUiViewResult oneui_view_element_visible(OneUiView *view,
+    OneUiUtf8String name, int *out_visible);
 /** Focus a uniquely named element of the mount's active view on its UI thread.
  * No widget handle escapes. Rejects ambiguous/missing names and closed mounts.
  * Call outside VM callbacks; out_focused reports native focus eligibility. */

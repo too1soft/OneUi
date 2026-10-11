@@ -84,6 +84,24 @@ int main(int argc, char **argv) {
             expect(oneui_view_element_metrics(c.view, name, &metrics) == 0 &&
                 metrics.x == 12 && metrics.y == 24 && metrics.width == 160 &&
                 metrics.height == 28 && !metrics.scrollable, "read-only element metrics");
+            int visible = -1;
+            expect(oneui_view_element_visible(c.view, name, &visible) == 0 && visible,
+                "named element visible");
+            label->setVisible(false);
+            expect(oneui_view_element_visible(c.view, name, &visible) == 0 && !visible,
+                "named element hidden");
+            label->setVisible(true);
+            expect(oneui_view_element_visible(c.view, str("missing"), &visible) ==
+                ONEUI_VIEW_NOT_FOUND && !visible, "visibility missing name resets output");
+            expect(oneui_view_element_visible(c.view, name, nullptr) ==
+                ONEUI_VIEW_INVALID_ARGUMENT, "visibility requires output");
+            int visibilityForeign = 0;
+            std::thread visibilityThread([&] {
+                int result = -1;
+                visibilityForeign = oneui_view_element_visible(c.view, name, &result);
+            });
+            visibilityThread.join();
+            expect(visibilityForeign == ONEUI_VIEW_WRONG_THREAD, "visibility UI thread ownership");
             expect(oneui_view_element_metrics(c.view, str("missing"), &metrics) ==
                 ONEUI_VIEW_NOT_FOUND, "metrics missing name");
             expect(oneui_view_element_metrics(c.view, str(""), &metrics) ==
@@ -126,6 +144,8 @@ int main(int argc, char **argv) {
                 oneui_view_mount_focus_element(c.mount,str("overlay-base-input"),1,&focused)==0 && focused,
                 "named lookup includes native overlay base and foreground");
             oneui_view_disconnect(c.view);
+            expect(oneui_view_element_visible(c.view, name, &visible) == ONEUI_VIEW_CLOSED,
+                "visibility closed view rejected");
             expect(oneui_view_mount_focus_element(c.mount, name, 1, &focused) == ONEUI_VIEW_CLOSED,
                 "focus rejects closed view");
             expect(oneui_view_element_metrics(c.view, name, &metrics) ==

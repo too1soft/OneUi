@@ -10,6 +10,8 @@ pub struct OneUiViewElementMetrics {
 extern "C" {
     pub fn oneui_view_element_metrics(view: *mut OneUiView, name: OneUiUtf8String,
         out: *mut OneUiViewElementMetrics) -> i32;
+    pub fn oneui_view_element_visible(view: *mut OneUiView, name: OneUiUtf8String,
+        out: *mut i32) -> i32;
 }
 
 pub type OneUiViewResult = i32;

@@ -50,6 +50,17 @@ OneUiViewResult oneui_view_element_metrics(OneUiView *view, OneUiUtf8String name
     });
 }
 
+OneUiViewResult oneui_view_element_visible(OneUiView *view, OneUiUtf8String name,
+                                          int *out_visible) {
+    if (out_visible) *out_visible = 0;
+    return call(__func__, [&] {
+        check(out_visible, ONEUI_VIEW_INVALID_ARGUMENT, "Visibility output required");
+        const auto value = runtime(view);
+        value->alive();
+        *out_visible = namedViewElement(value, name)->visible() ? 1 : 0;
+    });
+}
+
 OneUiViewResult oneui_view_mount_focus_element(OneUiViewMount *handle, OneUiUtf8String name,
                                               int focus_visible, int *out_focused) {
     if (out_focused) *out_focused = 0;
