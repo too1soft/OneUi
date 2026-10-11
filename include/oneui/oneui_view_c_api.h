@@ -264,6 +264,17 @@ ONEUI_API OneUiViewResult oneui_view_element_metrics(OneUiView *view,
  * Call outside VM callbacks; out_focused reports native focus eligibility. */
 ONEUI_API OneUiViewResult oneui_view_mount_focus_element(OneUiViewMount *mount,
     OneUiUtf8String name, int focus_visible, int *out_focused);
+/* Join existing native Tabs to the active View's WP4 drag domain. UI thread,
+ * outside VM callbacks, same window only. The domain stores a weak reference;
+ * it does not reparent the Tabs or replace their existing callbacks. */
+ONEUI_API OneUiViewResult oneui_view_mount_register_workspace_tabs(OneUiViewMount *mount,
+    OneUiUtf8String domain, OneUiUtf8String id, OneUiWidget *tabs);
+/* Forward native tab drag events to WP4: 0 start, 1 move, 2 release, 3 cancel.
+ * source is a stable pane key required at start, ignored thereafter. Coordinates
+ * are logical client coordinates. Release recomputes the target; stale revisions
+ * and maximized panes cancel without emitting an intent. No widget is created. */
+ONEUI_API OneUiViewResult oneui_view_workspace_tab_drag(OneUiView *view,
+    OneUiUtf8String domain, OneUiUtf8String source, int phase, float x, float y);
 #ifdef __cplusplus
 }
 #endif

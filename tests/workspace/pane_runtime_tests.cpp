@@ -3,6 +3,7 @@
 #include "oneui/controls/pane_header.h"
 #include "oneui/controls/terminal_view.h"
 #include "../support/recording_canvas.h"
+#include "views/workspace_drag_external.h"
 using namespace viewtest;
 using namespace oneui;
 int main(int argc,char** argv) {
@@ -57,6 +58,23 @@ int main(int argc,char** argv) {
         Value active;active.tag=1;active.integer=1;
         runtime->paneHeaderScalar(*headerInstance,"active",active);
         expect(header->tooltip()==L"B","active updates preserve explicit tooltip");
+
+        auto strip=std::make_shared<View>();strip->setFrame({0,-40,1000,30});
+        registerWorkspaceTabs(*runtime,"terminal","native-tabs",strip);
+        try { registerWorkspaceTabs(*runtime,"unknown","bad",strip);expect(false,"unknown domain accepted"); }
+        catch(const Failure& e) {expect(e.result==ONEUI_VIEW_NOT_FOUND,"unknown domain rejected");}
+        // Drive the actual header's pointer path into the externally registered
+        // strip. Geometry and preview remain in the same declarative domain.
+        grid->onMouseDown({{16,12},MouseButton::Left});grid->onMouseMove({{24,12}});
+        grid->onMouseMove({{200,-25}});
+        expect(grid->previewRect().has_value(),"external native strip participates in preview");
+        grid->onKeyDown({Key::Escape});
+        expect(!grid->previewRect(),"Escape cancels native header drag");
+        workspaceTabDrag(*runtime,"terminal","A",0,{100,100});
+        workspaceTabDrag(*runtime,"terminal","",2,{800,300});
+        expect(!grid->previewRect(),"visible pane cannot masquerade as inactive single tab");
+        try { workspaceTabDrag(*runtime,"terminal","A",4,{0,0});expect(false,"invalid drag phase accepted"); }
+        catch(const Failure& e) {expect(e.result==ONEUI_VIEW_INVALID_ARGUMENT,"phase validated");}
 
         string(split,"first","s");for(auto& scope:runtime->scopes)if(scope->vm==&split)runtime->notify(scope,0);
         try{runtime->flush();expect(false,"cycle accepted");}catch(const std::invalid_argument&){}

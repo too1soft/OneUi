@@ -9,6 +9,7 @@ std::shared_ptr<Runtime> runtime(OneUiView *view) {
 } // namespace oneui::capi::views
 using namespace oneui::capi::views;
 #include "oneui_c_api_view_metrics.inc"
+#include "oneui_c_api_view_workspace.inc"
 uint32_t oneui_view_protocol_version(void) { return ONEUI_VIEW_PROTOCOL_VERSION; }
 OneUiViewResult oneui_view_instantiate(OneUiViewMount *mountHandle, const uint8_t *bytes,
                                        size_t length, const OneUiViewModelVTable *table, void *vm,

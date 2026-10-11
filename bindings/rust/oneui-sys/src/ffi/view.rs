@@ -190,3 +190,10 @@ extern "C" {
     pub fn oneui_view_mount_focus_element(mount: *mut OneUiViewMount, name: OneUiUtf8String,
         focus_visible: i32, out_focused: *mut i32) -> i32;
 }
+
+extern "C" {
+    pub fn oneui_view_mount_register_workspace_tabs(mount: *mut OneUiViewMount,
+        domain: OneUiUtf8String, id: OneUiUtf8String, tabs: *mut OneUiWidget) -> i32;
+    pub fn oneui_view_workspace_tab_drag(view: *mut OneUiView, domain: OneUiUtf8String,
+        source: OneUiUtf8String, phase: i32, x: f32, y: f32) -> i32;
+}

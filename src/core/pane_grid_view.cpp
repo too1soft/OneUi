@@ -106,8 +106,13 @@ void PaneGrid::paint(Canvas& canvas) {
         canvas.fillRect(n.divider,color);
     }
     if(s.previewActive) {
-        auto fill=s.accent;fill.a=s.previewValid?41:15;
-        canvas.fillRect(s.preview,fill,10);canvas.strokeRect(s.preview,s.accent,10,s.previewValid?2.f:1.f);
+        auto accent=s.accent;
+        if(auto sheet=styleScope()) {
+            StyleNode node{"pane-grid-part",{"pane-grid-preview"},0};
+            accent=sheet->resolve(node).background.color.value_or(accent);
+        }
+        auto fill=accent;fill.a=s.previewValid?41:15;
+        canvas.fillRect(s.preview,fill,10);canvas.strokeRect(s.preview,accent,10,s.previewValid?2.f:1.f);
     }
     // Win32 may paint an invalidated snapshot before its first animation tick.
     // That completed initial-geometry paint is the warm frame. Do not paint a

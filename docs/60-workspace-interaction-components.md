@@ -583,3 +583,24 @@ tooltip (including an empty one) when active, title, path or other header settin
 change. Omitted tooltips retain the component's title/path default. Session privacy
 and connection-state wording remain application model/VM policy. This adds no
 public class layout or C ABI change.
+
+### Native tab strips in a declarative workspace
+
+`ViewMount::register_workspace_tabs(domain, id, tabs)` registers an existing
+native Tabs in the mounted view's WP4 domain. The Tabs must belong to the same
+window; registration holds a weak reference. Forward its native drag-out events
+with `View::workspace_tab_drag`, supplying the stable single-pane source on
+Started and window coordinates on every event. Flush pending workspace state
+before Started. WP4 owns preview, release hit testing, revision rejection and
+cancellation for both directions; the application only applies accepted intents.
+Maximized panes and multi-pane tab sources cannot begin a drag.
+
+`pane-grid-part.pane-grid-preview { background: var(--accent); }` supplies the
+preview accent, refreshed with the style scope. The component applies its own
+translucency (41/255 for a valid destination), outline and 45 ms exponential
+tracking. The release point is evaluated directly, independent of the lagging
+preview. These C API additions do not change public class layout.
+
+Named element metrics and mount focus lookup include content nested inside
+Popup. Native View focus requests route through Popup to its content, allowing
+an anchored DataMenu to receive keyboard input after it opens.

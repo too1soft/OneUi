@@ -1,4 +1,5 @@
 #include "workspace_cache.h"
+#include "workspace_drag_external.h"
 #include "oneui/layout/workspace_drag.h"
 #include <cmath>
 namespace oneui::views {
@@ -59,6 +60,31 @@ std::function<void()> Runtime::prepareDragGrid(const std::shared_ptr<Instance>& 
         return [d,commit=std::move(commit)]{commit();};
     }
     return []{};
+}
+void registerWorkspaceTabs(Runtime& runtime,const std::string& name,const std::string& id,
+                           const std::shared_ptr<Widget>& tabs) {
+    runtime.alive();
+    check(callbackPhase==Phase::Idle,ONEUI_VIEW_REENTRANT,"Drag registration during callback");
+    check(!name.empty()&&!id.empty()&&tabs,ONEUI_VIEW_INVALID_ARGUMENT,"Domain, identity and tabs required");
+    check(runtime.workspaceDomains && runtime.workspaceDomains->values.count(name),
+          ONEUI_VIEW_NOT_FOUND,"Workspace drag domain not found");
+    domain(runtime,name)->registerTabs(id,tabs);
+}
+void workspaceTabDrag(Runtime& runtime,const std::string& name,const std::string& source,
+                      int phase,Point point) {
+    runtime.alive();
+    check(callbackPhase==Phase::Idle,ONEUI_VIEW_REENTRANT,"Drag during callback");
+    check(phase>=0&&phase<=3&&std::isfinite(point.x)&&std::isfinite(point.y),
+          ONEUI_VIEW_INVALID_ARGUMENT,"Invalid workspace pointer event");
+    check(runtime.workspaceDomains && runtime.workspaceDomains->values.count(name),
+          ONEUI_VIEW_NOT_FOUND,"Workspace drag domain not found");
+    auto d=domain(runtime,name);
+    if(phase==0) {
+        check(!source.empty(),ONEUI_VIEW_INVALID_ARGUMENT,"Tab source required");
+        d->begin(source,point,true);
+    } else if(phase==1)d->move(point);
+    else if(phase==2)d->release(point);
+    else d->cancel();
 }
 void Runtime::wireDrag(const std::shared_ptr<Instance>& instance) {
     std::weak_ptr<Instance> weak=instance;

@@ -1,5 +1,6 @@
 // Read-only geometry for anchored actions and restoring scroll positions.
 #include "oneui/controls/template_table.h"
+#include "oneui/controls/popup.h"
 namespace {
 std::shared_ptr<oneui::Widget> namedViewElement(const std::shared_ptr<Runtime>& value, OneUiUtf8String name) {
         const auto key = text(name);
@@ -11,7 +12,9 @@ std::shared_ptr<oneui::Widget> namedViewElement(const std::shared_ptr<Runtime>& 
                 check(!found, ONEUI_VIEW_INVALID_ARGUMENT, "Ambiguous element name");
                 found = widget;
             }
-            if (auto overlay = std::dynamic_pointer_cast<oneui::OverlayHost>(widget)) {
+            if (auto popup = std::dynamic_pointer_cast<oneui::Popup>(widget)) {
+                if (popup->content()) visit(popup->content());
+            } else if (auto overlay = std::dynamic_pointer_cast<oneui::OverlayHost>(widget)) {
                 if (overlay->content()) visit(overlay->content());
                 for (const auto &entry : overlay->overlays()) visit(entry.child);
             } else if (auto container = std::dynamic_pointer_cast<oneui::View>(widget))

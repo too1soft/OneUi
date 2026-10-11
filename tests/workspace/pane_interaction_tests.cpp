@@ -154,6 +154,16 @@ void preview() {
         sample.grid->tickAnimations(300);return sample.grid->previewRect()->x;
     };
     check(std::abs(sample(8)-sample(16))<.01f && std::abs(sample(16)-sample(50))<.01f,"preview trajectory invariant across 8/16/50 ms steps");
+    for(auto color:{Color{0x11,0x22,0x33,255},Color{0xaa,0xbb,0xcc,255}}) {
+        auto sheet=std::make_shared<StyleSheet>();std::string error;
+        check(sheet->addRulesFromCss(color.r==0x11
+            ? "pane-grid-part.pane-grid-preview {background:#112233;}"
+            : "pane-grid-part.pane-grid-preview {background:#aabbcc;}",&error),"preview theme CSS");
+        f.grid->setStyleScope(sheet);test_support::RecordingCanvas canvas;f.grid->paint(canvas);
+        auto expected=color;expected.a=41;
+        check(!canvas.fillRects.empty()&&same(canvas.fillRects.back().color,expected),
+              "preview follows theme accent and retains translucent fill");
+    }
 }
 }
 int main(){try {internal::ScopedUiClock clock(clockNow);header();drag();dividerStyles();navigation();keyboardAcceptance();preview();

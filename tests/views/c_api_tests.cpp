@@ -1,6 +1,8 @@
 #include "capi/oneui_c_api_view_internal.h"
 #include "fixture.h"
 #include "oneui/layout/overlay_host.h"
+#include "oneui/controls/tabs.h"
+#include "oneui/controls/popup.h"
 #include <thread>
 using namespace viewtest;
 namespace {
@@ -81,6 +83,15 @@ int main(int argc, char **argv) {
             metrics.struct_size = sizeof(metrics);
             auto str = [](const char *text) { return OneUiUtf8String{text, std::char_traits<char>::length(text)}; };
             auto name = str("metrics-unique");
+            expect(oneui_view_mount_register_workspace_tabs(c.mount,str("terminal"),str("tabs"),nullptr)
+                == ONEUI_VIEW_INVALID_ARGUMENT,"workspace tabs require widget");
+            OneUiWidget unattached;unattached.widget=std::make_shared<oneui::Tabs>();
+            expect(oneui_view_mount_register_workspace_tabs(c.mount,str("terminal"),str("tabs"),&unattached)
+                == ONEUI_VIEW_INVALID_ARGUMENT,"workspace tabs reject foreign/unmounted widget");
+            expect(oneui_view_workspace_tab_drag(c.view,str("missing"),str("a"),0,0,0)
+                == ONEUI_VIEW_NOT_FOUND,"workspace drag rejects unknown domain");
+            expect(oneui_view_workspace_tab_drag(c.view,str("missing"),str("a"),99,0,0)
+                == ONEUI_VIEW_INVALID_ARGUMENT,"workspace drag validates phase");
             expect(oneui_view_element_metrics(c.view, name, &metrics) == 0 &&
                 metrics.x == 12 && metrics.y == 24 && metrics.width == 160 &&
                 metrics.height == 28 && !metrics.scrollable, "read-only element metrics");
@@ -125,6 +136,12 @@ int main(int argc, char **argv) {
             expect(oneui_view_element_metrics(c.view,str("overlay-badge"),&metrics)==0 &&
                 oneui_view_mount_focus_element(c.mount,str("overlay-base-input"),1,&focused)==0 && focused,
                 "named lookup includes native overlay base and foreground");
+            auto popup=std::make_shared<oneui::Popup>();
+            popup->setContent(overlay);
+            c.view->value->root->element.widget=popup;
+            expect(oneui_view_element_metrics(c.view,str("overlay-badge"),&metrics)==0 &&
+                oneui_view_mount_focus_element(c.mount,str("overlay-base-input"),1,&focused)==0 && focused,
+                "named lookup includes content beneath declarative popup");
             oneui_view_disconnect(c.view);
             expect(oneui_view_mount_focus_element(c.mount, name, 1, &focused) == ONEUI_VIEW_CLOSED,
                 "focus rejects closed view");

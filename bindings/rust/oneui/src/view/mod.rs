@@ -217,3 +217,5 @@ pub struct ViewDiagnostic {
     pub source: u32,
     pub message: String,
 }
+
+mod workspace;
