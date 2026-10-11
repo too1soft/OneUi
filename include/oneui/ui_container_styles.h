@@ -8,6 +8,9 @@ inline void StyleRegistry::updateAuthoredFlex(const std::shared_ptr<Widget>& wid
         found->second.flex=flex;
 }
 inline void StyleRegistry::applyBaseLayouts() {
+    // VM flushes restore base layout (including ContainerPage display). The
+    // same dimensions must therefore reapply their matching query overrides.
+    queries_.clear();
     std::map<const Widget*,std::shared_ptr<Stack>> parents;
     for (const auto& entry : entries_)
         if (auto stack = std::dynamic_pointer_cast<Stack>(entry.widget.lock()))
