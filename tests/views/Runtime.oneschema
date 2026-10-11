@@ -5,6 +5,7 @@ model Root {
     r enabled: bool
     r busy: bool
     r rows: list<Item>
+    command drag(phase:i64,origin_x:f64,origin_y:f64,x:f64,y:f64,alt:bool,control:bool,shift:bool)
     command click() when enabled busy busy
 }
 model Item key id {

@@ -157,6 +157,23 @@ void Runtime::wire(const std::shared_ptr<Instance> &instance) {
             if(auto surface=element.as<InteractiveSurface>())surface->setOnClick([fire]{fire({});});
             else element.as<Button>()->setOnClick([fire] { fire({}); });
         }
+        else if (name == "drag" && element.component == "InteractiveSurface" &&
+                 std::any_of(instance->events.begin(), instance->events.end(),
+                     [&](const auto& binding) { return binding[1] == event.id; })) {
+            auto surface = element.as<InteractiveSurface>();
+            surface->setPointerCursor(CursorKind::Grab);
+            surface->setOnDrag([fire](const PointerDragEvent& event) {
+                Value phase, ox, oy, x, y, alt, control, shift;
+                phase.tag = 2; phase.integer = static_cast<int>(event.phase);
+                ox.tag = oy.tag = x.tag = y.tag = 3;
+                ox.number = event.origin.x; oy.number = event.origin.y;
+                x.number = event.pointer.position.x; y.number = event.pointer.position.y;
+                alt.tag = control.tag = shift.tag = 1;
+                alt.integer = event.pointer.alt; control.integer = event.pointer.control;
+                shift.integer = event.pointer.shift;
+                fire({phase, ox, oy, x, y, alt, control, shift});
+            });
+        }
         else if (name == "pointer" && std::any_of(instance->events.begin(),instance->events.end(),
                  [&](const auto& binding){return binding[1]==event.id;}))
             element.as<InteractiveSurface>()->setOnPointerActivated([fire](const MouseEvent& event) {

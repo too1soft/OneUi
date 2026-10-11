@@ -7,6 +7,7 @@
     <Text v-for="item in rows" :key="item.id" :text="item.text"/>
     <NativeHost host="terminal"/>
     <Checkbox text="permission" tooltip="Permission toggle" v-model="checked"/>
+    <InteractiveSurface @drag="drag"><Text text="Drag"/></InteractiveSurface>
   </Column>
 </template>
 

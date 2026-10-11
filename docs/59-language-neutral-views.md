@@ -1040,3 +1040,7 @@ scroll offset and maximum, alongside TemplateTable and ScrollView. The additive
 for a unique accessible name without exposing a widget or invoking the VM. It
 shares the existing missing/ambiguous name, UI thread and closed-view checks.
 `Table.tooltip` uses the existing native tooltip presentation.
+
+`InteractiveSurface @drag` 可选事件提供 `(phase:i64,origin_x:f64,origin_y:f64,x:f64,y:f64,alt:bool,control:bool,shift:bool)`。phase 为 0 开始、1 移动、2 释放、3 取消；坐标为窗口逻辑坐标，阈值 7px。绑定该事件显示抓取光标；由原生控件处理捕获、Esc 和结束后不触发点击。
+
+Capture-only QA also exposes `oneui_widget_test_hover` / Rust `Widget::test_hover`. It sends a native mouse move through the supplied tree and reports a nonempty tooltip hit; it does not synthesize OS input or guarantee a timed tooltip bubble was shown. Renderer fixtures compare pre/post-hover pixels separately.

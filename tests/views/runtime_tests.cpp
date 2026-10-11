@@ -5,6 +5,7 @@ using namespace viewtest;
 #include "template_grid.inc"
 #include "slot_contracts.inc"
 #include "checkbox_contract.inc"
+#include "surface_drag.inc"
 #include "tree_contract.inc"
 #include "rich_table_contract.inc"
 #include "rich_table_reorder.inc"
@@ -12,6 +13,7 @@ int main(int argc, char **argv) {
     if (argc != 2)
         return 2;
     try {
+        surfaceDrag(argv[1]);
         {
             Case c(argv[1]);
             c.start();
