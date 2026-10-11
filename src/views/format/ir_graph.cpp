@@ -142,7 +142,7 @@ void validateGraph(const Image &im)
                 require(im.count(WSC1) && (rs[WSC1][0][1] & workspaceCollections) && parent != none &&
                     rs[NODE][parent][0] == 1, "BAD_IR: transparent collection parent");
                 const auto &rule = im.components[rs[NODE][parent][1]].childRule;
-                require(rule == "pane-collection" || rule == "dock-collection", "BAD_IR: transparent collection rule");
+                require(rule == "pane-collection" || rule == "dock-collection" || rule == "grid-collection", "BAD_IR: transparent collection rule");
             }
             workspaceScope.push_back(transparent);
             scopeHosts.emplace_back();

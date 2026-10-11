@@ -16,6 +16,14 @@ model Root {
   command cancel()
   command failed(source:utf8,code:utf8,message:utf8)
   command adjust(phase:i64,value:f64)
+  r menu: list<MenuEntry>
+  command menuActivated(id:utf8)
+  r popupOpen:bool
+  command popupClosed()
 }
 model FontItem key id {r id:utf8;r family:utf8;r label:utf8;r available:bool}
 model ColorToken key id {r id:utf8;r rgba:i64}
+model MenuEntry key id {
+  r id:utf8; r parent:utf8; r text:utf8; r icon:utf8; r shortcut:utf8
+  r disabled:bool; r checked:bool; r danger:bool; r separator:bool
+}

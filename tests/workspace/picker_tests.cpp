@@ -3,6 +3,8 @@
 #include "oneui/layout/theme_scope.h"
 #include "oneui/controls/font_picker.h"
 #include "oneui/controls/media_picker.h"
+#include "../../src/views/data_menu.h"
+#include "oneui/controls/popup.h"
 #include "../../src/core/picker_styles.h"
 #include "../../src/internal/ui_clock.h"
 #include "../support/recording_canvas.h"
@@ -120,5 +122,7 @@ void themes() {
 }
 #include "settings_controls.inc"
 #include "font_confirmation.inc"
+#include "data_menu_tests.inc"
+#include "declarative_popup_tests.inc"
 }
-int main(){try{fonts();mediaGeneration();localDecode();themes();settingsControls();fontConfirmation();std::cout<<"pickers: 6 scenario groups passed\n";}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}
+int main(){try{fonts();mediaGeneration();localDecode();themes();settingsControls();fontConfirmation();dataMenus();declarativePopups();std::cout<<"pickers, menus and popups: 8 scenario groups passed\n";}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

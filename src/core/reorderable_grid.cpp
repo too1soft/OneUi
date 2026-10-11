@@ -14,6 +14,9 @@ ReorderableGrid::ReorderableGrid() {
 }
 
 void ReorderableGrid::setItems(std::vector<ReorderableGridItem> items) {
+    if (items.size() == items_.size() && std::equal(items.begin(), items.end(), items_.begin(),
+        [](const auto& a, const auto& b) { return a.id == b.id && a.content == b.content; }))
+        return; // Child-property notifications must not cancel a native drag.
     clearChildren();
     items_.clear();
     itemIds_.clear();

@@ -903,3 +903,87 @@ Style the surface with `StateView` and its painted parts with the native
 `state-view-message` or `state-view-action`. Part nodes inherit the component's
 classes. The action part consumes `:hover`, `:pressed`, `:focus` and `:disabled`.
 These part selectors style painted content; they do not create child widgets.
+### WP5 B2：对话框、编辑控件和文字度量
+
+`Dialog` 接受恰好两个直接子节点，依次作为内容区和操作区；支持 `title`、
+`subtitle`、`icon`、`close-visible` 和无参数 `@close`。它使用原生 Dialog 的
+标题、关闭及 Escape 行为，不为内容额外插入布局容器。
+
+`TextArea` 是多行原生编辑器，支持 `v-model`、`placeholder`、`read-only` 和
+`line-height`。`Checkbox` 支持布尔 `v-model` 和 `text`，键盘和鼠标写回同一 VM。
+`Input.password-mask` 指定一个 BMP 非代理字符；空串、多个字符及代理字符被拒绝。
+
+`Text` v5 在既有属性 ID 后追加 `line-height`（15）、`text-align`（16）和
+`tooltip`（17）；对齐值为 `start`、`center`、`end`。`Button` v2 追加
+`tooltip`（14）和同样取值的 `content-align`（15）。默认行为保持不变。
+Basic 黄金文件由独立 `tests/viewc/golden_reference.py` 推导；相对 Text v4
+仅 COMP 段内容改变，文件长度、段偏移及契约哈希随之更新。IR major 保持 1。
+
+UTF-8 ABI 45 新增 `oneui_text_measure_width_utf8`，Rust 对应
+`oneui::measure_text_width(text, family, size, weight, scale)`。该接口不创建控件，
+使用与 Label 相同的无换行文字塑形器，返回逻辑像素宽度。空字体名使用默认回退；
+无效 UTF-8、非正或非有限字号/缩放、非法字重和空输出指针均失败。
+调用者负责传入所需字体环境；它不会隐式读取窗口或产品主题。
+
+
+### WP5 B2：表格、导航与焦点
+
+`TemplateTable` 接受表头、正文两个子节点。表头固定在顶部，横向滚动时与正文对齐。
+支持 `minimum-width`、`header-height`、`content-height`、`content-width`、
+`wheel-step`、`scroll-offset` 和 `horizontal-offset`。正文占满表头下方的空间；
+显式内容宽度可使列宽不受滚动条预留区影响。组件具有原生 Table 可访问角色。
+模板行适用于有界分页；无限长的简单数据集应使用 `VirtualList` 或 `DataTable`。
+`Scroll` 同样增加 `content-width`，追加属性 ID 15 并提升组件版本，旧 reader 拒绝新契约。
+
+`InteractiveSurface @pointer` 提供 `(x:f64,y:f64,control:bool,shift:bool,click_count:i64)`，
+保留原生坐标、修饰键及连击次数。只有声明该事件才安装处理器，既有 `@click` 行为保持不变。
+Button 支持绑定 `class` 和 `trailing-text`；Text 支持 CSS `font-family`，
+重新设为 `inherit` 时移除先前的字体覆盖。C++ 与 IR 共用相同实现。
+
+UTF-8 ABI 45 的 `oneui_view_element_metrics` / Rust `View::element_metrics` 按唯一名称
+返回已提交布局的几何信息，以及 Scroll、TemplateTable 的滚动偏移。查询不会 flush 或调用 VM，
+不暴露控件句柄。名称歧义返回 INVALID_ARGUMENT，缺失返回 NOT_FOUND，关闭后返回 CLOSED。
+
+`oneui_view_mount_focus_element` / Rust `ViewMount::focus_element` 将焦点交给当前挂载视图中
+唯一名称对应的原生元素，返回原生焦点请求是否被接受。它要求 UI 线程、有效挂载和存活视图，
+拒绝 VM 回调内的重入调用；调用者应在当前事件结束、挂载完成后恢复焦点。
+
+capture 构建的 `Widget::test_modified_click` 可保留 Ctrl/Shift 和连击次数，直接驱动原生事件；
+它不发送桌面输入，生产构建不启用该入口。
+
+### WP5 B2：覆盖层与可拖排网格
+
+`Overlay` 恰好接受底层、前景两个子节点。底层填满布局，前景可指定
+`overlay-width/height`、四向 `inset-*`、`horizontal-align/vertical-align`
+以及 `overlay-visible`；尺寸为零表示填满可用轴。隐藏前景不阻挡底层焦点。
+`SearchInput.prefix-icon`、`placeholder-when-focused` 和 `Button.trailing-icon`
+复用原生编辑器和按钮，未声明时保留原行为。
+
+`ReorderableGrid` 只接受 `GridItem`，后者恰好包含一个填满单元格的内容根。
+每个 GridItem 的 `grid-key` 必须非空且在网格内唯一；键控列表必须声明
+稳定的 `view-id`，复用 WP4 透明 REPT/render-scope 契约，不插入 Column。
+网格支持 `column-count/column-gap/row-gap/item-height` 和布尔
+`reorder-enabled/item-drag-enabled`。原生网格负责响应式尺寸、拖拽阈值、
+插入反馈与滚动内容高度，VM 负责提交业务顺序。
+`@reorderRequested(source:utf8,target:i64)` 返回源键和目标索引，
+`@itemDrag(source:utf8,phase:i64,x:f64,y:f64)` 返回窗口坐标，phase 依次为
+Started=0、Updated=1、Dropped=2、Cancelled=3。属性更新不取消正在进行的拖排，
+键控重排保留控件身份。新增 COMP 契约使不认识组件的旧 reader 拒绝加载。
+
+`InteractiveSurface @contextMenu(x:f64,y:f64)` 转发原生右键请求；
+`@click` 仍承载键盘激活，`@pointer` 承载选择及鼠标连击，两者分工不变。
+
+`ReorderableGrid` 的类型选择器支持 `gap`、`padding`、`height`（单元格高度）、
+`grid-min-column-width` 及边框/拖排轮廓颜色。`Button` 支持 CSS `opacity` 和
+`icon-size`，沿用原生绘制与状态过渡。原生 `StyleRegistry::replace` 使用
+`reorderable-grid` / `button` 等小写控件名；`.one` 的类型选择器由编译器转换。
+`copy-native`、`terminal-native` 等显式图标名保留旧原生图形，原有轮廓别名不变。
+
+运行时更新 `basis/grow/shrink/min/max` 时同步更新已缓存的 authored flex；
+后续 CSS 重应用不得用初始化时的 flex 覆盖新的绑定值。C++ setter 与 IR
+绑定遵循同一规则，确保详情侧栏开合及响应式宽度更新后仍正确参与父布局。
+
+支持背景填充的声明式组件也支持 `background-opacity`；有内容填充的组件
+支持 `content-background-opacity`。两者沿用原生 CSS 的填充透明度语义，
+不会降低文字、图标、焦点框或子控件的透明度。没有背景的组件（例如 Icon）
+仍拒绝该属性。该 CSS 能力不改变 COMP 契约或 IR 版本。

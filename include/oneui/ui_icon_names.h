@@ -15,16 +15,25 @@ inline std::optional<IconSymbol> namedIcon(std::string_view name) {
         {"close",IconSymbol::OutlineWorkbenchClose},{"split",IconSymbol::OutlineWorkbenchSplit},
         {"layout",IconSymbol::OutlineWorkbenchLayout},{"cpu",IconSymbol::OutlineWorkbenchCpu},
         {"refresh",IconSymbol::OutlineRefresh},{"sun",IconSymbol::OutlineSun},
-        {"copy",IconSymbol::OutlineCopy},{"pause",IconSymbol::Pause},
+        {"copy",IconSymbol::OutlineCopy},{"copy-native",IconSymbol::Copy},{"pause",IconSymbol::Pause},
         {"up",IconSymbol::OutlineWorkbenchUp},{"link",IconSymbol::OutlineWorkbenchLink},{"broadcast",IconSymbol::OutlineWorkbenchBroadcast},
         {"download",IconSymbol::OutlineWorkbenchDownload},{"settings",IconSymbol::OutlineWorkbenchSettings},
         {"key-dots",IconSymbol::KeyDots},{"check-circle",IconSymbol::CheckCircle},
         {"notebook",IconSymbol::Notebook},{"trash",IconSymbol::Trash},
         {"user",IconSymbol::User},{"refresh-circle",IconSymbol::Refresh},{"edit",IconSymbol::Edit},
         {"terminal-native",IconSymbol::Terminal},{"desktop",IconSymbol::Desktop},{"sparkle",IconSymbol::Sparkle},
-        {"check",IconSymbol::Check},
-        {"play",IconSymbol::Play},
-        {"server-native",IconSymbol::Server}
+        {"check",IconSymbol::Check},{"upload-native",IconSymbol::Upload},
+        {"server-native",IconSymbol::Server},{"server-outline",IconSymbol::OutlineServer},
+        {"terminal-outline",IconSymbol::OutlineTerminal},{"close-outline",IconSymbol::OutlineClose},
+        {"more-outline",IconSymbol::OutlineMore},{"grid",IconSymbol::LayoutGrid},
+        {"monitor",IconSymbol::Monitor},{"folder-outline",IconSymbol::OutlineFolder},{"sliders",IconSymbol::Sliders},
+        {"left-outline",IconSymbol::OutlineLeft},{"right-outline",IconSymbol::OutlineChevron},
+        {"down-outline",IconSymbol::OutlineDown},{"key-outline",IconSymbol::OutlineKey},
+        {"tag-outline",IconSymbol::OutlineTag},{"pin-outline",IconSymbol::OutlinePin},
+        {"search-outline",IconSymbol::OutlineSearch},{"inspector-outline",IconSymbol::OutlineInspector},
+        {"info-circle",IconSymbol::InfoCircle},{"warning-triangle",IconSymbol::WarningTriangle},
+        {"close-native",IconSymbol::Close},
+        {"play",IconSymbol::Play}
     };
     for(const auto& entry:entries)if(entry.name==name)return entry.symbol;
     return {};

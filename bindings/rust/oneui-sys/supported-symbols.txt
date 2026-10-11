@@ -82,6 +82,7 @@ oneui_dock_session_set_style_sheet
 oneui_dock_session_start_native_drag
 oneui_double_click_interval_ms
 oneui_enumerate_system_fonts
+oneui_text_measure_width_utf8
 oneui_focus_bookmark_destroy
 oneui_focus_bookmark_restore
 oneui_font_register_memory
@@ -596,6 +597,7 @@ oneui_window_tray_icon_visible
 oneui_view_destroy
 oneui_view_disconnect
 oneui_view_find_host
+oneui_view_element_metrics
 oneui_view_flush
 oneui_view_reload
 oneui_view_get_error
@@ -616,3 +618,4 @@ oneui_view_protocol_version
 oneui_view_root
 
 oneui_view_resolve_scope
+oneui_view_mount_focus_element

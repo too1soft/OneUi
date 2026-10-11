@@ -16,6 +16,16 @@ class DiagnosticTests(CompilerCase):
         self.compile('<StateView><Text/></StateView>', SCHEMA, error='CHILDREN')
         self.compile('<StateView @action="close"/>', SCHEMA, error='COMMAND_SIGNATURE')
 
+    def test_menu_record_contracts_remain_distinct(self):
+        schema = ('model Basic {r native:list<Native> r data:list<Data>}'
+                  'model Native key id {r id:utf8 r kind:utf8 r title:utf8 r detail:utf8 '
+                  'r icon:utf8 r danger:bool r disabled:bool}'
+                  'model Data key id {r id:utf8 r parent:utf8 r text:utf8 r icon:utf8 '
+                  'r shortcut:utf8 r disabled:bool r checked:bool r danger:bool r separator:bool}')
+        self.compile('<Column><Menu :items="native"/><DataMenu :items="data"/></Column>', schema)
+        self.compile('<Menu :items="data"/>', schema, error='BIND_RECORD')
+        self.compile('<DataMenu :items="native"/>', schema, error='BIND_RECORD')
+
     def test_pane_header_action_labels(self):
         self.compile('<PaneHeader :split-label="title" :maximize-label="title" :close-label="title" :live-label="title" :menu-label="title"/>', SCHEMA)
 
@@ -24,6 +34,52 @@ class DiagnosticTests(CompilerCase):
 
     def test_play_icon(self):
         self.compile('<Column><Icon symbol="play"/><Button icon="play" @click="click"/></Column>', SCHEMA)
+    def test_reorderable_grid_contract(self):
+        self.compile('<template view-model="Basic"><ReorderableGrid/></template><style scoped>ReorderableGrid {grid-min-column-width:280px;gap:8px;padding:0px;outline-width:2px;outline-color:#123456;}</style>', SCHEMA, raw=True)
+        self.compile('<template view-model="Basic"><Button/></template><style scoped>Button {opacity:0.58;}</style>', SCHEMA, raw=True)
+        schema = SCHEMA.replace('command click()', 'command reorder(source:utf8,target:i64) command drag(source:utf8,phase:i64,x:f64,y:f64) command click()')
+        self.compile('<ReorderableGrid column-count="3" @reorderRequested="reorder" @itemDrag="drag"><GridItem view-id="rows" v-for="row in rows" :key="row.id" :grid-key="row.id"><Text :text="row.text"/></GridItem></ReorderableGrid>', schema)
+        self.compile('<ReorderableGrid><Text/></ReorderableGrid>', schema, error='WORKSPACE_CHILDREN')
+        self.compile('<GridItem grid-key="a"><Text/><Text/></GridItem>', schema, error='CHILDREN')
+        self.compile('<ReorderableGrid><GridItem v-for="row in rows" :key="row.id" :grid-key="row.id"><Text/></GridItem></ReorderableGrid>', schema, error='WORKSPACE_SCOPE')
+        self.compile('<ReorderableGrid @reorderRequested="click"/>', schema, error='COMMAND_SIGNATURE')
+        self.compile('<ReorderableGrid :column-count="flag"/>', schema, error='BIND_TYPE')
+
+    def test_overlay_and_optional_icons(self):
+        self.compile('<Overlay overlay-width="34" overlay-height="18" inset-right="10" horizontal-align="end" vertical-align="center" :overlay-visible="flag"><Input v-model="input" prefix-icon="search-outline"/><Button trailing-icon="down-outline"/></Overlay>', SCHEMA)
+        for children in ['', '<Text/>', '<Text/><Text/><Text/>']:
+            self.compile('<Overlay>' + children + '</Overlay>', SCHEMA, error='CHILDREN')
+        self.compile('<Overlay :overlay-visible="title"><Text/><Text/></Overlay>', SCHEMA, error='BIND_TYPE')
+        self.compile('<SearchInput :prefix-icon="flag"/>', SCHEMA, error='BIND_TYPE')
+        self.compile('<Button :trailing-icon="flag"/>', SCHEMA, error='BIND_TYPE')
+        self.compile('<template view-model="Basic"><Button class="compact"/></template><style scoped>Button.compact {icon-size:12px;}</style>', SCHEMA, raw=True)
+
+    def test_text_font_family_style(self):
+        self.compile('<template view-model="Basic"><Text class="address"/></template><style scoped>Text.address {font-family:Cascadia Mono;}</style>', SCHEMA, raw=True)
+
+    def test_editor_control_contracts(self):
+        self.compile('<TextArea v-model="input" line-height="23" :read-only="flag"/>', SCHEMA)
+        self.compile('<Checkbox v-model="enabled" text="Selected"/>', SCHEMA)
+        self.compile('<Input v-model="input" password="true" password-mask="●"/>', SCHEMA)
+        self.compile('<TextArea v-model="title"/>', SCHEMA, error='MODEL_READ_ONLY')
+        self.compile('<Checkbox v-model="input"/>', SCHEMA, error='BIND_TYPE')
+        self.compile('<TextArea><Text/></TextArea>', SCHEMA, error='CHILDREN')
+
+    def test_dialog_contract(self):
+        self.compile('<Dialog :title="title" :close-visible="flag" @close="click"><Column/><Row/></Dialog>', SCHEMA)
+        for children in ['', '<Column/>', '<Column/><Row/><Text/>']:
+            self.compile('<Dialog>' + children + '</Dialog>', SCHEMA, error='CHILDREN')
+        self.compile('<Dialog @close="close"><Column/><Row/></Dialog>', SCHEMA, error='COMMAND_SIGNATURE')
+
+    def test_template_table_and_row_pointer(self):
+        schema = 'model Basic {r title:utf8 command pointer(x:f64,y:f64,control:bool,shift:bool,click_count:i64)}'
+        self.compile('<TemplateTable minimum-width="820" content-height="1000"><Text/><Column/></TemplateTable>', schema)
+        for children in ['', '<Column/>', '<Column/><Row/><Text/>']:
+            self.compile('<TemplateTable>' + children + '</TemplateTable>', schema, error='CHILDREN')
+        self.compile('<InteractiveSurface @pointer="pointer"><Text/></InteractiveSurface>', schema)
+        self.compile('<InteractiveSurface @pointer="click"><Text/></InteractiveSurface>', SCHEMA, error='COMMAND_SIGNATURE')
+        self.compile('<Button :class="title" trailing-text="3"/>', schema)
+        self.compile('<Button :class="flag"/>', SCHEMA, error='BIND_TYPE')
 
     def test_binding_and_command_errors(self):
         cases = [
@@ -32,7 +88,7 @@ class DiagnosticTests(CompilerCase):
             ('<Switch v-model="input"/>', 'BIND_TYPE'), ('<Text v-model="input"/>', 'MODEL_TYPE'),
             ('<Text @click="click"/>', 'COMPONENT_EVENT'), ('<Button @click="close"/>', 'COMMAND_SIGNATURE'),
             ('<Tabs @close="wrong"/>', 'COMMAND_SIGNATURE'), ('<Button @click="missing"/>', 'VM_COMMAND'),
-            ('<Text :text="input + title"/>', 'EXPRESSION'), ('<Button :class="title"/>', 'BIND_STATIC'),
+              ('<Text :text="input + title"/>', 'EXPRESSION'), ('<Icon :class="title"/>', 'BIND_STATIC'),
             ('<Text :class="flag"/>', 'BIND_TYPE'),
             ('<Text text="a" :text="title"/>', 'PROPERTY_DUPLICATE'), ('<Text text="a">b</Text>', 'PROPERTY_DUPLICATE'),
             ('<Input text="a" v-model="input"/>', 'PROPERTY_DUPLICATE'),
@@ -116,6 +172,13 @@ class DiagnosticTests(CompilerCase):
     def test_pane_header_parts(self):
         self.compile('<template view-model="Basic"><PaneHeader/></template><style scoped>pane-header-part.pane-header-path {font-family:Consolas;font-size:13px;color:#123456;} pane-header-part.pane-header-button:hover {background:#abcdef;} pane-grid-part.pane-grid-divider:hover {background:#445566;}</style>',
                      'model Basic {r title:utf8}', raw=True)
+    def test_fill_only_material_contract(self):
+        self.compile('<template view-model="Basic"><Column><Button/><SearchInput/><Select/></Column></template>'
+                     '<style scoped>Button {background-opacity:0.28;} SearchInput {background-opacity:0.28;} '
+                     'Select {background-opacity:0.28;content-background-opacity:0.96;}</style>', SCHEMA, raw=True)
+        self.compile('<template view-model="Basic"><Icon/></template>'
+                     '<style scoped>Icon {background-opacity:0.28;}</style>', SCHEMA,
+                     error='not consumed', raw=True)
 
     def test_constants_and_composite_builtins(self):
         self.compile('<Column><Text :visible="true" v-if="false"/><DataTable :items="rows" :columns="columns"/><TimeSeriesChart :series="series"/></Column>',

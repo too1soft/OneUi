@@ -9,8 +9,8 @@ void validateChildren(const Node &n, const ComponentContract &c, const Location 
     auto count = n.children.size();
     if(rule=="header-slots")for(const auto& child:n.children)
         if(child.tag!="HeaderSlot")at.fail("HEADER_SLOT: invalid native slot");
-    if (rule == "pane-collection" || rule == "dock-collection") {
-        const auto expected = rule == "pane-collection" ? "Pane" : "DockItem";
+    if (rule == "pane-collection" || rule == "dock-collection" || rule == "grid-collection") {
+        const auto expected = rule == "pane-collection" ? "Pane" : rule == "grid-collection" ? "GridItem" : "DockItem";
         for (const auto &child : n.children)
             if (child.tag != expected)
                 at.fail("WORKSPACE_CHILDREN: expected direct stable item");
