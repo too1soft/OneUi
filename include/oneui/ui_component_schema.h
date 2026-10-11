@@ -79,7 +79,7 @@ enum class ValueType { None, Text, Boolean, Integer, Number, Strings, Columns, R
     X(Button, "button", "text variant icon tooltip content-align trailing-text trailing-icon", None) \
     X(DataTable, "table", "items columns selectedKey item-key", Text) \
     X(List, "list", "items selectedIndex", Integer) \
-    X(VirtualList, "virtual-list", "items selectedIndex row-height scroll-offset", Integer) \
+    X(VirtualList, "virtual-list", "items selectedIndex row-height scroll-offset multiple", Integer) \
     X(StateView, "state-view", "title message action icon", None) \
     X(Menu, "menu", "items", None) \
     X(DataMenu, "menu", "title subtitle items", None) \
@@ -126,6 +126,7 @@ constexpr bool layoutNumber(std::string_view key) {
 }
 constexpr ValueType propertyType(Kind kind,std::string_view key) {
     if(!supports(kind,key))return ValueType::None;
+    if(kind==Kind::VirtualList && key=="multiple")return ValueType::Boolean;
     if(key=="placeholder-when-focused")return ValueType::Boolean;
     if(kind==Kind::Popup && contains("anchor-x anchor-y anchor-width anchor-height",key))return ValueType::Number;
     if(kind==Kind::ReorderableGrid) {

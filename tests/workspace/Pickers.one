@@ -15,5 +15,6 @@
     <DataMenu :title="label" :subtitle="error" :items="menu" @menuActivated="menuActivated"/>
     <Popup :open="popupOpen" anchor-x="300" anchor-y="220" anchor-width="10" anchor-height="10"
            content-width="180" content-height="100" @closed="popupClosed"><Button text="Action"/></Popup>
+    <VirtualList multiple="true" :items="resources" row-height="52" @selectionChanged="selectResource"/>
   </Column>
 </template>

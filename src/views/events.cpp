@@ -163,6 +163,20 @@ void Runtime::wire(const std::shared_ptr<Instance> &instance) {
                 v.text = narrow(key);
                 fire({v});
             };
+        else if (name == "selectionChanged" && element.component == "VirtualList")
+            element.as<VirtualList>()->setOnSelectionChanged([fire, node, previous = element.as<VirtualList>()->selectedIndices()](const std::vector<int>& selected) mutable {
+                auto instance = node.lock();
+                const std::set<int> old(previous.begin(), previous.end()), next(selected.begin(), selected.end());
+                previous = selected;
+                if (!instance || instance->applying) return;
+                std::set<int> changed = old;
+                for (int index : next) { if (!changed.erase(index)) changed.insert(index); }
+                for (int i : changed) {
+                    Value index, chosen; index.tag = 2; index.integer = i;
+                    chosen.tag = 1; chosen.integer = next.count(i) != 0;
+                    fire({index, chosen});
+                }
+            });
         else if (name == "activate" && element.component == "VirtualList")
             element.as<VirtualList>()->setOnActivated([fire](int) { fire({}); });
         else if (name == "activate")

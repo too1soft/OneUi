@@ -52,6 +52,7 @@ const std::map<std::string, ComponentContract> &registry()
         ++r.at("Input").version; // Explicit password mask, appended property ID 15.
         ++r.at("Scroll").version; // Explicit content width, appended property ID 15.
         ++r.at("SearchInput").version; // Optional prefix icon; absent keeps old rendering.
+        ++r.at("VirtualList").version; // Optional row selection and typed multi-selection events.
         ++r.at("FontPicker").version;
         // Read-only class bindings preserve static and scoped classes. Keep the
         // reviewed extension limited to the presentation nodes that need it.

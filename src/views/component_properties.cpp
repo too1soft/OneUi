@@ -205,6 +205,7 @@ void Mount::set(Element &e, const std::string &key, const std::string &value) {
         set(e, key, wide(value));
 }
 void Mount::set(Element &e, const std::string &key, bool value) {
+    if(e.component=="VirtualList" && key=="multiple") {e.as<VirtualList>()->setSelectionMode(value ? SelectionMode::Multiple : SelectionMode::Single);return;}
     if(e.component=="Popup" && key=="open") {e.as<Popup>()->setOpen(value);return;}
     if(key=="placeholder-when-focused") {e.as<TextField>()->setPlaceholderVisibleWhenFocused(value);return;}
     if(e.component=="ReorderableGrid") {

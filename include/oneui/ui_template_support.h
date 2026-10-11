@@ -45,6 +45,7 @@ inline std::string lowerValue(std::string value) { for(auto& ch:value)ch=static_
 inline std::set<std::string> componentCssProperties(const std::string& tag) {
     if (tag == "menu") return {"background", "background-color", "color", "placeholder-color", "border-color", "border-width", "border-radius", "padding", "font-size", "font-weight", "box-shadow"};
     if (tag == "reorderable-grid") return {"padding","gap","grid-min-column-width","outline-color","outline-width","border-color"};
+    if (tag == "popup") return {"background", "background-color", "color", "border-color", "border-width", "border-radius", "padding", "gap", "box-shadow"};
     if (tag == "dialog") return {"background", "background-color", "color", "border-color", "border-width", "border-radius", "padding", "font-size", "font-weight", "box-shadow"};
     if (tag == "pane-grid-part") return {"background","background-color"};
     if (tag == "pane-header-part") return {"background","background-color","color","border-color","border-width","border-radius","padding","font-size","font-weight","font-family"};

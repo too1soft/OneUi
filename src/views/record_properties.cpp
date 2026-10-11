@@ -79,6 +79,8 @@ void Runtime::applyList(Instance &instance, const std::string &property, ListSta
         }
     } else if (e.component == "VirtualList") {
         std::vector<VirtualListItem> values;
+        std::vector<int> selected;
+        bool selectionProvided = false;
         for (const auto &item : state.items) {
             VirtualListItem row{wide(field(item, "title").text), wide(field(item, "detail").text)};
             const auto &properties = image.schema.model(item->table.model_id).properties;
@@ -88,6 +90,12 @@ void Runtime::applyList(Instance &instance, const std::string &property, ListSta
                 check(found->second.tag == 4, ONEUI_VIEW_TYPE, "VirtualList rich text type");
                 return wide(field(item, name).text);
             };
+            auto chosen = properties.find("selected");
+            if (chosen != properties.end()) {
+                check(chosen->second.tag == 1, ONEUI_VIEW_TYPE, "VirtualList selected type");
+                selectionProvided = true;
+                if (field(item, "selected").integer) selected.push_back(static_cast<int>(values.size()));
+            }
             row.badge = optionalText("badge");
             row.trailing = optionalText("trailing");
             auto color = properties.find("indicator_rgba");
@@ -101,6 +109,7 @@ void Runtime::applyList(Instance &instance, const std::string &property, ListSta
             values.push_back(std::move(row));
         }
         e.as<VirtualList>()->setRichItems(std::move(values));
+        if (selectionProvided) e.as<VirtualList>()->setSelectedIndices(selected);
     } else if (e.component == "List") {
         std::vector<ListItem> values;
         for (const auto &item : state.items) values.push_back({wide(field(item, "title").text), wide(field(item, "detail").text)});

@@ -326,3 +326,5 @@ P("Checkbox", 11, "text", 4, 3, "")
 P("Checkbox", 12, "visible", 1, 3, "")
 
 E("VirtualList", 1, "activate", 0)
+P("VirtualList", 15, "multiple", 1, 3, "")
+r.at("VirtualList").events.push_back({2, "selectionChanged", {{"index", 2}, {"selected", 1}}});
