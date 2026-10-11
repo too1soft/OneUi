@@ -20,6 +20,7 @@ ONEUI_API StyleBox textFieldStyleBoxFromStyleSheet(const StyleSheet& sheet, Styl
 ONEUI_API ButtonStyleOverride buttonStyleOverrideFromStyleSheet(const StyleSheet& sheet, StyleNode node);
 ONEUI_API TextFieldStyleOverride textFieldStyleOverrideFromStyleSheet(const StyleSheet& sheet, StyleNode node);
 ONEUI_API SwitchStyleOverride switchStyleOverrideFromStyleSheet(const StyleSheet& sheet, StyleNode node);
+ONEUI_API CheckboxStyleOverride checkboxStyleOverrideFromStyleSheet(const StyleSheet& sheet, StyleNode node);
 ONEUI_API SelectStyleOverride selectStyleOverrideFromStyleSheet(const StyleSheet& sheet, StyleNode node);
 ONEUI_API ProgressBarStyleOverride progressBarStyleOverrideFromStyleSheet(const StyleSheet& sheet, StyleNode node);
 ONEUI_API PopupStyleOverride popupStyleOverrideFromStyleSheet(const StyleSheet& sheet, StyleNode node);
@@ -29,6 +30,5 @@ ONEUI_API TreeViewStyleOverride treeViewStyleOverrideFromStyleSheet(const StyleS
 ONEUI_API InteractiveSurfaceStyle interactiveSurfaceStyleFromStyleSheet(const StyleSheet& sheet, StyleNode node);
 ONEUI_API StyleBox cardStyleBoxFromStyleSheet(const StyleSheet& sheet, StyleNode node);
 ONEUI_API ProductShellStyle productShellStyleFromStyleSheet(const StyleSheet& sheet);
-ONEUI_API CheckboxStyleOverride checkboxStyleOverrideFromStyleSheet(const StyleSheet& sheet, StyleNode node);
 
 } // namespace oneui

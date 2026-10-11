@@ -42,7 +42,10 @@ inline void validateLayoutNumber(const std::string& key, float value) {
         throw std::invalid_argument(key + ((key == "max-width" || key=="min-column-width" || key=="breakpoint" || key=="pane-width") ? " must be a finite positive number" : " must be a finite nonnegative number"));
 }
 inline std::string lowerValue(std::string value) { for(auto& ch:value)ch=static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));return value; }
-inline std::set<std::string> cssProperties(const std::string& tag) {
+inline std::set<std::string> componentCssProperties(const std::string& tag) {
+    if (tag == "menu") return {"background", "background-color", "color", "placeholder-color", "border-color", "border-width", "border-radius", "padding", "font-size", "font-weight", "box-shadow"};
+    if (tag == "reorderable-grid") return {"padding","gap","grid-min-column-width","outline-color","outline-width","border-color"};
+    if (tag == "dialog") return {"background", "background-color", "color", "border-color", "border-width", "border-radius", "padding", "font-size", "font-weight", "box-shadow"};
     if (tag == "progress"||tag=="slider"||tag=="font-picker"||tag=="media-picker"||tag=="media-preview"||tag=="theme-scope") return {};
     if (tag == "card") return {"background-color","background","border-color","border-width","border-radius","padding","box-shadow","opacity"};
     if (tag == "interactive-surface") return {"background-color","background","border-color","border-width","border-radius","padding","transition-duration","transition-timing-function"};
@@ -54,20 +57,27 @@ inline std::set<std::string> cssProperties(const std::string& tag) {
     if (tag == "native-host") return {}; // foreign content owns its styling
     if (tag == "panes") return {"gap","padding","background-color","border-color","border-width","border-radius","box-shadow"};
     if (tag == "reveal") return {"transition-duration","transition-timing-function"};
-    if (tag == "label") return {"color","font-size","font-weight"};
+    if (tag == "label") return {"color","font-size","font-weight","font-family"};
     if (tag == "stack") return {"background","box-shadow","background-color","border-color","border-width","border-radius","padding","gap"};
     if (tag == "scroll-view") return {"background","box-shadow","background-color","border-color","border-width","border-radius","padding","color","scrollbar-color","scrollbar-width"};
     std::set<std::string> keys = {"color","background-color","border-color","border-width","border-radius","outline-color","outline-width","outline-offset"};
     if (tag != "switch" && tag != "checkbox") keys.insert("padding");
     if (tag == "button" || tag == "input" || tag == "tabs" || tag == "select" || tag == "table") keys.insert("font-size");
     if (tag == "button" || tag == "tabs") keys.insert("font-weight");
-    if (tag == "button") { keys.insert("icon-size"); keys.insert("gap"); }
+    if (tag == "button") { keys.insert("icon-size"); keys.insert("gap"); keys.insert("opacity"); }
     if (tag == "tabs") { keys.insert("content-background-color"); keys.insert("content-radius"); }
     if (tag == "button" || tag == "input") { keys.insert("background"); keys.insert("box-shadow"); keys.insert("transition-duration"); keys.insert("transition-timing-function"); }
     if (tag == "input") { keys.insert("placeholder-color"); keys.insert("caret-color"); keys.insert("selection-color"); }
     if (tag == "select") keys.insert("content-radius");
     if (tag == "switch" || tag == "checkbox" || tag == "select" || tag == "table") keys.insert("content-background-color");
     if (tag == "table") { keys.insert("scrollbar-color"); keys.insert("scrollbar-width"); keys.insert("placeholder-color"); keys.erase("outline-color"); keys.erase("outline-width"); keys.erase("outline-offset"); keys.insert("table-column-widths"); keys.insert("table-selection-width"); keys.insert("text-inset"); keys.insert("gap"); keys.insert("detail-font-size"); keys.insert("check-background"); keys.insert("check-border"); keys.insert("check-radius"); }
+    return keys;
+}
+inline std::set<std::string> cssProperties(const std::string& tag) {
+    auto keys = componentCssProperties(tag);
+    // Material opacity affects only the corresponding fill, never text/children.
+    if (keys.count("background") || keys.count("background-color")) keys.insert("background-opacity");
+    if (keys.count("content-background-color")) keys.insert("content-background-opacity");
     return keys;
 }
 inline std::string stripComments(std::string source) {

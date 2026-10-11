@@ -5,6 +5,11 @@
 namespace oneui::ui::schema {
 enum class ValueType { None, Text, Boolean, Integer, Number, Strings, Columns, Rows, TabItems, Series };
 #define ONEUI_AUTHORING_COMPONENTS(X) \
+    X(ReorderableGrid, "reorderable-grid", "column-count column-gap row-gap item-height reorder-enabled item-drag-enabled", None) \
+    X(GridItem, "grid-item", "grid-key", None) \
+    X(Overlay, "overlay-host", "overlay-width overlay-height inset-left inset-right inset-top inset-bottom horizontal-align vertical-align overlay-visible", None) \
+    X(TemplateTable, "scroll-view", "minimum-width header-height content-height content-width wheel-step scroll-offset horizontal-offset", None) \
+    X(Dialog, "dialog", "title subtitle icon close-visible", None) \
     X(PaneGrid, "workspace-collection", "nodes groups active-group active-pane maximized revision ack-request ack-accepted navigation-serial navigation-edge navigation-mode drag-domain gap divider-hit motion-ms resize-idle-ms motion", None) \
     X(Pane, "workspace-item", "pane-key closing close-request min-width min-height", None) \
     X(PaneHeader, "pane-header", "pane-key number title path active broadcast-role broadcast-hint broadcast-label viewing-history can-close can-split can-maximize", None) \
@@ -60,22 +65,25 @@ enum class ValueType { None, Text, Boolean, Integer, Number, Strings, Columns, R
     X(FormRow, "stack", "label hint error", None) \
     X(FormGrid, "stack", "min-column-width", None) \
     X(EmptyState, "stack", "title subtitle", None) \
-    X(Scroll, "scroll-view", "content-height wheel-step chrome-visible scroll-offset", None) \
+    X(Scroll, "scroll-view", "content-height content-width wheel-step chrome-visible scroll-offset", None) \
     X(Reveal, "reveal", "open preset reduced-motion", None) \
-    X(Text, "label", "text wrap max-lines spans", None) \
+    X(Text, "label", "text wrap max-lines spans line-height text-align tooltip", None) \
     X(ValidationMessage, "label", "text", None) \
-    X(Input, "input", "text placeholder password read-only", Text) \
-    X(SearchInput, "input", "text placeholder", Text) \
+    X(TextArea, "input", "text placeholder line-height read-only", Text) \
+    X(Checkbox, "checkbox", "text checked tooltip", Boolean) \
+    X(Input, "input", "text placeholder password password-mask read-only prefix-icon", Text) \
+    X(SearchInput, "input", "text placeholder prefix-icon placeholder-when-focused", Text) \
     X(Switch, "switch", "text checked", Boolean) \
     X(Select, "select", "items selectedIndex", Integer) \
     X(SegmentedControl, "tabs", "items selectedIndex", Integer) \
-    X(Button, "button", "text variant icon", None) \
+    X(Button, "button", "text variant icon tooltip content-align trailing-text trailing-icon", None) \
     X(DataTable, "table", "items columns selectedKey item-key", Text) \
     X(List, "list", "items selectedIndex", Integer) \
     X(VirtualList, "virtual-list", "items selectedIndex row-height scroll-offset", Integer) \
-    X(Checkbox, "checkbox", "text checked tooltip", Boolean) \
     X(TreeView, "tree-view", "items selectedKey", Text) \
-    X(Table, "table", "items columns multiple row-height header-height selection-column selection-column-width scroll-offset sort-column sort-descending column-dividers", None)
+    X(Table, "table", "items columns multiple row-height header-height selection-column selection-column-width scroll-offset sort-column sort-descending column-dividers", None) \
+    X(DataMenu, "menu", "title subtitle items", None) \
+    X(Popup, "popup", "open anchor-x anchor-y anchor-width anchor-height content-width content-height placement", None)
 
 enum class Kind {
 #define ONEUI_KIND(name, tag, props, model) name,
@@ -118,6 +126,14 @@ constexpr bool layoutNumber(std::string_view key) {
 }
 constexpr ValueType propertyType(Kind kind,std::string_view key) {
     if(!supports(kind,key))return ValueType::None;
+    if(key=="placeholder-when-focused")return ValueType::Boolean;
+    if(kind==Kind::Popup && contains("anchor-x anchor-y anchor-width anchor-height",key))return ValueType::Number;
+    if(kind==Kind::ReorderableGrid) {
+        if(key=="column-count")return ValueType::Integer;
+        if(key=="reorder-enabled"||key=="item-drag-enabled")return ValueType::Boolean;
+        if(key=="column-gap"||key=="row-gap"||key=="item-height")return ValueType::Number;
+    }
+    if(kind==Kind::Dialog&&key=="close-visible")return ValueType::Boolean;
     if(kind==Kind::FontPicker&&key=="selected")return ValueType::Text;
     if(kind==Kind::Table && contains("multiple selection-column sort-descending column-dividers",key))return ValueType::Boolean;
     if(kind==Kind::Table && key=="sort-column")return ValueType::Integer;
@@ -128,7 +144,8 @@ constexpr ValueType propertyType(Kind kind,std::string_view key) {
     if(contains("selectedIndex revision ack-request close-request navigation-serial number max-lines",key))return ValueType::Integer;
     if(contains("nodes groups drag-sources placements tokens spans",key))return ValueType::Rows;
     if(contains("gap divider-hit motion-ms resize-idle-ms min-width min-height threshold dock-min-width dock-min-height float-min-width float-min-height minimum maximum step opacity",key))return ValueType::Number;
-    if(contains("content-height wheel-step scroll-offset row-height",key))return ValueType::Number;
+    if(contains("content-height content-width wheel-step scroll-offset row-height line-height minimum-width header-height horizontal-offset overlay-width overlay-height inset-left inset-right inset-top inset-bottom",key))return ValueType::Number;
+    if(key=="overlay-visible")return ValueType::Boolean;
     if(key=="items")return kind==Kind::Select||kind==Kind::SegmentedControl?ValueType::Strings:kind==Kind::Tabs?ValueType::TabItems:ValueType::Rows;
     if(key=="series")return ValueType::Series;
     if(key=="columns")return ValueType::Columns;

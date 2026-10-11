@@ -1,6 +1,8 @@
 #include "fixture.h"
 using namespace viewtest;
 #include "settings_lists.inc"
+#include "template_table.inc"
+#include "template_grid.inc"
 #include "slot_contracts.inc"
 #include "checkbox_contract.inc"
 #include "tree_contract.inc"
@@ -196,6 +198,8 @@ int main(int argc, char **argv) {
         }
         checkboxContract(argv[1]);
         settingsLists(argv[1]);
+        templateTables(argv[1]);
+        templateGrids(argv[1]);
         slotContracts(argv[1]);
         treeContract(argv[1]);
         richTableContract(argv[1]);

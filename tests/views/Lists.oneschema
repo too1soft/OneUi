@@ -17,6 +17,11 @@ model Root {
     command sort(column:i64)
     command cell(key:utf8,column:i64)
     command context(key:utf8,x:f64,y:f64)
+    rw checked: bool
+    command pointer(x:f64,y:f64,control:bool,shift:bool,click_count:i64)
+    command reorder(source:utf8,target:i64)
+    command drag(source:utf8,phase:i64,x:f64,y:f64)
+    command pointer_context(x:f64,y:f64)
 }
 model Item key id {
     r id: utf8
@@ -27,6 +32,8 @@ model Item key id {
     rw expanded: bool
     rw selected: bool
     r cells: list<Cell>
+    r badge: utf8
+    r indicator_rgba: i64
 }
 model Cell key id {r id:utf8 r text:utf8 r icon:utf8 r alignment:i64}
 model Span key id {r id:utf8 r start:i64 r end:i64 r rgba:i64 r monospace:bool}

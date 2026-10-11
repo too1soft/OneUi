@@ -15,7 +15,7 @@ inline std::optional<IconSymbol> namedIcon(std::string_view name) {
         {"close",IconSymbol::OutlineWorkbenchClose},{"split",IconSymbol::OutlineWorkbenchSplit},
         {"layout",IconSymbol::OutlineWorkbenchLayout},{"cpu",IconSymbol::OutlineWorkbenchCpu},
         {"refresh",IconSymbol::OutlineRefresh},{"sun",IconSymbol::OutlineSun},
-        {"copy",IconSymbol::OutlineCopy},{"pause",IconSymbol::Pause},
+        {"copy",IconSymbol::OutlineCopy},{"copy-native",IconSymbol::Copy},{"pause",IconSymbol::Pause},
         {"up",IconSymbol::OutlineWorkbenchUp},{"link",IconSymbol::OutlineWorkbenchLink},{"broadcast",IconSymbol::OutlineWorkbenchBroadcast},
         {"download",IconSymbol::OutlineWorkbenchDownload},{"settings",IconSymbol::OutlineWorkbenchSettings},
         {"key-dots",IconSymbol::KeyDots},{"check-circle",IconSymbol::CheckCircle},
@@ -24,7 +24,18 @@ inline std::optional<IconSymbol> namedIcon(std::string_view name) {
         {"terminal-native",IconSymbol::Terminal},{"desktop",IconSymbol::Desktop},{"sparkle",IconSymbol::Sparkle},
         {"check",IconSymbol::Check},
         {"link-native",IconSymbol::Link},{"file-native",IconSymbol::File},{"compass",IconSymbol::Compass},
-        {"radio-on",IconSymbol::RadioOn},{"play",IconSymbol::Play},{"close-native",IconSymbol::Close}
+        {"radio-on",IconSymbol::RadioOn},{"play",IconSymbol::Play},
+        {"upload-native",IconSymbol::Upload},
+        {"server-native",IconSymbol::Server},{"server-outline",IconSymbol::OutlineServer},
+        {"terminal-outline",IconSymbol::OutlineTerminal},{"close-outline",IconSymbol::OutlineClose},
+        {"more-outline",IconSymbol::OutlineMore},{"grid",IconSymbol::LayoutGrid},
+        {"monitor",IconSymbol::Monitor},{"folder-outline",IconSymbol::OutlineFolder},{"sliders",IconSymbol::Sliders},
+        {"left-outline",IconSymbol::OutlineLeft},{"right-outline",IconSymbol::OutlineChevron},
+        {"down-outline",IconSymbol::OutlineDown},{"key-outline",IconSymbol::OutlineKey},
+        {"tag-outline",IconSymbol::OutlineTag},{"pin-outline",IconSymbol::OutlinePin},
+        {"search-outline",IconSymbol::OutlineSearch},{"inspector-outline",IconSymbol::OutlineInspector},
+        {"info-circle",IconSymbol::InfoCircle},{"warning-triangle",IconSymbol::WarningTriangle},
+        {"close-native",IconSymbol::Close}
     };
     for(const auto& entry:entries)if(entry.name==name)return entry.symbol;
     return {};

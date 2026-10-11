@@ -1,4 +1,6 @@
 #include "oneui/ui_declarative.h"
+#include "data_menu.h"
+#include "oneui/controls/popup.h"
 namespace oneui::ui {
 Element Mount::make(std::string type, std::vector<Element> children, std::string classes) {
     if (type == "NativeHost")
@@ -104,7 +106,41 @@ Element Mount::make(std::string type, std::vector<Element> children, std::string
     Builder b(StackEngine::Yoga, "");
     Node node = b.column({});
     std::shared_ptr<Stack> content;
-    if(type=="List")node=b.native(std::make_shared<List>());
+    if(type=="GridItem") {
+        if(children.size()!=1)throw std::invalid_argument("GridItem requires one child");
+        node=b.native(std::make_shared<TemplateGridItem>(children[0].widget));
+    }
+    else if(type=="ReorderableGrid") {
+        auto grid=std::make_shared<ReorderableGrid>();
+        std::vector<std::shared_ptr<Widget>> items;
+        for(const auto& child:children)items.push_back(child.widget);
+        grid->setItems(templateGridItems(items));
+        node=b.native(grid);
+    }
+    else if(type=="Overlay") {
+        if(children.size()!=2)throw std::invalid_argument("Overlay requires base and foreground");
+        node=b.native(std::make_shared<TemplateOverlay>(children[0].widget,children[1].widget));
+    }
+    else if(type=="TemplateTable") {
+        if(children.size()!=2)throw std::invalid_argument("TemplateTable requires header and body");
+        node=b.native(std::make_shared<TemplateTable>(children[0].widget,children[1].widget)).basis(0).grow();
+    }
+    else if(type=="Dialog") {
+        if(children.size()!=2)throw std::invalid_argument("Dialog requires content and actions");
+        auto dialog=std::make_shared<Dialog>();
+        dialog->setContent(children[0].widget);
+        dialog->setActions(children[1].widget);
+        node=b.native(dialog);
+    }
+    else if(type=="Popup") {
+        if(children.size()!=1)throw std::invalid_argument("Popup requires one content child");
+        auto popup=std::make_shared<Popup>();
+        popup->setContent(children[0].widget);
+        popup->setInteractionMode(PopupInteractionMode::LightDismiss);
+        node=b.native(popup);
+    }
+    else if(type=="DataMenu")node=b.native(std::make_shared<views::DataMenu>());
+    else if(type=="List")node=b.native(std::make_shared<List>());
     else if(type=="VirtualList")node=b.native(std::make_shared<VirtualList>());
     else if(type=="TreeView")node=b.native(std::make_shared<TreeView>());
     else if(type=="Table")node=b.native(std::make_shared<Table>());
@@ -149,6 +185,12 @@ Element Mount::make(std::string type, std::vector<Element> children, std::string
         node=b.native(header);
     } else if (type == "Text" || type == "Status" || type == "ValidationMessage")
         node = b.paragraph(L"");
+    else if (type == "TextArea") {
+        auto field = std::make_shared<TextArea>();
+        field->setClipboard(clipboard_);
+        node = b.native(std::move(field));
+    } else if (type == "Checkbox")
+        node = b.native(std::make_shared<Checkbox>());
     else if (type == "Input" || type == "SearchInput") {
         auto field = std::make_shared<TextField>();
         field->setClipboard(clipboard_);

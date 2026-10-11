@@ -99,8 +99,11 @@ std::shared_ptr<Instance> Runtime::build(uint32_t node, const Scopes &context, c
         styles->add(result->element);
         const auto &record = image.records[HOST][n[9]];
         if (!(record[2] & 2)) hosts.emplace(image.strings[record[1]], host);
-    } else if (type == "PaneGrid" || type == "DockWorkspace") {
-        std::shared_ptr<View> container = type=="PaneGrid" ? std::static_pointer_cast<View>(std::make_shared<PaneGrid>()) : std::make_shared<DockWorkspaceView>();
+    } else if (type == "PaneGrid" || type == "DockWorkspace" || type == "ReorderableGrid") {
+        std::shared_ptr<View> container;
+        if(type=="PaneGrid")container=std::make_shared<PaneGrid>();
+        else if(type=="ReorderableGrid")container=std::make_shared<ReorderableGrid>();
+        else container=std::make_shared<DockWorkspaceView>();
         result->element = ui::Element(ui::Node(container), type);
         result->element.classes = classes;
         styles->add(result->element);

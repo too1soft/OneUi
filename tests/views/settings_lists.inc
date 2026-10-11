@@ -17,7 +17,46 @@ void settingsLists(const char* runtimeFile) {
     span.values[id(c.image, "Span", "monospace")].integer = 1;
     const auto spans = id(c.image, "Root", "spans");
     c.vm.lists[spans] = {&span};
+    c.a.text(id(c.image, "Item", "badge"), "Host");
+    c.a.values[id(c.image, "Item", "indicator_rgba")].integer = 0x22d3a8ff;
     c.start();
+    auto caption = c.runtime->root->children[13]->element.as<oneui::Label>();
+    expect(caption->lineHeight() == 20 && caption->textAlign() == oneui::TextAlign::Center &&
+           caption->tooltip() == c.runtime->root->children[6]->element.as<oneui::Label>()->text(),
+           "Text retains explicit line boxes, alignment and bound tooltip");
+    auto area = c.runtime->root->children[10]->element.as<oneui::TextArea>();
+    auto checkbox = c.runtime->root->children[11]->element.as<oneui::Checkbox>();
+    auto password = c.runtime->root->children[12]->element.as<oneui::TextField>();
+    expect(area && area->multiline() && area->lineHeight() == 23,
+           "TextArea uses native multiline editing and authored line height");
+    expect(password->passwordMode() && password->passwordMask() == L'\x25cf',
+           "Input honors explicit password mask");
+    oneui::KeyEvent space;
+    space.key = oneui::Key::Space;
+    checkbox->onKeyDown(space);
+    expect(c.vm.values[id(c.image, "Root", "checked")].integer == 1,
+           "Checkbox keyboard writes the VM");
+    c.runtime->notify(c.runtime->rootScope, id(c.image, "Root", "checked"));
+    c.runtime->flush();
+    c.vm.values[id(c.image, "Root", "checked")].integer = 0;
+    c.runtime->notify(c.runtime->rootScope, id(c.image, "Root", "checked"));
+    c.runtime->flush();
+    expect(!checkbox->checked(), "Checkbox notification updates native state");
+    auto dialog = c.runtime->root->children[9]->element.as<oneui::Dialog>();
+    expect(bool(dialog) && dialog->children().size() == 2, "Dialog preserves content/actions regions");
+    oneui::KeyEvent escape;
+    escape.key = oneui::Key::Escape;
+    expect(dialog->onKeyDown(escape) && c.vm.invokes == 1, "Dialog Escape invokes close command");
+    c.vm.invokes = 0;
+    const auto visible = id(c.image, "Root", "visible");
+    c.vm.values[visible].integer = 0;
+    c.runtime->notify(c.runtime->rootScope, visible);
+    c.runtime->flush();
+    dialog->onKeyDown(escape);
+    expect(c.vm.invokes == 0, "non-dismissible Dialog does not invoke close");
+    c.vm.values[visible].integer = 1;
+    c.runtime->notify(c.runtime->rootScope, visible);
+    c.runtime->flush();
     auto flow = c.runtime->root->children[2]->children[0]->element.as<oneui::Stack>();
     auto surfaceFlow = c.runtime->root->children[3]->children[0]->element.as<oneui::Stack>();
     expect(flow->direction() == oneui::StackDirection::Row && flow->gap() == 12,
@@ -34,7 +73,14 @@ void settingsLists(const char* runtimeFile) {
     c.runtime->notify(c.runtime->rootScope, c.title);
     c.runtime->flush();
     c.runtime->root->element.widget->paint(canvas);
+    expect(area->text() == L"changed-layout" && password->text() == L"changed-layout",
+           "TextArea and Input both receive VM text notifications");
     expect(surface->frame().height == 128, "basis notification updates parent layout");
+    c.runtime->styles->appendScoped("Surface.surface-flow {color:#123456;}");
+    c.runtime->styles->applyBaseLayouts();
+    c.runtime->root->element.widget->paint(canvas);
+    expect(surface->frame().height == 128,
+           "CSS restyle retains updated authored basis instead of the first mounted value");
     expect(c.runtime->root->children[4]->element.classes.find("changed-layout") != std::string::npos,
            "Column class binding updates without losing scope");
     auto action = c.runtime->root->children[5];
@@ -50,6 +96,16 @@ void settingsLists(const char* runtimeFile) {
            "List receives title/detail records");
     expect(virtualList->rowHeight() == 42 && virtualList->items()[1].title == L"Beta",
            "VirtualList receives native row height and records");
+    expect(virtualList->items()[0].badge == L"Host" && virtualList->items()[0].indicatorVisible &&
+           virtualList->items()[0].indicatorColor.g == 0xd3 && !virtualList->items()[1].indicatorVisible,
+           "VirtualList projects optional rich records and transparent indicators");
+    virtualList->setSelectedIndex(0);
+    oneui::KeyEvent enter;
+    enter.key = oneui::Key::Enter;
+    const auto beforeActivate = c.vm.invokes;
+    virtualList->onKeyDown(enter);
+    expect(c.vm.invokes == beforeActivate + 1, "VirtualList activation invokes bound command exactly once");
+    c.vm.invokes = beforeActivate;
     virtualList->setFrame({0, 0, 300, 100});
     oneui::KeyEvent down;
     down.key = oneui::Key::Down;

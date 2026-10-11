@@ -10,6 +10,20 @@ int oneui_widget_test_freeze_caret(OneUiWidget* root, int enabled) {
     return 0;
 #endif
 }
+int oneui_widget_test_modified_click(OneUiWidget* root, float x, float y,
+                                   int control, int shift, int click_count) {
+#if defined(ONEUI_ENABLE_TEST_FRAME_CAPTURE) && ONEUI_ENABLE_TEST_FRAME_CAPTURE
+    try {
+        if (!root || !root->widget || !std::isfinite(x) || !std::isfinite(y) || click_count < 1) return 0;
+        oneui::MouseEvent event{{x,y},oneui::MouseButton::Left};
+        event.control=control!=0;event.shift=shift!=0;event.clickCount=click_count;
+        root->widget->onMouseMove(event);
+        root->widget->onMouseDown(event);
+        return root->widget->onMouseUp(event);
+    } catch (...) { oneui::capi::recordCurrentException(__func__); }
+#endif
+    return 0;
+}
 int oneui_widget_test_click(OneUiWidget* root, float x, float y) {
 #if defined(ONEUI_ENABLE_TEST_FRAME_CAPTURE) && ONEUI_ENABLE_TEST_FRAME_CAPTURE
     try {

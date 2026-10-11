@@ -1,4 +1,7 @@
 #pragma once
+#include "oneui/controls/template_table.h"
+#include "oneui/controls/template_overlay.h"
+#include "oneui/controls/template_grid_item.h"
 #include "oneui/localization.h"
 #include "oneui/controls/font_picker.h"
 #include "oneui/controls/media_picker.h"
@@ -28,6 +31,9 @@
 #include "oneui/controls/checkbox.h"
 #include "oneui/controls/tree_view.h"
 #include "oneui/controls/select.h"
+#include "oneui/controls/dialog.h"
+#include "oneui/controls/popup.h"
+#include "oneui/controls/menu.h"
 #include "oneui/controls/table.h"
 #include "oneui/clipboard.h"
 #include <codecvt>
@@ -54,6 +60,8 @@ public:
     // Resolve authored CSS dimensions into the parent's Yoga constraints after
     // assembly. Native leaf measurement must not override explicit CSS sizes.
     void applyBaseLayouts();
+    // Bound layout attributes remain the base beneath CSS/container overrides.
+    void updateAuthoredFlex(const std::shared_ptr<Widget>& widget, const StackFlex& flex);
     struct Source { std::string component, file; int line=0; };
 private:
     struct Entry { std::weak_ptr<Widget> widget; std::string component, classes; std::weak_ptr<Stack> content; std::string tone, file; int line=0; bool invalid=false; std::string appearance,variant; };
@@ -100,6 +108,10 @@ private:
             table->setScrollOffset(row*tableRowHeight(density_));
         }
         auto box = sheet.resolve(n);
+        if(entry.component=="DataMenu") {
+            auto menu=std::dynamic_pointer_cast<Menu>(std::dynamic_pointer_cast<View>(w)->children().front());
+            menu->setStyleSheet(std::make_shared<StyleSheet>(sheet),n); return;
+        }
         rememberStyleDiagnostic(w,n,box);
         configureQuery(w,box);
         if(auto page=std::dynamic_pointer_cast<ContainerPage>(w))page->setDisplay(box.display);
@@ -139,6 +151,7 @@ private:
         if(std::dynamic_pointer_cast<SplitView>(w) || std::dynamic_pointer_cast<ProgressBar>(w)) {applyNativeTheme(*w,sheet);return;}
         if(auto chart=std::dynamic_pointer_cast<TimeSeriesChart>(w)) {applyNativeTheme(*w,sheet);if(box.foreground || box.borderColor || box.fontSize || box.gap)chart->setStyleBox(box);return;}
         if (auto v = std::dynamic_pointer_cast<Label>(w)) {
+            v->setFontFamily(box.fontFamily.value_or(std::wstring{}));
             v->setColor(box.foreground.value_or(Color{30,40,35,255})); v->setFontSize(box.fontSize.value_or(14)); v->setFontWeight(box.fontWeight.value_or(400));
         } else if (auto v = std::dynamic_pointer_cast<Stack>(w)) {
             v->setStyleBox(box); v->setGap(box.gap.value_or(0)); v->setPadding(box.padding.value_or(Insets{}));
@@ -156,12 +169,16 @@ private:
         else if (auto v = std::dynamic_pointer_cast<TreeView>(w)) v->setStyleOverride(treeViewStyleOverrideFromStyleSheet(sheet,n));
         else if (auto v = std::dynamic_pointer_cast<Switch>(w)) v->setStyleOverride(switchStyleOverrideFromStyleSheet(sheet,n));
         else if (auto v = std::dynamic_pointer_cast<Select>(w)) v->setStyleOverride(selectStyleOverrideFromStyleSheet(sheet,n));
+        else if (auto v = std::dynamic_pointer_cast<Dialog>(w)) v->setStyleSheet(std::make_shared<StyleSheet>(sheet),n);
+        else if (auto v = std::dynamic_pointer_cast<Popup>(w)) v->setStyleOverride(popupStyleOverrideFromStyleSheet(sheet,n));
         else if (auto v = std::dynamic_pointer_cast<List>(w)) v->setStyleOverride(listStyleOverrideFromStyleSheet(sheet,n));
         else if (auto v = std::dynamic_pointer_cast<VirtualList>(w)) v->setStyleOverride(listStyleOverrideFromStyleSheet(sheet,n));
         else if (auto v = std::dynamic_pointer_cast<Table>(w)) {
             v->setStyleOverride(tableStyleOverrideFromStyleSheet(sheet,n));
             v->setColumnLayout(box.tableColumnWidths, box.tableSelectionWidth);
         }
+        else if (auto v = std::dynamic_pointer_cast<TemplateTable>(w)) v->setStyleBox(box);
+        else if (auto v = std::dynamic_pointer_cast<ReorderableGrid>(w)) v->setStyleBox(box);
         else if (auto v = std::dynamic_pointer_cast<ScrollView>(w)) {
             v->setStyleBox(box);
             v->setScrollbarStyle(box.scrollbarColor.value_or(box.foreground.value_or(Color{148,163,184,180})),
