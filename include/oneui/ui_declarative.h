@@ -31,6 +31,7 @@
 #include "oneui/controls/checkbox.h"
 #include "oneui/controls/select.h"
 #include "oneui/controls/dialog.h"
+#include "oneui/controls/popup.h"
 #include "oneui/controls/menu.h"
 #include "oneui/controls/table.h"
 #include "oneui/clipboard.h"
@@ -167,6 +168,7 @@ private:
         else if (auto v = std::dynamic_pointer_cast<Switch>(w)) v->setStyleOverride(switchStyleOverrideFromStyleSheet(sheet,n));
         else if (auto v = std::dynamic_pointer_cast<Select>(w)) v->setStyleOverride(selectStyleOverrideFromStyleSheet(sheet,n));
         else if (auto v = std::dynamic_pointer_cast<Dialog>(w)) v->setStyleSheet(std::make_shared<StyleSheet>(sheet),n);
+        else if (auto v = std::dynamic_pointer_cast<Popup>(w)) v->setStyleOverride(popupStyleOverrideFromStyleSheet(sheet,n));
         else if (auto v = std::dynamic_pointer_cast<List>(w)) v->setStyleOverride(listStyleOverrideFromStyleSheet(sheet,n));
         else if (auto v = std::dynamic_pointer_cast<VirtualList>(w)) v->setStyleOverride(listStyleOverrideFromStyleSheet(sheet,n));
         else if (auto v = std::dynamic_pointer_cast<Table>(w)) v->setStyleOverride(tableStyleOverrideFromStyleSheet(sheet,n));

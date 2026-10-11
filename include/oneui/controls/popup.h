@@ -70,6 +70,7 @@ public:
     void setViewport(std::optional<Rect> viewport);
     void clearViewport();
     void setAnchorRect(std::optional<Rect> rect);
+    std::optional<Rect> anchorRect() const { return anchorRect_; }
     void clearAnchorRect();
     void setCloseOnOutsideClick(bool close);
     void setInteractionMode(PopupInteractionMode mode);

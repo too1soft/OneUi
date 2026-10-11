@@ -18,6 +18,8 @@ model Root {
   command adjust(phase:i64,value:f64)
   r menu: list<MenuEntry>
   command menuActivated(id:utf8)
+  r popupOpen:bool
+  command popupClosed()
 }
 model FontItem key id {r id:utf8;r family:utf8;r label:utf8;r available:bool}
 model ColorToken key id {r id:utf8;r rgba:i64}

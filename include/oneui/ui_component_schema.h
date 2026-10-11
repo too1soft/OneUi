@@ -80,7 +80,8 @@ enum class ValueType { None, Text, Boolean, Integer, Number, Strings, Columns, R
     X(DataTable, "table", "items columns selectedKey item-key", Text) \
     X(List, "list", "items selectedIndex", Integer) \
     X(VirtualList, "virtual-list", "items selectedIndex row-height scroll-offset", Integer) \
-    X(DataMenu, "menu", "title subtitle items", None)
+    X(DataMenu, "menu", "title subtitle items", None) \
+    X(Popup, "popup", "open anchor-x anchor-y anchor-width anchor-height content-width content-height placement", None)
 
 enum class Kind {
 #define ONEUI_KIND(name, tag, props, model) name,
@@ -124,6 +125,7 @@ constexpr bool layoutNumber(std::string_view key) {
 constexpr ValueType propertyType(Kind kind,std::string_view key) {
     if(!supports(kind,key))return ValueType::None;
     if(key=="placeholder-when-focused")return ValueType::Boolean;
+    if(kind==Kind::Popup && contains("anchor-x anchor-y anchor-width anchor-height",key))return ValueType::Number;
     if(kind==Kind::ReorderableGrid) {
         if(key=="column-count")return ValueType::Integer;
         if(key=="reorder-enabled"||key=="item-drag-enabled")return ValueType::Boolean;

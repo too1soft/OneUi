@@ -1,4 +1,5 @@
 #include "runtime.h"
+#include "oneui/controls/popup.h"
 #include "data_menu.h"
 namespace oneui::views {
 void Runtime::wire(const std::shared_ptr<Instance> &instance) {
@@ -145,6 +146,8 @@ void Runtime::wire(const std::shared_ptr<Instance> &instance) {
             });
         else if (name == "submit")
             element.as<TextField>()->setOnSubmitted([fire](const std::wstring &) { fire({}); });
+        else if (name == "closed" && element.component == "Popup")
+            element.as<Popup>()->setOnClosed([fire] { fire({}); });
         else if (name == "close" && element.component == "Dialog")
             element.as<Dialog>()->setOnClose([fire] { fire({}); });
         else if (name == "close")

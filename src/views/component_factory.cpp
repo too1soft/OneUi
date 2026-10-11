@@ -1,5 +1,6 @@
 #include "oneui/ui_declarative.h"
 #include "data_menu.h"
+#include "oneui/controls/popup.h"
 namespace oneui::ui {
 Element Mount::make(std::string type, std::vector<Element> children, std::string classes) {
     if (type == "NativeHost")
@@ -130,6 +131,13 @@ Element Mount::make(std::string type, std::vector<Element> children, std::string
         dialog->setContent(children[0].widget);
         dialog->setActions(children[1].widget);
         node=b.native(dialog);
+    }
+    else if(type=="Popup") {
+        if(children.size()!=1)throw std::invalid_argument("Popup requires one content child");
+        auto popup=std::make_shared<Popup>();
+        popup->setContent(children[0].widget);
+        popup->setInteractionMode(PopupInteractionMode::LightDismiss);
+        node=b.native(popup);
     }
     else if(type=="DataMenu")node=b.native(std::make_shared<views::DataMenu>());
     else if(type=="List")node=b.native(std::make_shared<List>());

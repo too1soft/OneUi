@@ -48,6 +48,16 @@ int main(int argc,char** argv) {
         color.values[id(image,"ColorToken","rgba")].integer=0x00ff00ff;
         for(auto& s:runtime->scopes)if(s->vm==&color)runtime->notify(s,0);runtime->flush();
         expect(scope->revision()==revision+1&&preview->image()==nativeImage,"token delta keeps unrelated native identities");
+        auto popup=nodes[6]->element.as<Popup>();popup->setFrame({0,0,320,240});
+        const auto beforePopup=events.size();
+        vm.values[id(image,"Root","popupOpen")].integer=1;
+        runtime->notify(runtime->rootScope,0);runtime->flush();
+        expect(popup->isOpen()&&events.size()==beforePopup,"VM opens popup without command echo");
+        KeyEvent escape;escape.key=Key::Escape;popup->onKeyDown(escape);
+        expect(!popup->isOpen()&&events.size()==beforePopup+1&&events.back().second.empty(),"native Escape emits closed command");
+        vm.values[id(image,"Root","popupOpen")].integer=0;
+        runtime->notify(runtime->rootScope,0);runtime->flush();
+        expect(events.size()==beforePopup+1,"accepting close does not echo command");
         runtime->reload(image);expect(runtime->root->children[3]->element.widget==slider,"reload retains slider");
         runtime->close();expect(vm.retains==vm.releases&&font.retains==font.releases&&color.retains==color.releases,"picker VM leases balanced");
         std::cout<<"picker runtime: projections/events, slider model, local token delta and reload passed\n";return 0;

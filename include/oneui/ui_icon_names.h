@@ -30,7 +30,9 @@ inline std::optional<IconSymbol> namedIcon(std::string_view name) {
         {"left-outline",IconSymbol::OutlineLeft},{"right-outline",IconSymbol::OutlineChevron},
         {"down-outline",IconSymbol::OutlineDown},{"key-outline",IconSymbol::OutlineKey},
         {"tag-outline",IconSymbol::OutlineTag},{"pin-outline",IconSymbol::OutlinePin},
-        {"search-outline",IconSymbol::OutlineSearch},{"inspector-outline",IconSymbol::OutlineInspector}
+        {"search-outline",IconSymbol::OutlineSearch},{"inspector-outline",IconSymbol::OutlineInspector},
+        {"info-circle",IconSymbol::InfoCircle},{"warning-triangle",IconSymbol::WarningTriangle},
+        {"close-native",IconSymbol::Close}
     };
     for(const auto& entry:entries)if(entry.name==name)return entry.symbol;
     return {};

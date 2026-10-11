@@ -13,3 +13,4 @@
 #include "component_registry_overlay.inc"
 #include "component_registry_grid.inc"
 #include "component_registry_menu.inc"
+#include "component_registry_popup.inc"

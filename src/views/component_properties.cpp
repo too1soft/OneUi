@@ -1,7 +1,17 @@
 #include "oneui/ui_declarative.h"
 #include "data_menu.h"
+#include "oneui/controls/popup.h"
 namespace oneui::ui {
 void Mount::set(Element &e, const std::string &key, const std::wstring &value) {
+    if(e.component=="Popup" && key=="placement") {
+        const std::map<std::wstring,PopupPreferredPlacement> placements{
+            {L"bottom-start",PopupPreferredPlacement::BottomStart}, {L"bottom-end",PopupPreferredPlacement::BottomEnd},
+            {L"top-start",PopupPreferredPlacement::TopStart}, {L"top-end",PopupPreferredPlacement::TopEnd},
+            {L"left-start",PopupPreferredPlacement::LeftStart}, {L"right-start",PopupPreferredPlacement::RightStart}};
+        const auto found=placements.find(value);
+        if(found==placements.end())throw std::invalid_argument("Unknown popup placement");
+        e.as<Popup>()->setPreferredPlacement(found->second); return;
+    }
     if(e.component=="DataMenu") {
         if(key=="title") { e.as<views::DataMenu>()->setTitle(value); return; }
         if(key=="subtitle") { e.as<views::DataMenu>()->setSubtitle(value); return; }
@@ -184,6 +194,7 @@ void Mount::set(Element &e, const std::string &key, const std::string &value) {
         set(e, key, wide(value));
 }
 void Mount::set(Element &e, const std::string &key, bool value) {
+    if(e.component=="Popup" && key=="open") {e.as<Popup>()->setOpen(value);return;}
     if(key=="placeholder-when-focused") {e.as<TextField>()->setPlaceholderVisibleWhenFocused(value);return;}
     if(e.component=="ReorderableGrid") {
         if(key=="reorder-enabled"){e.as<ReorderableGrid>()->setReorderEnabled(value);return;}
@@ -233,6 +244,23 @@ void Mount::set(Element &e, const std::string &key, bool value) {
 }
 void Mount::set(Element &e, const std::string &key, float value) {
     syntax::validateLayoutNumber(key, value);
+    if(e.component=="Popup") {
+        auto popup=e.as<Popup>();
+        if(key.rfind("anchor-",0)==0) {
+            auto rect=popup->anchorRect().value_or(Rect{});
+            if(key=="anchor-x")rect.x=value;
+            else if(key=="anchor-y")rect.y=value;
+            else if(key=="anchor-width")rect.width=std::max(0.0f,value);
+            else if(key=="anchor-height")rect.height=std::max(0.0f,value);
+            else throw std::invalid_argument("Unknown popup anchor property");
+            popup->setAnchorRect(rect);return;
+        }
+        if(key=="content-width"||key=="content-height") {
+            auto size=popup->content()->preferredSize();
+            if(key=="content-width")size.width=std::max(1.0f,value);else size.height=std::max(1.0f,value);
+            popup->content()->setPreferredSize(size);return;
+        }
+    }
     if(e.component=="ReorderableGrid") {
         if(key=="column-gap"){e.as<ReorderableGrid>()->setColumnGap(value);return;}
         if(key=="row-gap"){e.as<ReorderableGrid>()->setRowGap(value);return;}
