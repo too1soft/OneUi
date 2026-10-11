@@ -79,7 +79,8 @@ enum class ValueType { None, Text, Boolean, Integer, Number, Strings, Columns, R
     X(Button, "button", "text variant icon tooltip content-align trailing-text trailing-icon", None) \
     X(DataTable, "table", "items columns selectedKey item-key", Text) \
     X(List, "list", "items selectedIndex", Integer) \
-    X(VirtualList, "virtual-list", "items selectedIndex row-height scroll-offset", Integer)
+    X(VirtualList, "virtual-list", "items selectedIndex row-height scroll-offset", Integer) \
+    X(DataMenu, "menu", "title subtitle items", None)
 
 enum class Kind {
 #define ONEUI_KIND(name, tag, props, model) name,

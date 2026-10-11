@@ -1,4 +1,5 @@
 #include "runtime.h"
+#include "data_menu.h"
 namespace oneui::views {
 void Runtime::wire(const std::shared_ptr<Instance> &instance) {
     if (image.records[oneview::NODE][instance->node][0] != 1)
@@ -107,7 +108,11 @@ void Runtime::wire(const std::shared_ptr<Instance> &instance) {
                               event[7]);
             }
         };
-        if(name=="reorderRequested" && element.component=="ReorderableGrid")
+        if(name=="menuActivated" && element.component=="DataMenu")
+            element.as<DataMenu>()->setOnActivated([fire](std::string id) {
+                Value value; value.tag=4; value.text=std::move(id); fire({value});
+            });
+        else if(name=="reorderRequested" && element.component=="ReorderableGrid")
             element.as<ReorderableGrid>()->setOnReorderRequested([fire](const std::wstring& source,int target) {
                 Value key,index;key.tag=4;key.text=narrow(source);index.tag=2;index.integer=target;
                 fire({key,index});

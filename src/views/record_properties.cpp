@@ -1,9 +1,11 @@
 #include "internal/view_profile.h"
 #include "internal/unicode.h"
 #include "runtime.h"
+#include "data_menu_records.h"
 namespace oneui::views {
 void Runtime::applyList(Instance &instance, const std::string &property, ListState &state) {
     ONEUI_VIEW_TIME(Rows);
+    if(applyDataMenu(*this,instance,state))return;
     if(workspaceList(instance,property,state))return;
     auto &e = instance.element;
     auto wide = [](const std::string &s) { ONEUI_VIEW_TIME(Conversion); return unicode::fromUtf8(s); };

@@ -43,6 +43,7 @@ inline void validateLayoutNumber(const std::string& key, float value) {
 }
 inline std::string lowerValue(std::string value) { for(auto& ch:value)ch=static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));return value; }
 inline std::set<std::string> componentCssProperties(const std::string& tag) {
+    if (tag == "menu") return {"background", "background-color", "color", "placeholder-color", "border-color", "border-width", "border-radius", "padding", "font-size", "font-weight", "box-shadow"};
     if (tag == "reorderable-grid") return {"padding","gap","grid-min-column-width","outline-color","outline-width","border-color"};
     if (tag == "dialog") return {"background", "background-color", "color", "border-color", "border-width", "border-radius", "padding", "font-size", "font-weight", "box-shadow"};
     if (tag == "progress"||tag=="slider"||tag=="font-picker"||tag=="media-picker"||tag=="media-preview"||tag=="theme-scope") return {};

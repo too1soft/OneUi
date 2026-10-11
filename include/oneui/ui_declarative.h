@@ -31,6 +31,7 @@
 #include "oneui/controls/checkbox.h"
 #include "oneui/controls/select.h"
 #include "oneui/controls/dialog.h"
+#include "oneui/controls/menu.h"
 #include "oneui/controls/table.h"
 #include "oneui/clipboard.h"
 #include <codecvt>
@@ -105,6 +106,10 @@ private:
             table->setScrollOffset(row*tableRowHeight(density_));
         }
         auto box = sheet.resolve(n);
+        if(entry.component=="DataMenu") {
+            auto menu=std::dynamic_pointer_cast<Menu>(std::dynamic_pointer_cast<View>(w)->children().front());
+            menu->setStyleSheet(std::make_shared<StyleSheet>(sheet),n); return;
+        }
         rememberStyleDiagnostic(w,n,box);
         configureQuery(w,box);
         if(auto page=std::dynamic_pointer_cast<ContainerPage>(w))page->setDisplay(box.display);

@@ -1,6 +1,11 @@
 #include "oneui/ui_declarative.h"
+#include "data_menu.h"
 namespace oneui::ui {
 void Mount::set(Element &e, const std::string &key, const std::wstring &value) {
+    if(e.component=="DataMenu") {
+        if(key=="title") { e.as<views::DataMenu>()->setTitle(value); return; }
+        if(key=="subtitle") { e.as<views::DataMenu>()->setSubtitle(value); return; }
+    }
     if(e.component=="GridItem" && key=="grid-key") {e.as<TemplateGridItem>()->setKey(value);return;}
     if (e.component == "Overlay" && (key == "horizontal-align" || key == "vertical-align")) {
         e.as<TemplateOverlay>()->setAlignment(key, value); return;

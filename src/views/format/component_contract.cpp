@@ -121,6 +121,7 @@ void validateRecord(const Model& model, const std::string& projection) {
     else if(projection=="@workspace.placement") fields="id:4 mode:4 x:3 y:3 width:3 height:3 pinned:1 order:2";
     else if(projection=="@picker.font") fields="id:4 family:4 label:4 available:1";
     else if(projection=="@picker.color") fields="id:4 rgba:2";
+    else if(projection=="@menu.item") fields="id:4 parent:4 text:4 icon:4 shortcut:4 disabled:1 checked:1 danger:1 separator:1";
     else if(projection=="@workspace.group") fields="id:4 root:4";
     else if(projection=="@workspace.tab-source") fields="id:4 pane:4 enabled:1";
     else throw Error("BIND_RECORD: unknown projection "+projection);

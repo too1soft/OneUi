@@ -12,5 +12,6 @@
     </MediaPreview>
     <Slider :minimum="minimum" :maximum="maximum" step="0.01" v-model="level" @interaction="adjust"/>
     <ThemeScope :tokens="colors"><Card><Text text="Scoped sample"/></Card></ThemeScope>
+    <DataMenu :title="label" :subtitle="error" :items="menu" @menuActivated="menuActivated"/>
   </Column>
 </template>

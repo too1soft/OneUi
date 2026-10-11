@@ -1,4 +1,5 @@
 #include "oneui/ui_declarative.h"
+#include "data_menu.h"
 namespace oneui::ui {
 Element Mount::make(std::string type, std::vector<Element> children, std::string classes) {
     if (type == "NativeHost")
@@ -130,6 +131,7 @@ Element Mount::make(std::string type, std::vector<Element> children, std::string
         dialog->setActions(children[1].widget);
         node=b.native(dialog);
     }
+    else if(type=="DataMenu")node=b.native(std::make_shared<views::DataMenu>());
     else if(type=="List")node=b.native(std::make_shared<List>());
     else if(type=="VirtualList")node=b.native(std::make_shared<VirtualList>());
     else if(type=="FontPicker")node=b.native(std::make_shared<FontPicker>());
