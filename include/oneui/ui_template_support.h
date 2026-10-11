@@ -67,7 +67,7 @@ inline std::set<std::string> componentCssProperties(const std::string& tag) {
     if (tag == "button" || tag == "input" || tag == "tabs" || tag == "select" || tag == "table") keys.insert("font-size");
     if (tag == "button" || tag == "tabs") keys.insert("font-weight");
     if (tag == "button") { keys.insert("icon-size"); keys.insert("gap"); keys.insert("opacity"); }
-    if (tag == "tabs") { keys.insert("content-background-color"); keys.insert("content-radius"); }
+    if (tag == "tabs") { keys.insert("text-inset"); keys.insert("content-background-color"); keys.insert("content-radius"); }
     if (tag == "button" || tag == "input") { keys.insert("background"); keys.insert("box-shadow"); keys.insert("transition-duration"); keys.insert("transition-timing-function"); }
     if (tag == "input") { keys.insert("placeholder-color"); keys.insert("caret-color"); keys.insert("selection-color"); }
     if (tag == "select") keys.insert("content-radius");

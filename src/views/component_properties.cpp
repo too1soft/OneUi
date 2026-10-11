@@ -314,7 +314,7 @@ void Mount::set(Element &e, const std::string &key, float value) {
     if (auto table = e.as<TemplateTable>()) {
         if (key == "minimum-width") { table->setMinimumWidth(value); return; }
         if (key == "header-height") { table->setHeaderHeight(value); return; }
-          if (key == "content-height") { table->setContentHeight(value); return; }
+    if (key == "content-height") { table->setContentHeight(value); return; }
           if (key == "content-width") { table->setContentWidth(value); return; }
         if (key == "wheel-step") { table->setWheelStep(value); return; }
         if (key == "scroll-offset") { table->setScrollOffset(value); return; }
@@ -324,6 +324,12 @@ void Mount::set(Element &e, const std::string &key, float value) {
         if (auto label = e.as<Label>()) label->setLineHeight(value);
         else e.as<TextField>()->setLineHeight(value);
         return;
+    }
+    if(key == "scrollbar-inset") {e.as<ScrollView>()->setScrollbarInset(value);return;}
+    if(e.component=="VirtualList" && (key=="trailing-width" || key=="trailing-gap")) {
+        auto list=e.as<VirtualList>();auto metrics=list->richMetrics();
+        if(key=="trailing-width")metrics.trailingWidth=value;else metrics.trailingGap=value;
+        list->setRichMetrics(metrics);return;
     }
     if (key == "content-height") { e.as<ScrollView>()->setContentHeight(value); return; }
     if (key == "content-width") { e.as<ScrollView>()->setContentWidth(value); return; }

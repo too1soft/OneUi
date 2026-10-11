@@ -564,3 +564,11 @@ unless they opt into confirmation.
 The popup paints an opaque surface inside its enclosing scroll viewport. Search,
 selection and secondary buttons inherit the active semantic palette when their
 optional component tokens are absent; this includes partial dark palettes.
+
+### Monitor connection composition contracts
+
+`Scroll.scrollbar-inset` exposes the native inset (default 5); zero reserves only the authored scrollbar width. `VirtualList.trailing-width` and `trailing-gap` expose native rich-row metrics (defaults 58 and 8). Structured rows may supply `trailing_rgba: i64` in unsigned 32-bit RGBA range; omitted values retain the native default. These properties support bindings and restore defaults when removed during reload. Monitor templates use compact metrics without a native content host.
+
+VirtualList also clamps an obsolete scroll offset when an enlarged viewport is painted or clicked, so filtering followed by expansion cannot leave hit testing at an old row. Runtime fixture covers both paths.
+
+`oneui_view_element_metrics` reports VirtualList scroll position/extent. SegmentedControl validates the existing Tabs `text-inset` style adapter, allowing narrow labels to keep readable space.

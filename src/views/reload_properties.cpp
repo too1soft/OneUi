@@ -77,7 +77,7 @@ std::function<void()> resetProperty(ui::Mount &factory,ui::Element &target,
             {"collapsed-extent",0},{"min-column-width",320},{"max-width",880},
             {"breakpoint",target.component=="SidebarLayout" ? 960 : 800},
             {"pane-width",target.component=="SidebarLayout" ? 208 : 380},{"value",0},
-            {"range-min",0},{"range-max",1},{"line-width",2.25},{"row-height",42},{"content-height",0},{"wheel-step",48},{"scroll-offset",0}};
+            {"range-min",0},{"range-max",1},{"line-width",2.25},{"row-height",42},{"content-height",0},{"wheel-step",48},{"scroll-offset",0},{"scrollbar-inset",5},{"trailing-width",58},{"trailing-gap",8}};
         auto found=numbers.find(key);
         check(found!=numbers.end(),ONEUI_VIEW_TYPE,"Missing reload numeric default");
         value.number=found->second;

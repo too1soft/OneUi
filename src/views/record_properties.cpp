@@ -86,6 +86,13 @@ void Runtime::applyList(Instance &instance, const std::string &property, ListSta
                 row.indicatorColor = {uint8_t(rgba >> 24), uint8_t(rgba >> 16), uint8_t(rgba >> 8), uint8_t(rgba)};
                 row.indicatorVisible = (rgba & 255) != 0;
             }
+            auto trailingColor=properties.find("trailing_rgba");
+            if(trailingColor!=properties.end()) {
+                check(trailingColor->second.tag==2,ONEUI_VIEW_TYPE,"VirtualList trailing color type");
+                const auto rgba=field(item,"trailing_rgba").integer;
+                check(rgba>=0 && uint64_t(rgba)<=0xffffffffu,ONEUI_VIEW_TYPE,"VirtualList trailing color range");
+                row.trailingColor={uint8_t(rgba>>24),uint8_t(rgba>>16),uint8_t(rgba>>8),uint8_t(rgba)};
+            }
             values.push_back(std::move(row));
         }
         e.as<VirtualList>()->setRichItems(std::move(values));

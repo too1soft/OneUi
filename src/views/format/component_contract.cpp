@@ -59,6 +59,8 @@ const std::map<std::string, ComponentContract> &registry()
         ++r.at("Text").version;
         ++r.at("Input").version; // Explicit password mask, appended property ID 15.
         ++r.at("Scroll").version; // Explicit content width, appended property ID 15.
+        ++r.at("Scroll").version; // Scrollbar inset, appended property ID 16.
+        ++r.at("VirtualList").version; // Compact trailing metrics, IDs 15/16.
         ++r.at("SearchInput").version; // Optional prefix icon; absent keeps old rendering.
         ++r.at("FontPicker").version;
         // Read-only class bindings preserve static and scoped classes. Keep the

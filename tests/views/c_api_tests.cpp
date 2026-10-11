@@ -2,6 +2,7 @@
 #include "fixture.h"
 #include "oneui/layout/overlay_host.h"
 #include "oneui/controls/table.h"
+#include "oneui/controls/virtual_list.h"
 #include <thread>
 using namespace viewtest;
 namespace {
@@ -163,6 +164,14 @@ int main(int argc, char **argv) {
             expect(oneui_view_element_metrics(c.view,str("metrics-table"),&metrics)==0 &&
                 metrics.scrollable && metrics.scroll_y==180 && metrics.max_scroll_y>2500,
                 "rich Table exposes actual scroll metrics");
+            auto list=std::make_shared<oneui::VirtualList>();
+            list->setAccessibleName(L"metrics-list");list->setFrame({0,0,400,200});list->setRowHeight(60);
+            list->setItems(std::vector<oneui::ListItem>(100,{L"row",L"detail"}));list->setScrollOffset(180);
+            c.view->value->root->element.widget=list;
+            expect(oneui_view_element_metrics(c.view,str("metrics-list"),&metrics)==0 &&
+                metrics.scrollable && metrics.scroll_y==180 && metrics.max_scroll_y==5800,
+                "VirtualList exposes actual scroll metrics for restoration and wheel evidence");
+            c.view->value->root->element.widget=table;
             int focusForeign=0;
             std::thread focusReadThread([&] { focusForeign=oneui_view_element_focused(c.view,str("metrics-table"),&focused); });
             focusReadThread.join(); expect(focusForeign==ONEUI_VIEW_WRONG_THREAD,"focus query owns UI thread");

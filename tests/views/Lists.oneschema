@@ -33,6 +33,8 @@ model Item key id {
     rw selected: bool
     r cells: list<Cell>
     r badge: utf8
+    r trailing:utf8
+    r trailing_rgba:i64
     r indicator_rgba: i64
 }
 model Cell key id {r id:utf8 r text:utf8 r icon:utf8 r alignment:i64}

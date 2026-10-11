@@ -263,6 +263,8 @@ P("VirtualList", 11, "shrink", 3, 1, "")
 P("VirtualList", 12, "visible", 1, 3, "")
 P("VirtualList", 13, "row-height", 3, 3, "")
 P("VirtualList", 14, "scroll-offset", 3, 3, "")
+P("VirtualList", 15, "trailing-width", 3, 3, "")
+P("VirtualList", 16, "trailing-gap", 3, 3, "")
 
 C("TextArea", "leaf", 11)
 P("TextArea", 1, "basis", 3, 1, "")

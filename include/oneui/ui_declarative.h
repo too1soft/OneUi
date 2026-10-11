@@ -142,7 +142,7 @@ private:
                 authored|=value.background.color.has_value() || value.foreground.has_value() || value.borderColor.has_value() ||
                     value.borderWidth.has_value() || value.radius.has_value() || value.content.backgroundColor.has_value() ||
                     value.content.radius.has_value() || value.padding.has_value() || value.fontSize.has_value() ||
-                    value.fontWeight.has_value() || value.outlineColor.has_value() || value.outlineWidth.has_value() || value.outlineOffset.has_value();
+                    value.fontWeight.has_value() || value.textInset.has_value() || value.outlineColor.has_value() || value.outlineWidth.has_value() || value.outlineOffset.has_value();
             }
             if(authored)tabs->setStyleOverride(tabsStyleOverrideFromStyleSheet(sheet,n));
             else applyNativeTheme(*tabs,sheet);

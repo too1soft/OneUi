@@ -65,7 +65,7 @@ enum class ValueType { None, Text, Boolean, Integer, Number, Strings, Columns, R
     X(FormRow, "stack", "label hint error", None) \
     X(FormGrid, "stack", "min-column-width", None) \
     X(EmptyState, "stack", "title subtitle", None) \
-    X(Scroll, "scroll-view", "content-height content-width wheel-step chrome-visible scroll-offset", None) \
+    X(Scroll, "scroll-view", "content-height content-width wheel-step chrome-visible scroll-offset scrollbar-inset", None) \
     X(Reveal, "reveal", "open preset reduced-motion", None) \
     X(Text, "label", "text wrap max-lines spans line-height text-align tooltip", None) \
     X(ValidationMessage, "label", "text", None) \
@@ -79,7 +79,7 @@ enum class ValueType { None, Text, Boolean, Integer, Number, Strings, Columns, R
     X(Button, "button", "text variant icon tooltip content-align trailing-text trailing-icon", None) \
     X(DataTable, "table", "items columns selectedKey item-key", Text) \
     X(List, "list", "items selectedIndex", Integer) \
-    X(VirtualList, "virtual-list", "items selectedIndex row-height scroll-offset", Integer) \
+    X(VirtualList, "virtual-list", "items selectedIndex row-height scroll-offset trailing-width trailing-gap", Integer) \
     X(TreeView, "tree-view", "items selectedKey", Text) \
     X(Table, "table", "items columns multiple row-height header-height selection-column selection-column-width scroll-offset sort-column sort-descending column-dividers tooltip", None) \
     X(DataMenu, "menu", "title subtitle items", None) \
@@ -144,7 +144,7 @@ constexpr ValueType propertyType(Kind kind,std::string_view key) {
     if(contains("selectedIndex revision ack-request close-request navigation-serial number max-lines",key))return ValueType::Integer;
     if(contains("nodes groups drag-sources placements tokens spans",key))return ValueType::Rows;
     if(contains("gap divider-hit motion-ms resize-idle-ms min-width min-height threshold dock-min-width dock-min-height float-min-width float-min-height minimum maximum step opacity",key))return ValueType::Number;
-    if(contains("content-height content-width wheel-step scroll-offset row-height line-height minimum-width header-height horizontal-offset overlay-width overlay-height inset-left inset-right inset-top inset-bottom",key))return ValueType::Number;
+    if(contains("content-height content-width wheel-step scroll-offset scrollbar-inset trailing-width trailing-gap row-height line-height minimum-width header-height horizontal-offset overlay-width overlay-height inset-left inset-right inset-top inset-bottom",key))return ValueType::Number;
     if(key=="overlay-visible")return ValueType::Boolean;
     if(key=="items")return kind==Kind::Select||kind==Kind::SegmentedControl?ValueType::Strings:kind==Kind::Tabs?ValueType::TabItems:ValueType::Rows;
     if(kind==Kind::TimeSeriesChart) {
