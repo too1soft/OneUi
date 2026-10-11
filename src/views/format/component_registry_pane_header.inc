@@ -80,3 +80,10 @@ P("DropSurface", 10, "visible", 1, 3, "")
 P("DropSurface", 11, "domain", 4, 1, "")
 P("DropSurface", 12, "role", 4, 1, "")
 r.at("DropSurface").events={{1,"dropRequested",{{"source",4},{"target",4},{"edge",4},{"request",2},{"revision",2}}}};
+
+// Localized native action captions; existing property IDs remain unchanged.
+P("PaneHeader", 23, "split-label", 4, 3, "")
+P("PaneHeader", 24, "maximize-label", 4, 3, "")
+P("PaneHeader", 25, "close-label", 4, 3, "")
+P("PaneHeader", 26, "live-label", 4, 3, "")
+P("PaneHeader", 27, "menu-label", 4, 3, "")

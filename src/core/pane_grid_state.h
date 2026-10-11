@@ -47,7 +47,7 @@ struct PaneGrid::State {
     std::vector<Viewport> pendingViewports;
     std::vector<std::pair<std::string,int64_t>> closing;
     std::map<std::string,int64_t> completedClosing;
-    size_t root = none, divider = none, focusedDivider = none;
+    size_t root = none, divider = none, focusedDivider = none, hoveredDivider = none;
     PaneMotionPhase phase = PaneMotionPhase::Idle;
     bool held = false, dirtyDivider = false, dragging = false;
     bool ready = false;

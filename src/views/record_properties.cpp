@@ -49,6 +49,32 @@ void Runtime::applyList(Instance &instance, const std::string &property, ListSta
             spans.push_back(span); previousEnd = end;
         }
         label->setRichText(label->text(), std::move(spans));
+    } else if (e.component == "Menu") {
+        // Validate the entire replacement before touching native interaction state.
+        struct Entry {
+            std::string kind;
+            std::wstring title, detail;
+            std::optional<IconSymbol> icon;
+            bool danger, disabled;
+        };
+        std::vector<Entry> entries;
+        for (const auto &item : state.items) {
+            auto kind = field(item, "kind").text;
+            check(kind == "item" || kind == "header" || kind == "separator",
+                  ONEUI_VIEW_TYPE, "Menu entry kind");
+            const auto name = field(item, "icon").text;
+            const auto icon = name.empty() ? std::optional<IconSymbol>{} : ui::namedIcon(name);
+            check(name.empty() || icon.has_value(), ONEUI_VIEW_TYPE, "Menu entry icon");
+            entries.push_back({kind, wide(field(item, "title").text), wide(field(item, "detail").text),
+                icon, bool(field(item, "danger").integer), bool(field(item, "disabled").integer)});
+        }
+        auto menu = e.as<Menu>();
+        menu->clearItems();
+        for (auto &entry : entries) {
+            if (entry.kind == "header") menu->addHeader(entry.title, entry.detail);
+            else if (entry.kind == "separator") menu->addSeparator();
+            else menu->setItemDisabled(menu->addItem(entry.title, entry.icon, entry.danger), entry.disabled);
+        }
     } else if (e.component == "List" || e.component == "VirtualList") {
         std::vector<ListItem> values;
         for (const auto &item : state.items) values.push_back({wide(field(item, "title").text), wide(field(item, "detail").text)});

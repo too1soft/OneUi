@@ -26,6 +26,8 @@
 #include "oneui/controls/text_field.h"
 #include "oneui/controls/switch.h"
 #include "oneui/controls/select.h"
+#include "oneui/controls/state_view.h"
+#include "oneui/controls/menu.h"
 #include "oneui/controls/table.h"
 #include "oneui/clipboard.h"
 #include <codecvt>
@@ -103,17 +105,20 @@ private:
         if(auto page=std::dynamic_pointer_cast<ContainerPage>(w))page->setDisplay(box.display);
         else if(box.display)w->setLayoutVisible(*box.display);
         if(box.width||box.height) {auto size=w->preferredSize();w->setPreferredSize({box.width.value_or(size.width),box.height.value_or(size.height)});}
+        if(entry.component=="PaneGrid")w->setStyleScope(std::make_shared<StyleSheet>(sheet));
         if(auto header=std::dynamic_pointer_cast<PaneHeader>(w)) {
             auto palette=nativePalette(sheet);
             if(!box.foreground)box.foreground=palette.ink;
             if(!box.background.color)box.background.color=palette.surface;
             if(!box.borderColor)box.borderColor=palette.accent;
-            header->setStyleBox(box);return;
+            header->setStyleBox(box);header->setStyleScope(std::make_shared<StyleSheet>(sheet));return;
         }
         if(auto host=std::dynamic_pointer_cast<NativeHostView>(w)) {
             if(host->themed() && !host->children().empty())applyNativeTheme(*host->children().front(),sheet,host->hasCompositionOwner());return;
         }
         if(auto card=std::dynamic_pointer_cast<Card>(w)){card->setStyleBox(box);return;}
+        if(auto state=std::dynamic_pointer_cast<StateView>(w)){state->setStyleSheet(std::make_shared<StyleSheet>(sheet),n);return;}
+        if(auto menu=std::dynamic_pointer_cast<Menu>(w)){menu->setStyleSheet(std::make_shared<StyleSheet>(sheet),n);return;}
         if(auto surface=std::dynamic_pointer_cast<InteractiveSurface>(w)) {
             surface->setStyle(interactiveSurfaceStyleFromStyleSheet(sheet,n));
             surface->setPadding(box.padding.value_or(Insets{}));return;

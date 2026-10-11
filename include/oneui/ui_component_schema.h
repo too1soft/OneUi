@@ -7,7 +7,7 @@ enum class ValueType { None, Text, Boolean, Integer, Number, Strings, Columns, R
 #define ONEUI_AUTHORING_COMPONENTS(X) \
     X(PaneGrid, "workspace-collection", "nodes groups active-group active-pane maximized revision ack-request ack-accepted navigation-serial navigation-edge navigation-mode drag-domain gap divider-hit motion-ms resize-idle-ms motion", None) \
     X(Pane, "workspace-item", "pane-key closing close-request min-width min-height", None) \
-    X(PaneHeader, "pane-header", "pane-key number title path active broadcast-role broadcast-hint broadcast-label viewing-history can-close can-split can-maximize", None) \
+    X(PaneHeader, "pane-header", "pane-key number title path active broadcast-role broadcast-hint broadcast-label viewing-history can-close can-split can-maximize split-label maximize-label close-label live-label menu-label", None) \
     X(HeaderSlot, "stack", "slot-name", None) \
     X(FontPicker, "font-picker", "items selected loading error preview-text size trigger-label confirm-selection monospace-only monospace-items apply-label cancel-label filter-label search-label retry-label", None) \
     X(MediaPicker, "media-picker", "asset label loading error accept choose-label clear-label cancel-label", None) \
@@ -72,7 +72,9 @@ enum class ValueType { None, Text, Boolean, Integer, Number, Strings, Columns, R
     X(Button, "button", "text variant icon", None) \
     X(DataTable, "table", "items columns selectedKey item-key", Text) \
     X(List, "list", "items selectedIndex", Integer) \
-    X(VirtualList, "virtual-list", "items selectedIndex row-height scroll-offset", Integer)
+    X(VirtualList, "virtual-list", "items selectedIndex row-height scroll-offset", Integer) \
+    X(StateView, "state-view", "title message action icon", None) \
+    X(Menu, "menu", "items", None)
 
 enum class Kind {
 #define ONEUI_KIND(name, tag, props, model) name,

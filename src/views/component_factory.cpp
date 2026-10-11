@@ -104,7 +104,9 @@ Element Mount::make(std::string type, std::vector<Element> children, std::string
     Builder b(StackEngine::Yoga, "");
     Node node = b.column({});
     std::shared_ptr<Stack> content;
-    if(type=="List")node=b.native(std::make_shared<List>());
+    if(type=="StateView")node=b.native(std::make_shared<StateView>());
+    else if(type=="Menu")node=b.native(std::make_shared<Menu>());
+    else if(type=="List")node=b.native(std::make_shared<List>());
     else if(type=="VirtualList")node=b.native(std::make_shared<VirtualList>());
     else if(type=="FontPicker")node=b.native(std::make_shared<FontPicker>());
     else if(type=="Slider")node=b.native(std::make_shared<Slider>());

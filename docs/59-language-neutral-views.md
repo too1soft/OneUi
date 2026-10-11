@@ -891,3 +891,15 @@ Rust `ViewMount::from_dispatcher` 可将声明式页面挂入当前窗口中的�
 安装；替换样式沿用宿主的 transient 样式，使图片背景上的 Select 弹出项保留应用主题。
 开发工具构建的布局快照包含声明式 CSS 类名与已解析样式；诊断使用弱引用，不保留退役控件。
 测试捕获构建提供 `Widget::test_freeze_caret`，用于固定输入框光标，生产构建不启用该入口。
+
+## StateView content states
+
+`StateView` is a leaf component with bindable `title`, `message` and `action`
+strings, a static named `icon`, and a zero-argument `@action` command. It uses
+the native StateView layout and keyboard/pointer action handling.
+
+Style the surface with `StateView` and its painted parts with the native
+`state-view-part` selector plus `state-view-icon`, `state-view-title`,
+`state-view-message` or `state-view-action`. Part nodes inherit the component's
+classes. The action part consumes `:hover`, `:pressed`, `:focus` and `:disabled`.
+These part selectors style painted content; they do not create child widgets.

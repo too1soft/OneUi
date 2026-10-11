@@ -564,3 +564,13 @@ unless they opt into confirmation.
 The popup paints an opaque surface inside its enclosing scroll viewport. Search,
 selection and secondary buttons inherit the active semantic palette when their
 optional component tokens are absent; this includes partial dark palettes.
+
+### PaneHeader action captions
+
+`split-label`, `maximize-label`, `close-label`, `live-label`, and `menu-label` accept UTF-8 literal or bound text. They update both the native button's accessible name and tooltip without replacing the button or changing drag routing. Broadcast feedback continues to use `broadcast-label` and `broadcast-hint`. Caption changes preserve content leases and native control identity.
+
+### WP6 header fidelity follow-up
+
+PaneHeader retains the separate left drag handle and right menu action. The right actions follow broadcast / split / maximize / menu / close / live order; the 29px header is followed by a 1px active rule. Header parts consume the inherited style scope through `pane-header-part` selectors: `pane-header-button`, `pane-header-broadcast-on`, `pane-header-grip`, `pane-header-number`, `pane-header-title`, and `pane-header-path`. The number/title/path nodes also expose `pane-header-active` or `pane-header-inactive`. Part colors, font size/weight/family and number radius are authored by the application and refresh on theme replacement. `menu-label` applies to both menu entry points. No C ABI or wire-format change.
+
+PaneGrid divider paint can be themed with `pane-grid-part.pane-grid-divider` background and `:hover`, `:pressed`, `:focus` states. PaneHeader exposes `pane-header-part.pane-header-rule` for the full-width bottom rule; its grip remains visible on inactive panes. Neither styling changes geometry or content ownership.

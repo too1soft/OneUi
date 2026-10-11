@@ -9,6 +9,13 @@ bool Runtime::paneHeaderScalar(Instance& instance,const std::string& name,const 
     }
     if(e.component!="PaneHeader")return false;
     auto header=e.as<PaneHeader>();auto config=header->config();
+    for(const auto& action:std::initializer_list<std::pair<const char*,PaneHeaderAction>>{
+        {"split-label",PaneHeaderAction::Split},{"maximize-label",PaneHeaderAction::Maximize},
+        {"close-label",PaneHeaderAction::Close},{"live-label",PaneHeaderAction::Live},
+        {"menu-label",PaneHeaderAction::Menu}})if(name==action.first) {
+        header->setActionLabel(action.second,unicode::fromUtf8(value.text));return true;
+    }
+
     if(name=="pane-key")config.pane=value.text;
     else if(name=="number")config.number=value.integer;
     else if(name=="title")config.title=unicode::fromUtf8(value.text);

@@ -10,6 +10,21 @@ model Child key id { r id:utf8 r name:utf8 }'''
 
 
 class DiagnosticTests(CompilerCase):
+    def test_state_view_contract(self):
+        self.compile('<template view-model="Basic"><StateView title="Empty" action="Open"/></template><style scoped>StateView {background: #112233; padding:12px;} state-view-part.state-view-action:hover {background:#334455;} state-view-part.state-view-action:pressed {background:#556677;}</style>', SCHEMA, raw=True)
+        self.compile('<StateView :title="title" :message="input" :action="title" icon="server" @action="click"/>', SCHEMA)
+        self.compile('<StateView><Text/></StateView>', SCHEMA, error='CHILDREN')
+        self.compile('<StateView @action="close"/>', SCHEMA, error='COMMAND_SIGNATURE')
+
+    def test_pane_header_action_labels(self):
+        self.compile('<PaneHeader :split-label="title" :maximize-label="title" :close-label="title" :live-label="title" :menu-label="title"/>', SCHEMA)
+
+    def test_native_server_icon(self):
+        self.compile('<Column><Icon symbol="server-native"/><StateView icon="server-native"/></Column>', SCHEMA)
+
+    def test_play_icon(self):
+        self.compile('<Column><Icon symbol="play"/><Button icon="play" @click="click"/></Column>', SCHEMA)
+
     def test_binding_and_command_errors(self):
         cases = [
             ('<Unknown/>', 'COMPONENT:'), ('<Text :text="missing"/>', 'VM_PROPERTY'),
@@ -97,6 +112,10 @@ class DiagnosticTests(CompilerCase):
         depths = [struct.unpack_from('<H', binds, at + 12)[0] for at in range(0, len(binds), 36)]
         self.assertIn(2, depths)
         self.assertIn(1, depths)
+
+    def test_pane_header_parts(self):
+        self.compile('<template view-model="Basic"><PaneHeader/></template><style scoped>pane-header-part.pane-header-path {font-family:Consolas;font-size:13px;color:#123456;} pane-header-part.pane-header-button:hover {background:#abcdef;} pane-grid-part.pane-grid-divider:hover {background:#445566;}</style>',
+                     'model Basic {r title:utf8}', raw=True)
 
     def test_constants_and_composite_builtins(self):
         self.compile('<Column><Text :visible="true" v-if="false"/><DataTable :items="rows" :columns="columns"/><TimeSeriesChart :series="series"/></Column>',

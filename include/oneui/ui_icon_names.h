@@ -22,7 +22,9 @@ inline std::optional<IconSymbol> namedIcon(std::string_view name) {
         {"notebook",IconSymbol::Notebook},{"trash",IconSymbol::Trash},
         {"user",IconSymbol::User},{"refresh-circle",IconSymbol::Refresh},{"edit",IconSymbol::Edit},
         {"terminal-native",IconSymbol::Terminal},{"desktop",IconSymbol::Desktop},{"sparkle",IconSymbol::Sparkle},
-        {"check",IconSymbol::Check}
+        {"check",IconSymbol::Check},
+        {"play",IconSymbol::Play},
+        {"server-native",IconSymbol::Server}
     };
     for(const auto& entry:entries)if(entry.name==name)return entry.symbol;
     return {};

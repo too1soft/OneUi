@@ -107,6 +107,12 @@ void Runtime::wire(const std::shared_ptr<Instance> &instance) {
             if(auto surface=element.as<InteractiveSurface>())surface->setOnClick([fire]{fire({});});
             else element.as<Button>()->setOnClick([fire] { fire({}); });
         }
+        else if (name == "action")
+            element.as<StateView>()->setOnAction([fire] { fire({}); });
+        else if (name == "activated" && element.component == "Menu")
+            element.as<Menu>()->setOnItemActivated([fire](int index) {
+                Value v; v.tag = 2; v.integer = index; fire({v});
+            });
         else if (name == "submit")
             element.as<TextField>()->setOnSubmitted([fire](const std::wstring &) { fire({}); });
         else if (name == "close")

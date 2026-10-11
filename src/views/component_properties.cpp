@@ -1,6 +1,17 @@
 #include "oneui/ui_declarative.h"
 namespace oneui::ui {
 void Mount::set(Element &e, const std::string &key, const std::wstring &value) {
+    if(e.component=="StateView") {
+        auto state=e.as<StateView>();
+        if(key=="title"){state->setTitle(value);return;}
+        if(key=="message"){state->setMessage(value);return;}
+        if(key=="action"){state->setAction(value);return;}
+        if(key=="icon") {
+            const auto icon=namedIcon(std::string(value.begin(),value.end()));
+            if(!icon)throw std::invalid_argument("Unknown StateView icon");
+            state->setIcon(*icon);return;
+        }
+    }
     if(e.component=="FontPicker" && key=="trigger-label") {e.as<FontPicker>()->setTriggerLabel(value);return;}
     if(e.component=="MediaPicker") {
         if(key=="choose-label"){e.as<MediaPicker>()->setChooseLabel(value);return;}

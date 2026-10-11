@@ -111,6 +111,7 @@ void validateRecord(const Model& model, const std::string& projection) {
     }
     std::string fields;
     if(projection=="@list.item") fields="id:4 title:4 detail:4";
+    else if(projection=="@menu.item") fields="id:4 kind:4 title:4 detail:4 icon:4 danger:1 disabled:1";
     else if(projection=="@text.span") fields="id:4 start:2 end:2 rgba:2 monospace:1";
     else if(projection=="@workspace.node") fields="id:4 kind:4 axis:4 ratio:3 first:4 second:4 pane:4";
     else if(projection=="@workspace.placement") fields="id:4 mode:4 x:3 y:3 width:3 height:3 pinned:1 order:2";

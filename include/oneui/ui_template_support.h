@@ -43,6 +43,11 @@ inline void validateLayoutNumber(const std::string& key, float value) {
 }
 inline std::string lowerValue(std::string value) { for(auto& ch:value)ch=static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));return value; }
 inline std::set<std::string> cssProperties(const std::string& tag) {
+    if (tag == "menu" || tag == "menu-part") return {"background","background-color","color","border-color","border-width","border-radius","padding","font-size","font-weight","box-shadow"};
+    if (tag == "pane-grid-part") return {"background","background-color"};
+    if (tag == "pane-header-part") return {"background","background-color","color","border-color","border-width","border-radius","padding","font-size","font-weight","font-family"};
+    if (tag == "pane-header") return {"background","background-color","color","border-color","border-width"};
+    if (tag == "state-view" || tag == "state-view-part") return {"background","background-color","color","border-color","border-width","border-radius","padding","font-size","font-weight","box-shadow"};
     if (tag == "progress"||tag=="slider"||tag=="font-picker"||tag=="media-picker"||tag=="media-preview"||tag=="theme-scope") return {};
     if (tag == "card") return {"background-color","background","border-color","border-width","border-radius","padding","box-shadow","opacity"};
     if (tag == "interactive-surface") return {"background-color","background","border-color","border-width","border-radius","padding","transition-duration","transition-timing-function"};
@@ -113,7 +118,7 @@ inline std::string css(std::string source, const std::string& scope = {}, const 
                 tag = component->second; mapped = tag + ".one-" + type + selector.substr(type.size());
             } else if(!classOnly) {
                 tag = type;
-                bool found = false; for (auto& c : components()) if (c.second == tag) found = true;
+                bool found = tag=="state-view-part" || tag=="pane-header-part" || tag=="pane-grid-part"; for (auto& c : components()) if (c.second == tag) found = true;
                 if (!found) fail("Unknown CSS component: " + type);
             }
             const auto colon=selector.find(':');
@@ -121,6 +126,7 @@ inline std::string css(std::string source, const std::string& scope = {}, const 
                 pseudo=selector.substr(colon+1);
                 std::set<std::string> states;
                 if(tag=="button"||tag=="interactive-surface")states={"hover","pressed","focus","disabled"};
+                else if(tag=="state-view"||tag=="state-view-part"||tag=="pane-header-part"||tag=="pane-grid-part")states={"hover","pressed","focus","disabled"};
                 else if(tag=="input")states={"hover","focus","disabled","read-only"};
                 else if(tag=="switch" || tag=="select" || tag=="tabs")states={"hover","pressed","focus","disabled","selected"};
             else if(tag=="table" || tag=="list" || tag=="virtual-list")states={"hover","pressed","selected"};

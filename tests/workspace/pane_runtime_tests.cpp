@@ -1,5 +1,6 @@
 #include "../views/fixture.h"
 #include "oneui/layout/pane_grid.h"
+#include "oneui/controls/pane_header.h"
 #include "oneui/controls/terminal_view.h"
 #include "../support/recording_canvas.h"
 using namespace viewtest;
@@ -28,6 +29,9 @@ int main(int argc,char** argv) {
         auto runtime=std::make_shared<Runtime>(image);runtime->initialize(&root.table,&root);
         auto grid=runtime->root->element.as<PaneGrid>();grid->setFrame({0,0,1000,600});
         auto pane=runtime->root->children[0]->rows.at("A")->element.as<PaneView>();
+        auto header=std::dynamic_pointer_cast<PaneHeader>(pane->children()[0]);
+        expect(header->children()[0]->accessibleName()==L"Divide right","authored pane action label");
+        expect(header->children()[4]->accessibleName()==L"A","bound pane action label");
         auto host=std::dynamic_pointer_cast<ui::NativeHostView>(pane->children()[1]);
         auto terminal=std::make_shared<TerminalView>();terminal->setGrid(24,80,std::vector<TerminalCell>(1920));
         host->attach(terminal,{});grid->tickAnimations(0);
@@ -45,6 +49,8 @@ int main(int argc,char** argv) {
         runtime->flush();
         expect(grid->snapshot().nodes[2].ratio==.7f,"record update publishes authority");
         expect(pane->children()[1]==host && host->children()[0]==terminal,"content address retained");
+        string(root,"activePane","B");runtime->notify(runtime->rootScope,id(image,"Root","activePane"));runtime->flush();
+        expect(header->children()[4]->accessibleName()==L"B","pane action label notification");
         string(split,"first","s");for(auto& scope:runtime->scopes)if(scope->vm==&split)runtime->notify(scope,0);
         try{runtime->flush();expect(false,"cycle accepted");}catch(const std::invalid_argument&){}
         expect(grid->snapshot().nodes[2].first=="a","invalid graph keeps published snapshot");

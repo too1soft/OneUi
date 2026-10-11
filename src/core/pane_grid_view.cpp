@@ -1,4 +1,5 @@
 #include "pane_grid_state.h"
+#include "oneui/style_sheet.h"
 #include "internal/split_geometry.h"
 #include "internal/ui_clock.h"
 #include <cmath>
@@ -9,7 +10,7 @@ void PaneView::layoutChildren() {
     auto bounds=frame();
     auto heading=header.lock();
     if(heading && heading->visible()) {
-        auto rect=bounds;rect.height=std::min(29.f,bounds.height);heading->setFrame(rect);
+        auto rect=bounds;rect.height=std::min(30.f,bounds.height);heading->setFrame(rect);
         bounds.y+=rect.height;bounds.height-=rect.height;
     }
     bounds.x+=16;bounds.y+=8;
@@ -91,7 +92,15 @@ void PaneGrid::paint(Canvas& canvas) {
     auto& s=*state_;
     if(s.snapshot.maximized.empty())for(size_t i=0;i<s.nodes.size();++i) {
         const auto& n=s.nodes[i];if(n.first==State::none || n.divider.width<=0 || n.divider.height<=0)continue;
-        canvas.fillRect(n.divider,i==s.focusedDivider?s.accent:Color{90,100,110,70});
+        const bool hovered=i==s.hoveredDivider, pressed=s.dragging && i==s.divider;
+        const bool focused=focusVisible() && i==s.focusedDivider;
+        Color color=(hovered||pressed||focused)?s.accent:Color{90,100,110,70};
+        if(auto sheet=styleScope()) {
+            StyleNode node{"pane-grid-part",{"pane-grid-divider"},
+                (hovered?StyleStateHover:0u)|(pressed?StyleStateActive:0u)|(focused?StyleStateFocus:0u)};
+            color=sheet->resolve(node).background.color.value_or(color);
+        }
+        canvas.fillRect(n.divider,color);
     }
     if(s.previewActive) {
         auto fill=s.accent;fill.a=s.previewValid?41:15;

@@ -6,11 +6,13 @@
 #include "internal/ui_clock.h"
 #include "../support/recording_canvas.h"
 #include <cmath>
+#include <algorithm>
 #include <iostream>
 #include <stdexcept>
 using namespace oneui;
 namespace {
 void check(bool value,const char* message){if(!value)throw std::runtime_error(message);}
+bool same(Color a,Color b){return a.r==b.r && a.g==b.g && a.b==b.b && a.a==b.a;}
 double now=0;
 double clockNow(){return now;}
 struct Fixture {
@@ -31,6 +33,10 @@ struct Fixture {
 void header() {
     View root;root.setFrame({0,0,600,100});auto h=std::make_shared<PaneHeader>();root.add(h);
     PaneHeaderConfig config;config.pane="p";config.title=L"title";h->setConfig(config);
+    h->setActionLabel(PaneHeaderAction::Split,L"Localized split");
+    check(h->children()[0]->accessibleName()==L"Localized split","localized split accessible name");
+    h->setConfig(config);
+    check(h->children()[0]->accessibleName()==L"Localized split","config changes retain action labels");
     test_support::RecordingCanvas canvas;
     IconButton splitIcon(IconSymbol::OutlineWorkbenchSplit);splitIcon.setFrame({0,0,24,24});splitIcon.paint(canvas);
     check(canvas.lines.size()>=5,"outline split paints its outline and central divider");
@@ -48,6 +54,27 @@ void header() {
     auto close=h->actionFrame(PaneHeaderAction::Close);Point p{close.x+12,close.y+12};
     root.onMouseDown({p,MouseButton::Left});root.onMouseUp({p,MouseButton::Left});
     check(phases.empty()&&actions.size()==1&&actions[0]==PaneHeaderAction::Close,"close never arms drag");
+    actions.clear();
+    auto more=h->children()[6]->frame();Point morePoint{more.x+12,more.y+12};
+    check(h->children()[2]->frame().x<h->children()[0]->frame().x &&
+          h->children()[0]->frame().x<h->children()[1]->frame().x &&
+          h->children()[1]->frame().x<more.x && more.x<close.x,"reference button order");
+    h->setActionLabel(PaneHeaderAction::Menu,L"Localized actions");
+    check(h->children()[5]->accessibleName()==L"Localized actions" &&
+          h->children()[6]->accessibleName()==L"Localized actions","grip and more both localized");
+    root.onMouseDown({morePoint,MouseButton::Left});root.onMouseUp({morePoint,MouseButton::Left});
+    check(actions.size()==1 && actions[0]==PaneHeaderAction::Menu && phases.empty(),"more button opens menu without drag");
+    auto sheet=std::make_shared<StyleSheet>();std::string error;
+    check(sheet->addRulesFromCss("pane-header-part.pane-header-path {color:#123456;font-size:13px;font-family:Consolas;} pane-header-part.pane-header-number {background:#112233;border-radius:5px;}",&error),"header part CSS");
+    h->setStyleScope(sheet);config.path=L"/tmp";h->setConfig(config);
+    test_support::RecordingCanvas styled;h->paint(styled);
+    bool pathStyled=false,badgeStyled=false;
+    for(auto& text:styled.textBlocks)if(text.text==L"/tmp")pathStyled=same(text.color,Color{0x12,0x34,0x56}) && text.style.fontFamily==L"Consolas";
+    for(auto& box:styled.fillRects)if(box.rect.width==17 && box.rect.height==17)badgeStyled=box.radius==5 && same(box.color,Color{0x11,0x22,0x33});
+    check(pathStyled && badgeStyled,"path font/color and rounded badge consume authored styles");
+    auto next=std::make_shared<StyleSheet>();next->addRulesFromCss("pane-header-part.pane-header-path {color:#abcdef;}",&error);
+    h->setStyleScope(next);test_support::RecordingCanvas restyled;h->paint(restyled);
+    check(std::any_of(restyled.textBlocks.begin(),restyled.textBlocks.end(),[](auto& text){return text.text==L"/tmp" && same(text.color,Color{0xab,0xcd,0xef});}),"header responds to theme replacement");
     root.onMouseDown({{12,14},MouseButton::Left});root.onMouseMove({{15.9f,14},MouseButton::Left});
     check(phases.empty(),"grip below four");root.onMouseMove({{16,14},MouseButton::Left});
     check(phases[0]==0,"grip starts at four");root.clearInteractionState();check(phases.back()==3,"capture loss cancels");
@@ -78,6 +105,19 @@ void drag() {
     check(f.events.back().edge=="tab-strip"&&f.events.back().target=="strip","pane to tab strip");
     domain.begin("a",{100,100});domain.release({100,100});check(f.events.size()==3,"self release no request");
     WorkspaceDragDomain isolated;check(!isolated.begin("a",{100,100}),"other view/domain cannot see source");
+}
+void dividerStyles() {
+    Fixture f;auto sheet=std::make_shared<StyleSheet>();std::string error;
+    check(sheet->addRulesFromCss("pane-grid-part.pane-grid-divider {background:#112233;} pane-grid-part.pane-grid-divider:hover {background:#445566;}",&error),"divider CSS");
+    f.grid->setStyleScope(sheet);
+    auto color=[&] {test_support::RecordingCanvas c;f.grid->paint(c);check(!c.fillRects.empty(),"divider paint");return c.fillRects.back().color;};
+    check(same(color(),{0x11,0x22,0x33}),"normal divider uses authored token");
+    auto pane=f.panes[0]->frame();Point hit{pane.x+pane.width+2.5f,pane.y+40};
+    f.grid->onMouseMove({hit});check(same(color(),{0x44,0x55,0x66}),"divider hover follows pointer");
+    f.grid->onMouseMove({{pane.x+20,pane.y+40}});check(same(color(),{0x11,0x22,0x33}),"leaving divider clears hover");
+    f.grid->onMouseMove({hit});f.grid->clearInteractionState();check(same(color(),{0x11,0x22,0x33}),"capture loss clears divider hover");
+    auto next=std::make_shared<StyleSheet>();next->addRulesFromCss("pane-grid-part.pane-grid-divider {background:#aabbcc;}",&error);
+    f.grid->setStyleScope(next);check(same(color(),{0xaa,0xbb,0xcc}),"divider responds to theme replacement");
 }
 void navigation() {
     Fixture f;
@@ -116,6 +156,6 @@ void preview() {
     check(std::abs(sample(8)-sample(16))<.01f && std::abs(sample(16)-sample(50))<.01f,"preview trajectory invariant across 8/16/50 ms steps");
 }
 }
-int main(){try {internal::ScopedUiClock clock(clockNow);header();drag();navigation();keyboardAcceptance();preview();
-    std::cout<<"PASS workspace interactions: 5 groups\n";return 0;
+int main(){try {internal::ScopedUiClock clock(clockNow);header();drag();dividerStyles();navigation();keyboardAcceptance();preview();
+    std::cout<<"PASS workspace interactions: 6 groups\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}
