@@ -57,8 +57,8 @@ void MediaPreview::complete() {
     if(!s.code.empty()&&s.failed){auto callback=s.failed;callback(s.source,s.code,s.message);}
 }
 void MediaPreview::setFit(const std::string& value) {
-    if(value!="contain"&&value!="cover"&&value!="stretch")throw std::invalid_argument("Invalid media fit");
-    state_->image->setContentMode(value=="contain"?ImageContentMode::Contain:value=="cover"?ImageContentMode::Cover:ImageContentMode::Stretch);
+    if(value!="contain"&&value!="cover"&&value!="stretch"&&value!="auto")throw std::invalid_argument("Invalid media fit");
+    state_->image->setContentMode(value=="contain"?ImageContentMode::Contain:value=="cover"?ImageContentMode::Cover:value=="auto"?ImageContentMode::ActualSize:ImageContentMode::Stretch);
 }
 void MediaPreview::setPosition(const std::string& value) {
     static const std::map<std::string,std::pair<ImageContentAlignment,ImageContentAlignment>> positions={
@@ -73,13 +73,13 @@ void MediaPreview::setPosition(const std::string& value) {
 void MediaPreview::setOpacity(float value){if(!std::isfinite(value)||value<0||value>1)throw std::invalid_argument("Invalid media opacity");state_->opacity=value;invalidate();}
 void MediaPreview::setOnLoadFailed(std::function<void(std::string,std::string,std::string)> callback){state_->failed=std::move(callback);}
 void MediaPreview::setSlot(const std::string& name,std::shared_ptr<Widget> child) {
-    if(name!="empty"&&name!="error")throw std::invalid_argument("Invalid media preview slot");
+    if(name!="empty"&&name!="error"&&name!="loading")throw std::invalid_argument("Invalid media preview slot");
     state_->slots[name]=std::move(child);std::vector<std::shared_ptr<Widget>> children{state_->image};
     for(auto& pair:state_->slots)children.push_back(pair.second);reconcileChildren(std::move(children));layoutChildren();
 }
 void MediaPreview::layoutChildren() {
     auto& s=*state_;s.image->setFrame(frame());
-    for(auto& [key,widget]:s.slots){widget->setLayoutVisible(key=="empty"?s.source.empty():!s.code.empty());widget->setFrame(frame());}
+    for(auto& [key,widget]:s.slots){widget->setLayoutVisible(key=="empty"?s.source.empty():key=="loading"?s.loading:!s.code.empty());widget->setFrame(frame());}
 }
 bool MediaPreview::tickAnimations(double now){complete();bool active=View::tickAnimations(now)||(state_->loading&&!state_->dispatcher);if(active)requestAnimationFrame();return active;}
 void MediaPreview::paint(Canvas& c) {

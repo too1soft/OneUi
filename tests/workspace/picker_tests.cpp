@@ -5,6 +5,7 @@
 #include "oneui/controls/media_picker.h"
 #include "../../src/views/data_menu.h"
 #include "oneui/controls/popup.h"
+#include "oneui/layout/panel.h"
 #include "../../src/core/picker_styles.h"
 #include "../../src/internal/ui_clock.h"
 #include "../support/recording_canvas.h"
@@ -64,12 +65,17 @@ void mediaGeneration() {
     auto preview=std::make_shared<MediaPreview>();auto image=preview->image();
     std::vector<MediaPreview::Completion> completions;std::vector<std::shared_ptr<std::atomic<bool>>> cancels;
     preview->setLoader([&](auto,auto cancel,auto done){cancels.push_back(cancel);completions.push_back(done);});
+    auto loading=std::make_shared<Panel>();preview->setSlot("loading",loading);
+    preview->setFit("auto");check(image->contentMode()==ImageContentMode::ActualSize,"original-size media fit");
     int errors=0;preview->setOnLoadFailed([&](auto,auto,auto){++errors;});
     preview->setSource("a.png");preview->setSource("b.png");check(*cancels[0]&&!(*cancels[1]),"source replacement cancels generation");
+    check(loading->visible(),"loading slot shown during decode");
+    test_support::RecordingCanvas loadingCanvas;preview->paint(loadingCanvas);
     auto good=std::make_shared<MediaPixels>();good->width=good->height=1;good->rgba={255,0,0,255};
     completions[0](good);preview->tickAnimations(0);check(!image->hasImage()&&preview->loading(),"late completion cannot replace new source");
     std::thread worker([&]{completions[1](good);});worker.join();check(!image->hasImage(),"worker completion does not touch UI");
     preview->tickAnimations(1);check(image->hasImage()&&!preview->loading()&&preview->image()==image,"UI drain keeps image object");
+    check(!loading->visible(),"loading slot hidden after decode");
     preview->setFit("cover");preview->setPosition("bottom-right");preview->setOpacity(.5f);preview->setFrame({0,0,100,100});
     test_support::RecordingCanvas canvas;preview->paint(canvas);check(!canvas.opacityLayers.empty()&&canvas.opacityLayers.back().opacity==.5f,"opacity composes pixels");
     preview->setSource("broken");auto bad=std::make_shared<MediaPixels>();bad->code="format";bad->message="bad image";completions[2](bad);preview->tickAnimations(2);

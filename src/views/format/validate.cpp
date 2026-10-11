@@ -77,7 +77,7 @@ void validateStatic(const std::string &component, const std::string &key, const 
         {"item-key", {"id"}}};
     if(key=="resize-policy")require(text=="settled"||text=="immediate","STATIC_ENUM: resize-policy");
     if(key=="slot-name") {
-        if(component=="MediaSlot")require(text=="empty"||text=="preview"||text=="error","MEDIA_SLOT: unknown slot");
+        if(component=="MediaSlot")require(text=="empty"||text=="preview"||text=="error"||text=="loading","MEDIA_SLOT: unknown slot");
         else require(text=="identity"||text=="actions"||text=="menu","HEADER_SLOT: unknown slot");
     }
     if (enums.count(key))

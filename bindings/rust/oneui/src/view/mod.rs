@@ -80,6 +80,11 @@ pub struct ViewMount {
     _ui: PhantomData<Rc<()>>,
 }
 impl ViewMount {
+    /// Empty attachment boundary for a routed declaration. Visible controls live in the view.
+    pub fn destination() -> Result<crate::Panel, crate::Error> {
+        crate::Panel::new()
+    }
+
     /// Mount in an empty window, or an empty Panel already in that window.
     /// The native control invalidates on window close; no Rust borrow is retained.
     pub fn new(window: &Window, destination: Option<&Widget>) -> VmResult<Self> {

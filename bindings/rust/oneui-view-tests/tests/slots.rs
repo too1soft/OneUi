@@ -4,7 +4,9 @@ use std::{cell::RefCell, rc::Rc};
 
 pub fn run() {
     let w = crate::window();
-    let mount = ViewMount::new(&w, None).unwrap();
+    let destination = ViewMount::destination().unwrap();
+    w.set_content(destination.as_widget());
+    let mount = ViewMount::new(&w, Some(destination.as_widget())).unwrap();
     let vm = Rc::new(RefCell::new(Vm::new()));
     let mut view = View::instantiate(&mount, page::spec(), vm.clone()).unwrap();
     let single = include_bytes!(concat!(env!("OUT_DIR"), "/slot-Single.oneview"));

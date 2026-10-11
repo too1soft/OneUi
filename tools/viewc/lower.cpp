@@ -221,7 +221,7 @@ uint32_t ViewCompiler::lower(Source &s, Node n, const std::vector<Scope> &scopes
         std::set<std::string> names;
         for(auto& child:n.children) {
             auto slot=child.attrs.find("slot");
-            if(slot==child.attrs.end()||!(slot->second.value=="empty"||slot->second.value=="error"||(c.name=="MediaPicker"&&slot->second.value=="preview"))||!names.insert(slot->second.value).second)at.fail("MEDIA_SLOT: unique empty/preview/error slots required");
+            if(slot==child.attrs.end()||!(slot->second.value=="empty"||slot->second.value=="error"||(c.name=="MediaPicker"&&slot->second.value=="preview")||(c.name=="MediaPreview"&&slot->second.value=="loading"))||!names.insert(slot->second.value).second)at.fail("MEDIA_SLOT: unique slots required (empty/error, picker preview, preview loading)");
             auto attribute=slot->second;child.attrs.erase(slot);
             Node wrapper=child;wrapper.tag="MediaSlot";wrapper.text.clear();wrapper.attrs.clear();wrapper.attrs["slot-name"]=attribute;wrapper.children={std::move(child)};child=std::move(wrapper);
         }

@@ -5,7 +5,7 @@ namespace oneui::views {
 bool Runtime::pickerScalar(Instance& instance,const std::string& name,const Value& value) {
     auto& e=instance.element;const auto& type=e.component;
     if(type=="MediaSlot"&&name=="slot-name") {
-        check(name=="slot-name"&&(value.text=="empty"||value.text=="error"||value.text=="preview"),ONEUI_VIEW_TYPE,"Invalid media slot");
+        check(name=="slot-name"&&(value.text=="empty"||value.text=="error"||value.text=="preview"||value.text=="loading"),ONEUI_VIEW_TYPE,"Invalid media slot");
         e.as<MediaSlotView>()->name=value.text;return true;
     }
     if(type!="FontPicker"&&type!="MediaPicker"&&type!="MediaPreview"&&type!="Slider")return false;
@@ -89,7 +89,7 @@ void Runtime::preparePicker(const std::shared_ptr<Instance>& instance) {
     } else if(type=="MediaPicker")apply=[w=instance->element.as<MediaPicker>(),c]{w->setChooseLabel(c->chooseLabel);w->setClearLabel(c->clearLabel);w->setCancelLabel(c->cancelLabel);w->setConfig(c->media);};
     else if(type=="ThemeScope")apply=[w=instance->element.as<ThemeScope>(),c]{w->setTokens(c->colors);};
     else if(type=="MediaPreview") {
-        check(c->fit=="contain"||c->fit=="cover"||c->fit=="stretch",ONEUI_VIEW_TYPE,"Invalid media fit");
+        check(c->fit=="contain"||c->fit=="cover"||c->fit=="stretch"||c->fit=="auto",ONEUI_VIEW_TYPE,"Invalid media fit");
         check(std::set<std::string>{"top-left","top","top-right","left","center","right","bottom-left","bottom","bottom-right"}.count(c->position),ONEUI_VIEW_TYPE,"Invalid media position");
         check(std::isfinite(c->opacity)&&c->opacity>=0&&c->opacity<=1,ONEUI_VIEW_TYPE,"Invalid media opacity");
         apply=[w=instance->element.as<MediaPreview>(),c]{w->setFit(c->fit);w->setPosition(c->position);w->setOpacity(float(c->opacity));w->setSource(c->source);};
