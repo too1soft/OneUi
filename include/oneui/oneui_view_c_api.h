@@ -86,6 +86,8 @@ typedef struct OneUiViewListInfo {
 #define ONEUI_LIST_REMOVE 2u
 #define ONEUI_LIST_MOVE 3u
 #define ONEUI_LIST_UPDATE 4u
+/* Exact permutation of all existing keys. Preserves item leases and field caches. */
+#define ONEUI_LIST_REORDER 5u
 typedef struct OneUiViewListChange {
     uint32_t struct_size;
     uint32_t kind;
@@ -264,6 +266,9 @@ ONEUI_API OneUiViewResult oneui_view_element_metrics(OneUiView *view,
  * UI thread only; does not flush, lay out or expose a widget handle. */
 ONEUI_API OneUiViewResult oneui_view_element_visible(OneUiView *view,
     OneUiUtf8String name, int *out_visible);
+/** Read native keyboard focus for one uniquely named element; UI thread only. */
+ONEUI_API OneUiViewResult oneui_view_element_focused(OneUiView *view,
+    OneUiUtf8String name, int *out_focused);
 /** Focus a uniquely named element of the mount's active view on its UI thread.
  * No widget handle escapes. Rejects ambiguous/missing names and closed mounts.
  * Call outside VM callbacks; out_focused reports native focus eligibility. */

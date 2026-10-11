@@ -7,6 +7,7 @@ using namespace viewtest;
 #include "checkbox_contract.inc"
 #include "tree_contract.inc"
 #include "rich_table_contract.inc"
+#include "rich_table_reorder.inc"
 int main(int argc, char **argv) {
     if (argc != 2)
         return 2;
@@ -203,6 +204,7 @@ int main(int argc, char **argv) {
         slotContracts(argv[1]);
         treeContract(argv[1]);
         richTableContract(argv[1]);
+        richTableReorderContract(argv[1]);
         std::cout << "14 runtime scenarios passed\n";
         return 0;
     } catch (const std::exception &e) {

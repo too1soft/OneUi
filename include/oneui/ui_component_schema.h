@@ -81,7 +81,7 @@ enum class ValueType { None, Text, Boolean, Integer, Number, Strings, Columns, R
     X(List, "list", "items selectedIndex", Integer) \
     X(VirtualList, "virtual-list", "items selectedIndex row-height scroll-offset", Integer) \
     X(TreeView, "tree-view", "items selectedKey", Text) \
-    X(Table, "table", "items columns multiple row-height header-height selection-column selection-column-width scroll-offset sort-column sort-descending column-dividers", None) \
+    X(Table, "table", "items columns multiple row-height header-height selection-column selection-column-width scroll-offset sort-column sort-descending column-dividers tooltip", None) \
     X(DataMenu, "menu", "title subtitle items", None) \
     X(Popup, "popup", "open anchor-x anchor-y anchor-width anchor-height content-width content-height placement", None)
 

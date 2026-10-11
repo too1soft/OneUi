@@ -6,8 +6,13 @@ void Runtime::applyRichTableRows(Instance& instance,ListState& state) {
     const bool reset=!cache || cache->source!=&state || cache->serial!=state.serial;
     if(!cache)cache=std::make_shared<Cache>();
     std::set<std::string> dirty;
-    if(reset)dirty.insert(state.keys.begin(),state.keys.end());
-    else for(auto scope:instance.recordDirty) {
+    const bool reread=!cache->source || cache->source!=&state ||
+        (reset && (state.lastReset || cache->serial+1!=state.serial));
+    if(reread)dirty.insert(state.keys.begin(),state.keys.end());
+    else if(reset) for(const auto& delta:state.applied)
+        if(delta.kind==ONEUI_LIST_INSERT || delta.kind==ONEUI_LIST_UPDATE)
+            dirty.insert(delta.keys.begin(),delta.keys.end());
+    for(auto scope:instance.recordDirty) {
         auto found=cache->owners.find(scope);
         if(found!=cache->owners.end())dirty.insert(found->second);
     }

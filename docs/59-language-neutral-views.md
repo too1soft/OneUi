@@ -296,6 +296,7 @@ typedef struct OneUiViewListInfo {
 #define ONEUI_LIST_INSERT 1u
 #define ONEUI_LIST_REMOVE 2u
 #define ONEUI_LIST_MOVE   3u
+#define ONEUI_LIST_REORDER 5u
 #define ONEUI_LIST_UPDATE 4u
 typedef struct OneUiViewListChange {
     uint32_t struct_size;
@@ -504,6 +505,7 @@ ViewControl 状态为 Building → Active → Closing → Closed，generation �
 | REMOVE | index/count 为移除前范围；keys 必须等于该旧范围；to_index=0 | 从缓存按旧 key 拆除，**不回调已不存在 index 的 child** |
 | MOVE | index/count 为旧区间，to_index 是移走区间之后的目标边界；keys 为源区间；properties 为空 | 例如 `[A,B,C,D]` 的 index=1,count=2,to=2 → `[A,D,B,C]`；to=1 为 no-op，不换 VM/控件 |
 | UPDATE | index/count 为当前范围；keys 对应该范围；properties 为 item 字段 ID（空表示全部），to_index=0 | key 与 item 身份不变，只标这些 child 属性脏，不重建条目 |
+| REORDER (5) | index/to_index=0；count 与 keys 为完整非空键排列；properties 为空 | 保留原 item 租约及字段缓存；只改变顺序。重复、缺失、多余或未知 key 原子失败。字段变化仍须单独 notify/UPDATE；增删或替换 VM 使用原有通知。Rust `StableList::reorder` 在修改前验证排列。 |
 
 所有增量的 key_count=count，properties 仅 UPDATE 可非空。单条 index/count 上界在 flush 按版本序列校验，直接可判的参数错误在 notify 时拒绝。root notify(list_id) 相当于未给精确 delta 的 RESET；集合整体换新必须 RESET，不能偷偷发送 INSERT。业务不能遗漏通知；调试模式可额外全量核对，release 不逐帧扫列表。
 
@@ -933,8 +935,8 @@ Events are `activate(key)`, `edit(key)`, `delete()`, `selection()`, `current(key
 columns are i64, and coordinates are f64 in native window coordinates.
 Selection changes update only changed item leases before the selection command.
 Closed views suppress retained-control callbacks. Row updates retain keyed
-selection and the top visible business row; structural resets currently rebuild
-the native row data and do not promise keyboard-range-anchor retention.
+selection and the top visible business row; structural resets rebuild the native row data while remapping the active row,
+selection and keyboard range anchor by stable key.
 
 ### Table 列宽容器查询
 
@@ -1029,3 +1031,12 @@ Started=0、Updated=1、Dropped=2、Cancelled=3。属性更新不取消正在进
 支持 `content-background-opacity`。两者沿用原生 CSS 的填充透明度语义，
 不会降低文字、图标、焦点框或子控件的透明度。没有背景的组件（例如 Icon）
 仍拒绝该属性。该 CSS 能力不改变 COMP 契约或 IR 版本。
+
+### SFTP Table read-only queries
+
+`oneui_view_element_metrics` / Rust `View::element_metrics` now reports `Table`
+scroll offset and maximum, alongside TemplateTable and ScrollView. The additive
+`oneui_view_element_focused` / `View::element_focused` reads native keyboard focus
+for a unique accessible name without exposing a widget or invoking the VM. It
+shares the existing missing/ambiguous name, UI thread and closed-view checks.
+`Table.tooltip` uses the existing native tooltip presentation.

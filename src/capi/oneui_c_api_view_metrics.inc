@@ -1,5 +1,6 @@
 // Read-only geometry for anchored actions and restoring scroll positions.
 #include "oneui/controls/template_table.h"
+#include "oneui/controls/table.h"
 namespace {
 std::shared_ptr<oneui::Widget> namedViewElement(const std::shared_ptr<Runtime>& value, OneUiUtf8String name) {
         const auto key = text(name);
@@ -40,6 +41,10 @@ OneUiViewResult oneui_view_element_metrics(OneUiView *view, OneUiUtf8String name
             result.scroll_y = table->scrollOffset();
             result.scroll_x = table->horizontalScrollOffset();
             result.max_scroll_y = table->maxScrollOffset();
+        } else if (auto table = std::dynamic_pointer_cast<oneui::Table>(found)) {
+            result.scrollable = 1;
+            result.scroll_y = table->scrollOffset();
+            result.max_scroll_y = table->maxScrollOffset();
         } else if (auto scroll = std::dynamic_pointer_cast<oneui::ScrollView>(found)) {
             result.scrollable = 1;
             result.scroll_y = scroll->scrollOffset();
@@ -47,6 +52,16 @@ OneUiViewResult oneui_view_element_metrics(OneUiView *view, OneUiUtf8String name
             result.max_scroll_y = scroll->maxScrollOffset();
         }
         *out = result;
+    });
+}
+
+OneUiViewResult oneui_view_element_focused(OneUiView *view, OneUiUtf8String name, int *out_focused) {
+    if (out_focused) *out_focused = 0;
+    return call(__func__, [&] {
+        check(out_focused, ONEUI_VIEW_INVALID_ARGUMENT, "Focus output required");
+        const auto value = runtime(view);
+        value->alive();
+        *out_focused = namedViewElement(value, name)->focused() ? 1 : 0;
     });
 }
 

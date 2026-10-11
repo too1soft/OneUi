@@ -8,6 +8,7 @@ pub struct OneUiViewElementMetrics {
     pub scroll_x: f32, pub scroll_y: f32, pub max_scroll_y: f32,
 }
 extern "C" {
+    pub fn oneui_view_element_focused(view: *mut OneUiView, name: OneUiUtf8String, out: *mut i32) -> i32;
     pub fn oneui_view_element_metrics(view: *mut OneUiView, name: OneUiUtf8String,
         out: *mut OneUiViewElementMetrics) -> i32;
     pub fn oneui_view_element_visible(view: *mut OneUiView, name: OneUiUtf8String,
@@ -25,6 +26,7 @@ pub const ONEUI_LIST_INSERT: u32 = 1;
 pub const ONEUI_LIST_REMOVE: u32 = 2;
 pub const ONEUI_LIST_MOVE: u32 = 3;
 pub const ONEUI_LIST_UPDATE: u32 = 4;
+pub const ONEUI_LIST_REORDER: u32 = 5;
 
 #[repr(C)]
 pub struct OneUiView {

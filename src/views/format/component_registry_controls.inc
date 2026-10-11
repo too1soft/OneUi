@@ -335,3 +335,5 @@ P("Table", 20, "sort-descending", 1, 3, "")
 P("Table", 21, "column-dividers", 1, 3, "")
 
 E("VirtualList", 1, "activate", 0)
+
+P("Table", 22, "tooltip", 4, 3, "")

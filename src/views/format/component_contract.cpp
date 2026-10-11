@@ -75,6 +75,7 @@ const std::map<std::string, ComponentContract> &registry()
         }
         ++r.at("Text").version; // Explicit line boxes, alignment and tooltip.
         ++r.at("Button").version; // Tooltip and content alignment.
+        ++r.at("Table").version; // Native table tooltip.
         // Detect authoring metadata drift before publishing a contract hash.
         // Intentional changes require a reviewed registry/version update.
         using namespace oneui::ui::schema;

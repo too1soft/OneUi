@@ -1,6 +1,7 @@
 #include "capi/oneui_c_api_view_internal.h"
 #include "fixture.h"
 #include "oneui/layout/overlay_host.h"
+#include "oneui/controls/table.h"
 #include <thread>
 using namespace viewtest;
 namespace {
@@ -84,6 +85,13 @@ int main(int argc, char **argv) {
             expect(oneui_view_element_metrics(c.view, name, &metrics) == 0 &&
                 metrics.x == 12 && metrics.y == 24 && metrics.width == 160 &&
                 metrics.height == 28 && !metrics.scrollable, "read-only element metrics");
+            int focused = -1;
+            expect(oneui_view_element_focused(c.view, name, &focused) == 0 && !focused,
+                "unfocused named element");
+            expect(oneui_view_element_focused(c.view, str("missing"), &focused) == ONEUI_VIEW_NOT_FOUND && !focused,
+                "focus missing name resets output");
+            expect(oneui_view_element_focused(c.view, name, nullptr) == ONEUI_VIEW_INVALID_ARGUMENT,
+                "focus requires output");
             int visible = -1;
             expect(oneui_view_element_visible(c.view, name, &visible) == 0 && visible,
                 "named element visible");
@@ -114,7 +122,7 @@ int main(int argc, char **argv) {
             expect(foreign == ONEUI_VIEW_WRONG_THREAD, "metrics UI thread ownership");
             auto other = c.view->value->root->children[1]->element.widget;
             other->setAccessibleName(L"focus-input");
-            int focused = 0;
+            focused = 0;
             expect(oneui_view_mount_focus_element(c.mount, str("focus-input"), 1, &focused) == 0 && focused &&
                 static_cast<Window*>(c.window.window.get())->focused == other.get(), "focus named native input");
             other->setDisabled(true);
@@ -143,7 +151,23 @@ int main(int argc, char **argv) {
             expect(oneui_view_element_metrics(c.view,str("overlay-badge"),&metrics)==0 &&
                 oneui_view_mount_focus_element(c.mount,str("overlay-base-input"),1,&focused)==0 && focused,
                 "named lookup includes native overlay base and foreground");
+            other->onFocusChanged(true);
+            expect(oneui_view_element_focused(c.view,str("overlay-base-input"),&focused)==0 && focused,
+                "focus query reads native state");
+            auto table=std::make_shared<oneui::Table>();
+            table->setAccessibleName(L"metrics-table");
+            table->setFrame({0,0,400,200}); table->setRowHeight(30);
+            table->setRows(std::vector<std::vector<std::wstring>>(100,{L"row"}));
+            table->setScrollOffset(180);
+            c.view->value->root->element.widget=table;
+            expect(oneui_view_element_metrics(c.view,str("metrics-table"),&metrics)==0 &&
+                metrics.scrollable && metrics.scroll_y==180 && metrics.max_scroll_y>2500,
+                "rich Table exposes actual scroll metrics");
+            int focusForeign=0;
+            std::thread focusReadThread([&] { focusForeign=oneui_view_element_focused(c.view,str("metrics-table"),&focused); });
+            focusReadThread.join(); expect(focusForeign==ONEUI_VIEW_WRONG_THREAD,"focus query owns UI thread");
             oneui_view_disconnect(c.view);
+            expect(oneui_view_element_focused(c.view, name, &focused) == ONEUI_VIEW_CLOSED,"closed focus query rejected");
             expect(oneui_view_element_visible(c.view, name, &visible) == ONEUI_VIEW_CLOSED,
                 "visibility closed view rejected");
             expect(oneui_view_mount_focus_element(c.mount, name, 1, &focused) == ONEUI_VIEW_CLOSED,

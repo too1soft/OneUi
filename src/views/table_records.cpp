@@ -19,7 +19,10 @@ void Runtime::applyTableRows(Instance& instance,ListState& state) {
     using Cache=Instance::TableCache;
     auto cache=instance.tableCache;
     bool reset=!cache || cache->source!=&state ||
-        (cache->serial!=state.serial && (state.lastReset || cache->serial+1!=state.serial));
+        (cache->serial!=state.serial && (state.lastReset || cache->serial+1!=state.serial ||
+         std::any_of(state.applied.begin(),state.applied.end(),[](const Delta& d) {
+             return d.kind==ONEUI_LIST_REORDER;
+         })));
     if (!cache) cache=std::make_shared<Cache>();
     const bool changed=reset || cache->serial!=state.serial;
     std::set<std::string> dirty;
