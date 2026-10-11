@@ -51,7 +51,31 @@ void Runtime::applyList(Instance &instance, const std::string &property, ListSta
             spans.push_back(span); previousEnd = end;
         }
         label->setRichText(label->text(), std::move(spans));
-    } else if (e.component == "List" || e.component == "VirtualList") {
+    } else if (e.component == "VirtualList") {
+        std::vector<VirtualListItem> values;
+        for (const auto &item : state.items) {
+            VirtualListItem row{wide(field(item, "title").text), wide(field(item, "detail").text)};
+            const auto &properties = image.schema.model(item->table.model_id).properties;
+            auto optionalText = [&](const char *name) {
+                auto found = properties.find(name);
+                if (found == properties.end()) return std::wstring{};
+                check(found->second.tag == 4, ONEUI_VIEW_TYPE, "VirtualList rich text type");
+                return wide(field(item, name).text);
+            };
+            row.badge = optionalText("badge");
+            row.trailing = optionalText("trailing");
+            auto color = properties.find("indicator_rgba");
+            if (color != properties.end()) {
+                check(color->second.tag == 2, ONEUI_VIEW_TYPE, "VirtualList indicator type");
+                const auto rgba = field(item, "indicator_rgba").integer;
+                check(rgba >= 0 && uint64_t(rgba) <= 0xffffffffu, ONEUI_VIEW_TYPE, "VirtualList indicator range");
+                row.indicatorColor = {uint8_t(rgba >> 24), uint8_t(rgba >> 16), uint8_t(rgba >> 8), uint8_t(rgba)};
+                row.indicatorVisible = (rgba & 255) != 0;
+            }
+            values.push_back(std::move(row));
+        }
+        e.as<VirtualList>()->setRichItems(std::move(values));
+    } else if (e.component == "List") {
         std::vector<ListItem> values;
         for (const auto &item : state.items) values.push_back({wide(field(item, "title").text), wide(field(item, "detail").text)});
         factory.set(e, property, values);

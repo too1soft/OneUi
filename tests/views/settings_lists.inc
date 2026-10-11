@@ -17,6 +17,8 @@ void settingsLists(const char* runtimeFile) {
     span.values[id(c.image, "Span", "monospace")].integer = 1;
     const auto spans = id(c.image, "Root", "spans");
     c.vm.lists[spans] = {&span};
+    c.a.text(id(c.image, "Item", "badge"), "Host");
+    c.a.values[id(c.image, "Item", "indicator_rgba")].integer = 0x22d3a8ff;
     c.start();
     auto caption = c.runtime->root->children[11]->element.as<oneui::Label>();
     expect(caption->lineHeight() == 20 && caption->textAlign() == oneui::TextAlign::Center &&
@@ -94,6 +96,16 @@ void settingsLists(const char* runtimeFile) {
            "List receives title/detail records");
     expect(virtualList->rowHeight() == 42 && virtualList->items()[1].title == L"Beta",
            "VirtualList receives native row height and records");
+    expect(virtualList->items()[0].badge == L"Host" && virtualList->items()[0].indicatorVisible &&
+           virtualList->items()[0].indicatorColor.g == 0xd3 && !virtualList->items()[1].indicatorVisible,
+           "VirtualList projects optional rich records and transparent indicators");
+    virtualList->setSelectedIndex(0);
+    oneui::KeyEvent enter;
+    enter.key = oneui::Key::Enter;
+    const auto beforeActivate = c.vm.invokes;
+    virtualList->onKeyDown(enter);
+    expect(c.vm.invokes == beforeActivate + 1, "VirtualList activation invokes bound command exactly once");
+    c.vm.invokes = beforeActivate;
     virtualList->setFrame({0, 0, 300, 100});
     oneui::KeyEvent down;
     down.key = oneui::Key::Down;

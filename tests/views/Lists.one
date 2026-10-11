@@ -1,7 +1,7 @@
 <template view-model="Root">
   <Column>
     <List :items="rows" v-model="selected"/>
-    <VirtualList :items="rows" v-model="selected" row-height="42"/>
+    <VirtualList :items="rows" v-model="selected" row-height="42" @activate="click"/>
     <Row class="row-flow" wrap="false">
       <Text v-for="item in rows" :key="item.id" :text="item.title"/>
     </Row>

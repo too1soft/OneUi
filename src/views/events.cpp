@@ -157,6 +157,8 @@ void Runtime::wire(const std::shared_ptr<Instance> &instance) {
                 v.text = narrow(key);
                 fire({v});
             };
+        else if (name == "activate" && element.component == "VirtualList")
+            element.as<VirtualList>()->setOnActivated([fire](int) { fire({}); });
         else if (name == "activate")
             element.as<Table>()->setOnActivated([fire](int) { fire({}); });
         else if (name == "delete")

@@ -294,3 +294,5 @@ P("Checkbox", 9, "name", 4, 3, "")
 P("Checkbox", 10, "shrink", 3, 1, "")
 P("Checkbox", 11, "text", 4, 3, "")
 P("Checkbox", 12, "visible", 1, 3, "")
+
+E("VirtualList", 1, "activate", 0)

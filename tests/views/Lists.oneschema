@@ -19,5 +19,7 @@ model Item key id {
     r text: utf8
     r title: utf8
     r detail: utf8
+    r badge: utf8
+    r indicator_rgba: i64
 }
 model Span key id {r id:utf8 r start:i64 r end:i64 r rgba:i64 r monospace:bool}
