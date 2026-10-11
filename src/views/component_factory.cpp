@@ -1,6 +1,7 @@
 #include "oneui/ui_declarative.h"
 #include "data_menu.h"
 #include "oneui/controls/popup.h"
+#include "oneui/layout/panel.h"
 namespace oneui::ui {
 Element Mount::make(std::string type, std::vector<Element> children, std::string classes) {
     if (type == "NativeHost")
@@ -264,6 +265,8 @@ Element Mount::make(std::string type, std::vector<Element> children, std::string
                type == "PanelHeader" || type == "PanelFooter" || type == "StatusBar" ||
                type == "WorkspaceBody")
         node = b.flow(nodes);
+    else if (type == "MountPoint")
+        node = b.native(std::make_shared<Panel>());
     else if (syntax::components().count(type))
         node = b.column(nodes);
     else

@@ -320,3 +320,16 @@ P("Toolbar", 8, "name", 4, 3, "")
 P("Toolbar", 9, "shrink", 3, 1, "")
 P("Toolbar", 10, "visible", 1, 3, "")
 
+// Empty destination for independently owned page Views.
+C("MountPoint", "leaf", 0)
+P("MountPoint", 1, "basis", 3, 1, "")
+P("MountPoint", 2, "class", 4, 3, "")
+P("MountPoint", 3, "grow", 3, 1, "")
+P("MountPoint", 4, "name", 4, 3, "")
+P("MountPoint", 5, "shrink", 3, 1, "")
+P("MountPoint", 6, "visible", 1, 3, "")
+P("MountPoint", 7, "min", 3, 1, "")
+P("MountPoint", 8, "max", 3, 1, "")
+P("MountPoint", 9, "disabled", 1, 3, "")
+P("MountPoint", 10, "description", 4, 3, "")
+

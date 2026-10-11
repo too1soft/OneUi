@@ -22,6 +22,21 @@ std::shared_ptr<oneui::Widget> namedViewElement(const std::shared_ptr<Runtime>& 
         return found;
 }
 }
+OneUiViewResult oneui_view_mount_point(OneUiView *view, OneUiUtf8String name, OneUiWidget **out) {
+    if (out) *out = nullptr;
+    return call(__func__, [&] {
+        check(out, ONEUI_VIEW_INVALID_ARGUMENT, "Mount point output required");
+        const auto value = runtime(view);
+        value->alive();
+        check(callbackPhase == Phase::Idle, ONEUI_VIEW_REENTRANT, "Mount lookup during callback");
+        auto found = namedViewElement(value, name);
+        check(bool(std::dynamic_pointer_cast<oneui::Panel>(found)), ONEUI_VIEW_TYPE,
+              "Element is not a MountPoint");
+        auto handle = std::make_unique<OneUiWidget>();
+        handle->widget = std::move(found);
+        *out = handle.release();
+    });
+}
 OneUiViewResult oneui_view_element_metrics(OneUiView *view, OneUiUtf8String name,
                                           OneUiViewElementMetrics *out) {
     return call(__func__, [&] {

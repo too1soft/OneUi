@@ -81,7 +81,8 @@ enum class ValueType { None, Text, Boolean, Integer, Number, Strings, Columns, R
     X(List, "list", "items selectedIndex", Integer) \
     X(VirtualList, "virtual-list", "items selectedIndex row-height scroll-offset", Integer) \
     X(DataMenu, "menu", "title subtitle items", None) \
-    X(Popup, "popup", "open anchor-x anchor-y anchor-width anchor-height content-width content-height placement", None)
+    X(Popup, "popup", "open anchor-x anchor-y anchor-width anchor-height content-width content-height placement", None) \
+    X(MountPoint, "panel", "", None)
 
 enum class Kind {
 #define ONEUI_KIND(name, tag, props, model) name,

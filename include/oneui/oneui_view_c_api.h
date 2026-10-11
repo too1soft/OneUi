@@ -259,6 +259,11 @@ typedef struct OneUiViewElementMetrics {
 } OneUiViewElementMetrics;
 ONEUI_API OneUiViewResult oneui_view_element_metrics(OneUiView *view,
     OneUiUtf8String name, OneUiViewElementMetrics *out);
+/** Retain a uniquely named MountPoint as a Panel handle for page composition.
+ * The caller owns the handle (oneui_widget_destroy). Lookup is UI-thread only,
+ * outside callbacks. Non-MountPoint elements return TYPE; no raw child escapes. */
+ONEUI_API OneUiViewResult oneui_view_mount_point(OneUiView *view,
+    OneUiUtf8String name, OneUiWidget **out);
 /** Focus a uniquely named element of the mount's active view on its UI thread.
  * No widget handle escapes. Rejects ambiguous/missing names and closed mounts.
  * Call outside VM callbacks; out_focused reports native focus eligibility. */

@@ -190,3 +190,7 @@ extern "C" {
     pub fn oneui_view_mount_focus_element(mount: *mut OneUiViewMount, name: OneUiUtf8String,
         focus_visible: i32, out_focused: *mut i32) -> i32;
 }
+extern "C" {
+    pub fn oneui_view_mount_point(view: *mut OneUiView, name: OneUiUtf8String,
+        out: *mut *mut OneUiWidget) -> OneUiViewResult;
+}

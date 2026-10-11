@@ -81,6 +81,30 @@ int main(int argc, char **argv) {
             metrics.struct_size = sizeof(metrics);
             auto str = [](const char *text) { return OneUiUtf8String{text, std::char_traits<char>::length(text)}; };
             auto name = str("metrics-unique");
+            expect(oneui_view_mount_set_styles(c.mount,
+                       str("MountPoint { background: #0d0f1359; border-width: 0px; }"), 0) == 0,
+                   "MountPoint consumes its native panel surface styles");
+            OneUiWidget *slot = nullptr;
+            expect(oneui_view_mount_point(c.view, name, &slot) == ONEUI_VIEW_TYPE && !slot,
+                   "ordinary controls cannot escape as mount points");
+            oneui::ui::Mount factory;
+            auto point = factory.make("MountPoint");
+            expect(bool(point.as<oneui::Panel>()), "MountPoint is a page destination");
+            point.widget->setAccessibleName(L"page-slot");
+            c.view->value->root->element.as<oneui::View>()->add(point.widget);
+            expect(oneui_view_mount_point(c.view, str("page-slot"), &slot) == 0 && slot,
+                   "retain named page mount point");
+            expect(slot->widget == point.widget, "mount lookup retains declared destination");
+            OneUiViewMount *pageMount = nullptr;
+            expect(oneui_view_mount_create(&c.window, slot, &pageMount) == 0,
+                   "independent View can mount in declared destination");
+            oneui_view_mount_destroy(pageMount);
+            oneui_widget_destroy(slot);
+            slot = nullptr;
+            expect(oneui_view_mount_point(c.view, str("missing"), &slot) == ONEUI_VIEW_NOT_FOUND,
+                   "missing mount point rejected");
+            expect(oneui_view_mount_point(c.view, str("page-slot"), nullptr) == ONEUI_VIEW_INVALID_ARGUMENT,
+                   "mount point requires output");
             expect(oneui_view_element_metrics(c.view, name, &metrics) == 0 &&
                 metrics.x == 12 && metrics.y == 24 && metrics.width == 160 &&
                 metrics.height == 28 && !metrics.scrollable, "read-only element metrics");
