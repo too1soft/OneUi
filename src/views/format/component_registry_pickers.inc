@@ -135,3 +135,6 @@ P("InteractiveSurface", 9, "shrink", 3, 1, "")
 P("InteractiveSurface", 10, "visible", 1, 3, "")
 
 E("InteractiveSurface", 1, "click", 0)
+r.at("InteractiveSurface").events.push_back({2,"pointer",{{"x",3},{"y",3},{"control",1},{"shift",1},{"click_count",2}}});
+r.at("InteractiveSurface").events.push_back({3,"contextMenu",{{"x",3},{"y",3}}});
+++r.at("InteractiveSurface").version;

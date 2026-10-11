@@ -210,6 +210,7 @@ P("Scroll", 11, "content-height", 3, 3, "")
 P("Scroll", 12, "wheel-step", 3, 3, "")
 P("Scroll", 13, "chrome-visible", 1, 3, "")
 P("Scroll", 14, "scroll-offset", 3, 3, "")
+P("Scroll", 15, "content-width", 3, 3, "")
 
 C("Section", "many", 0)
 P("Section", 1, "basis", 3, 1, "")

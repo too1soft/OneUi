@@ -11,6 +11,28 @@
     <Column :class="title" :basis="height" shrink="0"/>
     <InteractiveSurface @click="click"><Text text="Choose"/></InteractiveSurface>
     <Text :spans="spans" :text="title"/>
+    <Dialog :title="title" subtitle="Details" icon="upload" :close-visible="visible" @close="click">
+      <Column><Text text="Body"/></Column>
+      <Row><Button text="Accept" @click="click"/></Row>
+    </Dialog>
+    <TextArea v-model="title" line-height="23"/>
+    <Checkbox v-model="checked" text="Selected"/>
+    <Input v-model="title" password="true" password-mask="●"/>
+    <Text :text="title" line-height="20" text-align="center" :tooltip="title"/>
+    <Button text="Action" content-align="start" :tooltip="title"/>
+    <TemplateTable minimum-width="600" header-height="34" content-height="2000" wheel-step="40">
+      <Text text="Pinned header"/>
+      <Column><Text text="Body"/></Column>
+    </TemplateTable>
+    <InteractiveSurface @pointer="pointer" @contextMenu="context"><Text text="Select row"/></InteractiveSurface>
+    <Scroll content-width="640" content-height="800" wheel-step="30"><Text text="Wide content"/></Scroll>
+    <Overlay overlay-width="34" overlay-height="18" inset-right="10" horizontal-align="end" vertical-align="center" :overlay-visible="visible">
+      <SearchInput v-model="title" prefix-icon="search-outline" placeholder="Search" placeholder-when-focused="true"/>
+      <Button text="Key" trailing-icon="down-outline" @click="click"/>
+    </Overlay>
+    <ReorderableGrid column-count="2" column-gap="8" row-gap="10" item-height="70" reorder-enabled="true" item-drag-enabled="true" @reorderRequested="reorder" @itemDrag="drag">
+      <GridItem view-id="grid-rows" v-for="row in rows" :key="row.id" :grid-key="row.id"><Text :text="row.text"/></GridItem>
+    </ReorderableGrid>
   </Column>
 </template>
 <style scoped>
@@ -18,5 +40,5 @@ List { background-color:#18201b; color:#e3eae5; }
 VirtualList { background-color:#18201b; color:#e3eae5; }
 VirtualList:selected { content-background-color:#35453b; }
 Row.row-flow { gap:12px; }
-Surface.surface-flow { gap:8px; }
+Surface.surface-flow { gap:8px; width:300px; }
 </style>

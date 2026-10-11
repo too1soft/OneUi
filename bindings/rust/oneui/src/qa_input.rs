@@ -2,6 +2,7 @@
 use crate::{sys, Widget};
 unsafe extern "C" {
     fn oneui_widget_test_freeze_caret(root: *mut sys::OneUiWidget, enabled: i32) -> i32;
+    fn oneui_widget_test_modified_click(root: *mut sys::OneUiWidget, x:f32,y:f32,control:i32,shift:i32,click_count:i32)->i32;
     fn oneui_widget_test_click(root: *mut sys::OneUiWidget, x: f32, y: f32) -> i32;
     fn oneui_widget_test_wheel(root: *mut sys::OneUiWidget, x: f32, y: f32, delta: f32) -> i32;
     fn oneui_widget_test_text_utf8(
@@ -20,6 +21,11 @@ impl Widget {
     #[doc(hidden)]
     pub fn test_click(&self, x: f32, y: f32) -> bool {
         unsafe { oneui_widget_test_click(self.raw.as_ptr(), x, y) != 0 }
+    }
+    /// Send a modified/double click through the native tree in a capture build.
+    #[doc(hidden)]
+    pub fn test_modified_click(&self,x:f32,y:f32,control:bool,shift:bool,click_count:i32)->bool {
+        unsafe {oneui_widget_test_modified_click(self.raw.as_ptr(),x,y,control.into(),shift.into(),click_count)!=0}
     }
     /// Send wheel input through this widget tree in a test-frame-capture build.
     #[doc(hidden)]

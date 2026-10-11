@@ -28,7 +28,7 @@ void Runtime::wire(const std::shared_ptr<Instance> &instance) {
     const auto &contract = image.components[image.records[oneview::NODE][rootNode][1]];
     if (contract.modelProperty) {
         auto id = contract.modelProperty;
-        if (element.component == "Input" || element.component == "SearchInput")
+        if (element.component == "Input" || element.component == "SearchInput" || element.component == "TextArea")
             element.as<TextField>()->setOnChanged([mutate, id](const std::wstring &text) {
                 Value v;
                 v.tag = 4;
@@ -37,6 +37,10 @@ void Runtime::wire(const std::shared_ptr<Instance> &instance) {
             });
         else if (element.component == "Slider")
             element.as<Slider>()->setOnChanged([mutate,id](double value){Value v;v.tag=3;v.number=value;mutate(id,v);});
+        else if (element.component == "Checkbox")
+            element.as<Checkbox>()->setOnChanged([mutate,id](bool value) {
+                Value v; v.tag=1; v.integer=value; mutate(id,v);
+            });
         else if (element.component == "Switch")
             element.as<Switch>()->setOnChanged([mutate, id](bool value) {
                 Value v;
@@ -103,12 +107,41 @@ void Runtime::wire(const std::shared_ptr<Instance> &instance) {
                               event[7]);
             }
         };
-        if (name == "click") {
+        if(name=="reorderRequested" && element.component=="ReorderableGrid")
+            element.as<ReorderableGrid>()->setOnReorderRequested([fire](const std::wstring& source,int target) {
+                Value key,index;key.tag=4;key.text=narrow(source);index.tag=2;index.integer=target;
+                fire({key,index});
+            });
+        else if(name=="itemDrag" && element.component=="ReorderableGrid")
+            element.as<ReorderableGrid>()->setOnItemDrag([fire](const ItemDragEvent& event) {
+                Value key,phase,x,y;key.tag=4;key.text=narrow(event.sourceId);
+                phase.tag=2;phase.integer=static_cast<int>(event.phase);
+                x.tag=y.tag=3;x.number=event.position.x;y.number=event.position.y;
+                fire({key,phase,x,y});
+            });
+        else if (name == "click") {
             if(auto surface=element.as<InteractiveSurface>())surface->setOnClick([fire]{fire({});});
             else element.as<Button>()->setOnClick([fire] { fire({}); });
         }
+        else if (name == "pointer" && std::any_of(instance->events.begin(),instance->events.end(),
+                 [&](const auto& binding){return binding[1]==event.id;}))
+            element.as<InteractiveSurface>()->setOnPointerActivated([fire](const MouseEvent& event) {
+                Value x,y,control,shift,count;
+                x.tag=y.tag=3; x.number=event.position.x; y.number=event.position.y;
+                control.tag=shift.tag=1;control.integer=event.control;shift.integer=event.shift;
+                count.tag=2;count.integer=event.clickCount;
+                fire({x,y,control,shift,count});
+            });
+        else if (name == "contextMenu" && std::any_of(instance->events.begin(),instance->events.end(),
+                 [&](const auto& binding){return binding[1]==event.id;}))
+            element.as<InteractiveSurface>()->setOnContextMenuRequested([fire](const MouseEvent& event) {
+                Value x,y;x.tag=y.tag=3;x.number=event.position.x;y.number=event.position.y;
+                fire({x,y});
+            });
         else if (name == "submit")
             element.as<TextField>()->setOnSubmitted([fire](const std::wstring &) { fire({}); });
+        else if (name == "close" && element.component == "Dialog")
+            element.as<Dialog>()->setOnClose([fire] { fire({}); });
         else if (name == "close")
             element.tabs->closed = [fire](std::wstring key) {
                 Value v;

@@ -235,6 +235,30 @@ SwitchStyleOverride switchStyleOverrideFromStyleSheet(const StyleSheet& sheet, S
     return override;
 }
 
+CheckboxStyleOverride checkboxStyleOverrideFromStyleSheet(const StyleSheet& sheet, StyleNode node) {
+    const auto resolve = [&](StylePseudoMask state) {
+        const auto box = resolveBackgroundOpacity(resolveState(sheet, node, state));
+        CheckboxStateStyleOverride result;
+        result.boxBackground = box.background.color;
+        result.boxBorder = box.borderColor;
+        result.checkColor = box.content.backgroundColor;
+        result.labelColor = box.foreground;
+        result.borderWidth = box.borderWidth;
+        result.radius = box.radius;
+        if (box.outlineColor || box.outlineWidth || box.outlineOffset || box.radius)
+            result.focusRing = focusRingOverrideFromStyleBox(box);
+        return result;
+    };
+    CheckboxStyleOverride result;
+    result.normal = resolve(StyleStateNone);
+    result.hovered = resolve(StyleStateHover);
+    result.pressed = resolve(StyleStateActive);
+    result.disabled = resolve(StyleStateDisabled);
+    result.selected = resolve(StyleStateSelected);
+    result.focusVisible = resolve(StyleStateFocus);
+    return result;
+}
+
 SelectStyleOverride selectStyleOverrideFromStyleSheet(const StyleSheet& sheet, StyleNode node) {
     const auto transient = sheet.transientStyleSheet();
     const auto resolve = [&](unsigned state) {

@@ -5,6 +5,11 @@
 using namespace viewtest;
 namespace {
 struct Window final : oneui::Window {
+    oneui::Widget *focused = nullptr;
+    bool requestFocus(oneui::Widget *widget, bool) override {
+        if (!widget || widget->disabled()) return false;
+        focused = widget; return true;
+    }
     std::shared_ptr<oneui::Widget> content;
     std::vector<std::function<void()>> queued;
     void setContent(std::shared_ptr<oneui::Widget> v) override { content = std::move(v); }
@@ -64,8 +69,68 @@ int main(int argc, char **argv) {
     if (argc != 2)
         return 2;
     try {
-        expect(oneui_utf8_abi_version() == 44 && oneui_view_protocol_version() == 1,
+        expect(oneui_utf8_abi_version() == 45 && oneui_view_protocol_version() == 1,
                "ABI and protocol versions");
+        {
+            ApiCase c(argv[1]);
+            c.start();
+            auto label = c.view->value->root->children[0]->element.widget;
+            label->setAccessibleName(L"metrics-unique");
+            label->setFrame({12, 24, 160, 28});
+            OneUiViewElementMetrics metrics{};
+            metrics.struct_size = sizeof(metrics);
+            auto str = [](const char *text) { return OneUiUtf8String{text, std::char_traits<char>::length(text)}; };
+            auto name = str("metrics-unique");
+            expect(oneui_view_element_metrics(c.view, name, &metrics) == 0 &&
+                metrics.x == 12 && metrics.y == 24 && metrics.width == 160 &&
+                metrics.height == 28 && !metrics.scrollable, "read-only element metrics");
+            expect(oneui_view_element_metrics(c.view, str("missing"), &metrics) ==
+                ONEUI_VIEW_NOT_FOUND, "metrics missing name");
+            expect(oneui_view_element_metrics(c.view, str(""), &metrics) ==
+                ONEUI_VIEW_INVALID_ARGUMENT, "metrics empty name");
+            expect(oneui_view_element_metrics(c.view, name, nullptr) ==
+                ONEUI_VIEW_INVALID_ARGUMENT, "metrics missing output");
+            int foreign = 0;
+            std::thread t([&] { foreign = oneui_view_element_metrics(c.view, name, &metrics); });
+            t.join();
+            expect(foreign == ONEUI_VIEW_WRONG_THREAD, "metrics UI thread ownership");
+            auto other = c.view->value->root->children[1]->element.widget;
+            other->setAccessibleName(L"focus-input");
+            int focused = 0;
+            expect(oneui_view_mount_focus_element(c.mount, str("focus-input"), 1, &focused) == 0 && focused &&
+                static_cast<Window*>(c.window.window.get())->focused == other.get(), "focus named native input");
+            other->setDisabled(true);
+            expect(oneui_view_mount_focus_element(c.mount, str("focus-input"), 1, &focused) == 0 && !focused,
+                "focus reports native rejection");
+            other->setDisabled(false);
+            expect(oneui_view_mount_focus_element(c.mount, str("missing"), 1, &focused) == ONEUI_VIEW_NOT_FOUND,
+                "focus rejects missing name");
+            expect(oneui_view_mount_focus_element(c.mount, str(""), 1, &focused) == ONEUI_VIEW_INVALID_ARGUMENT &&
+                oneui_view_mount_focus_element(c.mount, name, 1, nullptr) == ONEUI_VIEW_INVALID_ARGUMENT,
+                "focus validates name and output");
+            std::thread ft([&] { foreign = oneui_view_mount_focus_element(c.mount, name, 1, &focused); });
+            ft.join(); expect(foreign == ONEUI_VIEW_WRONG_THREAD, "focus requires UI thread");
+            { Callback callback(*c.view->value, Phase::Mutate);
+              expect(oneui_view_mount_focus_element(c.mount, name, 1, &focused) == ONEUI_VIEW_REENTRANT,
+                     "focus mutation is not permitted during VM callback"); }
+            other->setAccessibleName(L"metrics-unique");
+            expect(oneui_view_mount_focus_element(c.mount, name, 1, &focused) == ONEUI_VIEW_INVALID_ARGUMENT,
+                "focus rejects ambiguous name");
+            expect(oneui_view_element_metrics(c.view, name, &metrics) ==
+                ONEUI_VIEW_INVALID_ARGUMENT, "metrics ambiguous name rejected");
+            other->setAccessibleName(L"overlay-base-input");
+            auto badge=std::make_shared<oneui::Label>();badge->setAccessibleName(L"overlay-badge");
+            auto overlay=std::make_shared<oneui::TemplateOverlay>(c.view->value->root->element.widget,badge);
+            c.view->value->root->element.widget=overlay;
+            expect(oneui_view_element_metrics(c.view,str("overlay-badge"),&metrics)==0 &&
+                oneui_view_mount_focus_element(c.mount,str("overlay-base-input"),1,&focused)==0 && focused,
+                "named lookup includes native overlay base and foreground");
+            oneui_view_disconnect(c.view);
+            expect(oneui_view_mount_focus_element(c.mount, name, 1, &focused) == ONEUI_VIEW_CLOSED,
+                "focus rejects closed view");
+            expect(oneui_view_element_metrics(c.view, name, &metrics) ==
+                ONEUI_VIEW_CLOSED, "metrics closed view rejected");
+        }
         {
             OneUiWindow window;
             window.window = std::make_unique<Window>();

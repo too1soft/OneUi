@@ -50,7 +50,7 @@ uint32_t ViewCompiler::lower(Source &s, Node n, const std::vector<Scope> &scopes
         bool transparent = false;
         if (parent != none && image.records[NODE][parent][0] == 1) {
             const auto &rule = image.components[image.records[NODE][parent][1]].childRule;
-            transparent = rule == "pane-collection" || rule == "dock-collection";
+            transparent = rule == "pane-collection" || rule == "dock-collection" || rule == "grid-collection";
         }
         if (transparent && !explicitId) at.fail("WORKSPACE_SCOPE: explicit view-id required");
         if (transparent && stable.find('/') != std::string::npos)

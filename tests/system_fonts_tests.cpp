@@ -1,4 +1,7 @@
 #include "oneui/fonts.h"
+#include "oneui/controls/label.h"
+#include <cmath>
+#include <limits>
 #include "oneui/oneui_c_api.h"
 #include <algorithm>
 #include <iostream>
@@ -7,6 +10,24 @@
 
 int main() {
     try {
+        for (const std::string text : {"", "Operating system", "主机分组", "مرحبا", "👩‍💻"}) {
+            float width = -1;
+            if (oneui_text_measure_width_utf8({text.data(), text.size()}, {nullptr, 0}, 12, 400, 1, &width) != 1 ||
+                !std::isfinite(width) || width < 0 || (!text.empty() && width == 0))
+                throw std::runtime_error("widget-free text shaping failed");
+        }
+        const std::string sample = "Operating system";
+        float width = 0;
+        oneui::Label label(L"Operating system");
+        label.setFontSize(12);
+        oneui_text_measure_width_utf8({sample.data(), sample.size()}, {nullptr,0},12,400,1,&width);
+        if (std::abs(width-label.naturalTextSize().width) > 0.001f)
+            throw std::runtime_error("text measurement must match Label without constructing a widget");
+        if (oneui_text_measure_width_utf8({"x",1},{nullptr,0},0,400,1,&width) ||
+            oneui_text_measure_width_utf8({"x",1},{nullptr,0},12,400,1,nullptr) ||
+            oneui_text_measure_width_utf8({"\xff",1},{nullptr,0},12,400,1,&width) ||
+            oneui_text_measure_width_utf8({"x",1},{nullptr,0},12,400,std::numeric_limits<float>::quiet_NaN(),&width))
+            throw std::runtime_error("invalid text measurement arguments must fail");
         std::vector<oneui::FontFamilyInfo> cpp;
         std::exception_ptr failure;
         std::thread worker([&] { try { cpp = oneui::enumerateSystemFonts(); } catch (...) { failure = std::current_exception(); } });

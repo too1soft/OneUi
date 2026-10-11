@@ -49,6 +49,9 @@ const std::map<std::string, ComponentContract> &registry()
 #undef C
         for (const auto *name : {"Input", "Text", "Scroll", "FontPicker", "MediaPicker"}) r.at(name).version = 2;
         ++r.at("Text").version;
+        ++r.at("Input").version; // Explicit password mask, appended property ID 15.
+        ++r.at("Scroll").version; // Explicit content width, appended property ID 15.
+        ++r.at("SearchInput").version; // Optional prefix icon; absent keeps old rendering.
         ++r.at("FontPicker").version;
         // Read-only class bindings preserve static and scoped classes. Keep the
         // reviewed extension limited to the presentation nodes that need it.
@@ -64,6 +67,8 @@ const std::map<std::string, ComponentContract> &registry()
             for (auto &property : contract.properties)
                 if (property.name == "basis") property.flags |= 2;
         }
+        ++r.at("Text").version; // Explicit line boxes, alignment and tooltip.
+        ++r.at("Button").version; // Tooltip and content alignment.
         // Detect authoring metadata drift before publishing a contract hash.
         // Intentional changes require a reviewed registry/version update.
         using namespace oneui::ui::schema;

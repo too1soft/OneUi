@@ -1,13 +1,54 @@
 #include "oneui/ui_declarative.h"
 namespace oneui::ui {
 void Mount::set(Element &e, const std::string &key, const std::wstring &value) {
+    if(e.component=="GridItem" && key=="grid-key") {e.as<TemplateGridItem>()->setKey(value);return;}
+    if (e.component == "Overlay" && (key == "horizontal-align" || key == "vertical-align")) {
+        e.as<TemplateOverlay>()->setAlignment(key, value); return;
+    }
+    if (key == "prefix-icon" || key == "trailing-icon") {
+        const auto symbol = value.empty() ? std::optional<IconSymbol>{} : namedIcon(std::string(value.begin(), value.end()));
+        if (!value.empty() && !symbol) throw std::invalid_argument("Unknown authoring icon");
+        if (key == "prefix-icon") e.as<TextField>()->setPrefixIcon(symbol);
+        else if (symbol) e.as<Button>()->setTrailingIcon(*symbol);
+        else e.as<Button>()->clearTrailingIcon();
+        return;
+    }
+    if (key == "trailing-text") { e.as<Button>()->setTrailingText(value); return; }
+    if (key == "tooltip") { e.widget->setTooltip(value); return; }
+    if (key == "text-align" || key == "content-align") {
+        if (value != L"start" && value != L"center" && value != L"end")
+            throw std::invalid_argument("text/content-align must be start, center or end");
+        const auto align = value == L"center" ? TextAlign::Center :
+                           value == L"end" ? TextAlign::Right : TextAlign::Left;
+        if (key == "text-align") e.as<Label>()->setAlign(align);
+        else e.as<Button>()->setContentAlign(align);
+        return;
+    }
+    if(e.component=="Dialog") {
+        auto dialog=e.as<Dialog>();
+        if(key=="title"){dialog->setTitle(value);return;}
+        if(key=="subtitle"){dialog->setSubtitle(value);return;}
+        if(key=="icon") {
+            if(value.empty())dialog->clearIconSymbol();
+            else {
+                const auto symbol=namedIcon(std::string(value.begin(),value.end()));
+                if(!symbol)throw std::invalid_argument("Unknown authoring icon");
+                dialog->setIconSymbol(*symbol);
+            }
+            return;
+        }
+    }
     if(e.component=="FontPicker" && key=="trigger-label") {e.as<FontPicker>()->setTriggerLabel(value);return;}
     if(e.component=="MediaPicker") {
         if(key=="choose-label"){e.as<MediaPicker>()->setChooseLabel(value);return;}
         if(key=="clear-label"){e.as<MediaPicker>()->setClearLabel(value);return;}
         if(key=="cancel-label"){e.as<MediaPicker>()->setCancelLabel(value);return;}
     }
-    if (key == "icon" || key == "symbol") {
+    if (key == "password-mask") {
+        if(value.size()!=1 || (value[0]>=0xd800 && value[0]<=0xdfff))
+            throw std::invalid_argument("password-mask requires one BMP character");
+        e.as<TextField>()->setPasswordMask(value[0]);
+    } else if (key == "icon" || key == "symbol") {
         if (value.empty()) {
             if (key == "icon") e.as<Button>()->clearIcon();
             else e.as<IconView>()->setSymbol(IconSymbol::RemoteAssist);
@@ -114,7 +155,9 @@ void Mount::set(Element &e, const std::string &key, const std::wstring &value) {
             w->setText(value);
             if (e.component == "ToolButton")
                 w->setPreferredSize({value.empty() ? 32.0f : 0.0f, 32});
-        } else if (auto w = e.as<Switch>())
+        } else if (auto w = e.as<Checkbox>())
+            w->setText(value);
+        else if (auto w = e.as<Switch>())
             w->setText(value);
         else if (auto w = e.as<TextField>()) {
             if (w->text() != value)
@@ -136,7 +179,16 @@ void Mount::set(Element &e, const std::string &key, const std::string &value) {
         set(e, key, wide(value));
 }
 void Mount::set(Element &e, const std::string &key, bool value) {
-    if (key == "visible")
+    if(key=="placeholder-when-focused") {e.as<TextField>()->setPlaceholderVisibleWhenFocused(value);return;}
+    if(e.component=="ReorderableGrid") {
+        if(key=="reorder-enabled"){e.as<ReorderableGrid>()->setReorderEnabled(value);return;}
+        if(key=="item-drag-enabled"){e.as<ReorderableGrid>()->setItemDragEnabled(value);return;}
+    }
+    if (key == "overlay-visible")
+        e.as<TemplateOverlay>()->setOverlayVisible(value);
+    else if (key == "close-visible")
+        e.as<Dialog>()->setCloseVisible(value);
+    else if (key == "visible")
         e.widget->setVisible(value);
     else if (key == "disabled")
         e.widget->setDisabled(value);
@@ -167,14 +219,39 @@ void Mount::set(Element &e, const std::string &key, bool value) {
         e.as<Reveal>()->setOpen(value);
     else if (key == "reduced-motion")
         e.as<Reveal>()->setReducedMotion(value);
-    else if (key == "checked")
-        e.as<Switch>()->setChecked(value);
+    else if (key == "checked") {
+        if(auto checkbox=e.as<Checkbox>())checkbox->setChecked(value);
+        else e.as<Switch>()->setChecked(value);
+    }
     else
         throw std::invalid_argument("Invalid bool property");
 }
 void Mount::set(Element &e, const std::string &key, float value) {
     syntax::validateLayoutNumber(key, value);
+    if(e.component=="ReorderableGrid") {
+        if(key=="column-gap"){e.as<ReorderableGrid>()->setColumnGap(value);return;}
+        if(key=="row-gap"){e.as<ReorderableGrid>()->setRowGap(value);return;}
+        if(key=="item-height"){e.as<ReorderableGrid>()->setItemHeight(value);return;}
+    }
+    if (e.component == "Overlay" && (key.rfind("overlay-",0)==0 || key.rfind("inset-",0)==0)) {
+        e.as<TemplateOverlay>()->setNumber(key,value); return;
+    }
+    if (auto table = e.as<TemplateTable>()) {
+        if (key == "minimum-width") { table->setMinimumWidth(value); return; }
+        if (key == "header-height") { table->setHeaderHeight(value); return; }
+          if (key == "content-height") { table->setContentHeight(value); return; }
+          if (key == "content-width") { table->setContentWidth(value); return; }
+        if (key == "wheel-step") { table->setWheelStep(value); return; }
+        if (key == "scroll-offset") { table->setScrollOffset(value); return; }
+        if (key == "horizontal-offset") { table->setHorizontalScrollOffset(value); return; }
+    }
+    if (key == "line-height") {
+        if (auto label = e.as<Label>()) label->setLineHeight(value);
+        else e.as<TextField>()->setLineHeight(value);
+        return;
+    }
     if (key == "content-height") { e.as<ScrollView>()->setContentHeight(value); return; }
+    if (key == "content-width") { e.as<ScrollView>()->setContentWidth(value); return; }
     if (key == "wheel-step") { e.as<ScrollView>()->setWheelStep(value); return; }
     if (key == "scroll-offset") {
         if (e.component == "VirtualList") e.as<VirtualList>()->setScrollOffset(value);
@@ -239,8 +316,13 @@ void Mount::set(Element &e, const std::string &key, float value) {
         e.shrink(value);
     else
         throw std::invalid_argument("Invalid layout property");
+    styles_->updateAuthoredFlex(e.widget,e.flex);
 }
 void Mount::set(Element &e, const std::string &key, int value) {
+    if(e.component=="ReorderableGrid" && key=="column-count") {
+        if(value<1)throw std::invalid_argument("column-count must be positive");
+        e.as<ReorderableGrid>()->setColumnCount(value);return;
+    }
     if (key == "max-lines") {
         if (value < 0) throw std::invalid_argument("max-lines must be nonnegative");
         e.as<Label>()->setMaxLines(value);

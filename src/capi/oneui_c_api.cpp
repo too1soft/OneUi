@@ -7,6 +7,7 @@
 #include <stdexcept>
 #include "oneui/native_interop.h"
 #include "oneui/fonts.h"
+#include "../text/text_layout.h"
 #include "oneui/localization.h"
 #include "oneui_c_api_internal.h"
 #include "oneui_c_api_window_internal.h"
@@ -1773,6 +1774,8 @@ void oneui_window_set_default_font_family_utf8(
     }
     window->window->setDefaultFontFamily(utf8OrEmpty(family));
 }
+
+#include "oneui_c_api_fonts.inc"
 
 int oneui_enumerate_system_fonts(OneUiFontFamilyCallback callback, void* user_data) {
     try {

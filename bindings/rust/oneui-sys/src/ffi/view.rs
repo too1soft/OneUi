@@ -1,6 +1,16 @@
 //! Language-neutral view protocol v1 (UTF-8 ABI 44).
 use crate::{OneUiUtf8String, OneUiWidget, OneUiWindow};
 use std::ffi::{c_char, c_void};
+#[repr(C)]
+pub struct OneUiViewElementMetrics {
+    pub struct_size: u32, pub scrollable: u32,
+    pub x: f32, pub y: f32, pub width: f32, pub height: f32,
+    pub scroll_x: f32, pub scroll_y: f32, pub max_scroll_y: f32,
+}
+extern "C" {
+    pub fn oneui_view_element_metrics(view: *mut OneUiView, name: OneUiUtf8String,
+        out: *mut OneUiViewElementMetrics) -> i32;
+}
 
 pub type OneUiViewResult = i32;
 pub const ONEUI_VIEW_PROTOCOL_VERSION: u32 = 1;
@@ -174,4 +184,9 @@ extern "C" {
         release: Option<unsafe extern "C" fn(*mut c_void)>,
     ) -> i32;
     pub fn oneui_view_host_detach(host: *mut OneUiWidget) -> i32;
+}
+
+extern "C" {
+    pub fn oneui_view_mount_focus_element(mount: *mut OneUiViewMount, name: OneUiUtf8String,
+        focus_visible: i32, out_focused: *mut i32) -> i32;
 }

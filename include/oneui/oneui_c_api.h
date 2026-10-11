@@ -541,7 +541,7 @@ enum {
     OneUiTerminalCellOverline = 1u << 11
 };
 
-#define ONEUI_UTF8_ABI_VERSION 44u
+#define ONEUI_UTF8_ABI_VERSION 45u
 
 /*
  * Copies and registers a process-local font under family_alias. Call before
@@ -559,6 +559,12 @@ ONEUI_API int oneui_font_register_memory(
  * Worker-thread use is recommended; see oneui/fonts.h for platform semantics. */
 typedef void (*OneUiFontFamilyCallback)(OneUiUtf8String family, int monospaced, void* user_data);
 ONEUI_API int oneui_enumerate_system_fonts(OneUiFontFamilyCallback callback, void* user_data);
+
+/* Widget-free unwrapped shaping, in logical pixels. Empty family uses the
+ * default fallback. Same shaper as Label, including complex scripts and emoji.
+ * Returns 1 on success, 0 for invalid UTF-8/options/output. Does not retain inputs. */
+ONEUI_API int oneui_text_measure_width_utf8(OneUiUtf8String text, OneUiUtf8String family,
+    float size, int weight, float scale, float* width);
 
 typedef enum OneUiWindowBackend {
     OneUiWindowBackendUnknown = 0,
@@ -779,6 +785,8 @@ ONEUI_API int oneui_window_capture_frame_png_utf8(OneUiWindow* window, const cha
  * Dispatches to the supplied widget tree; never sends OS input. Returns 0 in
  * builds without ONEUI_ENABLE_TEST_FRAME_CAPTURE or for unhandled input. */
 ONEUI_API int oneui_widget_test_click(OneUiWidget* root, float x, float y);
+ONEUI_API int oneui_widget_test_modified_click(OneUiWidget* root, float x, float y,
+    int control, int shift, int click_count);
 ONEUI_API int oneui_widget_test_wheel(OneUiWidget* root, float x, float y, float delta);
 ONEUI_API int oneui_widget_test_freeze_caret(OneUiWidget* root, int enabled);
 ONEUI_API int oneui_widget_test_text_utf8(OneUiWidget* root, OneUiUtf8String text, int replace);

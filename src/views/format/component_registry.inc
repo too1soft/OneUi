@@ -7,3 +7,8 @@
 #include "component_registry_queries.inc"
 
 #include "component_registry_pickers.inc"
+#include "component_registry_dialog.inc"
+#include "component_registry_template_table.inc"
+
+#include "component_registry_overlay.inc"
+#include "component_registry_grid.inc"

@@ -11,7 +11,7 @@ mod types;
 pub use ffi::*;
 pub use types::*;
 
-pub const UTF8_ABI_VERSION: c_uint = 44;
+pub const UTF8_ABI_VERSION: c_uint = 45;
 
 // C enums remain integer aliases so unknown values can be handled without
 // creating an invalid Rust enum discriminant. The ABI suite checks their layout.
@@ -489,6 +489,8 @@ pub type OneUiTerminalViewportCallback =
 
 extern "C" {
     pub fn oneui_utf8_abi_version() -> c_uint;
+    pub fn oneui_text_measure_width_utf8(text: OneUiUtf8String, family: OneUiUtf8String,
+        size: f32, weight: i32, scale: f32, width: *mut f32) -> i32;
     pub fn oneui_enumerate_system_fonts(
         callback: Option<unsafe extern "C" fn(OneUiUtf8String, c_int, *mut c_void)>,
         user_data: *mut c_void,

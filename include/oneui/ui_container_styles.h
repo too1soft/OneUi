@@ -2,6 +2,11 @@
 // Included after ui_declarative.h's definitions. Query application belongs to
 // declarative composition; the parser/evaluator and isolated layout are core.
 namespace oneui::ui {
+inline void StyleRegistry::updateAuthoredFlex(const std::shared_ptr<Widget>& widget,const StackFlex& flex) {
+    auto found=layoutDefaults_.find(widget.get());
+    if(found!=layoutDefaults_.end() && found->second.widget.lock()==widget)
+        found->second.flex=flex;
+}
 inline void StyleRegistry::applyBaseLayouts() {
     std::map<const Widget*,std::shared_ptr<Stack>> parents;
     for (const auto& entry : entries_)

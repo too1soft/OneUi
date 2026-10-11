@@ -57,7 +57,7 @@ mod window_callbacks;
 mod window_native;
 pub use application::{Application, ApplicationActivation, CloseDecision, QuitPolicy};
 pub use desktop_window::{DesktopWindowState, ModalSession, WindowStateSubscription};
-pub use fonts::{enumerate_system_fonts, FontFamilyInfo};
+pub use fonts::{enumerate_system_fonts, measure_text_width, FontFamilyInfo};
 pub use localization::{set_builtin_text, BuiltinText, LocalizationError};
 pub use native_error::{clear_native_error, last_native_error, NativeError, NativeErrorCode};
 mod slider;

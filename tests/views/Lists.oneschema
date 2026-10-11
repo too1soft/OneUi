@@ -5,9 +5,14 @@ model Root {
     r busy: bool
     r rows: list<Item>
     rw selected: i64
+    rw checked: bool
     r height: f64
     r spans: list<Span>
     command click() when enabled busy busy
+    command pointer(x:f64,y:f64,control:bool,shift:bool,click_count:i64)
+    command reorder(source:utf8,target:i64)
+    command drag(source:utf8,phase:i64,x:f64,y:f64)
+    command context(x:f64,y:f64)
 }
 model Item key id {
     r id: utf8

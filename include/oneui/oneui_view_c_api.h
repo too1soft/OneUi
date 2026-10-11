@@ -247,6 +247,23 @@ ONEUI_API OneUiViewResult oneui_view_host_detach(OneUiWidget *host);
  * handles across reload even when the underlying native Widget survives. */
 ONEUI_API OneUiViewResult oneui_view_reload(OneUiView *view, const uint8_t *ir_bytes, size_t len);
 
+/* UI-thread read-only snapshot; no widget ownership or mutation escapes.
+ * name is the unique accessible name inside this View (including repeat rows).
+ * Empty/ambiguous names are INVALID_ARGUMENT; absent names are NOT_FOUND.
+ * Geometry is the last committed native layout, in logical client coordinates.
+ * Safe in a command callback; does not flush, lay out or invoke model callbacks. */
+typedef struct OneUiViewElementMetrics {
+    uint32_t struct_size, scrollable;
+    float x, y, width, height;
+    float scroll_x, scroll_y, max_scroll_y;
+} OneUiViewElementMetrics;
+ONEUI_API OneUiViewResult oneui_view_element_metrics(OneUiView *view,
+    OneUiUtf8String name, OneUiViewElementMetrics *out);
+/** Focus a uniquely named element of the mount's active view on its UI thread.
+ * No widget handle escapes. Rejects ambiguous/missing names and closed mounts.
+ * Call outside VM callbacks; out_focused reports native focus eligibility. */
+ONEUI_API OneUiViewResult oneui_view_mount_focus_element(OneUiViewMount *mount,
+    OneUiUtf8String name, int focus_visible, int *out_focused);
 #ifdef __cplusplus
 }
 #endif

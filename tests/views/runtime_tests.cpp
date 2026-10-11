@@ -1,6 +1,8 @@
 #include "fixture.h"
 using namespace viewtest;
 #include "settings_lists.inc"
+#include "template_table.inc"
+#include "template_grid.inc"
 #include "slot_contracts.inc"
 int main(int argc, char **argv) {
     if (argc != 2)
@@ -192,6 +194,8 @@ int main(int argc, char **argv) {
             c.runtime->close();
         }
         settingsLists(argv[1]);
+        templateTables(argv[1]);
+        templateGrids(argv[1]);
         slotContracts(argv[1]);
         std::cout << "11 runtime scenarios passed\n";
         return 0;
