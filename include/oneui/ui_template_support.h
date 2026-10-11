@@ -47,7 +47,8 @@ inline std::set<std::string> componentCssProperties(const std::string& tag) {
     if (tag == "reorderable-grid") return {"padding","gap","grid-min-column-width","outline-color","outline-width","border-color"};
     if (tag == "popup") return {"background", "background-color", "color", "border-color", "border-width", "border-radius", "padding", "gap", "box-shadow"};
     if (tag == "dialog") return {"background", "background-color", "color", "border-color", "border-width", "border-radius", "padding", "font-size", "font-weight", "box-shadow"};
-    if (tag == "progress"||tag=="slider"||tag=="font-picker"||tag=="media-picker"||tag=="media-preview"||tag=="theme-scope") return {};
+    if (tag == "progress") return {"background", "background-color", "color", "border-radius"};
+    if (tag=="slider"||tag=="font-picker"||tag=="media-picker"||tag=="media-preview"||tag=="theme-scope") return {};
     if (tag == "card") return {"background-color","background","border-color","border-width","border-radius","padding","box-shadow","opacity"};
     if (tag == "interactive-surface") return {"background-color","background","border-color","border-width","border-radius","padding","transition-duration","transition-timing-function"};
     if (tag == "icon") return {"color"};

@@ -61,7 +61,7 @@ const std::map<std::string, ComponentContract> &registry()
         ++r.at("FontPicker").version;
         // Read-only class bindings preserve static and scoped classes. Keep the
         // reviewed extension limited to the presentation nodes that need it.
-        for (const auto *name : {"Surface", "Text", "Column"}) {
+        for (const auto *name : {"Surface", "Text", "Column", "Row"}) {
             auto &contract = r.at(name);
             ++contract.version;
             for (auto &property : contract.properties)

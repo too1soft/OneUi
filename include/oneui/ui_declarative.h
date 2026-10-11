@@ -148,7 +148,15 @@ private:
             else applyNativeTheme(*tabs,sheet);
             return;
         }
-        if(std::dynamic_pointer_cast<SplitView>(w) || std::dynamic_pointer_cast<ProgressBar>(w)) {applyNativeTheme(*w,sheet);return;}
+        if(auto progress=std::dynamic_pointer_cast<ProgressBar>(w)) {
+            auto style=progressBarStyleOverrideFromStyleSheet(sheet,n);
+            const auto palette=nativePalette(sheet);
+            style.trackBackground=style.trackBackground.value_or(palette.line);
+            style.fill=style.fill.value_or(palette.accent);
+            style.radius=style.radius.value_or(2.0f);
+            progress->setStyleOverride(std::move(style));return;
+        }
+        if(std::dynamic_pointer_cast<SplitView>(w)) {applyNativeTheme(*w,sheet);return;}
         if(auto chart=std::dynamic_pointer_cast<TimeSeriesChart>(w)) {applyNativeTheme(*w,sheet);if(box.foreground || box.borderColor || box.fontSize || box.gap)chart->setStyleBox(box);return;}
         if (auto v = std::dynamic_pointer_cast<Label>(w)) {
             v->setFontFamily(box.fontFamily.value_or(std::wstring{}));

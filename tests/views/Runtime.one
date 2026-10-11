@@ -8,7 +8,8 @@
     <NativeHost host="terminal"/>
     <Checkbox text="permission" tooltip="Permission toggle" v-model="checked"/>
     <InteractiveSurface @drag="drag"><Text text="Drag"/></InteractiveSurface>
+  <Row :class="title"><Text text="first"/><Text text="second"/><Progress value="0.5" class="paint-progress"/></Row>
   </Column>
 </template>
 
-<style scoped>Text { font-size: 13px; }</style>
+<style scoped>Text { font-size: 13px; } Row.initial { flex-direction:row; } Row.changed { flex-direction:column; }Progress.paint-progress {color:#c09030;background:#102030;border-radius:3px;} </style>

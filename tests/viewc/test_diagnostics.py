@@ -10,6 +10,11 @@ model Child key id { r id:utf8 r name:utf8 }'''
 
 
 class DiagnosticTests(CompilerCase):
+    def test_monitor_presentation_contracts(self):
+        source = '<template view-model="Basic"><Row :class="title"><Progress :value="ratio"/><Button icon="sparkles"/></Row></template><style scoped>Progress {color:#123456;background:#111111;border-radius:2px;}</style>'
+        self.compile(source, SCHEMA, raw=True)
+        self.compile(source.replace('border-radius:2px', 'padding:3px'), SCHEMA, raw=True, error='not consumed')
+
     def test_reorderable_grid_contract(self):
         self.compile('<template view-model="Basic"><ReorderableGrid/></template><style scoped>ReorderableGrid {grid-min-column-width:280px;gap:8px;padding:0px;outline-width:2px;outline-color:#123456;}</style>', SCHEMA, raw=True)
         self.compile('<template view-model="Basic"><Button/></template><style scoped>Button {opacity:0.58;}</style>', SCHEMA, raw=True)

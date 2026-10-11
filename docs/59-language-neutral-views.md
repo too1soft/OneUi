@@ -1044,3 +1044,16 @@ shares the existing missing/ambiguous name, UI thread and closed-view checks.
 `InteractiveSurface @drag` 可选事件提供 `(phase:i64,origin_x:f64,origin_y:f64,x:f64,y:f64,alt:bool,control:bool,shift:bool)`。phase 为 0 开始、1 移动、2 释放、3 取消；坐标为窗口逻辑坐标，阈值 7px。绑定该事件显示抓取光标；由原生控件处理捕获、Esc 和结束后不触发点击。
 
 Capture-only QA also exposes `oneui_widget_test_hover` / Rust `Widget::test_hover`. It sends a native mouse move through the supplied tree and reports a nonempty tooltip hit; it does not synthesize OS input or guarantee a timed tooltip bubble was shown. Renderer fixtures compare pre/post-hover pixels separately.
+
+### Monitor presentation contracts
+
+`Row.class` accepts a VM binding, like Column/Surface/Text. Changing the class
+reapplies authored layout styles (including `flex-direction`) without replacing
+the row or children. Row's component contract revision is incremented; rebuild
+both viewc and the runtime before compiling/using views that bind Row.class.
+
+`Progress` consumes `color` (fill), `background`/`background-color` (track), and
+`border-radius`, including disabled fill color. Unspecified values retain the
+native palette. Its value is a 0–1 fraction; generic `min`/`max` describe layout
+constraints, not a progress range. The `sparkles` icon names the existing
+workbench sparkle glyph. No public C++ class layout changed.
