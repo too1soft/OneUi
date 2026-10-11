@@ -15,7 +15,7 @@ inline void StyleRegistry::applyBaseLayouts() {
         for (std::string word; words >> word;) node.classes.push_back(word);
         const auto box = sheet_.resolve(node);
         if (box.width || box.height || box.minWidth || box.minHeight ||
-            box.flexBasis || box.flexGrow || box.flexShrink)
+            box.flexBasis || box.flexBasisPercent || box.flexOrder || box.flexGrow || box.flexShrink)
             applyLayout(entry, box, parent->second);
     }
 }
@@ -58,12 +58,14 @@ inline void StyleRegistry::applyLayout(const Entry& entry,const StyleBox& box,co
         throw std::invalid_argument("CONTAINER_CONSUMPTION: flex direction/wrap/container requires Stack");
     if(parent) {
         auto flex=defaults.flex.value_or(StackFlex{});
-        if(box.flexBasis)flex.basis=box.flexBasis;
+        if(box.flexBasis){flex.basis=box.flexBasis;flex.basisPercent.reset();}
+        if(box.flexBasisPercent){flex.basisPercent=box.flexBasisPercent;flex.basis.reset();}
+        if(box.flexOrder)flex.order=*box.flexOrder;
         if(box.flexGrow)flex.grow=*box.flexGrow;
         if(box.flexShrink)flex.shrink=*box.flexShrink;
         flex.width=box.width;flex.height=box.height;
         flex.minWidth=box.minWidth.value_or(0);flex.minHeight=box.minHeight.value_or(0);
-        if(defaults.flex||box.flexBasis||box.flexGrow||box.flexShrink||box.width||box.height||box.minWidth||box.minHeight)parent->setFlex(widget,flex);
+        if(defaults.flex||box.flexBasis||box.flexBasisPercent||box.flexOrder||box.flexGrow||box.flexShrink||box.width||box.height||box.minWidth||box.minHeight)parent->setFlex(widget,flex);
         else parent->clearFlex(widget);
     }
 }
@@ -125,7 +127,7 @@ inline bool StyleRegistry::evaluateQuery(const std::shared_ptr<Stack>& container
                     throw std::invalid_argument("CONTAINER_DEPENDENCY: nested query containers require fixed independent width and height");
                 if(nested)for(const auto& rule:sheet_.rules())if(rule.query&&selectorMatches(rule.selector,node)) {
                     const auto& b=rule.box;
-                    if(b.width||b.height||b.minWidth||b.minHeight||b.flexBasis||b.flexGrow||b.flexShrink||b.padding||b.display)
+                    if(b.width||b.height||b.minWidth||b.minHeight||b.flexBasis||b.flexBasisPercent||b.flexOrder||b.flexGrow||b.flexShrink||b.padding||b.display)
                         throw std::invalid_argument("CONTAINER_DEPENDENCY: ancestor query changes a measured container");
                 }
                 if((box.flexDirection||box.flexWrap)&&!std::dynamic_pointer_cast<Stack>(widget))

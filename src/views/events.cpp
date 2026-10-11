@@ -1,4 +1,5 @@
 #include "runtime.h"
+#include "rich_table_events.inc"
 namespace oneui::views {
 void Runtime::wire(const std::shared_ptr<Instance> &instance) {
     if (image.records[oneview::NODE][instance->node][0] != 1)
@@ -6,6 +7,7 @@ void Runtime::wire(const std::shared_ptr<Instance> &instance) {
     instance->owner = weak_from_this();
     wireWorkspace(instance);
     wirePicker(instance);
+    if(instance->element.component=="Table") {wireRichTable(instance);return;}
     auto node = std::weak_ptr<Instance>(instance);
     auto mutate = [node](uint32_t id, Value value) {
         auto item = node.lock();
@@ -24,6 +26,30 @@ void Runtime::wire(const std::shared_ptr<Instance> &instance) {
         }
     };
     auto &element = instance->element;
+    if(auto tree=element.as<TreeView>()) {
+        tree->setOnExpansionChanged([node](const std::wstring& key,bool expanded) {
+            auto item=node.lock();auto runtime=item?item->owner.lock():nullptr;
+            if(!runtime || runtime->closing || item->applying)return;
+            try {
+                // Resolve against the committed list lease, never against a new
+                // worker snapshot while the previous rows are still on screen.
+                for(const auto& b:item->bindings) {
+                    if(b.kind!=oneview::BIND || b.record[1]!=6)continue;
+                    auto scope=b.scope.lock();if(!scope)continue;
+                    auto found=scope->lists.find(b.record[2]);
+                    if(found==scope->lists.end())continue;
+                    auto& list=found->second;
+                    auto at=std::find(list.keys.begin(),list.keys.end(),narrow(key));
+                    if(at==list.keys.end())continue;
+                    auto row=list.items[size_t(at-list.keys.begin())];
+                    auto property=runtime->image.schema.model(row->table.model_id).properties.at("expanded").id;
+                    Value value;value.tag=1;value.integer=expanded;
+                    runtime->set(row,property,value);
+                }
+            } catch(const Failure& error) {runtime->fail(error.result,error.what());}
+              catch(...) {runtime->fail(ONEUI_VIEW_FOREIGN_FAILURE,"Exception in tree expansion callback");}
+        });
+    }
     auto rootNode = oneview::componentRoot(image, instance->node);
     const auto &contract = image.components[image.records[oneview::NODE][rootNode][1]];
     if (contract.modelProperty) {
@@ -37,6 +63,10 @@ void Runtime::wire(const std::shared_ptr<Instance> &instance) {
             });
         else if (element.component == "Slider")
             element.as<Slider>()->setOnChanged([mutate,id](double value){Value v;v.tag=3;v.number=value;mutate(id,v);});
+        else if (element.component == "Checkbox")
+            element.as<Checkbox>()->setOnChanged([mutate, id](bool value) {
+                Value v; v.tag = 1; v.integer = value; mutate(id, v);
+            });
         else if (element.component == "Switch")
             element.as<Switch>()->setOnChanged([mutate, id](bool value) {
                 Value v;
@@ -81,6 +111,8 @@ void Runtime::wire(const std::shared_ptr<Instance> &instance) {
                 element.tabs->selected = selection;
             if (element.table)
                 element.table->selected = selection;
+            if(auto tree=element.as<TreeView>())
+                tree->setOnSelectionChanged(selection);
         }
     }
     for (const auto &event : contract.events) {

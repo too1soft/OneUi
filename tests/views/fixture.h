@@ -24,6 +24,8 @@ struct Vm {
     std::function<void()> onGet, onInvoke, onConnect, onDisconnect, onRelease;
     OneUiViewNotifier *notifier = nullptr;
     int connectResult = 0;
+    uint32_t invokedCommand=0;
+    std::vector<Value> invokedArgs;
     explicit Vm(const oneview::Image &image, const char *model) {
         table.struct_size = sizeof(table);
         table.protocol_version = 1;
@@ -78,8 +80,10 @@ struct Vm {
             v.values[id] = Value::copy(*value);
             return 0;
         };
-        table.invoke = [](void *p, uint32_t, const OneUiValue *, size_t) {
+        table.invoke = [](void *p, uint32_t command, const OneUiValue *args, size_t count) {
             auto &v = *static_cast<Vm *>(p);
+            v.invokedCommand=command;v.invokedArgs.clear();
+            for(size_t i=0;i<count;++i)v.invokedArgs.push_back(Value::copy(args[i]));
             ++v.invokes;
             if (v.onInvoke)
                 v.onInvoke();

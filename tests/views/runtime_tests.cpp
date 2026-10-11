@@ -2,6 +2,9 @@
 using namespace viewtest;
 #include "settings_lists.inc"
 #include "slot_contracts.inc"
+#include "checkbox_contract.inc"
+#include "tree_contract.inc"
+#include "rich_table_contract.inc"
 int main(int argc, char **argv) {
     if (argc != 2)
         return 2;
@@ -191,9 +194,12 @@ int main(int argc, char **argv) {
             expect(field->clipboard() == clipboard, "legacy repeat propagates clipboard service");
             c.runtime->close();
         }
+        checkboxContract(argv[1]);
         settingsLists(argv[1]);
         slotContracts(argv[1]);
-        std::cout << "11 runtime scenarios passed\n";
+        treeContract(argv[1]);
+        richTableContract(argv[1]);
+        std::cout << "14 runtime scenarios passed\n";
         return 0;
     } catch (const std::exception &e) {
         std::cerr << e.what() << '\n';

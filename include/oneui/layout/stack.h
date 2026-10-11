@@ -38,6 +38,8 @@ struct StackFlex {
     bool contentBasis = false;
     std::optional<float> width,height;
     float minWidth=0,minHeight=0;
+    std::optional<float> basisPercent;
+    int order=0;
 };
 
 struct StackLayoutStats { std::uint64_t calculations = 0, measureCacheHits = 0, arrangeCacheHits = 0; };
@@ -111,6 +113,7 @@ private:
     std::vector<FlexItem> layoutItems_;
     StackFlex itemFlex(const std::shared_ptr<Widget>& child, float preferred) const;
     Size itemSize(const std::shared_ptr<Widget>& child) const;
+    std::vector<std::shared_ptr<Widget>> orderedChildren() const;
     std::optional<StyleBox> styleBox_;
 };
 

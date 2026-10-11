@@ -11,6 +11,11 @@
     <Column :class="title" :basis="height" shrink="0"/>
     <InteractiveSurface @click="click"><Text text="Choose"/></InteractiveSurface>
     <Text :spans="spans" :text="title"/>
+    <TreeView :items="rows" v-model="tree_selected"/>
+    <Table :items="rows" multiple="true" row-height="42" header-height="30"
+           selection-column="true" column-dividers="false" selection-column-width="40" sort-column="0"
+           @activate="activate" @edit="edit" @delete="delete" @selection="selection"
+           @current="current" @sort="sort" @cell="cell" @context="context"/>
   </Column>
 </template>
 <style scoped>

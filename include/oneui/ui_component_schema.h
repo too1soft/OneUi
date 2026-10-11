@@ -72,7 +72,10 @@ enum class ValueType { None, Text, Boolean, Integer, Number, Strings, Columns, R
     X(Button, "button", "text variant icon", None) \
     X(DataTable, "table", "items columns selectedKey item-key", Text) \
     X(List, "list", "items selectedIndex", Integer) \
-    X(VirtualList, "virtual-list", "items selectedIndex row-height scroll-offset", Integer)
+    X(VirtualList, "virtual-list", "items selectedIndex row-height scroll-offset", Integer) \
+    X(Checkbox, "checkbox", "text checked tooltip", Boolean) \
+    X(TreeView, "tree-view", "items selectedKey", Text) \
+    X(Table, "table", "items columns multiple row-height header-height selection-column selection-column-width scroll-offset sort-column sort-descending column-dividers", None)
 
 enum class Kind {
 #define ONEUI_KIND(name, tag, props, model) name,
@@ -116,6 +119,9 @@ constexpr bool layoutNumber(std::string_view key) {
 constexpr ValueType propertyType(Kind kind,std::string_view key) {
     if(!supports(kind,key))return ValueType::None;
     if(kind==Kind::FontPicker&&key=="selected")return ValueType::Text;
+    if(kind==Kind::Table && contains("multiple selection-column sort-descending column-dividers",key))return ValueType::Boolean;
+    if(kind==Kind::Table && key=="sort-column")return ValueType::Integer;
+    if(kind==Kind::Table && contains("header-height selection-column-width",key))return ValueType::Number;
     if(kind==Kind::FontPicker&&(key=="confirm-selection"||key=="monospace-only"))return ValueType::Boolean;
     if(kind==Kind::FontPicker&&key=="monospace-items")return ValueType::Rows;
     if(contains("disabled visible selected checked open reduced-motion detail-open wrap closable themed second-collapsed collapsed closing ack-accepted motion active viewing-history can-close can-split can-maximize reorderable hideable loading password read-only chrome-visible",key))return ValueType::Boolean;

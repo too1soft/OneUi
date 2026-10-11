@@ -81,7 +81,9 @@ void Mount::set(Element &e, const std::string &key, const std::wstring &value) {
         e.widget->setAccessibleName(value);
         if (e.component == "ToolButton")
             e.widget->setTooltip(value);
-    } else if (key == "description")
+    } else if (key == "tooltip")
+        e.widget->setTooltip(value);
+    else if (key == "description")
         e.widget->setAccessibleDescription(value);
     else if (key == "title" || key == "label") {
         if (!e.title)
@@ -103,7 +105,9 @@ void Mount::set(Element &e, const std::string &key, const std::wstring &value) {
     } else if (key == "placeholder")
         e.as<TextField>()->setPlaceholder(value);
     else if (key == "selectedKey") {
-        if (e.tabs)
+        if(auto tree=e.as<TreeView>())
+            tree->setSelectedId(value);
+        else if (e.tabs)
             e.tabs->select(value);
         else
             e.table->select(value);
@@ -114,7 +118,9 @@ void Mount::set(Element &e, const std::string &key, const std::wstring &value) {
             w->setText(value);
             if (e.component == "ToolButton")
                 w->setPreferredSize({value.empty() ? 32.0f : 0.0f, 32});
-        } else if (auto w = e.as<Switch>())
+        } else if (auto w = e.as<Checkbox>())
+            w->setText(value);
+        else if (auto w = e.as<Switch>())
             w->setText(value);
         else if (auto w = e.as<TextField>()) {
             if (w->text() != value)
@@ -146,6 +152,14 @@ void Mount::set(Element &e, const std::string &key, bool value) {
         e.as<TextField>()->setReadOnly(value);
     else if (key == "chrome-visible")
         e.as<ScrollView>()->setChromeVisible(value);
+    else if(key=="multiple")
+        e.as<Table>()->setSelectionMode(value?SelectionMode::Multiple:SelectionMode::Single);
+    else if(key=="column-dividers")
+        e.as<Table>()->setColumnDividersVisible(value);
+    else if(key=="selection-column")
+        e.as<Table>()->setSelectionColumnVisible(value);
+    else if(key=="sort-descending")
+        e.as<Table>()->setHeaderSort(e.as<Table>()->headerSortColumn(),value);
     else if (key == "collapsed") {
         for (auto &part : e.collapsible)
             part->setVisible(!value);
@@ -167,8 +181,10 @@ void Mount::set(Element &e, const std::string &key, bool value) {
         e.as<Reveal>()->setOpen(value);
     else if (key == "reduced-motion")
         e.as<Reveal>()->setReducedMotion(value);
-    else if (key == "checked")
-        e.as<Switch>()->setChecked(value);
+    else if (key == "checked") {
+        if (auto checkbox = e.as<Checkbox>()) checkbox->setChecked(value);
+        else e.as<Switch>()->setChecked(value);
+    }
     else
         throw std::invalid_argument("Invalid bool property");
 }
@@ -178,10 +194,17 @@ void Mount::set(Element &e, const std::string &key, float value) {
     if (key == "wheel-step") { e.as<ScrollView>()->setWheelStep(value); return; }
     if (key == "scroll-offset") {
         if (e.component == "VirtualList") e.as<VirtualList>()->setScrollOffset(value);
+        else if(e.component=="Table") e.as<Table>()->setScrollOffset(value);
         else e.as<ScrollView>()->setScrollOffset(value);
         return;
     }
-    if (key == "row-height") { e.as<VirtualList>()->setRowHeight(value); return; }
+    if (key == "row-height") {
+        if(e.component=="Table")e.as<Table>()->setRowHeight(value);
+        else e.as<VirtualList>()->setRowHeight(value);
+        return;
+    }
+    if(key=="header-height") {e.as<Table>()->setHeaderHeight(value);return;}
+    if(key=="selection-column-width") {e.as<Table>()->setSelectionColumnWidth(value);return;}
     if (key == "value") {
         e.as<ProgressBar>()->setValue(std::clamp(value, 0.0f, 1.0f));
         return;
@@ -241,7 +264,10 @@ void Mount::set(Element &e, const std::string &key, float value) {
         throw std::invalid_argument("Invalid layout property");
 }
 void Mount::set(Element &e, const std::string &key, int value) {
-    if (key == "max-lines") {
+    if(key=="sort-column") {
+        if(value < -1)throw std::invalid_argument("sort-column must be at least -1");
+        e.as<Table>()->setHeaderSort(value,e.as<Table>()->headerSortDescending());
+    } else if (key == "max-lines") {
         if (value < 0) throw std::invalid_argument("max-lines must be nonnegative");
         e.as<Label>()->setMaxLines(value);
     }

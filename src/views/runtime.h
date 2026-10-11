@@ -99,6 +99,8 @@ struct Instance {
     std::map<std::string, std::vector<std::wstring>> stringLists;
     struct TableCache;
     std::shared_ptr<TableCache> tableCache;
+    struct RichTableCache;
+    std::shared_ptr<RichTableCache> richTableCache;
     struct PickerCache;
     std::shared_ptr<PickerCache> pickerCache;
     struct WorkspaceCache;
@@ -186,6 +188,8 @@ struct Runtime : std::enable_shared_from_this<Runtime> {
     std::shared_ptr<Instance> build(uint32_t node, const Scopes &, const Slots & = {});
     void install(const std::shared_ptr<Instance> &, uint32_t owner, const Scopes &);
     void wire(const std::shared_ptr<Instance> &);
+    void wireRichTable(const std::shared_ptr<Instance>&);
+    void applyRichTableRows(Instance&, ListState&);
     void repeat(const std::shared_ptr<Instance> &);
     void prepareWorkspaceIndex();
     void workspaceChildren(const std::shared_ptr<Instance> &);

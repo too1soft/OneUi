@@ -106,6 +106,8 @@ Element Mount::make(std::string type, std::vector<Element> children, std::string
     std::shared_ptr<Stack> content;
     if(type=="List")node=b.native(std::make_shared<List>());
     else if(type=="VirtualList")node=b.native(std::make_shared<VirtualList>());
+    else if(type=="TreeView")node=b.native(std::make_shared<TreeView>());
+    else if(type=="Table")node=b.native(std::make_shared<Table>());
     else if(type=="FontPicker")node=b.native(std::make_shared<FontPicker>());
     else if(type=="Slider")node=b.native(std::make_shared<Slider>());
     else if(type=="InteractiveSurface") {
@@ -151,7 +153,9 @@ Element Mount::make(std::string type, std::vector<Element> children, std::string
         auto field = std::make_shared<TextField>();
         field->setClipboard(clipboard_);
         node = b.native(std::move(field));
-    } else if (type == "Switch")
+    } else if (type == "Checkbox")
+        node = b.native(std::make_shared<Checkbox>());
+    else if (type == "Switch")
         node = b.native(std::make_shared<Switch>());
     else if (type == "Select")
         node = b.native(std::make_shared<Select>());

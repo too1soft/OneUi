@@ -47,6 +47,12 @@ const std::map<std::string, ComponentContract> &registry()
 #undef E
 #undef P
 #undef C
+        r.at("Table").events = {
+            {1,"activate",{{"key",4}}}, {2,"edit",{{"key",4}}},
+            {3,"delete",{}}, {4,"selection",{}}, {5,"current",{{"key",4}}},
+            {6,"sort",{{"column",2}}}, {7,"cell",{{"key",4},{"column",2}}},
+            {8,"context",{{"key",4},{"x",3},{"y",3}}},
+        };
         for (const auto *name : {"Input", "Text", "Scroll", "FontPicker", "MediaPicker"}) r.at(name).version = 2;
         ++r.at("Text").version;
         ++r.at("FontPicker").version;
@@ -111,6 +117,9 @@ void validateRecord(const Model& model, const std::string& projection) {
     }
     std::string fields;
     if(projection=="@list.item") fields="id:4 title:4 detail:4";
+    else if(projection=="@tree.item") fields="id:4 parent:4 title:4 detail:4 expanded:1";
+    else if(projection=="@table.row") fields="id:4 cells:5 selected:1";
+    else if(projection=="@table.cell") fields="id:4 text:4";
     else if(projection=="@text.span") fields="id:4 start:2 end:2 rgba:2 monospace:1";
     else if(projection=="@workspace.node") fields="id:4 kind:4 axis:4 ratio:3 first:4 second:4 pane:4";
     else if(projection=="@workspace.placement") fields="id:4 mode:4 x:3 y:3 width:3 height:3 pinned:1 order:2";
@@ -126,6 +135,27 @@ void validateRecord(const Model& model, const std::string& projection) {
         auto found=model.properties.find(name);
         require(found!=model.properties.end() && found->second.tag==uint32_t(field.back()-'0'),
                 "BIND_RECORD: missing or incompatible "+name);
+    }
+    if(projection=="@tree.item")
+        require((model.properties.at("expanded").access & 2)!=0,
+                "BIND_RECORD: TreeView expanded must be writable");
+    if(projection=="@table.row")
+        require((model.properties.at("selected").access & 2)!=0,
+                "BIND_RECORD: Table selected must be writable");
+}
+void validateRecord(const Schema& schema,const Model& model,const std::string& projection) {
+    validateRecord(model,projection);
+    if(projection!="@table.row")return;
+    const auto& cell=schema.model(model.properties.at("cells").item);
+    validateRecord(cell,"@table.cell");
+    const std::map<std::string,uint32_t> optional={
+        {"detail",4},{"icon",4},{"trailing_icon",4},{"foreground",2},{"indicator",2},
+        {"alignment",2},{"weight",2},{"font_size",3},{"icon_size",3},{"badge",4},
+        {"badge_foreground",2},{"badge_background",2}};
+    for(const auto& [name,tag]:optional) {
+        const auto found=cell.properties.find(name);
+        require(found==cell.properties.end() || found->second.tag==tag,
+                "BIND_RECORD: incompatible Table cell "+name);
     }
 }
 Bytes encodeComponents(const std::vector<ComponentContract> &components)

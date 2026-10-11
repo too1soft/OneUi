@@ -38,9 +38,18 @@ bool applyDeclaration(
         if(value=="row"||value=="column"){rule.box.flexDirection=value;return true;}
     } else if(name=="flex-wrap") {
         if(value=="wrap"||value=="nowrap"){rule.box.flexWrap=value=="wrap";return true;}
+    } else if(name=="order") {
+        if(auto number=parseNumber(value);number && std::isfinite(*number) && std::floor(*number)==*number && *number>=-1000000 && *number<=1000000) {
+            rule.box.flexOrder=int(*number);return true;
+        }
+    } else if(name=="flex-basis" && !value.empty() && value.back()=='%') {
+        if(auto number=parseNumber(value.substr(0,value.size()-1));number && std::isfinite(*number) && *number>=0) {
+            rule.box.flexBasis.reset();rule.box.flexBasisPercent=*number;return true;
+        }
     } else if(name=="flex-basis"||name=="min-width"||name=="min-height") {
         if(auto number=parsePx(value);number&&*number>=0) {
-            (name=="flex-basis"?rule.box.flexBasis:name=="min-width"?rule.box.minWidth:rule.box.minHeight)=*number;return true;
+            (name=="flex-basis"?rule.box.flexBasis:name=="min-width"?rule.box.minWidth:rule.box.minHeight)=*number;
+            if(name=="flex-basis")rule.box.flexBasisPercent.reset();return true;
         }
     } else if(name=="flex-grow"||name=="flex-shrink") {
         if(auto number=parseNumber(value);number&&*number>=0) {
@@ -258,6 +267,19 @@ bool applyDeclaration(
         if (auto width = parsePx(value)) {
             rule.box.scrollbarWidth = *width;
             return true;
+        }
+    } else if (name == "table-column-widths") {
+        std::vector<float> widths;
+        for (const auto& token : splitWhitespaceTopLevel(value)) {
+            if (lower(token) == "auto") widths.push_back(0);
+            else if (auto width = parsePx(token); width && std::isfinite(*width) && *width >= 0)
+                widths.push_back(*width);
+            else return false;
+        }
+        if (!widths.empty()) { rule.box.tableColumnWidths = std::move(widths); return true; }
+    } else if (name == "table-selection-width") {
+        if (auto width = parsePx(value); width && std::isfinite(*width) && *width >= 24 && *width <= 128) {
+            rule.box.tableSelectionWidth = *width; return true;
         }
     } else if (name == "transition-duration") {
         if (auto duration = parseDurationMs(value)) {

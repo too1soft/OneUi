@@ -1,10 +1,14 @@
 #include "internal/view_profile.h"
 #include "internal/unicode.h"
 #include "runtime.h"
+#include "rich_table_records.inc"
 namespace oneui::views {
 void Runtime::applyList(Instance &instance, const std::string &property, ListState &state) {
     ONEUI_VIEW_TIME(Rows);
     if(workspaceList(instance,property,state))return;
+    if(instance.element.component=="Table" && property=="items") {
+        applyRichTableRows(instance,state);return;
+    }
     auto &e = instance.element;
     auto wide = [](const std::string &s) { ONEUI_VIEW_TIME(Conversion); return unicode::fromUtf8(s); };
     auto field = [&](const std::shared_ptr<Scope> &scope, const char *name) {
@@ -49,6 +53,15 @@ void Runtime::applyList(Instance &instance, const std::string &property, ListSta
             spans.push_back(span); previousEnd = end;
         }
         label->setRichText(label->text(), std::move(spans));
+    } else if (e.component == "TreeView") {
+        std::vector<TreeItem> values;
+        for(size_t i=0;i<state.items.size();++i) {
+            const auto& item=state.items[i];
+            values.push_back({wide(state.keys[i]),wide(field(item,"parent").text),
+                wide(field(item,"title").text),wide(field(item,"detail").text),
+                bool(field(item,"expanded").integer)});
+        }
+        e.as<TreeView>()->setItems(std::move(values));
     } else if (e.component == "List" || e.component == "VirtualList") {
         std::vector<ListItem> values;
         for (const auto &item : state.items) values.push_back({wide(field(item, "title").text), wide(field(item, "detail").text)});
@@ -70,7 +83,7 @@ void Runtime::applyList(Instance &instance, const std::string &property, ListSta
         factory.set(e, property, values);
     } else if (e.component == "DataTable" && property == "items") {
         applyTableRows(instance, state);
-    } else if (e.component == "DataTable" && property == "columns") {
+    } else if ((e.component == "DataTable" || e.component == "Table") && property == "columns") {
         std::vector<TableColumn> columns;
         for (const auto &item : state.items) {
             TableColumn c;

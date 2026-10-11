@@ -6,6 +6,7 @@
     <Text v-if="visible" text="conditional"/>
     <Text v-for="item in rows" :key="item.id" :text="item.text"/>
     <NativeHost host="terminal"/>
+    <Checkbox text="permission" tooltip="Permission toggle" v-model="checked"/>
   </Column>
 </template>
 

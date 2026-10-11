@@ -1,7 +1,52 @@
 #include "oneui/controls/table.h"
 #include <algorithm>
 #include <numeric>
+#include <cmath>
 namespace oneui {
+void Table::setColumnLayout(std::optional<std::vector<float>> widths,
+                            std::optional<float> selectionWidth) {
+    if (widths && (widths->empty() || std::any_of(widths->begin(), widths->end(),
+            [](float width) { return !std::isfinite(width) || width < 0; }))) return;
+    if (selectionWidth && (!std::isfinite(*selectionWidth) || *selectionWidth < 24 || *selectionWidth > 128)) return;
+    if (columnWidths_ == widths && styledSelectionWidth_ == selectionWidth) return;
+    columnWidths_ = std::move(widths);
+    styledSelectionWidth_ = selectionWidth;
+    projectColumns();
+}
+void Table::projectColumns() {
+    columns_ = authoredColumns_;
+    if (columnWidths_) {
+        columns_.resize(std::min(columns_.size(), columnWidths_->size()));
+        for (size_t i = 0; i < columns_.size(); ++i) columns_[i].width = (*columnWidths_)[i];
+    }
+    if (focusedHeader_ >= int(columns_.size())) focusedHeader_ = -1;
+    if (pressedColumn_ >= int(columns_.size())) pressedColumn_ = -1;
+    invalidate();
+}
+bool Table::reconcileRichRows(std::vector<std::vector<TableCell>> rows,
+                              const std::vector<int>& oldToNew) {
+    if (oldToNew.size() != rows_.size()) return false;
+    std::vector<bool> used(rows.size());
+    for (const auto index : oldToNew) {
+        if (index < -1 || index >= int(rows.size())) return false;
+        if (index >= 0) {
+            if (used[index]) return false;
+            used[index] = true;
+        }
+    }
+    std::vector<std::vector<std::wstring>> plain;
+    plain.reserve(rows.size());
+    for (const auto& row : rows) {
+        std::vector<std::wstring> cells;
+        cells.reserve(row.size());
+        for (const auto& cell : row) cells.push_back(cell.text);
+        plain.push_back(std::move(cells));
+    }
+    rows_ = std::move(plain);
+    richRows_ = std::move(rows);
+    remapRowsState(oldToNew);
+    return true;
+}
 void Table::remapRowsState(const std::vector<int>& oldToNew) {
     const auto previous=selection_.selectedIndices();
     const auto selected=selectedIndex();

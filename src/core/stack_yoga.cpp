@@ -142,7 +142,7 @@ struct Stack::YogaState {
         YGNodeStyleSetPadding(entry.node, YGEdgeRight, std::max(0.0f, stack->padding_.right));
         YGNodeStyleSetPadding(entry.node, YGEdgeBottom, std::max(0.0f, stack->padding_.bottom));
         YGNodeStyleSetPadding(entry.node, YGEdgeLeft, std::max(0.0f, stack->padding_.left));
-        const auto& children = stack->children();
+        const auto children = stack->orderedChildren();
         // Keep native and Yoga identities stable until the child list changes.
         bool same = entry.children.size() == children.size();
         for (size_t i = 0; same && i < children.size(); ++i)
@@ -187,7 +187,8 @@ struct Stack::YogaState {
             precedingWeight=std::max(precedingWeight,weight);
             YGNodeStyleSetFlexGrow(child.node, flex.grow);
             YGNodeStyleSetFlexShrink(child.node, flex.shrink);
-            if (flex.basis) YGNodeStyleSetFlexBasis(child.node, *flex.basis);
+            if (flex.basisPercent) YGNodeStyleSetFlexBasisPercent(child.node,*flex.basisPercent);
+            else if (flex.basis) YGNodeStyleSetFlexBasis(child.node, *flex.basis);
             else if (flex.contentBasis) YGNodeStyleSetFlexBasisAuto(child.node);
             else YGNodeStyleSetFlexBasis(child.node, std::max(0.0f, column ? preferred.height : preferred.width));
             YGNodeStyleSetWidth(child.node,flex.width.value_or(YGUndefined));

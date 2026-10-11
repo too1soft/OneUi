@@ -891,3 +891,57 @@ Rust `ViewMount::from_dispatcher` 可将声明式页面挂入当前窗口中的�
 安装；替换样式沿用宿主的 transient 样式，使图片背景上的 Select 弹出项保留应用主题。
 开发工具构建的布局快照包含声明式 CSS 类名与已解析样式；诊断使用弱引用，不保留退役控件。
 测试捕获构建提供 `Widget::test_freeze_caret`，用于固定输入框光标，生产构建不启用该入口。
+
+
+### Checkbox boolean input
+
+`Checkbox` is a leaf component with `text`, `checked`, and `tooltip` properties.
+Use `v-model` with a writable `bool` property. Native mouse and Space-key changes
+write through the guarded VM mutation path; programmatic VM notifications do not
+write back, and disconnected or disabled controls cannot mutate the VM.
+
+```xml
+<Checkbox text="Owner read" tooltip="Toggle owner read permission" v-model="ownerRead"/>
+```
+
+The stylesheet tag is `checkbox`. Background, border, foreground and
+`content-background-color` map to the same native checkbox styles used by the C API;
+`:checked`, `:selected`, `:hover`, `:pressed`, `:focus` and `:disabled` retain their native semantics.
+
+### Structured tree and rich table records
+
+`TreeView :items="nodes" v-model="selected"` consumes a keyed record with
+`id`, `parent`, `title`, `detail` (UTF-8), and writable `expanded` (bool).
+Selection uses stable IDs. Native expansion writes the corresponding live item
+lease; model refreshes preserve that expansion without echoing changes back.
+Its `tree-view` CSS tag consumes the native tree's list typography and state styles.
+
+`Table` adds rich cells and multiple selection without changing the existing
+`DataTable` contract. Its `items` records require `id:utf8`, `cells:list<Cell>`
+and writable `selected:bool`. Cells require `id:utf8`, `text:utf8`; optional
+fields are `detail`, `icon`, `trailing_icon`, `badge` (UTF-8), `alignment`,
+`weight`, `foreground`, `indicator`, `badge_foreground`, `badge_background`
+(i64), and `font_size`, `icon_size` (f64). Icons use the authoring icon names;
+colors use RRGGBBAA, with -1 selecting the native default. Cell types and value
+ranges are checked before publishing native rows.
+
+Columns use `oneui.v1.Column`. `multiple`, `row-height`, `header-height`,
+`selection-column`, `selection-column-width`, `scroll-offset`, `sort-column`
+and `sort-descending` configure the existing virtualized native Table.
+Events are `activate(key)`, `edit(key)`, `delete()`, `selection()`, `current(key)`,
+`sort(column)`, `cell(key,column)` and `context(key,x,y)`. Keys are UTF-8,
+columns are i64, and coordinates are f64 in native window coordinates.
+Selection changes update only changed item leases before the selection command.
+Closed views suppress retained-control callbacks. Row updates retain keyed
+selection and the top visible business row; structural resets currently rebuild
+the native row data and do not promise keyboard-range-anchor retention.
+
+### Table 列宽容器查询
+
+`table-column-widths: auto 76px` 保留前两列并覆盖宽度，`auto` 对应原生弹性宽度 0；宽屏可设为 `auto 100px 160px`。覆盖不改变行、选中集合及列的模型身份，移除样式恢复原始列宽。模型重新发布 columns 时仍保留有效的查询覆盖，不需要布局回调写 VM。`table-selection-width: 40px` 覆盖选择列宽度，范围 24–128px。这些样式只由 Table/DataTable 消费，非法数值及用于其他控件会在编译期报错。
+
+### 工具栏布局与行身份补充（WP5 路线 C）
+
+`order` 是有界整数（−1000000 至 1000000），相同 order 保持声明顺序；只改变布局顺序，不重建控件或 VM。`flex-basis` 可使用非负 px 或百分比，百分比相对父 Stack 内容区主轴；未确定的自然测量使用内容尺寸。百分比只扩展 flex-basis，不扩展 width/height。容器查询删除覆盖后恢复原声明，支持同一个输入框在窄屏独占一行、宽屏回到导航与操作之间。
+
+Table 的 `column-dividers` 绑定原生分隔线开关；富行重排按稳定键重映射活动行、选中集合和 Shift 锚点，文本更新不会重置锚点。新增图标别名 `link-native`、`file-native`、`compass` 对应已有原生几何，不改变旧别名。

@@ -14,7 +14,9 @@ StyleBox mergeStyleBox(StyleBox base, const StyleBox& overlay) {
     if(overlay.display)base.display=overlay.display;
     if(overlay.flexDirection)base.flexDirection=overlay.flexDirection;
     if(overlay.flexWrap)base.flexWrap=overlay.flexWrap;
-    if(overlay.flexBasis)base.flexBasis=overlay.flexBasis;
+    if(overlay.flexBasis){base.flexBasis=overlay.flexBasis;base.flexBasisPercent.reset();}
+    if(overlay.flexBasisPercent){base.flexBasisPercent=overlay.flexBasisPercent;base.flexBasis.reset();}
+    if(overlay.flexOrder)base.flexOrder=overlay.flexOrder;
     if(overlay.flexGrow)base.flexGrow=overlay.flexGrow;
     if(overlay.flexShrink)base.flexShrink=overlay.flexShrink;
     if(overlay.minWidth)base.minWidth=overlay.minWidth;
@@ -122,6 +124,8 @@ StyleBox mergeStyleBox(StyleBox base, const StyleBox& overlay) {
     if (overlay.scrollbarWidth) {
         base.scrollbarWidth = overlay.scrollbarWidth;
     }
+    if (overlay.tableColumnWidths) base.tableColumnWidths = overlay.tableColumnWidths;
+    if (overlay.tableSelectionWidth) base.tableSelectionWidth = overlay.tableSelectionWidth;
     if (overlay.transitionDurationMs) {
         base.transitionDurationMs = overlay.transitionDurationMs;
     }

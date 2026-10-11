@@ -377,4 +377,28 @@ ProductShellStyle productShellStyleFromStyleSheet(const StyleSheet& sheet) {
     return style;
 }
 
+CheckboxStyleOverride checkboxStyleOverrideFromStyleSheet(const StyleSheet& sheet, StyleNode node) {
+    const auto state = [&](StylePseudoMask mask) {
+        const auto box = resolveState(sheet, node, mask);
+        CheckboxStateStyleOverride result;
+        result.boxBackground = box.background.color;
+        result.boxBorder = box.borderColor;
+        result.checkColor = box.content.backgroundColor;
+        result.labelColor = box.foreground;
+        result.borderWidth = box.borderWidth;
+        result.radius = box.radius;
+        if (box.outlineColor || box.outlineWidth || box.outlineOffset || box.radius)
+            result.focusRing = focusRingOverrideFromStyleBox(box);
+        return result;
+    };
+    CheckboxStyleOverride result;
+    result.normal = state(StyleStateNone);
+    result.hovered = state(StyleStateHover);
+    result.pressed = state(StyleStateActive);
+    result.selected = state(StyleStateSelected);
+    result.disabled = state(StyleStateDisabled);
+    result.focusVisible = state(StyleStateFocus);
+    return result;
+}
+
 } // namespace oneui

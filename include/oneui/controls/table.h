@@ -49,6 +49,10 @@ public:
     Table();
 
     void setColumns(std::vector<TableColumn> columns);
+    // Container-query presentation: a prefix of authored columns, 0 = flexible.
+    // Clearing the override restores every authored width without changing rows.
+    void setColumnLayout(std::optional<std::vector<float>> widths,
+                         std::optional<float> selectionWidth = {});
     void setColumnPresentation(int column, TextAlign alignment, bool action);
     // Percent accepts a finite decimal in 0..100 with an optional '%' suffix.
     // Invalid values retain their text and do not imply a zero measurement.
@@ -56,9 +60,14 @@ public:
     void setHeaderHeight(float height);
     // Enables sortable headers. Activations use onCellAction(-1, column).
     void setHeaderSort(int column, bool descending);
+    int headerSortColumn() const { return sortColumn_; }
+    bool headerSortDescending() const { return sortDescending_; }
     void setOnCellAction(std::function<void(int, int)> callback);
     void setRows(std::vector<std::vector<std::wstring>> rows);
     void setRichRows(std::vector<std::vector<TableCell>> rows);
+    // Replace keyed rows while remapping active row, range anchor and selection.
+    bool reconcileRichRows(std::vector<std::vector<TableCell>> rows,
+                           const std::vector<int>& oldToNew);
     // Structural deltas preserve selection, keyboard anchor and pixel scroll.
     // MOVE destination is measured after removal, matching OneView's protocol.
     bool insertRows(std::size_t index, std::vector<std::vector<std::wstring>> rows);
@@ -131,6 +140,10 @@ private:
     void resetInteractionState() override;
 
     std::vector<TableColumn> columns_;
+    std::vector<TableColumn> authoredColumns_;
+    std::optional<std::vector<float>> columnWidths_;
+    std::optional<float> styledSelectionWidth_;
+    void projectColumns();
     std::vector<std::vector<std::wstring>> rows_;
     std::vector<std::vector<TableCell>> richRows_;
     SelectionModel selection_;
@@ -161,7 +174,7 @@ private:
     bool selectionColumnVisible_ = false;
     bool pressedSelection_ = false;
     float selectionColumnWidth_ = 44.0f;
-    float selectionGutter() const { return selectionColumnVisible_ ? selectionColumnWidth_ : 0.0f; }
+    float selectionGutter() const { return selectionColumnVisible_ ? styledSelectionWidth_.value_or(selectionColumnWidth_) : 0.0f; }
     float scrollOffset_ = 0.0f;
     SmoothScrollMotion scrollMotion_;
     std::optional<TableStyleOverride> styleOverride_;

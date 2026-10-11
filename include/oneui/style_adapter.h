@@ -29,5 +29,6 @@ ONEUI_API TreeViewStyleOverride treeViewStyleOverrideFromStyleSheet(const StyleS
 ONEUI_API InteractiveSurfaceStyle interactiveSurfaceStyleFromStyleSheet(const StyleSheet& sheet, StyleNode node);
 ONEUI_API StyleBox cardStyleBoxFromStyleSheet(const StyleSheet& sheet, StyleNode node);
 ONEUI_API ProductShellStyle productShellStyleFromStyleSheet(const StyleSheet& sheet);
+ONEUI_API CheckboxStyleOverride checkboxStyleOverrideFromStyleSheet(const StyleSheet& sheet, StyleNode node);
 
 } // namespace oneui

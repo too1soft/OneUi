@@ -1,5 +1,6 @@
 model Root {
     rw title: utf8
+    rw checked: bool
     r visible: bool
     r enabled: bool
     r busy: bool

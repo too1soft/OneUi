@@ -25,6 +25,8 @@
 #include "oneui/ui_style_diagnostics.h"
 #include "oneui/controls/text_field.h"
 #include "oneui/controls/switch.h"
+#include "oneui/controls/checkbox.h"
+#include "oneui/controls/tree_view.h"
 #include "oneui/controls/select.h"
 #include "oneui/controls/table.h"
 #include "oneui/clipboard.h"
@@ -91,7 +93,7 @@ private:
         if(entry.component=="Input" || entry.component=="SearchInput" || entry.component=="Select") {
             const auto size=w->preferredSize();w->setPreferredSize({size.width,controlHeight(density_)});
         }
-        if(auto table=std::dynamic_pointer_cast<Table>(w)) {
+        if(auto table=std::dynamic_pointer_cast<Table>(w); table && entry.component=="DataTable") {
             // Retain the top business row when changing density.
             const float row=table->rowHeight()>0?table->scrollOffset()/table->rowHeight():0;
             table->setRowHeight(tableRowHeight(density_));table->setHeaderHeight(controlHeight(density_));
@@ -150,11 +152,16 @@ private:
             v->setStyleOverride(textFieldStyleOverrideFromStyleSheet(sheet,n));
             v->setFontSize(box.fontSize.value_or(14));
         }
+        else if (auto v = std::dynamic_pointer_cast<Checkbox>(w)) v->setStyleOverride(checkboxStyleOverrideFromStyleSheet(sheet,n));
+        else if (auto v = std::dynamic_pointer_cast<TreeView>(w)) v->setStyleOverride(treeViewStyleOverrideFromStyleSheet(sheet,n));
         else if (auto v = std::dynamic_pointer_cast<Switch>(w)) v->setStyleOverride(switchStyleOverrideFromStyleSheet(sheet,n));
         else if (auto v = std::dynamic_pointer_cast<Select>(w)) v->setStyleOverride(selectStyleOverrideFromStyleSheet(sheet,n));
         else if (auto v = std::dynamic_pointer_cast<List>(w)) v->setStyleOverride(listStyleOverrideFromStyleSheet(sheet,n));
         else if (auto v = std::dynamic_pointer_cast<VirtualList>(w)) v->setStyleOverride(listStyleOverrideFromStyleSheet(sheet,n));
-        else if (auto v = std::dynamic_pointer_cast<Table>(w)) v->setStyleOverride(tableStyleOverrideFromStyleSheet(sheet,n));
+        else if (auto v = std::dynamic_pointer_cast<Table>(w)) {
+            v->setStyleOverride(tableStyleOverrideFromStyleSheet(sheet,n));
+            v->setColumnLayout(box.tableColumnWidths, box.tableSelectionWidth);
+        }
         else if (auto v = std::dynamic_pointer_cast<ScrollView>(w)) {
             v->setStyleBox(box);
             v->setScrollbarStyle(box.scrollbarColor.value_or(box.foreground.value_or(Color{148,163,184,180})),
@@ -358,6 +365,10 @@ public:
             auto binding=std::make_shared<Binding<std::wstring>>(source); own(binding);
             e.table->selectionValue=[binding] {const std::wstring fallback; return std::wstring(binding->get(fallback));};
             bind(e,"selectedKey",source); e.table->selected=[binding](std::wstring key) { std::wstring fallback; binding->set(std::move(key),fallback); };
+        } else if(auto tree=e.as<TreeView>()) {
+            auto binding=std::make_shared<Binding<std::wstring>>(source);own(binding);
+            bind(e,"selectedKey",source);
+            tree->setOnSelectionChanged([binding](const std::wstring& key){std::wstring fallback;binding->set(key,fallback);});
         } else { e.as<TextField>()->bindText(source); }
     }
     void model(Element e,State<float>& source) {
@@ -368,7 +379,10 @@ public:
         if(!e.tabs)throw std::invalid_argument("close requires Tabs");
         auto weak=std::weak_ptr<Life>(life_);e.tabs->closed=[weak,callback=std::move(callback)](std::wstring id){if(!weak.expired() && callback)callback(std::move(id));};
     }
-    void model(Element e,State<bool>& source) { e.as<Switch>()->bindChecked(source); }
+    void model(Element e,State<bool>& source) {
+        if (auto checkbox=e.as<Checkbox>()) checkbox->bindChecked(source);
+        else e.as<Switch>()->bindChecked(source);
+    }
     void model(Element e,State<int>& source) { e.as<Select>()->bindSelectedIndex(source); }
     template<class T> void modelTyped(Element e,State<T>& source) { model(e,source); }
     void click(Element e,VmCommand& command) {

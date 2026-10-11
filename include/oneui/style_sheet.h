@@ -106,6 +106,11 @@ struct StyleBox {
     // never dim text, icons, borders, focus rings or child widgets.
     std::optional<float> backgroundOpacity;
     std::optional<float> contentBackgroundOpacity;
+    // Table presentation only; omitted columns are retained in the authored model.
+    std::optional<std::vector<float>> tableColumnWidths;
+    std::optional<float> tableSelectionWidth;
+    std::optional<float> flexBasisPercent;
+    std::optional<int> flexOrder;
 };
 
 struct StyleRule {
