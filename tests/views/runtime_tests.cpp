@@ -9,6 +9,23 @@ int main(int argc, char **argv) {
         return 2;
     try {
         {
+            // The typed contract must admit the metrics consumed by native Tabs,
+            // and preserve authored selected colors instead of the default palette.
+            const auto css = oneui::ui::syntax::css(
+                "Tabs.session {background-color:#202022;content-background-color:#202022;"
+                "color:#ededee;text-inset:12px;tab-indicator-color:#0065d5;"
+                "tab-indicator-inset:12px;tab-indicator-height:0px;tab-outline-width:1px;tab-trailing-inset:4px;}"
+                "Tabs.session:selected {content-background-color:#303033;color:#ededee;}");
+            oneui::StyleSheet sheet;
+            std::string error;
+            expect(sheet.addRulesFromCss(css,&error), "typed Tabs CSS parses");
+            const auto selected=sheet.resolve({"tabs",{"one-Tabs","session"},oneui::StyleStateSelected});
+            expect(selected.content.backgroundColor->r==0x30 && selected.foreground->r==0xed,
+                   "selected Tabs keeps contrasting authored background and ink");
+            expect(selected.tabIndicatorHeight==0.0f && selected.tabOutlineWidth==1.0f,
+                   "typed Tabs keeps indicator and outline metrics");
+        }
+        {
             Case c(argv[1]);
             c.start();
             auto state = c.runtime->root->children[6]->element.as<oneui::StateView>();
