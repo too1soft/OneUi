@@ -1,8 +1,24 @@
 #include "oneui/ui_declarative.h"
 #include "data_menu.h"
+#include <sstream>
+#include <cmath>
 #include "oneui/controls/popup.h"
 namespace oneui::ui {
 void Mount::set(Element &e, const std::string &key, const std::wstring &value) {
+    if(e.component=="TimeSeriesChart" && key=="grid-style") {
+        std::wistringstream input(value); int vertical; float width; wchar_t extra;
+        if(!(input>>vertical>>width) || (input>>extra) || vertical<0 || vertical>16 || !std::isfinite(width) || width<=0)
+            throw std::invalid_argument("Chart grid-style requires count and positive line width");
+        e.as<TimeSeriesChart>()->setGridStyle(vertical,width);return;
+    }
+    if(e.component=="TimeSeriesChart" && key=="plot-insets") {
+        std::wistringstream input(value); Insets insets{}; wchar_t extra;
+        if(!(input>>insets.top>>insets.right>>insets.bottom>>insets.left) || (input>>extra) ||
+           !std::isfinite(insets.top) || !std::isfinite(insets.right) || !std::isfinite(insets.bottom) || !std::isfinite(insets.left) ||
+           insets.top<0 || insets.right<0 || insets.bottom<0 || insets.left<0)
+            throw std::invalid_argument("Chart plot-insets requires four nonnegative numbers");
+        e.as<TimeSeriesChart>()->setPlotInsets(insets);return;
+    }
     if(e.component=="Popup" && key=="placement") {
         const std::map<std::wstring,PopupPreferredPlacement> placements{
             {L"bottom-start",PopupPreferredPlacement::BottomStart}, {L"bottom-end",PopupPreferredPlacement::BottomEnd},
@@ -198,6 +214,14 @@ void Mount::set(Element &e, const std::string &key, const std::string &value) {
         set(e, key, wide(value));
 }
 void Mount::set(Element &e, const std::string &key, bool value) {
+    if(e.component=="TimeSeriesChart") {
+        auto chart=e.as<TimeSeriesChart>();
+        if(key=="smooth"){chart->setSmoothCurves(value);return;}
+        if(key=="area-fill"){chart->setAreaFill(value);return;}
+        if(key=="dashed-grid"){chart->setDashedGrid(value);return;}
+        if(key=="axes-visible"){chart->setAxesVisible(value);return;}
+        if(key=="latest-point"){chart->setLatestPointVisible(value);return;}
+    }
     if(e.component=="Popup" && key=="open") {e.as<Popup>()->setOpen(value);return;}
     if(key=="placeholder-when-focused") {e.as<TextField>()->setPlaceholderVisibleWhenFocused(value);return;}
     if(e.component=="ReorderableGrid") {
@@ -256,6 +280,12 @@ void Mount::set(Element &e, const std::string &key, bool value) {
 }
 void Mount::set(Element &e, const std::string &key, float value) {
     syntax::validateLayoutNumber(key, value);
+    if(e.component=="TimeSeriesChart") {
+        auto chart=e.as<TimeSeriesChart>();
+        if(key=="range-min"){chart->setRange(value,chart->maximum());return;}
+        if(key=="range-max"){chart->setRange(chart->minimum(),value);return;}
+        if(key=="line-width"){chart->setLineWidth(value);return;}
+    }
     if(e.component=="Popup") {
         auto popup=e.as<Popup>();
         if(key.rfind("anchor-",0)==0) {
@@ -371,6 +401,13 @@ void Mount::set(Element &e, const std::string &key, float value) {
     styles_->updateAuthoredFlex(e.widget,e.flex);
 }
 void Mount::set(Element &e, const std::string &key, int value) {
+    if(e.component=="TimeSeriesChart") {
+        if(key=="grid-lines") {e.as<TimeSeriesChart>()->setGridLines(value);return;}
+        if(key=="fill-alpha") {
+            if(value<0 || value>255)throw std::invalid_argument("Chart fill-alpha range");
+            e.as<TimeSeriesChart>()->setFillAlpha(static_cast<unsigned char>(value));return;
+        }
+    }
     if(e.component=="ReorderableGrid" && key=="column-count") {
         if(value<1)throw std::invalid_argument("column-count must be positive");
         e.as<ReorderableGrid>()->setColumnCount(value);return;

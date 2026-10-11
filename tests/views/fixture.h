@@ -144,6 +144,10 @@ struct Case {
         a.text(id(image, "Item", "text"), "Alpha");
         b.text(id(image, "Item", "text"), "Beta");
         vm.items = {&a, &b};
+        for(const auto* property:{"series","positions","labels"}) {
+            const auto& props=image.schema.model("Root").properties;
+            if(props.count(property))vm.lists[props.at(property).id]={};
+        }
         runtime = std::make_shared<Runtime>(image);
     }
     void start() { runtime->initialize(&vm.table, &vm); }

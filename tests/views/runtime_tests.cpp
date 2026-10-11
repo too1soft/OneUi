@@ -10,10 +10,12 @@ using namespace viewtest;
 #include "tree_contract.inc"
 #include "rich_table_contract.inc"
 #include "rich_table_reorder.inc"
+#include "chart_contract.inc"
 int main(int argc, char **argv) {
     if (argc != 2)
         return 2;
     try {
+        chartContract(argv[1]);
         surfaceDrag(argv[1]);
         {
             Case c(argv[1]);
@@ -22,7 +24,7 @@ int main(int argc, char **argv) {
             expect(label->text() == L"initial", "initial UTF8");
             auto flow = c.runtime->root->children.back()->element.as<oneui::Stack>();
             expect(flow->direction() == oneui::StackDirection::Row, "bound row initial direction");
-            auto progress=std::dynamic_pointer_cast<oneui::ProgressBar>(flow->children().back());
+            auto progress=std::dynamic_pointer_cast<oneui::ProgressBar>(flow->children()[2]);
             progress->setFrame({0,0,100,6});
             oneui::test_support::RecordingCanvas painted;
             progress->paint(painted);

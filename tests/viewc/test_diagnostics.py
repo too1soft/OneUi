@@ -10,6 +10,12 @@ model Child key id { r id:utf8 r name:utf8 }'''
 
 
 class DiagnosticTests(CompilerCase):
+    def test_chart_inspection_and_samples(self):
+        schema = 'model Basic {r title:utf8 r series:list<Series> r positions:list<oneui.v1.NumberItem> r labels:list<oneui.v1.StringItem> command inspect(index:i64,pinned:bool)} model Series key id {r id:utf8 r name:utf8 r rgba:i64 r values:list<Point>} model Point key id {r id:utf8 r value:f64 r valid:bool}'
+        source = '<TimeSeriesChart :series="series" :sample-positions="positions" :axis-labels="labels" range-min="0" range-max="100" grid-lines="3" smooth="false" area-fill="true" axes-visible="false" latest-point="true" dashed-grid="false" line-width="1.8" fill-alpha="24" plot-insets="10 8 19 36" @inspection="inspect"/>'
+        self.compile(source, schema)
+        self.compile(source.replace('range-max="100"', ':range-max="title"'), schema, error='BIND_TYPE')
+
     def test_monitor_presentation_contracts(self):
         source = '<template view-model="Basic"><Row :class="title"><Progress :value="ratio"/><Button icon="sparkles"/></Row></template><style scoped>Progress {color:#123456;background:#111111;border-radius:2px;}</style>'
         self.compile(source, SCHEMA, raw=True)

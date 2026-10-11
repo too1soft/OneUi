@@ -1,6 +1,7 @@
 #include "internal/view_profile.h"
 #include "internal/unicode.h"
 #include "runtime.h"
+#include <limits>
 #include "rich_table_records.inc"
 #include "data_menu_records.h"
 namespace oneui::views {
@@ -124,6 +125,14 @@ void Runtime::applyList(Instance &instance, const std::string &property, ListSta
             columns.push_back(std::move(c));
         }
         factory.set(e, property, columns);
+    } else if (e.component == "TimeSeriesChart" && property == "axis-labels") {
+        std::vector<std::wstring> labels;
+        for(const auto& item:state.items)labels.push_back(wide(field(item,"value").text));
+        e.as<TimeSeriesChart>()->setAxisLabels(std::move(labels));
+    } else if (e.component == "TimeSeriesChart" && property == "sample-positions") {
+        std::vector<double> positions;
+        for(const auto& item:state.items)positions.push_back(field(item,"value").number);
+        check(e.as<TimeSeriesChart>()->setSamplePositions(std::move(positions)),ONEUI_VIEW_TYPE,"Chart sample positions");
     } else if (e.component == "TimeSeriesChart") {
         std::vector<TimeSeriesChartSeries> series;
         for (const auto &item : state.items) {
@@ -131,8 +140,13 @@ void Runtime::applyList(Instance &instance, const std::string &property, ListSta
             s.name = wide(field(item, "name").text);
             auto rgba = uint32_t(field(item, "rgba").integer);
             s.color = {uint8_t(rgba >> 24), uint8_t(rgba >> 16), uint8_t(rgba >> 8), uint8_t(rgba)};
-            for (const auto &value : nested(item, "values").items)
-                s.values.push_back(field(value, "value").number);
+            for (const auto &value : nested(item, "values").items) {
+                const auto& fields=image.schema.model(value->table.model_id).properties;
+                auto valid=fields.find("valid");
+                check(valid==fields.end() || valid->second.tag==1,ONEUI_VIEW_TYPE,"Chart validity type");
+                s.values.push_back(valid!=fields.end() && !field(value,"valid").integer
+                    ? std::numeric_limits<double>::quiet_NaN() : field(value,"value").number);
+            }
             series.push_back(std::move(s));
         }
         factory.set(e, property, series);

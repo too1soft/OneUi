@@ -44,6 +44,12 @@ std::function<void()> resetProperty(ui::Mount &factory,ui::Element &target,
         if(target.tabs)return [w=target.tabs]{w->update({});};
     }
     if(key=="columns")return [w=target.as<Table>()]{w->setColumns({});};
+    if(target.component=="TimeSeriesChart") {
+        if(key=="sample-positions")return [w=target.as<TimeSeriesChart>()]{w->setSamplePositions({});};
+        if(key=="axis-labels")return [w=target.as<TimeSeriesChart>()]{w->setAxisLabels({});};
+        if(key=="grid-style")return [w=target.as<TimeSeriesChart>()]{w->setGridStyle(5,1);};
+        if(key=="plot-insets")return [w=target.as<TimeSeriesChart>()]{w->setPlotInsets({4,2,2,2});};
+    }
     if(key=="series")return [w=target.as<TimeSeriesChart>()]{w->setSeries({});};
     if(key=="size")return [w=target.widget,size=fresh.widget->preferredSize()]{w->setPreferredSize(size);};
     Value value;
@@ -54,6 +60,11 @@ std::function<void()> resetProperty(ui::Mount &factory,ui::Element &target,
         if(key=="wrap")value.integer=target.component=="Row" || target.component=="FormRow" ||
             target.component=="FormGrid" || target.component=="Toolbar" || target.component=="ActionBar";
         if(key=="open")value.integer=fresh.as<Reveal>()->open();
+    }
+    if(target.component=="TimeSeriesChart") {
+        if(key=="fill-alpha")value.integer=32;
+        if(key=="grid-lines")value.integer=4;
+        if(key=="axes-visible" || key=="smooth" || key=="area-fill" || key=="dashed-grid")value.integer=1;
     }
     if(value.tag==2 && key=="selectedIndex") {
         if(target.component=="List")value.integer=fresh.as<List>()->selectedIndex();
@@ -66,7 +77,7 @@ std::function<void()> resetProperty(ui::Mount &factory,ui::Element &target,
             {"collapsed-extent",0},{"min-column-width",320},{"max-width",880},
             {"breakpoint",target.component=="SidebarLayout" ? 960 : 800},
             {"pane-width",target.component=="SidebarLayout" ? 208 : 380},{"value",0},
-            {"row-height",42},{"content-height",0},{"wheel-step",48},{"scroll-offset",0}};
+            {"range-min",0},{"range-max",1},{"line-width",2.25},{"row-height",42},{"content-height",0},{"wheel-step",48},{"scroll-offset",0}};
         auto found=numbers.find(key);
         check(found!=numbers.end(),ONEUI_VIEW_TYPE,"Missing reload numeric default");
         value.number=found->second;

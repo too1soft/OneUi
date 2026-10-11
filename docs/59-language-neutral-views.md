@@ -1057,3 +1057,20 @@ both viewc and the runtime before compiling/using views that bind Row.class.
 native palette. Its value is a 0–1 fraction; generic `min`/`max` describe layout
 constraints, not a progress range. The `sparkles` icon names the existing
 workbench sparkle glyph. No public C++ class layout changed.
+
+
+### TimeSeriesChart presentation and inspection
+
+`series` accepts structural records with `id:utf8`, `name:utf8`, `rgba:i64`,
+`values:list<point>`. A point has `id:utf8`, `value:f64` and optional `valid:bool`;
+explicit false projects a gap (NaN), not zero. Existing NumberItem series remain
+supported. `sample-positions` uses NumberItem; `axis-labels` uses StringItem.
+
+The template can bind `range-min/max`, `smooth`, `area-fill`, `axes-visible`,
+`latest-point`, `dashed-grid`, `line-width`, `fill-alpha`, and `grid-lines`.
+`plot-insets` is four finite nonnegative numbers in top/right/bottom/left order;
+`grid-style` is vertical line count and stroke width (for example `0 0.7`).
+`@inspection(index:i64,pinned:bool)` forwards native hover/pin/clear semantics.
+Range, data, rendering, and tooltip behavior remain the native chart's contract.
+The chart COMP revision changes; rebuild viewc and runtime together. The runtime
+IR test covers authored grid pixels, gaps, native inspection and balanced leases.

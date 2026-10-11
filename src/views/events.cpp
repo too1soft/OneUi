@@ -137,7 +137,11 @@ void Runtime::wire(const std::shared_ptr<Instance> &instance) {
                               event[7]);
             }
         };
-        if(name=="menuActivated" && element.component=="DataMenu")
+        if(name=="inspection" && element.component=="TimeSeriesChart")
+            element.as<TimeSeriesChart>()->setOnInspectionChanged([fire](int index,bool pinned) {
+                Value i,p;i.tag=2;i.integer=index;p.tag=1;p.integer=pinned;fire({i,p});
+            });
+        else if(name=="menuActivated" && element.component=="DataMenu")
             element.as<DataMenu>()->setOnActivated([fire](std::string id) {
                 Value value; value.tag=4; value.text=std::move(id); fire({value});
             });

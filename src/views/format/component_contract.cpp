@@ -47,6 +47,8 @@ const std::map<std::string, ComponentContract> &registry()
 #undef E
 #undef P
 #undef C
+        r.at("TimeSeriesChart").events = {{1,"inspection",{{"index",2},{"pinned",1}}}};
+        ++r.at("TimeSeriesChart").version;
         r.at("Table").events = {
             {1,"activate",{{"key",4}}}, {2,"edit",{{"key",4}}},
             {3,"delete",{}}, {4,"selection",{}}, {5,"current",{{"key",4}}},
@@ -124,6 +126,8 @@ void validateRecord(const Model& model, const std::string& projection) {
     std::string fields;
     if(projection=="@list.item") fields="id:4 title:4 detail:4";
     else if(projection=="@tree.item") fields="id:4 parent:4 title:4 detail:4 expanded:1";
+    else if(projection=="@chart.series") fields="id:4 name:4 rgba:2 values:5";
+    else if(projection=="@chart.point") fields="id:4 value:3";
     else if(projection=="@table.row") fields="id:4 cells:5 selected:1";
     else if(projection=="@table.cell") fields="id:4 text:4";
     else if(projection=="@text.span") fields="id:4 start:2 end:2 rgba:2 monospace:1";
@@ -152,6 +156,13 @@ void validateRecord(const Model& model, const std::string& projection) {
 }
 void validateRecord(const Schema& schema,const Model& model,const std::string& projection) {
     validateRecord(model,projection);
+    if(projection=="@chart.series") {
+        const auto& point=schema.model(model.properties.at("values").item);
+        validateRecord(point,"@chart.point");
+        auto valid=point.properties.find("valid");
+        require(valid==point.properties.end() || valid->second.tag==1,"BIND_RECORD: Chart valid must be bool");
+        return;
+    }
     if(projection!="@table.row")return;
     const auto& cell=schema.model(model.properties.at("cells").item);
     validateRecord(cell,"@table.cell");

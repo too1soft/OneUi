@@ -56,7 +56,7 @@ enum class ValueType { None, Text, Boolean, Integer, Number, Strings, Columns, R
     X(Status, "label", "text tone", None) \
     X(Tabs, "tabs", "items selectedKey closable presentation reorderable drag-domain drag-kind drag-sources", Text) \
     X(SplitView, "split-view", "orientation ratio first-min second-min second-collapsed collapsed-extent", Number) \
-    X(TimeSeriesChart, "chart", "series", None) \
+    X(TimeSeriesChart, "chart", "series range-min range-max axis-labels sample-positions smooth area-fill dashed-grid axes-visible latest-point line-width fill-alpha grid-lines plot-insets grid-style", None) \
     X(Icon, "icon", "symbol size", None) \
     X(NativeHost, "native-host", "host themed resize-policy", None) \
     X(Column, "stack", "align justify wrap", None) \
@@ -147,6 +147,13 @@ constexpr ValueType propertyType(Kind kind,std::string_view key) {
     if(contains("content-height content-width wheel-step scroll-offset row-height line-height minimum-width header-height horizontal-offset overlay-width overlay-height inset-left inset-right inset-top inset-bottom",key))return ValueType::Number;
     if(key=="overlay-visible")return ValueType::Boolean;
     if(key=="items")return kind==Kind::Select||kind==Kind::SegmentedControl?ValueType::Strings:kind==Kind::Tabs?ValueType::TabItems:ValueType::Rows;
+    if(kind==Kind::TimeSeriesChart) {
+        if(contains("range-min range-max line-width",key))return ValueType::Number;
+        if(contains("smooth area-fill dashed-grid axes-visible latest-point",key))return ValueType::Boolean;
+        if(contains("grid-lines fill-alpha",key))return ValueType::Integer;
+        if(key=="axis-labels")return ValueType::Strings;
+        if(key=="sample-positions")return ValueType::Rows;
+    }
     if(key=="series")return ValueType::Series;
     if(key=="columns")return ValueType::Columns;
     if(layoutNumber(key))return ValueType::Number;
