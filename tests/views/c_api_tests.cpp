@@ -1,3 +1,4 @@
+#include "oneui/ui_icon_names.h"
 #include "capi/oneui_c_api_view_internal.h"
 #include "fixture.h"
 #include "oneui/layout/overlay_host.h"
@@ -66,6 +67,10 @@ struct ApiCase : Case {
 };
 } // namespace
 int main(int argc, char **argv) {
+    for (const auto name : {"note-outline", "box-outline", "sparkles-outline", "toolbox", "shield-outline", "globe", "import-outline", "sidebar-outline"}) {
+        expect(oneui::ui::namedIcon(name).has_value(), "shell icon name");
+    }
+    expect((oneview::registry().at("Row").property("class").flags & 2) != 0, "reactive Row presentation classes");
     if (argc != 2)
         return 2;
     try {
