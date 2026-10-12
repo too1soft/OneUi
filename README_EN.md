@@ -118,6 +118,8 @@ model Settings {
 
 ### 2. Implement the ViewModel in your language
 
+> **Version note:** `.oneschema` contracts, the `oneui-viewc` compiler, the view C ABI (`oneui_view_*`) and the Rust `oneui::view` module are currently available **from source builds only**. The published `0.1.0-preview.1` prebuilt SDK does not include them yet; they ship with the next prebuilt release. To use this path today, build from source as described below.
+
 - **Rust**: `viewc --emit rust` generates a typed trait for you to implement. See [examples/language_neutral_views](examples/language_neutral_views) — a pure-Rust ViewModel with no C++ glue.
 - **C++**: use `State`, `Computed` and `VmCommand` with the same template. See [examples/declarative](examples/declarative).
 - **Other languages**: implement one VTable following the [C ABI and ViewModel protocol](docs/59-language-neutral-views.md).

@@ -118,6 +118,8 @@ model Settings {
 
 ### 2. 用你熟悉的语言实现 ViewModel
 
+> **版本说明**：`.oneschema` 契约、`oneui-viewc` 编译器、视图 C ABI（`oneui_view_*`）和 Rust 的 `oneui::view` 模块目前只在**源码构建**中提供，当前公开的 `0.1.0-preview.1` 预编译 SDK 还不包含，将随下一个预编译版本一起发布。现在想使用这条链路，请按下文"从源码构建"操作。
+
 - **Rust**：`viewc --emit rust` 生成类型安全的 trait，你只需实现它。完整示例见 [examples/language_neutral_views](examples/language_neutral_views)：纯 Rust ViewModel，不需要任何 C++ 胶水代码。
 - **C++**：使用 `State`、`Computed`、`VmCommand`，同一份模板同样适用。见 [examples/declarative](examples/declarative)。
 - **其他语言**：按 [C ABI 与 ViewModel 协议](docs/59-language-neutral-views.md) 实现一张 VTable 即可。
