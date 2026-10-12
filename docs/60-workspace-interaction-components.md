@@ -414,7 +414,7 @@ PaneGrid的扁平内容池使以下操作**无需detach/attach**：
 
 `container-type:size`要求父布局能独立分配两轴（basis/grow/固定约束）。内容驱动高度的容器不能查询height或ratio，编译可判定时拒绝，运行时不满足独立尺寸条件则诊断并使用无条件样式。查询不发VM事件；媒体/monitor布局也使用同一机制，不把尺寸通知送回Rust计算分支。
 
-支持的查询内布局输出：display:none/flex、flex-direction、flex-wrap、flex-basis/grow/shrink、gap、width/height/min-width/min-height，以及现有绘制/文字属性；同步实现严格消费检查与Yoga/style_adapter应用，不能只解析不应用。`display:none`保留Widget与VM，但不参与布局/命中/可访问树；移出正在编辑节点前按正常隐藏政策提交composition并迁焦点到切换控件。
+支持的查询内布局输出：display:none/flex、flex-direction、flex-wrap、flex-basis/grow/shrink、gap、width/height/min-width/min-height、max-width/max-height（主轴上限，经 StackFlex::max 应用；跨轴给出 CONTAINER_CONSUMPTION 诊断），以及现有绘制/文字属性；同步实现严格消费检查与Yoga/style_adapter应用，不能只解析不应用。`display:none`保留Widget与VM，但不参与布局/命中/可访问树；移出正在编辑节点前按正常隐藏政策提交composition并迁焦点到切换控件。
 
 ### 6.2 布局后求值，最多一次重算
 

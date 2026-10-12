@@ -19,7 +19,7 @@ inline void StyleRegistry::applyBaseLayouts() {
         std::istringstream words(entry.classes);
         for (std::string word; words >> word;) node.classes.push_back(word);
         const auto box = sheet_.resolve(node);
-        if (box.width || box.height || box.minWidth || box.minHeight ||
+        if (box.width || box.height || box.minWidth || box.minHeight || box.maxWidth || box.maxHeight ||
             box.flexBasis || box.flexGrow || box.flexShrink)
             applyLayout(entry, box, parent->second);
     }
@@ -68,7 +68,17 @@ inline void StyleRegistry::applyLayout(const Entry& entry,const StyleBox& box,co
         if(box.flexShrink)flex.shrink=*box.flexShrink;
         flex.width=box.width;flex.height=box.height;
         flex.minWidth=box.minWidth.value_or(0);flex.minHeight=box.minHeight.value_or(0);
-        if(defaults.flex||box.flexBasis||box.flexGrow||box.flexShrink||box.width||box.height||box.minWidth||box.minHeight)parent->setFlex(widget,flex);
+        // max-width/max-height clamp the parent main axis (StackFlex::max); the
+        // cross axis keeps the authored or unbounded default.
+        const bool row=parent->direction()==StackDirection::Row;
+        if(box.maxWidth||box.maxHeight) {
+            const auto main=row?box.maxWidth:box.maxHeight;
+            if(!main)throw std::invalid_argument(row
+                ?"CONTAINER_CONSUMPTION: max-height requires a column parent"
+                :"CONTAINER_CONSUMPTION: max-width requires a row parent");
+            flex.max=*main;
+        }
+        if(defaults.flex||box.flexBasis||box.flexGrow||box.flexShrink||box.width||box.height||box.minWidth||box.minHeight||box.maxWidth||box.maxHeight)parent->setFlex(widget,flex);
         else parent->clearFlex(widget);
     }
 }
@@ -130,7 +140,7 @@ inline bool StyleRegistry::evaluateQuery(const std::shared_ptr<Stack>& container
                     throw std::invalid_argument("CONTAINER_DEPENDENCY: nested query containers require fixed independent width and height");
                 if(nested)for(const auto& rule:sheet_.rules())if(rule.query&&selectorMatches(rule.selector,node)) {
                     const auto& b=rule.box;
-                    if(b.width||b.height||b.minWidth||b.minHeight||b.flexBasis||b.flexGrow||b.flexShrink||b.padding||b.display)
+                    if(b.width||b.height||b.minWidth||b.minHeight||b.maxWidth||b.maxHeight||b.flexBasis||b.flexGrow||b.flexShrink||b.padding||b.display)
                         throw std::invalid_argument("CONTAINER_DEPENDENCY: ancestor query changes a measured container");
                 }
                 if((box.flexDirection||box.flexWrap)&&!std::dynamic_pointer_cast<Stack>(widget))

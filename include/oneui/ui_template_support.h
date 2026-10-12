@@ -162,14 +162,14 @@ inline std::string css(std::string source, const std::string& scope = {}, const 
             if(property=="display"&&cssValue!="none"&&cssValue!="flex")fail("CSS_LAYOUT: display expects none/flex");
             if(property=="flex-direction"&&cssValue!="row"&&cssValue!="column")fail("CSS_LAYOUT: flex-direction expects row/column");
             if(property=="flex-wrap"&&cssValue!="wrap"&&cssValue!="nowrap")fail("CSS_LAYOUT: flex-wrap expects wrap/nowrap");
-            if(std::set<std::string>{"width","height","min-width","min-height","flex-basis"}.count(property) &&
+            if(std::set<std::string>{"width","height","min-width","min-height","max-width","max-height","flex-basis"}.count(property) &&
                cssValue.rfind("var(",0)!=0&&!std::regex_match(cssValue,std::regex(R"(^[0-9]+(\.[0-9]+)?px$)")))fail("CSS_LAYOUT: finite nonnegative px required");
             if (trim(declaration.substr(colon + 1)).empty()) fail("Empty CSS value");
             if (selector == ":root") {
                 if (property.rfind("--", 0) != 0) fail(":root only accepts custom properties");
                 if (!scope.empty()) fail("Scoped :root tokens are unsupported; put shared tokens in external CSS");
             } else if(insideQuery && (property=="container-name"||property=="container-type"))fail("CONTAINER_DEPENDENCY: query cannot establish a container");
-            else if (!cssProperties(tag).count(property) && !std::set<std::string>{"display","width","height","min-width","min-height","flex-basis","flex-grow","flex-shrink"}.count(property) &&
+            else if (!cssProperties(tag).count(property) && !std::set<std::string>{"display","width","height","min-width","min-height","max-width","max-height","flex-basis","flex-grow","flex-shrink"}.count(property) &&
                      !((tag=="stack"||tag.empty())&&std::set<std::string>{"container-name","container-type","flex-direction","flex-wrap","gap"}.count(property))) fail("Property is not consumed by " + tag + ": " + property);
             else if(property=="background-color" && lowerValue(trim(declaration.substr(colon+1))).find("gradient(")!=std::string::npos) fail("Use background for gradients on supported components");
             else if(tag=="table" && !pseudo.empty() && property!="background-color") fail("DataTable row states only consume background-color");
