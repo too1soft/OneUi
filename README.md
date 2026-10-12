@@ -154,7 +154,25 @@ int main() {
 
 CSS 修改成功后整体替换；失败保留上一份有效样式，输入、焦点、光标与有效滚动位置保留。**模板结构、事件与 C++ 逻辑仍需重编译。** 这里没有完整 Vue、浏览器 CSS Grid 或 JavaScript 表达式；明确的支持范围见[声明式 API](docs/35-declarative-authoring-v1.md)和[布局指南](docs/36-declarative-page-patterns.md)。
 
+## 任何语言驱动的 `.one` 视图（新）
+
+`.one` 模板配合 `.oneschema` 契约，由 `oneui-viewc` 编译成平台无关的 `.oneview` IR，再通过 C ABI 由**任意语言**的 ViewModel 驱动；C++ 与 Rust 走同一份 IR，`viewc --emit rust` 会生成类型安全的 trait。列表按稳定 key 增量更新，开发时支持热重载并保留 VM 状态。设计见 [59 号文档](docs/59-language-neutral-views.md)。
+
+![纯 Rust ViewModel 驱动的设置页示例](docs/images/views/settings-rust-vm.png)
+
+实测（与手写版本同一 VM、同一二进制，五轮配对、9 万个样本）：设置页的 5 个场景、1,000 行列表的更新/插入/删除/移动，median 与 P95 均在手写版本的 **+10%** 以内，列表结构变化反而略快。[原始数据](docs/benchmarks/language-neutral-views/)
+
+工作区交互组件 `PaneGrid`、`PaneHeader`、`DockWorkspace`、拖放落点、方向导航、容器查询，以及字体/媒体选择、主题预览等组件也已提供，可直接在 `.one` 中声明。终端内容通过内容租约挂载，分屏、交换、跨标签、最大化时不重建。
+
+![工作区交互组件示例：分屏、窗格标题、停靠的文件与监控面板](docs/images/views/workspace-dark.png)
+
+NVIDIA OpenGL 下 18 个场景 × 100 次 × 5 轮、共 236,557 帧：最大 **15.2 ms**、P95 **4.2 ms**，超过 16 ms 的帧为 **0**（16 个可见窗格时同样为 0）。设计见 [60 号文档](docs/60-workspace-interaction-components.md)，示例在 `examples/workspace_interactions`。
+
 ## 性能数据
+
+![性能实验台：实时 FPS、帧间隔、CPU、内存与帧节奏](docs/images/performance/overview.png)
+
+上图为性能实验台的综合页（Release、OpenGL + Skia Ganesh、RTX 5080）：图表、2,500 个粒子与 10,000 行虚拟列表同时运行时，UI 更新约 **182 FPS**，平均帧间隔 **5.49 ms**、P95 **5.84 ms**，进程 CPU **1.3%**，工作集约 **112 MB**。运行 `.\examples\performance_labun.ps1` 即可看到同一页面。
 
 2026-09-28 的新写法回归：连接页 C++ / 模板平均 CPU paint 为 **3.260 / 3.263ms**，工作集 **100.28 / 99.60MiB**。相同功能的页面创建代码少了 **38.5%**，控件和订阅数量不变；三轮未观察到明显运行期开销回归。负载和轮次与下面的历史数据不同，请勿直接纵向比较。[前后同负载实测、代码量口径和原始数据](docs/50-typed-authoring-and-defaults.md#代码量与实测)。
 
