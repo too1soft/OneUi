@@ -16,19 +16,13 @@ Native connection workspace: searchable connections, stable-ID tabs, draggable s
 
 Use `Workspace` for page regions, `DockPanel` for panel headers/body/footer, and `ToolButton` for consistent actions. C++ and `.one` share these retained native components.
 
-![OneUI terminal workspace](docs/images/terminal-workspace-v4/dark-wide.png)
-
 **Stage status:** the first C++ / `.one` declarative development stage is complete; this remains a 0.1 development release. [Delivered scope, regression checks and remaining validation](docs/58-declarative-workspace-stage.md).
 
 ## Running examples
 
 Default light form with responsive columns:
 
-![Native light form](docs/images/typed-authoring/editor-light-wide.png)
-
 Dark compact table with 1,000 simulated records:
-
-![Native dark table](docs/images/performance-lab/table-dark-wide.png)
 
 Charts, particles, scrolling and live process metrics:
 
@@ -72,8 +66,6 @@ If VS is not found, check the C++ and CMake installation components. Missing `sk
 ## Shadows, gradients and motion
 
 Run `.\examples\performance_lab\run.ps1 -Build -Effects` to adjust multi-stop gradients, outer/inner shadows, expansion and fading. Add `motion-lift` or `motion-press` to a button for hover/press feedback; bind `Reveal.open` to show or hide retained content. Effects are opt-in; the default pages remain flat.
-
-![Native effects gallery](docs/images/effects/effects-light-1320-1.png)
 
 Both Skia software and GPU renderers support these effects. Gradients change immediately; stop interpolation is not animated. See [C++/template examples, CSS limits and measurement instructions](docs/51-effects-and-motion.md) (Chinese).
 

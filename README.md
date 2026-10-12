@@ -18,23 +18,15 @@ OneUI 试验台统一展示布局、性能与桌面能力。终端工作区位�
 
 `Workspace` 声明页面区域，`DockPanel` 声明面板头／正文／页脚，`ToolButton` 统一工具按钮样式；共用 C++／`.one` 入口，不必手工计算位置。
 
-![OneUI terminal workspace](docs/images/terminal-workspace-v4/dark-wide.png)
-
 **阶段状态：** C++／`.one` 声明式开发第一阶段已完成，当前仍为 0.1 开发版。[已交付能力、提交前回归与后续边界](docs/58-declarative-workspace-stage.md)。
 
 ## 实际运行效果
 
 浅色表单：默认间距、字号、绿色强调色和自动分栏，应用代码不用计算字段坐标。
 
-![OneUI 浅色表单和自适应双列布局](docs/images/typed-authoring/editor-light-wide.png)
-
 完整工作区：同一套布局自动适配侧栏、列表与详情；窄窗口切换为单页。
 
-![OneUI 页面组合与柔和预设](docs/images/layout-recipes/list-wide.png)
-
 深色紧凑表格：1,000 条模拟记录，原生虚拟化绘制。
-
-![OneUI 深色紧凑表格](docs/images/performance-lab/table-dark-wide.png)
 
 综合实验台：图表、粒子、滚动列表与实时指标。
 
@@ -89,8 +81,6 @@ $sdk = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows Kits\Installed Roots'
 ## 阴影、渐变和动效怎么加？
 
 先运行 `.\examples\performance_lab\run.ps1 -Build -Effects`，直接调节多色标渐变、内／外阴影、展开与淡入。按钮加 `class="motion-lift"` 或 `class="motion-press"` 即可使用悬停／按压反馈；内容用 `Reveal` 绑定显示状态。默认页面仍保持简洁，效果按需开启。
-
-![OneUI 阴影、三色渐变与动效展示](docs/images/effects/effects-light-1320-1.png)
 
 软件和 GPU 后端都可运行；渐变本身即时切换，尚不做色标动画。[可复制的 C++／模板例子、CSS 支持边界与测量方法](docs/51-effects-and-motion.md)。
 
@@ -158,21 +148,16 @@ CSS 修改成功后整体替换；失败保留上一份有效样式，输入、�
 
 `.one` 模板配合 `.oneschema` 契约，由 `oneui-viewc` 编译成平台无关的 `.oneview` IR，再通过 C ABI 由**任意语言**的 ViewModel 驱动；C++ 与 Rust 走同一份 IR，`viewc --emit rust` 会生成类型安全的 trait。列表按稳定 key 增量更新，开发时支持热重载并保留 VM 状态。设计见 [59 号文档](docs/59-language-neutral-views.md)。
 
-![纯 Rust ViewModel 驱动的设置页示例](docs/images/views/settings-rust-vm.png)
-
 实测（与手写版本同一 VM、同一二进制，五轮配对、9 万个样本）：设置页的 5 个场景、1,000 行列表的更新/插入/删除/移动，median 与 P95 均在手写版本的 **+10%** 以内，列表结构变化反而略快。[原始数据](docs/benchmarks/language-neutral-views/)
 
 工作区交互组件 `PaneGrid`、`PaneHeader`、`DockWorkspace`、拖放落点、方向导航、容器查询，以及字体/媒体选择、主题预览等组件也已提供，可直接在 `.one` 中声明。终端内容通过内容租约挂载，分屏、交换、跨标签、最大化时不重建。
-
-![工作区交互组件示例：分屏、窗格标题、停靠的文件与监控面板](docs/images/views/workspace-dark.png)
 
 NVIDIA OpenGL 下 18 个场景 × 100 次 × 5 轮、共 236,557 帧：最大 **15.2 ms**、P95 **4.2 ms**，超过 16 ms 的帧为 **0**（16 个可见窗格时同样为 0）。设计见 [60 号文档](docs/60-workspace-interaction-components.md)，示例在 `examples/workspace_interactions`。
 
 ## 性能数据
 
-![性能实验台：实时 FPS、帧间隔、CPU、内存与帧节奏](docs/images/performance/overview.png)
-
-上图为性能实验台的综合页（Release、OpenGL + Skia Ganesh、RTX 5080）：图表、2,500 个粒子与 10,000 行虚拟列表同时运行时，UI 更新约 **182 FPS**，平均帧间隔 **5.49 ms**、P95 **5.84 ms**，进程 CPU **1.3%**，工作集约 **112 MB**。运行 `.\examples\performance_labun.ps1` 即可看到同一页面。
+性能实验台综合页（见上方“实际运行效果”中的截图；Release、OpenGL + Skia Ganesh、RTX 5080）：图表、2,500 个粒子与 10,000 行虚拟列表同时运行时，UI 更新约 **182 FPS**，平均帧间隔 **5.49 ms**、P95 **5.84 ms**，进程 CPU **1.3%**，工作集约 **112 MB**。运行 `.\examples\performance_lab
+un.ps1` 即可看到同一页面。
 
 2026-09-28 的新写法回归：连接页 C++ / 模板平均 CPU paint 为 **3.260 / 3.263ms**，工作集 **100.28 / 99.60MiB**。相同功能的页面创建代码少了 **38.5%**，控件和订阅数量不变；三轮未观察到明显运行期开销回归。负载和轮次与下面的历史数据不同，请勿直接纵向比较。[前后同负载实测、代码量口径和原始数据](docs/50-typed-authoring-and-defaults.md#代码量与实测)。
 
