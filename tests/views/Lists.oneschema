@@ -24,6 +24,7 @@ model Root {
     command pointer_context(x:f64,y:f64)
 }
 model Item key id {
+    command copy()
     r id: utf8
     r text: utf8
     r title: utf8
@@ -36,6 +37,7 @@ model Item key id {
     r trailing:utf8
     r trailing_rgba:i64
     r indicator_rgba: i64
+    r spans: list<Span>
 }
 model Cell key id {r id:utf8 r text:utf8 r icon:utf8 r alignment:i64}
-model Span key id {r id:utf8 r start:i64 r end:i64 r rgba:i64 r monospace:bool}
+model Span key id {r id:utf8 r start:i64 r end:i64 r rgba:i64 r monospace:bool r weight:i64 r italic:bool r underline:bool r strike:bool r background:i64 r size:f64}

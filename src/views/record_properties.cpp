@@ -1,6 +1,7 @@
 #include "internal/view_profile.h"
 #include "internal/unicode.h"
 #include "runtime.h"
+#include <cmath>
 #include <limits>
 #include "rich_table_records.inc"
 #include "data_menu_records.h"
@@ -48,11 +49,31 @@ void Runtime::applyList(Instance &instance, const std::string &property, ListSta
             const auto rgba = field(item, "rgba").integer;
             check(start >= previousEnd && end > start && boundary(start) && boundary(end) &&
                   rgba >= 0 && uint64_t(rgba) <= 0xffffffffu, ONEUI_VIEW_TYPE, "Text span range/color");
+            // Optional style fields extend the frozen @text.span projection; a
+            // model that omits them keeps the inheriting defaults.
+            const auto& properties = image.schema.model(item->table.model_id).properties;
+            auto optional = [&](const char* name) -> Value {
+                auto found = properties.find(name);
+                return found == properties.end() ? Value{} : read(item, found->second.id);
+            };
+            const auto background = optional("background").integer;
+            const auto size = optional("size").number;
+            check(background >= 0 && uint64_t(background) <= 0xffffffffu && std::isfinite(size) &&
+                      size >= 0 && size <= 96,
+                  ONEUI_VIEW_TYPE, "Text span style");
             TextStyleSpan span;
             span.start = wide(bytes.substr(0, size_t(start))).size();
             span.end = wide(bytes.substr(0, size_t(end))).size();
             span.foreground = {uint8_t(rgba >> 24), uint8_t(rgba >> 16), uint8_t(rgba >> 8), uint8_t(rgba)};
             span.monospace = bool(field(item, "monospace").integer);
+            span.fontWeight = int(optional("weight").integer);
+            span.italic = optional("italic").integer != 0;
+            span.underline = optional("underline").integer != 0;
+            span.strikethrough = optional("strike").integer != 0;
+            span.fontSize = float(size);
+            if (background != 0)
+                span.background = {uint8_t(background >> 24), uint8_t(background >> 16),
+                                   uint8_t(background >> 8), uint8_t(background)};
             spans.push_back(span); previousEnd = end;
         }
         label->setRichText(label->text(), std::move(spans));

@@ -1,4 +1,5 @@
 #include "oneui/controls/virtual_list.h"
+#include "virtual_template_list.inc"
 
 #include "internal/scroll_trace.h"
 #include "list_style_internal.h"

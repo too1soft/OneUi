@@ -7,6 +7,8 @@ void validateChildren(const Node &n, const ComponentContract &c, const Location 
 {
     auto rule = c.childRule;
     auto count = n.children.size();
+    if (rule == "virtual-rows" && (count != 1 || !n.children[0].attrs.count("v-for")))
+        at.fail("VIRTUAL_ROWS: exactly one keyed v-for child required");
     if(rule=="header-slots")for(const auto& child:n.children)
         if(child.tag!="HeaderSlot")at.fail("HEADER_SLOT: invalid native slot");
     if (rule == "pane-collection" || rule == "dock-collection" || rule == "grid-collection") {

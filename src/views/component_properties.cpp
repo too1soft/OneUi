@@ -1,4 +1,5 @@
 #include "oneui/ui_declarative.h"
+#include "oneui/layout/virtual_template_list.h"
 #include "data_menu.h"
 #include <sstream>
 #include <cmath>
@@ -214,6 +215,7 @@ void Mount::set(Element &e, const std::string &key, const std::string &value) {
         set(e, key, wide(value));
 }
 void Mount::set(Element &e, const std::string &key, bool value) {
+    if (key == "follow-end") { e.as<VirtualTemplateList>()->setFollowEnd(value); return; }
     if(e.component=="TimeSeriesChart") {
         auto chart=e.as<TimeSeriesChart>();
         if(key=="smooth"){chart->setSmoothCurves(value);return;}
@@ -319,6 +321,11 @@ void Mount::set(Element &e, const std::string &key, float value) {
         if (key == "wheel-step") { table->setWheelStep(value); return; }
         if (key == "scroll-offset") { table->setScrollOffset(value); return; }
         if (key == "horizontal-offset") { table->setHorizontalScrollOffset(value); return; }
+    }
+    if (auto list = e.as<VirtualTemplateList>()) {
+        if (key == "estimated-height") { list->setEstimatedHeight(value); return; }
+        if (key == "overscan") { list->setOverscan(size_t(value)); return; }
+        if (key == "scroll-offset") { list->setScrollOffset(value); return; }
     }
     if (key == "line-height") {
         if (auto label = e.as<Label>()) label->setLineHeight(value);

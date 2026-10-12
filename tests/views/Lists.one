@@ -39,6 +39,12 @@
       <GridItem view-id="grid-rows" v-for="row in rows" :key="row.id" :grid-key="row.id"><Text :text="row.text"/></GridItem>
     </ReorderableGrid>
     <SegmentedControl class="compact-tabs"/>
+    <VirtualTemplateList estimated-height="64" overscan="2" follow-end="true">
+      <Column v-for="message in rows" :key="message.id">
+        <Text :text="message.text" :spans="message.spans"/>
+        <Button text="Copy" @click="message.copy"/>
+      </Column>
+    </VirtualTemplateList>
   </Column>
 </template>
 <style scoped>

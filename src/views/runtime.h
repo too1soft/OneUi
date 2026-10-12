@@ -191,6 +191,8 @@ struct Runtime : std::enable_shared_from_this<Runtime> {
     void wireRichTable(const std::shared_ptr<Instance>&);
     void applyRichTableRows(Instance&, ListState&);
     void repeat(const std::shared_ptr<Instance> &);
+    std::shared_ptr<Instance> buildVirtual(uint32_t, const Scopes&);
+    void virtualRepeat(const std::shared_ptr<Instance>&);
     void prepareWorkspaceIndex();
     void workspaceChildren(const std::shared_ptr<Instance> &);
     bool pickerScalar(Instance&, const std::string&, const Value&);

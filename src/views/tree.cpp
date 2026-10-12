@@ -83,6 +83,7 @@ std::shared_ptr<Instance> Runtime::build(uint32_t node, const Scopes &context, c
         repeat(result);
         return result;
     }
+    if (image.components[n[1]].name == "VirtualTemplateList") return buildVirtual(node, context);
     std::vector<ui::Element> children;
     for (uint32_t i = 0; i < n[4]; ++i) {
         auto child = build(image.records[EDGE][n[3] + i][1], context, slots);
@@ -264,6 +265,10 @@ void Runtime::update(const std::shared_ptr<Instance> &instance) {
         instance->element.widget->setVisible(conditionVisible);
     if (image.records[NODE][instance->node][0] == 2) {
         repeat(instance);
+        return;
+    }
+    if (instance->element.component == "VirtualTemplateList") {
+        virtualRepeat(instance);
         return;
     }
     // A table's disabled command must not disable row selection itself.

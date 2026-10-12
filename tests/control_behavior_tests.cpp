@@ -14,6 +14,7 @@
 #include "oneui/controls/list.h"
 #include "oneui/controls/menu.h"
 #include "oneui/controls/virtual_list.h"
+#include "oneui/layout/virtual_template_list.h"
 #include "oneui/controls/nav_item.h"
 #include "oneui/controls/popup.h"
 #include "oneui/controls/progress_bar.h"
@@ -9174,7 +9175,9 @@ void testTableSelectionColumnPointerAndKeyboard() {
     expectEqual("Disabled checkbox header does not emit",calls,before);
 }
 
+#include "virtual_template_list_tests.inc"
 int main() {
+    testVirtualTemplateViewport();
     testOverlayHostRoutesTooltipsThroughContentAndFloatingSurfaces();
     testStyleBorderStaysInsideItsClip();
     testCompactIconGlyphFitsAllocatedBox();

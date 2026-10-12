@@ -11,10 +11,12 @@ using namespace viewtest;
 #include "rich_table_contract.inc"
 #include "rich_table_reorder.inc"
 #include "chart_contract.inc"
+#include "virtual_template_contract.inc"
 int main(int argc, char **argv) {
     if (argc != 2)
         return 2;
     try {
+        virtualTemplateContract(argv[1]);
         chartContract(argv[1]);
         surfaceDrag(argv[1]);
         {

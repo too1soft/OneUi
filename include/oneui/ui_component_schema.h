@@ -80,6 +80,7 @@ enum class ValueType { None, Text, Boolean, Integer, Number, Strings, Columns, R
     X(DataTable, "table", "items columns selectedKey item-key", Text) \
     X(List, "list", "items selectedIndex", Integer) \
     X(VirtualList, "virtual-list", "items selectedIndex row-height scroll-offset trailing-width trailing-gap", Integer) \
+    X(VirtualTemplateList, "virtual-template-list", "estimated-height overscan follow-end scroll-offset", None) \
     X(TreeView, "tree-view", "items selectedKey", Text) \
     X(Table, "table", "items columns multiple row-height header-height selection-column selection-column-width scroll-offset sort-column sort-descending column-dividers tooltip", None) \
     X(DataMenu, "menu", "title subtitle items", None) \
@@ -125,6 +126,10 @@ constexpr bool layoutNumber(std::string_view key) {
     return contains("grow shrink basis min max max-width min-column-width breakpoint pane-width ratio first-min second-min size collapsed-extent value",key);
 }
 constexpr ValueType propertyType(Kind kind,std::string_view key) {
+    if (kind == Kind::VirtualTemplateList) {
+        if (key == "estimated-height" || key == "overscan") return ValueType::Number;
+        if (key == "follow-end") return ValueType::Boolean;
+    }
     if(!supports(kind,key))return ValueType::None;
     if(key=="placeholder-when-focused")return ValueType::Boolean;
     if(kind==Kind::Popup && contains("anchor-x anchor-y anchor-width anchor-height",key))return ValueType::Number;
