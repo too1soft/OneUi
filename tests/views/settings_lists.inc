@@ -30,6 +30,8 @@ void settingsLists(const char* runtimeFile) {
     oneui::MouseEvent press;press.button=oneui::MouseButton::Left;press.position={20,20};
     richList->onMouseDown(press);richList->onMouseUp(press);
     expect(richList->selectedIndex()==0,"VirtualList hit testing clamps obsolete offset after viewport expansion");
+    expect(c.vm.invokes==1,"VirtualList activate-on-single-click turns a single click into activation");
+    c.vm.invokes=0;
     oneui::test_support::RecordingCanvas richPaint;richList->paint(richPaint);
     expect(richList->scrollOffset()==0,"VirtualList expansion clamps an obsolete offset before rendering");
     auto colored=std::find_if(richPaint.texts.begin(),richPaint.texts.end(),[](const auto& t){return t.text==L"OK" && t.color.r==0x22 && t.color.g==0xd3;});

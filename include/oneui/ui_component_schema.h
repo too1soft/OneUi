@@ -79,7 +79,7 @@ enum class ValueType { None, Text, Boolean, Integer, Number, Strings, Columns, R
     X(Button, "button", "text variant icon tooltip content-align trailing-text trailing-icon", None) \
     X(DataTable, "table", "items columns selectedKey item-key", Text) \
     X(List, "list", "items selectedIndex", Integer) \
-    X(VirtualList, "virtual-list", "items selectedIndex row-height scroll-offset trailing-width trailing-gap", Integer) \
+    X(VirtualList, "virtual-list", "items selectedIndex row-height scroll-offset trailing-width trailing-gap activate-on-single-click", Integer) \
     X(VirtualTemplateList, "virtual-template-list", "estimated-height overscan follow-end scroll-offset", None) \
     X(TreeView, "tree-view", "items selectedKey", Text) \
     X(Table, "table", "items columns multiple row-height header-height selection-column selection-column-width scroll-offset sort-column sort-descending column-dividers tooltip", None) \
@@ -145,7 +145,7 @@ constexpr ValueType propertyType(Kind kind,std::string_view key) {
     if(kind==Kind::Table && contains("header-height selection-column-width",key))return ValueType::Number;
     if(kind==Kind::FontPicker&&(key=="confirm-selection"||key=="monospace-only"))return ValueType::Boolean;
     if(kind==Kind::FontPicker&&key=="monospace-items")return ValueType::Rows;
-    if(contains("disabled visible selected checked open reduced-motion detail-open wrap closable themed second-collapsed collapsed closing ack-accepted motion active viewing-history can-close can-split can-maximize reorderable hideable loading password read-only chrome-visible",key))return ValueType::Boolean;
+    if(contains("disabled visible selected checked open reduced-motion detail-open wrap closable themed second-collapsed collapsed closing ack-accepted motion active viewing-history can-close can-split can-maximize reorderable hideable loading password read-only chrome-visible activate-on-single-click",key))return ValueType::Boolean;
     if(contains("selectedIndex revision ack-request close-request navigation-serial number max-lines",key))return ValueType::Integer;
     if(contains("nodes groups drag-sources placements tokens spans",key))return ValueType::Rows;
     if(contains("gap divider-hit motion-ms resize-idle-ms min-width min-height threshold dock-min-width dock-min-height float-min-width float-min-height minimum maximum step opacity",key))return ValueType::Number;

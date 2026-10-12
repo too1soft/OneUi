@@ -216,6 +216,7 @@ void Mount::set(Element &e, const std::string &key, const std::string &value) {
 }
 void Mount::set(Element &e, const std::string &key, bool value) {
     if (key == "follow-end") { e.as<VirtualTemplateList>()->setFollowEnd(value); return; }
+    if (key == "activate-on-single-click") { e.as<VirtualList>()->setActivateOnSingleClick(value); return; }
     if(e.component=="TimeSeriesChart") {
         auto chart=e.as<TimeSeriesChart>();
         if(key=="smooth"){chart->setSmoothCurves(value);return;}
