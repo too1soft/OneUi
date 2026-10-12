@@ -76,6 +76,7 @@ def main():
                "libwebp-patents.txt", "zlib.txt", "expat.txt"]
     copies = [(path, "lib/" + path.name) for path in archives]
     copies += [(build / "oneui.dll", "bin/oneui.dll"),
+               (build / "oneui-viewc.exe", "bin/oneui-viewc.exe"),
                (build / "oneui.lib", "lib/oneui.lib")]
     copies += [(licenses / name, "licenses/" + name) for name in notices]
     if yoga:

@@ -97,6 +97,12 @@ def main():
     common = {"include/" + p.relative_to(headers).as_posix(): p
               for p in headers.rglob("*") if p.is_file()}
     common.update(collect_bindings(source))
+    # The .one template compiler ships with every package so applications can build views
+    # without a OneUI source checkout.
+    viewc = (args.input / "bin/oneui-viewc.exe") if args.platform == "windows" else (args.build / "oneui-viewc")
+    if not viewc.is_file():
+        raise ValueError("Missing oneui-viewc: " + str(viewc))
+    common["bin/" + viewc.name] = viewc
     common.update({"licenses/" + p.relative_to(args.licenses).as_posix(): p
                    for p in args.licenses.rglob("*") if p.is_file()})
     if not any(name.startswith("licenses/") for name in common):
