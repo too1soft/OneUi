@@ -1,180 +1,215 @@
+<div align="center">
+
 # OneUI
 
-English | [简体中文](README.md) · [MIT](LICENSE) · C++17 · 0.1 development
+**A native, high-performance desktop UI engine you can drive from any language**
 
-**Build native desktop interfaces in C++, with layout, themes and data binding handled by OneUI.**
+Declare the interface in `.one` templates; write the logic in C++, Rust, or anything that can call C.<br>
+Rendered natively with Skia — no WebView, no JavaScript, no browser runtime.
 
-Compose widgets in C++, or describe the same page with `.one` templates. Both share C++ business logic and a retained native widget tree. State changes update properties; pages are not rebuilt every frame. Rendering uses Skia, without JavaScript or a WebView.
+[Website](https://oneui.too1.net/) · [Component docs](https://oneui.too1.net/docs/14-component-reference) · [Get started](docs/sdk-quick-start.md) · [简体中文](README.md)
 
-OneUI suits settings tools, connection managers, operations consoles, and applications with many forms, tables and charts. The new authoring path is validated on **Windows with C++17**. APIs are still evolving.
+`MIT` · `C++17` · `Rust` · `C ABI` · `Windows / macOS / Linux` · `0.1 preview`
 
-Compose a sidebar, master/detail workspace and settings page with pinned actions. Run `./examples/performance_lab/run.ps1 -Layouts`; see the [layout recipe guide](docs/52-layout-recipes-and-presets.md) for C++ and `.one` examples and standard/soft presets.
+</div>
 
-Measured GPU shadow improvement in the effects workload: mean paint **1.09→0.62ms**, content P95 **12.81→0.95ms**, working set **170→109MiB**. Software rendering retains its original path. [Environment, raw data and limits](docs/52-layout-recipes-and-presets.md#最终同机实测2026-09-28).
+---
 
-Native connection workspace: searchable connections, stable-ID tabs, draggable splits, a virtualized file table and monitoring charts, with light/dark themes and a narrow layout. `.one` builds the page; Rust owns terminals. Connections, commands and metrics are simulated locally. Run `./examples/terminal_workbench/build.ps1 -Test -Run` with the Rust MSVC toolchain. [Try it and find the code](examples/terminal_workbench/README.md) · [Workspace layout components and validation](docs/57-workspace-layout-components.md).
+## Why OneUI
 
-Use `Workspace` for page regions, `DockPanel` for panel headers/body/footer, and `ToolButton` for consistent actions. C++ and `.one` share these retained native components.
+| | |
+|---|---|
+| ⚡ **Truly native speed** | Skia draws directly, with GPU (OpenGL / Ganesh) and software back ends. The lab page runs charts, 2,500 particles and a 10,000-row list at **~182 FPS** with **1.3%** process CPU. |
+| 🧩 **UI decoupled from language** | `.one` templates compile to a platform-neutral IR driven through a stable C ABI. **The same UI works from C++ and Rust**, and Go, C# and others can plug in through the same protocol. Switch back-end languages without rewriting the interface. |
+| 🛡️ **Errors caught at build time** | A `.oneschema` contract describes each page's data and commands. Wrong fields, wrong types and mismatched event arguments fail the **build** with the template line, instead of crashing at run time. |
+| 🔁 **Retained tree, precise updates** | Controls are created once. State changes refresh only affected properties; lists insert, remove and move by stable key. **No per-frame page rebuilds**, and zero extra paints when idle. |
+| 🎨 **Themes, density, live CSS** | Light and dark themes and two densities are built in, styled with CSS. Edit CSS during development and see it instantly — input, focus and scroll positions are kept. |
+| 🪟 **Rich desktop interaction included** | Split grids, drag-to-dock, floating panels, tab drag-out, directional navigation and container queries — the workspace features terminals, IDEs and consoles need. |
+| 🔍 **Built-in performance diagnostics** | Press F12 to see slow paints, animation stalls and expensive controls, mapped back to `.one` source lines. Off by default with zero overhead. |
+| 📦 **Prebuilt SDK** | Packages for Windows, macOS arm64 and Linux x64. Link through CMake or Rust **without building Skia**. |
 
-**Stage status:** the first C++ / `.one` declarative development stage is complete; this remains a 0.1 development release. [Delivered scope, regression checks and remaining validation](docs/58-declarative-workspace-stage.md).
+## See it running
 
-## Running examples
+![OneUI native performance lab: live FPS, frame intervals, CPU, memory and frame pacing](docs/images/performance-lab/overview.png)
 
-Default light form with responsive columns:
+<div align="center">
 
-Dark compact table with 1,000 simulated records:
+Release · OpenGL + Skia Ganesh · RTX 5080 — UI updates **~182 FPS** · mean frame interval **5.49 ms** · P95 **5.84 ms** · CPU **1.3%** · working set **~112 MB**
 
-Charts, particles, scrolling and live process metrics:
+</div>
 
-![Native performance lab](docs/images/performance-lab/overview.png)
+Run `.\examples\performance_lab\run.ps1` to see the same page on your machine.
 
-These are native client captures from the repository examples. See the [validation report](docs/40-declarative-stage-validation.md) for narrow layouts, error states, measurements and limitations.
+## Architecture
 
-## Run on Windows
+```mermaid
+flowchart TB
+    subgraph APP["Your application"]
+        direction LR
+        ONE[".one templates<br/>+ scoped CSS"]
+        SCHEMA[".oneschema<br/>data & command contract"]
+        VM["ViewModel<br/>C++ / Rust / Go / C# …"]
+    end
 
-Install Git, Python 3, PowerShell, and Visual Studio / Build Tools with **Desktop development with C++**, Windows SDK, CMake and Ninja. Examples require CMake 3.20+. The first Skia download/build is substantial; page edits subsequently use incremental builds. Node.js is not required.
+    VIEWC["oneui-viewc compiler<br/>type checks · typed bindings"]
+    IR[".oneview IR<br/>platform-neutral binary view"]
+    ABI["Stable C ABI<br/>instantiate · get/set · invoke · incremental notify"]
+
+    subgraph ENGINE["OneUI engine (C++17)"]
+        direction LR
+        RT["View runtime<br/>retained tree · incremental updates"]
+        CTRL["Controls<br/>forms · tables · charts · workspace"]
+        LAYOUT["Layout & style<br/>Yoga · CSS · themes"]
+    end
+
+    SKIA["Skia rendering<br/>GPU (OpenGL) / software"]
+    PLAT["Platform<br/>Win32 · macOS · X11 / Wayland"]
+
+    ONE --> VIEWC
+    SCHEMA --> VIEWC
+    VIEWC --> IR
+    VIEWC -. generated traits / adapters .-> VM
+    IR --> ABI
+    VM <--> ABI
+    ABI --> RT
+    RT --> CTRL --> LAYOUT --> SKIA --> PLAT
+```
+
+**Layering:** structure lives in `.one`, the data contract in `.oneschema`, business state in the ViewModel — and the ViewModel **never creates controls**. Every language goes through the same C ABI, so UI and logic evolve and are tested independently.
+
+| Concept | Role |
+|---|---|
+| `.one` | Declarative template: components, bindings, events, conditions, lists, slots, scoped CSS |
+| `.oneschema` | The page contract: read-only / read-write properties, types, list item models, command signatures |
+| `oneui-viewc` | Compiler: validates template and contract, emits `.oneview` IR and typed bindings per language |
+| `.oneview` IR | Versioned binary view with a contract hash; a template/ViewModel mismatch is rejected on load |
+| ViewModel | Your state and commands, in any language, talking to the UI only through the C ABI |
+| C ABI | The single cross-language boundary: instantiate views, read/write properties, invoke commands, list deltas |
+
+## Quick start
+
+### 1. Describe the UI
+
+```html
+<!-- Settings.one -->
+<template view-model="Settings">
+  <SettingsPage title="Connection">
+    <Section title="Basics">
+      <FormGrid>
+        <FormRow label="Name"><Input v-model="name" /></FormRow>
+        <FormRow label="Host"><Input v-model="host" /></FormRow>
+      </FormGrid>
+    </Section>
+    <ActionBar><Button @click="save">Save</Button></ActionBar>
+  </SettingsPage>
+</template>
+```
+
+```text
+// Settings.oneschema
+model Settings {
+  rw name: utf8
+  rw host: utf8
+  command save()
+}
+```
+
+`FormGrid` switches from two columns to one as the window narrows — no size checks in your code.
+
+### 2. Implement the ViewModel in your language
+
+- **Rust**: `viewc --emit rust` generates a typed trait for you to implement. See [examples/language_neutral_views](examples/language_neutral_views) — a pure-Rust ViewModel with no C++ glue.
+- **C++**: use `State`, `Computed` and `VmCommand` with the same template. See [examples/declarative](examples/declarative).
+- **Other languages**: implement one VTable following the [C ABI and ViewModel protocol](docs/59-language-neutral-views.md).
+
+### 3. Or compose directly in C++
+
+```cpp
+#include <oneui/ui_declarative_app.h>
+#include <oneui/ui_compose.h>
+#include <oneui/ui_theme.h>
+
+int main() {
+    oneui::ui::DeclarativeApp app(L"My first OneUI page", 760, 540);
+    oneui::State<std::wstring> name{L"Workspace"};
+    oneui::ui::Compose ui(app.mount());
+    auto page = ui.settingsPage({
+        ui.field(L"Name", ui.input(name)).hint(L"Type here and the text below follows."),
+        ui.text(name)
+    }).title(L"Preferences");
+    oneui::ui::applyTheme(app.mount());
+    return app.run(page);
+}
+```
+
+**For your own project**, use the [prebuilt SDK](docs/sdk-quick-start.md) and link it with CMake or the Rust bindings.
+
+## Components
+
+| Category | Components |
+|---|---|
+| Page skeletons | `SettingsPage`, `ListPage`, `DetailPage`, `Section`, `ActionBar`, `Workspace`, `DockPanel` |
+| Forms | `FormGrid`, `FormRow`, `Input`, `Select`, `Switch`, `Slider`, `FontPicker`, `MediaPicker` |
+| Data | `DataTable`, `TimeSeriesChart`, `Card`, plus native virtualized lists |
+| Workspace | `PaneGrid`, `PaneHeader`, `DockWorkspace`, `Tabs` (with drag-out), drop targets, directional navigation |
+| Native content | `NativeHost` for terminals, editors and remote frames |
+| Styling | CSS variables, scoped styles, container queries, `ThemeScope`, shadows, multi-stop gradients, motion |
+
+Full properties and examples: [component docs](https://oneui.too1.net/docs/14-component-reference).
+
+## Performance
+
+Every number below comes from a reproducible test in this repository, with raw data and method.
+
+| Scenario | Result | Details |
+|---|---|---|
+| Lab page (charts + 2,500 particles + 10,000-row list) | ~182 FPS · 5.49 ms mean frame interval · 1.3% CPU | screenshot above |
+| `.one` template vs hand-written C++ (connection page, 3 rounds) | CPU paint 4.04 / 4.04 ms · working set 100.38 / 100.12 MiB — **no template overhead** | [report](docs/40-declarative-stage-validation.md) |
+| IR + any-language VM vs hand-written (90,000 paired samples) | Settings page and 1,000-row list edits within **+10%** at median and P95 | [raw data](docs/benchmarks/language-neutral-views/) |
+| Split-workspace motion (236,557 frames, 16 panes) | max 15.2 ms · P95 4.2 ms · **zero frames over 16 ms** | [design & data](docs/60-workspace-interaction-components.md) |
+| Table scrolling: GPU vs software | 0.95 ms vs 7.62 ms per paint | [renderer selection](docs/41-renderer-selection-and-product-boundaries.md) |
+| Particle mesh batching | ~20% lower GPU-path paint time | [mesh default](docs/47-particle-mesh-default.md) |
+
+> "Paint" is CPU-side control drawing, not GPU execution time or display frame rate. Environment: Windows 10, Ryzen 9 9950X3D, RTX 5080, MSVC Release.
+
+## Developer experience
+
+- **Live CSS** with `-Dev`; invalid CSS keeps the last good stylesheet and reports exact line and column.
+- **Template hot reload** in development, keeping ViewModel state.
+- **Strict diagnostics** for unknown components, properties, types and selectors — nothing fails silently.
+- **Built-in diagnostics**: `window->enableDeveloperTools()` or `ONEUI_DEVTOOLS=1`; F12 toggles the panel, Ctrl+F12 exports a report. [Guide](docs/54-built-in-developer-tools.md)
+
+## Build from source (Windows)
+
+> Only needed to develop OneUI itself or run the lab. Applications should use the [prebuilt SDK](docs/sdk-quick-start.md).
+
+Requires Git, Python 3, PowerShell and Visual Studio / Build Tools with "Desktop development with C++" (Windows SDK, CMake 3.20+, Ninja). The first Skia build takes the longest; later builds are incremental.
 
 ```powershell
 git clone https://github.com/too1soft/OneUi.git
 cd OneUi
-
-# Once: locate VS/SDK and build the pinned Skia dependency.
 $vswhere = "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe"
 $vs = & $vswhere -latest -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
 $sdk = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows Kits\Installed Roots').KitsRoot10
 .\scripts\build-skia-static.ps1 -Fetch -SyncDeps -Generate -Build -WinVc "$vs/VC" -WinSdk $sdk
 
-# Default components, themes, responsive forms and density
-.\examples\performance_lab\run.ps1 -Build -Components
-
-# Charts, particles, virtual list and metrics
-.\examples\performance_lab\run.ps1
-
-# Learn: settings, validation, async saving and connection list
-.\examples\declarative\run.ps1 -Build -Dev
-
-# Full workflow: list → details → editor, light by default
-.\examples\performance_lab\run.ps1 -Connections -Entry template -Dev
+.\examples\performance_lab\run.ps1 -Build                  # performance lab
+.\examples\performance_lab\run.ps1 -Build -Components      # forms, themes, adaptive layout
+.\examples\declarative\run.ps1 -Build -Dev                 # learning sample with live CSS
 ```
 
-Skip the Skia step if the matching dependency already exists in `third_party/skia/out/oneui-win-x64-release`. Initial builds download dependencies from Skia, Chromium and GitHub; Yoga is pinned and hash checked. The Skia script accepts `-Proxy`. See the [build guide](docs/12-getting-started.md) for other toolchains.
+Samples use local simulated data only. More in the [lab guide](examples/performance_lab/README.md) and [build guide](docs/12-getting-started.md).
 
-`-Build` rebuilds; `-Test` builds and runs regressions; `-Dev` watches styles. Close the application before rebuilding its DLL. Regression tests additionally download pinned Unicode/font fixtures. Examples use local simulated data and discard it on exit; they do not connect to servers.
+## Platforms and status
 
-If VS is not found, check the C++ and CMake installation components. Missing `skia.lib` or text modules means the Skia step needs completing. Details: [learning example](examples/declarative/README.md), [performance lab](examples/performance_lab/README.md).
-
-## Shadows, gradients and motion
-
-Run `.\examples\performance_lab\run.ps1 -Build -Effects` to adjust multi-stop gradients, outer/inner shadows, expansion and fading. Add `motion-lift` or `motion-press` to a button for hover/press feedback; bind `Reveal.open` to show or hide retained content. Effects are opt-in; the default pages remain flat.
-
-Both Skia software and GPU renderers support these effects. Gradients change immediately; stop interpolation is not animated. See [C++/template examples, CSS limits and measurement instructions](docs/51-effects-and-motion.md) (Chinese).
-
-## Start with one input
-
-[hello.cpp](examples/declarative/hello.cpp) is a complete small program: a named input and a preview share one `State<std::wstring>`. Build and run it:
-
-```powershell
-.\examples\declarative\build.ps1
-.\examples\declarative\build\bin\oneui-hello.exe
-```
-
-Use the typed C++ builder for a labeled input and live preview:
-
-```cpp
-oneui::ui::Compose ui(app.mount()); // #include <oneui/ui_compose.h>
-auto page = ui.settingsPage({
-    ui.field(L"Name", ui.input(name)).hint(L"Changes appear below"),
-    ui.text(name)
-}).title(L"Settings");
-oneui::ui::applyTheme(app.mount());
-return app.run(page);
-```
-
-`ui.input(name)` binds both directions; `ui.text(name)` observes state. Field/page components handle labels, spacing, content width and scrolling. Compose delegates to the existing Mount; `make/set/model/bind` remain available. Unsupported properties and wrong binding types fail at compile time. See the [typed API, defaults and measurements](docs/50-typed-authoring-and-defaults.md) (Chinese).
-
-Next, run `examples/declarative/build/bin/oneui-details.exe`: [details.cpp](examples/declarative/details.cpp) is a standalone C++ example of responsive fields, read-only text, bottom actions and theme switching without manual field coordinates. The lab now supports list → details → edit, preserving filters and scroll position; saving from details returns to the same record. See the [page recipes](docs/48-connection-page-recipes.md) and [validation limits](docs/49-connection-workflow-validation.md) (Chinese).
-
-For a full application, [manual.h](examples/declarative/manual.h) contains the C++ composition, [Demo.one](examples/declarative/views/Demo.one) contains the equivalent template, and [vm.h](examples/declarative/vm.h) contains shared state, validation and commands. A ViewModel is simply the C++ class that owns this page data and behavior.
-
-## Prefer templates and CSS?
-
-```html
-<SettingsPage title="Connection settings">
-  <Section title="General">
-    <FormGrid>
-      <FormRow label="Name"><Input v-model="name" /></FormRow>
-      <FormRow label="Host"><Input v-model="host" /></FormRow>
-    </FormGrid>
-  </Section>
-</SettingsPage>
-```
-
-Declare `name` and `host` as `State<std::wstring>` members in your C++ ViewModel. `oneui-viewc` generates C++ during the build. FormGrid wraps to one column when space is tight; application code does not need to calculate field coordinates.
-
-| Task | API or file |
+| Platform | Status |
 |---|---|
-| Pick a page layout | SettingsPage / ListPage / DetailPage |
-| Arrange labeled fields | FormRow; FormGrid for automatic columns |
-| Change color, spacing or typography | External CSS or `<style scoped>`, with `-Dev` |
-| Dark / compact appearance | `ui::applyTheme(app.mount(), true, ui::Density::Compact)` |
-| Derived values and validation | C++ `Computed` |
-| Actions, running state and errors | `VmCommand`, bound through `@click="save"` |
-| Large lists | DataTable and stable business IDs; visible rows are drawn |
+| Windows 10+ | Main platform, most complete coverage |
+| Linux x64 (X11 / Wayland) | Prebuilt SDK; runs under WSLg, native desktop validation in progress |
+| macOS arm64 | Prebuilt SDK; validation in progress |
 
-Successful CSS edits replace the rules; invalid edits retain the last valid style. Input, focus, caret and valid scrolling state survive. **Template structure, events and C++ changes require a rebuild.** This is not full Vue or browser CSS Grid, and templates do not evaluate JavaScript. See the [authoring API](docs/35-declarative-authoring-v1.md) and [layout guide](docs/36-declarative-page-patterns.md).
+OneUI is a **0.1 preview**. Declarative authoring, the any-language view protocol and workspace components are delivered with regression tests; the API is still evolving. 125% / 150% DPI on real systems, multi-monitor and IME candidate windows are still being validated. See the [platform matrix](docs/37-native-desktop-backends.md).
 
-## Performance
+## License
 
-The 2026-09-28 typed-authoring regression measured **3.260 / 3.263ms** mean CPU paint and **100.28 / 99.60MiB** working set for C++ / templates. Equivalent page-construction code shrank **38.5%**, excluding the shared wrapper; widget and subscription counts stayed unchanged. No material runtime regression was observed across three rounds. This workload differs from the historical results below. [Matched before/after samples and methodology](docs/50-typed-authoring-and-defaults.md#代码量与实测).
-
-Measured 2026-09-27 on Windows 10, Ryzen 9 9950X3D (32 logical processors), RTX 5080, MSVC Release, OpenGL + Skia Ganesh. Both entries used the same exe/DLL, a 1320×900 client and 1,000 seeded records. Three alternating rounds each warm up for 50 cycles, then measure 150 search/edit/discard cycles. Style watching and render tracing are off.
-
-| Metric (three-run mean) | C++ entry | `.one` entry |
-|---|---:|---:|
-| Process CPU, whole-machine % | 3.19% | 3.20% |
-| Mean CPU paint | 4.04 ms | 4.04 ms |
-| Mean of per-run paint P95 | 8.17 ms | 8.18 ms |
-| Working set | 100.12 MiB | 100.38 MiB |
-| Private bytes | 142.77 MiB | 142.91 MiB |
-| Extra paints in 5s settled idle | 0 | 0 |
-
-No material template runtime overhead was observed in this run; three rounds do not establish significance for small differences. Paint measures CPU widget traversal, not GPU time or displayed FPS. Idle results apply to the connection page; chart/particle scenes continuously animate. This is not a GPUI comparison or a low-end hardware claim. [Raw data, hashes and reproduction](docs/40-declarative-stage-validation.md#性能测量).
-
-### CPU or GPU?
-
-Windows prefers GPU and falls back to software. Start the lab with `-Renderer gpu`, `-Renderer cpu`, or `-Renderer auto` (inherits the environment); restart to switch. The window reports the actual backend and device/reason.
-
-On the same build, three table-scroll rounds averaged **7.62 / 0.95ms CPU-side paint time** and **53.50 / 120.52MiB working set** for CPU / GPU. Both modes produced no additional idle connection-page paints. GPU rendering was faster but used more process memory. These are neither GPU timestamps nor display FPS. Run `examples/performance_lab/compare-renderers.ps1 -Rounds 3 -Seconds 5`; see the [four-scene results and raw data](docs/41-renderer-selection-and-product-boundaries.md).
-
-A previous three-round baseline on the same machine with **10,000 particles** measured **31.35 / 5.39ms** CPU-side paint time for CPU / GPU. Measure the current version with `compare-renderers.ps1 -Load heavy`. Results also expose Skia cache accounting, distinguishing limits from usage and process memory. See [heavy-load baseline and memory diagnostics](docs/43-heavy-renderer-diagnostics.md).
-
-A subsequent five-round, same-binary A/B test reduced GPU paint time from **5.43 to 5.08ms (6.4%)** using precomputed constants and ordered bulk drawing, with exact raster and actual OpenGL pixel parity. This was the previous default; `-ParticleMode reference` selects the original loop. Software paint improved by less than 1%, and reusable buffers add a small amount of memory. [Four variants, raw results and reproduction](docs/44-particle-drawing-optimization.md).
-
-The performance demo now defaults to **indexed mesh particles** on GPU, with ordered bulk drawing as the software/unsupported-input fallback. Select `-ParticleMode combined` for comparison. The corrected mesh passes strict RGB parity in 18 full scenes and 36 focused cases on the tested machine. The previous five-round A/B measured CPU-side GPU-path paint time at **5.23 → 4.17ms (20.4% lower)**. Normal SDK controls are unaffected. [Default behavior and stability validation](docs/47-particle-mesh-default.md) · [Pixel and A/B evidence](docs/46-particle-mesh-parity.md).
-
-Custom caption geometry and line-art glyphs use [TitleBarPresentation](docs/42-titlebar-presentation.md) in C++/C/Rust. CSS variants no longer select product-specific geometry.
-
-## Scope and maturity
-
-The declarative authoring/default component stage delivers shared bindings and commands, template compilation, strict CSS diagnostics and hot reload, light/dark themes, two densities, responsive forms and runnable examples. Real **125%/150% system DPI, cross-monitor movement and native Chinese IME candidate windows** remain unverified. Internal layout/composition tests do not substitute for those checks. Particle drawing/submission optimization is separate future work.
-
-Existing Widget/View APIs and the default Stack path remain available. Yoga is opt-in and enabled by the new examples. This iteration prioritizes C++; existing C ABI and Rust wrappers do not imply equivalent new template APIs.
-
-Windows is the primary platform. Linux X11/Wayland has built and run under WSLg; native Linux desktop acceptance is pending. Cocoa sources are integrated but await a Mac build. Consult the [platform matrix](docs/37-native-desktop-backends.md).
-
-## Built-in developer tools
-
-Call `window->enableDeveloperTools()` to inspect slow paints, animation delays, Reveal progress reversals and widget self-paint costs during normal use. Templates attach source locations automatically. F12 toggles the overlay; Ctrl+F12 exports JSON. Opt-in, no sampling repaint timer; native Windows integration is available now.
-
-Try `./examples/performance_lab/run.ps1 -Effects -DevTools`. [Usage, screenshot and limitations](docs/54-built-in-developer-tools.md).
-
-## References
-
-- [Stage validation and reproducible measurements](docs/40-declarative-stage-validation.md)
-- [Detailed capability reference](docs/capabilities-reference-en.md), [component inventory](docs/07-component-inventory.md), [component APIs](docs/14-component-reference.md)
-- [Build/integration](docs/12-getting-started.md), [C ABI](docs/c-abi-integration.md), [Rust](bindings/rust/README.md)
-- [Architecture](docs/01-architecture.md), [rendering](docs/39-rendering-and-validation.md), [accessibility](docs/15-accessibility.md)
-
-Public headers live in `include/oneui/`, widgets in `src/core/`, the template compiler in `tools/viewc/`, examples in `examples/`, and regressions in `tests/`. See [LICENSE](LICENSE) and [third-party notices](third_party/README.md).
-
-Expansion/collapse now has a native regression runner: `./examples/performance_lab/check-motion.ps1`. It checks geometry jumps, progress reversals and slow paint intervals, preserves frame traces and exits nonzero on failure. See [motion diagnostics and measurement limits](docs/53-motion-continuity-and-diagnostics.md).
+[MIT](LICENSE). Third-party notices in [third_party/README.md](third_party/README.md).

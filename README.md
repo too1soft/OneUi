@@ -1,92 +1,128 @@
+<div align="center">
+
 # OneUI
 
-[English](README_EN.md) | 简体中文 · [MIT](LICENSE) · C++17 · 0.1 开发版
+**原生、高性能、任何语言都能驱动的桌面 UI 引擎**
 
-**用 C++ 写原生桌面界面，布局、主题和数据绑定交给 OneUI。**
+用 `.one` 模板声明界面，用 C++、Rust 或任何能调用 C 的语言编写业务逻辑。<br>
+Skia 原生绘制，不需要 WebView，不需要 JavaScript，没有浏览器运行时。
 
-你可以直接组合 C++ 控件，也可以用 `.one` 标签描述页面。两种写法共用 C++ 业务逻辑，最终都是保留在内存中的原生控件树：改状态就更新对应属性，不会每帧重新创建页面。底层使用 Skia 绘制，不需要 JavaScript 或 WebView。
+[官网](https://oneui.too1.net/) · [组件文档](https://oneui.too1.net/docs/14-component-reference) · [快速接入](docs/sdk-quick-start.md) · [English](README_EN.md)
 
-适合设置工具、连接管理器、运维控制台，以及包含大量表格、图表和表单的桌面应用。当前提供 Windows、macOS arm64 和 Linux x64 的预编译预览 SDK；API 仍在演进，不是稳定版承诺。[各平台支持与验收范围](docs/sdk-platforms.md)。
+`MIT` · `C++17` · `Rust` · `C ABI` · `Windows / macOS / Linux` · `0.1 开发版`
 
-**业务项目优先使用预编译 SDK。** 按[接入指南](docs/sdk-quick-start.md)下载匹配版本，通过 CMake 或 Rust 绑定直接链接；无须在每个项目中编译 OneUI 或 Skia。版本锁与用户缓存支持多个项目复用。[官网部署与下载服务](docs/portal-deployment.md)提供内嵌文档的 Go 单程序。
+</div>
 
-现在可以直接组合导航、列表＋详情和底部固定操作的设置页，并选择标准／柔和视觉预设。运行 `./examples/performance_lab/run.ps1 -Layouts`，或看[完整页面组合教程](docs/52-layout-recipes-and-presets.md)。
+---
 
-最近的阴影优化实测：同一 GPU 效果场景的平均绘制 **1.09→0.62ms**、内容 P95 **12.81→0.95ms**、工作集 **170→109MiB**；软件路径保持不变。[环境、原始数据与限制](docs/52-layout-recipes-and-presets.md#最终同机实测2026-09-28)。
+## 为什么选择 OneUI
 
-OneUI 试验台统一展示布局、性能与桌面能力。终端工作区位于“功能 / 终端与日志”：稳定 ID 标签、终端分屏、模拟文件、监控与日志支持浅深主题及窄窗口，Rust 持有终端对象。运行 `./examples/performance_lab/build.ps1 -Test`，再运行 `./examples/performance_lab/run.ps1 -Page features/terminal`（Demo 需要 Rust 工具链，独立 SDK 不需要）。[试验台入口](examples/performance_lab/README.md) · [迁移和验收状态](docs/unified-lab-implementation.md)。
-
-`Workspace` 声明页面区域，`DockPanel` 声明面板头／正文／页脚，`ToolButton` 统一工具按钮样式；共用 C++／`.one` 入口，不必手工计算位置。
-
-**阶段状态：** C++／`.one` 声明式开发第一阶段已完成，当前仍为 0.1 开发版。[已交付能力、提交前回归与后续边界](docs/58-declarative-workspace-stage.md)。
+| | |
+|---|---|
+| ⚡ **真正的原生性能** | Skia 直接绘制，支持 GPU（OpenGL / Ganesh）与软件两套后端。综合实验台在图表、2,500 个粒子、10,000 行列表同时运行时可达 **约 182 FPS**，进程 CPU **1.3%**。 |
+| 🧩 **界面与语言彻底解耦** | `.one` 模板编译成平台无关的 IR，通过稳定的 C ABI 驱动。**同一份界面，C++、Rust 都能直接使用**，Go、C# 等语言也能按协议接入。换后端语言，界面无需重写。 |
+| 🛡️ **编译期就发现错误** | `.oneschema` 契约描述页面数据和命令；绑定错的字段、写错的类型、事件参数不匹配，在**构建时**就会报错并指向源码行，而不是在运行时才崩溃。 |
+| 🔁 **保留式控件树，精确增量更新** | 控件只创建一次。状态变化只刷新受影响的属性；列表按稳定 key 增量插入、删除、移动，**不会每帧重建页面**，空闲时零额外绘制。 |
+| 🎨 **主题、密度、CSS 热更新** | 内置浅色、深色主题和两档密度，样式用 CSS 编写。开发时修改 CSS 即时生效，输入、焦点、滚动位置都不丢失。 |
+| 🪟 **复杂桌面交互开箱即用** | 分屏网格、可拖拽停靠、浮动面板、标签拖出合并、方向键导航、容器查询……终端、IDE、运维控制台需要的工作区能力都已内置。 |
+| 🔍 **内置性能诊断** | 按 F12 即可看到慢绘制、动画卡顿和耗时控件，并直接定位到 `.one` 源码行。默认关闭，零开销。 |
+| 📦 **预编译 SDK** | 提供 Windows、macOS arm64、Linux x64 预编译包，业务项目通过 CMake 或 Rust 直接链接，**不必编译 Skia**。 |
 
 ## 实际运行效果
 
-浅色表单：默认间距、字号、绿色强调色和自动分栏，应用代码不用计算字段坐标。
+![OneUI 原生性能实验台：实时 FPS、帧间隔、CPU、内存与帧节奏](docs/images/performance-lab/overview.png)
 
-完整工作区：同一套布局自动适配侧栏、列表与详情；窄窗口切换为单页。
+<div align="center">
 
-深色紧凑表格：1,000 条模拟记录，原生虚拟化绘制。
+Release · OpenGL + Skia Ganesh · RTX 5080 —— UI 更新 **~182 FPS** · 平均帧间隔 **5.49 ms** · P95 **5.84 ms** · CPU **1.3%** · 工作集 **~112 MB**
 
-综合实验台：图表、粒子、滚动列表与实时指标。
+</div>
 
-![OneUI 原生性能实验台](docs/images/performance-lab/overview.png)
+运行 `.\examples\performance_lab\run.ps1` 即可在本机看到同一页面。
 
-以上是仓库示例实际生成的原生客户端截图。更多[窄窗口与错误状态截图](docs/40-declarative-stage-validation.md#截图)，以及[可复现的截图脚本](examples/performance_lab/capture-gallery.ps1)。
+## 架构
 
-## 从源码开发与运行 Demo（Windows）
+```mermaid
+flowchart TB
+    subgraph APP["你的应用"]
+        direction LR
+        ONE[".one 模板<br/>+ 作用域 CSS"]
+        SCHEMA[".oneschema<br/>数据与命令契约"]
+        VM["ViewModel<br/>C++ / Rust / Go / C# …"]
+    end
 
-下面的完整工具链只用于开发 OneUI 或修改试验台。业务程序接入请先看[预编译 SDK](docs/sdk-quick-start.md)。
+    VIEWC["oneui-viewc 编译器<br/>类型检查 · 生成类型安全绑定"]
+    IR[".oneview IR<br/>平台无关的二进制视图"]
+    ABI["稳定 C ABI<br/>实例化 · 读写属性 · 调用命令 · 增量通知"]
 
-需要 Git、Python 3、PowerShell，以及 Visual Studio / Build Tools 的“使用 C++ 的桌面开发”（包含 Windows SDK、CMake、Ninja）。示例要求 CMake 3.20+。**首次下载和编译 Skia 最耗时；以后修改页面只需增量构建。** 不必安装 Node.js。
+    subgraph ENGINE["OneUI 引擎（C++17）"]
+        direction LR
+        RT["视图运行时<br/>保留式控件树 · 增量更新"]
+        CTRL["控件库<br/>表单 · 表格 · 图表 · 工作区"]
+        LAYOUT["布局与样式<br/>Yoga · CSS · 主题"]
+    end
 
-**1. 获取源码。**
+    SKIA["Skia 渲染<br/>GPU（OpenGL） / 软件"]
+    PLAT["平台层<br/>Win32 · macOS · X11 / Wayland"]
 
-```powershell
-git clone https://github.com/too1soft/OneUi.git
-cd OneUi
+    ONE --> VIEWC
+    SCHEMA --> VIEWC
+    VIEWC --> IR
+    VIEWC -. 生成 trait / 适配器 .-> VM
+    IR --> ABI
+    VM <--> ABI
+    ABI --> RT
+    RT --> CTRL --> LAYOUT --> SKIA --> PLAT
 ```
 
-**2. 首次准备 Skia。** 以下命令自动查找 VS 与 Windows SDK；已有本仓库匹配的 `third_party/skia/out/oneui-win-x64-release` 构建可跳过。
+**分层原则：** 界面结构写在 `.one`，数据与命令的约定写在 `.oneschema`，业务状态放在 ViewModel，而 ViewModel **不创建任何控件**。所有语言都经过同一个 C ABI，所以界面与业务逻辑可以分别演进、分别测试。
 
-```powershell
-$vswhere = "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe"
-$vs = & $vswhere -latest -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-$sdk = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows Kits\Installed Roots').KitsRoot10
-.\scripts\build-skia-static.ps1 -Fetch -SyncDeps -Generate -Build -WinVc "$vs/VC" -WinSdk $sdk
+| 概念 | 作用 |
+|---|---|
+| `.one` | 声明式界面模板：组件、绑定、事件、条件、列表、插槽、作用域 CSS |
+| `.oneschema` | 页面的数据契约：属性（只读或读写）、类型、列表项模型、命令签名 |
+| `oneui-viewc` | 编译器：校验模板与契约，生成 `.oneview` IR 和各语言的类型安全绑定 |
+| `.oneview` IR | 版本化的二进制视图描述，带契约哈希；模板和 ViewModel 版本不匹配时直接拒绝加载 |
+| ViewModel | 你的业务状态与命令，用任意语言实现，通过 C ABI 与界面通信 |
+| C ABI | 唯一的跨语言边界：实例化视图、读写属性、调用命令、列表增量通知 |
+
+## 快速上手
+
+### 1. 用模板描述界面
+
+```html
+<!-- Settings.one -->
+<template view-model="Settings">
+  <SettingsPage title="连接设置">
+    <Section title="基本信息">
+      <FormGrid>
+        <FormRow label="名称"><Input v-model="name" /></FormRow>
+        <FormRow label="主机"><Input v-model="host" /></FormRow>
+      </FormGrid>
+    </Section>
+    <ActionBar><Button @click="save">保存</Button></ActionBar>
+  </SettingsPage>
+</template>
 ```
 
-首次会访问 Skia、Chromium 和 GitHub 下载依赖；需要代理时，Skia 脚本可加 `-Proxy http://127.0.0.1:你的端口`。Yoga 在构建示例时下载固定版本并校验哈希。离线构建与其他工具链见[构建指南](docs/12-getting-started.md)。
-
-**3. 选择一个示例。** 所有命令均在仓库根目录运行。
-
-```powershell
-# 推荐先看：默认表单、深浅主题、自适应布局、紧凑密度
-.\examples\performance_lab\run.ps1 -Build -Components
-
-# 图表、粒子、虚拟列表、实时 CPU / 内存
-.\examples\performance_lab\run.ps1
-
-# 学习开发：设置、保存校验、连接列表，开启 CSS 热更新
-.\examples\declarative\run.ps1 -Build -Dev
-
-# 完整业务流程：列表 → 详情 → 编辑，默认浅色
-.\examples\performance_lab\run.ps1 -Connections -Entry template -Dev
+```text
+// Settings.oneschema
+model Settings {
+  rw name: utf8
+  rw host: utf8
+  command save()
+}
 ```
 
-`-Build` 重新编译，`-Test` 编译并运行回归，`-Dev` 监听 CSS。结构或 C++ 变更后先关闭窗口再重建，避免 DLL 被占用。示例默认使用本地模拟数据，关闭后丢弃，不连接外部服务器。
+窗口变窄时，`FormGrid` 会自动从双列变为单列，不需要写任何尺寸判断。
 
-构建找不到 VS 时请确认安装了 C++ 和 CMake 组件；提示缺少 `skia.lib` 或文字模块时，完成第 2 步。回归测试还会下载固定的 Unicode／字体测试资源。更多参数见[实验台说明](examples/performance_lab/README.md)与[学习示例说明](examples/declarative/README.md)。
+### 2. 用你熟悉的语言实现 ViewModel
 
-## 阴影、渐变和动效怎么加？
+- **Rust**：`viewc --emit rust` 生成类型安全的 trait，你只需实现它。完整示例见 [examples/language_neutral_views](examples/language_neutral_views)：纯 Rust ViewModel，不需要任何 C++ 胶水代码。
+- **C++**：使用 `State`、`Computed`、`VmCommand`，同一份模板同样适用。见 [examples/declarative](examples/declarative)。
+- **其他语言**：按 [C ABI 与 ViewModel 协议](docs/59-language-neutral-views.md) 实现一张 VTable 即可。
 
-先运行 `.\examples\performance_lab\run.ps1 -Build -Effects`，直接调节多色标渐变、内／外阴影、展开与淡入。按钮加 `class="motion-lift"` 或 `class="motion-press"` 即可使用悬停／按压反馈；内容用 `Reveal` 绑定显示状态。默认页面仍保持简洁，效果按需开启。
-
-软件和 GPU 后端都可运行；渐变本身即时切换，尚不做色标动画。[可复制的 C++／模板例子、CSS 支持边界与测量方法](docs/51-effects-and-motion.md)。
-
-## 写第一个页面
-
-这是完整的 [hello.cpp](examples/declarative/hello.cpp)。输入框和预览绑定同一个变量，改输入会立即更新文字。
+### 3. 或者直接用 C++ 组合
 
 ```cpp
 #include <oneui/ui_declarative_app.h>
@@ -98,8 +134,7 @@ int main() {
     oneui::State<std::wstring> name{L"工作空间"};
     oneui::ui::Compose ui(app.mount());
     auto page = ui.settingsPage({
-        ui.field(L"名称", ui.input(name))
-            .hint(L"修改输入，下面的文字会跟着变化。"),
+        ui.field(L"名称", ui.input(name)).hint(L"修改输入，下面的文字会跟着变化。"),
         ui.text(name)
     }).title(L"偏好设置");
     oneui::ui::applyTheme(app.mount());
@@ -107,114 +142,99 @@ int main() {
 }
 ```
 
-```powershell
-.\examples\declarative\build.ps1
-.\examples\declarative\build\bin\oneui-hello.exe
-```
+输入框和文字绑定同一个状态，输入时文字立即更新；绑定类型写错会在编译时报告。
 
-把这个文件作为自己页面的起点。`ui.input(name)` 自动双向绑定，`ui.text(name)` 随状态更新，`ui.field` 提供标签和说明，`ui.settingsPage` 负责正文限宽和滚动。`Compose` 直接使用原有 Mount，旧的 `make/set/model/bind` 写法仍然可用。错误属性或绑定类型会在编译时报告。[常用写法、默认外观与验证](docs/50-typed-authoring-and-defaults.md)。
+**在业务项目中接入**，请使用[预编译 SDK](docs/sdk-quick-start.md)：下载对应平台的包，通过 CMake 或 Rust 绑定链接即可。
 
-下一步可直接运行 [details.cpp](examples/declarative/details.cpp)：构建后启动 `examples/declarative/build/bin/oneui-details.exe`，体验只用公共组件完成的自动分栏、长文本、底部操作和主题切换。[从字段到完整页面](docs/48-connection-page-recipes.md) 按“运行 → 改字段 → 组合布局 → 接入业务”说明代码和模板写法。
+## 组件一览
 
-## 更喜欢标签和 CSS？
-
-例如，一个双列表单可以写成下面这样；窗口变窄时自动转为单列：
-
-```html
-<SettingsPage title="连接设置">
-  <Section title="基本信息">
-    <FormGrid>
-      <FormRow label="名称"><Input v-model="name" /></FormRow>
-      <FormRow label="主机"><Input v-model="host" /></FormRow>
-    </FormGrid>
-  </Section>
-</SettingsPage>
-```
-
-`name`、`host` 是 C++ ViewModel 中的 `State<std::wstring>` 成员；ViewModel 就是存放页面数据、校验和操作的 C++ 类。`oneui-viewc` 在构建时把模板编译为 C++。完整可运行例子见 [Demo.one](examples/declarative/views/Demo.one) 和 [vm.h](examples/declarative/vm.h)。
-
-| 想调整什么 | 该怎么做 |
+| 类别 | 组件 |
 |---|---|
-| 页面布局 | 选 SettingsPage / ListPage / DetailPage；字段放 FormRow，自动分栏用 FormGrid |
-| 样式与间距 | 修改外部 CSS 或 `.one` 的 `<style scoped>`，用 `-Dev` 即时预览 |
-| 深色或紧凑外观 | `ui::applyTheme(app.mount(), true, ui::Density::Compact)` |
-| 派生文字或校验 | 在 C++ 中写 `Computed`，模板只引用成员 |
-| 按钮执行与保存中 | 使用 `VmCommand`，模板通过 `@click="save"` 绑定 |
-| 复杂数据列表 | DataTable + 稳定业务 ID；原生表格只绘制可见行 |
+| 页面骨架 | `SettingsPage`、`ListPage`、`DetailPage`、`Section`、`ActionBar`、`Workspace`、`DockPanel` |
+| 表单 | `FormGrid`、`FormRow`、`Input`、`Select`、`Switch`、`Slider`、`FontPicker`、`MediaPicker` |
+| 数据展示 | `DataTable`、`TimeSeriesChart`、`Card`，以及原生虚拟化列表 |
+| 工作区 | `PaneGrid`、`PaneHeader`、`DockWorkspace`、`Tabs`（支持拖出）、拖放落点、方向导航 |
+| 原生内容 | `NativeHost`：嵌入终端、编辑器、远程画面等原生内容 |
+| 样式能力 | CSS 变量、作用域样式、容器查询、`ThemeScope`、阴影、多色渐变、动效 |
 
-CSS 修改成功后整体替换；失败保留上一份有效样式，输入、焦点、光标与有效滚动位置保留。**模板结构、事件与 C++ 逻辑仍需重编译。** 这里没有完整 Vue、浏览器 CSS Grid 或 JavaScript 表达式；明确的支持范围见[声明式 API](docs/35-declarative-authoring-v1.md)和[布局指南](docs/36-declarative-page-patterns.md)。
-
-## 任何语言驱动的 `.one` 视图（新）
-
-`.one` 模板配合 `.oneschema` 契约，由 `oneui-viewc` 编译成平台无关的 `.oneview` IR，再通过 C ABI 由**任意语言**的 ViewModel 驱动；C++ 与 Rust 走同一份 IR，`viewc --emit rust` 会生成类型安全的 trait。列表按稳定 key 增量更新，开发时支持热重载并保留 VM 状态。设计见 [59 号文档](docs/59-language-neutral-views.md)。
-
-实测（与手写版本同一 VM、同一二进制，五轮配对、9 万个样本）：设置页的 5 个场景、1,000 行列表的更新/插入/删除/移动，median 与 P95 均在手写版本的 **+10%** 以内，列表结构变化反而略快。[原始数据](docs/benchmarks/language-neutral-views/)
-
-工作区交互组件 `PaneGrid`、`PaneHeader`、`DockWorkspace`、拖放落点、方向导航、容器查询，以及字体/媒体选择、主题预览等组件也已提供，可直接在 `.one` 中声明。终端内容通过内容租约挂载，分屏、交换、跨标签、最大化时不重建。
-
-NVIDIA OpenGL 下 18 个场景 × 100 次 × 5 轮、共 236,557 帧：最大 **15.2 ms**、P95 **4.2 ms**，超过 16 ms 的帧为 **0**（16 个可见窗格时同样为 0）。设计见 [60 号文档](docs/60-workspace-interaction-components.md)，示例在 `examples/workspace_interactions`。
+完整属性与示例见[组件文档](https://oneui.too1.net/docs/14-component-reference)。
 
 ## 性能数据
 
-性能实验台综合页（见上方“实际运行效果”中的截图；Release、OpenGL + Skia Ganesh、RTX 5080）：图表、2,500 个粒子与 10,000 行虚拟列表同时运行时，UI 更新约 **182 FPS**，平均帧间隔 **5.49 ms**、P95 **5.84 ms**，进程 CPU **1.3%**，工作集约 **112 MB**。运行 `.\examples\performance_lab
-un.ps1` 即可看到同一页面。
+所有数据都来自仓库中可复现的测试，并附有原始数据与测量方法。
 
-2026-09-28 的新写法回归：连接页 C++ / 模板平均 CPU paint 为 **3.260 / 3.263ms**，工作集 **100.28 / 99.60MiB**。相同功能的页面创建代码少了 **38.5%**，控件和订阅数量不变；三轮未观察到明显运行期开销回归。负载和轮次与下面的历史数据不同，请勿直接纵向比较。[前后同负载实测、代码量口径和原始数据](docs/50-typed-authoring-and-defaults.md#代码量与实测)。
+| 场景 | 结果 | 详情 |
+|---|---|---|
+| 综合实验台（图表 + 2,500 粒子 + 10,000 行列表） | ~182 FPS · 平均帧间隔 5.49 ms · CPU 1.3% | 本页截图 |
+| `.one` 模板 vs 手写 C++（连接页，三轮） | CPU paint 4.04 / 4.04 ms · 工作集 100.38 / 100.12 MiB，**模板没有额外开销** | [报告](docs/40-declarative-stage-validation.md#性能测量) |
+| IR + 任意语言 VM vs 手写（9 万个配对样本） | 设置页与 1,000 行列表的增删改移，median 和 P95 均在 **+10%** 以内 | [原始数据](docs/benchmarks/language-neutral-views/) |
+| 分屏工作区动画（236,557 帧，16 个窗格） | 最大 15.2 ms · P95 4.2 ms · **超过 16 ms 的帧为 0** | [设计与数据](docs/60-workspace-interaction-components.md) |
+| 表格滚动：GPU vs 软件 | 每次绘制 0.95 ms vs 7.62 ms | [渲染后端选择](docs/41-renderer-selection-and-product-boundaries.md) |
+| 粒子网格合批 | GPU 路径绘制耗时下降约 20% | [网格默认化](docs/47-particle-mesh-default.md) |
+| 阴影优化 | 平均绘制 1.09 → 0.62 ms · 工作集 170 → 109 MiB | [效果与实测](docs/52-layout-recipes-and-presets.md#最终同机实测2026-09-28) |
 
-2026-09-27，Windows 10、Ryzen 9 9950X3D（32 逻辑处理器）、RTX 5080、MSVC Release、OpenGL + Skia Ganesh。使用同一 exe/DLL、1320×900 窗口、1,000 条固定数据，交替执行三轮搜索／编辑／取消流程；每轮先预热 50 次，再测 150 次。开发监听与渲染追踪关闭。
+> paint 指 CPU 侧的控件绘制耗时，不等同于 GPU 执行时间或显示器帧率。测量环境：Windows 10、Ryzen 9 9950X3D、RTX 5080、MSVC Release。
 
-| 指标（三轮平均） | C++ 代码入口 | `.one` 模板入口 |
-|---|---:|---:|
-| 进程 CPU，占整机比例 | 3.19% | 3.20% |
-| CPU 侧 paint 平均 | 4.04 ms | 4.04 ms |
-| 每轮 paint P95 的平均 | 8.17 ms | 8.18 ms |
-| 工作集 | 100.12 MiB | 100.38 MiB |
-| 私有提交内存 | 142.77 MiB | 142.91 MiB |
-| 稳定后 5 秒额外 paint | 0 | 0 |
+## 开发体验
 
-本次未观察到明显的模板运行开销；三轮结果不足以证明微小差异有统计意义。paint 是 CPU 侧控件绘制遍历，不是 GPU 执行时间或屏幕帧率。空闲结果仅针对连接页，图表／粒子页本来就持续动画。这不是 GPUI 对比，也不代表低配机器性能。 [原始数据、哈希与复现步骤](docs/40-declarative-stage-validation.md#性能测量)。
+- **CSS 热更新**：加 `-Dev` 启动后，修改样式立即生效；样式写错时保留上一份有效样式，并给出准确的行列位置。
+- **模板热重载**：开发模式下修改 `.one` 会原地重载，ViewModel 的状态不丢失。
+- **严格诊断**：未知组件、未知属性、类型不匹配、选择器写错，都会在构建或加载时明确报错，不会悄悄失效。
+- **内置性能诊断**：调用 `window->enableDeveloperTools()`，或设置环境变量 `ONEUI_DEVTOOLS=1`；按 F12 打开诊断面板，Ctrl+F12 导出报告。[使用说明](docs/54-built-in-developer-tools.md)
+- **可复现的回归**：试验台内置交互、截图与动效连续性检查，失败时保留逐帧数据。
 
-### CPU 与 GPU 怎么选？
+## 从源码构建（Windows）
 
-Windows 默认尝试 GPU，失败回退软件绘制。实验台可以启动时选择，窗口会显示**实际后端**；切换需重启：
+> 只有开发 OneUI 本身或运行试验台才需要这一步。业务项目请直接使用[预编译 SDK](docs/sdk-quick-start.md)。
+
+需要 Git、Python 3、PowerShell，以及 Visual Studio / Build Tools 的"使用 C++ 的桌面开发"（含 Windows SDK、CMake 3.20+、Ninja）。首次编译 Skia 最耗时，之后只需增量构建。
 
 ```powershell
-.\examples\performance_lab\run.ps1 -Renderer gpu
-.\examples\performance_lab\run.ps1 -Renderer cpu
-.\examples\performance_lab\compare-renderers.ps1 -Rounds 3 -Seconds 5
+git clone https://github.com/too1soft/OneUi.git
+cd OneUi
+
+# 首次准备 Skia（自动查找 VS 与 Windows SDK；需要代理时加 -Proxy http://127.0.0.1:端口）
+$vswhere = "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe"
+$vs = & $vswhere -latest -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+$sdk = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows Kits\Installed Roots').KitsRoot10
+.\scripts\build-skia-static.ps1 -Fetch -SyncDeps -Generate -Build -WinVc "$vs/VC" -WinSdk $sdk
 ```
 
-本机同一构建、三轮实测：表格滚动 CPU / GPU 每次绘制 **7.62 / 0.95ms**，进程工作集 **53.50 / 120.52MiB**；空闲连接页两种模式均无额外绘制。GPU 更快，但进程内存更高。这是 CPU 侧绘制耗时，不能等同 GPU 时间或显示帧率。完整的[四场景数据、环境与原始记录](docs/41-renderer-selection-and-product-boundaries.md)解释了测量口径和波动。
+然后选一个示例运行：
 
-把负载升到 **10,000 粒子**，此前三轮基线的 CPU / GPU 每次绘制为 **31.35 / 5.39ms**。用 `compare-renderers.ps1 -Load heavy` 可测当前版本；输出还包含 Skia 缓存统计，帮助区分缓存预算、资源用量与进程内存。见[高压基线与内存诊断](docs/43-heavy-renderer-diagnostics.md)。
+```powershell
+.\examples\performance_lab\run.ps1 -Build                  # 性能实验台：图表、粒子、虚拟列表、实时指标
+.\examples\performance_lab\run.ps1 -Build -Components      # 默认表单、深浅主题、自适应布局、紧凑密度
+.\examples\declarative\run.ps1 -Build -Dev                 # 学习示例：设置、校验、连接列表，CSS 热更新
+.\examples\performance_lab\run.ps1 -Build -Effects         # 阴影、渐变与动效
+.\examples\performance_lab\run.ps1 -Renderer cpu           # 切换为软件渲染（默认优先 GPU）
+```
 
-后续五轮同一二进制 A/B 测试中，预计算与保序批量入口让 GPU 每次绘制从 **5.43ms 降至 5.08ms（降低 6.4%）**，软件及实际 OpenGL 像素对比一致。该组合方案仍可显式选择；`-ParticleMode reference` 可切回原始模式。CPU 软件路径改善不到 1%，仍有优化空间；缓冲增加了少量内存。[四种方案、原始数据与复现](docs/44-particle-drawing-optimization.md)。
+示例只使用本地模拟数据，不连接任何外部服务。更多参数见[实验台说明](examples/performance_lab/README.md)和[构建指南](docs/12-getting-started.md)。
 
-性能 Demo 的粒子现在默认采用 **mesh 索引网格**，把多个粒子合批交给 GPU 绘制，软件或不支持的情况自动回退。可用 `-ParticleMode combined` 切回对照方案。修正版本机 18 + 36 个严格 RGB 场景零差异；上一轮五次比较的 GPU 路径 CPU 侧绘制耗时为 **5.23 → 4.17ms，降低约 20.4%**。普通 SDK 控件不受该默认值影响。[默认行为与稳定性验证](docs/47-particle-mesh-default.md) · [画质和 A/B 数据](docs/46-particle-mesh-parity.md)。
+## 平台与当前阶段
 
-标题栏的产品外观也可通过 [C++／C／Rust 通用配置](docs/42-titlebar-presentation.md)提供，主题名称只控制 CSS，核心不按产品名称切换几何。
+| 平台 | 状态 |
+|---|---|
+| Windows 10+ | 主线平台，功能与验收最完整 |
+| Linux x64（X11 / Wayland） | 提供预编译 SDK，已在 WSLg 构建运行；原生桌面验收进行中 |
+| macOS arm64 | 提供预编译 SDK，验收进行中 |
 
-## 当前阶段与兼容性
+OneUI 目前是 **0.1 开发版**：声明式开发、多语言视图协议、工作区组件均已交付并有回归测试，API 仍在演进，暂不承诺稳定性。真实系统下 125% / 150% DPI、跨屏、中文输入法候选窗口等场景仍在验收中。详见[平台支持矩阵](docs/37-native-desktop-backends.md)。
 
-声明式开发与默认组件阶段已交付：共享绑定／命令、模板编译、严格样式诊断与热更新、浅／深主题、两档密度、自动表单布局，以及可运行和可回归的示例。真实系统 **125%／150% DPI、跨屏、中文输入法候选窗口** 仍待验收；内部布局／组合输入测试不替代这些检查。粒子网格优化及默认启用见上述报告；图表等其他绘制负载和跨设备验证仍需继续。
+## 文档导航
 
-旧 Widget／View API 和默认 Stack 路径继续保留；Yoga 为显式启用，新示例已替你开启。声明式新接口本轮优先 C++，现有 C ABI／Rust 包装继续可用，但不等于新增模板能力已在各语言对齐。
+| 我想…… | 去看 |
+|---|---|
+| 在项目里接入 OneUI | [预编译 SDK 接入](docs/sdk-quick-start.md) · [C++ 构建](docs/12-getting-started.md) · [Rust 绑定](bindings/rust/README.md) |
+| 学习写页面 | [声明式写法](docs/35-declarative-authoring-v1.md) · [页面布局模式](docs/36-declarative-page-patterns.md) · [从字段到完整页面](docs/48-connection-page-recipes.md) |
+| 了解多语言视图协议 | [语言无关的声明式视图](docs/59-language-neutral-views.md) · [C ABI](docs/c-abi-integration.md) |
+| 做复杂工作区 | [工作区交互组件](docs/60-workspace-interaction-components.md) |
+| 查组件 API | [组件文档（官网）](https://oneui.too1.net/docs/14-component-reference) · [能力参考](docs/capabilities-reference.md) |
+| 理解内部设计 | [架构](docs/01-architecture.md) · [渲染与验证](docs/39-rendering-and-validation.md) · [无障碍](docs/15-accessibility.md) |
 
-Windows 为当前主线。Linux X11／Wayland 已在 WSLg 构建运行，原生 Linux 桌面验收未完成；macOS 源码已接入，尚待 Mac 构建。[平台支持矩阵](docs/37-native-desktop-backends.md)分别记录实现与验收状态。
+源码结构：公共头文件在 `include/oneui/`，控件实现在 `src/core/`，视图运行时在 `src/views/`，模板编译器在 `tools/viewc/`，示例与回归测试分别在 `examples/` 和 `tests/`。
 
-## 内置开发诊断
+## 许可
 
-调用 `window->enableDeveloperTools()`，正常操作时就能观察慢绘制、动画延迟、Reveal 进度倒退和耗时控件；`.one` 自动附带源码行。F12 显隐面板，Ctrl+F12 导出报告。默认关闭，无采样刷新定时器，当前 Windows 可用。
-
-实验台直接运行 `./examples/performance_lab/run.ps1 -Effects -DevTools`。[接入、截图与检测边界](docs/54-built-in-developer-tools.md)。
-
-## 深入了解
-
-- [本轮验收与可复现性能](docs/40-declarative-stage-validation.md)
-- [完整能力参考](docs/capabilities-reference.md) · [组件清单](docs/07-component-inventory.md) · [组件 API](docs/14-component-reference.md)
-- [C++ 构建与接入](docs/12-getting-started.md) · [C ABI](docs/c-abi-integration.md) · [Rust](bindings/rust/README.md)
-- [架构](docs/01-architecture.md) · [渲染边界](docs/39-rendering-and-validation.md) · [无障碍](docs/15-accessibility.md)
-
-核心头文件在 `include/oneui/`，控件实现位于 `src/core/`，模板编译器在 `tools/viewc/`；演示和回归分别在 `examples/` 与 `tests/`。许可证见 [LICENSE](LICENSE)，第三方依赖见 [third_party/README.md](third_party/README.md)。
-
-展开／收起可自动检查位置跳变、进度倒退和慢帧：`./examples/performance_lab/check-motion.ps1`。脚本驱动真实原生窗口，失败保留逐帧数据并返回非零；见[动效连续性与检测](docs/53-motion-continuity-and-diagnostics.md)。
+[MIT](LICENSE)。第三方依赖见 [third_party/README.md](third_party/README.md)。
