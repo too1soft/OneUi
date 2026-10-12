@@ -3,6 +3,7 @@
 #include "oneui/controls/popup.h"
 namespace oneui::ui {
 void Mount::set(Element &e, const std::string &key, const std::wstring &value) {
+    if (key == "accessible-name") { e.widget->setAccessibleName(value); return; }
     if(e.component=="StateView") {
         auto state=e.as<StateView>();
         if(key=="title"){state->setTitle(value);return;}

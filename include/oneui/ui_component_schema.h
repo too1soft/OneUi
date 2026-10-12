@@ -71,7 +71,7 @@ enum class ValueType { None, Text, Boolean, Integer, Number, Strings, Columns, R
     X(ValidationMessage, "label", "text", None) \
     X(TextArea, "input", "text placeholder line-height read-only", Text) \
     X(Checkbox, "checkbox", "text checked", Boolean) \
-    X(Input, "input", "text placeholder password password-mask read-only prefix-icon", Text) \
+    X(Input, "input", "text placeholder password password-mask read-only prefix-icon accessible-name", Text) \
     X(SearchInput, "input", "text placeholder prefix-icon placeholder-when-focused", Text) \
     X(Switch, "switch", "text checked", Boolean) \
     X(Select, "select", "items selectedIndex", Integer) \

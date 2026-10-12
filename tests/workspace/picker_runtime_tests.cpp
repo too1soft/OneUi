@@ -13,7 +13,10 @@ int main(int argc,char** argv) {
         Vm menuItem(image,"MenuEntry");
         text(menuItem,"id","menu-command"); text(menuItem,"text","Run");
         text(menuItem,"icon","terminal-native");
-        vm.lists[id(image,"Root","menu")]={&menuItem};
+        Vm menuHeader(image,"MenuEntry");
+        text(menuHeader,"id","menu-group"); text(menuHeader,"text","Group");
+        menuHeader.values[id(image,"MenuEntry","header")].integer=1;
+        vm.lists[id(image,"Root","menu")]={&menuHeader,&menuItem};
         vm.values[id(image,"Root","maximum")].number=1;vm.values[id(image,"Root","level")].number=.5;
         std::vector<std::pair<uint32_t,std::vector<Value>>> events;
         static decltype(events)* recorded;recorded=&events;

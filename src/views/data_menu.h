@@ -13,7 +13,7 @@ struct DataMenuEntry {
     std::string id, parent;
     std::wstring text, shortcut;
     std::optional<IconSymbol> icon;
-    bool disabled = false, checked = false, danger = false, separator = false;
+    bool disabled = false, checked = false, danger = false, separator = false, header = false;
 };
 
 class DataMenu final : public View {
@@ -36,10 +36,12 @@ public:
             size_t depth = 1;
             while (!parent.empty()) {
                 auto found = ids.find(parent);
-                if (found == ids.end() || found->second->separator || ++depth > 64)
+                if (found == ids.end() || found->second->separator || found->second->header || ++depth > 64)
                     throw std::invalid_argument("Invalid menu parent/cycle/depth");
                 parent = found->second->parent;
             }
+            if (entry.header && !entry.parent.empty())
+                throw std::invalid_argument("Menu headers stay at the top level");
         }
     }
     void setItems(std::vector<DataMenuEntry> entries) {
@@ -88,6 +90,7 @@ private:
             const auto& entry = entries_[i];
             if (entry.parent != parent) continue;
             if (entry.separator) { menu_->addSeparator(); continue; }
+            if (entry.header) { menu_->addHeader(entry.text, L""); continue; }
             auto label = entry.checked ? L"\u2713 " + entry.text : entry.text;
             if (!entry.shortcut.empty()) label += L"    " + entry.shortcut;
             if (hasChildren(entry.id)) label += L"  \u203a";
