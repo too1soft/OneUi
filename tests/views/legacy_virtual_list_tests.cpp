@@ -1,4 +1,5 @@
 #include "fixture.h"
+#include "legacy_image.h"
 #include <filesystem>
 using namespace viewtest;
 
@@ -88,9 +89,12 @@ void exercise(const std::filesystem::path& directory, const std::string& branch,
               const std::string& variant) {
     LegacyCase c(directory / (branch + variant + ".oneview"));
     const bool terminal = branch == "Terminal", bound = variant != "Static";
-    const auto& contract = c.image.components[0];
-    expect(contract.property(15).name == (terminal ? "multiple" : "trailing-width"),
-           "old ID15 retains its image-local meaning");
+    const auto raw = legacytest::frozenContracts(legacytest::bytes(directory / (branch + variant + ".oneview")));
+    expect(raw.size() == 1 && raw[0].property(15).name == (terminal ? "multiple" : "trailing-width"),
+           "real old ID15 retains its serialized meaning");
+    expect(c.image.components[0].property(15).name == "multiple" &&
+           c.image.components[0].property(16).name == "trailing-width",
+           "validated historical properties normalize by name to unique current IDs");
     auto list = c.list();
     expect(list->items().size() == 2 && list->rowHeight() == 32,
            "old static and list bindings initialize native rows");
@@ -172,7 +176,14 @@ int main(int argc, char** argv) {
                current.property(18).name == "activate-on-single-click", "new v3 contract has unique additive IDs");
         const std::filesystem::path directory(argv[1]);
         for (const auto* branch : {"Terminal", "Tools"}) {
-            contractRejectsTampering(load((directory / (std::string(branch) + "Static.oneview")).string().c_str()));
+            const auto data = legacytest::bytes(directory / (std::string(branch) + "Static.oneview"));
+            auto historical = oneview::readImage(data);
+            const auto normalized = historical.components[0];
+            historical.components = legacytest::frozenContracts(data);
+            for (const auto section : {oneview::PROP, oneview::BIND})
+                for (auto& record : historical.records[section])
+                    record[1] = historical.components[0].property(normalized.property(record[1]).name).id;
+            contractRejectsTampering(historical);
             for (const auto* variant : {"Static", "Bound", "Call"}) exercise(directory, branch, variant);
         }
         std::cout << "PASS legacy VirtualList: actual old IR, static/BIND/CALL/events/model/reload/tamper rejection\n";

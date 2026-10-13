@@ -17,7 +17,9 @@ struct Mount : std::enable_shared_from_this<Mount> {
     ui::Density density = ui::Density::Comfortable;
     bool closed = false, reserved = false;
     std::weak_ptr<Runtime> parentView;
-    bool child = false;
+    // Only explicit destination children insert an extra owned Panel.
+    std::weak_ptr<View> childSurface;
+    bool child = false, ownsDestination = false;
     std::vector<std::weak_ptr<Mount>> children;
     void closeChildren();
     void check() const;
@@ -54,6 +56,8 @@ void unbindHostHandle(OneUiWidget *);
 void pruneHostHandles(OneUiView *);
 std::shared_ptr<Runtime> hostRuntime(OneUiWidget *);
 void registerMount(OneUiWindow *, const std::shared_ptr<Mount> &);
+void reserveChildDestination(const std::shared_ptr<Widget> &, const std::shared_ptr<Mount> &);
+void releaseChildDestination(const std::shared_ptr<Widget> &, const Mount *);
 bool closeWindowMounts(OneUiWindow *) noexcept;
 } // namespace oneui::capi::views
 struct OneUiViewMount {

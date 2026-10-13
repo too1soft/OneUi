@@ -71,6 +71,7 @@ void validateStatic(const std::string &component, const std::string &key, const 
     static const std::map<std::string, std::set<std::string>> enums = {
         {"orientation", {"horizontal", "vertical"}},
         {"presentation", {"document", "segmented"}},
+        {"sizing", {"compact", "equal"}},
         {"variant", {"normal", "primary", "danger", "ghost"}},
         {"justify", {"start", "center", "end", "space-between"}},
         {"preset", {"fade", "expand"}},

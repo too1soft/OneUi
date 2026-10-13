@@ -1,4 +1,5 @@
 #include "oneui/ui_declarative.h"
+#include "oneui/controls/icon_button.h"
 #include "oneui/layout/container_query.h"
 #include "core/style_layout_internal.h"
 #include "core/internal/widget_presentation.h"
@@ -137,7 +138,7 @@ void storage() {
     check(header->children().size()==7,"seventh PaneHeader action remains present with old object layout");
     const auto more=internal::WidgetPresentationAccess::find(*header)->paneHeaderMore;
     check(more&&more->frame().width==24,"private seventh action participates in layout");
-    auto headerLife=header->lifetimeToken();header.reset();
+    std::weak_ptr<PaneHeader> headerLife=header;header.reset();
     check(headerLife.expired(),"a retained seventh button does not keep its header alive");
 }
 } // namespace

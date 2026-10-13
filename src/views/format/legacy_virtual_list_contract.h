@@ -36,40 +36,4 @@ inline const std::vector<ComponentContract>& legacyVirtualListContracts() {
     return contracts;
 }
 
-// Match every serialized field before accepting a historical contract. The
-// returned contract stays in Image, so PROP/BIND/CALL/event IDs retain their
-// original meaning during validation, mutation and reload.
-inline bool consumeComponentContract(Cursor& cursor, const ComponentContract& expected) {
-    auto c = cursor;
-    try {
-        require(c.u32() == expected.version, "VERSION: component contract");
-        const auto np = c.u32(), ne = c.u32();
-        require(np == expected.properties.size() && ne == expected.events.size(), "BAD_IR: component counts");
-        for (const auto& p : expected.properties)
-            require(c.u32() == p.id && c.str() == p.name && c.u32() == p.tag &&
-                    c.u32() == p.flags && c.str() == p.record, "BAD_IR: component property contract");
-        for (const auto& e : expected.events) {
-            require(c.u32() == e.id && c.str() == e.name && c.u32() == e.args.size(), "BAD_IR: event contract");
-            for (const auto& a : e.args)
-                require(c.str() == a.name && c.u32() == a.tag, "BAD_IR: event argument");
-        }
-        require(c.str() == expected.childRule && c.u32() == expected.modelProperty, "BAD_IR: child/model contract");
-    } catch (const Error&) {
-        return false;
-    }
-    cursor.pos = c.pos;
-    return true;
-}
-
-inline const ComponentContract& decodeComponentContract(Cursor& c, const ComponentContract& current) {
-    if (consumeComponentContract(c, current)) return current;
-    if (current.name == "VirtualList")
-        for (const auto& legacy : legacyVirtualListContracts())
-            if (consumeComponentContract(c, legacy)) return legacy;
-    auto peek = c;
-    const auto version = peek.u32();
-    require(version == current.version || (current.name == "VirtualList" && version == 2),
-            "VERSION: component contract");
-    throw Error("BAD_IR: component contract");
-}
 } // namespace oneview

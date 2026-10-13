@@ -129,6 +129,7 @@ void themes() {
 #include "settings_controls.inc"
 #include "font_confirmation.inc"
 #include "data_menu_tests.inc"
+#include "data_menu_replay.inc"
 #include "declarative_popup_tests.inc"
 }
-int main(){try{fonts();mediaGeneration();localDecode();themes();settingsControls();fontConfirmation();dataMenus();declarativePopups();std::cout<<"pickers, menus and popups: 8 scenario groups passed\n";}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}
+int main(){try{fonts();mediaGeneration();localDecode();themes();settingsControls();fontConfirmation();dataMenus();dataMenuReplay();declarativePopups();std::cout<<"pickers, menus and popups: 9 scenario groups passed\n";}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

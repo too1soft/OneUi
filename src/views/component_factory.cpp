@@ -1,6 +1,7 @@
 #include "oneui/ui_declarative.h"
 #include "oneui/layout/virtual_template_list.h"
 #include "data_menu.h"
+#include "tabs_presentation.h"
 #include "oneui/controls/popup.h"
 #include "oneui/layout/panel.h"
 namespace oneui::ui {
@@ -320,7 +321,7 @@ Element Mount::make(std::string type, std::vector<Element> children, std::string
         e.as<Tabs>()->setSizingMode(TabsSizingMode::Equal);
     }
     if (type == "Tabs") {
-        e.tabs = std::make_shared<KeyedTabs>(e.as<Tabs>());
+        e.tabs = detail::makeAuthoredTabs(e.as<Tabs>());
         own(e.tabs);
     }
     if (type == "SplitView")

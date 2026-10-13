@@ -81,6 +81,25 @@ void layout(StackEngine engine) {
     mount.styles()->replace("");paint(1100,500);
     check(!tree.widget->visible()&&details.widget->visible()&&columns.as<Stack>()->direction()==StackDirection::Column,"removing query CSS restores authored defaults");
 }
+void displayOnlyReplay() {
+    ui::Mount mount({},std::make_shared<ui::StyleRegistry>(),{});
+    auto child=mount.make("Text",{},"child");
+    auto shell=mount.make("Column",{child},"shell");
+    mount.styles()->replace(
+        ".shell{container-name:shell;container-type:size;}"
+        ".child{display:none;}"
+        "@container shell (width >= 300px){.child{display:flex;}}");
+    test_support::RecordingCanvas canvas;
+    auto paint=[&]{shell.widget->setFrame({0,0,400,100});shell.widget->paint(canvas);};
+    paint();check(child.widget->visible(),"display-only query enables child");
+    mount.styles()->applyBaseLayouts();
+    check(!child.widget->visible(),"display-only base write actually replaced query");
+    paint();check(child.widget->visible(),"same-size query reapplied after display-only base write");
+    mount.styles()->applyAll();
+    check(!child.widget->visible(),"base applyAll actually replaced display query");
+    paint();check(child.widget->visible(),"same-size query reapplied after base applyAll");
+    check(mount.styles()->queryDiagnostics().empty(),"display-only query remains valid");
+}
 void invalidCssAndDependencies() {
     StyleSheet sheet;std::string error;
     check(sheet.addRulesFromCss(".a {color:#123456;}",&error),"initial CSS");auto count=sheet.rules().size();
@@ -107,6 +126,10 @@ void maxWidthClamps() {
         auto paint=[&](float width){shell.widget->setFrame({0,0,width,40});shell.widget->paint(canvas);};
         paint(599.99f);check(std::abs(cell.widget->frame().width-120)<.01f,"unconditional max-width clamps basis");
         paint(600);check(std::abs(cell.widget->frame().width-200)<.01f,"query max-width clamps basis");
+        mount.styles()->applyBaseLayouts();paint(600);
+        check(std::abs(cell.widget->frame().width-200)<.01f,"base layout refresh preserves same-size query override");
+        mount.styles()->applyBaseLayouts();paint(601);
+        check(std::abs(cell.widget->frame().width-200)<.01f,"base layout refresh preserves same-tier query override");
         paint(500);check(std::abs(cell.widget->frame().width-120)<.01f,"query exit restores unconditional max-width");
         check(mount.styles()->queryDiagnostics().empty(),"max-width on a row child has no diagnostics");
     }
@@ -118,6 +141,6 @@ void maxWidthClamps() {
     check(!mount.styles()->queryDiagnostics().empty(),"cross-axis max-width diagnosed");
 }
 }
-int main(){try{comparisons();stackChildren();layout(StackEngine::Yoga);layout(StackEngine::Legacy);invalidCssAndDependencies();maxWidthClamps();
-    std::cout<<"PASS container queries and Stack: 6 groups\n";return 0;
+int main(){try{comparisons();stackChildren();layout(StackEngine::Yoga);layout(StackEngine::Legacy);invalidCssAndDependencies();maxWidthClamps();displayOnlyReplay();
+    std::cout<<"PASS container queries and Stack: 7 groups\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

@@ -1,4 +1,5 @@
 #include "ir.h"
+#include "legacy_contract_normalize.h"
 #include <algorithm>
 #include <set>
 
@@ -129,6 +130,7 @@ Image readImage(const Bytes &b)
     for (const auto& slot : image.records[SLOT])
         require(!(slot[3] & slotSingleRoot) || minor >= 1, "VERSION: single-root slot requires minor 1");
     validateGraph(image);
+    normalizeLegacyContracts(image);
     return image;
 }
 } // namespace oneview

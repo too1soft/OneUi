@@ -1,0 +1,1 @@
+<template><Column><slot name="body" root="single"/></Column></template>

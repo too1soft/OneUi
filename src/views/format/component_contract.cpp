@@ -1,5 +1,5 @@
 #include "component_contract.h"
-#include "legacy_virtual_list_contract.h"
+#include "legacy_component_contract.h"
 #include "oneui/ui_component_schema.h"
 #include <sstream>
 
@@ -59,9 +59,14 @@ const std::map<std::string, ComponentContract> &registry()
         for (const auto *name : {"Input", "Text", "Scroll", "FontPicker", "MediaPicker"}) r.at(name).version = 2;
         ++r.at("Text").version;
         ++r.at("Input").version; // Explicit password mask, appended property ID 15.
+        ++r.at("Input").version; // Explicit accessible-name contract, property ID 17.
+        ++r.at("Checkbox").version; // Tooltip property ID 13.
+        ++r.at("DockWorkspace").version; // Caption and raise-on-press properties IDs 21-24.
         ++r.at("Scroll").version; // Explicit content width, appended property ID 15.
         ++r.at("Scroll").version; // Scrollbar inset, appended property ID 16.
         ++r.at("VirtualList").version; // Unified trailing metrics/click contract, IDs 16-18.
+        ++r.at("Scroll").version; // Viewport size event, no native layout change.
+        r.at("Scroll").events.push_back({1,"viewport-size-changed",{{"width",3},{"height",3}}});
         ++r.at("SearchInput").version; // Optional prefix icon; absent keeps old rendering.
         ++r.at("VirtualList").version; // Optional row selection and typed multi-selection events.
         ++r.at("FontPicker").version;

@@ -1,0 +1,5 @@
+<template view-model="Root">
+  <InteractiveSurface name="legacy" view-id="legacy-root" @click="activate" @pointer="pointer" @contextMenu="context" @drag="drag">
+    <Text text="Legacy pointer"/>
+  </InteractiveSurface>
+</template>

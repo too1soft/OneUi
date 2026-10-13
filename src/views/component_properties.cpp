@@ -3,6 +3,7 @@
 #include "data_menu.h"
 #include <sstream>
 #include <cmath>
+#include "tabs_presentation.h"
 #include "oneui/controls/popup.h"
 namespace oneui::ui {
 void Mount::set(Element &e, const std::string &key, const std::wstring &value) {
@@ -109,8 +110,19 @@ void Mount::set(Element &e, const std::string &key, const std::wstring &value) {
         if (value != L"document" && value != L"segmented")
             throw std::invalid_argument("Tabs presentation must be document or segmented");
         auto tabs = e.as<Tabs>();
-        tabs->setDocumentMode(value == L"document");
-        tabs->setSizingMode(value == L"document" ? TabsSizingMode::Compact : TabsSizingMode::Equal);
+        const bool document = value == L"document";
+        auto* state = detail::tabsPresentation(e.tabs);
+        if (state) state->document = document;
+        tabs->setDocumentMode(document);
+        if (!state || !state->sizing)
+            tabs->setSizingMode(document ? TabsSizingMode::Compact : TabsSizingMode::Equal);
+    } else if (key == "sizing") {
+        if (value != L"compact" && value != L"equal")
+            throw std::invalid_argument("Tabs sizing must be compact or equal");
+        auto* state = detail::tabsPresentation(e.tabs);
+        if (!state) throw std::invalid_argument("Tabs sizing requires Mount::make Tabs");
+        state->sizing = value == L"compact" ? TabsSizingMode::Compact : TabsSizingMode::Equal;
+        e.as<Tabs>()->setSizingMode(*state->sizing);
     } else if (key == "orientation") {
         if (value != L"horizontal" && value != L"vertical")
             throw std::invalid_argument("orientation must be horizontal or vertical");

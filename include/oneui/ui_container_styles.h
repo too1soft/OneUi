@@ -8,9 +8,7 @@ inline void StyleRegistry::updateAuthoredFlex(const std::shared_ptr<Widget>& wid
         found->second.flex=flex;
 }
 inline void StyleRegistry::applyBaseLayouts() {
-    // VM flushes restore base layout (including ContainerPage display). The
-    // same dimensions must therefore reapply their matching query overrides.
-    queries_.clear();
+    bool applied=false;
     std::map<const Widget*,std::shared_ptr<Stack>> parents;
     for (const auto& entry : entries_)
         if (auto stack = std::dynamic_pointer_cast<Stack>(entry.widget.lock()))
@@ -24,9 +22,15 @@ inline void StyleRegistry::applyBaseLayouts() {
         const auto box = sheet_.resolve(node);
         const auto layout = sheet_.resolveLayout(node);
         if (box.width || box.height || box.minWidth || box.minHeight || layout.maxWidth || layout.maxHeight ||
-            box.flexBasis || layout.flexBasisPercent || layout.flexOrder || box.flexGrow || box.flexShrink)
+            box.flexBasis || layout.flexBasisPercent || layout.flexOrder || box.flexGrow || box.flexShrink ||
+            box.display || box.flexDirection || box.flexWrap) {
             applyLayout(entry, box, parent->second, layout);
+            applied=true;
+        }
     }
+    // Base dimensions can replace an active query override without changing
+    // the measured size or matched tier. Reapply it on the next layout pass.
+    if(applied)for(auto& entry:queries_)entry.second.version=~size_t{};
 }
 inline void StyleRegistry::restoreQueryLayouts() {
     for(const auto& entry:entries_)if(auto widget=entry.widget.lock()) {

@@ -1,4 +1,5 @@
 #include "runtime.h"
+#include "pointer_event_slots.h"
 #include "rich_table_events.inc"
 #include "oneui/controls/popup.h"
 #include "data_menu.h"
@@ -117,29 +118,22 @@ void Runtime::wire(const std::shared_ptr<Instance> &instance) {
                 tree->setOnSelectionChanged(selection);
         }
     }
+    if (element.component == "InteractiveSurface")
+        preparePointerEventSlots(instance, 0, pointerEventMask(*instance))();
     for (const auto &event : contract.events) {
         auto name = event.name;
-        auto fire = [node, id=event.id](std::vector<Value> args) {
-            auto item = node.lock();
-            auto runtime = item ? item->owner.lock() : nullptr;
-            if (!runtime || !item || runtime->closing || item->applying)
-                return;
-            const auto found=std::find_if(item->events.begin(),item->events.end(),
-                [&](const auto &e) { return e[1]==id; });
-            if(found==item->events.end())return;
-            auto event=*found;
-            try {
-                runtime->invoke(item, event, std::move(args));
-            } catch (const Failure &e) {
-                runtime->fail(e.result, e.what(), event[7]);
-            } catch (...) {
-                runtime->fail(ONEUI_VIEW_FOREIGN_FAILURE, "Exception in command callback",
-                              event[7]);
-            }
-        };
+        auto fire = eventDispatcher(node, event.id);
         if(name=="inspection" && element.component=="TimeSeriesChart")
             element.as<TimeSeriesChart>()->setOnInspectionChanged([fire](int index,bool pinned) {
                 Value i,p;i.tag=2;i.integer=index;p.tag=1;p.integer=pinned;fire({i,p});
+            });
+        else if(name=="viewport-size-changed" && element.component=="Scroll")
+            // Keep the dispatcher even without a current EVNT: reload may add
+            // a binding while retaining this native widget and Instance.
+            element.widget->setOnSizeChanged([fire](Size size) {
+                Value width,height;width.tag=height.tag=3;
+                width.number=size.width;height.number=size.height;
+                fire({width,height});
             });
         else if(name=="menuActivated" && element.component=="DataMenu")
             element.as<DataMenu>()->setOnActivated([fire](std::string id) {
@@ -166,38 +160,6 @@ void Runtime::wire(const std::shared_ptr<Instance> &instance) {
         else if (name == "activated" && element.component == "Menu")
             element.as<Menu>()->setOnItemActivated([fire](int index) {
                 Value v; v.tag = 2; v.integer = index; fire({v});
-            });
-        else if (name == "drag" && element.component == "InteractiveSurface" &&
-                 std::any_of(instance->events.begin(), instance->events.end(),
-                     [&](const auto& binding) { return binding[1] == event.id; })) {
-            auto surface = element.as<InteractiveSurface>();
-            surface->setPointerCursor(CursorKind::Grab);
-            surface->setOnDrag([fire](const PointerDragEvent& event) {
-                Value phase, ox, oy, x, y, alt, control, shift;
-                phase.tag = 2; phase.integer = static_cast<int>(event.phase);
-                ox.tag = oy.tag = x.tag = y.tag = 3;
-                ox.number = event.origin.x; oy.number = event.origin.y;
-                x.number = event.pointer.position.x; y.number = event.pointer.position.y;
-                alt.tag = control.tag = shift.tag = 1;
-                alt.integer = event.pointer.alt; control.integer = event.pointer.control;
-                shift.integer = event.pointer.shift;
-                fire({phase, ox, oy, x, y, alt, control, shift});
-            });
-        }
-        else if (name == "pointer" && std::any_of(instance->events.begin(),instance->events.end(),
-                 [&](const auto& binding){return binding[1]==event.id;}))
-            element.as<InteractiveSurface>()->setOnPointerActivated([fire](const MouseEvent& event) {
-                Value x,y,control,shift,count;
-                x.tag=y.tag=3; x.number=event.position.x; y.number=event.position.y;
-                control.tag=shift.tag=1;control.integer=event.control;shift.integer=event.shift;
-                count.tag=2;count.integer=event.clickCount;
-                fire({x,y,control,shift,count});
-            });
-        else if (name == "contextMenu" && std::any_of(instance->events.begin(),instance->events.end(),
-                 [&](const auto& binding){return binding[1]==event.id;}))
-            element.as<InteractiveSurface>()->setOnContextMenuRequested([fire](const MouseEvent& event) {
-                Value x,y;x.tag=y.tag=3;x.number=event.position.x;y.number=event.position.y;
-                fire({x,y});
             });
         else if (name == "submit")
             element.as<TextField>()->setOnSubmitted([fire](const std::wstring &) { fire({}); });

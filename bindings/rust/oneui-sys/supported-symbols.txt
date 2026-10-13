@@ -623,6 +623,7 @@ oneui_view_mount_point
 
 oneui_view_mount_register_workspace_tabs
 oneui_view_mount_child
+oneui_view_mount_child_with_destination
 oneui_view_element_focused
 oneui_view_dock_action
 oneui_view_dock_item_metrics

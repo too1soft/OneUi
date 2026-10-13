@@ -6,6 +6,7 @@
 #include <map>
 #include <set>
 #include <stdexcept>
+#include <tuple>
 
 namespace oneui::views {
 // Private implementation: public authoring uses records and stable command IDs.
@@ -14,6 +15,11 @@ struct DataMenuEntry {
     std::wstring text, shortcut;
     std::optional<IconSymbol> icon;
     bool disabled = false, checked = false, danger = false, separator = false, header = false;
+    bool operator==(const DataMenuEntry& other) const {
+        return std::tie(id, parent, text, shortcut, icon, disabled, checked, danger, separator, header)
+            == std::tie(other.id, other.parent, other.text, other.shortcut, other.icon,
+                        other.disabled, other.checked, other.danger, other.separator, other.header);
+    }
 };
 
 class DataMenu final : public View {
@@ -22,8 +28,8 @@ public:
         add(menu_);
         menu_->setOnItemActivated([this](int index) { activate(index); });
     }
-    void setTitle(std::wstring value) { title_ = std::move(value); rebuild(); }
-    void setSubtitle(std::wstring value) { subtitle_ = std::move(value); rebuild(); }
+    void setTitle(std::wstring value) { if (title_ != value) { title_ = std::move(value); rebuild(); } }
+    void setSubtitle(std::wstring value) { if (subtitle_ != value) { subtitle_ = std::move(value); rebuild(); } }
     void setOnActivated(std::function<void(std::string)> action) { action_ = std::move(action); }
     static void validate(const std::vector<DataMenuEntry>& entries) {
         if (entries.size() > 10000) throw std::invalid_argument("Menu item limit");
@@ -46,6 +52,9 @@ public:
     }
     void setItems(std::vector<DataMenuEntry> entries) {
         validate(entries);
+        // A binding transaction can replay an unchanged snapshot after input.
+        // Preserve scrolling and submenu navigation only for identical content.
+        if (entries_ == entries) return;
         entries_ = std::move(entries);
         path_.clear();
         rebuild();

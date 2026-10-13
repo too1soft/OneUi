@@ -219,6 +219,15 @@ ONEUI_API OneUiViewResult oneui_view_dock_action(OneUiView *view, OneUiUtf8Strin
  * on parent reload. Remount after reload; ordinary property flushes preserve it. */
 ONEUI_API OneUiViewResult oneui_view_mount_child(OneUiViewMount *parent,
     OneUiUtf8String name, OneUiViewMount **out);
+/* Attach an empty, unattached Panel under the named empty Surface and use it
+ * as the child's destination. An unattached Panel has no window identity;
+ * success binds it to the parent's window. Attached/nonempty Panels, cycles
+ * and duplicate reservations are rejected. The mount retains the Panel even
+ * if its widget handle is released. Destroying the child View empties the Panel
+ * for reuse; destroying the mount or parent removes it from the Surface.
+ * Ordinary controls remain constructed by the child declarative template. */
+ONEUI_API OneUiViewResult oneui_view_mount_child_with_destination(OneUiViewMount *parent,
+    OneUiUtf8String name, OneUiWidget *destination, OneUiViewMount **out);
 
 /* On success out owns one notifier reference. */
 ONEUI_API OneUiViewResult oneui_view_notifier(OneUiView *view, OneUiViewNotifier **out);

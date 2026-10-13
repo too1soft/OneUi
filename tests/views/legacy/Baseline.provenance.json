@@ -1,0 +1,2187 @@
+{
+  "format": 1,
+  "purpose": "Real pre-integration baseline IR, verified against exact git source descriptors",
+  "compiler": "E:\\project\\byname\\oneui-views\\build\\capture\\oneui-viewc.exe",
+  "compiler_sha256": "791b75d0f5b435f0a6701e589afe573457647410b759919a198737bdf20055ad",
+  "baseline_commit": "64a5b8965be629e2c8a743eb399c91055a7f31a0",
+  "expected_descriptors_sha256": "7fa88fd50abbc49bc88e690b724f6f2a83bad784b23677ce03e630eafa2b9a70",
+  "schema_sha256": "4979f2ea4847b8dbd6b7d620d6ce6cd7a17d6b0a8b62caa22853dafec855d0e9",
+  "fixtures": {
+    "BaselineInput.oneview": {
+      "sha256": "d37ff5bb9b78f4a1c61a57a75e55436bbcdfff87efc49e143fbda5e09f42d69e",
+      "size_bytes": 3464,
+      "comp_sha256": "0c16021e60497940b9891830f23189f3ae21a392fc09b2696bb36d4cd89921d8",
+      "source": "E:\\project\\byname\\oneui-views\\tests\\views\\legacy\\BaselineInput.one",
+      "source_sha256": "ca46319b7bc7f8c455c810c451ab062616ecb51524147fa48b92ed65353d8cc0",
+      "command": [
+        "E:\\project\\byname\\oneui-views\\build\\capture\\oneui-viewc.exe",
+        "--emit",
+        "ir",
+        "--input",
+        "E:\\project\\byname\\oneui-views\\tests\\views\\legacy\\BaselineInput.one",
+        "--schema",
+        "E:\\project\\byname\\oneui-views\\tests\\views\\legacy\\Baseline.oneschema",
+        "--name",
+        "BaselineInput",
+        "--output",
+        "E:\\project\\byname\\oneui-views\\tests\\views\\legacy\\Baseline.freeze.oneview"
+      ],
+      "contracts": [
+        {
+          "name": "Input",
+          "version": 3,
+          "properties": [
+            {
+              "id": 1,
+              "name": "basis",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 2,
+              "name": "class",
+              "tag": 4,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 3,
+              "name": "description",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 4,
+              "name": "disabled",
+              "tag": 1,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 5,
+              "name": "grow",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 6,
+              "name": "max",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 7,
+              "name": "min",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 8,
+              "name": "name",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 9,
+              "name": "placeholder",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 10,
+              "name": "shrink",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 11,
+              "name": "text",
+              "tag": 4,
+              "flags": 7,
+              "record": ""
+            },
+            {
+              "id": 12,
+              "name": "visible",
+              "tag": 1,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 13,
+              "name": "password",
+              "tag": 1,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 14,
+              "name": "read-only",
+              "tag": 1,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 15,
+              "name": "password-mask",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 16,
+              "name": "prefix-icon",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            }
+          ],
+          "events": [
+            {
+              "id": 1,
+              "name": "submit",
+              "args": []
+            }
+          ],
+          "child_rule": "leaf",
+          "model_property": 11
+        }
+      ]
+    },
+    "BaselineCheckbox.oneview": {
+      "sha256": "8f8d374c103fdc07b5eb565d423977b7711121cd574dc563aed177915d913b8d",
+      "size_bytes": 3136,
+      "comp_sha256": "a8b6b3414b6e0ed989379b0564745dee6976b4a7c94420ab15d2cb2c090bcca8",
+      "source": "E:\\project\\byname\\oneui-views\\tests\\views\\legacy\\BaselineCheckbox.one",
+      "source_sha256": "9d87b7af0ebfdee9c117b545c7f09cf9a45bb46dd5a5c1bcfca948971f97aaf9",
+      "command": [
+        "E:\\project\\byname\\oneui-views\\build\\capture\\oneui-viewc.exe",
+        "--emit",
+        "ir",
+        "--input",
+        "E:\\project\\byname\\oneui-views\\tests\\views\\legacy\\BaselineCheckbox.one",
+        "--schema",
+        "E:\\project\\byname\\oneui-views\\tests\\views\\legacy\\Baseline.oneschema",
+        "--name",
+        "BaselineCheckbox",
+        "--output",
+        "E:\\project\\byname\\oneui-views\\tests\\views\\legacy\\Baseline.freeze.oneview"
+      ],
+      "contracts": [
+        {
+          "name": "Checkbox",
+          "version": 1,
+          "properties": [
+            {
+              "id": 1,
+              "name": "basis",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 2,
+              "name": "checked",
+              "tag": 1,
+              "flags": 7,
+              "record": ""
+            },
+            {
+              "id": 3,
+              "name": "class",
+              "tag": 4,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 4,
+              "name": "description",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 5,
+              "name": "disabled",
+              "tag": 1,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 6,
+              "name": "grow",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 7,
+              "name": "max",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 8,
+              "name": "min",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 9,
+              "name": "name",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 10,
+              "name": "shrink",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 11,
+              "name": "text",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 12,
+              "name": "visible",
+              "tag": 1,
+              "flags": 3,
+              "record": ""
+            }
+          ],
+          "events": [],
+          "child_rule": "leaf",
+          "model_property": 2
+        }
+      ]
+    },
+    "BaselineTimeSeriesChart.oneview": {
+      "sha256": "4a797be173e74e6d4c69884f148a36b4f1b26b516c0116828aaeb97e39f9010d",
+      "size_bytes": 3056,
+      "comp_sha256": "4b5f4c3d2be1f486117667addac2b611022014c3ea55d9852585ca2437481d63",
+      "source": "E:\\project\\byname\\oneui-views\\tests\\views\\legacy\\BaselineTimeSeriesChart.one",
+      "source_sha256": "f8d085837f35ea623dd32e8c3443ba217c90e3ba9e4e36cae940b2dc62742c73",
+      "command": [
+        "E:\\project\\byname\\oneui-views\\build\\capture\\oneui-viewc.exe",
+        "--emit",
+        "ir",
+        "--input",
+        "E:\\project\\byname\\oneui-views\\tests\\views\\legacy\\BaselineTimeSeriesChart.one",
+        "--schema",
+        "E:\\project\\byname\\oneui-views\\tests\\views\\legacy\\Baseline.oneschema",
+        "--name",
+        "BaselineTimeSeriesChart",
+        "--output",
+        "E:\\project\\byname\\oneui-views\\tests\\views\\legacy\\Baseline.freeze.oneview"
+      ],
+      "contracts": [
+        {
+          "name": "TimeSeriesChart",
+          "version": 1,
+          "properties": [
+            {
+              "id": 1,
+              "name": "basis",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 2,
+              "name": "class",
+              "tag": 4,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 3,
+              "name": "description",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 4,
+              "name": "disabled",
+              "tag": 1,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 5,
+              "name": "grow",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 6,
+              "name": "max",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 7,
+              "name": "min",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 8,
+              "name": "name",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 9,
+              "name": "series",
+              "tag": 5,
+              "flags": 2,
+              "record": "oneui.v1.Series"
+            },
+            {
+              "id": 10,
+              "name": "shrink",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 11,
+              "name": "visible",
+              "tag": 1,
+              "flags": 3,
+              "record": ""
+            }
+          ],
+          "events": [],
+          "child_rule": "leaf",
+          "model_property": 0
+        }
+      ]
+    },
+    "BaselineScroll.oneview": {
+      "sha256": "64e6bd44185f3b4e3ad18a5ac62cd6c5380cb02050adea4441f7ada3dd0fd66b",
+      "size_bytes": 3912,
+      "comp_sha256": "15b5511331d4de1983e01b10e31c7b5b84f73ad294a43a94c8277dcb17ade7b4",
+      "source": "E:\\project\\byname\\oneui-views\\tests\\views\\legacy\\BaselineScroll.one",
+      "source_sha256": "7e0ae424e8a35e52136f129535b98e91956697ef136f047c616fbce1905d39cf",
+      "command": [
+        "E:\\project\\byname\\oneui-views\\build\\capture\\oneui-viewc.exe",
+        "--emit",
+        "ir",
+        "--input",
+        "E:\\project\\byname\\oneui-views\\tests\\views\\legacy\\BaselineScroll.one",
+        "--schema",
+        "E:\\project\\byname\\oneui-views\\tests\\views\\legacy\\Baseline.oneschema",
+        "--name",
+        "BaselineScroll",
+        "--output",
+        "E:\\project\\byname\\oneui-views\\tests\\views\\legacy\\Baseline.freeze.oneview"
+      ],
+      "contracts": [
+        {
+          "name": "Scroll",
+          "version": 3,
+          "properties": [
+            {
+              "id": 1,
+              "name": "basis",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 2,
+              "name": "class",
+              "tag": 4,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 3,
+              "name": "description",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 4,
+              "name": "disabled",
+              "tag": 1,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 5,
+              "name": "grow",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 6,
+              "name": "max",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 7,
+              "name": "min",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 8,
+              "name": "name",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 9,
+              "name": "shrink",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 10,
+              "name": "visible",
+              "tag": 1,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 11,
+              "name": "content-height",
+              "tag": 3,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 12,
+              "name": "wheel-step",
+              "tag": 3,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 13,
+              "name": "chrome-visible",
+              "tag": 1,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 14,
+              "name": "scroll-offset",
+              "tag": 3,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 15,
+              "name": "content-width",
+              "tag": 3,
+              "flags": 3,
+              "record": ""
+            }
+          ],
+          "events": [],
+          "child_rule": "one",
+          "model_property": 0
+        },
+        {
+          "name": "Text",
+          "version": 5,
+          "properties": [
+            {
+              "id": 1,
+              "name": "basis",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 2,
+              "name": "class",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 3,
+              "name": "description",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 4,
+              "name": "disabled",
+              "tag": 1,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 5,
+              "name": "grow",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 6,
+              "name": "max",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 7,
+              "name": "min",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 8,
+              "name": "name",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 9,
+              "name": "shrink",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 10,
+              "name": "text",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 11,
+              "name": "visible",
+              "tag": 1,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 12,
+              "name": "wrap",
+              "tag": 1,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 13,
+              "name": "max-lines",
+              "tag": 2,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 14,
+              "name": "spans",
+              "tag": 5,
+              "flags": 2,
+              "record": "@text.span"
+            },
+            {
+              "id": 15,
+              "name": "line-height",
+              "tag": 3,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 16,
+              "name": "text-align",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 17,
+              "name": "tooltip",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            }
+          ],
+          "events": [],
+          "child_rule": "leaf",
+          "model_property": 0
+        }
+      ]
+    },
+    "BaselineVirtualList.oneview": {
+      "sha256": "f29e4463623e76117e61583fbe72357871115b43e2683d9d55096ac2ea6bfcf7",
+      "size_bytes": 3408,
+      "comp_sha256": "cad092384d964e3e942c46e4cc1e0169c951eb0aafb46cc4a5fae4b8aa668c9b",
+      "source": "E:\\project\\byname\\oneui-views\\tests\\views\\legacy\\BaselineVirtualList.one",
+      "source_sha256": "9c6f386b5ec2af4b32f959c2c5bb35ba2fa2f288497d961cd12f7fbbd5c5228d",
+      "command": [
+        "E:\\project\\byname\\oneui-views\\build\\capture\\oneui-viewc.exe",
+        "--emit",
+        "ir",
+        "--input",
+        "E:\\project\\byname\\oneui-views\\tests\\views\\legacy\\BaselineVirtualList.one",
+        "--schema",
+        "E:\\project\\byname\\oneui-views\\tests\\views\\legacy\\Baseline.oneschema",
+        "--name",
+        "BaselineVirtualList",
+        "--output",
+        "E:\\project\\byname\\oneui-views\\tests\\views\\legacy\\Baseline.freeze.oneview"
+      ],
+      "contracts": [
+        {
+          "name": "VirtualList",
+          "version": 1,
+          "properties": [
+            {
+              "id": 1,
+              "name": "basis",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 2,
+              "name": "class",
+              "tag": 4,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 3,
+              "name": "description",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 4,
+              "name": "disabled",
+              "tag": 1,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 5,
+              "name": "grow",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 6,
+              "name": "items",
+              "tag": 5,
+              "flags": 2,
+              "record": "@list.item"
+            },
+            {
+              "id": 7,
+              "name": "max",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 8,
+              "name": "min",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 9,
+              "name": "name",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 10,
+              "name": "selectedIndex",
+              "tag": 2,
+              "flags": 7,
+              "record": ""
+            },
+            {
+              "id": 11,
+              "name": "shrink",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 12,
+              "name": "visible",
+              "tag": 1,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 13,
+              "name": "row-height",
+              "tag": 3,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 14,
+              "name": "scroll-offset",
+              "tag": 3,
+              "flags": 3,
+              "record": ""
+            }
+          ],
+          "events": [
+            {
+              "id": 1,
+              "name": "activate",
+              "args": []
+            }
+          ],
+          "child_rule": "leaf",
+          "model_property": 10
+        }
+      ]
+    },
+    "BaselineTabs.oneview": {
+      "sha256": "fca807522dfaf5450dc88a7572745b6d4368db9177e3c423c74701c7075777e0",
+      "size_bytes": 4080,
+      "comp_sha256": "f84213de2309cb12d90dde61729b0a9b32524643cf63eb5a8f444a0cef69017a",
+      "source": "E:\\project\\byname\\oneui-views\\tests\\views\\legacy\\BaselineTabs.one",
+      "source_sha256": "52392cdae2a4d8da5a20a107b9a2789ff1ea62175812a14c1f7e66095792e76c",
+      "command": [
+        "E:\\project\\byname\\oneui-views\\build\\capture\\oneui-viewc.exe",
+        "--emit",
+        "ir",
+        "--input",
+        "E:\\project\\byname\\oneui-views\\tests\\views\\legacy\\BaselineTabs.one",
+        "--schema",
+        "E:\\project\\byname\\oneui-views\\tests\\views\\legacy\\Baseline.oneschema",
+        "--name",
+        "BaselineTabs",
+        "--output",
+        "E:\\project\\byname\\oneui-views\\tests\\views\\legacy\\Baseline.freeze.oneview"
+      ],
+      "contracts": [
+        {
+          "name": "Tabs",
+          "version": 2,
+          "properties": [
+            {
+              "id": 1,
+              "name": "basis",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 2,
+              "name": "class",
+              "tag": 4,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 3,
+              "name": "closable",
+              "tag": 1,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 4,
+              "name": "description",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 5,
+              "name": "disabled",
+              "tag": 1,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 6,
+              "name": "grow",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 7,
+              "name": "items",
+              "tag": 5,
+              "flags": 2,
+              "record": "oneui.v1.TabItem"
+            },
+            {
+              "id": 8,
+              "name": "max",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 9,
+              "name": "min",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 10,
+              "name": "name",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 11,
+              "name": "presentation",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 12,
+              "name": "selectedKey",
+              "tag": 4,
+              "flags": 7,
+              "record": ""
+            },
+            {
+              "id": 13,
+              "name": "shrink",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 14,
+              "name": "visible",
+              "tag": 1,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 15,
+              "name": "reorderable",
+              "tag": 1,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 16,
+              "name": "drag-domain",
+              "tag": 4,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 17,
+              "name": "drag-kind",
+              "tag": 4,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 18,
+              "name": "drag-sources",
+              "tag": 5,
+              "flags": 2,
+              "record": "@workspace.tab-source"
+            }
+          ],
+          "events": [
+            {
+              "id": 1,
+              "name": "close",
+              "args": [
+                {
+                  "name": "key",
+                  "tag": 4
+                }
+              ]
+            },
+            {
+              "id": 2,
+              "name": "dragOut",
+              "args": [
+                {
+                  "name": "key",
+                  "tag": 4
+                },
+                {
+                  "name": "phase",
+                  "tag": 2
+                },
+                {
+                  "name": "x",
+                  "tag": 3
+                },
+                {
+                  "name": "y",
+                  "tag": 3
+                }
+              ]
+            },
+            {
+              "id": 3,
+              "name": "reorderRequested",
+              "args": [
+                {
+                  "name": "source",
+                  "tag": 4
+                },
+                {
+                  "name": "before",
+                  "tag": 4
+                }
+              ]
+            }
+          ],
+          "child_rule": "leaf",
+          "model_property": 12
+        }
+      ]
+    },
+    "BaselineDockWorkspace.oneview": {
+      "sha256": "c40054a6d07e15442c3352d07a0071f2337ca856f0968fc0b2f64f58d05a92c7",
+      "size_bytes": 4200,
+      "comp_sha256": "fe2be6a0c02e915792186783565ef07e480d96a77a1a0522a17fa9f9dcf1e790",
+      "source": "E:\\project\\byname\\oneui-views\\tests\\views\\legacy\\BaselineDockWorkspace.one",
+      "source_sha256": "6975291c9e361cc4185b7324bf6d0851be6b26ff2639dc3bfe860e4da893ec7c",
+      "command": [
+        "E:\\project\\byname\\oneui-views\\build\\capture\\oneui-viewc.exe",
+        "--emit",
+        "ir",
+        "--input",
+        "E:\\project\\byname\\oneui-views\\tests\\views\\legacy\\BaselineDockWorkspace.one",
+        "--schema",
+        "E:\\project\\byname\\oneui-views\\tests\\views\\legacy\\Baseline.oneschema",
+        "--name",
+        "BaselineDockWorkspace",
+        "--output",
+        "E:\\project\\byname\\oneui-views\\tests\\views\\legacy\\Baseline.freeze.oneview"
+      ],
+      "contracts": [
+        {
+          "name": "DockWorkspace",
+          "version": 2,
+          "properties": [
+            {
+              "id": 1,
+              "name": "basis",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 2,
+              "name": "class",
+              "tag": 4,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 3,
+              "name": "description",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 4,
+              "name": "disabled",
+              "tag": 1,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 5,
+              "name": "grow",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 6,
+              "name": "max",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 7,
+              "name": "min",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 8,
+              "name": "name",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 9,
+              "name": "shrink",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 10,
+              "name": "visible",
+              "tag": 1,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 11,
+              "name": "nodes",
+              "tag": 5,
+              "flags": 2,
+              "record": "@workspace.node"
+            },
+            {
+              "id": 12,
+              "name": "root",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 13,
+              "name": "placements",
+              "tag": 5,
+              "flags": 2,
+              "record": "@workspace.placement"
+            },
+            {
+              "id": 14,
+              "name": "revision",
+              "tag": 2,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 15,
+              "name": "maximized",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 16,
+              "name": "compact-active",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 17,
+              "name": "ack-request",
+              "tag": 2,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 18,
+              "name": "ack-accepted",
+              "tag": 1,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 19,
+              "name": "gap",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 20,
+              "name": "divider-hit",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            }
+          ],
+          "events": [
+            {
+              "id": 1,
+              "name": "dockRequested",
+              "args": [
+                {
+                  "name": "source",
+                  "tag": 4
+                },
+                {
+                  "name": "target",
+                  "tag": 4
+                },
+                {
+                  "name": "edge",
+                  "tag": 4
+                },
+                {
+                  "name": "request",
+                  "tag": 2
+                },
+                {
+                  "name": "revision",
+                  "tag": 2
+                }
+              ]
+            },
+            {
+              "id": 2,
+              "name": "ratioRequested",
+              "args": [
+                {
+                  "name": "split",
+                  "tag": 4
+                },
+                {
+                  "name": "ratio",
+                  "tag": 3
+                },
+                {
+                  "name": "request",
+                  "tag": 2
+                },
+                {
+                  "name": "revision",
+                  "tag": 2
+                }
+              ]
+            },
+            {
+              "id": 3,
+              "name": "floatRequested",
+              "args": [
+                {
+                  "name": "pane",
+                  "tag": 4
+                },
+                {
+                  "name": "x",
+                  "tag": 3
+                },
+                {
+                  "name": "y",
+                  "tag": 3
+                },
+                {
+                  "name": "width",
+                  "tag": 3
+                },
+                {
+                  "name": "height",
+                  "tag": 3
+                },
+                {
+                  "name": "request",
+                  "tag": 2
+                },
+                {
+                  "name": "revision",
+                  "tag": 2
+                }
+              ]
+            },
+            {
+              "id": 4,
+              "name": "boundsRequested",
+              "args": [
+                {
+                  "name": "pane",
+                  "tag": 4
+                },
+                {
+                  "name": "x",
+                  "tag": 3
+                },
+                {
+                  "name": "y",
+                  "tag": 3
+                },
+                {
+                  "name": "width",
+                  "tag": 3
+                },
+                {
+                  "name": "height",
+                  "tag": 3
+                },
+                {
+                  "name": "request",
+                  "tag": 2
+                },
+                {
+                  "name": "revision",
+                  "tag": 2
+                }
+              ]
+            },
+            {
+              "id": 5,
+              "name": "pinRequested",
+              "args": [
+                {
+                  "name": "pane",
+                  "tag": 4
+                },
+                {
+                  "name": "pinned",
+                  "tag": 1
+                },
+                {
+                  "name": "request",
+                  "tag": 2
+                },
+                {
+                  "name": "revision",
+                  "tag": 2
+                }
+              ]
+            },
+            {
+              "id": 6,
+              "name": "raiseRequested",
+              "args": [
+                {
+                  "name": "pane",
+                  "tag": 4
+                },
+                {
+                  "name": "request",
+                  "tag": 2
+                },
+                {
+                  "name": "revision",
+                  "tag": 2
+                }
+              ]
+            },
+            {
+              "id": 7,
+              "name": "maximizeRequested",
+              "args": [
+                {
+                  "name": "pane",
+                  "tag": 4
+                },
+                {
+                  "name": "request",
+                  "tag": 2
+                },
+                {
+                  "name": "revision",
+                  "tag": 2
+                }
+              ]
+            },
+            {
+              "id": 8,
+              "name": "visibilityRequested",
+              "args": [
+                {
+                  "name": "pane",
+                  "tag": 4
+                },
+                {
+                  "name": "visible",
+                  "tag": 1
+                },
+                {
+                  "name": "request",
+                  "tag": 2
+                },
+                {
+                  "name": "revision",
+                  "tag": 2
+                }
+              ]
+            },
+            {
+              "id": 9,
+              "name": "redockRequested",
+              "args": [
+                {
+                  "name": "pane",
+                  "tag": 4
+                },
+                {
+                  "name": "request",
+                  "tag": 2
+                },
+                {
+                  "name": "revision",
+                  "tag": 2
+                }
+              ]
+            }
+          ],
+          "child_rule": "dock-collection",
+          "model_property": 0
+        }
+      ]
+    },
+    "BaselineDragHandle.oneview": {
+      "sha256": "008b0a18496cf71b1e73583f85942f31883d4822b3657242ad469e66eb5dbb5c",
+      "size_bytes": 4088,
+      "comp_sha256": "7bcc43551c49a588fd9f775e1362352384d8fac865b555df38644c19f5ce4ff3",
+      "source": "E:\\project\\byname\\oneui-views\\tests\\views\\legacy\\BaselineDragHandle.one",
+      "source_sha256": "d45a9d0abca4dba075b10bf5ae0e4eaa309e28f705c22eeffadcbe74a2426b62",
+      "command": [
+        "E:\\project\\byname\\oneui-views\\build\\capture\\oneui-viewc.exe",
+        "--emit",
+        "ir",
+        "--input",
+        "E:\\project\\byname\\oneui-views\\tests\\views\\legacy\\BaselineDragHandle.one",
+        "--schema",
+        "E:\\project\\byname\\oneui-views\\tests\\views\\legacy\\Baseline.oneschema",
+        "--name",
+        "BaselineDragHandle",
+        "--output",
+        "E:\\project\\byname\\oneui-views\\tests\\views\\legacy\\Baseline.freeze.oneview"
+      ],
+      "contracts": [
+        {
+          "name": "DragHandle",
+          "version": 1,
+          "properties": [
+            {
+              "id": 1,
+              "name": "basis",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 2,
+              "name": "class",
+              "tag": 4,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 3,
+              "name": "description",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 4,
+              "name": "disabled",
+              "tag": 1,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 5,
+              "name": "grow",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 6,
+              "name": "max",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 7,
+              "name": "min",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 8,
+              "name": "name",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 9,
+              "name": "shrink",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 10,
+              "name": "visible",
+              "tag": 1,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 11,
+              "name": "source",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 12,
+              "name": "domain",
+              "tag": 4,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 13,
+              "name": "kind",
+              "tag": 4,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 14,
+              "name": "threshold",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            }
+          ],
+          "events": [
+            {
+              "id": 1,
+              "name": "dragStateChanged",
+              "args": [
+                {
+                  "name": "source",
+                  "tag": 4
+                },
+                {
+                  "name": "phase",
+                  "tag": 2
+                }
+              ]
+            }
+          ],
+          "child_rule": "optional-one",
+          "model_property": 0
+        },
+        {
+          "name": "Text",
+          "version": 5,
+          "properties": [
+            {
+              "id": 1,
+              "name": "basis",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 2,
+              "name": "class",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 3,
+              "name": "description",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 4,
+              "name": "disabled",
+              "tag": 1,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 5,
+              "name": "grow",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 6,
+              "name": "max",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 7,
+              "name": "min",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 8,
+              "name": "name",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 9,
+              "name": "shrink",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 10,
+              "name": "text",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 11,
+              "name": "visible",
+              "tag": 1,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 12,
+              "name": "wrap",
+              "tag": 1,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 13,
+              "name": "max-lines",
+              "tag": 2,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 14,
+              "name": "spans",
+              "tag": 5,
+              "flags": 2,
+              "record": "@text.span"
+            },
+            {
+              "id": 15,
+              "name": "line-height",
+              "tag": 3,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 16,
+              "name": "text-align",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 17,
+              "name": "tooltip",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            }
+          ],
+          "events": [],
+          "child_rule": "leaf",
+          "model_property": 0
+        }
+      ]
+    },
+    "BaselinePaneHeader.oneview": {
+      "sha256": "76e448f1054d8c0efeb6ede638b93174896c0be5bf88c7ae4f98077dce4293e8",
+      "size_bytes": 4864,
+      "comp_sha256": "0872e17f091a553071ed237bdf8626da24e0541e616cef4945fdb2786808659b",
+      "source": "E:\\project\\byname\\oneui-views\\tests\\views\\legacy\\BaselinePaneHeader.one",
+      "source_sha256": "05f7a1fc9e47ec10bc85c67406ebcfda3420f3c8f9ab52174d08c83d6cdea6ff",
+      "command": [
+        "E:\\project\\byname\\oneui-views\\build\\capture\\oneui-viewc.exe",
+        "--emit",
+        "ir",
+        "--input",
+        "E:\\project\\byname\\oneui-views\\tests\\views\\legacy\\BaselinePaneHeader.one",
+        "--schema",
+        "E:\\project\\byname\\oneui-views\\tests\\views\\legacy\\Baseline.oneschema",
+        "--name",
+        "BaselinePaneHeader",
+        "--output",
+        "E:\\project\\byname\\oneui-views\\tests\\views\\legacy\\Baseline.freeze.oneview"
+      ],
+      "contracts": [
+        {
+          "name": "PaneHeader",
+          "version": 1,
+          "properties": [
+            {
+              "id": 1,
+              "name": "basis",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 2,
+              "name": "class",
+              "tag": 4,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 3,
+              "name": "description",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 4,
+              "name": "disabled",
+              "tag": 1,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 5,
+              "name": "grow",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 6,
+              "name": "max",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 7,
+              "name": "min",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 8,
+              "name": "name",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 9,
+              "name": "shrink",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 10,
+              "name": "visible",
+              "tag": 1,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 11,
+              "name": "pane-key",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 12,
+              "name": "number",
+              "tag": 2,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 13,
+              "name": "title",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 14,
+              "name": "path",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 15,
+              "name": "active",
+              "tag": 1,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 16,
+              "name": "broadcast-role",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 17,
+              "name": "broadcast-hint",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 18,
+              "name": "broadcast-label",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 19,
+              "name": "viewing-history",
+              "tag": 1,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 20,
+              "name": "can-close",
+              "tag": 1,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 21,
+              "name": "can-split",
+              "tag": 1,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 22,
+              "name": "can-maximize",
+              "tag": 1,
+              "flags": 3,
+              "record": ""
+            }
+          ],
+          "events": [
+            {
+              "id": 1,
+              "name": "activateRequested",
+              "args": [
+                {
+                  "name": "pane",
+                  "tag": 4
+                }
+              ]
+            },
+            {
+              "id": 2,
+              "name": "splitRequested",
+              "args": [
+                {
+                  "name": "pane",
+                  "tag": 4
+                },
+                {
+                  "name": "edge",
+                  "tag": 4
+                }
+              ]
+            },
+            {
+              "id": 3,
+              "name": "maximizeRequested",
+              "args": [
+                {
+                  "name": "pane",
+                  "tag": 4
+                }
+              ]
+            },
+            {
+              "id": 4,
+              "name": "closeRequested",
+              "args": [
+                {
+                  "name": "pane",
+                  "tag": 4
+                }
+              ]
+            },
+            {
+              "id": 5,
+              "name": "broadcastRequested",
+              "args": [
+                {
+                  "name": "pane",
+                  "tag": 4
+                }
+              ]
+            },
+            {
+              "id": 6,
+              "name": "liveRequested",
+              "args": [
+                {
+                  "name": "pane",
+                  "tag": 4
+                }
+              ]
+            },
+            {
+              "id": 7,
+              "name": "menuRequested",
+              "args": [
+                {
+                  "name": "pane",
+                  "tag": 4
+                },
+                {
+                  "name": "x",
+                  "tag": 3
+                },
+                {
+                  "name": "y",
+                  "tag": 3
+                }
+              ]
+            }
+          ],
+          "child_rule": "header-slots",
+          "model_property": 0
+        }
+      ]
+    },
+    "BaselineInteractiveSurface.oneview": {
+      "sha256": "f846b164f50613c9b3bc38d106c8fc74349e318c10b5b1dd343b18ce01e08e95",
+      "size_bytes": 4264,
+      "comp_sha256": "10f2749578adbdeeda7381f4b3105d8c691db8c4956b0b9d0a7366cb35289da8",
+      "source": "E:\\project\\byname\\oneui-views\\tests\\views\\legacy\\BaselineInteractiveSurface.one",
+      "source_sha256": "1122ab12cf6e018373ffcdcc8fef0f2e6d32f07eae534747068e2f875ae34d11",
+      "command": [
+        "E:\\project\\byname\\oneui-views\\build\\capture\\oneui-viewc.exe",
+        "--emit",
+        "ir",
+        "--input",
+        "E:\\project\\byname\\oneui-views\\tests\\views\\legacy\\BaselineInteractiveSurface.one",
+        "--schema",
+        "E:\\project\\byname\\oneui-views\\tests\\views\\legacy\\Baseline.oneschema",
+        "--name",
+        "BaselineInteractiveSurface",
+        "--output",
+        "E:\\project\\byname\\oneui-views\\tests\\views\\legacy\\Baseline.freeze.oneview"
+      ],
+      "contracts": [
+        {
+          "name": "InteractiveSurface",
+          "version": 2,
+          "properties": [
+            {
+              "id": 1,
+              "name": "basis",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 2,
+              "name": "class",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 3,
+              "name": "description",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 4,
+              "name": "disabled",
+              "tag": 1,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 5,
+              "name": "grow",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 6,
+              "name": "max",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 7,
+              "name": "min",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 8,
+              "name": "name",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 9,
+              "name": "shrink",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 10,
+              "name": "visible",
+              "tag": 1,
+              "flags": 3,
+              "record": ""
+            }
+          ],
+          "events": [
+            {
+              "id": 1,
+              "name": "click",
+              "args": []
+            },
+            {
+              "id": 2,
+              "name": "pointer",
+              "args": [
+                {
+                  "name": "x",
+                  "tag": 3
+                },
+                {
+                  "name": "y",
+                  "tag": 3
+                },
+                {
+                  "name": "control",
+                  "tag": 1
+                },
+                {
+                  "name": "shift",
+                  "tag": 1
+                },
+                {
+                  "name": "click_count",
+                  "tag": 2
+                }
+              ]
+            },
+            {
+              "id": 3,
+              "name": "contextMenu",
+              "args": [
+                {
+                  "name": "x",
+                  "tag": 3
+                },
+                {
+                  "name": "y",
+                  "tag": 3
+                }
+              ]
+            }
+          ],
+          "child_rule": "one",
+          "model_property": 0
+        },
+        {
+          "name": "Text",
+          "version": 5,
+          "properties": [
+            {
+              "id": 1,
+              "name": "basis",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 2,
+              "name": "class",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 3,
+              "name": "description",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 4,
+              "name": "disabled",
+              "tag": 1,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 5,
+              "name": "grow",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 6,
+              "name": "max",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 7,
+              "name": "min",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 8,
+              "name": "name",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 9,
+              "name": "shrink",
+              "tag": 3,
+              "flags": 1,
+              "record": ""
+            },
+            {
+              "id": 10,
+              "name": "text",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 11,
+              "name": "visible",
+              "tag": 1,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 12,
+              "name": "wrap",
+              "tag": 1,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 13,
+              "name": "max-lines",
+              "tag": 2,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 14,
+              "name": "spans",
+              "tag": 5,
+              "flags": 2,
+              "record": "@text.span"
+            },
+            {
+              "id": 15,
+              "name": "line-height",
+              "tag": 3,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 16,
+              "name": "text-align",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            },
+            {
+              "id": 17,
+              "name": "tooltip",
+              "tag": 4,
+              "flags": 3,
+              "record": ""
+            }
+          ],
+          "events": [],
+          "child_rule": "leaf",
+          "model_property": 0
+        }
+      ]
+    }
+  }
+}

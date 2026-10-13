@@ -16,10 +16,16 @@
 #include <iostream>
 #include <new>
 #include <stdexcept>
+#include <type_traits>
 using namespace oneui;
 
 namespace {
 void check(bool value) { if (!value) throw std::runtime_error("old-header ABI guard failed"); }
+struct LifetimeAccess : Widget {
+    static auto tokenMember() { return &LifetimeAccess::lifetimeToken; }
+};
+static_assert(std::is_same_v<decltype(LifetimeAccess::tokenMember()),
+                             std::weak_ptr<int> (Widget::*)() const>);
 template<class T> void layout(const char* name) {
     std::cout << name << ' ' << sizeof(T) << ' ' << alignof(T) << '\n';
 }
@@ -38,7 +44,7 @@ void oldApiCalls() {
     std::weak_ptr<int> token;
     for (int i = 0; i < 8; ++i) {
         auto* table = new (memory.object) Table;
-        token = table->lifetimeToken();
+        token = (table->*LifetimeAccess::tokenMember())();
         table->setColumns({{L"A", 100}, {L"B", 200}});
         table->setRows({{L"a", L"b"}});
         table->setSelectedIndex(0);

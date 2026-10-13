@@ -1,0 +1,270 @@
+{
+  "format": 1,
+  "purpose": "Unmodified retained real Tabs v3 IR for exact legacy contract compatibility",
+  "source": "D:\\ishell-par\\terminal\\ishell_oneui\\target\\debug\\build\\ishellpro-native-shell-808637f5db1e244c\\out\\views\\terminal\\Tabs.oneview",
+  "source_mtime_utc": "2026-10-13T11:25:45.518745+00:00",
+  "size_bytes": 4384,
+  "sha256": "0b719a612b1e6164909e99391c2e36c0ba8705add1b4edd494383dd6bf5c5c82",
+  "compiler_sha256": "unknown",
+  "compiler_provenance": "Retained Cargo OUT_DIR artifact; exact producing executable is not established. No compiler was run or binary rewritten to create this fixture.",
+  "comp_sha256": "7da1035cad103090a4c95d09975e712cf2eb099603f4f72846aeba0c3ddc7475",
+  "contracts": [
+    {
+      "name": "Tabs",
+      "version": 3,
+      "properties": [
+        {
+          "id": 1,
+          "name": "basis",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 2,
+          "name": "class",
+          "tag": 4,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 3,
+          "name": "closable",
+          "tag": 1,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 4,
+          "name": "description",
+          "tag": 4,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 5,
+          "name": "disabled",
+          "tag": 1,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 6,
+          "name": "grow",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 7,
+          "name": "items",
+          "tag": 5,
+          "flags": 2,
+          "record": "oneui.v1.TabItem"
+        },
+        {
+          "id": 8,
+          "name": "max",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 9,
+          "name": "min",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 10,
+          "name": "name",
+          "tag": 4,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 11,
+          "name": "presentation",
+          "tag": 4,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 12,
+          "name": "selectedKey",
+          "tag": 4,
+          "flags": 7,
+          "record": ""
+        },
+        {
+          "id": 13,
+          "name": "shrink",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 14,
+          "name": "visible",
+          "tag": 1,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 15,
+          "name": "reorderable",
+          "tag": 1,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 16,
+          "name": "drag-domain",
+          "tag": 4,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 17,
+          "name": "drag-kind",
+          "tag": 4,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 18,
+          "name": "drag-sources",
+          "tag": 5,
+          "flags": 2,
+          "record": "@workspace.tab-source"
+        },
+        {
+          "id": 19,
+          "name": "decorations",
+          "tag": 5,
+          "flags": 2,
+          "record": "@workspace.tab-decoration"
+        },
+        {
+          "id": 20,
+          "name": "item-min",
+          "tag": 3,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 21,
+          "name": "item-max",
+          "tag": 3,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 22,
+          "name": "edit-key",
+          "tag": 4,
+          "flags": 3,
+          "record": ""
+        }
+      ],
+      "events": [
+        {
+          "id": 1,
+          "name": "close",
+          "args": [
+            {
+              "name": "key",
+              "tag": 4
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "name": "dragOut",
+          "args": [
+            {
+              "name": "key",
+              "tag": 4
+            },
+            {
+              "name": "phase",
+              "tag": 2
+            },
+            {
+              "name": "x",
+              "tag": 3
+            },
+            {
+              "name": "y",
+              "tag": 3
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "name": "reorderRequested",
+          "args": [
+            {
+              "name": "source",
+              "tag": 4
+            },
+            {
+              "name": "before",
+              "tag": 4
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "name": "contextRequested",
+          "args": [
+            {
+              "name": "key",
+              "tag": 4
+            },
+            {
+              "name": "x",
+              "tag": 3
+            },
+            {
+              "name": "y",
+              "tag": 3
+            }
+          ]
+        },
+        {
+          "id": 5,
+          "name": "overflowChanged",
+          "args": [
+            {
+              "name": "count",
+              "tag": 2
+            }
+          ]
+        },
+        {
+          "id": 6,
+          "name": "editFinished",
+          "args": [
+            {
+              "name": "key",
+              "tag": 4
+            },
+            {
+              "name": "text",
+              "tag": 4
+            },
+            {
+              "name": "reason",
+              "tag": 2
+            }
+          ]
+        }
+      ],
+      "child_rule": "leaf",
+      "model_property": 12,
+      "serialized_record_sha256": "2f5e47f8f90df225427ac396b3e9dfdbe3b869ad6cf21190f5889cca8aff3829"
+    }
+  ]
+}

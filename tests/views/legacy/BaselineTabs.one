@@ -1,0 +1,4 @@
+<template view-model="Root">
+  <Tabs name="legacy" view-id="legacy-root" :items="tabs" v-model="selected" presentation="document" reorderable="true"
+        @close="close" @dragOut="dragOut" @reorderRequested="reorder"/>
+</template>

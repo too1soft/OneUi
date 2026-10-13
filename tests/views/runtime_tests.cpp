@@ -12,6 +12,8 @@ using namespace viewtest;
 #include "rich_table_reorder.inc"
 #include "chart_contract.inc"
 #include "virtual_template_contract.inc"
+#include "tabs_sizing.inc"
+#include "scroll_size.inc"
 int main(int argc, char **argv) {
     if (argc != 2)
         return 2;
@@ -255,7 +257,9 @@ int main(int argc, char **argv) {
         treeContract(argv[1]);
         richTableContract(argv[1]);
         richTableReorderContract(argv[1]);
-        std::cout << "14 runtime scenarios passed\n";
+        tabsSizing(argv[1]);
+        scrollSize(argv[1]);
+        std::cout << "runtime scenarios passed\n";
         return 0;
     } catch (const std::exception &e) {
         std::cerr << e.what() << '\n';

@@ -1,0 +1,8 @@
+<template view-model="Root">
+  <Column view-id="legacy-root">
+    <NativeHost host="foreign"/>
+    <InteractiveSurface view-id="owned" @click="activate" @drag="drag">
+      <Text text="Owned"/>
+    </InteractiveSurface>
+  </Column>
+</template>

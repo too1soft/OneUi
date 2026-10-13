@@ -1052,6 +1052,21 @@ Started=0、Updated=1、Dropped=2、Cancelled=3。属性更新不取消正在进
 替换或关闭先关闭子挂载，再退役父内容。关闭后的子句柄不能继续操作。
 原 `oneui_view_mount_create` 的空 Panel 合同不变。
 
+`oneui_view_mount_child_with_destination(parent, name, destination, out)` /
+Rust `ViewMount::child_with_destination(name, &Widget)` 另可将调用方保留的空 Panel
+作为该 Surface 的实际孩子，再把独立声明式 View 放入 Panel。这样原生宿主保留的
+root 与参与布局、焦点链、尺寸回调的 root 是同一对象；普通控件仍由 `.one` 创建。
+未附着 Panel 没有预先的窗口身份；成功调用首次将它绑定到父窗口，不能声称调用前
+已验证“同窗口”。已有 composition owner、已在窗口树内、非空、非 Panel、自身或祖先
+循环及重复挂载均拒绝；不挪走其他窗口或容器中的节点。mount 持有共享所有权，不借用
+调用方 Widget 句柄。销毁子 View 清空 Panel 并保留挂载预留，可在同一个 mount 重建
+View；销毁 mount、父 View reload 或关闭则同时摘除 Panel，使旧 mount 返回 CLOSED。
+释放后可用同一空 Panel 新建挂载。旧 `child(name)` 仍直接使用 Surface，不插入额外 Panel。
+这个目的 Panel 只填充父 Surface 分配的实际区域，不自动向父容器转发子 View root 的
+preferred/natural size。调用方应在父 `.one` 声明固定或弹性 slot 约束；在居中 Row 中
+缺少高度的空目的壳可以得到零高度。动态内容显隐应以同一语义状态驱动父 slot 的
+visible 和声明式尺寸约束，不把应用布局写入挂载壳或改变全局 Panel 的测量行为。
+
 `View::element_focused(name)` 只读查询唯一具名元素焦点。工作区面板应使用
 `View::dock_item_frame(workspace, pane)`，通过稳定 pane key 查询最新提交几何，
 不会与同名标题、工具栏按钮混淆。这些查询须在所属 UI 线程、View 存活期间调用。
@@ -1100,3 +1115,66 @@ The template can bind `range-min/max`, `smooth`, `area-fill`, `axes-visible`,
 Range, data, rendering, and tooltip behavior remain the native chart's contract.
 The chart COMP revision changes; rebuild viewc and runtime together. The runtime
 IR test covers authored grid pixels, gaps, native inspection and balanced leases.
+
+Tabs COMP version 4 追加 utf8 属性 `sizing`（property ID 23），支持静态及绑定值
+`compact` / `equal`。显式 sizing 独立于 `presentation` 及两者的应用顺序；未提供时
+保持 document→compact、segmented→equal。热重载删除 sizing 恢复当前 presentation
+的默认尺寸模式，未知值拒绝。`presentation="segmented" sizing="compact" item-min="50"
+item-max="96"` 可保留紧凑分段选择器的宽度范围；equal 均分可用宽度。
+不新增 C ABI、Rust 接口或原生枚举；须使用新版 viewc 重生成消费方 IR。
+尺寸覆盖状态由声明式工厂的私有共享控制块持有，公开 Element、KeyedTabs、Tabs
+布局不变。手工构造且未经过 `Mount::make("Tabs")` 的 Element 不支持新 sizing，
+设置时明确报错；其原有 presentation 设置行为保持不变。
+
+Scroll COMP version 5 统一两个分支的追加能力：property ID 16 `scrollbar-inset` 及事件 ID 1：`@viewport-size-changed="resized"`，命令签名为
+`command resized(width:f64,height:f64)`。参数来自实际 Scroll viewportRect（当前等于
+frame），不扣除绘制在内部的 chrome 或滚动条，也不是内容尺寸。首次真实尺寸变化、
+父布局 resize 或隐藏导致的零尺寸均按实际值报告；只改变位置或重复同尺寸不触发。
+注册时不合成初始通知；初始布局从零变为非零时触发。事件在 frame 写入后、Scroll
+子布局完成前同步派发，使用普通 VM Mutate 阶段。消费者应只保存尺寸或合并投递
+weak Idle 工作；回调中不能 flush、重排子树或依赖尚未更新的子节点 frame。
+
+模板 Scroll 的 `setOnSizeChanged` 单回调槽由声明式事件分发器管理；不要通过通用
+Widget API 替换此槽。分发器使用弱 Instance/Runtime 和当前事件表，reload 可以增删
+绑定而保留原控件；替换节点或 View 关闭后旧控件不再调用 VM。没有绑定时不调用命令。
+不新增 C/Rust API 或公开类布局。新编译器生成严格 v5；读取器额外接受完整、
+精确的 Scroll v3 合同，以及两个不同 v4 合同：main 的 16 属性/零事件和 terminal 的
+15 属性/viewport 事件。每个候选均逐字段精确校验，不以版本号或属性子集替代合同。
+真实旧编译器生成的 `tests/views/ScrollSizeV3.oneview` 是固定兼容资产，来源及 SHA256
+见同目录 `ScrollSizeV3.provenance.json`，不得用新版编译器重新生成。
+
+### 已冻结组件合同的后向读取
+
+当前新增属性的合同版本为 Input v4、Checkbox v2、DockWorkspace v3、Scroll v5；
+Tabs v4、VirtualList v3 和 TimeSeriesChart v2 保持各自当前版本。读取器精确接受下列
+有限历史集合，未列出的同名/同版本变体仍拒绝：
+
+| 组件 | 历史合同 |
+| --- | --- |
+| Input | ABI 基准 `64a5b89` 的 v3；追加 accessible-name 的分支 v3 |
+| Checkbox | 基准 v1；追加 tooltip 的分支 v1 |
+| DockWorkspace | 基准 v2；追加四项 caption/raise 属性的分支 v2 |
+| TimeSeriesChart | 基准 v1（series 为 `oneui.v1.Series`） |
+| Scroll | 基准 v3；上述两个分别冻结的 v4 |
+| VirtualList | 基准 v1；terminal 和 tools 各自完整 v2 |
+| Tabs | 基准 v2；完整分支 v3 |
+| DragHandle、PaneHeader、InteractiveSurface | 分别为基准 v1、v1、v2 |
+
+解码保留旧完整 descriptor，先验证旧 Image 与 Graph，包括 PROP、BIND、EVNT 的
+所有引用；合法旧图再按属性/事件名映射至当前 ID，覆盖 CALL 与 slot 的真实组件根，
+最后重新验证当前图。不能在旧 COMP 下使用新属性或新事件。旧 tools VirtualList 的
+15–17 属性映射至当前 16–18，不误解释成 multiple。旧 Chart 的 Series/NumberItem
+仍按原 id/name/rgba/values/value 读取，负值和零值保留；结构化 record 接受旧字段，
+不修改 VM schema、record 身份或用户数据。
+
+真实旧输入保存在 `tests/views/legacy/`，`Baseline.provenance.json` 记录基准编译器
+及十个 IR 的哈希；`TabsV3.provenance.json` 明确该保留产物的旧编译器哈希未知。
+历史输出不由新编译器再生。相同 VM schema 下，旧图与新图重载保留匹配控件；事件
+分发读取当前绑定。InteractiveSurface 仅在可选 pointer/contextMenu/drag 绑定存在性
+变化时更新模板自有槽，移除后恢复默认点击行为；绑定仍存在时保留进行中的拖动。
+NativeHost 内部控件和其回调不参与模板回调槽重载。
+
+
+### DataMenu 相同记录重放
+
+DataMenu 的绑定事务允许重放相同记录快照。完全相同的记录字段（id、parent、text、shortcut、icon、disabled、checked、danger、separator、header）及顺序不重建原生 Menu，保留当前滚动和子菜单路径；title/subtitle 的同值重放同样保留状态。任何字段、顺序或成员变化继续验证并重建，非法输入保持旧状态。事件回调每次绑定照常替换，后续激活使用最新回调；此规则不缓存或跳过事件重绑，也不对全局 StableList 版本做去重。

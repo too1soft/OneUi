@@ -1,0 +1,5 @@
+<template view-model="Root">
+  <PaneHeader name="legacy" view-id="legacy-root" pane-key="pane" title="Legacy pane" number="2" can-close="true" can-split="true" can-maximize="true"
+      @activateRequested="pane" @splitRequested="split" @maximizeRequested="pane" @closeRequested="pane"
+      @broadcastRequested="pane" @liveRequested="pane" @menuRequested="paneMenu"/>
+</template>

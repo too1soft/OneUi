@@ -1,0 +1,7 @@
+<import name="Shell" src="LegacySlotShell.one"/>
+<template view-model="Root">
+  <Shell view-id="legacy-root">
+    <VirtualList slot="body" name="slotted" :items="rows" v-model="index"
+                 :trailing-width="size" trailing-gap="6" activate-on-single-click="true" @activate="activate"/>
+  </Shell>
+</template>

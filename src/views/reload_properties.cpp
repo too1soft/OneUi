@@ -1,4 +1,5 @@
 #include "reload_plan.h"
+#include "tabs_presentation.h"
 #include "oneui/layout/pane_grid.h"
 #include "oneui/layout/dock_workspace_view.h"
 namespace oneui::views {
@@ -31,6 +32,12 @@ std::function<void()> resetProperty(ui::Mount &factory,ui::Element &target,
         return [w=target.as<PaneHeader>(),n=fresh.as<PaneHeader>()]{w->setConfig(n->config());};
     if(target.component=="Tabs" && (key=="drag-domain"||key=="drag-kind"||key=="drag-sources"))return []{};
     if(target.component=="Tabs" && key=="reorderable")return [w=target.as<Tabs>()]{w->setReorderEnabled(false);};
+    if(target.component=="Tabs" && key=="sizing")return [&target] {
+        auto* state=ui::detail::tabsPresentation(target.tabs);
+        check(state!=nullptr,ONEUI_VIEW_TYPE,"Tabs sizing requires Mount::make Tabs");
+        state->sizing.reset();
+        target.as<Tabs>()->setSizingMode(state->document ? TabsSizingMode::Compact : TabsSizingMode::Equal);
+    };
     if(target.component=="ContainerPage"&&key=="selected")return [w=target.as<ContainerPage>()]{w->setSelected(false);};
     if(key=="icon")return [w=target.as<Button>()]{w->clearIcon();};
     if(key=="symbol")return [w=target.as<IconView>()]{w->setSymbol(IconSymbol::RemoteAssist);};

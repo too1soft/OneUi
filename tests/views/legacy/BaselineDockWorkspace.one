@@ -1,0 +1,3 @@
+<template view-model="Root">
+  <DockWorkspace name="legacy" view-id="legacy-root" gap="6" divider-hit="10"/>
+</template>

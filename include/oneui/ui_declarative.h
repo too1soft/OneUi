@@ -86,6 +86,10 @@ private:
     void restoreQueryLayouts();
     void apply(const Entry& entry, const StyleSheet& supplied) {
         auto w = entry.widget.lock(); if (!w) return;
+        // Base style replay can reset query display and native preferred sizes
+        // even when applyBaseLayouts finds no flex/dimension declaration.
+        // Preserve cached storage, but force the same-size query to reapply.
+        if(&supplied==&sheet_)for(auto& query:queries_)query.second.version=~size_t{};
         std::optional<StyleSheet> filtered;
         const StyleSheet* effective=&supplied;
         if(auto local=localThemes_.find(w.get());local!=localThemes_.end()) {

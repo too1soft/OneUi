@@ -1,0 +1,13 @@
+<template view-model="Root">
+  <Column>
+    <Tabs/>
+    <Tabs presentation="segmented"/>
+    <Tabs presentation="segmented" sizing="compact" item-min="50" item-max="96"/>
+    <Tabs sizing="compact" presentation="segmented" item-min="50" item-max="96"/>
+    <Tabs presentation="document" sizing="equal"/>
+    <Tabs sizing="equal" presentation="document"/>
+    <Tabs :presentation="presentation" :sizing="sizing" item-min="50" item-max="96"/>
+    <Tabs :sizing="sizing" :presentation="presentation" item-min="50" item-max="96"/>
+    <Tabs :presentation="presentation"/>
+  </Column>
+</template>
