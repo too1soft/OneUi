@@ -357,6 +357,16 @@ table->setOnDeleteRequested([](const std::vector<int>& rows) { confirmDelete(row
 
 未实现内置排序、筛选、列 resize、可变行高和单元格 editor。
 
+## DataGrid
+
+虚拟化的可编辑单元格表格，面向任意行数的结果集：VM 只提供当前窗口行（`grid-rows` +
+`window-start`），逻辑行数由 `row-count` 给出，可见范围超出窗口时发出 `viewport(first,count)`。
+支持冻结列、列宽拖动与双击自适应、表头排序请求、单元格/整行/整列/全选选区、单元格内编辑
+（F2、双击、直接键入或 IME 输入）、样式类，以及 `edit` / `context` / `copy` / `activate` 事件。
+表格不写剪贴板、不修改自身数据，一切修改都由 VM 回写绑定。
+
+详细内容见 [SQL workbench components](61-sql-workbench-components.md#datagrid)。
+
 ## Menu / Popup / Dialog / OverlayHost
 
 ### Menu

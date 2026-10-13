@@ -154,7 +154,7 @@ void validateImage(const Image &im)
                 "BAD_IR: binding");
         last = r[0];
         if (v.tag == 5)
-            validateRecord(im.schema.model(v.item), p.record);
+            validateRecord(im.schema, im.schema.model(v.item), p.record);
         require(assigned.emplace(r[0], r[1]).second, "BAD_IR: duplicate binding/property");
         span(r[6]);
     }

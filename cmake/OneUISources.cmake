@@ -116,6 +116,9 @@ set(ONEUI_CORE_SOURCES
     src/core/stack_children.cpp
     src/core/style_transition.cpp
     src/core/switch.cpp
+    src/core/data_grid.cpp
+    src/core/data_grid_paint.cpp
+    src/core/data_grid_surface.cpp
     src/core/table_rows.cpp
     src/core/table.cpp
     src/core/tabs.cpp

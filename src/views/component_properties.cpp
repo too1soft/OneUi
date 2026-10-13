@@ -1,6 +1,7 @@
 #include "oneui/ui_declarative.h"
 #include "data_menu.h"
 #include "oneui/controls/popup.h"
+#include "oneui/controls/data_grid.h"
 namespace oneui::ui {
 void Mount::set(Element &e, const std::string &key, const std::wstring &value) {
     if(e.component=="Popup" && key=="placement") {
@@ -194,6 +195,10 @@ void Mount::set(Element &e, const std::string &key, const std::string &value) {
         set(e, key, wide(value));
 }
 void Mount::set(Element &e, const std::string &key, bool value) {
+    if (e.component == "DataGrid") {
+        if (key == "row-numbers") { e.as<DataGrid>()->setRowNumbersVisible(value); return; }
+        if (key == "editable") { e.as<DataGrid>()->setEditable(value); return; }
+    }
     if(e.component=="Popup" && key=="open") {e.as<Popup>()->setOpen(value);return;}
     if(key=="placeholder-when-focused") {e.as<TextField>()->setPlaceholderVisibleWhenFocused(value);return;}
     if(e.component=="ReorderableGrid") {
@@ -243,6 +248,10 @@ void Mount::set(Element &e, const std::string &key, bool value) {
         throw std::invalid_argument("Invalid bool property");
 }
 void Mount::set(Element &e, const std::string &key, float value) {
+    if (e.component == "DataGrid") {
+        if (key == "row-height") { e.as<DataGrid>()->setRowHeight(value); return; }
+        if (key == "header-height") { e.as<DataGrid>()->setHeaderHeight(value); return; }
+    }
     syntax::validateLayoutNumber(key, value);
     if(e.component=="Popup") {
         auto popup=e.as<Popup>();
@@ -352,6 +361,24 @@ void Mount::set(Element &e, const std::string &key, float value) {
     styles_->updateAuthoredFlex(e.widget,e.flex);
 }
 void Mount::set(Element &e, const std::string &key, int value) {
+    if (e.component == "DataGrid") {
+        auto grid = e.as<DataGrid>();
+        if (key == "row-count") { grid->setRowCount(value); return; }
+        if (key == "window-start") { grid->setWindowStart(value); return; }
+        if (key == "frozen-columns") { grid->setFrozenColumns(value); return; }
+        // Selection fields arrive one at a time; each refines the current selection.
+        auto selection = grid->selection();
+        if (key == "anchor-row") selection.anchorRow = value;
+        else if (key == "anchor-column") selection.anchorColumn = value;
+        else if (key == "focus-row") selection.focusRow = value;
+        else if (key == "focus-column") selection.focusColumn = value;
+        else if (key == "select-kind") {
+            if (value < 0 || value > 3) throw std::invalid_argument("select-kind must be 0-3");
+            selection.kind = DataGridSelectKind(value);
+        } else throw std::invalid_argument("Unknown DataGrid integer property");
+        grid->setSelection(selection);
+        return;
+    }
     if(e.component=="ReorderableGrid" && key=="column-count") {
         if(value<1)throw std::invalid_argument("column-count must be positive");
         e.as<ReorderableGrid>()->setColumnCount(value);return;

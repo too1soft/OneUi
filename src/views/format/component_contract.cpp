@@ -123,6 +123,9 @@ void validateRecord(const Model& model, const std::string& projection) {
     else if(projection=="@picker.color") fields="id:4 rgba:2";
     else if(projection=="@menu.item") fields="id:4 parent:4 text:4 icon:4 shortcut:4 disabled:1 checked:1 danger:1 separator:1";
     else if(projection=="@workspace.group") fields="id:4 root:4";
+    else if(projection=="@grid.column") fields="id:4 title:4 detail:4 width:3 align:2 sort:2 key:1";
+    // Row cells are a nested list of records with text:4 and classes:4.
+    else if(projection=="@grid.row") fields="id:4 number:4 classes:4 cells:5";
     else if(projection=="@workspace.tab-source") fields="id:4 pane:4 enabled:1";
     else throw Error("BIND_RECORD: unknown projection "+projection);
     require(model.keyName=="id","BIND_RECORD: workspace key must be id");
@@ -132,6 +135,18 @@ void validateRecord(const Model& model, const std::string& projection) {
         auto found=model.properties.find(name);
         require(found!=model.properties.end() && found->second.tag==uint32_t(field.back()-'0'),
                 "BIND_RECORD: missing or incompatible "+name);
+    }
+}
+void validateRecord(const Schema& schema, const Model& model, const std::string& projection) {
+    validateRecord(model, projection);
+    if(projection!="@grid.row")return;
+    // Grid rows carry their cells as a nested record list.
+    const auto& cells=model.properties.at("cells");
+    auto& cell=cells.item ? schema.model(cells.item) : schema.model(cells.itemName);
+    for(const auto* name:{"text","classes"}) {
+        auto found=cell.properties.find(name);
+        require(found!=cell.properties.end() && found->second.tag==4,
+                std::string("BIND_RECORD: grid cell missing or incompatible ")+name);
     }
 }
 Bytes encodeComponents(const std::vector<ComponentContract> &components)

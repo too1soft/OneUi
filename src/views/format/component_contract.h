@@ -30,4 +30,5 @@ Bytes encodeComponents(const std::vector<ComponentContract> &components);
 std::vector<ComponentContract> decodeComponents(const Bytes &bytes);
 void addBuiltins(Schema &schema);
 void validateRecord(const Model&, const std::string& projection);
+void validateRecord(const Schema&, const Model&, const std::string& projection);
 } // namespace oneview

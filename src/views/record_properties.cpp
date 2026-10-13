@@ -2,6 +2,7 @@
 #include "internal/unicode.h"
 #include "runtime.h"
 #include "data_menu_records.h"
+#include "oneui/controls/data_grid.h"
 namespace oneui::views {
 void Runtime::applyList(Instance &instance, const std::string &property, ListState &state) {
     ONEUI_VIEW_TIME(Rows);
@@ -111,6 +112,39 @@ void Runtime::applyList(Instance &instance, const std::string &property, ListSta
             columns.push_back(std::move(c));
         }
         factory.set(e, property, columns);
+    } else if (e.component == "DataGrid" && property == "grid-columns") {
+        std::vector<DataGridColumn> columns;
+        for (const auto &item : state.items) {
+            DataGridColumn c;
+            c.id = wide(field(item, "id").text);
+            c.title = wide(field(item, "title").text);
+            c.detail = wide(field(item, "detail").text);
+            c.width = float(field(item, "width").number);
+            const auto align = field(item, "align").integer, sort = field(item, "sort").integer;
+            check(c.width >= 0 && align >= 0 && align <= 2 && sort >= 0 && sort <= 2, ONEUI_VIEW_TYPE,
+                  "Grid column value range");
+            c.alignment = TextAlign(align);
+            c.sort = int(sort);
+            c.key = bool(field(item, "key").integer);
+            columns.push_back(std::move(c));
+        }
+        e.as<DataGrid>()->setColumns(std::move(columns));
+    } else if (e.component == "DataGrid" && property == "grid-rows") {
+        // The VM supplies only the materialized window; its first row index is window-start.
+        std::vector<DataGridRow> rows;
+        rows.reserve(state.items.size());
+        for (const auto &item : state.items) {
+            DataGridRow row;
+            row.number = wide(field(item, "number").text);
+            row.classes = field(item, "classes").text;
+            auto &cells = nested(item, "cells");
+            row.cells.reserve(cells.items.size());
+            for (const auto &cell : cells.items)
+                row.cells.push_back({wide(field(cell, "text").text), field(cell, "classes").text});
+            rows.push_back(std::move(row));
+        }
+        auto grid = e.as<DataGrid>();
+        grid->setWindow(grid->windowStart(), std::move(rows));
     } else if (e.component == "TimeSeriesChart") {
         std::vector<TimeSeriesChartSeries> series;
         for (const auto &item : state.items) {

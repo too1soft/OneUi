@@ -1,0 +1,7 @@
+<template view-model="Grid">
+  <Column>
+    <DataGrid :grid-columns="columns" :grid-rows="rows" :row-count="total" :window-start="start"
+              :frozen-columns="frozen" :editable="editable" row-height="24"
+              @viewport="viewport" @sort="sort" @edit="edit" @activate="activate"/>
+  </Column>
+</template>

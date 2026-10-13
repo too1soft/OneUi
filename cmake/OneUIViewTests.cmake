@@ -95,7 +95,15 @@ add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/TableRecords.oneview"
     DEPENDS oneui-viewc tests/views/TableRecords.one tests/views/TableRecords.oneschema VERBATIM)
 add_custom_target(oneui_view_records_ir DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/TableRecords.oneview")
 add_dependencies(oneui_view_test_ir oneui_view_records_ir)
-add_executable(oneui_view_list_tests tests/views/list_tests.cpp tests/views/table_record_tests.cpp)
+add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/DataGridRecords.oneview"
+    COMMAND oneui-viewc --emit ir --input "${PROJECT_SOURCE_DIR}/tests/views/DataGridRecords.one"
+        --schema "${PROJECT_SOURCE_DIR}/tests/views/DataGridRecords.oneschema"
+        --output "${CMAKE_CURRENT_BINARY_DIR}/DataGridRecords.oneview"
+    DEPENDS oneui-viewc tests/views/DataGridRecords.one tests/views/DataGridRecords.oneschema VERBATIM)
+add_custom_target(oneui_view_data_grid_ir DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/DataGridRecords.oneview")
+add_dependencies(oneui_view_test_ir oneui_view_data_grid_ir)
+add_executable(oneui_view_list_tests tests/views/list_tests.cpp tests/views/table_record_tests.cpp
+    tests/views/data_grid_record_tests.cpp)
 target_link_libraries(oneui_view_list_tests PRIVATE oneui_views oneui_core)
 target_compile_definitions(oneui_view_list_tests PRIVATE ONEUI_BUILDING_DLL)
 target_include_directories(oneui_view_list_tests PRIVATE src)

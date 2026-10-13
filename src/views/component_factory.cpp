@@ -1,6 +1,7 @@
 #include "oneui/ui_declarative.h"
 #include "data_menu.h"
 #include "oneui/controls/popup.h"
+#include "oneui/controls/data_grid.h"
 #include "oneui/layout/panel.h"
 namespace oneui::ui {
 Element Mount::make(std::string type, std::vector<Element> children, std::string classes) {
@@ -143,6 +144,7 @@ Element Mount::make(std::string type, std::vector<Element> children, std::string
     else if(type=="DataMenu")node=b.native(std::make_shared<views::DataMenu>());
     else if(type=="List")node=b.native(std::make_shared<List>());
     else if(type=="VirtualList")node=b.native(std::make_shared<VirtualList>());
+    else if(type=="DataGrid")node=b.native(std::make_shared<DataGrid>()).basis(0).grow();
     else if(type=="FontPicker")node=b.native(std::make_shared<FontPicker>());
     else if(type=="Slider")node=b.native(std::make_shared<Slider>());
     else if(type=="InteractiveSurface") {

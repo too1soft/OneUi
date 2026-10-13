@@ -1,6 +1,7 @@
 #include "runtime.h"
 #include "oneui/controls/popup.h"
 #include "data_menu.h"
+#include "oneui/controls/data_grid.h"
 namespace oneui::views {
 void Runtime::wire(const std::shared_ptr<Instance> &instance) {
     if (image.records[oneview::NODE][instance->node][0] != 1)
@@ -125,6 +126,35 @@ void Runtime::wire(const std::shared_ptr<Instance> &instance) {
                 x.tag=y.tag=3;x.number=event.position.x;y.number=event.position.y;
                 fire({key,phase,x,y});
             });
+        else if (element.component == "DataGrid") {
+            auto grid = element.as<DataGrid>();
+            const auto integer = [](std::int64_t value) { Value v; v.tag = 2; v.integer = value; return v; };
+            const auto number = [](double value) { Value v; v.tag = 3; v.number = value; return v; };
+            if (name == "viewport")
+                grid->setOnViewport([fire, integer](std::int64_t first, std::int64_t count) { fire({integer(first), integer(count)}); });
+            else if (name == "sort")
+                grid->setOnSort([fire, integer](int column) { fire({integer(column)}); });
+            else if (name == "resize")
+                grid->setOnResize([fire, integer, number](int column, float width) { fire({integer(column), number(width)}); });
+            else if (name == "selection")
+                grid->setOnSelectionChanged([fire, integer](const DataGridSelection &s) {
+                    fire({integer(s.anchorRow), integer(s.anchorColumn), integer(s.focusRow), integer(s.focusColumn),
+                          integer(int(s.kind))});
+                });
+            else if (name == "edit")
+                grid->setOnEdit([fire, integer](std::int64_t row, int column, const std::wstring &text) {
+                    Value v; v.tag = 4; v.text = narrow(text);
+                    fire({integer(row), integer(column), v});
+                });
+            else if (name == "context")
+                grid->setOnContextMenu([fire, integer, number](std::int64_t row, int column, Point point) {
+                    fire({integer(row), integer(column), number(point.x), number(point.y)});
+                });
+            else if (name == "copy")
+                grid->setOnCopy([fire] { fire({}); });
+            else if (name == "activate")
+                grid->setOnActivate([fire, integer](std::int64_t row, int column) { fire({integer(row), integer(column)}); });
+        }
         else if (name == "click") {
             if(auto surface=element.as<InteractiveSurface>())surface->setOnClick([fire]{fire({});});
             else element.as<Button>()->setOnClick([fire] { fire({}); });
