@@ -2,6 +2,7 @@
 #include "oneui/controls/popup.h"
 #include "data_menu.h"
 #include "oneui/controls/data_grid.h"
+#include "oneui/controls/tree_view.h"
 namespace oneui::views {
 void Runtime::wire(const std::shared_ptr<Instance> &instance) {
     if (image.records[oneview::NODE][instance->node][0] != 1)
@@ -70,6 +71,10 @@ void Runtime::wire(const std::shared_ptr<Instance> &instance) {
                 v.integer = value;
                 mutate(id, v);
             });
+        else if (element.component == "TreeView")
+            element.as<TreeView>()->setOnSelectionChanged([mutate, id](const std::wstring &key) {
+                Value v; v.tag = 4; v.text = narrow(key); mutate(id, v);
+            });
         else if (element.component == "SplitView")
             element.as<SplitView>()->setOnSplitRatioChanged([mutate, id](float value) {
                 Value v;
@@ -126,6 +131,22 @@ void Runtime::wire(const std::shared_ptr<Instance> &instance) {
                 x.tag=y.tag=3;x.number=event.position.x;y.number=event.position.y;
                 fire({key,phase,x,y});
             });
+        else if (element.component == "TreeView") {
+            auto tree = element.as<TreeView>();
+            const auto text = [](const std::wstring &value) { Value v; v.tag = 4; v.text = narrow(value); return v; };
+            if (name == "expand")
+                tree->setOnExpansionChanged([fire, text](const std::wstring &key, bool expanded) {
+                    Value open; open.tag = 1; open.integer = expanded;
+                    fire({text(key), open});
+                });
+            else if (name == "activate")
+                tree->setOnActivated([fire, text](const std::wstring &key) { fire({text(key)}); });
+            else if (name == "context")
+                tree->setOnContextMenu([fire, text](const std::wstring &key, Point point) {
+                    Value x, y; x.tag = y.tag = 3; x.number = point.x; y.number = point.y;
+                    fire({text(key), x, y});
+                });
+        }
         else if (element.component == "DataGrid") {
             auto grid = element.as<DataGrid>();
             const auto integer = [](std::int64_t value) { Value v; v.tag = 2; v.integer = value; return v; };

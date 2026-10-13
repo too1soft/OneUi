@@ -67,11 +67,53 @@ report the height of the currently visible rows. When a tree is put inside a
 `ScrollView`, use this value as the content height after changing its items or
 expansion state.
 
+## Large trees, lazy branches and decorations
+
+These C++ additions are opt-in; trees that do not use them behave as before.
+
+- `setInternalScrolling(true)` keeps the preferred height fixed and scrolls
+  inside the frame (wheel, keyboard, `setScrollOffset`, `scrollToId`). Visible
+  rows are cached and only rows inside the frame are painted, so 50,000
+  visible nodes cost the same per frame as fifty. Home/End and PageUp/PageDown
+  are available in every mode.
+- `TreeItem::hasChildren` shows an expand marker before children exist;
+  expanding reports `onExpansionChanged` so the product can load them. While
+  `loading` is set on an expanded branch without children, a placeholder row
+  shows `setLoadingText` (default `Loading...`); keyboard navigation skips it.
+- `setRetainExpansion(true)` keeps the user's expand/collapse state across
+  `setItems` for items whose supplied `expanded` value did not change. Products
+  can therefore insert children without echoing expansion back, while a
+  changed `expanded` value (for example "collapse all") still wins.
+- `icon`, `badge`, `classes` (`muted`, `error`, `warning`, `accent`, `strong`)
+  and a highlighted title range (`highlightStart` / `highlightLength`, UTF-16)
+  decorate rows; `setRowHeight` sets the row height (default 32).
+- `setOnActivated` makes Enter and double-click activate a node (the marker,
+  Space and Left/Right still toggle). `setOnContextMenu` reports right clicks
+  (pointer position), the Menu key and Shift+F10 (below the row), in window
+  coordinates.
+
+## Declarative contract
+
+```xml
+<TreeView :tree-items="nodes" v-model="selected" row-height="26"
+          loading-text="Loading..."
+          @expand="expand" @activate="activate" @context="context"/>
+```
+
+`tree-items` is a list of `@tree.node` records with `id`, `parent`, `text`,
+`detail`, `icon` (an authoring icon name), `badge`, `classes`, `has_children`,
+`expanded`, `loading`, `highlight_start` and `highlight_len` (the range is in
+Unicode scalar values). The model property is `selected-id`. Events:
+`expand(id: utf8, expanded: bool)`, `activate(id: utf8)` and
+`context(id: utf8, x: f64, y: f64)`. Declarative trees always use internal
+scrolling and retained expansion, so a list INSERT of children keeps the
+selection, the scroll position and the expanded branch.
+
 ## Scope
 
-`TreeView` is intended for navigation and moderately sized grouped data, such
-as host groups, folders, and policies. It intentionally does not implement
-inline editing, checkboxes, or large-data virtualization. It supports internal
+`TreeView` is intended for navigation and grouped data, such as host groups,
+folders, policies and database object navigators. It intentionally does not
+implement inline editing or checkboxes. It supports internal
 reorder requests and external drop-target presentation, but domain validation
 and persistence remain product responsibilities and must not be smuggled into
 the navigation primitive.

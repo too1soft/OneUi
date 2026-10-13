@@ -15,3 +15,4 @@
 #include "component_registry_menu.inc"
 #include "component_registry_popup.inc"
 #include "component_registry_data_grid.inc"
+#include "component_registry_tree_view.inc"

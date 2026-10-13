@@ -2,8 +2,13 @@
 #include "data_menu.h"
 #include "oneui/controls/popup.h"
 #include "oneui/controls/data_grid.h"
+#include "oneui/controls/tree_view.h"
 namespace oneui::ui {
 void Mount::set(Element &e, const std::string &key, const std::wstring &value) {
+    if (e.component == "TreeView") {
+        if (key == "selected-id") { e.as<TreeView>()->setSelectedId(value); return; }
+        if (key == "loading-text") { e.as<TreeView>()->setLoadingText(value); return; }
+    }
     if(e.component=="Popup" && key=="placement") {
         const std::map<std::wstring,PopupPreferredPlacement> placements{
             {L"bottom-start",PopupPreferredPlacement::BottomStart}, {L"bottom-end",PopupPreferredPlacement::BottomEnd},
@@ -252,6 +257,7 @@ void Mount::set(Element &e, const std::string &key, float value) {
         if (key == "row-height") { e.as<DataGrid>()->setRowHeight(value); return; }
         if (key == "header-height") { e.as<DataGrid>()->setHeaderHeight(value); return; }
     }
+    if (e.component == "TreeView" && key == "row-height") { e.as<TreeView>()->setRowHeight(value); return; }
     syntax::validateLayoutNumber(key, value);
     if(e.component=="Popup") {
         auto popup=e.as<Popup>();

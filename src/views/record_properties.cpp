@@ -3,6 +3,8 @@
 #include "runtime.h"
 #include "data_menu_records.h"
 #include "oneui/controls/data_grid.h"
+#include "oneui/controls/tree_view.h"
+#include "oneui/ui_icon_names.h"
 namespace oneui::views {
 void Runtime::applyList(Instance &instance, const std::string &property, ListState &state) {
     ONEUI_VIEW_TIME(Rows);
@@ -112,6 +114,39 @@ void Runtime::applyList(Instance &instance, const std::string &property, ListSta
             columns.push_back(std::move(c));
         }
         factory.set(e, property, columns);
+    } else if (e.component == "TreeView" && property == "tree-items") {
+        // Highlight ranges arrive in Unicode scalar values; the tree uses UTF-16 offsets.
+        auto utf16 = [](const std::wstring &text, std::int64_t scalars) {
+            std::size_t at = 0;
+            for (std::int64_t n = 0; n < scalars && at < text.size(); ++n)
+                at += (text[at] >= 0xd800 && text[at] <= 0xdbff && at + 1 < text.size()) ? 2 : 1;
+            return at;
+        };
+        std::vector<TreeItem> items;
+        items.reserve(state.items.size());
+        for (const auto &item : state.items) {
+            TreeItem node;
+            node.id = wide(field(item, "id").text);
+            node.parentId = wide(field(item, "parent").text);
+            node.title = wide(field(item, "text").text);
+            node.detail = wide(field(item, "detail").text);
+            const auto &icon = field(item, "icon").text;
+            if (!icon.empty()) {
+                node.icon = ui::namedIcon(icon);
+                check(node.icon.has_value(), ONEUI_VIEW_TYPE, "Tree node icon name");
+            }
+            node.badge = wide(field(item, "badge").text);
+            node.classes = field(item, "classes").text;
+            node.hasChildren = bool(field(item, "has_children").integer);
+            node.expanded = bool(field(item, "expanded").integer);
+            node.loading = bool(field(item, "loading").integer);
+            const auto start = field(item, "highlight_start").integer, length = field(item, "highlight_len").integer;
+            check(start >= 0 && length >= 0, ONEUI_VIEW_TYPE, "Tree node highlight range");
+            node.highlightStart = utf16(node.title, start);
+            node.highlightLength = utf16(node.title, start + length) - node.highlightStart;
+            items.push_back(std::move(node));
+        }
+        e.as<TreeView>()->setItems(std::move(items));
     } else if (e.component == "DataGrid" && property == "grid-columns") {
         std::vector<DataGridColumn> columns;
         for (const auto &item : state.items) {

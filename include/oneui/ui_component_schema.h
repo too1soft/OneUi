@@ -83,7 +83,8 @@ enum class ValueType { None, Text, Boolean, Integer, Number, Strings, Columns, R
     X(DataMenu, "menu", "title subtitle items", None) \
     X(Popup, "popup", "open anchor-x anchor-y anchor-width anchor-height content-width content-height placement", None) \
     X(MountPoint, "panel", "", None) \
-    X(DataGrid, "data-grid", "grid-columns grid-rows row-count window-start frozen-columns row-height header-height row-numbers editable anchor-row anchor-column focus-row focus-column select-kind", None)
+    X(DataGrid, "data-grid", "grid-columns grid-rows row-count window-start frozen-columns row-height header-height row-numbers editable anchor-row anchor-column focus-row focus-column select-kind", None) \
+    X(TreeView, "tree-view", "tree-items selected-id row-height loading-text", Text)
 
 enum class Kind {
 #define ONEUI_KIND(name, tag, props, model) name,
@@ -139,7 +140,7 @@ constexpr ValueType propertyType(Kind kind,std::string_view key) {
     if(kind==Kind::FontPicker&&key=="monospace-items")return ValueType::Rows;
     if(contains("row-numbers editable disabled visible selected checked open reduced-motion detail-open wrap closable themed second-collapsed collapsed closing ack-accepted motion active viewing-history can-close can-split can-maximize reorderable hideable loading password read-only chrome-visible",key))return ValueType::Boolean;
     if(contains("row-count window-start frozen-columns anchor-row anchor-column focus-row focus-column select-kind selectedIndex revision ack-request close-request navigation-serial number max-lines",key))return ValueType::Integer;
-    if(contains("grid-columns grid-rows nodes groups drag-sources placements tokens spans",key))return ValueType::Rows;
+    if(contains("tree-items grid-columns grid-rows nodes groups drag-sources placements tokens spans",key))return ValueType::Rows;
     if(contains("gap divider-hit motion-ms resize-idle-ms min-width min-height threshold dock-min-width dock-min-height float-min-width float-min-height minimum maximum step opacity",key))return ValueType::Number;
     if(contains("content-height content-width wheel-step scroll-offset row-height line-height minimum-width header-height horizontal-offset overlay-width overlay-height inset-left inset-right inset-top inset-bottom",key))return ValueType::Number;
     if(key=="overlay-visible")return ValueType::Boolean;

@@ -1,0 +1,6 @@
+<template view-model="Navigator">
+  <Column>
+    <TreeView :tree-items="nodes" v-model="selected" row-height="32" loading-text="Loading"
+              @expand="expand" @activate="activate" @context="context"/>
+  </Column>
+</template>

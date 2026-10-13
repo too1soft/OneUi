@@ -90,3 +90,11 @@ resizing, edits and copies are requests the VM answers by updating bindings.
 `insertWindowRows` / `eraseWindowRows` / `updateWindowRow`, selection and
 scrolling (`setSelection`, `scrollToCell`), editing (`beginEdit`,
 `cancelEdit`) and the callbacks listed above.
+
+## TreeView
+
+The object navigator uses the existing `TreeView` with its large-tree
+additions: internal scrolling, lazy branches with a loading placeholder,
+retained expansion across incremental inserts, icons, badges, style classes,
+filter highlight ranges and `expand` / `activate` / `context` events. See
+[TreeView](34-tree-view.md#large-trees-lazy-branches-and-decorations).

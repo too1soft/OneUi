@@ -2,6 +2,7 @@
 #include "data_menu.h"
 #include "oneui/controls/popup.h"
 #include "oneui/controls/data_grid.h"
+#include "oneui/controls/tree_view.h"
 #include "oneui/layout/panel.h"
 namespace oneui::ui {
 Element Mount::make(std::string type, std::vector<Element> children, std::string classes) {
@@ -145,6 +146,13 @@ Element Mount::make(std::string type, std::vector<Element> children, std::string
     else if(type=="List")node=b.native(std::make_shared<List>());
     else if(type=="VirtualList")node=b.native(std::make_shared<VirtualList>());
     else if(type=="DataGrid")node=b.native(std::make_shared<DataGrid>()).basis(0).grow();
+    else if(type=="TreeView") {
+        // Declarative trees scroll themselves and keep user expansion across refreshes.
+        auto tree=std::make_shared<TreeView>();
+        tree->setInternalScrolling(true);
+        tree->setRetainExpansion(true);
+        node=b.native(tree).basis(0).grow();
+    }
     else if(type=="FontPicker")node=b.native(std::make_shared<FontPicker>());
     else if(type=="Slider")node=b.native(std::make_shared<Slider>());
     else if(type=="InteractiveSurface") {

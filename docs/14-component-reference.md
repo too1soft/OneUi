@@ -320,6 +320,11 @@ tabs->setOnContextMenuRequested([](int index, oneui::Point at) { openTabMenu(ind
 结构化 item 使用稳定 `id` 与 `parentId`，支持 title/detail、展开、选择、重排请求和外部 drop
 target。产品必须保证 ID 唯一且层级无环。TreeView 不自动写产品树。
 
+可选能力：内部滚动（5 万可见节点只画可见行）、懒加载分支（`hasChildren` + `loading` 占位行）、
+跨刷新保留用户展开状态、图标 / 徽标 / 样式类 / 标题高亮范围、`activate` 与 `context` 回调。
+声明式组件 `TreeView` 使用 `@tree.node` 记录与 `selected-id` 模型属性，详见
+[TreeView](34-tree-view.md#declarative-contract)。
+
 ## Table
 
 Table 是多列、固定行高的数据视图，不再是静态占位表格。
