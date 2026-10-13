@@ -10,6 +10,21 @@ model Child key id { r id:utf8 r name:utf8 }'''
 
 
 class DiagnosticTests(CompilerCase):
+    def test_scroll_viewport_size_event(self):
+        schema = 'model Basic {command resized(width:f64,height:f64) command wrong(width:i64,height:f64) command empty()}'
+        self.compile('<Scroll @viewport-size-changed="resized"><Text/></Scroll>', schema)
+        for command in ('wrong', 'empty'):
+            self.compile('<Scroll @viewport-size-changed="' + command + '"><Text/></Scroll>', schema, error='COMMAND_SIGNATURE')
+        self.compile('<Text @viewport-size-changed="resized"/>', schema, error='COMPONENT_EVENT')
+
+    def test_tabs_sizing_contract(self):
+        for attributes in ('presentation="segmented" sizing="compact"',
+                           'sizing="equal" presentation="document"',
+                           ':sizing="title" :presentation="input"'):
+            self.compile('<Tabs ' + attributes + '/>', SCHEMA)
+        self.compile('<Tabs sizing="unknown"/>', SCHEMA, error='STATIC_ENUM')
+        self.compile('<Tabs :sizing="flag"/>', SCHEMA, error='BIND_TYPE')
+
     def test_state_view_contract(self):
         self.compile('<template view-model="Basic"><StateView title="Empty" action="Open"/></template><style scoped>StateView {background: #112233; padding:12px;} state-view-part.state-view-action:hover {background:#334455;} state-view-part.state-view-action:pressed {background:#556677;}</style>', SCHEMA, raw=True)
         self.compile('<StateView :title="title" :message="input" :action="title" icon="server" @action="click"/>', SCHEMA)

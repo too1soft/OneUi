@@ -9,6 +9,7 @@
 </template>
 <style scoped>
 .shell {container-name:sftp;container-type:size;}
+.tree {flex-basis:80px;}
 @container sftp (width >= 860px) and (height > 0px) and (aspect-ratio >= 8/5) {
   .columns {flex-direction:row;gap:12px;}
   .tree {display:flex;flex-basis:224px;flex-shrink:0;}

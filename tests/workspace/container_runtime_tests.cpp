@@ -1,5 +1,6 @@
 #include "../views/fixture.h"
 #include "../support/recording_canvas.h"
+#include <cmath>
 using namespace viewtest;
 using namespace oneui;
 int main(int argc,char** argv) {
@@ -17,6 +18,10 @@ int main(int argc,char** argv) {
         paint(860);expect(tree->visible()&&browser->visible()&&!details->visible(),"compiled query enables two panes");
         paint(1100);expect(details->visible(),"compiled query enables details");
         expect(vm.reads==reads&&vm.retains==leases,"layout query has no VM reads, writes or new lease");
+        expect(std::abs(tree->frame().width-224)<.01f,"wide query overrides authored tree basis");
+        runtime->notify(runtime->rootScope,0);runtime->flush();paint(1100);
+        expect(tree->visible()&&browser->visible()&&details->visible(),"same-size VM flush preserves wide query visibility");
+        expect(std::abs(tree->frame().width-224)<.01f,"same-size VM flush preserves query tree width");
         paint(850);vm.values[id(image,"QueryRoot","detailsSelected")].integer=0;
         vm.values[id(image,"QueryRoot","treeSelected")].integer=1;
         runtime->notify(runtime->rootScope,0);runtime->flush();paint(850);

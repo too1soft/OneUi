@@ -1,0 +1,1 @@
+model Root { r visible:bool command resized(width:f64,height:f64) }

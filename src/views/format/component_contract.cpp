@@ -1,4 +1,5 @@
 #include "component_contract.h"
+#include "scroll_v3_contract.h"
 #include "oneui/ui_component_schema.h"
 #include <sstream>
 
@@ -51,6 +52,8 @@ const std::map<std::string, ComponentContract> &registry()
         ++r.at("Text").version;
         ++r.at("Input").version; // Explicit password mask, appended property ID 15.
         ++r.at("Scroll").version; // Explicit content width, appended property ID 15.
+        ++r.at("Scroll").version; // Viewport size event, no native layout change.
+        r.at("Scroll").events.push_back({1,"viewport-size-changed",{{"width",3},{"height",3}}});
         ++r.at("SearchInput").version; // Optional prefix icon; absent keeps old rendering.
         ++r.at("VirtualList").version; // Optional row selection and typed multi-selection events.
         ++r.at("FontPicker").version;
@@ -185,8 +188,9 @@ std::vector<ComponentContract> decodeComponents(const Bytes &b)
         auto known = registry().find(name);
         require(known != registry().end() && (result.empty() || result.back().name < name),
                 "BAD_IR: unknown/unsorted component");
-        auto &expected = known->second;
-        require(c.u32() == expected.version, "VERSION: component contract");
+        const auto version = c.u32();
+        const auto& expected = name=="Scroll" && version==3 ? scrollV3Contract() : known->second;
+        require(version == expected.version, "VERSION: component contract");
         auto np = c.u32(), ne = c.u32();
         require(np == expected.properties.size() && ne == expected.events.size(), "BAD_IR: component counts");
         for (auto &p : expected.properties)

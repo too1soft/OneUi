@@ -102,6 +102,10 @@ void maxWidthClamps() {
         auto paint=[&](float width){shell.widget->setFrame({0,0,width,40});shell.widget->paint(canvas);};
         paint(599.99f);check(std::abs(cell.widget->frame().width-120)<.01f,"unconditional max-width clamps basis");
         paint(600);check(std::abs(cell.widget->frame().width-200)<.01f,"query max-width clamps basis");
+        mount.styles()->applyBaseLayouts();paint(600);
+        check(std::abs(cell.widget->frame().width-200)<.01f,"base layout refresh preserves same-size query override");
+        mount.styles()->applyBaseLayouts();paint(601);
+        check(std::abs(cell.widget->frame().width-200)<.01f,"base layout refresh preserves same-tier query override");
         paint(500);check(std::abs(cell.widget->frame().width-120)<.01f,"query exit restores unconditional max-width");
         check(mount.styles()->queryDiagnostics().empty(),"max-width on a row child has no diagnostics");
     }

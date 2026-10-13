@@ -172,6 +172,12 @@ extern "C" {
         name: OneUiUtf8String,
         out: *mut *mut OneUiViewMount,
     ) -> i32;
+    pub fn oneui_view_mount_child_with_destination(
+        parent: *mut OneUiViewMount,
+        name: OneUiUtf8String,
+        destination: *mut OneUiWidget,
+        out: *mut *mut OneUiViewMount,
+    ) -> i32;
     pub fn oneui_view_mount_set_styles(
         mount: *mut OneUiViewMount,
         css: OneUiUtf8String,

@@ -1,0 +1,121 @@
+{
+  "purpose": "Frozen real Scroll v3 compatibility asset; never regenerate using a newer compiler.",
+  "compiler_sha256": "2b5cff774bdcb9858dd38059f64b112c13884887c12ef179f85344fc52f30d6a",
+  "fixture_sha256": "c755cdb90b1f702a95f2ca46ae04704779201db7bcbbc2aacad84e0ffeb7128c",
+  "comp_sha256": "354907cbb6f8be7995d64dd1e65bf4242df026e2c7303d9468364f3ae77b69b1",
+  "command": "build/capture/oneui-viewc.exe --emit ir --input tests/views/ScrollSizeV3.one --schema tests/views/ScrollSize.oneschema --name ScrollSize --output tests/views/ScrollSizeV3.oneview",
+  "contract": {
+    "name": "Scroll",
+    "version": 3,
+    "properties": [
+      {
+        "id": 1,
+        "name": "basis",
+        "tag": 3,
+        "flags": 1,
+        "record": ""
+      },
+      {
+        "id": 2,
+        "name": "class",
+        "tag": 4,
+        "flags": 1,
+        "record": ""
+      },
+      {
+        "id": 3,
+        "name": "description",
+        "tag": 4,
+        "flags": 3,
+        "record": ""
+      },
+      {
+        "id": 4,
+        "name": "disabled",
+        "tag": 1,
+        "flags": 3,
+        "record": ""
+      },
+      {
+        "id": 5,
+        "name": "grow",
+        "tag": 3,
+        "flags": 1,
+        "record": ""
+      },
+      {
+        "id": 6,
+        "name": "max",
+        "tag": 3,
+        "flags": 1,
+        "record": ""
+      },
+      {
+        "id": 7,
+        "name": "min",
+        "tag": 3,
+        "flags": 1,
+        "record": ""
+      },
+      {
+        "id": 8,
+        "name": "name",
+        "tag": 4,
+        "flags": 3,
+        "record": ""
+      },
+      {
+        "id": 9,
+        "name": "shrink",
+        "tag": 3,
+        "flags": 1,
+        "record": ""
+      },
+      {
+        "id": 10,
+        "name": "visible",
+        "tag": 1,
+        "flags": 3,
+        "record": ""
+      },
+      {
+        "id": 11,
+        "name": "content-height",
+        "tag": 3,
+        "flags": 3,
+        "record": ""
+      },
+      {
+        "id": 12,
+        "name": "wheel-step",
+        "tag": 3,
+        "flags": 3,
+        "record": ""
+      },
+      {
+        "id": 13,
+        "name": "chrome-visible",
+        "tag": 1,
+        "flags": 3,
+        "record": ""
+      },
+      {
+        "id": 14,
+        "name": "scroll-offset",
+        "tag": 3,
+        "flags": 3,
+        "record": ""
+      },
+      {
+        "id": 15,
+        "name": "content-width",
+        "tag": 3,
+        "flags": 3,
+        "record": ""
+      }
+    ],
+    "events": [],
+    "childRule": "one",
+    "modelProperty": 0
+  }
+}

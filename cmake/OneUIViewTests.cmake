@@ -43,6 +43,27 @@ foreach(fixture SlotSingle SlotWrapped SlotFallback)
     add_dependencies(oneui_view_test_ir oneui_view_${fixture}_ir)
 endforeach()
 add_executable(oneui_view_runtime_tests tests/views/runtime_tests.cpp)
+add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/TabsSizing.oneview"
+    COMMAND oneui-viewc --emit ir --input "${PROJECT_SOURCE_DIR}/tests/views/TabsSizing.one"
+        --schema "${PROJECT_SOURCE_DIR}/tests/views/TabsSizing.oneschema" --name TabsSizing
+        --output "${CMAKE_CURRENT_BINARY_DIR}/TabsSizing.oneview"
+    DEPENDS oneui-viewc tests/views/TabsSizing.one tests/views/TabsSizing.oneschema VERBATIM)
+add_custom_target(oneui_view_tabs_sizing_ir DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/TabsSizing.oneview")
+add_dependencies(oneui_view_test_ir oneui_view_tabs_sizing_ir)
+add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/ScrollSize.oneview"
+    COMMAND oneui-viewc --emit ir --input "${PROJECT_SOURCE_DIR}/tests/views/ScrollSize.one"
+        --schema "${PROJECT_SOURCE_DIR}/tests/views/ScrollSize.oneschema" --name ScrollSize
+        --output "${CMAKE_CURRENT_BINARY_DIR}/ScrollSize.oneview"
+    DEPENDS oneui-viewc tests/views/ScrollSize.one tests/views/ScrollSize.oneschema VERBATIM)
+add_custom_target(oneui_view_scroll_size_ir DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/ScrollSize.oneview")
+add_dependencies(oneui_view_test_ir oneui_view_scroll_size_ir)
+add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/ScrollSizeV3.oneview"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${PROJECT_SOURCE_DIR}/tests/views/ScrollSizeV3.oneview"
+        "${CMAKE_CURRENT_BINARY_DIR}/ScrollSizeV3.oneview"
+    DEPENDS tests/views/ScrollSizeV3.oneview VERBATIM)
+add_custom_target(oneui_view_scroll_size_v3_ir DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/ScrollSizeV3.oneview")
+add_dependencies(oneui_view_test_ir oneui_view_scroll_size_v3_ir)
 add_executable(oneui_pane_motion_tests tests/workspace/pane_motion_tests.cpp)
 target_link_libraries(oneui_pane_motion_tests PRIVATE oneui_core)
 target_include_directories(oneui_pane_motion_tests PRIVATE src)

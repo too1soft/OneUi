@@ -109,7 +109,15 @@ void Runtime::wire(const std::shared_ptr<Instance> &instance) {
                               event[7]);
             }
         };
-        if(name=="menuActivated" && element.component=="DataMenu")
+        if(name=="viewport-size-changed" && element.component=="Scroll")
+            // Keep the dispatcher even without a current EVNT: reload may add
+            // a binding while retaining this native widget and Instance.
+            element.widget->setOnSizeChanged([fire](Size size) {
+                Value width,height;width.tag=height.tag=3;
+                width.number=size.width;height.number=size.height;
+                fire({width,height});
+            });
+        else if(name=="menuActivated" && element.component=="DataMenu")
             element.as<DataMenu>()->setOnActivated([fire](std::string id) {
                 Value value; value.tag=4; value.text=std::move(id); fire({value});
             });

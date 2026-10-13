@@ -11,6 +11,8 @@ P("Tabs", 19, "decorations", 5, 2, "@workspace.tab-decoration")
 P("Tabs", 20, "item-min", 3, 3, "")
 P("Tabs", 21, "item-max", 3, 3, "")
 P("Tabs", 22, "edit-key", 4, 3, "")
+r.at("Tabs").version=4;
+P("Tabs", 23, "sizing", 4, 3, "")
 r.at("Tabs").events.push_back({4,"contextRequested",{{"key",4},{"x",3},{"y",3}}});
 r.at("Tabs").events.push_back({5,"overflowChanged",{{"count",2}}});
 r.at("Tabs").events.push_back({6,"editFinished",{{"key",4},{"text",4},{"reason",2}}});

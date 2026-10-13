@@ -4,6 +4,8 @@ using namespace viewtest;
 #include "template_table.inc"
 #include "template_grid.inc"
 #include "slot_contracts.inc"
+#include "tabs_sizing.inc"
+#include "scroll_size.inc"
 int main(int argc, char **argv) {
     if (argc != 2)
         return 2;
@@ -231,6 +233,8 @@ int main(int argc, char **argv) {
         templateTables(argv[1]);
         templateGrids(argv[1]);
         slotContracts(argv[1]);
+        tabsSizing(argv[1]);
+        scrollSize(argv[1]);
         std::cout << "11 runtime scenarios passed\n";
         return 0;
     } catch (const std::exception &e) {

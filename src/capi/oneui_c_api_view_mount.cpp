@@ -37,6 +37,13 @@ void Mount::check() const {
         oneui::views::check(parent && !parent->closing && parent->root &&
             contains(parent->root->element.widget, destination.get()),
             ONEUI_VIEW_CLOSED, "Parent view or child destination removed");
+        if (ownsDestination) {
+            auto surface = childSurface.lock();
+            oneui::views::check(surface &&
+                std::find(surface->children().begin(), surface->children().end(), destination) !=
+                    surface->children().end(),
+                ONEUI_VIEW_CLOSED, "Destination Panel removed from its Surface");
+        }
     }
 }
 void Mount::closeChildren() {
@@ -57,6 +64,14 @@ void Mount::close(bool windowClosed) {
         window = nullptr; // Observer may run during Window's base destructor.
     if (auto view = active.lock())
         view->close();
+    if (auto surface = childSurface.lock()) {
+        auto children = surface->children();
+        children.erase(std::remove(children.begin(), children.end(), destination), children.end());
+        // Commit isolates focus/invalidation callbacks during parent teardown.
+        surface->prepareChildren(std::move(children))->commit();
+    }
+    childSurface.reset();
+    releaseChildDestination(destination, this);
     window = nullptr;
     destination.reset();
     windowRoot.reset();
@@ -87,9 +102,12 @@ void Mount::publish(const std::shared_ptr<Runtime> &view) {
     view->detach = [weak] {
         if (auto mount = weak.lock()) {
             mount->closeChildren();
-            if (mount->destination)
-                mount->destination->reconcileChildren({});
-            else if (mount->window && mount->window->window) {
+            if (mount->destination) {
+                if (mount->ownsDestination)
+                    mount->destination->prepareChildren({})->commit();
+                else
+                    mount->destination->reconcileChildren({});
+            } else if (mount->window && mount->window->window) {
                 mount->window->window->setContent(nullptr);
                 mount->window->rootContent.reset();
             }

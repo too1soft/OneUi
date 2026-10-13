@@ -129,6 +129,11 @@ Image readImage(const Bytes &b)
     for (const auto& slot : image.records[SLOT])
         require(!(slot[3] & slotSingleRoot) || minor >= 1, "VERSION: single-root slot requires minor 1");
     validateGraph(image);
+    // Validate all EVNT references against the original zero-event v3 contract
+    // before enabling the current dispatcher for future hot-reload bindings.
+    for(auto& component:image.components)
+        if(component.name=="Scroll" && component.version==3)
+            component=registry().at("Scroll");
     return image;
 }
 } // namespace oneview

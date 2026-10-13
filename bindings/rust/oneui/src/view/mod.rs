@@ -88,6 +88,26 @@ impl ViewMount {
             sys::OneUiUtf8String::from_str(name), &mut raw) })?;
         Ok(Self { raw: NonNull::new(raw).ok_or(ViewError::CLOSED)?, _ui: PhantomData })
     }
+    /// Attach an empty, unattached Panel to an empty named Surface and mount
+    /// the child View inside that Panel. Success first binds it to this window;
+    /// no Rust borrow is retained. Attached Panels and duplicate mounts fail.
+    /// Dropping the child View empties the Panel for reuse. Dropping this mount,
+    /// or closing/reloading its parent View, also removes the Panel.
+    pub fn child_with_destination(&self, name: &str, destination: &Widget) -> VmResult<Self> {
+        let mut raw = std::ptr::null_mut();
+        check(unsafe {
+            sys::oneui_view_mount_child_with_destination(
+                self.raw.as_ptr(),
+                sys::OneUiUtf8String::from_str(name),
+                destination.as_raw(),
+                &mut raw,
+            )
+        })?;
+        Ok(Self {
+            raw: NonNull::new(raw).ok_or(ViewError::CLOSED)?,
+            _ui: PhantomData,
+        })
+    }
     /// Mount in an empty window, or an empty Panel already in that window.
     /// The native control invalidates on window close; no Rust borrow is retained.
     pub fn new(window: &Window, destination: Option<&Widget>) -> VmResult<Self> {
