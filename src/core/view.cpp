@@ -1,6 +1,7 @@
 #include "internal/frame_profile.h"
 #include "internal/developer_tools.h"
 #include "oneui/view.h"
+#include "internal/key_dispatch_scope.h"
 #include "oneui/controls/popup.h"
 
 #include <algorithm>

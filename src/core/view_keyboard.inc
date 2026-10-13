@@ -5,6 +5,7 @@ bool View::hasTextComposition() const {
 
 // Keyboard dispatch and descendant focus traversal for View.
 bool View::onKeyDown(const KeyEvent& event) {
+    const internal::KeyDispatchScope dispatch(this);
     if (!interactive()) {
         return false;
     }
@@ -144,4 +145,3 @@ bool View::requestFocus(Widget* descendant, bool focusVisible) {
     }
     return false;
 }
-

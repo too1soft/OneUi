@@ -258,7 +258,18 @@ bool InteractiveSurface::onKeyDown(const KeyEvent& event) {
         if (event.shift && !focusedChild()) {
             return false;
         }
-        return View::onKeyDown(event);
+        const auto life = lifetimeToken();
+        if (View::onKeyDown(event) || life.expired()) {
+            return true;
+        }
+        if (event.shift) {
+            // The surface precedes its nested actions in the forward order.
+            // Exhausting those actions backward returns to its own tab stop.
+            focusChild(nullptr);
+            if (!life.expired()) setFocusVisible(true);
+            return true;
+        }
+        return false;
     }
 
     if (focusedChild() && View::onKeyDown(event)) {
