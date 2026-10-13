@@ -32,11 +32,22 @@ void Mount::check() const {
     oneui::views::check(thread == std::this_thread::get_id(), ONEUI_VIEW_WRONG_THREAD,
                         "Mount requires UI thread");
     oneui::views::check(!closed && window && window->window, ONEUI_VIEW_CLOSED, "Mount closed");
+    if (child) {
+        auto parent = parentView.lock();
+        oneui::views::check(parent && !parent->closing && parent->root &&
+            contains(parent->root->element.widget, destination.get()),
+            ONEUI_VIEW_CLOSED, "Parent view or child destination removed");
+    }
+}
+void Mount::closeChildren() {
+    auto values = std::move(children);
+    for (auto& weak : values) if (auto value = weak.lock()) value->close();
 }
 void Mount::close(bool windowClosed) {
     if (closed)
         return;
     closed = true;
+    closeChildren();
     if (windowClosed && windowRoot) {
         windowRoot->setInvalidator({});
         windowRoot->setRectInvalidator({});
@@ -62,18 +73,22 @@ void Mount::publish(const std::shared_ptr<Runtime> &view) {
         auto mount=weak.lock();auto value=runtime.lock();
         oneui::views::check(bool(mount) && bool(value),ONEUI_VIEW_CLOSED,"Reload mount closed");
         mount->check();
+        // A reload is a new composition boundary; clients can reattach children
+        // after successful reload. Ordinary property flushes do not call this.
+        mount->closeChildren();
         auto root=value->root->element.widget;
         if(mount->destination) {
             if(mount->destination->children().empty() || mount->destination->children().front()!=root)
-                mount->destination->setContent(root);
+                mount->destination->reconcileChildren({root});
         } else if(mount->windowRoot!=root) {
             mount->window->window->setContent(root);mount->window->rootContent=root;mount->windowRoot=root;
         }
     };
     view->detach = [weak] {
         if (auto mount = weak.lock()) {
+            mount->closeChildren();
             if (mount->destination)
-                mount->destination->setContent(nullptr);
+                mount->destination->reconcileChildren({});
             else if (mount->window && mount->window->window) {
                 mount->window->window->setContent(nullptr);
                 mount->window->rootContent.reset();
@@ -111,7 +126,7 @@ void Mount::publish(const std::shared_ptr<Runtime> &view) {
                 view->close();
     };
     if (destination)
-        destination->setContent(view->root->element.widget);
+        destination->reconcileChildren({view->root->element.widget});
     else {
         window->window->setContent(view->root->element.widget);
         window->rootContent = view->root->element.widget;

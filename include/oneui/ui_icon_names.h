@@ -38,7 +38,7 @@ inline std::optional<IconSymbol> namedIcon(std::string_view name) {
         {"remote-assist",IconSymbol::RemoteAssist},{"radio-on",IconSymbol::RadioOn},
         {"folder-native",IconSymbol::Folder},{"file-native",IconSymbol::File},
         {"download-native",IconSymbol::Download},{"chevron-down",IconSymbol::ChevronDown},
-        {"plus-native",IconSymbol::Plus}
+        {"plus-native",IconSymbol::Plus},{"chevron-up",IconSymbol::ChevronUp}
     };
     for(const auto& entry:entries)if(entry.name==name)return entry.symbol;
     return {};

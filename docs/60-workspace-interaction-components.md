@@ -623,3 +623,14 @@ half split at the nearest edge; it does not replace either session.
 
 The public Tabs layout replaces obsolete compact packing storage with viewport
 width state. Consumers must clean and rebuild their existing SDK configuration.
+
+`DragHandle` also emits `activated(source,x,y,count,button)` for a click below
+the drag threshold, right click, or Enter/Space. A child control consumes its
+own input first; a completed drag does not activate. This appended event leaves
+the existing drag event and phase values unchanged.
+
+Dock divider paint can be styled with
+`dock-workspace-part.dock-workspace-divider` and its `:pressed` / `:focus`
+states. Transparent normal background keeps the authored gap visible; styling
+does not alter divider geometry or its hit target. `interactionActive()` and
+`hasDockTarget()` expose read-only interaction state for native input contracts.

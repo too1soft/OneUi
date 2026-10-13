@@ -3,13 +3,22 @@ use crate::{OneUiUtf8String, OneUiWidget, OneUiWindow};
 use std::ffi::{c_char, c_void};
 #[repr(C)]
 pub struct OneUiViewElementMetrics {
-    pub struct_size: u32, pub scrollable: u32,
-    pub x: f32, pub y: f32, pub width: f32, pub height: f32,
-    pub scroll_x: f32, pub scroll_y: f32, pub max_scroll_y: f32,
+    pub struct_size: u32,
+    pub scrollable: u32,
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+    pub scroll_x: f32,
+    pub scroll_y: f32,
+    pub max_scroll_y: f32,
 }
 extern "C" {
-    pub fn oneui_view_element_metrics(view: *mut OneUiView, name: OneUiUtf8String,
-        out: *mut OneUiViewElementMetrics) -> i32;
+    pub fn oneui_view_element_metrics(
+        view: *mut OneUiView,
+        name: OneUiUtf8String,
+        out: *mut OneUiViewElementMetrics,
+    ) -> i32;
 }
 
 pub type OneUiViewResult = i32;
@@ -127,8 +136,12 @@ pub struct OneUiViewScopeSegment {
     pub key: OneUiUtf8String,
 }
 extern "C" {
-    pub fn oneui_view_resolve_scope(view: *mut OneUiView, segments: *const OneUiViewScopeSegment,
-        segment_count: usize, out_scope: *mut *mut OneUiViewNotifier) -> i32;
+    pub fn oneui_view_resolve_scope(
+        view: *mut OneUiView,
+        segments: *const OneUiViewScopeSegment,
+        segment_count: usize,
+        out_scope: *mut *mut OneUiViewNotifier,
+    ) -> i32;
     pub fn oneui_view_protocol_version() -> u32;
     pub fn oneui_view_mount_create(
         window: *mut OneUiWindow,
@@ -136,6 +149,29 @@ extern "C" {
         out: *mut *mut OneUiViewMount,
     ) -> i32;
     pub fn oneui_view_mount_destroy(mount: *mut OneUiViewMount);
+    pub fn oneui_view_dock_action(
+        view: *mut OneUiView,
+        name: OneUiUtf8String,
+        action: i32,
+        pane: OneUiUtf8String,
+        flag: i32,
+    ) -> i32;
+    pub fn oneui_view_dock_item_metrics(
+        view: *mut OneUiView,
+        name: OneUiUtf8String,
+        pane: OneUiUtf8String,
+        out: *mut OneUiViewElementMetrics,
+    ) -> i32;
+    pub fn oneui_view_element_focused(
+        view: *mut OneUiView,
+        name: OneUiUtf8String,
+        out: *mut i32,
+    ) -> i32;
+    pub fn oneui_view_mount_child(
+        parent: *mut OneUiViewMount,
+        name: OneUiUtf8String,
+        out: *mut *mut OneUiViewMount,
+    ) -> i32;
     pub fn oneui_view_mount_set_styles(
         mount: *mut OneUiViewMount,
         css: OneUiUtf8String,
@@ -187,13 +223,27 @@ extern "C" {
 }
 
 extern "C" {
-    pub fn oneui_view_mount_focus_element(mount: *mut OneUiViewMount, name: OneUiUtf8String,
-        focus_visible: i32, out_focused: *mut i32) -> i32;
+    pub fn oneui_view_mount_focus_element(
+        mount: *mut OneUiViewMount,
+        name: OneUiUtf8String,
+        focus_visible: i32,
+        out_focused: *mut i32,
+    ) -> i32;
 }
 
 extern "C" {
-    pub fn oneui_view_mount_register_workspace_tabs(mount: *mut OneUiViewMount,
-        domain: OneUiUtf8String, id: OneUiUtf8String, tabs: *mut OneUiWidget) -> i32;
-    pub fn oneui_view_workspace_tab_drag(view: *mut OneUiView, domain: OneUiUtf8String,
-        source: OneUiUtf8String, phase: i32, x: f32, y: f32) -> i32;
+    pub fn oneui_view_mount_register_workspace_tabs(
+        mount: *mut OneUiViewMount,
+        domain: OneUiUtf8String,
+        id: OneUiUtf8String,
+        tabs: *mut OneUiWidget,
+    ) -> i32;
+    pub fn oneui_view_workspace_tab_drag(
+        view: *mut OneUiView,
+        domain: OneUiUtf8String,
+        source: OneUiUtf8String,
+        phase: i32,
+        x: f32,
+        y: f32,
+    ) -> i32;
 }

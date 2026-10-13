@@ -74,11 +74,15 @@ bool DockWorkspaceView::onMouseDown(const MouseEvent& e) {
     // button or the interactive body inside PanelHeader.
     if(e.clickCount==2)for(auto it=children().rbegin();it!=children().rend();++it) {
         auto item=std::dynamic_pointer_cast<DockItemView>(*it);if(!item||!item->visible()||!item->frame().contains(e.position))continue;
-        std::vector<std::shared_ptr<Widget>> work;if(auto h=item->header.lock())work.push_back(h);
-        while(!work.empty()) {
-            auto w=work.back();work.pop_back();if(!w->visible()||!w->frame().contains(e.position))continue;
-            if(std::dynamic_pointer_cast<DragHandle>(w)){requestAction(DockIntentKind::Maximize,item->key);return true;}
-            if(auto v=std::dynamic_pointer_cast<View>(w))for(auto& c:v->children())work.push_back(c);
+        std::function<Widget*(const std::shared_ptr<Widget>&)> hit = [&](const auto& w)->Widget* {
+            if(!w||!w->visible()||!w->frame().contains(e.position))return nullptr;
+            if(auto v=std::dynamic_pointer_cast<View>(w))
+                for(auto i=v->children().rbegin();i!=v->children().rend();++i)
+                    if(auto* child=hit(*i))return child;
+            return w->isFocusable()?w.get():nullptr;
+        };
+        if(dynamic_cast<DragHandle*>(hit(item->header.lock()))) {
+            requestAction(DockIntentKind::Maximize,item->key);return true;
         }
         break;
     }

@@ -1,4 +1,5 @@
 #include "dock_workspace_state.h"
+#include "oneui/style_sheet.h"
 #include "internal/split_geometry.h"
 #include <algorithm>
 namespace oneui {
@@ -55,7 +56,16 @@ bool DockWorkspaceView::paintPending() const{return state_->pendingRequest!=0;}
 void DockWorkspaceView::setMotionEnabled(bool value){motion_=value;if(!value){state_->preview=state_->previewTarget;invalidate();}}
 void DockWorkspaceView::paint(Canvas& c) {
     layoutChildren();auto& s=*state_;Color accent{40,97,61};
-    for(auto& n:s.nodes)if(n.divider.width>0&&n.divider.height>0)c.fillRect(n.divider,{90,100,110,70});
+    for(size_t i=0;i<s.nodes.size();++i) {
+        auto& n=s.nodes[i];if(n.divider.width<=0||n.divider.height<=0)continue;
+        Color color{90,100,110,70};
+        if(auto sheet=styleScope()) {
+            const auto flags=(s.gesture==State::Gesture::Divider&&s.divider==i?StyleStateActive:0u)
+                |(focusVisible()&&s.focusedDivider==i?StyleStateFocus:0u);
+            color=sheet->resolve({"dock-workspace-part",{"dock-workspace-divider"},flags}).background.color.value_or(color);
+        }
+        c.fillRect(n.divider,color);
+    }
     View::paint(c); // Floating content covers dividers beneath it.
     if(s.previewActive){c.fillRect(s.preview,{40,97,61,40},8);c.strokeRect(s.preview,accent,8,2);}
     if(s.hit&&s.gesture==State::Gesture::Move) {

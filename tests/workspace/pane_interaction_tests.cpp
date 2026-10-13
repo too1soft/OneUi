@@ -83,6 +83,29 @@ void header() {
     root.onMouseDown({{10,50},MouseButton::Left});root.onMouseMove({{17,50},MouseButton::Left});
     KeyEvent escape;escape.key=Key::Escape;root.onKeyDown(escape);check(phases.back()==3,"handle Esc through root");
 }
+void handleActivation() {
+    View root;root.setFrame({0,0,300,100});
+    auto handle=std::make_shared<DragHandle>();handle->threshold=7;root.add(handle);handle->setFrame({0,0,200,40});
+    int clicks=0;std::vector<MouseEvent> activations;std::vector<int> phases;
+    handle->setOnActivated([&](auto e){activations.push_back(e);});
+    handle->setOnDrag([&](int p,auto){phases.push_back(p);});
+    root.onMouseDown({{100,20}});root.onMouseUp({{100,20}});
+    check(activations.size()==1&&phases.empty(),"click activates without drag");
+    root.onMouseDown({{100,20},MouseButton::Right});
+    check(activations.size()==2&&activations.back().button==MouseButton::Right,"right activation retains button");
+    root.onMouseDown({{100,20},MouseButton::Left,false,false,false,2});
+    root.onMouseUp({{100,20},MouseButton::Left,false,false,false,2});
+    check(activations.size()==3&&activations.back().clickCount==2,"double activation retains count");
+    root.onMouseDown({{100,20}});root.onMouseMove({{107,20}});root.onMouseUp({{130,20}});
+    check(phases.back()==2&&activations.size()==3,"drag release never activates");
+    KeyEvent key;key.key=Key::Enter;handle->onKeyDown(key);
+    key.key=Key::Space;handle->onKeyDown(key);
+    check(activations.size()==5,"keyboard activation supports Enter and Space");
+    auto button=std::make_shared<IconButton>(IconSymbol::Close);button->setOnClick([&]{++clicks;});
+    handle->add(button);button->setFrame({0,0,40,40});
+    root.onMouseDown({{15,15}});root.onMouseUp({{15,15}});
+    check(clicks==1&&activations.size()==5,"nested toolbar button retains input ownership");
+}
 void drag() {
     Fixture f;WorkspaceDragDomain domain;domain.registerGrid(f.grid);
     auto b=f.panes[1]->frame();auto point=[&](float x,float y){return Point{b.x+b.width*x,b.y+b.height*y};};
@@ -166,6 +189,6 @@ void preview() {
     }
 }
 }
-int main(){try {internal::ScopedUiClock clock(clockNow);header();drag();dividerStyles();navigation();keyboardAcceptance();preview();
+int main(){try {internal::ScopedUiClock clock(clockNow);header();handleActivation();drag();dividerStyles();navigation();keyboardAcceptance();preview();
     std::cout<<"PASS workspace interactions: 6 groups\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

@@ -1,5 +1,6 @@
 #include "oneui/layout/dock_workspace_view.h"
 #include "oneui/controls/drag_handle.h"
+#include "oneui/style_sheet.h"
 #include "internal/ui_clock.h"
 #include "../support/recording_canvas.h"
 #include <iostream>
@@ -45,6 +46,11 @@ struct Fixture {
 };
 void geometry() {
     Fixture f;auto a=f.items[0]->frame(),b=f.items[1]->frame(),c=f.items[2]->frame();
+    auto sheet=std::make_shared<StyleSheet>();std::string cssError;
+    check(sheet->addRulesFromCss("dock-workspace-part.dock-workspace-divider {background:#112233;}",&cssError),"divider part stylesheet");
+    f.dock->setStyleScope(sheet);test_support::RecordingCanvas themed;f.dock->paint(themed);
+    check(!themed.fillRects.empty()&&themed.fillRects[0].color.r==0x11&&themed.fillRects[0].color.g==0x22,
+          "dock divider consumes application theme rather than fixed material");
     check(near(a.width,992*.699f)&&near(c.width,992*(1-.699f)),"minimum clamps .699 without growing viewport");
     check(near(a.height,(700-8)*.53f)&&near(b.y,(a.y+a.height)+8),"vertical ratio/gap");
     auto address=f.items[3].get();f.floating();check(f.items[3].get()==address,"floating preserves object");

@@ -1,5 +1,8 @@
 r.at("DockWorkspace").version=2;
 r.at("DockItem").version=2;
+// Additive activation contract; existing drag event identity remains frozen.
+++r.at("DragHandle").version;
+r.at("DragHandle").events.push_back({2,"activated",{{"source",4},{"x",3},{"y",3},{"count",2},{"button",2}}});
 P("DockWorkspace", 11, "nodes", 5, 2, "@workspace.node")
 P("DockWorkspace", 12, "root", 4, 3, "")
 P("DockWorkspace", 13, "placements", 5, 2, "@workspace.placement")

@@ -9,13 +9,17 @@ using namespace oneui::views;
 struct Mount : std::enable_shared_from_this<Mount> {
     std::thread::id thread = std::this_thread::get_id();
     OneUiWindow *window = nullptr;
-    std::shared_ptr<Panel> destination;
+    std::shared_ptr<View> destination;
     std::shared_ptr<Widget> windowRoot;
     Window::EventSubscription closedSubscription;
     std::weak_ptr<Runtime> active;
     std::string externalCss;
     ui::Density density = ui::Density::Comfortable;
     bool closed = false, reserved = false;
+    std::weak_ptr<Runtime> parentView;
+    bool child = false;
+    std::vector<std::weak_ptr<Mount>> children;
+    void closeChildren();
     void check() const;
     void close(bool windowClosed = false);
     void publish(const std::shared_ptr<Runtime> &);

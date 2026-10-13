@@ -3,6 +3,7 @@ model RustPage {
     rw enabled: bool
     r status: utf8
     r rows: list<RustRow>
+    r readonly: list<RustReadOnly>
     command run()
     command choose(target: utf8)
 }
@@ -10,4 +11,8 @@ model RustRow key id {
     r id: utf8
     r text: utf8
     command select()
+}
+model RustReadOnly key id {
+    r id: utf8
+    r value: i64
 }

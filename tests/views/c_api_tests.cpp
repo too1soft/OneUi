@@ -3,6 +3,7 @@
 #include "oneui/layout/overlay_host.h"
 #include "oneui/controls/tabs.h"
 #include "oneui/layout/panel.h"
+#include "oneui/layout/dock_workspace_view.h"
 #include "oneui/controls/popup.h"
 #include <thread>
 using namespace viewtest;
@@ -68,10 +69,12 @@ struct ApiCase : Case {
     }
 };
 } // namespace
+#include "child_mount.inc"
 int main(int argc, char **argv) {
     if (argc != 2)
         return 2;
     try {
+        childMountContract(argv[1]);
         expect(oneui_utf8_abi_version() == 45 && oneui_view_protocol_version() == 1,
                "ABI and protocol versions");
         {
@@ -115,6 +118,41 @@ int main(int argc, char **argv) {
             auto other = c.view->value->root->children[1]->element.widget;
             other->setAccessibleName(L"focus-input");
             int focused = 0;
+            expect(oneui_view_element_focused(c.view,str("focus-input"),&focused)==0&&!focused,
+                   "focus query reads unfocused state");
+            std::dynamic_pointer_cast<oneui::View>(c.view->value->root->element.widget)->requestFocus(other.get(),true);
+            expect(oneui_view_element_focused(c.view,str("focus-input"),&focused)==0&&focused,
+                   "focus query reads focused state without changing it");
+            expect(oneui_view_element_focused(c.view,str("missing"),&focused)==ONEUI_VIEW_NOT_FOUND,
+                   "focus query validates unique name");
+            expect(oneui_view_element_focused(c.view,name,nullptr)==ONEUI_VIEW_INVALID_ARGUMENT,
+                   "focus query validates output");
+            std::thread fq([&]{foreign=oneui_view_element_focused(c.view,name,&focused);});
+            fq.join();expect(foreign==ONEUI_VIEW_WRONG_THREAD,"focus query requires UI thread");
+            expect(oneui_view_dock_action(c.view,name,0,str("terminal"),0)==ONEUI_VIEW_INVALID_ARGUMENT,
+                   "dock action requires a DockWorkspace");
+            expect(oneui_view_dock_action(c.view,name,99,str("terminal"),0)==ONEUI_VIEW_INVALID_ARGUMENT,
+                   "dock action rejects unknown action");
+            auto dock = std::make_shared<oneui::DockWorkspaceView>();
+            dock->setAccessibleName(L"geometry-workspace");
+            auto pane = std::make_shared<oneui::DockItemView>();
+            pane->key = "stable-pane"; pane->setAccessibleName(L"focus-input");
+            dock->add(pane);
+            auto rootView=std::dynamic_pointer_cast<oneui::View>(c.view->value->root->element.widget);
+            auto originalChildren=rootView->children();
+            rootView->add(dock);
+            pane->setFrame({10,20,320,180});
+            OneUiViewElementMetrics paneMetrics{};paneMetrics.struct_size=sizeof(paneMetrics);
+            expect(oneui_view_dock_item_metrics(c.view,str("geometry-workspace"),str("stable-pane"),&paneMetrics)==0 &&
+                paneMetrics.x==10 && paneMetrics.y==20 && paneMetrics.width==320 && paneMetrics.height==180,
+                "stable pane geometry does not depend on duplicate accessible labels");
+            expect(oneui_view_dock_item_metrics(c.view,str("geometry-workspace"),str("missing"),&paneMetrics)==ONEUI_VIEW_NOT_FOUND,
+                "pane geometry rejects missing key");
+            expect(oneui_view_dock_item_metrics(c.view,str("geometry-workspace"),str("stable-pane"),nullptr)==ONEUI_VIEW_INVALID_ARGUMENT,
+                "pane geometry validates output");
+            std::thread pg([&]{foreign=oneui_view_dock_item_metrics(c.view,str("geometry-workspace"),str("stable-pane"),&paneMetrics);});
+            pg.join();expect(foreign==ONEUI_VIEW_WRONG_THREAD,"pane geometry requires UI thread");
+            rootView->reconcileChildren(originalChildren);
             expect(oneui_view_mount_focus_element(c.mount, str("focus-input"), 1, &focused) == 0 && focused &&
                 static_cast<Window*>(c.window.window.get())->focused == other.get(), "focus named native input");
             other->setDisabled(true);

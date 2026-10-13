@@ -2,6 +2,8 @@
 #include "internal/ui_clock.h"
 #include <cmath>
 namespace oneui {
+bool DockWorkspaceView::interactionActive() const { return state_->gesture!=State::Gesture::None; }
+bool DockWorkspaceView::hasDockTarget() const { return state_->hit && state_->hit->placement!=DockHitPlacement::None; }
 void DockWorkspaceView::cancel() {
     auto& s=*state_;
     if(s.divider!=State::none)s.nodes[s.divider].ratio=s.beginRatio;
@@ -25,9 +27,10 @@ void DockWorkspaceView::updateMove(Point point) {
     s.hit=alt_||!s.snapshot.compactActive.empty()?std::nullopt:
         dockHitTest(item.identity,point,s.targets,item.placement.mode=="floating"?DockHitMode::GuideStrict:DockHitMode::GuideNearest);
     if(s.hit&&s.hit->placement!=DockHitPlacement::None)showPreview(s.hit->preview);
-    else if(alt_||item.placement.mode=="floating") {
+    else if(item.placement.mode=="floating") s.previewActive=false;
+    else if(alt_) {
         auto r=s.bounds;r.x+=host.x;r.y+=host.y;showPreview(r);
-    } else s.previewActive=false;
+    } else { auto r=s.start;r.x+=host.x;r.y+=host.y;showPreview(r); }
     // Floating content follows the pointer directly. Only the destination
     // overlay is smoothed; its geometry never participates in hit testing.
     layoutChildren();invalidate();

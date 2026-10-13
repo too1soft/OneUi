@@ -12,6 +12,10 @@ use std::{
 
 fn main() {
     let cases: &[(&str, fn())] = &[
+        (
+            "generated property and typed command dispatch",
+            page::dispatch_contract,
+        ),
         ("single-root slots and 50 bidirectional reloads", slots::run),
         ("dynamic scope and content lease", workspace::run),
         ("generated IR matches standalone IR", identical_ir),

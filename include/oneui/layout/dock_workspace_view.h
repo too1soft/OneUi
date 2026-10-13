@@ -51,6 +51,8 @@ public:
     void setMotionEnabled(bool);
     std::optional<Rect> previewRect() const;
     bool paintPending() const;
+    bool interactionActive() const;
+    bool hasDockTarget() const;
     Size naturalSize() const override;
     void paint(Canvas&) override;
     bool tickAnimations(double) override;

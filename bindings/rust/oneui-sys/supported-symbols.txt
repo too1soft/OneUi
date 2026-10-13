@@ -621,4 +621,8 @@ oneui_view_resolve_scope
 oneui_view_mount_focus_element
 
 oneui_view_mount_register_workspace_tabs
+oneui_view_mount_child
+oneui_view_element_focused
+oneui_view_dock_action
+oneui_view_dock_item_metrics
 oneui_view_workspace_tab_drag

@@ -120,6 +120,12 @@ void Runtime::wireDrag(const std::shared_ptr<Instance>& instance) {
         auto surface=instance->element.as<DropSurface>();
         if(auto d=domain(*this,surface->domain))d->registerTabs(image.strings[image.records[oneview::NODE][instance->node][11]],surface);
     } else if(instance->element.component=="DragHandle") {
+        instance->element.as<DragHandle>()->setOnActivated([weak](const MouseEvent& event) {
+            auto item=weak.lock();if(!item)return;
+            emitComponentEvent(weak,"activated",{string(item->element.as<DragHandle>()->source),
+                number(event.position.x),number(event.position.y),integer(event.clickCount),
+                integer(int(event.button))});
+        });
         instance->element.as<DragHandle>()->setOnDrag([weak](int phase,Point point) {
             auto item=weak.lock();auto owner=item?item->owner.lock():nullptr;if(!owner||owner->closing)return;
             auto w=item->element.as<DragHandle>();

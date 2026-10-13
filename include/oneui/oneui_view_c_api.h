@@ -204,6 +204,19 @@ ONEUI_API OneUiViewResult oneui_view_disconnect(OneUiView *view);
 /* Consumes the owned view handle; NULL permitted; UI thread only. */
 ONEUI_API void oneui_view_destroy(OneUiView *view);
 ONEUI_API OneUiViewResult oneui_view_get_error(OneUiView *view, OneUiViewError *out);
+/* Read-only focus query for a unique declared element; exposes no widget handle. */
+ONEUI_API OneUiViewResult oneui_view_element_focused(OneUiView *view,
+    OneUiUtf8String name, int *out_focused);
+/* Dock actions: 0=float, 1=pin, 2=raise, 3=maximize, 4=visibility, 5=redock. */
+ONEUI_API OneUiViewResult oneui_view_dock_action(OneUiView *view, OneUiUtf8String name,
+    int action, OneUiUtf8String pane, int flag);
+
+/* Compose an independent declarative VM into an empty named Surface of the
+ * parent's active view. No native widget slot is exposed. The child inherits
+ * styles and window ownership, closes before its parent, and becomes CLOSED
+ * on parent reload. Remount after reload; ordinary property flushes preserve it. */
+ONEUI_API OneUiViewResult oneui_view_mount_child(OneUiViewMount *parent,
+    OneUiUtf8String name, OneUiViewMount **out);
 
 /* On success out owns one notifier reference. */
 ONEUI_API OneUiViewResult oneui_view_notifier(OneUiView *view, OneUiViewNotifier **out);
@@ -259,6 +272,9 @@ typedef struct OneUiViewElementMetrics {
 } OneUiViewElementMetrics;
 ONEUI_API OneUiViewResult oneui_view_element_metrics(OneUiView *view,
     OneUiUtf8String name, OneUiViewElementMetrics *out);
+/** Query a workspace pane by stable pane key; accessible labels may repeat. */
+ONEUI_API OneUiViewResult oneui_view_dock_item_metrics(OneUiView *view,
+    OneUiUtf8String workspace, OneUiUtf8String pane, OneUiViewElementMetrics *out);
 /** Focus a uniquely named element of the mount's active view on its UI thread.
  * No widget handle escapes. Rejects ambiguous/missing names and closed mounts.
  * Call outside VM callbacks; out_focused reports native focus eligibility. */

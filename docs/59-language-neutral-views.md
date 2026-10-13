@@ -987,3 +987,19 @@ Started=0、Updated=1、Dropped=2、Cancelled=3。属性更新不取消正在进
 支持 `content-background-opacity`。两者沿用原生 CSS 的填充透明度语义，
 不会降低文字、图标、焦点框或子控件的透明度。没有背景的组件（例如 Icon）
 仍拒绝该属性。该 CSS 能力不改变 COMP 契约或 IR 版本。
+
+### 声明式子 View 组合
+
+`oneui_view_mount_child(parent, name, out)` / Rust `ViewMount::child(name)`
+复用挂载协议，把独立 View 挂在父模板的唯一、空 `Surface` 中。目标不能含
+模板子节点，也不能被另一活跃子挂载占用。子挂载继承父窗口、样式和密度；
+独立关闭后可重新挂载。普通父 View flush 保留子 View；父 View reload、detach、
+替换或关闭先关闭子挂载，再退役父内容。关闭后的子句柄不能继续操作。
+原 `oneui_view_mount_create` 的空 Panel 合同不变。
+
+`View::element_focused(name)` 只读查询唯一具名元素焦点。工作区面板应使用
+`View::dock_item_frame(workspace, pane)`，通过稳定 pane key 查询最新提交几何，
+不会与同名标题、工具栏按钮混淆。这些查询须在所属 UI 线程、View 存活期间调用。
+
+`View::dock_action` 通过 DockWorkspace 的 intent/revision/ack 协议请求浮动、
+置顶、提高层级、最大化、可见性及返回停靠。它不直接修改 VM 数据。
