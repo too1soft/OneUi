@@ -1,4 +1,5 @@
 #include "oneui/controls/tabs.h"
+#include "internal/widget_presentation.h"
 
 #include "oneui/icon.h"
 #include "oneui/style.h"
@@ -32,9 +33,10 @@ void Tabs::paint(Canvas& canvas) {
     const bool metricsChanged = compactItemOffsets_.size() != items_.size() + 1;
     updateCompactMetrics(canvas);
     const int selected = std::clamp(selectedIndex(), 0, count - 1);
-    if (metricsChanged || lastPaintWidth_ != rect.width || editingIndex_ >= 0)
+    auto& lastPaintWidth = internal::WidgetPresentationAccess::get(*this).tabsLastPaintWidth;
+    if (metricsChanged || lastPaintWidth != rect.width || editingIndex_ >= 0)
         ensureIndexVisible(editingIndex_ >= 0 ? editingIndex_ : selected);
-    lastPaintWidth_ = rect.width;
+    lastPaintWidth = rect.width;
     const int overflow = overflowItemCount();
     if (reportedOverflow_ != overflow) {
         reportedOverflow_ = overflow;

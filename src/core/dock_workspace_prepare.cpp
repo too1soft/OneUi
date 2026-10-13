@@ -10,7 +10,11 @@ bool finite(Rect r) {return std::isfinite(r.x)&&std::isfinite(r.y)&&std::isfinit
 bool valid(Size s) {return std::isfinite(s.width)&&std::isfinite(s.height)&&s.width>=0&&s.height>=0;}
 }
 std::function<void()> DockWorkspaceView::prepare(DockWorkspaceSnapshot model,std::vector<std::shared_ptr<DockItemView>> items) {
+    return prepare(std::move(model),std::move(items),state_->presentation);
+}
+std::function<void()> DockWorkspaceView::prepare(DockWorkspaceSnapshot model,std::vector<std::shared_ptr<DockItemView>> items,DockWorkspacePresentation presentation) {
     auto next=std::make_shared<State>();auto& s=*next;
+    s.presentation=std::move(presentation);
     s.snapshot=std::move(model);const auto& m=s.snapshot;
     s.identities=state_->identities;s.nextIdentity=state_->nextIdentity;
     if(!std::isfinite(m.dividerHit)||m.dividerHit<0)throw std::invalid_argument("Invalid dock divider hit");

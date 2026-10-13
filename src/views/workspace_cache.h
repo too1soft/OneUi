@@ -7,6 +7,7 @@ struct Instance::WorkspaceCache {
     std::optional<std::wstring> headerTooltip;
     PaneGridSnapshot grid;
     DockWorkspaceSnapshot dock;
+    DockWorkspacePresentation dockPresentation;
     int64_t navigation = 0;
     std::string edge, mode="focus", domain;
     struct TabSource {std::string pane;bool enabled=false;};

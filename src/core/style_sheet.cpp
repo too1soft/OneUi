@@ -42,18 +42,8 @@ std::optional<std::string> StyleSheet::customProperty(const std::string& name) c
     return found->second;
 }
 
-StyleBox StyleSheet::resolve(const StyleNode& node) const {
-    const std::string cacheKey = resolveCacheKey(node);
-    if (auto cached = resolveCache_.find(cacheKey); cached != resolveCache_.end()) {
-        return cached->second;
-    }
-
-    struct Match {
-        const StyleRule* rule = nullptr;
-        int specificity = 0;
-    };
-
-    std::vector<Match> matches;
+std::vector<const StyleRule*> StyleSheet::matchingRules(const StyleNode& node) const {
+    std::vector<const StyleRule*> matches;
     for (std::size_t index = 0; index < rules_.size(); ++index) {
         if(rules_[index].query)continue;
         const auto& compiled = selectors_[index];
@@ -66,28 +56,35 @@ StyleBox StyleSheet::resolve(const StyleNode& node) const {
                 [&](const std::string& klass) { return hasClass(node, klass); })) {
             continue;
         }
-        matches.push_back(Match{&rules_[index], compiled.specificity});
+        matches.push_back(&rules_[index]);
     }
 
-    std::stable_sort(matches.begin(), matches.end(), [](const Match& lhs, const Match& rhs) {
-        if (lhs.specificity != rhs.specificity) {
-            return lhs.specificity < rhs.specificity;
+    std::stable_sort(matches.begin(), matches.end(), [&](const StyleRule* lhs, const StyleRule* rhs) {
+        const auto left = selectors_[size_t(lhs - rules_.data())].specificity;
+        const auto right = selectors_[size_t(rhs - rules_.data())].specificity;
+        if (left != right) {
+            return left < right;
         }
-        return lhs.rule->order < rhs.rule->order;
+        return lhs->order < rhs->order;
     });
+    return matches;
+}
 
+StyleBox StyleSheet::resolve(const StyleNode& node) const {
+    const std::string cacheKey = resolveCacheKey(node);
+    if (auto cached = resolveCache_.find(cacheKey); cached != resolveCache_.end()) return cached->second;
     StyleBox resolved;
-    for (const auto& match : matches) {
-        StyleBox current = match.rule->box;
-        if (!match.rule->declarations.empty()) {
+    for (const auto* rule : matchingRules(node)) {
+        StyleBox current = rule->box;
+        if (!rule->declarations.empty()) {
             StyleRule dynamicRule;
-            for (const auto& [property, value] : match.rule->declarations) {
+            for (const auto& [property, value] : rule->declarations) {
                 // The declaration was validated when the CSS was loaded. A
                 // failed runtime resolution leaves the last valid parsed box
                 // in place instead of partially applying a theme.
                 if (!applyDeclaration(
                         dynamicRule, property, value, customProperties_, nullptr)) {
-                    dynamicRule.box = match.rule->box;
+                    dynamicRule.box = rule->box;
                     break;
                 }
             }

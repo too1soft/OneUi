@@ -1,7 +1,7 @@
 <template view-model="Root">
   <Column>
     <List :items="rows" v-model="selected"/>
-    <VirtualList :items="rows" v-model="selected" row-height="42" @activate="click"/>
+    <VirtualList :items="rows" v-model="selected" row-height="42" trailing-width="36" trailing-gap="4" activate-on-single-click="true" @activate="click"/>
     <Row class="row-flow" wrap="false">
       <Text v-for="item in rows" :key="item.id" :text="item.title"/>
     </Row>
@@ -11,6 +11,11 @@
     <Column :class="title" :basis="height" shrink="0"/>
     <InteractiveSurface @click="click"><Text text="Choose"/></InteractiveSurface>
     <Text :spans="spans" :text="title"/>
+    <TreeView :items="rows" v-model="tree_selected"/>
+    <Table :items="rows" multiple="true" row-height="42" header-height="30"
+           selection-column="true" column-dividers="false" selection-column-width="40" sort-column="0"
+           @activate="activate" @edit="edit" @delete="delete" @selection="selection"
+           @current="current" @sort="sort" @cell="cell" @context="context"/>
     <Dialog :title="title" subtitle="Details" icon="upload" :close-visible="visible" @close="click">
       <Column><Text text="Body"/></Column>
       <Row><Button text="Accept" @click="click"/></Row>
@@ -24,8 +29,8 @@
       <Text text="Pinned header"/>
       <Column><Text text="Body"/></Column>
     </TemplateTable>
-    <InteractiveSurface @pointer="pointer" @contextMenu="context"><Text text="Select row"/></InteractiveSurface>
-    <Scroll content-width="640" content-height="800" wheel-step="30"><Text text="Wide content"/></Scroll>
+    <InteractiveSurface @pointer="pointer" @contextMenu="pointer_context"><Text text="Select row"/></InteractiveSurface>
+    <Scroll scrollbar-inset="0" class="compact-scroll" content-width="640" content-height="800" wheel-step="30"><Text text="Wide content"/></Scroll>
     <Overlay overlay-width="34" overlay-height="18" inset-right="10" horizontal-align="end" vertical-align="center" :overlay-visible="visible">
       <SearchInput v-model="title" prefix-icon="search-outline" placeholder="Search" placeholder-when-focused="true"/>
       <Button text="Key" trailing-icon="down-outline" @click="click"/>
@@ -33,9 +38,18 @@
     <ReorderableGrid column-count="2" column-gap="8" row-gap="10" item-height="70" reorder-enabled="true" item-drag-enabled="true" @reorderRequested="reorder" @itemDrag="drag">
       <GridItem view-id="grid-rows" v-for="row in rows" :key="row.id" :grid-key="row.id"><Text :text="row.text"/></GridItem>
     </ReorderableGrid>
+    <SegmentedControl class="compact-tabs"/>
+    <VirtualTemplateList estimated-height="64" overscan="2" follow-end="true">
+      <Column v-for="message in rows" :key="message.id">
+        <Text :text="message.text" :spans="message.spans"/>
+        <Button text="Copy" @click="message.copy"/>
+      </Column>
+    </VirtualTemplateList>
   </Column>
 </template>
 <style scoped>
+SegmentedControl.compact-tabs {text-inset:4px;}
+Scroll.compact-scroll {scrollbar-width:7px;}
 List { background-color:#18201b; color:#e3eae5; }
 VirtualList { background-color:#18201b; color:#e3eae5; }
 VirtualList:selected { content-background-color:#35453b; }

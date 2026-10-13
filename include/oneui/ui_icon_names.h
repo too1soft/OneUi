@@ -22,7 +22,10 @@ inline std::optional<IconSymbol> namedIcon(std::string_view name) {
         {"notebook",IconSymbol::Notebook},{"trash",IconSymbol::Trash},
         {"user",IconSymbol::User},{"refresh-circle",IconSymbol::Refresh},{"edit",IconSymbol::Edit},
         {"terminal-native",IconSymbol::Terminal},{"desktop",IconSymbol::Desktop},{"sparkle",IconSymbol::Sparkle},
-        {"check",IconSymbol::Check},{"upload-native",IconSymbol::Upload},
+        {"check",IconSymbol::Check},
+        {"link-native",IconSymbol::Link},{"file-native",IconSymbol::File},{"compass",IconSymbol::Compass},
+        {"radio-on",IconSymbol::RadioOn},{"play",IconSymbol::Play},
+        {"upload-native",IconSymbol::Upload},
         {"server-native",IconSymbol::Server},{"server-outline",IconSymbol::OutlineServer},
         {"terminal-outline",IconSymbol::OutlineTerminal},{"close-outline",IconSymbol::OutlineClose},
         {"more-outline",IconSymbol::OutlineMore},{"grid",IconSymbol::LayoutGrid},
@@ -44,7 +47,8 @@ inline std::optional<IconSymbol> namedIcon(std::string_view name) {
         {"remote-assist",IconSymbol::RemoteAssist},{"radio-on",IconSymbol::RadioOn},
         {"folder-native",IconSymbol::Folder},{"file-native",IconSymbol::File},
         {"download-native",IconSymbol::Download},{"chevron-down",IconSymbol::ChevronDown},
-        {"plus-native",IconSymbol::Plus},{"chevron-up",IconSymbol::ChevronUp}
+        {"plus-native",IconSymbol::Plus},{"chevron-up",IconSymbol::ChevronUp},
+        {"sparkles",IconSymbol::OutlineWorkbenchSparkles}
     };
     for(const auto& entry:entries)if(entry.name==name)return entry.symbol;
     return {};

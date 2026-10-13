@@ -19,6 +19,7 @@ struct DockWorkspaceView::State {
     struct Work {size_t node;Rect rect;};
     enum class Gesture {None,Move,Resize,Divider};
     DockWorkspaceSnapshot snapshot;
+    DockWorkspacePresentation presentation;
     DockTreeIndex index;
     std::vector<Node> nodes;
     std::vector<Item> items;

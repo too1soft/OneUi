@@ -1,12 +1,18 @@
 #include "internal/view_profile.h"
 #include "internal/unicode.h"
 #include "runtime.h"
+#include <cmath>
+#include <limits>
+#include "rich_table_records.inc"
 #include "data_menu_records.h"
 namespace oneui::views {
 void Runtime::applyList(Instance &instance, const std::string &property, ListState &state) {
     ONEUI_VIEW_TIME(Rows);
     if(applyDataMenu(*this,instance,state))return;
     if(workspaceList(instance,property,state))return;
+    if(instance.element.component=="Table" && property=="items") {
+        applyRichTableRows(instance,state);return;
+    }
     auto &e = instance.element;
     auto wide = [](const std::string &s) { ONEUI_VIEW_TIME(Conversion); return unicode::fromUtf8(s); };
     auto field = [&](const std::shared_ptr<Scope> &scope, const char *name) {
@@ -43,11 +49,31 @@ void Runtime::applyList(Instance &instance, const std::string &property, ListSta
             const auto rgba = field(item, "rgba").integer;
             check(start >= previousEnd && end > start && boundary(start) && boundary(end) &&
                   rgba >= 0 && uint64_t(rgba) <= 0xffffffffu, ONEUI_VIEW_TYPE, "Text span range/color");
+            // Optional style fields extend the frozen @text.span projection; a
+            // model that omits them keeps the inheriting defaults.
+            const auto& properties = image.schema.model(item->table.model_id).properties;
+            auto optional = [&](const char* name) -> Value {
+                auto found = properties.find(name);
+                return found == properties.end() ? Value{} : read(item, found->second.id);
+            };
+            const auto background = optional("background").integer;
+            const auto size = optional("size").number;
+            check(background >= 0 && uint64_t(background) <= 0xffffffffu && std::isfinite(size) &&
+                      size >= 0 && size <= 96,
+                  ONEUI_VIEW_TYPE, "Text span style");
             TextStyleSpan span;
             span.start = wide(bytes.substr(0, size_t(start))).size();
             span.end = wide(bytes.substr(0, size_t(end))).size();
             span.foreground = {uint8_t(rgba >> 24), uint8_t(rgba >> 16), uint8_t(rgba >> 8), uint8_t(rgba)};
             span.monospace = bool(field(item, "monospace").integer);
+            span.fontWeight = int(optional("weight").integer);
+            span.italic = optional("italic").integer != 0;
+            span.underline = optional("underline").integer != 0;
+            span.strikethrough = optional("strike").integer != 0;
+            span.fontSize = float(size);
+            if (background != 0)
+                span.background = {uint8_t(background >> 24), uint8_t(background >> 16),
+                                   uint8_t(background >> 8), uint8_t(background)};
             spans.push_back(span); previousEnd = end;
         }
         label->setRichText(label->text(), std::move(spans));
@@ -77,6 +103,15 @@ void Runtime::applyList(Instance &instance, const std::string &property, ListSta
             else if (entry.kind == "separator") menu->addSeparator();
             else menu->setItemDisabled(menu->addItem(entry.title, entry.icon, entry.danger), entry.disabled);
         }
+    } else if (e.component == "TreeView") {
+        std::vector<TreeItem> values;
+        for(size_t i=0;i<state.items.size();++i) {
+            const auto& item=state.items[i];
+            values.push_back({wide(state.keys[i]),wide(field(item,"parent").text),
+                wide(field(item,"title").text),wide(field(item,"detail").text),
+                bool(field(item,"expanded").integer)});
+        }
+        e.as<TreeView>()->setItems(std::move(values));
     } else if (e.component == "VirtualList") {
         std::vector<VirtualListItem> values;
         std::vector<int> selected;
@@ -106,6 +141,13 @@ void Runtime::applyList(Instance &instance, const std::string &property, ListSta
                 row.indicatorColor = {uint8_t(rgba >> 24), uint8_t(rgba >> 16), uint8_t(rgba >> 8), uint8_t(rgba)};
                 row.indicatorVisible = (rgba & 255) != 0;
             }
+            auto trailingColor=properties.find("trailing_rgba");
+            if(trailingColor!=properties.end()) {
+                check(trailingColor->second.tag==2,ONEUI_VIEW_TYPE,"VirtualList trailing color type");
+                const auto rgba=field(item,"trailing_rgba").integer;
+                check(rgba>=0 && uint64_t(rgba)<=0xffffffffu,ONEUI_VIEW_TYPE,"VirtualList trailing color range");
+                row.trailingColor={uint8_t(rgba>>24),uint8_t(rgba>>16),uint8_t(rgba>>8),uint8_t(rgba)};
+            }
             values.push_back(std::move(row));
         }
         e.as<VirtualList>()->setRichItems(std::move(values));
@@ -131,7 +173,7 @@ void Runtime::applyList(Instance &instance, const std::string &property, ListSta
         factory.set(e, property, values);
     } else if (e.component == "DataTable" && property == "items") {
         applyTableRows(instance, state);
-    } else if (e.component == "DataTable" && property == "columns") {
+    } else if ((e.component == "DataTable" || e.component == "Table") && property == "columns") {
         std::vector<TableColumn> columns;
         for (const auto &item : state.items) {
             TableColumn c;
@@ -146,6 +188,14 @@ void Runtime::applyList(Instance &instance, const std::string &property, ListSta
             columns.push_back(std::move(c));
         }
         factory.set(e, property, columns);
+    } else if (e.component == "TimeSeriesChart" && property == "axis-labels") {
+        std::vector<std::wstring> labels;
+        for(const auto& item:state.items)labels.push_back(wide(field(item,"value").text));
+        e.as<TimeSeriesChart>()->setAxisLabels(std::move(labels));
+    } else if (e.component == "TimeSeriesChart" && property == "sample-positions") {
+        std::vector<double> positions;
+        for(const auto& item:state.items)positions.push_back(field(item,"value").number);
+        check(e.as<TimeSeriesChart>()->setSamplePositions(std::move(positions)),ONEUI_VIEW_TYPE,"Chart sample positions");
     } else if (e.component == "TimeSeriesChart") {
         std::vector<TimeSeriesChartSeries> series;
         for (const auto &item : state.items) {
@@ -153,8 +203,13 @@ void Runtime::applyList(Instance &instance, const std::string &property, ListSta
             s.name = wide(field(item, "name").text);
             auto rgba = uint32_t(field(item, "rgba").integer);
             s.color = {uint8_t(rgba >> 24), uint8_t(rgba >> 16), uint8_t(rgba >> 8), uint8_t(rgba)};
-            for (const auto &value : nested(item, "values").items)
-                s.values.push_back(field(value, "value").number);
+            for (const auto &value : nested(item, "values").items) {
+                const auto& fields=image.schema.model(value->table.model_id).properties;
+                auto valid=fields.find("valid");
+                check(valid==fields.end() || valid->second.tag==1,ONEUI_VIEW_TYPE,"Chart validity type");
+                s.values.push_back(valid!=fields.end() && !field(value,"valid").integer
+                    ? std::numeric_limits<double>::quiet_NaN() : field(value,"value").number);
+            }
             series.push_back(std::move(s));
         }
         factory.set(e, property, series);

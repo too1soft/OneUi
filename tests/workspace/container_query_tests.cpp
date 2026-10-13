@@ -39,14 +39,15 @@ void stackChildren() {
 }
 const char* css=R"CSS(
 .frame {container-name:sftp;container-type:size;}
+.tree, .browser, .details {flex-grow:1;flex-basis:0px;}
 @container sftp (width >= 860px) and (height > 0px) and (aspect-ratio >= 8/5) {
   .columns {flex-direction:row;gap:12px;}
-  .tree {display:flex;flex-basis:224px;flex-shrink:0;}
+  .tree {display:flex;flex-basis:224px;flex-grow:0;flex-shrink:0;}
   .browser {display:flex;flex-basis:0px;flex-grow:1;}
   .details {display:none;}
 }
 @container sftp (width >= 1100px) and (height > 0px) and (aspect-ratio >= 8/5) {
-  .details {display:flex;flex-basis:292px;flex-shrink:0;}
+  .details {display:flex;flex-basis:292px;flex-grow:0;flex-shrink:0;}
 }
 )CSS";
 void layout(StackEngine engine) {
@@ -67,6 +68,10 @@ void layout(StackEngine engine) {
     check(columns.as<Stack>()->direction()==StackDirection::Row,"query direction consumed");
     check(std::abs(tree.widget->frame().width-224)<.01f,"query flex basis consumed");
     paint(1100,500);check(details.widget->visible()&&std::abs(details.widget->frame().width-292)<.01f,"details third pane");
+    mount.styles()->applyBaseLayouts();
+    paint(1100,500);
+    check(tree.widget->visible()&&browser.widget->visible()&&details.widget->visible(),"VM base layout refresh reapplies queries at unchanged dimensions");
+    check(std::abs(tree.widget->frame().width-224)<.01f&&std::abs(details.widget->frame().width-292)<.01f,"VM refresh preserves queried pane widths");
     details.widget->setVisible(false);paint(1100.01f,500);check(!details.widget->visible(),"CSS cannot override authored false");
     details.widget->setVisible(true);paint(850,500);
     check(details.widget->visible()&&!tree.widget->visible()&&columns.as<Stack>()->direction()==StackDirection::Column,"query exit restores base layout");

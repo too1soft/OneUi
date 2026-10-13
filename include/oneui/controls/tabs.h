@@ -130,7 +130,7 @@ private:
     float minimumItemWidth_ = 96.0f;
     float maximumItemWidth_ = 220.0f;
     std::vector<float> compactItemOffsets_;
-    float lastPaintWidth_ = -1.0f;
+    std::vector<float> documentItemOffsets_;
     float scrollOffset_ = 0.0f;
     bool documentMode_ = false;
     int reportedOverflow_ = -1;

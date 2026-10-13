@@ -56,7 +56,7 @@ enum class ValueType { None, Text, Boolean, Integer, Number, Strings, Columns, R
     X(Status, "label", "text tone", None) \
     X(Tabs, "tabs", "items selectedKey closable presentation reorderable drag-domain drag-kind drag-sources decorations item-min item-max edit-key", Text) \
     X(SplitView, "split-view", "orientation ratio first-min second-min second-collapsed collapsed-extent", Number) \
-    X(TimeSeriesChart, "chart", "series", None) \
+    X(TimeSeriesChart, "chart", "series range-min range-max axis-labels sample-positions smooth area-fill dashed-grid axes-visible latest-point line-width fill-alpha grid-lines plot-insets grid-style", None) \
     X(Icon, "icon", "symbol size", None) \
     X(NativeHost, "native-host", "host themed resize-policy", None) \
     X(Column, "stack", "align justify wrap", None) \
@@ -65,12 +65,12 @@ enum class ValueType { None, Text, Boolean, Integer, Number, Strings, Columns, R
     X(FormRow, "stack", "label hint error", None) \
     X(FormGrid, "stack", "min-column-width", None) \
     X(EmptyState, "stack", "title subtitle", None) \
-    X(Scroll, "scroll-view", "content-height content-width wheel-step chrome-visible scroll-offset", None) \
+    X(Scroll, "scroll-view", "content-height content-width wheel-step chrome-visible scroll-offset scrollbar-inset", None) \
     X(Reveal, "reveal", "open preset reduced-motion", None) \
     X(Text, "label", "text wrap max-lines spans line-height text-align tooltip", None) \
     X(ValidationMessage, "label", "text", None) \
     X(TextArea, "input", "text placeholder line-height read-only", Text) \
-    X(Checkbox, "checkbox", "text checked", Boolean) \
+    X(Checkbox, "checkbox", "text checked tooltip", Boolean) \
     X(Input, "input", "text placeholder password password-mask read-only prefix-icon accessible-name", Text) \
     X(SearchInput, "input", "text placeholder prefix-icon placeholder-when-focused", Text) \
     X(Switch, "switch", "text checked", Boolean) \
@@ -79,12 +79,15 @@ enum class ValueType { None, Text, Boolean, Integer, Number, Strings, Columns, R
     X(Button, "button", "text variant icon tooltip content-align trailing-text trailing-icon", None) \
     X(DataTable, "table", "items columns selectedKey item-key", Text) \
     X(List, "list", "items selectedIndex", Integer) \
-    X(VirtualList, "virtual-list", "items selectedIndex row-height scroll-offset multiple", Integer) \
-    X(StateView, "state-view", "title message action icon", None) \
-    X(Menu, "menu", "items", None) \
+    X(VirtualList, "virtual-list", "items selectedIndex row-height scroll-offset multiple trailing-width trailing-gap activate-on-single-click", Integer) \
     X(DataMenu, "menu", "title subtitle items", None) \
     X(Popup, "popup", "open anchor-x anchor-y anchor-width anchor-height content-width content-height placement", None) \
-    X(MountPoint, "panel", "", None)
+    X(MountPoint, "panel", "", None) \
+    X(StateView, "state-view", "title message action icon", None) \
+    X(Menu, "menu", "items", None) \
+    X(VirtualTemplateList, "virtual-template-list", "estimated-height overscan follow-end scroll-offset", None) \
+    X(TreeView, "tree-view", "items selectedKey", Text) \
+    X(Table, "table", "items columns multiple row-height header-height selection-column selection-column-width scroll-offset sort-column sort-descending column-dividers tooltip", None)
 
 enum class Kind {
 #define ONEUI_KIND(name, tag, props, model) name,
@@ -126,6 +129,10 @@ constexpr bool layoutNumber(std::string_view key) {
     return contains("grow shrink basis min max max-width min-column-width breakpoint pane-width ratio first-min second-min size collapsed-extent value",key);
 }
 constexpr ValueType propertyType(Kind kind,std::string_view key) {
+    if (kind == Kind::VirtualTemplateList) {
+        if (key == "estimated-height" || key == "overscan") return ValueType::Number;
+        if (key == "follow-end") return ValueType::Boolean;
+    }
     if(!supports(kind,key))return ValueType::None;
     if(kind==Kind::VirtualList && key=="multiple")return ValueType::Boolean;
     if(key=="placeholder-when-focused")return ValueType::Boolean;
@@ -137,17 +144,27 @@ constexpr ValueType propertyType(Kind kind,std::string_view key) {
     }
     if(kind==Kind::Dialog&&key=="close-visible")return ValueType::Boolean;
     if(kind==Kind::FontPicker&&key=="selected")return ValueType::Text;
+    if(kind==Kind::Table && contains("multiple selection-column sort-descending column-dividers",key))return ValueType::Boolean;
+    if(kind==Kind::Table && key=="sort-column")return ValueType::Integer;
+    if(kind==Kind::Table && contains("header-height selection-column-width",key))return ValueType::Number;
     if(kind==Kind::FontPicker&&(key=="confirm-selection"||key=="monospace-only"))return ValueType::Boolean;
     if(kind==Kind::FontPicker&&key=="monospace-items")return ValueType::Rows;
-    if(contains("disabled visible selected checked open reduced-motion detail-open wrap closable themed second-collapsed collapsed closing ack-accepted motion active viewing-history can-close can-split can-maximize reorderable hideable loading password read-only chrome-visible raise-on-press",key))return ValueType::Boolean;
+    if(contains("disabled visible selected checked open reduced-motion detail-open wrap closable themed second-collapsed collapsed closing ack-accepted motion active viewing-history can-close can-split can-maximize reorderable hideable loading password read-only chrome-visible raise-on-press activate-on-single-click",key))return ValueType::Boolean;
     if(contains("selectedIndex revision ack-request close-request navigation-serial number max-lines",key))return ValueType::Integer;
     if(contains("nodes groups drag-sources placements tokens spans",key))return ValueType::Rows;
     if(contains("gap divider-hit motion-ms resize-idle-ms min-width min-height threshold dock-min-width dock-min-height float-min-width float-min-height minimum maximum step opacity",key))return ValueType::Number;
-    if(contains("content-height content-width wheel-step scroll-offset row-height line-height minimum-width header-height horizontal-offset overlay-width overlay-height inset-left inset-right inset-top inset-bottom",key))return ValueType::Number;
+    if(contains("content-height content-width wheel-step scroll-offset scrollbar-inset trailing-width trailing-gap row-height line-height minimum-width header-height horizontal-offset overlay-width overlay-height inset-left inset-right inset-top inset-bottom",key))return ValueType::Number;
     if(key=="overlay-visible")return ValueType::Boolean;
     if(kind==Kind::Tabs && key=="decorations")return ValueType::Rows;
     if(kind==Kind::Tabs && (key=="item-min"||key=="item-max"))return ValueType::Number;
     if(key=="items")return kind==Kind::Select||kind==Kind::SegmentedControl?ValueType::Strings:kind==Kind::Tabs?ValueType::TabItems:ValueType::Rows;
+    if(kind==Kind::TimeSeriesChart) {
+        if(contains("range-min range-max line-width",key))return ValueType::Number;
+        if(contains("smooth area-fill dashed-grid axes-visible latest-point",key))return ValueType::Boolean;
+        if(contains("grid-lines fill-alpha",key))return ValueType::Integer;
+        if(key=="axis-labels")return ValueType::Strings;
+        if(key=="sample-positions")return ValueType::Rows;
+    }
     if(key=="series")return ValueType::Series;
     if(key=="columns")return ValueType::Columns;
     if(layoutNumber(key))return ValueType::Number;

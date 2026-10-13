@@ -785,6 +785,8 @@ ONEUI_API int oneui_window_capture_frame_png_utf8(OneUiWindow* window, const cha
  * Dispatches to the supplied widget tree; never sends OS input. Returns 0 in
  * builds without ONEUI_ENABLE_TEST_FRAME_CAPTURE or for unhandled input. */
 ONEUI_API int oneui_widget_test_click(OneUiWidget* root, float x, float y);
+// Move through the captured widget tree; return whether a tooltip is hit.
+ONEUI_API int oneui_widget_test_hover(OneUiWidget* root, float x, float y);
 ONEUI_API int oneui_widget_test_modified_click(OneUiWidget* root, float x, float y,
     int control, int shift, int click_count);
 ONEUI_API int oneui_widget_test_wheel(OneUiWidget* root, float x, float y, float delta);

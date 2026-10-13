@@ -1,4 +1,5 @@
 #include "component_contract.h"
+#include "legacy_virtual_list_contract.h"
 #include "oneui/ui_component_schema.h"
 #include <sstream>
 
@@ -47,10 +48,20 @@ const std::map<std::string, ComponentContract> &registry()
 #undef E
 #undef P
 #undef C
+        r.at("TimeSeriesChart").events = {{1,"inspection",{{"index",2},{"pinned",1}}}};
+        ++r.at("TimeSeriesChart").version;
+        r.at("Table").events = {
+            {1,"activate",{{"key",4}}}, {2,"edit",{{"key",4}}},
+            {3,"delete",{}}, {4,"selection",{}}, {5,"current",{{"key",4}}},
+            {6,"sort",{{"column",2}}}, {7,"cell",{{"key",4},{"column",2}}},
+            {8,"context",{{"key",4},{"x",3},{"y",3}}},
+        };
         for (const auto *name : {"Input", "Text", "Scroll", "FontPicker", "MediaPicker"}) r.at(name).version = 2;
         ++r.at("Text").version;
         ++r.at("Input").version; // Explicit password mask, appended property ID 15.
         ++r.at("Scroll").version; // Explicit content width, appended property ID 15.
+        ++r.at("Scroll").version; // Scrollbar inset, appended property ID 16.
+        ++r.at("VirtualList").version; // Unified trailing metrics/click contract, IDs 16-18.
         ++r.at("SearchInput").version; // Optional prefix icon; absent keeps old rendering.
         ++r.at("VirtualList").version; // Optional row selection and typed multi-selection events.
         ++r.at("FontPicker").version;
@@ -74,6 +85,7 @@ const std::map<std::string, ComponentContract> &registry()
         ++r.at("Menu").version;
         for (auto &property : r.at("Menu").properties)
             if (property.name == "items") property.record = "@native-menu.item";
+        ++r.at("Table").version; // Native table tooltip.
         // Detect authoring metadata drift before publishing a contract hash.
         // Intentional changes require a reviewed registry/version update.
         using namespace oneui::ui::schema;
@@ -122,6 +134,11 @@ void validateRecord(const Model& model, const std::string& projection) {
     std::string fields;
     if(projection=="@list.item") fields="id:4 title:4 detail:4";
     else if(projection=="@native-menu.item") fields="id:4 kind:4 title:4 detail:4 icon:4 danger:1 disabled:1";
+    else if(projection=="@tree.item") fields="id:4 parent:4 title:4 detail:4 expanded:1";
+    else if(projection=="@chart.series") fields="id:4 name:4 rgba:2 values:5";
+    else if(projection=="@chart.point") fields="id:4 value:3";
+    else if(projection=="@table.row") fields="id:4 cells:5 selected:1";
+    else if(projection=="@table.cell") fields="id:4 text:4";
     else if(projection=="@text.span") fields="id:4 start:2 end:2 rgba:2 monospace:1";
     else if(projection=="@workspace.node") fields="id:4 kind:4 axis:4 ratio:3 first:4 second:4 pane:4";
     else if(projection=="@workspace.placement") fields="id:4 mode:4 x:3 y:3 width:3 height:3 pinned:1 order:2";
@@ -139,6 +156,34 @@ void validateRecord(const Model& model, const std::string& projection) {
         auto found=model.properties.find(name);
         require(found!=model.properties.end() && found->second.tag==uint32_t(field.back()-'0'),
                 "BIND_RECORD: missing or incompatible "+name);
+    }
+    if(projection=="@tree.item")
+        require((model.properties.at("expanded").access & 2)!=0,
+                "BIND_RECORD: TreeView expanded must be writable");
+    if(projection=="@table.row")
+        require((model.properties.at("selected").access & 2)!=0,
+                "BIND_RECORD: Table selected must be writable");
+}
+void validateRecord(const Schema& schema,const Model& model,const std::string& projection) {
+    validateRecord(model,projection);
+    if(projection=="@chart.series") {
+        const auto& point=schema.model(model.properties.at("values").item);
+        validateRecord(point,"@chart.point");
+        auto valid=point.properties.find("valid");
+        require(valid==point.properties.end() || valid->second.tag==1,"BIND_RECORD: Chart valid must be bool");
+        return;
+    }
+    if(projection!="@table.row")return;
+    const auto& cell=schema.model(model.properties.at("cells").item);
+    validateRecord(cell,"@table.cell");
+    const std::map<std::string,uint32_t> optional={
+        {"detail",4},{"icon",4},{"trailing_icon",4},{"foreground",2},{"indicator",2},
+        {"alignment",2},{"weight",2},{"font_size",3},{"icon_size",3},{"badge",4},
+        {"badge_foreground",2},{"badge_background",2}};
+    for(const auto& [name,tag]:optional) {
+        const auto found=cell.properties.find(name);
+        require(found==cell.properties.end() || found->second.tag==tag,
+                "BIND_RECORD: incompatible Table cell "+name);
     }
 }
 Bytes encodeComponents(const std::vector<ComponentContract> &components)
@@ -185,24 +230,7 @@ std::vector<ComponentContract> decodeComponents(const Bytes &b)
         auto known = registry().find(name);
         require(known != registry().end() && (result.empty() || result.back().name < name),
                 "BAD_IR: unknown/unsorted component");
-        auto &expected = known->second;
-        require(c.u32() == expected.version, "VERSION: component contract");
-        auto np = c.u32(), ne = c.u32();
-        require(np == expected.properties.size() && ne == expected.events.size(), "BAD_IR: component counts");
-        for (auto &p : expected.properties)
-        {
-            require(c.u32() == p.id && c.str() == p.name && c.u32() == p.tag && c.u32() == p.flags &&
-                        c.str() == p.record,
-                    "BAD_IR: component property contract");
-        }
-        for (auto &e : expected.events)
-        {
-            require(c.u32() == e.id && c.str() == e.name && c.u32() == e.args.size(), "BAD_IR: event contract");
-            for (auto &a : e.args)
-                require(c.str() == a.name && c.u32() == a.tag, "BAD_IR: event argument");
-        }
-        require(c.str() == expected.childRule && c.u32() == expected.modelProperty, "BAD_IR: child/model contract");
-        result.push_back(expected);
+        result.push_back(decodeComponentContract(c, known->second));
     }
     c.done();
     return result;

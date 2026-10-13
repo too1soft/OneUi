@@ -58,7 +58,7 @@ struct StyleContentBox {
 struct StyleBox {
     std::optional<std::string> containerName,flexDirection;
     std::optional<bool> sizeContainment,display,flexWrap;
-    std::optional<float> flexBasis,flexGrow,flexShrink,minWidth,minHeight,maxWidth,maxHeight;
+    std::optional<float> flexBasis,flexGrow,flexShrink,minWidth,minHeight;
     StyleBackground background;
     StyleContentBox content;
     std::optional<Color> foreground;
@@ -108,6 +108,16 @@ struct StyleBox {
     std::optional<float> contentBackgroundOpacity;
 };
 
+// New presentation properties are separate from the frozen StyleBox ABI.
+struct StyleLayout {
+    std::optional<float> maxWidth,maxHeight;
+    std::optional<std::vector<float>> tableColumnWidths;
+    std::optional<float> tableSelectionWidth;
+    std::optional<float> flexBasisPercent;
+    std::optional<int> flexOrder;
+    bool flexBasisSpecified = false;
+};
+
 struct StyleRule {
     std::string selector;
     StyleBox box;
@@ -136,12 +146,14 @@ public:
     std::optional<std::string> customProperty(const std::string& name) const;
     bool addRulesFromCss(const std::string& css, std::string* error = nullptr);
     StyleBox resolve(const StyleNode& node) const;
+    StyleLayout resolveLayout(const StyleNode& node) const;
     const std::vector<StyleRule>& rules() const;
     const std::map<std::string, std::string>& customProperties() const;
     std::size_t version() const;
     StyleSheet forContainers(const std::map<std::string,Size>& sizes) const;
 
 private:
+    std::vector<const StyleRule*> matchingRules(const StyleNode& node) const;
     struct CompiledSelector {
         StyleNode node;
         bool valid = false;

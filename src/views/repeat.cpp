@@ -153,3 +153,4 @@ void Runtime::repeat(const std::shared_ptr<Instance> &instance) {
         commit();
 }
 } // namespace oneui::views
+#include "virtual_repeat.inc"

@@ -9,9 +9,9 @@ void templateTables(const char* runtimeFile) {
         args.assign(values,values+count);return ONEUI_VIEW_OK;
     };
     c.start();
-    auto table = c.runtime->root->children[13]->element.as<oneui::TemplateTable>();
-    auto header = c.runtime->root->children[13]->children[0]->element.widget;
-    auto body = c.runtime->root->children[13]->children[1]->element.widget;
+    auto table = c.runtime->root->children[15]->element.as<oneui::TemplateTable>();
+    auto header = c.runtime->root->children[15]->children[0]->element.widget;
+    auto body = c.runtime->root->children[15]->children[1]->element.widget;
     oneui::test_support::RecordingCanvas canvas;
     table->setFrame({10,20,400,300});
     table->paint(canvas);
@@ -40,7 +40,7 @@ void templateTables(const char* runtimeFile) {
     expect(table->scrollOffset()==table->maxScrollOffset(), "last table row is reachable");
     expect(table->accessibleRole()==oneui::AccessibilityRole::Table, "table semantics are native");
 
-    auto row=c.runtime->root->children[14]->element.as<oneui::InteractiveSurface>();
+    auto row=c.runtime->root->children[16]->element.as<oneui::InteractiveSurface>();
     row->setFrame({20,30,200,40});
     oneui::MouseEvent pointer{{25,35},oneui::MouseButton::Left};
     pointer.control=true;pointer.shift=true;pointer.clickCount=2;
@@ -53,7 +53,7 @@ void templateTables(const char* runtimeFile) {
     row->onMouseDown(pointer);row->onMouseUp(pointer);
     expect(args.size()==2 && args[0].as.number==25 && args[1].as.number==35,
            "context menu command retains native pointer coordinates");
-    auto caption=c.runtime->root->children[11]->element.as<oneui::Label>();
+    auto caption=c.runtime->root->children[13]->element.as<oneui::Label>();
     c.runtime->styles->replace("label {font-family:Cascadia Mono;font-size:13px;}");
     expect(caption->textFontFamily()==L"Cascadia Mono", "IR Text consumes font-family");
     oneui::ui::Mount legacy({},std::make_shared<oneui::ui::StyleRegistry>(),std::make_shared<oneui::MemoryClipboard>());
@@ -81,7 +81,7 @@ void templateTables(const char* runtimeFile) {
     legacy.styles()->replace("label {font-family:inherit;}");
     expect(caption->textFontFamily().empty() && oldText->textFontFamily().empty(),
            "restyling removes a previous font override");
-    auto scroll = c.runtime->root->children[15]->element.as<oneui::ScrollView>();
+    auto scroll = c.runtime->root->children[17]->element.as<oneui::ScrollView>();
     auto oldScrollElement = legacy.make("Scroll", {legacy.make("Text")});
     legacy.set(oldScrollElement, "content-width", 640.f);
     legacy.set(oldScrollElement, "content-height", 800.f);
@@ -101,9 +101,9 @@ void templateTables(const char* runtimeFile) {
            oneui::ui::namedIcon("sliders") == oneui::IconSymbol::Sliders &&
            oneui::ui::namedIcon("copy-native") == oneui::IconSymbol::Copy,
            "outline aliases retain the original native glyphs");
-    auto layer = c.runtime->root->children[16]->element.as<oneui::TemplateOverlay>();
-    auto field = c.runtime->root->children[16]->children[0]->element.as<oneui::TextField>();
-    auto foreground = c.runtime->root->children[16]->children[1]->element.as<oneui::Button>();
+    auto layer = c.runtime->root->children[18]->element.as<oneui::TemplateOverlay>();
+    auto field = c.runtime->root->children[18]->children[0]->element.as<oneui::TextField>();
+    auto foreground = c.runtime->root->children[18]->children[1]->element.as<oneui::Button>();
     layer->setOverlayVisible(true);
     layer->setFrame({10,20,400,50}); layer->paint(canvas);
     expect(field->frame().x==10 && field->frame().width==400 && foreground->frame().x==366 &&

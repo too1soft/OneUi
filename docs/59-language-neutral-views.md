@@ -296,6 +296,7 @@ typedef struct OneUiViewListInfo {
 #define ONEUI_LIST_INSERT 1u
 #define ONEUI_LIST_REMOVE 2u
 #define ONEUI_LIST_MOVE   3u
+#define ONEUI_LIST_REORDER 5u
 #define ONEUI_LIST_UPDATE 4u
 typedef struct OneUiViewListChange {
     uint32_t struct_size;
@@ -504,6 +505,7 @@ ViewControl 状态为 Building → Active → Closing → Closed，generation �
 | REMOVE | index/count 为移除前范围；keys 必须等于该旧范围；to_index=0 | 从缓存按旧 key 拆除，**不回调已不存在 index 的 child** |
 | MOVE | index/count 为旧区间，to_index 是移走区间之后的目标边界；keys 为源区间；properties 为空 | 例如 `[A,B,C,D]` 的 index=1,count=2,to=2 → `[A,D,B,C]`；to=1 为 no-op，不换 VM/控件 |
 | UPDATE | index/count 为当前范围；keys 对应该范围；properties 为 item 字段 ID（空表示全部），to_index=0 | key 与 item 身份不变，只标这些 child 属性脏，不重建条目 |
+| REORDER (5) | index/to_index=0；count 与 keys 为完整非空键排列；properties 为空 | 保留原 item 租约及字段缓存；只改变顺序。重复、缺失、多余或未知 key 原子失败。字段变化仍须单独 notify/UPDATE；增删或替换 VM 使用原有通知。Rust `StableList::reorder` 在修改前验证排列。 |
 
 所有增量的 key_count=count，properties 仅 UPDATE 可非空。单条 index/count 上界在 flush 按版本序列校验，直接可判的参数错误在 notify 时拒绝。root notify(list_id) 相当于未给精确 delta 的 RESET；集合整体换新必须 RESET，不能偷偷发送 INSERT。业务不能遗漏通知；调试模式可额外全量核对，release 不逐帧扫列表。
 
@@ -903,6 +905,59 @@ Style the surface with `StateView` and its painted parts with the native
 `state-view-message` or `state-view-action`. Part nodes inherit the component's
 classes. The action part consumes `:hover`, `:pressed`, `:focus` and `:disabled`.
 These part selectors style painted content; they do not create child widgets.
+
+### Checkbox boolean input
+
+`Checkbox` is a leaf component with `text`, `checked`, and `tooltip` properties.
+Use `v-model` with a writable `bool` property. Native mouse and Space-key changes
+write through the guarded VM mutation path; programmatic VM notifications do not
+write back, and disconnected or disabled controls cannot mutate the VM.
+
+```xml
+<Checkbox text="Owner read" tooltip="Toggle owner read permission" v-model="ownerRead"/>
+```
+
+The stylesheet tag is `checkbox`. Background, border, foreground and
+`content-background-color` map to the same native checkbox styles used by the C API;
+`:checked`, `:selected`, `:hover`, `:pressed`, `:focus` and `:disabled` retain their native semantics.
+
+### Structured tree and rich table records
+
+`TreeView :items="nodes" v-model="selected"` consumes a keyed record with
+`id`, `parent`, `title`, `detail` (UTF-8), and writable `expanded` (bool).
+Selection uses stable IDs. Native expansion writes the corresponding live item
+lease; model refreshes preserve that expansion without echoing changes back.
+Its `tree-view` CSS tag consumes the native tree's list typography and state styles.
+
+`Table` adds rich cells and multiple selection without changing the existing
+`DataTable` contract. Its `items` records require `id:utf8`, `cells:list<Cell>`
+and writable `selected:bool`. Cells require `id:utf8`, `text:utf8`; optional
+fields are `detail`, `icon`, `trailing_icon`, `badge` (UTF-8), `alignment`,
+`weight`, `foreground`, `indicator`, `badge_foreground`, `badge_background`
+(i64), and `font_size`, `icon_size` (f64). Icons use the authoring icon names;
+colors use RRGGBBAA, with -1 selecting the native default. Cell types and value
+ranges are checked before publishing native rows.
+
+Columns use `oneui.v1.Column`. `multiple`, `row-height`, `header-height`,
+`selection-column`, `selection-column-width`, `scroll-offset`, `sort-column`
+and `sort-descending` configure the existing virtualized native Table.
+Events are `activate(key)`, `edit(key)`, `delete()`, `selection()`, `current(key)`,
+`sort(column)`, `cell(key,column)` and `context(key,x,y)`. Keys are UTF-8,
+columns are i64, and coordinates are f64 in native window coordinates.
+Selection changes update only changed item leases before the selection command.
+Closed views suppress retained-control callbacks. Row updates retain keyed
+selection and the top visible business row; structural resets rebuild the native row data while remapping the active row,
+selection and keyboard range anchor by stable key.
+
+### Table 列宽容器查询
+
+`table-column-widths: auto 76px` 保留前两列并覆盖宽度，`auto` 对应原生弹性宽度 0；宽屏可设为 `auto 100px 160px`。覆盖不改变行、选中集合及列的模型身份，移除样式恢复原始列宽。模型重新发布 columns 时仍保留有效的查询覆盖，不需要布局回调写 VM。`table-selection-width: 40px` 覆盖选择列宽度，范围 24–128px。这些样式只由 Table/DataTable 消费，非法数值及用于其他控件会在编译期报错。
+
+### 工具栏布局与行身份补充（WP5 路线 C）
+
+`order` 是有界整数（−1000000 至 1000000），相同 order 保持声明顺序；只改变布局顺序，不重建控件或 VM。`flex-basis` 可使用非负 px 或百分比，百分比相对父 Stack 内容区主轴；未确定的自然测量使用内容尺寸。百分比只扩展 flex-basis，不扩展 width/height。容器查询删除覆盖后恢复原声明，支持同一个输入框在窄屏独占一行、宽屏回到导航与操作之间。
+
+Table 的 `column-dividers` 绑定原生分隔线开关；富行重排按稳定键重映射活动行、选中集合和 Shift 锚点，文本更新不会重置锚点。新增图标别名 `link-native`、`file-native`、`compass` 对应已有原生几何，不改变旧别名。
 ### WP5 B2：对话框、编辑控件和文字度量
 
 `Dialog` 接受恰好两个直接子节点，依次作为内容区和操作区；支持 `title`、
@@ -1003,3 +1058,45 @@ Started=0、Updated=1、Dropped=2、Cancelled=3。属性更新不取消正在进
 
 `View::dock_action` 通过 DockWorkspace 的 intent/revision/ack 协议请求浮动、
 置顶、提高层级、最大化、可见性及返回停靠。它不直接修改 VM 数据。
+### SFTP Table read-only queries
+
+`oneui_view_element_metrics` / Rust `View::element_metrics` now reports `Table`
+scroll offset and maximum, alongside TemplateTable and ScrollView. The additive
+`oneui_view_element_focused` / `View::element_focused` reads native keyboard focus
+for a unique accessible name without exposing a widget or invoking the VM. It
+shares the existing missing/ambiguous name, UI thread and closed-view checks.
+`Table.tooltip` uses the existing native tooltip presentation.
+
+`InteractiveSurface @drag` 可选事件提供 `(phase:i64,origin_x:f64,origin_y:f64,x:f64,y:f64,alt:bool,control:bool,shift:bool)`。phase 为 0 开始、1 移动、2 释放、3 取消；坐标为窗口逻辑坐标，阈值 7px。绑定该事件显示抓取光标；由原生控件处理捕获、Esc 和结束后不触发点击。
+
+Capture-only QA also exposes `oneui_widget_test_hover` / Rust `Widget::test_hover`. It sends a native mouse move through the supplied tree and reports a nonempty tooltip hit; it does not synthesize OS input or guarantee a timed tooltip bubble was shown. Renderer fixtures compare pre/post-hover pixels separately.
+
+### Monitor presentation contracts
+
+`Row.class` accepts a VM binding, like Column/Surface/Text. Changing the class
+reapplies authored layout styles (including `flex-direction`) without replacing
+the row or children. Row's component contract revision is incremented; rebuild
+both viewc and the runtime before compiling/using views that bind Row.class.
+
+`Progress` consumes `color` (fill), `background`/`background-color` (track), and
+`border-radius`, including disabled fill color. Unspecified values retain the
+native palette. Its value is a 0–1 fraction; generic `min`/`max` describe layout
+constraints, not a progress range. The `sparkles` icon names the existing
+workbench sparkle glyph. No public C++ class layout changed.
+
+
+### TimeSeriesChart presentation and inspection
+
+`series` accepts structural records with `id:utf8`, `name:utf8`, `rgba:i64`,
+`values:list<point>`. A point has `id:utf8`, `value:f64` and optional `valid:bool`;
+explicit false projects a gap (NaN), not zero. Existing NumberItem series remain
+supported. `sample-positions` uses NumberItem; `axis-labels` uses StringItem.
+
+The template can bind `range-min/max`, `smooth`, `area-fill`, `axes-visible`,
+`latest-point`, `dashed-grid`, `line-width`, `fill-alpha`, and `grid-lines`.
+`plot-insets` is four finite nonnegative numbers in top/right/bottom/left order;
+`grid-style` is vertical line count and stroke width (for example `0 0.7`).
+`@inspection(index:i64,pinned:bool)` forwards native hover/pin/clear semantics.
+Range, data, rendering, and tooltip behavior remain the native chart's contract.
+The chart COMP revision changes; rebuild viewc and runtime together. The runtime
+IR test covers authored grid pixels, gaps, native inspection and balanced leases.

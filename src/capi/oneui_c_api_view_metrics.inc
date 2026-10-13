@@ -2,6 +2,8 @@
 #include "oneui/controls/template_table.h"
 #include "oneui/controls/popup.h"
 #include "oneui/layout/dock_workspace_view.h"
+#include "oneui/controls/table.h"
+#include "oneui/controls/virtual_list.h"
 namespace {
 std::shared_ptr<oneui::Widget> namedViewElement(const std::shared_ptr<Runtime>& value, OneUiUtf8String name) {
         const auto key = text(name);
@@ -59,6 +61,14 @@ OneUiViewResult oneui_view_element_metrics(OneUiView *view, OneUiUtf8String name
             result.scroll_y = table->scrollOffset();
             result.scroll_x = table->horizontalScrollOffset();
             result.max_scroll_y = table->maxScrollOffset();
+        } else if (auto table = std::dynamic_pointer_cast<oneui::Table>(found)) {
+            result.scrollable = 1;
+            result.scroll_y = table->scrollOffset();
+            result.max_scroll_y = table->maxScrollOffset();
+        } else if (auto list = std::dynamic_pointer_cast<oneui::VirtualList>(found)) {
+            result.scrollable = 1;
+            result.scroll_y = list->scrollOffset();
+            result.max_scroll_y = list->maxScrollOffset();
         } else if (auto scroll = std::dynamic_pointer_cast<oneui::ScrollView>(found)) {
             result.scrollable = 1;
             result.scroll_y = scroll->scrollOffset();
@@ -107,13 +117,24 @@ OneUiViewResult oneui_view_dock_action(OneUiView* view, OneUiUtf8String name,
         dock->requestAction(kinds[action], key, flag != 0);
     });
 }
-OneUiViewResult oneui_view_element_focused(OneUiView* view, OneUiUtf8String name,
-                                          int* out) {
-    if(out)*out=0;
-    return call(__func__,[&] {
-        check(out,ONEUI_VIEW_INVALID_ARGUMENT,"Focus output required");
-        auto value=runtime(view);value->alive();
-        *out=namedViewElement(value,name)->focused()?1:0;
+OneUiViewResult oneui_view_element_focused(OneUiView *view, OneUiUtf8String name, int *out_focused) {
+    if (out_focused) *out_focused = 0;
+    return call(__func__, [&] {
+        check(out_focused, ONEUI_VIEW_INVALID_ARGUMENT, "Focus output required");
+        const auto value = runtime(view);
+        value->alive();
+        *out_focused = namedViewElement(value, name)->focused() ? 1 : 0;
+    });
+}
+
+OneUiViewResult oneui_view_element_visible(OneUiView *view, OneUiUtf8String name,
+                                          int *out_visible) {
+    if (out_visible) *out_visible = 0;
+    return call(__func__, [&] {
+        check(out_visible, ONEUI_VIEW_INVALID_ARGUMENT, "Visibility output required");
+        const auto value = runtime(view);
+        value->alive();
+        *out_visible = namedViewElement(value, name)->visible() ? 1 : 0;
     });
 }
 

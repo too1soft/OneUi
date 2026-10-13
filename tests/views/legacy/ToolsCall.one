@@ -1,0 +1,4 @@
+<import name="ListRoot" src="ListRoot.one"/>
+<template view-model="Root">
+  <ListRoot view-id="legacy-list" :items="rows" v-model="index" :trailing-width="width" :trailing-gap="gap" :activate-on-single-click="click" @activate="activate"/>
+</template>

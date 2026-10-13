@@ -1,4 +1,5 @@
 #include "oneui/controls/virtual_list.h"
+#include "virtual_template_list.inc"
 
 #include "internal/scroll_trace.h"
 #include "list_style_internal.h"
@@ -297,6 +298,8 @@ void VirtualList::setOnItemDrag(std::function<void(const ItemDragEvent&)> callba
 }
 
 void VirtualList::paint(Canvas& canvas) {
+    // A viewport expansion can make a previously valid selection scroll obsolete.
+    if (scrollOffset_ > maxScrollOffset()) setScrollOffset(scrollOffset_);
     const Rect rect = frame();
     const ListStyle containerStyle = resolvedContainerStyle();
     if (focusVisible() && !disabled() && containerStyle.focusRing.visible) {
@@ -529,6 +532,7 @@ bool VirtualList::onMouseMove(const MouseEvent& event) {
 }
 
 bool VirtualList::onMouseDown(const MouseEvent& event) {
+    if (scrollOffset_ > maxScrollOffset()) setScrollOffset(scrollOffset_);
     if (!interactive() || (event.button != MouseButton::Left && event.button != MouseButton::Right)) {
         return false;
     }

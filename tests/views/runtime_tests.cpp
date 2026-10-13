@@ -1,13 +1,24 @@
 #include "fixture.h"
+#include "../support/recording_canvas.h"
 using namespace viewtest;
 #include "settings_lists.inc"
 #include "template_table.inc"
 #include "template_grid.inc"
 #include "slot_contracts.inc"
+#include "checkbox_contract.inc"
+#include "surface_drag.inc"
+#include "tree_contract.inc"
+#include "rich_table_contract.inc"
+#include "rich_table_reorder.inc"
+#include "chart_contract.inc"
+#include "virtual_template_contract.inc"
 int main(int argc, char **argv) {
     if (argc != 2)
         return 2;
     try {
+        virtualTemplateContract(argv[1]);
+        chartContract(argv[1]);
+        surfaceDrag(argv[1]);
         {
             // The typed contract must admit the metrics consumed by native Tabs,
             // and preserve authored selected colors instead of the default palette.
@@ -47,6 +58,14 @@ int main(int argc, char **argv) {
             c.start();
             auto label = c.runtime->root->children[0]->element.as<oneui::Label>();
             expect(label->text() == L"initial", "initial UTF8");
+            auto flow = c.runtime->root->children.back()->element.as<oneui::Stack>();
+            expect(flow->direction() == oneui::StackDirection::Row, "bound row initial direction");
+            auto progress=std::dynamic_pointer_cast<oneui::ProgressBar>(flow->children()[2]);
+            progress->setFrame({0,0,100,6});
+            oneui::test_support::RecordingCanvas painted;
+            progress->paint(painted);
+            expect(painted.fillRects.size()==2 && painted.fillRects[1].color.r==0xc0 && painted.fillRects[1].color.g==0x90 && painted.fillRects[1].color.b==0x30, "Progress CSS must reach actual paint, not only resolved style metadata");
+            expect(painted.fillRects[0].color.r==0x10 && painted.fillRects[0].radius==3, "Progress track and radius CSS paint");
             const auto initialClasses = c.runtime->root->children[0]->element.classes;
             expect(initialClasses.size() > std::string("initial ").size() &&
                    initialClasses.find("initial") != std::string::npos, "scope plus bound classes");
@@ -56,6 +75,7 @@ int main(int argc, char **argv) {
                 c.runtime->notify(c.runtime->rootScope, c.title);
             c.runtime->flush();
             expect(label->text() == L"changed" && c.vm.reads[c.title] == 2, "coalesced change");
+            expect(flow->direction() == oneui::StackDirection::Column, "bound row reflows through style change");
             const auto changedClasses = c.runtime->root->children[0]->element.classes;
             expect(changedClasses.substr(0, changedClasses.size() - 7) == initialClasses.substr(0, initialClasses.size() - 7) &&
                    changedClasses.find("changed") != std::string::npos &&
@@ -227,11 +247,15 @@ int main(int argc, char **argv) {
             expect(field->clipboard() == clipboard, "legacy repeat propagates clipboard service");
             c.runtime->close();
         }
+        checkboxContract(argv[1]);
         settingsLists(argv[1]);
         templateTables(argv[1]);
         templateGrids(argv[1]);
         slotContracts(argv[1]);
-        std::cout << "11 runtime scenarios passed\n";
+        treeContract(argv[1]);
+        richTableContract(argv[1]);
+        richTableReorderContract(argv[1]);
+        std::cout << "14 runtime scenarios passed\n";
         return 0;
     } catch (const std::exception &e) {
         std::cerr << e.what() << '\n';

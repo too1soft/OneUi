@@ -53,6 +53,15 @@ impl View {
         })?;
         Ok(focused != 0)
     }
+
+    /// Own resolved visibility after layout, including container-query display.
+    /// Does not include ancestor/window visibility, flush or expose a widget.
+    pub fn element_visible(&self, name: &str) -> VmResult<bool> {
+        let mut visible = 0;
+        check(unsafe { sys::oneui_view_element_visible(self.raw.as_ptr(),
+            sys::OneUiUtf8String::from_str(name), &mut visible) })?;
+        Ok(visible != 0)
+    }
     /// Query a unique accessible name, including names bound in repeat rows.
     /// Returns the last committed layout without flushing or calling the VM.
     pub fn element_metrics(&self, name: &str) -> VmResult<ElementMetrics> {

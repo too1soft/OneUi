@@ -1,6 +1,7 @@
 //! Input for opt-in renderer QA builds; never sends input to the operating system.
 use crate::{sys, Widget};
 unsafe extern "C" {
+    fn oneui_widget_test_hover(root: *mut sys::OneUiWidget, x: f32, y: f32) -> i32;
     fn oneui_widget_test_freeze_caret(root: *mut sys::OneUiWidget, enabled: i32) -> i32;
     fn oneui_widget_test_modified_click(root: *mut sys::OneUiWidget, x:f32,y:f32,control:i32,shift:i32,click_count:i32)->i32;
     fn oneui_widget_test_click(root: *mut sys::OneUiWidget, x: f32, y: f32) -> i32;
@@ -21,6 +22,11 @@ impl Widget {
     #[doc(hidden)]
     pub fn test_click(&self, x: f32, y: f32) -> bool {
         unsafe { oneui_widget_test_click(self.raw.as_ptr(), x, y) != 0 }
+    }
+    /// Move through the captured widget tree and report a tooltip hit; no OS input.
+    #[doc(hidden)]
+    pub fn test_hover(&self, x: f32, y: f32) -> bool {
+        unsafe { oneui_widget_test_hover(self.raw.as_ptr(), x, y) != 0 }
     }
     /// Send a modified/double click through the native tree in a capture build.
     #[doc(hidden)]

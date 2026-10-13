@@ -54,10 +54,12 @@ inline std::set<std::string> componentCssProperties(const std::string& tag) {
     if (tag == "pane-header") return {"background","background-color","color","border-color","border-width"};
     if (tag == "state-view" || tag == "state-view-part") return {"background","background-color","color","border-color","border-width","border-radius","padding","font-size","font-weight","box-shadow"};
     if (tag == "menu-part") return {"background","background-color","color","border-color","border-width","border-radius","padding","font-size","font-weight","box-shadow"};
-    if (tag == "progress"||tag=="slider"||tag=="font-picker"||tag=="media-picker"||tag=="media-preview"||tag=="theme-scope") return {};
+    if (tag=="slider"||tag=="font-picker"||tag=="media-picker"||tag=="media-preview"||tag=="theme-scope") return {};
+    if (tag == "progress") return {"background", "background-color", "color", "border-radius"};
     if (tag == "card") return {"background-color","background","border-color","border-width","border-radius","padding","box-shadow","opacity"};
     if (tag == "interactive-surface") return {"background-color","background","border-color","border-width","border-radius","padding","transition-duration","transition-timing-function"};
     if (tag == "icon") return {"color"};
+    if (tag == "tree-view") return {"background-color","content-background-color","color","placeholder-color","border-color","border-width","border-radius","content-radius","padding","font-size","font-weight","detail-font-size","detail-font-weight","text-inset","title-offset-y","detail-offset-y","outline-color","outline-width","outline-offset"};
     if (tag=="split-view") return {}; // semantic native theme
     if (tag == "list" || tag == "virtual-list") return {"background-color","content-background-color","color","placeholder-color","border-color","border-width","border-radius","content-radius","padding","font-size","font-weight","detail-font-size","detail-font-weight","text-inset","title-offset-y","detail-offset-y","scrollbar-color","scrollbar-width","outline-color","outline-width","outline-offset"};
     if (tag == "chart") return {"color","border-color","font-size","gap"};
@@ -71,7 +73,7 @@ inline std::set<std::string> componentCssProperties(const std::string& tag) {
     if (tag != "switch" && tag != "checkbox") keys.insert("padding");
     if (tag == "button" || tag == "input" || tag == "tabs" || tag == "select" || tag == "table") keys.insert("font-size");
       if (tag == "button" || tag == "tabs") keys.insert("font-weight");
-      if (tag == "button") { keys.insert("icon-size"); keys.insert("opacity"); }
+      if (tag == "button") { keys.insert("icon-size"); keys.insert("gap"); keys.insert("opacity"); }
     if (tag == "tabs") {
         for (const auto* key : {"content-background-color", "content-radius", "text-inset",
              "tab-indicator-color", "tab-indicator-inset", "tab-indicator-height",
@@ -81,7 +83,7 @@ inline std::set<std::string> componentCssProperties(const std::string& tag) {
     if (tag == "input") { keys.insert("placeholder-color"); keys.insert("caret-color"); keys.insert("selection-color"); }
     if (tag == "select") keys.insert("content-radius");
     if (tag == "switch" || tag == "checkbox" || tag == "select" || tag == "table") keys.insert("content-background-color");
-    if (tag == "table") { keys.insert("scrollbar-color"); keys.insert("scrollbar-width"); keys.insert("placeholder-color"); keys.erase("outline-color"); keys.erase("outline-width"); keys.erase("outline-offset"); }
+    if (tag == "table") { keys.insert("scrollbar-color"); keys.insert("scrollbar-width"); keys.insert("placeholder-color"); keys.erase("outline-color"); keys.erase("outline-width"); keys.erase("outline-offset"); keys.insert("table-column-widths"); keys.insert("table-selection-width"); keys.insert("text-inset"); keys.insert("gap"); keys.insert("detail-font-size"); keys.insert("check-background"); keys.insert("check-border"); keys.insert("check-radius"); }
     return keys;
 }
 inline std::set<std::string> cssProperties(const std::string& tag) {
@@ -148,6 +150,7 @@ inline std::string css(std::string source, const std::string& scope = {}, const 
                 else if(tag=="input")states={"hover","focus","disabled","read-only"};
                 else if(tag=="switch" || tag=="checkbox" || tag=="select" || tag=="tabs")states={"hover","pressed","focus","disabled","selected"};
             else if(tag=="table" || tag=="list" || tag=="virtual-list")states={"hover","pressed","selected"};
+                else if(tag=="tree-view")states={"hover","pressed","selected","focus","disabled"};
                 if(tag=="switch" || tag=="checkbox")states.insert("checked");
                 if(!states.count(pseudo))fail("State is not consumed by "+tag+": "+pseudo);
             }
@@ -164,14 +167,35 @@ inline std::string css(std::string source, const std::string& scope = {}, const 
             if(property=="display"&&cssValue!="none"&&cssValue!="flex")fail("CSS_LAYOUT: display expects none/flex");
             if(property=="flex-direction"&&cssValue!="row"&&cssValue!="column")fail("CSS_LAYOUT: flex-direction expects row/column");
             if(property=="flex-wrap"&&cssValue!="wrap"&&cssValue!="nowrap")fail("CSS_LAYOUT: flex-wrap expects wrap/nowrap");
-            if(std::set<std::string>{"width","height","min-width","min-height","max-width","max-height","flex-basis"}.count(property) &&
+            if(std::set<std::string>{"width","height","min-width","min-height","max-width","max-height"}.count(property) &&
                cssValue.rfind("var(",0)!=0&&!std::regex_match(cssValue,std::regex(R"(^[0-9]+(\.[0-9]+)?px$)")))fail("CSS_LAYOUT: finite nonnegative px required");
+            if(property=="flex-basis" && cssValue.rfind("var(",0)!=0 && !std::regex_match(cssValue,std::regex(R"(^[0-9]+(\.[0-9]+)?(px|%)$)")))fail("CSS_LAYOUT: flex-basis requires finite nonnegative px or percentage");
+            if(property=="order" && cssValue.rfind("var(",0)!=0 && !std::regex_match(cssValue,std::regex(R"(^-?[0-9]+$)")))fail("CSS_LAYOUT: order requires an integer");
+            if(property=="table-column-widths" && cssValue.rfind("var(",0)!=0) {
+                std::istringstream tokens(cssValue);std::string token;bool any=false;
+                while(tokens>>token) {
+                    any=true;if(token=="auto")continue;
+                    if(!std::regex_match(token,std::regex(R"(^[0-9]+(\.[0-9]+)?px$)")))fail("CSS_LAYOUT: table columns require auto or nonnegative px");
+                    try {if(!std::isfinite(std::stof(token)))fail("CSS_LAYOUT: finite table width required");}
+                    catch(const std::out_of_range&){fail("CSS_LAYOUT: table width exceeds finite range");}
+                }
+                if(!any)fail("CSS_LAYOUT: nonempty table column widths required");
+            }
+            if(property=="table-selection-width" && cssValue.rfind("var(",0)!=0) {
+                if(!std::regex_match(cssValue,std::regex(R"(^[0-9]+(\.[0-9]+)?px$)")))fail("CSS_LAYOUT: table selection width requires px");
+                try {const auto n=std::stof(cssValue);if(n<24||n>128)fail("CSS_LAYOUT: table selection width requires 24..128px");}
+                catch(const std::out_of_range&){fail("CSS_LAYOUT: table selection width exceeds range");}
+            }
+            if(property=="order" && cssValue.rfind("var(",0)!=0) {
+                try {const auto n=std::stoll(cssValue);if(n < -1000000 || n > 1000000)fail("CSS_LAYOUT: order exceeds range");}
+                catch(const std::out_of_range&){fail("CSS_LAYOUT: order exceeds range");}
+            }
             if (trim(declaration.substr(colon + 1)).empty()) fail("Empty CSS value");
             if (selector == ":root") {
                 if (property.rfind("--", 0) != 0) fail(":root only accepts custom properties");
                 if (!scope.empty()) fail("Scoped :root tokens are unsupported; put shared tokens in external CSS");
             } else if(insideQuery && (property=="container-name"||property=="container-type"))fail("CONTAINER_DEPENDENCY: query cannot establish a container");
-            else if (!cssProperties(tag).count(property) && !std::set<std::string>{"display","width","height","min-width","min-height","max-width","max-height","flex-basis","flex-grow","flex-shrink"}.count(property) &&
+            else if (!cssProperties(tag).count(property) && !std::set<std::string>{"display","width","height","min-width","min-height","max-width","max-height","flex-basis","flex-grow","flex-shrink","order"}.count(property) &&
                      !((tag=="stack"||tag.empty())&&std::set<std::string>{"container-name","container-type","flex-direction","flex-wrap","gap"}.count(property))) fail("Property is not consumed by " + tag + ": " + property);
             else if(property=="background-color" && lowerValue(trim(declaration.substr(colon+1))).find("gradient(")!=std::string::npos) fail("Use background for gradients on supported components");
             else if(tag=="table" && !pseudo.empty() && property!="background-color") fail("DataTable row states only consume background-color");

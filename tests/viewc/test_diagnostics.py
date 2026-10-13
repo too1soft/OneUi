@@ -34,6 +34,16 @@ class DiagnosticTests(CompilerCase):
 
     def test_play_icon(self):
         self.compile('<Column><Icon symbol="play"/><Button icon="play" @click="click"/></Column>', SCHEMA)
+    def test_chart_inspection_and_samples(self):
+        schema = 'model Basic {r title:utf8 r series:list<Series> r positions:list<oneui.v1.NumberItem> r labels:list<oneui.v1.StringItem> command inspect(index:i64,pinned:bool)} model Series key id {r id:utf8 r name:utf8 r rgba:i64 r values:list<Point>} model Point key id {r id:utf8 r value:f64 r valid:bool}'
+        source = '<TimeSeriesChart :series="series" :sample-positions="positions" :axis-labels="labels" range-min="0" range-max="100" grid-lines="3" smooth="false" area-fill="true" axes-visible="false" latest-point="true" dashed-grid="false" line-width="1.8" fill-alpha="24" plot-insets="10 8 19 36" @inspection="inspect"/>'
+        self.compile(source, schema)
+        self.compile(source.replace('range-max="100"', ':range-max="title"'), schema, error='BIND_TYPE')
+
+    def test_monitor_presentation_contracts(self):
+        source = '<template view-model="Basic"><Row :class="title"><Progress :value="ratio"/><Button icon="sparkles"/></Row></template><style scoped>Progress {color:#123456;background:#111111;border-radius:2px;}</style>'
+        self.compile(source, SCHEMA, raw=True)
+        self.compile(source.replace('border-radius:2px', 'padding:3px'), SCHEMA, raw=True, error='not consumed')
     def test_reorderable_grid_contract(self):
         self.compile('<template view-model="Basic"><ReorderableGrid/></template><style scoped>ReorderableGrid {grid-min-column-width:280px;gap:8px;padding:0px;outline-width:2px;outline-color:#123456;}</style>', SCHEMA, raw=True)
         self.compile('<template view-model="Basic"><Button/></template><style scoped>Button {opacity:0.58;}</style>', SCHEMA, raw=True)
@@ -111,6 +121,18 @@ class DiagnosticTests(CompilerCase):
             with self.subTest(one=one):
                 self.compile(one, SCHEMA, error=code)
 
+    def test_checkbox_boolean_contract(self):
+        self.compile('<Checkbox text="Read" v-model="enabled"/>', SCHEMA)
+        self.compile('<Checkbox v-model="input"/>', SCHEMA, error="BIND_TYPE")
+        self.compile('<Checkbox v-model="flag"/>', SCHEMA, error="MODEL_READ_ONLY")
+        self.compile('<Checkbox><Text/></Checkbox>', SCHEMA, error="CHILDREN")
+        self.compile('<template view-model="Basic"><Checkbox v-model="enabled"/></template>'
+                     '<style scoped>Checkbox:checked { background-color:#112233; content-background-color:#ffffff; }'
+                     'Checkbox:focus { outline-color:#224466; outline-width:2px; }</style>', SCHEMA, raw=True)
+        self.compile('<template view-model="Basic"><Checkbox/></template>'
+                     '<style scoped>Checkbox { padding:4px; }</style>', SCHEMA,
+                     error='Property is not consumed', raw=True)
+
     def test_presentation_class_bindings(self):
         for component in ('Text', 'Surface', 'Column'):
             with self.subTest(component=component):
@@ -186,6 +208,36 @@ class DiagnosticTests(CompilerCase):
     def test_constants_and_composite_builtins(self):
         self.compile('<Column><Text :visible="true" v-if="false"/><DataTable :items="rows" :columns="columns"/><TimeSeriesChart :series="series"/></Column>',
                      'model Basic {r title:utf8 r rows:list<oneui.v1.Row> r columns:list<oneui.v1.Column> r series:list<oneui.v1.Series>}')
+
+    def test_tree_record_contract(self):
+        schema = 'model Basic {r nodes:list<Node> rw selected:utf8} model Node key id {r id:utf8 r parent:utf8 r title:utf8 r detail:utf8 rw expanded:bool}'
+        self.compile('<TreeView :items="nodes" v-model="selected"/>', schema)
+        self.compile('<TreeView :items="nodes" v-model="selected"/>', schema.replace('rw expanded:bool', 'r expanded:bool'), error='expanded must be writable')
+        self.compile('<TreeView :items="nodes"/>', schema.replace('r parent:utf8', 'r parent:i64'), error='BIND_RECORD')
+        self.compile('<TreeView v-model="selected"><Text/></TreeView>', schema, error='CHILD')
+
+    def test_rich_table_record_contract(self):
+        schema = 'model Basic {r rows:list<Row> command open(key:utf8)} model Row key id {r id:utf8 r cells:list<Cell> rw selected:bool} model Cell key id {r id:utf8 r text:utf8 r icon:utf8}'
+        self.compile('<Table :items="rows" multiple="true" @activate="open"/>', schema)
+        self.compile('<Table :items="rows"/>', schema.replace('rw selected:bool', 'r selected:bool'), error='selected must be writable')
+        self.compile('<Table :items="rows"/>', schema.replace('r icon:utf8', 'r icon:i64'), error='BIND_RECORD')
+        self.compile('<Table :items="rows" @activate="open"/>', schema.replace('open(key:utf8)', 'open()'), error='COMMAND_SIGNATURE')
+
+    def test_flex_order_and_percent_basis(self):
+        source = '<template view-model="Basic"><Row wrap="true"><Input/></Row></template><style scoped>Input { flex-basis:100%; order:-2; }</style>'
+        schema = 'model Basic {r title:utf8}'
+        self.compile(source, schema, raw=True)
+        self.compile(source.replace('100%', '-1%'), schema, raw=True, error='CSS_LAYOUT')
+        self.compile(source.replace('order:-2', 'order:1.5'), schema, raw=True, error='CSS_LAYOUT')
+        self.compile(source.replace('flex-basis:100%', 'width:100%'), schema, raw=True, error='CSS_LAYOUT')
+
+    def test_table_query_column_styles(self):
+        source = '<template view-model="Basic"><Table/></template><style scoped>Table { table-column-widths:auto 76px; table-selection-width:40px; }</style>'
+        schema = 'model Basic {r title:utf8}'
+        self.compile(source, schema, raw=True)
+        self.compile(source.replace('auto 76px', 'auto -1px'), schema, raw=True, error='CSS_LAYOUT')
+        self.compile(source.replace('40px', '8px'), schema, raw=True, error='CSS_LAYOUT')
+        self.compile(source.replace('<Table/>', '<Text/>').replace('Table {', 'Text {'), schema, raw=True, error='not consumed')
 
     def test_import_in_repeat_uses_item_vm_and_slot_captures_caller(self):
         self.write('Child.one', '''<template view-model="Item"><Column>

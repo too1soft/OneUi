@@ -19,7 +19,8 @@ void Runtime::mark(const std::shared_ptr<Scope> &scope, uint32_t id) {
     if (found == scope->observers.end())
         return;
     for (auto &weak : found->second) {
-        if (auto node=weak.lock(); node && node->tableCache) node->recordDirty.insert(scope.get());
+        if (auto node=weak.lock(); node && (node->tableCache || node->richTableCache))
+            node->recordDirty.insert(scope.get());
         for (auto node = weak.lock(); node; node = node->parent.lock())
             node->dirty = true;
     }
@@ -78,7 +79,7 @@ void Runtime::notifyList(const std::shared_ptr<Scope> &scope, uint32_t property,
         throw Failure(ONEUI_VIEW_UNKNOWN_ID, "Unknown list property");
     }
     check(p->tag == 5, ONEUI_VIEW_TYPE, "Property is not a list");
-    check(change.struct_size == sizeof(change) && change.kind <= ONEUI_LIST_UPDATE,
+    check(change.struct_size == sizeof(change) && change.kind <= ONEUI_LIST_REORDER,
           ONEUI_VIEW_INVALID_ARGUMENT, "List change size/kind");
     check(change.after_revision > change.before_revision, ONEUI_VIEW_STALE_CHANGE,
           "List revision must increase");
@@ -96,6 +97,8 @@ void Runtime::notifyList(const std::shared_ptr<Scope> &scope, uint32_t property,
               "Delta destination");
         check(change.kind == ONEUI_LIST_UPDATE || !change.property_count,
               ONEUI_VIEW_INVALID_ARGUMENT, "Delta fields only for UPDATE");
+        check(change.kind != ONEUI_LIST_REORDER || !change.index,
+              ONEUI_VIEW_INVALID_ARGUMENT, "REORDER covers the complete list");
     }
     Delta delta{change.kind,  change.before_revision, change.after_revision,
                 change.index, change.count,           change.to_index};

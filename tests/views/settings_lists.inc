@@ -19,14 +19,42 @@ void settingsLists(const char* runtimeFile) {
     c.vm.lists[spans] = {&span};
     c.a.text(id(c.image, "Item", "badge"), "Host");
     c.a.values[id(c.image, "Item", "indicator_rgba")].integer = 0x22d3a8ff;
+    c.a.text(id(c.image,"Item","trailing"),"OK");
+    c.a.values[id(c.image,"Item","trailing_rgba")].integer=0x22d3a8ff;
     c.start();
-    auto caption = c.runtime->root->children[11]->element.as<oneui::Label>();
+    auto richList=c.runtime->root->children[1]->element.as<oneui::VirtualList>();
+    expect(richList->richMetrics().trailingWidth==36 && richList->richMetrics().trailingGap==4,
+           "VirtualList template retains compact trailing metrics");
+    richList->setFrame({0,0,300,42});richList->setScrollOffset(42);
+    richList->setFrame({0,0,300,84});
+    oneui::MouseEvent press;press.button=oneui::MouseButton::Left;press.position={20,20};
+    richList->onMouseDown(press);richList->onMouseUp(press);
+    expect(richList->selectedIndex()==0,"VirtualList hit testing clamps obsolete offset after viewport expansion");
+    expect(c.vm.invokes==1,"VirtualList activate-on-single-click turns a single click into activation");
+    c.vm.invokes=0;
+    oneui::test_support::RecordingCanvas richPaint;richList->paint(richPaint);
+    expect(richList->scrollOffset()==0,"VirtualList expansion clamps an obsolete offset before rendering");
+    auto colored=std::find_if(richPaint.texts.begin(),richPaint.texts.end(),[](const auto& t){return t.text==L"OK" && t.color.r==0x22 && t.color.g==0xd3;});
+    expect(colored!=richPaint.texts.end(),"structured VirtualList row paints explicit trailing color");
+    auto compactScroll=c.runtime->root->children[17]->element.as<oneui::ScrollView>();
+    compactScroll->setContentWidth(0);compactScroll->setFrame({0,0,300,200});compactScroll->paint(richPaint);
+    expect(compactScroll->children().front()->frame().width==293,"zero scrollbar inset preserves seven-pixel gutter");
+    compactScroll->setContentWidth(640);
+
+    auto compactTabs=c.runtime->root->children[20]->element.as<oneui::Tabs>();
+    compactTabs->setItems({L"UDP",L"All"});
+    compactTabs->setFrame({0,0,199,26});
+    compactTabs->paint(richPaint);
+    auto label=std::find_if(richPaint.texts.begin(),richPaint.texts.end(),[](const auto& t){return t.text==L"UDP" && t.rect.width>=85;});
+    expect(label!=richPaint.texts.end(),"SegmentedControl consumes authored text inset for narrow labels");
+
+    auto caption = c.runtime->root->children[13]->element.as<oneui::Label>();
     expect(caption->lineHeight() == 20 && caption->textAlign() == oneui::TextAlign::Center &&
            caption->tooltip() == c.runtime->root->children[6]->element.as<oneui::Label>()->text(),
            "Text retains explicit line boxes, alignment and bound tooltip");
-    auto area = c.runtime->root->children[8]->element.as<oneui::TextArea>();
-    auto checkbox = c.runtime->root->children[9]->element.as<oneui::Checkbox>();
-    auto password = c.runtime->root->children[10]->element.as<oneui::TextField>();
+    auto area = c.runtime->root->children[10]->element.as<oneui::TextArea>();
+    auto checkbox = c.runtime->root->children[11]->element.as<oneui::Checkbox>();
+    auto password = c.runtime->root->children[12]->element.as<oneui::TextField>();
     expect(area && area->multiline() && area->lineHeight() == 23,
            "TextArea uses native multiline editing and authored line height");
     expect(password->passwordMode() && password->passwordMask() == L'\x25cf',
@@ -42,7 +70,7 @@ void settingsLists(const char* runtimeFile) {
     c.runtime->notify(c.runtime->rootScope, id(c.image, "Root", "checked"));
     c.runtime->flush();
     expect(!checkbox->checked(), "Checkbox notification updates native state");
-    auto dialog = c.runtime->root->children[7]->element.as<oneui::Dialog>();
+    auto dialog = c.runtime->root->children[9]->element.as<oneui::Dialog>();
     expect(bool(dialog) && dialog->children().size() == 2, "Dialog preserves content/actions regions");
     oneui::KeyEvent escape;
     escape.key = oneui::Key::Escape;

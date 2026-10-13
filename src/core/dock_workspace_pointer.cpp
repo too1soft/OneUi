@@ -52,7 +52,7 @@ bool DockWorkspaceView::onMouseDown(const MouseEvent& e) {
     alt_=e.alt;pointerOrigin_=e.position;
     if(e.button!=MouseButton::Left)return View::onMouseDown(e);
     auto [item,edge]=resizeAt(e.position);
-    if(item!=State::none && state_->snapshot.raiseOnPress) {
+    if(item!=State::none && state_->presentation.raiseOnPress) {
         auto key=state_->items[item].view->key;
         requestAction(DockIntentKind::Raise,key);
         item=state_->itemIds.count(key)?state_->itemIds.at(key):State::none;

@@ -12,7 +12,7 @@
 #include <string>
 
 namespace oneui {
-namespace internal { class DeveloperRecorder; }
+namespace internal { class DeveloperRecorder; struct WidgetPresentationAccess; }
 
 enum class MouseButton {
     None,
@@ -307,6 +307,7 @@ protected:
 
 private:
     friend class internal::DeveloperRecorder;
+    friend struct internal::WidgetPresentationAccess;
     std::shared_ptr<StyleSheet> localStyleScope_;
     std::shared_ptr<StyleSheet> inheritedStyleScope_;
     const void* styleScopeOwner_ = nullptr;

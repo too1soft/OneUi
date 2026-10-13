@@ -19,7 +19,7 @@ void templateGrids(const char* runtimeFile) {
         for(size_t i=0;i<count;++i)delivered.push_back(c.vm.values[uint32_t(0x80000000u+i)]);
     };
     c.start();
-    const auto instance=c.runtime->root->children[17];
+    const auto instance=c.runtime->root->children[19];
     auto grid=instance->element.as<oneui::ReorderableGrid>();
     expect(grid && grid->itemCount()==2 && grid->children().size()==2,"grid repeat inserts direct native items");
     auto first=grid->children()[0];
@@ -67,7 +67,7 @@ void templateGrids(const char* runtimeFile) {
     grid->setFrame({10,20,250,180});grid->paint(canvas);
     expect(grid->contentHeight()>0,"resized grid publishes scroll content height");
     c.runtime->reload(c.image);
-    auto reloaded=c.runtime->root->children[17]->element.as<oneui::ReorderableGrid>();
+    auto reloaded=c.runtime->root->children[19]->element.as<oneui::ReorderableGrid>();
     expect(reloaded && reloaded->itemCount()==2,"grid reload restores committed keyed projection");
     c.vm.items={&c.a};++c.vm.revision;
     c.runtime->notify(c.runtime->rootScope,c.rows);c.runtime->flush();

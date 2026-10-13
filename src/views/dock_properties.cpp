@@ -31,10 +31,10 @@ bool Runtime::dockScalar(Instance& instance,const std::string& name,const Value&
     else if(name=="ack-accepted")s.ackAccepted=bool(v.integer);
     else if(name=="gap")s.gap=float(v.number);
     else if(name=="divider-hit")s.dividerHit=float(v.number);
-    else if(name=="preview-dock-text")s.previewDockText=v.text;
-    else if(name=="preview-float-text")s.previewFloatText=v.text;
-    else if(name=="preview-keep-text")s.previewKeepText=v.text;
-    else if(name=="raise-on-press")s.raiseOnPress=bool(v.integer);
+    else if(name=="preview-dock-text")next->dockPresentation.previewDockText=v.text;
+    else if(name=="preview-float-text")next->dockPresentation.previewFloatText=v.text;
+    else if(name=="preview-keep-text")next->dockPresentation.previewKeepText=v.text;
+    else if(name=="raise-on-press")next->dockPresentation.raiseOnPress=bool(v.integer);
     else return false;
     if(staging)rollbacks.push_back([&instance,old]{instance.workspaceCache=old;for(auto& b:instance.bindings)b.previous.reset();});
     instance.workspaceCache=std::move(next);return true;
@@ -72,7 +72,7 @@ void Runtime::prepareDock(const std::shared_ptr<Instance>& instance,const std::v
     std::vector<std::shared_ptr<DockItemView>> items;
     for(auto& child:children){auto item=std::dynamic_pointer_cast<DockItemView>(child);check(bool(item),ONEUI_VIEW_TYPE,"DockWorkspace requires DockItem");items.push_back(item);}
     if(!instance->workspaceCache)instance->workspaceCache=std::make_shared<Instance::WorkspaceCache>();
-    auto publish=instance->element.as<DockWorkspaceView>()->prepare(instance->workspaceCache->dock,std::move(items));
+    auto publish=instance->element.as<DockWorkspaceView>()->prepare(instance->workspaceCache->dock,std::move(items),instance->workspaceCache->dockPresentation);
     if(staging&&instance->published)commits.push_back(std::move(publish));else publish();
 }
 } // namespace oneui::views

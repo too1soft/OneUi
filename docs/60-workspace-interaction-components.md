@@ -641,3 +641,10 @@ Dock divider paint can be styled with
 states. Transparent normal background keeps the authored gap visible; styling
 does not alter divider geometry or its hit target. `interactionActive()` and
 `hasDockTarget()` expose read-only interaction state for native input contracts.
+### Monitor connection composition contracts
+
+`Scroll.scrollbar-inset` exposes the native inset (default 5); zero reserves only the authored scrollbar width. `VirtualList.trailing-width` and `trailing-gap` expose native rich-row metrics (defaults 58 and 8). `VirtualList.activate-on-single-click` (default false) lets a single click fire `@activate`, matching completion popups that accept on click; it restores the default when removed during reload. Structured rows may supply `trailing_rgba: i64` in unsigned 32-bit RGBA range; omitted values retain the native default. These properties support bindings and restore defaults when removed during reload. Monitor templates use compact metrics without a native content host.
+
+VirtualList also clamps an obsolete scroll offset when an enlarged viewport is painted or clicked, so filtering followed by expansion cannot leave hit testing at an old row. Runtime fixture covers both paths.
+
+`oneui_view_element_metrics` reports VirtualList scroll position/extent. SegmentedControl validates the existing Tabs `text-inset` style adapter, allowing narrow labels to keep readable space.

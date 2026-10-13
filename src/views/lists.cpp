@@ -1,5 +1,6 @@
 #include "internal/view_profile.h"
 #include "runtime.h"
+#include <unordered_set>
 namespace oneui::views {
 void Runtime::auditListIdentity(const std::shared_ptr<Scope> &scope, uint32_t property,
                                 const ListState &state, const std::vector<std::string> &keys) {
@@ -180,8 +181,11 @@ void Runtime::refreshList(const std::shared_ptr<Scope> &scope, uint32_t property
         });
     }
     // RESET with identical key but changed VM is a replacement, not BAD_KEY.
+    std::unordered_set<const Scope*> live;
+    live.reserve(next.size());
+    for (const auto& item : next) live.insert(item.get());
     for (auto &oldItem : state.items)
-        if (std::find(next.begin(), next.end(), oldItem) == next.end())
+        if (!live.count(oldItem.get()))
             if (staging)
                 retired.push_back(oldItem);
             else

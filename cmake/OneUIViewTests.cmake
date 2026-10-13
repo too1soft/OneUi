@@ -88,6 +88,17 @@ target_compile_definitions(oneui_view_runtime_tests PRIVATE ONEUI_BUILDING_DLL)
 target_include_directories(oneui_view_runtime_tests PRIVATE src)
 add_dependencies(oneui_view_runtime_tests oneui_view_test_ir)
 add_test(NAME oneui_view_runtime_tests COMMAND oneui_view_runtime_tests "${CMAKE_CURRENT_BINARY_DIR}/Runtime.oneview")
+add_executable(oneui_view_legacy_virtual_list_tests tests/views/legacy_virtual_list_tests.cpp)
+target_link_libraries(oneui_view_legacy_virtual_list_tests PRIVATE oneui_views oneui_core)
+target_compile_definitions(oneui_view_legacy_virtual_list_tests PRIVATE ONEUI_BUILDING_DLL)
+target_include_directories(oneui_view_legacy_virtual_list_tests PRIVATE src)
+add_test(NAME oneui_view_legacy_virtual_list_tests COMMAND oneui_view_legacy_virtual_list_tests
+    "${PROJECT_SOURCE_DIR}/tests/views/legacy")
+add_executable(oneui_presentation_storage_tests tests/presentation_storage_tests.cpp)
+target_link_libraries(oneui_presentation_storage_tests PRIVATE oneui_core)
+target_compile_definitions(oneui_presentation_storage_tests PRIVATE ONEUI_BUILDING_DLL)
+target_include_directories(oneui_presentation_storage_tests PRIVATE src)
+add_test(NAME oneui_presentation_storage_tests COMMAND oneui_presentation_storage_tests)
 add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/TableRecords.oneview"
     COMMAND oneui-viewc --emit ir --input "${PROJECT_SOURCE_DIR}/tests/views/TableRecords.one"
         --schema "${PROJECT_SOURCE_DIR}/tests/views/TableRecords.oneschema"

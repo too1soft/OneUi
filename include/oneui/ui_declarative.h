@@ -29,6 +29,7 @@
 #include "oneui/controls/text_field.h"
 #include "oneui/controls/switch.h"
 #include "oneui/controls/checkbox.h"
+#include "oneui/controls/tree_view.h"
 #include "oneui/controls/select.h"
 #include "oneui/controls/state_view.h"
 #include "oneui/controls/dialog.h"
@@ -81,7 +82,7 @@ private:
     void refreshLocalThemes();
     void configureQuery(const std::shared_ptr<Widget>&,const StyleBox&);
     bool evaluateQuery(const std::shared_ptr<Stack>&);
-    void applyLayout(const Entry&,const StyleBox&,const std::shared_ptr<Stack>&);
+    void applyLayout(const Entry&,const StyleBox&,const std::shared_ptr<Stack>&,const StyleLayout& = {});
     void restoreQueryLayouts();
     void apply(const Entry& entry, const StyleSheet& supplied) {
         auto w = entry.widget.lock(); if (!w) return;
@@ -101,7 +102,7 @@ private:
         if(entry.component=="Input" || entry.component=="SearchInput" || entry.component=="Select") {
             const auto size=w->preferredSize();w->setPreferredSize({size.width,controlHeight(density_)});
         }
-        if(auto table=std::dynamic_pointer_cast<Table>(w)) {
+        if(auto table=std::dynamic_pointer_cast<Table>(w); table && entry.component=="DataTable") {
             // Retain the top business row when changing density.
             const float row=table->rowHeight()>0?table->scrollOffset()/table->rowHeight():0;
             table->setRowHeight(tableRowHeight(density_));table->setHeaderHeight(controlHeight(density_));
@@ -145,13 +146,21 @@ private:
                 authored|=value.background.color.has_value() || value.foreground.has_value() || value.borderColor.has_value() ||
                     value.borderWidth.has_value() || value.radius.has_value() || value.content.backgroundColor.has_value() ||
                     value.content.radius.has_value() || value.padding.has_value() || value.fontSize.has_value() ||
-                    value.fontWeight.has_value() || value.outlineColor.has_value() || value.outlineWidth.has_value() || value.outlineOffset.has_value();
+                    value.fontWeight.has_value() || value.textInset.has_value() || value.outlineColor.has_value() || value.outlineWidth.has_value() || value.outlineOffset.has_value();
             }
             if(authored)tabs->setStyleOverride(tabsStyleOverrideFromStyleSheet(sheet,n));
             else applyNativeTheme(*tabs,sheet);
             return;
         }
-        if(std::dynamic_pointer_cast<SplitView>(w) || std::dynamic_pointer_cast<ProgressBar>(w)) {applyNativeTheme(*w,sheet);return;}
+        if(auto progress=std::dynamic_pointer_cast<ProgressBar>(w)) {
+            auto style=progressBarStyleOverrideFromStyleSheet(sheet,n);
+            const auto palette=nativePalette(sheet);
+            style.trackBackground=style.trackBackground.value_or(palette.line);
+            style.fill=style.fill.value_or(palette.accent);
+            style.radius=style.radius.value_or(2.0f);
+            progress->setStyleOverride(std::move(style));return;
+        }
+        if(std::dynamic_pointer_cast<SplitView>(w)) {applyNativeTheme(*w,sheet);return;}
         if(auto chart=std::dynamic_pointer_cast<TimeSeriesChart>(w)) {applyNativeTheme(*w,sheet);if(box.foreground || box.borderColor || box.fontSize || box.gap)chart->setStyleBox(box);return;}
         if (auto v = std::dynamic_pointer_cast<Label>(w)) {
             v->setFontFamily(box.fontFamily.value_or(std::wstring{}));
@@ -169,13 +178,18 @@ private:
             v->setFontSize(box.fontSize.value_or(14));
         }
         else if (auto v = std::dynamic_pointer_cast<Checkbox>(w)) v->setStyleOverride(checkboxStyleOverrideFromStyleSheet(sheet,n));
+        else if (auto v = std::dynamic_pointer_cast<TreeView>(w)) v->setStyleOverride(treeViewStyleOverrideFromStyleSheet(sheet,n));
         else if (auto v = std::dynamic_pointer_cast<Switch>(w)) v->setStyleOverride(switchStyleOverrideFromStyleSheet(sheet,n));
         else if (auto v = std::dynamic_pointer_cast<Select>(w)) v->setStyleOverride(selectStyleOverrideFromStyleSheet(sheet,n));
         else if (auto v = std::dynamic_pointer_cast<Dialog>(w)) v->setStyleSheet(std::make_shared<StyleSheet>(sheet),n);
         else if (auto v = std::dynamic_pointer_cast<Popup>(w)) v->setStyleOverride(popupStyleOverrideFromStyleSheet(sheet,n));
         else if (auto v = std::dynamic_pointer_cast<List>(w)) v->setStyleOverride(listStyleOverrideFromStyleSheet(sheet,n));
         else if (auto v = std::dynamic_pointer_cast<VirtualList>(w)) v->setStyleOverride(listStyleOverrideFromStyleSheet(sheet,n));
-        else if (auto v = std::dynamic_pointer_cast<Table>(w)) v->setStyleOverride(tableStyleOverrideFromStyleSheet(sheet,n));
+        else if (auto v = std::dynamic_pointer_cast<Table>(w)) {
+            v->setStyleOverride(tableStyleOverrideFromStyleSheet(sheet,n));
+            const auto layout = sheet.resolveLayout(n);
+            v->setColumnLayout(layout.tableColumnWidths, layout.tableSelectionWidth);
+        }
         else if (auto v = std::dynamic_pointer_cast<TemplateTable>(w)) v->setStyleBox(box);
         else if (auto v = std::dynamic_pointer_cast<ReorderableGrid>(w)) v->setStyleBox(box);
         else if (auto v = std::dynamic_pointer_cast<ScrollView>(w)) {
@@ -381,6 +395,10 @@ public:
             auto binding=std::make_shared<Binding<std::wstring>>(source); own(binding);
             e.table->selectionValue=[binding] {const std::wstring fallback; return std::wstring(binding->get(fallback));};
             bind(e,"selectedKey",source); e.table->selected=[binding](std::wstring key) { std::wstring fallback; binding->set(std::move(key),fallback); };
+        } else if(auto tree=e.as<TreeView>()) {
+            auto binding=std::make_shared<Binding<std::wstring>>(source);own(binding);
+            bind(e,"selectedKey",source);
+            tree->setOnSelectionChanged([binding](const std::wstring& key){std::wstring fallback;binding->set(key,fallback);});
         } else { e.as<TextField>()->bindText(source); }
     }
     void model(Element e,State<float>& source) {
@@ -392,7 +410,7 @@ public:
         auto weak=std::weak_ptr<Life>(life_);e.tabs->closed=[weak,callback=std::move(callback)](std::wstring id){if(!weak.expired() && callback)callback(std::move(id));};
     }
     void model(Element e,State<bool>& source) {
-        if(auto checkbox=e.as<Checkbox>())checkbox->bindChecked(source);
+        if (auto checkbox=e.as<Checkbox>()) checkbox->bindChecked(source);
         else e.as<Switch>()->bindChecked(source);
     }
     void model(Element e,State<int>& source) { e.as<Select>()->bindSelectedIndex(source); }

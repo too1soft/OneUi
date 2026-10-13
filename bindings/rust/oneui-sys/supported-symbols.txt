@@ -627,3 +627,4 @@ oneui_view_element_focused
 oneui_view_dock_action
 oneui_view_dock_item_metrics
 oneui_view_workspace_tab_drag
+oneui_view_element_visible

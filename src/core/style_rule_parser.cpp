@@ -1,4 +1,5 @@
 #include "style_css_internal.h"
+#include "style_layout_internal.h"
 #include "oneui/layout/container_query.h"
 #include <stdexcept>
 #include <algorithm>
@@ -78,7 +79,7 @@ StyleSheet StyleSheet::forContainers(const std::map<std::string,Size>& sizes) co
         if(rule.query) {
             auto size=sizes.find(rule.query->name);
             if(size==sizes.end()||!rule.query->matches(size->second))continue;
-            rule.query.reset();
+            clearRuleQuery(rule);
         }
         result.addRule(std::move(rule));
     }

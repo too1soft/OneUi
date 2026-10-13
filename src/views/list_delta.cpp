@@ -15,7 +15,20 @@ bool Runtime::refreshDelta(const std::shared_ptr<Scope>& scope, uint32_t propert
             check(d.before == revision && d.index <= keys.size(), ONEUI_VIEW_STALE_CHANGE,
                   "Delta revision/index");
             const auto index = size_t(d.index), count = size_t(d.count);
-            if (d.kind == ONEUI_LIST_INSERT) {
+            if (d.kind == ONEUI_LIST_REORDER) {
+                check(index == 0 && count == keys.size(), ONEUI_VIEW_BAD_KEY,
+                      "REORDER requires every existing key");
+                std::unordered_map<std::string, std::shared_ptr<Scope>> byKey;
+                for (size_t i=0; i<keys.size(); ++i) byKey.emplace(keys[i],items[i]);
+                std::vector<std::shared_ptr<Scope>> reordered;
+                reordered.reserve(count);
+                for (const auto& key : d.keys) {
+                    auto found=byKey.find(key);
+                    check(found!=byKey.end(),ONEUI_VIEW_BAD_KEY,"REORDER unknown/duplicate key");
+                    reordered.push_back(found->second);byKey.erase(found);
+                }
+                keys=d.keys;items=std::move(reordered);
+            } else if (d.kind == ONEUI_LIST_INSERT) {
                 for (const auto& key : d.keys)
                     check(std::find(keys.begin(), keys.end(), key) == keys.end(),
                           ONEUI_VIEW_BAD_KEY, "Inserted key exists");
@@ -47,6 +60,11 @@ bool Runtime::refreshDelta(const std::shared_ptr<Scope>& scope, uint32_t propert
         auditListIdentity(scope, property, state, keys);
 #endif
     } catch (const Failure& e) {
+        // A permutation is a strict identity claim; never mask a bad permutation
+        // by accepting a different foreign snapshot through RESET fallback.
+        if (std::any_of(state.pending.begin(),state.pending.end(),[](const Delta& d) {
+                return d.kind==ONEUI_LIST_REORDER;
+            })) throw;
         fail(e.result,e.what()); state.reset = true; return false;
     }
     const auto model = image.schema.model(scope->table.model_id).property(property).item;

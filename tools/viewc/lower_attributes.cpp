@@ -71,7 +71,7 @@ void ViewCompiler::attributes(Source &s, const Node &n, const std::vector<Scope>
                 if (model)
                     require(r.access == 3, "MODEL_READ_ONLY: v-model requires rw property");
                 if (r.tag == 5)
-                    validateRecord(image.schema.model(r.item), p.record);
+                    validateRecord(image.schema, image.schema.model(r.item), p.record);
                 image.add(BIND, {index, p.id, r.id, r.depth | ((model ? 2u : 1u) << 16), r.model, 0, span(s, a), 0, ownerKind});
             }
             else

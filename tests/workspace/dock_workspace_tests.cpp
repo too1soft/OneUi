@@ -17,6 +17,7 @@ struct Fixture {
     std::shared_ptr<DockWorkspaceView> dock=std::make_shared<DockWorkspaceView>();
     std::vector<std::shared_ptr<DockItemView>> items;
     DockWorkspaceSnapshot state;
+    DockWorkspacePresentation presentation;
     std::vector<DockIntent> events;
     test_support::RecordingCanvas canvas;
     Fixture() {
@@ -35,7 +36,7 @@ struct Fixture {
                      {"root","","left","right",DockAxis::Horizontal,.699f}};
         state.root="root";state.revision=1;publish();dock->setOnIntent([this](auto e){events.push_back(e);});
     }
-    void publish(){dock->setSnapshot(state,items);dock->paint(canvas);}
+    void publish(){dock->setSnapshot(state,items,presentation);dock->paint(canvas);}
     void floating() {
         state.nodes.erase(state.nodes.begin()+3); // ai
         state.nodes.erase(state.nodes.begin()+4); // right
@@ -45,6 +46,24 @@ struct Fixture {
     Point title(size_t i){auto r=items[i]->frame();return {r.x+50,r.y+14};}
     void begin(size_t i){auto p=title(i);root.onMouseDown({p});root.onMouseMove({{p.x+7,p.y}});}
 };
+void presentationTransaction() {
+    Fixture f;
+    auto presentation=f.presentation;
+    presentation.previewKeepText="next caption";presentation.raiseOnPress=false;
+    auto bad=f.state;bad.placements.front().mode="invalid";
+    bool rejected=false;
+    try {f.dock->prepare(bad,f.items,presentation);}catch(const std::invalid_argument&){rejected=true;}
+    check(rejected&&f.dock->presentation().raiseOnPress&&
+          f.dock->presentation().previewKeepText==f.presentation.previewKeepText,
+          "failed snapshot preparation preserves all presentation configuration");
+    auto commit=f.dock->prepare(f.state,f.items,presentation);
+    check(f.dock->presentation().raiseOnPress,"prepared configuration remains unpublished until commit");
+    commit();
+    check(!f.dock->presentation().raiseOnPress&&f.dock->presentation().previewKeepText=="next caption",
+          "snapshot and presentation commit together");
+    f.dock->setSnapshot(f.state,f.items);
+    check(!f.dock->presentation().raiseOnPress,"old snapshot API preserves independent presentation");
+}
 void geometry() {
     Fixture f;auto a=f.items[0]->frame(),b=f.items[1]->frame(),c=f.items[2]->frame();
     auto sheet=std::make_shared<StyleSheet>();std::string cssError;
@@ -111,7 +130,7 @@ void dividerAndActions() {
     auto title=f.title(0);MouseEvent dbl{title};dbl.clickCount=2;f.root.onMouseDown(dbl);check(f.events.back().kind==DockIntentKind::Maximize,"title doubleclick maximize intent");
 }
 void transactionalPointerAndPreview() {
-    Fixture f;f.floating();f.state.raiseOnPress=false;f.publish();
+    Fixture f;f.floating();f.presentation.raiseOnPress=false;f.publish();
     const auto before=f.state.placements[3];auto p=f.title(3);
     f.root.onMouseDown({p});f.root.onMouseMove({{p.x+20,p.y+20}});
     KeyEvent esc;esc.key=Key::Escape;f.root.onKeyDown(esc);
@@ -149,7 +168,7 @@ void previewMotion() {
     check(std::abs(sample.dock->previewRect()->x-mid.x)<.001f,"two 8ms steps equal one 16ms step");
     f.root.onMouseMove({{origin.x,origin.y}});f.dock->setMotionEnabled(false);
     check(f.dock->previewRect()->x==from.x,"reduced motion snaps immediately");
-    f.state.previewKeepText="Custom keep and cancel";f.publish();
+    f.presentation.previewKeepText="Custom keep and cancel";f.publish();
     test_support::RecordingCanvas painted;f.dock->paint(painted);
     check(!painted.texts.empty()&&painted.texts.back().text==L"Custom keep and cancel","localized caption is actually painted");
     f.root.onMouseUp({{origin.x,origin.y}});check(!f.dock->previewRect(),"release clears feedback immediately");
@@ -158,4 +177,4 @@ void previewMotion() {
     setPlatformMotionEnabled(true);
 }
 }
-int main(){try{internal::ScopedUiClock clock(clockNow);geometry();drag();floatingResize();dividerAndActions();transactionalPointerAndPreview();previewMotion();std::cout<<"dock workspace: 6 scenario groups passed\n";}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}
+int main(){try{internal::ScopedUiClock clock(clockNow);geometry();drag();floatingResize();dividerAndActions();transactionalPointerAndPreview();previewMotion();presentationTransaction();std::cout<<"dock workspace: 7 scenario groups passed\n";}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

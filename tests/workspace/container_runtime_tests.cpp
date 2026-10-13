@@ -12,6 +12,33 @@ int main(int argc,char** argv) {
         auto tree=rows[0]->element.widget,browser=rows[1]->element.widget,details=rows[2]->element.widget;
         test_support::RecordingCanvas canvas;
         auto paint=[&](float width){root->setFrame({0,0,width,500});root->paint(canvas);};
+        expect(runtime->root->children.size()==2,"root contains panes and toolbar");
+        const auto toolbar=runtime->root->children[1];
+        expect(toolbar->children.size()==3,"toolbar has three fields");
+        const auto navigation=toolbar->children[0]->element.widget;
+        const auto search=toolbar->children[1]->element.as<TextField>();
+        const auto actions=toolbar->children[2]->element.widget;
+        expect(bool(search),"toolbar search is a TextField");
+        paint(399);
+        expect(search->frame().y>actions->frame().y && actions->frame().y>navigation->frame().y,
+               "tiny toolbar has three ordered lines");
+        expect(std::abs(search->frame().width-375)<0.1f,"percentage basis fills content width");
+        paint(400);
+        expect(std::abs(navigation->frame().y-actions->frame().y)<0.1f && search->frame().y>actions->frame().y,
+               "medium toolbar moves search to second line");
+        paint(620);
+        expect(navigation->frame().x<search->frame().x && search->frame().x<actions->frame().x &&
+               std::abs(search->frame().width-165)<0.1f,"wide toolbar restores source-independent order and fixed basis");
+        paint(399);
+        expect(search==toolbar->children[1]->element.as<TextField>() && search->text()==L"retained search",
+               "query reordering retains the same text field and input state");
+        auto table=rows[1]->children[0]->children[1]->element.as<Table>();
+        expect(bool(table),"browser contains a Table");
+        table->setColumns({{L"Name",0},{L"Size",120},{L"Modified",180}});
+        table->setRows({{L"a"},{L"b"}});table->setSelectedIndex(1);
+        paint(619.99f);expect(table->columns().size()==2&&table->columns()[1].width==76,"narrow query projects two columns");
+        paint(620);expect(table->columns().size()==3&&table->columns()[1].width==100,"exact query boundary restores three columns");
+        paint(619);expect(table->columns().size()==2&&table->selectedIndex()==1,"shrinking columns retains selection");
         paint(859.99f);expect(!tree->visible()&&!browser->visible()&&details->visible(),"ABI selected detail in narrow query");
         auto leases=vm.retains;auto reads=vm.reads;
         paint(860);expect(tree->visible()&&browser->visible()&&!details->visible(),"compiled query enables two panes");

@@ -1,4 +1,5 @@
 #include "oneui/widget.h"
+#include "internal/widget_presentation.h"
 
 #include <utility>
 #include <algorithm>
@@ -6,7 +7,8 @@
 
 namespace oneui {
 namespace { std::atomic<std::uint64_t> nextInputSession{1}; }
-Widget::Widget() : textInputSession_(nextInputSession.fetch_add(1, std::memory_order_relaxed)) {}
+Widget::Widget() : lifetime_(new int(0), internal::WidgetLifetime{}),
+    textInputSession_(nextInputSession.fetch_add(1, std::memory_order_relaxed)) {}
 
 std::shared_ptr<StyleSheet> Widget::styleScope() const {
     return localStyleScope_ ? localStyleScope_ : inheritedStyleScope_;

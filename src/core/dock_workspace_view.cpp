@@ -14,8 +14,11 @@ void DockItemView::layoutChildren() {
 DockWorkspaceView::DockWorkspaceView():state_(std::make_shared<State>()){}
 DockWorkspaceView::~DockWorkspaceView()=default;
 const DockWorkspaceSnapshot& DockWorkspaceView::snapshot() const{return state_->snapshot;}
+const DockWorkspacePresentation& DockWorkspaceView::presentation() const{return state_->presentation;}
+void DockWorkspaceView::setPresentation(DockWorkspacePresentation value){state_->presentation=std::move(value);invalidate();}
 void DockWorkspaceView::setOnIntent(std::function<void(const DockIntent&)> callback){intent_=std::move(callback);}
 void DockWorkspaceView::setSnapshot(DockWorkspaceSnapshot s,std::vector<std::shared_ptr<DockItemView>> items){prepare(std::move(s),std::move(items))();}
+void DockWorkspaceView::setSnapshot(DockWorkspaceSnapshot s,std::vector<std::shared_ptr<DockItemView>> items,DockWorkspacePresentation presentation){prepare(std::move(s),std::move(items),std::move(presentation))();}
 void DockWorkspaceView::emit(DockIntent e) {
     e.revision=state_->snapshot.revision;e.request=++request_;
     if(e.kind==DockIntentKind::Dock||e.kind==DockIntentKind::Float||e.kind==DockIntentKind::Bounds)state_->pendingRequest=e.request;
@@ -83,9 +86,9 @@ void DockWorkspaceView::paint(Canvas& c) {
             if(s.hit&&s.hit->placement!=DockHitPlacement::None) {
                 label=title(s.items[s.source])+L" → ";
                 for(auto& item:s.items)if(item.identity==s.hit->target)label+=title(item);
-                label+=L" · "+unicode::fromUtf8(s.snapshot.previewDockText);
-            } else if(alt_)label=title(s.items[s.source])+L" · "+unicode::fromUtf8(s.snapshot.previewFloatText);
-            else label=unicode::fromUtf8(s.snapshot.previewKeepText);
+                label+=L" · "+unicode::fromUtf8(s.presentation.previewDockText);
+            } else if(alt_)label=title(s.items[s.source])+L" · "+unicode::fromUtf8(s.presentation.previewFloatText);
+            else label=unicode::fromUtf8(s.presentation.previewKeepText);
         }
         auto host=frame();float width=std::min(std::max(0.f,host.width-24),c.measureTextWidth(label,12,500)+16);
         Rect chip{std::clamp(s.preview.x+12,host.x+12,std::max(host.x+12,host.x+host.width-width-12)),

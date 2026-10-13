@@ -45,8 +45,7 @@ protected:
 private:
     PaneHeaderConfig config_;
     StyleBox style_;
-    std::array<std::shared_ptr<IconButton>,7> buttons_;
-    std::shared_ptr<StyleSheet> buttonSheet_;
+    std::array<std::shared_ptr<IconButton>,6> buttons_;
     std::shared_ptr<Widget> identity_,actions_,menu_;
     std::function<void(PaneHeaderAction,Point)> intent_;
     std::function<void(int,Point)> drag_;
@@ -54,6 +53,7 @@ private:
     Point origin_,point_;
     void emit(PaneHeaderAction,Point={});
     void refreshButtonStyles();
+    std::array<std::shared_ptr<IconButton>,7> actionButtons() const;
     StyleBox partStyle(const char*) const;
 };
 } // namespace oneui

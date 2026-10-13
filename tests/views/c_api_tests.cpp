@@ -6,6 +6,8 @@
 #include "oneui/layout/panel.h"
 #include "oneui/layout/dock_workspace_view.h"
 #include "oneui/controls/popup.h"
+#include "oneui/controls/table.h"
+#include "oneui/controls/virtual_list.h"
 #include <thread>
 using namespace viewtest;
 namespace {
@@ -134,6 +136,31 @@ int main(int argc, char **argv) {
             expect(oneui_view_element_metrics(c.view, name, &metrics) == 0 &&
                 metrics.x == 12 && metrics.y == 24 && metrics.width == 160 &&
                 metrics.height == 28 && !metrics.scrollable, "read-only element metrics");
+            int focused = -1;
+            expect(oneui_view_element_focused(c.view, name, &focused) == 0 && !focused,
+                "unfocused named element");
+            expect(oneui_view_element_focused(c.view, str("missing"), &focused) == ONEUI_VIEW_NOT_FOUND && !focused,
+                "focus missing name resets output");
+            expect(oneui_view_element_focused(c.view, name, nullptr) == ONEUI_VIEW_INVALID_ARGUMENT,
+                "focus requires output");
+            int visible = -1;
+            expect(oneui_view_element_visible(c.view, name, &visible) == 0 && visible,
+                "named element visible");
+            label->setVisible(false);
+            expect(oneui_view_element_visible(c.view, name, &visible) == 0 && !visible,
+                "named element hidden");
+            label->setVisible(true);
+            expect(oneui_view_element_visible(c.view, str("missing"), &visible) ==
+                ONEUI_VIEW_NOT_FOUND && !visible, "visibility missing name resets output");
+            expect(oneui_view_element_visible(c.view, name, nullptr) ==
+                ONEUI_VIEW_INVALID_ARGUMENT, "visibility requires output");
+            int visibilityForeign = 0;
+            std::thread visibilityThread([&] {
+                int result = -1;
+                visibilityForeign = oneui_view_element_visible(c.view, name, &result);
+            });
+            visibilityThread.join();
+            expect(visibilityForeign == ONEUI_VIEW_WRONG_THREAD, "visibility UI thread ownership");
             expect(oneui_view_element_metrics(c.view, str("missing"), &metrics) ==
                 ONEUI_VIEW_NOT_FOUND, "metrics missing name");
             expect(oneui_view_element_metrics(c.view, str(""), &metrics) ==
@@ -146,7 +173,7 @@ int main(int argc, char **argv) {
             expect(foreign == ONEUI_VIEW_WRONG_THREAD, "metrics UI thread ownership");
             auto other = c.view->value->root->children[1]->element.widget;
             other->setAccessibleName(L"focus-input");
-            int focused = 0;
+            focused = 0;
             expect(oneui_view_element_focused(c.view,str("focus-input"),&focused)==0&&!focused,
                    "focus query reads unfocused state");
             std::dynamic_pointer_cast<oneui::View>(c.view->value->root->element.widget)->requestFocus(other.get(),true);
@@ -216,7 +243,33 @@ int main(int argc, char **argv) {
             expect(oneui_view_element_metrics(c.view,str("overlay-badge"),&metrics)==0 &&
                 oneui_view_mount_focus_element(c.mount,str("overlay-base-input"),1,&focused)==0 && focused,
                 "named lookup includes content beneath declarative popup");
+            other->onFocusChanged(true);
+            expect(oneui_view_element_focused(c.view,str("overlay-base-input"),&focused)==0 && focused,
+                "focus query reads native state");
+            auto table=std::make_shared<oneui::Table>();
+            table->setAccessibleName(L"metrics-table");
+            table->setFrame({0,0,400,200}); table->setRowHeight(30);
+            table->setRows(std::vector<std::vector<std::wstring>>(100,{L"row"}));
+            table->setScrollOffset(180);
+            c.view->value->root->element.widget=table;
+            expect(oneui_view_element_metrics(c.view,str("metrics-table"),&metrics)==0 &&
+                metrics.scrollable && metrics.scroll_y==180 && metrics.max_scroll_y>2500,
+                "rich Table exposes actual scroll metrics");
+            auto list=std::make_shared<oneui::VirtualList>();
+            list->setAccessibleName(L"metrics-list");list->setFrame({0,0,400,200});list->setRowHeight(60);
+            list->setItems(std::vector<oneui::ListItem>(100,{L"row",L"detail"}));list->setScrollOffset(180);
+            c.view->value->root->element.widget=list;
+            expect(oneui_view_element_metrics(c.view,str("metrics-list"),&metrics)==0 &&
+                metrics.scrollable && metrics.scroll_y==180 && metrics.max_scroll_y==5800,
+                "VirtualList exposes actual scroll metrics for restoration and wheel evidence");
+            c.view->value->root->element.widget=table;
+            int focusForeign=0;
+            std::thread focusReadThread([&] { focusForeign=oneui_view_element_focused(c.view,str("metrics-table"),&focused); });
+            focusReadThread.join(); expect(focusForeign==ONEUI_VIEW_WRONG_THREAD,"focus query owns UI thread");
             oneui_view_disconnect(c.view);
+            expect(oneui_view_element_focused(c.view, name, &focused) == ONEUI_VIEW_CLOSED,"closed focus query rejected");
+            expect(oneui_view_element_visible(c.view, name, &visible) == ONEUI_VIEW_CLOSED,
+                "visibility closed view rejected");
             expect(oneui_view_mount_focus_element(c.mount, name, 1, &focused) == ONEUI_VIEW_CLOSED,
                 "focus rejects closed view");
             expect(oneui_view_element_metrics(c.view, name, &metrics) ==

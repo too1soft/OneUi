@@ -1,5 +1,8 @@
 #include "oneui/ui_declarative.h"
+#include "oneui/layout/virtual_template_list.h"
 #include "data_menu.h"
+#include <sstream>
+#include <cmath>
 #include "oneui/controls/popup.h"
 namespace oneui::ui {
 void Mount::set(Element &e, const std::string &key, const std::wstring &value) {
@@ -14,6 +17,20 @@ void Mount::set(Element &e, const std::string &key, const std::wstring &value) {
             if(!icon)throw std::invalid_argument("Unknown StateView icon");
             state->setIcon(*icon);return;
         }
+    }
+    if(e.component=="TimeSeriesChart" && key=="grid-style") {
+        std::wistringstream input(value); int vertical; float width; wchar_t extra;
+        if(!(input>>vertical>>width) || (input>>extra) || vertical<0 || vertical>16 || !std::isfinite(width) || width<=0)
+            throw std::invalid_argument("Chart grid-style requires count and positive line width");
+        e.as<TimeSeriesChart>()->setGridStyle(vertical,width);return;
+    }
+    if(e.component=="TimeSeriesChart" && key=="plot-insets") {
+        std::wistringstream input(value); Insets insets{}; wchar_t extra;
+        if(!(input>>insets.top>>insets.right>>insets.bottom>>insets.left) || (input>>extra) ||
+           !std::isfinite(insets.top) || !std::isfinite(insets.right) || !std::isfinite(insets.bottom) || !std::isfinite(insets.left) ||
+           insets.top<0 || insets.right<0 || insets.bottom<0 || insets.left<0)
+            throw std::invalid_argument("Chart plot-insets requires four nonnegative numbers");
+        e.as<TimeSeriesChart>()->setPlotInsets(insets);return;
     }
     if(e.component=="Popup" && key=="placement") {
         const std::map<std::wstring,PopupPreferredPlacement> placements{
@@ -149,7 +166,9 @@ void Mount::set(Element &e, const std::string &key, const std::wstring &value) {
         e.widget->setAccessibleName(value);
         if (e.component == "ToolButton")
             e.widget->setTooltip(value);
-    } else if (key == "description")
+    } else if (key == "tooltip")
+        e.widget->setTooltip(value);
+    else if (key == "description")
         e.widget->setAccessibleDescription(value);
     else if (key == "title" || key == "label") {
         if (!e.title)
@@ -171,7 +190,9 @@ void Mount::set(Element &e, const std::string &key, const std::wstring &value) {
     } else if (key == "placeholder")
         e.as<TextField>()->setPlaceholder(value);
     else if (key == "selectedKey") {
-        if (e.tabs)
+        if(auto tree=e.as<TreeView>())
+            tree->setSelectedId(value);
+        else if (e.tabs)
             e.tabs->select(value);
         else
             e.table->select(value);
@@ -207,6 +228,16 @@ void Mount::set(Element &e, const std::string &key, const std::string &value) {
 }
 void Mount::set(Element &e, const std::string &key, bool value) {
     if(e.component=="VirtualList" && key=="multiple") {e.as<VirtualList>()->setSelectionMode(value ? SelectionMode::Multiple : SelectionMode::Single);return;}
+    if (key == "follow-end") { e.as<VirtualTemplateList>()->setFollowEnd(value); return; }
+    if (key == "activate-on-single-click") { e.as<VirtualList>()->setActivateOnSingleClick(value); return; }
+    if(e.component=="TimeSeriesChart") {
+        auto chart=e.as<TimeSeriesChart>();
+        if(key=="smooth"){chart->setSmoothCurves(value);return;}
+        if(key=="area-fill"){chart->setAreaFill(value);return;}
+        if(key=="dashed-grid"){chart->setDashedGrid(value);return;}
+        if(key=="axes-visible"){chart->setAxesVisible(value);return;}
+        if(key=="latest-point"){chart->setLatestPointVisible(value);return;}
+    }
     if(e.component=="Popup" && key=="open") {e.as<Popup>()->setOpen(value);return;}
     if(key=="placeholder-when-focused") {e.as<TextField>()->setPlaceholderVisibleWhenFocused(value);return;}
     if(e.component=="ReorderableGrid") {
@@ -227,6 +258,14 @@ void Mount::set(Element &e, const std::string &key, bool value) {
         e.as<TextField>()->setReadOnly(value);
     else if (key == "chrome-visible")
         e.as<ScrollView>()->setChromeVisible(value);
+    else if(key=="multiple")
+        e.as<Table>()->setSelectionMode(value?SelectionMode::Multiple:SelectionMode::Single);
+    else if(key=="column-dividers")
+        e.as<Table>()->setColumnDividersVisible(value);
+    else if(key=="selection-column")
+        e.as<Table>()->setSelectionColumnVisible(value);
+    else if(key=="sort-descending")
+        e.as<Table>()->setHeaderSort(e.as<Table>()->headerSortColumn(),value);
     else if (key == "collapsed") {
         for (auto &part : e.collapsible)
             part->setVisible(!value);
@@ -249,7 +288,7 @@ void Mount::set(Element &e, const std::string &key, bool value) {
     else if (key == "reduced-motion")
         e.as<Reveal>()->setReducedMotion(value);
     else if (key == "checked") {
-        if(auto checkbox=e.as<Checkbox>())checkbox->setChecked(value);
+        if (auto checkbox = e.as<Checkbox>()) checkbox->setChecked(value);
         else e.as<Switch>()->setChecked(value);
     }
     else
@@ -257,6 +296,12 @@ void Mount::set(Element &e, const std::string &key, bool value) {
 }
 void Mount::set(Element &e, const std::string &key, float value) {
     syntax::validateLayoutNumber(key, value);
+    if(e.component=="TimeSeriesChart") {
+        auto chart=e.as<TimeSeriesChart>();
+        if(key=="range-min"){chart->setRange(value,chart->maximum());return;}
+        if(key=="range-max"){chart->setRange(chart->minimum(),value);return;}
+        if(key=="line-width"){chart->setLineWidth(value);return;}
+    }
     if(e.component=="Popup") {
         auto popup=e.as<Popup>();
         if(key.rfind("anchor-",0)==0) {
@@ -285,26 +330,44 @@ void Mount::set(Element &e, const std::string &key, float value) {
     if (auto table = e.as<TemplateTable>()) {
         if (key == "minimum-width") { table->setMinimumWidth(value); return; }
         if (key == "header-height") { table->setHeaderHeight(value); return; }
-          if (key == "content-height") { table->setContentHeight(value); return; }
+    if (key == "content-height") { table->setContentHeight(value); return; }
           if (key == "content-width") { table->setContentWidth(value); return; }
         if (key == "wheel-step") { table->setWheelStep(value); return; }
         if (key == "scroll-offset") { table->setScrollOffset(value); return; }
         if (key == "horizontal-offset") { table->setHorizontalScrollOffset(value); return; }
+    }
+    if (auto list = e.as<VirtualTemplateList>()) {
+        if (key == "estimated-height") { list->setEstimatedHeight(value); return; }
+        if (key == "overscan") { list->setOverscan(size_t(value)); return; }
+        if (key == "scroll-offset") { list->setScrollOffset(value); return; }
     }
     if (key == "line-height") {
         if (auto label = e.as<Label>()) label->setLineHeight(value);
         else e.as<TextField>()->setLineHeight(value);
         return;
     }
+    if(key == "scrollbar-inset") {e.as<ScrollView>()->setScrollbarInset(value);return;}
+    if(e.component=="VirtualList" && (key=="trailing-width" || key=="trailing-gap")) {
+        auto list=e.as<VirtualList>();auto metrics=list->richMetrics();
+        if(key=="trailing-width")metrics.trailingWidth=value;else metrics.trailingGap=value;
+        list->setRichMetrics(metrics);return;
+    }
     if (key == "content-height") { e.as<ScrollView>()->setContentHeight(value); return; }
     if (key == "content-width") { e.as<ScrollView>()->setContentWidth(value); return; }
     if (key == "wheel-step") { e.as<ScrollView>()->setWheelStep(value); return; }
     if (key == "scroll-offset") {
         if (e.component == "VirtualList") e.as<VirtualList>()->setScrollOffset(value);
+        else if(e.component=="Table") e.as<Table>()->setScrollOffset(value);
         else e.as<ScrollView>()->setScrollOffset(value);
         return;
     }
-    if (key == "row-height") { e.as<VirtualList>()->setRowHeight(value); return; }
+    if (key == "row-height") {
+        if(e.component=="Table")e.as<Table>()->setRowHeight(value);
+        else e.as<VirtualList>()->setRowHeight(value);
+        return;
+    }
+    if(key=="header-height") {e.as<Table>()->setHeaderHeight(value);return;}
+    if(key=="selection-column-width") {e.as<Table>()->setSelectionColumnWidth(value);return;}
     if (key == "value") {
         e.as<ProgressBar>()->setValue(std::clamp(value, 0.0f, 1.0f));
         return;
@@ -365,11 +428,21 @@ void Mount::set(Element &e, const std::string &key, float value) {
     styles_->updateAuthoredFlex(e.widget,e.flex);
 }
 void Mount::set(Element &e, const std::string &key, int value) {
+    if(e.component=="TimeSeriesChart") {
+        if(key=="grid-lines") {e.as<TimeSeriesChart>()->setGridLines(value);return;}
+        if(key=="fill-alpha") {
+            if(value<0 || value>255)throw std::invalid_argument("Chart fill-alpha range");
+            e.as<TimeSeriesChart>()->setFillAlpha(static_cast<unsigned char>(value));return;
+        }
+    }
     if(e.component=="ReorderableGrid" && key=="column-count") {
         if(value<1)throw std::invalid_argument("column-count must be positive");
         e.as<ReorderableGrid>()->setColumnCount(value);return;
     }
-    if (key == "max-lines") {
+    if(key=="sort-column") {
+        if(value < -1)throw std::invalid_argument("sort-column must be at least -1");
+        e.as<Table>()->setHeaderSort(value,e.as<Table>()->headerSortDescending());
+    } else if (key == "max-lines") {
         if (value < 0) throw std::invalid_argument("max-lines must be nonnegative");
         e.as<Label>()->setMaxLines(value);
     }

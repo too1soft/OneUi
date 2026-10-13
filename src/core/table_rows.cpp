@@ -1,7 +1,61 @@
 #include "oneui/controls/table.h"
+#include "internal/widget_presentation.h"
 #include <algorithm>
 #include <numeric>
+#include <cmath>
 namespace oneui {
+void Table::setColumnLayout(std::optional<std::vector<float>> widths,
+                            std::optional<float> selectionWidth) {
+    if (widths && (widths->empty() || std::any_of(widths->begin(), widths->end(),
+            [](float width) { return !std::isfinite(width) || width < 0; }))) return;
+    if (selectionWidth && (!std::isfinite(*selectionWidth) || *selectionWidth < 24 || *selectionWidth > 128)) return;
+    auto& presentation = internal::WidgetPresentationAccess::table(*this, columns_);
+    if (presentation.widths == widths && presentation.selectionWidth == selectionWidth) return;
+    presentation.widths = std::move(widths);
+    presentation.selectionWidth = selectionWidth;
+    projectColumns();
+}
+void Table::projectColumns() {
+    const auto& presentation = internal::WidgetPresentationAccess::table(*this, columns_);
+    columns_ = presentation.authored;
+    if (presentation.widths) {
+        columns_.resize(std::min(columns_.size(), presentation.widths->size()));
+        for (size_t i = 0; i < columns_.size(); ++i) columns_[i].width = (*presentation.widths)[i];
+    }
+    if (focusedHeader_ >= int(columns_.size())) focusedHeader_ = -1;
+    if (pressedColumn_ >= int(columns_.size())) pressedColumn_ = -1;
+    invalidate();
+}
+float Table::selectionGutter() const {
+    if (!selectionColumnVisible_) return 0;
+    const auto* presentation = internal::WidgetPresentationAccess::find(*this);
+    return presentation && presentation->table
+        ? presentation->table->selectionWidth.value_or(selectionColumnWidth_) : selectionColumnWidth_;
+}
+bool Table::reconcileRichRows(std::vector<std::vector<TableCell>> rows,
+                              const std::vector<int>& oldToNew) {
+    if (oldToNew.size() != rows_.size()) return false;
+    std::vector<bool> used(rows.size());
+    for (const auto index : oldToNew) {
+        if (index < -1 || index >= int(rows.size())) return false;
+        if (index >= 0) {
+            if (used[index]) return false;
+            used[index] = true;
+        }
+    }
+    std::vector<std::vector<std::wstring>> plain;
+    plain.reserve(rows.size());
+    for (const auto& row : rows) {
+        std::vector<std::wstring> cells;
+        cells.reserve(row.size());
+        for (const auto& cell : row) cells.push_back(cell.text);
+        plain.push_back(std::move(cells));
+    }
+    rows_ = std::move(plain);
+    richRows_ = std::move(rows);
+    remapRowsState(oldToNew);
+    return true;
+}
 void Table::remapRowsState(const std::vector<int>& oldToNew) {
     const auto previous=selection_.selectedIndices();
     const auto selected=selectedIndex();

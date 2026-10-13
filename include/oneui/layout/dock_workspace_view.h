@@ -26,6 +26,9 @@ struct DockWorkspaceSnapshot {
     int64_t revision = 0, ackRequest = 0;
     bool ackAccepted = true;
     float gap = 8, dividerHit = 8;
+};
+// Presentation is independent of the frozen authoritative snapshot ABI.
+struct DockWorkspacePresentation {
     std::string previewDockText = "Release to split equally · Esc to cancel";
     std::string previewFloatText = "Release to float · Esc to cancel";
     std::string previewKeepText = "Release to keep layout · Alt to float · Esc to cancel";
@@ -47,8 +50,12 @@ public:
     DockWorkspaceView();
     ~DockWorkspaceView() override;
     std::function<void()> prepare(DockWorkspaceSnapshot, std::vector<std::shared_ptr<DockItemView>>);
+    std::function<void()> prepare(DockWorkspaceSnapshot, std::vector<std::shared_ptr<DockItemView>>, DockWorkspacePresentation);
     void setSnapshot(DockWorkspaceSnapshot, std::vector<std::shared_ptr<DockItemView>>);
+    void setSnapshot(DockWorkspaceSnapshot, std::vector<std::shared_ptr<DockItemView>>, DockWorkspacePresentation);
     const DockWorkspaceSnapshot& snapshot() const;
+    const DockWorkspacePresentation& presentation() const;
+    void setPresentation(DockWorkspacePresentation);
     void setOnIntent(std::function<void(const DockIntent&)>);
     void drag(const std::string& source, int phase, Point windowPoint);
     void requestAction(DockIntentKind, const std::string& source, bool flag = false);
