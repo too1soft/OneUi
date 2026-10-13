@@ -1,5 +1,6 @@
 #include "dock_workspace_state.h"
 #include "internal/ui_clock.h"
+#include "oneui/animation.h"
 #include <cmath>
 namespace oneui {
 bool DockWorkspaceView::interactionActive() const { return state_->gesture!=State::Gesture::None; }
@@ -13,7 +14,7 @@ void DockWorkspaceView::cancel() {
 }
 void DockWorkspaceView::showPreview(Rect r) {
     auto& s=*state_;s.previewTarget=r;
-    if(!s.previewActive||!motion_)s.preview=r;
+    if(!s.previewActive||!motion_||!motionEnabled())s.preview=r;
     s.previewActive=true;s.previewTime=internal::uiTimeMs();invalidate();requestAnimationFrame();
 }
 void DockWorkspaceView::updateMove(Point point) {
@@ -58,7 +59,7 @@ void DockWorkspaceView::drag(const std::string& source,int phase,Point point) {
     } else if(alt_||item.placement.mode=="floating") {
         event.kind=item.placement.mode=="floating"?DockIntentKind::Bounds:DockIntentKind::Float;send=true;
     }
-    s.gesture=State::Gesture::None;s.hit.reset();
+    s.gesture=State::Gesture::None;s.hit.reset();s.previewActive=false;
     if(send)emit(std::move(event));else cancel();
 }
 bool DockWorkspaceView::tickAnimations(double now) {
@@ -68,12 +69,14 @@ bool DockWorkspaceView::tickAnimations(double now) {
         s.keyboardDirty=false;s.divider=State::none;emit(std::move(event));
     }
     auto& current=*state_;
-    if(current.previewActive&&motion_) {
+    if(current.previewActive&&(!motion_||!motionEnabled()))current.preview=current.previewTarget;
+    if(current.previewActive&&motion_&&motionEnabled()) {
         auto& r=current.preview;auto t=current.previewTarget;
-        float k=float(1-std::exp(-std::clamp(now-current.previewTime,0.,50.)/45.));current.previewTime=now;
-        r.x+=(t.x-r.x)*k;r.y+=(t.y-r.y)*k;r.width+=(t.width-r.width)*k;r.height+=(t.height-r.height)*k;
-        bool moving=std::abs(r.x-t.x)+std::abs(r.y-t.y)+std::abs(r.width-t.width)+std::abs(r.height-t.height)>.1f;
-        if(!moving)r=t;else {invalidate();active=true;}
+        float k=float(1-std::exp(-std::max(now-current.previewTime,0.)/45.));current.previewTime=now;
+        bool settled=std::abs(r.x-t.x)<.4f&&std::abs(r.y-t.y)<.4f&&std::abs(r.width-t.width)<.4f&&std::abs(r.height-t.height)<.4f;
+        if(settled)r=t;
+        else {r.x+=(t.x-r.x)*k;r.y+=(t.y-r.y)*k;r.width+=(t.width-r.width)*k;r.height+=(t.height-r.height)*k;active=true;}
+        invalidate();
     }
     if(current.keyboardDirty)active=true;
     if(active)requestAnimationFrame();return active;

@@ -286,6 +286,13 @@ VM保存DockRestore锚点和版本化快照；该历史状态不参加当前绘�
 
 DockWorkspace的 `nodes` 同WorkspaceNode，root/maximized/compact-active为utf8 key；revision/ack-request为i64，ack-accepted为bool。gap为非负f64默认8，divider-hit默认8（沿用SplitView的最小8px命中）；边缘/浮动拖动规则见1.2。DockItem的pane-key必填且稳定，四个min为有限非负f64，默认dock280×150/float240×160；hideable默认true。split divider只改变内部显示ratio并实时刷新子容器，release或键盘静止时请求dockRatioRequested；VM接受后更新node.ratio并持久化，取消恢复旧ratio。参考中的临时ratio模型因此落到组件瞬时态，用户可见行为保持。DockItem默认操作菜单用PanelHeader中的 `.one` 菜单绑定上述命令，hideable=false不提供隐藏意图；收起/浮动/置顶也可由应用自己的菜单命令触发，组件不得先改placement再通知。
 
+T25 追加合同：`raise-on-press:bool` 默认 true，保留按下浮窗先请求 Raise 的旧 SDK 行为。
+需要 Esc 连同持久化 order 一并保持的宿主可设 false；此时指针 drag/resize 仅预览，
+显式 `Raise` 和 `Pin` 请求仍生效。`preview-dock-text`、`preview-float-text`、
+`preview-keep-text` 为可绑定 UTF-8 操作提示；SDK组合可访问面板名并绘制不捕获输入的提示条。
+样式 part 为 `dock-workspace-preview`（背景/边框）和 `dock-workspace-caption`（背景/文字）；
+提示背景保持不透明、目的地区域保持半透明，松手/Esc立即移除反馈。
+
 ### 3.5 Stack增删与多列重排
 
 模板继续写 `<Column><Card v-for="item in items" :key="item.id">…</Card></Column>`。schema为 `r items:list<Item>`、`model Item key id { r id:utf8 ... }`。VM INSERT/REMOVE/MOVE delta决定结构，Stack不发业务增删事件；无新增“在模板中执行insert()”语法。default槽保留任意子项。

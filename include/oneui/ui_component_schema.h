@@ -25,7 +25,7 @@ enum class ValueType { None, Text, Boolean, Integer, Number, Strings, Columns, R
     X(ContainerPage, "container-page", "selected", None) \
     X(DragHandle, "drag-handle", "source domain kind threshold", None) \
     X(DropSurface, "drop-surface", "domain role", None) \
-    X(DockWorkspace, "workspace-collection", "nodes root placements revision maximized compact-active ack-request ack-accepted gap divider-hit", None) \
+    X(DockWorkspace, "workspace-collection", "nodes root placements revision maximized compact-active ack-request ack-accepted gap divider-hit preview-dock-text preview-float-text preview-keep-text raise-on-press", None) \
     X(DockItem, "workspace-item", "pane-key dock-min-width dock-min-height float-min-width float-min-height hideable", None) \
     X(Workspace, "stack", "", None) \
     X(TitleBar, "stack", "", None) \
@@ -138,7 +138,7 @@ constexpr ValueType propertyType(Kind kind,std::string_view key) {
     if(kind==Kind::FontPicker&&key=="selected")return ValueType::Text;
     if(kind==Kind::FontPicker&&(key=="confirm-selection"||key=="monospace-only"))return ValueType::Boolean;
     if(kind==Kind::FontPicker&&key=="monospace-items")return ValueType::Rows;
-    if(contains("disabled visible selected checked open reduced-motion detail-open wrap closable themed second-collapsed collapsed closing ack-accepted motion active viewing-history can-close can-split can-maximize reorderable hideable loading password read-only chrome-visible",key))return ValueType::Boolean;
+    if(contains("disabled visible selected checked open reduced-motion detail-open wrap closable themed second-collapsed collapsed closing ack-accepted motion active viewing-history can-close can-split can-maximize reorderable hideable loading password read-only chrome-visible raise-on-press",key))return ValueType::Boolean;
     if(contains("selectedIndex revision ack-request close-request navigation-serial number max-lines",key))return ValueType::Integer;
     if(contains("nodes groups drag-sources placements tokens spans",key))return ValueType::Rows;
     if(contains("gap divider-hit motion-ms resize-idle-ms min-width min-height threshold dock-min-width dock-min-height float-min-width float-min-height minimum maximum step opacity",key))return ValueType::Number;

@@ -52,9 +52,8 @@ bool DockWorkspaceView::onMouseDown(const MouseEvent& e) {
     alt_=e.alt;pointerOrigin_=e.position;
     if(e.button!=MouseButton::Left)return View::onMouseDown(e);
     auto [item,edge]=resizeAt(e.position);
-    if(item!=State::none) {
+    if(item!=State::none && state_->snapshot.raiseOnPress) {
         auto key=state_->items[item].view->key;
-        // The VM may synchronously publish a new order/revision in this call.
         requestAction(DockIntentKind::Raise,key);
         item=state_->itemIds.count(key)?state_->itemIds.at(key):State::none;
     }

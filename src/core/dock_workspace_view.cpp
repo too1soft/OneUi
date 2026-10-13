@@ -1,6 +1,7 @@
 #include "dock_workspace_state.h"
 #include "oneui/style_sheet.h"
 #include "internal/split_geometry.h"
+#include "internal/unicode.h"
 #include <algorithm>
 namespace oneui {
 void DockItemView::layoutChildren() {
@@ -67,7 +68,31 @@ void DockWorkspaceView::paint(Canvas& c) {
         c.fillRect(n.divider,color);
     }
     View::paint(c); // Floating content covers dividers beneath it.
-    if(s.previewActive){c.fillRect(s.preview,{40,97,61,40},8);c.strokeRect(s.preview,accent,8,2);}
+    if(s.previewActive){
+        Color fill{54,153,255,24},border{54,153,255,128},ink{32,33,36},backing{255,255,255};
+        if(auto sheet=styleScope()) {
+            auto preview=sheet->resolve({"dock-workspace-part",{"dock-workspace-preview"},0});
+            auto caption=sheet->resolve({"dock-workspace-part",{"dock-workspace-caption"},0});
+            fill=preview.background.color.value_or(fill);border=preview.borderColor.value_or(border);
+            ink=caption.foreground.value_or(ink);backing=caption.background.color.value_or(backing);
+        }
+        c.fillRect(s.preview,fill,12);c.strokeRect(s.preview,border,12,1);
+        std::wstring label;
+        auto title=[](const State::Item& item){return item.view->accessibleName().empty()?unicode::fromUtf8(item.view->key):item.view->accessibleName();};
+        if(s.source!=State::none) {
+            if(s.hit&&s.hit->placement!=DockHitPlacement::None) {
+                label=title(s.items[s.source])+L" → ";
+                for(auto& item:s.items)if(item.identity==s.hit->target)label+=title(item);
+                label+=L" · "+unicode::fromUtf8(s.snapshot.previewDockText);
+            } else if(alt_)label=title(s.items[s.source])+L" · "+unicode::fromUtf8(s.snapshot.previewFloatText);
+            else label=unicode::fromUtf8(s.snapshot.previewKeepText);
+        }
+        auto host=frame();float width=std::min(std::max(0.f,host.width-24),c.measureTextWidth(label,12,500)+16);
+        Rect chip{std::clamp(s.preview.x+12,host.x+12,std::max(host.x+12,host.x+host.width-width-12)),
+                  std::clamp(s.preview.y+12,host.y+12,std::max(host.y+12,host.y+host.height-40)),width,28};
+        backing.a=255;c.fillRect(chip,backing,6);
+        c.drawTextStyled(label,{chip.x+8,chip.y,chip.width-16,chip.height},ink,12,TextAlign::Center,500);
+    }
     if(s.hit&&s.gesture==State::Gesture::Move) {
         auto r=s.hit->bounds;float x=r.x+r.width*.5f,y=r.y+r.height*.5f;
         Rect guides[]={{x-68,y-18,42,36},{x+26,y-18,42,36},{x-21,y-58,42,36},{x-21,y+22,42,36}};

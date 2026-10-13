@@ -1,6 +1,7 @@
 #include "oneui/layout/dock_workspace_view.h"
 #include "oneui/controls/drag_handle.h"
 #include "oneui/style_sheet.h"
+#include "oneui/animation.h"
 #include "internal/ui_clock.h"
 #include "../support/recording_canvas.h"
 #include <iostream>
@@ -109,5 +110,52 @@ void dividerAndActions() {
     f.dock->requestAction(DockIntentKind::Redock,"sftp");check(f.events.back().kind==DockIntentKind::Redock,"redock intent");
     auto title=f.title(0);MouseEvent dbl{title};dbl.clickCount=2;f.root.onMouseDown(dbl);check(f.events.back().kind==DockIntentKind::Maximize,"title doubleclick maximize intent");
 }
+void transactionalPointerAndPreview() {
+    Fixture f;f.floating();f.state.raiseOnPress=false;f.publish();
+    const auto before=f.state.placements[3];auto p=f.title(3);
+    f.root.onMouseDown({p});f.root.onMouseMove({{p.x+20,p.y+20}});
+    KeyEvent esc;esc.key=Key::Escape;f.root.onKeyDown(esc);
+    check(f.events.empty()&&!f.dock->interactionActive()&&!f.dock->previewRect(),"transactional drag Escape sends no mutation including Raise");
+    auto r=f.items[3]->frame();Point corner{r.x+r.width-1,r.y+r.height-1};
+    f.root.onMouseDown({corner});f.root.onMouseMove({{corner.x-50,corner.y-50}});
+    f.root.onKeyDown(esc);f.root.onMouseUp({corner});
+    check(f.events.empty()&&near(f.items[3]->frame().width,before.bounds.width)&&f.dock->snapshot().placements[3].order==before.order,"resize Escape preserves saved geometry and order");
+    f.dock->requestAction(DockIntentKind::Raise,"ai");
+    check(f.events.size()==1&&f.events.back().kind==DockIntentKind::Raise,"explicit Raise remains available with raise-on-press disabled");
+    f.state.placements[3].order=42;++f.state.revision;f.state.ackRequest=f.events.back().request;f.publish();
+    check(f.dock->snapshot().placements[3].order==42&&f.dock->children().back()==f.items[3],"accepted explicit Raise updates paint order");
+    f.state.nodes={{"t","terminal"},{"s","sftp"},{"root","","t","s",DockAxis::Vertical,.5f}};f.state.root="root";
+    f.state.placements[2]={"monitor","floating",before.bounds,true,2};++f.state.revision;f.publish();
+    auto count=f.events.size();f.root.onMouseDown({corner});f.root.onMouseUp({{corner.x-10,corner.y-10}});
+    check(f.events.size()==count+1&&f.events.back().source=="monitor","pinned overlapping tool consumes the edge; lower AI never receives it");
 }
-int main(){try{internal::ScopedUiClock clock(clockNow);geometry();drag();floatingResize();dividerAndActions();std::cout<<"dock workspace: 4 scenario groups passed\n";}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}
+void previewMotion() {
+    auto setup=[](Fixture& f) {
+        now=0;f.dock->setMotionEnabled(true);f.begin(0);
+        auto r=f.items[2]->frame();f.root.onMouseMove({{r.x+r.width-2,r.y+80}});
+        return Rect{r.x+r.width*.5f,r.y,r.width*.5f,r.height};
+    };
+    Fixture f;auto from=f.items[0]->frame(),target=setup(f);
+    now=16;f.dock->tickAnimations(now);auto mid=*f.dock->previewRect();
+    check(mid.x>from.x&&mid.x<target.x,"preview advances without overshoot");
+    auto origin=f.title(0);f.root.onMouseMove({{origin.x,origin.y}});
+    now=32;f.dock->tickAnimations(now);auto reverse=*f.dock->previewRect();
+    check(reverse.x>from.x&&reverse.x<mid.x,"preview retargets from current display");
+    auto r=f.items[2]->frame();f.root.onMouseMove({{r.x+r.width-2,r.y+80}});
+    for(int i=0;i<31;++i){now+=16;f.dock->tickAnimations(now);}
+    auto settled=*f.dock->previewRect();
+    check(settled.x==target.x&&settled.y==target.y&&settled.width==target.width&&settled.height==target.height,"old preview contract settles exactly in thirty frames");
+    Fixture sample;setup(sample);now=8;sample.dock->tickAnimations(now);now=16;sample.dock->tickAnimations(now);
+    check(std::abs(sample.dock->previewRect()->x-mid.x)<.001f,"two 8ms steps equal one 16ms step");
+    f.root.onMouseMove({{origin.x,origin.y}});f.dock->setMotionEnabled(false);
+    check(f.dock->previewRect()->x==from.x,"reduced motion snaps immediately");
+    f.state.previewKeepText="Custom keep and cancel";f.publish();
+    test_support::RecordingCanvas painted;f.dock->paint(painted);
+    check(!painted.texts.empty()&&painted.texts.back().text==L"Custom keep and cancel","localized caption is actually painted");
+    f.root.onMouseUp({{origin.x,origin.y}});check(!f.dock->previewRect(),"release clears feedback immediately");
+    Fixture reduced;auto reducedTarget=setup(reduced);setPlatformMotionEnabled(false);reduced.dock->tickAnimations(now);
+    check(reduced.dock->previewRect()->x==reducedTarget.x,"system reduced-motion preference snaps an active preview");
+    setPlatformMotionEnabled(true);
+}
+}
+int main(){try{internal::ScopedUiClock clock(clockNow);geometry();drag();floatingResize();dividerAndActions();transactionalPointerAndPreview();previewMotion();std::cout<<"dock workspace: 6 scenario groups passed\n";}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}
