@@ -4,6 +4,7 @@
 #include "oneui/layout/dock_workspace_view.h"
 #include "oneui/controls/table.h"
 #include "oneui/controls/virtual_list.h"
+#include "oneui/layout/virtual_template_list.h"
 namespace {
 std::shared_ptr<oneui::Widget> namedViewElement(const std::shared_ptr<Runtime>& value, OneUiUtf8String name) {
         const auto key = text(name);
@@ -65,6 +66,10 @@ OneUiViewResult oneui_view_element_metrics(OneUiView *view, OneUiUtf8String name
             result.scrollable = 1;
             result.scroll_y = table->scrollOffset();
             result.max_scroll_y = table->maxScrollOffset();
+        } else if (auto list = std::dynamic_pointer_cast<oneui::VirtualTemplateList>(found)) {
+            result.scrollable = 1;
+            result.scroll_y = list->scrollOffset();
+            result.max_scroll_y = list->maxScrollOffset();
         } else if (auto list = std::dynamic_pointer_cast<oneui::VirtualList>(found)) {
             result.scrollable = 1;
             result.scroll_y = list->scrollOffset();

@@ -75,6 +75,7 @@ struct ApiCase : Case {
 #include "child_mount.inc"
 #include "child_destination.inc"
 #include "child_destination_lifecycle.inc"
+#include "virtual_template_metrics.inc"
 int main(int argc, char **argv) {
     for (const auto name : {"note-outline", "box-outline", "sparkles-outline", "toolbox", "shield-outline", "globe", "import-outline", "sidebar-outline"}) {
         expect(oneui::ui::namedIcon(name).has_value(), "shell icon name");
@@ -88,6 +89,7 @@ int main(int argc, char **argv) {
         childDestinationCloseContract(argv[1]);
         childDestinationNativeWindowContract(argv[1]);
         childDestinationTeardownContract(argv[1]);
+        virtualTemplateMetricsContract(argv[1]);
         expect(oneui_utf8_abi_version() == 45 && oneui_view_protocol_version() == 1,
                "ABI and protocol versions");
         {

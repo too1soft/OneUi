@@ -1,5 +1,6 @@
 #include "oneui/layout/dock_workspace_view.h"
 #include "oneui/controls/drag_handle.h"
+#include "oneui/layout/stack.h"
 #include "oneui/style_sheet.h"
 #include "oneui/animation.h"
 #include "internal/ui_clock.h"
@@ -46,6 +47,7 @@ struct Fixture {
     Point title(size_t i){auto r=items[i]->frame();return {r.x+50,r.y+14};}
     void begin(size_t i){auto p=title(i);root.onMouseDown({p});root.onMouseMove({{p.x+7,p.y}});}
 };
+#include "dock_header_geometry.inc"
 void presentationTransaction() {
     Fixture f;
     auto presentation=f.presentation;
@@ -177,4 +179,4 @@ void previewMotion() {
     setPlatformMotionEnabled(true);
 }
 }
-int main(){try{internal::ScopedUiClock clock(clockNow);geometry();drag();floatingResize();dividerAndActions();transactionalPointerAndPreview();previewMotion();presentationTransaction();std::cout<<"dock workspace: 7 scenario groups passed\n";}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}
+int main(){try{internal::ScopedUiClock clock(clockNow);geometry();drag();floatingResize();dividerAndActions();transactionalPointerAndPreview();previewMotion();presentationTransaction();headerGeometry();std::cout<<"dock workspace: 8 scenario groups passed\n";}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

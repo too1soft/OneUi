@@ -6,7 +6,12 @@
 namespace oneui {
 void DockItemView::layoutChildren() {
     auto rect=frame();auto h=header.lock(),f=footer.lock(),b=body.lock();
-    if(h&&h->visible()) {auto r=rect;r.height=std::min(rect.height,std::max(29.f,h->naturalSize().height));h->setFrame(r);rect.y+=r.height;rect.height-=r.height;}
+    if(h&&h->visible()) {
+        const float preferred=h->preferredSize().height;
+        const float height=preferred>0?preferred:h->naturalSize().height;
+        auto r=rect;r.height=std::min(rect.height,std::max(29.f,height));
+        h->setFrame(r);rect.y+=r.height;rect.height-=r.height;
+    }
     if(f&&f->visible()) {auto r=rect;r.height=std::min(rect.height,f->naturalSize().height);r.y=(rect.y+rect.height)-r.height;f->setFrame(r);rect.height-=r.height;}
     if(b)b->setFrame(rect);
     for(auto& child:children())if(child!=h&&child!=f&&child!=b)child->setFrame(rect);
