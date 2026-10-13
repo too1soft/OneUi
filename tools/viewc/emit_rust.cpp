@@ -46,7 +46,8 @@ std::string decode(uint32_t tag, const std::string &value) {
 std::string trait(const Model &model) { return symbol(model.name) + "Vm"; }
 std::string commands(const Model &model) { return symbol(model.name) + "Command"; }
 void emitTrait(std::ostream &out, const Schema &schema, const Model &model) {
-    out << "#[derive(Clone, Debug, PartialEq)]\npub enum " << commands(model) << " {\n";
+    const auto entity = model.name.find('.') == std::string::npos ? symbol(model.name) : pascal(model.name);
+    out << "#[derive(Clone, Debug, PartialEq)]\npub enum " << entity << "Command {\n";
     for (const auto &[_, command] : model.commands) {
         out << "    " << pascal(command.name);
         if (!command.args.empty()) {
@@ -56,7 +57,11 @@ void emitTrait(std::ostream &out, const Schema &schema, const Model &model) {
         }
         out << ",\n";
     }
-    out << "}\n#[allow(non_snake_case)]\npub trait " << trait(model) << ": 'static {\n";
+    out << "}\n";
+    if (entity != symbol(model.name))
+        out << "pub use self::" << entity << "Command as " << commands(model) << ";\n"
+            << "pub use self::" << entity << "Vm as " << trait(model) << ";\n";
+    out << "#[allow(non_snake_case)]\npub trait " << entity << "Vm: 'static {\n";
     for (auto &[_, p] : model.properties) {
         if (p.tag == List) {
             out << "    type " << pascal(p.name) << "Item: " << trait(schema.model(p.item)) << ";\n"
@@ -150,6 +155,9 @@ std::string emitRust(const Image &image, const Bytes &bytes) {
     std::set<std::string> names;
     for (auto &[_, model] : image.schema.models) {
         if (!names.insert(symbol(model.name)).second) throw Error("Rust model names collide after qualification");
+        if (model.name.find('.') != std::string::npos &&
+            pascal(model.name) != symbol(model.name) && !names.insert(pascal(model.name)).second)
+            throw Error("Rust model names collide after qualification");
         std::set<std::string> methods{"on_view_connect", "on_view_disconnect"};
         if (!model.commands.empty()) methods.insert("invoke");
         std::set<std::string> constants, variants;

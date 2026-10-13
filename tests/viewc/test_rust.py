@@ -49,6 +49,19 @@ class Rust(CompilerCase):
         self.assertIn('fn r#type', text)
         self.assertIn('fn r#field_self', text)
 
+    def test_qualified_entities_retain_legacy_public_aliases(self):
+        text = self.emit('model Basic { r items: list<oneui.v1.StringItem> }')
+        self.assertIn('pub enum OneuiV1StringItemCommand {', text)
+        self.assertIn('pub trait OneuiV1StringItemVm:', text)
+        self.assertIn('pub use self::OneuiV1StringItemCommand as oneui_v1_StringItemCommand;', text)
+        self.assertIn('pub use self::OneuiV1StringItemVm as oneui_v1_StringItemVm;', text)
+        self.assertIn('type ItemsItem: oneui_v1_StringItemVm;', text)
+        self.assertIn('Result<oneui_v1_StringItemCommand, ViewError>', text)
+        self.assertNotIn('non_camel_case_types', text)
+
+    def test_qualified_entity_alias_collision_is_rejected(self):
+        self.emit('model Basic { r a:list<a.b> r b:list<AB> } model a.b key id { r id:utf8 } model AB key id { r id:utf8 }', error='collide')
+
 
 if __name__ == '__main__':
     unittest.main()
