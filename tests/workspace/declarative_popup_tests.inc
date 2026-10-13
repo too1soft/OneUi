@@ -1,4 +1,5 @@
 void declarativePopups() {
+    (void)ui::syntax::css("Popup { background:#24262b; color:#ffffff; border-color:#404550; border-width:1px; border-radius:6px; padding:0px; gap:4px; box-shadow:0px 2px 8px #00000040; }");
     ui::Mount mount({},std::make_shared<ui::StyleRegistry>(),{});
     auto body=mount.make("Button");
     mount.set(body,"text",L"Popup action");
@@ -12,6 +13,8 @@ void declarativePopups() {
     mount.set(element,"placement",L"bottom-start");
     int closed=0;popup->setOnClosed([&]{++closed;});
     mount.set(element,"open",true);
+    check(root.requestFocus(body.widget.get(),true),"root can focus a descendant through Popup");
+    check(body.widget->focused(),"popup content receives keyboard focus");
     const auto rect=popup->resolvedContentRect();
     check(rect.y<220 && rect.x+rect.width<=320,"popup flips and clamps at viewport edge");
     KeyEvent escape;escape.key=Key::Escape;

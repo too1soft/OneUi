@@ -204,6 +204,19 @@ ONEUI_API OneUiViewResult oneui_view_disconnect(OneUiView *view);
 /* Consumes the owned view handle; NULL permitted; UI thread only. */
 ONEUI_API void oneui_view_destroy(OneUiView *view);
 ONEUI_API OneUiViewResult oneui_view_get_error(OneUiView *view, OneUiViewError *out);
+/* Read-only focus query for a unique declared element; exposes no widget handle. */
+ONEUI_API OneUiViewResult oneui_view_element_focused(OneUiView *view,
+    OneUiUtf8String name, int *out_focused);
+/* Dock actions: 0=float, 1=pin, 2=raise, 3=maximize, 4=visibility, 5=redock. */
+ONEUI_API OneUiViewResult oneui_view_dock_action(OneUiView *view, OneUiUtf8String name,
+    int action, OneUiUtf8String pane, int flag);
+
+/* Compose an independent declarative VM into an empty named Surface of the
+ * parent's active view. No native widget slot is exposed. The child inherits
+ * styles and window ownership, closes before its parent, and becomes CLOSED
+ * on parent reload. Remount after reload; ordinary property flushes preserve it. */
+ONEUI_API OneUiViewResult oneui_view_mount_child(OneUiViewMount *parent,
+    OneUiUtf8String name, OneUiViewMount **out);
 
 /* On success out owns one notifier reference. */
 ONEUI_API OneUiViewResult oneui_view_notifier(OneUiView *view, OneUiViewNotifier **out);
@@ -264,11 +277,25 @@ ONEUI_API OneUiViewResult oneui_view_element_metrics(OneUiView *view,
  * outside callbacks. Non-MountPoint elements return TYPE; no raw child escapes. */
 ONEUI_API OneUiViewResult oneui_view_mount_point(OneUiView *view,
     OneUiUtf8String name, OneUiWidget **out);
+/** Query a workspace pane by stable pane key; accessible labels may repeat. */
+ONEUI_API OneUiViewResult oneui_view_dock_item_metrics(OneUiView *view,
+    OneUiUtf8String workspace, OneUiUtf8String pane, OneUiViewElementMetrics *out);
 /** Focus a uniquely named element of the mount's active view on its UI thread.
  * No widget handle escapes. Rejects ambiguous/missing names and closed mounts.
  * Call outside VM callbacks; out_focused reports native focus eligibility. */
 ONEUI_API OneUiViewResult oneui_view_mount_focus_element(OneUiViewMount *mount,
     OneUiUtf8String name, int focus_visible, int *out_focused);
+/* Join native Tabs or a declarative Tabs host Panel to the active View's WP4 drag domain. UI thread,
+ * outside VM callbacks, same window only. The domain stores a weak reference;
+ * it does not reparent the Tabs or replace their existing callbacks. */
+ONEUI_API OneUiViewResult oneui_view_mount_register_workspace_tabs(OneUiViewMount *mount,
+    OneUiUtf8String domain, OneUiUtf8String id, OneUiWidget *tabs);
+/* Forward native tab drag events to WP4: 0 start, 1 move, 2 release, 3 cancel.
+ * source is a stable pane key required at start, ignored thereafter. Coordinates
+ * are logical client coordinates. Release recomputes the target; stale revisions
+ * and maximized panes cancel without emitting an intent. No widget is created. */
+ONEUI_API OneUiViewResult oneui_view_workspace_tab_drag(OneUiView *view,
+    OneUiUtf8String domain, OneUiUtf8String source, int phase, float x, float y);
 #ifdef __cplusplus
 }
 #endif

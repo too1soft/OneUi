@@ -3,6 +3,18 @@
 #include "oneui/controls/popup.h"
 namespace oneui::ui {
 void Mount::set(Element &e, const std::string &key, const std::wstring &value) {
+    if (key == "accessible-name") { e.widget->setAccessibleName(value); return; }
+    if(e.component=="StateView") {
+        auto state=e.as<StateView>();
+        if(key=="title"){state->setTitle(value);return;}
+        if(key=="message"){state->setMessage(value);return;}
+        if(key=="action"){state->setAction(value);return;}
+        if(key=="icon") {
+            const auto icon=namedIcon(std::string(value.begin(),value.end()));
+            if(!icon)throw std::invalid_argument("Unknown StateView icon");
+            state->setIcon(*icon);return;
+        }
+    }
     if(e.component=="Popup" && key=="placement") {
         const std::map<std::wstring,PopupPreferredPlacement> placements{
             {L"bottom-start",PopupPreferredPlacement::BottomStart}, {L"bottom-end",PopupPreferredPlacement::BottomEnd},
@@ -194,6 +206,7 @@ void Mount::set(Element &e, const std::string &key, const std::string &value) {
         set(e, key, wide(value));
 }
 void Mount::set(Element &e, const std::string &key, bool value) {
+    if(e.component=="VirtualList" && key=="multiple") {e.as<VirtualList>()->setSelectionMode(value ? SelectionMode::Multiple : SelectionMode::Single);return;}
     if(e.component=="Popup" && key=="open") {e.as<Popup>()->setOpen(value);return;}
     if(key=="placeholder-when-focused") {e.as<TextField>()->setPlaceholderVisibleWhenFocused(value);return;}
     if(e.component=="ReorderableGrid") {

@@ -6,6 +6,8 @@
     <Text v-if="visible" text="conditional"/>
     <Text v-for="item in rows" :key="item.id" :text="item.text"/>
     <NativeHost host="terminal"/>
+    <StateView :title="title" :message="title" :action="title" icon="server" @action="click"/>
+    <Surface name="child-slot" grow="1"/>
   </Column>
 </template>
 

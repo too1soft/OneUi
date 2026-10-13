@@ -11,19 +11,84 @@ pub struct ElementMetrics {
     pub max_scroll_y: f32,
 }
 impl View {
+    /// Last committed pane geometry, addressed by stable key rather than label.
+    pub fn dock_item_frame(&self, workspace: &str, pane: &str) -> VmResult<Rect> {
+        let mut value: sys::OneUiViewElementMetrics = unsafe { std::mem::zeroed() };
+        value.struct_size = std::mem::size_of_val(&value) as u32;
+        check(unsafe {
+            sys::oneui_view_dock_item_metrics(
+                self.raw.as_ptr(),
+                sys::OneUiUtf8String::from_str(workspace),
+                sys::OneUiUtf8String::from_str(pane),
+                &mut value,
+            )
+        })?;
+        Ok(Rect {
+            x: value.x,
+            y: value.y,
+            width: value.width,
+            height: value.height,
+        })
+    }
+    /// Dispatch a standard workspace action through the same intent/ack contract as input.
+    pub fn dock_action(&self, name: &str, action: DockAction, pane: &str, flag: bool) -> VmResult {
+        check(unsafe {
+            sys::oneui_view_dock_action(
+                self.raw.as_ptr(),
+                sys::OneUiUtf8String::from_str(name),
+                action as i32,
+                sys::OneUiUtf8String::from_str(pane),
+                i32::from(flag),
+            )
+        })
+    }
+    pub fn element_focused(&self, name: &str) -> VmResult<bool> {
+        let mut focused = 0;
+        check(unsafe {
+            sys::oneui_view_element_focused(
+                self.raw.as_ptr(),
+                sys::OneUiUtf8String::from_str(name),
+                &mut focused,
+            )
+        })?;
+        Ok(focused != 0)
+    }
     /// Query a unique accessible name, including names bound in repeat rows.
     /// Returns the last committed layout without flushing or calling the VM.
     pub fn element_metrics(&self, name: &str) -> VmResult<ElementMetrics> {
         let mut value: sys::OneUiViewElementMetrics = unsafe { std::mem::zeroed() };
         value.struct_size = std::mem::size_of_val(&value) as u32;
-        check(unsafe { sys::oneui_view_element_metrics(self.raw.as_ptr(),
-            sys::OneUiUtf8String::from_str(name), &mut value) })?;
+        check(unsafe {
+            sys::oneui_view_element_metrics(
+                self.raw.as_ptr(),
+                sys::OneUiUtf8String::from_str(name),
+                &mut value,
+            )
+        })?;
         Ok(ElementMetrics {
-            frame: Rect { x: value.x, y: value.y, width: value.width, height: value.height },
-            scrollable: value.scrollable != 0, scroll_x: value.scroll_x,
-            scroll_y: value.scroll_y, max_scroll_y: value.max_scroll_y,
+            frame: Rect {
+                x: value.x,
+                y: value.y,
+                width: value.width,
+                height: value.height,
+            },
+            scrollable: value.scrollable != 0,
+            scroll_x: value.scroll_x,
+            scroll_y: value.scroll_y,
+            max_scroll_y: value.max_scroll_y,
         })
     }
+}
+
+#[derive(Clone, Copy, Debug)]
+#[repr(i32)]
+pub enum DockAction {
+    Float = 0,
+    Pin = 1,
+    Raise = 2,
+    Maximize = 3,
+    Visibility = 4,
+    Redock = 5,
 }
 
 impl super::ViewMount {
@@ -31,8 +96,14 @@ impl super::ViewMount {
     /// Call outside VM callbacks, after its view has been attached.
     pub fn focus_element(&self, name: &str, focus_visible: bool) -> VmResult<bool> {
         let mut focused = 0;
-        check(unsafe { sys::oneui_view_mount_focus_element(self.raw.as_ptr(),
-            sys::OneUiUtf8String::from_str(name), i32::from(focus_visible), &mut focused) })?;
+        check(unsafe {
+            sys::oneui_view_mount_focus_element(
+                self.raw.as_ptr(),
+                sys::OneUiUtf8String::from_str(name),
+                i32::from(focus_visible),
+                &mut focused,
+            )
+        })?;
         Ok(focused != 0)
     }
 }

@@ -129,6 +129,12 @@ void Runtime::wire(const std::shared_ptr<Instance> &instance) {
             if(auto surface=element.as<InteractiveSurface>())surface->setOnClick([fire]{fire({});});
             else element.as<Button>()->setOnClick([fire] { fire({}); });
         }
+        else if (name == "action")
+            element.as<StateView>()->setOnAction([fire] { fire({}); });
+        else if (name == "activated" && element.component == "Menu")
+            element.as<Menu>()->setOnItemActivated([fire](int index) {
+                Value v; v.tag = 2; v.integer = index; fire({v});
+            });
         else if (name == "pointer" && std::any_of(instance->events.begin(),instance->events.end(),
                  [&](const auto& binding){return binding[1]==event.id;}))
             element.as<InteractiveSurface>()->setOnPointerActivated([fire](const MouseEvent& event) {
@@ -157,6 +163,20 @@ void Runtime::wire(const std::shared_ptr<Instance> &instance) {
                 v.text = narrow(key);
                 fire({v});
             };
+        else if (name == "selectionChanged" && element.component == "VirtualList")
+            element.as<VirtualList>()->setOnSelectionChanged([fire, node, previous = element.as<VirtualList>()->selectedIndices()](const std::vector<int>& selected) mutable {
+                auto instance = node.lock();
+                const std::set<int> old(previous.begin(), previous.end()), next(selected.begin(), selected.end());
+                previous = selected;
+                if (!instance || instance->applying) return;
+                std::set<int> changed = old;
+                for (int index : next) { if (!changed.erase(index)) changed.insert(index); }
+                for (int i : changed) {
+                    Value index, chosen; index.tag = 2; index.integer = i;
+                    chosen.tag = 1; chosen.integer = next.count(i) != 0;
+                    fire({index, chosen});
+                }
+            });
         else if (name == "activate" && element.component == "VirtualList")
             element.as<VirtualList>()->setOnActivated([fire](int) { fire({}); });
         else if (name == "activate")

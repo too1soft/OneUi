@@ -52,6 +52,7 @@ const std::map<std::string, ComponentContract> &registry()
         ++r.at("Input").version; // Explicit password mask, appended property ID 15.
         ++r.at("Scroll").version; // Explicit content width, appended property ID 15.
         ++r.at("SearchInput").version; // Optional prefix icon; absent keeps old rendering.
+        ++r.at("VirtualList").version; // Optional row selection and typed multi-selection events.
         ++r.at("FontPicker").version;
         // Read-only class bindings preserve static and scoped classes. Keep the
         // reviewed extension limited to the presentation nodes that need it.
@@ -69,6 +70,10 @@ const std::map<std::string, ComponentContract> &registry()
         }
         ++r.at("Text").version; // Explicit line boxes, alignment and tooltip.
         ++r.at("Button").version; // Tooltip and content alignment.
+        // Preserve frozen registry rows while separating the two menu contracts.
+        ++r.at("Menu").version;
+        for (auto &property : r.at("Menu").properties)
+            if (property.name == "items") property.record = "@native-menu.item";
         // Detect authoring metadata drift before publishing a contract hash.
         // Intentional changes require a reviewed registry/version update.
         using namespace oneui::ui::schema;
@@ -116,6 +121,7 @@ void validateRecord(const Model& model, const std::string& projection) {
     }
     std::string fields;
     if(projection=="@list.item") fields="id:4 title:4 detail:4";
+    else if(projection=="@native-menu.item") fields="id:4 kind:4 title:4 detail:4 icon:4 danger:1 disabled:1";
     else if(projection=="@text.span") fields="id:4 start:2 end:2 rgba:2 monospace:1";
     else if(projection=="@workspace.node") fields="id:4 kind:4 axis:4 ratio:3 first:4 second:4 pane:4";
     else if(projection=="@workspace.placement") fields="id:4 mode:4 x:3 y:3 width:3 height:3 pinned:1 order:2";
@@ -124,6 +130,7 @@ void validateRecord(const Model& model, const std::string& projection) {
     else if(projection=="@menu.item") fields="id:4 parent:4 text:4 icon:4 shortcut:4 disabled:1 checked:1 danger:1 separator:1";
     else if(projection=="@workspace.group") fields="id:4 root:4";
     else if(projection=="@workspace.tab-source") fields="id:4 pane:4 enabled:1";
+    else if(projection=="@workspace.tab-decoration") fields="id:4 icon:2 rgba:2";
     else throw Error("BIND_RECORD: unknown projection "+projection);
     require(model.keyName=="id","BIND_RECORD: workspace key must be id");
     std::istringstream stream(fields);std::string field;
@@ -225,7 +232,7 @@ void addBuiltins(Schema &schema)
     };
     model("StringItem", "id:utf8 value:utf8");
     model("NumberItem", "id:utf8 value:f64");
-    model("TabItem", "id:utf8 title:utf8");
+    model("TabItem", "id:utf8 title:utf8"); // Decorations use a separate optional keyed projection.
     model("Row", "id:utf8 cells:StringItem");
     model("Column", "id:utf8 header:utf8 width:f64 alignment:i64 action:bool kind:i64");
     model("Series", "id:utf8 name:utf8 rgba:i64 values:NumberItem");

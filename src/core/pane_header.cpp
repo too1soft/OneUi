@@ -7,13 +7,13 @@
 namespace oneui {
 namespace {
 constexpr PaneHeaderAction actions[]={PaneHeaderAction::Split,PaneHeaderAction::Maximize,PaneHeaderAction::Broadcast,
-                                     PaneHeaderAction::Live,PaneHeaderAction::Close,PaneHeaderAction::Menu};
-constexpr IconSymbol icons[]={IconSymbol::OutlineWorkbenchSplit,IconSymbol::OutlineWorkbenchMaximize,IconSymbol::Share,
-                              IconSymbol::Play,IconSymbol::OutlineClose,IconSymbol::OutlineWorkbenchGrip};
-constexpr const wchar_t* labels[]={L"Split pane right",L"Maximize or restore pane",L"Broadcast",L"Return to live output",L"Close pane",L"Move pane or open menu"};
+                                     PaneHeaderAction::Live,PaneHeaderAction::Close,PaneHeaderAction::Menu,PaneHeaderAction::Menu};
+constexpr IconSymbol icons[]={IconSymbol::OutlineWorkbenchSplit,IconSymbol::OutlineWorkbenchMaximize,IconSymbol::OutlineWorkbenchBroadcast,
+                              IconSymbol::ChevronDown,IconSymbol::OutlineWorkbenchClose,IconSymbol::OutlineWorkbenchGrip,IconSymbol::OutlineWorkbenchMore};
+constexpr const wchar_t* labels[]={L"Split pane right",L"Maximize or restore pane",L"Broadcast",L"Return to live output",L"Close pane",L"Move pane or open menu",L"Pane actions"};
 }
 PaneHeader::PaneHeader() {
-    setPreferredSize({220,29});setAccessibleName(L"Pane header");
+    setPreferredSize({220,30});setAccessibleName(L"Pane header");
     for(size_t i=0;i<buttons_.size();++i) {
         buttons_[i]=std::make_shared<IconButton>(icons[i]);buttons_[i]->setAccessibleName(labels[i]);
         buttons_[i]->setTooltip(labels[i]);buttons_[i]->setOnClick([this,i]{
@@ -26,17 +26,45 @@ void PaneHeader::setConfig(PaneHeaderConfig config) {
         throw std::invalid_argument("Invalid broadcast role");
     if(config.number<1)throw std::invalid_argument("Pane number must be positive");
     if(config.pane!=config_.pane)resetInteractionState();
+    const bool roleChanged=config.broadcastRole!=config_.broadcastRole;
     config_=std::move(config);buttons_[2]->setTooltip(config_.broadcastHint);
+    if(roleChanged)refreshButtonStyles();
     setTooltip(config_.title+(config_.path.empty()?L"":L"\n"+config_.path));
     layoutChildren();invalidate();
 }
-void PaneHeader::setStyleBox(StyleBox style){
-    style_=std::move(style);
-    auto sheet=std::make_shared<StyleSheet>();StyleBox button;
-    button.foreground=style_.foreground;button.padding=Insets{4};button.borderWidth=1.5f;
-    sheet->addRule({"button",button});
-    for(auto& b:buttons_)b->setStyleSheet(sheet,{"button",{},0});
-    invalidate();
+void PaneHeader::setStyleBox(StyleBox style) {
+    style_=std::move(style);refreshButtonStyles();invalidate();
+}
+void PaneHeader::styleScopeChanged() {
+    View::styleScopeChanged();refreshButtonStyles();invalidate();
+}
+StyleBox PaneHeader::partStyle(const char* part) const {
+    auto sheet=styleScope();if(!sheet)return {};
+    StyleNode node{"pane-header-part",{part,config_.active?"pane-header-active":"pane-header-inactive"},0};
+    return sheet->resolve(node);
+}
+void PaneHeader::refreshButtonStyles() {
+    auto sheet=std::make_shared<StyleSheet>();
+    StyleBox button;button.foreground=style_.foreground;button.padding=Insets{4};
+    button.borderWidth=1.5f;button.background.color=Color{0,0,0,0};button.radius=4;
+    sheet->addRule({"pane-header-part",button});
+    if(auto scope=styleScope()) {
+        for(auto& token:scope->customProperties())sheet->setCustomProperty(token.first,token.second);
+        for(auto& rule:scope->rules())sheet->addRule(rule);
+    }
+    buttonSheet_=sheet;
+    for(size_t i=0;i<buttons_.size();++i)if(buttons_[i]) {
+        StyleNode node{"pane-header-part",{"pane-header-button"},0};
+        if(i==2 && config_.broadcastRole!="none")node.classes.push_back("pane-header-broadcast-on");
+        buttons_[i]->setStyleSheet(sheet,std::move(node));
+    }
+}
+void PaneHeader::setActionLabel(PaneHeaderAction action,std::wstring label) {
+    bool found=false;
+    for(size_t i=0;i<buttons_.size();++i)if(actions[i]==action) {
+        buttons_[i]->setAccessibleName(label);buttons_[i]->setTooltip(label);found=true;
+    }
+    if(!found)throw std::invalid_argument("Pane header action has no button");
 }
 void PaneHeader::setOnIntent(std::function<void(PaneHeaderAction,Point)> callback){intent_=std::move(callback);}
 void PaneHeader::setOnDrag(std::function<void(int,Point)> callback){drag_=std::move(callback);}
@@ -53,35 +81,52 @@ Rect PaneHeader::actionFrame(PaneHeaderAction action) const {
     for(size_t i=0;i<buttons_.size();++i)if(actions[i]==action)return buttons_[i]->frame();return {};
 }
 void PaneHeader::layoutChildren() {
-    auto r=frame();float right=r.x+r.width-4;
+    auto r=frame();float right=r.x+r.width-6;
     buttons_[0]->setVisible(!compact() && config_.canSplit);buttons_[1]->setVisible(!compact() && config_.canMaximize);
     buttons_[3]->setVisible(config_.viewingHistory);buttons_[4]->setVisible(config_.canClose);
-    for(int i=4;i>=0;--i)if(buttons_[i]->visible()){right-=24;buttons_[i]->setFrame({right,r.y+2,24,24});}
-    buttons_[5]->setFrame({r.x,r.y+1,36,26});
+    // Product reference order: broadcast, split, maximize, more, close, live.
+    for(auto i:{3,4,6,1,0,2})if(buttons_[i]->visible()) {
+        right-=24;buttons_[i]->setFrame({right,r.y+2.5f,24,24});right-=4;
+    }
+    buttons_[5]->setFrame({r.x+8,r.y+1.5f,36,26});
     if(actions_ && actions_->visible()){right-=actions_->naturalSize().width;actions_->setFrame({right,r.y,actions_->naturalSize().width,29});}
-    if(identity_)identity_->setFrame({r.x+39,r.y,std::max(0.f,right-r.x-43),29});
+    if(identity_)identity_->setFrame({r.x+48,r.y,std::max(0.f,right-r.x-48),29});
     if(menu_)menu_->setFrame({r.x,r.y+r.height,r.width,menu_->naturalSize().height});
 }
 void PaneHeader::paint(Canvas& canvas) {
     layoutChildren();auto r=frame();const auto& t=theme();
     Color background=style_.background.color.value_or(t.surface),foreground=style_.foreground.value_or(t.text);
     canvas.fillRect(r,background);
-    if(config_.active)canvas.fillRect({r.x,r.y,r.width,1},style_.borderColor.value_or(t.primary));
+    auto rule=partStyle("pane-header-rule");
+    canvas.fillRect({r.x,r.y+29,r.width,1},rule.background.color.value_or(config_.active?style_.borderColor.value_or(t.primary):Color{0,0,0,0}));
     const bool reveal=hovered_||config_.active||focusVisible()||std::any_of(buttons_.begin(),buttons_.end(),[](auto& b){return b->focusVisible();});
-    for(size_t i=0;i<buttons_.size();++i)if(buttons_[i]->visible() && (reveal || (i==2 && config_.broadcastRole!="none")))buttons_[i]->paint(canvas);
-    canvas.fillEllipse({r.x+11,r.y+6,17,17},config_.active?style_.borderColor.value_or(t.primary):background);
-    canvas.drawText(std::to_wstring(config_.number),{r.x+10,r.y+4,19,20},config_.active?background:foreground,11);
+    for(size_t i=0;i<buttons_.size();++i)if(i!=5 && buttons_[i]->visible() && (reveal || (i==2 && config_.broadcastRole!="none")))buttons_[i]->paint(canvas);
+    auto grip=partStyle("pane-header-grip");
+    paintIcon(canvas,IconSymbol::OutlineWorkbenchGrip,{r.x+10,r.y+6.5f,12,16},grip.foreground.value_or(foreground),Color{0,0,0,0},1.5f);
+    auto badge=partStyle("pane-header-number");
+    if(!badge.background.color)badge.background.color=config_.active?style_.borderColor.value_or(t.primary):background;
+    if(!badge.radius)badge.radius=5;
+    paintStyleBox(canvas,{r.x+25,r.y+6,17,17},badge);
+    canvas.drawTextStyledEllipsized(std::to_wstring(config_.number),{r.x+25,r.y+6,17,17},
+        badge.foreground.value_or(config_.active?background:foreground),badge.fontSize.value_or(11),TextAlign::Center,badge.fontWeight.value_or(400));
     if(identity_) {if(identity_->visible())identity_->paint(canvas);}
     else {
         auto title=config_.title;
         if(config_.broadcastRole!="none")title=!config_.broadcastLabel.empty()?config_.broadcastLabel:config_.broadcastRole=="source"?L"Source":L"Receiver";
+        auto titleStyle=partStyle("pane-header-title"),pathStyle=partStyle("pane-header-path");
+        float size=titleStyle.fontSize.value_or(13);
         float available=std::max(r.width-(compact()?128.f:184.f),36.f);
-        float width=std::min(available,std::clamp(std::ceil(canvas.measureTextWidth(title,12)),36.f,120.f));
-        TextBlockStyle text;text.fontSize=12;text.ellipsis=true;text.maxLines=1;text.align=TextAlign::Left;
-        canvas.drawTextBlock(title,{r.x+39,r.y+6,width,18},foreground,text);
-        float end=r.x+r.width-4;
-        for(size_t i=0;i<5;++i)if(buttons_[i]->visible())end=std::min(end,buttons_[i]->frame().x);
-        canvas.drawTextBlock(config_.path,{r.x+43+width,r.y+6,std::max(0.f,end-r.x-width-47),18},foreground,text);
+        float width=title.empty()?0:std::min(available,std::clamp(std::ceil(canvas.measureTextWidth(title,size)),36.f,120.f));
+        TextBlockStyle text;text.fontSize=size;text.fontWeight=titleStyle.fontWeight.value_or(400);
+        text.fontFamily=titleStyle.fontFamily.value_or(L"");text.ellipsis=true;text.maxLines=1;text.align=TextAlign::Left;
+        if(!title.empty())canvas.drawTextBlock(title,{r.x+48,r.y+3.5f,width,22},titleStyle.foreground.value_or(foreground),text);
+        float end=r.x+r.width-6;
+        for(size_t i=0;i<buttons_.size();++i)if(i!=5 && buttons_[i]->visible())end=std::min(end,buttons_[i]->frame().x-4);
+        if(actions_ && actions_->visible())end=std::min(end,actions_->frame().x-4);
+        const float start=r.x+48+(title.empty()?0:width+6);
+        text.fontSize=pathStyle.fontSize.value_or(13);text.fontWeight=pathStyle.fontWeight.value_or(400);
+        text.fontFamily=pathStyle.fontFamily.value_or(L"");
+        canvas.drawTextBlock(config_.path,{start,r.y+3.5f,std::max(0.f,end-start),22},pathStyle.foreground.value_or(foreground),text);
     }
     for(auto& slot:{actions_,menu_})if(slot&&slot->visible())slot->paint(canvas);
 }

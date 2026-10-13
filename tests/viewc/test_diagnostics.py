@@ -10,6 +10,30 @@ model Child key id { r id:utf8 r name:utf8 }'''
 
 
 class DiagnosticTests(CompilerCase):
+    def test_state_view_contract(self):
+        self.compile('<template view-model="Basic"><StateView title="Empty" action="Open"/></template><style scoped>StateView {background: #112233; padding:12px;} state-view-part.state-view-action:hover {background:#334455;} state-view-part.state-view-action:pressed {background:#556677;}</style>', SCHEMA, raw=True)
+        self.compile('<StateView :title="title" :message="input" :action="title" icon="server" @action="click"/>', SCHEMA)
+        self.compile('<StateView><Text/></StateView>', SCHEMA, error='CHILDREN')
+        self.compile('<StateView @action="close"/>', SCHEMA, error='COMMAND_SIGNATURE')
+
+    def test_menu_record_contracts_remain_distinct(self):
+        schema = ('model Basic {r native:list<Native> r data:list<Data>}'
+                  'model Native key id {r id:utf8 r kind:utf8 r title:utf8 r detail:utf8 '
+                  'r icon:utf8 r danger:bool r disabled:bool}'
+                  'model Data key id {r id:utf8 r parent:utf8 r text:utf8 r icon:utf8 '
+                  'r shortcut:utf8 r disabled:bool r checked:bool r danger:bool r separator:bool}')
+        self.compile('<Column><Menu :items="native"/><DataMenu :items="data"/></Column>', schema)
+        self.compile('<Menu :items="data"/>', schema, error='BIND_RECORD')
+        self.compile('<DataMenu :items="native"/>', schema, error='BIND_RECORD')
+
+    def test_pane_header_action_labels(self):
+        self.compile('<PaneHeader :split-label="title" :maximize-label="title" :close-label="title" :live-label="title" :menu-label="title"/>', SCHEMA)
+
+    def test_native_server_icon(self):
+        self.compile('<Column><Icon symbol="server-native"/><StateView icon="server-native"/></Column>', SCHEMA)
+
+    def test_play_icon(self):
+        self.compile('<Column><Icon symbol="play"/><Button icon="play" @click="click"/></Column>', SCHEMA)
     def test_reorderable_grid_contract(self):
         self.compile('<template view-model="Basic"><ReorderableGrid/></template><style scoped>ReorderableGrid {grid-min-column-width:280px;gap:8px;padding:0px;outline-width:2px;outline-color:#123456;}</style>', SCHEMA, raw=True)
         self.compile('<template view-model="Basic"><Button/></template><style scoped>Button {opacity:0.58;}</style>', SCHEMA, raw=True)
@@ -37,6 +61,9 @@ class DiagnosticTests(CompilerCase):
         self.compile('<TextArea v-model="input" line-height="23" :read-only="flag"/>', SCHEMA)
         self.compile('<Checkbox v-model="enabled" text="Selected"/>', SCHEMA)
         self.compile('<Input v-model="input" password="true" password-mask="●"/>', SCHEMA)
+        self.compile('<Input v-model="input" accessible-name="Search actions"/>', SCHEMA)
+        self.compile('<Input v-model="input" :accessible-name="flag"/>', SCHEMA, error='BIND_TYPE')
+        self.compile('<Column><Icon symbol="radio-on"/><Icon symbol="search-native"/><Icon symbol="chevron-down"/></Column>', SCHEMA)
         self.compile('<TextArea v-model="title"/>', SCHEMA, error='MODEL_READ_ONLY')
         self.compile('<Checkbox v-model="input"/>', SCHEMA, error='BIND_TYPE')
         self.compile('<TextArea><Text/></TextArea>', SCHEMA, error='CHILDREN')
@@ -145,6 +172,9 @@ class DiagnosticTests(CompilerCase):
         self.assertIn(2, depths)
         self.assertIn(1, depths)
 
+    def test_pane_header_parts(self):
+        self.compile('<template view-model="Basic"><PaneHeader/></template><style scoped>pane-header-part.pane-header-path {font-family:Consolas;font-size:13px;color:#123456;} pane-header-part.pane-header-button:hover {background:#abcdef;} pane-grid-part.pane-grid-divider:hover {background:#445566;}</style>',
+                     'model Basic {r title:utf8}', raw=True)
     def test_fill_only_material_contract(self):
         self.compile('<template view-model="Basic"><Column><Button/><SearchInput/><Select/></Column></template>'
                      '<style scoped>Button {background-opacity:0.28;} SearchInput {background-opacity:0.28;} '

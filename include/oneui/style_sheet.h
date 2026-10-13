@@ -58,7 +58,7 @@ struct StyleContentBox {
 struct StyleBox {
     std::optional<std::string> containerName,flexDirection;
     std::optional<bool> sizeContainment,display,flexWrap;
-    std::optional<float> flexBasis,flexGrow,flexShrink,minWidth,minHeight;
+    std::optional<float> flexBasis,flexGrow,flexShrink,minWidth,minHeight,maxWidth,maxHeight;
     StyleBackground background;
     StyleContentBox content;
     std::optional<Color> foreground;

@@ -19,6 +19,8 @@ StyleBox mergeStyleBox(StyleBox base, const StyleBox& overlay) {
     if(overlay.flexShrink)base.flexShrink=overlay.flexShrink;
     if(overlay.minWidth)base.minWidth=overlay.minWidth;
     if(overlay.minHeight)base.minHeight=overlay.minHeight;
+    if(overlay.maxWidth)base.maxWidth=overlay.maxWidth;
+    if(overlay.maxHeight)base.maxHeight=overlay.maxHeight;
     if (overlay.backgroundOpacity) base.backgroundOpacity = overlay.backgroundOpacity;
     if (overlay.contentBackgroundOpacity) base.contentBackgroundOpacity = overlay.contentBackgroundOpacity;
     if (overlay.background.color || overlay.background.gradient || overlay.background.gradientStart) {

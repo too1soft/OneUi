@@ -46,7 +46,14 @@ inline std::set<std::string> componentCssProperties(const std::string& tag) {
     if (tag == "panel") return {"background", "background-color", "border-color", "border-width", "border-radius", "padding", "box-shadow"};
     if (tag == "menu") return {"background", "background-color", "color", "placeholder-color", "border-color", "border-width", "border-radius", "padding", "font-size", "font-weight", "box-shadow"};
     if (tag == "reorderable-grid") return {"padding","gap","grid-min-column-width","outline-color","outline-width","border-color"};
+    if (tag == "popup") return {"background", "background-color", "color", "border-color", "border-width", "border-radius", "padding", "gap", "box-shadow"};
     if (tag == "dialog") return {"background", "background-color", "color", "border-color", "border-width", "border-radius", "padding", "font-size", "font-weight", "box-shadow"};
+    if (tag == "pane-grid-part") return {"background","background-color"};
+    if (tag == "dock-workspace-part") return {"background","background-color","border-color","color"};
+    if (tag == "pane-header-part") return {"background","background-color","color","border-color","border-width","border-radius","padding","font-size","font-weight","font-family"};
+    if (tag == "pane-header") return {"background","background-color","color","border-color","border-width"};
+    if (tag == "state-view" || tag == "state-view-part") return {"background","background-color","color","border-color","border-width","border-radius","padding","font-size","font-weight","box-shadow"};
+    if (tag == "menu-part") return {"background","background-color","color","border-color","border-width","border-radius","padding","font-size","font-weight","box-shadow"};
     if (tag == "progress"||tag=="slider"||tag=="font-picker"||tag=="media-picker"||tag=="media-preview"||tag=="theme-scope") return {};
     if (tag == "card") return {"background-color","background","border-color","border-width","border-radius","padding","box-shadow","opacity"};
     if (tag == "interactive-surface") return {"background-color","background","border-color","border-width","border-radius","padding","transition-duration","transition-timing-function"};
@@ -65,7 +72,11 @@ inline std::set<std::string> componentCssProperties(const std::string& tag) {
     if (tag == "button" || tag == "input" || tag == "tabs" || tag == "select" || tag == "table") keys.insert("font-size");
       if (tag == "button" || tag == "tabs") keys.insert("font-weight");
       if (tag == "button") { keys.insert("icon-size"); keys.insert("opacity"); }
-    if (tag == "tabs") { keys.insert("content-background-color"); keys.insert("content-radius"); }
+    if (tag == "tabs") {
+        for (const auto* key : {"content-background-color", "content-radius", "text-inset",
+             "tab-indicator-color", "tab-indicator-inset", "tab-indicator-height",
+             "tab-outline-width", "tab-trailing-inset"}) keys.insert(key);
+    }
     if (tag == "button" || tag == "input") { keys.insert("background"); keys.insert("box-shadow"); keys.insert("transition-duration"); keys.insert("transition-timing-function"); }
     if (tag == "input") { keys.insert("placeholder-color"); keys.insert("caret-color"); keys.insert("selection-color"); }
     if (tag == "select") keys.insert("content-radius");
@@ -125,7 +136,7 @@ inline std::string css(std::string source, const std::string& scope = {}, const 
                 tag = component->second; mapped = tag + ".one-" + type + selector.substr(type.size());
             } else if(!classOnly) {
                 tag = type;
-                bool found = false; for (auto& c : components()) if (c.second == tag) found = true;
+                bool found = tag=="state-view-part" || tag=="pane-header-part" || tag=="pane-grid-part" || tag=="dock-workspace-part"; for (auto& c : components()) if (c.second == tag) found = true;
                 if (!found) fail("Unknown CSS component: " + type);
             }
             const auto colon=selector.find(':');
@@ -133,6 +144,7 @@ inline std::string css(std::string source, const std::string& scope = {}, const 
                 pseudo=selector.substr(colon+1);
                 std::set<std::string> states;
                 if(tag=="button"||tag=="interactive-surface")states={"hover","pressed","focus","disabled"};
+                else if(tag=="state-view"||tag=="state-view-part"||tag=="pane-header-part"||tag=="pane-grid-part"||tag=="dock-workspace-part")states={"hover","pressed","focus","disabled"};
                 else if(tag=="input")states={"hover","focus","disabled","read-only"};
                 else if(tag=="switch" || tag=="checkbox" || tag=="select" || tag=="tabs")states={"hover","pressed","focus","disabled","selected"};
             else if(tag=="table" || tag=="list" || tag=="virtual-list")states={"hover","pressed","selected"};
@@ -152,14 +164,14 @@ inline std::string css(std::string source, const std::string& scope = {}, const 
             if(property=="display"&&cssValue!="none"&&cssValue!="flex")fail("CSS_LAYOUT: display expects none/flex");
             if(property=="flex-direction"&&cssValue!="row"&&cssValue!="column")fail("CSS_LAYOUT: flex-direction expects row/column");
             if(property=="flex-wrap"&&cssValue!="wrap"&&cssValue!="nowrap")fail("CSS_LAYOUT: flex-wrap expects wrap/nowrap");
-            if(std::set<std::string>{"width","height","min-width","min-height","flex-basis"}.count(property) &&
+            if(std::set<std::string>{"width","height","min-width","min-height","max-width","max-height","flex-basis"}.count(property) &&
                cssValue.rfind("var(",0)!=0&&!std::regex_match(cssValue,std::regex(R"(^[0-9]+(\.[0-9]+)?px$)")))fail("CSS_LAYOUT: finite nonnegative px required");
             if (trim(declaration.substr(colon + 1)).empty()) fail("Empty CSS value");
             if (selector == ":root") {
                 if (property.rfind("--", 0) != 0) fail(":root only accepts custom properties");
                 if (!scope.empty()) fail("Scoped :root tokens are unsupported; put shared tokens in external CSS");
             } else if(insideQuery && (property=="container-name"||property=="container-type"))fail("CONTAINER_DEPENDENCY: query cannot establish a container");
-            else if (!cssProperties(tag).count(property) && !std::set<std::string>{"display","width","height","min-width","min-height","flex-basis","flex-grow","flex-shrink"}.count(property) &&
+            else if (!cssProperties(tag).count(property) && !std::set<std::string>{"display","width","height","min-width","min-height","max-width","max-height","flex-basis","flex-grow","flex-shrink"}.count(property) &&
                      !((tag=="stack"||tag.empty())&&std::set<std::string>{"container-name","container-type","flex-direction","flex-wrap","gap"}.count(property))) fail("Property is not consumed by " + tag + ": " + property);
             else if(property=="background-color" && lowerValue(trim(declaration.substr(colon+1))).find("gradient(")!=std::string::npos) fail("Use background for gradients on supported components");
             else if(tag=="table" && !pseudo.empty() && property!="background-color") fail("DataTable row states only consume background-color");

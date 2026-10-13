@@ -38,9 +38,9 @@ bool applyDeclaration(
         if(value=="row"||value=="column"){rule.box.flexDirection=value;return true;}
     } else if(name=="flex-wrap") {
         if(value=="wrap"||value=="nowrap"){rule.box.flexWrap=value=="wrap";return true;}
-    } else if(name=="flex-basis"||name=="min-width"||name=="min-height") {
+    } else if(name=="flex-basis"||name=="min-width"||name=="min-height"||name=="max-width"||name=="max-height") {
         if(auto number=parsePx(value);number&&*number>=0) {
-            (name=="flex-basis"?rule.box.flexBasis:name=="min-width"?rule.box.minWidth:rule.box.minHeight)=*number;return true;
+            (name=="flex-basis"?rule.box.flexBasis:name=="min-width"?rule.box.minWidth:name=="min-height"?rule.box.minHeight:name=="max-width"?rule.box.maxWidth:rule.box.maxHeight)=*number;return true;
         }
     } else if(name=="flex-grow"||name=="flex-shrink") {
         if(auto number=parseNumber(value);number&&*number>=0) {

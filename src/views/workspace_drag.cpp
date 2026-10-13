@@ -1,4 +1,5 @@
 #include "workspace_cache.h"
+#include "workspace_drag_external.h"
 #include "oneui/layout/workspace_drag.h"
 #include <cmath>
 namespace oneui::views {
@@ -33,16 +34,44 @@ bool Runtime::dragScalar(Instance& instance,const std::string& name,const Value&
         return true;
     }
     if(instance.element.component!="Tabs")return false;
-    if(name!="drag-domain"&&name!="drag-kind"&&name!="reorderable")return false;
+    if(name!="drag-domain"&&name!="drag-kind"&&name!="reorderable"&&name!="item-min"&&name!="item-max"&&name!="edit-key")return false;
     auto& cache=instance.workspaceCache;if(!cache)cache=std::make_shared<Instance::WorkspaceCache>();
     if(name=="drag-domain")cache->domain=value.text;
     if(name=="drag-kind") {
         check(value.text=="single-pane-tab",ONEUI_VIEW_TYPE,"Invalid tab drag kind");cache->dragKind=value.text;
     }
     if(name=="reorderable")instance.element.as<Tabs>()->setReorderEnabled(bool(value.integer));
+    if(name=="item-min" || name=="item-max") {
+        check(std::isfinite(value.number)&&value.number>=32,ONEUI_VIEW_TYPE,"Invalid tab width");
+        (name=="item-min"?cache->tabMinimum:cache->tabMaximum)=float(value.number);
+        instance.element.as<Tabs>()->setItemWidthRange(cache->tabMinimum,cache->tabMaximum);
+    }
+    if(name=="edit-key") {
+        auto tabs=instance.element.as<Tabs>();
+        tabs->cancelEdit();
+        for(int i=0;i<int(tabs->items().size());++i)
+            if(narrow(instance.element.tabs->key(i))==value.text) {
+                if(auto view=std::dynamic_pointer_cast<View>(root->element.widget))view->requestFocus(tabs.get(),true);
+                tabs->beginEdit(i);break;
+            }
+    }
     return true;
 }
 bool Runtime::dragList(Instance& instance,const std::string& name,ListState& state) {
+    if(instance.element.component=="Tabs" && name=="decorations") {
+        std::vector<std::optional<IconSymbol>> icons;
+        std::vector<Color> colors;
+        for(const auto& item:state.items) {
+            auto& model=image.schema.model(item->table.model_id);
+            auto icon=read(item,model.properties.at("icon").id).integer;
+            auto rgba=uint32_t(read(item,model.properties.at("rgba").id).integer);
+            icons.push_back(icon<0?std::nullopt:std::optional<IconSymbol>(IconSymbol(icon)));
+            colors.push_back(Color{uint8_t(rgba>>24),uint8_t(rgba>>16),uint8_t(rgba>>8),uint8_t(rgba)});
+        }
+        instance.element.as<Tabs>()->setItemIcons(std::move(icons));
+        instance.element.as<Tabs>()->setItemStatusColors(std::move(colors));
+        return true;
+    }
     if(instance.element.component!="Tabs" || name!="drag-sources")return false;
     auto& cache=instance.workspaceCache;if(!cache)cache=std::make_shared<Instance::WorkspaceCache>();
     std::map<std::string,Instance::WorkspaceCache::TabSource> values;
@@ -60,12 +89,43 @@ std::function<void()> Runtime::prepareDragGrid(const std::shared_ptr<Instance>& 
     }
     return []{};
 }
+void registerWorkspaceTabs(Runtime& runtime,const std::string& name,const std::string& id,
+                           const std::shared_ptr<Widget>& tabs) {
+    runtime.alive();
+    check(callbackPhase==Phase::Idle,ONEUI_VIEW_REENTRANT,"Drag registration during callback");
+    check(!name.empty()&&!id.empty()&&tabs,ONEUI_VIEW_INVALID_ARGUMENT,"Domain, identity and tabs required");
+    check(runtime.workspaceDomains && runtime.workspaceDomains->values.count(name),
+          ONEUI_VIEW_NOT_FOUND,"Workspace drag domain not found");
+    domain(runtime,name)->registerTabs(id,tabs);
+}
+void workspaceTabDrag(Runtime& runtime,const std::string& name,const std::string& source,
+                      int phase,Point point) {
+    runtime.alive();
+    check(callbackPhase==Phase::Idle,ONEUI_VIEW_REENTRANT,"Drag during callback");
+    check(phase>=0&&phase<=3&&std::isfinite(point.x)&&std::isfinite(point.y),
+          ONEUI_VIEW_INVALID_ARGUMENT,"Invalid workspace pointer event");
+    check(runtime.workspaceDomains && runtime.workspaceDomains->values.count(name),
+          ONEUI_VIEW_NOT_FOUND,"Workspace drag domain not found");
+    auto d=domain(runtime,name);
+    if(phase==0) {
+        check(!source.empty(),ONEUI_VIEW_INVALID_ARGUMENT,"Tab source required");
+        d->begin(source,point,true);
+    } else if(phase==1)d->move(point);
+    else if(phase==2)d->release(point);
+    else d->cancel();
+}
 void Runtime::wireDrag(const std::shared_ptr<Instance>& instance) {
     std::weak_ptr<Instance> weak=instance;
     if(instance->element.component=="DropSurface") {
         auto surface=instance->element.as<DropSurface>();
         if(auto d=domain(*this,surface->domain))d->registerTabs(image.strings[image.records[oneview::NODE][instance->node][11]],surface);
     } else if(instance->element.component=="DragHandle") {
+        instance->element.as<DragHandle>()->setOnActivated([weak](const MouseEvent& event) {
+            auto item=weak.lock();if(!item)return;
+            emitComponentEvent(weak,"activated",{string(item->element.as<DragHandle>()->source),
+                number(event.position.x),number(event.position.y),integer(event.clickCount),
+                integer(int(event.button))});
+        });
         instance->element.as<DragHandle>()->setOnDrag([weak](int phase,Point point) {
             auto item=weak.lock();auto owner=item?item->owner.lock():nullptr;if(!owner||owner->closing)return;
             auto w=item->element.as<DragHandle>();
@@ -94,6 +154,17 @@ void Runtime::wireDrag(const std::shared_ptr<Instance>& instance) {
         });
     } else if(instance->element.component=="Tabs") {
         auto tabs=instance->element.as<Tabs>();
+        tabs->setOnContextMenuRequested([weak](int index,Point point) {
+            auto item=weak.lock();if(!item)return;
+            emitComponentEvent(weak,"contextRequested",{string(narrow(item->element.tabs->key(index))),number(point.x),number(point.y)});
+        });
+        tabs->setOnOverflowChanged([weak](int count) {
+            emitComponentEvent(weak,"overflowChanged",{integer(count)});
+        });
+        tabs->setOnEditFinished([weak](int index,const std::wstring& text,TabEditReason reason) {
+            auto item=weak.lock();if(!item)return;
+            emitComponentEvent(weak,"editFinished",{string(narrow(item->element.tabs->key(index))),string(narrow(text)),integer(int(reason))});
+        });
         if(instance->workspaceCache)if(auto d=domain(*this,instance->workspaceCache->domain))
             d->registerTabs(image.strings[image.records[oneview::NODE][instance->node][11]],tabs);
         tabs->setOnReorderRequested([weak](int from,int to) {

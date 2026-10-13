@@ -29,9 +29,12 @@ void Tabs::paint(Canvas& canvas) {
         return;
     }
 
+    const bool metricsChanged = compactItemOffsets_.size() != items_.size() + 1;
     updateCompactMetrics(canvas);
     const int selected = std::clamp(selectedIndex(), 0, count - 1);
-    ensureIndexVisible(editingIndex_ >= 0 ? editingIndex_ : selected);
+    if (metricsChanged || lastPaintWidth_ != rect.width || editingIndex_ >= 0)
+        ensureIndexVisible(editingIndex_ >= 0 ? editingIndex_ : selected);
+    lastPaintWidth_ = rect.width;
     const int overflow = overflowItemCount();
     if (reportedOverflow_ != overflow) {
         reportedOverflow_ = overflow;

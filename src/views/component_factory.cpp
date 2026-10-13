@@ -107,7 +107,9 @@ Element Mount::make(std::string type, std::vector<Element> children, std::string
     Builder b(StackEngine::Yoga, "");
     Node node = b.column({});
     std::shared_ptr<Stack> content;
-    if(type=="GridItem") {
+    if(type=="StateView")node=b.native(std::make_shared<StateView>());
+    else if(type=="Menu")node=b.native(std::make_shared<Menu>());
+    else if(type=="GridItem") {
         if(children.size()!=1)throw std::invalid_argument("GridItem requires one child");
         node=b.native(std::make_shared<TemplateGridItem>(children[0].widget));
     }

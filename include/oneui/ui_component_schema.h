@@ -12,7 +12,7 @@ enum class ValueType { None, Text, Boolean, Integer, Number, Strings, Columns, R
     X(Dialog, "dialog", "title subtitle icon close-visible", None) \
     X(PaneGrid, "workspace-collection", "nodes groups active-group active-pane maximized revision ack-request ack-accepted navigation-serial navigation-edge navigation-mode drag-domain gap divider-hit motion-ms resize-idle-ms motion", None) \
     X(Pane, "workspace-item", "pane-key closing close-request min-width min-height", None) \
-    X(PaneHeader, "pane-header", "pane-key number title path active broadcast-role broadcast-hint broadcast-label viewing-history can-close can-split can-maximize", None) \
+    X(PaneHeader, "pane-header", "pane-key number title path active broadcast-role broadcast-hint broadcast-label viewing-history can-close can-split can-maximize split-label maximize-label close-label live-label menu-label tooltip", None) \
     X(HeaderSlot, "stack", "slot-name", None) \
     X(FontPicker, "font-picker", "items selected loading error preview-text size trigger-label confirm-selection monospace-only monospace-items apply-label cancel-label filter-label search-label retry-label", None) \
     X(MediaPicker, "media-picker", "asset label loading error accept choose-label clear-label cancel-label", None) \
@@ -25,7 +25,7 @@ enum class ValueType { None, Text, Boolean, Integer, Number, Strings, Columns, R
     X(ContainerPage, "container-page", "selected", None) \
     X(DragHandle, "drag-handle", "source domain kind threshold", None) \
     X(DropSurface, "drop-surface", "domain role", None) \
-    X(DockWorkspace, "workspace-collection", "nodes root placements revision maximized compact-active ack-request ack-accepted gap divider-hit", None) \
+    X(DockWorkspace, "workspace-collection", "nodes root placements revision maximized compact-active ack-request ack-accepted gap divider-hit preview-dock-text preview-float-text preview-keep-text raise-on-press", None) \
     X(DockItem, "workspace-item", "pane-key dock-min-width dock-min-height float-min-width float-min-height hideable", None) \
     X(Workspace, "stack", "", None) \
     X(TitleBar, "stack", "", None) \
@@ -54,7 +54,7 @@ enum class ValueType { None, Text, Boolean, Integer, Number, Strings, Columns, R
     X(ActionBar, "stack", "", None) \
     X(LoadingState, "stack", "title subtitle", None) \
     X(Status, "label", "text tone", None) \
-    X(Tabs, "tabs", "items selectedKey closable presentation reorderable drag-domain drag-kind drag-sources", Text) \
+    X(Tabs, "tabs", "items selectedKey closable presentation reorderable drag-domain drag-kind drag-sources decorations item-min item-max edit-key", Text) \
     X(SplitView, "split-view", "orientation ratio first-min second-min second-collapsed collapsed-extent", Number) \
     X(TimeSeriesChart, "chart", "series", None) \
     X(Icon, "icon", "symbol size", None) \
@@ -71,7 +71,7 @@ enum class ValueType { None, Text, Boolean, Integer, Number, Strings, Columns, R
     X(ValidationMessage, "label", "text", None) \
     X(TextArea, "input", "text placeholder line-height read-only", Text) \
     X(Checkbox, "checkbox", "text checked", Boolean) \
-    X(Input, "input", "text placeholder password password-mask read-only prefix-icon", Text) \
+    X(Input, "input", "text placeholder password password-mask read-only prefix-icon accessible-name", Text) \
     X(SearchInput, "input", "text placeholder prefix-icon placeholder-when-focused", Text) \
     X(Switch, "switch", "text checked", Boolean) \
     X(Select, "select", "items selectedIndex", Integer) \
@@ -79,7 +79,9 @@ enum class ValueType { None, Text, Boolean, Integer, Number, Strings, Columns, R
     X(Button, "button", "text variant icon tooltip content-align trailing-text trailing-icon", None) \
     X(DataTable, "table", "items columns selectedKey item-key", Text) \
     X(List, "list", "items selectedIndex", Integer) \
-    X(VirtualList, "virtual-list", "items selectedIndex row-height scroll-offset", Integer) \
+    X(VirtualList, "virtual-list", "items selectedIndex row-height scroll-offset multiple", Integer) \
+    X(StateView, "state-view", "title message action icon", None) \
+    X(Menu, "menu", "items", None) \
     X(DataMenu, "menu", "title subtitle items", None) \
     X(Popup, "popup", "open anchor-x anchor-y anchor-width anchor-height content-width content-height placement", None) \
     X(MountPoint, "panel", "", None)
@@ -125,6 +127,7 @@ constexpr bool layoutNumber(std::string_view key) {
 }
 constexpr ValueType propertyType(Kind kind,std::string_view key) {
     if(!supports(kind,key))return ValueType::None;
+    if(kind==Kind::VirtualList && key=="multiple")return ValueType::Boolean;
     if(key=="placeholder-when-focused")return ValueType::Boolean;
     if(kind==Kind::Popup && contains("anchor-x anchor-y anchor-width anchor-height",key))return ValueType::Number;
     if(kind==Kind::ReorderableGrid) {
@@ -136,12 +139,14 @@ constexpr ValueType propertyType(Kind kind,std::string_view key) {
     if(kind==Kind::FontPicker&&key=="selected")return ValueType::Text;
     if(kind==Kind::FontPicker&&(key=="confirm-selection"||key=="monospace-only"))return ValueType::Boolean;
     if(kind==Kind::FontPicker&&key=="monospace-items")return ValueType::Rows;
-    if(contains("disabled visible selected checked open reduced-motion detail-open wrap closable themed second-collapsed collapsed closing ack-accepted motion active viewing-history can-close can-split can-maximize reorderable hideable loading password read-only chrome-visible",key))return ValueType::Boolean;
+    if(contains("disabled visible selected checked open reduced-motion detail-open wrap closable themed second-collapsed collapsed closing ack-accepted motion active viewing-history can-close can-split can-maximize reorderable hideable loading password read-only chrome-visible raise-on-press",key))return ValueType::Boolean;
     if(contains("selectedIndex revision ack-request close-request navigation-serial number max-lines",key))return ValueType::Integer;
     if(contains("nodes groups drag-sources placements tokens spans",key))return ValueType::Rows;
     if(contains("gap divider-hit motion-ms resize-idle-ms min-width min-height threshold dock-min-width dock-min-height float-min-width float-min-height minimum maximum step opacity",key))return ValueType::Number;
     if(contains("content-height content-width wheel-step scroll-offset row-height line-height minimum-width header-height horizontal-offset overlay-width overlay-height inset-left inset-right inset-top inset-bottom",key))return ValueType::Number;
     if(key=="overlay-visible")return ValueType::Boolean;
+    if(kind==Kind::Tabs && key=="decorations")return ValueType::Rows;
+    if(kind==Kind::Tabs && (key=="item-min"||key=="item-max"))return ValueType::Number;
     if(key=="items")return kind==Kind::Select||kind==Kind::SegmentedControl?ValueType::Strings:kind==Kind::Tabs?ValueType::TabItems:ValueType::Rows;
     if(key=="series")return ValueType::Series;
     if(key=="columns")return ValueType::Columns;

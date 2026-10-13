@@ -50,6 +50,7 @@ TextAlign Tabs::itemTextAlign(int index) const {
 }
 
 void Tabs::setItemIcons(std::vector<std::optional<IconSymbol>> icons) {
+    if(itemIcons_==icons)return;
     itemIcons_ = std::move(icons);
     compactItemOffsets_.clear();
     invalidate();
@@ -63,8 +64,11 @@ void Tabs::setDocumentMode(bool enabled) {
 }
 
 void Tabs::setItemStatusColors(std::vector<Color> colors) {
+    const bool metricsChanged=colors.size()!=itemStatusColors_.size() ||
+        !std::equal(colors.begin(),colors.end(),itemStatusColors_.begin(),
+            [](Color a,Color b){return (a.a>0)==(b.a>0);});
     itemStatusColors_ = std::move(colors);
-    compactItemOffsets_.clear();
+    if(metricsChanged)compactItemOffsets_.clear();
     invalidate();
 }
 

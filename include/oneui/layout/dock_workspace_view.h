@@ -26,6 +26,10 @@ struct DockWorkspaceSnapshot {
     int64_t revision = 0, ackRequest = 0;
     bool ackAccepted = true;
     float gap = 8, dividerHit = 8;
+    std::string previewDockText = "Release to split equally · Esc to cancel";
+    std::string previewFloatText = "Release to float · Esc to cancel";
+    std::string previewKeepText = "Release to keep layout · Alt to float · Esc to cancel";
+    bool raiseOnPress = true;
 };
 enum class DockIntentKind { Dock, Ratio, Float, Bounds, Pin, Raise, Maximize, Visibility, Redock };
 struct DockIntent {
@@ -51,6 +55,8 @@ public:
     void setMotionEnabled(bool);
     std::optional<Rect> previewRect() const;
     bool paintPending() const;
+    bool interactionActive() const;
+    bool hasDockTarget() const;
     Size naturalSize() const override;
     void paint(Canvas&) override;
     bool tickAnimations(double) override;

@@ -88,7 +88,31 @@ void invalidCssAndDependencies() {
     outer.widget->setFrame({0,0,500,500});test_support::RecordingCanvas canvas;outer.widget->paint(canvas);
     check(!mount.styles()->queryDiagnostics().empty(),"dependent nested container diagnosed instead of oscillating");
 }
+void maxWidthClamps() {
+    for(auto engine:{StackEngine::Yoga,StackEngine::Legacy}) {
+        ui::Mount mount({},std::make_shared<ui::StyleRegistry>(),{});
+        auto cell=mount.make("Column",{mount.make("Text")},"cell");
+        auto shell=mount.make("Row",{cell},"shell");
+        shell.as<Stack>()->setEngine(engine);cell.as<Stack>()->setEngine(engine);
+        mount.styles()->replace(
+            ".shell{container-name:shell;container-type:size;}"
+            ".cell{flex-basis:400px;flex-shrink:0;max-width:120px;}"
+            "@container shell (width >= 600px){.cell{max-width:200px;}}");
+        test_support::RecordingCanvas canvas;
+        auto paint=[&](float width){shell.widget->setFrame({0,0,width,40});shell.widget->paint(canvas);};
+        paint(599.99f);check(std::abs(cell.widget->frame().width-120)<.01f,"unconditional max-width clamps basis");
+        paint(600);check(std::abs(cell.widget->frame().width-200)<.01f,"query max-width clamps basis");
+        paint(500);check(std::abs(cell.widget->frame().width-120)<.01f,"query exit restores unconditional max-width");
+        check(mount.styles()->queryDiagnostics().empty(),"max-width on a row child has no diagnostics");
+    }
+    ui::Mount mount({},std::make_shared<ui::StyleRegistry>(),{});
+    auto cell=mount.make("Text",{},"cell");
+    auto shell=mount.make("Column",{cell},"shell");
+    mount.styles()->replace(".shell{container-name:shell;container-type:size;}@container shell (width > 1px){.cell{max-width:50px;}}");
+    shell.widget->setFrame({0,0,300,300});test_support::RecordingCanvas canvas;shell.widget->paint(canvas);
+    check(!mount.styles()->queryDiagnostics().empty(),"cross-axis max-width diagnosed");
 }
-int main(){try{comparisons();stackChildren();layout(StackEngine::Yoga);layout(StackEngine::Legacy);invalidCssAndDependencies();
-    std::cout<<"PASS container queries and Stack: 5 groups\n";return 0;
+}
+int main(){try{comparisons();stackChildren();layout(StackEngine::Yoga);layout(StackEngine::Legacy);invalidCssAndDependencies();maxWidthClamps();
+    std::cout<<"PASS container queries and Stack: 6 groups\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

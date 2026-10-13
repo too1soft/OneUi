@@ -7,7 +7,7 @@ pub mod diagnostics;
 mod host;
 mod mount_point;
 mod metrics;
-pub use metrics::ElementMetrics;
+pub use metrics::{DockAction, ElementMetrics};
 mod scope;
 pub use scope::ScopeSegment;
 mod list;
@@ -85,6 +85,15 @@ impl ViewMount {
         crate::Panel::new()
     }
 
+    /// Compose an independent declarative VM in an empty named Surface.
+    /// The returned mount closes before the parent view and cannot accept
+    /// arbitrary native controls. Instantiate a typed View in it as usual.
+    pub fn child(&self, name: &str) -> VmResult<Self> {
+        let mut raw = std::ptr::null_mut();
+        check(unsafe { sys::oneui_view_mount_child(self.raw.as_ptr(),
+            sys::OneUiUtf8String::from_str(name), &mut raw) })?;
+        Ok(Self { raw: NonNull::new(raw).ok_or(ViewError::CLOSED)?, _ui: PhantomData })
+    }
     /// Mount in an empty window, or an empty Panel already in that window.
     /// The native control invalidates on window close; no Rust borrow is retained.
     pub fn new(window: &Window, destination: Option<&Widget>) -> VmResult<Self> {
@@ -223,3 +232,5 @@ pub struct ViewDiagnostic {
     pub source: u32,
     pub message: String,
 }
+
+mod workspace;

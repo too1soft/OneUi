@@ -31,6 +31,10 @@ bool Runtime::dockScalar(Instance& instance,const std::string& name,const Value&
     else if(name=="ack-accepted")s.ackAccepted=bool(v.integer);
     else if(name=="gap")s.gap=float(v.number);
     else if(name=="divider-hit")s.dividerHit=float(v.number);
+    else if(name=="preview-dock-text")s.previewDockText=v.text;
+    else if(name=="preview-float-text")s.previewFloatText=v.text;
+    else if(name=="preview-keep-text")s.previewKeepText=v.text;
+    else if(name=="raise-on-press")s.raiseOnPress=bool(v.integer);
     else return false;
     if(staging)rollbacks.push_back([&instance,old]{instance.workspaceCache=old;for(auto& b:instance.bindings)b.previous.reset();});
     instance.workspaceCache=std::move(next);return true;

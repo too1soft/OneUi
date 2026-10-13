@@ -46,7 +46,8 @@ std::string decode(uint32_t tag, const std::string &value) {
 std::string trait(const Model &model) { return symbol(model.name) + "Vm"; }
 std::string commands(const Model &model) { return symbol(model.name) + "Command"; }
 void emitTrait(std::ostream &out, const Schema &schema, const Model &model) {
-    out << "#[derive(Clone, Debug, PartialEq)]\npub enum " << commands(model) << " {\n";
+    const auto entity = model.name.find('.') == std::string::npos ? symbol(model.name) : pascal(model.name);
+    out << "#[derive(Clone, Debug, PartialEq)]\npub enum " << entity << "Command {\n";
     for (const auto &[_, command] : model.commands) {
         out << "    " << pascal(command.name);
         if (!command.args.empty()) {
@@ -56,7 +57,11 @@ void emitTrait(std::ostream &out, const Schema &schema, const Model &model) {
         }
         out << ",\n";
     }
-    out << "}\n#[allow(non_snake_case)]\npub trait " << trait(model) << ": 'static {\n";
+    out << "}\n";
+    if (entity != symbol(model.name))
+        out << "pub use self::" << entity << "Command as " << commands(model) << ";\n"
+            << "pub use self::" << entity << "Vm as " << trait(model) << ";\n";
+    out << "#[allow(non_snake_case)]\npub trait " << entity << "Vm: 'static {\n";
     for (auto &[_, p] : model.properties) {
         if (p.tag == List) {
             out << "    type " << pascal(p.name) << "Item: " << trait(schema.model(p.item)) << ";\n"
@@ -85,24 +90,25 @@ void emitModel(std::ostream &out, const Schema &schema, const Model &model) {
         << "<V: " << trait(model) << ">() -> oneui::view::ModelSpec<V> {\n"
         << "    use oneui::view::{Value, ViewError};\n    oneui::view::ModelSpec {\n"
         << "        schema: SCHEMA_HASH, model: " << model.id << ",\n"
-        << "        get: |vm, id| match id {\n";
+        << "        get: |vm, id| match oneui::view::PropertyId::new(id) {\n";
     for (auto &[_, p] : model.properties)
         if (p.tag != List)
-            out << "            " << p.id << " => Ok(Value::" << variant(p.tag) << "(vm.r#" << symbol(p.name)
+            out << "            " << symbol(model.name) << "_properties::" << upper(p.name) << " => Ok(Value::" << variant(p.tag) << "(vm.r#" << symbol(p.name)
                 << "()" << (p.tag == Utf8 ? ".to_owned()" : "") << ")),\n";
     out << "            _ => Err(ViewError::UNKNOWN_ID),\n        },\n"
-        << "        set: |vm, id, value, cx| match id {\n";
+        << "        set: |vm, id, value, cx| match oneui::view::PropertyId::new(id) {\n";
     for (auto &[_, p] : model.properties) {
-        out << "            " << p.id << " => ";
+        out << "            " << symbol(model.name) << "_properties::" << upper(p.name) << " => ";
         if (p.access == 3 && p.tag != List)
             out << "vm.set_" << symbol(p.name) << "(" << decode(p.tag, "value") << ", cx),\n";
         else out << "Err(ViewError::READ_ONLY),\n";
     }
     out << "            _ => Err(ViewError::UNKNOWN_ID),\n        },\n"
-        << "        invoke: |vm, id, args, cx| match id {\n";
+        << "        invoke: |vm, id, args, cx| {\n"
+        << "            let command: Result<" << commands(model) << ", ViewError> = match id {\n";
     for (auto &[_, c] : model.commands) {
         out << "            " << c.id << " => {\n                if args.len() != " << c.args.size()
-            << " { return Err(ViewError::TYPE); }\n                vm.invoke(" << commands(model)
+            << " { return Err(ViewError::TYPE); }\n                Ok(" << commands(model)
             << "::" << pascal(c.name);
         if (!c.args.empty()) {
             out << " { ";
@@ -110,15 +116,20 @@ void emitModel(std::ostream &out, const Schema &schema, const Model &model) {
                 out << "r#" << symbol(c.args[i].name) << ": " << decode(c.args[i].tag, "args[" + std::to_string(i) + "]") << ", ";
             out << "}";
         }
-        out << ", cx)\n            },\n";
+        out << ")\n            },\n";
     }
-    out << "            _ => Err(ViewError::UNKNOWN_ID),\n        },\n";
+    out << "            _ => Err(ViewError::UNKNOWN_ID),\n            };\n";
+    if (model.commands.empty())
+        out << "            match command { Ok(command) => match command {}, Err(error) => Err(error) }\n";
+    else
+        out << "            vm.invoke(command?, cx)\n";
+    out << "        },\n";
     for (const auto &operation : {"info", "key", "item"}) {
         const bool info = std::string(operation) == "info", key = std::string(operation) == "key";
-        out << "        list_" << operation << ": |vm, id" << (info ? "" : ", index") << "| match id {\n";
+        out << "        list_" << operation << ": |vm, id" << (info ? "" : ", index") << "| match oneui::view::PropertyId::new(id) {\n";
         for (auto &[_, p] : model.properties) {
             if (p.tag != List) continue;
-            out << "            " << p.id << " => ";
+            out << "            " << symbol(model.name) << "_properties::" << upper(p.name) << " => ";
             if (info) out << "Ok(vm.r#" << symbol(p.name) << "().info()),\n";
             else if (key) out << "vm.r#" << symbol(p.name) << "().key(index).map(str::to_owned).ok_or(ViewError::BAD_KEY),\n";
             else out << "Ok(model_" << symbol(schema.model(p.item).name) << "::<V::" << pascal(p.name)
@@ -144,6 +155,9 @@ std::string emitRust(const Image &image, const Bytes &bytes) {
     std::set<std::string> names;
     for (auto &[_, model] : image.schema.models) {
         if (!names.insert(symbol(model.name)).second) throw Error("Rust model names collide after qualification");
+        if (model.name.find('.') != std::string::npos &&
+            pascal(model.name) != symbol(model.name) && !names.insert(pascal(model.name)).second)
+            throw Error("Rust model names collide after qualification");
         std::set<std::string> methods{"on_view_connect", "on_view_disconnect"};
         if (!model.commands.empty()) methods.insert("invoke");
         std::set<std::string> constants, variants;

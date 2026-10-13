@@ -43,6 +43,26 @@ void dataMenus() {
         return text.text.find(L"Ctrl+C")!=std::wstring::npos && text.text.find(L"\u2713")!=std::wstring::npos;
     }),"check mark and shortcut hint rendered");
 
+    DataMenuEntry header; header.id="group"; header.text=L"Group"; header.header=true;
+    auto grouped=entries; grouped.insert(grouped.begin(),header);
+    menu->setItems(grouped);
+    test_support::RecordingCanvas groupedCanvas;
+    menu->paint(groupedCanvas);
+    check(std::any_of(groupedCanvas.texts.begin(),groupedCanvas.texts.end(),[](const auto& text) {
+        return text.text==L"Group";
+    }),"group header text rendered");
+    key(Key::Home); key(Key::Enter);
+    check(activated.back()=="checked","keyboard skips group headers");
+    bad=grouped; bad.back().parent="group";
+    rejected=false;
+    try { menu->setItems(bad); } catch(const std::invalid_argument&) { rejected=true; }
+    check(rejected,"header cannot parent submenu items");
+    DataMenuEntry nestedHeader; nestedHeader.id="nested"; nestedHeader.parent="parent"; nestedHeader.text=L"Nested"; nestedHeader.header=true;
+    bad=grouped; bad.push_back(nestedHeader);
+    rejected=false;
+    try { menu->setItems(bad); } catch(const std::invalid_argument&) { rejected=true; }
+    check(rejected,"nested group header rejected");
+
     auto styles=std::make_shared<ui::StyleRegistry>();
     ui::Mount mount({},styles,{});
     auto themed=mount.make("DataMenu",{},"example-menu");

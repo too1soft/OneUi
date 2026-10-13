@@ -10,6 +10,12 @@ inline bool applyDataMenu(Runtime& runtime, Instance& instance, ListState& state
     auto field = [&](const std::shared_ptr<Scope>& scope, const char* name) {
         return runtime.read(scope, runtime.image.schema.model(scope->table.model_id).properties.at(name).id);
     };
+    auto optionalField = [&](const std::shared_ptr<Scope>& scope, const char* name) -> Value {
+        const auto& properties = runtime.image.schema.model(scope->table.model_id).properties;
+        const auto found = properties.find(name);
+        if (found == properties.end()) return {};
+        return runtime.read(scope, found->second.id);
+    };
     for (size_t i = 0; i < state.items.size(); ++i) {
         const auto& item = state.items[i];
         DataMenuEntry entry;
@@ -26,6 +32,7 @@ inline bool applyDataMenu(Runtime& runtime, Instance& instance, ListState& state
         entry.checked = bool(field(item, "checked").integer);
         entry.danger = bool(field(item, "danger").integer);
         entry.separator = bool(field(item, "separator").integer);
+        entry.header = bool(optionalField(item, "header").integer);
         entries.push_back(std::move(entry));
     }
     try { DataMenu::validate(entries); }
