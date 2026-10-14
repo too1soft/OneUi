@@ -116,6 +116,14 @@ set(ONEUI_CORE_SOURCES
     src/core/stack_children.cpp
     src/core/style_transition.cpp
     src/core/switch.cpp
+    src/core/code_editor/code_document.cpp
+    src/core/code_editor/code_editor.cpp
+    src/core/code_editor/code_editor_edit.cpp
+    src/core/code_editor/code_editor_find.cpp
+    src/core/code_editor/code_editor_paint.cpp
+    src/core/code_editor/code_editor_view.cpp
+    src/core/code_editor/code_language.cpp
+    src/core/code_editor/code_lexer.cpp
     src/core/data_grid.cpp
     src/core/data_grid_paint.cpp
     src/core/data_grid_surface.cpp

@@ -16,3 +16,4 @@
 #include "component_registry_popup.inc"
 #include "component_registry_data_grid.inc"
 #include "component_registry_tree_view.inc"
+#include "component_registry_code_editor.inc"

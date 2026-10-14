@@ -3,6 +3,7 @@
 #include "data_menu.h"
 #include "oneui/controls/data_grid.h"
 #include "oneui/controls/tree_view.h"
+#include "oneui/controls/code_editor.h"
 namespace oneui::views {
 void Runtime::wire(const std::shared_ptr<Instance> &instance) {
     if (image.records[oneview::NODE][instance->node][0] != 1)
@@ -131,6 +132,16 @@ void Runtime::wire(const std::shared_ptr<Instance> &instance) {
                 x.tag=y.tag=3;x.number=event.position.x;y.number=event.position.y;
                 fire({key,phase,x,y});
             });
+        else if (element.component == "CodeEditor") {
+            auto editor = element.as<CodeEditor>();
+            const auto integer = [](std::uint64_t value) { Value v; v.tag = 2; v.integer = static_cast<std::int64_t>(value); return v; };
+            if (name == "changed")
+                editor->setOnChanged([fire, integer](std::uint64_t revision) { fire({integer(revision)}); });
+            else if (name == "cursor")
+                editor->setOnCursorChanged([fire, integer](const CodeEditorState &s) {
+                    fire({integer(s.caret), integer(s.anchor), integer(s.line), integer(s.column), integer(s.cursors)});
+                });
+        }
         else if (element.component == "TreeView") {
             auto tree = element.as<TreeView>();
             const auto text = [](const std::wstring &value) { Value v; v.tag = 4; v.text = narrow(value); return v; };

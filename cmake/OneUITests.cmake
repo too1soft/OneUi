@@ -122,6 +122,8 @@ function(oneui_register_core_tests)
     oneui_add_core_test(oneui_panel_behavior_tests tests/panel_behavior_tests.cpp)
     oneui_add_core_test(oneui_motion_diagnostics_tests tests/motion_diagnostics_tests.cpp)
     oneui_add_core_test(oneui_data_grid_behavior_tests tests/data_grid_behavior_tests.cpp)
+    oneui_add_core_test(oneui_code_editor_behavior_tests tests/code_editor_behavior_tests.cpp)
+    target_include_directories(oneui_code_editor_behavior_tests PRIVATE src)
     target_include_directories(oneui_data_grid_behavior_tests PRIVATE src)
 endfunction()
 

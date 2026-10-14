@@ -3,6 +3,7 @@ using namespace viewtest;
 void tableRecordTests(const std::filesystem::path&);
 void dataGridRecordTests(const std::filesystem::path&);
 void treeRecordTests(const std::filesystem::path&);
+void codeEditorRecordTests(const std::filesystem::path&);
 namespace {
 #ifdef NDEBUG
 constexpr int debugProbe = 0;
@@ -208,6 +209,7 @@ int main(int argc, char **argv) {
         tableRecordTests(std::filesystem::path(argv[1]).parent_path()/"TableRecords.oneview");
         dataGridRecordTests(std::filesystem::path(argv[1]).parent_path()/"DataGridRecords.oneview");
         treeRecordTests(std::filesystem::path(argv[1]).parent_path()/"TreeRecords.oneview");
+        codeEditorRecordTests(std::filesystem::path(argv[1]).parent_path()/"CodeEditorRecords.oneview");
         std::cout << "8 list scenarios passed\n";
         return 0;
     } catch (const std::exception &e) {

@@ -1,0 +1,7 @@
+model Script {
+    r language: utf8
+    r text: utf8
+    r revision: i64
+    command changed(revision:i64)
+    command cursor(caret:i64,anchor:i64,line:i64,column:i64,cursors:i64)
+}

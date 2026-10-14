@@ -597,6 +597,10 @@ oneui_window_tray_icon_visible
 oneui_view_destroy
 oneui_view_disconnect
 oneui_view_find_host
+oneui_view_code_editor_replace
+oneui_view_code_editor_select
+oneui_view_code_editor_state
+oneui_view_code_editor_text
 oneui_view_element_metrics
 oneui_view_flush
 oneui_view_reload

@@ -372,6 +372,14 @@ table->setOnDeleteRequested([](const std::vector<int>& rows) { confirmDelete(row
 
 详细内容见 [SQL workbench components](61-sql-workbench-components.md#datagrid)。
 
+## CodeEditor
+
+原生多行代码编辑器：按行存储、增量词法着色（JSON 语言描述）、行号、当前行、括号匹配、缩进参考线、
+自动换行、只读、撤销合并、多光标、注释 / 缩进 / 复制行 / 移动行、查找替换栏（正则、大小写、全词）。
+文本由组件持有，VM 通过 `text` + `text-revision` 整体替换，通过节流的 `changed` / `cursor` 事件感知变化，
+需要时用 `oneui_view_code_editor_text` 等接口读取全文或范围。详见
+[SQL workbench components](61-sql-workbench-components.md#codeeditor)。
+
 ## Menu / Popup / Dialog / OverlayHost
 
 ### Menu

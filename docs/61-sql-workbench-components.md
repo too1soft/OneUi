@@ -98,3 +98,91 @@ additions: internal scrolling, lazy branches with a loading placeholder,
 retained expansion across incremental inserts, icons, badges, style classes,
 filter highlight ranges and `expand` / `activate` / `context` events. See
 [TreeView](34-tree-view.md#large-trees-lazy-branches-and-decorations).
+
+## CodeEditor
+
+`CodeEditor` is a native multi-line code editor drawn by OneUI (no embedded
+browser or child HWND, so popups and dialogs layer over it normally).
+
+### Model
+
+- The editor owns the text. Storage is one buffer per line with cached UTF-8
+  line lengths and lazily rebuilt prefix sums, so edits cost the touched lines
+  and 100,000-line scripts stay interactive (measured with the recording
+  canvas: open including lexing and first paint about 70 ms, a keystroke at the
+  end including paint about 0.3 ms, a wrapped keystroke about 0.5 ms;
+  `tests/code_editor_behavior_tests.cpp`).
+- Offsets at the product boundary are UTF-8 byte offsets; line and column are
+  1-based, the column in Unicode scalar values.
+- Undo groups consecutive typing (and consecutive deletes) of one cursor within
+  a second; a newline, a command or a pause starts a new step. Multi-cursor
+  edits, Replace All and line commands are single steps.
+
+### Language description
+
+Syntax colors are computed in C++ from a JSON description; colors derive from
+theme tokens, so every theme gets matching colors without extra tables.
+
+```json
+{
+  "case_sensitive": false,
+  "keywords": ["SELECT", "FROM"], "types": ["INT"], "functions": ["COUNT"],
+  "constants": ["NULL", "TRUE"],
+  "line_comments": ["--", "#"], "block_comments": [["/*", "*/"]],
+  "nested_block_comments": false,
+  "string_quotes": "'\"", "backslash_escapes": true,
+  "identifier_quotes": ["``", "\"\"", "[]"],
+  "parameter_prefixes": ":@?", "dollar_quotes": true
+}
+```
+
+Unknown keys are ignored; malformed descriptions are rejected. Lexing is
+incremental: only line end states are kept for the whole document, tokens are
+produced for painted lines, and after an edit lexing stops at the first line
+whose end state did not change. Words followed by `(` color as functions.
+
+### Declarative contract
+
+```xml
+<CodeEditor name="sql" :language="language" :text="script" :text-revision="scriptRevision"
+            :read-only="readOnly" word-wrap="false" line-numbers="true" indent-guides="true"
+            tab-size="4" insert-spaces="true" font-size="13" comment-prefix="--"
+            @changed="changed" @cursor="cursor"/>
+```
+
+- `text` with `text-revision`: the VM replaces the document by publishing new
+  text with a larger revision; equal or older revisions are ignored, so a late
+  property refresh never reverts typing. With revision 0 the text is initial
+  content and applies only until the user edits.
+- `changed(revision: i64)` and `cursor(caret, anchor, line, column, cursors: i64)`
+  are throttled: the first change after a quiet period is reported at once and
+  further ones at most every 150 ms.
+- The VM reads text on demand instead of mirroring every key:
+  `oneui_view_code_editor_state`, `oneui_view_code_editor_text` (byte range,
+  size query with a NULL buffer), `oneui_view_code_editor_replace` (one undoable
+  edit; `expected_revision` turns a race with typing into `STALE_CHANGE`) and
+  `oneui_view_code_editor_select`. Rust: `View::code_editor_state`,
+  `code_editor_text`, `code_editor_replace`, `code_editor_select`. The element
+  is addressed by its `name`.
+
+### Keys
+
+| Keys | Action |
+| --- | --- |
+| Arrows, Home/End, PageUp/PageDown, Ctrl+Home/End, Ctrl+Left/Right | Move (Shift extends); Home toggles between indentation and column 0 |
+| Ctrl+Backspace / Ctrl+Delete | Delete a word |
+| Enter | New line keeping the indentation |
+| Tab / Shift+Tab | Indent (or insert an indent) / outdent; Ctrl+] and Ctrl+[ too |
+| Ctrl+/ | Toggle line comments, aligned at the smallest indentation |
+| Ctrl+D, Shift+Alt+Up/Down | Duplicate lines |
+| Alt+Up/Down | Move lines |
+| Ctrl+Shift+K | Delete lines |
+| Alt+click, Ctrl+Alt+Up/Down | Add a cursor; Esc returns to one cursor |
+| Ctrl+A / C / X / V, Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z | Clipboard and history; copy and cut without a selection take the line; pasting as many lines as cursors gives one line each |
+| Ctrl+F / Ctrl+H, F3 / Shift+F3 | Find bar / with replace, next / previous; the bar has case, regex and whole-word toggles, match counts, Enter / Shift+Enter, Ctrl+Enter in the replace field replaces all |
+| Double / triple click | Select word / line; dragging after a double click extends by words |
+
+Any other combination (Ctrl+Enter, F5, Ctrl+Shift+E, ...) is not consumed:
+command scopes see shortcuts before the focused widget, and the editor only
+claims editing shortcuts, so page commands keep working while it has focus.
+IME composition is drawn at the caret and committed text is one insertion.

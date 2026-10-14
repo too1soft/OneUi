@@ -1,0 +1,6 @@
+<template view-model="Script">
+  <Column>
+    <CodeEditor name="sql" :language="language" :text="text" :text-revision="revision"
+                tab-size="2" word-wrap="true" font-size="13" @changed="changed" @cursor="cursor"/>
+  </Column>
+</template>

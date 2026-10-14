@@ -2,6 +2,8 @@
 #include "capi/oneui_c_api_view_internal.h"
 #include "fixture.h"
 #include "oneui/layout/overlay_host.h"
+#include "oneui/controls/code_editor.h"
+#include <cstdint>
 #include <thread>
 using namespace viewtest;
 namespace {
@@ -110,6 +112,45 @@ int main(int argc, char **argv) {
                    "missing mount point rejected");
             expect(oneui_view_mount_point(c.view, str("page-slot"), nullptr) == ONEUI_VIEW_INVALID_ARGUMENT,
                    "mount point requires output");
+            {
+                auto element = factory.make("CodeEditor");
+                auto editor = element.as<oneui::CodeEditor>();
+                expect(bool(editor), "CodeEditor factory");
+                editor->setAccessibleName(L"sql-editor");
+                editor->setText(L"select 1;\n中");
+                auto root = c.view->value->root->element.as<oneui::View>();
+                root->add(element.widget);
+                const auto sql = str("sql-editor");
+                OneUiViewCodeEditorState state{};
+                state.struct_size = sizeof(state);
+                expect(oneui_view_code_editor_state(c.view, sql, &state) == 0 && state.line_count == 2 && state.length == 13,
+                       "editor state");
+                size_t length = 0;
+                expect(oneui_view_code_editor_text(c.view, sql, 0, UINT64_MAX, nullptr, 0, &length) == 0 && length == 13,
+                       "editor text size query");
+                std::string buffer(length, '\0');
+                expect(oneui_view_code_editor_text(c.view, sql, 0, UINT64_MAX, buffer.data(), 4, &length) == ONEUI_VIEW_LIMIT,
+                       "editor text needs a large enough buffer");
+                expect(oneui_view_code_editor_text(c.view, sql, 0, 6, buffer.data(), buffer.size(), &length) == 0 &&
+                           buffer.substr(0, length) == "select",
+                       "editor range read");
+                expect(oneui_view_code_editor_replace(c.view, sql, 0, 6, str("SELECT"), state.revision) == 0,
+                       "editor replace at the expected revision");
+                expect(oneui_view_code_editor_replace(c.view, sql, 0, 6, str("x"), state.revision) == ONEUI_VIEW_STALE_CHANGE,
+                       "stale editor replace rejected");
+                expect(oneui_view_code_editor_select(c.view, sql, 7, 8) == 0, "editor select");
+                expect(oneui_view_code_editor_state(c.view, sql, &state) == 0 && state.anchor == 7 && state.caret == 8,
+                       "editor selection state");
+                expect(oneui_view_code_editor_state(c.view, str("metrics-unique"), &state) == ONEUI_VIEW_TYPE,
+                       "non-editor names rejected");
+                expect(editor->text() == L"SELECT 1;\n中", "editor replacement applied");
+                editor->setReadOnly(true);
+                expect(oneui_view_code_editor_replace(c.view, sql, 0, 1, str("x"), 0) == ONEUI_VIEW_READ_ONLY,
+                       "read-only editor rejects edits");
+                auto children = root->children();
+                children.erase(std::remove(children.begin(), children.end(), element.widget), children.end());
+                root->reconcileChildren(std::move(children));
+            }
             expect(oneui_view_element_metrics(c.view, name, &metrics) == 0 &&
                 metrics.x == 12 && metrics.y == 24 && metrics.width == 160 &&
                 metrics.height == 28 && !metrics.scrollable, "read-only element metrics");

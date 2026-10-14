@@ -3,8 +3,16 @@
 #include "oneui/controls/popup.h"
 #include "oneui/controls/data_grid.h"
 #include "oneui/controls/tree_view.h"
+#include "oneui/controls/code_editor.h"
+#include "internal/unicode.h"
 namespace oneui::ui {
 void Mount::set(Element &e, const std::string &key, const std::wstring &value) {
+    if (e.component == "CodeEditor") {
+        auto editor = e.as<CodeEditor>();
+        if (key == "text") { editor->setBoundText(value); return; }
+        if (key == "comment-prefix") { editor->setCommentPrefix(value); return; }
+        if (key == "language") { editor->setLanguage(parseCodeLanguage(unicode::toUtf8(value))); return; }
+    }
     if (e.component == "TreeView") {
         if (key == "selected-id") { e.as<TreeView>()->setSelectedId(value); return; }
         if (key == "loading-text") { e.as<TreeView>()->setLoadingText(value); return; }
@@ -200,6 +208,14 @@ void Mount::set(Element &e, const std::string &key, const std::string &value) {
         set(e, key, wide(value));
 }
 void Mount::set(Element &e, const std::string &key, bool value) {
+    if (e.component == "CodeEditor") {
+        auto editor = e.as<CodeEditor>();
+        if (key == "read-only") { editor->setReadOnly(value); return; }
+        if (key == "word-wrap") { editor->setWordWrap(value); return; }
+        if (key == "line-numbers") { editor->setLineNumbers(value); return; }
+        if (key == "indent-guides") { editor->setIndentGuides(value); return; }
+        if (key == "insert-spaces") { editor->setInsertSpaces(value); return; }
+    }
     if (e.component == "DataGrid") {
         if (key == "row-numbers") { e.as<DataGrid>()->setRowNumbersVisible(value); return; }
         if (key == "editable") { e.as<DataGrid>()->setEditable(value); return; }
@@ -258,6 +274,7 @@ void Mount::set(Element &e, const std::string &key, float value) {
         if (key == "header-height") { e.as<DataGrid>()->setHeaderHeight(value); return; }
     }
     if (e.component == "TreeView" && key == "row-height") { e.as<TreeView>()->setRowHeight(value); return; }
+    if (e.component == "CodeEditor" && key == "font-size") { e.as<CodeEditor>()->setFontSize(value); return; }
     syntax::validateLayoutNumber(key, value);
     if(e.component=="Popup") {
         auto popup=e.as<Popup>();
@@ -367,6 +384,14 @@ void Mount::set(Element &e, const std::string &key, float value) {
     styles_->updateAuthoredFlex(e.widget,e.flex);
 }
 void Mount::set(Element &e, const std::string &key, int value) {
+    if (e.component == "CodeEditor") {
+        if (key == "text-revision") {
+            if (value < 0) throw std::invalid_argument("text-revision must not be negative");
+            e.as<CodeEditor>()->setBoundRevision(static_cast<std::uint64_t>(value));
+            return;
+        }
+        if (key == "tab-size") { e.as<CodeEditor>()->setTabSize(value); return; }
+    }
     if (e.component == "DataGrid") {
         auto grid = e.as<DataGrid>();
         if (key == "row-count") { grid->setRowCount(value); return; }

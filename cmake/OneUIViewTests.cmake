@@ -109,8 +109,15 @@ add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/TreeRecords.oneview"
     DEPENDS oneui-viewc tests/views/TreeRecords.one tests/views/TreeRecords.oneschema VERBATIM)
 add_custom_target(oneui_view_tree_ir DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/TreeRecords.oneview")
 add_dependencies(oneui_view_test_ir oneui_view_tree_ir)
+add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/CodeEditorRecords.oneview"
+    COMMAND oneui-viewc --emit ir --input "${PROJECT_SOURCE_DIR}/tests/views/CodeEditorRecords.one"
+        --schema "${PROJECT_SOURCE_DIR}/tests/views/CodeEditorRecords.oneschema"
+        --output "${CMAKE_CURRENT_BINARY_DIR}/CodeEditorRecords.oneview"
+    DEPENDS oneui-viewc tests/views/CodeEditorRecords.one tests/views/CodeEditorRecords.oneschema VERBATIM)
+add_custom_target(oneui_view_code_editor_ir DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/CodeEditorRecords.oneview")
+add_dependencies(oneui_view_test_ir oneui_view_code_editor_ir)
 add_executable(oneui_view_list_tests tests/views/list_tests.cpp tests/views/table_record_tests.cpp
-    tests/views/data_grid_record_tests.cpp tests/views/tree_record_tests.cpp)
+    tests/views/data_grid_record_tests.cpp tests/views/tree_record_tests.cpp tests/views/code_editor_record_tests.cpp)
 target_link_libraries(oneui_view_list_tests PRIVATE oneui_views oneui_core)
 target_compile_definitions(oneui_view_list_tests PRIVATE ONEUI_BUILDING_DLL)
 target_include_directories(oneui_view_list_tests PRIVATE src)

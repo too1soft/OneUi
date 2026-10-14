@@ -11,6 +11,22 @@ extern "C" {
     pub fn oneui_view_element_metrics(view: *mut OneUiView, name: OneUiUtf8String,
         out: *mut OneUiViewElementMetrics) -> i32;
 }
+#[repr(C)]
+pub struct OneUiViewCodeEditorState {
+    pub struct_size: u32, pub cursors: u32,
+    pub revision: u64, pub caret: u64, pub anchor: u64, pub line: u64, pub column: u64,
+    pub length: u64, pub line_count: u64,
+}
+extern "C" {
+    pub fn oneui_view_code_editor_state(view: *mut OneUiView, name: OneUiUtf8String,
+        out: *mut OneUiViewCodeEditorState) -> i32;
+    pub fn oneui_view_code_editor_text(view: *mut OneUiView, name: OneUiUtf8String, start: u64, end: u64,
+        buffer: *mut c_char, capacity: usize, out_length: *mut usize) -> i32;
+    pub fn oneui_view_code_editor_replace(view: *mut OneUiView, name: OneUiUtf8String, start: u64, end: u64,
+        text: OneUiUtf8String, expected_revision: u64) -> i32;
+    pub fn oneui_view_code_editor_select(view: *mut OneUiView, name: OneUiUtf8String, anchor: u64,
+        caret: u64) -> i32;
+}
 
 pub type OneUiViewResult = i32;
 pub const ONEUI_VIEW_PROTOCOL_VERSION: u32 = 1;
