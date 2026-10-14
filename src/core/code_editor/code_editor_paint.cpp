@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cwctype>
 #include <unordered_map>
 
 namespace oneui {
@@ -126,6 +127,45 @@ void CodeEditorImpl::paint(Canvas& canvas, bool focused, bool caretVisible) {
         if (line == primarySel.caret.line && primarySel.empty())
             canvas.fillRect(Rect{text.x - 4.0f, y, text.width + 4.0f, lineHeight}, withAlpha(t.hoverBackground, 200));
 
+        // Decorations under the text.
+        for (const auto& dec : decorations) {
+            if (line < dec.start.line || line > dec.end.line) continue;
+            const std::size_t from = line == dec.start.line ? dec.start.column : 0;
+            const std::size_t to = line == dec.end.line ? dec.end.column : content.size();
+            const std::size_t a = std::max(from, segStart), b = std::min(to, segEnd);
+            if (a > b) continue;
+            const float x0 = xAt(a);
+            float x1 = xAt(b);
+            const bool fullLine = line != dec.end.line && b == content.size();
+            switch (dec.kind) {
+            case CodeDecorationKind::Statement:
+            case CodeDecorationKind::Highlight:
+            case CodeDecorationKind::Running: {
+                if (fullLine) x1 = std::max(x1, text.x + text.width);
+                const Color tint = dec.kind == CodeDecorationKind::Statement ? withAlpha(t.primary, 20)
+                                   : dec.kind == CodeDecorationKind::Running ? withAlpha(t.success, 34)
+                                                                             : withAlpha(t.warning, 45);
+                if (x1 > x0) canvas.fillRect(Rect{x0, y, x1 - x0, lineHeight}, tint);
+                break;
+            }
+            case CodeDecorationKind::Error:
+            case CodeDecorationKind::Warning: {
+                if (x1 <= x0) x1 = x0 + advance(L'M');
+                const Color color = dec.kind == CodeDecorationKind::Error ? t.error : t.warning;
+                const float base = y + lineHeight - 3.0f;
+                float x = x0;
+                bool up = true;
+                while (x < x1) {
+                    const float next = std::min(x1, x + 3.0f);
+                    canvas.drawLine(Point{x, up ? base : base - 2.0f}, Point{next, up ? base - 2.0f : base}, color, 1.0f);
+                    x = next;
+                    up = !up;
+                }
+                break;
+            }
+            }
+        }
+
         // Search matches on this row.
         for (const auto& m : matches) {
             if (m.start.line != line) continue;
@@ -241,6 +281,18 @@ void CodeEditorImpl::paint(Canvas& canvas, bool focused, bool caretVisible) {
         }
     }
 
+    // Gutter markers for running statements and problems.
+    for (const auto& dec : decorations) {
+        if (dec.kind != CodeDecorationKind::Running && dec.kind != CodeDecorationKind::Error) continue;
+        const float top = text.y + topPadding + static_cast<float>(rowOfLine(dec.start.line)) * lineHeight - scroll;
+        const float bottom = text.y + topPadding + static_cast<float>(rowOfLine(dec.end.line) + 1) * lineHeight - scroll;
+        if (bottom < f.y || top > f.y + f.height) continue;
+        if (dec.kind == CodeDecorationKind::Running)
+            canvas.fillRect(Rect{f.x + 2.0f, top + 2.0f, 3.0f, std::max(4.0f, bottom - top - 4.0f)}, t.success, 1.5f);
+        else
+            canvas.fillEllipse(Rect{f.x + 4.0f, top + lineHeight * 0.5f - 3.0f, 6.0f, 6.0f}, t.error);
+    }
+
     // Scrollbars.
     if (const Rect v = verticalThumb(); v.height > 0.0f) canvas.fillRect(v, withAlpha(t.borderStrong, 150), 3.0f);
     if (const Rect h = horizontalThumb(); h.width > 0.0f) canvas.fillRect(h, withAlpha(t.borderStrong, 150), 3.0f);
@@ -282,6 +334,39 @@ void CodeEditorImpl::paint(Canvas& canvas, bool focused, bool caretVisible) {
         }
     }
     canvas.restore();
+
+    // Completion list, drawn above neighbouring widgets while open.
+    if (completionVisible) {
+        const Rect r = completionRect();
+        canvas.drawBoxShadow(r, BoxShadow{t.shadowColor, Point{0.0f, 6.0f}, 16.0f, 0.0f}, 6.0f);
+        canvas.fillRect(r, t.surface, 6.0f);
+        canvas.strokeRect(r, t.border, 6.0f, 1.0f);
+        const int end = std::min(static_cast<int>(completionFiltered.size()), completionTop + completionRows);
+        for (int i = completionTop; i < end; ++i) {
+            const auto& item = completionItems[completionFiltered[static_cast<std::size_t>(i)]];
+            const Rect row{r.x + 4.0f, r.y + 4.0f + static_cast<float>(i - completionTop) * completionRowHeight, r.width - 8.0f,
+                           completionRowHeight};
+            if (i == completionSelected) canvas.fillRect(row, t.primarySoft, 4.0f);
+            const Rect badge{row.x + 4.0f, row.y + 4.0f, 16.0f, row.height - 8.0f};
+            const wchar_t letter = item.kind.empty() ? L'?' : static_cast<wchar_t>(std::towupper(item.kind.front()));
+            canvas.fillRect(badge, withAlpha(t.primary, 36), 3.0f);
+            canvas.drawTextStyled(std::wstring(1, letter), badge, t.primary, t.fontSm * 0.9f, TextAlign::Center, 600);
+            const float detailWidth = item.detail.empty() ? 0.0f : std::min(140.0f, canvas.measureTextWidth(item.detail, t.fontSm) + 8.0f);
+            canvas.drawTextStyledWithFont(item.label, Rect{badge.x + badge.width + 8.0f, row.y, row.width - 40.0f - detailWidth, row.height},
+                                          i == completionSelected ? t.primary : t.text, fontSize, TextAlign::Left,
+                                          TextFontFamily::Monospace);
+            if (!item.detail.empty())
+                canvas.drawTextStyledEllipsized(item.detail, Rect{row.x + row.width - detailWidth - 4.0f, row.y, detailWidth, row.height},
+                                                t.textMuted, t.fontSm, TextAlign::Right);
+        }
+        if (static_cast<int>(completionFiltered.size()) > completionRows) {
+            const float track = r.height - 8.0f;
+            const float thumb = std::max(16.0f, track * completionRows / static_cast<float>(completionFiltered.size()));
+            const float y = r.y + 4.0f + (track - thumb) * completionTop /
+                                         static_cast<float>(completionFiltered.size() - completionRows);
+            canvas.fillRect(Rect{r.x + r.width - 5.0f, y, 3.0f, thumb}, withAlpha(t.borderStrong, 150), 1.5f);
+        }
+    }
 }
 
 } // namespace oneui

@@ -4,6 +4,7 @@
 #include "data_menu_records.h"
 #include "oneui/controls/data_grid.h"
 #include "oneui/controls/tree_view.h"
+#include "oneui/controls/code_editor.h"
 #include "oneui/ui_icon_names.h"
 namespace oneui::views {
 void Runtime::applyList(Instance &instance, const std::string &property, ListState &state) {
@@ -114,6 +115,43 @@ void Runtime::applyList(Instance &instance, const std::string &property, ListSta
             columns.push_back(std::move(c));
         }
         factory.set(e, property, columns);
+    } else if (e.component == "CodeEditor" && property == "decorations") {
+        std::vector<CodeDecoration> decorations;
+        for (const auto &item : state.items) {
+            CodeDecoration d;
+            d.id = wide(field(item, "id").text);
+            const auto start = field(item, "start").integer, end = field(item, "end").integer;
+            check(start >= 0 && end >= start, ONEUI_VIEW_TYPE, "Editor decoration range");
+            d.start = static_cast<std::size_t>(start);
+            d.end = static_cast<std::size_t>(end);
+            const auto &kind = field(item, "kind").text;
+            if (kind == "statement") d.kind = CodeDecorationKind::Statement;
+            else if (kind == "error") d.kind = CodeDecorationKind::Error;
+            else if (kind == "warning") d.kind = CodeDecorationKind::Warning;
+            else if (kind == "running") d.kind = CodeDecorationKind::Running;
+            else if (kind == "highlight") d.kind = CodeDecorationKind::Highlight;
+            else check(false, ONEUI_VIEW_TYPE, "Editor decoration kind");
+            d.message = wide(field(item, "message").text);
+            decorations.push_back(std::move(d));
+        }
+        e.as<CodeEditor>()->setBoundDecorations(std::move(decorations));
+    } else if (e.component == "CodeEditor" && property == "completion-items") {
+        std::vector<CodeCompletionItem> items;
+        items.reserve(state.items.size());
+        for (const auto &item : state.items) {
+            CodeCompletionItem c;
+            c.id = wide(field(item, "id").text);
+            c.label = wide(field(item, "label").text);
+            c.kind = wide(field(item, "kind").text);
+            c.detail = wide(field(item, "detail").text);
+            c.insert = wide(field(item, "insert").text);
+            const auto start = field(item, "replace_start").integer, end = field(item, "replace_end").integer;
+            check(start >= 0 && end >= 0, ONEUI_VIEW_TYPE, "Completion replace range");
+            c.replaceStart = static_cast<std::size_t>(start);
+            c.replaceEnd = static_cast<std::size_t>(end);
+            items.push_back(std::move(c));
+        }
+        e.as<CodeEditor>()->setCompletionItems(std::move(items));
     } else if (e.component == "TreeView" && property == "tree-items") {
         // Highlight ranges arrive in Unicode scalar values; the tree uses UTF-16 offsets.
         auto utf16 = [](const std::wstring &text, std::int64_t scalars) {

@@ -69,7 +69,11 @@ void CodeEditor::setText(const std::wstring& text) {
     d.horizontal = 0.0f;
     d.rowsValid = false;
     d.resetHistory();
+    d.decorations.clear();
+    d.editLog.clear();
+    d.closeCompletion();
     d.touched();
+    d.logFloor = d.revision;
 }
 
 std::wstring CodeEditor::text() const { return impl_->doc.text(); }
@@ -126,6 +130,16 @@ void CodeEditor::setBoundRevision(std::uint64_t revision) {
         setExternalText(d.boundText, revision);
         d.editedSinceBound = false;
     }
+}
+
+void CodeEditor::setBoundDecorations(std::vector<CodeDecoration> decorations) {
+    impl_->boundDecorations = std::move(decorations);
+    setDecorations(impl_->boundDecorations, impl_->boundDecorationsRevision);
+}
+
+void CodeEditor::setBoundDecorationsRevision(std::uint64_t revision) {
+    impl_->boundDecorationsRevision = revision;
+    setDecorations(impl_->boundDecorations, revision);
 }
 
 CodeEditorState CodeEditor::state() const { return impl_->state(); }
@@ -246,6 +260,90 @@ std::size_t CodeEditor::matchCount() const {
 int CodeEditor::currentMatch() const {
     impl_->refreshMatches();
     return impl_->current;
+}
+
+void CodeEditor::setDecorations(std::vector<CodeDecoration> decorations, std::uint64_t revision) {
+    auto& d = *impl_;
+    d.decorations.clear();
+    if (revision != 0 && revision != d.revision) {
+        // Too old to map, or from the future: wait for a fresh publication.
+        if (revision > d.revision || revision < d.logFloor) {
+            invalidate();
+            return;
+        }
+    }
+    const auto length = d.doc.byteLength();
+    for (auto& item : decorations) {
+        std::size_t start = std::min(item.start, item.end), end = std::max(item.start, item.end);
+        if (revision != 0)
+            for (const auto& e : d.editLog) {
+                if (e.revision <= revision) continue;
+                auto map = [&](std::size_t o) {
+                    if (o < e.start) return o;
+                    if (o >= e.start + e.removed) return o - e.removed + e.inserted;
+                    return e.start + e.inserted;
+                };
+                start = map(start);
+                end = map(end);
+            }
+        code::Decoration decoration;
+        decoration.id = std::move(item.id);
+        decoration.start = d.doc.fromByteOffset(std::min(start, length));
+        decoration.end = d.doc.fromByteOffset(std::min(end, length));
+        decoration.kind = item.kind;
+        decoration.message = std::move(item.message);
+        d.decorations.push_back(std::move(decoration));
+    }
+    invalidate();
+}
+
+std::vector<CodeDecoration> CodeEditor::decorations() const {
+    std::vector<CodeDecoration> result;
+    for (const auto& d : impl_->decorations)
+        result.push_back({d.id, impl_->doc.byteOffset(d.start), impl_->doc.byteOffset(d.end), d.kind, d.message});
+    return result;
+}
+
+void CodeEditor::setCompletionItems(std::vector<CodeCompletionItem> items) {
+    auto& d = *impl_;
+    d.completionItems = std::move(items);
+    const auto caret = d.selections[std::min(d.primary, d.selections.size() - 1)].caret;
+    Position start = d.completionVisible ? d.completionStart : d.wordStartBefore(caret);
+    if (!d.completionItems.empty() && d.completionItems.front().replaceEnd > d.completionItems.front().replaceStart) {
+        const auto given = d.doc.fromByteOffset(d.completionItems.front().replaceStart);
+        if (given.line == caret.line && given <= caret) start = given;
+    }
+    d.completionStart = start;
+    d.filterCompletions();
+    d.updateCompletionVisibility();
+}
+
+void CodeEditor::setCompletionOpen(bool open) {
+    auto& d = *impl_;
+    d.completionWanted = open;
+    if (open) d.filterCompletions();
+    d.updateCompletionVisibility();
+}
+
+bool CodeEditor::completionOpen() const { return impl_->completionVisible; }
+int CodeEditor::completionIndex() const { return impl_->completionVisible ? impl_->completionSelected : -1; }
+
+std::vector<std::wstring> CodeEditor::visibleCompletions() const {
+    std::vector<std::wstring> result;
+    if (!impl_->completionVisible) return result;
+    for (const auto index : impl_->completionFiltered) result.push_back(impl_->completionItems[index].label);
+    return result;
+}
+
+bool CodeEditor::acceptCompletion() { return impl_->acceptCompletion(); }
+void CodeEditor::closeCompletion() { impl_->closeCompletion(); }
+void CodeEditor::requestCompletion(CodeCompletionTrigger trigger) { impl_->requestCompletion(trigger); }
+void CodeEditor::setOnCompletionRequested(std::function<void(std::size_t, CodeCompletionTrigger)> callback) {
+    impl_->onCompletionRequested = std::move(callback);
+}
+void CodeEditor::setOnCompletionClosed(std::function<void()> callback) { impl_->onCompletionClosed = std::move(callback); }
+void CodeEditor::setOnCompletionAccepted(std::function<void(const std::wstring&)> callback) {
+    impl_->onCompletionAccepted = std::move(callback);
 }
 
 bool CodeEditor::findNext(bool backwards) { return impl_->findNext(backwards); }
@@ -489,6 +587,41 @@ void CodeEditor::paint(Canvas& canvas) {
     View::paint(canvas);
 }
 
+Rect CodeEditor::paintBounds() const {
+    Rect bounds = View::paintBounds();
+    if (impl_->completionVisible) {
+        const Rect popup = impl_->completionRect();
+        const float left = std::min(bounds.x, popup.x - 16.0f), top = std::min(bounds.y, popup.y - 16.0f);
+        const float right = std::max(bounds.x + bounds.width, popup.x + popup.width + 16.0f);
+        const float bottom = std::max(bounds.y + bounds.height, popup.y + popup.height + 16.0f);
+        bounds = Rect{left, top, right - left, bottom - top};
+    }
+    return bounds;
+}
+
+bool CodeEditor::hitTest(Point point) const {
+    return View::hitTest(point) || (impl_->completionVisible && impl_->completionRect().contains(point));
+}
+
+bool CodeEditor::paintsAboveSiblings() const { return impl_->completionVisible; }
+
+const std::wstring* CodeEditor::tooltipAt(Point point) const {
+    const auto& d = *impl_;
+    if (d.completionVisible && d.completionRect().contains(point)) return nullptr;
+    if (d.findVisible && d.findLayout().bar.contains(point)) return View::tooltipAt(point);
+    if (!d.decorations.empty() && d.textRect().contains(point)) {
+        const auto p = d.hit(point);
+        for (const auto& decoration : d.decorations) {
+            if (decoration.message.empty()) continue;
+            const bool squiggle = decoration.kind == CodeDecorationKind::Error || decoration.kind == CodeDecorationKind::Warning;
+            const auto end = decoration.start == decoration.end ? Position{decoration.end.line, decoration.end.column + 1} : decoration.end;
+            if ((squiggle || decoration.kind == CodeDecorationKind::Running) && decoration.start <= p && p < end)
+                return &decoration.message;
+        }
+    }
+    return View::tooltipAt(point);
+}
+
 void CodeEditor::layoutChildren() {
     if (!impl_->findVisible) return;
     const auto l = impl_->findLayout();
@@ -499,6 +632,16 @@ void CodeEditor::layoutChildren() {
 bool CodeEditor::onMouseDown(const MouseEvent& event) {
     auto& d = *impl_;
     if (!interactive()) return false;
+    if (d.completionVisible) {
+        const int row = d.completionRowAt(event.position);
+        if (row >= 0) {
+            d.completionSelected = row;
+            d.acceptCompletion();
+            return true;
+        }
+        if (d.completionRect().contains(event.position)) return true;
+        d.closeCompletion();
+    }
     if (d.findVisible) {
         const auto l = d.findLayout();
         if (l.bar.contains(event.position)) {
@@ -644,6 +787,12 @@ bool CodeEditor::onMouseUp(const MouseEvent& event) {
 
 bool CodeEditor::onMouseWheel(const MouseWheelEvent& event) {
     auto& d = *impl_;
+    if (d.completionVisible && d.completionRect().contains(event.position)) {
+        const int last = std::max(0, static_cast<int>(d.completionFiltered.size()) - CodeEditorImpl::completionRows);
+        d.completionTop = std::clamp(d.completionTop - static_cast<int>(event.deltaY * 3.0f), 0, last);
+        invalidate();
+        return true;
+    }
     if (!frame().contains(event.position)) return false;
     if (event.shift) d.setHorizontal(d.horizontal - event.deltaY * d.advance(L'M') * 8.0f);
     else d.setScroll(d.scroll - event.deltaY * d.lineHeight * 3.0f);
@@ -670,6 +819,28 @@ bool CodeEditor::onKeyDown(const KeyEvent& event) {
         return View::onKeyDown(event);
     }
     const bool shift = event.shift, ctrl = event.control, alt = event.alt;
+    if (d.completionVisible && !ctrl && !alt) {
+        switch (event.key) {
+        case Key::Up: d.moveCompletion(-1); return true;
+        case Key::Down: d.moveCompletion(1); return true;
+        case Key::PageUp: d.moveCompletion(-CodeEditorImpl::completionRows); return true;
+        case Key::PageDown: d.moveCompletion(CodeEditorImpl::completionRows); return true;
+        case Key::Enter:
+        case Key::Tab:
+            if (!shift && d.acceptCompletion()) return true;
+            break;
+        case Key::Escape: d.closeCompletion(); return true;
+        case Key::Backspace:
+            d.deleteBackward(false);
+            if (d.selections[d.primary].caret < d.completionStart) d.closeCompletion();
+            else {
+                d.filterCompletions();
+                d.updateCompletionVisibility();
+            }
+            return true;
+        default: d.closeCompletion(); break;
+        }
+    }
     switch (event.key) {
     case Key::Left: d.move(-1, 0, shift, ctrl); return true;
     case Key::Right: d.move(1, 0, shift, ctrl); return true;
@@ -750,6 +921,10 @@ CommandResult CodeEditor::dispatchBuiltinCommandKey(const KeyEvent& event, const
     }
     // Inside the find bar the text field handles editing shortcuts.
     if (focusedChild()) return CommandResult::NotFound;
+    if (key == "space" && !shift) {
+        d.requestCompletion(CodeCompletionTrigger::Manual);
+        return CommandResult::Executed;
+    }
     const auto done = [this] {
         invalidate();
         return CommandResult::Executed;
@@ -782,6 +957,7 @@ bool CodeEditor::onTextInput(wchar_t character) {
     if (focusedChild()) return View::onTextInput(character);
     if (impl_->readOnly || character < 0x20 || character == 0x7f) return false;
     insertText(std::wstring(1, character));
+    impl_->afterTyping(std::wstring(1, character));
     return true;
 }
 
@@ -793,6 +969,7 @@ bool CodeEditor::onTextCommitted(const std::wstring& text) {
         return false;
     }
     insertText(code::normalizeNewlines(text));
+    impl_->afterTyping(text);
     return true;
 }
 

@@ -40,6 +40,36 @@ void codeEditorRecordTests(const std::filesystem::path& path) {
     editor->insertText(L" -- edited");
     runtime->notify(runtime->rootScope,revision);runtime->flush();
     expect(editor->text()==L" -- editedselect 3","the same revision is not applied twice");
+    // Decorations bind as records with their own revision.
+    const auto marks=id(image,"Script","marks"), marksRevision=id(image,"Script","marksRevision");
+    auto mark=std::make_unique<Vm>(image,"Mark");
+    mark->text(mark->key,"m1");mark->values[id(image,"Mark","start")].integer=0;mark->values[id(image,"Mark","end")].integer=3;
+    mark->text(id(image,"Mark","kind"),"error");mark->text(id(image,"Mark","message"),"unknown word");
+    vm.lists[marks]={mark.get()};
+    vm.values[marksRevision].integer=static_cast<std::int64_t>(editor->revision());
+    ++vm.revision;runtime->notify(runtime->rootScope,marks);runtime->notify(runtime->rootScope,marksRevision);runtime->flush();
+    expect(editor->decorations().size()==1 && editor->decorations()[0].kind==oneui::CodeDecorationKind::Error,
+           "decorations bind with kinds");
+    // Completion: request, answer, accept.
+    const auto items=id(image,"Script","items"), open=id(image,"Script","open");
+    editor->setText(L"");
+    editor->onTextInput(L's');
+    runtime->flush();
+    expect(vm.lastCommand==commands.at("complete").id && vm.lastArgs.size()==2 && vm.lastArgs[0].integer==1 &&
+           vm.lastArgs[1].integer==1,"completionRequested(offset, trigger)");
+    std::vector<std::unique_ptr<Vm>> owned;
+    for(const char* label:{"select","sessions"}) {
+        auto s=std::make_unique<Vm>(image,"Suggestion");
+        s->text(s->key,label);s->text(id(image,"Suggestion","label"),label);s->text(id(image,"Suggestion","kind"),"keyword");
+        vm.lists[items].push_back(s.get());owned.push_back(std::move(s));
+    }
+    vm.values[open].integer=1;
+    ++vm.revision;runtime->notify(runtime->rootScope,items);runtime->notify(runtime->rootScope,open);runtime->flush();
+    expect(editor->completionOpen() && editor->visibleCompletions().size()==2,"completion items and open bind");
+    oneui::KeyEvent enter;enter.key=oneui::Key::Enter;
+    editor->onKeyDown(enter);runtime->flush();
+    expect(editor->text()==L"select" && vm.lastCommand==commands.at("accepted").id && vm.lastArgs.size()==1 &&
+           vm.lastArgs[0].text=="select","completionAccepted(id) after closing");
     runtime->close();
     std::cout << "code editor declarative binding scenarios passed\n";
 }

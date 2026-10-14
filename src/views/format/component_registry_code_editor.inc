@@ -21,7 +21,14 @@ P("CodeEditor", 18, "tab-size", 2, 3, "")
 P("CodeEditor", 19, "insert-spaces", 1, 3, "")
 P("CodeEditor", 20, "font-size", 3, 3, "")
 P("CodeEditor", 21, "comment-prefix", 4, 3, "")
+P("CodeEditor", 22, "decorations", 5, 2, "@editor.decoration")
+P("CodeEditor", 23, "decorations-revision", 2, 3, "")
+P("CodeEditor", 24, "completion-items", 5, 2, "@completion.item")
+P("CodeEditor", 25, "completion-open", 1, 3, "")
 r.at("CodeEditor").events={
     {1,"changed",{{"revision",2}}},
-    {2,"cursor",{{"caret",2},{"anchor",2},{"line",2},{"column",2},{"cursors",2}}}
+    {2,"cursor",{{"caret",2},{"anchor",2},{"line",2},{"column",2},{"cursors",2}}},
+    {3,"completionRequested",{{"offset",2},{"trigger",2}}},
+    {4,"completionClosed",{}},
+    {5,"completionAccepted",{{"id",4}}}
 };

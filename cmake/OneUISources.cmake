@@ -117,6 +117,7 @@ set(ONEUI_CORE_SOURCES
     src/core/style_transition.cpp
     src/core/switch.cpp
     src/core/code_editor/code_document.cpp
+    src/core/code_editor/code_editor_assist.cpp
     src/core/code_editor/code_editor.cpp
     src/core/code_editor/code_editor_edit.cpp
     src/core/code_editor/code_editor_find.cpp

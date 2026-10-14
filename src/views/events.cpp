@@ -141,6 +141,16 @@ void Runtime::wire(const std::shared_ptr<Instance> &instance) {
                 editor->setOnCursorChanged([fire, integer](const CodeEditorState &s) {
                     fire({integer(s.caret), integer(s.anchor), integer(s.line), integer(s.column), integer(s.cursors)});
                 });
+            else if (name == "completionRequested")
+                editor->setOnCompletionRequested([fire, integer](std::size_t offset, CodeCompletionTrigger trigger) {
+                    fire({integer(offset), integer(static_cast<std::uint64_t>(trigger))});
+                });
+            else if (name == "completionClosed")
+                editor->setOnCompletionClosed([fire] { fire({}); });
+            else if (name == "completionAccepted")
+                editor->setOnCompletionAccepted([fire](const std::wstring &id) {
+                    Value v; v.tag = 4; v.text = narrow(id); fire({v});
+                });
         }
         else if (element.component == "TreeView") {
             auto tree = element.as<TreeView>();

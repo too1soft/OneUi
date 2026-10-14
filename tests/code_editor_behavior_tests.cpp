@@ -360,6 +360,90 @@ void testLargeDocumentPerformance() {
     expectTrue("wrapped keystrokes stay under 16 ms", worst < 16.0);
 }
 
+void testDecorationsFollowEdits() {
+    auto e = editor(L"select 1;\nselect 2;");
+    e->setDecorations({{L"err", 17, 18, oneui::CodeDecorationKind::Error, L"bad literal"},
+                       {L"stmt", 10, 19, oneui::CodeDecorationKind::Statement, L""}});
+    e->setSelection(0, 0);
+    e->insertText(L"xx");
+    auto decorations = e->decorations();
+    expectTrue("decorations shift with edits", decorations.size() == 2 && decorations[0].start == 19 && decorations[0].end == 20 &&
+                                                  decorations[1].start == 12 && decorations[1].end == 21);
+    // Hover over the squiggle shows its message (gutter 43, text at 49, 7 px per character, 20 px lines).
+    RecordingCanvas canvas;
+    e->paint(canvas);
+    const auto* tip = e->tooltipAt(oneui::Point{49.0f + 7.0f * 7.0f + 3.0f, 4.0f + 20.0f + 10.0f});
+    expectTrue("error decorations explain themselves on hover", tip && *tip == L"bad literal");
+    expectTrue("no tooltip elsewhere", e->tooltipAt(oneui::Point{49.0f + 2.0f, 4.0f + 10.0f}) == nullptr);
+    e->setSelection(11, 21);
+    e->insertText(L"");
+    e->onKeyDown(key(oneui::Key::Backspace));
+    expectEqual("deleting the text removes its decorations", e->decorations().size(), std::size_t{0});
+    // Decorations computed for an older revision are mapped forward.
+    e->setText(L"select 1;\nselect 2;");
+    const auto revision = e->revision();
+    e->setSelection(0, 0);
+    e->insertText(L"-- ");
+    e->setDecorations({{L"late", 17, 18, oneui::CodeDecorationKind::Warning, L"late"}}, revision);
+    decorations = e->decorations();
+    expectTrue("late decorations are mapped through newer edits", decorations.size() == 1 && decorations[0].start == 20);
+    e->setDecorations({{L"future", 0, 1, oneui::CodeDecorationKind::Error, L""}}, e->revision() + 5);
+    expectEqual("decorations from an unknown revision are dropped", e->decorations().size(), std::size_t{0});
+}
+
+void testCompletionFlow() {
+    auto e = editor(L"");
+    std::vector<std::pair<std::size_t, oneui::CodeCompletionTrigger>> requests;
+    int closed = 0;
+    std::vector<std::wstring> accepted;
+    e->setOnCompletionRequested([&](std::size_t offset, oneui::CodeCompletionTrigger trigger) { requests.push_back({offset, trigger}); });
+    e->setOnCompletionClosed([&] { ++closed; });
+    e->setOnCompletionAccepted([&](const std::wstring& id) { accepted.push_back(id); });
+    auto answer = [&] {
+        e->setCompletionItems({{L"k:select", L"SELECT", L"keyword", L"", L"SELECT ", 0, 0},
+                               {L"k:set", L"SET", L"keyword", L"", L"", 0, 0},
+                               {L"t:sessions", L"sessions", L"table", L"public", L"", 0, 0},
+                               {L"f:substr", L"SUBSTR", L"function", L"text", L"SUBSTR(", 0, 0}});
+        e->setCompletionOpen(true);
+    };
+    e->onTextInput(L's');
+    expectTrue("a new word asks for completions", requests.size() == 1 && requests[0].second == oneui::CodeCompletionTrigger::Character);
+    answer();
+    expectTrue("the list opens", e->completionOpen() && e->visibleCompletions().size() == 4);
+    e->onTextInput(L'e');
+    expectTrue("typing filters locally", e->visibleCompletions().size() == 3);
+    expectTrue("and asks again", requests.size() == 2);
+    e->onKeyDown(key(oneui::Key::Down));
+    expectEqual("arrow keys move the selection", e->completionIndex(), 1);
+    e->onKeyDown(key(oneui::Key::Up));
+    e->onKeyDown(key(oneui::Key::Enter));
+    expectText("Enter accepts the insert text", e->text(), L"SELECT ");
+    expectTrue("acceptance closes and reports", !e->completionOpen() && closed == 1 && accepted.size() == 1 && accepted[0] == L"k:select");
+    e->onTextInput(L'u');
+    e->onTextInput(L'.');
+    expectTrue("a dot asks for members", requests.back().second == oneui::CodeCompletionTrigger::Member && requests.back().first == 9);
+    e->setCompletionItems({{L"c:id", L"id", L"column", L"int", L"", 0, 0}, {L"c:name", L"name", L"column", L"text", L"", 0, 0}});
+    e->setCompletionOpen(true);
+    expectTrue("member list opens", e->completionOpen() && e->visibleCompletions().size() == 2);
+    RecordingCanvas canvas;
+    e->paint(canvas);
+    expectTrue("the open list paints above siblings", e->paintsAboveSiblings());
+    e->onKeyDown(key(oneui::Key::Tab));
+    expectText("Tab accepts", e->text(), L"SELECT u.id");
+    e->onTextInput(L' ');
+    e->onTextInput(L'n');
+    answer();
+    e->onKeyDown(key(oneui::Key::Escape));
+    expectTrue("Esc closes without inserting", !e->completionOpen() && e->text() == L"SELECT u.id n");
+    e->onKeyDown(key(oneui::Key::Backspace));
+    expectTrue("Ctrl+Space asks explicitly", e->dispatchBuiltinCommandKey(key(oneui::Key::Space, false, true), {}) ==
+                                                 oneui::CommandResult::Executed &&
+                                             requests.back().second == oneui::CodeCompletionTrigger::Manual);
+    answer();
+    e->onKeyDown(key(oneui::Key::Backspace));
+    expectTrue("deleting past the word start closes the list", !e->completionOpen());
+}
+
 } // namespace
 
 int main() {
@@ -372,6 +456,8 @@ int main() {
     testFindAndReplace();
     testSynchronization();
     testImeAndKeyRouting();
+    testDecorationsFollowEdits();
+    testCompletionFlow();
     testLargeDocumentPerformance();
     if (failures) std::cerr << failures << " code editor failure(s)\n";
     return failures ? 1 : 0;

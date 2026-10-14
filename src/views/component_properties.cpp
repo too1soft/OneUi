@@ -215,6 +215,7 @@ void Mount::set(Element &e, const std::string &key, bool value) {
         if (key == "line-numbers") { editor->setLineNumbers(value); return; }
         if (key == "indent-guides") { editor->setIndentGuides(value); return; }
         if (key == "insert-spaces") { editor->setInsertSpaces(value); return; }
+        if (key == "completion-open") { editor->setCompletionOpen(value); return; }
     }
     if (e.component == "DataGrid") {
         if (key == "row-numbers") { e.as<DataGrid>()->setRowNumbersVisible(value); return; }
@@ -391,6 +392,11 @@ void Mount::set(Element &e, const std::string &key, int value) {
             return;
         }
         if (key == "tab-size") { e.as<CodeEditor>()->setTabSize(value); return; }
+        if (key == "decorations-revision") {
+            if (value < 0) throw std::invalid_argument("decorations-revision must not be negative");
+            e.as<CodeEditor>()->setBoundDecorationsRevision(static_cast<std::uint64_t>(value));
+            return;
+        }
     }
     if (e.component == "DataGrid") {
         auto grid = e.as<DataGrid>();

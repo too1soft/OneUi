@@ -127,6 +127,8 @@ void validateRecord(const Model& model, const std::string& projection) {
     // Row cells are a nested list of records with text:4 and classes:4.
     else if(projection=="@grid.row") fields="id:4 number:4 classes:4 cells:5";
     else if(projection=="@tree.node") fields="id:4 parent:4 text:4 detail:4 icon:4 badge:4 classes:4 has_children:1 expanded:1 loading:1 highlight_start:2 highlight_len:2";
+    else if(projection=="@editor.decoration") fields="id:4 start:2 end:2 kind:4 message:4";
+    else if(projection=="@completion.item") fields="id:4 label:4 kind:4 detail:4 insert:4 replace_start:2 replace_end:2";
     else if(projection=="@workspace.tab-source") fields="id:4 pane:4 enabled:1";
     else throw Error("BIND_RECORD: unknown projection "+projection);
     require(model.keyName=="id","BIND_RECORD: workspace key must be id");

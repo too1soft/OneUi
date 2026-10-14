@@ -165,6 +165,36 @@ whose end state did not change. Words followed by `(` color as functions.
   `code_editor_text`, `code_editor_replace`, `code_editor_select`. The element
   is addressed by its `name`.
 
+### Decorations
+
+```xml
+<CodeEditor :decorations="marks" :decorations-revision="marksRevision" .../>
+```
+
+`@editor.decoration` records carry `id`, `start` and `end` (UTF-8 bytes),
+`kind` (`statement` background, `error` / `warning` squiggles, `running`
+gutter bar and tint, `highlight`) and `message` (shown on hover for errors,
+warnings and running statements). Ranges follow edits and disappear with the
+text they describe. `decorations-revision` names the editor revision the
+offsets were computed for; when the user typed in the meantime the editor maps
+them forward through its retained edit log, and drops them only when that
+revision is older than the log (the product then republishes).
+
+### Completion
+
+The editor raises `completionRequested(offset, trigger)` with trigger
+`0` (Ctrl+Space), `1` (a word starts or continues while the list is open) or
+`2` (after `.`). The product answers with `completion-items`
+(`@completion.item`: `id`, `label`, `kind` badge, `detail`, `insert` — empty
+means the label —, `replace_start` / `replace_end`, both 0 for "the word before
+the caret") and sets `completion-open`. The list is drawn at the caret above
+neighbouring widgets and filtered locally (prefix matches first, then
+substring matches) while the editor asks again, so stale answers never block
+typing. Up/Down/PageUp/PageDown select, Enter or Tab accept, Esc, a non-word
+character or moving the caret closes. `completionClosed()` reports every close
+so the product can reset `completion-open`, followed by
+`completionAccepted(id)` when an item was inserted.
+
 ### Keys
 
 | Keys | Action |
@@ -179,6 +209,7 @@ whose end state did not change. Words followed by `(` color as functions.
 | Ctrl+Shift+K | Delete lines |
 | Alt+click, Ctrl+Alt+Up/Down | Add a cursor; Esc returns to one cursor |
 | Ctrl+A / C / X / V, Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z | Clipboard and history; copy and cut without a selection take the line; pasting as many lines as cursors gives one line each |
+| Ctrl+Space | Ask for completions |
 | Ctrl+F / Ctrl+H, F3 / Shift+F3 | Find bar / with replace, next / previous; the bar has case, regex and whole-word toggles, match counts, Enter / Shift+Enter, Ctrl+Enter in the replace field replaces all |
 | Double / triple click | Select word / line; dragging after a double click extends by words |
 

@@ -45,6 +45,22 @@ struct Match {
     Position end;
 };
 
+struct Decoration {
+    std::wstring id;
+    Position start;
+    Position end;
+    CodeDecorationKind kind = CodeDecorationKind::Highlight;
+    std::wstring message;
+};
+
+// An applied edit in UTF-8 byte space, tagged with the revision it produced.
+struct ByteEdit {
+    std::uint64_t revision = 0;
+    std::size_t start = 0;
+    std::size_t removed = 0;
+    std::size_t inserted = 0;
+};
+
 // Maps a position through an edit applied at or before it.
 Position shiftThrough(Position position, const Edit& edit);
 
@@ -182,6 +198,41 @@ struct CodeEditorImpl {
     bool replaceCurrent(const std::wstring& replacement);
     std::size_t replaceAll(const std::wstring& replacement);
     void selectMatch(int index);
+
+    // Decorations and the byte-level edit log used to map late decorations.
+    std::vector<code::Decoration> decorations;
+    std::vector<code::ByteEdit> editLog;
+    std::vector<CodeDecoration> boundDecorations;
+    std::uint64_t boundDecorationsRevision = 0;
+    std::uint64_t logFloor = 0;
+
+    // Completion.
+    std::vector<CodeCompletionItem> completionItems;
+    std::vector<std::size_t> completionFiltered;
+    int completionSelected = -1;
+    int completionTop = 0;
+    bool completionWanted = false;
+    bool completionVisible = false;
+    code::Position completionStart;
+    std::function<void(std::size_t, CodeCompletionTrigger)> onCompletionRequested;
+    std::function<void()> onCompletionClosed;
+    std::function<void(const std::wstring&)> onCompletionAccepted;
+
+    // --- decorations and completion (code_editor_assist.cpp)
+    void logEdit(const code::Edit& edit);
+    void mapDecorations(const code::Edit& edit);
+    code::Position wordStartBefore(code::Position caret) const;
+    void filterCompletions();
+    void updateCompletionVisibility();
+    void requestCompletion(CodeCompletionTrigger trigger);
+    void closeCompletion();
+    bool acceptCompletion();
+    void moveCompletion(int delta);
+    void afterTyping(const std::wstring& text);
+    Rect completionRect() const;
+    int completionRowAt(Point point) const;
+    static constexpr float completionRowHeight = 22.0f;
+    static constexpr int completionRows = 10;
 
     // --- painting (code_editor_paint.cpp)
     struct FindLayout {

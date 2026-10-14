@@ -69,6 +69,39 @@ struct CodeSearchOptions {
     bool wholeWord = false;
 };
 
+enum class CodeDecorationKind : std::uint8_t {
+    Statement, // background of the statement the caret is in
+    Error,     // red squiggle with a hover message
+    Warning,   // amber squiggle with a hover message
+    Running,   // statement being executed: gutter marker and tint
+    Highlight, // neutral background
+};
+
+// Byte range [start, end) in UTF-8 offsets of the revision it was made for.
+struct CodeDecoration {
+    std::wstring id;
+    std::size_t start = 0;
+    std::size_t end = 0;
+    CodeDecorationKind kind = CodeDecorationKind::Highlight;
+    std::wstring message;
+};
+
+struct CodeCompletionItem {
+    std::wstring id;
+    std::wstring label;
+    // Free-form category shown as a badge: table, view, column, function, ...
+    std::wstring kind;
+    std::wstring detail;
+    // Inserted text; empty means the label.
+    std::wstring insert;
+    // Byte range replaced on acceptance, extended to the caret as the user
+    // keeps typing. Both 0 means "the word before the caret".
+    std::size_t replaceStart = 0;
+    std::size_t replaceEnd = 0;
+};
+
+enum class CodeCompletionTrigger : int { Manual = 0, Character = 1, Member = 2 };
+
 // Offsets are UTF-8 byte offsets into the document; line/column are 1-based,
 // with the column counted in Unicode scalar values.
 struct CodeEditorState {
@@ -106,6 +139,9 @@ public:
     // revision 0 the text is initial content and applies until the user edits.
     void setBoundText(std::wstring text);
     void setBoundRevision(std::uint64_t revision);
+    // Declarative decorations: the list and its revision arrive separately.
+    void setBoundDecorations(std::vector<CodeDecoration> decorations);
+    void setBoundDecorationsRevision(std::uint64_t revision);
     CodeEditorState state() const;
     void setSelection(std::size_t anchor, std::size_t caret);
 
@@ -136,6 +172,28 @@ public:
     bool findNext(bool backwards = false);
     bool replaceCurrent(const std::wstring& replacement);
     std::size_t replaceAll(const std::wstring& replacement);
+
+    // Decorations made for `revision` (0 = current text). Ranges follow later
+    // edits; a range deleted entirely disappears. Decorations older than the
+    // retained edit history are dropped until the product republishes them.
+    void setDecorations(std::vector<CodeDecoration> decorations, std::uint64_t revision = 0);
+    // Current decorations, mapped to the current text.
+    std::vector<CodeDecoration> decorations() const;
+
+    // Completion. The editor asks, the product answers with items; the list is
+    // drawn at the caret and filtered locally while the user keeps typing.
+    void setCompletionItems(std::vector<CodeCompletionItem> items);
+    void setCompletionOpen(bool open);
+    bool completionOpen() const;
+    // Index into the filtered list, or -1.
+    int completionIndex() const;
+    std::vector<std::wstring> visibleCompletions() const;
+    bool acceptCompletion();
+    void closeCompletion();
+    void requestCompletion(CodeCompletionTrigger trigger);
+    void setOnCompletionRequested(std::function<void(std::size_t offset, CodeCompletionTrigger trigger)> callback);
+    void setOnCompletionClosed(std::function<void()> callback);
+    void setOnCompletionAccepted(std::function<void(const std::wstring& id)> callback);
 
     // Editing commands, also reachable through keys.
     bool undo();
@@ -170,6 +228,10 @@ public:
     std::size_t firstVisibleLine() const;
 
     void paint(Canvas& canvas) override;
+    Rect paintBounds() const override;
+    bool hitTest(Point point) const override;
+    bool paintsAboveSiblings() const override;
+    const std::wstring* tooltipAt(Point point) const override;
     void layoutChildren() override;
     bool onMouseDown(const MouseEvent& event) override;
     bool onMouseMove(const MouseEvent& event) override;

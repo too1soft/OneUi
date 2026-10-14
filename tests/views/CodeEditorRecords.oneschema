@@ -1,7 +1,30 @@
+model Mark key id {
+    r id: utf8
+    r start: i64
+    r end: i64
+    r kind: utf8
+    r message: utf8
+}
+model Suggestion key id {
+    r id: utf8
+    r label: utf8
+    r kind: utf8
+    r detail: utf8
+    r insert: utf8
+    r replace_start: i64
+    r replace_end: i64
+}
 model Script {
     r language: utf8
     r text: utf8
     r revision: i64
+    r marks: list<Mark>
+    r marksRevision: i64
+    r items: list<Suggestion>
+    r open: bool
     command changed(revision:i64)
     command cursor(caret:i64,anchor:i64,line:i64,column:i64,cursors:i64)
+    command complete(offset:i64,trigger:i64)
+    command closed()
+    command accepted(id:utf8)
 }

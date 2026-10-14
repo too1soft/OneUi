@@ -45,6 +45,8 @@ void CodeEditorImpl::changed(const code::LineChange& change) {
 }
 
 void CodeEditorImpl::applyEdit(const code::Edit& edit) {
+    logEdit(edit);
+    mapDecorations(edit);
     code::LineChange change;
     if (!edit.removed.empty()) {
         doc.erase(edit.start, code::Document::advance(edit.start, edit.removed), &change);
