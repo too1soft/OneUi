@@ -456,6 +456,22 @@ bool Select::paintsAboveSiblings() const {
     return interactive() && popup_.open && !items_.empty();
 }
 
+Rect Select::paintBounds() const {
+    const Rect field = frame();
+    if (!paintsAboveSiblings()) {
+        return field;
+    }
+    // The inline popup paints outside the field; hover and scroll changes must
+    // invalidate it, including the drop shadow below the surface.
+    const Rect popup = popupSurfaceRect();
+    const float shadow = std::max(0.0f, resolvedFieldStyle().popupShadowOffset);
+    const float x = std::min(field.x, popup.x);
+    const float y = std::min(field.y, popup.y);
+    const float right = std::max(field.x + field.width, popup.x + popup.width);
+    const float bottom = std::max(field.y + field.height, popup.y + popup.height + shadow);
+    return Rect{x, y, right - x, bottom - y};
+}
+
 AccessibilityInfo Select::accessibilityInfo() const {
     auto info = Widget::accessibilityInfo();
     if (info.role == AccessibilityRole::None) {

@@ -131,6 +131,35 @@ void dividerAndActions() {
     f.dock->requestAction(DockIntentKind::Redock,"sftp");check(f.events.back().kind==DockIntentKind::Redock,"redock intent");
     auto title=f.title(0);MouseEvent dbl{title};dbl.clickCount=2;f.root.onMouseDown(dbl);check(f.events.back().kind==DockIntentKind::Maximize,"title doubleclick maximize intent");
 }
+bool painted(const test_support::RecordingCanvas& c,Color color,const Rect* rect=nullptr) {
+    for(const auto& call:c.fillRects)
+        if(call.color.r==color.r&&call.color.g==color.g&&call.color.b==color.b&&
+           (!rect||(near(call.rect.x,rect->x)&&near(call.rect.y,rect->y)&&near(call.rect.width,rect->width)&&near(call.rect.height,rect->height))))return true;
+    return false;
+}
+void scopedPartsAndFloatingSurface() {
+    Fixture f;f.floating();
+    auto sheet=std::make_shared<StyleSheet>();std::string error;
+    // viewc appends the template scope class to every scoped selector.
+    check(sheet->addRulesFromCss(
+        "dock-workspace-part.dock-workspace-caption.one-s-t {background:#102030;color:#e0e0e0;}"
+        "dock-workspace-part.dock-workspace-guide.one-s-t {background:#334455;color:#aabbcc;}"
+        "dock-workspace-part.dock-workspace-guide.one-s-t:selected {background:#00aa55;}"
+        "dock-workspace-part.dock-workspace-float.one-s-t {background:#202428;border-color:#445566;border-width:1px;border-radius:10px;}",&error),
+        "dock part CSS parses");
+    f.dock->setStyleSheet(sheet,StyleNode{"dock-workspace",{"one-DockWorkspace","one-s-t"},0});f.publish();
+    test_support::RecordingCanvas idle;f.dock->paint(idle);
+    const auto floating=f.items[3]->frame(),docked=f.items[0]->frame();
+    check(painted(idle,{0x20,0x24,0x28},&floating),"floating item paints the scoped dock-workspace-float surface");
+    check(!painted(idle,{0x20,0x24,0x28},&docked),"docked items paint no floating surface");
+    check(near(f.items[3]->body.lock()->frame().x,floating.x+1),"floating content sits inside the surface border");
+    f.begin(0);auto target=f.items[2]->frame();f.root.onMouseMove({{target.x+target.width-2,target.y+80}});
+    check(f.dock->previewRect().has_value(),"dragging onto a docked target shows a preview");
+    test_support::RecordingCanvas dragging;f.dock->paint(dragging);
+    check(painted(dragging,{0x10,0x20,0x30}),"scoped caption rule styles the drag caption");
+    check(painted(dragging,{0x33,0x44,0x55}),"scoped guide rule styles idle compass guides");
+    KeyEvent esc;esc.key=Key::Escape;f.root.onKeyDown(esc);
+}
 void transactionalPointerAndPreview() {
     Fixture f;f.floating();f.presentation.raiseOnPress=false;f.publish();
     const auto before=f.state.placements[3];auto p=f.title(3);
@@ -179,4 +208,4 @@ void previewMotion() {
     setPlatformMotionEnabled(true);
 }
 }
-int main(){try{internal::ScopedUiClock clock(clockNow);geometry();drag();floatingResize();dividerAndActions();transactionalPointerAndPreview();previewMotion();presentationTransaction();headerGeometry();std::cout<<"dock workspace: 8 scenario groups passed\n";}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}
+int main(){try{internal::ScopedUiClock clock(clockNow);geometry();drag();floatingResize();dividerAndActions();transactionalPointerAndPreview();previewMotion();presentationTransaction();headerGeometry();scopedPartsAndFloatingSurface();std::cout<<"dock workspace: 9 scenario groups passed\n";}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

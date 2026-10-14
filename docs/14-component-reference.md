@@ -245,6 +245,13 @@ Unicode 一致性修复已通过；完整 IME 产品矩阵、MinGW 匹配依赖�
 
 Select 的 popup 能从嵌套 ScrollView/Dialog/OverlayHost 正确接收输入，并使用稳定 paint viewport，
 不会因为 dirty clip 变小而错误放置。当前不支持多选、搜索或自定义 option widget。
+popup 打开时 `paintBounds()` 覆盖整个选项列表（含阴影），悬停与滚动在宿主区域之外也会重绘；
+普通态 `background` 只作用于输入框，选项行只在 hover／pressed／selected 状态绘制底色。
+打开的 popup 拥有其指针区域，祖先控件的 tooltip 不会显示在它上面。
+
+`Input` 与 `SearchInput` 都接受 `placeholder-when-focused`（`Input` 属性 ID 18），聚焦且为空时仍显示占位提示。
+`Icon` 的 `size` 是显式字形尺寸：父容器给出更大的 frame（如拉伸的 DragHandle）时，图标按该尺寸居中绘制；
+未设置 `size` 时字形随 frame 缩放。
 
 Slider 已提供 C ABI 与安全 Rust `Slider` / `SliderHandle`。输入专用回调区分
 Begin/Update/Commit/Cancel，程序设值不触发该回调；Escape、隐藏、禁用和捕获丢失取消并恢复

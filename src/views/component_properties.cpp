@@ -390,6 +390,7 @@ void Mount::set(Element &e, const std::string &key, float value) {
     }
     if (key == "size") {
         e.widget->setPreferredSize({value, value});
+        if (e.component == "Icon") e.as<IconView>()->setGlyphSize(value);
         return;
     }
     if (key == "ratio") {

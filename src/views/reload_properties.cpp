@@ -58,6 +58,9 @@ std::function<void()> resetProperty(ui::Mount &factory,ui::Element &target,
         if(key=="plot-insets")return [w=target.as<TimeSeriesChart>()]{w->setPlotInsets({4,2,2,2});};
     }
     if(key=="series")return [w=target.as<TimeSeriesChart>()]{w->setSeries({});};
+    if(key=="size" && target.component=="Icon")
+        return [w=target.as<IconView>(),size=fresh.widget->preferredSize(),glyph=fresh.as<IconView>()->glyphSize()]{
+            w->setPreferredSize(size);w->setGlyphSize(glyph);};
     if(key=="size")return [w=target.widget,size=fresh.widget->preferredSize()]{w->setPreferredSize(size);};
     Value value;
     const auto &property=oneview::registry().at(target.component).property(key);

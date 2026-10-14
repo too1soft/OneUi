@@ -124,6 +124,9 @@ private:
     Binding<bool> openBinding_;
     PopupPreferredPlacement preferredPlacement_ = PopupPreferredPlacement::BottomStart;
     std::optional<Rect> viewport_;
+    // Stable client viewport of the last paint pass; used when no explicit
+    // viewport is set, because the popup's own layout frame may be empty.
+    std::optional<Rect> paintViewport_;
     std::optional<Rect> anchorRect_;
     std::optional<PopupStyleOverride> styleOverride_;
     PopupInteractionMode interactionMode_ = PopupInteractionMode::LightDismiss;

@@ -19,6 +19,7 @@
 #include "oneui/controls/progress_bar.h"
 #include "oneui/layout/adaptive_panes.h"
 #include "oneui/layout/container_page.h"
+#include "oneui/layout/dock_workspace_view.h"
 #include "oneui/layout/container_query.h"
 #include "oneui/ui.h"
 #include "oneui/ui_density.h"
@@ -123,6 +124,7 @@ private:
         else if(box.display)w->setLayoutVisible(*box.display);
         if(box.width||box.height) {auto size=w->preferredSize();w->setPreferredSize({box.width.value_or(size.width),box.height.value_or(size.height)});}
         if(entry.component=="PaneGrid")w->setStyleScope(std::make_shared<StyleSheet>(sheet));
+        if(auto dock=std::dynamic_pointer_cast<DockWorkspaceView>(w))dock->setStyleSheet(std::make_shared<StyleSheet>(sheet),n);
         if(auto header=std::dynamic_pointer_cast<PaneHeader>(w)) {
             auto palette=nativePalette(sheet);
             if(!box.foreground)box.foreground=palette.ink;

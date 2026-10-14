@@ -1053,6 +1053,27 @@ void testLongSelectScrollsWithinViewportAndRevealsKeyboardSelection() {
     expectEqual("Escape preserves long select value",select.selectedIndex(),99);
 }
 
+void testOpenSelectOwnsTooltipAndPaintBoundsOfItsPopup() {
+    auto parent = std::make_shared<oneui::View>();
+    parent->setFrame({0.0f, 0.0f, 400.0f, 60.0f});
+    parent->setTooltip(L"toolbar summary");
+    auto select = std::make_shared<oneui::Select>();
+    select->setFrame({20.0f, 14.0f, 200.0f, 32.0f});
+    select->setItems({L"All", L"SSH", L"RDP", L"VNC"});
+    parent->add(select);
+    RecordingCanvas canvas;
+    canvas.viewportOverride = oneui::Rect{0.0f, 0.0f, 800.0f, 600.0f};
+    parent->paint(canvas);
+    expectTrue("Closed select keeps parent tooltip", parent->tooltipAt({300.0f, 30.0f}) != nullptr);
+    expectNear("Closed select paints only its field", select->paintBounds().height, 32.0f);
+    select->onKeyDown(oneui::KeyEvent{oneui::Key::Enter});
+    parent->paint(canvas);
+    const oneui::Point inPopup{40.0f, 90.0f};
+    expectTrue("Open select popup is hit through the parent", parent->hitTest(inPopup));
+    expectTrue("Open select popup hides the parent tooltip", parent->tooltipAt(inPopup) == nullptr);
+    expectTrue("Open select paint bounds cover its popup", select->paintBounds().height > 100.0f);
+}
+
 void testSelectNoopOnChanged() {
     oneui::Select select;
     select.setItems({L"One", L"Two", L"Three"});
@@ -7998,6 +8019,28 @@ void testIconViewPaintsRegistryPrimitives() {
     expectEqual("IconView accent alpha", canvas.fillEllipses.front().color.a, 255);
 }
 
+void testIconViewGlyphSizeStaysCentredInStretchedFrame() {
+    oneui::IconView icon(oneui::IconSymbol::BrandBloom);
+    icon.setFrame(oneui::Rect{10.0f, 20.0f, 40.0f, 30.0f});
+    RecordingCanvas stretched;
+    icon.paint(stretched);
+    float widest = 0.0f;
+    for (const auto& call : stretched.fillEllipses) widest = std::max(widest, call.rect.x + call.rect.width - 10.0f);
+    expectTrue("IconView without glyph size scales with its frame", widest > 20.0f);
+
+    icon.setGlyphSize(14.0f);
+    RecordingCanvas sized;
+    icon.paint(sized);
+    bool inside = !sized.fillEllipses.empty();
+    for (const auto& call : sized.fillEllipses) {
+        inside = inside && call.rect.x >= 23.0f - 0.01f && call.rect.y >= 28.0f - 0.01f &&
+                 call.rect.x + call.rect.width <= 37.0f + 0.01f && call.rect.y + call.rect.height <= 42.0f + 0.01f;
+    }
+    expectTrue("IconView glyph size paints a centred square inside a larger frame", inside);
+    icon.setGlyphSize(std::nullopt);
+    expectTrue("IconView glyph size can be cleared", !icon.glyphSize().has_value());
+}
+
 void testButtonSupportsLeadingContentAndTrailingMetadata() {
     oneui::Button button(L"default");
     button.setFrame(oneui::Rect{0.0f, 0.0f, 200.0f, 32.0f});
@@ -9428,6 +9471,8 @@ int main() {
     testDisabledButtonOpacityCompositesTheWholeControl();
     testButtonSupportsLeadingAndTrailingIcons();
     testIconViewPaintsRegistryPrimitives();
+    testIconViewGlyphSizeStaysCentredInStretchedFrame();
+    testOpenSelectOwnsTooltipAndPaintBoundsOfItsPopup();
     testWindowTitleBarPaintsAndDispatchesChromeActions();
     testWindowTitleBarAdvancesAccessoryThemeTransition();
     testLabelStatusIndicatorFollowsContentAndReservesSpace();

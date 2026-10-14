@@ -49,7 +49,7 @@ inline std::set<std::string> componentCssProperties(const std::string& tag) {
     if (tag == "popup") return {"background", "background-color", "color", "border-color", "border-width", "border-radius", "padding", "gap", "box-shadow"};
     if (tag == "dialog") return {"background", "background-color", "color", "border-color", "border-width", "border-radius", "padding", "font-size", "font-weight", "box-shadow"};
     if (tag == "pane-grid-part") return {"background","background-color"};
-    if (tag == "dock-workspace-part") return {"background","background-color","border-color","color"};
+    if (tag == "dock-workspace-part") return {"background","background-color","border-color","border-width","border-radius","box-shadow","color"};
     if (tag == "pane-header-part") return {"background","background-color","color","border-color","border-width","border-radius","padding","font-size","font-weight","font-family"};
     if (tag == "pane-header") return {"background","background-color","color","border-color","border-width"};
     if (tag == "state-view" || tag == "state-view-part") return {"background","background-color","color","border-color","border-width","border-radius","padding","font-size","font-weight","box-shadow"};
@@ -146,7 +146,8 @@ inline std::string css(std::string source, const std::string& scope = {}, const 
                 pseudo=selector.substr(colon+1);
                 std::set<std::string> states;
                 if(tag=="button"||tag=="interactive-surface")states={"hover","pressed","focus","disabled"};
-                else if(tag=="state-view"||tag=="state-view-part"||tag=="pane-header-part"||tag=="pane-grid-part"||tag=="dock-workspace-part")states={"hover","pressed","focus","disabled"};
+                else if(tag=="state-view"||tag=="state-view-part"||tag=="pane-header-part"||tag=="pane-grid-part")states={"hover","pressed","focus","disabled"};
+                else if(tag=="dock-workspace-part")states={"hover","pressed","focus","disabled","selected"};
                 else if(tag=="input")states={"hover","focus","disabled","read-only"};
                 else if(tag=="switch" || tag=="checkbox" || tag=="select" || tag=="tabs")states={"hover","pressed","focus","disabled","selected"};
             else if(tag=="table" || tag=="list" || tag=="virtual-list")states={"hover","pressed","selected"};

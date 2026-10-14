@@ -57,6 +57,13 @@ add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/ScrollSize.oneview"
     DEPENDS oneui-viewc tests/views/ScrollSize.one tests/views/ScrollSize.oneschema VERBATIM)
 add_custom_target(oneui_view_scroll_size_ir DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/ScrollSize.oneview")
 add_dependencies(oneui_view_test_ir oneui_view_scroll_size_ir)
+add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/PopupSurface.oneview"
+    COMMAND oneui-viewc --emit ir --input "${PROJECT_SOURCE_DIR}/tests/views/PopupSurface.one"
+        --schema "${PROJECT_SOURCE_DIR}/tests/views/PopupSurface.oneschema" --name PopupSurface
+        --output "${CMAKE_CURRENT_BINARY_DIR}/PopupSurface.oneview"
+    DEPENDS oneui-viewc tests/views/PopupSurface.one tests/views/PopupSurface.partial.one tests/views/PopupSurface.oneschema VERBATIM)
+add_custom_target(oneui_view_popup_surface_ir DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/PopupSurface.oneview")
+add_dependencies(oneui_view_test_ir oneui_view_popup_surface_ir)
 add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/ScrollSizeV3.oneview"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${PROJECT_SOURCE_DIR}/tests/views/ScrollSizeV3.oneview"

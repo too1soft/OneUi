@@ -60,6 +60,7 @@ const std::map<std::string, ComponentContract> &registry()
         ++r.at("Text").version;
         ++r.at("Input").version; // Explicit password mask, appended property ID 15.
         ++r.at("Input").version; // Explicit accessible-name contract, property ID 17.
+        ++r.at("Input").version; // Placeholder visible while focused, property ID 18.
         ++r.at("Checkbox").version; // Tooltip property ID 13.
         ++r.at("DockWorkspace").version; // Caption and raise-on-press properties IDs 21-24.
         ++r.at("Scroll").version; // Explicit content width, appended property ID 15.

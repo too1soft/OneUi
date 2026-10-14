@@ -277,6 +277,9 @@ SelectStyleOverride selectStyleOverrideFromStyleSheet(const StyleSheet& sheet, S
     };
     SelectStyleOverride override;
     override.normal = resolve(StyleStateNone);
+    // The field's resting background must not fill every popup option; only
+    // hover/press/selected states paint option rows.
+    override.normal->optionBackground.reset();
     override.hovered = resolve(StyleStateHover);
     override.pressed = resolve(StyleStateActive);
     override.disabled = resolve(StyleStateDisabled);

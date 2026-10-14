@@ -40,5 +40,10 @@ struct DockWorkspaceView::State {
     double previewTime=0;
     std::optional<DockHit> hit;
     int64_t pendingRequest=0;
+    std::shared_ptr<StyleSheet> sheet;
+    StyleNode node;
+    // Cached `dock-workspace-float` box, keyed by the sheet it came from.
+    mutable std::shared_ptr<const StyleBox> floatSurface;
+    mutable const StyleSheet* floatSurfaceSheet=nullptr;
 };
 } // namespace oneui

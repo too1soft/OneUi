@@ -1,5 +1,6 @@
 #pragma once
 #include "oneui/layout/workspace_tree.h"
+#include "oneui/style_sheet.h"
 #include "oneui/view.h"
 
 namespace oneui {
@@ -10,8 +11,14 @@ public:
     bool hideable = true;
     std::weak_ptr<Widget> header, body, footer;
     Size naturalSize() const override { return dockMinimum; }
+    // Surface the workspace paints beneath this item's content while it floats
+    // (the `dock-workspace-float` part); null while docked.
+    void setFloatingSurface(std::shared_ptr<const StyleBox> surface);
+    void paint(Canvas&) override;
 protected:
     void layoutChildren() override;
+private:
+    std::shared_ptr<const StyleBox> floatingSurface_;
 };
 struct DockPlacement {
     std::string id, mode = "docked";
@@ -60,6 +67,9 @@ public:
     void drag(const std::string& source, int phase, Point windowPoint);
     void requestAction(DockIntentKind, const std::string& source, bool flag = false);
     void setMotionEnabled(bool);
+    // Owner element style; part rules (`dock-workspace-part.*`) resolve with the
+    // owner's classes so template-scoped rules apply.
+    void setStyleSheet(std::shared_ptr<StyleSheet> sheet, StyleNode node);
     std::optional<Rect> previewRect() const;
     bool paintPending() const;
     bool interactionActive() const;
@@ -77,6 +87,7 @@ protected:
     void layoutChildren() override;
     bool hasInteractionState() const override;
     void resetInteractionState() override;
+    void styleScopeChanged() override;
 private:
     struct State;
     std::shared_ptr<State> state_;
@@ -91,6 +102,8 @@ private:
     void updateDivider(Point);
     void showPreview(Rect);
     size_t dividerAt(Point) const;
+    StyleBox partStyle(const char* part, unsigned state) const;
+    std::shared_ptr<const StyleBox> floatingSurface() const;
     std::pair<size_t,std::optional<DockResizeEdge>> resizeAt(Point) const;
 };
 } // namespace oneui

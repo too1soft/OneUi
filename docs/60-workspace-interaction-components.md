@@ -292,6 +292,10 @@ T25 追加合同：`raise-on-press:bool` 默认 true，保留按下浮窗先请�
 `preview-keep-text` 为可绑定 UTF-8 操作提示；SDK组合可访问面板名并绘制不捕获输入的提示条。
 样式 part 为 `dock-workspace-preview`（背景/边框）和 `dock-workspace-caption`（背景/文字）；
 提示背景保持不透明、目的地区域保持半透明，松手/Esc立即移除反馈。
+part 规则按 DockWorkspace 元素自身的类解析，因此模板 `<style scoped>` 中的
+`dock-workspace-part.*` 规则同样生效。`dock-workspace-guide`（背景/文字/边框/圆角，
+`:selected` 为当前命中方向）控制拖拽方向键；`dock-workspace-float`（背景/边框/圆角/
+`box-shadow`）是浮动面板的表面，绘制在该面板内容之下，内容按边框宽度内缩；停靠面板不绘制。
 
 ### 3.5 Stack增删与多列重排
 

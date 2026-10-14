@@ -317,6 +317,11 @@ const std::wstring* View::tooltipAt(Point point) const {
         if (const auto* text = child->tooltipAt(point)) {
             return text;
         }
+        // An open overlay (popup, select menu) owns its pointer region;
+        // ancestors' tooltips must not appear on top of it.
+        if (child->paintsAboveSiblings()) {
+            return nullptr;
+        }
     }
     return Widget::tooltipAt(point);
 }

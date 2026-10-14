@@ -14,6 +14,8 @@ using namespace viewtest;
 #include "virtual_template_contract.inc"
 #include "tabs_sizing.inc"
 #include "scroll_size.inc"
+#include "popup_surface.inc"
+#include "input_placeholder.inc"
 int main(int argc, char **argv) {
     if (argc != 2)
         return 2;
@@ -259,6 +261,8 @@ int main(int argc, char **argv) {
         richTableReorderContract(argv[1]);
         tabsSizing(argv[1]);
         scrollSize(argv[1]);
+        popupSurface(argv[1]);
+        inputPlaceholder();
         std::cout << "runtime scenarios passed\n";
         return 0;
     } catch (const std::exception &e) {

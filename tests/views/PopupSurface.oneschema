@@ -1,0 +1,1 @@
+model Root { r open:bool r width:f64 r height:f64 }

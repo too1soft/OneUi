@@ -69,6 +69,7 @@ P("Input", 14, "read-only", 1, 3, "")
 P("Input", 15, "password-mask", 4, 3, "")
 P("Input", 16, "prefix-icon", 4, 3, "")
 P("Input", 17, "accessible-name", 4, 3, "")
+P("Input", 18, "placeholder-when-focused", 1, 3, "")
 E("Input", 1, "submit", 0)
 
 C("Progress", "leaf", 0)

@@ -37,6 +37,10 @@ oneui::PopupPlacementResult result = oneui::PopupPlacement::resolve(request);
 - `result.placement`：实际使用的 placement，可能与首选值不同。
 - `result.flipped`：是否在主轴方向发生翻转；上下 placement 在 top/bottom 之间翻转，左右 placement 在 left/right 之间翻转。
 
+`Popup` 控件解析 viewport 的顺序为：显式 `setViewport()`，其次是最近一次绘制的稳定 paint viewport
+（`Canvas::viewportBounds()`，与 Select 相同），最后才是自身 frame。模板中的 `Popup` 常作为零高度的
+布局子项存在，因此不能用自身 frame 约束内容尺寸。
+
 ## PopupPreferredPlacement
 
 ```cpp

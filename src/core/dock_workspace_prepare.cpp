@@ -17,6 +17,9 @@ std::function<void()> DockWorkspaceView::prepare(DockWorkspaceSnapshot model,std
     s.presentation=std::move(presentation);
     s.snapshot=std::move(model);const auto& m=s.snapshot;
     s.identities=state_->identities;s.nextIdentity=state_->nextIdentity;
+    // Owner style survives snapshot replacement; only layout state is rebuilt.
+    s.sheet=state_->sheet;s.node=state_->node;
+    s.floatSurface=state_->floatSurface;s.floatSurfaceSheet=state_->floatSurfaceSheet;
     if(!std::isfinite(m.dividerHit)||m.dividerHit<0)throw std::invalid_argument("Invalid dock divider hit");
     std::map<std::string,DockPlacement> placements;
     for(auto& p:m.placements) {

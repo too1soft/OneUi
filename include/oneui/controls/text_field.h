@@ -30,6 +30,7 @@ public:
 
     void setPlaceholder(std::wstring placeholder);
     void setPlaceholderVisibleWhenFocused(bool visible) { placeholderVisibleWhenFocused_ = visible; invalidate(); }
+    bool placeholderVisibleWhenFocused() const { return placeholderVisibleWhenFocused_; }
     void setText(std::wstring text);
     const std::wstring& text() const;
     void setCaretIndex(std::size_t index);
