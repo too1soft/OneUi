@@ -5,6 +5,24 @@
 namespace oneui {
 bool DockWorkspaceView::interactionActive() const { return state_->gesture!=State::Gesture::None; }
 bool DockWorkspaceView::hasDockTarget() const { return state_->hit && state_->hit->placement!=DockHitPlacement::None; }
+namespace {
+using FloatOnDrop=DockWorkspacePresentation::FloatOnDrop;
+using FloatModifier=DockWorkspacePresentation::FloatModifier;
+bool modifierHeld(FloatModifier modifier,bool alt,bool shift,bool control) {
+    switch(modifier) {
+    case FloatModifier::Alt:return alt;
+    case FloatModifier::Shift:return shift;
+    case FloatModifier::Control:return control;
+    case FloatModifier::None:return false;
+    }
+    return false;
+}
+}
+bool DockWorkspaceView::willFloat() const {
+    const auto& s=*state_;const auto& p=s.presentation;
+    if(p.floatOnDrop==FloatOnDrop::Never)return false;
+    return p.floatOnDrop==FloatOnDrop::OutsideGuides||modifierHeld(p.floatModifier,alt_,s.shift,s.control);
+}
 void DockWorkspaceView::cancel() {
     auto& s=*state_;
     if(s.divider!=State::none)s.nodes[s.divider].ratio=s.beginRatio;
@@ -25,11 +43,13 @@ void DockWorkspaceView::updateMove(Point point) {
     s.targets.clear();
     for(auto& target:s.items)if(target.shown&&target.view->visible())
         s.targets.push_back({target.identity,target.view->frame(),target.placement.mode=="floating"});
-    s.hit=alt_||!s.snapshot.compactActive.empty()?std::nullopt:
-        dockHitTest(item.identity,point,s.targets,item.placement.mode=="floating"?DockHitMode::GuideStrict:DockHitMode::GuideNearest);
+    const auto& policy=s.presentation;
+    const bool forceFloat=policy.floatOnDrop!=FloatOnDrop::Never&&modifierHeld(policy.floatModifier,alt_,s.shift,s.control);
+    const auto mode=item.placement.mode=="floating"||policy.guideOnlyDocking?DockHitMode::GuideStrict:DockHitMode::GuideNearest;
+    s.hit=forceFloat||!s.snapshot.compactActive.empty()?std::nullopt:dockHitTest(item.identity,point,s.targets,mode);
     if(s.hit&&s.hit->placement!=DockHitPlacement::None)showPreview(s.hit->preview);
     else if(item.placement.mode=="floating") s.previewActive=false;
-    else if(alt_) {
+    else if(willFloat()) {
         auto r=s.bounds;r.x+=host.x;r.y+=host.y;showPreview(r);
     } else { auto r=s.start;r.x+=host.x;r.y+=host.y;showPreview(r); }
     // Floating content follows the pointer directly. Only the destination
@@ -56,7 +76,7 @@ void DockWorkspaceView::drag(const std::string& source,int phase,Point point) {
         event.kind=DockIntentKind::Dock;
         for(auto& target:s.items)if(target.identity==s.hit->target)event.target=target.view->key;
         const char* edges[]={"","left","right","top","bottom"};event.edge=edges[int(s.hit->placement)];send=true;
-    } else if(alt_||item.placement.mode=="floating") {
+    } else if(willFloat()||item.placement.mode=="floating") {
         event.kind=item.placement.mode=="floating"?DockIntentKind::Bounds:DockIntentKind::Float;send=true;
     }
     s.gesture=State::Gesture::None;s.hit.reset();s.previewActive=false;

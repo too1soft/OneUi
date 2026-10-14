@@ -100,6 +100,34 @@ void drag() {
     f.begin(0);KeyEvent esc;esc.key=Key::Escape;f.root.onKeyDown(esc);f.root.onMouseUp({drop});check(f.events.size()==count,"escape no commit");
     f.state.compactActive="terminal";f.publish();f.begin(0);f.root.onMouseUp(up);check(f.events.size()==count,"compact docked cannot drag");
 }
+void dropPolicy() {
+    using P=DockWorkspacePresentation;
+    {   // Outside-guides: releasing over empty space floats without a modifier.
+        Fixture f;f.presentation.floatOnDrop=P::FloatOnDrop::OutsideGuides;f.presentation.guideOnlyDocking=true;f.publish();
+        f.begin(1);auto r=f.items[0]->frame();Point open{r.x+r.width*.5f,r.y+r.height*.5f+90};
+        f.root.onMouseMove({open});check(f.dock->willFloat(),"outside-guides floats by default");
+        f.root.onMouseUp({open});check(!f.events.empty()&&f.events.back().kind==DockIntentKind::Float,"outside-guides drop floats");
+    }
+    {   // Explicit guides still dock under outside-guides.
+        Fixture f;f.presentation.floatOnDrop=P::FloatOnDrop::OutsideGuides;f.publish();
+        f.begin(0);auto r=f.items[2]->frame();Point edge{(r.x+r.width)-2,r.y+80};
+        f.root.onMouseUp({edge});check(!f.events.empty()&&f.events.back().kind==DockIntentKind::Dock,"nearest docking keeps working");
+    }
+    {   // Shift as the configured modifier; Alt no longer floats.
+        Fixture f;f.presentation.floatModifier=P::FloatModifier::Shift;f.publish();
+        auto r=f.items[2]->frame();Point drop{(r.x+r.width)-2,r.y+80};
+        f.begin(0);MouseEvent alt{drop};alt.alt=true;f.root.onMouseUp(alt);
+        check(f.events.back().kind==DockIntentKind::Dock,"Alt is not the configured modifier");
+        f.state.ackRequest=f.events.back().request;f.state.ackAccepted=false;++f.state.revision;f.publish();
+        f.begin(0);MouseEvent shift{drop};shift.shift=true;f.root.onMouseUp(shift);
+        check(f.events.back().kind==DockIntentKind::Float,"Shift floats when configured");
+    }
+    {   // Never: no modifier floats a docked pane by drag.
+        Fixture f;f.presentation.floatOnDrop=P::FloatOnDrop::Never;f.publish();
+        auto count=f.events.size();f.begin(1);auto r=f.items[0]->frame();MouseEvent up{{r.x+r.width*.5f,r.y+r.height*.5f}};up.alt=true;
+        f.root.onMouseUp(up);check(f.events.size()==count||f.events.back().kind!=DockIntentKind::Float,"never does not float");
+    }
+}
 void floatingResize() {
     Fixture f;f.floating();f.begin(3);auto target=f.items[0]->frame();Point center{target.x+target.width*.5f,target.y+target.height*.5f};
     f.root.onMouseUp({center});check(f.events.back().kind==DockIntentKind::Bounds,"float strict center does not dock");
@@ -208,4 +236,4 @@ void previewMotion() {
     setPlatformMotionEnabled(true);
 }
 }
-int main(){try{internal::ScopedUiClock clock(clockNow);geometry();drag();floatingResize();dividerAndActions();transactionalPointerAndPreview();previewMotion();presentationTransaction();headerGeometry();scopedPartsAndFloatingSurface();std::cout<<"dock workspace: 9 scenario groups passed\n";}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}
+int main(){try{internal::ScopedUiClock clock(clockNow);geometry();drag();dropPolicy();floatingResize();dividerAndActions();transactionalPointerAndPreview();previewMotion();presentationTransaction();headerGeometry();scopedPartsAndFloatingSurface();std::cout<<"dock workspace: 10 scenario groups passed\n";}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

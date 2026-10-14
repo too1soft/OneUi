@@ -25,7 +25,7 @@ enum class ValueType { None, Text, Boolean, Integer, Number, Strings, Columns, R
     X(ContainerPage, "container-page", "selected", None) \
     X(DragHandle, "drag-handle", "source domain kind threshold", None) \
     X(DropSurface, "drop-surface", "domain role", None) \
-    X(DockWorkspace, "workspace-collection", "nodes root placements revision maximized compact-active ack-request ack-accepted gap divider-hit preview-dock-text preview-float-text preview-keep-text raise-on-press", None) \
+    X(DockWorkspace, "workspace-collection", "nodes root placements revision maximized compact-active ack-request ack-accepted gap divider-hit preview-dock-text preview-float-text preview-keep-text raise-on-press float-on-drop float-modifier dock-hit-mode", None) \
     X(DockItem, "workspace-item", "pane-key dock-min-width dock-min-height float-min-width float-min-height hideable", None) \
     X(Workspace, "stack", "", None) \
     X(TitleBar, "stack", "", None) \

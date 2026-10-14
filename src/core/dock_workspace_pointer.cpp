@@ -49,7 +49,7 @@ void DockWorkspaceView::updateDivider(Point point) {
 }
 bool DockWorkspaceView::onMouseDown(const MouseEvent& e) {
     if(!interactive())return false;
-    alt_=e.alt;pointerOrigin_=e.position;
+    alt_=e.alt;state_->shift=e.shift;state_->control=e.control;pointerOrigin_=e.position;
     if(e.button!=MouseButton::Left)return View::onMouseDown(e);
     auto [item,edge]=resizeAt(e.position);
     if(item!=State::none && state_->presentation.raiseOnPress) {
@@ -88,13 +88,13 @@ bool DockWorkspaceView::onMouseDown(const MouseEvent& e) {
     return View::onMouseDown(e);
 }
 bool DockWorkspaceView::onMouseMove(const MouseEvent& e) {
-    alt_=e.alt;
+    alt_=e.alt;state_->shift=e.shift;state_->control=e.control;
     if(state_->gesture==State::Gesture::Resize){updateResize(e.position);return true;}
     if(state_->gesture==State::Gesture::Divider){updateDivider(e.position);return true;}
     return View::onMouseMove(e);
 }
 bool DockWorkspaceView::onMouseUp(const MouseEvent& e) {
-    alt_=e.alt;
+    alt_=e.alt;state_->shift=e.shift;state_->control=e.control;
     if(state_->gesture==State::Gesture::Resize) {
         updateResize(e.position);auto& s=*state_;
         DockIntent event{DockIntentKind::Bounds,s.items[s.source].view->key};event.bounds=s.bounds;

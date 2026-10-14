@@ -63,6 +63,7 @@ const std::map<std::string, ComponentContract> &registry()
         ++r.at("Input").version; // Placeholder visible while focused, property ID 18.
         ++r.at("Checkbox").version; // Tooltip property ID 13.
         ++r.at("DockWorkspace").version; // Caption and raise-on-press properties IDs 21-24.
+        ++r.at("DockWorkspace").version; // Drop policy properties IDs 25-27.
         ++r.at("Scroll").version; // Explicit content width, appended property ID 15.
         ++r.at("Scroll").version; // Scrollbar inset, appended property ID 16.
         ++r.at("VirtualList").version; // Unified trailing metrics/click contract, IDs 16-18.

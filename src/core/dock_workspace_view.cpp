@@ -126,7 +126,7 @@ void DockWorkspaceView::paint(Canvas& c) {
                 label=title(s.items[s.source])+L" → ";
                 for(auto& item:s.items)if(item.identity==s.hit->target)label+=title(item);
                 label+=L" · "+unicode::fromUtf8(s.presentation.previewDockText);
-            } else if(alt_)label=title(s.items[s.source])+L" · "+unicode::fromUtf8(s.presentation.previewFloatText);
+            } else if(willFloat())label=title(s.items[s.source])+L" · "+unicode::fromUtf8(s.presentation.previewFloatText);
             else label=unicode::fromUtf8(s.presentation.previewKeepText);
         }
         auto host=frame();float width=std::min(std::max(0.f,host.width-24),c.measureTextWidth(label,12,500)+16);

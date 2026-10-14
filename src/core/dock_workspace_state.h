@@ -20,6 +20,7 @@ struct DockWorkspaceView::State {
     enum class Gesture {None,Move,Resize,Divider};
     DockWorkspaceSnapshot snapshot;
     DockWorkspacePresentation presentation;
+    bool shift = false, control = false; // Pointer modifiers of the gesture.
     DockTreeIndex index;
     std::vector<Node> nodes;
     std::vector<Item> items;

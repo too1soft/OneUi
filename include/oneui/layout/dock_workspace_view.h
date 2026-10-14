@@ -40,6 +40,17 @@ struct DockWorkspacePresentation {
     std::string previewFloatText = "Release to float · Esc to cancel";
     std::string previewKeepText = "Release to keep layout · Alt to float · Esc to cancel";
     bool raiseOnPress = true;
+    // Drop policy for a docked pane released without a dock target.
+    // Modifier keeps the historical contract: only the modifier floats.
+    // OutsideGuides floats any release away from the guides; Never disables
+    // floating by drag (menus and commands can still float a pane).
+    enum class FloatOnDrop { Modifier, OutsideGuides, Never };
+    enum class FloatModifier { Alt, Shift, Control, None };
+    FloatOnDrop floatOnDrop = FloatOnDrop::Modifier;
+    FloatModifier floatModifier = FloatModifier::Alt;
+    // Docked sources dock on the nearest edge of any pane by default; when
+    // true they dock only on explicit guides, as floating sources already do.
+    bool guideOnlyDocking = false;
 };
 enum class DockIntentKind { Dock, Ratio, Float, Bounds, Pin, Raise, Maximize, Visibility, Redock };
 struct DockIntent {
@@ -62,6 +73,8 @@ public:
     void setSnapshot(DockWorkspaceSnapshot, std::vector<std::shared_ptr<DockItemView>>, DockWorkspacePresentation);
     const DockWorkspaceSnapshot& snapshot() const;
     const DockWorkspacePresentation& presentation() const;
+    // True when releasing the current gesture without a dock target floats it.
+    bool willFloat() const;
     void setPresentation(DockWorkspacePresentation);
     void setOnIntent(std::function<void(const DockIntent&)>);
     void drag(const std::string& source, int phase, Point windowPoint);
