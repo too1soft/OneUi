@@ -85,6 +85,12 @@ impl ViewMount {
         crate::Panel::new()
     }
 
+    /// Window-level overlay boundary that owns the routed destination and
+    /// hosts popups and dialogs. Visible controls still live in views.
+    pub fn overlay_boundary() -> Result<crate::OverlayHost, crate::Error> {
+        crate::OverlayHost::new()
+    }
+
     /// Compose an independent declarative VM in an empty named Surface.
     /// The returned mount closes before the parent view and cannot accept
     /// arbitrary native controls. Instantiate a typed View in it as usual.
