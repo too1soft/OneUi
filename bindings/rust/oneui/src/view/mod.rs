@@ -82,7 +82,12 @@ pub struct ViewMount {
 impl ViewMount {
     /// Empty attachment boundary for a routed declaration. Visible controls live in the view.
     pub fn destination() -> Result<crate::Panel, crate::Error> {
-        crate::Panel::new()
+        // Panel defaults to a white fill and a 1px light border; a boundary
+        // must show its parent.
+        let panel = crate::Panel::new()?;
+        panel.set_background(crate::Color::rgba(0, 0, 0, 0));
+        panel.set_border(crate::Color::rgba(0, 0, 0, 0), 0.0);
+        Ok(panel)
     }
 
     /// Window-level overlay boundary that owns the routed destination and

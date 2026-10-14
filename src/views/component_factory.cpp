@@ -274,8 +274,14 @@ Element Mount::make(std::string type, std::vector<Element> children, std::string
                type == "PanelHeader" || type == "PanelFooter" || type == "StatusBar" ||
                type == "WorkspaceBody")
         node = b.flow(nodes);
-    else if (type == "MountPoint")
-        node = b.native(std::make_shared<Panel>());
+    else if (type == "MountPoint") {
+        // An attachment boundary paints nothing; Panel defaults to a white
+        // fill and a 1px light border.
+        auto slot = std::make_shared<Panel>();
+        slot->setBackground(Color{0, 0, 0, 0});
+        slot->setBorderWidth(0.0f);
+        node = b.native(slot);
+    }
     else if (syntax::components().count(type))
         node = b.column(nodes);
     else
