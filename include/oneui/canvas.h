@@ -5,6 +5,8 @@
 #include "oneui/geometry.h"
 #include "oneui/text.h"
 
+#include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -232,6 +234,84 @@ public:
                 break;
             }
         }
+    }
+    /// Strokes `path` as `dash`-long segments separated by `gap`. The default
+    /// flattens curves and draws the segments; backends may use a path effect.
+    virtual void strokePathDashed(const CanvasPath& path, Color color, float width, float dash, float gap) {
+        if (dash <= 0.0f || gap < 0.0f) {
+            strokePath(path, color, width, true);
+            return;
+        }
+        std::vector<Point> polyline;
+        Point current{};
+        Point start{};
+        bool hasCurrent = false;
+        bool on = true;
+        float remaining = dash;
+        const auto flush = [&]() {
+            for (std::size_t i = 1; i < polyline.size(); ++i) {
+                Point from = polyline[i - 1];
+                const Point to = polyline[i];
+                float length = std::hypot(to.x - from.x, to.y - from.y);
+                while (length > 0.0f) {
+                    const float step = std::min(remaining, length);
+                    const float t = step / length;
+                    const Point next{from.x + (to.x - from.x) * t, from.y + (to.y - from.y) * t};
+                    if (on) drawLine(from, next, color, width);
+                    from = next;
+                    length -= step;
+                    remaining -= step;
+                    if (remaining <= 0.0f) {
+                        on = !on;
+                        remaining = on ? dash : gap;
+                    }
+                }
+            }
+            polyline.clear();
+        };
+        for (const auto& command : path.commands) {
+            switch (command.verb) {
+            case CanvasPathVerb::MoveTo:
+                flush();
+                current = start = command.first;
+                polyline.push_back(current);
+                hasCurrent = true;
+                break;
+            case CanvasPathVerb::LineTo:
+                if (!hasCurrent) polyline.push_back(current);
+                current = command.first;
+                polyline.push_back(current);
+                hasCurrent = true;
+                break;
+            case CanvasPathVerb::CubicTo: {
+                if (!hasCurrent) {
+                    current = command.third;
+                    polyline.push_back(current);
+                    hasCurrent = true;
+                    break;
+                }
+                const Point from = current;
+                for (int step = 1; step <= 16; ++step) {
+                    const float t = static_cast<float>(step) / 16.0f;
+                    const float u = 1.0f - t;
+                    polyline.push_back(Point{
+                        u * u * u * from.x + 3.0f * u * u * t * command.first.x +
+                            3.0f * u * t * t * command.second.x + t * t * t * command.third.x,
+                        u * u * u * from.y + 3.0f * u * u * t * command.first.y +
+                            3.0f * u * t * t * command.second.y + t * t * t * command.third.y});
+                }
+                current = command.third;
+                break;
+            }
+            case CanvasPathVerb::Close:
+                if (hasCurrent) {
+                    polyline.push_back(start);
+                    current = start;
+                }
+                break;
+            }
+        }
+        flush();
     }
     virtual void fillPathLinearGradient(
         const CanvasPath& path,

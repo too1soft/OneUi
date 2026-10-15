@@ -118,5 +118,34 @@ int main() {
     chart.setSamplePositions({});
     chart.onMouseMove(mouse);
     expectEqual("empty domain restores equal spacing", chart.inspectionIndex(), 2);
+
+    // Per-series fill and dashes; a series-bounded gradient for low curves.
+    chart.setInspectionIndex(-1);
+    chart.setLatestPointVisible(false);
+    chart.setSmoothCurves(false);
+    chart.setAreaFill(false);
+    chart.setPlotInsets({0, 0, 0, 0});
+    chart.setRange(0.0, 100.0);
+    oneui::TimeSeriesChartSeries received{L"rx", oneui::Color{62, 207, 142, 255}, {10, 20, 10}};
+    received.fill = true;
+    oneui::TimeSeriesChartSeries sent{L"tx", oneui::Color{110, 155, 255, 255}, {0, 100, 0}};
+    sent.dashed = true;
+    chart.setSeries({received, sent});
+    oneui::test_support::RecordingCanvas styled;
+    chart.paint(styled);
+    expectEqual("only the series asking for fill is filled", static_cast<int>(styled.pathGradients.size()), 1);
+    expectTrue("plot extent spans the plot", std::abs(styled.pathGradients.front().bounds.y - 0.0f) < 0.001f);
+    float drawn = 0.0f;
+    for (const auto& line : styled.lines) {
+        if (line.color.r == 110) drawn += std::hypot(line.to.x - line.from.x, line.to.y - line.from.y);
+    }
+    const float full = 2.0f * std::hypot(120.0f, 120.0f);
+    expectTrue("dashed series leaves gaps", drawn > 0.0f && drawn < full * 0.7f);
+    chart.setFillExtent(oneui::TimeSeriesFillExtent::Series);
+    oneui::test_support::RecordingCanvas extent;
+    chart.paint(extent);
+    const auto bounds = extent.pathGradients.front().bounds;
+    expectTrue("series extent starts at the curve's peak", std::abs(bounds.y - 96.0f) < 0.001f);
+    expectTrue("series extent ends at the baseline", std::abs(bounds.y + bounds.height - 120.0f) < 0.001f);
     return failures == 0 ? 0 : 1;
 }

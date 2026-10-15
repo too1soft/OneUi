@@ -12,6 +12,7 @@
 #endif
 
 #include "include/core/SkBlurTypes.h"
+#include "include/effects/SkDashPathEffect.h"
 #include "include/core/SkCanvas.h"
 #include "include/core/SkColor.h"
 #include "include/core/SkFont.h"
@@ -381,6 +382,29 @@ class SkiaCanvasImpl final : public Canvas {
         paint.setStrokeWidth(width);
         paint.setStrokeCap(rounded ? SkPaint::kRound_Cap : SkPaint::kButt_Cap);
         paint.setStrokeJoin(rounded ? SkPaint::kRound_Join : SkPaint::kMiter_Join);
+        canvas_.drawPath(native, paint);
+    }
+
+    void strokePathDashed(const CanvasPath &path, Color color, float width, float dash,
+                          float gap) override {
+        internal::FrameSpan span(internal::FrameStage::Path);
+        if (path.empty()) {
+            return;
+        }
+        if (dash <= 0.0f || gap < 0.0f) {
+            strokePath(path, color, width, true);
+            return;
+        }
+        SkPath native = toSkPath(path);
+        SkPaint paint;
+        paint.setAntiAlias(true);
+        paint.setColor(toSkColor(color));
+        paint.setStyle(SkPaint::kStroke_Style);
+        paint.setStrokeWidth(width);
+        paint.setStrokeCap(SkPaint::kButt_Cap);
+        paint.setStrokeJoin(SkPaint::kRound_Join);
+        const SkScalar intervals[] = {dash, gap};
+        paint.setPathEffect(SkDashPathEffect::Make(intervals, 0.0f));
         canvas_.drawPath(native, paint);
     }
 

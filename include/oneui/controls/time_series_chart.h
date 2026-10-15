@@ -16,9 +16,23 @@ struct TimeSeriesChartSeries {
     std::wstring name;
     Color color{37, 99, 235, 255};
     std::vector<double> values;
+    /// Area fill for this series; unset follows the chart's area-fill.
+    std::optional<bool> fill;
+    /// Stroke the line as dashes, for a secondary series beside a filled one.
+    bool dashed = false;
     bool operator==(const TimeSeriesChartSeries& other) const {
-        return name==other.name && values==other.values && color.r==other.color.r && color.g==other.color.g && color.b==other.color.b && color.a==other.color.a;
+        return name==other.name && values==other.values && color.r==other.color.r && color.g==other.color.g && color.b==other.color.b && color.a==other.color.a
+            && fill==other.fill && dashed==other.dashed;
     }
+};
+
+/// Vertical extent of an area fill's gradient.
+enum class TimeSeriesFillExtent {
+    /// From the top of the plot to its baseline (the original behavior).
+    Plot,
+    /// From the series' highest point to the baseline, so a low curve still
+    /// shows the whole gradient beneath it.
+    Series,
 };
 
 struct TimeSeriesChartThreshold {
@@ -52,6 +66,7 @@ public:
     void setLatestPointSize(float width, float height);
     void setSmoothCurves(bool enabled);
     void setAreaFill(bool enabled);
+    void setFillExtent(TimeSeriesFillExtent extent);
     void setDashedGrid(bool enabled);
     void setAxesVisible(bool visible);
     void setLineWidth(float width);
@@ -104,6 +119,7 @@ private:
     float latestPointHeight_ = 5.0f;
     bool smoothCurves_ = true;
     bool areaFill_ = true;
+    TimeSeriesFillExtent fillExtent_ = TimeSeriesFillExtent::Plot;
     bool dashedGrid_ = true;
     bool axesVisible_ = true;
     float lineWidth_ = 2.25f;

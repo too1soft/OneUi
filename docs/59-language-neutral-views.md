@@ -1113,6 +1113,16 @@ The template can bind `range-min/max`, `smooth`, `area-fill`, `axes-visible`,
 `grid-style` is vertical line count and stroke width (for example `0 0.7`).
 `@inspection(index:i64,pinned:bool)` forwards native hover/pin/clear semantics.
 Range, data, rendering, and tooltip behavior remain the native chart's contract.
+
+A series record may also declare `fill:bool` (overrides the chart's `area-fill`
+for that series) and `dashed:bool` (strokes the line as 4px dashes with 3px gaps),
+so a chart can fill its primary series and draw a secondary one as a plain or
+dashed line. `fill-extent` is `plot` (default: the gradient runs from the top of
+the plot to the baseline) or `series` (it runs from the series' highest point,
+so a low curve still shows the whole gradient beneath it). Fill extent is
+property ID 26; both series fields are optional and absent ones keep the previous
+rendering. `Canvas::strokePathDashed` is the backing primitive: the Skia backend
+uses a dash path effect, other backends flatten the path and draw segments.
 The chart COMP revision changes; rebuild viewc and runtime together. The runtime
 IR test covers authored grid pixels, gaps, native inspection and balanced leases.
 

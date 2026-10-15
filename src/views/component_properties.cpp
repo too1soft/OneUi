@@ -25,6 +25,12 @@ void Mount::set(Element &e, const std::string &key, const std::wstring &value) {
             throw std::invalid_argument("Chart grid-style requires count and positive line width");
         e.as<TimeSeriesChart>()->setGridStyle(vertical,width);return;
     }
+    if(e.component=="TimeSeriesChart" && key=="fill-extent") {
+        if(value==L"plot") e.as<TimeSeriesChart>()->setFillExtent(TimeSeriesFillExtent::Plot);
+        else if(value==L"series") e.as<TimeSeriesChart>()->setFillExtent(TimeSeriesFillExtent::Series);
+        else throw std::invalid_argument("Chart fill-extent must be plot or series");
+        return;
+    }
     if(e.component=="TimeSeriesChart" && key=="plot-insets") {
         std::wistringstream input(value); Insets insets{}; wchar_t extra;
         if(!(input>>insets.top>>insets.right>>insets.bottom>>insets.left) || (input>>extra) ||

@@ -203,6 +203,9 @@ void Runtime::applyList(Instance &instance, const std::string &property, ListSta
             s.name = wide(field(item, "name").text);
             auto rgba = uint32_t(field(item, "rgba").integer);
             s.color = {uint8_t(rgba >> 24), uint8_t(rgba >> 16), uint8_t(rgba >> 8), uint8_t(rgba)};
+            const auto& seriesFields = image.schema.model(item->table.model_id).properties;
+            if (seriesFields.count("fill")) s.fill = bool(field(item, "fill").integer);
+            if (seriesFields.count("dashed")) s.dashed = bool(field(item, "dashed").integer);
             for (const auto &value : nested(item, "values").items) {
                 const auto& fields=image.schema.model(value->table.model_id).properties;
                 auto valid=fields.find("valid");

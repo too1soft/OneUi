@@ -112,6 +112,11 @@ void TimeSeriesChart::setAreaFill(bool enabled) {
     invalidate();
 }
 
+void TimeSeriesChart::setFillExtent(TimeSeriesFillExtent extent) {
+    fillExtent_ = extent;
+    invalidate();
+}
+
 void TimeSeriesChart::setDashedGrid(bool enabled) {
     dashedGrid_ = enabled;
     invalidate();
@@ -400,7 +405,7 @@ void TimeSeriesChart::paint(Canvas& canvas) {
                     Point{p2.x - (p3.x - p1.x) * tension, p2.y - (p3.y - p1.y) * tension},
                     p2);
             }
-            if (areaFill_ && points.size() > 1) {
+            if (item.fill.value_or(areaFill_) && points.size() > 1) {
                 CanvasPath areaPath = linePath;
                 areaPath.lineTo(Point{points.back().x, rect.y + rect.height});
                 areaPath.lineTo(Point{points.front().x, rect.y + rect.height});
@@ -409,9 +414,21 @@ void TimeSeriesChart::paint(Canvas& canvas) {
                 fillStart.a = fillAlpha_;
                 Color fillEnd = color;
                 fillEnd.a = 0;
-                canvas.fillPathLinearGradient(areaPath, rect, fillStart, fillEnd, 90.0f);
+                Rect gradient = rect;
+                if (fillExtent_ == TimeSeriesFillExtent::Series) {
+                    float top = rect.y + rect.height;
+                    for (const auto& point : points) top = std::min(top, point.y);
+                    // A flat series still gets a few pixels of gradient.
+                    top = std::min(top, rect.y + rect.height - 4.0f);
+                    gradient = Rect{rect.x, top, rect.width, rect.y + rect.height - top};
+                }
+                canvas.fillPathLinearGradient(areaPath, gradient, fillStart, fillEnd, 90.0f);
             }
-            canvas.strokePath(linePath, color, lineWidth_, true);
+            if (item.dashed) {
+                canvas.strokePathDashed(linePath, color, lineWidth_, 4.0f, 3.0f);
+            } else {
+                canvas.strokePath(linePath, color, lineWidth_, true);
+            }
         }
         if (latestPointVisible_ && std::isfinite(item.values.back())) {
             const auto point = pointAt(item.values.size() - 1);

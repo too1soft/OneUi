@@ -56,6 +56,7 @@ std::function<void()> resetProperty(ui::Mount &factory,ui::Element &target,
         if(key=="axis-labels")return [w=target.as<TimeSeriesChart>()]{w->setAxisLabels({});};
         if(key=="grid-style")return [w=target.as<TimeSeriesChart>()]{w->setGridStyle(5,1);};
         if(key=="plot-insets")return [w=target.as<TimeSeriesChart>()]{w->setPlotInsets({4,2,2,2});};
+        if(key=="fill-extent")return [w=target.as<TimeSeriesChart>()]{w->setFillExtent(TimeSeriesFillExtent::Plot);};
     }
     if(key=="series")return [w=target.as<TimeSeriesChart>()]{w->setSeries({});};
     if(key=="size" && target.component=="Icon")

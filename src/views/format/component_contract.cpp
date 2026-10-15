@@ -68,6 +68,7 @@ const std::map<std::string, ComponentContract> &registry()
         ++r.at("Scroll").version; // Scrollbar inset, appended property ID 16.
         ++r.at("VirtualList").version; // Unified trailing metrics/click contract, IDs 16-18.
         ++r.at("Scroll").version; // Viewport size event, no native layout change.
+        ++r.at("TimeSeriesChart").version; // Fill extent, property ID 26; optional series fill/dashed.
         r.at("Scroll").events.push_back({1,"viewport-size-changed",{{"width",3},{"height",3}}});
         ++r.at("SearchInput").version; // Optional prefix icon; absent keeps old rendering.
         ++r.at("VirtualList").version; // Optional row selection and typed multi-selection events.
@@ -174,6 +175,11 @@ void validateRecord(const Model& model, const std::string& projection) {
 void validateRecord(const Schema& schema,const Model& model,const std::string& projection) {
     validateRecord(model,projection);
     if(projection=="@chart.series") {
+        for(const char* name:{"fill","dashed"}) {
+            const auto found=model.properties.find(name);
+            require(found==model.properties.end() || found->second.tag==1,
+                    std::string("BIND_RECORD: Chart series ")+name+" must be bool");
+        }
         const auto& point=schema.model(model.properties.at("values").item);
         validateRecord(point,"@chart.point");
         auto valid=point.properties.find("valid");
