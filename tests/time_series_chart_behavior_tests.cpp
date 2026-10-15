@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include "support/recording_canvas.h"
+#include "../src/internal/ui_clock.h"
 #include <iostream>
 #include <limits>
 
@@ -148,5 +149,50 @@ int main() {
     const auto bounds = extent.pathGradients.front().bounds;
     expectTrue("series extent starts at the curve's peak", std::abs(bounds.y - 96.0f) < 0.001f);
     expectTrue("series extent ends at the baseline", std::abs(bounds.y + bounds.height - 120.0f) < 0.001f);
+
+    // Monotone smoothing never overshoots a plateau.
+    chart.setFillExtent(oneui::TimeSeriesFillExtent::Plot);
+    chart.setSmoothCurves(true);
+    chart.setSeries({{L"plateau", oneui::Color{10, 20, 30, 255}, {0, 100, 100, 100, 0}}});
+    oneui::test_support::RecordingCanvas plateau;
+    chart.paint(plateau);
+    bool overshoot = false;
+    for (const auto& line : plateau.lines)
+        if (line.color.r == 10 && (line.from.y < -0.01f || line.to.y < -0.01f || line.from.y > 120.01f || line.to.y > 120.01f)) overshoot = true;
+    expectTrue("smooth curve stays within its samples", !overshoot);
+
+    // Live charts slide between updates, hold the newest value and ease changes.
+    double clock = 10000.0;
+    oneui::internal::ScopedUiClock scopedClock([&] { return clock; });
+    chart.setSmoothCurves(false);
+    chart.setLatestPointVisible(true);
+    chart.setLatestPointSize(4.0f, 4.0f);
+    chart.setScrollRate(0.1);
+    chart.setSeries({{L"live", oneui::Color{40, 50, 60, 255}, {50, 50, 50}}});
+    clock += 1000.0;
+    oneui::test_support::RecordingCanvas slid;
+    chart.paint(slid);
+    const auto dot = slid.fillEllipses.back().rect;
+    expectTrue("newest value holds at the right edge", std::abs(dot.x + dot.width * 0.5f - 240.0f) < 0.01f);
+    bool movedLeft = false;
+    for (const auto& line : slid.lines)
+        if (line.color.r == 40 && std::abs(line.from.x - 96.0f) < 0.01f) movedLeft = true;
+    expectTrue("samples slide left at the scroll rate", movedLeft);
+    expectTrue("a live chart keeps animating", chart.tickAnimations(clock));
+    chart.setRange(0.0, 200.0);
+    oneui::test_support::RecordingCanvas easeStart;
+    chart.paint(easeStart);
+    expectTrue("range change starts from the old scale", std::abs(easeStart.fillEllipses.back().rect.y + 2.0f - 60.0f) < 0.01f);
+    clock += 200.0;
+    oneui::test_support::RecordingCanvas easeMid;
+    chart.paint(easeMid);
+    const float midY = easeMid.fillEllipses.back().rect.y + 2.0f;
+    expectTrue("range change eases", midY > 60.5f && midY < 89.5f);
+    clock += 1000.0;
+    oneui::test_support::RecordingCanvas easeEnd;
+    chart.paint(easeEnd);
+    expectTrue("range change settles", std::abs(easeEnd.fillEllipses.back().rect.y + 2.0f - 90.0f) < 0.01f);
+    chart.setScrollRate(0.0);
+    expectTrue("a static chart stops animating", !chart.tickAnimations(clock + 5000.0));
     return failures == 0 ? 0 : 1;
 }

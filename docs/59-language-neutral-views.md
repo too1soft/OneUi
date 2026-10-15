@@ -1123,6 +1123,14 @@ so a low curve still shows the whole gradient beneath it). Fill extent is
 property ID 26; both series fields are optional and absent ones keep the previous
 rendering. `Canvas::strokePathDashed` is the backing primitive: the Skia backend
 uses a dash path effect, other backends flatten the path and draw segments.
+
+`scroll-rate` (property ID 27, plot widths per second, default 0) makes a live
+chart: between data updates the plot slides left at that rate (for a 60-second
+window bound to evenly timed samples, 1/60), the newest value holds out to the
+right edge, and a change of `range-max` or of a series' newest value eases in
+over 450 ms instead of jumping. A chart that receives no data for 12 seconds
+stops sliding; 0 restores the static chart. `smooth` curves use monotone cubic
+interpolation, so a curve never overshoots its samples.
 The chart COMP revision changes; rebuild viewc and runtime together. The runtime
 IR test covers authored grid pixels, gaps, native inspection and balanced leases.
 

@@ -319,6 +319,10 @@ void Mount::set(Element &e, const std::string &key, float value) {
         if(key=="range-min"){chart->setRange(value,chart->maximum());return;}
         if(key=="range-max"){chart->setRange(chart->minimum(),value);return;}
         if(key=="line-width"){chart->setLineWidth(value);return;}
+        if(key=="scroll-rate"){
+            if(!std::isfinite(value) || value<0)throw std::invalid_argument("Chart scroll-rate must be a nonnegative number");
+            chart->setScrollRate(value);return;
+        }
     }
     if(e.component=="Popup") {
         auto popup=e.as<Popup>();

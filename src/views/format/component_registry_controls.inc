@@ -392,3 +392,4 @@ P("TimeSeriesChart", 24, "plot-insets", 4, 3, "")
 
 P("TimeSeriesChart", 25, "grid-style", 4, 3, "")
 P("TimeSeriesChart", 26, "fill-extent", 4, 3, "")
+P("TimeSeriesChart", 27, "scroll-rate", 3, 3, "")

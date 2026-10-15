@@ -56,7 +56,7 @@ enum class ValueType { None, Text, Boolean, Integer, Number, Strings, Columns, R
     X(Status, "label", "text tone", None) \
     X(Tabs, "tabs", "items selectedKey closable presentation reorderable drag-domain drag-kind drag-sources decorations item-min item-max edit-key sizing", Text) \
     X(SplitView, "split-view", "orientation ratio first-min second-min second-collapsed collapsed-extent", Number) \
-    X(TimeSeriesChart, "chart", "series range-min range-max axis-labels sample-positions smooth area-fill dashed-grid axes-visible latest-point line-width fill-alpha grid-lines plot-insets grid-style fill-extent", None) \
+    X(TimeSeriesChart, "chart", "series range-min range-max axis-labels sample-positions smooth area-fill dashed-grid axes-visible latest-point line-width fill-alpha grid-lines plot-insets grid-style fill-extent scroll-rate", None) \
     X(Icon, "icon", "symbol size", None) \
     X(NativeHost, "native-host", "host themed resize-policy", None) \
     X(Column, "stack", "align justify wrap", None) \
@@ -159,7 +159,7 @@ constexpr ValueType propertyType(Kind kind,std::string_view key) {
     if(kind==Kind::Tabs && (key=="item-min"||key=="item-max"))return ValueType::Number;
     if(key=="items")return kind==Kind::Select||kind==Kind::SegmentedControl?ValueType::Strings:kind==Kind::Tabs?ValueType::TabItems:ValueType::Rows;
     if(kind==Kind::TimeSeriesChart) {
-        if(contains("range-min range-max line-width",key))return ValueType::Number;
+        if(contains("range-min range-max line-width scroll-rate",key))return ValueType::Number;
         if(contains("smooth area-fill dashed-grid axes-visible latest-point",key))return ValueType::Boolean;
         if(contains("grid-lines fill-alpha",key))return ValueType::Integer;
         if(key=="axis-labels")return ValueType::Strings;

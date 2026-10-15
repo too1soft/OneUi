@@ -67,6 +67,12 @@ public:
     void setSmoothCurves(bool enabled);
     void setAreaFill(bool enabled);
     void setFillExtent(TimeSeriesFillExtent extent);
+    /// Live charts: between updates the plot slides left at `rate` plot widths
+    /// per second (for example 1/60 for a one-minute window), the newest value
+    /// holds to the right edge, and range or newest-value changes ease in
+    /// instead of jumping. 0 (default) keeps a static chart.
+    void setScrollRate(double rate);
+    double scrollRate() const;
     void setDashedGrid(bool enabled);
     void setAxesVisible(bool visible);
     void setLineWidth(float width);
@@ -87,6 +93,7 @@ public:
     bool onFocusChanged(bool focused) override;
     bool isFocusable() const override;
     CursorKind cursor(Point point) const override;
+    bool tickAnimations(double nowMs) override;
 
 protected:
     bool hasInteractionState() const override;
@@ -120,6 +127,17 @@ private:
     bool smoothCurves_ = true;
     bool areaFill_ = true;
     TimeSeriesFillExtent fillExtent_ = TimeSeriesFillExtent::Plot;
+    // Live presentation; all times come from the UI clock.
+    double liveShift(double nowMs) const;
+    double displayedMaximum(double nowMs) const;
+    double displayedLast(std::size_t series, double nowMs) const;
+    double scrollRate_ = 0.0;
+    double dataTimeMs_ = 0.0;
+    double rangeFromMax_ = 0.0;
+    double rangeStartMs_ = -1.0;
+    std::vector<double> revealFrom_;
+    double revealStartMs_ = -1.0;
+    float paintedShiftPx_ = 0.0f;
     bool dashedGrid_ = true;
     bool axesVisible_ = true;
     float lineWidth_ = 2.25f;
