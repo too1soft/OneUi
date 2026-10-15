@@ -179,6 +179,13 @@ int main() {
         if (line.color.r == 40 && std::abs(line.from.x - 96.0f) < 0.01f) movedLeft = true;
     expectTrue("samples slide left at the scroll rate", movedLeft);
     expectTrue("a live chart keeps animating", chart.tickAnimations(clock));
+    chart.setSeries({{L"live", oneui::Color{40, 50, 60, 255}, {50, 50, 50}}});
+    oneui::test_support::RecordingCanvas resent;
+    chart.paint(resent);
+    bool stillSlid = false;
+    for (const auto& line : resent.lines)
+        if (line.color.r == 40 && std::abs(line.from.x - 96.0f) < 0.01f) stillSlid = true;
+    expectTrue("identical data does not restart the slide", stillSlid);
     chart.setRange(0.0, 200.0);
     oneui::test_support::RecordingCanvas easeStart;
     chart.paint(easeStart);

@@ -28,6 +28,8 @@ TimeSeriesChart::TimeSeriesChart() {
 }
 
 void TimeSeriesChart::setSeries(std::vector<TimeSeriesChartSeries> series) {
+    // Resending the same data is not an update; a live chart keeps sliding.
+    if (series == series_) return;
     if (scrollRate_ > 0.0) {
         // Each series' newest value eases in from what is on screen now.
         const double now = internal::uiTimeMs();
@@ -151,6 +153,7 @@ bool TimeSeriesChart::setSamplePositions(std::vector<double> positions) {
         std::any_of(positions.begin(), positions.end(), [](double p) {
             return !std::isfinite(p) || p < 0.0 || p > 1.0;
         })) return false;
+    if (positions == samplePositions_) return true;
     samplePositions_ = std::move(positions);
     if (scrollRate_ > 0.0) dataTimeMs_ = internal::uiTimeMs();
     invalidate();
