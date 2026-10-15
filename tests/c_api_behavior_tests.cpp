@@ -54,7 +54,8 @@ void testSliderAbiIsNullSafeAndSeparatesInputFromSetters() {
 void testBuiltinTextRejectsInvalidInputAndCanRestoreDefaults() {
     expectTrue("Builtin labels accept application English", oneui_set_builtin_text_utf8(3, "Close window") == 1);
     expectTrue("Builtin labels accept application Chinese", oneui_set_builtin_text_utf8(3, "关闭窗口") == 1);
-    expectTrue("Builtin labels reject an unknown key", oneui_set_builtin_text_utf8(9, "Unknown") == 0);
+    expectTrue("Builtin labels accept the find bar keys", oneui_set_builtin_text_utf8(21, "Close") == 1 && oneui_set_builtin_text_utf8(21, nullptr) == 1);
+    expectTrue("Builtin labels reject an unknown key", oneui_set_builtin_text_utf8(22, "Unknown") == 0);
     expectTrue("Tray show label accepts application English", oneui_set_builtin_text_utf8(6, "Show main window") == 1);
     expectTrue("Tray quit label accepts application English", oneui_set_builtin_text_utf8(7, "Quit") == 1);
     expectTrue("Loading label accepts application English", oneui_set_builtin_text_utf8(8, "Loading") == 1);

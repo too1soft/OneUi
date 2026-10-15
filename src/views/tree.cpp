@@ -25,6 +25,7 @@ void Runtime::initialize(const OneUiViewModelVTable *table, void *vm, bool share
         else styles->replace(css, density);
         root = build(image.records[TMPL][image.root][1], {rootScope});
         update(root);
+        registerPendingShortcuts();
         styles->applyBaseLayouts();
         prepareWorkspaceIndex();
         activate(root);

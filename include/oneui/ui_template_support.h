@@ -67,6 +67,7 @@ inline std::set<std::string> componentCssProperties(const std::string& tag) {
     if (tag == "panes") return {"gap","padding","background-color","border-color","border-width","border-radius","box-shadow"};
     if (tag == "reveal") return {"transition-duration","transition-timing-function"};
     if (tag == "label") return {"color","font-size","font-weight","font-family"};
+    if (tag == "code-editor") return {"background-color","color","placeholder-color","caret-color","selection-color","content-background-color","border-color","border-width","border-radius","scrollbar-color"};
     if (tag == "stack") return {"background","box-shadow","background-color","border-color","border-width","border-radius","padding","gap"};
     if (tag == "scroll-view") return {"background","box-shadow","background-color","border-color","border-width","border-radius","padding","color","scrollbar-color","scrollbar-width"};
     std::set<std::string> keys = {"color","background-color","border-color","border-width","border-radius","outline-color","outline-width","outline-offset"};

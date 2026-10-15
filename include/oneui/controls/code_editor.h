@@ -1,7 +1,10 @@
 #pragma once
 
 #include "oneui/export.h"
+#include "oneui/color.h"
 #include "oneui/view.h"
+
+#include <array>
 
 #include <cstdint>
 #include <functional>
@@ -104,6 +107,61 @@ enum class CodeCompletionTrigger : int { Manual = 0, Character = 1, Member = 2 }
 
 // Offsets are UTF-8 byte offsets into the document; line/column are 1-based,
 // with the column counted in Unicode scalar values.
+// Every color the editor paints. Declarative views fill it from the CodeEditor
+// style rule and the --code-* custom properties (codeEditorStyleFromStyleSheet);
+// codeEditorStyleFromTheme gives the built-in defaults.
+struct CodeEditorStyle {
+    Color background{0, 0, 0};
+    Color foreground{0, 0, 0};
+    Color gutterBackground{0, 0, 0};
+    Color gutterForeground{0, 0, 0};
+    Color gutterActiveForeground{0, 0, 0};
+    Color gutterBorder{0, 0, 0};
+    Color currentLine{0, 0, 0};
+    Color selection{0, 0, 0};
+    Color inactiveSelection{0, 0, 0};
+    Color caret{0, 0, 0};
+    Color indentGuide{0, 0, 0};
+    // Bracket match, active find options and the selected completion.
+    Color accent{0, 0, 0};
+    Color accentSoft{0, 0, 0};
+    Color match{0, 0, 0};
+    Color currentMatch{0, 0, 0};
+    Color error{0, 0, 0};
+    Color warning{0, 0, 0};
+    Color success{0, 0, 0};
+    // Find bar and completion list.
+    Color panelBackground{0, 0, 0};
+    Color panelForeground{0, 0, 0};
+    Color panelMuted{0, 0, 0};
+    Color panelBorder{0, 0, 0};
+    Color shadow{0, 0, 0};
+    Color scrollbar{0, 0, 0};
+    // Indexed by CodeTokenKind.
+    std::array<Color, 11> tokens{Color{0, 0, 0}, Color{0, 0, 0}, Color{0, 0, 0}, Color{0, 0, 0}, Color{0, 0, 0}, Color{0, 0, 0}, Color{0, 0, 0}, Color{0, 0, 0}, Color{0, 0, 0}, Color{0, 0, 0}, Color{0, 0, 0}};
+    Color token(CodeTokenKind kind) const { return tokens[static_cast<std::size_t>(kind)]; }
+};
+
+struct Theme;
+ONEUI_API CodeEditorStyle codeEditorStyleFromTheme(const Theme& theme);
+
+// Editing commands for toolbars and menus; keys reach the same actions.
+enum class CodeEditorCommand : int {
+    Undo = 1,
+    Redo = 2,
+    Find = 3,
+    Replace = 4,
+    CloseFind = 5,
+    SelectAll = 6,
+    ToggleComment = 7,
+    Indent = 8,
+    Outdent = 9,
+    DuplicateLines = 10,
+    Cut = 11,
+    Copy = 12,
+    Paste = 13,
+};
+
 struct CodeEditorState {
     std::uint64_t revision = 0;
     std::size_t caret = 0;
@@ -145,7 +203,24 @@ public:
     CodeEditorState state() const;
     void setSelection(std::size_t anchor, std::size_t caret);
 
+    // Documents. One editor holds several documents and shows one; each keeps
+    // its text, language, undo history, selections, scroll position and
+    // decorations while hidden. The editor starts on the document "". Selecting
+    // an unknown id creates an empty document and returns true; load it with
+    // setText. Closing the shown document shows "" (empty when it was never
+    // filled); closing "" itself empties it.
+    bool selectDocument(const std::wstring& id);
+    void closeDocument(const std::wstring& id);
+    const std::wstring& documentId() const;
+    std::vector<std::wstring> documentIds() const;
+    bool canUndo() const;
+    bool canRedo() const;
+    // Returns false when the command does not apply (read-only, empty history).
+    bool execute(CodeEditorCommand command);
+
     // Presentation.
+    void setStyle(CodeEditorStyle style);
+    const CodeEditorStyle& style() const;
     void setLanguage(CodeLanguage language);
     void setReadOnly(bool readOnly);
     bool readOnly() const;

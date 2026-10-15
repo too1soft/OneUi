@@ -177,6 +177,23 @@ int main(int argc, char **argv) {
                 expect(oneui_view_code_editor_state(c.view, str("metrics-unique"), &state) == ONEUI_VIEW_TYPE,
                        "non-editor names rejected");
                 expect(editor->text() == L"SELECT 1;\n中", "editor replacement applied");
+                int created = 0, canUndo = 1, canRedo = 1, applied = 0;
+                expect(oneui_view_code_editor_select_document(c.view, sql, str("other"), &created) == 0 && created == 1,
+                       "editor document created");
+                expect(oneui_view_code_editor_reset(c.view, sql, str("echo 1")) == 0 && editor->text() == L"echo 1",
+                       "editor reset loads the document");
+                expect(oneui_view_code_editor_history(c.view, sql, &canUndo, &canRedo) == 0 && !canUndo && !canRedo,
+                       "reset starts a fresh history");
+                expect(oneui_view_code_editor_execute(c.view, sql, 3, &applied) == 0 && applied == 1 && editor->findOpen(),
+                       "editor find command");
+                expect(oneui_view_code_editor_execute(c.view, sql, 99, &applied) == ONEUI_VIEW_INVALID_ARGUMENT,
+                       "unknown editor command rejected");
+                expect(oneui_view_code_editor_select_document(c.view, sql, str(""), &created) == 0 && created == 0 &&
+                           editor->text() == L"SELECT 1;\n中",
+                       "editor document restored");
+                expect(oneui_view_code_editor_close_document(c.view, sql, str("other")) == 0 &&
+                           editor->documentIds().size() == 1,
+                       "editor document closed");
                 editor->setReadOnly(true);
                 expect(oneui_view_code_editor_replace(c.view, sql, 0, 1, str("x"), 0) == ONEUI_VIEW_READ_ONLY,
                        "read-only editor rejects edits");

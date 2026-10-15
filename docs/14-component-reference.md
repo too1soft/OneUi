@@ -190,6 +190,11 @@ client 处理，其余区域仍可拖动窗口。
 
 ### Button
 
+`shortcut="Ctrl+S"`（声明式）：视图内任意位置按下组合键即点击该按钮；按钮或其祖先隐藏、禁用时
+不触发。注册在视图根的命令作用域上，所以聚焦控件自己认领的组合键（编辑器的 Ctrl+F）优先。修饰键
+`Ctrl`/`Shift`/`Alt`/`Meta`/`Primary`，按键名与 `KeyChord` 相同（`s`、`tab`、`f5`、`pagedown`）。
+C++ 可用 `Button::activate()` 以键盘激活的语义点击（禁用或隐藏时返回 false）。
+
 支持 primary/secondary/quiet/danger 等 variant、leading icon、trailing text、内容对齐、
 hover/pressed/focus/disabled 状态、键盘 Enter/Space 激活和 callback。
 

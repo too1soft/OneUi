@@ -1,4 +1,5 @@
 #include "code_editor_impl.h"
+#include "oneui/localization.h"
 
 #include "oneui/clipboard.h"
 #include "oneui/controls/text_field.h"
@@ -36,9 +37,10 @@ CodeEditor::CodeEditor()
       replaceField_(std::make_shared<TextField>()) {
     setAccessibleRole(AccessibilityRole::TextBox);
     setPreferredSize({480.0f, 240.0f});
-    findField_->setPlaceholder(L"Find");
-    replaceField_->setPlaceholder(L"Replace");
+    findField_->setPlaceholder(builtinText(BuiltinText::FindPlaceholder));
+    replaceField_->setPlaceholder(builtinText(BuiltinText::ReplacePlaceholder));
     for (auto* field : {findField_.get(), replaceField_.get()}) {
+        impl_->styleFindFields(*field);
         field->setVisible(false);
         field->setSubmitOnEnter(false);
     }
@@ -212,6 +214,9 @@ void CodeEditor::openFind(bool replace) {
     auto& d = *impl_;
     d.findVisible = true;
     d.replaceVisible = replace;
+    // Text set after construction (the application's language) applies here.
+    findField_->setPlaceholder(builtinText(BuiltinText::FindPlaceholder));
+    replaceField_->setPlaceholder(builtinText(BuiltinText::ReplacePlaceholder));
     const auto& s = d.selections[d.primary];
     if (!s.empty() && s.start().line == s.end().line) {
         const auto selected = d.doc.text(s.start(), s.end());
@@ -608,7 +613,20 @@ bool CodeEditor::paintsAboveSiblings() const { return impl_->completionVisible; 
 const std::wstring* CodeEditor::tooltipAt(Point point) const {
     const auto& d = *impl_;
     if (d.completionVisible && d.completionRect().contains(point)) return nullptr;
-    if (d.findVisible && d.findLayout().bar.contains(point)) return View::tooltipAt(point);
+    if (d.findVisible && d.findLayout().bar.contains(point)) {
+        const auto l = d.findLayout();
+        const std::pair<Rect, BuiltinText> hints[] = {
+            {l.matchCase, BuiltinText::FindMatchCase}, {l.regex, BuiltinText::FindRegex},
+            {l.word, BuiltinText::FindWholeWord},      {l.previous, BuiltinText::FindPrevious},
+            {l.next, BuiltinText::FindNext},           {l.close, BuiltinText::FindClose},
+        };
+        for (const auto& [rect, key] : hints) {
+            if (!rect.contains(point)) continue;
+            d.findTooltip = builtinText(key);
+            return &d.findTooltip;
+        }
+        return View::tooltipAt(point);
+    }
     if (!d.decorations.empty() && d.textRect().contains(point)) {
         const auto p = d.hit(point);
         for (const auto& decoration : d.decorations) {

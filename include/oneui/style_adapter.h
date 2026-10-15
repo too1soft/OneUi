@@ -1,6 +1,7 @@
 #pragma once
 
 #include "oneui/export.h"
+#include "oneui/controls/code_editor.h"
 #include "oneui/controls/interactive_surface.h"
 #include "oneui/controls/progress_bar.h"
 #include "oneui/layout/product_shell.h"
@@ -25,6 +26,11 @@ ONEUI_API SelectStyleOverride selectStyleOverrideFromStyleSheet(const StyleSheet
 ONEUI_API ProgressBarStyleOverride progressBarStyleOverrideFromStyleSheet(const StyleSheet& sheet, StyleNode node);
 ONEUI_API PopupStyleOverride popupStyleOverrideFromStyleSheet(const StyleSheet& sheet, StyleNode node);
 ONEUI_API ListStyleOverride listStyleOverrideFromStyleSheet(const StyleSheet& sheet, StyleNode node);
+// CodeEditor: background-color, color, placeholder-color (line numbers),
+// caret-color, selection-color, content-background-color (current line),
+// border-color and scrollbar-color, plus --code-* custom properties for the
+// gutter, accents, find panel and syntax colors.
+ONEUI_API CodeEditorStyle codeEditorStyleFromStyleSheet(const StyleSheet& sheet, StyleNode node);
 ONEUI_API TableStyleOverride tableStyleOverrideFromStyleSheet(const StyleSheet& sheet, StyleNode node);
 ONEUI_API TreeViewStyleOverride treeViewStyleOverrideFromStyleSheet(const StyleSheet& sheet, StyleNode node);
 ONEUI_API InteractiveSurfaceStyle interactiveSurfaceStyleFromStyleSheet(const StyleSheet& sheet, StyleNode node);

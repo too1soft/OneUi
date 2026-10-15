@@ -38,7 +38,7 @@ Position shiftThrough(Position position, const Edit& edit) {
 
 } // namespace code
 
-CodeEditorImpl::CodeEditorImpl(CodeEditor& editor) : owner(editor) {
+CodeEditorImpl::CodeEditorImpl(CodeEditor& editor) : owner(editor), style(codeEditorStyleFromTheme(theme())) {
     lexer.reset(doc);
 }
 

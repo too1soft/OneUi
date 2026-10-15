@@ -17,6 +17,7 @@ P("Button", 14, "tooltip", 4, 3, "")
 P("Button", 15, "content-align", 4, 3, "")
 P("Button", 16, "trailing-text", 4, 3, "")
 P("Button", 17, "trailing-icon", 4, 3, "")
+P("Button", 18, "shortcut", 4, 3, "")
 E("Button", 1, "click", 0)
 
 C("DataTable", "leaf", 12)

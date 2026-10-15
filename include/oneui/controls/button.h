@@ -36,6 +36,9 @@ public:
     void clearStyleOverride();
     void setDisabled(bool disabled) override;
     void setOnClick(std::function<void()> callback);
+    // Clicks as keyboard activation would (shortcuts, automation); a disabled
+    // or hidden button ignores it. Returns whether the click ran.
+    bool activate();
     // Measures current text/icons and resolved padding using the window font
     // environment. Call after applying styles; does not change preferredSize.
     Size naturalContentSize() const;

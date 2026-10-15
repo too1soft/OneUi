@@ -195,6 +195,56 @@ character or moving the caret closes. `completionClosed()` reports every close
 so the product can reset `completion-open`, followed by
 `completionAccepted(id)` when an item was inserted.
 
+### Documents
+
+One editor holds several documents and shows one, so tabs of files or queries
+need a single editor. Each document keeps its text, language, undo history,
+selections, scroll position and decorations while hidden; revisions stay
+unique across documents. The editor starts on the document `""`.
+
+```cpp
+editor->selectDocument(L"web-01:/etc/nginx/nginx.conf"); // true: created empty
+editor->setText(content);                                // load, history starts here
+editor->closeDocument(id);                               // shown one -> back to ""
+```
+
+C ABI / Rust: `oneui_view_code_editor_select_document` / `View::code_editor_select_document`
+(returns whether it was created), `_close_document`, `_reset` (load text and
+clear history), `_execute` with a command (undo, redo, find, replace, close
+find, select all, toggle comment, indent, outdent, duplicate lines, cut, copy,
+paste; reports whether it applied) and `_history` (`can_undo`, `can_redo`)
+for toolbars. All run outside VM callbacks.
+
+### Styling
+
+Colors come from the `CodeEditor` rule and `--code-*` custom properties, so
+the editor follows the application theme:
+
+```css
+CodeEditor.editor { background-color: var(--surface); color: var(--text);
+  caret-color: var(--accent); selection-color: #3b82f655;
+  placeholder-color: var(--text-muted);          /* line numbers */
+  content-background-color: #ffffff0a;           /* current line */
+  border-color: var(--border); scrollbar-color: var(--scrollbar); }
+:root { --code-keyword: #c678dd; --code-string: #98c379; --code-comment: #7f848e; }
+```
+
+Unset colors derive from `background-color` and `color` (gutter, current line,
+indent guides, find panel, comments, operators), so a rule with only those two
+gives a consistent dark or light editor. Variables: `--code-gutter-background`,
+`--code-line-number`, `--code-line-number-active`, `--code-current-line`,
+`--code-indent-guide`, `--code-accent`, `--code-accent-soft`, `--code-match`,
+`--code-match-current`, `--code-error`, `--code-warning`, `--code-success`,
+`--code-panel`, `--code-panel-border`, `--code-shadow`, and syntax colors
+`--code-keyword`, `--code-type`, `--code-function`, `--code-constant`,
+`--code-number`, `--code-string`, `--code-variable`, `--code-comment`,
+`--code-operator`, `--code-parameter`. C++: `CodeEditor::setStyle` with
+`codeEditorStyleFromStyleSheet` or `codeEditorStyleFromTheme`.
+
+Find bar text (placeholders, "No results", the `{0} of {1}` count, replace
+buttons and tooltips) uses `BuiltinText::Find*` / `Replace*`, so the
+application's language applies through `setBuiltinText`.
+
 ### Keys
 
 | Keys | Action |

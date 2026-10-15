@@ -76,7 +76,7 @@ enum class ValueType { None, Text, Boolean, Integer, Number, Strings, Columns, R
     X(Switch, "switch", "text checked", Boolean) \
     X(Select, "select", "items selectedIndex", Integer) \
     X(SegmentedControl, "tabs", "items selectedIndex", Integer) \
-    X(Button, "button", "text variant icon tooltip content-align trailing-text trailing-icon", None) \
+    X(Button, "button", "text variant icon tooltip content-align trailing-text trailing-icon shortcut", None) \
     X(DataTable, "table", "items columns selectedKey item-key", Text) \
     X(List, "list", "items selectedIndex", Integer) \
     X(VirtualList, "virtual-list", "items selectedIndex row-height scroll-offset multiple trailing-width trailing-gap activate-on-single-click", Integer) \

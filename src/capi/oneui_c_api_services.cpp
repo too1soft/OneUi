@@ -118,7 +118,7 @@ std::size_t oneui_clipboard_get_text_utf8(char* buffer, std::size_t buffer_len) 
 
 int oneui_set_builtin_text_utf8(int key, const char* text) {
     try {
-        if (key < 0 || key > static_cast<int>(oneui::BuiltinText::Loading)) throw std::invalid_argument("Unknown built-in text key");
+        if (key < 0 || key > static_cast<int>(oneui::BuiltinText::FindClose)) throw std::invalid_argument("Unknown built-in text key");
         if (!text) return oneui::setBuiltinText(static_cast<oneui::BuiltinText>(key), std::nullopt);
         const auto length = std::char_traits<char>::length(text);
         if (length == 0 || length > 4096) throw std::invalid_argument("Built-in text must contain 1 to 4096 UTF-8 bytes");

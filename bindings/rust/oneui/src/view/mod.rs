@@ -7,7 +7,7 @@ pub mod diagnostics;
 mod host;
 mod mount_point;
 mod code_editor;
-pub use code_editor::CodeEditorState;
+pub use code_editor::{CodeEditorCommand, CodeEditorState};
 mod metrics;
 pub use metrics::{DockAction, ElementMetrics};
 mod scope;

@@ -73,3 +73,53 @@ OneUiViewResult oneui_view_code_editor_select(OneUiView *view, OneUiUtf8String n
                              static_cast<std::size_t>(std::min<uint64_t>(caret, length)));
     });
 }
+OneUiViewResult oneui_view_code_editor_select_document(OneUiView *view, OneUiUtf8String name, OneUiUtf8String id,
+                                                      int *out_created) {
+    if (out_created) *out_created = 0;
+    return call(__func__, [&] {
+        const auto value = runtime(view);
+        value->alive();
+        check(callbackPhase == Phase::Idle, ONEUI_VIEW_REENTRANT, "Editor document switch during VM callback");
+        const bool created = namedCodeEditor(value, name)->selectDocument(oneui::unicode::fromUtf8(text(id)));
+        if (out_created) *out_created = created ? 1 : 0;
+    });
+}
+OneUiViewResult oneui_view_code_editor_close_document(OneUiView *view, OneUiUtf8String name, OneUiUtf8String id) {
+    return call(__func__, [&] {
+        const auto value = runtime(view);
+        value->alive();
+        check(callbackPhase == Phase::Idle, ONEUI_VIEW_REENTRANT, "Editor document close during VM callback");
+        namedCodeEditor(value, name)->closeDocument(oneui::unicode::fromUtf8(text(id)));
+    });
+}
+OneUiViewResult oneui_view_code_editor_reset(OneUiView *view, OneUiUtf8String name, OneUiUtf8String content) {
+    return call(__func__, [&] {
+        const auto value = runtime(view);
+        value->alive();
+        check(callbackPhase == Phase::Idle, ONEUI_VIEW_REENTRANT, "Editor reset during VM callback");
+        namedCodeEditor(value, name)->setText(oneui::unicode::fromUtf8(text(content)));
+    });
+}
+OneUiViewResult oneui_view_code_editor_execute(OneUiView *view, OneUiUtf8String name, int command, int *out_applied) {
+    if (out_applied) *out_applied = 0;
+    return call(__func__, [&] {
+        check(command >= static_cast<int>(oneui::CodeEditorCommand::Undo) &&
+                  command <= static_cast<int>(oneui::CodeEditorCommand::Paste),
+              ONEUI_VIEW_INVALID_ARGUMENT, "Unknown CodeEditor command");
+        const auto value = runtime(view);
+        value->alive();
+        check(callbackPhase == Phase::Idle, ONEUI_VIEW_REENTRANT, "Editor command during VM callback");
+        const bool applied = namedCodeEditor(value, name)->execute(static_cast<oneui::CodeEditorCommand>(command));
+        if (out_applied) *out_applied = applied ? 1 : 0;
+    });
+}
+OneUiViewResult oneui_view_code_editor_history(OneUiView *view, OneUiUtf8String name, int *out_can_undo, int *out_can_redo) {
+    return call(__func__, [&] {
+        check(out_can_undo && out_can_redo, ONEUI_VIEW_INVALID_ARGUMENT, "History outputs required");
+        const auto value = runtime(view);
+        value->alive();
+        const auto editor = namedCodeEditor(value, name);
+        *out_can_undo = editor->canUndo() ? 1 : 0;
+        *out_can_redo = editor->canRedo() ? 1 : 0;
+    });
+}

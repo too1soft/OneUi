@@ -332,6 +332,23 @@ ONEUI_API OneUiViewResult oneui_view_code_editor_replace(OneUiView *view, OneUiU
     uint64_t start, uint64_t end, OneUiUtf8String text, uint64_t expected_revision);
 ONEUI_API OneUiViewResult oneui_view_code_editor_select(OneUiView *view, OneUiUtf8String name,
     uint64_t anchor, uint64_t caret);
+/* Documents: one editor keeps several (text, language, undo history, selection,
+ * scroll); the other calls act on the shown one. Selecting an unknown id creates
+ * an empty document (*out_created = 1); load it with reset. Closing the shown
+ * document shows the "" document. Outside VM callbacks. */
+ONEUI_API OneUiViewResult oneui_view_code_editor_select_document(OneUiView *view, OneUiUtf8String name,
+    OneUiUtf8String id, int *out_created);
+ONEUI_API OneUiViewResult oneui_view_code_editor_close_document(OneUiView *view, OneUiUtf8String name,
+    OneUiUtf8String id);
+/* Replaces the shown document's text and clears its undo history (loading a file). */
+ONEUI_API OneUiViewResult oneui_view_code_editor_reset(OneUiView *view, OneUiUtf8String name, OneUiUtf8String text);
+/* Editing commands for toolbars: 1 undo, 2 redo, 3 find, 4 replace, 5 close find,
+ * 6 select all, 7 toggle comment, 8 indent, 9 outdent, 10 duplicate lines, 11 cut,
+ * 12 copy, 13 paste. *out_applied is 0 when the command did not apply. */
+ONEUI_API OneUiViewResult oneui_view_code_editor_execute(OneUiView *view, OneUiUtf8String name, int command,
+    int *out_applied);
+ONEUI_API OneUiViewResult oneui_view_code_editor_history(OneUiView *view, OneUiUtf8String name,
+    int *out_can_undo, int *out_can_redo);
 #ifdef __cplusplus
 }
 #endif

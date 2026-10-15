@@ -159,6 +159,9 @@ std::shared_ptr<Instance> ReloadPlan::adopt(const std::shared_ptr<Instance> &can
         for(auto &widget:element.collapsible)widget=mapped(widget);
         *result=*candidate;
         result->element=std::move(element);
+        // The candidate's registration points at the candidate; register this copy.
+        result->shortcut.reset();
+        if(result->shortcutChord)old.registerShortcut(*result);
         result->tableCache.reset(); // Candidate cache has not been published to the retained Table.
     }
     result->owner=old.weak_from_this();

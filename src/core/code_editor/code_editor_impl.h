@@ -72,6 +72,28 @@ struct CodeEditorImpl {
     explicit CodeEditorImpl(CodeEditor& editor);
 
     CodeEditor& owner;
+    CodeEditorStyle style;
+
+    // Documents not on screen, with everything that belongs to their text.
+    struct ParkedDocument {
+        code::Document doc;
+        code::Lexer lexer;
+        std::vector<code::Selection> selections{code::Selection{}};
+        std::size_t primary = 0;
+        std::vector<code::Transaction> undoStack;
+        std::vector<code::Transaction> redoStack;
+        float scroll = 0.0f;
+        float horizontal = 0.0f;
+        std::size_t longestLine = 0;
+        std::vector<code::Decoration> decorations;
+        std::vector<code::ByteEdit> editLog;
+        std::uint64_t logFloor = 0;
+    };
+    std::wstring documentId;
+    std::unordered_map<std::wstring, ParkedDocument> parked;
+    void park(ParkedDocument& out);
+    void unpark(ParkedDocument&& in);
+    void styleFindFields(TextField& field) const;
     code::Document doc;
     code::Lexer lexer;
     std::vector<code::Selection> selections{code::Selection{}};
@@ -121,6 +143,7 @@ struct CodeEditorImpl {
     int current = -1;
     bool matchesDirty = true;
     std::wstring searchError;
+    mutable std::wstring findTooltip;
 
     // Throttled notifications.
     std::function<void(std::uint64_t)> onChanged;

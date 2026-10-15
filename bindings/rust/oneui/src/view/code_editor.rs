@@ -1,5 +1,25 @@
 use super::{check, View, VmResult};
 use crate::sys;
+use std::os::raw::c_int;
+
+/// Toolbar commands of a CodeEditor; keys reach the same actions.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(i32)]
+pub enum CodeEditorCommand {
+    Undo = 1,
+    Redo = 2,
+    Find = 3,
+    Replace = 4,
+    CloseFind = 5,
+    SelectAll = 6,
+    ToggleComment = 7,
+    Indent = 8,
+    Outdent = 9,
+    DuplicateLines = 10,
+    Cut = 11,
+    Copy = 12,
+    Paste = 13,
+}
 
 /// Primary cursor and document size of a declarative CodeEditor.
 /// Offsets are UTF-8 byte offsets; line and column are 1-based.
@@ -58,5 +78,42 @@ impl View {
     pub fn code_editor_select(&self, name: &str, anchor: usize, caret: usize) -> VmResult {
         check(unsafe { sys::oneui_view_code_editor_select(self.raw.as_ptr(),
             sys::OneUiUtf8String::from_str(name), anchor as u64, caret as u64) })
+    }
+
+    /// Show document `id` (created empty when unknown; returns true then).
+    /// Every document keeps its text, language, undo history, selection and scroll.
+    pub fn code_editor_select_document(&self, name: &str, id: &str) -> VmResult<bool> {
+        let mut created: c_int = 0;
+        check(unsafe { sys::oneui_view_code_editor_select_document(self.raw.as_ptr(),
+            sys::OneUiUtf8String::from_str(name), sys::OneUiUtf8String::from_str(id), &mut created) })?;
+        Ok(created != 0)
+    }
+
+    /// Forget document `id`; closing the shown one shows a new empty document.
+    pub fn code_editor_close_document(&self, name: &str, id: &str) -> VmResult {
+        check(unsafe { sys::oneui_view_code_editor_close_document(self.raw.as_ptr(),
+            sys::OneUiUtf8String::from_str(name), sys::OneUiUtf8String::from_str(id)) })
+    }
+
+    /// Replace the shown document's text and clear its undo history.
+    pub fn code_editor_reset(&self, name: &str, text: &str) -> VmResult {
+        check(unsafe { sys::oneui_view_code_editor_reset(self.raw.as_ptr(),
+            sys::OneUiUtf8String::from_str(name), sys::OneUiUtf8String::from_str(text)) })
+    }
+
+    /// Run an editing command; false when it did not apply.
+    pub fn code_editor_execute(&self, name: &str, command: CodeEditorCommand) -> VmResult<bool> {
+        let mut applied: c_int = 0;
+        check(unsafe { sys::oneui_view_code_editor_execute(self.raw.as_ptr(),
+            sys::OneUiUtf8String::from_str(name), command as c_int, &mut applied) })?;
+        Ok(applied != 0)
+    }
+
+    /// Whether undo and redo would apply: `(can_undo, can_redo)`.
+    pub fn code_editor_history(&self, name: &str) -> VmResult<(bool, bool)> {
+        let (mut undo, mut redo): (c_int, c_int) = (0, 0);
+        check(unsafe { sys::oneui_view_code_editor_history(self.raw.as_ptr(),
+            sys::OneUiUtf8String::from_str(name), &mut undo, &mut redo) })?;
+        Ok((undo != 0, redo != 0))
     }
 }

@@ -36,7 +36,10 @@ ONEUI_API OneUiErrorCode oneui_last_error_code(void);
 ONEUI_API void oneui_clear_error(void);
 
 /* Builtin text keys: 0=minimize, 1=maximize, 2=restore, 3=close, 4=accept, 5=cancel,
-   6=show main window, 7=quit application, 8=loading.
+   6=show main window, 7=quit application, 8=loading; code editor find bar: 9=find placeholder,
+   10=replace placeholder, 11=no results, 12=invalid pattern, 13=match count ("{0}" current,
+   "{1}" total), 14=replace, 15=replace all, 16=match case, 17=regular expression, 18=whole word,
+   19=previous match, 20=next match, 21=close.
    UTF-8 text is copied. NULL resets to the platform default. Returns 0 for invalid input. */
 ONEUI_API int oneui_set_builtin_text_utf8(int key, const char* text);
 

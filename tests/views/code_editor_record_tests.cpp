@@ -1,4 +1,5 @@
 #include "fixture.h"
+#include "oneui/command.h"
 #include "oneui/controls/code_editor.h"
 #include <memory>
 using namespace viewtest;
@@ -70,6 +71,20 @@ void codeEditorRecordTests(const std::filesystem::path& path) {
     editor->onKeyDown(enter);runtime->flush();
     expect(editor->text()==L"select" && vm.lastCommand==commands.at("accepted").id && vm.lastArgs.size()==1 &&
            vm.lastArgs[0].text=="select","completionAccepted(id) after closing");
+    // A Button shortcut clicks the button wherever focus is in the view.
+    oneui::KeyEvent ctrlS;ctrlS.virtualKey='S';ctrlS.control=true;
+    auto rootWidget=runtime->root->element.widget;
+    expect(oneui::dispatchCommandKey(rootWidget,nullptr,ctrlS),"Ctrl+S reaches the view root");
+    runtime->flush();
+    expect(vm.lastCommand==commands.at("save").id,"the shortcut clicks its button");
+    const auto saveDisabled=id(image,"Script","saveDisabled");
+    vm.values[saveDisabled].integer=1;
+    runtime->notify(runtime->rootScope,saveDisabled);runtime->flush();
+    const auto clicks=vm.invokes;
+    oneui::dispatchCommandKey(rootWidget,nullptr,ctrlS);runtime->flush();
+    expect(vm.invokes==clicks,"a disabled button ignores its shortcut");
+    oneui::KeyEvent ctrlD;ctrlD.virtualKey='D';ctrlD.control=true;
+    expect(!oneui::dispatchCommandKey(rootWidget,nullptr,ctrlD),"other chords are not claimed");
     runtime->close();
     std::cout << "code editor declarative binding scenarios passed\n";
 }

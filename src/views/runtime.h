@@ -1,6 +1,8 @@
 #pragma once
 #include "format/ir.h"
 #include "oneui/oneui_view_c_api.h"
+#include "oneui/command.h"
+#include "oneui/subscription.h"
 #include "oneui/ui_declarative.h"
 #include <atomic>
 #include <thread>
@@ -111,6 +113,10 @@ struct Instance {
     bool transparent = false;
     std::string repeatId;
     std::shared_ptr<std::map<std::string, std::shared_ptr<Instance>>> pendingRows;
+    // Button `shortcut`, registered on the view root while the instance lives.
+    std::optional<KeyChord> shortcutChord;
+    // Shared so reload can copy instances; the retained copy registers again.
+    std::shared_ptr<Subscription> shortcut;
 };
 enum class Phase { Idle, Read, Mutate, Connect, Cleanup };
 extern thread_local Runtime *callbackRuntime;
@@ -204,6 +210,10 @@ struct Runtime : std::enable_shared_from_this<Runtime> {
     void prepareDock(const std::shared_ptr<Instance>&, const std::vector<std::shared_ptr<Widget>>&);
     void wireDock(const std::shared_ptr<Instance>&);
     bool workspaceScalar(Instance&, const std::string&, const Value&);
+    bool shortcutScalar(Instance&, const std::string&, const Value&);
+    void registerShortcut(Instance&);
+    void registerPendingShortcuts();
+    std::vector<Instance*> pendingShortcuts;
     bool paneHeaderScalar(Instance&, const std::string&, const Value&);
     bool dragScalar(Instance&, const std::string&, const Value&);
     bool dragList(Instance&, const std::string&, ListState&);

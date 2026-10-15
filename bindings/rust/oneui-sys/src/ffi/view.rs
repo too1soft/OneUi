@@ -1,6 +1,6 @@
 //! Language-neutral view protocol v1 (UTF-8 ABI 44).
 use crate::{OneUiUtf8String, OneUiWidget, OneUiWindow};
-use std::ffi::{c_char, c_void};
+use std::ffi::{c_char, c_int, c_void};
 #[repr(C)]
 pub struct OneUiViewElementMetrics {
     pub struct_size: u32,
@@ -275,4 +275,14 @@ extern "C" {
 extern "C" {
     pub fn oneui_view_mount_point(view: *mut OneUiView, name: OneUiUtf8String,
         out: *mut *mut OneUiWidget) -> OneUiViewResult;
+    pub fn oneui_view_code_editor_select_document(view: *mut OneUiView, name: OneUiUtf8String,
+        id: OneUiUtf8String, out_created: *mut c_int) -> OneUiViewResult;
+    pub fn oneui_view_code_editor_close_document(view: *mut OneUiView, name: OneUiUtf8String,
+        id: OneUiUtf8String) -> OneUiViewResult;
+    pub fn oneui_view_code_editor_reset(view: *mut OneUiView, name: OneUiUtf8String,
+        text: OneUiUtf8String) -> OneUiViewResult;
+    pub fn oneui_view_code_editor_execute(view: *mut OneUiView, name: OneUiUtf8String, command: c_int,
+        out_applied: *mut c_int) -> OneUiViewResult;
+    pub fn oneui_view_code_editor_history(view: *mut OneUiView, name: OneUiUtf8String,
+        out_can_undo: *mut c_int, out_can_redo: *mut c_int) -> OneUiViewResult;
 }

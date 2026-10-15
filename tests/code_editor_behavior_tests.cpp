@@ -1,8 +1,11 @@
 #include "oneui/clipboard.h"
 #include "oneui/controls/code_editor.h"
+#include "oneui/localization.h"
+#include "oneui/style_adapter.h"
 
 #include "core/code_editor/code_document.h"
 
+#include <algorithm>
 #include <chrono>
 #include <iostream>
 #include <memory>
@@ -444,9 +447,132 @@ void testCompletionFlow() {
     expectTrue("deleting past the word start closes the list", !e->completionOpen());
 }
 
+class ColorCanvas final : public oneui::Canvas {
+public:
+    void save() override {}
+    void restore() override {}
+    void clipRect(oneui::Rect) override {}
+    void clear(oneui::Color) override {}
+    void fillRect(oneui::Rect, oneui::Color color, float = 0.0f) override { fills.push_back(color); }
+    void strokeRect(oneui::Rect, oneui::Color, float, float = 1.0f) override {}
+    void fillEllipse(oneui::Rect, oneui::Color) override {}
+    void strokeEllipse(oneui::Rect, oneui::Color, float = 1.0f) override {}
+    void drawLine(oneui::Point, oneui::Point, oneui::Color, float = 1.0f) override {}
+    void drawText(const std::wstring& text, oneui::Rect, oneui::Color, float, oneui::TextAlign = oneui::TextAlign::Center) override {
+        texts.push_back(text);
+    }
+    float measureTextWidth(const std::wstring& text, float, int = 400) const override {
+        return 7.0f * static_cast<float>(text.size());
+    }
+    std::vector<oneui::Color> fills;
+    std::vector<std::wstring> texts;
+};
+
+bool same(oneui::Color a, oneui::Color b) { return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a; }
+
+void testDocumentsKeepTheirState() {
+    oneui::CodeEditor editor;
+    editor.setFrame({0.0f, 0.0f, 600.0f, 300.0f});
+    editor.setLanguage(oneui::parseCodeLanguage(R"({"keywords":["SELECT"]})"));
+    editor.setText(L"select 1");
+    editor.setSelection(3, 3);
+    editor.insertText(L"X");
+    expectTrue("documents: a new id is created", editor.selectDocument(L"b"));
+    expectText("documents: a new document starts empty", editor.text(), L"");
+    expectTrue("documents: a new document has no history", !editor.canUndo());
+    editor.setLanguage(oneui::parseCodeLanguage(R"({"case_sensitive":true,"keywords":["echo"]})"));
+    editor.setText(L"echo hi");
+    editor.setSelection(5, 7);
+    expectTrue("documents: returning is not a creation", !editor.selectDocument(L""));
+    expectText("documents: text is restored", editor.text(), L"selXect 1");
+    expectEqual("documents: caret is restored", editor.state().caret, std::size_t{4});
+    expectTrue("documents: undo history is kept", editor.canUndo());
+    expectTrue("documents: undo command applies", editor.execute(oneui::CodeEditorCommand::Undo));
+    expectText("documents: undo restores the text", editor.text(), L"select 1");
+    expectTrue("documents: language is kept",
+               !editor.lineTokens(0).empty() && editor.lineTokens(0)[0].kind == oneui::CodeTokenKind::Keyword);
+    expectTrue("documents: redo becomes available", editor.canRedo());
+    editor.selectDocument(L"b");
+    expectEqual("documents: other selection kept", editor.state().anchor, std::size_t{5});
+    expectTrue("documents: other language kept",
+               !editor.lineTokens(0).empty() && editor.lineTokens(0)[0].kind == oneui::CodeTokenKind::Keyword);
+    expectEqual("documents: both are listed", editor.documentIds().size(), std::size_t{2});
+    editor.closeDocument(L"b");
+    expectText("documents: closing the shown one shows \"\"", editor.text(), L"select 1");
+    expectEqual("documents: closed id is gone", editor.documentIds().size(), std::size_t{1});
+    expectTrue("documents: reopening creates again", editor.selectDocument(L"b"));
+    expectText("documents: a closed document is not restored", editor.text(), L"");
+}
+
+void testCommands() {
+    oneui::CodeEditor editor;
+    editor.setFrame({0.0f, 0.0f, 600.0f, 300.0f});
+    editor.setText(L"a\nb");
+    expectTrue("commands: nothing to undo yet", !editor.execute(oneui::CodeEditorCommand::Undo));
+    expectTrue("commands: find opens", editor.execute(oneui::CodeEditorCommand::Find) && editor.findOpen());
+    expectTrue("commands: close find", editor.execute(oneui::CodeEditorCommand::CloseFind) && !editor.findOpen());
+    expectTrue("commands: nothing to close", !editor.execute(oneui::CodeEditorCommand::CloseFind));
+    editor.execute(oneui::CodeEditorCommand::SelectAll);
+    editor.execute(oneui::CodeEditorCommand::Indent);
+    expectText("commands: indent", editor.text(), L"    a\n    b");
+    editor.setReadOnly(true);
+    expectTrue("commands: replace needs an editable document", !editor.execute(oneui::CodeEditorCommand::Replace));
+    expectTrue("commands: read-only refuses edits", !editor.execute(oneui::CodeEditorCommand::Outdent));
+    expectTrue("commands: find still works read-only", editor.execute(oneui::CodeEditorCommand::Find));
+}
+
+void testStyleFromStyleSheet() {
+    oneui::StyleSheet sheet;
+    std::string error;
+    expectTrue("style: css parses", sheet.addRulesFromCss(
+        ":root { --accent: #00ff00; --code-accent: var(--accent); --code-keyword: #ff0000; }\n"
+        "code-editor.dark { background-color: #101010; color: #eeeeee; caret-color: #ffcc00; }", &error));
+    const auto s = oneui::codeEditorStyleFromStyleSheet(sheet, oneui::StyleNode{"code-editor", {"dark"}});
+    expectTrue("style: background", same(s.background, oneui::Color{16, 16, 16}));
+    expectTrue("style: foreground", same(s.foreground, oneui::Color{238, 238, 238}));
+    expectTrue("style: caret", same(s.caret, oneui::Color{255, 204, 0}));
+    expectTrue("style: gutter follows the surface", same(s.gutterBackground, s.background));
+    expectTrue("style: panel derives from the surface", s.panelBackground.r < 64);
+    expectTrue("style: keyword variable", same(s.token(oneui::CodeTokenKind::Keyword), oneui::Color{255, 0, 0}));
+    expectTrue("style: var() chains resolve", same(s.accent, oneui::Color{0, 255, 0}));
+    expectTrue("style: plain text follows color", same(s.token(oneui::CodeTokenKind::Plain), s.foreground));
+
+    oneui::CodeEditor editor;
+    editor.setFrame({0.0f, 0.0f, 400.0f, 200.0f});
+    editor.setStyle(s);
+    ColorCanvas canvas;
+    editor.paint(canvas);
+    expectTrue("style: the editor paints its background", !canvas.fills.empty() && same(canvas.fills.front(), s.background));
+}
+
+void testFindBarTextIsLocalized() {
+    oneui::setBuiltinText(oneui::BuiltinText::FindNoResults, L"无结果");
+    oneui::setBuiltinText(oneui::BuiltinText::FindMatchCount, L"{0}/{1}");
+    oneui::CodeEditor editor;
+    editor.setFrame({0.0f, 0.0f, 600.0f, 300.0f});
+    editor.setText(L"alpha beta alpha");
+    editor.openFind(false);
+    editor.setSearch(L"zeta", {});
+    ColorCanvas canvas;
+    editor.paint(canvas);
+    expectTrue("find text: no results", std::find(canvas.texts.begin(), canvas.texts.end(), L"无结果") != canvas.texts.end());
+    editor.setSearch(L"alpha", {});
+    editor.findNext();
+    canvas.texts.clear();
+    editor.paint(canvas);
+    expectTrue("find text: count template", std::find(canvas.texts.begin(), canvas.texts.end(), L"1/2") != canvas.texts.end() ||
+                                                std::find(canvas.texts.begin(), canvas.texts.end(), L"2/2") != canvas.texts.end());
+    oneui::setBuiltinText(oneui::BuiltinText::FindNoResults, std::nullopt);
+    oneui::setBuiltinText(oneui::BuiltinText::FindMatchCount, std::nullopt);
+}
+
 } // namespace
 
 int main() {
+    testDocumentsKeepTheirState();
+    testCommands();
+    testStyleFromStyleSheet();
+    testFindBarTextIsLocalized();
     testDocumentOffsets();
     testLanguageAndTokens();
     testIncrementalLexing();
