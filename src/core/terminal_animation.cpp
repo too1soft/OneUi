@@ -40,7 +40,29 @@ bool TerminalView::tickAnimations(double nowMs) {
             }
         }
     }
-    return cursorActive || textBlinkActive;
+    bool bellActive = false;
+    if (bellStartMs_ > 0.0) {
+        const double progress = std::max(0.0, nowMs - bellStartMs_) / kBellFlashMs;
+        const auto alpha = progress >= 1.0
+            ? std::uint8_t{0}
+            : static_cast<std::uint8_t>(std::lround(kBellFlashAlpha * (1.0 - progress)));
+        if (alpha != bellAlpha_) {
+            bellAlpha_ = alpha;
+            invalidate();
+        }
+        bellActive = alpha != 0;
+        if (!bellActive) {
+            bellStartMs_ = 0.0;
+        }
+    }
+    return cursorActive || textBlinkActive || bellActive;
+}
+
+void TerminalView::flashBell() {
+    bellStartMs_ = currentTimeMs();
+    bellAlpha_ = static_cast<std::uint8_t>(kBellFlashAlpha);
+    invalidate();
+    requestAnimationFrame();
 }
 
 void TerminalView::restartCursorBlink() {

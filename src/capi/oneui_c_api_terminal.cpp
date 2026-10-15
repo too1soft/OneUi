@@ -182,6 +182,12 @@ void oneui_terminal_view_set_cursor_blinking(OneUiWidget* view, int enabled) {
     }
 }
 
+void oneui_terminal_view_flash_bell(OneUiWidget* view) {
+    if (auto* nativeView = asWidget<oneui::TerminalView>(view)) {
+        nativeView->flashBell();
+    }
+}
+
 void oneui_terminal_view_set_copy_on_select(OneUiWidget* view, int enabled) {
     if (auto* nativeView = asWidget<oneui::TerminalView>(view)) {
         nativeView->setCopyOnSelect(enabled != 0);

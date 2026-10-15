@@ -1655,6 +1655,8 @@ ONEUI_API void oneui_terminal_view_set_cursor_style(
     OneUiWidget* view,
     OneUiTerminalCursorStyle style);
 ONEUI_API void oneui_terminal_view_set_cursor_blinking(OneUiWidget* view, int enabled);
+/* Visual bell: a short fading tint over the terminal. */
+ONEUI_API void oneui_terminal_view_flash_bell(OneUiWidget* view);
 ONEUI_API void oneui_terminal_view_set_copy_on_select(OneUiWidget* view, int enabled);
 ONEUI_API void oneui_terminal_view_set_right_button_action(
     OneUiWidget* view,

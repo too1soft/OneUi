@@ -146,6 +146,7 @@ extern "C" {
         style: OneUiTerminalCursorStyle,
     );
     pub fn oneui_terminal_view_set_cursor_blinking(view: *mut OneUiWidget, enabled: c_int);
+    pub fn oneui_terminal_view_flash_bell(view: *mut OneUiWidget);
     pub fn oneui_terminal_view_set_copy_on_select(view: *mut OneUiWidget, enabled: c_int);
     pub fn oneui_terminal_view_set_right_button_action(
         view: *mut OneUiWidget,

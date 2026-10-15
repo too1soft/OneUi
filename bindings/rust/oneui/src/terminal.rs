@@ -444,6 +444,11 @@ impl TerminalView {
         };
     }
 
+    /// Visual bell: a short fading tint over the terminal.
+    pub fn flash_bell(&self) {
+        unsafe { sys::oneui_terminal_view_flash_bell(self.widget.as_raw()) };
+    }
+
     pub fn set_copy_on_select(&self, enabled: bool) {
         unsafe {
             sys::oneui_terminal_view_set_copy_on_select(self.widget.as_raw(), i32::from(enabled))

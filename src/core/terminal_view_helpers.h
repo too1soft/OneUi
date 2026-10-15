@@ -17,6 +17,9 @@ constexpr unsigned int kVirtualKeyAlt = 0x12;
 constexpr unsigned int kVirtualKeyLeftWin = 0x5B;
 constexpr unsigned int kVirtualKeyRightWin = 0x5C;
 constexpr double kCursorBlinkPeriodMs = 1060.0;
+// Visual bell: initial tint opacity (of 255) and fade duration.
+constexpr double kBellFlashAlpha = 56.0;
+constexpr double kBellFlashMs = 200.0;
 constexpr double kCursorBlinkOnMs = 530.0;
 constexpr double kSlowTextBlinkPeriodMs = 1000.0;
 constexpr double kSlowTextBlinkOnMs = 500.0;
