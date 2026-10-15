@@ -91,6 +91,7 @@
                 return false;
             };
             if (hitsControl(hitsControl, content_)) return HTNOWHERE;
+            if (platform::titleBarControlAt(content_, point)) return HTNOWHERE;
         }
         const bool hasInteractiveTitleBarRegion =
             titleBarInteractiveLeadingWidthLogical_ >= 0.0f

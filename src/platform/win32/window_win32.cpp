@@ -18,6 +18,7 @@
 #include "oneui/controls/window_title_bar.h"
 #include "internal/scroll_trace.h"
 #include "platform/shared/skia_canvas.h"
+#include "platform/shared/title_bar_hit.h"
 #include "platform/win32/compat_win32.h"
 #include "platform/win32/window_shadow.h"
 
