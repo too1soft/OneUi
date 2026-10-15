@@ -1025,7 +1025,9 @@ class SkiaCanvasImpl final : public Canvas {
         const float radians = (angleDegrees - 90.0f) * pi / 180.0f;
         const float dx = std::cos(radians);
         const float dy = std::sin(radians);
-        const float half = std::sqrt(rect.width * rect.width + rect.height * rect.height) * 0.5f;
+        // CSS gradient line: |W sin a| + |H cos a| long, so a vertical gradient
+        // spans the height and a horizontal one the width.
+        const float half = (std::abs(rect.width * dx) + std::abs(rect.height * dy)) * 0.5f;
         const SkPoint points[2] = {
             SkPoint::Make(rect.x + rect.width * 0.5f - dx * half, rect.y + rect.height * 0.5f - dy * half),
             SkPoint::Make(rect.x + rect.width * 0.5f + dx * half, rect.y + rect.height * 0.5f + dy * half),

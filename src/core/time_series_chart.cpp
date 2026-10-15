@@ -422,7 +422,8 @@ void TimeSeriesChart::paint(Canvas& canvas) {
                     top = std::min(top, rect.y + rect.height - 4.0f);
                     gradient = Rect{rect.x, top, rect.width, rect.y + rect.height - top};
                 }
-                canvas.fillPathLinearGradient(areaPath, gradient, fillStart, fillEnd, 90.0f);
+                // CSS angles: 180 degrees runs from the curve down to the baseline.
+                canvas.fillPathLinearGradient(areaPath, gradient, fillStart, fillEnd, 180.0f);
             }
             if (item.dashed) {
                 canvas.strokePathDashed(linePath, color, lineWidth_, 4.0f, 3.0f);

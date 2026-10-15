@@ -57,7 +57,7 @@ struct BoxShadowCall {
 };
 
 struct GradientCall { Rect rect; Gradient gradient; float radius; };
-struct PathGradientCall { Rect bounds; Color start; Color end; };
+struct PathGradientCall { Rect bounds; Color start; Color end; float angle; };
 struct OpacityCall { Rect rect; float opacity; };
 
 class RecordingCanvas final : public Canvas {
@@ -111,7 +111,7 @@ public:
     }
 
     void fillGradient(Rect rect, const Gradient& gradient, float radius=0) override { gradients.push_back({rect,gradient,radius}); }
-    void fillPathLinearGradient(const CanvasPath&, Rect bounds, Color start, Color end, float) override { pathGradients.push_back({bounds,start,end}); }
+    void fillPathLinearGradient(const CanvasPath&, Rect bounds, Color start, Color end, float angle) override { pathGradients.push_back({bounds,start,end,angle}); }
     void drawInsetShadow(Rect rect, const BoxShadow& shadow, float radius=0) override { insetShadows.push_back({rect,shadow,radius}); }
     void saveOpacity(Rect rect,float opacity) override { opacityLayers.push_back({rect,opacity});save(); }
     void drawBoxShadow(Rect rect, const BoxShadow& shadow, float radius = 0.0f) override {

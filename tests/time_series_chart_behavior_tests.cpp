@@ -135,6 +135,7 @@ int main() {
     chart.paint(styled);
     expectEqual("only the series asking for fill is filled", static_cast<int>(styled.pathGradients.size()), 1);
     expectTrue("plot extent spans the plot", std::abs(styled.pathGradients.front().bounds.y - 0.0f) < 0.001f);
+    expectTrue("fill fades from the curve down to the baseline", styled.pathGradients.front().angle == 180.0f);
     float drawn = 0.0f;
     for (const auto& line : styled.lines) {
         if (line.color.r == 110) drawn += std::hypot(line.to.x - line.from.x, line.to.y - line.from.y);
