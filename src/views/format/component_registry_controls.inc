@@ -341,6 +341,15 @@ P("TreeView", 9, "name", 4, 3, "")
 P("TreeView", 10, "selectedKey", 4, 7, "")
 P("TreeView", 11, "shrink", 3, 1, "")
 P("TreeView", 12, "visible", 1, 3, "")
+P("TreeView", 13, "tree-items", 5, 2, "@tree.node")
+P("TreeView", 14, "selected-id", 4, 7, "")
+P("TreeView", 15, "row-height", 3, 3, "")
+P("TreeView", 16, "loading-text", 4, 3, "")
+r.at("TreeView").events={
+    {1,"expand",{{"id",4},{"expanded",1}}},
+    {2,"activate",{{"id",4}}},
+    {3,"context",{{"id",4},{"x",3},{"y",3}}}
+};
 
 C("Table", "leaf", 0)
 P("Table", 1, "basis", 3, 1, "")

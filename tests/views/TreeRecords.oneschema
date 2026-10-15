@@ -1,0 +1,21 @@
+model TreeNode key id {
+    r id: utf8
+    r parent: utf8
+    r text: utf8
+    r detail: utf8
+    r icon: utf8
+    r badge: utf8
+    r classes: utf8
+    r has_children: bool
+    r expanded: bool
+    r loading: bool
+    r highlight_start: i64
+    r highlight_len: i64
+}
+model Navigator {
+    r nodes: list<TreeNode>
+    rw selected: utf8
+    command expand(id:utf8,expanded:bool)
+    command activate(id:utf8)
+    command context(id:utf8,x:f64,y:f64)
+}

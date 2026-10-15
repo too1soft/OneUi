@@ -312,6 +312,26 @@ ONEUI_API OneUiViewResult oneui_view_mount_register_workspace_tabs(OneUiViewMoun
  * and maximized panes cancel without emitting an intent. No widget is created. */
 ONEUI_API OneUiViewResult oneui_view_workspace_tab_drag(OneUiView *view,
     OneUiUtf8String domain, OneUiUtf8String source, int phase, float x, float y);
+/* CodeEditor document access by unique accessible name, UI thread. The editor
+ * owns its text: the VM reads it when needed instead of mirroring every key.
+ * Offsets are UTF-8 bytes; line/column are 1-based (column in scalar values).
+ * NOT_FOUND / TYPE for missing or non-editor names. */
+typedef struct OneUiViewCodeEditorState {
+    uint32_t struct_size, cursors;
+    uint64_t revision, caret, anchor, line, column, length, line_count;
+} OneUiViewCodeEditorState;
+ONEUI_API OneUiViewResult oneui_view_code_editor_state(OneUiView *view,
+    OneUiUtf8String name, OneUiViewCodeEditorState *out);
+/* Copies the clamped byte range [start, end) without a terminator. Pass a NULL
+ * buffer to query out_length; a buffer smaller than out_length is LIMIT. */
+ONEUI_API OneUiViewResult oneui_view_code_editor_text(OneUiView *view, OneUiUtf8String name,
+    uint64_t start, uint64_t end, char *buffer, size_t capacity, size_t *out_length);
+/* One undoable replacement, outside VM callbacks. expected_revision 0 skips the
+ * check; otherwise a document changed since that revision is STALE_CHANGE. */
+ONEUI_API OneUiViewResult oneui_view_code_editor_replace(OneUiView *view, OneUiUtf8String name,
+    uint64_t start, uint64_t end, OneUiUtf8String text, uint64_t expected_revision);
+ONEUI_API OneUiViewResult oneui_view_code_editor_select(OneUiView *view, OneUiUtf8String name,
+    uint64_t anchor, uint64_t caret);
 #ifdef __cplusplus
 }
 #endif

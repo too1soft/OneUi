@@ -327,6 +327,11 @@ tabs->setOnContextMenuRequested([](int index, oneui::Point at) { openTabMenu(ind
 结构化 item 使用稳定 `id` 与 `parentId`，支持 title/detail、展开、选择、重排请求和外部 drop
 target。产品必须保证 ID 唯一且层级无环。TreeView 不自动写产品树。
 
+可选能力：内部滚动（5 万可见节点只画可见行）、懒加载分支（`hasChildren` + `loading` 占位行）、
+跨刷新保留用户展开状态、图标 / 徽标 / 样式类 / 标题高亮范围、`activate` 与 `context` 回调。
+声明式组件 `TreeView` 用 `tree-items`（`@tree.node`，大树、内部滚动）或 `items`（`@tree.item`，放在 `Scroll` 里的小树），`v-model` 绑定选中 id，详见
+[TreeView](34-tree-view.md#declarative-contract)。
+
 ## Table
 
 Table 是多列、固定行高的数据视图，不再是静态占位表格。
@@ -363,6 +368,24 @@ table->setOnDeleteRequested([](const std::vector<int>& rows) { confirmDelete(row
 - Rust `TableHandle` 后台整表/单行更新。
 
 未实现内置排序、筛选、列 resize、可变行高和单元格 editor。
+
+## DataGrid
+
+虚拟化的可编辑单元格表格，面向任意行数的结果集：VM 只提供当前窗口行（`grid-rows` +
+`window-start`），逻辑行数由 `row-count` 给出，可见范围超出窗口时发出 `viewport(first,count)`。
+支持冻结列、列宽拖动与双击自适应、表头排序请求、单元格/整行/整列/全选选区、单元格内编辑
+（F2、双击、直接键入或 IME 输入）、样式类，以及 `edit` / `context` / `copy` / `activate` 事件。
+表格不写剪贴板、不修改自身数据，一切修改都由 VM 回写绑定。
+
+详细内容见 [SQL workbench components](61-sql-workbench-components.md#datagrid)。
+
+## CodeEditor
+
+原生多行代码编辑器：按行存储、增量词法着色（JSON 语言描述）、行号、当前行、括号匹配、缩进参考线、
+自动换行、只读、撤销合并、多光标、注释 / 缩进 / 复制行 / 移动行、查找替换栏（正则、大小写、全词）。
+文本由组件持有，VM 通过 `text` + `text-revision` 整体替换，通过节流的 `changed` / `cursor` 事件感知变化，
+需要时用 `oneui_view_code_editor_text` 等接口读取全文或范围。详见
+[SQL workbench components](61-sql-workbench-components.md#codeeditor)。
 
 ## Menu / Popup / Dialog / OverlayHost
 

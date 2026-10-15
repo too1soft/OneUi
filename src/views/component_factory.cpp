@@ -3,6 +3,9 @@
 #include "data_menu.h"
 #include "tabs_presentation.h"
 #include "oneui/controls/popup.h"
+#include "oneui/controls/data_grid.h"
+#include "oneui/controls/tree_view.h"
+#include "oneui/controls/code_editor.h"
 #include "oneui/layout/panel.h"
 namespace oneui::ui {
 Element Mount::make(std::string type, std::vector<Element> children, std::string classes) {
@@ -150,6 +153,12 @@ Element Mount::make(std::string type, std::vector<Element> children, std::string
     else if(type=="VirtualTemplateList")node=b.native(std::make_shared<VirtualTemplateList>());
     else if(type=="TreeView")node=b.native(std::make_shared<TreeView>());
     else if(type=="Table")node=b.native(std::make_shared<Table>());
+    else if(type=="DataGrid")node=b.native(std::make_shared<DataGrid>()).basis(0).grow();
+    else if(type=="CodeEditor") {
+        auto editor=std::make_shared<CodeEditor>();
+        editor->setClipboard(clipboard_);
+        node=b.native(editor).basis(0).grow();
+    }
     else if(type=="FontPicker")node=b.native(std::make_shared<FontPicker>());
     else if(type=="Slider")node=b.native(std::make_shared<Slider>());
     else if(type=="InteractiveSurface") {

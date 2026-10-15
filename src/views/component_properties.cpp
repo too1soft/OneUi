@@ -5,6 +5,10 @@
 #include <cmath>
 #include "tabs_presentation.h"
 #include "oneui/controls/popup.h"
+#include "oneui/controls/data_grid.h"
+#include "oneui/controls/tree_view.h"
+#include "oneui/controls/code_editor.h"
+#include "internal/unicode.h"
 namespace oneui::ui {
 void Mount::set(Element &e, const std::string &key, const std::wstring &value) {
     if (key == "accessible-name") { e.widget->setAccessibleName(value); return; }
@@ -38,6 +42,16 @@ void Mount::set(Element &e, const std::string &key, const std::wstring &value) {
            insets.top<0 || insets.right<0 || insets.bottom<0 || insets.left<0)
             throw std::invalid_argument("Chart plot-insets requires four nonnegative numbers");
         e.as<TimeSeriesChart>()->setPlotInsets(insets);return;
+    }
+    if (e.component == "CodeEditor") {
+        auto editor = e.as<CodeEditor>();
+        if (key == "text") { editor->setBoundText(value); return; }
+        if (key == "comment-prefix") { editor->setCommentPrefix(value); return; }
+        if (key == "language") { editor->setLanguage(parseCodeLanguage(unicode::toUtf8(value))); return; }
+    }
+    if (e.component == "TreeView") {
+        if (key == "selected-id") { e.as<TreeView>()->setSelectedId(value); return; }
+        if (key == "loading-text") { e.as<TreeView>()->setLoadingText(value); return; }
     }
     if(e.component=="Popup" && key=="placement") {
         const std::map<std::wstring,PopupPreferredPlacement> placements{
@@ -256,6 +270,19 @@ void Mount::set(Element &e, const std::string &key, bool value) {
         if(key=="axes-visible"){chart->setAxesVisible(value);return;}
         if(key=="latest-point"){chart->setLatestPointVisible(value);return;}
     }
+    if (e.component == "CodeEditor") {
+        auto editor = e.as<CodeEditor>();
+        if (key == "read-only") { editor->setReadOnly(value); return; }
+        if (key == "word-wrap") { editor->setWordWrap(value); return; }
+        if (key == "line-numbers") { editor->setLineNumbers(value); return; }
+        if (key == "indent-guides") { editor->setIndentGuides(value); return; }
+        if (key == "insert-spaces") { editor->setInsertSpaces(value); return; }
+        if (key == "completion-open") { editor->setCompletionOpen(value); return; }
+    }
+    if (e.component == "DataGrid") {
+        if (key == "row-numbers") { e.as<DataGrid>()->setRowNumbersVisible(value); return; }
+        if (key == "editable") { e.as<DataGrid>()->setEditable(value); return; }
+    }
     if(e.component=="Popup" && key=="open") {e.as<Popup>()->setOpen(value);return;}
     if(key=="placeholder-when-focused") {e.as<TextField>()->setPlaceholderVisibleWhenFocused(value);return;}
     if(e.component=="ReorderableGrid") {
@@ -313,6 +340,12 @@ void Mount::set(Element &e, const std::string &key, bool value) {
         throw std::invalid_argument("Invalid bool property");
 }
 void Mount::set(Element &e, const std::string &key, float value) {
+    if (e.component == "DataGrid") {
+        if (key == "row-height") { e.as<DataGrid>()->setRowHeight(value); return; }
+        if (key == "header-height") { e.as<DataGrid>()->setHeaderHeight(value); return; }
+    }
+    if (e.component == "TreeView" && key == "row-height") { e.as<TreeView>()->setRowHeight(value); return; }
+    if (e.component == "CodeEditor" && key == "font-size") { e.as<CodeEditor>()->setFontSize(value); return; }
     syntax::validateLayoutNumber(key, value);
     if(e.component=="TimeSeriesChart") {
         auto chart=e.as<TimeSeriesChart>();
@@ -457,6 +490,37 @@ void Mount::set(Element &e, const std::string &key, int value) {
             if(value<0 || value>255)throw std::invalid_argument("Chart fill-alpha range");
             e.as<TimeSeriesChart>()->setFillAlpha(static_cast<unsigned char>(value));return;
         }
+    }
+    if (e.component == "CodeEditor") {
+        if (key == "text-revision") {
+            if (value < 0) throw std::invalid_argument("text-revision must not be negative");
+            e.as<CodeEditor>()->setBoundRevision(static_cast<std::uint64_t>(value));
+            return;
+        }
+        if (key == "tab-size") { e.as<CodeEditor>()->setTabSize(value); return; }
+        if (key == "decorations-revision") {
+            if (value < 0) throw std::invalid_argument("decorations-revision must not be negative");
+            e.as<CodeEditor>()->setBoundDecorationsRevision(static_cast<std::uint64_t>(value));
+            return;
+        }
+    }
+    if (e.component == "DataGrid") {
+        auto grid = e.as<DataGrid>();
+        if (key == "row-count") { grid->setRowCount(value); return; }
+        if (key == "window-start") { grid->setWindowStart(value); return; }
+        if (key == "frozen-columns") { grid->setFrozenColumns(value); return; }
+        // Selection fields arrive one at a time; each refines the current selection.
+        auto selection = grid->selection();
+        if (key == "anchor-row") selection.anchorRow = value;
+        else if (key == "anchor-column") selection.anchorColumn = value;
+        else if (key == "focus-row") selection.focusRow = value;
+        else if (key == "focus-column") selection.focusColumn = value;
+        else if (key == "select-kind") {
+            if (value < 0 || value > 3) throw std::invalid_argument("select-kind must be 0-3");
+            selection.kind = DataGridSelectKind(value);
+        } else throw std::invalid_argument("Unknown DataGrid integer property");
+        grid->setSelection(selection);
+        return;
     }
     if(e.component=="ReorderableGrid" && key=="column-count") {
         if(value<1)throw std::invalid_argument("column-count must be positive");

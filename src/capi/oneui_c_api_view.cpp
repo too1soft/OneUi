@@ -13,6 +13,7 @@ using namespace oneui::capi::views;
 #include "oneui_c_api_view_metrics.inc"
 #include "oneui_c_api_view_child.inc"
 #include "oneui_c_api_view_workspace.inc" // Window-checked native/declarative strip hosts.
+#include "oneui_c_api_view_code_editor.inc"
 uint32_t oneui_view_protocol_version(void) { return ONEUI_VIEW_PROTOCOL_VERSION; }
 OneUiViewResult oneui_view_instantiate(OneUiViewMount *mountHandle, const uint8_t *bytes,
                                        size_t length, const OneUiViewModelVTable *table, void *vm,

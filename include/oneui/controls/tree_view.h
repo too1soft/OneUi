@@ -1,6 +1,7 @@
 #pragma once
 
 #include "oneui/export.h"
+#include "oneui/icon.h"
 #include "oneui/style.h"
 #include "oneui/widget.h"
 
@@ -21,6 +22,18 @@ struct TreeItem {
     std::wstring title;
     std::wstring detail;
     bool expanded = true;
+    // Optional presentation; defaults keep the original look.
+    std::optional<IconSymbol> icon;
+    std::wstring badge;
+    // Space-separated tokens: muted, error, warning, accent, strong.
+    std::string classes;
+    // Lazy branches: shows an expand marker before any child is loaded.
+    bool hasChildren = false;
+    // An expanded branch without children shows a loading placeholder row.
+    bool loading = false;
+    // Highlighted title range in UTF-16 code units (e.g. a filter match).
+    std::size_t highlightStart = 0;
+    std::size_t highlightLength = 0;
 };
 
 // A small, accessible tree for hierarchical navigation and grouped data.
@@ -50,6 +63,26 @@ public:
     std::size_t visibleItemCount() const;
     float contentHeight() const;
 
+    // Internal scrolling for large trees. Off by default: the tree then grows
+    // to its content height and relies on an enclosing ScrollView.
+    void setInternalScrolling(bool enabled);
+    bool internalScrolling() const;
+    void setScrollOffset(float offset);
+    float scrollOffset() const;
+    float maxScrollOffset() const;
+    void scrollToId(const std::wstring& id);
+    void setRowHeight(float height);
+    // Keeps the user's expand/collapse state across setItems for items whose
+    // supplied `expanded` value did not change; a changed value still wins.
+    void setRetainExpansion(bool retain);
+    void setLoadingText(std::wstring text);
+    // With an activation callback, Enter and double-click activate instead of
+    // toggling; the expand marker, Space and Left/Right still toggle.
+    void setOnActivated(std::function<void(const std::wstring&)> callback);
+    // Right click, the Menu key and Shift+F10, in window coordinates.
+    void setOnContextMenu(std::function<void(const std::wstring&, Point)> callback);
+    bool onMouseWheel(const MouseWheelEvent& event) override;
+
     void paint(Canvas& canvas) override;
     bool onMouseMove(const MouseEvent& event) override;
     bool onMouseDown(const MouseEvent& event) override;
@@ -62,10 +95,15 @@ private:
     struct VisibleItem {
         std::size_t index = 0;
         int depth = 0;
+        bool placeholder = false;
     };
 
     void rebuildHierarchy();
-    std::vector<VisibleItem> visibleItems() const;
+    const std::vector<VisibleItem>& visibleItems() const;
+    bool expandable(std::size_t index) const;
+    int stepSelectable(int from, int step, const std::vector<VisibleItem>& visible) const;
+    void paintItem(Canvas& canvas, const VisibleItem& visibleItem, int visibleIndex);
+    void clampScroll();
     void appendVisibleItems(std::vector<VisibleItem>& output, std::size_t index, int depth) const;
     void assignSelectedId(std::wstring id);
     void ensureSelectionVisible();
@@ -107,6 +145,16 @@ private:
     std::function<void(const std::wstring&)> onSelectionChanged_;
     std::function<void(const std::wstring&, bool)> onExpansionChanged_;
     std::function<void(const std::wstring&, const std::wstring&)> onReorderRequested_;
+    std::function<void(const std::wstring&)> onActivated_;
+    std::function<void(const std::wstring&, Point)> onContextMenu_;
+    mutable std::vector<VisibleItem> visibleCache_;
+    mutable bool visibleDirty_ = true;
+    bool internalScrolling_ = false;
+    bool retainExpansion_ = false;
+    std::unordered_map<std::wstring, bool> suppliedExpanded_;
+    float scrollOffset_ = 0.0f;
+    float rowHeight_ = 32.0f;
+    std::wstring loadingText_ = L"Loading...";
 };
 
 } // namespace oneui

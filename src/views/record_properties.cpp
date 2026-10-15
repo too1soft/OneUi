@@ -5,6 +5,10 @@
 #include <limits>
 #include "rich_table_records.inc"
 #include "data_menu_records.h"
+#include "oneui/controls/data_grid.h"
+#include "oneui/controls/tree_view.h"
+#include "oneui/controls/code_editor.h"
+#include "oneui/ui_icon_names.h"
 namespace oneui::views {
 void Runtime::applyList(Instance &instance, const std::string &property, ListState &state) {
     ONEUI_VIEW_TIME(Rows);
@@ -103,7 +107,7 @@ void Runtime::applyList(Instance &instance, const std::string &property, ListSta
             else if (entry.kind == "separator") menu->addSeparator();
             else menu->setItemDisabled(menu->addItem(entry.title, entry.icon, entry.danger), entry.disabled);
         }
-    } else if (e.component == "TreeView") {
+    } else if (e.component == "TreeView" && property == "items") {
         std::vector<TreeItem> values;
         for(size_t i=0;i<state.items.size();++i) {
             const auto& item=state.items[i];
@@ -196,6 +200,116 @@ void Runtime::applyList(Instance &instance, const std::string &property, ListSta
         std::vector<double> positions;
         for(const auto& item:state.items)positions.push_back(field(item,"value").number);
         check(e.as<TimeSeriesChart>()->setSamplePositions(std::move(positions)),ONEUI_VIEW_TYPE,"Chart sample positions");
+    } else if (e.component == "CodeEditor" && property == "decorations") {
+        std::vector<CodeDecoration> decorations;
+        for (const auto &item : state.items) {
+            CodeDecoration d;
+            d.id = wide(field(item, "id").text);
+            const auto start = field(item, "start").integer, end = field(item, "end").integer;
+            check(start >= 0 && end >= start, ONEUI_VIEW_TYPE, "Editor decoration range");
+            d.start = static_cast<std::size_t>(start);
+            d.end = static_cast<std::size_t>(end);
+            const auto &kind = field(item, "kind").text;
+            if (kind == "statement") d.kind = CodeDecorationKind::Statement;
+            else if (kind == "error") d.kind = CodeDecorationKind::Error;
+            else if (kind == "warning") d.kind = CodeDecorationKind::Warning;
+            else if (kind == "running") d.kind = CodeDecorationKind::Running;
+            else if (kind == "highlight") d.kind = CodeDecorationKind::Highlight;
+            else check(false, ONEUI_VIEW_TYPE, "Editor decoration kind");
+            d.message = wide(field(item, "message").text);
+            decorations.push_back(std::move(d));
+        }
+        e.as<CodeEditor>()->setBoundDecorations(std::move(decorations));
+    } else if (e.component == "CodeEditor" && property == "completion-items") {
+        std::vector<CodeCompletionItem> items;
+        items.reserve(state.items.size());
+        for (const auto &item : state.items) {
+            CodeCompletionItem c;
+            c.id = wide(field(item, "id").text);
+            c.label = wide(field(item, "label").text);
+            c.kind = wide(field(item, "kind").text);
+            c.detail = wide(field(item, "detail").text);
+            c.insert = wide(field(item, "insert").text);
+            const auto start = field(item, "replace_start").integer, end = field(item, "replace_end").integer;
+            check(start >= 0 && end >= 0, ONEUI_VIEW_TYPE, "Completion replace range");
+            c.replaceStart = static_cast<std::size_t>(start);
+            c.replaceEnd = static_cast<std::size_t>(end);
+            items.push_back(std::move(c));
+        }
+        e.as<CodeEditor>()->setCompletionItems(std::move(items));
+    } else if (e.component == "TreeView" && property == "tree-items") {
+        // Highlight ranges arrive in Unicode scalar values; the tree uses UTF-16 offsets.
+        auto utf16 = [](const std::wstring &text, std::int64_t scalars) {
+            std::size_t at = 0;
+            for (std::int64_t n = 0; n < scalars && at < text.size(); ++n)
+                at += (text[at] >= 0xd800 && text[at] <= 0xdbff && at + 1 < text.size()) ? 2 : 1;
+            return at;
+        };
+        std::vector<TreeItem> items;
+        items.reserve(state.items.size());
+        for (const auto &item : state.items) {
+            TreeItem node;
+            node.id = wide(field(item, "id").text);
+            node.parentId = wide(field(item, "parent").text);
+            node.title = wide(field(item, "text").text);
+            node.detail = wide(field(item, "detail").text);
+            const auto &icon = field(item, "icon").text;
+            if (!icon.empty()) {
+                node.icon = ui::namedIcon(icon);
+                check(node.icon.has_value(), ONEUI_VIEW_TYPE, "Tree node icon name");
+            }
+            node.badge = wide(field(item, "badge").text);
+            node.classes = field(item, "classes").text;
+            node.hasChildren = bool(field(item, "has_children").integer);
+            node.expanded = bool(field(item, "expanded").integer);
+            node.loading = bool(field(item, "loading").integer);
+            const auto start = field(item, "highlight_start").integer, length = field(item, "highlight_len").integer;
+            check(start >= 0 && length >= 0, ONEUI_VIEW_TYPE, "Tree node highlight range");
+            node.highlightStart = utf16(node.title, start);
+            node.highlightLength = utf16(node.title, start + length) - node.highlightStart;
+            items.push_back(std::move(node));
+        }
+        // `tree-items` trees are large and lazy: they scroll themselves and keep
+        // user expansion across refreshes. `items` trees grow inside a Scroll.
+        auto tree = e.as<TreeView>();
+        if (!tree->internalScrolling()) {
+            tree->setInternalScrolling(true);
+            tree->setRetainExpansion(true);
+        }
+        tree->setItems(std::move(items));
+    } else if (e.component == "DataGrid" && property == "grid-columns") {
+        std::vector<DataGridColumn> columns;
+        for (const auto &item : state.items) {
+            DataGridColumn c;
+            c.id = wide(field(item, "id").text);
+            c.title = wide(field(item, "title").text);
+            c.detail = wide(field(item, "detail").text);
+            c.width = float(field(item, "width").number);
+            const auto align = field(item, "align").integer, sort = field(item, "sort").integer;
+            check(c.width >= 0 && align >= 0 && align <= 2 && sort >= 0 && sort <= 2, ONEUI_VIEW_TYPE,
+                  "Grid column value range");
+            c.alignment = TextAlign(align);
+            c.sort = int(sort);
+            c.key = bool(field(item, "key").integer);
+            columns.push_back(std::move(c));
+        }
+        e.as<DataGrid>()->setColumns(std::move(columns));
+    } else if (e.component == "DataGrid" && property == "grid-rows") {
+        // The VM supplies only the materialized window; its first row index is window-start.
+        std::vector<DataGridRow> rows;
+        rows.reserve(state.items.size());
+        for (const auto &item : state.items) {
+            DataGridRow row;
+            row.number = wide(field(item, "number").text);
+            row.classes = field(item, "classes").text;
+            auto &cells = nested(item, "cells");
+            row.cells.reserve(cells.items.size());
+            for (const auto &cell : cells.items)
+                row.cells.push_back({wide(field(cell, "text").text), field(cell, "classes").text});
+            rows.push_back(std::move(row));
+        }
+        auto grid = e.as<DataGrid>();
+        grid->setWindow(grid->windowStart(), std::move(rows));
     } else if (e.component == "TimeSeriesChart") {
         std::vector<TimeSeriesChartSeries> series;
         for (const auto &item : state.items) {

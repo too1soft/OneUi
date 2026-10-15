@@ -6,6 +6,8 @@ mod callbacks;
 pub mod diagnostics;
 mod host;
 mod mount_point;
+mod code_editor;
+pub use code_editor::CodeEditorState;
 mod metrics;
 pub use metrics::{DockAction, ElementMetrics};
 mod scope;

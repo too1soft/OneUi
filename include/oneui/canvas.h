@@ -254,7 +254,7 @@ public:
                 const Point to = polyline[i];
                 float length = std::hypot(to.x - from.x, to.y - from.y);
                 while (length > 0.0f) {
-                    const float step = std::min(remaining, length);
+                    const float step = (std::min)(remaining, length); // windows.h may define min
                     const float t = step / length;
                     const Point next{from.x + (to.x - from.x) * t, from.y + (to.y - from.y) * t};
                     if (on) drawLine(from, next, color, width);

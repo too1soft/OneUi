@@ -86,8 +86,10 @@ enum class ValueType { None, Text, Boolean, Integer, Number, Strings, Columns, R
     X(StateView, "state-view", "title message action icon", None) \
     X(Menu, "menu", "items", None) \
     X(VirtualTemplateList, "virtual-template-list", "estimated-height overscan follow-end scroll-offset", None) \
-    X(TreeView, "tree-view", "items selectedKey", Text) \
-    X(Table, "table", "items columns multiple row-height header-height selection-column selection-column-width scroll-offset sort-column sort-descending column-dividers tooltip", None)
+    X(TreeView, "tree-view", "items selectedKey tree-items selected-id row-height loading-text", Text) \
+    X(Table, "table", "items columns multiple row-height header-height selection-column selection-column-width scroll-offset sort-column sort-descending column-dividers tooltip", None) \
+    X(DataGrid, "data-grid", "grid-columns grid-rows row-count window-start frozen-columns row-height header-height row-numbers editable anchor-row anchor-column focus-row focus-column select-kind", None) \
+    X(CodeEditor, "code-editor", "language text text-revision read-only word-wrap line-numbers indent-guides tab-size insert-spaces font-size comment-prefix decorations decorations-revision completion-items completion-open", None)
 
 enum class Kind {
 #define ONEUI_KIND(name, tag, props, model) name,
@@ -149,10 +151,10 @@ constexpr ValueType propertyType(Kind kind,std::string_view key) {
     if(kind==Kind::Table && contains("header-height selection-column-width",key))return ValueType::Number;
     if(kind==Kind::FontPicker&&(key=="confirm-selection"||key=="monospace-only"))return ValueType::Boolean;
     if(kind==Kind::FontPicker&&key=="monospace-items")return ValueType::Rows;
-    if(contains("disabled visible selected checked open reduced-motion detail-open wrap closable themed second-collapsed collapsed closing ack-accepted motion active viewing-history can-close can-split can-maximize reorderable hideable loading password read-only chrome-visible raise-on-press activate-on-single-click",key))return ValueType::Boolean;
-    if(contains("selectedIndex revision ack-request close-request navigation-serial number max-lines",key))return ValueType::Integer;
-    if(contains("nodes groups drag-sources placements tokens spans",key))return ValueType::Rows;
-    if(contains("gap divider-hit motion-ms resize-idle-ms min-width min-height threshold dock-min-width dock-min-height float-min-width float-min-height minimum maximum step opacity",key))return ValueType::Number;
+    if(contains("completion-open word-wrap line-numbers indent-guides insert-spaces row-numbers editable disabled visible selected checked open reduced-motion detail-open wrap closable themed second-collapsed collapsed closing ack-accepted motion active viewing-history can-close can-split can-maximize reorderable hideable loading password read-only chrome-visible raise-on-press activate-on-single-click",key))return ValueType::Boolean;
+    if(contains("decorations-revision text-revision tab-size row-count window-start frozen-columns anchor-row anchor-column focus-row focus-column select-kind selectedIndex revision ack-request close-request navigation-serial number max-lines",key))return ValueType::Integer;
+    if(contains("decorations completion-items tree-items grid-columns grid-rows nodes groups drag-sources placements tokens spans",key))return ValueType::Rows;
+    if(contains("font-size gap divider-hit motion-ms resize-idle-ms min-width min-height threshold dock-min-width dock-min-height float-min-width float-min-height minimum maximum step opacity",key))return ValueType::Number;
     if(contains("content-height content-width wheel-step scroll-offset scrollbar-inset trailing-width trailing-gap row-height line-height minimum-width header-height horizontal-offset overlay-width overlay-height inset-left inset-right inset-top inset-bottom",key))return ValueType::Number;
     if(key=="overlay-visible")return ValueType::Boolean;
     if(kind==Kind::Tabs && key=="decorations")return ValueType::Rows;

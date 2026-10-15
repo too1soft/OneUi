@@ -1,5 +1,6 @@
 #include "oneui/controls/tree_view.h"
 
+#include <chrono>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -154,7 +155,152 @@ void testInvalidParentsAndDuplicateIdsRemainSafe() {
 
 } // namespace
 
+std::vector<oneui::TreeItem> largeTree(int groups, int leaves) {
+    std::vector<oneui::TreeItem> items;
+    for (int g = 0; g < groups; ++g) {
+        const auto group = L"g" + std::to_wstring(g);
+        items.push_back({group, L"", L"Group " + std::to_wstring(g), L"", true});
+        for (int l = 0; l < leaves; ++l)
+            items.push_back({group + L"." + std::to_wstring(l), group, L"Leaf " + std::to_wstring(l), L"", false});
+    }
+    return items;
+}
+
+void testInternalScrollingPaintsOnlyVisibleRows() {
+    oneui::TreeView tree;
+    tree.setInternalScrolling(true);
+    tree.setRowHeight(24.0f);
+    tree.setFrame(oneui::Rect{0.0f, 0.0f, 300.0f, 480.0f});
+    tree.setItems(largeTree(500, 99));
+    expectEqual("fifty thousand visible rows", tree.visibleItemCount(), 50000);
+    expectTrue("preferred height does not grow with content", tree.preferredSize().height < 1000.0f);
+    expectTrue("scroll range covers the content", tree.maxScrollOffset() == 24.0f * 50000 - 480.0f);
+    RecordingCanvas canvas;
+    tree.paint(canvas);
+    expectTrue("only visible rows are painted", canvas.texts.size() <= 30);
+    const auto start = std::chrono::steady_clock::now();
+    for (int frame = 0; frame < 200; ++frame) {
+        oneui::MouseWheelEvent wheel;
+        wheel.position = {100.0f, 100.0f};
+        wheel.deltaY = -1.0f;
+        tree.onMouseWheel(wheel);
+        RecordingCanvas frameCanvas;
+        tree.paint(frameCanvas);
+    }
+    const auto ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count() / 200.0;
+    std::cout << "tree view frame (50k visible nodes, recording canvas): " << ms << " ms\n";
+    expectTrue("frames stay cheap", ms < 4.0);
+    expectTrue("wheel scrolled", tree.scrollOffset() == 200.0f * 72.0f);
+    tree.setSelectedId(L"g400.5");
+    expectTrue("selection scrolls into view",
+               tree.scrollOffset() <= 24.0f * (400 * 100 + 6) && tree.scrollOffset() + 480.0f >= 24.0f * (400 * 100 + 6));
+    oneui::KeyEvent end;
+    end.key = oneui::Key::End;
+    tree.onKeyDown(end);
+    expectTrue("End selects the last row", tree.selectedId() == L"g499.98");
+    expectTrue("End scrolls to the bottom", tree.scrollOffset() == tree.maxScrollOffset());
+}
+
+void testLazyBranchesShowLoadingAndKeepState() {
+    oneui::TreeView tree;
+    tree.setInternalScrolling(true);
+    tree.setRetainExpansion(true);
+    tree.setFrame(oneui::Rect{0.0f, 0.0f, 300.0f, 200.0f});
+    std::vector<std::pair<std::wstring, bool>> expansions;
+    tree.setOnExpansionChanged([&](const std::wstring& id, bool expanded) { expansions.push_back({id, expanded}); });
+    oneui::TreeItem db{L"db", L"", L"shop", L"", false};
+    db.hasChildren = true;
+    oneui::TreeItem other{L"other", L"", L"other", L"", false};
+    tree.setItems({db, other});
+    tree.setSelectedId(L"db");
+    expectEqual("lazy branch starts collapsed", tree.visibleItemCount(), 2);
+    oneui::KeyEvent right;
+    right.key = oneui::Key::Right;
+    tree.onKeyDown(right);
+    expectTrue("expanding a lazy branch reports it", expansions.size() == 1 && expansions[0].first == L"db" && expansions[0].second);
+    expectEqual("no placeholder until loading", tree.visibleItemCount(), 2);
+    db.loading = true;
+    tree.setItems({db, other});
+    expectEqual("loading shows a placeholder row", tree.visibleItemCount(), 3);
+    RecordingCanvas canvas;
+    tree.paint(canvas);
+    bool placeholder = false;
+    for (const auto& text : canvas.texts) placeholder = placeholder || text == L"Loading...";
+    expectTrue("placeholder text is painted", placeholder);
+    oneui::KeyEvent down;
+    down.key = oneui::Key::Down;
+    tree.onKeyDown(down);
+    expectTrue("keyboard skips the placeholder", tree.selectedId() == L"other");
+    tree.setSelectedId(L"db");
+    // Children arrive while the supplied expanded flag is still false: the
+    // user's expansion and selection survive the refresh.
+    db.loading = false;
+    tree.setItems({db, {L"db.users", L"db", L"users", L"", false}, {L"db.orders", L"db", L"orders", L"", false}, other});
+    expectEqual("children replace the placeholder", tree.visibleItemCount(), 4);
+    expectTrue("selection survives the refresh", tree.selectedId() == L"db");
+    // A changed supplied value still wins.
+    db.expanded = true;
+    tree.setItems({db, {L"db.users", L"db", L"users", L"", false}, other});
+    db.expanded = false;
+    tree.setItems({db, {L"db.users", L"db", L"users", L"", false}, other});
+    expectEqual("collapsing from data wins", tree.visibleItemCount(), 2);
+}
+
+void testActivationContextAndDecorations() {
+    oneui::TreeView tree;
+    tree.setInternalScrolling(true);
+    tree.setFrame(oneui::Rect{0.0f, 0.0f, 300.0f, 200.0f});
+    oneui::TreeItem table{L"t", L"", L"customers", L"12 MB", false};
+    table.hasChildren = true;
+    table.icon = oneui::IconSymbol::Terminal;
+    table.badge = L"view";
+    table.classes = "muted strong";
+    table.highlightStart = 2;
+    table.highlightLength = 3;
+    tree.setItems({table, {L"u", L"", L"users", L"", false}});
+    std::vector<std::wstring> activated, menus;
+    oneui::Point menuAt{};
+    tree.setOnActivated([&](const std::wstring& id) { activated.push_back(id); });
+    tree.setOnContextMenu([&](const std::wstring& id, oneui::Point at) { menus.push_back(id); menuAt = at; });
+    oneui::MouseEvent twice;
+    twice.position = {150.0f, 16.0f};
+    twice.clickCount = 2;
+    tree.onMouseDown(twice);
+    tree.onMouseUp(twice);
+    expectTrue("double-click activates instead of toggling", activated.size() == 1 && activated[0] == L"t" && !tree.isExpanded(L"t"));
+    oneui::KeyEvent enter;
+    enter.key = oneui::Key::Enter;
+    tree.onKeyDown(enter);
+    expectEqual("Enter activates", activated.size(), 2);
+    oneui::KeyEvent space;
+    space.key = oneui::Key::Space;
+    tree.onKeyDown(space);
+    expectTrue("Space still toggles", tree.isExpanded(L"t"));
+    oneui::MouseEvent right;
+    right.position = {150.0f, 48.0f};
+    right.button = oneui::MouseButton::Right;
+    tree.onMouseDown(right);
+    expectTrue("right click selects and reports", menus.size() == 1 && menus[0] == L"u" && tree.selectedId() == L"u");
+    expectTrue("right click reports the pointer", menuAt.x == 150.0f && menuAt.y == 48.0f);
+    oneui::KeyEvent apps;
+    apps.key = oneui::Key::Other;
+    apps.virtualKey = 0x5d;
+    tree.onKeyDown(apps);
+    expectTrue("menu key reports below the row", menus.size() == 2 && menuAt.y == 64.0f);
+    RecordingCanvas canvas;
+    tree.paint(canvas);
+    bool badge = false, detail = false;
+    for (const auto& text : canvas.texts) {
+        badge = badge || text == L"view";
+        detail = detail || text == L"12 MB";
+    }
+    expectTrue("badge and detail are painted", badge && detail);
+}
+
 int main() {
+    testInternalScrollingPaintsOnlyVisibleRows();
+    testLazyBranchesShowLoadingAndKeepState();
+    testActivationContextAndDecorations();
     testVisibleHierarchyAndKeyboardNavigation();
     testPointerToggleAndSelectionCallbacks();
     testCollapsingTheSelectedChildReportsTheFallbackSelection();

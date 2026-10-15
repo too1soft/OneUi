@@ -28,6 +28,8 @@ struct Vm {
     std::map<uint32_t,std::vector<Vm*>> lists;
     std::map<uint32_t,int> infos,keys,leases;
     std::string scratch;
+    uint32_t lastCommand = 0;
+    std::vector<Value> lastArgs;
     int retains = 0, releases = 0, connects = 0, disconnects = 0, sets = 0, invokes = 0,
         acquires = 0;
     uint64_t revision = 1;
@@ -96,6 +98,10 @@ struct Vm {
             v.invokedCommand=command;v.invokedArgs.clear();
             for(size_t i=0;i<count;++i)v.invokedArgs.push_back(Value::copy(args[i]));
             ++v.invokes;
+            v.lastCommand = command;
+            v.lastArgs.clear();
+            for (size_t i = 0; i < count; ++i)
+                v.lastArgs.push_back(Value::copy(args[i]));
             if (v.onInvoke)
                 v.onInvoke();
             return 0;
