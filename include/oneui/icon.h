@@ -125,7 +125,11 @@ enum class IconSymbol {
     OutlineWorkbenchPlus,
     OutlineWorkbenchDown,
     OutlineWorkbenchClose,
-    OutlineWorkbenchBroadcast
+    OutlineWorkbenchBroadcast,
+    // Editing commands; appended so earlier values stay stable.
+    OutlineUndo,
+    OutlineRedo,
+    OutlineSave
 };
 
 enum class IconPrimitiveKind {

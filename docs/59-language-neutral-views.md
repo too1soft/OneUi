@@ -995,6 +995,14 @@ UTF-8 ABI 45 新增 `oneui_text_measure_width_utf8`，Rust 对应
 Button 支持绑定 `class` 和 `trailing-text`；Text 支持 CSS `font-family`，
 重新设为 `inherit` 时移除先前的字体覆盖。C++ 与 IR 共用相同实现。
 
+Text 另支持 CSS 盒模型：`padding`、`background-color`、`border-color`、`border-width`、
+`border-radius`（`Label::setPadding` / `setBoxStyle`）。内边距计入 `naturalSize` 和换行测量，
+文字在内边距内排版；背景和边框绘制在整个 frame。未设置时不绘制任何矩形，尺寸与旧版一致。
+用于状态栏分段、徽标等无需额外 Surface 包裹的文字。
+
+图标名称新增 `undo`、`redo`、`save`（`IconSymbol::OutlineUndo/OutlineRedo/OutlineSave`，
+追加在枚举末尾，Rust 值 116–118；C API 的图标范围上限随之扩大，旧值不变）。
+
 UTF-8 ABI 45 的 `oneui_view_element_metrics` / Rust `View::element_metrics` 按唯一名称
 返回已提交布局的几何信息，以及 Scroll、TemplateTable 的滚动偏移。查询不会 flush 或调用 VM，
 不暴露控件句柄。名称歧义返回 INVALID_ARGUMENT，缺失返回 NOT_FOUND，关闭后返回 CLOSED。

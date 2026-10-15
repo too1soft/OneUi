@@ -17,6 +17,7 @@ inline std::optional<IconSymbol> namedIcon(std::string_view name) {
         {"refresh",IconSymbol::OutlineRefresh},{"sun",IconSymbol::OutlineSun},
         {"copy",IconSymbol::OutlineCopy},{"copy-native",IconSymbol::Copy},{"pause",IconSymbol::Pause},
         {"up",IconSymbol::OutlineWorkbenchUp},{"link",IconSymbol::OutlineWorkbenchLink},{"broadcast",IconSymbol::OutlineWorkbenchBroadcast},
+        {"undo",IconSymbol::OutlineUndo},{"redo",IconSymbol::OutlineRedo},{"save",IconSymbol::OutlineSave},
         {"download",IconSymbol::OutlineWorkbenchDownload},{"settings",IconSymbol::OutlineWorkbenchSettings},
         {"key-dots",IconSymbol::KeyDots},{"check-circle",IconSymbol::CheckCircle},
         {"notebook",IconSymbol::Notebook},{"trash",IconSymbol::Trash},

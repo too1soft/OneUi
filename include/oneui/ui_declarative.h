@@ -171,6 +171,9 @@ private:
         if (auto v = std::dynamic_pointer_cast<Label>(w)) {
             v->setFontFamily(box.fontFamily.value_or(std::wstring{}));
             v->setColor(box.foreground.value_or(Color{30,40,35,255})); v->setFontSize(box.fontSize.value_or(14)); v->setFontWeight(box.fontWeight.value_or(400));
+            v->setPadding(box.padding.value_or(Insets{}));
+            v->setBoxStyle(box.background.color.value_or(Color{0,0,0,0}), box.borderColor.value_or(Color{0,0,0,0}),
+                           box.borderWidth.value_or(box.borderColor ? 1.0f : 0.0f), box.radius.value_or(0.0f));
         } else if (auto v = std::dynamic_pointer_cast<Stack>(w)) {
             v->setStyleBox(box); v->setGap(box.gap.value_or(0)); v->setPadding(box.padding.value_or(Insets{}));
             if(box.flexDirection)v->setDirection(*box.flexDirection=="row"?StackDirection::Row:StackDirection::Column);

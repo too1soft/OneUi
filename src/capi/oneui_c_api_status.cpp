@@ -131,7 +131,7 @@ void oneui_status_strip_set_primary_action_trailing_icon(OneUiWidget* status_str
             nativeStatusStrip->setPrimaryActionTrailingIcon(std::nullopt);
         } else {
             nativeStatusStrip->setPrimaryActionTrailingIcon(static_cast<oneui::IconSymbol>(
-                std::clamp(symbol, 0, static_cast<int>(oneui::IconSymbol::OutlineWorkbenchBroadcast))));
+                std::clamp(symbol, 0, static_cast<int>(oneui::IconSymbol::OutlineSave))));
         }
     }
 }

@@ -41,7 +41,7 @@ oneui::ButtonStyleOverride toButtonOverride(const OneUiButtonStyle& style) {
 } // namespace
 
 void oneui_button_set_trailing_icon(OneUiWidget* button, int symbol) {
-    if(auto* value=asWidget<oneui::Button>(button)) value->setTrailingIcon(static_cast<oneui::IconSymbol>(std::clamp(symbol,0,static_cast<int>(oneui::IconSymbol::OutlineWorkbenchBroadcast))));
+    if(auto* value=asWidget<oneui::Button>(button)) value->setTrailingIcon(static_cast<oneui::IconSymbol>(std::clamp(symbol,0,static_cast<int>(oneui::IconSymbol::OutlineSave))));
 }
 
 OneUiWidget* oneui_button_create(const wchar_t* text) {

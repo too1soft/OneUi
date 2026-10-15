@@ -19,7 +19,7 @@ using namespace oneui::capi;
 namespace oneui::capi {
 
 int clampIconSymbol(int symbol) {
-    return std::clamp(symbol, 0, static_cast<int>(oneui::IconSymbol::OutlineWorkbenchBroadcast));
+    return std::clamp(symbol, 0, static_cast<int>(oneui::IconSymbol::OutlineSave));
 }
 
 void copyUtf8Field(const std::string& value, char* buffer, std::size_t bufferLength) {

@@ -832,6 +832,33 @@ bool paintOutlineIcon(Canvas& canvas, IconSymbol symbol, Rect rect, Color color)
         path.moveTo(p(7,9));path.lineTo(p(10,12));path.lineTo(p(7,15));
         path.moveTo(p(13,15));path.lineTo(p(17,15));
         canvas.strokePath(path,color,stroke,true); return true; }
+    case IconSymbol::OutlineUndo: {
+        // Arrow back to the left, then a half turn down to the baseline.
+        CanvasPath path;
+        path.moveTo(p(9,14));path.lineTo(p(4,9));path.lineTo(p(9,4));
+        path.moveTo(p(4,9));path.lineTo(p(14.5f,9));
+        path.cubicTo(p(17.5377f,9),p(20,11.4623f),p(20,14.5f));
+        path.cubicTo(p(20,17.5377f),p(17.5377f,20),p(14.5f,20));
+        path.lineTo(p(11,20));
+        canvas.strokePath(path,color,stroke,true); return true; }
+    case IconSymbol::OutlineRedo: {
+        CanvasPath path;
+        path.moveTo(p(15,14));path.lineTo(p(20,9));path.lineTo(p(15,4));
+        path.moveTo(p(20,9));path.lineTo(p(9.5f,9));
+        path.cubicTo(p(6.4623f,9),p(4,11.4623f),p(4,14.5f));
+        path.cubicTo(p(4,17.5377f),p(6.4623f,20),p(9.5f,20));
+        path.lineTo(p(13,20));
+        canvas.strokePath(path,color,stroke,true); return true; }
+    case IconSymbol::OutlineSave: {
+        // Floppy outline: body with a clipped corner, label and shutter.
+        CanvasPath path;
+        path.moveTo(p(5,3));path.lineTo(p(15,3));path.lineTo(p(21,9));path.lineTo(p(21,19));
+        path.cubicTo(p(21,20.1f),p(20.1f,21),p(19,21));path.lineTo(p(5,21));
+        path.cubicTo(p(3.9f,21),p(3,20.1f),p(3,19));path.lineTo(p(3,5));
+        path.cubicTo(p(3,3.9f),p(3.9f,3),p(5,3));path.close();
+        path.moveTo(p(17,21));path.lineTo(p(17,14));path.lineTo(p(7,14));path.lineTo(p(7,21));
+        path.moveTo(p(7,3));path.lineTo(p(7,8));path.lineTo(p(15,8));
+        canvas.strokePath(path,color,stroke,true); return true; }
     #include "workbench_outline_icons.inc"
     default: return false;
     }

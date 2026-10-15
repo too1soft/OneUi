@@ -70,7 +70,7 @@ static std::vector<oneui::TableCell> copyRichTableRow(const OneUiTableRichRowUtf
         const auto& source = row.cells[i]; oneui::TableCell cell;
         cell.text = utf8OrEmpty(source.text); cell.detail = utf8OrEmpty(source.detail); cell.badge = utf8OrEmpty(source.badge);
         cell.alignment = source.alignment == 2 ? oneui::TextAlign::Right : source.alignment == 1 ? oneui::TextAlign::Center : oneui::TextAlign::Left;
-        if (source.icon >= 0 && source.icon <= static_cast<int>(oneui::IconSymbol::OutlineWorkbenchBroadcast)) cell.leadingIcon = static_cast<oneui::IconSymbol>(source.icon);
+        if (source.icon >= 0 && source.icon <= static_cast<int>(oneui::IconSymbol::OutlineSave)) cell.leadingIcon = static_cast<oneui::IconSymbol>(source.icon);
         if (source.foreground.a) cell.foreground = toNativeColor(source.foreground);
         if (source.badge_color_flags & 1u) cell.badgeForeground = toNativeColor(source.badge_foreground);
         if (source.badge_color_flags & 2u) cell.badgeBackground = toNativeColor(source.badge_background);

@@ -118,6 +118,9 @@ pub enum IconSymbol {
     OutlineWorkbenchDown = 113,
     OutlineWorkbenchClose = 114,
     OutlineWorkbenchBroadcast = 115,
+    OutlineUndo = 116,
+    OutlineRedo = 117,
+    OutlineSave = 118,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

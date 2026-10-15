@@ -49,6 +49,7 @@
 #include "oneui/layout/title_bar_bridge.h"
 #include "oneui/layout/wrap.h"
 #include "oneui/controls/label.h"
+#include "oneui/ui_template_support.h"
 #include "oneui/controls/log_view.h"
 #include "oneui/animation.h"
 #include "oneui/icon.h"
@@ -8613,6 +8614,34 @@ void testLabelStatusIndicatorFollowsContentAndReservesSpace() {
     expectEqual("No negative-width text draw", static_cast<int>(narrow.textBlocks.size()), 0);
 }
 
+void testLabelBoxPaddingBackgroundAndBorder() {
+    // Declarative Text accepts a CSS box like other components.
+    oneui::ui::syntax::css("Text.badge {padding:2px 8px;background-color:#123456;border-color:#abcdef;border-width:1px;border-radius:4px;}");
+    oneui::Label label(L"UTF-8");
+    const auto text = label.naturalTextSize();
+    expectNear("Plain label natural width is its text", label.naturalSize().width, text.width);
+    label.setPadding({2, 8, 2, 8});
+    expectNear("Padding adds to natural width", label.naturalSize().width, text.width + 16);
+    expectNear("Padding adds to natural height", label.naturalSize().height, text.height + 4);
+    expectNear("Single-line measure includes padding", label.measure({500, 100}).width, text.width + 16);
+    label.setBoxStyle({18, 52, 86}, {171, 205, 239}, 1, 4);
+    label.setFrame({10, 20, 100, 24});
+    RecordingCanvas canvas;
+    label.paint(canvas);
+    expectEqual("Box background painted once", static_cast<int>(canvas.fillRects.size()), 1);
+    expectNear("Background covers the frame", canvas.fillRects.front().rect.width, 100);
+    expectEqual("Border painted once", static_cast<int>(canvas.strokeRects.size()), 1);
+    expectNear("Text starts after left padding", canvas.textBlocks.front().rect.x, 18);
+    expectNear("Text width excludes horizontal padding", canvas.textBlocks.front().rect.width, 84);
+    label.setTextWrapping(true);
+    expectNear("Wrapped measure keeps padding inside available width", label.measure({60, 100}).width <= 60 ? 1 : 0, 1);
+    oneui::Label plain(L"x");
+    plain.setFrame({0, 0, 40, 20});
+    RecordingCanvas none;
+    plain.paint(none);
+    expectEqual("Labels without a box paint no rectangles", static_cast<int>(none.fillRects.size() + none.strokeRects.size()), 0);
+}
+
 void testWindowTitleBarAdvancesAccessoryThemeTransition() {
     oneui::WindowTitleBar titleBar(L"Theme transition");
     titleBar.setFrame(oneui::Rect{0, 0, 900, 38});
@@ -9476,6 +9505,7 @@ int main() {
     testWindowTitleBarPaintsAndDispatchesChromeActions();
     testWindowTitleBarAdvancesAccessoryThemeTransition();
     testLabelStatusIndicatorFollowsContentAndReservesSpace();
+    testLabelBoxPaddingBackgroundAndBorder();
     testWindowTitleBarAccessoryReceivesLayoutAndPointerInput();
     testNavItemPaintsSelectionAndDispatchesClick();
     testNavItemSupportsExplicitSelectionIndicatorColor();
