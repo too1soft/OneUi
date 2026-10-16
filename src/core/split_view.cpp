@@ -212,7 +212,9 @@ bool SplitView::onMouseDown(const MouseEvent& event) {
     if (!interactive()) return false;
     if (event.button == MouseButton::Left && hasResizableDivider()
         && dividerHitRect().contains(event.position)) {
-        focusChild(divider_.get(), false);
+        // Pointer resizing leaves keyboard focus where it was: a terminal or
+        // text field in either pane keeps its arrow keys. Tab still reaches
+        // the divider for keyboard resizing.
         if (event.clickCount == 2) {
             const auto life = lifetimeToken();
             updateSplitRatio(0.5f, true);

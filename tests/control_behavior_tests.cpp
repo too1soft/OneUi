@@ -8538,6 +8538,12 @@ void testSplitViewKeyboardCancellationAndDoubleClick() {
     root.paint(canvas);
     root.onMouseDown({{100, 200}});
     root.onMouseUp({{100, 200}});
+    expectEqual("Pointer press on the divider keeps pane focus", second->focused(), true);
+    root.onKeyDown(oneui::KeyEvent{oneui::Key::Down});
+    expectNear("Pane arrows after a divider press cannot resize", split->splitRatio(), 0.5f);
+    oneui::KeyEvent back{oneui::Key::Tab};
+    back.shift = true;
+    root.onKeyDown(back);
     root.onKeyDown(oneui::KeyEvent{oneui::Key::Down});
     expectNear("Vertical divider down increases first pane", split->splitRatio(), 0.525f);
     root.onKeyDown(oneui::KeyEvent{oneui::Key::Right});
