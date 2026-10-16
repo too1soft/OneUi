@@ -138,6 +138,8 @@ private:
     std::vector<double> revealFrom_;
     double revealStartMs_ = -1.0;
     float paintedShiftPx_ = 0.0f;
+    double paintedEaseStep_ = -1.0;
+    bool easePending_ = false;
     bool dashedGrid_ = true;
     bool axesVisible_ = true;
     float lineWidth_ = 2.25f;

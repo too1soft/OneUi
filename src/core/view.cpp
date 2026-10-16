@@ -76,14 +76,14 @@ const std::vector<std::shared_ptr<Widget>>& View::children() const {
 void View::setInvalidator(std::function<void()> invalidator) {
     Widget::setInvalidator(std::move(invalidator));
     for (const auto& child : children_) {
-        child->attachInvalidatorToOwner(this, [this] { invalidate(); });
+        child->refreshInvalidatorFromOwner(this, [this] { invalidate(); });
     }
 }
 
 void View::setRectInvalidator(std::function<void(Rect)> invalidator) {
     Widget::setRectInvalidator(std::move(invalidator));
     for (const auto& child : children_) {
-        child->attachRectInvalidatorToOwner(
+        child->refreshRectInvalidatorFromOwner(
             this,
             [this](Rect rect) { invalidateRect(rect); });
     }
@@ -92,7 +92,7 @@ void View::setRectInvalidator(std::function<void(Rect)> invalidator) {
 void View::setAnimationScheduler(std::function<void()> scheduler) {
     Widget::setAnimationScheduler(std::move(scheduler));
     for (const auto& child : children_) {
-        child->attachAnimationSchedulerToOwner(
+        child->refreshAnimationSchedulerFromOwner(
             this,
             [this] { requestAnimationFrame(); });
     }

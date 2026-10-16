@@ -29,6 +29,7 @@
             animationTimerActive_ = false;
         }
         animationFramePending_ = false;
+        deferredAnimationFrameMs_ = 0.0;
 
         std::queue<std::function<void(double)>> callbacks;
         {
@@ -62,16 +63,18 @@
         }
     }
 
-    bool armAnimationFrameTimer() {
+    // Arms the frame timer for the next display refresh, or for `notBeforeMs`
+    // when that is later.
+    bool armAnimationFrameTimer(double notBeforeMs = 0.0) {
         if (!animationFrameTimer_) {
             return false;
         }
 
         const double nowMs = currentTimeMs();
         const double refreshIntervalMs = animationFrameIntervalMs();
-        const double scheduledMs = lastAnimationFrameMs_ > 0.0
+        const double scheduledMs = std::max(notBeforeMs, lastAnimationFrameMs_ > 0.0
             ? lastAnimationFrameMs_ + refreshIntervalMs
-            : nowMs;
+            : nowMs);
         const double delayMs = std::max(0.5, scheduledMs - nowMs);
         LARGE_INTEGER dueTime{};
         dueTime.QuadPart = -std::max<LONGLONG>(
@@ -146,24 +149,71 @@
         flushPendingPaint();
     }
 
+    // Brings a sleeping content wake forward to the next display refresh.
+    void expediteDeferredAnimationFrame() {
+        if (!animationFramePending_ || deferredAnimationFrameMs_ <= 0.0) {
+            return;
+        }
+        deferredAnimationFrameMs_ = 0.0;
+        if (!armAnimationFrameTimer() && hwnd_) {
+            animationTimerActive_ = SetTimer(hwnd_, kOneUiAnimationTimer, kOneUiAnimationFrameIntervalMs, nullptr) != 0;
+        }
+    }
+
     void scheduleContentAnimationFrame() {
+        if (contentAnimationFramePending_) {
+            expediteDeferredAnimationFrame();
+            return;
+        }
+        contentAnimationFramePending_ = true;
+        requestAnimationFrame([this](double nowMs) { runContentAnimationFrame(nowMs); });
+    }
+
+    // Ticks content again at `dueMs` rather than the next refresh, for widgets
+    // that asked to sleep (internal::requestAnimationWakeAt). Any frame request
+    // made meanwhile brings the frame forward.
+    void scheduleContentAnimationWake(double dueMs) {
         if (contentAnimationFramePending_) {
             return;
         }
         contentAnimationFramePending_ = true;
-        requestAnimationFrame([this](double nowMs) {
-            contentAnimationFramePending_ = false;
-            if (!content_ || !content_->visible()) {
-                return;
-            }
+        {
+            std::lock_guard<std::mutex> lock(animationCallbacksMutex_);
+            animationCallbacks_.push([this](double nowMs) { runContentAnimationFrame(nowMs); });
+        }
+        if (animationFramePending_) {
+            return;
+        }
+        animationFramePending_ = true;
+        deferredAnimationFrameMs_ = dueMs;
+        if (armAnimationFrameTimer(dueMs)) {
+            return;
+        }
+        const double delayMs = std::max(0.0, dueMs - currentTimeMs());
+        const UINT timerMs = std::max<UINT>(kOneUiAnimationFrameIntervalMs, static_cast<UINT>(std::ceil(delayMs)));
+        if (SetTimer(hwnd_, kOneUiAnimationTimer, timerMs, nullptr)) {
+            animationTimerActive_ = true;
+        } else {
+            animationFramePending_ = false;
+            deferredAnimationFrameMs_ = 0.0;
+        }
+    }
 
-            const double workspaceUpdateStarted = internal::workspaceFrameProbe ? currentTimeMs() : 0;
-            const bool stillAnimating = content_->tickAnimations(nowMs);
-            if (workspaceUpdateStarted) internal::workspaceUpdateMs += currentTimeMs() - workspaceUpdateStarted;
-            if (stillAnimating) {
-                scheduleContentAnimationFrame();
-            }
-        });
+    void runContentAnimationFrame(double nowMs) {
+        contentAnimationFramePending_ = false;
+        if (!content_ || !content_->visible()) {
+            return;
+        }
+
+        const double workspaceUpdateStarted = internal::workspaceFrameProbe ? currentTimeMs() : 0;
+        internal::AnimationWakeScope wake;
+        const bool stillAnimating = content_->tickAnimations(nowMs);
+        if (workspaceUpdateStarted) internal::workspaceUpdateMs += currentTimeMs() - workspaceUpdateStarted;
+        if (stillAnimating) {
+            scheduleContentAnimationFrame();
+        } else if (wake.dueMs() > 0.0) {
+            scheduleContentAnimationWake(wake.dueMs());
+        }
     }
 
     RECT invalidationRectFor(Rect rect) const {

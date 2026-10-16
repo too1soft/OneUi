@@ -207,7 +207,7 @@ void FormField::clearStyleOverride() {
 void FormField::setInvalidator(std::function<void()> invalidator) {
     Widget::setInvalidator(std::move(invalidator));
     if (child_) {
-        child_->attachInvalidatorToOwner(this, [this] {
+        child_->refreshInvalidatorFromOwner(this, [this] {
             updatePreferredSize();
             invalidate();
         });
@@ -218,7 +218,7 @@ void FormField::setInvalidator(std::function<void()> invalidator) {
 void FormField::setRectInvalidator(std::function<void(Rect)> invalidator) {
     Widget::setRectInvalidator(std::move(invalidator));
     if (child_) {
-        child_->attachRectInvalidatorToOwner(
+        child_->refreshRectInvalidatorFromOwner(
             this,
             [this](Rect rect) { invalidateRect(rect); });
     }
@@ -228,7 +228,7 @@ void FormField::setRectInvalidator(std::function<void(Rect)> invalidator) {
 void FormField::setAnimationScheduler(std::function<void()> scheduler) {
     Widget::setAnimationScheduler(std::move(scheduler));
     if (child_) {
-        child_->attachAnimationSchedulerToOwner(
+        child_->refreshAnimationSchedulerFromOwner(
             this,
             [this] { requestAnimationFrame(); });
     }

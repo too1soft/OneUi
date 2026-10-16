@@ -1,7 +1,10 @@
 #include "oneui/controls/time_series_chart.h"
 
+#include <algorithm>
 #include <cmath>
+#include <vector>
 #include "support/recording_canvas.h"
+#include "../src/internal/animation_wake.h"
 #include "../src/internal/ui_clock.h"
 #include <iostream>
 #include <limits>
@@ -201,5 +204,64 @@ int main() {
     expectTrue("range change settles", std::abs(easeEnd.fillEllipses.back().rect.y + 2.0f - 90.0f) < 0.01f);
     chart.setScrollRate(0.0);
     expectTrue("a static chart stops animating", !chart.tickAnimations(clock + 5000.0));
+
+    // Live charts repaint on a shared clock well below the display rate, so a
+    // high-refresh display does not repaint the window every frame.
+    clock = 20000.0;
+    oneui::TimeSeriesChart wide;
+    oneui::TimeSeriesChart narrow;
+    wide.setFrame(oneui::Rect{0.0f, 0.0f, 340.0f, 80.0f});
+    narrow.setFrame(oneui::Rect{0.0f, 0.0f, 120.0f, 40.0f});
+    std::vector<double> repaints;
+    for (auto* live : {&wide, &narrow}) {
+        live->setInvalidator([&] { repaints.push_back(clock); });
+        live->setRectInvalidator([&](oneui::Rect) { repaints.push_back(clock); });
+        live->setRange(0.0, 100.0);
+        live->setScrollRate(1.0 / 60.0);
+        live->setSeries({{L"live", oneui::Color{40, 50, 60, 255}, {10, 20}}});
+    }
+    const auto runFrames = [&](double untilMs) {
+        repaints.clear();
+        while (clock < untilMs) {
+            clock += 1000.0 / 180.0;
+            for (auto* live : {&wide, &narrow}) {
+                if (live->tickAnimations(clock)) {
+                    oneui::test_support::RecordingCanvas frame;
+                    live->paint(frame);
+                }
+            }
+        }
+    };
+    const auto distinctFrames = [&] {
+        std::vector<double> frames = repaints;
+        frames.erase(std::unique(frames.begin(), frames.end()), frames.end());
+        return static_cast<int>(frames.size());
+    };
+    runFrames(20500.0);
+    runFrames(21500.0);
+    expectTrue("a slide repaints at most 8 times a second", distinctFrames() <= 8);
+    expectTrue("a slide still moves", distinctFrames() >= 4);
+    for (auto* live : {&wide, &narrow}) live->setSeries({{L"live", oneui::Color{40, 50, 60, 255}, {10, 20, 90}}});
+    runFrames(22000.0);
+    expectTrue("an eased update repaints at most 32 times a second", distinctFrames() <= 17);
+    expectTrue("charts fed together repaint in the same frames",
+        repaints.size() >= 2 * static_cast<std::size_t>(distinctFrames()) - 4);
+
+    // When its window can wake it later, a live chart sleeps between steps
+    // instead of ticking every display refresh.
+    {
+        oneui::internal::AnimationWakeScope wake;
+        expectTrue("a live chart sleeps when its window can wake it", !wide.tickAnimations(clock));
+        expectTrue("it wakes for its next slide step",
+            wake.dueMs() > clock && wake.dueMs() <= clock + 250.0 &&
+            std::abs(std::fmod(wake.dueMs(), 125.0)) < 0.001);
+    }
+    {
+        for (auto* live : {&wide, &narrow}) live->setSeries({{L"live", oneui::Color{40, 50, 60, 255}, {10, 20, 90, 40}}});
+        oneui::internal::AnimationWakeScope wake;
+        expectTrue("an easing chart sleeps too", !wide.tickAnimations(clock + 1.0));
+        expectTrue("it wakes for its next ease step", wake.dueMs() > clock + 1.0 && wake.dueMs() <= clock + 1.0 + 1000.0 / 32.0);
+    }
+    expectTrue("without a wake scope the chart keeps requesting frames", wide.tickAnimations(clock + 2.0));
     return failures == 0 ? 0 : 1;
 }

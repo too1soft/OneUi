@@ -158,20 +158,20 @@ const std::vector<OverlayEntry> &OverlayHost::overlays() const { return overlays
 void OverlayHost::setInvalidator(std::function<void()> invalidator) {
     View::setInvalidator(std::move(invalidator));
     if (content_) {
-        content_->attachInvalidatorToOwner(this, [this] { invalidate(); });
+        content_->refreshInvalidatorFromOwner(this, [this] { invalidate(); });
     }
     for (const auto &entry : overlays_) {
-        entry.child->attachInvalidatorToOwner(this, [this] { invalidate(); });
+        entry.child->refreshInvalidatorFromOwner(this, [this] { invalidate(); });
     }
 }
 
 void OverlayHost::setRectInvalidator(std::function<void(Rect)> invalidator) {
     View::setRectInvalidator(std::move(invalidator));
     if (content_) {
-        content_->attachRectInvalidatorToOwner(this, [this](Rect rect) { invalidateRect(rect); });
+        content_->refreshRectInvalidatorFromOwner(this, [this](Rect rect) { invalidateRect(rect); });
     }
     for (const auto &entry : overlays_) {
-        entry.child->attachRectInvalidatorToOwner(this,
+        entry.child->refreshRectInvalidatorFromOwner(this,
                                                   [this](Rect rect) { invalidateRect(rect); });
     }
 }
@@ -179,10 +179,10 @@ void OverlayHost::setRectInvalidator(std::function<void(Rect)> invalidator) {
 void OverlayHost::setAnimationScheduler(std::function<void()> scheduler) {
     View::setAnimationScheduler(std::move(scheduler));
     if (content_) {
-        content_->attachAnimationSchedulerToOwner(this, [this] { requestAnimationFrame(); });
+        content_->refreshAnimationSchedulerFromOwner(this, [this] { requestAnimationFrame(); });
     }
     for (const auto &entry : overlays_) {
-        entry.child->attachAnimationSchedulerToOwner(this, [this] { requestAnimationFrame(); });
+        entry.child->refreshAnimationSchedulerFromOwner(this, [this] { requestAnimationFrame(); });
     }
 }
 

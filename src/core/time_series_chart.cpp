@@ -1,4 +1,5 @@
 #include "oneui/controls/time_series_chart.h"
+#include "internal/animation_wake.h"
 #include "internal/ui_clock.h"
 
 #include <algorithm>
@@ -14,9 +15,19 @@ namespace {
 constexpr double liveTransitionMs = 450.0;
 // A live chart that stops receiving data stops sliding after this long.
 constexpr double liveMaximumScrollSeconds = 12.0;
+// Live charts repaint on steps of one UI clock shared by every chart, so charts
+// fed together repaint in the same frame, and well below the display rate: a
+// slide moves a few pixels a second and an eased update needs no more than
+// 32 fps. Each repaint presents the whole window, so this bounds idle cost.
+// Ease steps divide slide steps, so a slide never adds frames to an ease.
+constexpr double liveSlideStepMs = 125.0;
+constexpr double liveEaseStepMs = liveSlideStepMs / 4.0;
 double easeOut(double t) {
     t = std::clamp(t, 0.0, 1.0);
     return 1.0 - (1.0 - t) * (1.0 - t) * (1.0 - t);
+}
+double clockStep(double nowMs, double stepMs) {
+    return std::floor(nowMs / stepMs);
 }
 }
 
@@ -83,6 +94,8 @@ double TimeSeriesChart::scrollRate() const {
 
 double TimeSeriesChart::liveShift(double nowMs) const {
     if (scrollRate_ <= 0.0) return 0.0;
+    // The slide advances only on shared clock steps (see liveSlideStepMs).
+    nowMs = clockStep(nowMs, liveSlideStepMs) * liveSlideStepMs;
     return scrollRate_ * std::clamp((nowMs - dataTimeMs_) / 1000.0, 0.0, liveMaximumScrollSeconds);
 }
 
@@ -104,10 +117,34 @@ bool TimeSeriesChart::tickAnimations(double nowMs) {
     const bool easing = (rangeStartMs_ >= 0.0 && nowMs - rangeStartMs_ < liveTransitionMs) ||
         (revealStartMs_ >= 0.0 && nowMs - revealStartMs_ < liveTransitionMs);
     const bool sliding = scrollRate_ > 0.0 && nowMs - dataTimeMs_ < liveMaximumScrollSeconds * 1000.0;
-    if (!easing && !sliding) return false;
-    // Slow slides repaint only once they have moved by half a pixel.
-    const float shift = static_cast<float>(liveShift(nowMs)) * plotRect().width;
-    if (easing || std::abs(shift - paintedShiftPx_) >= 0.5f) invalidate();
+    // An ease repaints once per ease step, and once more when it ends so the
+    // final value is shown. Slow slides repaint only once they have moved by
+    // half a pixel.
+    const double easeStep = clockStep(nowMs, liveEaseStepMs);
+    const bool easeRepaint = easing ? easeStep != paintedEaseStep_ : easePending_;
+    easePending_ = easing;
+    if (!easing && !sliding) {
+        if (easeRepaint) invalidate();
+        return false;
+    }
+    const float width = plotRect().width;
+    const float shift = static_cast<float>(liveShift(nowMs)) * width;
+    const bool repaint = easeRepaint || std::abs(shift - paintedShiftPx_) >= 0.5f;
+    if (repaint) invalidate();
+
+    // Nothing changes before the next ease step or the slide step that moves
+    // the picture by another half pixel; sleep until then when the window can.
+    double wakeMs = std::numeric_limits<double>::infinity();
+    if (easing) wakeMs = (easeStep + 1.0) * liveEaseStepMs;
+    if (sliding) {
+        const double pixelsPerMs = scrollRate_ * width / 1000.0;
+        const double from = repaint ? shift : paintedShiftPx_;
+        double slideMs = pixelsPerMs > 0.0 ? dataTimeMs_ + (from + 0.5) / pixelsPerMs : nowMs;
+        slideMs = std::ceil(slideMs / liveSlideStepMs) * liveSlideStepMs;
+        if (slideMs <= nowMs) slideMs = (clockStep(nowMs, liveSlideStepMs) + 1.0) * liveSlideStepMs;
+        wakeMs = std::min(wakeMs, std::min(slideMs, dataTimeMs_ + liveMaximumScrollSeconds * 1000.0));
+    }
+    if (internal::requestAnimationWakeAt(wakeMs)) return false;
     requestAnimationFrame();
     return true;
 }
@@ -416,6 +453,7 @@ void TimeSeriesChart::paint(Canvas& canvas) {
     const double nowMs = internal::uiTimeMs();
     const float shift = static_cast<float>(liveShift(nowMs));
     paintedShiftPx_ = shift * rect.width;
+    paintedEaseStep_ = clockStep(nowMs, liveEaseStepMs);
     const double shownMaximum = displayedMaximum(nowMs);
     const double span = std::max(0.000001, shownMaximum - minimum_);
     for (const auto& threshold : thresholds_) {

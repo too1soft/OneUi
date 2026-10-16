@@ -198,6 +198,30 @@ void Widget::attachAnimationSchedulerToOwner(
     animationSchedulerOwner_ = owner;
 }
 
+void Widget::refreshInvalidatorFromOwner(
+    const void* owner,
+    std::function<void()> invalidator) {
+    if (invalidatorOwner_ == owner) {
+        attachInvalidatorToOwner(owner, std::move(invalidator));
+    }
+}
+
+void Widget::refreshRectInvalidatorFromOwner(
+    const void* owner,
+    std::function<void(Rect)> invalidator) {
+    if (rectInvalidatorOwner_ == owner) {
+        attachRectInvalidatorToOwner(owner, std::move(invalidator));
+    }
+}
+
+void Widget::refreshAnimationSchedulerFromOwner(
+    const void* owner,
+    std::function<void()> scheduler) {
+    if (animationSchedulerOwner_ == owner) {
+        attachAnimationSchedulerToOwner(owner, std::move(scheduler));
+    }
+}
+
 void Widget::detachFromOwner(const void* owner) {
     if (invalidatorOwner_ == owner) {
         setInvalidator({});

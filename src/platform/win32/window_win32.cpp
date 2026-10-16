@@ -17,6 +17,7 @@
 #include "oneui/view.h"
 #include "oneui/controls/window_title_bar.h"
 #include "internal/scroll_trace.h"
+#include "internal/animation_wake.h"
 #include "platform/shared/skia_canvas.h"
 #include "platform/shared/title_bar_hit.h"
 #include "platform/win32/compat_win32.h"
@@ -208,6 +209,8 @@ public:
     bool mouseLeaveTracking_ = false;
     bool animationTimerActive_ = false;
     bool animationFramePending_ = false;
+    // Set while the pending frame is a content wake armed later than the next refresh.
+    double deferredAnimationFrameMs_ = 0.0;
     double lastAnimationFrameMs_ = 0.0;
     HMONITOR animationFrameMonitor_ = nullptr;
     double animationFrameIntervalMs_ = 1000.0 / 60.0;

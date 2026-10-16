@@ -171,6 +171,8 @@
             animationCallbacks_.push(std::move(callback));
         }
         if (animationFramePending_) {
+            // A sleeping content wake must not delay this frame.
+            expediteDeferredAnimationFrame();
             return;
         }
 
