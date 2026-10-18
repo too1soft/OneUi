@@ -6,6 +6,8 @@
 namespace oneui::internal {
 // UI-thread-local injection for deterministic tests; production uses monotonic time.
 inline thread_local std::function<double()> uiClock;
+// Opt-in capture control, independent of elapsed animation time.
+inline thread_local bool freezeCarets = false;
 inline double uiTimeMs() {
     if (uiClock) return uiClock();
     return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count();

@@ -14,7 +14,9 @@ MediaPicker::MediaPicker():preview_(std::make_shared<MediaPreview>()),choose_(st
 }
 void MediaPicker::styleScopeChanged() {
     View::styleScopeChanged();auto sheet=styleScope();if(!sheet)return;
-    for(auto button:{choose_,clear_,cancel_})if(button)applyPickerButton(*button,*sheet);
+    choose_->setStyleOverride(buttonStyleOverrideFromStyleSheet(*sheet,{"button",{"one-Button","media-picker-choose"},0}));
+    clear_->setStyleOverride(buttonStyleOverrideFromStyleSheet(*sheet,{"button",{"one-Button","media-picker-clear"},0}));
+    cancel_->setStyleOverride(buttonStyleOverrideFromStyleSheet(*sheet,{"button",{"one-Button","media-picker-cancel"},0}));
     if(label_)label_->setColor(pickerColors(*sheet).foreground.value_or(Color{28,43,35}));
 }
 void MediaPicker::setConfig(MediaPickerConfig value) {
@@ -27,6 +29,9 @@ void MediaPicker::setConfig(MediaPickerConfig value) {
     choose_->setDisabled(config_.loading);clear_->setDisabled(config_.loading||config_.asset.empty());cancel_->setVisible(config_.loading);
     layoutChildren();invalidate();
 }
+void MediaPicker::setChooseLabel(std::wstring label) {choose_->setText(label.empty()?L"Choose image":std::move(label));choose_->setIcon(IconSymbol::File);}
+void MediaPicker::setClearLabel(std::wstring label) {clear_->setText(label.empty()?L"Clear":std::move(label));clear_->setIcon(IconSymbol::Trash);}
+void MediaPicker::setCancelLabel(std::wstring label) {cancel_->setText(label.empty()?L"Cancel":std::move(label));}
 void MediaPicker::setSlot(std::string name,std::shared_ptr<Widget> child) {
     if(name!="empty"&&name!="preview"&&name!="error")throw std::invalid_argument("Invalid media picker slot");
     slots_[std::move(name)]=std::move(child);
@@ -34,6 +39,14 @@ void MediaPicker::setSlot(std::string name,std::shared_ptr<Widget> child) {
     for(auto& item:slots_)children.push_back(item.second);reconcileChildren(std::move(children));layoutChildren();
 }
 void MediaPicker::layoutChildren() {
+    if(frame().height<=40) {
+        auto r=frame();preview_->setLayoutVisible(false);label_->setLayoutVisible(false);
+        for(auto& item:slots_)item.second->setLayoutVisible(false);
+        auto action=std::min(86.f,r.width/3);auto primary=std::max(0.f,r.width-action-6);
+        choose_->setFrame({r.x,r.y,primary,r.height});clear_->setFrame({r.x+primary+6,r.y,action,r.height});
+        cancel_->setFrame(clear_->frame());clear_->setLayoutVisible(!config_.loading);return;
+    }
+    label_->setLayoutVisible(true);clear_->setLayoutVisible(true);
     auto r=frame();Rect preview{r.x,r.y,r.width,std::max(0.f,r.height-70)};
     preview_->setFrame(preview);bool custom=false;
     for(auto& [key,w]:slots_) {

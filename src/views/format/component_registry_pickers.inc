@@ -16,6 +16,15 @@ P("FontPicker", 13, "loading", 1, 3, "")
 P("FontPicker", 14, "error", 4, 3, "")
 P("FontPicker", 15, "preview-text", 4, 3, "")
 P("FontPicker", 16, "size", 3, 3, "")
+P("FontPicker", 17, "trigger-label", 4, 3, "")
+P("FontPicker", 18, "confirm-selection", 1, 3, "")
+P("FontPicker", 19, "monospace-only", 1, 3, "")
+P("FontPicker", 20, "monospace-items", 5, 2, "oneui.v1.StringItem")
+P("FontPicker", 21, "apply-label", 4, 3, "")
+P("FontPicker", 22, "cancel-label", 4, 3, "")
+P("FontPicker", 23, "filter-label", 4, 3, "")
+P("FontPicker", 24, "search-label", 4, 3, "")
+P("FontPicker", 25, "retry-label", 4, 3, "")
 
 C("MediaPicker", "many", 0)
 P("MediaPicker", 1, "basis", 3, 1, "")
@@ -33,6 +42,10 @@ P("MediaPicker", 12, "label", 4, 3, "")
 P("MediaPicker", 13, "loading", 1, 3, "")
 P("MediaPicker", 14, "error", 4, 3, "")
 P("MediaPicker", 15, "accept", 4, 1, "")
+
+P("MediaPicker", 16, "choose-label", 4, 3, "")
+P("MediaPicker", 17, "clear-label", 4, 3, "")
+P("MediaPicker", 18, "cancel-label", 4, 3, "")
 
 C("MediaPreview", "many", 0)
 P("MediaPreview", 1, "basis", 3, 1, "")
@@ -108,3 +121,23 @@ r.at("FontPicker").events={{1,"selectionRequested",{{"key",4}}},{2,"retryRequest
 r.at("MediaPicker").events={{1,"chooseRequested",{}},{2,"clearRequested",{}},{3,"cancelRequested",{}}};
 r.at("MediaPreview").events={{1,"loadFailed",{{"source",4},{"code",4},{"message",4}}}};
 r.at("Slider").events={{1,"interaction",{{"phase",2},{"value",3}}}};
+
+C("InteractiveSurface", "one", 0)
+P("InteractiveSurface", 1, "basis", 3, 1, "")
+P("InteractiveSurface", 2, "class", 4, 3, "")
+P("InteractiveSurface", 3, "description", 4, 3, "")
+P("InteractiveSurface", 4, "disabled", 1, 3, "")
+P("InteractiveSurface", 5, "grow", 3, 1, "")
+P("InteractiveSurface", 6, "max", 3, 1, "")
+P("InteractiveSurface", 7, "min", 3, 1, "")
+P("InteractiveSurface", 8, "name", 4, 3, "")
+P("InteractiveSurface", 9, "shrink", 3, 1, "")
+P("InteractiveSurface", 10, "visible", 1, 3, "")
+
+E("InteractiveSurface", 1, "click", 0)
+r.at("InteractiveSurface").events.push_back({2,"pointer",{{"x",3},{"y",3},{"control",1},{"shift",1},{"click_count",2}}});
+r.at("InteractiveSurface").events.push_back({3,"contextMenu",{{"x",3},{"y",3}}});
+++r.at("InteractiveSurface").version;
+
+r.at("InteractiveSurface").events.push_back({4,"drag",{{"phase",2},{"origin_x",3},{"origin_y",3},{"x",3},{"y",3},{"alt",1},{"control",1},{"shift",1}}});
+++r.at("InteractiveSurface").version;

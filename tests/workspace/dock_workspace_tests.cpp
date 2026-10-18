@@ -1,5 +1,8 @@
 #include "oneui/layout/dock_workspace_view.h"
 #include "oneui/controls/drag_handle.h"
+#include "oneui/layout/stack.h"
+#include "oneui/style_sheet.h"
+#include "oneui/animation.h"
 #include "internal/ui_clock.h"
 #include "../support/recording_canvas.h"
 #include <iostream>
@@ -15,6 +18,7 @@ struct Fixture {
     std::shared_ptr<DockWorkspaceView> dock=std::make_shared<DockWorkspaceView>();
     std::vector<std::shared_ptr<DockItemView>> items;
     DockWorkspaceSnapshot state;
+    DockWorkspacePresentation presentation;
     std::vector<DockIntent> events;
     test_support::RecordingCanvas canvas;
     Fixture() {
@@ -33,7 +37,7 @@ struct Fixture {
                      {"root","","left","right",DockAxis::Horizontal,.699f}};
         state.root="root";state.revision=1;publish();dock->setOnIntent([this](auto e){events.push_back(e);});
     }
-    void publish(){dock->setSnapshot(state,items);dock->paint(canvas);}
+    void publish(){dock->setSnapshot(state,items,presentation);dock->paint(canvas);}
     void floating() {
         state.nodes.erase(state.nodes.begin()+3); // ai
         state.nodes.erase(state.nodes.begin()+4); // right
@@ -43,8 +47,32 @@ struct Fixture {
     Point title(size_t i){auto r=items[i]->frame();return {r.x+50,r.y+14};}
     void begin(size_t i){auto p=title(i);root.onMouseDown({p});root.onMouseMove({{p.x+7,p.y}});}
 };
+#include "dock_header_geometry.inc"
+void presentationTransaction() {
+    Fixture f;
+    auto presentation=f.presentation;
+    presentation.previewKeepText="next caption";presentation.raiseOnPress=false;
+    auto bad=f.state;bad.placements.front().mode="invalid";
+    bool rejected=false;
+    try {f.dock->prepare(bad,f.items,presentation);}catch(const std::invalid_argument&){rejected=true;}
+    check(rejected&&f.dock->presentation().raiseOnPress&&
+          f.dock->presentation().previewKeepText==f.presentation.previewKeepText,
+          "failed snapshot preparation preserves all presentation configuration");
+    auto commit=f.dock->prepare(f.state,f.items,presentation);
+    check(f.dock->presentation().raiseOnPress,"prepared configuration remains unpublished until commit");
+    commit();
+    check(!f.dock->presentation().raiseOnPress&&f.dock->presentation().previewKeepText=="next caption",
+          "snapshot and presentation commit together");
+    f.dock->setSnapshot(f.state,f.items);
+    check(!f.dock->presentation().raiseOnPress,"old snapshot API preserves independent presentation");
+}
 void geometry() {
     Fixture f;auto a=f.items[0]->frame(),b=f.items[1]->frame(),c=f.items[2]->frame();
+    auto sheet=std::make_shared<StyleSheet>();std::string cssError;
+    check(sheet->addRulesFromCss("dock-workspace-part.dock-workspace-divider {background:#112233;}",&cssError),"divider part stylesheet");
+    f.dock->setStyleScope(sheet);test_support::RecordingCanvas themed;f.dock->paint(themed);
+    check(!themed.fillRects.empty()&&themed.fillRects[0].color.r==0x11&&themed.fillRects[0].color.g==0x22,
+          "dock divider consumes application theme rather than fixed material");
     check(near(a.width,992*.699f)&&near(c.width,992*(1-.699f)),"minimum clamps .699 without growing viewport");
     check(near(a.height,(700-8)*.53f)&&near(b.y,(a.y+a.height)+8),"vertical ratio/gap");
     auto address=f.items[3].get();f.floating();check(f.items[3].get()==address,"floating preserves object");
@@ -71,6 +99,34 @@ void drag() {
     f.begin(0);f.root.clearInteractionState();f.root.onMouseUp({drop});check(f.events.size()==count,"capture loss no commit");
     f.begin(0);KeyEvent esc;esc.key=Key::Escape;f.root.onKeyDown(esc);f.root.onMouseUp({drop});check(f.events.size()==count,"escape no commit");
     f.state.compactActive="terminal";f.publish();f.begin(0);f.root.onMouseUp(up);check(f.events.size()==count,"compact docked cannot drag");
+}
+void dropPolicy() {
+    using P=DockWorkspacePresentation;
+    {   // Outside-guides: releasing over empty space floats without a modifier.
+        Fixture f;f.presentation.floatOnDrop=P::FloatOnDrop::OutsideGuides;f.presentation.guideOnlyDocking=true;f.publish();
+        f.begin(1);auto r=f.items[0]->frame();Point open{r.x+r.width*.5f,r.y+r.height*.5f+90};
+        f.root.onMouseMove({open});check(f.dock->willFloat(),"outside-guides floats by default");
+        f.root.onMouseUp({open});check(!f.events.empty()&&f.events.back().kind==DockIntentKind::Float,"outside-guides drop floats");
+    }
+    {   // Explicit guides still dock under outside-guides.
+        Fixture f;f.presentation.floatOnDrop=P::FloatOnDrop::OutsideGuides;f.publish();
+        f.begin(0);auto r=f.items[2]->frame();Point edge{(r.x+r.width)-2,r.y+80};
+        f.root.onMouseUp({edge});check(!f.events.empty()&&f.events.back().kind==DockIntentKind::Dock,"nearest docking keeps working");
+    }
+    {   // Shift as the configured modifier; Alt no longer floats.
+        Fixture f;f.presentation.floatModifier=P::FloatModifier::Shift;f.publish();
+        auto r=f.items[2]->frame();Point drop{(r.x+r.width)-2,r.y+80};
+        f.begin(0);MouseEvent alt{drop};alt.alt=true;f.root.onMouseUp(alt);
+        check(f.events.back().kind==DockIntentKind::Dock,"Alt is not the configured modifier");
+        f.state.ackRequest=f.events.back().request;f.state.ackAccepted=false;++f.state.revision;f.publish();
+        f.begin(0);MouseEvent shift{drop};shift.shift=true;f.root.onMouseUp(shift);
+        check(f.events.back().kind==DockIntentKind::Float,"Shift floats when configured");
+    }
+    {   // Never: no modifier floats a docked pane by drag.
+        Fixture f;f.presentation.floatOnDrop=P::FloatOnDrop::Never;f.publish();
+        auto count=f.events.size();f.begin(1);auto r=f.items[0]->frame();MouseEvent up{{r.x+r.width*.5f,r.y+r.height*.5f}};up.alt=true;
+        f.root.onMouseUp(up);check(f.events.size()==count||f.events.back().kind!=DockIntentKind::Float,"never does not float");
+    }
 }
 void floatingResize() {
     Fixture f;f.floating();f.begin(3);auto target=f.items[0]->frame();Point center{target.x+target.width*.5f,target.y+target.height*.5f};
@@ -103,5 +159,81 @@ void dividerAndActions() {
     f.dock->requestAction(DockIntentKind::Redock,"sftp");check(f.events.back().kind==DockIntentKind::Redock,"redock intent");
     auto title=f.title(0);MouseEvent dbl{title};dbl.clickCount=2;f.root.onMouseDown(dbl);check(f.events.back().kind==DockIntentKind::Maximize,"title doubleclick maximize intent");
 }
+bool painted(const test_support::RecordingCanvas& c,Color color,const Rect* rect=nullptr) {
+    for(const auto& call:c.fillRects)
+        if(call.color.r==color.r&&call.color.g==color.g&&call.color.b==color.b&&
+           (!rect||(near(call.rect.x,rect->x)&&near(call.rect.y,rect->y)&&near(call.rect.width,rect->width)&&near(call.rect.height,rect->height))))return true;
+    return false;
 }
-int main(){try{internal::ScopedUiClock clock(clockNow);geometry();drag();floatingResize();dividerAndActions();std::cout<<"dock workspace: 4 scenario groups passed\n";}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}
+void scopedPartsAndFloatingSurface() {
+    Fixture f;f.floating();
+    auto sheet=std::make_shared<StyleSheet>();std::string error;
+    // viewc appends the template scope class to every scoped selector.
+    check(sheet->addRulesFromCss(
+        "dock-workspace-part.dock-workspace-caption.one-s-t {background:#102030;color:#e0e0e0;}"
+        "dock-workspace-part.dock-workspace-guide.one-s-t {background:#334455;color:#aabbcc;}"
+        "dock-workspace-part.dock-workspace-guide.one-s-t:selected {background:#00aa55;}"
+        "dock-workspace-part.dock-workspace-float.one-s-t {background:#202428;border-color:#445566;border-width:1px;border-radius:10px;}",&error),
+        "dock part CSS parses");
+    f.dock->setStyleSheet(sheet,StyleNode{"dock-workspace",{"one-DockWorkspace","one-s-t"},0});f.publish();
+    test_support::RecordingCanvas idle;f.dock->paint(idle);
+    const auto floating=f.items[3]->frame(),docked=f.items[0]->frame();
+    check(painted(idle,{0x20,0x24,0x28},&floating),"floating item paints the scoped dock-workspace-float surface");
+    check(!painted(idle,{0x20,0x24,0x28},&docked),"docked items paint no floating surface");
+    check(near(f.items[3]->body.lock()->frame().x,floating.x+1),"floating content sits inside the surface border");
+    f.begin(0);auto target=f.items[2]->frame();f.root.onMouseMove({{target.x+target.width-2,target.y+80}});
+    check(f.dock->previewRect().has_value(),"dragging onto a docked target shows a preview");
+    test_support::RecordingCanvas dragging;f.dock->paint(dragging);
+    check(painted(dragging,{0x10,0x20,0x30}),"scoped caption rule styles the drag caption");
+    check(painted(dragging,{0x33,0x44,0x55}),"scoped guide rule styles idle compass guides");
+    KeyEvent esc;esc.key=Key::Escape;f.root.onKeyDown(esc);
+}
+void transactionalPointerAndPreview() {
+    Fixture f;f.floating();f.presentation.raiseOnPress=false;f.publish();
+    const auto before=f.state.placements[3];auto p=f.title(3);
+    f.root.onMouseDown({p});f.root.onMouseMove({{p.x+20,p.y+20}});
+    KeyEvent esc;esc.key=Key::Escape;f.root.onKeyDown(esc);
+    check(f.events.empty()&&!f.dock->interactionActive()&&!f.dock->previewRect(),"transactional drag Escape sends no mutation including Raise");
+    auto r=f.items[3]->frame();Point corner{r.x+r.width-1,r.y+r.height-1};
+    f.root.onMouseDown({corner});f.root.onMouseMove({{corner.x-50,corner.y-50}});
+    f.root.onKeyDown(esc);f.root.onMouseUp({corner});
+    check(f.events.empty()&&near(f.items[3]->frame().width,before.bounds.width)&&f.dock->snapshot().placements[3].order==before.order,"resize Escape preserves saved geometry and order");
+    f.dock->requestAction(DockIntentKind::Raise,"ai");
+    check(f.events.size()==1&&f.events.back().kind==DockIntentKind::Raise,"explicit Raise remains available with raise-on-press disabled");
+    f.state.placements[3].order=42;++f.state.revision;f.state.ackRequest=f.events.back().request;f.publish();
+    check(f.dock->snapshot().placements[3].order==42&&f.dock->children().back()==f.items[3],"accepted explicit Raise updates paint order");
+    f.state.nodes={{"t","terminal"},{"s","sftp"},{"root","","t","s",DockAxis::Vertical,.5f}};f.state.root="root";
+    f.state.placements[2]={"monitor","floating",before.bounds,true,2};++f.state.revision;f.publish();
+    auto count=f.events.size();f.root.onMouseDown({corner});f.root.onMouseUp({{corner.x-10,corner.y-10}});
+    check(f.events.size()==count+1&&f.events.back().source=="monitor","pinned overlapping tool consumes the edge; lower AI never receives it");
+}
+void previewMotion() {
+    auto setup=[](Fixture& f) {
+        now=0;f.dock->setMotionEnabled(true);f.begin(0);
+        auto r=f.items[2]->frame();f.root.onMouseMove({{r.x+r.width-2,r.y+80}});
+        return Rect{r.x+r.width*.5f,r.y,r.width*.5f,r.height};
+    };
+    Fixture f;auto from=f.items[0]->frame(),target=setup(f);
+    now=16;f.dock->tickAnimations(now);auto mid=*f.dock->previewRect();
+    check(mid.x>from.x&&mid.x<target.x,"preview advances without overshoot");
+    auto origin=f.title(0);f.root.onMouseMove({{origin.x,origin.y}});
+    now=32;f.dock->tickAnimations(now);auto reverse=*f.dock->previewRect();
+    check(reverse.x>from.x&&reverse.x<mid.x,"preview retargets from current display");
+    auto r=f.items[2]->frame();f.root.onMouseMove({{r.x+r.width-2,r.y+80}});
+    for(int i=0;i<31;++i){now+=16;f.dock->tickAnimations(now);}
+    auto settled=*f.dock->previewRect();
+    check(settled.x==target.x&&settled.y==target.y&&settled.width==target.width&&settled.height==target.height,"old preview contract settles exactly in thirty frames");
+    Fixture sample;setup(sample);now=8;sample.dock->tickAnimations(now);now=16;sample.dock->tickAnimations(now);
+    check(std::abs(sample.dock->previewRect()->x-mid.x)<.001f,"two 8ms steps equal one 16ms step");
+    f.root.onMouseMove({{origin.x,origin.y}});f.dock->setMotionEnabled(false);
+    check(f.dock->previewRect()->x==from.x,"reduced motion snaps immediately");
+    f.presentation.previewKeepText="Custom keep and cancel";f.publish();
+    test_support::RecordingCanvas painted;f.dock->paint(painted);
+    check(!painted.texts.empty()&&painted.texts.back().text==L"Custom keep and cancel","localized caption is actually painted");
+    f.root.onMouseUp({{origin.x,origin.y}});check(!f.dock->previewRect(),"release clears feedback immediately");
+    Fixture reduced;auto reducedTarget=setup(reduced);setPlatformMotionEnabled(false);reduced.dock->tickAnimations(now);
+    check(reduced.dock->previewRect()->x==reducedTarget.x,"system reduced-motion preference snaps an active preview");
+    setPlatformMotionEnabled(true);
+}
+}
+int main(){try{internal::ScopedUiClock clock(clockNow);geometry();drag();dropPolicy();floatingResize();dividerAndActions();transactionalPointerAndPreview();previewMotion();presentationTransaction();headerGeometry();scopedPartsAndFloatingSurface();std::cout<<"dock workspace: 10 scenario groups passed\n";}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

@@ -4,6 +4,7 @@
 #include "reorder_internal.h"
 
 #include <algorithm>
+#include <cstdint>
 #include <utility>
 
 namespace oneui {
@@ -93,6 +94,24 @@ void applyTreeViewStateOverride(TreeViewStyle& style, const TreeViewStateStyleOv
     }
 }
 
+bool hasClass(const std::string& classes, const char* token) {
+    const std::string needle(token);
+    std::size_t at = 0;
+    while (at < classes.size()) {
+        const auto end = classes.find(' ', at);
+        const auto length = (end == std::string::npos ? classes.size() : end) - at;
+        if (classes.compare(at, length, needle) == 0) return true;
+        if (end == std::string::npos) break;
+        at = end + 1;
+    }
+    return false;
+}
+
+Color alpha(Color color, std::uint8_t a) {
+    color.a = a;
+    return color;
+}
+
 TreeViewStyle baseTreeViewStyle(bool selected, bool disabled, bool hovered, bool pressed) {
     const auto& t = theme();
     TreeViewStyle style;
@@ -145,6 +164,7 @@ void TreeView::setItems(std::vector<TreeItem> items) {
     pressedToggle_ = false;
     clearExternalDropTarget();
     resetReorderState();
+    clampScroll();
     ensureSelectionVisible();
     updatePreferredHeight();
     invalidate();
@@ -164,7 +184,7 @@ bool TreeView::isExpanded(const std::wstring& id) const {
 
 void TreeView::setExpanded(std::wstring id, bool expanded) {
     const auto found = idToIndex_.find(id);
-    if (found == idToIndex_.end() || !hasChildren(found->second)) {
+    if (found == idToIndex_.end() || !expandable(found->second)) {
         return;
     }
 
@@ -177,6 +197,8 @@ void TreeView::setExpanded(std::wstring id, bool expanded) {
     } else {
         expandedIds_.erase(id);
     }
+    visibleDirty_ = true;
+    clampScroll();
     ensureSelectionVisible();
     updatePreferredHeight();
     if (onExpansionChanged_) {
@@ -221,8 +243,78 @@ void TreeView::setOnReorderRequested(
     onReorderRequested_ = std::move(callback);
 }
 
+void TreeView::setInternalScrolling(bool enabled) {
+    if (internalScrolling_ == enabled) return;
+    internalScrolling_ = enabled;
+    scrollOffset_ = 0.0f;
+    updatePreferredHeight();
+    invalidate();
+}
+
+bool TreeView::internalScrolling() const { return internalScrolling_; }
+
+void TreeView::setScrollOffset(float offset) {
+    const float next = std::clamp(offset, 0.0f, maxScrollOffset());
+    if (next == scrollOffset_) return;
+    scrollOffset_ = next;
+    hoveredIndex_ = -1;
+    invalidate();
+}
+
+float TreeView::scrollOffset() const { return scrollOffset_; }
+
+float TreeView::maxScrollOffset() const {
+    if (!internalScrolling_) return 0.0f;
+    return std::max(0.0f, rowHeight() * static_cast<float>(visibleItems().size()) - frame().height);
+}
+
+void TreeView::scrollToId(const std::wstring& id) {
+    if (!internalScrolling_) return;
+    const int index = visibleIndexForId(id, visibleItems());
+    if (index < 0) return;
+    const float top = rowHeight() * static_cast<float>(index);
+    if (top < scrollOffset_) setScrollOffset(top);
+    else if (top + rowHeight() > scrollOffset_ + frame().height) setScrollOffset(top + rowHeight() - frame().height);
+}
+
+void TreeView::setRowHeight(float height) {
+    height = std::clamp(height, 16.0f, 96.0f);
+    if (height == rowHeight_) return;
+    rowHeight_ = height;
+    clampScroll();
+    updatePreferredHeight();
+    invalidate();
+}
+
+void TreeView::setRetainExpansion(bool retain) {
+    retainExpansion_ = retain;
+}
+
+void TreeView::setLoadingText(std::wstring text) {
+    loadingText_ = std::move(text);
+    invalidate();
+}
+
+void TreeView::setOnActivated(std::function<void(const std::wstring&)> callback) {
+    onActivated_ = std::move(callback);
+}
+
+void TreeView::setOnContextMenu(std::function<void(const std::wstring&, Point)> callback) {
+    onContextMenu_ = std::move(callback);
+}
+
+bool TreeView::onMouseWheel(const MouseWheelEvent& event) {
+    if (!interactive() || !contains(event.position) || maxScrollOffset() <= 0.0f) return false;
+    setScrollOffset(scrollOffset_ - event.deltaY * rowHeight() * 3.0f);
+    return true;
+}
+
+void TreeView::clampScroll() {
+    scrollOffset_ = std::clamp(scrollOffset_, 0.0f, maxScrollOffset());
+}
+
 void TreeView::updateExternalDropTarget(Point point) {
-    const auto visible = visibleItems();
+    const auto& visible = visibleItems();
     const int next = hitItemIndex(point, visible);
     const std::wstring nextId = next >= 0
         ? items_[visible[static_cast<std::size_t>(next)].index].id
@@ -259,7 +351,7 @@ float TreeView::contentHeight() const {
 void TreeView::paint(Canvas& canvas) {
     const Rect rect = frame();
     const TreeViewStyle containerStyle = resolvedContainerStyle();
-    const auto visible = visibleItems();
+    const auto& visible = visibleItems();
 
     if (focusVisible() && !disabled() && containerStyle.focusRing.visible) {
         const float offset = containerStyle.focusRing.offset;
@@ -272,62 +364,19 @@ void TreeView::paint(Canvas& canvas) {
     canvas.fillRect(rect, containerStyle.background, containerStyle.radius);
     canvas.strokeRect(rect, containerStyle.border, containerStyle.radius, containerStyle.borderWidth);
 
-    for (int visibleIndex = 0; visibleIndex < static_cast<int>(visible.size()); ++visibleIndex) {
-        const auto& visibleItem = visible[static_cast<std::size_t>(visibleIndex)];
-        const auto& item = items_[visibleItem.index];
-        const bool selected = item.id == selectedId_;
-        const bool hovered = visibleIndex == hoveredIndex_
-            || visibleIndex == externalDropTargetIndex_;
-        const TreeViewStyle itemStyle = resolvedItemStyle(selected, hovered, visibleIndex == pressedIndex_);
-        const Rect row = itemRect(visibleIndex);
-        if (row.y >= rect.y + rect.height) {
+    canvas.save();
+    canvas.clipRect(rect);
+    // Only rows intersecting the frame are painted, so large trees cost the
+    // same per frame as small ones.
+    const int first = std::max(0, static_cast<int>(scrollOffset_ / rowHeight()));
+    for (int visibleIndex = first; visibleIndex < static_cast<int>(visible.size()); ++visibleIndex) {
+        if (itemRect(visibleIndex).y >= rect.y + rect.height) {
             break;
         }
-        if (itemStyle.rowBackground.a > 0) {
-            canvas.fillRect(row.inset(itemStyle.rowInset), itemStyle.rowBackground, itemStyle.rowRadius);
-        }
-
-        const float indent = static_cast<float>(visibleItem.depth) * toggleWidth();
-        const float toggleLeft = row.x + itemStyle.textInset + indent;
-        const Rect toggleRect{toggleLeft, row.y, toggleWidth(), row.height};
-        const bool expandable = hasChildren(visibleItem.index);
-        if (expandable) {
-            canvas.drawTextStyled(
-                isExpanded(item.id) ? L"v" : L">",
-                toggleRect,
-                itemStyle.detailColor,
-                itemStyle.detailFontSize,
-                TextAlign::Center,
-                itemStyle.detailFontWeight);
-        }
-
-        const float textLeft = toggleLeft + toggleWidth();
-        const float detailWidth = item.detail.empty()
-            ? 0.0f
-            : canvas.measureTextWidth(
-                item.detail,
-                itemStyle.detailFontSize,
-                itemStyle.detailFontWeight) + 8.0f;
-        const float textWidth = std::max(0.0f, row.x + row.width - itemStyle.textInset - textLeft - detailWidth);
-        canvas.drawTextStyledEllipsized(
-            item.title,
-            Rect{textLeft, row.y, textWidth, row.height},
-            itemStyle.titleColor,
-            itemStyle.titleFontSize,
-            TextAlign::Left,
-            itemStyle.titleFontWeight);
-        if (!item.detail.empty()) {
-            canvas.drawTextStyledEllipsized(
-                item.detail,
-                Rect{row.x + row.width - itemStyle.textInset - detailWidth, row.y, detailWidth, row.height},
-                itemStyle.detailColor,
-                itemStyle.detailFontSize,
-                TextAlign::Right,
-                itemStyle.detailFontWeight);
-        }
+        paintItem(canvas, visible[static_cast<std::size_t>(visibleIndex)], visibleIndex);
     }
     if (reordering_ && reorderInsertionIndex_ >= 0) {
-        const float rawY = rect.y + static_cast<float>(reorderInsertionIndex_) * rowHeight();
+        const float rawY = rect.y + static_cast<float>(reorderInsertionIndex_) * rowHeight() - scrollOffset_;
         const float indicatorY = std::clamp(rawY, rect.y + 1.0f, rect.y + rect.height - 1.0f);
         const float indicatorInset = std::max(4.0f, containerStyle.textInset);
         canvas.drawLine(
@@ -336,13 +385,102 @@ void TreeView::paint(Canvas& canvas) {
             containerStyle.focusRing.color,
             std::max(2.0f, containerStyle.focusRing.width));
     }
+    canvas.restore();
+}
+
+void TreeView::paintItem(Canvas& canvas, const VisibleItem& visibleItem, int visibleIndex) {
+    const auto& item = items_[visibleItem.index];
+    const Rect row = itemRect(visibleIndex);
+    if (visibleItem.placeholder) {
+        const TreeViewStyle style = resolvedItemStyle(false, false, false);
+        const float left = row.x + style.textInset + static_cast<float>(visibleItem.depth + 1) * toggleWidth();
+        canvas.drawTextStyledEllipsized(loadingText_, Rect{left, row.y, std::max(0.0f, row.x + row.width - left), row.height},
+                                        style.detailColor, style.detailFontSize, TextAlign::Left, style.detailFontWeight);
+        return;
+    }
+    const bool selected = item.id == selectedId_;
+    const bool hovered = visibleIndex == hoveredIndex_
+        || visibleIndex == externalDropTargetIndex_;
+    TreeViewStyle itemStyle = resolvedItemStyle(selected, hovered, visibleIndex == pressedIndex_);
+    const auto& t = theme();
+    if (!selected && !item.classes.empty()) {
+        if (hasClass(item.classes, "muted")) itemStyle.titleColor = t.textSubtle;
+        if (hasClass(item.classes, "error")) itemStyle.titleColor = t.formField.errorColor;
+        if (hasClass(item.classes, "warning")) itemStyle.titleColor = t.warning;
+        if (hasClass(item.classes, "accent")) itemStyle.titleColor = t.primary;
+    }
+    if (hasClass(item.classes, "strong")) itemStyle.titleFontWeight = 600;
+    if (itemStyle.rowBackground.a > 0) {
+        canvas.fillRect(row.inset(itemStyle.rowInset), itemStyle.rowBackground, itemStyle.rowRadius);
+    }
+
+    const float indent = static_cast<float>(visibleItem.depth) * toggleWidth();
+    const float toggleLeft = row.x + itemStyle.textInset + indent;
+    const Rect toggleRect{toggleLeft, row.y, toggleWidth(), row.height};
+    if (expandable(visibleItem.index)) {
+        canvas.drawTextStyled(
+            isExpanded(item.id) ? L"v" : L">",
+            toggleRect,
+            itemStyle.detailColor,
+            itemStyle.detailFontSize,
+            TextAlign::Center,
+            itemStyle.detailFontWeight);
+    }
+
+    float textLeft = toggleLeft + toggleWidth();
+    if (item.icon) {
+        const float size = std::min(16.0f, row.height - 8.0f);
+        paintIcon(canvas, *item.icon, Rect{textLeft, row.y + (row.height - size) * 0.5f, size, size}, itemStyle.detailColor,
+                  t.primary);
+        textLeft += size + 6.0f;
+    }
+    float right = row.x + row.width - itemStyle.textInset;
+    if (!item.detail.empty()) {
+        const float detailWidth = canvas.measureTextWidth(item.detail, itemStyle.detailFontSize, itemStyle.detailFontWeight) + 8.0f;
+        canvas.drawTextStyledEllipsized(
+            item.detail,
+            Rect{right - detailWidth, row.y, detailWidth, row.height},
+            itemStyle.detailColor,
+            itemStyle.detailFontSize,
+            TextAlign::Right,
+            itemStyle.detailFontWeight);
+        right -= detailWidth;
+    }
+    if (!item.badge.empty()) {
+        const float badgeWidth = canvas.measureTextWidth(item.badge, itemStyle.detailFontSize, 500) + 12.0f;
+        const float badgeHeight = std::min(18.0f, row.height - 8.0f);
+        const Rect badge{right - badgeWidth, row.y + (row.height - badgeHeight) * 0.5f, badgeWidth, badgeHeight};
+        canvas.fillRect(badge, t.surfaceMuted, badgeHeight * 0.5f);
+        canvas.drawTextStyled(item.badge, badge, itemStyle.detailColor, itemStyle.detailFontSize, TextAlign::Center, 500);
+        right -= badgeWidth + 6.0f;
+    }
+    const float textWidth = std::max(0.0f, right - textLeft);
+    if (item.highlightLength > 0 && item.highlightStart < item.title.size()) {
+        const auto start = item.highlightStart;
+        const auto length = std::min(item.highlightLength, item.title.size() - start);
+        const float before = canvas.measureTextWidth(item.title.substr(0, start), itemStyle.titleFontSize, itemStyle.titleFontWeight);
+        const float width = canvas.measureTextWidth(item.title.substr(start, length), itemStyle.titleFontSize, itemStyle.titleFontWeight);
+        const float x = textLeft + before;
+        if (x < textLeft + textWidth) {
+            const float height = itemStyle.titleFontSize + 6.0f;
+            canvas.fillRect(Rect{x - 1.0f, row.y + (row.height - height) * 0.5f, std::min(width + 2.0f, textLeft + textWidth - x + 1.0f), height},
+                            alpha(t.warning, 70), 3.0f);
+        }
+    }
+    canvas.drawTextStyledEllipsized(
+        item.title,
+        Rect{textLeft, row.y, textWidth, row.height},
+        itemStyle.titleColor,
+        itemStyle.titleFontSize,
+        TextAlign::Left,
+        itemStyle.titleFontWeight);
 }
 
 bool TreeView::onMouseMove(const MouseEvent& event) {
     if (!interactive()) {
         return false;
     }
-    const auto visible = visibleItems();
+    const auto& visible = visibleItems();
     if (reorderEnabled_ && reorderSourceIndex_ >= 0 && !pressedToggle_) {
         if (!reordering_ && detail::exceedsReorderDragThreshold(
                 event.position.x - reorderStartPoint_.x,
@@ -366,16 +504,41 @@ bool TreeView::onMouseMove(const MouseEvent& event) {
 }
 
 bool TreeView::onMouseDown(const MouseEvent& event) {
-    if (!interactive() || event.button != MouseButton::Left) {
+    if (!interactive()) {
+        return false;
+    }
+    if (event.button == MouseButton::Right) {
+        const auto& visible = visibleItems();
+        const int index = hitItemIndex(event.position, visible);
+        if (index < 0 || visible[static_cast<std::size_t>(index)].placeholder || !onContextMenu_) {
+            return false;
+        }
+        assignSelectedId(items_[visible[static_cast<std::size_t>(index)].index].id);
+        onContextMenu_(selectedId_, event.position);
+        return true;
+    }
+    if (event.button != MouseButton::Left) {
         return false;
     }
     resetReorderState();
-    const auto visible = visibleItems();
+    const auto& visible = visibleItems();
     pressedIndex_ = hitItemIndex(event.position, visible);
     if (pressedIndex_ < 0) {
         return false;
     }
+    if (visible[static_cast<std::size_t>(pressedIndex_)].placeholder) {
+        pressedIndex_ = -1;
+        return true;
+    }
     pressedToggle_ = isToggleHit(event.position, visible[static_cast<std::size_t>(pressedIndex_)], pressedIndex_);
+    if (event.clickCount >= 2 && !pressedToggle_ && onActivated_) {
+        const std::wstring id = items_[visible[static_cast<std::size_t>(pressedIndex_)].index].id;
+        pressedIndex_ = -1;
+        assignSelectedId(id);
+        onActivated_(id);
+        invalidate();
+        return true;
+    }
     if (reorderEnabled_ && !pressedToggle_) {
         reorderStartPoint_ = event.position;
         reorderSourceIndex_ = pressedIndex_;
@@ -389,7 +552,7 @@ bool TreeView::onMouseUp(const MouseEvent& event) {
     if (!interactive() || event.button != MouseButton::Left) {
         return false;
     }
-    const auto visible = visibleItems();
+    const auto& visible = visibleItems();
     if (reordering_) {
         updateReorderTarget(event.position, visible);
         const int sourceIndex = reorderSourceIndex_;
@@ -439,14 +602,22 @@ bool TreeView::onKeyDown(const KeyEvent& event) {
     if (!interactive()) {
         return false;
     }
-    const auto visible = visibleItems();
+    const auto& visible = visibleItems();
     if (visible.empty()) {
         return false;
     }
 
     const int selected = visibleIndexForId(selectedId_, visible);
     const int effectiveSelected = selected >= 0 ? selected : 0;
-    const auto& current = visible[static_cast<std::size_t>(effectiveSelected)];
+    // Copied: toggling rebuilds the visible row cache.
+    const auto current = visible[static_cast<std::size_t>(effectiveSelected)];
+    constexpr unsigned appsKey = 0x5d, f10Key = 0x79;
+    if (event.virtualKey == appsKey || (event.virtualKey == f10Key && event.shift)) {
+        if (!onContextMenu_ || selectedId_.empty()) return false;
+        const Rect row = itemRect(effectiveSelected);
+        onContextMenu_(selectedId_, Point{row.x + 24.0f, row.y + row.height});
+        return true;
+    }
 
     if (reorderEnabled_ && event.alt && !event.control
         && (event.key == Key::Up || event.key == Key::Down)) {
@@ -462,18 +633,26 @@ bool TreeView::onKeyDown(const KeyEvent& event) {
         return true;
     }
 
-    if (event.key == Key::Down) {
-        const int next = std::min(static_cast<int>(visible.size()) - 1, effectiveSelected + 1);
+    const int page = std::max(1, static_cast<int>(frame().height / rowHeight()) - 1);
+    const int last = static_cast<int>(visible.size()) - 1;
+    int step = 0;
+    if (event.key == Key::Down) step = 1;
+    else if (event.key == Key::Up) step = -1;
+    else if (event.key == Key::PageDown) step = page;
+    else if (event.key == Key::PageUp) step = -page;
+    else if (event.key == Key::Home) step = -last - 1;
+    else if (event.key == Key::End) step = last + 1;
+    if (step != 0) {
+        const int next = stepSelectable(effectiveSelected, step, visible);
         assignSelectedId(items_[visible[static_cast<std::size_t>(next)].index].id);
         return true;
     }
-    if (event.key == Key::Up) {
-        const int previous = std::max(0, effectiveSelected - 1);
-        assignSelectedId(items_[visible[static_cast<std::size_t>(previous)].index].id);
+    if (event.key == Key::Enter && onActivated_ && !selectedId_.empty()) {
+        onActivated_(selectedId_);
         return true;
     }
     if (event.key == Key::Right) {
-        if (hasChildren(current.index) && !isExpanded(items_[current.index].id)) {
+        if (expandable(current.index) && !isExpanded(items_[current.index].id)) {
             toggleItem(current.index);
         } else if (hasChildren(current.index)) {
             assignSelectedId(items_[children_[current.index].front()].id);
@@ -481,14 +660,14 @@ bool TreeView::onKeyDown(const KeyEvent& event) {
         return true;
     }
     if (event.key == Key::Left) {
-        if (hasChildren(current.index) && isExpanded(items_[current.index].id)) {
+        if (expandable(current.index) && isExpanded(items_[current.index].id)) {
             toggleItem(current.index);
         } else if (const auto parent = parentIndex(current.index)) {
             assignSelectedId(items_[*parent].id);
         }
         return true;
     }
-    if ((event.key == Key::Space || event.key == Key::Enter) && hasChildren(current.index)) {
+    if ((event.key == Key::Space || event.key == Key::Enter) && expandable(current.index)) {
         toggleItem(current.index);
         return true;
     }
@@ -509,7 +688,7 @@ AccessibilityInfo TreeView::accessibilityInfo() const {
         const auto& item = items_[found->second];
         info.value = item.detail.empty() ? item.title : item.title + L" - " + item.detail;
         info.state.selected = true;
-        info.state.expanded = hasChildren(found->second) && isExpanded(item.id);
+        info.state.expanded = expandable(found->second) && isExpanded(item.id);
     }
     return info;
 }
@@ -527,14 +706,27 @@ void TreeView::rebuildHierarchy() {
         uniqueItems.push_back(std::move(item));
     }
     items_ = std::move(uniqueItems);
+    visibleDirty_ = true;
     children_.assign(items_.size(), {});
     roots_.clear();
-    expandedIds_.clear();
+    std::unordered_set<std::wstring> expanded;
+    std::unordered_map<std::wstring, bool> supplied;
+    supplied.reserve(items_.size());
     for (const auto& item : items_) {
-        if (item.expanded) {
-            expandedIds_.insert(item.id);
+        bool open = item.expanded;
+        if (retainExpansion_) {
+            const auto previous = suppliedExpanded_.find(item.id);
+            if (previous != suppliedExpanded_.end() && previous->second == item.expanded) {
+                open = expandedIds_.count(item.id) != 0;
+            }
         }
+        if (open) {
+            expanded.insert(item.id);
+        }
+        supplied.emplace(item.id, item.expanded);
     }
+    expandedIds_ = std::move(expanded);
+    suppliedExpanded_ = std::move(supplied);
 
     for (std::size_t index = 0; index < items_.size(); ++index) {
         const auto parent = idToIndex_.find(items_[index].parentId);
@@ -562,18 +754,42 @@ void TreeView::rebuildHierarchy() {
     }
 }
 
-std::vector<TreeView::VisibleItem> TreeView::visibleItems() const {
-    std::vector<VisibleItem> result;
-    result.reserve(items_.size());
-    for (const std::size_t root : roots_) {
-        appendVisibleItems(result, root, 0);
+const std::vector<TreeView::VisibleItem>& TreeView::visibleItems() const {
+    if (visibleDirty_) {
+        visibleCache_.clear();
+        visibleCache_.reserve(items_.size());
+        for (const std::size_t root : roots_) {
+            appendVisibleItems(visibleCache_, root, 0);
+        }
+        visibleDirty_ = false;
     }
-    return result;
+    return visibleCache_;
+}
+
+bool TreeView::expandable(std::size_t index) const {
+    return hasChildren(index) || (index < items_.size() && items_[index].hasChildren);
+}
+
+int TreeView::stepSelectable(int from, int step, const std::vector<VisibleItem>& visible) const {
+    const int last = static_cast<int>(visible.size()) - 1;
+    const int direction = step > 0 ? 1 : -1;
+    int next = std::clamp(from + step, 0, last);
+    while (next >= 0 && next <= last && visible[static_cast<std::size_t>(next)].placeholder) next += direction;
+    if (next < 0 || next > last) {
+        // Ran past the end: back off to the nearest real row.
+        next = std::clamp(next, 0, last);
+        while (next >= 0 && next <= last && visible[static_cast<std::size_t>(next)].placeholder) next -= direction;
+    }
+    return std::clamp(next, 0, last);
 }
 
 void TreeView::appendVisibleItems(std::vector<VisibleItem>& output, std::size_t index, int depth) const {
     output.push_back(VisibleItem{index, depth});
     if (!isExpanded(items_[index].id)) {
+        return;
+    }
+    if (children_[index].empty() && items_[index].loading) {
+        output.push_back(VisibleItem{index, depth, true});
         return;
     }
     for (const std::size_t child : children_[index]) {
@@ -582,7 +798,7 @@ void TreeView::appendVisibleItems(std::vector<VisibleItem>& output, std::size_t 
 }
 
 void TreeView::assignSelectedId(std::wstring id) {
-    const auto visible = visibleItems();
+    const auto& visible = visibleItems();
     if (visible.empty()) {
         id.clear();
     } else if (visibleIndexForId(id, visible) < 0) {
@@ -592,6 +808,7 @@ void TreeView::assignSelectedId(std::wstring id) {
         return;
     }
     selectedId_ = std::move(id);
+    scrollToId(selectedId_);
     if (onSelectionChanged_) {
         onSelectionChanged_(selectedId_);
     }
@@ -599,7 +816,7 @@ void TreeView::assignSelectedId(std::wstring id) {
 }
 
 void TreeView::ensureSelectionVisible() {
-    const auto visible = visibleItems();
+    const auto& visible = visibleItems();
     if (visible.empty()) {
         if (!selectedId_.empty()) {
             assignSelectedId({});
@@ -618,7 +835,8 @@ void TreeView::ensureSelectionVisible() {
 
 int TreeView::visibleIndexForId(const std::wstring& id, const std::vector<VisibleItem>& visible) const {
     for (int index = 0; index < static_cast<int>(visible.size()); ++index) {
-        if (items_[visible[static_cast<std::size_t>(index)].index].id == id) {
+        const auto& row = visible[static_cast<std::size_t>(index)];
+        if (!row.placeholder && items_[row.index].id == id) {
             return index;
         }
     }
@@ -629,7 +847,7 @@ int TreeView::hitItemIndex(Point point, const std::vector<VisibleItem>& visible)
     if (!contains(point) || visible.empty()) {
         return -1;
     }
-    const int index = static_cast<int>((point.y - frame().y) / rowHeight());
+    const int index = static_cast<int>((point.y - frame().y + scrollOffset_) / rowHeight());
     if (index < 0 || index >= static_cast<int>(visible.size())) {
         return -1;
     }
@@ -638,11 +856,11 @@ int TreeView::hitItemIndex(Point point, const std::vector<VisibleItem>& visible)
 
 Rect TreeView::itemRect(int visibleIndex) const {
     const Rect rect = frame();
-    return Rect{rect.x, rect.y + rowHeight() * static_cast<float>(visibleIndex), rect.width, rowHeight()};
+    return Rect{rect.x, rect.y + rowHeight() * static_cast<float>(visibleIndex) - scrollOffset_, rect.width, rowHeight()};
 }
 
 bool TreeView::isToggleHit(Point point, const VisibleItem& item, int visibleIndex) const {
-    if (!hasChildren(item.index)) {
+    if (item.placeholder || !expandable(item.index)) {
         return false;
     }
     const TreeViewStyle style = resolvedItemStyle(items_[item.index].id == selectedId_, false, false);
@@ -663,7 +881,7 @@ void TreeView::updateReorderTarget(Point point, const std::vector<VisibleItem>& 
     reorderInsertionIndex_ = detail::reorderInsertionIndex(
         point.y,
         frame().y,
-        0.0f,
+        scrollOffset_,
         rowHeight(),
         static_cast<int>(visible.size()));
     reorderTargetIndex_ = detail::reorderTargetIndex(
@@ -677,7 +895,7 @@ bool TreeView::hasChildren(std::size_t index) const {
 }
 
 void TreeView::toggleItem(std::size_t index) {
-    if (!hasChildren(index)) {
+    if (!expandable(index)) {
         return;
     }
     setExpanded(items_[index].id, !isExpanded(items_[index].id));
@@ -746,7 +964,7 @@ TreeViewStyle TreeView::resolvedItemStyle(bool selected, bool hovered, bool pres
 }
 
 float TreeView::rowHeight() const {
-    return 32.0f;
+    return rowHeight_;
 }
 
 float TreeView::toggleWidth() const {
@@ -754,6 +972,9 @@ float TreeView::toggleWidth() const {
 }
 
 void TreeView::updatePreferredHeight() {
+    if (internalScrolling_) {
+        return;
+    }
     const Size current = preferredSize();
     setPreferredSize(Size{current.width, contentHeight()});
 }

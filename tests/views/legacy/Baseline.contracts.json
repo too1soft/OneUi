@@ -1,0 +1,1597 @@
+{
+  "format": 1,
+  "origin": "git source descriptors only; not a compiler-output claim",
+  "baseline_commit": "64a5b8965be629e2c8a743eb399c91055a7f31a0",
+  "source_sha256": {
+    "src/views/format/component_registry.inc": "e804da00eeec909b091a9e72554f89427fbcfd1817ad0491a70f9e667c2617a1",
+    "src/views/format/component_registry_controls.inc": "ba67471c3bd5380fd33bf9f4e58693743d1ce17b48beebc8ba1c7c14aabdf527",
+    "src/views/format/component_registry_layout.inc": "525cf107360fec9738a680c0f7de0a02a3f13b510ce9d583ff96c2a8070d2259",
+    "src/views/format/component_registry_workspace.inc": "f57878b4dcd2b31d2640b3646bf1f41d3979ba11f20a0cffe72b77cb4ee3f653",
+    "src/views/format/component_registry_pane_header.inc": "7a33b768704c988d76af236169253f932003fe65c3a6c0eaa3b096485ee8f41a",
+    "src/views/format/component_registry_queries.inc": "85053561239b265cb8c2a337ce89e7dabf163713b8b8836bd308581d89ebbd6c",
+    "src/views/format/component_registry_pickers.inc": "a1d28d91ab62eb31a828f52603e075b40a8aeded5633f4ad44c72e20974e6775",
+    "src/views/format/component_registry_dialog.inc": "02b9b26b9fa7061b1e0ea197aa094edd2d71ab6c86753360bdccfccfb6b50933",
+    "src/views/format/component_registry_template_table.inc": "ced42787049b8d8a90601e1d3308c218e6e24cedcd45f5ac2dc70c1cf0adad3a",
+    "src/views/format/component_registry_overlay.inc": "6b655e037a10d42e8bdc4451209e7c64564e07607a7a6416ece7a13d3b64ad9f",
+    "src/views/format/component_registry_grid.inc": "6770e5dc61f999baafe87ce7d831c1a3a7ef8fca94946b4363301be891347aa1",
+    "src/views/format/component_registry_menu.inc": "e186fdda34dcbe6403f0bdd58f6c3fae895622f15e2b377427cbee413728d8d7",
+    "src/views/format/component_registry_popup.inc": "7b8b7a305a03de51b18f932c827e49b301401caaa5b3a90268adf6bba62e3fec",
+    "src/views/format/component_registry_panes.inc": "c3ee3c939c5a5b09e3db495a10ba97bd8721f85bb09a4089fbec3f06a9934b2c",
+    "src/views/format/component_registry_dock.inc": "29bd699046b8aacc3e43d0267ea5d14db8f879a27bae58bdf582581b5b92c8e6",
+    "src/views/format/component_contract.cpp": "e0cc7b71be8063c1a5a70e263e457f774c0da70075c4fea88a2e7ead41f6f93e"
+  },
+  "contracts": [
+    {
+      "name": "Input",
+      "child_rule": "leaf",
+      "version": 3,
+      "model_property": 11,
+      "properties": [
+        {
+          "id": 1,
+          "name": "basis",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 2,
+          "name": "class",
+          "tag": 4,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 3,
+          "name": "description",
+          "tag": 4,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 4,
+          "name": "disabled",
+          "tag": 1,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 5,
+          "name": "grow",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 6,
+          "name": "max",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 7,
+          "name": "min",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 8,
+          "name": "name",
+          "tag": 4,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 9,
+          "name": "placeholder",
+          "tag": 4,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 10,
+          "name": "shrink",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 11,
+          "name": "text",
+          "tag": 4,
+          "flags": 7,
+          "record": ""
+        },
+        {
+          "id": 12,
+          "name": "visible",
+          "tag": 1,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 13,
+          "name": "password",
+          "tag": 1,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 14,
+          "name": "read-only",
+          "tag": 1,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 15,
+          "name": "password-mask",
+          "tag": 4,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 16,
+          "name": "prefix-icon",
+          "tag": 4,
+          "flags": 3,
+          "record": ""
+        }
+      ],
+      "events": [
+        {
+          "id": 1,
+          "name": "submit",
+          "args": []
+        }
+      ]
+    },
+    {
+      "name": "Checkbox",
+      "child_rule": "leaf",
+      "version": 1,
+      "model_property": 2,
+      "properties": [
+        {
+          "id": 1,
+          "name": "basis",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 2,
+          "name": "checked",
+          "tag": 1,
+          "flags": 7,
+          "record": ""
+        },
+        {
+          "id": 3,
+          "name": "class",
+          "tag": 4,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 4,
+          "name": "description",
+          "tag": 4,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 5,
+          "name": "disabled",
+          "tag": 1,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 6,
+          "name": "grow",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 7,
+          "name": "max",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 8,
+          "name": "min",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 9,
+          "name": "name",
+          "tag": 4,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 10,
+          "name": "shrink",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 11,
+          "name": "text",
+          "tag": 4,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 12,
+          "name": "visible",
+          "tag": 1,
+          "flags": 3,
+          "record": ""
+        }
+      ],
+      "events": []
+    },
+    {
+      "name": "TimeSeriesChart",
+      "child_rule": "leaf",
+      "version": 1,
+      "model_property": 0,
+      "properties": [
+        {
+          "id": 1,
+          "name": "basis",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 2,
+          "name": "class",
+          "tag": 4,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 3,
+          "name": "description",
+          "tag": 4,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 4,
+          "name": "disabled",
+          "tag": 1,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 5,
+          "name": "grow",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 6,
+          "name": "max",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 7,
+          "name": "min",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 8,
+          "name": "name",
+          "tag": 4,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 9,
+          "name": "series",
+          "tag": 5,
+          "flags": 2,
+          "record": "oneui.v1.Series"
+        },
+        {
+          "id": 10,
+          "name": "shrink",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 11,
+          "name": "visible",
+          "tag": 1,
+          "flags": 3,
+          "record": ""
+        }
+      ],
+      "events": []
+    },
+    {
+      "name": "Scroll",
+      "child_rule": "one",
+      "version": 3,
+      "model_property": 0,
+      "properties": [
+        {
+          "id": 1,
+          "name": "basis",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 2,
+          "name": "class",
+          "tag": 4,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 3,
+          "name": "description",
+          "tag": 4,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 4,
+          "name": "disabled",
+          "tag": 1,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 5,
+          "name": "grow",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 6,
+          "name": "max",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 7,
+          "name": "min",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 8,
+          "name": "name",
+          "tag": 4,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 9,
+          "name": "shrink",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 10,
+          "name": "visible",
+          "tag": 1,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 11,
+          "name": "content-height",
+          "tag": 3,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 12,
+          "name": "wheel-step",
+          "tag": 3,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 13,
+          "name": "chrome-visible",
+          "tag": 1,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 14,
+          "name": "scroll-offset",
+          "tag": 3,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 15,
+          "name": "content-width",
+          "tag": 3,
+          "flags": 3,
+          "record": ""
+        }
+      ],
+      "events": []
+    },
+    {
+      "name": "VirtualList",
+      "child_rule": "leaf",
+      "version": 1,
+      "model_property": 10,
+      "properties": [
+        {
+          "id": 1,
+          "name": "basis",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 2,
+          "name": "class",
+          "tag": 4,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 3,
+          "name": "description",
+          "tag": 4,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 4,
+          "name": "disabled",
+          "tag": 1,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 5,
+          "name": "grow",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 6,
+          "name": "items",
+          "tag": 5,
+          "flags": 2,
+          "record": "@list.item"
+        },
+        {
+          "id": 7,
+          "name": "max",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 8,
+          "name": "min",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 9,
+          "name": "name",
+          "tag": 4,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 10,
+          "name": "selectedIndex",
+          "tag": 2,
+          "flags": 7,
+          "record": ""
+        },
+        {
+          "id": 11,
+          "name": "shrink",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 12,
+          "name": "visible",
+          "tag": 1,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 13,
+          "name": "row-height",
+          "tag": 3,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 14,
+          "name": "scroll-offset",
+          "tag": 3,
+          "flags": 3,
+          "record": ""
+        }
+      ],
+      "events": [
+        {
+          "id": 1,
+          "name": "activate",
+          "args": []
+        }
+      ]
+    },
+    {
+      "name": "Tabs",
+      "child_rule": "leaf",
+      "version": 2,
+      "model_property": 12,
+      "properties": [
+        {
+          "id": 1,
+          "name": "basis",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 2,
+          "name": "class",
+          "tag": 4,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 3,
+          "name": "closable",
+          "tag": 1,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 4,
+          "name": "description",
+          "tag": 4,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 5,
+          "name": "disabled",
+          "tag": 1,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 6,
+          "name": "grow",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 7,
+          "name": "items",
+          "tag": 5,
+          "flags": 2,
+          "record": "oneui.v1.TabItem"
+        },
+        {
+          "id": 8,
+          "name": "max",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 9,
+          "name": "min",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 10,
+          "name": "name",
+          "tag": 4,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 11,
+          "name": "presentation",
+          "tag": 4,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 12,
+          "name": "selectedKey",
+          "tag": 4,
+          "flags": 7,
+          "record": ""
+        },
+        {
+          "id": 13,
+          "name": "shrink",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 14,
+          "name": "visible",
+          "tag": 1,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 15,
+          "name": "reorderable",
+          "tag": 1,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 16,
+          "name": "drag-domain",
+          "tag": 4,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 17,
+          "name": "drag-kind",
+          "tag": 4,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 18,
+          "name": "drag-sources",
+          "tag": 5,
+          "flags": 2,
+          "record": "@workspace.tab-source"
+        }
+      ],
+      "events": [
+        {
+          "id": 1,
+          "name": "close",
+          "args": [
+            {
+              "name": "key",
+              "tag": 4
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "name": "dragOut",
+          "args": [
+            {
+              "name": "key",
+              "tag": 4
+            },
+            {
+              "name": "phase",
+              "tag": 2
+            },
+            {
+              "name": "x",
+              "tag": 3
+            },
+            {
+              "name": "y",
+              "tag": 3
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "name": "reorderRequested",
+          "args": [
+            {
+              "name": "source",
+              "tag": 4
+            },
+            {
+              "name": "before",
+              "tag": 4
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "DockWorkspace",
+      "child_rule": "dock-collection",
+      "version": 2,
+      "model_property": 0,
+      "properties": [
+        {
+          "id": 1,
+          "name": "basis",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 2,
+          "name": "class",
+          "tag": 4,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 3,
+          "name": "description",
+          "tag": 4,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 4,
+          "name": "disabled",
+          "tag": 1,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 5,
+          "name": "grow",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 6,
+          "name": "max",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 7,
+          "name": "min",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 8,
+          "name": "name",
+          "tag": 4,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 9,
+          "name": "shrink",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 10,
+          "name": "visible",
+          "tag": 1,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 11,
+          "name": "nodes",
+          "tag": 5,
+          "flags": 2,
+          "record": "@workspace.node"
+        },
+        {
+          "id": 12,
+          "name": "root",
+          "tag": 4,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 13,
+          "name": "placements",
+          "tag": 5,
+          "flags": 2,
+          "record": "@workspace.placement"
+        },
+        {
+          "id": 14,
+          "name": "revision",
+          "tag": 2,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 15,
+          "name": "maximized",
+          "tag": 4,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 16,
+          "name": "compact-active",
+          "tag": 4,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 17,
+          "name": "ack-request",
+          "tag": 2,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 18,
+          "name": "ack-accepted",
+          "tag": 1,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 19,
+          "name": "gap",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 20,
+          "name": "divider-hit",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        }
+      ],
+      "events": [
+        {
+          "id": 1,
+          "name": "dockRequested",
+          "args": [
+            {
+              "name": "source",
+              "tag": 4
+            },
+            {
+              "name": "target",
+              "tag": 4
+            },
+            {
+              "name": "edge",
+              "tag": 4
+            },
+            {
+              "name": "request",
+              "tag": 2
+            },
+            {
+              "name": "revision",
+              "tag": 2
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "name": "ratioRequested",
+          "args": [
+            {
+              "name": "split",
+              "tag": 4
+            },
+            {
+              "name": "ratio",
+              "tag": 3
+            },
+            {
+              "name": "request",
+              "tag": 2
+            },
+            {
+              "name": "revision",
+              "tag": 2
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "name": "floatRequested",
+          "args": [
+            {
+              "name": "pane",
+              "tag": 4
+            },
+            {
+              "name": "x",
+              "tag": 3
+            },
+            {
+              "name": "y",
+              "tag": 3
+            },
+            {
+              "name": "width",
+              "tag": 3
+            },
+            {
+              "name": "height",
+              "tag": 3
+            },
+            {
+              "name": "request",
+              "tag": 2
+            },
+            {
+              "name": "revision",
+              "tag": 2
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "name": "boundsRequested",
+          "args": [
+            {
+              "name": "pane",
+              "tag": 4
+            },
+            {
+              "name": "x",
+              "tag": 3
+            },
+            {
+              "name": "y",
+              "tag": 3
+            },
+            {
+              "name": "width",
+              "tag": 3
+            },
+            {
+              "name": "height",
+              "tag": 3
+            },
+            {
+              "name": "request",
+              "tag": 2
+            },
+            {
+              "name": "revision",
+              "tag": 2
+            }
+          ]
+        },
+        {
+          "id": 5,
+          "name": "pinRequested",
+          "args": [
+            {
+              "name": "pane",
+              "tag": 4
+            },
+            {
+              "name": "pinned",
+              "tag": 1
+            },
+            {
+              "name": "request",
+              "tag": 2
+            },
+            {
+              "name": "revision",
+              "tag": 2
+            }
+          ]
+        },
+        {
+          "id": 6,
+          "name": "raiseRequested",
+          "args": [
+            {
+              "name": "pane",
+              "tag": 4
+            },
+            {
+              "name": "request",
+              "tag": 2
+            },
+            {
+              "name": "revision",
+              "tag": 2
+            }
+          ]
+        },
+        {
+          "id": 7,
+          "name": "maximizeRequested",
+          "args": [
+            {
+              "name": "pane",
+              "tag": 4
+            },
+            {
+              "name": "request",
+              "tag": 2
+            },
+            {
+              "name": "revision",
+              "tag": 2
+            }
+          ]
+        },
+        {
+          "id": 8,
+          "name": "visibilityRequested",
+          "args": [
+            {
+              "name": "pane",
+              "tag": 4
+            },
+            {
+              "name": "visible",
+              "tag": 1
+            },
+            {
+              "name": "request",
+              "tag": 2
+            },
+            {
+              "name": "revision",
+              "tag": 2
+            }
+          ]
+        },
+        {
+          "id": 9,
+          "name": "redockRequested",
+          "args": [
+            {
+              "name": "pane",
+              "tag": 4
+            },
+            {
+              "name": "request",
+              "tag": 2
+            },
+            {
+              "name": "revision",
+              "tag": 2
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "DragHandle",
+      "child_rule": "optional-one",
+      "version": 1,
+      "model_property": 0,
+      "properties": [
+        {
+          "id": 1,
+          "name": "basis",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 2,
+          "name": "class",
+          "tag": 4,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 3,
+          "name": "description",
+          "tag": 4,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 4,
+          "name": "disabled",
+          "tag": 1,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 5,
+          "name": "grow",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 6,
+          "name": "max",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 7,
+          "name": "min",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 8,
+          "name": "name",
+          "tag": 4,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 9,
+          "name": "shrink",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 10,
+          "name": "visible",
+          "tag": 1,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 11,
+          "name": "source",
+          "tag": 4,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 12,
+          "name": "domain",
+          "tag": 4,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 13,
+          "name": "kind",
+          "tag": 4,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 14,
+          "name": "threshold",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        }
+      ],
+      "events": [
+        {
+          "id": 1,
+          "name": "dragStateChanged",
+          "args": [
+            {
+              "name": "source",
+              "tag": 4
+            },
+            {
+              "name": "phase",
+              "tag": 2
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "PaneHeader",
+      "child_rule": "header-slots",
+      "version": 1,
+      "model_property": 0,
+      "properties": [
+        {
+          "id": 1,
+          "name": "basis",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 2,
+          "name": "class",
+          "tag": 4,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 3,
+          "name": "description",
+          "tag": 4,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 4,
+          "name": "disabled",
+          "tag": 1,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 5,
+          "name": "grow",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 6,
+          "name": "max",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 7,
+          "name": "min",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 8,
+          "name": "name",
+          "tag": 4,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 9,
+          "name": "shrink",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 10,
+          "name": "visible",
+          "tag": 1,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 11,
+          "name": "pane-key",
+          "tag": 4,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 12,
+          "name": "number",
+          "tag": 2,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 13,
+          "name": "title",
+          "tag": 4,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 14,
+          "name": "path",
+          "tag": 4,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 15,
+          "name": "active",
+          "tag": 1,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 16,
+          "name": "broadcast-role",
+          "tag": 4,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 17,
+          "name": "broadcast-hint",
+          "tag": 4,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 18,
+          "name": "broadcast-label",
+          "tag": 4,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 19,
+          "name": "viewing-history",
+          "tag": 1,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 20,
+          "name": "can-close",
+          "tag": 1,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 21,
+          "name": "can-split",
+          "tag": 1,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 22,
+          "name": "can-maximize",
+          "tag": 1,
+          "flags": 3,
+          "record": ""
+        }
+      ],
+      "events": [
+        {
+          "id": 1,
+          "name": "activateRequested",
+          "args": [
+            {
+              "name": "pane",
+              "tag": 4
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "name": "splitRequested",
+          "args": [
+            {
+              "name": "pane",
+              "tag": 4
+            },
+            {
+              "name": "edge",
+              "tag": 4
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "name": "maximizeRequested",
+          "args": [
+            {
+              "name": "pane",
+              "tag": 4
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "name": "closeRequested",
+          "args": [
+            {
+              "name": "pane",
+              "tag": 4
+            }
+          ]
+        },
+        {
+          "id": 5,
+          "name": "broadcastRequested",
+          "args": [
+            {
+              "name": "pane",
+              "tag": 4
+            }
+          ]
+        },
+        {
+          "id": 6,
+          "name": "liveRequested",
+          "args": [
+            {
+              "name": "pane",
+              "tag": 4
+            }
+          ]
+        },
+        {
+          "id": 7,
+          "name": "menuRequested",
+          "args": [
+            {
+              "name": "pane",
+              "tag": 4
+            },
+            {
+              "name": "x",
+              "tag": 3
+            },
+            {
+              "name": "y",
+              "tag": 3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "InteractiveSurface",
+      "child_rule": "one",
+      "version": 2,
+      "model_property": 0,
+      "properties": [
+        {
+          "id": 1,
+          "name": "basis",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 2,
+          "name": "class",
+          "tag": 4,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 3,
+          "name": "description",
+          "tag": 4,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 4,
+          "name": "disabled",
+          "tag": 1,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 5,
+          "name": "grow",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 6,
+          "name": "max",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 7,
+          "name": "min",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 8,
+          "name": "name",
+          "tag": 4,
+          "flags": 3,
+          "record": ""
+        },
+        {
+          "id": 9,
+          "name": "shrink",
+          "tag": 3,
+          "flags": 1,
+          "record": ""
+        },
+        {
+          "id": 10,
+          "name": "visible",
+          "tag": 1,
+          "flags": 3,
+          "record": ""
+        }
+      ],
+      "events": [
+        {
+          "id": 1,
+          "name": "click",
+          "args": []
+        },
+        {
+          "id": 2,
+          "name": "pointer",
+          "args": [
+            {
+              "name": "x",
+              "tag": 3
+            },
+            {
+              "name": "y",
+              "tag": 3
+            },
+            {
+              "name": "control",
+              "tag": 1
+            },
+            {
+              "name": "shift",
+              "tag": 1
+            },
+            {
+              "name": "click_count",
+              "tag": 2
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "name": "contextMenu",
+          "args": [
+            {
+              "name": "x",
+              "tag": 3
+            },
+            {
+              "name": "y",
+              "tag": 3
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

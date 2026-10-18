@@ -141,7 +141,9 @@ with temporary_workspace() as directory:
         compose_cases = [
             ('ui.nativeHost("terminal").grow();', True, ''),
             ('ui.row({}).align(L"center").justify(L"space-between").wrap(false);', True, ''),
-            ('ui.text(L"Caption").wrap(false);', False, 'Compose property is not supported'),
+            ('ui.text(L"Caption").wrap(false);', True, ''),
+            ('ui.text(L"Caption").wrap(flag);', True, ''),
+            ('ui.text(L"Caption").wrap(name);', False, 'Compose property and State/Computed value types do not match'),
 
             ('ui.sidebarLayout(ui.sidebar({ui.text(L"Navigation")}),ui.masterDetail(ui.listPage({}),ui.detailPage({})).detailOpen(flag).breakpoint(800).paneWidth(380));ui.surface({}).appearance(L"raised");',True,''),
             ('ui.sidebarLayout(ui.column({}),ui.column({}));',False,''),

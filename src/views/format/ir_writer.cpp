@@ -67,6 +67,9 @@ Bytes writeImage(const Image &image)
     const char magic[] = "ONEVIEW";
     std::copy(magic, magic + 8, b.begin());
     patch(b, 8, 1, 2);
+    const bool singleRoot = std::any_of(image.records[SLOT].begin(), image.records[SLOT].end(),
+        [](const auto& slot) { return slot[3] & slotSingleRoot; });
+    patch(b, 10, singleRoot ? 1 : 0, 2);
     patch(b, 12, 128);
     patch(b, 24, 128, 8);
     patch(b, 32, last);

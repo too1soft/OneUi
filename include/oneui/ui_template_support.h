@@ -42,26 +42,56 @@ inline void validateLayoutNumber(const std::string& key, float value) {
         throw std::invalid_argument(key + ((key == "max-width" || key=="min-column-width" || key=="breakpoint" || key=="pane-width") ? " must be a finite positive number" : " must be a finite nonnegative number"));
 }
 inline std::string lowerValue(std::string value) { for(auto& ch:value)ch=static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));return value; }
-inline std::set<std::string> cssProperties(const std::string& tag) {
-    if (tag == "progress"||tag=="slider"||tag=="font-picker"||tag=="media-picker"||tag=="media-preview"||tag=="theme-scope") return {};
+inline std::set<std::string> componentCssProperties(const std::string& tag) {
+    if (tag == "panel") return {"background", "background-color", "border-color", "border-width", "border-radius", "padding", "box-shadow"};
+    if (tag == "menu") return {"background", "background-color", "color", "placeholder-color", "border-color", "border-width", "border-radius", "padding", "font-size", "font-weight", "box-shadow"};
+    if (tag == "reorderable-grid") return {"padding","gap","grid-min-column-width","outline-color","outline-width","border-color"};
+    if (tag == "popup") return {"background", "background-color", "color", "border-color", "border-width", "border-radius", "padding", "gap", "box-shadow"};
+    if (tag == "dialog") return {"background", "background-color", "color", "border-color", "border-width", "border-radius", "padding", "font-size", "font-weight", "box-shadow"};
+    if (tag == "pane-grid-part") return {"background","background-color"};
+    if (tag == "dock-workspace-part") return {"background","background-color","border-color","border-width","border-radius","box-shadow","color"};
+    if (tag == "pane-header-part") return {"background","background-color","color","border-color","border-width","border-radius","padding","font-size","font-weight","font-family"};
+    if (tag == "pane-header") return {"background","background-color","color","border-color","border-width"};
+    if (tag == "state-view" || tag == "state-view-part") return {"background","background-color","color","border-color","border-width","border-radius","padding","font-size","font-weight","box-shadow"};
+    if (tag == "menu-part") return {"background","background-color","color","border-color","border-width","border-radius","padding","font-size","font-weight","box-shadow"};
+    if (tag=="slider"||tag=="font-picker"||tag=="media-picker"||tag=="media-preview"||tag=="theme-scope") return {};
+    if (tag == "progress") return {"background", "background-color", "color", "border-radius"};
     if (tag == "card") return {"background-color","background","border-color","border-width","border-radius","padding","box-shadow","opacity"};
+    if (tag == "interactive-surface") return {"background-color","background","border-color","border-width","border-radius","padding","transition-duration","transition-timing-function"};
     if (tag == "icon") return {"color"};
-    if (tag == "tabs" || tag=="split-view") return {}; // semantic native theme
+    if (tag == "tree-view") return {"background-color","content-background-color","color","placeholder-color","border-color","border-width","border-radius","content-radius","padding","font-size","font-weight","detail-font-size","detail-font-weight","text-inset","title-offset-y","detail-offset-y","outline-color","outline-width","outline-offset"};
+    if (tag=="split-view") return {}; // semantic native theme
+    if (tag == "list" || tag == "virtual-list") return {"background-color","content-background-color","color","placeholder-color","border-color","border-width","border-radius","content-radius","padding","font-size","font-weight","detail-font-size","detail-font-weight","text-inset","title-offset-y","detail-offset-y","scrollbar-color","scrollbar-width","outline-color","outline-width","outline-offset"};
     if (tag == "chart") return {"color","border-color","font-size","gap"};
     if (tag == "native-host") return {}; // foreign content owns its styling
     if (tag == "panes") return {"gap","padding","background-color","border-color","border-width","border-radius","box-shadow"};
     if (tag == "reveal") return {"transition-duration","transition-timing-function"};
-    if (tag == "label") return {"color","font-size","font-weight"};
+    if (tag == "label") return {"color","font-size","font-weight","font-family","padding","background-color","border-color","border-width","border-radius"};
+    if (tag == "code-editor") return {"background-color","color","placeholder-color","caret-color","selection-color","content-background-color","border-color","border-width","border-radius","scrollbar-color"};
     if (tag == "stack") return {"background","box-shadow","background-color","border-color","border-width","border-radius","padding","gap"};
-    if (tag == "scroll-view") return {"background","box-shadow","background-color","border-color","border-width","border-radius","padding"};
+    if (tag == "scroll-view") return {"background","box-shadow","background-color","border-color","border-width","border-radius","padding","color","scrollbar-color","scrollbar-width"};
     std::set<std::string> keys = {"color","background-color","border-color","border-width","border-radius","outline-color","outline-width","outline-offset"};
-    if (tag != "switch") keys.insert("padding");
-    if (tag == "button" || tag == "select" || tag == "table") keys.insert("font-size");
-    if (tag == "button") keys.insert("font-weight");
+    if (tag != "switch" && tag != "checkbox") keys.insert("padding");
+    if (tag == "button" || tag == "input" || tag == "tabs" || tag == "select" || tag == "table") keys.insert("font-size");
+      if (tag == "button" || tag == "tabs") keys.insert("font-weight");
+      if (tag == "button") { keys.insert("icon-size"); keys.insert("gap"); keys.insert("opacity"); }
+    if (tag == "tabs") {
+        for (const auto* key : {"content-background-color", "content-radius", "text-inset",
+             "tab-indicator-color", "tab-indicator-inset", "tab-indicator-height",
+             "tab-outline-width", "tab-trailing-inset"}) keys.insert(key);
+    }
     if (tag == "button" || tag == "input") { keys.insert("background"); keys.insert("box-shadow"); keys.insert("transition-duration"); keys.insert("transition-timing-function"); }
     if (tag == "input") { keys.insert("placeholder-color"); keys.insert("caret-color"); keys.insert("selection-color"); }
-    if (tag == "switch" || tag == "select" || tag == "table") keys.insert("content-background-color");
-    if (tag == "table") { keys.insert("scrollbar-color"); keys.insert("scrollbar-width"); keys.insert("placeholder-color"); keys.erase("outline-color"); keys.erase("outline-width"); keys.erase("outline-offset"); }
+    if (tag == "select") keys.insert("content-radius");
+    if (tag == "switch" || tag == "checkbox" || tag == "select" || tag == "table") keys.insert("content-background-color");
+    if (tag == "table") { keys.insert("scrollbar-color"); keys.insert("scrollbar-width"); keys.insert("placeholder-color"); keys.erase("outline-color"); keys.erase("outline-width"); keys.erase("outline-offset"); keys.insert("table-column-widths"); keys.insert("table-selection-width"); keys.insert("text-inset"); keys.insert("gap"); keys.insert("detail-font-size"); keys.insert("check-background"); keys.insert("check-border"); keys.insert("check-radius"); }
+    return keys;
+}
+inline std::set<std::string> cssProperties(const std::string& tag) {
+    auto keys = componentCssProperties(tag);
+    // Material opacity affects only the corresponding fill, never text/children.
+    if (keys.count("background") || keys.count("background-color")) keys.insert("background-opacity");
+    if (keys.count("content-background-color")) keys.insert("content-background-opacity");
     return keys;
 }
 inline std::string stripComments(std::string source) {
@@ -109,17 +139,21 @@ inline std::string css(std::string source, const std::string& scope = {}, const 
                 tag = component->second; mapped = tag + ".one-" + type + selector.substr(type.size());
             } else if(!classOnly) {
                 tag = type;
-                bool found = false; for (auto& c : components()) if (c.second == tag) found = true;
+                bool found = tag=="state-view-part" || tag=="pane-header-part" || tag=="pane-grid-part" || tag=="dock-workspace-part"; for (auto& c : components()) if (c.second == tag) found = true;
                 if (!found) fail("Unknown CSS component: " + type);
             }
             const auto colon=selector.find(':');
             if(colon!=selector.npos) {
                 pseudo=selector.substr(colon+1);
                 std::set<std::string> states;
-                if(tag=="button")states={"hover","pressed","focus","disabled"};
+                if(tag=="button"||tag=="interactive-surface")states={"hover","pressed","focus","disabled"};
+                else if(tag=="state-view"||tag=="state-view-part"||tag=="pane-header-part"||tag=="pane-grid-part")states={"hover","pressed","focus","disabled"};
+                else if(tag=="dock-workspace-part")states={"hover","pressed","focus","disabled","selected"};
                 else if(tag=="input")states={"hover","focus","disabled","read-only"};
-                else if(tag=="switch" || tag=="select")states={"hover","pressed","focus","disabled","selected"};
-            else if(tag=="table")states={"hover","pressed","selected"};
+                else if(tag=="switch" || tag=="checkbox" || tag=="select" || tag=="tabs")states={"hover","pressed","focus","disabled","selected"};
+            else if(tag=="table" || tag=="list" || tag=="virtual-list")states={"hover","pressed","selected"};
+                else if(tag=="tree-view")states={"hover","pressed","selected","focus","disabled"};
+                if(tag=="switch" || tag=="checkbox")states.insert("checked");
                 if(!states.count(pseudo))fail("State is not consumed by "+tag+": "+pseudo);
             }
             if (!scope.empty()) { const auto pseudo = mapped.find(':'); mapped.insert(pseudo == mapped.npos ? mapped.size() : pseudo, "." + scope); }
@@ -135,14 +169,35 @@ inline std::string css(std::string source, const std::string& scope = {}, const 
             if(property=="display"&&cssValue!="none"&&cssValue!="flex")fail("CSS_LAYOUT: display expects none/flex");
             if(property=="flex-direction"&&cssValue!="row"&&cssValue!="column")fail("CSS_LAYOUT: flex-direction expects row/column");
             if(property=="flex-wrap"&&cssValue!="wrap"&&cssValue!="nowrap")fail("CSS_LAYOUT: flex-wrap expects wrap/nowrap");
-            if(std::set<std::string>{"width","height","min-width","min-height","flex-basis"}.count(property) &&
+            if(std::set<std::string>{"width","height","min-width","min-height","max-width","max-height"}.count(property) &&
                cssValue.rfind("var(",0)!=0&&!std::regex_match(cssValue,std::regex(R"(^[0-9]+(\.[0-9]+)?px$)")))fail("CSS_LAYOUT: finite nonnegative px required");
+            if(property=="flex-basis" && cssValue.rfind("var(",0)!=0 && !std::regex_match(cssValue,std::regex(R"(^[0-9]+(\.[0-9]+)?(px|%)$)")))fail("CSS_LAYOUT: flex-basis requires finite nonnegative px or percentage");
+            if(property=="order" && cssValue.rfind("var(",0)!=0 && !std::regex_match(cssValue,std::regex(R"(^-?[0-9]+$)")))fail("CSS_LAYOUT: order requires an integer");
+            if(property=="table-column-widths" && cssValue.rfind("var(",0)!=0) {
+                std::istringstream tokens(cssValue);std::string token;bool any=false;
+                while(tokens>>token) {
+                    any=true;if(token=="auto")continue;
+                    if(!std::regex_match(token,std::regex(R"(^[0-9]+(\.[0-9]+)?px$)")))fail("CSS_LAYOUT: table columns require auto or nonnegative px");
+                    try {if(!std::isfinite(std::stof(token)))fail("CSS_LAYOUT: finite table width required");}
+                    catch(const std::out_of_range&){fail("CSS_LAYOUT: table width exceeds finite range");}
+                }
+                if(!any)fail("CSS_LAYOUT: nonempty table column widths required");
+            }
+            if(property=="table-selection-width" && cssValue.rfind("var(",0)!=0) {
+                if(!std::regex_match(cssValue,std::regex(R"(^[0-9]+(\.[0-9]+)?px$)")))fail("CSS_LAYOUT: table selection width requires px");
+                try {const auto n=std::stof(cssValue);if(n<24||n>128)fail("CSS_LAYOUT: table selection width requires 24..128px");}
+                catch(const std::out_of_range&){fail("CSS_LAYOUT: table selection width exceeds range");}
+            }
+            if(property=="order" && cssValue.rfind("var(",0)!=0) {
+                try {const auto n=std::stoll(cssValue);if(n < -1000000 || n > 1000000)fail("CSS_LAYOUT: order exceeds range");}
+                catch(const std::out_of_range&){fail("CSS_LAYOUT: order exceeds range");}
+            }
             if (trim(declaration.substr(colon + 1)).empty()) fail("Empty CSS value");
             if (selector == ":root") {
                 if (property.rfind("--", 0) != 0) fail(":root only accepts custom properties");
                 if (!scope.empty()) fail("Scoped :root tokens are unsupported; put shared tokens in external CSS");
             } else if(insideQuery && (property=="container-name"||property=="container-type"))fail("CONTAINER_DEPENDENCY: query cannot establish a container");
-            else if (!cssProperties(tag).count(property) && !std::set<std::string>{"display","width","height","min-width","min-height","flex-basis","flex-grow","flex-shrink"}.count(property) &&
+            else if (!cssProperties(tag).count(property) && !std::set<std::string>{"display","width","height","min-width","min-height","max-width","max-height","flex-basis","flex-grow","flex-shrink","order"}.count(property) &&
                      !((tag=="stack"||tag.empty())&&std::set<std::string>{"container-name","container-type","flex-direction","flex-wrap","gap"}.count(property))) fail("Property is not consumed by " + tag + ": " + property);
             else if(property=="background-color" && lowerValue(trim(declaration.substr(colon+1))).find("gradient(")!=std::string::npos) fail("Use background for gradients on supported components");
             else if(tag=="table" && !pseudo.empty() && property!="background-color") fail("DataTable row states only consume background-color");

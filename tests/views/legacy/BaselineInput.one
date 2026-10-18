@@ -1,0 +1,3 @@
+<template view-model="Root">
+  <Input name="legacy" view-id="legacy-root" v-model="text" password="true" password-mask="*" prefix-icon="search" @submit="submit"/>
+</template>

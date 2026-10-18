@@ -50,7 +50,7 @@ uint32_t ViewCompiler::lower(Source &s, Node n, const std::vector<Scope> &scopes
         bool transparent = false;
         if (parent != none && image.records[NODE][parent][0] == 1) {
             const auto &rule = image.components[image.records[NODE][parent][1]].childRule;
-            transparent = rule == "pane-collection" || rule == "dock-collection";
+            transparent = rule == "pane-collection" || rule == "dock-collection" || rule == "grid-collection";
         }
         if (transparent && !explicitId) at.fail("WORKSPACE_SCOPE: explicit view-id required");
         if (transparent && stable.find('/') != std::string::npos)
@@ -102,7 +102,14 @@ uint32_t ViewCompiler::lower(Source &s, Node n, const std::vector<Scope> &scopes
         auto calleeScopes = scopes;
         calleeScopes.front().variable.clear();
         const auto beginNodes = image.count(NODE);
-        auto target = makeTemplate(child, child.root, calleeScopes, child.relative + ":" + path);
+        uint32_t target;
+        try {
+            target = makeTemplate(child, child.root, calleeScopes, child.relative + ":" + path);
+        } catch (const Error& e) {
+            if (std::string(e.what()).find("SLOT_ROOT:") != std::string::npos)
+                at.fail(e.what()); // Preserve the declaration detail, anchored at the call.
+            throw;
+        }
         active.erase(key);
         const bool workspaceCall = scopes.front().workspace || std::any_of(
             image.records[NODE].begin() + beginNodes, image.records[NODE].end(), [&](const auto &node) {
@@ -117,6 +124,14 @@ uint32_t ViewCompiler::lower(Source &s, Node n, const std::vector<Scope> &scopes
             ch.attrs.erase("slot");
             groups[name].push_back(ch);
         }
+        std::map<std::string, uint32_t> slotFlags;
+        for (const auto& declaration : image.records[SLOT])
+            if (declaration[0] == target && !(declaration[3] & slotSupplied)) {
+                const auto& name = image.strings[declaration[1]];
+                slotFlags[name] = declaration[3] & slotSingleRoot;
+                if ((declaration[3] & slotSingleRoot) && !groups.count(name) && declaration[2] == none)
+                    at.fail("SLOT_ROOT: " + name + " requires exactly one root (got 0)");
+            }
         for (auto &group : groups)
         {
             if (!slots[target].count(group.first))
@@ -128,8 +143,15 @@ uint32_t ViewCompiler::lower(Source &s, Node n, const std::vector<Scope> &scopes
             wrapper.column = n.column;
             wrapper.endLine = n.endLine;
             wrapper.endColumn = n.endColumn;
+            const auto flags = slotFlags.at(group.first);
+            if (flags & slotSingleRoot) {
+                if (group.second.size() != 1)
+                    at.fail("SLOT_ROOT: " + group.first + " requires exactly one root (got " +
+                            std::to_string(group.second.size()) + ")");
+                wrapper = group.second.front();
+            }
             auto body = makeTemplate(s, wrapper, scopes, s.relative + ":" + path + ":slot:" + group.first);
-            image.add(SLOT, {call, image.sid(group.first), body, 1, 0, scopes[0].model, sourceSpan, 0});
+            image.add(SLOT, {call, image.sid(group.first), body, slotSupplied | flags, 0, scopes[0].model, sourceSpan, 0});
         }
         image.records[NODE][index][0] = 3;
         image.records[NODE][index][9] = call;
@@ -156,17 +178,26 @@ uint32_t ViewCompiler::lower(Source &s, Node n, const std::vector<Scope> &scopes
     if (n.tag == "slot")
     {
         auto name = n.attrs.count("name") ? n.attrs.at("name").value : "default";
-        if (n.attrs.size() > (n.attrs.count("name") ? 1u : 0u) || !n.text.empty() || name.empty() ||
+        const auto flags = n.attrs.count("root") ? slotSingleRoot : 0u;
+        if (flags && n.attrs.at("root").value != "single")
+            at.fail("SLOT_ROOT: root must be the static value single");
+        if (n.attrs.size() > n.attrs.count("name") + n.attrs.count("root") || !n.text.empty() || name.empty() ||
             !slots[tmpl].insert(name).second)
             at.fail("SLOT_NAME: invalid/duplicate outlet");
         uint32_t body = none;
         if (!n.children.empty())
         {
-            n.tag = "Column";
-            n.attrs.clear();
-            body = makeTemplate(s, n, scopes, s.relative + ":" + path + ":fallback");
+            Node fallback = n;
+            fallback.tag = "Column";
+            fallback.attrs.clear();
+            if (flags) {
+                if (n.children.size() != 1)
+                    at.fail("SLOT_ROOT: fallback requires exactly one root");
+                fallback = n.children.front();
+            }
+            body = makeTemplate(s, fallback, scopes, s.relative + ":" + path + ":fallback");
         }
-        auto slot = image.add(SLOT, {tmpl, image.sid(name), body, 0, 0, scopes[0].model, sourceSpan, 0});
+        auto slot = image.add(SLOT, {tmpl, image.sid(name), body, flags, 0, scopes[0].model, sourceSpan, 0});
         image.records[NODE][index][0] = 4;
         image.records[NODE][index][9] = slot;
         return index;
@@ -190,7 +221,7 @@ uint32_t ViewCompiler::lower(Source &s, Node n, const std::vector<Scope> &scopes
         std::set<std::string> names;
         for(auto& child:n.children) {
             auto slot=child.attrs.find("slot");
-            if(slot==child.attrs.end()||!(slot->second.value=="empty"||slot->second.value=="error"||(c.name=="MediaPicker"&&slot->second.value=="preview"))||!names.insert(slot->second.value).second)at.fail("MEDIA_SLOT: unique empty/preview/error slots required");
+            if(slot==child.attrs.end()||!(slot->second.value=="empty"||slot->second.value=="error"||(c.name=="MediaPicker"&&slot->second.value=="preview")||(c.name=="MediaPreview"&&slot->second.value=="loading"))||!names.insert(slot->second.value).second)at.fail("MEDIA_SLOT: unique slots required (empty/error, picker preview, preview loading)");
             auto attribute=slot->second;child.attrs.erase(slot);
             Node wrapper=child;wrapper.tag="MediaSlot";wrapper.text.clear();wrapper.attrs.clear();wrapper.attrs["slot-name"]=attribute;wrapper.children={std::move(child)};child=std::move(wrapper);
         }

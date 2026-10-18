@@ -23,6 +23,7 @@ set(ONEUI_VIEW_RUNTIME_SOURCES
     src/views/dock_properties.cpp
     src/views/dock_events.cpp
     src/views/workspace_properties.cpp
+    src/views/shortcut_properties.cpp
     src/views/workspace_events.cpp
     src/views/pane_header_properties.cpp
     src/views/workspace_drag.cpp

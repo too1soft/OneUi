@@ -1,4 +1,5 @@
 #include "oneui_c_api_view_internal.h"
+// Included implementations provide stable-key workspace geometry and child mounts.
 namespace oneui::capi::views {
 std::shared_ptr<Runtime> runtime(OneUiView *view) {
     check(view && view->value, ONEUI_VIEW_INVALID_ARGUMENT, "View required");
@@ -8,6 +9,11 @@ std::shared_ptr<Runtime> runtime(OneUiView *view) {
 }
 } // namespace oneui::capi::views
 using namespace oneui::capi::views;
+// Metrics also owns the additive focus and workspace-action capabilities.
+#include "oneui_c_api_view_metrics.inc"
+#include "oneui_c_api_view_child.inc"
+#include "oneui_c_api_view_workspace.inc" // Window-checked native/declarative strip hosts.
+#include "oneui_c_api_view_code_editor.inc"
 uint32_t oneui_view_protocol_version(void) { return ONEUI_VIEW_PROTOCOL_VERSION; }
 OneUiViewResult oneui_view_instantiate(OneUiViewMount *mountHandle, const uint8_t *bytes,
                                        size_t length, const OneUiViewModelVTable *table, void *vm,
@@ -34,10 +40,6 @@ OneUiViewResult oneui_view_instantiate(OneUiViewMount *mountHandle, const uint8_
         try {
             view->initialize(table, vm);
             mount->check();
-            std::string css = mount->externalCss;
-            for (const auto &r : view->image.records[oneview::CSS])
-                css += '\n' + view->image.strings[r[2]];
-            view->styles->replace(css, mount->density);
             auto handle = std::make_unique<OneUiView>();
             handle->value = view;
             handle->root.widget = view->root->element.widget;

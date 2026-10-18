@@ -1,9 +1,24 @@
+#include "oneui/ui_icon_names.h"
 #include "capi/oneui_c_api_view_internal.h"
 #include "fixture.h"
+#include "oneui/layout/overlay_host.h"
+#include "oneui/controls/tabs.h"
+#include "oneui/layout/panel.h"
+#include "oneui/layout/dock_workspace_view.h"
+#include "oneui/controls/popup.h"
+#include "oneui/controls/table.h"
+#include "oneui/controls/virtual_list.h"
+#include "oneui/controls/code_editor.h"
+#include <cstdint>
 #include <thread>
 using namespace viewtest;
 namespace {
 struct Window final : oneui::Window {
+    oneui::Widget *focused = nullptr;
+    bool requestFocus(oneui::Widget *widget, bool) override {
+        if (!widget || widget->disabled()) return false;
+        focused = widget; return true;
+    }
     std::shared_ptr<oneui::Widget> content;
     std::vector<std::function<void()>> queued;
     void setContent(std::shared_ptr<oneui::Widget> v) override { content = std::move(v); }
@@ -59,12 +74,310 @@ struct ApiCase : Case {
     }
 };
 } // namespace
+#include "child_mount.inc"
+#include "child_destination.inc"
+#include "child_destination_lifecycle.inc"
+#include "virtual_template_metrics.inc"
+#include "overlay_focus_window.inc"
 int main(int argc, char **argv) {
+    for (const auto name : {"note-outline", "box-outline", "sparkles-outline", "toolbox", "shield-outline", "globe", "import-outline", "sidebar-outline"}) {
+        expect(oneui::ui::namedIcon(name).has_value(), "shell icon name");
+    }
+    expect((oneview::registry().at("Row").property("class").flags & 2) != 0, "reactive Row presentation classes");
     if (argc != 2)
         return 2;
     try {
-        expect(oneui_utf8_abi_version() == 44 && oneui_view_protocol_version() == 1,
+        childMountContract(argv[1]);
+        childDestinationContract(argv[1]);
+        childDestinationCloseContract(argv[1]);
+        childDestinationNativeWindowContract(argv[1]);
+        childDestinationTeardownContract(argv[1]);
+        virtualTemplateMetricsContract(argv[1]);
+        overlayFocusNativeWindowContract();
+        expect(oneui_utf8_abi_version() == 45 && oneui_view_protocol_version() == 1,
                "ABI and protocol versions");
+        {
+            ApiCase c(argv[1]);
+            c.start();
+            auto label = c.view->value->root->children[0]->element.widget;
+            label->setAccessibleName(L"metrics-unique");
+            label->setFrame({12, 24, 160, 28});
+            OneUiViewElementMetrics metrics{};
+            metrics.struct_size = sizeof(metrics);
+            auto str = [](const char *text) { return OneUiUtf8String{text, std::char_traits<char>::length(text)}; };
+            auto name = str("metrics-unique");
+            expect(oneui_view_mount_set_styles(c.mount,
+                       str("MountPoint { background: #0d0f1359; border-width: 0px; }"), 0) == 0,
+                   "MountPoint consumes its native panel surface styles");
+            OneUiWidget *slot = nullptr;
+            expect(oneui_view_mount_point(c.view, name, &slot) == ONEUI_VIEW_TYPE && !slot,
+                   "ordinary controls cannot escape as mount points");
+            oneui::ui::Mount factory;
+            auto point = factory.make("MountPoint");
+            expect(bool(point.as<oneui::Panel>()), "MountPoint is a page destination");
+            point.widget->setAccessibleName(L"page-slot");
+            c.view->value->root->element.as<oneui::View>()->add(point.widget);
+            expect(oneui_view_mount_point(c.view, str("page-slot"), &slot) == 0 && slot,
+                   "retain named page mount point");
+            expect(slot->widget == point.widget, "mount lookup retains declared destination");
+            OneUiViewMount *pageMount = nullptr;
+            expect(oneui_view_mount_create(&c.window, slot, &pageMount) == 0,
+                   "independent View can mount in declared destination");
+            oneui_view_mount_destroy(pageMount);
+            oneui_widget_destroy(slot);
+            slot = nullptr;
+            expect(oneui_view_mount_point(c.view, str("missing"), &slot) == ONEUI_VIEW_NOT_FOUND,
+                   "missing mount point rejected");
+            expect(oneui_view_mount_point(c.view, str("page-slot"), nullptr) == ONEUI_VIEW_INVALID_ARGUMENT,
+                   "mount point requires output");
+            expect(oneui_view_mount_register_workspace_tabs(c.mount,str("terminal"),str("tabs"),nullptr)
+                == ONEUI_VIEW_INVALID_ARGUMENT,"workspace tabs require widget");
+            OneUiWidget unattached;unattached.widget=std::make_shared<oneui::Tabs>();
+            expect(oneui_view_mount_register_workspace_tabs(c.mount,str("terminal"),str("tabs"),&unattached)
+                == ONEUI_VIEW_INVALID_ARGUMENT,"workspace tabs reject foreign/unmounted widget");
+            expect(oneui_view_workspace_tab_drag(c.view,str("missing"),str("a"),0,0,0)
+                == ONEUI_VIEW_NOT_FOUND,"workspace drag rejects unknown domain");
+            expect(oneui_view_workspace_tab_drag(c.view,str("missing"),str("a"),99,0,0)
+                == ONEUI_VIEW_INVALID_ARGUMENT,"workspace drag validates phase");
+            OneUiWidget stripHost;stripHost.widget=std::make_shared<oneui::Panel>();
+            expect(oneui_view_mount_register_workspace_tabs(c.mount,str("terminal"),str("host"),&stripHost)
+                == ONEUI_VIEW_INVALID_ARGUMENT,"declarative strip rejects a foreign host");
+            std::dynamic_pointer_cast<oneui::View>(c.view->value->root->element.widget)->add(stripHost.widget);
+            expect(oneui_view_mount_register_workspace_tabs(c.mount,str("terminal"),str("host"),&stripHost)
+                == ONEUI_VIEW_NOT_FOUND,"same-window declarative host passes validation and requires an existing domain");
+            {
+                auto element = factory.make("CodeEditor");
+                auto editor = element.as<oneui::CodeEditor>();
+                expect(bool(editor), "CodeEditor factory");
+                editor->setAccessibleName(L"sql-editor");
+                editor->setText(L"select 1;\n中");
+                auto root = c.view->value->root->element.as<oneui::View>();
+                root->add(element.widget);
+                const auto sql = str("sql-editor");
+                OneUiViewCodeEditorState state{};
+                state.struct_size = sizeof(state);
+                expect(oneui_view_code_editor_state(c.view, sql, &state) == 0 && state.line_count == 2 && state.length == 13,
+                       "editor state");
+                size_t length = 0;
+                expect(oneui_view_code_editor_text(c.view, sql, 0, UINT64_MAX, nullptr, 0, &length) == 0 && length == 13,
+                       "editor text size query");
+                std::string buffer(length, '\0');
+                expect(oneui_view_code_editor_text(c.view, sql, 0, UINT64_MAX, buffer.data(), 4, &length) == ONEUI_VIEW_LIMIT,
+                       "editor text needs a large enough buffer");
+                expect(oneui_view_code_editor_text(c.view, sql, 0, 6, buffer.data(), buffer.size(), &length) == 0 &&
+                           buffer.substr(0, length) == "select",
+                       "editor range read");
+                expect(oneui_view_code_editor_replace(c.view, sql, 0, 6, str("SELECT"), state.revision) == 0,
+                       "editor replace at the expected revision");
+                expect(oneui_view_code_editor_replace(c.view, sql, 0, 6, str("x"), state.revision) == ONEUI_VIEW_STALE_CHANGE,
+                       "stale editor replace rejected");
+                expect(oneui_view_code_editor_select(c.view, sql, 7, 8) == 0, "editor select");
+                expect(oneui_view_code_editor_state(c.view, sql, &state) == 0 && state.anchor == 7 && state.caret == 8,
+                       "editor selection state");
+                expect(oneui_view_code_editor_state(c.view, str("metrics-unique"), &state) == ONEUI_VIEW_TYPE,
+                       "non-editor names rejected");
+                expect(editor->text() == L"SELECT 1;\n中", "editor replacement applied");
+                int created = 0, canUndo = 1, canRedo = 1, applied = 0;
+                expect(oneui_view_code_editor_select_document(c.view, sql, str("other"), &created) == 0 && created == 1,
+                       "editor document created");
+                expect(oneui_view_code_editor_reset(c.view, sql, str("echo 1")) == 0 && editor->text() == L"echo 1",
+                       "editor reset loads the document");
+                expect(oneui_view_code_editor_history(c.view, sql, &canUndo, &canRedo) == 0 && !canUndo && !canRedo,
+                       "reset starts a fresh history");
+                expect(oneui_view_code_editor_execute(c.view, sql, 3, &applied) == 0 && applied == 1 && editor->findOpen(),
+                       "editor find command");
+                expect(oneui_view_code_editor_execute(c.view, sql, 99, &applied) == ONEUI_VIEW_INVALID_ARGUMENT,
+                       "unknown editor command rejected");
+                expect(oneui_view_code_editor_select_document(c.view, sql, str(""), &created) == 0 && created == 0 &&
+                           editor->text() == L"SELECT 1;\n中",
+                       "editor document restored");
+                expect(oneui_view_code_editor_close_document(c.view, sql, str("other")) == 0 &&
+                           editor->documentIds().size() == 1,
+                       "editor document closed");
+                editor->setReadOnly(true);
+                expect(oneui_view_code_editor_replace(c.view, sql, 0, 1, str("x"), 0) == ONEUI_VIEW_READ_ONLY,
+                       "read-only editor rejects edits");
+                auto children = root->children();
+                children.erase(std::remove(children.begin(), children.end(), element.widget), children.end());
+                root->reconcileChildren(std::move(children));
+            }
+            expect(oneui_view_element_metrics(c.view, name, &metrics) == 0 &&
+                metrics.x == 12 && metrics.y == 24 && metrics.width == 160 &&
+                metrics.height == 28 && !metrics.scrollable, "read-only element metrics");
+            int focused = -1;
+            expect(oneui_view_element_focused(c.view, name, &focused) == 0 && !focused,
+                "unfocused named element");
+            expect(oneui_view_element_focused(c.view, str("missing"), &focused) == ONEUI_VIEW_NOT_FOUND && !focused,
+                "focus missing name resets output");
+            expect(oneui_view_element_focused(c.view, name, nullptr) == ONEUI_VIEW_INVALID_ARGUMENT,
+                "focus requires output");
+            int visible = -1;
+            expect(oneui_view_element_visible(c.view, name, &visible) == 0 && visible,
+                "named element visible");
+            label->setVisible(false);
+            expect(oneui_view_element_visible(c.view, name, &visible) == 0 && !visible,
+                "named element hidden");
+            label->setVisible(true);
+            expect(oneui_view_element_visible(c.view, str("missing"), &visible) ==
+                ONEUI_VIEW_NOT_FOUND && !visible, "visibility missing name resets output");
+            expect(oneui_view_element_visible(c.view, name, nullptr) ==
+                ONEUI_VIEW_INVALID_ARGUMENT, "visibility requires output");
+            int visibilityForeign = 0;
+            std::thread visibilityThread([&] {
+                int result = -1;
+                visibilityForeign = oneui_view_element_visible(c.view, name, &result);
+            });
+            visibilityThread.join();
+            expect(visibilityForeign == ONEUI_VIEW_WRONG_THREAD, "visibility UI thread ownership");
+            expect(oneui_view_element_metrics(c.view, str("missing"), &metrics) ==
+                ONEUI_VIEW_NOT_FOUND, "metrics missing name");
+            expect(oneui_view_element_metrics(c.view, str(""), &metrics) ==
+                ONEUI_VIEW_INVALID_ARGUMENT, "metrics empty name");
+            expect(oneui_view_element_metrics(c.view, name, nullptr) ==
+                ONEUI_VIEW_INVALID_ARGUMENT, "metrics missing output");
+            int foreign = 0;
+            std::thread t([&] { foreign = oneui_view_element_metrics(c.view, name, &metrics); });
+            t.join();
+            expect(foreign == ONEUI_VIEW_WRONG_THREAD, "metrics UI thread ownership");
+            auto other = c.view->value->root->children[1]->element.widget;
+            other->setAccessibleName(L"focus-input");
+            focused = 0;
+            expect(oneui_view_element_focused(c.view,str("focus-input"),&focused)==0&&!focused,
+                   "focus query reads unfocused state");
+            std::dynamic_pointer_cast<oneui::View>(c.view->value->root->element.widget)->requestFocus(other.get(),true);
+            expect(oneui_view_element_focused(c.view,str("focus-input"),&focused)==0&&focused,
+                   "focus query reads focused state without changing it");
+            expect(oneui_view_element_focused(c.view,str("missing"),&focused)==ONEUI_VIEW_NOT_FOUND,
+                   "focus query validates unique name");
+            expect(oneui_view_element_focused(c.view,name,nullptr)==ONEUI_VIEW_INVALID_ARGUMENT,
+                   "focus query validates output");
+            std::thread fq([&]{foreign=oneui_view_element_focused(c.view,name,&focused);});
+            fq.join();expect(foreign==ONEUI_VIEW_WRONG_THREAD,"focus query requires UI thread");
+            expect(oneui_view_dock_action(c.view,name,0,str("terminal"),0)==ONEUI_VIEW_INVALID_ARGUMENT,
+                   "dock action requires a DockWorkspace");
+            expect(oneui_view_dock_action(c.view,name,99,str("terminal"),0)==ONEUI_VIEW_INVALID_ARGUMENT,
+                   "dock action rejects unknown action");
+            auto dock = std::make_shared<oneui::DockWorkspaceView>();
+            dock->setAccessibleName(L"geometry-workspace");
+            auto pane = std::make_shared<oneui::DockItemView>();
+            pane->key = "stable-pane"; pane->setAccessibleName(L"focus-input");
+            dock->add(pane);
+            auto rootView=std::dynamic_pointer_cast<oneui::View>(c.view->value->root->element.widget);
+            auto originalChildren=rootView->children();
+            rootView->add(dock);
+            pane->setFrame({10,20,320,180});
+            OneUiViewElementMetrics paneMetrics{};paneMetrics.struct_size=sizeof(paneMetrics);
+            expect(oneui_view_dock_item_metrics(c.view,str("geometry-workspace"),str("stable-pane"),&paneMetrics)==0 &&
+                paneMetrics.x==10 && paneMetrics.y==20 && paneMetrics.width==320 && paneMetrics.height==180,
+                "stable pane geometry does not depend on duplicate accessible labels");
+            expect(oneui_view_dock_item_metrics(c.view,str("geometry-workspace"),str("missing"),&paneMetrics)==ONEUI_VIEW_NOT_FOUND,
+                "pane geometry rejects missing key");
+            expect(oneui_view_dock_item_metrics(c.view,str("geometry-workspace"),str("stable-pane"),nullptr)==ONEUI_VIEW_INVALID_ARGUMENT,
+                "pane geometry validates output");
+            std::thread pg([&]{foreign=oneui_view_dock_item_metrics(c.view,str("geometry-workspace"),str("stable-pane"),&paneMetrics);});
+            pg.join();expect(foreign==ONEUI_VIEW_WRONG_THREAD,"pane geometry requires UI thread");
+            rootView->reconcileChildren(originalChildren);
+            expect(oneui_view_mount_focus_element(c.mount, str("focus-input"), 1, &focused) == 0 && focused &&
+                static_cast<Window*>(c.window.window.get())->focused == other.get(), "focus named native input");
+            other->setDisabled(true);
+            expect(oneui_view_mount_focus_element(c.mount, str("focus-input"), 1, &focused) == 0 && !focused,
+                "focus reports native rejection");
+            other->setDisabled(false);
+            expect(oneui_view_mount_focus_element(c.mount, str("missing"), 1, &focused) == ONEUI_VIEW_NOT_FOUND,
+                "focus rejects missing name");
+            expect(oneui_view_mount_focus_element(c.mount, str(""), 1, &focused) == ONEUI_VIEW_INVALID_ARGUMENT &&
+                oneui_view_mount_focus_element(c.mount, name, 1, nullptr) == ONEUI_VIEW_INVALID_ARGUMENT,
+                "focus validates name and output");
+            std::thread ft([&] { foreign = oneui_view_mount_focus_element(c.mount, name, 1, &focused); });
+            ft.join(); expect(foreign == ONEUI_VIEW_WRONG_THREAD, "focus requires UI thread");
+            { Callback callback(*c.view->value, Phase::Mutate);
+              expect(oneui_view_mount_focus_element(c.mount, name, 1, &focused) == ONEUI_VIEW_REENTRANT,
+                     "focus mutation is not permitted during VM callback"); }
+            other->setAccessibleName(L"metrics-unique");
+            expect(oneui_view_mount_focus_element(c.mount, name, 1, &focused) == ONEUI_VIEW_INVALID_ARGUMENT,
+                "focus rejects ambiguous name");
+            expect(oneui_view_element_metrics(c.view, name, &metrics) ==
+                ONEUI_VIEW_INVALID_ARGUMENT, "metrics ambiguous name rejected");
+            other->setAccessibleName(L"overlay-base-input");
+            auto badge=std::make_shared<oneui::Label>();badge->setAccessibleName(L"overlay-badge");
+            auto overlay=std::make_shared<oneui::TemplateOverlay>(c.view->value->root->element.widget,badge);
+            c.view->value->root->element.widget=overlay;
+            expect(oneui_view_element_metrics(c.view,str("overlay-badge"),&metrics)==0 &&
+                oneui_view_mount_focus_element(c.mount,str("overlay-base-input"),1,&focused)==0 && focused,
+                "named lookup includes native overlay base and foreground");
+            auto popup=std::make_shared<oneui::Popup>();
+            popup->setContent(overlay);
+            c.view->value->root->element.widget=popup;
+            expect(oneui_view_element_metrics(c.view,str("overlay-badge"),&metrics)==0 &&
+                oneui_view_mount_focus_element(c.mount,str("overlay-base-input"),1,&focused)==0 && focused,
+                "named lookup includes content beneath declarative popup");
+            other->onFocusChanged(true);
+            expect(oneui_view_element_focused(c.view,str("overlay-base-input"),&focused)==0 && focused,
+                "focus query reads native state");
+            auto table=std::make_shared<oneui::Table>();
+            table->setAccessibleName(L"metrics-table");
+            table->setFrame({0,0,400,200}); table->setRowHeight(30);
+            table->setRows(std::vector<std::vector<std::wstring>>(100,{L"row"}));
+            table->setScrollOffset(180);
+            c.view->value->root->element.widget=table;
+            expect(oneui_view_element_metrics(c.view,str("metrics-table"),&metrics)==0 &&
+                metrics.scrollable && metrics.scroll_y==180 && metrics.max_scroll_y>2500,
+                "rich Table exposes actual scroll metrics");
+            auto list=std::make_shared<oneui::VirtualList>();
+            list->setAccessibleName(L"metrics-list");list->setFrame({0,0,400,200});list->setRowHeight(60);
+            list->setItems(std::vector<oneui::ListItem>(100,{L"row",L"detail"}));list->setScrollOffset(180);
+            c.view->value->root->element.widget=list;
+            expect(oneui_view_element_metrics(c.view,str("metrics-list"),&metrics)==0 &&
+                metrics.scrollable && metrics.scroll_y==180 && metrics.max_scroll_y==5800,
+                "VirtualList exposes actual scroll metrics for restoration and wheel evidence");
+            c.view->value->root->element.widget=table;
+            int focusForeign=0;
+            std::thread focusReadThread([&] { focusForeign=oneui_view_element_focused(c.view,str("metrics-table"),&focused); });
+            focusReadThread.join(); expect(focusForeign==ONEUI_VIEW_WRONG_THREAD,"focus query owns UI thread");
+            oneui_view_disconnect(c.view);
+            expect(oneui_view_element_focused(c.view, name, &focused) == ONEUI_VIEW_CLOSED,"closed focus query rejected");
+            expect(oneui_view_element_visible(c.view, name, &visible) == ONEUI_VIEW_CLOSED,
+                "visibility closed view rejected");
+            expect(oneui_view_mount_focus_element(c.mount, name, 1, &focused) == ONEUI_VIEW_CLOSED,
+                "focus rejects closed view");
+            expect(oneui_view_element_metrics(c.view, name, &metrics) ==
+                ONEUI_VIEW_CLOSED, "metrics closed view rejected");
+        }
+        {
+            OneUiWindow window;
+            window.window = std::make_unique<Window>();
+            auto host = std::make_shared<oneui::OverlayHost>();
+            auto destination = std::make_shared<oneui::Panel>();
+            host->setContent(destination);
+            window.rootContent = host;
+            window.window->setContent(host);
+            OneUiWidget handle;
+            handle.widget = destination;
+            OneUiViewMount *mount = nullptr;
+            expect(oneui_view_mount_create(&window, &handle, &mount) == ONEUI_VIEW_OK,
+                   "mount panel under overlay host content");
+            oneui_view_mount_destroy(mount);
+            handle.widget = std::make_shared<oneui::Panel>();
+            expect(oneui_view_mount_create(&window, &handle, &mount) == ONEUI_VIEW_INVALID_ARGUMENT,
+                   "reject panel outside this window");
+            host->addOverlay(handle.widget);
+            expect(oneui_view_mount_create(&window, &handle, &mount) == ONEUI_VIEW_OK,
+                   "mount panel under overlay entry");
+            oneui_view_mount_destroy(mount);
+        }
+        {
+            auto path = std::filesystem::path(argv[1]).parent_path() / "ExternalTheme.oneview";
+            ApiCase c(path.string().c_str());
+            // Scoped declarations may reference application tokens that are absent
+            // from the SDK default theme, including on the very first mount.
+            const std::string applicationCss = ":root { --application-ink:#123456; }";
+            expect(oneui_view_mount_set_styles(c.mount,
+                       {applicationCss.data(), applicationCss.size()}, 0) == 0,
+                   "application token stylesheet");
+            c.start();
+            expect(oneui_view_root(c.view) != nullptr,
+                   "initial scoped CSS resolves application tokens");
+        }
         {
             ApiCase c(argv[1]);
             c.start();

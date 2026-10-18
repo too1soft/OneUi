@@ -7,10 +7,12 @@ void validateChildren(const Node &n, const ComponentContract &c, const Location 
 {
     auto rule = c.childRule;
     auto count = n.children.size();
+    if (rule == "virtual-rows" && (count != 1 || !n.children[0].attrs.count("v-for")))
+        at.fail("VIRTUAL_ROWS: exactly one keyed v-for child required");
     if(rule=="header-slots")for(const auto& child:n.children)
         if(child.tag!="HeaderSlot")at.fail("HEADER_SLOT: invalid native slot");
-    if (rule == "pane-collection" || rule == "dock-collection") {
-        const auto expected = rule == "pane-collection" ? "Pane" : "DockItem";
+    if (rule == "pane-collection" || rule == "dock-collection" || rule == "grid-collection") {
+        const auto expected = rule == "pane-collection" ? "Pane" : rule == "grid-collection" ? "GridItem" : "DockItem";
         for (const auto &child : n.children)
             if (child.tag != expected)
                 at.fail("WORKSPACE_CHILDREN: expected direct stable item");
@@ -69,6 +71,7 @@ void validateStatic(const std::string &component, const std::string &key, const 
     static const std::map<std::string, std::set<std::string>> enums = {
         {"orientation", {"horizontal", "vertical"}},
         {"presentation", {"document", "segmented"}},
+        {"sizing", {"compact", "equal"}},
         {"variant", {"normal", "primary", "danger", "ghost"}},
         {"justify", {"start", "center", "end", "space-between"}},
         {"preset", {"fade", "expand"}},
@@ -77,7 +80,7 @@ void validateStatic(const std::string &component, const std::string &key, const 
         {"item-key", {"id"}}};
     if(key=="resize-policy")require(text=="settled"||text=="immediate","STATIC_ENUM: resize-policy");
     if(key=="slot-name") {
-        if(component=="MediaSlot")require(text=="empty"||text=="preview"||text=="error","MEDIA_SLOT: unknown slot");
+        if(component=="MediaSlot")require(text=="empty"||text=="preview"||text=="error"||text=="loading","MEDIA_SLOT: unknown slot");
         else require(text=="identity"||text=="actions"||text=="menu","HEADER_SLOT: unknown slot");
     }
     if (enums.count(key))

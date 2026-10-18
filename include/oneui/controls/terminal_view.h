@@ -129,6 +129,10 @@ public:
     TerminalCursorStyle cursorStyle() const;
     void setCursorBlinking(bool enabled);
     bool cursorBlinking() const;
+    /// Visual bell: briefly tints the whole view and fades out (about 200 ms).
+    /// Repeated bells restart the fade instead of stacking.
+    void flashBell();
+    bool bellFlashing() const { return bellAlpha_ != 0; }
     void setFontSize(float size);
     float fontSize() const;
     /// Sets the preferred monospace font family. A missing or proportional
@@ -298,6 +302,8 @@ private:
     bool slowBlinkVisible_ = true;
     bool rapidBlinkVisible_ = true;
     double textBlinkStartMs_ = 0.0;
+    double bellStartMs_ = 0.0;
+    std::uint8_t bellAlpha_ = 0;
     float fontSize_ = 14.0f;
     std::wstring fontFamily_;
     float lineHeight_ = 1.30f;

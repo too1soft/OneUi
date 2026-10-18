@@ -1,0 +1,32 @@
+model GridColumn key id {
+    r id: utf8
+    r title: utf8
+    r detail: utf8
+    r width: f64
+    r align: i64
+    r sort: i64
+    r key: bool
+}
+model GridCell key id {
+    r id: utf8
+    r text: utf8
+    r classes: utf8
+}
+model GridRow key id {
+    r id: utf8
+    r number: utf8
+    r classes: utf8
+    r cells: list<GridCell>
+}
+model Grid {
+    r columns: list<GridColumn>
+    r rows: list<GridRow>
+    r total: i64
+    r start: i64
+    r frozen: i64
+    r editable: bool
+    command viewport(first:i64,count:i64)
+    command sort(column:i64)
+    command edit(row:i64,column:i64,text:utf8)
+    command activate(row:i64,column:i64)
+}

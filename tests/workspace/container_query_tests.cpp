@@ -39,14 +39,15 @@ void stackChildren() {
 }
 const char* css=R"CSS(
 .frame {container-name:sftp;container-type:size;}
+.tree, .browser, .details {flex-grow:1;flex-basis:0px;}
 @container sftp (width >= 860px) and (height > 0px) and (aspect-ratio >= 8/5) {
   .columns {flex-direction:row;gap:12px;}
-  .tree {display:flex;flex-basis:224px;flex-shrink:0;}
+  .tree {display:flex;flex-basis:224px;flex-grow:0;flex-shrink:0;}
   .browser {display:flex;flex-basis:0px;flex-grow:1;}
   .details {display:none;}
 }
 @container sftp (width >= 1100px) and (height > 0px) and (aspect-ratio >= 8/5) {
-  .details {display:flex;flex-basis:292px;flex-shrink:0;}
+  .details {display:flex;flex-basis:292px;flex-grow:0;flex-shrink:0;}
 }
 )CSS";
 void layout(StackEngine engine) {
@@ -67,6 +68,10 @@ void layout(StackEngine engine) {
     check(columns.as<Stack>()->direction()==StackDirection::Row,"query direction consumed");
     check(std::abs(tree.widget->frame().width-224)<.01f,"query flex basis consumed");
     paint(1100,500);check(details.widget->visible()&&std::abs(details.widget->frame().width-292)<.01f,"details third pane");
+    mount.styles()->applyBaseLayouts();
+    paint(1100,500);
+    check(tree.widget->visible()&&browser.widget->visible()&&details.widget->visible(),"VM base layout refresh reapplies queries at unchanged dimensions");
+    check(std::abs(tree.widget->frame().width-224)<.01f&&std::abs(details.widget->frame().width-292)<.01f,"VM refresh preserves queried pane widths");
     details.widget->setVisible(false);paint(1100.01f,500);check(!details.widget->visible(),"CSS cannot override authored false");
     details.widget->setVisible(true);paint(850,500);
     check(details.widget->visible()&&!tree.widget->visible()&&columns.as<Stack>()->direction()==StackDirection::Column,"query exit restores base layout");
@@ -75,6 +80,25 @@ void layout(StackEngine engine) {
     check(mount.styles()->queryDiagnostics().empty(),"independent shell has no diagnostics");
     mount.styles()->replace("");paint(1100,500);
     check(!tree.widget->visible()&&details.widget->visible()&&columns.as<Stack>()->direction()==StackDirection::Column,"removing query CSS restores authored defaults");
+}
+void displayOnlyReplay() {
+    ui::Mount mount({},std::make_shared<ui::StyleRegistry>(),{});
+    auto child=mount.make("Text",{},"child");
+    auto shell=mount.make("Column",{child},"shell");
+    mount.styles()->replace(
+        ".shell{container-name:shell;container-type:size;}"
+        ".child{display:none;}"
+        "@container shell (width >= 300px){.child{display:flex;}}");
+    test_support::RecordingCanvas canvas;
+    auto paint=[&]{shell.widget->setFrame({0,0,400,100});shell.widget->paint(canvas);};
+    paint();check(child.widget->visible(),"display-only query enables child");
+    mount.styles()->applyBaseLayouts();
+    check(!child.widget->visible(),"display-only base write actually replaced query");
+    paint();check(child.widget->visible(),"same-size query reapplied after display-only base write");
+    mount.styles()->applyAll();
+    check(!child.widget->visible(),"base applyAll actually replaced display query");
+    paint();check(child.widget->visible(),"same-size query reapplied after base applyAll");
+    check(mount.styles()->queryDiagnostics().empty(),"display-only query remains valid");
 }
 void invalidCssAndDependencies() {
     StyleSheet sheet;std::string error;
@@ -88,7 +112,35 @@ void invalidCssAndDependencies() {
     outer.widget->setFrame({0,0,500,500});test_support::RecordingCanvas canvas;outer.widget->paint(canvas);
     check(!mount.styles()->queryDiagnostics().empty(),"dependent nested container diagnosed instead of oscillating");
 }
+void maxWidthClamps() {
+    for(auto engine:{StackEngine::Yoga,StackEngine::Legacy}) {
+        ui::Mount mount({},std::make_shared<ui::StyleRegistry>(),{});
+        auto cell=mount.make("Column",{mount.make("Text")},"cell");
+        auto shell=mount.make("Row",{cell},"shell");
+        shell.as<Stack>()->setEngine(engine);cell.as<Stack>()->setEngine(engine);
+        mount.styles()->replace(
+            ".shell{container-name:shell;container-type:size;}"
+            ".cell{flex-basis:400px;flex-shrink:0;max-width:120px;}"
+            "@container shell (width >= 600px){.cell{max-width:200px;}}");
+        test_support::RecordingCanvas canvas;
+        auto paint=[&](float width){shell.widget->setFrame({0,0,width,40});shell.widget->paint(canvas);};
+        paint(599.99f);check(std::abs(cell.widget->frame().width-120)<.01f,"unconditional max-width clamps basis");
+        paint(600);check(std::abs(cell.widget->frame().width-200)<.01f,"query max-width clamps basis");
+        mount.styles()->applyBaseLayouts();paint(600);
+        check(std::abs(cell.widget->frame().width-200)<.01f,"base layout refresh preserves same-size query override");
+        mount.styles()->applyBaseLayouts();paint(601);
+        check(std::abs(cell.widget->frame().width-200)<.01f,"base layout refresh preserves same-tier query override");
+        paint(500);check(std::abs(cell.widget->frame().width-120)<.01f,"query exit restores unconditional max-width");
+        check(mount.styles()->queryDiagnostics().empty(),"max-width on a row child has no diagnostics");
+    }
+    ui::Mount mount({},std::make_shared<ui::StyleRegistry>(),{});
+    auto cell=mount.make("Text",{},"cell");
+    auto shell=mount.make("Column",{cell},"shell");
+    mount.styles()->replace(".shell{container-name:shell;container-type:size;}@container shell (width > 1px){.cell{max-width:50px;}}");
+    shell.widget->setFrame({0,0,300,300});test_support::RecordingCanvas canvas;shell.widget->paint(canvas);
+    check(!mount.styles()->queryDiagnostics().empty(),"cross-axis max-width diagnosed");
 }
-int main(){try{comparisons();stackChildren();layout(StackEngine::Yoga);layout(StackEngine::Legacy);invalidCssAndDependencies();
-    std::cout<<"PASS container queries and Stack: 5 groups\n";return 0;
+}
+int main(){try{comparisons();stackChildren();layout(StackEngine::Yoga);layout(StackEngine::Legacy);invalidCssAndDependencies();maxWidthClamps();displayOnlyReplay();
+    std::cout<<"PASS container queries and Stack: 7 groups\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

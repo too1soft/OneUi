@@ -188,7 +188,7 @@ TMPL 包括根、导入组件、repeat body 和 slot body；每个 template 的�
 
 词法 depth=0 是当前 scope，1 是直接词法父 scope，以此类推；import CALL 不新建 VM 层，REPEAT 的 body 新建 item scope、父为发起 repeat 的 scope；slot body 在调用者捕获 scope 下实例化，fallback 在被调用模板当前 scope。TMPL.model_id 必须等于其实际 scope 的 schema model；BIND/EVNT/COND/REPT 中 model_id 必须等于沿 depth 找到的模型，否则 BAD_IR。这同时约束嵌套列表引用外层 item 和 slot 的捕获，不能靠运行时猜测。
 
-SLOT.flags bit0=0 时为模板的 outlet 声明，owner_index 是 TMPL；body_template 是 fallback 或 NONE。bit0=1 时为 CALL 的供给，owner_index 是 CALL；body_template 是调用者内容，捕获调用者 VM lexical context。TMPL.slot_start/count 只指声明，CALL.slot_start/count 只指供给；NODE opcode SLOT 的 aux 指 outlet 声明。同名供给按原顺序合成一个 body，不重复消费同一个 widget。slot 运行时保留旧编译器的 Column 包装；未知供给名、重复 outlet 名编译时报错。该收紧与旧行为的差异纳入迁移诊断，不静默丢内容。
+SLOT.flags bit0=0 时为模板的 outlet 声明，owner_index 是 TMPL；body_template 是 fallback 或 NONE。bit0=1 时为 CALL 的供给，owner_index 是 CALL；body_template 是调用者内容，捕获调用者 VM lexical context。TMPL.slot_start/count 只指声明，CALL.slot_start/count 只指供给；NODE opcode SLOT 的 aux 指 outlet 声明。同名供给按原顺序合成一个 body，不重复消费同一个 widget。未标记的 slot 保留旧编译器的 Column 包装；未知供给名、重复 outlet 名编译时报错。WP5 显式 `root="single"` 使用同一 flags 的 bit1（值2），契约与 IR 1.1 兼容规则见章末增补；capture_depth 字段保持零，不重新解释或移动。
 
 scope_id 引用 CSS 中出现的非零 scope 编号（同 scope 可多条 CSS），没有样式仍分配该模板的稳定 scope。生成类为 `one-s-` + SHA-256(规范相对路径、模板名) 前 16 hex；编译时检测截断碰撞，碰撞即报错。lowered_text 为经现有 `syntax::css` 消费校验和 scope 转换后的 UTF-8；加载仍验证支持的 CSS，不直接信任 blob。主题变量仍来自外部 :root，不新增浏览器继承语义。
 
@@ -296,6 +296,7 @@ typedef struct OneUiViewListInfo {
 #define ONEUI_LIST_INSERT 1u
 #define ONEUI_LIST_REMOVE 2u
 #define ONEUI_LIST_MOVE   3u
+#define ONEUI_LIST_REORDER 5u
 #define ONEUI_LIST_UPDATE 4u
 typedef struct OneUiViewListChange {
     uint32_t struct_size;
@@ -504,6 +505,7 @@ ViewControl 状态为 Building → Active → Closing → Closed，generation �
 | REMOVE | index/count 为移除前范围；keys 必须等于该旧范围；to_index=0 | 从缓存按旧 key 拆除，**不回调已不存在 index 的 child** |
 | MOVE | index/count 为旧区间，to_index 是移走区间之后的目标边界；keys 为源区间；properties 为空 | 例如 `[A,B,C,D]` 的 index=1,count=2,to=2 → `[A,D,B,C]`；to=1 为 no-op，不换 VM/控件 |
 | UPDATE | index/count 为当前范围；keys 对应该范围；properties 为 item 字段 ID（空表示全部），to_index=0 | key 与 item 身份不变，只标这些 child 属性脏，不重建条目 |
+| REORDER (5) | index/to_index=0；count 与 keys 为完整非空键排列；properties 为空 | 保留原 item 租约及字段缓存；只改变顺序。重复、缺失、多余或未知 key 原子失败。字段变化仍须单独 notify/UPDATE；增删或替换 VM 使用原有通知。Rust `StableList::reorder` 在修改前验证排列。 |
 
 所有增量的 key_count=count，properties 仅 UPDATE 可非空。单条 index/count 上界在 flush 按版本序列校验，直接可判的参数错误在 notify 时拒绝。root notify(list_id) 相当于未给精确 delta 的 RESET；集合整体换新必须 RESET，不能偷偷发送 INSERT。业务不能遗漏通知；调试模式可额外全量核对，release 不逐帧扫列表。
 
@@ -834,3 +836,371 @@ v-for 使用列表来源与提交 serial 区分结构变化和子属性通知；
 不能仅因没有子 Widget 就丢弃通知。连接只随租约建立/断开；未来若另立只接受父列表
 通知的记录契约，才能省去它们。本次性能不以新增契约或 bulk ABI 为前提。
 测量、回归、最终性能表见 [列表性能修正报告](benchmarks/language-neutral-views/listperf.md)。
+
+### WP5 设置页契约扩展
+
+`Surface` v2、`Text` v3 支持 `:class="property"`，属性类型为只读 UTF-8。
+绑定值包含该节点全部业务类名；同一节点不能同时声明 `class` 和 `:class`。
+通知会替换上一次业务类名，保留编译器生成的作用域类名，空字符串会清除业务类名。
+动态类名的样式规则应写明确组件类型，例如 `Surface.settings-focus-target`，
+以便严格 CSS 校验确定属性消费者。主题令牌规则沿用挂载样式表；页面 scoped 样式负责布局。
+
+设置页同时使用 `Text.wrap/max-lines`、`Input.password/read-only/submit`、
+`Scroll.content-height/wheel-step/chrome-visible/scroll-offset` 和 `SegmentedControl`。
+`Input`、`Scroll` 契约为 v2；`SegmentedControl` 为 v1。IR 与绑定须由同版本 viewc 重生成。
+图标名称新增 `key-dots`、`check-circle`、`notebook`，对应已有原生图标枚举。
+
+`Column` 支持动态 class，`Surface` / `Column` 支持绑定 flex basis。
+`List` / `VirtualList` 接受结构化 `@list.item` 列表（id/title/detail），
+选择变更通过生成的 VM 属性写回；列表行身份沿用稳定 key。
+`Text.spans` 接受 `@text.span` 列表（id/start/end/rgba/monospace）：
+start/end 是 UTF-8 字节偏移，必须落在字符边界，区间不能为空且不能越界。
+原生 UTF-16 偏移由运行时转换；无效更新返回 TYPE，保留之前的已绘制跨度。
+
+`InteractiveSurface` 允许可点击的声明式卡片。空动态图标字符串表示无图标。
+只有被调用方显式声明 `root="single"` 的 slot 才保留内容根的父级布局关系；未标记的 slot 始终保留合成 Column。重复片段继承容器的方向、gap 和 Surface 内容布局。
+
+### WP5 增补：显式单根插槽（Claude 已裁决）
+
+被调用模板在插槽声明上使用静态属性 `<slot name="content" root="single"/>`。
+调用方用普通 `slot="content"` 提供恰好一个根节点；提供零个或两个以上根节点时，
+viewc 在调用点报告 `SLOT_ROOT`。调用方不能通过属性覆盖该契约，动态 `:root` 和
+其他 `root` 值均拒绝。根数按模板直接子节点计数，条件和重复仍遵循自身的既有语义。
+
+带有 fallback 的声明也必须恰好包含一个 fallback 根；调用方未提供内容时使用它。
+自闭合声明表示必填插槽，缺少供给时编译失败。直接编译的入口模板没有调用方，
+因此其单根插槽必须有 fallback。非法多根 fallback 在导入调用点报错并保留声明位置。
+
+单根内容（含 fallback）直接成为插槽位置上的子节点，不合成 Column，原有 grow、
+basis、flex 和父布局规则直接适用。**未标记的插槽继续始终使用 Column 包装**，
+即使只有一个根也不展开。C++ 和 Rust 生成器嵌入相同 IR，使用同一运行时。
+标记变更是结构热重载：重新构建/移除包装节点，保留 VM 连接与原有生命周期约束。
+
+编码使用现有 32 字节 SLOT 记录的 flags 字段（offset 12）的 bit 1：
+清零为默认包装，置位为 single；同字段的 bit 0 仍为 `0=TMPL 声明`、
+`1=CALL 供给`。原 offset 16 的 capture_depth 保持零。供给的 single 位由声明派生，
+loader 要求同名声明与供给一致，并拒绝缺失的必填供给和任何未知 flags 位。
+不新增段、不改变 stride。使用 single 的文件写为 **IR 1.1**，其余仍为 **IR 1.0**；
+loader 拒绝将 single 标记放入 minor 0 文件。
+
+本扩展使用旧 reader 已强制为零的 SLOT flags 未知位 作为必需语义能力标记，按本次裁决
+不新增 required 段，也不升 major。旧 reader 即使忽略 minor，也会因未知 flags 拒绝，
+不会错误显示；这是第 3.4 节 required capability 规则在既有记录标志上的具体应用。
+不含插槽的 Basic 黄金字节保持本轮组件契约更新后的独立参考结果不变。
+
+Rust `ViewMount::from_dispatcher` 可将声明式页面挂入当前窗口中的空 Panel。
+挂载验证遍历 OverlayHost 和 Popup，仍拒绝其他窗口的节点。外部 CSS 在首次实例化前
+安装；替换样式沿用宿主的 transient 样式，使图片背景上的 Select 弹出项保留应用主题。
+开发工具构建的布局快照包含声明式 CSS 类名与已解析样式；诊断使用弱引用，不保留退役控件。
+测试捕获构建提供 `Widget::test_freeze_caret`，用于固定输入框光标，生产构建不启用该入口。
+
+## StateView content states
+
+`StateView` is a leaf component with bindable `title`, `message` and `action`
+strings, a static named `icon`, and a zero-argument `@action` command. It uses
+the native StateView layout and keyboard/pointer action handling.
+
+Style the surface with `StateView` and its painted parts with the native
+`state-view-part` selector plus `state-view-icon`, `state-view-title`,
+`state-view-message` or `state-view-action`. Part nodes inherit the component's
+classes. The action part consumes `:hover`, `:pressed`, `:focus` and `:disabled`.
+These part selectors style painted content; they do not create child widgets.
+
+### Checkbox boolean input
+
+`Checkbox` is a leaf component with `text`, `checked`, and `tooltip` properties.
+Use `v-model` with a writable `bool` property. Native mouse and Space-key changes
+write through the guarded VM mutation path; programmatic VM notifications do not
+write back, and disconnected or disabled controls cannot mutate the VM.
+
+```xml
+<Checkbox text="Owner read" tooltip="Toggle owner read permission" v-model="ownerRead"/>
+```
+
+The stylesheet tag is `checkbox`. Background, border, foreground and
+`content-background-color` map to the same native checkbox styles used by the C API;
+`:checked`, `:selected`, `:hover`, `:pressed`, `:focus` and `:disabled` retain their native semantics.
+
+### Structured tree and rich table records
+
+`TreeView :items="nodes" v-model="selected"` consumes a keyed record with
+`id`, `parent`, `title`, `detail` (UTF-8), and writable `expanded` (bool).
+Selection uses stable IDs. Native expansion writes the corresponding live item
+lease; model refreshes preserve that expansion without echoing changes back.
+Its `tree-view` CSS tag consumes the native tree's list typography and state styles.
+
+`Table` adds rich cells and multiple selection without changing the existing
+`DataTable` contract. Its `items` records require `id:utf8`, `cells:list<Cell>`
+and writable `selected:bool`. Cells require `id:utf8`, `text:utf8`; optional
+fields are `detail`, `icon`, `trailing_icon`, `badge` (UTF-8), `alignment`,
+`weight`, `foreground`, `indicator`, `badge_foreground`, `badge_background`
+(i64), and `font_size`, `icon_size` (f64). Icons use the authoring icon names;
+colors use RRGGBBAA, with -1 selecting the native default. Cell types and value
+ranges are checked before publishing native rows.
+
+Columns use `oneui.v1.Column`. `multiple`, `row-height`, `header-height`,
+`selection-column`, `selection-column-width`, `scroll-offset`, `sort-column`
+and `sort-descending` configure the existing virtualized native Table.
+Events are `activate(key)`, `edit(key)`, `delete()`, `selection()`, `current(key)`,
+`sort(column)`, `cell(key,column)` and `context(key,x,y)`. Keys are UTF-8,
+columns are i64, and coordinates are f64 in native window coordinates.
+Selection changes update only changed item leases before the selection command.
+Closed views suppress retained-control callbacks. Row updates retain keyed
+selection and the top visible business row; structural resets rebuild the native row data while remapping the active row,
+selection and keyboard range anchor by stable key.
+
+### Table 列宽容器查询
+
+`table-column-widths: auto 76px` 保留前两列并覆盖宽度，`auto` 对应原生弹性宽度 0；宽屏可设为 `auto 100px 160px`。覆盖不改变行、选中集合及列的模型身份，移除样式恢复原始列宽。模型重新发布 columns 时仍保留有效的查询覆盖，不需要布局回调写 VM。`table-selection-width: 40px` 覆盖选择列宽度，范围 24–128px。这些样式只由 Table/DataTable 消费，非法数值及用于其他控件会在编译期报错。
+
+### 工具栏布局与行身份补充（WP5 路线 C）
+
+`order` 是有界整数（−1000000 至 1000000），相同 order 保持声明顺序；只改变布局顺序，不重建控件或 VM。`flex-basis` 可使用非负 px 或百分比，百分比相对父 Stack 内容区主轴；未确定的自然测量使用内容尺寸。百分比只扩展 flex-basis，不扩展 width/height。容器查询删除覆盖后恢复原声明，支持同一个输入框在窄屏独占一行、宽屏回到导航与操作之间。
+
+Table 的 `column-dividers` 绑定原生分隔线开关；富行重排按稳定键重映射活动行、选中集合和 Shift 锚点，文本更新不会重置锚点。新增图标别名 `link-native`、`file-native`、`compass` 对应已有原生几何，不改变旧别名。
+### WP5 B2：对话框、编辑控件和文字度量
+
+`Dialog` 接受恰好两个直接子节点，依次作为内容区和操作区；支持 `title`、
+`subtitle`、`icon`、`close-visible` 和无参数 `@close`。它使用原生 Dialog 的
+标题、关闭及 Escape 行为，不为内容额外插入布局容器。
+
+`TextArea` 是多行原生编辑器，支持 `v-model`、`placeholder`、`read-only` 和
+`line-height`。`Checkbox` 支持布尔 `v-model` 和 `text`，键盘和鼠标写回同一 VM。
+`Input.password-mask` 指定一个 BMP 非代理字符；空串、多个字符及代理字符被拒绝。
+
+`Text` v5 在既有属性 ID 后追加 `line-height`（15）、`text-align`（16）和
+`tooltip`（17）；对齐值为 `start`、`center`、`end`。`Button` v2 追加
+`tooltip`（14）和同样取值的 `content-align`（15）。默认行为保持不变。
+Basic 黄金文件由独立 `tests/viewc/golden_reference.py` 推导；相对 Text v4
+仅 COMP 段内容改变，文件长度、段偏移及契约哈希随之更新。IR major 保持 1。
+
+UTF-8 ABI 45 新增 `oneui_text_measure_width_utf8`，Rust 对应
+`oneui::measure_text_width(text, family, size, weight, scale)`。该接口不创建控件，
+使用与 Label 相同的无换行文字塑形器，返回逻辑像素宽度。空字体名使用默认回退；
+无效 UTF-8、非正或非有限字号/缩放、非法字重和空输出指针均失败。
+调用者负责传入所需字体环境；它不会隐式读取窗口或产品主题。
+
+
+### WP5 B2：表格、导航与焦点
+
+`TemplateTable` 接受表头、正文两个子节点。表头固定在顶部，横向滚动时与正文对齐。
+支持 `minimum-width`、`header-height`、`content-height`、`content-width`、
+`wheel-step`、`scroll-offset` 和 `horizontal-offset`。正文占满表头下方的空间；
+显式内容宽度可使列宽不受滚动条预留区影响。组件具有原生 Table 可访问角色。
+模板行适用于有界分页；无限长的简单数据集应使用 `VirtualList` 或 `DataTable`。
+`Scroll` 同样增加 `content-width`，追加属性 ID 15 并提升组件版本，旧 reader 拒绝新契约。
+
+`InteractiveSurface @pointer` 提供 `(x:f64,y:f64,control:bool,shift:bool,click_count:i64)`，
+保留原生坐标、修饰键及连击次数。只有声明该事件才安装处理器，既有 `@click` 行为保持不变。
+Button 支持绑定 `class` 和 `trailing-text`；Text 支持 CSS `font-family`，
+重新设为 `inherit` 时移除先前的字体覆盖。C++ 与 IR 共用相同实现。
+
+Text 另支持 CSS 盒模型：`padding`、`background-color`、`border-color`、`border-width`、
+`border-radius`（`Label::setPadding` / `setBoxStyle`）。内边距计入 `naturalSize` 和换行测量，
+文字在内边距内排版；背景和边框绘制在整个 frame。未设置时不绘制任何矩形，尺寸与旧版一致。
+用于状态栏分段、徽标等无需额外 Surface 包裹的文字。
+
+图标名称新增 `undo`、`redo`、`save`（`IconSymbol::OutlineUndo/OutlineRedo/OutlineSave`，
+追加在枚举末尾，Rust 值 116–118；C API 的图标范围上限随之扩大，旧值不变）。
+
+UTF-8 ABI 45 的 `oneui_view_element_metrics` / Rust `View::element_metrics` 按唯一名称
+返回已提交布局的几何信息，以及 Scroll、TemplateTable 的滚动偏移。查询不会 flush 或调用 VM，
+不暴露控件句柄。名称歧义返回 INVALID_ARGUMENT，缺失返回 NOT_FOUND，关闭后返回 CLOSED。
+
+`oneui_view_mount_focus_element` / Rust `ViewMount::focus_element` 将焦点交给当前挂载视图中
+唯一名称对应的原生元素，返回原生焦点请求是否被接受。它要求 UI 线程、有效挂载和存活视图，
+拒绝 VM 回调内的重入调用；调用者应在当前事件结束、挂载完成后恢复焦点。
+
+capture 构建的 `Widget::test_modified_click` 可保留 Ctrl/Shift 和连击次数，直接驱动原生事件；
+它不发送桌面输入，生产构建不启用该入口。
+
+### WP5 B2：覆盖层与可拖排网格
+
+`Overlay` 恰好接受底层、前景两个子节点。底层填满布局，前景可指定
+`overlay-width/height`、四向 `inset-*`、`horizontal-align/vertical-align`
+以及 `overlay-visible`；尺寸为零表示填满可用轴。隐藏前景不阻挡底层焦点。
+`SearchInput.prefix-icon`、`placeholder-when-focused` 和 `Button.trailing-icon`
+复用原生编辑器和按钮，未声明时保留原行为。
+
+`ReorderableGrid` 只接受 `GridItem`，后者恰好包含一个填满单元格的内容根。
+每个 GridItem 的 `grid-key` 必须非空且在网格内唯一；键控列表必须声明
+稳定的 `view-id`，复用 WP4 透明 REPT/render-scope 契约，不插入 Column。
+网格支持 `column-count/column-gap/row-gap/item-height` 和布尔
+`reorder-enabled/item-drag-enabled`。原生网格负责响应式尺寸、拖拽阈值、
+插入反馈与滚动内容高度，VM 负责提交业务顺序。
+`@reorderRequested(source:utf8,target:i64)` 返回源键和目标索引，
+`@itemDrag(source:utf8,phase:i64,x:f64,y:f64)` 返回窗口坐标，phase 依次为
+Started=0、Updated=1、Dropped=2、Cancelled=3。属性更新不取消正在进行的拖排，
+键控重排保留控件身份。新增 COMP 契约使不认识组件的旧 reader 拒绝加载。
+
+`InteractiveSurface @contextMenu(x:f64,y:f64)` 转发原生右键请求；
+`@click` 仍承载键盘激活，`@pointer` 承载选择及鼠标连击，两者分工不变。
+
+`ReorderableGrid` 的类型选择器支持 `gap`、`padding`、`height`（单元格高度）、
+`grid-min-column-width` 及边框/拖排轮廓颜色。`Button` 支持 CSS `opacity` 和
+`icon-size`，沿用原生绘制与状态过渡。原生 `StyleRegistry::replace` 使用
+`reorderable-grid` / `button` 等小写控件名；`.one` 的类型选择器由编译器转换。
+`copy-native`、`terminal-native` 等显式图标名保留旧原生图形，原有轮廓别名不变。
+
+运行时更新 `basis/grow/shrink/min/max` 时同步更新已缓存的 authored flex；
+后续 CSS 重应用不得用初始化时的 flex 覆盖新的绑定值。C++ setter 与 IR
+绑定遵循同一规则，确保详情侧栏开合及响应式宽度更新后仍正确参与父布局。
+
+支持背景填充的声明式组件也支持 `background-opacity`；有内容填充的组件
+支持 `content-background-opacity`。两者沿用原生 CSS 的填充透明度语义，
+不会降低文字、图标、焦点框或子控件的透明度。没有背景的组件（例如 Icon）
+仍拒绝该属性。该 CSS 能力不改变 COMP 契约或 IR 版本。
+
+### 声明式子 View 组合
+
+`oneui_view_mount_child(parent, name, out)` / Rust `ViewMount::child(name)`
+复用挂载协议，把独立 View 挂在父模板的唯一、空 `Surface` 中。目标不能含
+模板子节点，也不能被另一活跃子挂载占用。子挂载继承父窗口、样式和密度；
+独立关闭后可重新挂载。普通父 View flush 保留子 View；父 View reload、detach、
+替换或关闭先关闭子挂载，再退役父内容。关闭后的子句柄不能继续操作。
+原 `oneui_view_mount_create` 的空 Panel 合同不变。
+
+`oneui_view_mount_child_with_destination(parent, name, destination, out)` /
+Rust `ViewMount::child_with_destination(name, &Widget)` 另可将调用方保留的空 Panel
+作为该 Surface 的实际孩子，再把独立声明式 View 放入 Panel。这样原生宿主保留的
+root 与参与布局、焦点链、尺寸回调的 root 是同一对象；普通控件仍由 `.one` 创建。
+未附着 Panel 没有预先的窗口身份；成功调用首次将它绑定到父窗口，不能声称调用前
+已验证“同窗口”。已有 composition owner、已在窗口树内、非空、非 Panel、自身或祖先
+循环及重复挂载均拒绝；不挪走其他窗口或容器中的节点。mount 持有共享所有权，不借用
+调用方 Widget 句柄。销毁子 View 清空 Panel 并保留挂载预留，可在同一个 mount 重建
+View；销毁 mount、父 View reload 或关闭则同时摘除 Panel，使旧 mount 返回 CLOSED。
+释放后可用同一空 Panel 新建挂载。旧 `child(name)` 仍直接使用 Surface，不插入额外 Panel。
+这个目的 Panel 只填充父 Surface 分配的实际区域，不自动向父容器转发子 View root 的
+preferred/natural size。调用方应在父 `.one` 声明固定或弹性 slot 约束；在居中 Row 中
+缺少高度的空目的壳可以得到零高度。动态内容显隐应以同一语义状态驱动父 slot 的
+visible 和声明式尺寸约束，不把应用布局写入挂载壳或改变全局 Panel 的测量行为。
+
+`View::element_focused(name)` 只读查询唯一具名元素焦点。工作区面板应使用
+`View::dock_item_frame(workspace, pane)`，通过稳定 pane key 查询最新提交几何，
+不会与同名标题、工具栏按钮混淆。这些查询须在所属 UI 线程、View 存活期间调用。
+
+`View::dock_action` 通过 DockWorkspace 的 intent/revision/ack 协议请求浮动、
+置顶、提高层级、最大化、可见性及返回停靠。它不直接修改 VM 数据。
+### SFTP Table read-only queries
+
+`oneui_view_element_metrics` / Rust `View::element_metrics` now reports `Table`
+scroll offset and maximum, alongside TemplateTable and ScrollView. The additive
+`oneui_view_element_focused` / `View::element_focused` reads native keyboard focus
+for a unique accessible name without exposing a widget or invoking the VM. It
+shares the existing missing/ambiguous name, UI thread and closed-view checks.
+`Table.tooltip` uses the existing native tooltip presentation.
+
+`InteractiveSurface @drag` 可选事件提供 `(phase:i64,origin_x:f64,origin_y:f64,x:f64,y:f64,alt:bool,control:bool,shift:bool)`。phase 为 0 开始、1 移动、2 释放、3 取消；坐标为窗口逻辑坐标，阈值 7px。绑定该事件显示抓取光标；由原生控件处理捕获、Esc 和结束后不触发点击。
+
+Capture-only QA also exposes `oneui_widget_test_hover` / Rust `Widget::test_hover`. It sends a native mouse move through the supplied tree and reports a nonempty tooltip hit; it does not synthesize OS input or guarantee a timed tooltip bubble was shown. Renderer fixtures compare pre/post-hover pixels separately.
+
+### Monitor presentation contracts
+
+`Row.class` accepts a VM binding, like Column/Surface/Text. Changing the class
+reapplies authored layout styles (including `flex-direction`) without replacing
+the row or children. Row's component contract revision is incremented; rebuild
+both viewc and the runtime before compiling/using views that bind Row.class.
+
+`Progress` consumes `color` (fill), `background`/`background-color` (track), and
+`border-radius`, including disabled fill color. Unspecified values retain the
+native palette. Its value is a 0–1 fraction; generic `min`/`max` describe layout
+constraints, not a progress range. The `sparkles` icon names the existing
+workbench sparkle glyph. No public C++ class layout changed.
+
+
+### TimeSeriesChart presentation and inspection
+
+`series` accepts structural records with `id:utf8`, `name:utf8`, `rgba:i64`,
+`values:list<point>`. A point has `id:utf8`, `value:f64` and optional `valid:bool`;
+explicit false projects a gap (NaN), not zero. Existing NumberItem series remain
+supported. `sample-positions` uses NumberItem; `axis-labels` uses StringItem.
+
+The template can bind `range-min/max`, `smooth`, `area-fill`, `axes-visible`,
+`latest-point`, `dashed-grid`, `line-width`, `fill-alpha`, and `grid-lines`.
+`plot-insets` is four finite nonnegative numbers in top/right/bottom/left order;
+`grid-style` is vertical line count and stroke width (for example `0 0.7`).
+`@inspection(index:i64,pinned:bool)` forwards native hover/pin/clear semantics.
+Range, data, rendering, and tooltip behavior remain the native chart's contract.
+
+A series record may also declare `fill:bool` (overrides the chart's `area-fill`
+for that series) and `dashed:bool` (strokes the line as 4px dashes with 3px gaps),
+so a chart can fill its primary series and draw a secondary one as a plain or
+dashed line. `fill-extent` is `plot` (default: the gradient runs from the top of
+the plot to the baseline) or `series` (it runs from the series' highest point,
+so a low curve still shows the whole gradient beneath it). Fill extent is
+property ID 26; both series fields are optional and absent ones keep the previous
+rendering. `Canvas::strokePathDashed` is the backing primitive: the Skia backend
+uses a dash path effect, other backends flatten the path and draw segments.
+
+`scroll-rate` (property ID 27, plot widths per second, default 0) makes a live
+chart: between data updates the plot slides left at that rate (for a 60-second
+window bound to evenly timed samples, 1/60), the newest value holds out to the
+right edge, and a change of `range-max` or of a series' newest value eases in
+over 450 ms instead of jumping. A chart that receives no data for 12 seconds
+stops sliding; 0 restores the static chart. `smooth` curves use monotone cubic
+interpolation, so a curve never overshoots its samples.
+The chart COMP revision changes; rebuild viewc and runtime together. The runtime
+IR test covers authored grid pixels, gaps, native inspection and balanced leases.
+
+Tabs COMP version 4 追加 utf8 属性 `sizing`（property ID 23），支持静态及绑定值
+`compact` / `equal`。显式 sizing 独立于 `presentation` 及两者的应用顺序；未提供时
+保持 document→compact、segmented→equal。热重载删除 sizing 恢复当前 presentation
+的默认尺寸模式，未知值拒绝。`presentation="segmented" sizing="compact" item-min="50"
+item-max="96"` 可保留紧凑分段选择器的宽度范围；equal 均分可用宽度。
+不新增 C ABI、Rust 接口或原生枚举；须使用新版 viewc 重生成消费方 IR。
+尺寸覆盖状态由声明式工厂的私有共享控制块持有，公开 Element、KeyedTabs、Tabs
+布局不变。手工构造且未经过 `Mount::make("Tabs")` 的 Element 不支持新 sizing，
+设置时明确报错；其原有 presentation 设置行为保持不变。
+
+Scroll COMP version 5 统一两个分支的追加能力：property ID 16 `scrollbar-inset` 及事件 ID 1：`@viewport-size-changed="resized"`，命令签名为
+`command resized(width:f64,height:f64)`。参数来自实际 Scroll viewportRect（当前等于
+frame），不扣除绘制在内部的 chrome 或滚动条，也不是内容尺寸。首次真实尺寸变化、
+父布局 resize 或隐藏导致的零尺寸均按实际值报告；只改变位置或重复同尺寸不触发。
+注册时不合成初始通知；初始布局从零变为非零时触发。事件在 frame 写入后、Scroll
+子布局完成前同步派发，使用普通 VM Mutate 阶段。消费者应只保存尺寸或合并投递
+weak Idle 工作；回调中不能 flush、重排子树或依赖尚未更新的子节点 frame。
+
+模板 Scroll 的 `setOnSizeChanged` 单回调槽由声明式事件分发器管理；不要通过通用
+Widget API 替换此槽。分发器使用弱 Instance/Runtime 和当前事件表，reload 可以增删
+绑定而保留原控件；替换节点或 View 关闭后旧控件不再调用 VM。没有绑定时不调用命令。
+不新增 C/Rust API 或公开类布局。新编译器生成严格 v5；读取器额外接受完整、
+精确的 Scroll v3 合同，以及两个不同 v4 合同：main 的 16 属性/零事件和 terminal 的
+15 属性/viewport 事件。每个候选均逐字段精确校验，不以版本号或属性子集替代合同。
+真实旧编译器生成的 `tests/views/ScrollSizeV3.oneview` 是固定兼容资产，来源及 SHA256
+见同目录 `ScrollSizeV3.provenance.json`，不得用新版编译器重新生成。
+
+### 已冻结组件合同的后向读取
+
+当前新增属性的合同版本为 Input v4、Checkbox v2、DockWorkspace v3、Scroll v5；
+Tabs v4、VirtualList v3 和 TimeSeriesChart v2 保持各自当前版本。读取器精确接受下列
+有限历史集合，未列出的同名/同版本变体仍拒绝：
+
+| 组件 | 历史合同 |
+| --- | --- |
+| Input | ABI 基准 `64a5b89` 的 v3；追加 accessible-name 的分支 v3 |
+| Checkbox | 基准 v1；追加 tooltip 的分支 v1 |
+| DockWorkspace | 基准 v2；追加四项 caption/raise 属性的分支 v2 |
+| TimeSeriesChart | 基准 v1（series 为 `oneui.v1.Series`） |
+| Scroll | 基准 v3；上述两个分别冻结的 v4 |
+| VirtualList | 基准 v1；terminal 和 tools 各自完整 v2 |
+| Tabs | 基准 v2；完整分支 v3 |
+| DragHandle、PaneHeader、InteractiveSurface | 分别为基准 v1、v1、v2 |
+
+解码保留旧完整 descriptor，先验证旧 Image 与 Graph，包括 PROP、BIND、EVNT 的
+所有引用；合法旧图再按属性/事件名映射至当前 ID，覆盖 CALL 与 slot 的真实组件根，
+最后重新验证当前图。不能在旧 COMP 下使用新属性或新事件。旧 tools VirtualList 的
+15–17 属性映射至当前 16–18，不误解释成 multiple。旧 Chart 的 Series/NumberItem
+仍按原 id/name/rgba/values/value 读取，负值和零值保留；结构化 record 接受旧字段，
+不修改 VM schema、record 身份或用户数据。
+
+真实旧输入保存在 `tests/views/legacy/`，`Baseline.provenance.json` 记录基准编译器
+及十个 IR 的哈希；`TabsV3.provenance.json` 明确该保留产物的旧编译器哈希未知。
+历史输出不由新编译器再生。相同 VM schema 下，旧图与新图重载保留匹配控件；事件
+分发读取当前绑定。InteractiveSurface 仅在可选 pointer/contextMenu/drag 绑定存在性
+变化时更新模板自有槽，移除后恢复默认点击行为；绑定仍存在时保留进行中的拖动。
+NativeHost 内部控件和其回调不参与模板回调槽重载。
+
+
+### DataMenu 相同记录重放
+
+DataMenu 的绑定事务允许重放相同记录快照。完全相同的记录字段（id、parent、text、shortcut、icon、disabled、checked、danger、separator、header）及顺序不重建原生 Menu，保留当前滚动和子菜单路径；title/subtitle 的同值重放同样保留状态。任何字段、顺序或成员变化继续验证并重建，非法输入保持旧状态。事件回调每次绑定照常替换，后续激活使用最新回调；此规则不缓存或跳过事件重绑，也不对全局 StableList 版本做去重。

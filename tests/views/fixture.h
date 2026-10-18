@@ -9,6 +9,17 @@ inline void expect(bool value, const char *message) {
     if (!value)
         throw std::runtime_error(message);
 }
+inline std::shared_ptr<Instance> uniqueChild(const std::shared_ptr<Instance>& parent,
+                                           const std::string& component) {
+    std::shared_ptr<Instance> result;
+    for (const auto& child : parent->children) {
+        if (child->element.component != component) continue;
+        expect(!result, "fixture component must be unique");
+        result = child;
+    }
+    expect(bool(result), "fixture component must exist");
+    return result;
+}
 struct Vm {
     OneUiViewModelVTable table{};
     std::map<uint32_t, Value> values;
@@ -17,6 +28,8 @@ struct Vm {
     std::map<uint32_t,std::vector<Vm*>> lists;
     std::map<uint32_t,int> infos,keys,leases;
     std::string scratch;
+    uint32_t lastCommand = 0;
+    std::vector<Value> lastArgs;
     int retains = 0, releases = 0, connects = 0, disconnects = 0, sets = 0, invokes = 0,
         acquires = 0;
     uint64_t revision = 1;
@@ -24,6 +37,8 @@ struct Vm {
     std::function<void()> onGet, onInvoke, onConnect, onDisconnect, onRelease;
     OneUiViewNotifier *notifier = nullptr;
     int connectResult = 0;
+    uint32_t invokedCommand=0;
+    std::vector<Value> invokedArgs;
     explicit Vm(const oneview::Image &image, const char *model) {
         table.struct_size = sizeof(table);
         table.protocol_version = 1;
@@ -78,9 +93,15 @@ struct Vm {
             v.values[id] = Value::copy(*value);
             return 0;
         };
-        table.invoke = [](void *p, uint32_t, const OneUiValue *, size_t) {
+        table.invoke = [](void *p, uint32_t command, const OneUiValue *args, size_t count) {
             auto &v = *static_cast<Vm *>(p);
+            v.invokedCommand=command;v.invokedArgs.clear();
+            for(size_t i=0;i<count;++i)v.invokedArgs.push_back(Value::copy(args[i]));
             ++v.invokes;
+            v.lastCommand = command;
+            v.lastArgs.clear();
+            for (size_t i = 0; i < count; ++i)
+                v.lastArgs.push_back(Value::copy(args[i]));
             if (v.onInvoke)
                 v.onInvoke();
             return 0;
@@ -140,6 +161,10 @@ struct Case {
         a.text(id(image, "Item", "text"), "Alpha");
         b.text(id(image, "Item", "text"), "Beta");
         vm.items = {&a, &b};
+        for(const auto* property:{"series","positions","labels"}) {
+            const auto& props=image.schema.model("Root").properties;
+            if(props.count(property))vm.lists[props.at(property).id]={};
+        }
         runtime = std::make_shared<Runtime>(image);
     }
     void start() { runtime->initialize(&vm.table, &vm); }

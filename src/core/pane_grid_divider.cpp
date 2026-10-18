@@ -53,8 +53,10 @@ bool PaneGrid::onMouseDown(const MouseEvent& event) {
 }
 bool PaneGrid::onMouseMove(const MouseEvent& event) {
     if(state_->dragging){updateDivider(event.position);return true;}
+    const auto hover=pressedChild()?State::none:dividerAt(event.position);
+    if(hover!=state_->hoveredDivider){state_->hoveredDivider=hover;invalidate();}
     if(pressedChild())return View::onMouseMove(event);
-    return dividerAt(event.position)!=State::none || View::onMouseMove(event);
+    return hover!=State::none || View::onMouseMove(event);
 }
 bool PaneGrid::onMouseUp(const MouseEvent& event) {
     if(!state_->dragging)return View::onMouseUp(event);
@@ -103,6 +105,6 @@ CursorKind PaneGrid::cursor(Point point) const {
     if(i!=State::none)return state_->snapshot.nodes[i].axis==DockAxis::Horizontal?CursorKind::ResizeHorizontal:CursorKind::ResizeVertical;
     return View::cursor(point);
 }
-bool PaneGrid::hasInteractionState() const {return state_->dragging||state_->dirtyDivider||View::hasInteractionState();}
-void PaneGrid::resetInteractionState() {cancelDivider();View::resetInteractionState();}
+bool PaneGrid::hasInteractionState() const {return state_->dragging||state_->dirtyDivider||state_->hoveredDivider!=State::none||View::hasInteractionState();}
+void PaneGrid::resetInteractionState() {cancelDivider();state_->hoveredDivider=State::none;View::resetInteractionState();invalidate();}
 } // namespace oneui

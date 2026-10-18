@@ -1,0 +1,5 @@
+<template view-model="Root">
+  <Scroll name="legacy" view-id="legacy-root" :content-width="size" content-height="480">
+    <Text text="Legacy viewport"/>
+  </Scroll>
+</template>

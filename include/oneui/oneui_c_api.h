@@ -36,7 +36,10 @@ ONEUI_API OneUiErrorCode oneui_last_error_code(void);
 ONEUI_API void oneui_clear_error(void);
 
 /* Builtin text keys: 0=minimize, 1=maximize, 2=restore, 3=close, 4=accept, 5=cancel,
-   6=show main window, 7=quit application, 8=loading.
+   6=show main window, 7=quit application, 8=loading; code editor find bar: 9=find placeholder,
+   10=replace placeholder, 11=no results, 12=invalid pattern, 13=match count ("{0}" current,
+   "{1}" total), 14=replace, 15=replace all, 16=match case, 17=regular expression, 18=whole word,
+   19=previous match, 20=next match, 21=close.
    UTF-8 text is copied. NULL resets to the platform default. Returns 0 for invalid input. */
 ONEUI_API int oneui_set_builtin_text_utf8(int key, const char* text);
 
@@ -541,7 +544,7 @@ enum {
     OneUiTerminalCellOverline = 1u << 11
 };
 
-#define ONEUI_UTF8_ABI_VERSION 44u
+#define ONEUI_UTF8_ABI_VERSION 45u
 
 /*
  * Copies and registers a process-local font under family_alias. Call before
@@ -559,6 +562,12 @@ ONEUI_API int oneui_font_register_memory(
  * Worker-thread use is recommended; see oneui/fonts.h for platform semantics. */
 typedef void (*OneUiFontFamilyCallback)(OneUiUtf8String family, int monospaced, void* user_data);
 ONEUI_API int oneui_enumerate_system_fonts(OneUiFontFamilyCallback callback, void* user_data);
+
+/* Widget-free unwrapped shaping, in logical pixels. Empty family uses the
+ * default fallback. Same shaper as Label, including complex scripts and emoji.
+ * Returns 1 on success, 0 for invalid UTF-8/options/output. Does not retain inputs. */
+ONEUI_API int oneui_text_measure_width_utf8(OneUiUtf8String text, OneUiUtf8String family,
+    float size, int weight, float scale, float* width);
 
 typedef enum OneUiWindowBackend {
     OneUiWindowBackendUnknown = 0,
@@ -775,6 +784,17 @@ ONEUI_API void oneui_window_set_content(OneUiWindow* window, OneUiWidget* widget
 /* Explicit renderer capture for opt-in QA builds. Call on the UI thread.
  * Returns 0 when ONEUI_ENABLE_TEST_FRAME_CAPTURE is disabled. No screen capture. */
 ONEUI_API int oneui_window_capture_frame_png_utf8(OneUiWindow* window, const char* path_utf8);
+/* Opt-in renderer QA input. UI thread only, coordinates in the root's space.
+ * Dispatches to the supplied widget tree; never sends OS input. Returns 0 in
+ * builds without ONEUI_ENABLE_TEST_FRAME_CAPTURE or for unhandled input. */
+ONEUI_API int oneui_widget_test_click(OneUiWidget* root, float x, float y);
+// Move through the captured widget tree; return whether a tooltip is hit.
+ONEUI_API int oneui_widget_test_hover(OneUiWidget* root, float x, float y);
+ONEUI_API int oneui_widget_test_modified_click(OneUiWidget* root, float x, float y,
+    int control, int shift, int click_count);
+ONEUI_API int oneui_widget_test_wheel(OneUiWidget* root, float x, float y, float delta);
+ONEUI_API int oneui_widget_test_freeze_caret(OneUiWidget* root, int enabled);
+ONEUI_API int oneui_widget_test_text_utf8(OneUiWidget* root, OneUiUtf8String text, int replace);
 /* Writes the developer-tools frame report (slow paints, animation delays and
  * their hottest components) as JSON. Returns 0 when developer tools are not
  * compiled in or not enabled (ONEUI_DEVTOOLS=1). Call on the UI thread. */
@@ -1635,6 +1655,8 @@ ONEUI_API void oneui_terminal_view_set_cursor_style(
     OneUiWidget* view,
     OneUiTerminalCursorStyle style);
 ONEUI_API void oneui_terminal_view_set_cursor_blinking(OneUiWidget* view, int enabled);
+/* Visual bell: a short fading tint over the terminal. */
+ONEUI_API void oneui_terminal_view_flash_bell(OneUiWidget* view);
 ONEUI_API void oneui_terminal_view_set_copy_on_select(OneUiWidget* view, int enabled);
 ONEUI_API void oneui_terminal_view_set_right_button_action(
     OneUiWidget* view,

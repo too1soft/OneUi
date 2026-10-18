@@ -1,0 +1,3 @@
+<template view-model="Root">
+  <Checkbox name="legacy" view-id="legacy-root" text="Old checkbox" v-model="checked"/>
+</template>

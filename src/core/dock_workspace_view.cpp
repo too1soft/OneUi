@@ -1,19 +1,67 @@
 #include "dock_workspace_state.h"
+#include "oneui/style_sheet.h"
 #include "internal/split_geometry.h"
+#include "internal/unicode.h"
 #include <algorithm>
 namespace oneui {
+void DockItemView::setFloatingSurface(std::shared_ptr<const StyleBox> surface) {
+    if(floatingSurface_==surface)return;
+    floatingSurface_=std::move(surface);invalidate();
+}
+void DockItemView::paint(Canvas& canvas) {
+    if(floatingSurface_)paintStyleBox(canvas,frame(),*floatingSurface_);
+    View::paint(canvas);
+}
 void DockItemView::layoutChildren() {
     auto rect=frame();auto h=header.lock(),f=footer.lock(),b=body.lock();
-    if(h&&h->visible()) {auto r=rect;r.height=std::min(rect.height,std::max(29.f,h->naturalSize().height));h->setFrame(r);rect.y+=r.height;rect.height-=r.height;}
+    if(floatingSurface_)if(const float border=floatingSurface_->borderWidth.value_or(0);border>0)
+        rect=rect.inset({border,border,border,border});
+    if(h&&h->visible()) {
+        const float preferred=h->preferredSize().height;
+        const float height=preferred>0?preferred:h->naturalSize().height;
+        auto r=rect;r.height=std::min(rect.height,std::max(29.f,height));
+        h->setFrame(r);rect.y+=r.height;rect.height-=r.height;
+    }
     if(f&&f->visible()) {auto r=rect;r.height=std::min(rect.height,f->naturalSize().height);r.y=(rect.y+rect.height)-r.height;f->setFrame(r);rect.height-=r.height;}
     if(b)b->setFrame(rect);
     for(auto& child:children())if(child!=h&&child!=f&&child!=b)child->setFrame(rect);
 }
 DockWorkspaceView::DockWorkspaceView():state_(std::make_shared<State>()){}
+void DockWorkspaceView::setStyleSheet(std::shared_ptr<StyleSheet> sheet,StyleNode node) {
+    state_->sheet=std::move(sheet);state_->node=std::move(node);
+    state_->floatSurface.reset();state_->floatSurfaceSheet=nullptr;invalidate();
+}
+void DockWorkspaceView::styleScopeChanged() {
+    View::styleScopeChanged();
+    state_->floatSurface.reset();state_->floatSurfaceSheet=nullptr;invalidate();
+}
+StyleBox DockWorkspaceView::partStyle(const char* part,unsigned flags) const {
+    const auto& s=*state_;
+    const StyleSheet* sheet=s.sheet?s.sheet.get():styleScope().get();
+    if(!sheet)return {};
+    StyleNode node{"dock-workspace-part",{},flags};
+    for(const auto& klass:s.node.classes)if(klass!=s.node.tag)node.classes.push_back(klass);
+    node.classes.push_back(part);
+    return sheet->resolve(node);
+}
+std::shared_ptr<const StyleBox> DockWorkspaceView::floatingSurface() const {
+    const auto& s=*state_;
+    const StyleSheet* sheet=s.sheet?s.sheet.get():styleScope().get();
+    if(sheet!=s.floatSurfaceSheet) {
+        s.floatSurfaceSheet=sheet;s.floatSurface.reset();
+        auto box=partStyle("dock-workspace-float",0);
+        if(box.background.color||box.borderColor||!box.shadows.empty())
+            s.floatSurface=std::make_shared<const StyleBox>(std::move(box));
+    }
+    return s.floatSurface;
+}
 DockWorkspaceView::~DockWorkspaceView()=default;
 const DockWorkspaceSnapshot& DockWorkspaceView::snapshot() const{return state_->snapshot;}
+const DockWorkspacePresentation& DockWorkspaceView::presentation() const{return state_->presentation;}
+void DockWorkspaceView::setPresentation(DockWorkspacePresentation value){state_->presentation=std::move(value);invalidate();}
 void DockWorkspaceView::setOnIntent(std::function<void(const DockIntent&)> callback){intent_=std::move(callback);}
 void DockWorkspaceView::setSnapshot(DockWorkspaceSnapshot s,std::vector<std::shared_ptr<DockItemView>> items){prepare(std::move(s),std::move(items))();}
+void DockWorkspaceView::setSnapshot(DockWorkspaceSnapshot s,std::vector<std::shared_ptr<DockItemView>> items,DockWorkspacePresentation presentation){prepare(std::move(s),std::move(items),std::move(presentation))();}
 void DockWorkspaceView::emit(DockIntent e) {
     e.revision=state_->snapshot.revision;e.request=++request_;
     if(e.kind==DockIntentKind::Dock||e.kind==DockIntentKind::Float||e.kind==DockIntentKind::Bounds)state_->pendingRequest=e.request;
@@ -23,9 +71,12 @@ Size DockWorkspaceView::naturalSize() const{return state_->index.minimum("root")
 void DockWorkspaceView::layoutChildren() {
     auto& s=*state_;const auto& m=s.snapshot;auto viewport=frame();
     auto active=m.maximized.empty()?m.compactActive:m.maximized;
+    const auto surface=floatingSurface();
     for(auto& item:s.items) {
         item.shown=item.placement.mode!="hidden" && (m.maximized.empty()?active.empty()||item.placement.mode=="floating"||item.view->key==active:item.view->key==active);
         item.view->setLayoutVisible(item.shown);
+        const bool floating=m.maximized.empty()&&item.placement.mode=="floating";
+        item.view->setFloatingSurface(floating?surface:nullptr);
     }
     if(!active.empty()&&s.itemIds.count(active))s.items[s.itemIds.at(active)].view->setFrame(viewport);
     for(auto& n:s.nodes)n.divider={};
@@ -55,14 +106,48 @@ bool DockWorkspaceView::paintPending() const{return state_->pendingRequest!=0;}
 void DockWorkspaceView::setMotionEnabled(bool value){motion_=value;if(!value){state_->preview=state_->previewTarget;invalidate();}}
 void DockWorkspaceView::paint(Canvas& c) {
     layoutChildren();auto& s=*state_;Color accent{40,97,61};
-    for(auto& n:s.nodes)if(n.divider.width>0&&n.divider.height>0)c.fillRect(n.divider,{90,100,110,70});
+    for(size_t i=0;i<s.nodes.size();++i) {
+        auto& n=s.nodes[i];if(n.divider.width<=0||n.divider.height<=0)continue;
+        const auto flags=(s.gesture==State::Gesture::Divider&&s.divider==i?StyleStateActive:0u)
+            |(focusVisible()&&s.focusedDivider==i?StyleStateFocus:0u);
+        const Color color=partStyle("dock-workspace-divider",flags).background.color.value_or(Color{90,100,110,70});
+        c.fillRect(n.divider,color);
+    }
     View::paint(c); // Floating content covers dividers beneath it.
-    if(s.previewActive){c.fillRect(s.preview,{40,97,61,40},8);c.strokeRect(s.preview,accent,8,2);}
+    if(s.previewActive){
+        const auto preview=partStyle("dock-workspace-preview",0),caption=partStyle("dock-workspace-caption",0);
+        const Color fill=preview.background.color.value_or(Color{54,153,255,24}),border=preview.borderColor.value_or(Color{54,153,255,128});
+        const Color ink=caption.foreground.value_or(Color{32,33,36});Color backing=caption.background.color.value_or(Color{255,255,255});
+        c.fillRect(s.preview,fill,12);c.strokeRect(s.preview,border,12,1);
+        std::wstring label;
+        auto title=[](const State::Item& item){return item.view->accessibleName().empty()?unicode::fromUtf8(item.view->key):item.view->accessibleName();};
+        if(s.source!=State::none) {
+            if(s.hit&&s.hit->placement!=DockHitPlacement::None) {
+                label=title(s.items[s.source])+L" → ";
+                for(auto& item:s.items)if(item.identity==s.hit->target)label+=title(item);
+                label+=L" · "+unicode::fromUtf8(s.presentation.previewDockText);
+            } else if(willFloat())label=title(s.items[s.source])+L" · "+unicode::fromUtf8(s.presentation.previewFloatText);
+            else label=unicode::fromUtf8(s.presentation.previewKeepText);
+        }
+        auto host=frame();float width=std::min(std::max(0.f,host.width-24),c.measureTextWidth(label,12,500)+16);
+        Rect chip{std::clamp(s.preview.x+12,host.x+12,std::max(host.x+12,host.x+host.width-width-12)),
+                  std::clamp(s.preview.y+12,host.y+12,std::max(host.y+12,host.y+host.height-40)),width,28};
+        backing.a=255;c.fillRect(chip,backing,6);
+        c.drawTextStyled(label,{chip.x+8,chip.y,chip.width-16,chip.height},ink,12,TextAlign::Center,500);
+    }
     if(s.hit&&s.gesture==State::Gesture::Move) {
         auto r=s.hit->bounds;float x=r.x+r.width*.5f,y=r.y+r.height*.5f;
         Rect guides[]={{x-68,y-18,42,36},{x+26,y-18,42,36},{x-21,y-58,42,36},{x-21,y+22,42,36}};
         const wchar_t* labels[]={L"←",L"→",L"↑",L"↓"};
-        for(int i=0;i<4;++i){bool active=int(s.hit->placement)==i+1;c.fillRect(guides[i],active?accent:Color{90,100,110,220},5);c.drawText(labels[i],guides[i],{255,255,255},16);}
+        for(int i=0;i<4;++i) {
+            const bool active=int(s.hit->placement)==i+1;
+            const auto guide=partStyle("dock-workspace-guide",active?StyleStateSelected:0u);
+            const Color fill=guide.background.color.value_or(active?accent:Color{90,100,110,220});
+            const float radius=guide.radius.value_or(5);
+            c.fillRect(guides[i],fill,radius);
+            if(guide.borderColor&&guide.borderWidth.value_or(0)>0)c.strokeRect(guides[i],*guide.borderColor,radius,*guide.borderWidth);
+            c.drawText(labels[i],guides[i],guide.foreground.value_or(Color{255,255,255}),16);
+        }
     }
 }
 void DockWorkspaceView::requestAction(DockIntentKind kind,const std::string& source,bool flag) {

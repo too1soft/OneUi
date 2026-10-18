@@ -1,4 +1,5 @@
 #include "desktop_window.h"
+#include "title_bar_hit.h"
 #include "internal/unicode.h"
 #include "internal/frame_profile.h"
 #include "internal/developer_tools.h"
@@ -748,6 +749,7 @@ void DesktopWindow::setTitleBarInteractiveInsets(float l, float r) {
 bool DesktopWindow::dragRegion(Point p) const {
     if (!options_.borderless || p.y < 0 || p.y >= titleHeight_ || p.x >= logicalSize_.width - reservedWidth_)
         return false;
+    if (titleBarControlAt(content_, clientPoint(p))) return false;
     return interactiveLeading_ < 0 || interactiveTrailing_ < 0 || p.x < interactiveLeading_ ||
            p.x >= logicalSize_.width - interactiveTrailing_;
 }

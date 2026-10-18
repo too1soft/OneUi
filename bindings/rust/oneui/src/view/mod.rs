@@ -5,6 +5,11 @@ mod callbacks;
 #[cfg(feature = "view-diagnostics")]
 pub mod diagnostics;
 mod host;
+mod mount_point;
+mod code_editor;
+pub use code_editor::{CodeEditorCommand, CodeEditorState};
+mod metrics;
+pub use metrics::{DockAction, ElementMetrics};
 mod scope;
 pub use scope::ScopeSegment;
 mod list;
@@ -77,14 +82,64 @@ pub struct ViewMount {
     _ui: PhantomData<Rc<()>>,
 }
 impl ViewMount {
+    /// Empty attachment boundary for a routed declaration. Visible controls live in the view.
+    pub fn destination() -> Result<crate::Panel, crate::Error> {
+        // Panel defaults to a white fill and a 1px light border; a boundary
+        // must show its parent.
+        let panel = crate::Panel::new()?;
+        panel.set_background(crate::Color::rgba(0, 0, 0, 0));
+        panel.set_border(crate::Color::rgba(0, 0, 0, 0), 0.0);
+        Ok(panel)
+    }
+
+    /// Window-level overlay boundary that owns the routed destination and
+    /// hosts popups and dialogs. Visible controls still live in views.
+    pub fn overlay_boundary() -> Result<crate::OverlayHost, crate::Error> {
+        crate::OverlayHost::new()
+    }
+
+    /// Compose an independent declarative VM in an empty named Surface.
+    /// The returned mount closes before the parent view and cannot accept
+    /// arbitrary native controls. Instantiate a typed View in it as usual.
+    pub fn child(&self, name: &str) -> VmResult<Self> {
+        let mut raw = std::ptr::null_mut();
+        check(unsafe { sys::oneui_view_mount_child(self.raw.as_ptr(),
+            sys::OneUiUtf8String::from_str(name), &mut raw) })?;
+        Ok(Self { raw: NonNull::new(raw).ok_or(ViewError::CLOSED)?, _ui: PhantomData })
+    }
+    /// Attach an empty, unattached Panel to an empty named Surface and mount
+    /// the child View inside that Panel. Success first binds it to this window;
+    /// no Rust borrow is retained. Attached Panels and duplicate mounts fail.
+    /// Dropping the child View empties the Panel for reuse. Dropping this mount,
+    /// or closing/reloading its parent View, also removes the Panel.
+    pub fn child_with_destination(&self, name: &str, destination: &Widget) -> VmResult<Self> {
+        let mut raw = std::ptr::null_mut();
+        check(unsafe {
+            sys::oneui_view_mount_child_with_destination(
+                self.raw.as_ptr(),
+                sys::OneUiUtf8String::from_str(name),
+                destination.as_raw(),
+                &mut raw,
+            )
+        })?;
+        Ok(Self {
+            raw: NonNull::new(raw).ok_or(ViewError::CLOSED)?,
+            _ui: PhantomData,
+        })
+    }
     /// Mount in an empty window, or an empty Panel already in that window.
     /// The native control invalidates on window close; no Rust borrow is retained.
     pub fn new(window: &Window, destination: Option<&Widget>) -> VmResult<Self> {
-        if std::thread::current().id() != window.state.ui_thread {
+        Self::from_dispatcher(&window.dispatcher(), destination)
+    }
+    /// Mount from an application's retained dispatcher on its owning UI thread.
+    /// Destination must still be an empty Panel attached to that window.
+    pub fn from_dispatcher(dispatcher: &crate::UiDispatcher, destination: Option<&Widget>) -> VmResult<Self> {
+        if std::thread::current().id() != dispatcher.state.ui_thread {
             return Err(ViewError::WRONG_THREAD);
         }
         let mut raw = std::ptr::null_mut();
-        let code = window
+        let code = dispatcher
             .state
             .with_raw(|w| unsafe {
                 sys::oneui_view_mount_create(
@@ -210,3 +265,5 @@ pub struct ViewDiagnostic {
     pub source: u32,
     pub message: String,
 }
+
+mod workspace;

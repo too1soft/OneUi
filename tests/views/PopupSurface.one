@@ -1,0 +1,20 @@
+<import name="AnchoredFrame" src="PopupSurface.partial.one"/>
+<template view-model="Root">
+  <Column>
+  <AnchoredFrame>
+    <Surface slot="content" class="panel">
+      <Column grow="1" basis="0">
+        <Row class="head" wrap="false"/>
+        <Surface grow="1" basis="0"/>
+      </Column>
+    </Surface>
+  </AnchoredFrame>
+  </Column>
+</template>
+<style scoped>
+Column {padding:0px;gap:0px;}
+Surface {padding:0px;}
+Row.head {height:48px;}
+Surface.panel {background:#202428;border-color:#445566;border-width:1px;border-radius:10px;box-shadow:0px 6px 20px 0px #00000066;}
+popup.menu-popup {background:#00000000;border-width:0px;padding:0px;}
+</style>

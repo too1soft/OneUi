@@ -40,6 +40,12 @@ struct StackFlex {
     float minWidth=0,minHeight=0;
 };
 
+// Additive presentation API; the frozen StackFlex value layout stays intact.
+struct StackFlexPresentation {
+    std::optional<float> basisPercent;
+    int order = 0;
+};
+
 struct StackLayoutStats { std::uint64_t calculations = 0, measureCacheHits = 0, arrangeCacheHits = 0; };
 
 class ONEUI_API Stack final : public View {
@@ -53,6 +59,7 @@ public:
     StackEngine engine() const { return engine_; }
     StackDirection direction() const { return direction_; }
     StackAlign align() const {return align_;}
+    float gap() const {return gap_;}
     bool wrap() const {return wrap_;}
     void setSizeContainment(bool value){if(sizeContained_!=value){sizeContained_=value;invalidate();}}
     bool sizeContained() const {return sizeContained_;}
@@ -70,6 +77,8 @@ public:
     void setAlign(StackAlign align);
     void setJustify(StackJustify justify);
     void setFlex(const std::shared_ptr<Widget>& child, StackFlex flex);
+    void setFlexPresentation(const std::shared_ptr<Widget>& child, StackFlexPresentation value);
+    StackFlexPresentation flexPresentation(const std::shared_ptr<Widget>& child) const;
     void clearFlex(const std::shared_ptr<Widget>& child);
     void setStyleBox(StyleBox style);
     void clearStyleBox();
@@ -110,6 +119,7 @@ private:
     std::vector<FlexItem> layoutItems_;
     StackFlex itemFlex(const std::shared_ptr<Widget>& child, float preferred) const;
     Size itemSize(const std::shared_ptr<Widget>& child) const;
+    std::vector<std::shared_ptr<Widget>> orderedChildren() const;
     std::optional<StyleBox> styleBox_;
 };
 

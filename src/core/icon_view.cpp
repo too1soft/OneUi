@@ -33,8 +33,23 @@ void IconView::setStrokeWidth(float width) {
     invalidate();
 }
 
+void IconView::setGlyphSize(std::optional<float> size) {
+    if (size && !(*size > 0.0f)) {
+        size.reset();
+    }
+    if (glyphSize_ == size) {
+        return;
+    }
+    glyphSize_ = size;
+    invalidate();
+}
+
 void IconView::paint(Canvas& canvas) {
-    const auto rect = frame();
+    auto rect = frame();
+    if (glyphSize_) {
+        const float side = std::min({*glyphSize_, rect.width, rect.height});
+        rect = Rect{rect.x + (rect.width - side) * 0.5f, rect.y + (rect.height - side) * 0.5f, side, side};
+    }
     const auto color = disabled() ? Color{128, 132, 146, color_.a} : color_;
     const auto accent = disabled() && accent_.a != 0 ? Color{96, 99, 112, accent_.a} : accent_;
     paintIcon(canvas, symbol_, rect, color, accent, strokeWidth_);

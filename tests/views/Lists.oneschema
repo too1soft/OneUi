@@ -1,0 +1,43 @@
+model Root {
+    rw title: utf8
+    r visible: bool
+    r enabled: bool
+    r busy: bool
+    r rows: list<Item>
+    rw selected: i64
+    rw tree_selected: utf8
+    r height: f64
+    r spans: list<Span>
+    command click() when enabled busy busy
+    command activate(key:utf8)
+    command edit(key:utf8)
+    command delete()
+    command selection()
+    command current(key:utf8)
+    command sort(column:i64)
+    command cell(key:utf8,column:i64)
+    command context(key:utf8,x:f64,y:f64)
+    rw checked: bool
+    command pointer(x:f64,y:f64,control:bool,shift:bool,click_count:i64)
+    command reorder(source:utf8,target:i64)
+    command drag(source:utf8,phase:i64,x:f64,y:f64)
+    command pointer_context(x:f64,y:f64)
+}
+model Item key id {
+    command copy()
+    r id: utf8
+    r text: utf8
+    r title: utf8
+    r detail: utf8
+    r parent: utf8
+    rw expanded: bool
+    rw selected: bool
+    r cells: list<Cell>
+    r badge: utf8
+    r trailing:utf8
+    r trailing_rgba:i64
+    r indicator_rgba: i64
+    r spans: list<Span>
+}
+model Cell key id {r id:utf8 r text:utf8 r icon:utf8 r alignment:i64}
+model Span key id {r id:utf8 r start:i64 r end:i64 r rgba:i64 r monospace:bool r weight:i64 r italic:bool r underline:bool r strike:bool r background:i64 r size:f64}

@@ -21,6 +21,9 @@ int main(int argc,char **argv) {
         }
         c.vm.text(c.title,"after reload");c.runtime->notify(c.runtime->rootScope,c.title);c.runtime->flush();
         expect(input->text()==L"after reload","observers after reload");
+        expect(c.runtime->root->children[0]->element.classes.find("after reload") != std::string::npos &&
+               c.runtime->root->children[0]->element.classes.find("initial") == std::string::npos,
+               "bound classes replace obsolete tokens after repeated reloads");
         auto edited=c.image;
         const auto buttonNode=c.runtime->root->children[2]->node;
         auto button=c.runtime->root->children[2]->element.as<oneui::Button>();

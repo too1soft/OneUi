@@ -286,6 +286,17 @@ VM保存DockRestore锚点和版本化快照；该历史状态不参加当前绘�
 
 DockWorkspace的 `nodes` 同WorkspaceNode，root/maximized/compact-active为utf8 key；revision/ack-request为i64，ack-accepted为bool。gap为非负f64默认8，divider-hit默认8（沿用SplitView的最小8px命中）；边缘/浮动拖动规则见1.2。DockItem的pane-key必填且稳定，四个min为有限非负f64，默认dock280×150/float240×160；hideable默认true。split divider只改变内部显示ratio并实时刷新子容器，release或键盘静止时请求dockRatioRequested；VM接受后更新node.ratio并持久化，取消恢复旧ratio。参考中的临时ratio模型因此落到组件瞬时态，用户可见行为保持。DockItem默认操作菜单用PanelHeader中的 `.one` 菜单绑定上述命令，hideable=false不提供隐藏意图；收起/浮动/置顶也可由应用自己的菜单命令触发，组件不得先改placement再通知。
 
+T25 追加合同：`raise-on-press:bool` 默认 true，保留按下浮窗先请求 Raise 的旧 SDK 行为。
+需要 Esc 连同持久化 order 一并保持的宿主可设 false；此时指针 drag/resize 仅预览，
+显式 `Raise` 和 `Pin` 请求仍生效。`preview-dock-text`、`preview-float-text`、
+`preview-keep-text` 为可绑定 UTF-8 操作提示；SDK组合可访问面板名并绘制不捕获输入的提示条。
+样式 part 为 `dock-workspace-preview`（背景/边框）和 `dock-workspace-caption`（背景/文字）；
+提示背景保持不透明、目的地区域保持半透明，松手/Esc立即移除反馈。
+part 规则按 DockWorkspace 元素自身的类解析，因此模板 `<style scoped>` 中的
+`dock-workspace-part.*` 规则同样生效。`dock-workspace-guide`（背景/文字/边框/圆角，
+`:selected` 为当前命中方向）控制拖拽方向键；`dock-workspace-float`（背景/边框/圆角/
+`box-shadow`）是浮动面板的表面，绘制在该面板内容之下，内容按边框宽度内缩；停靠面板不绘制。
+
 ### 3.5 Stack增删与多列重排
 
 模板继续写 `<Column><Card v-for="item in items" :key="item.id">…</Card></Column>`。schema为 `r items:list<Item>`、`model Item key id { r id:utf8 ... }`。VM INSERT/REMOVE/MOVE delta决定结构，Stack不发业务增删事件；无新增“在模板中执行insert()”语法。default槽保留任意子项。
@@ -414,7 +425,7 @@ PaneGrid的扁平内容池使以下操作**无需detach/attach**：
 
 `container-type:size`要求父布局能独立分配两轴（basis/grow/固定约束）。内容驱动高度的容器不能查询height或ratio，编译可判定时拒绝，运行时不满足独立尺寸条件则诊断并使用无条件样式。查询不发VM事件；媒体/monitor布局也使用同一机制，不把尺寸通知送回Rust计算分支。
 
-支持的查询内布局输出：display:none/flex、flex-direction、flex-wrap、flex-basis/grow/shrink、gap、width/height/min-width/min-height，以及现有绘制/文字属性；同步实现严格消费检查与Yoga/style_adapter应用，不能只解析不应用。`display:none`保留Widget与VM，但不参与布局/命中/可访问树；移出正在编辑节点前按正常隐藏政策提交composition并迁焦点到切换控件。
+支持的查询内布局输出：display:none/flex、flex-direction、flex-wrap、flex-basis/grow/shrink、gap、width/height/min-width/min-height、max-width/max-height（主轴上限，经 StackFlex::max 应用；跨轴给出 CONTAINER_CONSUMPTION 诊断），以及现有绘制/文字属性；同步实现严格消费检查与Yoga/style_adapter应用，不能只解析不应用。`display:none`保留Widget与VM，但不参与布局/命中/可访问树；移出正在编辑节点前按正常隐藏政策提交composition并迁焦点到切换控件。
 
 ### 6.2 布局后求值，最多一次重算
 
@@ -533,6 +544,16 @@ IR推荐保持major1，新增**必需能力段** `WSC1`（目录kind=19、flags=
 
 ## 11. design-1阶段核验（历史记录）
 
+### WP5 设置页接入补充
+
+FontPicker 的 `trigger-label` 可本地化按钮文案，已选字体仍通过 accessibility value 暴露。
+MediaPicker 支持 `choose-label`、`clear-label`、`cancel-label`，32px 紧凑布局可用于表单行。
+其内部按钮分别使用 `media-picker-choose`、`media-picker-clear`、`media-picker-cancel` 样式类，
+字体按钮使用 `font-picker-trigger`；主题切换重新解析内部按钮样式。
+MediaPreview 的既有本地静态图片契约不变，视频导入和全局视频播放仍由应用服务承担。
+
+以下为早期设计记录，不能替代上述能力的实现验证；WP5 测试结果在 iShell 交接报告中列明。
+
 已完成只读现状调查与可实施契约；没有运行编译、运行时交互、性能或截图测试，因此本稿的性能与验收均为待执行计划。图MCP索引查询和MyStudio ensure_project被禁止审批策略拒绝，未继续调用受限工具，未换HTTP绕过；workspace_context已读，agent_kit.version=5与本地相同。MyStudio **未同步**（无task/execution/handoff写入）。版本状态：files_updated=false，http_verified=未单独执行，client_loaded=本会话已读取v5且workspace_context可用；未声称已上报回执。
 
 本任务不产生构建/实验/截图临时文件，仅保留正式设计稿及 `WP-4-design-commit-msg.txt`。不触碰既有capture配置和原工作区产物；WP3历史受阻项见 `docs/benchmarks/language-neutral-views/artifacts.md`，本次未把历史数字冒充新审计或宣称清理。进入实现前按9.2执行全项目产物审计。UI技能读取到 `.impeccable/design.json` 比 DESIGN.md 旧；它不是本任务视觉权威，未顺带重建，后续可单独document刷新。
@@ -540,3 +561,94 @@ IR推荐保持major1，新增**必需能力段** `WSC1`（目录kind=19、flags=
 交付文件已检查UTF-8无BOM、无连续四问号乱码、无替换字符/U+200B、代码围栏配对；I/O前缀的具体引用路径存在。Git分支仍为codex/workspace-components，状态仅上述两个新增文件，源码无diff；未写Git索引或提交。此为文档静态核验，不替代实现后的编译与行为验收。
 
 提交由Claude代为执行，提交信息附文件清单和Co-Authored-By。此记录仅对应design-1；design-2已获准S1→S2，实施证据另见S1/S2报告。每步提交信息用WP-4-S<N>-commit-msg.txt，交叉文件则合并并说明原因。
+
+WP5 settings FontPicker extension: `confirm-selection` keeps a candidate as a
+local preview until Apply; Cancel/Escape leave the VM value unchanged. Optional
+`monospace-items` is a `oneui.v1.StringItem` list of OS-reported fixed-pitch keys;
+`monospace-only` sets the initial filter and the user may disable it. The
+`apply-label`, `cancel-label`, `filter-label`, `search-label`, and `retry-label`
+properties localize the popup. `retryRequested` remains available after success
+so newly installed fonts can be enumerated again. The component never discovers
+fonts or persists preferences itself. Existing callers keep immediate selection
+unless they opt into confirmation.
+
+The popup paints an opaque surface inside its enclosing scroll viewport. Search,
+selection and secondary buttons inherit the active semantic palette when their
+optional component tokens are absent; this includes partial dark palettes.
+
+### PaneHeader action captions
+
+`split-label`, `maximize-label`, `close-label`, `live-label`, and `menu-label` accept UTF-8 literal or bound text. They update both the native button's accessible name and tooltip without replacing the button or changing drag routing. Broadcast feedback continues to use `broadcast-label` and `broadcast-hint`. Caption changes preserve content leases and native control identity.
+
+### WP6 header fidelity follow-up
+
+PaneHeader retains the separate left drag handle and right menu action. The right actions follow broadcast / split / maximize / menu / close / live order; the 29px header is followed by a 1px active rule. Header parts consume the inherited style scope through `pane-header-part` selectors: `pane-header-button`, `pane-header-broadcast-on`, `pane-header-grip`, `pane-header-number`, `pane-header-title`, and `pane-header-path`. The number/title/path nodes also expose `pane-header-active` or `pane-header-inactive`. Part colors, font size/weight/family and number radius are authored by the application and refresh on theme replacement. `menu-label` applies to both menu entry points. No C ABI or wire-format change.
+
+PaneGrid divider paint can be themed with `pane-grid-part.pane-grid-divider` background and `:hover`, `:pressed`, `:focus` states. PaneHeader exposes `pane-header-part.pane-header-rule` for the full-width bottom rule; its grip remains visible on inactive panes. Neither styling changes geometry or content ownership.
+
+### PaneHeader session tooltip
+
+`tooltip` accepts literal or bound UTF-8 text independently of the visible title,
+path and broadcast hint. The declaration runtime preserves an explicitly authored
+tooltip (including an empty one) when active, title, path or other header settings
+change. Omitted tooltips retain the component's title/path default. Session privacy
+and connection-state wording remain application model/VM policy. This adds no
+public class layout or C ABI change.
+
+### Native tab strips in a declarative workspace
+
+`ViewMount::register_workspace_tabs(domain, id, tabs)` registers an existing
+native Tabs in the mounted view's WP4 domain. The Tabs must belong to the same
+window; registration holds a weak reference. Forward its native drag-out events
+with `View::workspace_tab_drag`, supplying the stable single-pane source on
+Started and window coordinates on every event. Flush pending workspace state
+before Started. WP4 owns preview, release hit testing, revision rejection and
+cancellation for both directions; the application only applies accepted intents.
+Maximized panes and multi-pane tab sources cannot begin a drag.
+
+`pane-grid-part.pane-grid-preview { background: var(--accent); }` supplies the
+preview accent, refreshed with the style scope. The component applies its own
+translucency (41/255 for a valid destination), outline and 45 ms exponential
+tracking. The release point is evaluated directly, independent of the lagging
+preview. These C API additions do not change public class layout.
+
+Named element metrics and mount focus lookup include content nested inside
+Popup. Native View focus requests route through Popup to its content, allowing
+an anchored DataMenu to receive keyboard input after it opens.
+
+### Declarative session Tabs (T11/T12)
+
+Tabs v3 appends `decorations` (keyed rows: `id`, `icon`, packed RGBA `rgba`),
+`item-min`, `item-max` and `edit-key`. It appends keyed `contextRequested`,
+`overflowChanged` and `editFinished` events without changing earlier IDs or
+`oneui.v1.TabItem`. Decoration rows follow item order. Compact document tabs
+keep logical order, allow wheel scrolling to every item and bring a newly
+activated or edited item into view; repaint preserves the user's scroll offset.
+
+`ViewMount::register_workspace_tab_surface` also accepts the declarative host
+Panel, retaining the existing same-window and drag-domain checks. Forward drag
+events outside VM callbacks, preserving phase order and release coordinates.
+Reject a changed model revision while deferring Started; WP4 rejects revisions
+changed during the gesture. Pure model merging inserts an external leaf in a
+half split at the nearest edge; it does not replace either session.
+
+The public Tabs layout replaces obsolete compact packing storage with viewport
+width state. Consumers must clean and rebuild their existing SDK configuration.
+
+`DragHandle` also emits `activated(source,x,y,count,button)` for a click below
+the drag threshold, right click, or Enter/Space. A child control consumes its
+own input first; a completed drag does not activate. This appended event leaves
+the existing drag event and phase values unchanged.
+
+Dock divider paint can be styled with
+`dock-workspace-part.dock-workspace-divider` and its `:pressed` / `:focus`
+states. Transparent normal background keeps the authored gap visible; styling
+does not alter divider geometry or its hit target. `interactionActive()` and
+`hasDockTarget()` expose read-only interaction state for native input contracts.
+### Monitor connection composition contracts
+
+`Scroll.scrollbar-inset` exposes the native inset (default 5); zero reserves only the authored scrollbar width. `VirtualList.trailing-width` and `trailing-gap` expose native rich-row metrics (defaults 58 and 8). `VirtualList.activate-on-single-click` (default false) lets a single click fire `@activate`, matching completion popups that accept on click; it restores the default when removed during reload. Structured rows may supply `trailing_rgba: i64` in unsigned 32-bit RGBA range; omitted values retain the native default. These properties support bindings and restore defaults when removed during reload. Monitor templates use compact metrics without a native content host.
+
+VirtualList also clamps an obsolete scroll offset when an enlarged viewport is painted or clicked, so filtering followed by expansion cannot leave hit testing at an old row. Runtime fixture covers both paths.
+
+`oneui_view_element_metrics` reports VirtualList scroll position/extent. SegmentedControl validates the existing Tabs `text-inset` style adapter, allowing narrow labels to keep readable space.

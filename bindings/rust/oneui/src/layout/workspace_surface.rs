@@ -1,4 +1,4 @@
-//! Native composition for [`DockWorkspace`](super::workspace::DockWorkspace).
+//! Native composition for [`DockWorkspace`].
 //! Content widgets are registered once. Reparenting never reconstructs content.
 use super::workspace::*;
 use crate::{

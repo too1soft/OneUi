@@ -12,6 +12,19 @@ pub enum BuiltinText {
     ShowMainWindow,
     QuitApplication,
     Loading,
+    FindPlaceholder,
+    ReplacePlaceholder,
+    FindNoResults,
+    FindInvalidPattern,
+    FindMatchCount,
+    ReplaceOne,
+    ReplaceAll,
+    FindMatchCase,
+    FindRegex,
+    FindWholeWord,
+    FindPrevious,
+    FindNext,
+    FindClose,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

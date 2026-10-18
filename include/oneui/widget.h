@@ -12,7 +12,7 @@
 #include <string>
 
 namespace oneui {
-namespace internal { class DeveloperRecorder; }
+namespace internal { class DeveloperRecorder; struct WidgetPresentationAccess; }
 
 enum class MouseButton {
     None,
@@ -210,6 +210,16 @@ public:
     void attachAnimationSchedulerToOwner(
         const void* owner,
         std::function<void()> scheduler);
+    /// Re-installs a channel during propagation from `owner`, but only while
+    /// `owner` still holds it. A parent that is being torn down may still list
+    /// a child that has since been reparented; it must not reclaim it.
+    void refreshInvalidatorFromOwner(const void* owner, std::function<void()> invalidator);
+    void refreshRectInvalidatorFromOwner(
+        const void* owner,
+        std::function<void(Rect)> invalidator);
+    void refreshAnimationSchedulerFromOwner(
+        const void* owner,
+        std::function<void()> scheduler);
     /// Clears composition callbacks only when they still belong to `owner`.
     /// This makes destruction of an old parent safe after a child was
     /// reparented into a new native tree.
@@ -307,6 +317,7 @@ protected:
 
 private:
     friend class internal::DeveloperRecorder;
+    friend struct internal::WidgetPresentationAccess;
     std::shared_ptr<StyleSheet> localStyleScope_;
     std::shared_ptr<StyleSheet> inheritedStyleScope_;
     const void* styleScopeOwner_ = nullptr;

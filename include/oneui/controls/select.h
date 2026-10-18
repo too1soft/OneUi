@@ -34,6 +34,7 @@ public:
     bool isFocusable() const override;
     bool hitTest(Point point) const override;
     bool paintsAboveSiblings() const override;
+    Rect paintBounds() const override;
     AccessibilityInfo accessibilityInfo() const override;
 
 private:

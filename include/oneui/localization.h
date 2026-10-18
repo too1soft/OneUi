@@ -16,6 +16,20 @@ enum class BuiltinText {
     ShowMainWindow,
     QuitApplication,
     Loading,
+    // Code editor find bar. FindMatchCount uses {0} (current) and {1} (total).
+    FindPlaceholder,
+    ReplacePlaceholder,
+    FindNoResults,
+    FindInvalidPattern,
+    FindMatchCount,
+    ReplaceOne,
+    ReplaceAll,
+    FindMatchCase,
+    FindRegex,
+    FindWholeWord,
+    FindPrevious,
+    FindNext,
+    FindClose,
 };
 
 // Application overrides are copied and synchronized. nullopt restores the

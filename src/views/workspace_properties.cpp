@@ -4,6 +4,7 @@
 namespace oneui::views {
 bool Runtime::workspaceScalar(Instance& instance,const std::string& name,const Value& v) {
     auto& e=instance.element;
+    if(shortcutScalar(instance,name,v))return true;
     if(pickerScalar(instance,name,v))return true;
     if(dockScalar(instance,name,v))return true;
     if(e.component=="ContainerPage"&&name=="selected"){e.as<ContainerPage>()->setSelected(bool(v.integer));return true;}

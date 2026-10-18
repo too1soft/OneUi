@@ -1,7 +1,11 @@
 #include "oneui/controls/time_series_chart.h"
 
+#include <algorithm>
 #include <cmath>
+#include <vector>
 #include "support/recording_canvas.h"
+#include "../src/internal/animation_wake.h"
+#include "../src/internal/ui_clock.h"
 #include <iostream>
 #include <limits>
 
@@ -118,5 +122,146 @@ int main() {
     chart.setSamplePositions({});
     chart.onMouseMove(mouse);
     expectEqual("empty domain restores equal spacing", chart.inspectionIndex(), 2);
+
+    // Per-series fill and dashes; a series-bounded gradient for low curves.
+    chart.setInspectionIndex(-1);
+    chart.setLatestPointVisible(false);
+    chart.setSmoothCurves(false);
+    chart.setAreaFill(false);
+    chart.setPlotInsets({0, 0, 0, 0});
+    chart.setRange(0.0, 100.0);
+    oneui::TimeSeriesChartSeries received{L"rx", oneui::Color{62, 207, 142, 255}, {10, 20, 10}};
+    received.fill = true;
+    oneui::TimeSeriesChartSeries sent{L"tx", oneui::Color{110, 155, 255, 255}, {0, 100, 0}};
+    sent.dashed = true;
+    chart.setSeries({received, sent});
+    oneui::test_support::RecordingCanvas styled;
+    chart.paint(styled);
+    expectEqual("only the series asking for fill is filled", static_cast<int>(styled.pathGradients.size()), 1);
+    expectTrue("plot extent spans the plot", std::abs(styled.pathGradients.front().bounds.y - 0.0f) < 0.001f);
+    expectTrue("fill fades from the curve down to the baseline", styled.pathGradients.front().angle == 180.0f);
+    float drawn = 0.0f;
+    for (const auto& line : styled.lines) {
+        if (line.color.r == 110) drawn += std::hypot(line.to.x - line.from.x, line.to.y - line.from.y);
+    }
+    const float full = 2.0f * std::hypot(120.0f, 120.0f);
+    expectTrue("dashed series leaves gaps", drawn > 0.0f && drawn < full * 0.7f);
+    chart.setFillExtent(oneui::TimeSeriesFillExtent::Series);
+    oneui::test_support::RecordingCanvas extent;
+    chart.paint(extent);
+    const auto bounds = extent.pathGradients.front().bounds;
+    expectTrue("series extent starts at the curve's peak", std::abs(bounds.y - 96.0f) < 0.001f);
+    expectTrue("series extent ends at the baseline", std::abs(bounds.y + bounds.height - 120.0f) < 0.001f);
+
+    // Monotone smoothing never overshoots a plateau.
+    chart.setFillExtent(oneui::TimeSeriesFillExtent::Plot);
+    chart.setSmoothCurves(true);
+    chart.setSeries({{L"plateau", oneui::Color{10, 20, 30, 255}, {0, 100, 100, 100, 0}}});
+    oneui::test_support::RecordingCanvas plateau;
+    chart.paint(plateau);
+    bool overshoot = false;
+    for (const auto& line : plateau.lines)
+        if (line.color.r == 10 && (line.from.y < -0.01f || line.to.y < -0.01f || line.from.y > 120.01f || line.to.y > 120.01f)) overshoot = true;
+    expectTrue("smooth curve stays within its samples", !overshoot);
+
+    // Live charts slide between updates, hold the newest value and ease changes.
+    double clock = 10000.0;
+    oneui::internal::ScopedUiClock scopedClock([&] { return clock; });
+    chart.setSmoothCurves(false);
+    chart.setLatestPointVisible(true);
+    chart.setLatestPointSize(4.0f, 4.0f);
+    chart.setScrollRate(0.1);
+    chart.setSeries({{L"live", oneui::Color{40, 50, 60, 255}, {50, 50, 50}}});
+    clock += 1000.0;
+    oneui::test_support::RecordingCanvas slid;
+    chart.paint(slid);
+    const auto dot = slid.fillEllipses.back().rect;
+    expectTrue("newest value holds at the right edge", std::abs(dot.x + dot.width * 0.5f - 240.0f) < 0.01f);
+    bool movedLeft = false;
+    for (const auto& line : slid.lines)
+        if (line.color.r == 40 && std::abs(line.from.x - 96.0f) < 0.01f) movedLeft = true;
+    expectTrue("samples slide left at the scroll rate", movedLeft);
+    expectTrue("a live chart keeps animating", chart.tickAnimations(clock));
+    chart.setSeries({{L"live", oneui::Color{40, 50, 60, 255}, {50, 50, 50}}});
+    oneui::test_support::RecordingCanvas resent;
+    chart.paint(resent);
+    bool stillSlid = false;
+    for (const auto& line : resent.lines)
+        if (line.color.r == 40 && std::abs(line.from.x - 96.0f) < 0.01f) stillSlid = true;
+    expectTrue("identical data does not restart the slide", stillSlid);
+    chart.setRange(0.0, 200.0);
+    oneui::test_support::RecordingCanvas easeStart;
+    chart.paint(easeStart);
+    expectTrue("range change starts from the old scale", std::abs(easeStart.fillEllipses.back().rect.y + 2.0f - 60.0f) < 0.01f);
+    clock += 200.0;
+    oneui::test_support::RecordingCanvas easeMid;
+    chart.paint(easeMid);
+    const float midY = easeMid.fillEllipses.back().rect.y + 2.0f;
+    expectTrue("range change eases", midY > 60.5f && midY < 89.5f);
+    clock += 1000.0;
+    oneui::test_support::RecordingCanvas easeEnd;
+    chart.paint(easeEnd);
+    expectTrue("range change settles", std::abs(easeEnd.fillEllipses.back().rect.y + 2.0f - 90.0f) < 0.01f);
+    chart.setScrollRate(0.0);
+    expectTrue("a static chart stops animating", !chart.tickAnimations(clock + 5000.0));
+
+    // Live charts repaint on a shared clock well below the display rate, so a
+    // high-refresh display does not repaint the window every frame.
+    clock = 20000.0;
+    oneui::TimeSeriesChart wide;
+    oneui::TimeSeriesChart narrow;
+    wide.setFrame(oneui::Rect{0.0f, 0.0f, 340.0f, 80.0f});
+    narrow.setFrame(oneui::Rect{0.0f, 0.0f, 120.0f, 40.0f});
+    std::vector<double> repaints;
+    for (auto* live : {&wide, &narrow}) {
+        live->setInvalidator([&] { repaints.push_back(clock); });
+        live->setRectInvalidator([&](oneui::Rect) { repaints.push_back(clock); });
+        live->setRange(0.0, 100.0);
+        live->setScrollRate(1.0 / 60.0);
+        live->setSeries({{L"live", oneui::Color{40, 50, 60, 255}, {10, 20}}});
+    }
+    const auto runFrames = [&](double untilMs) {
+        repaints.clear();
+        while (clock < untilMs) {
+            clock += 1000.0 / 180.0;
+            for (auto* live : {&wide, &narrow}) {
+                if (live->tickAnimations(clock)) {
+                    oneui::test_support::RecordingCanvas frame;
+                    live->paint(frame);
+                }
+            }
+        }
+    };
+    const auto distinctFrames = [&] {
+        std::vector<double> frames = repaints;
+        frames.erase(std::unique(frames.begin(), frames.end()), frames.end());
+        return static_cast<int>(frames.size());
+    };
+    runFrames(20500.0);
+    runFrames(21500.0);
+    expectTrue("a slide repaints at most 8 times a second", distinctFrames() <= 8);
+    expectTrue("a slide still moves", distinctFrames() >= 4);
+    for (auto* live : {&wide, &narrow}) live->setSeries({{L"live", oneui::Color{40, 50, 60, 255}, {10, 20, 90}}});
+    runFrames(22000.0);
+    expectTrue("an eased update repaints at most 32 times a second", distinctFrames() <= 17);
+    expectTrue("charts fed together repaint in the same frames",
+        repaints.size() >= 2 * static_cast<std::size_t>(distinctFrames()) - 4);
+
+    // When its window can wake it later, a live chart sleeps between steps
+    // instead of ticking every display refresh.
+    {
+        oneui::internal::AnimationWakeScope wake;
+        expectTrue("a live chart sleeps when its window can wake it", !wide.tickAnimations(clock));
+        expectTrue("it wakes for its next slide step",
+            wake.dueMs() > clock && wake.dueMs() <= clock + 250.0 &&
+            std::abs(std::fmod(wake.dueMs(), 125.0)) < 0.001);
+    }
+    {
+        for (auto* live : {&wide, &narrow}) live->setSeries({{L"live", oneui::Color{40, 50, 60, 255}, {10, 20, 90, 40}}});
+        oneui::internal::AnimationWakeScope wake;
+        expectTrue("an easing chart sleeps too", !wide.tickAnimations(clock + 1.0));
+        expectTrue("it wakes for its next ease step", wake.dueMs() > clock + 1.0 && wake.dueMs() <= clock + 1.0 + 1000.0 / 32.0);
+    }
+    expectTrue("without a wake scope the chart keeps requesting frames", wide.tickAnimations(clock + 2.0));
     return failures == 0 ? 0 : 1;
 }

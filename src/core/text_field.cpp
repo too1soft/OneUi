@@ -1099,12 +1099,12 @@ bool TextField::tickAnimations(double nowMs) {
                      borderTransition_.running();
     if (focused() && editable()) {
         const double elapsed = std::fmod(std::max(0.0, nowMs - caretBlinkStartMs_), CaretBlinkPeriodMs);
-        const bool nextCaretVisible = elapsed < CaretBlinkOnMs;
+        const bool nextCaretVisible = internal::freezeCarets || elapsed < CaretBlinkOnMs;
         if (nextCaretVisible != caretBlinkVisible_) {
             caretBlinkVisible_ = nextCaretVisible;
             needsPaint = true;
         }
-        keepScheduling = true;
+        keepScheduling = keepScheduling || !internal::freezeCarets;
     } else if (!caretBlinkVisible_) {
         caretBlinkVisible_ = true;
         needsPaint = true;

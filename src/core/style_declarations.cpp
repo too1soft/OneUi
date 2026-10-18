@@ -1,4 +1,5 @@
 #include "style_css_internal.h"
+#include "style_layout_internal.h"
 #include "internal/unicode.h"
 #include <algorithm>
 #include <cctype>
@@ -28,6 +29,16 @@ bool applyDeclaration(
     if (isCustomPropertyName(name)) {
         return true;
     }
+    if (name == "order" || name == "max-width" || name == "max-height" ||
+        name == "table-column-widths" || name == "table-selection-width" ||
+        (name == "flex-basis" && !value.empty() && value.back() == '%')) {
+        const auto* previous = ruleLayout(rule);
+        auto layout = previous ? *previous : StyleLayout{};
+        if (!layoutDeclaration(layout, name, value)) return false;
+        storeRuleLayout(rule, std::move(layout));
+        if (name == "flex-basis") rule.box.flexBasis.reset();
+        return true;
+    }
     if(name=="container-name") {
         if(!value.empty() && std::all_of(value.begin(),value.end(),[](unsigned char c){return std::isalnum(c)||c=='_'||c=='-';})) {rule.box.containerName=value;return true;}
     } else if(name=="container-type") {
@@ -40,7 +51,16 @@ bool applyDeclaration(
         if(value=="wrap"||value=="nowrap"){rule.box.flexWrap=value=="wrap";return true;}
     } else if(name=="flex-basis"||name=="min-width"||name=="min-height") {
         if(auto number=parsePx(value);number&&*number>=0) {
-            (name=="flex-basis"?rule.box.flexBasis:name=="min-width"?rule.box.minWidth:rule.box.minHeight)=*number;return true;
+            (name=="flex-basis"?rule.box.flexBasis:name=="min-width"?rule.box.minWidth:rule.box.minHeight)=*number;
+            if(name=="flex-basis") {
+                const auto* previous=ruleLayout(rule);
+                if(previous || raw_value.find("var(")!=std::string::npos) {
+                    auto layout=previous?*previous:StyleLayout{};
+                    layout.flexBasisPercent.reset();layout.flexBasisSpecified=true;
+                    storeRuleLayout(rule,std::move(layout));
+                }
+            }
+            return true;
         }
     } else if(name=="flex-grow"||name=="flex-shrink") {
         if(auto number=parseNumber(value);number&&*number>=0) {

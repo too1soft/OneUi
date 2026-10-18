@@ -5,6 +5,8 @@ namespace oneui {
 // this control never owns or mutates a workspace model.
 class ONEUI_API DragHandle final : public View {
 public:
+    ~DragHandle() override;
+    void setOnActivated(std::function<void(const MouseEvent&)> callback);
     std::string source,domain,kind="pane";
     float threshold=4;
     bool isFocusable() const override {return interactive();}

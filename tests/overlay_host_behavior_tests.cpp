@@ -12,6 +12,7 @@
 
 #include <iostream>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -165,6 +166,7 @@ std::shared_ptr<OverlayProbe> makeProbe(int id, std::vector<int>& paintLog, std:
     return probe;
 }
 
+#include "overlay_focus_scope_tests.inc"
 void testAddOverlayPreservesEntryOrderAndLayerValues() {
     std::vector<int> paintLog;
     std::vector<int> eventLog;
@@ -1242,6 +1244,8 @@ int main() {
     testModalDialogScrollViewRoutesSelectPopupPointerCommit();
     testNestedViewRoutesElevatedSelectOutsideParentBounds();
     testNestedOverlayHostPropagatesElevatedSelectToAncestors();
+    testContentFocusIsExclusiveWithModalAndSafeAfterReplacement();
+    testKeyboardDispatchScopeRestoresAfterExceptionAndReentry();
 
     if (failures != 0) {
         std::cerr << failures << " overlay host behavior test(s) failed\n";

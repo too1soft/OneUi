@@ -70,6 +70,7 @@ public:
     void setViewport(std::optional<Rect> viewport);
     void clearViewport();
     void setAnchorRect(std::optional<Rect> rect);
+    std::optional<Rect> anchorRect() const { return anchorRect_; }
     void clearAnchorRect();
     void setCloseOnOutsideClick(bool close);
     void setInteractionMode(PopupInteractionMode mode);
@@ -123,6 +124,9 @@ private:
     Binding<bool> openBinding_;
     PopupPreferredPlacement preferredPlacement_ = PopupPreferredPlacement::BottomStart;
     std::optional<Rect> viewport_;
+    // Stable client viewport of the last paint pass; used when no explicit
+    // viewport is set, because the popup's own layout frame may be empty.
+    std::optional<Rect> paintViewport_;
     std::optional<Rect> anchorRect_;
     std::optional<PopupStyleOverride> styleOverride_;
     PopupInteractionMode interactionMode_ = PopupInteractionMode::LightDismiss;

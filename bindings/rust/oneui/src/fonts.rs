@@ -51,3 +51,13 @@ pub fn enumerate_system_fonts() -> Result<Vec<FontFamilyInfo>, Error> {
         Ok(state.fonts)
     }
 }
+
+/// Widget-free unwrapped text shaping in logical pixels, using Label's shaper.
+/// An empty family uses OneUI's default font fallback. Invalid options fail.
+pub fn measure_text_width(text: &str, family: &str, size: f32, weight: i32, scale: f32) -> Result<f32, Error> {
+    let mut width = 0.0;
+    let ok = unsafe { sys::oneui_text_measure_width_utf8(
+        sys::OneUiUtf8String::from_str(text), sys::OneUiUtf8String::from_str(family),
+        size, weight, scale, &mut width) };
+    if ok == 1 { Ok(width) } else { Err(Error::InvalidTextOptions) }
+}

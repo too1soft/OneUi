@@ -132,12 +132,50 @@ fn stable_list_deltas() {
     let update = list.update(1, &[PropertyId::new(1)]).unwrap();
     assert_eq!(update.kind, 4);
     assert_eq!(update.properties, vec![1]);
+    let revision = list.revision();
+    for keys in [
+        vec!["a"],
+        vec!["a", "a"],
+        vec!["a", "missing"],
+        vec!["a", "b", "extra"],
+    ] {
+        assert_eq!(
+            list.reorder(keys.into_iter().map(str::to_owned).collect())
+                .unwrap_err(),
+            ViewError::BAD_KEY
+        );
+        assert_eq!(list.revision(), revision);
+        assert_eq!(list.key(0), Some("b"));
+    }
+    let change = list.reorder(vec!["a".into(), "b".into()]).unwrap();
+    assert_eq!(change.kind, sys::ONEUI_LIST_REORDER);
+    assert!(Rc::ptr_eq(list.get(0).unwrap(), &first));
+    list.reorder(vec!["b".into(), "a".into()]).unwrap();
     list.remove(0).unwrap();
     assert!(Rc::ptr_eq(list.get(0).unwrap(), &first));
     let replacement = vm();
     list.reset(vec![("a".into(), replacement.clone())]).unwrap();
     assert!(Rc::ptr_eq(list.get(0).unwrap(), &replacement));
 }
+fn dispatcher_mount_checks_lifetime_and_thread() {
+    use std::sync::{Arc, Mutex};
+    let dispatcher = crate::UiDispatcher {
+        state: Arc::new(super::super::dispatcher::WindowState {
+            raw: Mutex::new(None),
+            ui_thread: std::thread::current().id(),
+        }),
+    };
+    assert!(matches!(
+        ViewMount::from_dispatcher(&dispatcher, None),
+        Err(ViewError::CLOSED)
+    ));
+    let result =
+        std::thread::spawn(move || ViewMount::from_dispatcher(&dispatcher, None).err().unwrap())
+            .join()
+            .unwrap();
+    assert_eq!(result, ViewError::WRONG_THREAD);
+}
+
 pub(crate) fn cases() -> Vec<(&'static str, fn())> {
     vec![
         ("view.values_and_borrowing", values_and_borrowing),
@@ -145,5 +183,9 @@ pub(crate) fn cases() -> Vec<(&'static str, fn())> {
         ("view.callback_reentry", callback_reentry),
         ("view.leases_release_once", leases_release_once),
         ("view.stable_list_deltas", stable_list_deltas),
+        (
+            "view.dispatcher_mount_checks_lifetime_and_thread",
+            dispatcher_mount_checks_lifetime_and_thread,
+        ),
     ]
 }

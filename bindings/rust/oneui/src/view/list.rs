@@ -152,4 +152,30 @@ impl<T> StableList<T> {
         self.entries = entries;
         Ok(change)
     }
+
+    /// Publish a complete permutation without replacing leases or invalidating fields.
+    /// Mutated item fields must send their own notifications, as for MOVE.
+    pub fn reorder(&mut self, keys: Vec<String>) -> VmResult<ListChange> {
+        let entries: std::collections::HashMap<_, _> = self
+            .entries
+            .iter()
+            .map(|(key, row)| (key.as_str(), row))
+            .collect();
+        let mut unique = HashSet::new();
+        if keys.is_empty()
+            || keys.len() != self.len()
+            || keys
+                .iter()
+                .any(|key| !entries.contains_key(key.as_str()) || !unique.insert(key.as_str()))
+        {
+            return Err(ViewError::BAD_KEY);
+        }
+        let reordered = keys
+            .iter()
+            .map(|key| (key.clone(), entries[key.as_str()].clone()))
+            .collect();
+        let change = self.change(sys::ONEUI_LIST_REORDER, 0, 0, keys)?;
+        self.entries = reordered;
+        Ok(change)
+    }
 }

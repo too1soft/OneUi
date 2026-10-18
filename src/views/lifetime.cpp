@@ -1,5 +1,6 @@
 #include "internal/view_profile.h"
 #include "runtime.h"
+#include "oneui/layout/virtual_template_list.h"
 #include <cstring>
 namespace oneui::views {
 thread_local Runtime *callbackRuntime = nullptr;
@@ -160,6 +161,16 @@ void Runtime::finishClose() {
     if (closed || depth)
         return;
     closed = true; // Prevent recursive cleanup from guard epilogues.
+    std::function<void(const std::shared_ptr<Instance>&)> detachVirtual = [&](const auto& node) {
+        if (!node) return;
+        if (auto list = node->element.template as<VirtualTemplateList>()) {
+            list->setKeys({});
+            list->setFactory({}, {});
+        }
+        for (const auto& child : node->children) detachVirtual(child);
+        for (const auto& [_, row] : node->rows) detachVirtual(row);
+    };
+    detachVirtual(root);
     if (root && root->element.widget) {
         auto w = root->element.widget;
         w->clearInteractionState();

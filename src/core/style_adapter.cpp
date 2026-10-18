@@ -1,6 +1,9 @@
 #include "oneui/style_adapter.h"
 
+#include "style_css_internal.h"
+
 #include <algorithm>
+#include <cmath>
 #include <utility>
 
 namespace oneui {
@@ -235,6 +238,30 @@ SwitchStyleOverride switchStyleOverrideFromStyleSheet(const StyleSheet& sheet, S
     return override;
 }
 
+CheckboxStyleOverride checkboxStyleOverrideFromStyleSheet(const StyleSheet& sheet, StyleNode node) {
+    const auto resolve = [&](StylePseudoMask state) {
+        const auto box = resolveBackgroundOpacity(resolveState(sheet, node, state));
+        CheckboxStateStyleOverride result;
+        result.boxBackground = box.background.color;
+        result.boxBorder = box.borderColor;
+        result.checkColor = box.content.backgroundColor;
+        result.labelColor = box.foreground;
+        result.borderWidth = box.borderWidth;
+        result.radius = box.radius;
+        if (box.outlineColor || box.outlineWidth || box.outlineOffset || box.radius)
+            result.focusRing = focusRingOverrideFromStyleBox(box);
+        return result;
+    };
+    CheckboxStyleOverride result;
+    result.normal = resolve(StyleStateNone);
+    result.hovered = resolve(StyleStateHover);
+    result.pressed = resolve(StyleStateActive);
+    result.disabled = resolve(StyleStateDisabled);
+    result.selected = resolve(StyleStateSelected);
+    result.focusVisible = resolve(StyleStateFocus);
+    return result;
+}
+
 SelectStyleOverride selectStyleOverrideFromStyleSheet(const StyleSheet& sheet, StyleNode node) {
     const auto transient = sheet.transientStyleSheet();
     const auto resolve = [&](unsigned state) {
@@ -253,6 +280,9 @@ SelectStyleOverride selectStyleOverrideFromStyleSheet(const StyleSheet& sheet, S
     };
     SelectStyleOverride override;
     override.normal = resolve(StyleStateNone);
+    // The field's resting background must not fill every popup option; only
+    // hover/press/selected states paint option rows.
+    override.normal->optionBackground.reset();
     override.hovered = resolve(StyleStateHover);
     override.pressed = resolve(StyleStateActive);
     override.disabled = resolve(StyleStateDisabled);
@@ -294,6 +324,96 @@ ProgressBarStyleOverride progressBarStyleOverrideFromStyleSheet(const StyleSheet
     override.disabledFill = disabled.foreground;
     override.radius = normal.radius;
     return override;
+}
+
+namespace {
+
+Color mixColor(Color a, Color b, float t) {
+    auto mix = [t](std::uint8_t x, std::uint8_t y) {
+        return static_cast<std::uint8_t>(std::lround(static_cast<float>(x) + (static_cast<float>(y) - static_cast<float>(x)) * t));
+    };
+    return Color{mix(a.r, b.r), mix(a.g, b.g), mix(a.b, b.b), mix(a.a, b.a)};
+}
+
+Color alphaColor(Color color, std::uint8_t a) {
+    color.a = a;
+    return color;
+}
+
+// A custom property as a color, following var() references.
+std::optional<Color> customColor(const StyleSheet& sheet, const char* name) {
+    auto value = sheet.customProperty(name);
+    if (!value) return std::nullopt;
+    for (int depth = 0; depth < 8 && value->find("var(") != std::string::npos; ++depth)
+        *value = style_detail::resolveCustomProperties(*value, sheet.customProperties(), nullptr);
+    return parseStyleColor(*value);
+}
+
+} // namespace
+
+CodeEditorStyle codeEditorStyleFromStyleSheet(const StyleSheet& sheet, StyleNode node) {
+    auto s = codeEditorStyleFromTheme(theme());
+    const StyleBox box = resolveState(sheet, std::move(node), StyleStateNone);
+    // Surface and ink first: everything not named explicitly derives from them,
+    // so a dark rule alone already gives a readable dark editor.
+    if (box.background.color || box.foreground) {
+        const Color bg = box.background.color.value_or(s.background);
+        const Color fg = box.foreground.value_or(s.foreground);
+        s.background = bg;
+        s.foreground = fg;
+        s.caret = fg;
+        s.gutterBackground = bg;
+        s.gutterForeground = mixColor(fg, bg, 0.55f);
+        s.gutterActiveForeground = mixColor(fg, bg, 0.2f);
+        s.gutterBorder = mixColor(bg, fg, 0.12f);
+        s.currentLine = mixColor(bg, fg, 0.05f);
+        s.inactiveSelection = alphaColor(mixColor(bg, fg, 0.35f), 90);
+        s.indentGuide = mixColor(bg, fg, 0.12f);
+        s.panelBackground = mixColor(bg, fg, 0.04f);
+        s.panelForeground = fg;
+        s.panelMuted = mixColor(fg, bg, 0.4f);
+        s.panelBorder = mixColor(bg, fg, 0.18f);
+        s.scrollbar = alphaColor(mixColor(bg, fg, 0.35f), 170);
+        s.tokens[static_cast<std::size_t>(CodeTokenKind::Plain)] = fg;
+        s.tokens[static_cast<std::size_t>(CodeTokenKind::Identifier)] = fg;
+        s.tokens[static_cast<std::size_t>(CodeTokenKind::Comment)] = mixColor(fg, bg, 0.45f);
+        s.tokens[static_cast<std::size_t>(CodeTokenKind::Operator)] = mixColor(fg, bg, 0.25f);
+    }
+    if (box.placeholderColor) s.gutterForeground = *box.placeholderColor;
+    if (box.caretColor) s.caret = *box.caretColor;
+    if (box.selectionColor) s.selection = *box.selectionColor;
+    if (box.content.backgroundColor) s.currentLine = *box.content.backgroundColor;
+    if (box.borderColor) s.gutterBorder = s.panelBorder = *box.borderColor;
+    if (box.scrollbarColor) s.scrollbar = *box.scrollbarColor;
+    const std::pair<const char*, Color*> colors[] = {
+        {"--code-gutter-background", &s.gutterBackground},
+        {"--code-line-number", &s.gutterForeground},
+        {"--code-line-number-active", &s.gutterActiveForeground},
+        {"--code-current-line", &s.currentLine},
+        {"--code-indent-guide", &s.indentGuide},
+        {"--code-accent", &s.accent},
+        {"--code-accent-soft", &s.accentSoft},
+        {"--code-match", &s.match},
+        {"--code-match-current", &s.currentMatch},
+        {"--code-error", &s.error},
+        {"--code-warning", &s.warning},
+        {"--code-success", &s.success},
+        {"--code-panel", &s.panelBackground},
+        {"--code-panel-border", &s.panelBorder},
+        {"--code-shadow", &s.shadow},
+    };
+    for (const auto& [name, target] : colors)
+        if (const auto color = customColor(sheet, name)) *target = *color;
+    const std::pair<const char*, CodeTokenKind> tokens[] = {
+        {"--code-keyword", CodeTokenKind::Keyword},   {"--code-type", CodeTokenKind::Type},
+        {"--code-function", CodeTokenKind::Function}, {"--code-constant", CodeTokenKind::Constant},
+        {"--code-number", CodeTokenKind::Number},     {"--code-string", CodeTokenKind::String},
+        {"--code-variable", CodeTokenKind::Identifier}, {"--code-comment", CodeTokenKind::Comment},
+        {"--code-operator", CodeTokenKind::Operator}, {"--code-parameter", CodeTokenKind::Parameter},
+    };
+    for (const auto& [name, kind] : tokens)
+        if (const auto color = customColor(sheet, name)) s.tokens[static_cast<std::size_t>(kind)] = *color;
+    return s;
 }
 
 ListStyleOverride listStyleOverrideFromStyleSheet(const StyleSheet& sheet, StyleNode node) {
@@ -376,5 +496,6 @@ ProductShellStyle productShellStyleFromStyleSheet(const StyleSheet& sheet) {
     style.statusStrip = sheet.resolve(StyleNode{"section", {"status-strip"}, StyleStateNone});
     return style;
 }
+
 
 } // namespace oneui

@@ -1,0 +1,6 @@
+<template>
+  <Popup :open="open" anchor-x="10" anchor-y="10" anchor-width="80" anchor-height="30"
+         :content-width="width" :content-height="height" placement="bottom-start" class="menu-popup">
+    <slot name="content" root="single"/>
+  </Popup>
+</template>

@@ -14,6 +14,7 @@
 #include "oneui/controls/list.h"
 #include "oneui/controls/menu.h"
 #include "oneui/controls/virtual_list.h"
+#include "oneui/layout/virtual_template_list.h"
 #include "oneui/controls/nav_item.h"
 #include "oneui/controls/popup.h"
 #include "oneui/controls/progress_bar.h"
@@ -48,6 +49,7 @@
 #include "oneui/layout/title_bar_bridge.h"
 #include "oneui/layout/wrap.h"
 #include "oneui/controls/label.h"
+#include "oneui/ui_template_support.h"
 #include "oneui/controls/log_view.h"
 #include "oneui/animation.h"
 #include "oneui/icon.h"
@@ -851,12 +853,17 @@ void testDocumentTabsKeepGeometryAndStatusAcrossHover() {
     tabs.setSelectedIndex(0);
     tabs.setFrame({0,0,250,38});
     RecordingCanvas packed; tabs.paint(packed);
-    expectNear("Document skips a long tab that does not fit", tabs.itemFrame(1).width, 0);
-    expectTrue("Document fills remaining space with a later short tab", tabs.itemFrame(2).width > 0);
+    expectTrue("Document preserves logical order across overflow", tabs.itemFrame(1).x < tabs.itemFrame(2).x);
+    tabs.onMouseWheel({{100,19},-10});
+    tabs.paint(packed);
+    expectTrue("Document wheel reveals the last tab",tabs.itemFrame(2).x+tabs.itemFrame(2).width<=250.5f);
+    const float scrolled=tabs.itemFrame(2).x;
+    tabs.paint(packed);
+    expectNear("Repaint preserves document scroll",tabs.itemFrame(2).x,scrolled);
     const auto shortTab=tabs.itemFrame(2);
     tabs.onMouseDown(oneui::MouseEvent{{shortTab.x+20,19}});
     tabs.onMouseUp(oneui::MouseEvent{{shortTab.x+20,19}});
-    expectEqual("Packed tab keeps its original session index",tabs.selectedIndex(),2);
+    expectEqual("Scrolled tab keeps its original session index",tabs.selectedIndex(),2);
     tabs.setSelectedIndex(1); tabs.paint(packed);
     expectTrue("Selecting a hidden long tab reserves its full width",tabs.itemFrame(1).width > 0);
     expectEqual("Selecting a long tab evicts the tail without clipping",tabs.overflowItemCount(),2);
@@ -1045,6 +1052,27 @@ void testLongSelectScrollsWithinViewportAndRevealsKeyboardSelection() {
     select.onKeyDown(oneui::KeyEvent{oneui::Key::Home});
     select.onKeyDown(oneui::KeyEvent{oneui::Key::Escape});
     expectEqual("Escape preserves long select value",select.selectedIndex(),99);
+}
+
+void testOpenSelectOwnsTooltipAndPaintBoundsOfItsPopup() {
+    auto parent = std::make_shared<oneui::View>();
+    parent->setFrame({0.0f, 0.0f, 400.0f, 60.0f});
+    parent->setTooltip(L"toolbar summary");
+    auto select = std::make_shared<oneui::Select>();
+    select->setFrame({20.0f, 14.0f, 200.0f, 32.0f});
+    select->setItems({L"All", L"SSH", L"RDP", L"VNC"});
+    parent->add(select);
+    RecordingCanvas canvas;
+    canvas.viewportOverride = oneui::Rect{0.0f, 0.0f, 800.0f, 600.0f};
+    parent->paint(canvas);
+    expectTrue("Closed select keeps parent tooltip", parent->tooltipAt({300.0f, 30.0f}) != nullptr);
+    expectNear("Closed select paints only its field", select->paintBounds().height, 32.0f);
+    select->onKeyDown(oneui::KeyEvent{oneui::Key::Enter});
+    parent->paint(canvas);
+    const oneui::Point inPopup{40.0f, 90.0f};
+    expectTrue("Open select popup is hit through the parent", parent->hitTest(inPopup));
+    expectTrue("Open select popup hides the parent tooltip", parent->tooltipAt(inPopup) == nullptr);
+    expectTrue("Open select paint bounds cover its popup", select->paintBounds().height > 100.0f);
 }
 
 void testSelectNoopOnChanged() {
@@ -7992,6 +8020,28 @@ void testIconViewPaintsRegistryPrimitives() {
     expectEqual("IconView accent alpha", canvas.fillEllipses.front().color.a, 255);
 }
 
+void testIconViewGlyphSizeStaysCentredInStretchedFrame() {
+    oneui::IconView icon(oneui::IconSymbol::BrandBloom);
+    icon.setFrame(oneui::Rect{10.0f, 20.0f, 40.0f, 30.0f});
+    RecordingCanvas stretched;
+    icon.paint(stretched);
+    float widest = 0.0f;
+    for (const auto& call : stretched.fillEllipses) widest = std::max(widest, call.rect.x + call.rect.width - 10.0f);
+    expectTrue("IconView without glyph size scales with its frame", widest > 20.0f);
+
+    icon.setGlyphSize(14.0f);
+    RecordingCanvas sized;
+    icon.paint(sized);
+    bool inside = !sized.fillEllipses.empty();
+    for (const auto& call : sized.fillEllipses) {
+        inside = inside && call.rect.x >= 23.0f - 0.01f && call.rect.y >= 28.0f - 0.01f &&
+                 call.rect.x + call.rect.width <= 37.0f + 0.01f && call.rect.y + call.rect.height <= 42.0f + 0.01f;
+    }
+    expectTrue("IconView glyph size paints a centred square inside a larger frame", inside);
+    icon.setGlyphSize(std::nullopt);
+    expectTrue("IconView glyph size can be cleared", !icon.glyphSize().has_value());
+}
+
 void testButtonSupportsLeadingContentAndTrailingMetadata() {
     oneui::Button button(L"default");
     button.setFrame(oneui::Rect{0.0f, 0.0f, 200.0f, 32.0f});
@@ -8488,6 +8538,12 @@ void testSplitViewKeyboardCancellationAndDoubleClick() {
     root.paint(canvas);
     root.onMouseDown({{100, 200}});
     root.onMouseUp({{100, 200}});
+    expectEqual("Pointer press on the divider keeps pane focus", second->focused(), true);
+    root.onKeyDown(oneui::KeyEvent{oneui::Key::Down});
+    expectNear("Pane arrows after a divider press cannot resize", split->splitRatio(), 0.5f);
+    oneui::KeyEvent back{oneui::Key::Tab};
+    back.shift = true;
+    root.onKeyDown(back);
     root.onKeyDown(oneui::KeyEvent{oneui::Key::Down});
     expectNear("Vertical divider down increases first pane", split->splitRatio(), 0.525f);
     root.onKeyDown(oneui::KeyEvent{oneui::Key::Right});
@@ -8562,6 +8618,34 @@ void testLabelStatusIndicatorFollowsContentAndReservesSpace() {
     label.paint(narrow);
     expectNear("Indicator stays inside tiny bounds", narrow.fillEllipses.front().rect.width, 5);
     expectEqual("No negative-width text draw", static_cast<int>(narrow.textBlocks.size()), 0);
+}
+
+void testLabelBoxPaddingBackgroundAndBorder() {
+    // Declarative Text accepts a CSS box like other components.
+    oneui::ui::syntax::css("Text.badge {padding:2px 8px;background-color:#123456;border-color:#abcdef;border-width:1px;border-radius:4px;}");
+    oneui::Label label(L"UTF-8");
+    const auto text = label.naturalTextSize();
+    expectNear("Plain label natural width is its text", label.naturalSize().width, text.width);
+    label.setPadding({2, 8, 2, 8});
+    expectNear("Padding adds to natural width", label.naturalSize().width, text.width + 16);
+    expectNear("Padding adds to natural height", label.naturalSize().height, text.height + 4);
+    expectNear("Single-line measure includes padding", label.measure({500, 100}).width, text.width + 16);
+    label.setBoxStyle({18, 52, 86}, {171, 205, 239}, 1, 4);
+    label.setFrame({10, 20, 100, 24});
+    RecordingCanvas canvas;
+    label.paint(canvas);
+    expectEqual("Box background painted once", static_cast<int>(canvas.fillRects.size()), 1);
+    expectNear("Background covers the frame", canvas.fillRects.front().rect.width, 100);
+    expectEqual("Border painted once", static_cast<int>(canvas.strokeRects.size()), 1);
+    expectNear("Text starts after left padding", canvas.textBlocks.front().rect.x, 18);
+    expectNear("Text width excludes horizontal padding", canvas.textBlocks.front().rect.width, 84);
+    label.setTextWrapping(true);
+    expectNear("Wrapped measure keeps padding inside available width", label.measure({60, 100}).width <= 60 ? 1 : 0, 1);
+    oneui::Label plain(L"x");
+    plain.setFrame({0, 0, 40, 20});
+    RecordingCanvas none;
+    plain.paint(none);
+    expectEqual("Labels without a box paint no rectangles", static_cast<int>(none.fillRects.size() + none.strokeRects.size()), 0);
 }
 
 void testWindowTitleBarAdvancesAccessoryThemeTransition() {
@@ -9174,7 +9258,9 @@ void testTableSelectionColumnPointerAndKeyboard() {
     expectEqual("Disabled checkbox header does not emit",calls,before);
 }
 
+#include "virtual_template_list_tests.inc"
 int main() {
+    testVirtualTemplateViewport();
     testOverlayHostRoutesTooltipsThroughContentAndFloatingSurfaces();
     testStyleBorderStaysInsideItsClip();
     testCompactIconGlyphFitsAllocatedBox();
@@ -9420,9 +9506,12 @@ int main() {
     testDisabledButtonOpacityCompositesTheWholeControl();
     testButtonSupportsLeadingAndTrailingIcons();
     testIconViewPaintsRegistryPrimitives();
+    testIconViewGlyphSizeStaysCentredInStretchedFrame();
+    testOpenSelectOwnsTooltipAndPaintBoundsOfItsPopup();
     testWindowTitleBarPaintsAndDispatchesChromeActions();
     testWindowTitleBarAdvancesAccessoryThemeTransition();
     testLabelStatusIndicatorFollowsContentAndReservesSpace();
+    testLabelBoxPaddingBackgroundAndBorder();
     testWindowTitleBarAccessoryReceivesLayoutAndPointerInput();
     testNavItemPaintsSelectionAndDispatchesClick();
     testNavItemSupportsExplicitSelectionIndicatorColor();

@@ -1,11 +1,66 @@
 pub mod page {
     include!(concat!(env!("OUT_DIR"), "/page.rs"));
+
+    pub fn dispatch_contract() {
+        use super::ReadOnly;
+        use oneui::view::{Value, ViewError, VmContext};
+        let cx = VmContext::default();
+        let spec = model_RustReadOnly::<ReadOnly>();
+        assert_eq!(
+            (spec.get)(&ReadOnly, RustReadOnly_properties::VALUE.get())
+                .unwrap()
+                .integer()
+                .unwrap(),
+            17
+        );
+        assert_eq!(
+            (spec.set)(
+                &mut ReadOnly,
+                RustReadOnly_properties::VALUE.get(),
+                &Value::I64(9),
+                &cx
+            ),
+            Err(ViewError::READ_ONLY)
+        );
+        assert_eq!(
+            (spec.invoke)(&mut ReadOnly, 1, &[], &cx),
+            Err(ViewError::UNKNOWN_ID)
+        );
+        assert_eq!(
+            (spec.invoke)(&mut ReadOnly, 0, &[Value::Bool(true)], &cx),
+            Err(ViewError::UNKNOWN_ID)
+        );
+        let spec = model_RustPage::<super::Vm>();
+        let mut vm = super::Vm::new();
+        assert_eq!(
+            (spec.invoke)(&mut vm, 999, &[], &cx),
+            Err(ViewError::UNKNOWN_ID)
+        );
+        assert_eq!((spec.invoke)(&mut vm, 1, &[], &cx), Err(ViewError::TYPE));
+        assert_eq!(
+            (spec.invoke)(&mut vm, 1, &[Value::Bool(true)], &cx),
+            Err(ViewError::TYPE)
+        );
+        assert_eq!(
+            (spec.invoke)(&mut vm, 1, &[Value::Utf8("chosen".into())], &cx),
+            Ok(())
+        );
+    }
 }
 use oneui::view::*;
 use std::{
     cell::{Cell, RefCell},
     rc::Rc,
 };
+pub struct ReadOnly;
+impl page::RustReadOnlyVm for ReadOnly {
+    fn id(&self) -> &str {
+        "readonly"
+    }
+    fn value(&self) -> i64 {
+        17
+    }
+}
 pub struct Row {
     pub id: String,
     pub connections: usize,
@@ -37,6 +92,7 @@ impl page::RustRowVm for Row {
     }
 }
 pub struct Vm {
+    pub readonly: StableList<ReadOnly>,
     pub title: String,
     pub enabled: bool,
     pub rows: StableList<Row>,
@@ -50,6 +106,7 @@ impl Vm {
         rows.insert(0, "a", Rc::new(RefCell::new(Row::new("a"))))
             .unwrap();
         Self {
+            readonly: StableList::new(),
             title: "Rust".into(),
             enabled: true,
             rows,
@@ -66,6 +123,10 @@ impl Drop for Vm {
     }
 }
 impl page::RustPageVm for Vm {
+    type ReadonlyItem = ReadOnly;
+    fn readonly(&self) -> &StableList<ReadOnly> {
+        &self.readonly
+    }
     type RowsItem = Row;
     fn title(&self) -> &str {
         assert_ne!(self.panic, 1, "get panic");

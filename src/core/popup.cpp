@@ -351,6 +351,10 @@ void Popup::installContentCallbacks() {
 }
 
 void Popup::paint(Canvas& canvas) {
+    if (const auto viewport = canvas.viewportBounds();
+        viewport && viewport->width > 0.0f && viewport->height > 0.0f) {
+        paintViewport_ = viewport;
+    }
     layoutAnchor();
     if (anchor_ && anchor_->visible()) {
         anchor_->paint(canvas);
@@ -591,6 +595,9 @@ Rect Popup::resolvedAnchorRect() const {
 Rect Popup::resolvedViewport() const {
     if (viewport_) {
         return *viewport_;
+    }
+    if (paintViewport_) {
+        return *paintViewport_;
     }
     return frame();
 }

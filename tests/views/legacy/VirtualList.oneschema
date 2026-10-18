@@ -1,0 +1,15 @@
+model Root {
+    r rows:list<Item>
+    rw index:i64
+    r multi:bool
+    r width:f64
+    r gap:f64
+    r click:bool
+    command activate()
+    command selection(index:i64, selected:bool)
+}
+model Item key id {
+    r id:utf8
+    r title:utf8
+    r detail:utf8
+}

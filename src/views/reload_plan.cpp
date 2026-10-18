@@ -1,4 +1,5 @@
 #include "reload_plan.h"
+#include "pointer_event_slots.h"
 namespace oneui::views {
 namespace {
 std::string identity(const Runtime &runtime,const Instance &node) {
@@ -121,6 +122,9 @@ void ReloadPlan::prepare() {
     prepare(next.root->element.widget);
     for(auto &[candidate,previous]:matches) {
         if(!widgets.count(candidate->element.widget.get()))continue;
+        const auto oldPointer = pointerEventMask(*previous), newPointer = pointerEventMask(*candidate);
+        if (oldPointer != newPointer)
+            properties.push_back(preparePointerEventSlots(previous, oldPointer, newPointer));
         auto before=authored(old,*previous),after=authored(next,*candidate);
         for(auto &[name,_]:before)
             if(!after.count(name) && name!="class")
@@ -155,6 +159,9 @@ std::shared_ptr<Instance> ReloadPlan::adopt(const std::shared_ptr<Instance> &can
         for(auto &widget:element.collapsible)widget=mapped(widget);
         *result=*candidate;
         result->element=std::move(element);
+        // The candidate's registration points at the candidate; register this copy.
+        result->shortcut.reset();
+        if(result->shortcutChord)old.registerShortcut(*result);
         result->tableCache.reset(); // Candidate cache has not been published to the retained Table.
     }
     result->owner=old.weak_from_this();

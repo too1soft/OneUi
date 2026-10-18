@@ -154,8 +154,16 @@ Size Label::naturalTextSize() const {
     return {layout->width() + inset, std::max(layout->height(), indicatorDiameter_)};
 }
 
+Size Label::naturalSize() const {
+    const auto text = naturalTextSize();
+    return {text.width + padding_.left + padding_.right, text.height + padding_.top + padding_.bottom};
+}
+
 Size Label::measure(Size available) const {
-    if (!textWrapping_) return naturalTextSize();
+    if (!textWrapping_) return naturalSize();
+    const float horizontal = padding_.left + padding_.right;
+    const float vertical = padding_.top + padding_.bottom;
+    if (std::isfinite(available.width)) available.width = std::max(0.0f, available.width - horizontal);
     text::LayoutOptions options;
     options.text = textOptions_;
     options.family = textFontFamily();
@@ -166,13 +174,39 @@ Size Label::measure(Size available) const {
     options.lineHeight = lineHeight_ > 0 ? lineHeight_ : std::max(1.0f, fontSize_ * 1.4f);
     options.maxLines = maxLines_; options.ellipsis = maxLines_ > 0;
     const auto layout = text::Layout::make(text(), options);
-    return {std::min(available.width, std::ceil(layout->width() + inset)),
+    return {std::min(available.width, std::ceil(layout->width() + inset)) + horizontal,
             std::ceil(std::max({layout->height(), indicatorDiameter_,
-                static_cast<float>(layout->lines().size()) * options.lineHeight}))};
+                static_cast<float>(layout->lines().size()) * options.lineHeight})) + vertical};
+}
+
+void Label::setPadding(Insets padding) {
+    const auto valid = [](float v) { return std::isfinite(v) ? std::max(0.0f, v) : 0.0f; };
+    padding = Insets{valid(padding.top), valid(padding.right), valid(padding.bottom), valid(padding.left)};
+    if (padding.top == padding_.top && padding.right == padding_.right &&
+        padding.bottom == padding_.bottom && padding.left == padding_.left) return;
+    padding_ = padding;
+    invalidate();
+}
+
+void Label::setBoxStyle(Color background, Color border, float borderWidth, float radius) {
+    boxBackground_ = background;
+    boxBorder_ = border;
+    boxBorderWidth_ = std::isfinite(borderWidth) ? std::max(0.0f, borderWidth) : 0.0f;
+    boxRadius_ = std::isfinite(radius) ? std::max(0.0f, radius) : 0.0f;
+    invalidate();
 }
 
 void Label::paint(Canvas& canvas) {
-    const Rect bounds = frame();
+    const Rect box = frame();
+    if (box.width <= 0 || box.height <= 0) return;
+    if (boxBackground_.a > 0) canvas.fillRect(box, boxBackground_, boxRadius_);
+    if (boxBorder_.a > 0 && boxBorderWidth_ > 0) {
+        const float half = boxBorderWidth_ / 2;
+        canvas.strokeRect({box.x + half, box.y + half, box.width - boxBorderWidth_, box.height - boxBorderWidth_},
+                          boxBorder_, std::max(0.0f, boxRadius_ - half), boxBorderWidth_);
+    }
+    const Rect bounds{box.x + padding_.left, box.y + padding_.top,
+                      box.width - padding_.left - padding_.right, box.height - padding_.top - padding_.bottom};
     if (bounds.width <= 0 || bounds.height <= 0 || fontSize_ <= 0) return;
     const float diameter = std::min({indicatorDiameter_, bounds.width, bounds.height});
     const float inset = diameter > 0 ? std::min(bounds.width, diameter + indicatorGap_) : 0.0f;

@@ -1103,9 +1103,22 @@ void testFocusCallbackReportsRealFocusTransitions() {
     expectEqual("terminal focus callback reports blur", changes.back() ? 1 : 0, 0);
 }
 
+void testVisualBellFadesOut() {
+    oneui::TerminalView terminal;
+    expectEqual("terminal starts without bell", terminal.bellFlashing() ? 1 : 0, 0);
+    terminal.flashBell();
+    expectEqual("bell tints at once", terminal.bellFlashing() ? 1 : 0, 1);
+    // Times before the bell keep it at full strength and the animation alive.
+    expectEqual("bell keeps animating", terminal.tickAnimations(0.0) ? 1 : 0, 1);
+    expectEqual("bell still visible", terminal.bellFlashing() ? 1 : 0, 1);
+    terminal.tickAnimations(1.0e15);
+    expectEqual("bell fades out", terminal.bellFlashing() ? 1 : 0, 0);
+}
+
 } // namespace
 
 int main() {
+    testVisualBellFadesOut();
     testGridCopiesCellsAndCursor();
     testGridUpdatesOnlyRequestedCells();
     testPaintHonorsWideCellsStylesAndCursor();

@@ -1,4 +1,6 @@
 #include "oneui/ui_theme.h"
+#include "oneui/layout/overlay_host.h"
+#include "oneui/controls/popup.h"
 #include "oneui_c_api_view_internal.h"
 namespace oneui::capi::views {
 std::string text(OneUiUtf8String s) {
@@ -12,6 +14,14 @@ bool contains(const std::shared_ptr<Widget> &root, const Widget *target) {
         return false;
     if (root.get() == target)
         return true;
+    if (auto host = std::dynamic_pointer_cast<OverlayHost>(root)) {
+        if (contains(host->content(), target)) return true;
+        for (auto &entry : host->overlays())
+            if (contains(entry.child, target)) return true;
+    }
+    if (auto popup = std::dynamic_pointer_cast<Popup>(root))
+        if (contains(popup->anchor(), target) || contains(popup->content(), target))
+            return true;
     if (auto view = std::dynamic_pointer_cast<View>(root))
         for (auto &child : view->children())
             if (contains(child, target))
@@ -22,11 +32,29 @@ void Mount::check() const {
     oneui::views::check(thread == std::this_thread::get_id(), ONEUI_VIEW_WRONG_THREAD,
                         "Mount requires UI thread");
     oneui::views::check(!closed && window && window->window, ONEUI_VIEW_CLOSED, "Mount closed");
+    if (child) {
+        auto parent = parentView.lock();
+        oneui::views::check(parent && !parent->closing && parent->root &&
+            contains(parent->root->element.widget, destination.get()),
+            ONEUI_VIEW_CLOSED, "Parent view or child destination removed");
+        if (ownsDestination) {
+            auto surface = childSurface.lock();
+            oneui::views::check(surface &&
+                std::find(surface->children().begin(), surface->children().end(), destination) !=
+                    surface->children().end(),
+                ONEUI_VIEW_CLOSED, "Destination Panel removed from its Surface");
+        }
+    }
+}
+void Mount::closeChildren() {
+    auto values = std::move(children);
+    for (auto& weak : values) if (auto value = weak.lock()) value->close();
 }
 void Mount::close(bool windowClosed) {
     if (closed)
         return;
     closed = true;
+    closeChildren();
     if (windowClosed && windowRoot) {
         windowRoot->setInvalidator({});
         windowRoot->setRectInvalidator({});
@@ -36,6 +64,14 @@ void Mount::close(bool windowClosed) {
         window = nullptr; // Observer may run during Window's base destructor.
     if (auto view = active.lock())
         view->close();
+    if (auto surface = childSurface.lock()) {
+        auto children = surface->children();
+        children.erase(std::remove(children.begin(), children.end(), destination), children.end());
+        // Commit isolates focus/invalidation callbacks during parent teardown.
+        surface->prepareChildren(std::move(children))->commit();
+    }
+    childSurface.reset();
+    releaseChildDestination(destination, this);
     window = nullptr;
     destination.reset();
     windowRoot.reset();
@@ -43,6 +79,7 @@ void Mount::close(bool windowClosed) {
 }
 void Mount::publish(const std::shared_ptr<Runtime> &view) {
     check();
+    view->styles->inheritTransient(window->styleSheet ? window->styleSheet->transientStyleSheet() : nullptr);
     active = view;
     if (!destination)
         windowRoot = view->root->element.widget;
@@ -51,19 +88,26 @@ void Mount::publish(const std::shared_ptr<Runtime> &view) {
         auto mount=weak.lock();auto value=runtime.lock();
         oneui::views::check(bool(mount) && bool(value),ONEUI_VIEW_CLOSED,"Reload mount closed");
         mount->check();
+        // A reload is a new composition boundary; clients can reattach children
+        // after successful reload. Ordinary property flushes do not call this.
+        mount->closeChildren();
         auto root=value->root->element.widget;
         if(mount->destination) {
             if(mount->destination->children().empty() || mount->destination->children().front()!=root)
-                mount->destination->setContent(root);
+                mount->destination->reconcileChildren({root});
         } else if(mount->windowRoot!=root) {
             mount->window->window->setContent(root);mount->window->rootContent=root;mount->windowRoot=root;
         }
     };
     view->detach = [weak] {
         if (auto mount = weak.lock()) {
-            if (mount->destination)
-                mount->destination->setContent(nullptr);
-            else if (mount->window && mount->window->window) {
+            mount->closeChildren();
+            if (mount->destination) {
+                if (mount->ownsDestination)
+                    mount->destination->prepareChildren({})->commit();
+                else
+                    mount->destination->reconcileChildren({});
+            } else if (mount->window && mount->window->window) {
                 mount->window->window->setContent(nullptr);
                 mount->window->rootContent.reset();
             }
@@ -100,7 +144,7 @@ void Mount::publish(const std::shared_ptr<Runtime> &view) {
                 view->close();
     };
     if (destination)
-        destination->setContent(view->root->element.widget);
+        destination->reconcileChildren({view->root->element.widget});
     else {
         window->window->setContent(view->root->element.widget);
         window->rootContent = view->root->element.widget;
@@ -175,8 +219,11 @@ OneUiViewResult oneui_view_mount_set_styles(OneUiViewMount *handle, OneUiUtf8Str
             density ? oneui::ui::Density::Compact : oneui::ui::Density::Comfortable;
         oneui::ui::StyleRegistry validation;
         validation.replace(combined, nativeDensity);
-        if (view)
+        if (view) {
             view->styles->replace(combined, nativeDensity);
+            view->styles->inheritTransient(mount->window->styleSheet ? mount->window->styleSheet->transientStyleSheet() : nullptr);
+            view->refreshRepeatLayouts(view->root);
+        }
         mount->externalCss = std::move(external);
         mount->density = nativeDensity;
         if(view) {view->externalCss=mount->externalCss;view->density=nativeDensity;}

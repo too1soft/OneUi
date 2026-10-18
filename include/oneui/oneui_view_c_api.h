@@ -86,6 +86,8 @@ typedef struct OneUiViewListInfo {
 #define ONEUI_LIST_REMOVE 2u
 #define ONEUI_LIST_MOVE 3u
 #define ONEUI_LIST_UPDATE 4u
+/* Exact permutation of all existing keys. Preserves item leases and field caches. */
+#define ONEUI_LIST_REORDER 5u
 typedef struct OneUiViewListChange {
     uint32_t struct_size;
     uint32_t kind;
@@ -204,6 +206,28 @@ ONEUI_API OneUiViewResult oneui_view_disconnect(OneUiView *view);
 /* Consumes the owned view handle; NULL permitted; UI thread only. */
 ONEUI_API void oneui_view_destroy(OneUiView *view);
 ONEUI_API OneUiViewResult oneui_view_get_error(OneUiView *view, OneUiViewError *out);
+/* Read-only focus query for a unique declared element; exposes no widget handle. */
+ONEUI_API OneUiViewResult oneui_view_element_focused(OneUiView *view,
+    OneUiUtf8String name, int *out_focused);
+/* Dock actions: 0=float, 1=pin, 2=raise, 3=maximize, 4=visibility, 5=redock. */
+ONEUI_API OneUiViewResult oneui_view_dock_action(OneUiView *view, OneUiUtf8String name,
+    int action, OneUiUtf8String pane, int flag);
+
+/* Compose an independent declarative VM into an empty named Surface of the
+ * parent's active view. No native widget slot is exposed. The child inherits
+ * styles and window ownership, closes before its parent, and becomes CLOSED
+ * on parent reload. Remount after reload; ordinary property flushes preserve it. */
+ONEUI_API OneUiViewResult oneui_view_mount_child(OneUiViewMount *parent,
+    OneUiUtf8String name, OneUiViewMount **out);
+/* Attach an empty, unattached Panel under the named empty Surface and use it
+ * as the child's destination. An unattached Panel has no window identity;
+ * success binds it to the parent's window. Attached/nonempty Panels, cycles
+ * and duplicate reservations are rejected. The mount retains the Panel even
+ * if its widget handle is released. Destroying the child View empties the Panel
+ * for reuse; destroying the mount or parent removes it from the Surface.
+ * Ordinary controls remain constructed by the child declarative template. */
+ONEUI_API OneUiViewResult oneui_view_mount_child_with_destination(OneUiViewMount *parent,
+    OneUiUtf8String name, OneUiWidget *destination, OneUiViewMount **out);
 
 /* On success out owns one notifier reference. */
 ONEUI_API OneUiViewResult oneui_view_notifier(OneUiView *view, OneUiViewNotifier **out);
@@ -247,6 +271,84 @@ ONEUI_API OneUiViewResult oneui_view_host_detach(OneUiWidget *host);
  * handles across reload even when the underlying native Widget survives. */
 ONEUI_API OneUiViewResult oneui_view_reload(OneUiView *view, const uint8_t *ir_bytes, size_t len);
 
+/* UI-thread read-only snapshot; no widget ownership or mutation escapes.
+ * name is the unique accessible name inside this View (including repeat rows).
+ * Empty/ambiguous names are INVALID_ARGUMENT; absent names are NOT_FOUND.
+ * Geometry is the last committed native layout, in logical client coordinates.
+ * Safe in a command callback; does not flush, lay out or invoke model callbacks. */
+typedef struct OneUiViewElementMetrics {
+    uint32_t struct_size, scrollable;
+    float x, y, width, height;
+    float scroll_x, scroll_y, max_scroll_y;
+} OneUiViewElementMetrics;
+ONEUI_API OneUiViewResult oneui_view_element_metrics(OneUiView *view,
+    OneUiUtf8String name, OneUiViewElementMetrics *out);
+/** Retain a uniquely named MountPoint as a Panel handle for page composition.
+ * The caller owns the handle (oneui_widget_destroy). Lookup is UI-thread only,
+ * outside callbacks. Non-MountPoint elements return TYPE; no raw child escapes. */
+ONEUI_API OneUiViewResult oneui_view_mount_point(OneUiView *view,
+    OneUiUtf8String name, OneUiWidget **out);
+/** Query a workspace pane by stable pane key; accessible labels may repeat. */
+ONEUI_API OneUiViewResult oneui_view_dock_item_metrics(OneUiView *view,
+    OneUiUtf8String workspace, OneUiUtf8String pane, OneUiViewElementMetrics *out);
+/** Read a named element's own resolved visibility after layout (including
+ * container-query display). Ancestor/window visibility is not included.
+ * UI thread only; does not flush, lay out or expose a widget handle. */
+ONEUI_API OneUiViewResult oneui_view_element_visible(OneUiView *view,
+    OneUiUtf8String name, int *out_visible);
+/** Focus a uniquely named element of the mount's active view on its UI thread.
+ * No widget handle escapes. Rejects ambiguous/missing names and closed mounts.
+ * Call outside VM callbacks; out_focused reports native focus eligibility. */
+ONEUI_API OneUiViewResult oneui_view_mount_focus_element(OneUiViewMount *mount,
+    OneUiUtf8String name, int focus_visible, int *out_focused);
+/* Join native Tabs or a declarative Tabs host Panel to the active View's WP4 drag domain. UI thread,
+ * outside VM callbacks, same window only. The domain stores a weak reference;
+ * it does not reparent the Tabs or replace their existing callbacks. */
+ONEUI_API OneUiViewResult oneui_view_mount_register_workspace_tabs(OneUiViewMount *mount,
+    OneUiUtf8String domain, OneUiUtf8String id, OneUiWidget *tabs);
+/* Forward native tab drag events to WP4: 0 start, 1 move, 2 release, 3 cancel.
+ * source is a stable pane key required at start, ignored thereafter. Coordinates
+ * are logical client coordinates. Release recomputes the target; stale revisions
+ * and maximized panes cancel without emitting an intent. No widget is created. */
+ONEUI_API OneUiViewResult oneui_view_workspace_tab_drag(OneUiView *view,
+    OneUiUtf8String domain, OneUiUtf8String source, int phase, float x, float y);
+/* CodeEditor document access by unique accessible name, UI thread. The editor
+ * owns its text: the VM reads it when needed instead of mirroring every key.
+ * Offsets are UTF-8 bytes; line/column are 1-based (column in scalar values).
+ * NOT_FOUND / TYPE for missing or non-editor names. */
+typedef struct OneUiViewCodeEditorState {
+    uint32_t struct_size, cursors;
+    uint64_t revision, caret, anchor, line, column, length, line_count;
+} OneUiViewCodeEditorState;
+ONEUI_API OneUiViewResult oneui_view_code_editor_state(OneUiView *view,
+    OneUiUtf8String name, OneUiViewCodeEditorState *out);
+/* Copies the clamped byte range [start, end) without a terminator. Pass a NULL
+ * buffer to query out_length; a buffer smaller than out_length is LIMIT. */
+ONEUI_API OneUiViewResult oneui_view_code_editor_text(OneUiView *view, OneUiUtf8String name,
+    uint64_t start, uint64_t end, char *buffer, size_t capacity, size_t *out_length);
+/* One undoable replacement, outside VM callbacks. expected_revision 0 skips the
+ * check; otherwise a document changed since that revision is STALE_CHANGE. */
+ONEUI_API OneUiViewResult oneui_view_code_editor_replace(OneUiView *view, OneUiUtf8String name,
+    uint64_t start, uint64_t end, OneUiUtf8String text, uint64_t expected_revision);
+ONEUI_API OneUiViewResult oneui_view_code_editor_select(OneUiView *view, OneUiUtf8String name,
+    uint64_t anchor, uint64_t caret);
+/* Documents: one editor keeps several (text, language, undo history, selection,
+ * scroll); the other calls act on the shown one. Selecting an unknown id creates
+ * an empty document (*out_created = 1); load it with reset. Closing the shown
+ * document shows the "" document. Outside VM callbacks. */
+ONEUI_API OneUiViewResult oneui_view_code_editor_select_document(OneUiView *view, OneUiUtf8String name,
+    OneUiUtf8String id, int *out_created);
+ONEUI_API OneUiViewResult oneui_view_code_editor_close_document(OneUiView *view, OneUiUtf8String name,
+    OneUiUtf8String id);
+/* Replaces the shown document's text and clears its undo history (loading a file). */
+ONEUI_API OneUiViewResult oneui_view_code_editor_reset(OneUiView *view, OneUiUtf8String name, OneUiUtf8String text);
+/* Editing commands for toolbars: 1 undo, 2 redo, 3 find, 4 replace, 5 close find,
+ * 6 select all, 7 toggle comment, 8 indent, 9 outdent, 10 duplicate lines, 11 cut,
+ * 12 copy, 13 paste. *out_applied is 0 when the command did not apply. */
+ONEUI_API OneUiViewResult oneui_view_code_editor_execute(OneUiView *view, OneUiUtf8String name, int command,
+    int *out_applied);
+ONEUI_API OneUiViewResult oneui_view_code_editor_history(OneUiView *view, OneUiUtf8String name,
+    int *out_can_undo, int *out_can_redo);
 #ifdef __cplusplus
 }
 #endif

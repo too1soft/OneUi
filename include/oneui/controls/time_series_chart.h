@@ -16,9 +16,23 @@ struct TimeSeriesChartSeries {
     std::wstring name;
     Color color{37, 99, 235, 255};
     std::vector<double> values;
+    /// Area fill for this series; unset follows the chart's area-fill.
+    std::optional<bool> fill;
+    /// Stroke the line as dashes, for a secondary series beside a filled one.
+    bool dashed = false;
     bool operator==(const TimeSeriesChartSeries& other) const {
-        return name==other.name && values==other.values && color.r==other.color.r && color.g==other.color.g && color.b==other.color.b && color.a==other.color.a;
+        return name==other.name && values==other.values && color.r==other.color.r && color.g==other.color.g && color.b==other.color.b && color.a==other.color.a
+            && fill==other.fill && dashed==other.dashed;
     }
+};
+
+/// Vertical extent of an area fill's gradient.
+enum class TimeSeriesFillExtent {
+    /// From the top of the plot to its baseline (the original behavior).
+    Plot,
+    /// From the series' highest point to the baseline, so a low curve still
+    /// shows the whole gradient beneath it.
+    Series,
 };
 
 struct TimeSeriesChartThreshold {
@@ -52,6 +66,13 @@ public:
     void setLatestPointSize(float width, float height);
     void setSmoothCurves(bool enabled);
     void setAreaFill(bool enabled);
+    void setFillExtent(TimeSeriesFillExtent extent);
+    /// Live charts: between updates the plot slides left at `rate` plot widths
+    /// per second (for example 1/60 for a one-minute window), the newest value
+    /// holds to the right edge, and range or newest-value changes ease in
+    /// instead of jumping. 0 (default) keeps a static chart.
+    void setScrollRate(double rate);
+    double scrollRate() const;
     void setDashedGrid(bool enabled);
     void setAxesVisible(bool visible);
     void setLineWidth(float width);
@@ -72,6 +93,7 @@ public:
     bool onFocusChanged(bool focused) override;
     bool isFocusable() const override;
     CursorKind cursor(Point point) const override;
+    bool tickAnimations(double nowMs) override;
 
 protected:
     bool hasInteractionState() const override;
@@ -104,6 +126,20 @@ private:
     float latestPointHeight_ = 5.0f;
     bool smoothCurves_ = true;
     bool areaFill_ = true;
+    TimeSeriesFillExtent fillExtent_ = TimeSeriesFillExtent::Plot;
+    // Live presentation; all times come from the UI clock.
+    double liveShift(double nowMs) const;
+    double displayedMaximum(double nowMs) const;
+    double displayedLast(std::size_t series, double nowMs) const;
+    double scrollRate_ = 0.0;
+    double dataTimeMs_ = 0.0;
+    double rangeFromMax_ = 0.0;
+    double rangeStartMs_ = -1.0;
+    std::vector<double> revealFrom_;
+    double revealStartMs_ = -1.0;
+    float paintedShiftPx_ = 0.0f;
+    double paintedEaseStep_ = -1.0;
+    bool easePending_ = false;
     bool dashedGrid_ = true;
     bool axesVisible_ = true;
     float lineWidth_ = 2.25f;

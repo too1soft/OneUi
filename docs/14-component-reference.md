@@ -190,6 +190,11 @@ client 处理，其余区域仍可拖动窗口。
 
 ### Button
 
+`shortcut="Ctrl+S"`（声明式）：视图内任意位置按下组合键即点击该按钮；按钮或其祖先隐藏、禁用时
+不触发。注册在视图根的命令作用域上，所以聚焦控件自己认领的组合键（编辑器的 Ctrl+F）优先。修饰键
+`Ctrl`/`Shift`/`Alt`/`Meta`/`Primary`，按键名与 `KeyChord` 相同（`s`、`tab`、`f5`、`pagedown`）。
+C++ 可用 `Button::activate()` 以键盘激活的语义点击（禁用或隐藏时返回 false）。
+
 支持 primary/secondary/quiet/danger 等 variant、leading icon、trailing text、内容对齐、
 hover/pressed/focus/disabled 状态、键盘 Enter/Space 激活和 callback。
 
@@ -245,6 +250,13 @@ Unicode 一致性修复已通过；完整 IME 产品矩阵、MinGW 匹配依赖�
 
 Select 的 popup 能从嵌套 ScrollView/Dialog/OverlayHost 正确接收输入，并使用稳定 paint viewport，
 不会因为 dirty clip 变小而错误放置。当前不支持多选、搜索或自定义 option widget。
+popup 打开时 `paintBounds()` 覆盖整个选项列表（含阴影），悬停与滚动在宿主区域之外也会重绘；
+普通态 `background` 只作用于输入框，选项行只在 hover／pressed／selected 状态绘制底色。
+打开的 popup 拥有其指针区域，祖先控件的 tooltip 不会显示在它上面。
+
+`Input` 与 `SearchInput` 都接受 `placeholder-when-focused`（`Input` 属性 ID 18），聚焦且为空时仍显示占位提示。
+`Icon` 的 `size` 是显式字形尺寸：父容器给出更大的 frame（如拉伸的 DragHandle）时，图标按该尺寸居中绘制；
+未设置 `size` 时字形随 frame 缩放。
 
 Slider 已提供 C ABI 与安全 Rust `Slider` / `SliderHandle`。输入专用回调区分
 Begin/Update/Commit/Cancel，程序设值不触发该回调；Escape、隐藏、禁用和捕获丢失取消并恢复
@@ -320,6 +332,11 @@ tabs->setOnContextMenuRequested([](int index, oneui::Point at) { openTabMenu(ind
 结构化 item 使用稳定 `id` 与 `parentId`，支持 title/detail、展开、选择、重排请求和外部 drop
 target。产品必须保证 ID 唯一且层级无环。TreeView 不自动写产品树。
 
+可选能力：内部滚动（5 万可见节点只画可见行）、懒加载分支（`hasChildren` + `loading` 占位行）、
+跨刷新保留用户展开状态、图标 / 徽标 / 样式类 / 标题高亮范围、`activate` 与 `context` 回调。
+声明式组件 `TreeView` 用 `tree-items`（`@tree.node`，大树、内部滚动）或 `items`（`@tree.item`，放在 `Scroll` 里的小树），`v-model` 绑定选中 id，详见
+[TreeView](34-tree-view.md#declarative-contract)。
+
 ## Table
 
 Table 是多列、固定行高的数据视图，不再是静态占位表格。
@@ -356,6 +373,24 @@ table->setOnDeleteRequested([](const std::vector<int>& rows) { confirmDelete(row
 - Rust `TableHandle` 后台整表/单行更新。
 
 未实现内置排序、筛选、列 resize、可变行高和单元格 editor。
+
+## DataGrid
+
+虚拟化的可编辑单元格表格，面向任意行数的结果集：VM 只提供当前窗口行（`grid-rows` +
+`window-start`），逻辑行数由 `row-count` 给出，可见范围超出窗口时发出 `viewport(first,count)`。
+支持冻结列、列宽拖动与双击自适应、表头排序请求、单元格/整行/整列/全选选区、单元格内编辑
+（F2、双击、直接键入或 IME 输入）、样式类，以及 `edit` / `context` / `copy` / `activate` 事件。
+表格不写剪贴板、不修改自身数据，一切修改都由 VM 回写绑定。
+
+详细内容见 [SQL workbench components](61-sql-workbench-components.md#datagrid)。
+
+## CodeEditor
+
+原生多行代码编辑器：按行存储、增量词法着色（JSON 语言描述）、行号、当前行、括号匹配、缩进参考线、
+自动换行、只读、撤销合并、多光标、注释 / 缩进 / 复制行 / 移动行、查找替换栏（正则、大小写、全词）。
+文本由组件持有，VM 通过 `text` + `text-revision` 整体替换，通过节流的 `changed` / `cursor` 事件感知变化，
+需要时用 `oneui_view_code_editor_text` 等接口读取全文或范围。详见
+[SQL workbench components](61-sql-workbench-components.md#codeeditor)。
 
 ## Menu / Popup / Dialog / OverlayHost
 

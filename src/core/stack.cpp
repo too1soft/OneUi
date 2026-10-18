@@ -1,4 +1,5 @@
 #include "oneui/layout/stack.h"
+#include "internal/widget_presentation.h"
 #include "oneui/controls/reveal.h"
 
 #include <algorithm>
@@ -61,6 +62,7 @@ void Stack::setFlex(const std::shared_ptr<Widget>& child, StackFlex flex) {
 
 void Stack::clearFlex(const std::shared_ptr<Widget>& child) {
     flex_.erase(child);
+    if (auto* state = internal::WidgetPresentationAccess::find(*this)) state->flex.erase(child.get());
     invalidate();
 }
 
@@ -99,13 +101,22 @@ void Stack::clearStyleBox() {
     invalidate();
 }
 
+std::vector<std::shared_ptr<Widget>> Stack::orderedChildren() const {
+    auto result=children();
+    auto order=[&](const auto& child) {
+        return flexPresentation(child).order;
+    };
+    std::stable_sort(result.begin(),result.end(),[&](const auto& a,const auto& b){return order(a)<order(b);});
+    return result;
+}
+
 Size Stack::naturalSize() const {
     if(sizeContained_)return {};
     if (engine_ == StackEngine::Yoga) return measureYoga({INFINITY, INFINITY});
     Size result{};
     float precedingWeight=0,gaps=0;
     const bool column = direction_ == StackDirection::Column;
-    for (const auto& child : children()) {
+    for (const auto& child : orderedChildren()) {
         if (!child->visible()) continue;
         const float weight=motionWeight(child,column);
         gaps+=weightedGap(std::max(0.f,gap_),std::min(precedingWeight,weight));
@@ -154,12 +165,13 @@ void Stack::layoutChildren() {
     const float gap = std::max(0.0f, gap_);
     layoutItems_.clear();
     float occupied = 0.0f,precedingWeight=0,gaps=0;
-    for (const auto& child : children()) {
+    for (const auto& child : orderedChildren()) {
         if (!child->visible()) continue;
         const Size preferred = itemSize(child);
         const float main = column ? preferred.height : preferred.width;
         const StackFlex flex = itemFlex(child, main);
-        const float basis = flex.basis.value_or(std::max(0.0f, main));
+        const auto presentation = flexPresentation(child);
+        const float basis = presentation.basisPercent ? (column?content.height:content.width)*(*presentation.basisPercent/100.f) : flex.basis.value_or(std::max(0.0f, main));
         const float size = std::clamp(basis, flex.min, flex.max);
         const float weight=motionWeight(child,column);
         const float before=weightedGap(gap,std::min(precedingWeight,weight));

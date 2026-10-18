@@ -1,0 +1,25 @@
+model Root {
+    rw text:utf8
+    rw checked:bool
+    rw index:i64
+    rw selected:utf8
+    r size:f64
+    r series:list<oneui.v1.Series>
+    r tabs:list<oneui.v1.TabItem>
+    r rows:list<Row>
+    command submit()
+    command activate()
+    command close(key:utf8)
+    command reorder(source:utf8,before:utf8)
+    command dragOut(key:utf8,phase:i64,x:f64,y:f64)
+    command handle(source:utf8,phase:i64)
+    command pane(pane:utf8)
+    command split(pane:utf8,edge:utf8)
+    command paneMenu(pane:utf8,x:f64,y:f64)
+    command pointer(x:f64,y:f64,control:bool,shift:bool,click_count:i64)
+    command context(x:f64,y:f64)
+    command inspect(index:i64,pinned:bool)
+    command viewport(width:f64,height:f64)
+    command drag(phase:i64,origin_x:f64,origin_y:f64,x:f64,y:f64,alt:bool,control:bool,shift:bool)
+}
+model Row key id {r id:utf8 r title:utf8 r detail:utf8}

@@ -1,0 +1,5 @@
+<template view-model="Root">
+  <DragHandle name="legacy" view-id="legacy-root" source="pane" threshold="4" @dragStateChanged="handle">
+    <Text text="Legacy handle"/>
+  </DragHandle>
+</template>

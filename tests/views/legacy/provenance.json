@@ -1,0 +1,70 @@
+{
+  "format": 1,
+  "purpose": "actual pre-integration VirtualList v2 IR",
+  "compilers": {
+    "Terminal": {
+      "executable": "D:\\ishell-par\\terminal\\oneui-views\\build\\capture\\oneui-viewc.exe",
+      "sha256": "2b5cff774bdcb9858dd38059f64b112c13884887c12ef179f85344fc52f30d6a",
+      "fixtures": {
+        "TerminalStatic.oneview": {
+          "sha256": "49c1b6450c1098ec004dbbd4ff91fc73eb378a9eaf41d8bd6fd0aeff6065a2a5",
+          "source_sha256": "4789d62f6bbe3beaa11b90e4930753141d7ad5b310be1736af362983b977d1a8",
+          "comp_sha256": "a1e02fc3af3c7d58fb77ad47ba5a302aa09f56f933a7e9f4475782af6dc67c05"
+        },
+        "TerminalBound.oneview": {
+          "sha256": "ccb1cf3b6c12958a436dfe302b2ae2834fe8a8c60d27cc4907ecf2a6941c0b07",
+          "source_sha256": "a19e81b996ac568ff3f6d6bca8b1bf982b5b22222baf02c26dfb765092fd82cb",
+          "comp_sha256": "a1e02fc3af3c7d58fb77ad47ba5a302aa09f56f933a7e9f4475782af6dc67c05"
+        },
+        "TerminalCall.oneview": {
+          "sha256": "fcc0a2df78c1e41ed56cade4a89c9fba1086c65c03e3f6db200ed26e59c791c5",
+          "source_sha256": "872b7d5c38ec8221d1f3f52f239e5b067f95f96d88989f3a6bbea9d147bedb0a",
+          "comp_sha256": "a1e02fc3af3c7d58fb77ad47ba5a302aa09f56f933a7e9f4475782af6dc67c05"
+        },
+        "TerminalReset.oneview": {
+          "sha256": "0f8f8c0e0810dbd68608df2f992d9e00339b932cff26757d40067086c179ceb4",
+          "source_sha256": "e1e1279c0464a2ed1894267ec709e14d91bf66167954303f45eff43a264e2ff2",
+          "comp_sha256": "a1e02fc3af3c7d58fb77ad47ba5a302aa09f56f933a7e9f4475782af6dc67c05"
+        },
+        "TerminalResetCall.oneview": {
+          "sha256": "21903970213dd0528ed7fdacb0585c3f51745e42d9ac8a2004fc08da1d971c7c",
+          "source_sha256": "185ec183451c885c41b5fa41f6a4f44e7b3afad330b70d76257effe1b3b2d05b",
+          "comp_sha256": "a1e02fc3af3c7d58fb77ad47ba5a302aa09f56f933a7e9f4475782af6dc67c05"
+        }
+      }
+    },
+    "Tools": {
+      "executable": "D:\\ishell-par\\tools\\oneui-views\\build\\capture\\oneui-viewc.exe",
+      "sha256": "963e4f50f08547f7b6db198d64ee088ae0d07e309267e411005e274af70e6f61",
+      "fixtures": {
+        "ToolsStatic.oneview": {
+          "sha256": "3e9d8b5555fbb9a5e9a8017430c28fce2aae2891cab2367cb206fc30aa9f3c9c",
+          "source_sha256": "f2d06d01630e85b92e775475a38d2028aefe61d924f010a2e8e6f47d438dba6c",
+          "comp_sha256": "1ef2d8d2ff19a5a4e8a4b3148b410f08ca53d738cee0bb15cc9a8c6644c411eb"
+        },
+        "ToolsBound.oneview": {
+          "sha256": "63a524aaa768d776f531ed3f8506251d71aa65a95cf32e36b316e884c19dc8a1",
+          "source_sha256": "2477b10da67d2c6c2b02635f84cbdf5c7bdb3c7fb17dadf635cdedcbe3b5a01e",
+          "comp_sha256": "1ef2d8d2ff19a5a4e8a4b3148b410f08ca53d738cee0bb15cc9a8c6644c411eb"
+        },
+        "ToolsCall.oneview": {
+          "sha256": "e1ba069482c1c0671a71d913153a0037091c42f2b23fb6306204dcac23d78a77",
+          "source_sha256": "4ff241be309046c06a675aabb19e3a6547901464c1c84de62187b8f29ec1a473",
+          "comp_sha256": "1ef2d8d2ff19a5a4e8a4b3148b410f08ca53d738cee0bb15cc9a8c6644c411eb"
+        },
+        "ToolsReset.oneview": {
+          "sha256": "361ad4a9bd42d7be2d249d18526e5981139c6a5c4541f9f2110e8f3acd1719bf",
+          "source_sha256": "e1e1279c0464a2ed1894267ec709e14d91bf66167954303f45eff43a264e2ff2",
+          "comp_sha256": "1ef2d8d2ff19a5a4e8a4b3148b410f08ca53d738cee0bb15cc9a8c6644c411eb"
+        },
+        "ToolsResetCall.oneview": {
+          "sha256": "e4e9cfc8f74229611f8105580ee65ed139f3fb08e3710cfba2561f9e173a2e81",
+          "source_sha256": "185ec183451c885c41b5fa41f6a4f44e7b3afad330b70d76257effe1b3b2d05b",
+          "comp_sha256": "1ef2d8d2ff19a5a4e8a4b3148b410f08ca53d738cee0bb15cc9a8c6644c411eb"
+        }
+      }
+    }
+  },
+  "VirtualList.oneschema": "bef8ac070857906a56b8eb9f4c3f4fcd50c6fa77b1a2e35f763fd38b40f92f5d",
+  "ListRoot.one": "fc98071f8f932d5559de5390ed07d6e4f64f645645998c103d7a03014827a819"
+}

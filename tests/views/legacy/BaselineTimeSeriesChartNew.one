@@ -1,0 +1,3 @@
+<template view-model="Root">
+  <TimeSeriesChart name="legacy" view-id="legacy-root" :series="series" @inspection="inspect"/>
+</template>

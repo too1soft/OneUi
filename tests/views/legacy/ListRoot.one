@@ -1,0 +1,1 @@
+<template><VirtualList view-id="legacy-native-list" name="legacy-list" row-height="32"/></template>

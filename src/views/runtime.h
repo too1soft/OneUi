@@ -1,6 +1,8 @@
 #pragma once
 #include "format/ir.h"
 #include "oneui/oneui_view_c_api.h"
+#include "oneui/command.h"
+#include "oneui/subscription.h"
 #include "oneui/ui_declarative.h"
 #include <atomic>
 #include <thread>
@@ -66,6 +68,9 @@ struct Binding {
     std::weak_ptr<Scope> scope;
     uint32_t kind;
     std::optional<Value> previous;
+    // Static author classes plus generated scope tokens. Dynamic classes are
+    // replaced against this base, never accumulated across notifications.
+    std::optional<std::string> baseClasses;
 };
 struct ModelWrite {
     std::weak_ptr<Scope> scope;
@@ -96,6 +101,8 @@ struct Instance {
     std::map<std::string, std::vector<std::wstring>> stringLists;
     struct TableCache;
     std::shared_ptr<TableCache> tableCache;
+    struct RichTableCache;
+    std::shared_ptr<RichTableCache> richTableCache;
     struct PickerCache;
     std::shared_ptr<PickerCache> pickerCache;
     struct WorkspaceCache;
@@ -106,6 +113,10 @@ struct Instance {
     bool transparent = false;
     std::string repeatId;
     std::shared_ptr<std::map<std::string, std::shared_ptr<Instance>>> pendingRows;
+    // Button `shortcut`, registered on the view root while the instance lives.
+    std::optional<KeyChord> shortcutChord;
+    // Shared so reload can copy instances; the retained copy registers again.
+    std::shared_ptr<Subscription> shortcut;
 };
 enum class Phase { Idle, Read, Mutate, Connect, Cleanup };
 extern thread_local Runtime *callbackRuntime;
@@ -170,6 +181,7 @@ struct Runtime : std::enable_shared_from_this<Runtime> {
     void flush();
     void flushPass();
     void update(const std::shared_ptr<Instance> &);
+    void refreshRepeatLayouts(const std::shared_ptr<Instance>&);
     void apply(const std::shared_ptr<Instance> &, Binding &);
     void invoke(const std::shared_ptr<Instance> &, const oneview::Record &, std::vector<Value>);
     void set(const std::shared_ptr<Scope> &, uint32_t, const Value &);
@@ -182,7 +194,11 @@ struct Runtime : std::enable_shared_from_this<Runtime> {
     std::shared_ptr<Instance> build(uint32_t node, const Scopes &, const Slots & = {});
     void install(const std::shared_ptr<Instance> &, uint32_t owner, const Scopes &);
     void wire(const std::shared_ptr<Instance> &);
+    void wireRichTable(const std::shared_ptr<Instance>&);
+    void applyRichTableRows(Instance&, ListState&);
     void repeat(const std::shared_ptr<Instance> &);
+    std::shared_ptr<Instance> buildVirtual(uint32_t, const Scopes&);
+    void virtualRepeat(const std::shared_ptr<Instance>&);
     void prepareWorkspaceIndex();
     void workspaceChildren(const std::shared_ptr<Instance> &);
     bool pickerScalar(Instance&, const std::string&, const Value&);
@@ -194,6 +210,10 @@ struct Runtime : std::enable_shared_from_this<Runtime> {
     void prepareDock(const std::shared_ptr<Instance>&, const std::vector<std::shared_ptr<Widget>>&);
     void wireDock(const std::shared_ptr<Instance>&);
     bool workspaceScalar(Instance&, const std::string&, const Value&);
+    bool shortcutScalar(Instance&, const std::string&, const Value&);
+    void registerShortcut(Instance&);
+    void registerPendingShortcuts();
+    std::vector<Instance*> pendingShortcuts;
     bool paneHeaderScalar(Instance&, const std::string&, const Value&);
     bool dragScalar(Instance&, const std::string&, const Value&);
     bool dragList(Instance&, const std::string&, ListState&);

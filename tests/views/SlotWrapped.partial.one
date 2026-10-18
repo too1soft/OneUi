@@ -1,0 +1,1 @@
+<template><Column view-id="frame"><slot name="body" /></Column></template>

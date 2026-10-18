@@ -1,0 +1,3 @@
+<template view-model="Root">
+  <VirtualList name="legacy" view-id="legacy-root" :items="rows" v-model="index" :row-height="size" scroll-offset="0" @activate="activate"/>
+</template>

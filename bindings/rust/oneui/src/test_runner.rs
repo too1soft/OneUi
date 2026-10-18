@@ -4,6 +4,12 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::process::ExitCode;
 
 pub(super) fn run(tests: &[(&str, fn())]) -> ExitCode {
+    let mut cases = tests.to_vec();
+    cases.push((
+        "guarded_sink_preserves_background_generation_and_closed_lifetime",
+        super::text_sink_tests::guarded_sink_preserves_background_generation_and_closed_lifetime,
+    ));
+    let tests = &cases;
     let mut filters = Vec::new();
     let mut skips = Vec::new();
     let mut exact = false;

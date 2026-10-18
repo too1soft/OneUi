@@ -1,8 +1,13 @@
 #include "oneui/ui_theme.h"
+#include "oneui/ui_native_theme.h"
 #include "oneui/layout/theme_scope.h"
 #include "oneui/controls/font_picker.h"
 #include "oneui/controls/media_picker.h"
+#include "../../src/views/data_menu.h"
+#include "oneui/controls/popup.h"
+#include "oneui/layout/panel.h"
 #include "../../src/core/picker_styles.h"
+#include "../../src/internal/ui_clock.h"
 #include "../support/recording_canvas.h"
 #include <iostream>
 #include <stdexcept>
@@ -20,6 +25,25 @@ void fonts() {
     check(palette.foreground && palette.foreground->r == 227 &&
           palette.background.color && palette.background.color->r == 24,
           "partial dark palette retains colors without selection/line tokens");
+    const auto native = ui::nativePalette(partial);
+    check(native.surface.r == 24 && native.ink.r == 227,
+          "native palette retains dark colors when optional tokens are absent");
+    for (const bool dark : {false, true}) {
+        StyleSheet sheet;
+        sheet.setCustomProperty("--surface", dark ? "#18201b" : "#ffffff");
+        sheet.setCustomProperty("--ink", dark ? "#e3eae5" : "#21302b");
+        sheet.setCustomProperty("--selection", dark ? "#35453b" : "#e7eee8");
+        Tabs tabs;
+        tabs.setItems({L"Active", L"Inactive"});
+        tabs.setFrame({0, 0, 300, 34});
+        ui::applyNativeTheme(tabs, sheet, false);
+        test_support::RecordingCanvas painted;
+        tabs.paint(painted);
+        check(!painted.fillRects.empty() && painted.fillRects.front().color.r == (dark ? 24 : 255),
+              "Tabs strip uses resolved light/dark surface through native theme adapter");
+        check(painted.fillRects.size() > 1 && painted.fillRects[1].color.r == (dark ? 53 : 231),
+              "Tabs selected item uses light/dark selection token");
+    }
     View root;root.setFrame({0,0,900,700});auto picker=std::make_shared<FontPicker>();root.add(picker);picker->setFrame({20,20,300,36});
     FontPickerConfig config;config.selected="missing";
     for(int i=0;i<1000;++i)config.items.push_back({"font"+std::to_string(i),L"Consolas",L"Font "+std::to_wstring(i),i!=0});
@@ -41,12 +65,17 @@ void mediaGeneration() {
     auto preview=std::make_shared<MediaPreview>();auto image=preview->image();
     std::vector<MediaPreview::Completion> completions;std::vector<std::shared_ptr<std::atomic<bool>>> cancels;
     preview->setLoader([&](auto,auto cancel,auto done){cancels.push_back(cancel);completions.push_back(done);});
+    auto loading=std::make_shared<Panel>();preview->setSlot("loading",loading);
+    preview->setFit("auto");check(image->contentMode()==ImageContentMode::ActualSize,"original-size media fit");
     int errors=0;preview->setOnLoadFailed([&](auto,auto,auto){++errors;});
     preview->setSource("a.png");preview->setSource("b.png");check(*cancels[0]&&!(*cancels[1]),"source replacement cancels generation");
+    check(loading->visible(),"loading slot shown during decode");
+    test_support::RecordingCanvas loadingCanvas;preview->paint(loadingCanvas);
     auto good=std::make_shared<MediaPixels>();good->width=good->height=1;good->rgba={255,0,0,255};
     completions[0](good);preview->tickAnimations(0);check(!image->hasImage()&&preview->loading(),"late completion cannot replace new source");
     std::thread worker([&]{completions[1](good);});worker.join();check(!image->hasImage(),"worker completion does not touch UI");
     preview->tickAnimations(1);check(image->hasImage()&&!preview->loading()&&preview->image()==image,"UI drain keeps image object");
+    check(!loading->visible(),"loading slot hidden after decode");
     preview->setFit("cover");preview->setPosition("bottom-right");preview->setOpacity(.5f);preview->setFrame({0,0,100,100});
     test_support::RecordingCanvas canvas;preview->paint(canvas);check(!canvas.opacityLayers.empty()&&canvas.opacityLayers.back().opacity==.5f,"opacity composes pixels");
     preview->setSource("broken");auto bad=std::make_shared<MediaPixels>();bad->code="format";bad->message="bad image";completions[2](bad);preview->tickAnimations(2);
@@ -97,5 +126,10 @@ void themes() {
     check(canvas.texts.back().color.r==28,"global theme unchanged");
     first->setTokens({});canvas.texts.clear();scopes[0].widget->paint(canvas);check(canvas.texts.back().color.r==28,"empty local tokens inherit parent");
 }
+#include "settings_controls.inc"
+#include "font_confirmation.inc"
+#include "data_menu_tests.inc"
+#include "data_menu_replay.inc"
+#include "declarative_popup_tests.inc"
 }
-int main(){try{fonts();mediaGeneration();localDecode();themes();std::cout<<"pickers: 4 scenario groups passed\n";}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}
+int main(){try{fonts();mediaGeneration();localDecode();themes();settingsControls();fontConfirmation();dataMenus();dataMenuReplay();declarativePopups();std::cout<<"pickers, menus and popups: 9 scenario groups passed\n";}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

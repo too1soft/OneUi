@@ -1,4 +1,5 @@
 #include "oneui/widget.h"
+#include "internal/widget_presentation.h"
 
 #include <utility>
 #include <algorithm>
@@ -6,7 +7,8 @@
 
 namespace oneui {
 namespace { std::atomic<std::uint64_t> nextInputSession{1}; }
-Widget::Widget() : textInputSession_(nextInputSession.fetch_add(1, std::memory_order_relaxed)) {}
+Widget::Widget() : lifetime_(new int(0), internal::WidgetLifetime{}),
+    textInputSession_(nextInputSession.fetch_add(1, std::memory_order_relaxed)) {}
 
 std::shared_ptr<StyleSheet> Widget::styleScope() const {
     return localStyleScope_ ? localStyleScope_ : inheritedStyleScope_;
@@ -194,6 +196,30 @@ void Widget::attachAnimationSchedulerToOwner(
     std::function<void()> scheduler) {
     setAnimationScheduler(std::move(scheduler));
     animationSchedulerOwner_ = owner;
+}
+
+void Widget::refreshInvalidatorFromOwner(
+    const void* owner,
+    std::function<void()> invalidator) {
+    if (invalidatorOwner_ == owner) {
+        attachInvalidatorToOwner(owner, std::move(invalidator));
+    }
+}
+
+void Widget::refreshRectInvalidatorFromOwner(
+    const void* owner,
+    std::function<void(Rect)> invalidator) {
+    if (rectInvalidatorOwner_ == owner) {
+        attachRectInvalidatorToOwner(owner, std::move(invalidator));
+    }
+}
+
+void Widget::refreshAnimationSchedulerFromOwner(
+    const void* owner,
+    std::function<void()> scheduler) {
+    if (animationSchedulerOwner_ == owner) {
+        attachAnimationSchedulerToOwner(owner, std::move(scheduler));
+    }
 }
 
 void Widget::detachFromOwner(const void* owner) {

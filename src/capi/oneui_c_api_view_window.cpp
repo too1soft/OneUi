@@ -4,7 +4,29 @@ namespace oneui::capi::views {
 namespace {
 std::mutex mountsMutex;
 std::map<OneUiWindow *, std::vector<std::weak_ptr<Mount>>> mounts;
+struct ChildDestination {
+    std::weak_ptr<Widget> widget;
+    std::weak_ptr<Mount> mount;
+};
+std::vector<ChildDestination> childDestinations;
 } // namespace
+void reserveChildDestination(const std::shared_ptr<Widget> &widget, const std::shared_ptr<Mount> &mount) {
+    std::lock_guard<std::mutex> lock(mountsMutex);
+    childDestinations.erase(std::remove_if(childDestinations.begin(), childDestinations.end(),
+        [](const auto &entry) { return entry.widget.expired() || entry.mount.expired(); }),
+        childDestinations.end());
+    for (const auto &entry : childDestinations)
+        check(entry.widget.lock() != widget, ONEUI_VIEW_BUSY, "Destination Panel already reserved");
+    childDestinations.push_back({widget, mount});
+}
+void releaseChildDestination(const std::shared_ptr<Widget> &widget, const Mount *mount) {
+    std::lock_guard<std::mutex> lock(mountsMutex);
+    childDestinations.erase(std::remove_if(childDestinations.begin(), childDestinations.end(),
+        [&](const auto &entry) {
+            return entry.mount.expired() ||
+                (entry.widget.lock() == widget && entry.mount.lock().get() == mount);
+        }), childDestinations.end());
+}
 void registerMount(OneUiWindow *window, const std::shared_ptr<Mount> &mount) {
     std::lock_guard<std::mutex> lock(mountsMutex);
     auto &entries = mounts[window];

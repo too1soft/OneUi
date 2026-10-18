@@ -1,6 +1,6 @@
 """Independent Basic.one byte specification; never imports the production registry.
 
-The checked-in .hex is authored from these explicit v1 records. Updating it is a
+The checked-in .hex uses explicit format-v1 records and the Text-v5 contract. Updating it is a
 reviewed format change, not an automatic response to a compiler test failure.
 """
 import hashlib
@@ -31,15 +31,21 @@ def basic_image():
     schema = b'OVSCHM1\0' + words(1, 1)
     schema += words(1) + text('Basic') + words(0, 1, 0)
     schema += words(1) + text('title') + words(4, 1, 0)
+    # Text v5 adds explicit line-height, text-align and tooltip.
+    # Text v4: v2 adds wrap/max-lines, v3 adds UTF-8 spans, v4 permits
+    # read-only class bindings. Existing property IDs and all other IR
+    # sections retain their v1 encoding. This data is independent of viewc.
     props = [
-        (1, 'basis', 3, 1), (2, 'class', 4, 1), (3, 'description', 4, 3),
+        (1, 'basis', 3, 1), (2, 'class', 4, 3), (3, 'description', 4, 3),
         (4, 'disabled', 1, 3), (5, 'grow', 3, 1), (6, 'max', 3, 1),
         (7, 'min', 3, 1), (8, 'name', 4, 3), (9, 'shrink', 3, 1),
         (10, 'text', 4, 3), (11, 'visible', 1, 3),
+        (12, 'wrap', 1, 3), (13, 'max-lines', 2, 3), (14, 'spans', 5, 2),
+        (15, 'line-height', 3, 3), (16, 'text-align', 4, 3), (17, 'tooltip', 4, 3),
     ]
-    component = b'OVCOMP1\0' + words(1) + text('Text') + words(1, 11, 0)
+    component = b'OVCOMP1\0' + words(1) + text('Text') + words(5, 17, 0)
     for ident, name, tag, flags in props:
-        component += words(ident) + text(name) + words(tag, flags) + text('')
+        component += words(ident) + text(name) + words(tag, flags) + text('@text.span' if name == 'spans' else '')
     component += text('leaf') + words(0)
     sections = {i: b'' for i in range(1, 19)}
     sections[1] = struct.pack('<5Q', *offsets) + blob

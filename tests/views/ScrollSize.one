@@ -1,0 +1,8 @@
+<template view-model="Root">
+  <Column view-id="root">
+    <Scroll view-id="viewport" grow="1" basis="0" min="0" :visible="visible" @viewport-size-changed="resized">
+      <Surface view-id="body"/>
+    </Scroll>
+  </Column>
+</template>
+<style scoped>Column {padding:0px;gap:0px;}</style>

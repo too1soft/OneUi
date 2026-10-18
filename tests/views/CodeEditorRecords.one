@@ -1,0 +1,10 @@
+<template view-model="Script">
+  <Column>
+    <CodeEditor name="sql" :language="language" :text="text" :text-revision="revision"
+                tab-size="2" word-wrap="true" font-size="13" @changed="changed" @cursor="cursor"
+                :decorations="marks" :decorations-revision="marksRevision"
+                :completion-items="items" :completion-open="open"
+                @completionRequested="complete" @completionClosed="closed" @completionAccepted="accepted"/>
+    <Button name="save" text="Save" shortcut="Ctrl+S" :disabled="saveDisabled" @click="save"/>
+  </Column>
+</template>

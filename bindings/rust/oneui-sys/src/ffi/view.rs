@@ -1,6 +1,43 @@
 //! Language-neutral view protocol v1 (UTF-8 ABI 44).
 use crate::{OneUiUtf8String, OneUiWidget, OneUiWindow};
-use std::ffi::{c_char, c_void};
+use std::ffi::{c_char, c_int, c_void};
+#[repr(C)]
+pub struct OneUiViewElementMetrics {
+    pub struct_size: u32,
+    pub scrollable: u32,
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+    pub scroll_x: f32,
+    pub scroll_y: f32,
+    pub max_scroll_y: f32,
+}
+extern "C" {
+    pub fn oneui_view_element_metrics(
+        view: *mut OneUiView,
+        name: OneUiUtf8String,
+        out: *mut OneUiViewElementMetrics,
+    ) -> i32;
+    pub fn oneui_view_element_visible(view: *mut OneUiView, name: OneUiUtf8String,
+        out: *mut i32) -> i32;
+}
+#[repr(C)]
+pub struct OneUiViewCodeEditorState {
+    pub struct_size: u32, pub cursors: u32,
+    pub revision: u64, pub caret: u64, pub anchor: u64, pub line: u64, pub column: u64,
+    pub length: u64, pub line_count: u64,
+}
+extern "C" {
+    pub fn oneui_view_code_editor_state(view: *mut OneUiView, name: OneUiUtf8String,
+        out: *mut OneUiViewCodeEditorState) -> i32;
+    pub fn oneui_view_code_editor_text(view: *mut OneUiView, name: OneUiUtf8String, start: u64, end: u64,
+        buffer: *mut c_char, capacity: usize, out_length: *mut usize) -> i32;
+    pub fn oneui_view_code_editor_replace(view: *mut OneUiView, name: OneUiUtf8String, start: u64, end: u64,
+        text: OneUiUtf8String, expected_revision: u64) -> i32;
+    pub fn oneui_view_code_editor_select(view: *mut OneUiView, name: OneUiUtf8String, anchor: u64,
+        caret: u64) -> i32;
+}
 
 pub type OneUiViewResult = i32;
 pub const ONEUI_VIEW_PROTOCOL_VERSION: u32 = 1;
@@ -13,6 +50,7 @@ pub const ONEUI_LIST_INSERT: u32 = 1;
 pub const ONEUI_LIST_REMOVE: u32 = 2;
 pub const ONEUI_LIST_MOVE: u32 = 3;
 pub const ONEUI_LIST_UPDATE: u32 = 4;
+pub const ONEUI_LIST_REORDER: u32 = 5;
 
 #[repr(C)]
 pub struct OneUiView {
@@ -117,8 +155,12 @@ pub struct OneUiViewScopeSegment {
     pub key: OneUiUtf8String,
 }
 extern "C" {
-    pub fn oneui_view_resolve_scope(view: *mut OneUiView, segments: *const OneUiViewScopeSegment,
-        segment_count: usize, out_scope: *mut *mut OneUiViewNotifier) -> i32;
+    pub fn oneui_view_resolve_scope(
+        view: *mut OneUiView,
+        segments: *const OneUiViewScopeSegment,
+        segment_count: usize,
+        out_scope: *mut *mut OneUiViewNotifier,
+    ) -> i32;
     pub fn oneui_view_protocol_version() -> u32;
     pub fn oneui_view_mount_create(
         window: *mut OneUiWindow,
@@ -126,6 +168,35 @@ extern "C" {
         out: *mut *mut OneUiViewMount,
     ) -> i32;
     pub fn oneui_view_mount_destroy(mount: *mut OneUiViewMount);
+    pub fn oneui_view_dock_action(
+        view: *mut OneUiView,
+        name: OneUiUtf8String,
+        action: i32,
+        pane: OneUiUtf8String,
+        flag: i32,
+    ) -> i32;
+    pub fn oneui_view_dock_item_metrics(
+        view: *mut OneUiView,
+        name: OneUiUtf8String,
+        pane: OneUiUtf8String,
+        out: *mut OneUiViewElementMetrics,
+    ) -> i32;
+    pub fn oneui_view_element_focused(
+        view: *mut OneUiView,
+        name: OneUiUtf8String,
+        out: *mut i32,
+    ) -> i32;
+    pub fn oneui_view_mount_child(
+        parent: *mut OneUiViewMount,
+        name: OneUiUtf8String,
+        out: *mut *mut OneUiViewMount,
+    ) -> i32;
+    pub fn oneui_view_mount_child_with_destination(
+        parent: *mut OneUiViewMount,
+        name: OneUiUtf8String,
+        destination: *mut OneUiWidget,
+        out: *mut *mut OneUiViewMount,
+    ) -> i32;
     pub fn oneui_view_mount_set_styles(
         mount: *mut OneUiViewMount,
         css: OneUiUtf8String,
@@ -174,4 +245,44 @@ extern "C" {
         release: Option<unsafe extern "C" fn(*mut c_void)>,
     ) -> i32;
     pub fn oneui_view_host_detach(host: *mut OneUiWidget) -> i32;
+}
+
+extern "C" {
+    pub fn oneui_view_mount_focus_element(
+        mount: *mut OneUiViewMount,
+        name: OneUiUtf8String,
+        focus_visible: i32,
+        out_focused: *mut i32,
+    ) -> i32;
+}
+
+extern "C" {
+    pub fn oneui_view_mount_register_workspace_tabs(
+        mount: *mut OneUiViewMount,
+        domain: OneUiUtf8String,
+        id: OneUiUtf8String,
+        tabs: *mut OneUiWidget,
+    ) -> i32;
+    pub fn oneui_view_workspace_tab_drag(
+        view: *mut OneUiView,
+        domain: OneUiUtf8String,
+        source: OneUiUtf8String,
+        phase: i32,
+        x: f32,
+        y: f32,
+    ) -> i32;
+}
+extern "C" {
+    pub fn oneui_view_mount_point(view: *mut OneUiView, name: OneUiUtf8String,
+        out: *mut *mut OneUiWidget) -> OneUiViewResult;
+    pub fn oneui_view_code_editor_select_document(view: *mut OneUiView, name: OneUiUtf8String,
+        id: OneUiUtf8String, out_created: *mut c_int) -> OneUiViewResult;
+    pub fn oneui_view_code_editor_close_document(view: *mut OneUiView, name: OneUiUtf8String,
+        id: OneUiUtf8String) -> OneUiViewResult;
+    pub fn oneui_view_code_editor_reset(view: *mut OneUiView, name: OneUiUtf8String,
+        text: OneUiUtf8String) -> OneUiViewResult;
+    pub fn oneui_view_code_editor_execute(view: *mut OneUiView, name: OneUiUtf8String, command: c_int,
+        out_applied: *mut c_int) -> OneUiViewResult;
+    pub fn oneui_view_code_editor_history(view: *mut OneUiView, name: OneUiUtf8String,
+        out_can_undo: *mut c_int, out_can_redo: *mut c_int) -> OneUiViewResult;
 }

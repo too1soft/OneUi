@@ -1,14 +1,37 @@
 <template view-model="QueryRoot">
-  <Column class="shell">
-    <Column class="columns" grow="1" basis="0">
-      <ContainerPage class="tree" :selected="treeSelected"><Text text="Tree"/></ContainerPage>
-      <ContainerPage class="browser" :selected="browserSelected"><Text text="Browser"/></ContainerPage>
-      <ContainerPage class="details" :selected="detailsSelected"><Text text="Details"/></ContainerPage>
+  <Column class="shell" name="query-shell">
+    <Column class="columns" name="query-columns" grow="1" basis="0">
+      <ContainerPage class="tree" name="query-tree" :selected="treeSelected"><Text text="Tree"/></ContainerPage>
+      <ContainerPage class="browser" name="query-browser" :selected="browserSelected"><Column><Text text="Browser"/><Table class="files" name="query-files"/></Column></ContainerPage>
+      <ContainerPage class="details" name="query-details" :selected="detailsSelected"><Text text="Details"/></ContainerPage>
     </Column>
+    <Row class="toolbar" name="query-toolbar" wrap="true" align="center" shrink="0">
+      <Row class="navigation" name="query-navigation"><Text text="Navigation"/></Row>
+      <Input class="search" name="query-search" text="retained search"/>
+      <Button class="actions" name="query-actions" text="Upload"/>
+    </Row>
   </Column>
 </template>
 <style scoped>
 .shell {container-name:sftp;container-type:size;}
+.toolbar {height:117.5px;padding:5px 12px;gap:5px;}
+.navigation {flex-basis:100%;flex-grow:1;min-width:0px;height:32.5px;order:0;}
+Input.search {flex-basis:100%;flex-shrink:0;height:32px;order:2;}
+Button.actions {flex-basis:188px;flex-shrink:0;height:32.5px;order:1;}
+@container sftp (width >= 400px) {
+ .toolbar {height:80.5px;}
+ .navigation {flex-basis:0px;}
+}
+@container sftp (width >= 620px) {
+ .toolbar {height:48px;padding:7.25px 12px;flex-wrap:nowrap;}
+ Input.search {flex-basis:165px;order:1;}
+ Button.actions {order:2;}
+}
+Table.files {table-column-widths:auto 76px;table-selection-width:40px;}
+@container sftp (width >= 620px) {
+  Table.files {table-column-widths:auto 100px 160px;table-selection-width:64px;}
+}
+.tree {flex-basis:80px;}
 @container sftp (width >= 860px) and (height > 0px) and (aspect-ratio >= 8/5) {
   .columns {flex-direction:row;gap:12px;}
   .tree {display:flex;flex-basis:224px;flex-shrink:0;}

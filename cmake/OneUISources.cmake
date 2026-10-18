@@ -97,12 +97,14 @@ set(ONEUI_CORE_SOURCES
     src/core/sparkline.cpp
     src/core/split_view.cpp
     src/core/stack.cpp
+    src/core/stack_presentation.cpp
     src/core/stack_yoga.cpp
     src/core/ui.cpp
     src/core/state_view.cpp
     src/core/status_strip.cpp
     src/core/style_adapter.cpp
     src/core/style_sheet.cpp
+    src/core/style_layout.cpp
     src/core/style_rule_parser.cpp
     src/core/container_query_parse.cpp
     src/core/container_query_evaluate.cpp
@@ -116,6 +118,19 @@ set(ONEUI_CORE_SOURCES
     src/core/stack_children.cpp
     src/core/style_transition.cpp
     src/core/switch.cpp
+    src/core/code_editor/code_document.cpp
+    src/core/code_editor/code_editor_assist.cpp
+    src/core/code_editor/code_editor_documents.cpp
+    src/core/code_editor/code_editor.cpp
+    src/core/code_editor/code_editor_edit.cpp
+    src/core/code_editor/code_editor_find.cpp
+    src/core/code_editor/code_editor_paint.cpp
+    src/core/code_editor/code_editor_view.cpp
+    src/core/code_editor/code_language.cpp
+    src/core/code_editor/code_lexer.cpp
+    src/core/data_grid.cpp
+    src/core/data_grid_paint.cpp
+    src/core/data_grid_surface.cpp
     src/core/table_rows.cpp
     src/core/table.cpp
     src/core/tabs.cpp
@@ -152,6 +167,30 @@ set(ONEUI_C_API_SOURCES
     src/core/notification_service.cpp
     src/platform/native_services.cpp
     src/capi/oneui_c_api.cpp
+    src/capi/oneui_c_api_window_properties.cpp
+    src/capi/oneui_c_api_window_shell.cpp
+    src/capi/oneui_c_api_layout.cpp
+    src/capi/oneui_c_api_snapshot.cpp
+    src/capi/oneui_c_api_services.cpp
+    src/capi/oneui_c_api_style_sheet.cpp
+    src/capi/oneui_c_api_shell_layout.cpp
+    src/capi/oneui_c_api_containers.cpp
+    src/capi/oneui_c_api_terminal.cpp
+    src/capi/oneui_c_api_content.cpp
+    src/capi/oneui_c_api_button.cpp
+    src/capi/oneui_c_api_text_input.cpp
+    src/capi/oneui_c_api_charts.cpp
+    src/capi/oneui_c_api_table.cpp
+    src/capi/oneui_c_api_media.cpp
+    src/capi/oneui_c_api_selection.cpp
+    src/capi/oneui_c_api_navigation.cpp
+    src/capi/oneui_c_api_overlays.cpp
+    src/capi/oneui_c_api_virtual_list.cpp
+    src/capi/oneui_c_api_tree.cpp
+    src/capi/oneui_c_api_status.cpp
+    src/capi/oneui_c_api_interactive.cpp
+    src/capi/oneui_c_api_style_apply.cpp
+    src/capi/oneui_c_api_control_values.cpp
     src/capi/oneui_c_api_window.cpp
     src/capi/oneui_c_api_application.cpp
     src/capi/oneui_c_api_notifications.cpp

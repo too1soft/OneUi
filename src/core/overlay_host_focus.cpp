@@ -5,8 +5,14 @@
 namespace oneui {
 bool OverlayHost::focusFirstLeaf() {
     if (!hasActiveFocusTrap() && content_ && content_->visible() && !content_->disabled() &&
-        content_->focusFirstLeaf()) {
+        content_->isFocusable()) {
         focusOverlay(nullptr);
+        focusChild(content_.get(), true);
+        if (!content_->focused()) {
+            content_->onFocusChanged(true);
+            content_->setFocusVisible(true);
+        }
+        content_->focusFirstLeaf();
         return true;
     }
     const auto overlays = focusableOverlays();
@@ -26,8 +32,14 @@ bool OverlayHost::focusLastLeaf() {
         return true;
     }
     if (!hasActiveFocusTrap() && content_ && content_->visible() && !content_->disabled() &&
-        content_->focusLastLeaf()) {
+        content_->isFocusable()) {
         focusOverlay(nullptr);
+        focusChild(content_.get(), true);
+        if (!content_->focused()) {
+            content_->onFocusChanged(true);
+            content_->setFocusVisible(true);
+        }
+        content_->focusLastLeaf();
         return true;
     }
     return false;
@@ -165,6 +177,8 @@ void OverlayHost::focusOverlay(Widget *child, bool focusVisible) {
         }
         if (!focusedOverlay_ && !previousFocusedChild_) {
             previousFocusedChild_ = focusedChild();
+            if (!previousFocusedChild_ && content_ && content_->focused())
+                previousFocusedChild_ = content_.get();
             if (!previousFocusedChild_) {
                 for (const auto &viewChild : children()) {
                     if (viewChild && viewChild->focused()) {
@@ -177,6 +191,9 @@ void OverlayHost::focusOverlay(Widget *child, bool focusVisible) {
                 previousFocusedChild_ ? previousFocusedChild_->focusVisible() : false;
         }
         focusChild(nullptr);
+        // Content is owned outside View::children_ and may have gained focus
+        // through requestFocus/onFocusChanged without setting focusedChild_.
+        if (content_ && content_->focused()) content_->onFocusChanged(false);
     }
     if (focusedOverlay_) {
         focusedOverlay_->onFocusChanged(false);

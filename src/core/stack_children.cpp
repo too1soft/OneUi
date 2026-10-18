@@ -17,7 +17,7 @@ bool Stack::remove(const std::shared_ptr<Widget>& child) {
     if(found==next.end())return false;
     const bool moveFocus=focusedChild()==child.get();
     next.erase(found);auto plan=prepareChildren(std::move(next));plan->commit();
-    flex_.erase(child);
+    clearFlex(child);
     for(auto i=flex_.begin();i!=flex_.end();)if(i->first.expired())i=flex_.erase(i);else ++i;
     if(moveFocus)focusFirstLeaf();
     invalidate();return true;

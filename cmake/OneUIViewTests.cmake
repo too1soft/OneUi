@@ -18,7 +18,59 @@ add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/Advanced.oneview"
     DEPENDS oneui-viewc tests/views/Advanced.one tests/views/Slotted.one tests/views/Runtime.oneschema VERBATIM)
 add_custom_target(oneui_view_advanced_ir DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/Advanced.oneview")
 add_dependencies(oneui_view_test_ir oneui_view_advanced_ir)
+add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/Lists.oneview"
+    COMMAND oneui-viewc --emit ir --input "${PROJECT_SOURCE_DIR}/tests/views/Lists.one"
+        --schema "${PROJECT_SOURCE_DIR}/tests/views/Lists.oneschema" --name Lists
+        --output "${CMAKE_CURRENT_BINARY_DIR}/Lists.oneview"
+    DEPENDS oneui-viewc tests/views/Lists.one tests/views/Lists.oneschema VERBATIM)
+add_custom_target(oneui_view_settings_lists_ir DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/Lists.oneview")
+add_dependencies(oneui_view_test_ir oneui_view_settings_lists_ir)
+add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/ExternalTheme.oneview"
+    COMMAND oneui-viewc --emit ir --input "${PROJECT_SOURCE_DIR}/tests/views/ExternalTheme.one"
+        --schema "${PROJECT_SOURCE_DIR}/tests/views/Runtime.oneschema" --name ExternalTheme
+        --output "${CMAKE_CURRENT_BINARY_DIR}/ExternalTheme.oneview"
+    DEPENDS oneui-viewc tests/views/ExternalTheme.one tests/views/Runtime.oneschema VERBATIM)
+add_custom_target(oneui_view_external_theme_ir DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/ExternalTheme.oneview")
+add_dependencies(oneui_view_test_ir oneui_view_external_theme_ir)
+foreach(fixture SlotSingle SlotWrapped SlotFallback)
+    add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/${fixture}.oneview"
+        COMMAND oneui-viewc --emit ir --input "${PROJECT_SOURCE_DIR}/tests/views/${fixture}.one"
+            --schema "${PROJECT_SOURCE_DIR}/tests/views/Runtime.oneschema" --name ${fixture}
+            --output "${CMAKE_CURRENT_BINARY_DIR}/${fixture}.oneview"
+        DEPENDS oneui-viewc "tests/views/${fixture}.one" tests/views/Runtime.oneschema
+            tests/views/SlotSingle.partial.one tests/views/SlotWrapped.partial.one VERBATIM)
+    add_custom_target(oneui_view_${fixture}_ir DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/${fixture}.oneview")
+    add_dependencies(oneui_view_test_ir oneui_view_${fixture}_ir)
+endforeach()
 add_executable(oneui_view_runtime_tests tests/views/runtime_tests.cpp)
+add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/TabsSizing.oneview"
+    COMMAND oneui-viewc --emit ir --input "${PROJECT_SOURCE_DIR}/tests/views/TabsSizing.one"
+        --schema "${PROJECT_SOURCE_DIR}/tests/views/TabsSizing.oneschema" --name TabsSizing
+        --output "${CMAKE_CURRENT_BINARY_DIR}/TabsSizing.oneview"
+    DEPENDS oneui-viewc tests/views/TabsSizing.one tests/views/TabsSizing.oneschema VERBATIM)
+add_custom_target(oneui_view_tabs_sizing_ir DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/TabsSizing.oneview")
+add_dependencies(oneui_view_test_ir oneui_view_tabs_sizing_ir)
+add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/ScrollSize.oneview"
+    COMMAND oneui-viewc --emit ir --input "${PROJECT_SOURCE_DIR}/tests/views/ScrollSize.one"
+        --schema "${PROJECT_SOURCE_DIR}/tests/views/ScrollSize.oneschema" --name ScrollSize
+        --output "${CMAKE_CURRENT_BINARY_DIR}/ScrollSize.oneview"
+    DEPENDS oneui-viewc tests/views/ScrollSize.one tests/views/ScrollSize.oneschema VERBATIM)
+add_custom_target(oneui_view_scroll_size_ir DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/ScrollSize.oneview")
+add_dependencies(oneui_view_test_ir oneui_view_scroll_size_ir)
+add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/PopupSurface.oneview"
+    COMMAND oneui-viewc --emit ir --input "${PROJECT_SOURCE_DIR}/tests/views/PopupSurface.one"
+        --schema "${PROJECT_SOURCE_DIR}/tests/views/PopupSurface.oneschema" --name PopupSurface
+        --output "${CMAKE_CURRENT_BINARY_DIR}/PopupSurface.oneview"
+    DEPENDS oneui-viewc tests/views/PopupSurface.one tests/views/PopupSurface.partial.one tests/views/PopupSurface.oneschema VERBATIM)
+add_custom_target(oneui_view_popup_surface_ir DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/PopupSurface.oneview")
+add_dependencies(oneui_view_test_ir oneui_view_popup_surface_ir)
+add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/ScrollSizeV3.oneview"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${PROJECT_SOURCE_DIR}/tests/views/ScrollSizeV3.oneview"
+        "${CMAKE_CURRENT_BINARY_DIR}/ScrollSizeV3.oneview"
+    DEPENDS tests/views/ScrollSizeV3.oneview VERBATIM)
+add_custom_target(oneui_view_scroll_size_v3_ir DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/ScrollSizeV3.oneview")
+add_dependencies(oneui_view_test_ir oneui_view_scroll_size_v3_ir)
 add_executable(oneui_pane_motion_tests tests/workspace/pane_motion_tests.cpp)
 target_link_libraries(oneui_pane_motion_tests PRIVATE oneui_core)
 target_include_directories(oneui_pane_motion_tests PRIVATE src)
@@ -64,6 +116,18 @@ target_compile_definitions(oneui_view_runtime_tests PRIVATE ONEUI_BUILDING_DLL)
 target_include_directories(oneui_view_runtime_tests PRIVATE src)
 add_dependencies(oneui_view_runtime_tests oneui_view_test_ir)
 add_test(NAME oneui_view_runtime_tests COMMAND oneui_view_runtime_tests "${CMAKE_CURRENT_BINARY_DIR}/Runtime.oneview")
+add_executable(oneui_view_legacy_virtual_list_tests tests/views/legacy_virtual_list_tests.cpp)
+target_link_libraries(oneui_view_legacy_virtual_list_tests PRIVATE oneui_views oneui_core)
+target_compile_definitions(oneui_view_legacy_virtual_list_tests PRIVATE ONEUI_BUILDING_DLL)
+target_include_directories(oneui_view_legacy_virtual_list_tests PRIVATE src)
+add_test(NAME oneui_view_legacy_virtual_list_tests COMMAND oneui_view_legacy_virtual_list_tests
+    "${PROJECT_SOURCE_DIR}/tests/views/legacy")
+include("${CMAKE_CURRENT_LIST_DIR}/OneUILegacyContractTests.cmake")
+add_executable(oneui_presentation_storage_tests tests/presentation_storage_tests.cpp)
+target_link_libraries(oneui_presentation_storage_tests PRIVATE oneui_core)
+target_compile_definitions(oneui_presentation_storage_tests PRIVATE ONEUI_BUILDING_DLL)
+target_include_directories(oneui_presentation_storage_tests PRIVATE src)
+add_test(NAME oneui_presentation_storage_tests COMMAND oneui_presentation_storage_tests)
 add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/TableRecords.oneview"
     COMMAND oneui-viewc --emit ir --input "${PROJECT_SOURCE_DIR}/tests/views/TableRecords.one"
         --schema "${PROJECT_SOURCE_DIR}/tests/views/TableRecords.oneschema"
@@ -71,7 +135,29 @@ add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/TableRecords.oneview"
     DEPENDS oneui-viewc tests/views/TableRecords.one tests/views/TableRecords.oneschema VERBATIM)
 add_custom_target(oneui_view_records_ir DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/TableRecords.oneview")
 add_dependencies(oneui_view_test_ir oneui_view_records_ir)
-add_executable(oneui_view_list_tests tests/views/list_tests.cpp tests/views/table_record_tests.cpp)
+add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/DataGridRecords.oneview"
+    COMMAND oneui-viewc --emit ir --input "${PROJECT_SOURCE_DIR}/tests/views/DataGridRecords.one"
+        --schema "${PROJECT_SOURCE_DIR}/tests/views/DataGridRecords.oneschema"
+        --output "${CMAKE_CURRENT_BINARY_DIR}/DataGridRecords.oneview"
+    DEPENDS oneui-viewc tests/views/DataGridRecords.one tests/views/DataGridRecords.oneschema VERBATIM)
+add_custom_target(oneui_view_data_grid_ir DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/DataGridRecords.oneview")
+add_dependencies(oneui_view_test_ir oneui_view_data_grid_ir)
+add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/TreeRecords.oneview"
+    COMMAND oneui-viewc --emit ir --input "${PROJECT_SOURCE_DIR}/tests/views/TreeRecords.one"
+        --schema "${PROJECT_SOURCE_DIR}/tests/views/TreeRecords.oneschema"
+        --output "${CMAKE_CURRENT_BINARY_DIR}/TreeRecords.oneview"
+    DEPENDS oneui-viewc tests/views/TreeRecords.one tests/views/TreeRecords.oneschema VERBATIM)
+add_custom_target(oneui_view_tree_ir DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/TreeRecords.oneview")
+add_dependencies(oneui_view_test_ir oneui_view_tree_ir)
+add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/CodeEditorRecords.oneview"
+    COMMAND oneui-viewc --emit ir --input "${PROJECT_SOURCE_DIR}/tests/views/CodeEditorRecords.one"
+        --schema "${PROJECT_SOURCE_DIR}/tests/views/CodeEditorRecords.oneschema"
+        --output "${CMAKE_CURRENT_BINARY_DIR}/CodeEditorRecords.oneview"
+    DEPENDS oneui-viewc tests/views/CodeEditorRecords.one tests/views/CodeEditorRecords.oneschema VERBATIM)
+add_custom_target(oneui_view_code_editor_ir DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/CodeEditorRecords.oneview")
+add_dependencies(oneui_view_test_ir oneui_view_code_editor_ir)
+add_executable(oneui_view_list_tests tests/views/list_tests.cpp tests/views/table_record_tests.cpp
+    tests/views/data_grid_record_tests.cpp tests/views/tree_record_tests.cpp tests/views/code_editor_record_tests.cpp)
 target_link_libraries(oneui_view_list_tests PRIVATE oneui_views oneui_core)
 target_compile_definitions(oneui_view_list_tests PRIVATE ONEUI_BUILDING_DLL)
 target_include_directories(oneui_view_list_tests PRIVATE src)

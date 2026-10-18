@@ -36,7 +36,7 @@ public:
     /// Intrinsic text dimensions before clipping/ellipsis, using the same
     /// family, spans, weight and DPI as paint(). Intended for layout audits.
     Size naturalTextSize() const;
-    Size naturalSize() const override { return naturalTextSize(); }
+    Size naturalSize() const override;
     Size measure(Size available) const override;
     void setTextOptions(TextOptions options);
     const TextOptions& textOptions() const { return textOptions_; }
@@ -53,9 +53,21 @@ public:
     void setLineHeight(float height);
     float lineHeight() const;
 
+    /// CSS box of a declarative `Text`: padding insets the text; background,
+    /// border and radius are painted behind it. The defaults paint nothing, so
+    /// labels without a box keep their exact size and look.
+    void setPadding(Insets padding);
+    Insets padding() const { return padding_; }
+    void setBoxStyle(Color background, Color border, float borderWidth, float radius);
+
     void paint(Canvas& canvas) override;
 
 private:
+    Insets padding_;
+    Color boxBackground_{0, 0, 0, 0};
+    Color boxBorder_{0, 0, 0, 0};
+    float boxBorderWidth_ = 0.0f;
+    float boxRadius_ = 0.0f;
     std::wstring text_;
     Binding<std::wstring> textBinding_;
     Color color_{25, 28, 33};

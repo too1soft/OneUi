@@ -21,6 +21,7 @@
 | 入口 | 状态与行为 |
 |---|---|
 | `Tabs` | `:items` 为 `State<vector<ui::TabItem>>`；每项 `{id,title}`；`v-model` 是 `State<wstring>` 业务 ID |
+| `Tabs sizing="compact\|equal"` | 独立控制标签尺寸；可用 `:sizing` 绑定 utf8。`presentation` 仅控制 document/segmented 外观；未显式 sizing 时沿用 document→compact、segmented→equal。显式值不受初始化或动态更新顺序影响；热重载移除 sizing 恢复当前 presentation 的默认值。未知值拒绝。 |
 | `SplitView` | 恰好两个子元素；`orientation` horizontal / vertical；`v-model` 为 `State<float>`；`first-min` / `second-min` 为逻辑像素 |
 | `TimeSeriesChart` | `:series` 为 `State<vector<TimeSeriesChartSeries>>`，原生绘制、保留控件身份 |
 | `Icon`、`Button icon` | 共享命名图标；未知静态名称编译时报错 |

@@ -1,4 +1,12 @@
 #include "oneui/ui_declarative.h"
+#include "oneui/layout/virtual_template_list.h"
+#include "data_menu.h"
+#include "tabs_presentation.h"
+#include "oneui/controls/popup.h"
+#include "oneui/controls/data_grid.h"
+#include "oneui/controls/tree_view.h"
+#include "oneui/controls/code_editor.h"
+#include "oneui/layout/panel.h"
 namespace oneui::ui {
 Element Mount::make(std::string type, std::vector<Element> children, std::string classes) {
     if (type == "NativeHost")
@@ -104,9 +112,60 @@ Element Mount::make(std::string type, std::vector<Element> children, std::string
     Builder b(StackEngine::Yoga, "");
     Node node = b.column({});
     std::shared_ptr<Stack> content;
-    if(type=="FontPicker")node=b.native(std::make_shared<FontPicker>());
+    if(type=="StateView")node=b.native(std::make_shared<StateView>());
+    else if(type=="Menu")node=b.native(std::make_shared<Menu>());
+    else if(type=="GridItem") {
+        if(children.size()!=1)throw std::invalid_argument("GridItem requires one child");
+        node=b.native(std::make_shared<TemplateGridItem>(children[0].widget));
+    }
+    else if(type=="ReorderableGrid") {
+        auto grid=std::make_shared<ReorderableGrid>();
+        std::vector<std::shared_ptr<Widget>> items;
+        for(const auto& child:children)items.push_back(child.widget);
+        grid->setItems(templateGridItems(items));
+        node=b.native(grid);
+    }
+    else if(type=="Overlay") {
+        if(children.size()!=2)throw std::invalid_argument("Overlay requires base and foreground");
+        node=b.native(std::make_shared<TemplateOverlay>(children[0].widget,children[1].widget));
+    }
+    else if(type=="TemplateTable") {
+        if(children.size()!=2)throw std::invalid_argument("TemplateTable requires header and body");
+        node=b.native(std::make_shared<TemplateTable>(children[0].widget,children[1].widget)).basis(0).grow();
+    }
+    else if(type=="Dialog") {
+        if(children.size()!=2)throw std::invalid_argument("Dialog requires content and actions");
+        auto dialog=std::make_shared<Dialog>();
+        dialog->setContent(children[0].widget);
+        dialog->setActions(children[1].widget);
+        node=b.native(dialog);
+    }
+    else if(type=="Popup") {
+        if(children.size()!=1)throw std::invalid_argument("Popup requires one content child");
+        auto popup=std::make_shared<Popup>();
+        popup->setContent(children[0].widget);
+        popup->setInteractionMode(PopupInteractionMode::LightDismiss);
+        node=b.native(popup);
+    }
+    else if(type=="DataMenu")node=b.native(std::make_shared<views::DataMenu>());
+    else if(type=="List")node=b.native(std::make_shared<List>());
+    else if(type=="VirtualList")node=b.native(std::make_shared<VirtualList>());
+    else if(type=="VirtualTemplateList")node=b.native(std::make_shared<VirtualTemplateList>());
+    else if(type=="TreeView")node=b.native(std::make_shared<TreeView>());
+    else if(type=="Table")node=b.native(std::make_shared<Table>());
+    else if(type=="DataGrid")node=b.native(std::make_shared<DataGrid>()).basis(0).grow();
+    else if(type=="CodeEditor") {
+        auto editor=std::make_shared<CodeEditor>();
+        editor->setClipboard(clipboard_);
+        node=b.native(editor).basis(0).grow();
+    }
+    else if(type=="FontPicker")node=b.native(std::make_shared<FontPicker>());
     else if(type=="Slider")node=b.native(std::make_shared<Slider>());
-    else if(type=="Card") {
+    else if(type=="InteractiveSurface") {
+        auto surface=std::make_shared<InteractiveSurface>();
+        if(children.size()!=1)throw std::invalid_argument("InteractiveSurface requires one child");
+        surface->setContent(children[0].widget);node=b.native(surface);
+    } else if(type=="Card") {
         auto card=std::make_shared<Card>();if(children.size()!=1)throw std::invalid_argument("Card requires one child");card->setContent(children[0].widget);node=b.native(card);
     } else if(type=="ThemeScope") {
         auto scope=std::make_shared<ThemeScope>();if(children.size()!=1)throw std::invalid_argument("ThemeScope requires one child");scope->add(children[0].widget);node=b.native(scope);
@@ -141,11 +200,19 @@ Element Mount::make(std::string type, std::vector<Element> children, std::string
         node=b.native(header);
     } else if (type == "Text" || type == "Status" || type == "ValidationMessage")
         node = b.paragraph(L"");
+    else if (type == "TextArea") {
+        auto field = std::make_shared<TextArea>();
+        field->setClipboard(clipboard_);
+        node = b.native(std::move(field));
+    } else if (type == "Checkbox")
+        node = b.native(std::make_shared<Checkbox>());
     else if (type == "Input" || type == "SearchInput") {
         auto field = std::make_shared<TextField>();
         field->setClipboard(clipboard_);
         node = b.native(std::move(field));
-    } else if (type == "Switch")
+    } else if (type == "Checkbox")
+        node = b.native(std::make_shared<Checkbox>());
+    else if (type == "Switch")
         node = b.native(std::make_shared<Switch>());
     else if (type == "Select")
         node = b.native(std::make_shared<Select>());
@@ -155,7 +222,7 @@ Element Mount::make(std::string type, std::vector<Element> children, std::string
         auto progress = std::make_shared<ProgressBar>();
         progress->setPreferredSize({0, 6});
         node = b.native(progress).shrink(0);
-    } else if (type == "Tabs") {
+    } else if (type == "Tabs" || type == "SegmentedControl") {
         auto tabs = std::make_shared<Tabs>();
         tabs->setDocumentMode(true);
         tabs->setSizingMode(TabsSizingMode::Compact);
@@ -216,6 +283,14 @@ Element Mount::make(std::string type, std::vector<Element> children, std::string
                type == "PanelHeader" || type == "PanelFooter" || type == "StatusBar" ||
                type == "WorkspaceBody")
         node = b.flow(nodes);
+    else if (type == "MountPoint") {
+        // An attachment boundary paints nothing; Panel defaults to a white
+        // fill and a 1px light border.
+        auto slot = std::make_shared<Panel>();
+        slot->setBackground(Color{0, 0, 0, 0});
+        slot->setBorderWidth(0.0f);
+        node = b.native(slot);
+    }
     else if (syntax::components().count(type))
         node = b.column(nodes);
     else
@@ -256,16 +331,20 @@ Element Mount::make(std::string type, std::vector<Element> children, std::string
     if (type == "ToolButton")
         e.widget->setPreferredSize({32, 32});
 
+    if (type == "SegmentedControl") {
+        e.as<Tabs>()->setDocumentMode(false);
+        e.as<Tabs>()->setSizingMode(TabsSizingMode::Equal);
+    }
     if (type == "Tabs") {
-        e.tabs = std::make_shared<KeyedTabs>(e.as<Tabs>());
+        e.tabs = detail::makeAuthoredTabs(e.as<Tabs>());
         own(e.tabs);
     }
     if (type == "SplitView")
         e.splitLimits = std::make_shared<Element::SplitLimits>();
     if (type == "SearchInput")
         e.basis(280).grow();
-    if (type == "Select")
-        e.basis(140);
+    // Native Select supplies a width preference. A main-axis basis would turn
+    // that width into a 140px height inside an imported slot's column wrapper.
     if (type == "Toolbar" || type == "ActionBar" || type == "Header")
         e.shrink(0);
     if (type == "Status")
@@ -357,3 +436,36 @@ Element Mount::make(std::string type, std::vector<Element> children, std::string
     return e;
 }
 } // namespace oneui::ui
+
+namespace oneui::ui {
+void StyleRegistry::inheritTransient(const std::shared_ptr<StyleSheet>& sheet) {
+    sheet_.setTransientStyleSheet(sheet);
+    // Only Select consumes the separate popup palette. Leave repeat flow intact.
+    for(const auto& entry:entries_)if(entry.component=="Select")apply(entry,sheet_);
+}
+namespace {
+#if ONEUI_DEVELOPER_TOOLS
+thread_local std::map<const Widget*,StyleDiagnostic> diagnostics;
+#endif
+}
+void rememberStyleDiagnostic(const std::shared_ptr<Widget>& widget,const StyleNode& node,const StyleBox& box) {
+#if ONEUI_DEVELOPER_TOOLS
+    if(diagnostics.size()%256==0) {
+        for(auto it=diagnostics.begin();it!=diagnostics.end();) {
+            if(it->second.widget.expired())it=diagnostics.erase(it);else ++it;
+        }
+    }
+    diagnostics[widget.get()]={widget,node,box};
+#endif
+}
+std::vector<StyleDiagnostic> styleDiagnostics() {
+    std::vector<StyleDiagnostic> result;
+#if ONEUI_DEVELOPER_TOOLS
+    for(auto it=diagnostics.begin();it!=diagnostics.end();) {
+        if(it->second.widget.expired())it=diagnostics.erase(it);
+        else {result.push_back(it->second);++it;}
+    }
+#endif
+    return result;
+}
+}

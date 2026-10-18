@@ -1,20 +1,90 @@
 #include "fixture.h"
+#include "../support/recording_canvas.h"
 using namespace viewtest;
+#include "settings_lists.inc"
+#include "template_table.inc"
+#include "template_grid.inc"
+#include "slot_contracts.inc"
+#include "checkbox_contract.inc"
+#include "surface_drag.inc"
+#include "tree_contract.inc"
+#include "rich_table_contract.inc"
+#include "rich_table_reorder.inc"
+#include "chart_contract.inc"
+#include "virtual_template_contract.inc"
+#include "tabs_sizing.inc"
+#include "scroll_size.inc"
+#include "popup_surface.inc"
+#include "input_placeholder.inc"
 int main(int argc, char **argv) {
     if (argc != 2)
         return 2;
     try {
+        virtualTemplateContract(argv[1]);
+        chartContract(argv[1]);
+        surfaceDrag(argv[1]);
+        {
+            // The typed contract must admit the metrics consumed by native Tabs,
+            // and preserve authored selected colors instead of the default palette.
+            const auto css = oneui::ui::syntax::css(
+                "Tabs.session {background-color:#202022;content-background-color:#202022;"
+                "color:#ededee;text-inset:12px;tab-indicator-color:#0065d5;"
+                "tab-indicator-inset:12px;tab-indicator-height:0px;tab-outline-width:1px;tab-trailing-inset:4px;}"
+                "Tabs.session:selected {content-background-color:#303033;color:#ededee;}");
+            oneui::StyleSheet sheet;
+            std::string error;
+            expect(sheet.addRulesFromCss(css,&error), "typed Tabs CSS parses");
+            const auto selected=sheet.resolve({"tabs",{"one-Tabs","session"},oneui::StyleStateSelected});
+            expect(selected.content.backgroundColor->r==0x30 && selected.foreground->r==0xed,
+                   "selected Tabs keeps contrasting authored background and ink");
+            expect(selected.tabIndicatorHeight==0.0f && selected.tabOutlineWidth==1.0f,
+                   "typed Tabs keeps indicator and outline metrics");
+        }
+        {
+            Case c(argv[1]);
+            c.start();
+            auto state = c.runtime->root->children[6]->element.as<oneui::StateView>();
+            expect(state && state->actionText() == L"initial", "StateView dynamic text");
+            c.runtime->styles->replace(oneui::ui::syntax::css(
+                "StateView {background:#112233;padding:12px;} "
+                "state-view-part.state-view-title {font-size:15px;} "
+                "state-view-part.state-view-action:hover {background:#334455;}"));
+            expect(state->onKeyDown({oneui::Key::Enter}) && c.vm.invokes == 1,
+                   "StateView action uses VM invocation");
+            c.vm.text(c.title, "updated");
+            c.runtime->notify(c.runtime->rootScope, c.title);
+            c.runtime->flush();
+            expect(state->actionText() == L"updated", "StateView notification refresh");
+            c.runtime->close();
+        }
         {
             Case c(argv[1]);
             c.start();
             auto label = c.runtime->root->children[0]->element.as<oneui::Label>();
             expect(label->text() == L"initial", "initial UTF8");
+            auto flow = c.runtime->root->children.back()->element.as<oneui::Stack>();
+            expect(flow->direction() == oneui::StackDirection::Row, "bound row initial direction");
+            auto progress=std::dynamic_pointer_cast<oneui::ProgressBar>(flow->children()[2]);
+            progress->setFrame({0,0,100,6});
+            oneui::test_support::RecordingCanvas painted;
+            progress->paint(painted);
+            expect(painted.fillRects.size()==2 && painted.fillRects[1].color.r==0xc0 && painted.fillRects[1].color.g==0x90 && painted.fillRects[1].color.b==0x30, "Progress CSS must reach actual paint, not only resolved style metadata");
+            expect(painted.fillRects[0].color.r==0x10 && painted.fillRects[0].radius==3, "Progress track and radius CSS paint");
+            const auto initialClasses = c.runtime->root->children[0]->element.classes;
+            expect(initialClasses.size() > std::string("initial ").size() &&
+                   initialClasses.find("initial") != std::string::npos, "scope plus bound classes");
             expect(c.vm.reads[c.title] == 1, "one get per property across bindings");
             c.vm.text(c.title, "changed");
             for (int i = 0; i < 100; ++i)
                 c.runtime->notify(c.runtime->rootScope, c.title);
             c.runtime->flush();
             expect(label->text() == L"changed" && c.vm.reads[c.title] == 2, "coalesced change");
+            expect(flow->direction() == oneui::StackDirection::Column, "bound row reflows through style change");
+            const auto changedClasses = c.runtime->root->children[0]->element.classes;
+            expect(changedClasses.substr(0, changedClasses.size() - 7) == initialClasses.substr(0, initialClasses.size() - 7) &&
+                   changedClasses.find("changed") != std::string::npos &&
+                   changedClasses.find("initial") == std::string::npos,
+                   "class updates remove obsolete values and retain scope tokens");
             c.runtime->flush();
             expect(c.vm.reads[c.title] == 2, "no polling");
             expect(c.runtime->hosts.count("terminal") == 1, "empty native host");
@@ -41,6 +111,11 @@ int main(int argc, char **argv) {
             Case c(argv[1]);
             c.start();
             auto repeat = c.runtime->root->children[4];
+            c.runtime->factory.set(c.runtime->root->element,"class",std::string("flow-parent"));
+            c.runtime->styles->replace(oneui::ui::syntax::css("Column.flow-parent { gap:17px; }"));
+            c.runtime->refreshRepeatLayouts(c.runtime->root);
+            expect(repeat->element.as<oneui::Stack>()->gap()==17,
+                   "CSS replacement restores inherited repeat spacing");
             auto old = repeat->rows.at("a")->element.widget;
             c.vm.items = {&c.b, &c.a};
             ++c.vm.revision;
@@ -176,7 +251,19 @@ int main(int argc, char **argv) {
             expect(field->clipboard() == clipboard, "legacy repeat propagates clipboard service");
             c.runtime->close();
         }
-        std::cout << "9 runtime scenarios passed\n";
+        checkboxContract(argv[1]);
+        settingsLists(argv[1]);
+        templateTables(argv[1]);
+        templateGrids(argv[1]);
+        slotContracts(argv[1]);
+        treeContract(argv[1]);
+        richTableContract(argv[1]);
+        richTableReorderContract(argv[1]);
+        tabsSizing(argv[1]);
+        scrollSize(argv[1]);
+        popupSurface(argv[1]);
+        inputPlaceholder();
+        std::cout << "runtime scenarios passed\n";
         return 0;
     } catch (const std::exception &e) {
         std::cerr << e.what() << '\n';

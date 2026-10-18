@@ -12,6 +12,7 @@
 #endif
 
 #include "include/core/SkBlurTypes.h"
+#include "include/effects/SkDashPathEffect.h"
 #include "include/core/SkCanvas.h"
 #include "include/core/SkColor.h"
 #include "include/core/SkFont.h"
@@ -381,6 +382,29 @@ class SkiaCanvasImpl final : public Canvas {
         paint.setStrokeWidth(width);
         paint.setStrokeCap(rounded ? SkPaint::kRound_Cap : SkPaint::kButt_Cap);
         paint.setStrokeJoin(rounded ? SkPaint::kRound_Join : SkPaint::kMiter_Join);
+        canvas_.drawPath(native, paint);
+    }
+
+    void strokePathDashed(const CanvasPath &path, Color color, float width, float dash,
+                          float gap) override {
+        internal::FrameSpan span(internal::FrameStage::Path);
+        if (path.empty()) {
+            return;
+        }
+        if (dash <= 0.0f || gap < 0.0f) {
+            strokePath(path, color, width, true);
+            return;
+        }
+        SkPath native = toSkPath(path);
+        SkPaint paint;
+        paint.setAntiAlias(true);
+        paint.setColor(toSkColor(color));
+        paint.setStyle(SkPaint::kStroke_Style);
+        paint.setStrokeWidth(width);
+        paint.setStrokeCap(SkPaint::kButt_Cap);
+        paint.setStrokeJoin(SkPaint::kRound_Join);
+        const SkScalar intervals[] = {dash, gap};
+        paint.setPathEffect(SkDashPathEffect::Make(intervals, 0.0f));
         canvas_.drawPath(native, paint);
     }
 
@@ -1001,7 +1025,9 @@ class SkiaCanvasImpl final : public Canvas {
         const float radians = (angleDegrees - 90.0f) * pi / 180.0f;
         const float dx = std::cos(radians);
         const float dy = std::sin(radians);
-        const float half = std::sqrt(rect.width * rect.width + rect.height * rect.height) * 0.5f;
+        // CSS gradient line: |W sin a| + |H cos a| long, so a vertical gradient
+        // spans the height and a horizontal one the width.
+        const float half = (std::abs(rect.width * dx) + std::abs(rect.height * dy)) * 0.5f;
         const SkPoint points[2] = {
             SkPoint::Make(rect.x + rect.width * 0.5f - dx * half, rect.y + rect.height * 0.5f - dy * half),
             SkPoint::Make(rect.x + rect.width * 0.5f + dx * half, rect.y + rect.height * 0.5f + dy * half),

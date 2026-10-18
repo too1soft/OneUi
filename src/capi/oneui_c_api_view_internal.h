@@ -9,13 +9,19 @@ using namespace oneui::views;
 struct Mount : std::enable_shared_from_this<Mount> {
     std::thread::id thread = std::this_thread::get_id();
     OneUiWindow *window = nullptr;
-    std::shared_ptr<Panel> destination;
+    std::shared_ptr<View> destination;
     std::shared_ptr<Widget> windowRoot;
     Window::EventSubscription closedSubscription;
     std::weak_ptr<Runtime> active;
     std::string externalCss;
     ui::Density density = ui::Density::Comfortable;
     bool closed = false, reserved = false;
+    std::weak_ptr<Runtime> parentView;
+    // Only explicit destination children insert an extra owned Panel.
+    std::weak_ptr<View> childSurface;
+    bool child = false, ownsDestination = false;
+    std::vector<std::weak_ptr<Mount>> children;
+    void closeChildren();
     void check() const;
     void close(bool windowClosed = false);
     void publish(const std::shared_ptr<Runtime> &);
@@ -50,6 +56,8 @@ void unbindHostHandle(OneUiWidget *);
 void pruneHostHandles(OneUiView *);
 std::shared_ptr<Runtime> hostRuntime(OneUiWidget *);
 void registerMount(OneUiWindow *, const std::shared_ptr<Mount> &);
+void reserveChildDestination(const std::shared_ptr<Widget> &, const std::shared_ptr<Mount> &);
+void releaseChildDestination(const std::shared_ptr<Widget> &, const Mount *);
 bool closeWindowMounts(OneUiWindow *) noexcept;
 } // namespace oneui::capi::views
 struct OneUiViewMount {

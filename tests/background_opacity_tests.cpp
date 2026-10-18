@@ -1,5 +1,6 @@
 #include "oneui/style_adapter.h"
 #include "oneui/style_sheet.h"
+#include "oneui/ui_template_support.h"
 #include "support/recording_canvas.h"
 #include <iostream>
 #include <stdexcept>
@@ -10,6 +11,26 @@ void require(bool value, const char* message) {
 }
 void verify() {
     using namespace oneui;
+    // Both .one compilation and ViewMount::setStyles use this typed CSS contract.
+    const auto mapped = ui::syntax::css(
+        "Button {background:#12345680;background-opacity:0.5;color:#ffffff;}"
+        "SearchInput {background:#123456;background-opacity:0.28;}"
+        "Select {background-opacity:0.28;content-background-opacity:0.96;}");
+    StyleSheet declarative;
+    std::string mappedError;
+    require(declarative.addRulesFromCss(mapped, &mappedError), "typed material CSS parses");
+    const auto material = declarative.resolve({"button", {"one-Button"}, 0});
+    require(material.background.color->a == 64 && material.foreground->a == 255,
+            "typed material changes fill only, preserving text opacity");
+    require(declarative.resolve({"input", {"one-SearchInput"}, 0}).background.color->a == 71,
+            "SearchInput material maps to the native input");
+    try {
+        ui::syntax::css("Icon {background-opacity:0.5;}");
+        require(false, "components without background must still reject material CSS");
+    } catch (const std::runtime_error& error) {
+        require(std::string(error.what()).find("not consumed") != std::string::npos,
+                "unsupported material CSS has the existing diagnostic");
+    }
     StyleSheet sheet;
     std::string error;
     sheet.setCustomProperty("--surface-alpha", "50%");

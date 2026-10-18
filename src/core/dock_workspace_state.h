@@ -19,6 +19,8 @@ struct DockWorkspaceView::State {
     struct Work {size_t node;Rect rect;};
     enum class Gesture {None,Move,Resize,Divider};
     DockWorkspaceSnapshot snapshot;
+    DockWorkspacePresentation presentation;
+    bool shift = false, control = false; // Pointer modifiers of the gesture.
     DockTreeIndex index;
     std::vector<Node> nodes;
     std::vector<Item> items;
@@ -39,5 +41,10 @@ struct DockWorkspaceView::State {
     double previewTime=0;
     std::optional<DockHit> hit;
     int64_t pendingRequest=0;
+    std::shared_ptr<StyleSheet> sheet;
+    StyleNode node;
+    // Cached `dock-workspace-float` box, keyed by the sheet it came from.
+    mutable std::shared_ptr<const StyleBox> floatSurface;
+    mutable const StyleSheet* floatSurfaceSheet=nullptr;
 };
 } // namespace oneui

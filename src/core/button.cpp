@@ -540,6 +540,12 @@ AccessibilityInfo Button::accessibilityInfo() const {
     return info;
 }
 
+bool Button::activate() {
+    if (disabled() || !visible()) return false;
+    click();
+    return true;
+}
+
 void Button::click() {
     // A command is allowed to rebuild or destroy the widget tree that owns this
     // button. Keep an independent callback copy alive until invocation returns.

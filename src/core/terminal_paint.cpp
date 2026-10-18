@@ -334,6 +334,9 @@ void TerminalView::paint(Canvas& canvas) {
         }
     }
     canvas.restore();
+    if (bellAlpha_ != 0) {
+        canvas.fillRect(bounds, Color{foreground_.r, foreground_.g, foreground_.b, bellAlpha_});
+    }
     const auto thumb = scrollbackThumbRect();
     if (thumb.height > 0.0f) canvas.fillRect(thumb, Color{foreground_.r, foreground_.g, foreground_.b, static_cast<std::uint8_t>(draggingScrollback_ ? 110 : 65)}, 3.0f);
 }

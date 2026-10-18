@@ -2,12 +2,42 @@
 // Included after ui_declarative.h's definitions. Query application belongs to
 // declarative composition; the parser/evaluator and isolated layout are core.
 namespace oneui::ui {
+inline void StyleRegistry::updateAuthoredFlex(const std::shared_ptr<Widget>& widget,const StackFlex& flex) {
+    auto found=layoutDefaults_.find(widget.get());
+    if(found!=layoutDefaults_.end() && found->second.widget.lock()==widget)
+        found->second.flex=flex;
+}
+inline void StyleRegistry::applyBaseLayouts() {
+    bool applied=false;
+    std::map<const Widget*,std::shared_ptr<Stack>> parents;
+    for (const auto& entry : entries_)
+        if (auto stack = std::dynamic_pointer_cast<Stack>(entry.widget.lock()))
+            for (const auto& child : stack->children()) parents[child.get()] = stack;
+    for (const auto& entry : entries_) if (auto widget = entry.widget.lock()) {
+        auto parent = parents.find(widget.get());
+        if (parent == parents.end()) continue;
+        StyleNode node{syntax::components().at(entry.component), {"one-"+entry.component}, 0};
+        std::istringstream words(entry.classes);
+        for (std::string word; words >> word;) node.classes.push_back(word);
+        const auto box = sheet_.resolve(node);
+        const auto layout = sheet_.resolveLayout(node);
+        if (box.width || box.height || box.minWidth || box.minHeight || layout.maxWidth || layout.maxHeight ||
+            box.flexBasis || layout.flexBasisPercent || layout.flexOrder || box.flexGrow || box.flexShrink ||
+            box.display || box.flexDirection || box.flexWrap) {
+            applyLayout(entry, box, parent->second, layout);
+            applied=true;
+        }
+    }
+    // Base dimensions can replace an active query override without changing
+    // the measured size or matched tier. Reapply it on the next layout pass.
+    if(applied)for(auto& entry:queries_)entry.second.version=~size_t{};
+}
 inline void StyleRegistry::restoreQueryLayouts() {
     for(const auto& entry:entries_)if(auto widget=entry.widget.lock()) {
         auto found=layoutDefaults_.find(widget.get());if(found==layoutDefaults_.end())continue;
         StyleNode node{syntax::components().at(entry.component),{"one-"+entry.component},0};
         std::istringstream words(entry.classes);for(std::string word;words>>word;)node.classes.push_back(word);
-        applyLayout(entry,sheet_.resolve(node),found->second.parent.lock());
+        applyLayout(entry,sheet_.resolve(node),found->second.parent.lock(),sheet_.resolveLayout(node));
     }
 }
 inline void StyleRegistry::configureQuery(const std::shared_ptr<Widget>& widget,const StyleBox& box) {
@@ -23,7 +53,7 @@ inline void StyleRegistry::configureQuery(const std::shared_ptr<Widget>& widget,
     std::weak_ptr<Stack> weak=stack;std::weak_ptr<int> life=queryLifetime_;
     stack->setContainerQuery([this,weak,life]{if(life.expired())return false;auto w=weak.lock();return w&&evaluateQuery(w);});
 }
-inline void StyleRegistry::applyLayout(const Entry& entry,const StyleBox& box,const std::shared_ptr<Stack>& parent) {
+inline void StyleRegistry::applyLayout(const Entry& entry,const StyleBox& box,const std::shared_ptr<Stack>& parent,const StyleLayout& layout) {
     auto widget=entry.widget.lock();if(!widget)return;
     auto& defaults=layoutDefaults_[widget.get()];
     if(defaults.widget.lock()!=widget) {
@@ -42,12 +72,24 @@ inline void StyleRegistry::applyLayout(const Entry& entry,const StyleBox& box,co
     if(parent) {
         auto flex=defaults.flex.value_or(StackFlex{});
         if(box.flexBasis)flex.basis=box.flexBasis;
+        if(layout.flexBasisPercent)flex.basis.reset();
         if(box.flexGrow)flex.grow=*box.flexGrow;
         if(box.flexShrink)flex.shrink=*box.flexShrink;
         flex.width=box.width;flex.height=box.height;
         flex.minWidth=box.minWidth.value_or(0);flex.minHeight=box.minHeight.value_or(0);
-        if(defaults.flex||box.flexBasis||box.flexGrow||box.flexShrink||box.width||box.height||box.minWidth||box.minHeight)parent->setFlex(widget,flex);
+        // max-width/max-height clamp the parent main axis (StackFlex::max); the
+        // cross axis keeps the authored or unbounded default.
+        const bool row=parent->direction()==StackDirection::Row;
+        if(layout.maxWidth||layout.maxHeight) {
+            const auto main=row?layout.maxWidth:layout.maxHeight;
+            if(!main)throw std::invalid_argument(row
+                ?"CONTAINER_CONSUMPTION: max-height requires a column parent"
+                :"CONTAINER_CONSUMPTION: max-width requires a row parent");
+            flex.max=*main;
+        }
+        if(defaults.flex||box.flexBasis||layout.flexBasisPercent||layout.flexOrder||box.flexGrow||box.flexShrink||box.width||box.height||box.minWidth||box.minHeight||layout.maxWidth||layout.maxHeight)parent->setFlex(widget,flex);
         else parent->clearFlex(widget);
+        parent->setFlexPresentation(widget,{layout.flexBasisPercent,layout.flexOrder.value_or(0)});
     }
 }
 inline bool StyleRegistry::evaluateQuery(const std::shared_ptr<Stack>& container) {
@@ -96,7 +138,7 @@ inline bool StyleRegistry::evaluateQuery(const std::shared_ptr<Stack>& container
         state.measured={frame.width,frame.height};
         if(state.version==sheet_.version()&&state.treeVersion==treeVersion_&&matches==state.matches)return false;
         auto effective=sheet_.forContainers(sizes);
-        struct Pending {const Entry* entry;StyleBox box;std::shared_ptr<Stack> parent;};
+        struct Pending {const Entry* entry;StyleBox box;std::shared_ptr<Stack> parent;StyleLayout layout;};
         std::vector<Pending> pending;
         std::vector<std::shared_ptr<Widget>> work(container->children().begin(),container->children().end());
         while(!work.empty()) {
@@ -108,12 +150,13 @@ inline bool StyleRegistry::evaluateQuery(const std::shared_ptr<Stack>& container
                     throw std::invalid_argument("CONTAINER_DEPENDENCY: nested query containers require fixed independent width and height");
                 if(nested)for(const auto& rule:sheet_.rules())if(rule.query&&selectorMatches(rule.selector,node)) {
                     const auto& b=rule.box;
-                    if(b.width||b.height||b.minWidth||b.minHeight||b.flexBasis||b.flexGrow||b.flexShrink||b.padding||b.display)
+                    if(b.width||b.height||b.minWidth||b.minHeight||b.flexBasis||b.flexGrow||b.flexShrink||b.padding||b.display||
+                       std::any_of(rule.declarations.begin(),rule.declarations.end(),[](const auto& declaration){return declaration.first=="flex-basis"||declaration.first=="order"||declaration.first=="max-width"||declaration.first=="max-height";}))
                         throw std::invalid_argument("CONTAINER_DEPENDENCY: ancestor query changes a measured container");
                 }
                 if((box.flexDirection||box.flexWrap)&&!std::dynamic_pointer_cast<Stack>(widget))
                     throw std::invalid_argument("CONTAINER_CONSUMPTION: layout output requires Stack");
-                pending.push_back({found->second,std::move(box),std::dynamic_pointer_cast<Stack>(parents[widget.get()])});
+                pending.push_back({found->second,std::move(box),std::dynamic_pointer_cast<Stack>(parents[widget.get()]),effective.resolveLayout(node)});
             }
             if(!nested)if(auto view=std::dynamic_pointer_cast<View>(widget))for(auto& child:view->children())work.push_back(child);
         }
@@ -122,7 +165,7 @@ inline bool StyleRegistry::evaluateQuery(const std::shared_ptr<Stack>& container
         auto previousFocus=container->activeFocusChild();
         while(previousFocus) {auto next=previousFocus->activeFocusChild();if(!next)break;previousFocus=std::move(next);}
         for(auto& change:pending) {
-            applyLayout(*change.entry,change.box,change.parent);
+            applyLayout(*change.entry,change.box,change.parent,change.layout);
             apply(*change.entry,effective);
         }
         if(previousFocus&&!previousFocus->focused())container->focusFirstLeaf();

@@ -31,6 +31,28 @@ bool Runtime::dockScalar(Instance& instance,const std::string& name,const Value&
     else if(name=="ack-accepted")s.ackAccepted=bool(v.integer);
     else if(name=="gap")s.gap=float(v.number);
     else if(name=="divider-hit")s.dividerHit=float(v.number);
+    else if(name=="preview-dock-text")next->dockPresentation.previewDockText=v.text;
+    else if(name=="preview-float-text")next->dockPresentation.previewFloatText=v.text;
+    else if(name=="preview-keep-text")next->dockPresentation.previewKeepText=v.text;
+    else if(name=="raise-on-press")next->dockPresentation.raiseOnPress=bool(v.integer);
+    else if(name=="float-on-drop") {
+        using F=DockWorkspacePresentation::FloatOnDrop;auto& p=next->dockPresentation;
+        if(v.text=="modifier")p.floatOnDrop=F::Modifier;
+        else if(v.text=="outside-guides")p.floatOnDrop=F::OutsideGuides;
+        else if(v.text=="never")p.floatOnDrop=F::Never;
+        else check(false,ONEUI_VIEW_TYPE,"float-on-drop must be modifier, outside-guides or never");
+    } else if(name=="float-modifier") {
+        using M=DockWorkspacePresentation::FloatModifier;auto& p=next->dockPresentation;
+        if(v.text=="alt")p.floatModifier=M::Alt;
+        else if(v.text=="shift")p.floatModifier=M::Shift;
+        else if(v.text=="ctrl")p.floatModifier=M::Control;
+        else if(v.text=="none")p.floatModifier=M::None;
+        else check(false,ONEUI_VIEW_TYPE,"float-modifier must be alt, shift, ctrl or none");
+    } else if(name=="dock-hit-mode") {
+        if(v.text=="nearest")next->dockPresentation.guideOnlyDocking=false;
+        else if(v.text=="guides")next->dockPresentation.guideOnlyDocking=true;
+        else check(false,ONEUI_VIEW_TYPE,"dock-hit-mode must be nearest or guides");
+    }
     else return false;
     if(staging)rollbacks.push_back([&instance,old]{instance.workspaceCache=old;for(auto& b:instance.bindings)b.previous.reset();});
     instance.workspaceCache=std::move(next);return true;
@@ -68,7 +90,7 @@ void Runtime::prepareDock(const std::shared_ptr<Instance>& instance,const std::v
     std::vector<std::shared_ptr<DockItemView>> items;
     for(auto& child:children){auto item=std::dynamic_pointer_cast<DockItemView>(child);check(bool(item),ONEUI_VIEW_TYPE,"DockWorkspace requires DockItem");items.push_back(item);}
     if(!instance->workspaceCache)instance->workspaceCache=std::make_shared<Instance::WorkspaceCache>();
-    auto publish=instance->element.as<DockWorkspaceView>()->prepare(instance->workspaceCache->dock,std::move(items));
+    auto publish=instance->element.as<DockWorkspaceView>()->prepare(instance->workspaceCache->dock,std::move(items),instance->workspaceCache->dockPresentation);
     if(staging&&instance->published)commits.push_back(std::move(publish));else publish();
 }
 } // namespace oneui::views

@@ -143,7 +143,7 @@ uint32_t ViewCompiler::makeTemplate(Source &s, const Node &n, const std::vector<
     // Nested bodies may have emitted outlets too; collect this owner's declarations contiguously.
     std::vector<uint32_t> owned;
     for (uint32_t i = 0; i < image.count(SLOT); ++i)
-        if (image.records[SLOT][i][0] == t && image.records[SLOT][i][3] == 0)
+        if (image.records[SLOT][i][0] == t && !(image.records[SLOT][i][3] & slotSupplied))
             owned.push_back(i);
     if (!owned.empty())
     {
@@ -162,6 +162,11 @@ Image ViewCompiler::compile(const fs::path &input, const fs::path &schema, const
     dependencies.insert(dependencies.end(), image.schema.dependencies.begin(), image.schema.dependencies.end());
     active.insert(root.path.generic_string());
     image.root = makeTemplate(root, root.root, {{"", image.schema.root}}, name);
+    for (const auto& slot : image.records[SLOT])
+        if (!(slot[3] & slotSupplied) && slot[0] == image.root && (slot[3] & slotSingleRoot) && slot[2] == none) {
+            const auto& at = image.records[SMAP][slot[6]];
+            Location{image.strings[at[0]], at[1], at[2]}.fail("SLOT_ROOT: required outlet has no caller or fallback");
+        }
     active.clear();
     // Component indices are canonical by name, independent of traversal.
     auto previous = image.components;
@@ -182,7 +187,7 @@ Image ViewCompiler::compile(const fs::path &input, const fs::path &schema, const
         {
             auto start = image.count(SLOT);
             for (uint32_t i = 0; i < old.size(); ++i)
-                if (old[i][0] == owner && old[i][3] == (kind == CALL ? 1u : 0u))
+                if (old[i][0] == owner && (old[i][3] & slotSupplied) == (kind == CALL ? slotSupplied : 0u))
                 {
                     remap[i] = image.count(SLOT);
                     image.add(SLOT, old[i]);

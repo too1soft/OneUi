@@ -1,4 +1,5 @@
 #include "component_contract.h"
+#include "legacy_component_contract.h"
 #include "oneui/ui_component_schema.h"
 #include <sstream>
 
@@ -47,6 +48,53 @@ const std::map<std::string, ComponentContract> &registry()
 #undef E
 #undef P
 #undef C
+        r.at("TimeSeriesChart").events = {{1,"inspection",{{"index",2},{"pinned",1}}}};
+        ++r.at("TimeSeriesChart").version;
+        r.at("Table").events = {
+            {1,"activate",{{"key",4}}}, {2,"edit",{{"key",4}}},
+            {3,"delete",{}}, {4,"selection",{}}, {5,"current",{{"key",4}}},
+            {6,"sort",{{"column",2}}}, {7,"cell",{{"key",4},{"column",2}}},
+            {8,"context",{{"key",4},{"x",3},{"y",3}}},
+        };
+        for (const auto *name : {"Input", "Text", "Scroll", "FontPicker", "MediaPicker"}) r.at(name).version = 2;
+        ++r.at("Text").version;
+        ++r.at("Input").version; // Explicit password mask, appended property ID 15.
+        ++r.at("Input").version; // Explicit accessible-name contract, property ID 17.
+        ++r.at("Input").version; // Placeholder visible while focused, property ID 18.
+        ++r.at("Checkbox").version; // Tooltip property ID 13.
+        ++r.at("DockWorkspace").version; // Caption and raise-on-press properties IDs 21-24.
+        ++r.at("DockWorkspace").version; // Drop policy properties IDs 25-27.
+        ++r.at("Scroll").version; // Explicit content width, appended property ID 15.
+        ++r.at("Scroll").version; // Scrollbar inset, appended property ID 16.
+        ++r.at("VirtualList").version; // Unified trailing metrics/click contract, IDs 16-18.
+        ++r.at("Scroll").version; // Viewport size event, no native layout change.
+        ++r.at("TimeSeriesChart").version; // Fill extent, property ID 26; optional series fill/dashed.
+        ++r.at("TimeSeriesChart").version; // Live scroll rate, property ID 27.
+        r.at("Scroll").events.push_back({1,"viewport-size-changed",{{"width",3},{"height",3}}});
+        ++r.at("SearchInput").version; // Optional prefix icon; absent keeps old rendering.
+        ++r.at("VirtualList").version; // Optional row selection and typed multi-selection events.
+        ++r.at("FontPicker").version;
+        // Read-only class bindings preserve static and scoped classes. Keep the
+        // reviewed extension limited to the presentation nodes that need it.
+        for (const auto *name : {"Surface", "Text", "Column", "Row"}) {
+            auto &contract = r.at(name);
+            ++contract.version;
+            for (auto &property : contract.properties)
+                if (property.name == "class") property.flags |= 2;
+        }
+        for (const auto *name : {"Surface", "Column"}) {
+            auto &contract = r.at(name);
+            ++contract.version;
+            for (auto &property : contract.properties)
+                if (property.name == "basis") property.flags |= 2;
+        }
+        ++r.at("Text").version; // Explicit line boxes, alignment and tooltip.
+        ++r.at("Button").version; // Tooltip and content alignment.
+        // Preserve frozen registry rows while separating the two menu contracts.
+        ++r.at("Menu").version;
+        for (auto &property : r.at("Menu").properties)
+            if (property.name == "items") property.record = "@native-menu.item";
+        ++r.at("Table").version; // Native table tooltip.
         // Detect authoring metadata drift before publishing a contract hash.
         // Intentional changes require a reviewed registry/version update.
         using namespace oneui::ui::schema;
@@ -65,7 +113,7 @@ const std::map<std::string, ComponentContract> &registry()
                 contract.property(name);
                 ++count;
             }
-            require(count == contract.properties.size(), "REGISTRY: property set drift");
+            require(count == contract.properties.size(), "REGISTRY: property set drift for " + contract.name);
             uint32_t previous = 0;
             for (const auto &p : contract.properties)
             {
@@ -93,12 +141,28 @@ void validateRecord(const Model& model, const std::string& projection) {
         return;
     }
     std::string fields;
-    if(projection=="@workspace.node") fields="id:4 kind:4 axis:4 ratio:3 first:4 second:4 pane:4";
+    if(projection=="@list.item") fields="id:4 title:4 detail:4";
+    else if(projection=="@native-menu.item") fields="id:4 kind:4 title:4 detail:4 icon:4 danger:1 disabled:1";
+    else if(projection=="@tree.item") fields="id:4 parent:4 title:4 detail:4 expanded:1";
+    else if(projection=="@chart.series") fields="id:4 name:4 rgba:2 values:5";
+    else if(projection=="@chart.point") fields="id:4 value:3";
+    else if(projection=="@table.row") fields="id:4 cells:5 selected:1";
+    else if(projection=="@table.cell") fields="id:4 text:4";
+    else if(projection=="@text.span") fields="id:4 start:2 end:2 rgba:2 monospace:1";
+    else if(projection=="@workspace.node") fields="id:4 kind:4 axis:4 ratio:3 first:4 second:4 pane:4";
     else if(projection=="@workspace.placement") fields="id:4 mode:4 x:3 y:3 width:3 height:3 pinned:1 order:2";
     else if(projection=="@picker.font") fields="id:4 family:4 label:4 available:1";
     else if(projection=="@picker.color") fields="id:4 rgba:2";
+    else if(projection=="@menu.item") fields="id:4 parent:4 text:4 icon:4 shortcut:4 disabled:1 checked:1 danger:1 separator:1";
     else if(projection=="@workspace.group") fields="id:4 root:4";
+    else if(projection=="@grid.column") fields="id:4 title:4 detail:4 width:3 align:2 sort:2 key:1";
+    // Row cells are a nested list of records with text:4 and classes:4.
+    else if(projection=="@grid.row") fields="id:4 number:4 classes:4 cells:5";
+    else if(projection=="@tree.node") fields="id:4 parent:4 text:4 detail:4 icon:4 badge:4 classes:4 has_children:1 expanded:1 loading:1 highlight_start:2 highlight_len:2";
+    else if(projection=="@editor.decoration") fields="id:4 start:2 end:2 kind:4 message:4";
+    else if(projection=="@completion.item") fields="id:4 label:4 kind:4 detail:4 insert:4 replace_start:2 replace_end:2";
     else if(projection=="@workspace.tab-source") fields="id:4 pane:4 enabled:1";
+    else if(projection=="@workspace.tab-decoration") fields="id:4 icon:2 rgba:2";
     else throw Error("BIND_RECORD: unknown projection "+projection);
     require(model.keyName=="id","BIND_RECORD: workspace key must be id");
     std::istringstream stream(fields);std::string field;
@@ -107,6 +171,50 @@ void validateRecord(const Model& model, const std::string& projection) {
         auto found=model.properties.find(name);
         require(found!=model.properties.end() && found->second.tag==uint32_t(field.back()-'0'),
                 "BIND_RECORD: missing or incompatible "+name);
+    }
+    if(projection=="@tree.item")
+        require((model.properties.at("expanded").access & 2)!=0,
+                "BIND_RECORD: TreeView expanded must be writable");
+    if(projection=="@table.row")
+        require((model.properties.at("selected").access & 2)!=0,
+                "BIND_RECORD: Table selected must be writable");
+}
+void validateRecord(const Schema& schema,const Model& model,const std::string& projection) {
+    validateRecord(model,projection);
+    if(projection=="@chart.series") {
+        for(const char* name:{"fill","dashed"}) {
+            const auto found=model.properties.find(name);
+            require(found==model.properties.end() || found->second.tag==1,
+                    std::string("BIND_RECORD: Chart series ")+name+" must be bool");
+        }
+        const auto& point=schema.model(model.properties.at("values").item);
+        validateRecord(point,"@chart.point");
+        auto valid=point.properties.find("valid");
+        require(valid==point.properties.end() || valid->second.tag==1,"BIND_RECORD: Chart valid must be bool");
+        return;
+    }
+    if(projection=="@grid.row") {
+        // Grid rows carry their cells as a nested record list.
+        const auto& cells=model.properties.at("cells");
+        auto& cell=cells.item ? schema.model(cells.item) : schema.model(cells.itemName);
+        for(const auto* name:{"text","classes"}) {
+            auto found=cell.properties.find(name);
+            require(found!=cell.properties.end() && found->second.tag==4,
+                    std::string("BIND_RECORD: grid cell missing or incompatible ")+name);
+        }
+        return;
+    }
+    if(projection!="@table.row")return;
+    const auto& cell=schema.model(model.properties.at("cells").item);
+    validateRecord(cell,"@table.cell");
+    const std::map<std::string,uint32_t> optional={
+        {"detail",4},{"icon",4},{"trailing_icon",4},{"foreground",2},{"indicator",2},
+        {"alignment",2},{"weight",2},{"font_size",3},{"icon_size",3},{"badge",4},
+        {"badge_foreground",2},{"badge_background",2}};
+    for(const auto& [name,tag]:optional) {
+        const auto found=cell.properties.find(name);
+        require(found==cell.properties.end() || found->second.tag==tag,
+                "BIND_RECORD: incompatible Table cell "+name);
     }
 }
 Bytes encodeComponents(const std::vector<ComponentContract> &components)
@@ -153,24 +261,7 @@ std::vector<ComponentContract> decodeComponents(const Bytes &b)
         auto known = registry().find(name);
         require(known != registry().end() && (result.empty() || result.back().name < name),
                 "BAD_IR: unknown/unsorted component");
-        auto &expected = known->second;
-        require(c.u32() == expected.version, "VERSION: component contract");
-        auto np = c.u32(), ne = c.u32();
-        require(np == expected.properties.size() && ne == expected.events.size(), "BAD_IR: component counts");
-        for (auto &p : expected.properties)
-        {
-            require(c.u32() == p.id && c.str() == p.name && c.u32() == p.tag && c.u32() == p.flags &&
-                        c.str() == p.record,
-                    "BAD_IR: component property contract");
-        }
-        for (auto &e : expected.events)
-        {
-            require(c.u32() == e.id && c.str() == e.name && c.u32() == e.args.size(), "BAD_IR: event contract");
-            for (auto &a : e.args)
-                require(c.str() == a.name && c.u32() == a.tag, "BAD_IR: event argument");
-        }
-        require(c.str() == expected.childRule && c.u32() == expected.modelProperty, "BAD_IR: child/model contract");
-        result.push_back(expected);
+        result.push_back(decodeComponentContract(c, known->second));
     }
     c.done();
     return result;
@@ -200,7 +291,7 @@ void addBuiltins(Schema &schema)
     };
     model("StringItem", "id:utf8 value:utf8");
     model("NumberItem", "id:utf8 value:f64");
-    model("TabItem", "id:utf8 title:utf8");
+    model("TabItem", "id:utf8 title:utf8"); // Decorations use a separate optional keyed projection.
     model("Row", "id:utf8 cells:StringItem");
     model("Column", "id:utf8 header:utf8 width:f64 alignment:i64 action:bool kind:i64");
     model("Series", "id:utf8 name:utf8 rgba:i64 values:NumberItem");
