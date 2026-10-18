@@ -13,10 +13,13 @@ TARGETS = ["windows-modern-x86", "windows-modern-x86_64", "windows-legacy-x86",
            "windows-legacy-x86_64", "macos-native-arm64", "linux-ubuntu24.04-x86_64"]
 
 
-def build_release(directory, records, version, channel, published_at):
+def build_release(directory, records, version, channel, published_at, targets=None):
     if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:-[a-zA-Z0-9.-]+)?", version):
         raise ValueError("Use a semantic release version")
     date.fromisoformat(published_at)
+    targets = TARGETS if targets is None else targets
+    if not targets or len(set(targets)) != len(targets) or set(targets) - set(TARGETS):
+        raise ValueError("Select explicit supported, unique release targets")
     artifacts, provenance = [], set()
     for sidecar in sorted(records.glob("artifacts-*.json")):
         for item in json.loads(sidecar.read_text(encoding="utf-8")):
@@ -37,7 +40,7 @@ def build_release(directory, records, version, channel, published_at):
                     raise ValueError("SDK target differs from packaging record")
             provenance.add((manifest["abiVersion"], manifest["sourceCommit"], manifest["sourceDirty"]))
             artifacts.append(item)
-    expected = {target + "-" + mode for target in TARGETS for mode in ("shared", "static")}
+    expected = {target + "-" + mode for target in targets for mode in ("shared", "static")}
     if {a["id"] for a in artifacts} != expected or len(artifacts) != len(expected):
         raise ValueError("Incomplete or duplicate target set")
     if len(provenance) != 1:
@@ -45,7 +48,7 @@ def build_release(directory, records, version, channel, published_at):
     abi, commit, dirty = provenance.pop()
     return dict(version=version, channel=channel, abi=abi, publishedAt=published_at,
                 docsVersion=version, sourceCommit=commit, sourceDirty=dirty,
-                notes=["Windows 四种目标、macOS arm64、Linux x86_64，分别提供动态和静态包。",
+                notes=["本版本提供：" + "、".join(targets) + "，分别提供动态和静态包；其他目标请选已有版本。",
                        "请按每个包的支持范围、验收结果和签名状态接入。",
                        "包含匹配头文件、CMake 入口、Rust 绑定、许可证及校验清单。业务项目无需编译 OneUI。"],
                 artifacts=artifacts)
@@ -70,12 +73,14 @@ def main():
     p.add_argument("--version", required=True)
     p.add_argument("--channel", choices=("stable", "preview", "experimental"), default="preview")
     p.add_argument("--published-at", default=date.today().isoformat())
+    p.add_argument("--targets", nargs="+", choices=TARGETS,
+                   help="Explicit partial release; default still requires all six targets")
     p.add_argument("--replace-unpublished", action="store_true",
                    help="Explicitly replace local candidate metadata before first distribution; never a published release")
     args = p.parse_args()
     path = args.directory / "releases.json"
     release = build_release(args.directory, args.records or args.directory,
-                            args.version, args.channel, args.published_at)
+                            args.version, args.channel, args.published_at, args.targets)
     catalog = json.loads(path.read_text(encoding="utf-8")) if path.exists() else dict(schemaVersion=1, releases=[])
     merged = merge_release(catalog, release, args.replace_unpublished)
     # Keep an atomic catalog transaction; the server validates every historical download on restart.

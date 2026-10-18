@@ -47,3 +47,6 @@ __pycache__/
 
 # Opt-in native developer report
 oneui-devtools.json
+
+# Local SDK publish target (server address and login stay off the public repo)
+website/deploy/oneui-production.json

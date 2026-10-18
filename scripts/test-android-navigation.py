@@ -11,7 +11,7 @@ from pathlib import Path
 import re
 import subprocess
 import time
-import xml.etree.ElementTree as ET
+from android_lab_device import surface_bounds
 
 PACKAGE = 'net.too1.oneui.lab'
 XML = '/data/local/tmp/oneui-lab.xml'
@@ -64,11 +64,7 @@ def main():
         raise AssertionError('Expected page to settle without ongoing frames')
 
     def area():
-        shell('uiautomator', 'dump', XML)
-        tree = ET.fromstring(shell('cat', XML))
-        node = tree.find('.//node[@class="android.view.SurfaceView"]')
-        require(node is not None, 'No visible workbench SurfaceView')
-        return tuple(map(int, re.findall(r'\d+', node.get('bounds'))))
+        return surface_bounds(shell, XML)
 
     bounds = ()
 
@@ -145,8 +141,13 @@ def main():
         time.sleep(1)
         require(status()['frames'] == frames and status()['plots']['performance/particles']['ticks'] == ticks,
                 'Background scene did not stop')
-        shell('am', 'start', '-W', '-n', PACKAGE + '/.LabActivity'); time.sleep(.5)
-        require(status()['plots']['performance/particles']['ticks'] > ticks, 'Foreground did not resume')
+        shell('am', 'start', '-W', '-n', PACKAGE + '/.LabActivity')
+        resume_deadline = time.monotonic() + 4
+        while time.monotonic() < resume_deadline:
+            state = status()
+            if state['lifecycle'] == 1 and state['plots']['performance/particles']['ticks'] > ticks: break
+            time.sleep(.1)
+        else: raise AssertionError('Foreground did not become active and resume within four seconds')
         tap('button0'); settled()
         record('background-foreground-retains-scene', ticks=ticks)
         navigate(1, 'performance/charts'); settled(); tap('button0'); time.sleep(.4)
@@ -158,10 +159,11 @@ def main():
             navigate(1, 'performance/particles'); settled()
         state = settled(); require(state['pages'] == 4 and state['page'] == particles, 'Repeated navigation grew page cache')
         record('bounded-retained-cache', rounds=8, pages=state['pages'])
+        expected_dark = 1 - state['dark']
         tap('theme'); settled()
         shell('settings', 'put', 'system', 'user_rotation', '1'); time.sleep(1)
         state = settled(); bounds = area()
-        require(state['wide'] == 1 and state['dark'] == 1 and state['page'] == particles, 'Expanded layout lost state')
+        require(state['wide'] == 1 and state['dark'] == expected_dark and state['page'] == particles, 'Expanded layout lost state')
         require('menu' not in state and 'group0' in state, 'Expanded layout needs retained sidebar')
         navigate(2, 'features/controls'); require(settled()['page'] == controls, 'Sidebar navigation failed')
         record('expanded-sidebar-dark-theme', surface=bounds)

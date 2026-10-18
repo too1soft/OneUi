@@ -1,4 +1,4 @@
-#include "mobile/workbench.hpp"
+#include "host.hpp"
 #include "oneui/mobile/widget_host.h"
 #include "platform/android/skia_surface_android.h"
 #include <android/log.h>
@@ -6,39 +6,8 @@
 #include <jni.h>
 #include <sstream>
 
-namespace {
+namespace lab::android {
 using namespace oneui;
-struct Host {
-    mobile::WidgetHost widgets;
-    mobile::SkiaSurface surface;
-    lab::mobile::Workbench workbench;
-    float scale = 1;
-    unsigned frames = 0, events = 0;
-    int error = 0;
-    Host() {
-        widgets.setTouchScrolling(true);
-        widgets.setContent(workbench.widget());
-    }
-    mobile::Runtime &runtime() { return widgets.runtime(); }
-    void activate() {
-        OneUiMobileStateV1 state{};
-        runtime().state(state);
-        workbench.setActive(state.lifecycle == ONEUI_MOBILE_ACTIVE && state.surface_available);
-    }
-    void commands() {
-        if (!workbench.hasPending())
-            return;
-        runtime().cancelPointers();
-        widgets.pumpInput();
-        workbench.flush();
-    }
-    void suspend() {
-        workbench.setActive(false);
-        runtime().setSurface(false);
-        widgets.pumpInput();
-        surface.reset();
-    }
-};
 Host *host(JNIEnv *env, jlong value) {
     auto *h = reinterpret_cast<Host *>(value);
     if (!h || h->runtime().checkThread() != ONEUI_MOBILE_OK) {
@@ -73,8 +42,38 @@ void controls(std::ostringstream &out, const std::shared_ptr<Widget> &widget, in
         for (const auto &child : view->children())
             controls(out, child, buttons, sliders);
 }
-} // namespace
+} // namespace lab::android
+using namespace lab::android;
 #define JNI_METHOD(name) Java_net_too1_oneui_lab_NativeHost_##name
+extern "C" JNIEXPORT void JNICALL JNI_METHOD(observeAppearance)(JNIEnv *env, jclass, jlong value,
+                                                                jint theme, jboolean available) {
+    if (auto *h = host(env, value)) {
+        h->error = h->workbench.appearance().observe(theme, available);
+        h->workbench.syncAppearance();
+    }
+}
+extern "C" JNIEXPORT jlongArray JNICALL JNI_METHOD(appearance)(JNIEnv *env, jclass, jlong value) {
+    auto *h = host(env, value);
+    if (!h)
+        return nullptr;
+    OneUiMobileAppearanceStateV1 s{};
+    h->workbench.appearance().state(s);
+    jlong values[] = {jlong(s.revision),    jlong(s.applied_revision),
+                      jlong(s.status_argb), jlong(s.navigation_argb),
+                      s.status_icons,       s.navigation_icons,
+                      s.effective_theme};
+    auto result = env->NewLongArray(7);
+    if (result)
+        env->SetLongArrayRegion(result, 0, 7, values);
+    return result;
+}
+extern "C" JNIEXPORT void JNICALL JNI_METHOD(acknowledgeAppearance)(JNIEnv *env, jclass,
+                                                                    jlong value, jlong revision) {
+    if (auto *h = host(env, value)) {
+        h->error = h->workbench.appearance().acknowledge(uint64_t(revision));
+        h->workbench.syncAppearance();
+    }
+}
 extern "C" JNIEXPORT jlong JNICALL JNI_METHOD(create)(JNIEnv *env, jclass) {
     try {
         return reinterpret_cast<jlong>(new Host);
@@ -85,6 +84,7 @@ extern "C" JNIEXPORT jlong JNICALL JNI_METHOD(create)(JNIEnv *env, jclass) {
 }
 extern "C" JNIEXPORT void JNICALL JNI_METHOD(destroy)(JNIEnv *env, jclass, jlong value) {
     if (auto *h = host(env, value)) {
+        h->input.reset();
         h->widgets.setContent({});
         h->workbench.setActive(false);
         h->runtime().setLifecycle(ONEUI_MOBILE_DESTROYED);
@@ -94,6 +94,8 @@ extern "C" JNIEXPORT void JNICALL JNI_METHOD(destroy)(JNIEnv *env, jclass, jlong
 extern "C" JNIEXPORT void JNICALL JNI_METHOD(lifecycle)(JNIEnv *env, jclass, jlong value,
                                                         jint state) {
     if (auto *h = host(env, value)) {
+        if (state != ONEUI_MOBILE_ACTIVE)
+            h->input.reset();
         h->error = h->runtime().setLifecycle(state);
         h->widgets.pumpInput();
         h->activate();
@@ -109,17 +111,22 @@ extern "C" JNIEXPORT jboolean JNICALL JNI_METHOD(attach)(JNIEnv *env, jclass, jl
     auto *h = host(env, value);
     if (!h)
         return false;
-    h->suspend();
+    h->workbench.setActive(false);
+    h->runtime().setSurface(false);
+    h->widgets.pumpInput();
     h->error = h->runtime().setViewport({float(width), float(height), scale, 0, 0, 0, 0, 0});
     if (h->error || !surface)
         return false;
     h->scale = scale;
+    h->reveal = true;
     h->workbench.viewport(float(width) / scale);
     if (!h->surface.attach(ANativeWindow_fromSurface(env, surface), width, height)) {
         h->error = ONEUI_MOBILE_FAILED;
         return false;
     }
     h->runtime().setSurface(true);
+    h->widgets.pumpInput();
+    h->input.restoreComposition();
     h->activate();
     __android_log_print(ANDROID_LOG_INFO, "OneUILab", "Skia Ganesh: %s",
                         h->surface.renderer().c_str());
@@ -130,12 +137,14 @@ extern "C" JNIEXPORT void JNICALL JNI_METHOD(pointer)(JNIEnv *env, jclass, jlong
                                                       jfloat pressure, jlong time) {
     if (auto *h = host(env, value)) {
         try {
+            const auto previousEditor = h->input.snapshot().session;
             h->error =
                 h->runtime().pushPointer({id, phase, kind, x, y, pressure, uint64_t(time), 0});
             if (h->error)
                 h->runtime().cancelPointers();
             h->widgets.pumpInput();
             h->commands();
+            h->reveal = h->reveal || previousEditor != h->input.snapshot().session;
             ++h->events;
         } catch (const std::exception &e) {
             fail(env, e.what());
@@ -146,6 +155,7 @@ extern "C" JNIEXPORT void JNICALL JNI_METHOD(cancel)(JNIEnv *env, jclass, jlong 
     if (auto *h = host(env, value)) {
         h->runtime().cancelPointers();
         h->widgets.pumpInput();
+        h->input.restoreComposition();
     }
 }
 extern "C" JNIEXPORT jboolean JNICALL JNI_METHOD(back)(JNIEnv *env, jclass, jlong value) {
@@ -169,14 +179,23 @@ extern "C" JNIEXPORT void JNICALL JNI_METHOD(draw)(JNIEnv *env, jclass, jlong va
     if (!h)
         return;
     try {
-        auto canvas = h->surface.begin(h->scale);
-        if (!canvas) {
-            h->error = ONEUI_MOBILE_FAILED;
-            h->suspend();
+        ++h->callbacks;
+        std::unique_ptr<Canvas> canvas;
+        h->error = h->widgets.paintWhenNeeded(
+            [&] {
+                canvas = h->surface.begin(h->scale);
+                return canvas.get();
+            },
+            uint64_t(time));
+        if (h->reveal) {
+            h->input.revealCaret();
+            h->reveal = false;
+        }
+        canvas.reset();
+        if (h->error == ONEUI_MOBILE_EMPTY) {
+            h->error = 0;
             return;
         }
-        h->error = h->widgets.paint(*canvas, uint64_t(time));
-        canvas.reset();
         if (h->error == ONEUI_MOBILE_OK && h->surface.present())
             ++h->frames;
         else {
@@ -196,12 +215,13 @@ extern "C" JNIEXPORT jstring JNICALL JNI_METHOD(status)(JNIEnv *env, jclass, jlo
     h->runtime().state(state);
     auto scroll = std::dynamic_pointer_cast<ScrollView>(h->workbench.page()->widget());
     std::ostringstream out;
-    out << "frames=" << h->frames << " events=" << h->events << " pending=" << state.needs_frame
-        << " lifecycle=" << state.lifecycle << " surface=" << state.surface_generation
-        << " error=" << h->error << " dark=" << h->workbench.dark()
-        << " scroll=" << (scroll ? scroll->scrollOffset() : 0) << " page=" << h->workbench.page()
-        << " renderer=" << h->surface.renderer() << " scale=" << h->scale
-        << " detail=" << h->surface.error();
+    out << "frames=" << h->frames << " callbacks=" << h->callbacks << " events=" << h->events
+        << " pending=" << state.needs_frame << " lifecycle=" << state.lifecycle
+        << " surface=" << state.surface_generation << " error=" << h->error
+        << " dark=" << h->workbench.dark() << " scroll=" << (scroll ? scroll->scrollOffset() : 0)
+        << " page=" << h->workbench.page() << " renderer=" << h->surface.renderer()
+        << " scale=" << h->scale << " gpuContexts=" << h->surface.contextCount()
+        << " gpuResizes=" << h->surface.resizeCount() << " detail=" << h->surface.error();
     int buttons = 0, sliders = 0;
     controls(out, h->workbench.page()->widget(), buttons, sliders);
     h->workbench.describeControls(out);

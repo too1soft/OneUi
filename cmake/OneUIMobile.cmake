@@ -7,7 +7,8 @@ else()
     set(_oneui_mobile_type STATIC)
 endif()
 add_library(oneui_mobile_runtime ${_oneui_mobile_type}
-    src/mobile/runtime.cpp src/mobile/c_api.cpp)
+    src/mobile/runtime.cpp src/mobile/c_api.cpp
+    src/mobile/appearance.cpp src/mobile/appearance_c.cpp)
 add_library(OneUI::mobile_runtime ALIAS oneui_mobile_runtime)
 find_package(Threads REQUIRED)
 target_link_libraries(oneui_mobile_runtime PUBLIC Threads::Threads)
@@ -46,7 +47,9 @@ install(TARGETS oneui_mobile_runtime EXPORT OneUIMobileTargets
     LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
     RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
 install(FILES include/oneui/mobile/c_api.h include/oneui/mobile/runtime.h
+    include/oneui/mobile/appearance.h include/oneui/mobile/appearance_c.h
     include/oneui/mobile/android.h DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/oneui/mobile")
+install(DIRECTORY platform/android/java/ DESTINATION "${CMAKE_INSTALL_DATADIR}/oneui/android/java")
 install(EXPORT OneUIMobileTargets NAMESPACE OneUI:: DESTINATION "${_oneui_mobile_package}")
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/OneUIMobileConfig.cmake"
     "${CMAKE_CURRENT_BINARY_DIR}/OneUIMobileConfigVersion.cmake"
@@ -60,4 +63,11 @@ if(BUILD_TESTING AND NOT CMAKE_CROSSCOMPILING)
     target_link_libraries(oneui_mobile_c_tests PRIVATE OneUI::mobile_runtime)
     set_target_properties(oneui_mobile_c_tests PROPERTIES LINKER_LANGUAGE CXX)
     add_test(NAME oneui_mobile_c_tests COMMAND oneui_mobile_c_tests)
+    add_executable(oneui_mobile_appearance_tests tests/mobile/appearance_tests.cpp)
+    target_link_libraries(oneui_mobile_appearance_tests PRIVATE OneUI::mobile_runtime)
+    add_test(NAME oneui_mobile_appearance_tests COMMAND oneui_mobile_appearance_tests)
+    add_executable(oneui_mobile_appearance_c_tests tests/mobile/appearance_c_tests.c)
+    target_link_libraries(oneui_mobile_appearance_c_tests PRIVATE OneUI::mobile_runtime)
+    set_target_properties(oneui_mobile_appearance_c_tests PROPERTIES LINKER_LANGUAGE CXX)
+    add_test(NAME oneui_mobile_appearance_c_tests COMMAND oneui_mobile_appearance_c_tests)
 endif()

@@ -66,7 +66,8 @@ def main():
     classes.mkdir(exist_ok=True); dex.mkdir(exist_ok=True)
     run(javac, '-encoding', 'UTF-8', '-source', '8', '-target', '8',
         '-bootclasspath', os.pathsep.join(map(str, [android, tools / 'core-lambda-stubs.jar'])),
-        '-d', classes, *sorted((source / 'java').rglob('*.java')))
+        '-d', classes, *sorted((source / 'java').rglob('*.java')),
+        *sorted((root / 'platform/android/java').rglob('*.java')))
     jar = package / 'classes.jar'
     with zipfile.ZipFile(jar, 'w', zipfile.ZIP_DEFLATED) as archive:
         for item in sorted(classes.rglob('*.class')):

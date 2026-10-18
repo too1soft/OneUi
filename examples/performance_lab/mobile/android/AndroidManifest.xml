@@ -4,7 +4,7 @@
       android:allowBackup="false" android:debuggable="true" android:extractNativeLibs="true"
       android:enableOnBackInvokedCallback="true">
     <activity android:name=".LabActivity" android:exported="true" android:launchMode="singleTop"
-        android:configChanges="orientation|screenSize|keyboardHidden">
+        android:windowSoftInputMode="adjustResize" android:configChanges="orientation|screenSize|keyboardHidden|uiMode|fontScale">
       <intent-filter>
         <action android:name="android.intent.action.MAIN" />
         <category android:name="android.intent.category.LAUNCHER" />

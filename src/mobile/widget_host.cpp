@@ -37,11 +37,14 @@ Runtime &WidgetHost::runtime() { return state_->runtime; }
 OneUiMobileResult WidgetHost::setTouchScrolling(bool enabled) {
     auto state = state_;
     const auto thread = state->runtime.checkThread();
-    if (thread != ONEUI_MOBILE_OK) return thread;
-    if (state->dispatchDepth || !state->alive) return ONEUI_MOBILE_INVALID_STATE;
+    if (thread != ONEUI_MOBILE_OK)
+        return thread;
+    if (state->dispatchDepth || !state->alive)
+        return ONEUI_MOBILE_INVALID_STATE;
     state->runtime.cancelPointers();
     pumpInput();
-    if (!state->alive) return ONEUI_MOBILE_INVALID_STATE;
+    if (!state->alive)
+        return ONEUI_MOBILE_INVALID_STATE;
     state->scroll.reset();
     state->touchScrolling = enabled;
     return ONEUI_MOBILE_OK;
@@ -104,8 +107,8 @@ OneUiMobileResult WidgetHost::pumpInput() {
             continue;
         if (event.phase == ONEUI_MOBILE_CANCEL && (event.id == -1 || event.primary)) {
             content->clearInteractionState();
-            if (state->alive)
-                content->onFocusChanged(false);
+            // Pointer cancellation (including an IME-driven Surface resize)
+            // must not blur the text editor or discard its composition.
         } else if (event.primary) {
             MouseEvent mouse{{event.x, event.y}, MouseButton::Left};
             if (event.phase == ONEUI_MOBILE_DOWN)
@@ -119,6 +122,10 @@ OneUiMobileResult WidgetHost::pumpInput() {
     return ONEUI_MOBILE_OK;
 }
 OneUiMobileResult WidgetHost::paint(Canvas &canvas, uint64_t time) {
+    return paintWhenNeeded([&canvas] { return &canvas; }, time);
+}
+OneUiMobileResult WidgetHost::paintWhenNeeded(const std::function<Canvas *()> &factory,
+                                              uint64_t time) {
     auto state = state_;
     const auto input = pumpInput();
     if (input != ONEUI_MOBILE_OK)
@@ -126,6 +133,7 @@ OneUiMobileResult WidgetHost::paint(Canvas &canvas, uint64_t time) {
     if (!state->alive)
         return ONEUI_MOBILE_INVALID_STATE;
     auto content = state->content;
+    const bool invalidated = state->runtime.dirty_;
     OneUiMobileFrameV1 frame{};
     const auto result = state->runtime.takeFrame(time, frame);
     if (result != ONEUI_MOBILE_OK || !content)
@@ -147,6 +155,8 @@ OneUiMobileResult WidgetHost::paint(Canvas &canvas, uint64_t time) {
                                        .count();
         if (content->tickAnimations(animationTime))
             state->runtime.setAnimating(true);
+        if (!invalidated && !state->runtime.dirty_)
+            return ONEUI_MOBILE_EMPTY;
         if (!state->alive)
             return ONEUI_MOBILE_INVALID_STATE;
         OneUiMobileStateV1 live{};
@@ -154,7 +164,10 @@ OneUiMobileResult WidgetHost::paint(Canvas &canvas, uint64_t time) {
         if (live.lifecycle != ONEUI_MOBILE_ACTIVE || !live.surface_available ||
             live.surface_generation != frame.surface_generation)
             return ONEUI_MOBILE_INVALID_STATE;
-        content->paint(canvas);
+        auto *canvas = factory ? factory() : nullptr;
+        if (!canvas)
+            return ONEUI_MOBILE_FAILED;
+        content->paint(*canvas);
     } catch (...) {
         state->runtime.invalidate();
         throw;

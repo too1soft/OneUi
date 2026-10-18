@@ -133,8 +133,9 @@ def main():
         require(changed['gridBottom'] <= changed['grid'][1] + changed['grid'][3] + .1 and
                 changed['slider1'][2] >= changed['gridBottom'], 'Grid overlaps the following control')
         record('touch-scroll-and-grid', scroll=changed['scroll'], columns=changed['slider1'][0])
+        expected_dark = 1 - changed['dark']
         tap(changed, 'theme'); changed = settle()
-        require(changed['dark'] == 1, 'Real OneUI theme button failed')
+        require(changed['dark'] == expected_dark, 'Real OneUI theme button failed')
         record('theme-retains-controls', page=changed['page'], gap=changed['slider0'][0], columns=changed['slider1'][0])
         initial_pss = pss()
         retained = changed
@@ -160,13 +161,13 @@ def main():
                 status()['frames'] == background['frames'], 'Background keeps drawing')
         shell('am', 'start', '-W', '-n', PACKAGE + '/.LabActivity')
         resumed = settle()
-        require(resumed['page'] == retained['page'] and resumed['scroll'] == retained['scroll'] and resumed['dark'] == 1,
+        require(resumed['page'] == retained['page'] and resumed['scroll'] == retained['scroll'] and resumed['dark'] == expected_dark,
                 'Background/resume lost page state')
         record('background-stops-and-resumes', background_frames=background['frames'], resumed_frames=resumed['frames'])
         shell('settings', 'put', 'system', 'user_rotation', '1'); time.sleep(1)
         wide = settle(); area = bounds()
         require(area[2] - area[0] > area[3] - area[1], 'Landscape geometry invalid')
-        require(wide['page'] == retained['page'] and wide['dark'] == 1 and wide['slider1'][0] == 4,
+        require(wide['page'] == retained['page'] and wide['dark'] == expected_dark and wide['slider1'][0] == 4,
                 'Rotation recreated the page model')
         require(wide['theme'][1] >= 0 and wide['theme'][1] + wide['theme'][3] <= (area[3]-area[1])/wide['scale'],
                 'Landscape footer is outside the surface')

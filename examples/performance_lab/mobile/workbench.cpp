@@ -1,8 +1,10 @@
 #include "workbench.hpp"
+#include "appearance_page.hpp"
 #include "internal/unicode.h"
 #include "mobile_snippets.hpp"
 #include "pages/page_factories.hpp"
 #include "performance_page.hpp"
+#include "text_page.hpp"
 #include <algorithm>
 #include <sstream>
 
@@ -12,10 +14,14 @@ namespace {
 class ShellView final : public View {
   public:
     Color background{245, 247, 244};
+    Color header{245, 247, 244};
     void refresh() { invalidate(); }
     std::function<void(Rect)> arrange;
     void paint(Canvas &canvas) override {
         canvas.fillRect(frame(), background);
+        auto b = frame();
+        b.height = std::min(64.f, b.height);
+        canvas.fillRect(b, header);
         View::paint(canvas);
     }
     void layoutChildren() override {
@@ -25,7 +31,7 @@ class ShellView final : public View {
 };
 bool available(const std::string &id) {
     return id == "layout/basic" || id == "features/controls" || id == "performance/charts" ||
-           id == "performance/particles";
+           id == "performance/particles" || id == "features/theme" || id == "features/text";
 }
 void touchTargets(const std::shared_ptr<Widget> &widget) {
     if (auto view = std::dynamic_pointer_cast<View>(widget)) {
@@ -125,10 +131,15 @@ void Workbench::navigate(const std::string &id) {
             created = createBasicLayoutPage();
         else if (id == "features/controls")
             created = createBasicControlsPage();
+        else if (id == "features/text")
+            created = createTextPage();
+        else if (id == "features/theme")
+            created = createAppearancePage(appearance_);
         else
             created = createPlotPage(id == "performance/particles");
         created->setTheme(dark_, false);
         touchTargets(created->widget());
+        textPageMetrics(created.get(), fontScale_, bodySize_);
         pages_.emplace(id, std::move(created));
     }
     if (pageActive_ && page())
@@ -156,8 +167,11 @@ bool Workbench::flush() {
         drawer_ = !drawer_;
         updateVisibility();
     } else if (command == "@theme") {
-        dark_ = !dark_;
-        applyTheme();
+        OneUiMobileAppearanceStateV1 state{};
+        appearance_.state(state);
+        state.options.theme_mode = dark_ ? ONEUI_MOBILE_THEME_LIGHT : ONEUI_MOBILE_THEME_DARK;
+        appearance_.setOptions(state.options);
+        syncAppearance();
     } else if (command == "@code") {
         codeOpen_ = !codeOpen_;
         updateVisibility();
@@ -224,7 +238,10 @@ void Workbench::updateVisibility() {
     std::static_pointer_cast<ShellView>(root_)->refresh();
 }
 void Workbench::arrange(Rect b) {
-    const float header = std::min(64.f, b.height), footer = std::min(64.f, b.height - header);
+    // Leave room for an editor above a landscape keyboard. Dismissing the
+    // keyboard brings the code button back into the available viewport.
+    const float header = std::min(64.f, b.height);
+    const float footer = b.height < 380 ? 0.f : std::min(64.f, b.height - header);
     const float sidebar = wide_ ? 272.f : 0.f;
     menu_->setFrame({b.x + 12, b.y + 8, 64, 48});
     title_->setFrame(
@@ -234,8 +251,8 @@ void Workbench::arrange(Rect b) {
                     std::max(0.f, b.height - header - footer)};
     content_->setFrame(body);
     code_->setFrame({body.x + 16, body.y, std::max(0.f, body.width - 32), body.height});
-    source_->setFrame(
-        {body.x + 16, b.y + b.height - footer + 8, std::max(0.f, body.width - 32), 48});
+    source_->setFrame({body.x + 16, b.y + b.height - footer + 8, std::max(0.f, body.width - 32),
+                       footer ? 48.f : 0.f});
     navigation_->setFrame({b.x, b.y + header, wide_ ? sidebar : b.width, b.height - header});
 }
 void Workbench::applyTheme() {
@@ -256,6 +273,14 @@ void Workbench::applyTheme() {
     StyleBox box;
     box.background.color = surface;
     std::static_pointer_cast<ShellView>(root_)->background = surface;
+    OneUiMobileAppearanceStateV1 state{};
+    appearance_.state(state);
+    const auto argb = state.status_argb;
+    std::static_pointer_cast<ShellView>(root_)->header =
+        Color{uint8_t(argb >> 16), uint8_t(argb >> 8), uint8_t(argb)};
+    if (state.options.custom_bar_colors)
+        title_->setColor(state.status_icons == ONEUI_MOBILE_ICONS_LIGHT ? Color{255, 255, 255}
+                                                                        : Color{0, 0, 0});
     std::static_pointer_cast<ShellView>(root_)->refresh();
     entries_->setStyleBox(box);
     navigation_->setStyleBox(box);
@@ -265,22 +290,60 @@ void Workbench::applyTheme() {
 }
 void Workbench::loadSource() {
     const char *source = current_ == "layout/basic"         ? snippets::basic_layout
+                         : current_ == "features/text"      ? snippets::text_input
+                         : current_ == "features/theme"     ? snippets::appearance
                          : current_ == "features/controls"  ? snippets::controls
                          : current_ == "performance/charts" ? snippets::charts
                                                             : snippets::particles;
-    codeText_->setText(L"C++ · 与桌面同源，已随 Android 目标编译检查。\n"
-                       L"移动宿主使用 WidgetHost::setContent；C / Rust 控件接入仍待补齐。\n\n" +
-                       unicode::fromUtf8(source));
+    codeText_->setText(
+        (current_ == "features/text"
+             ? std::wstring(
+                   L"C++ · 移动输入 SDK，已随 Android 目标编译检查。\n"
+                   L"Android EditorSurface 接入示例见移动文档；C / Rust 控件宿主仍待接入。\n\n")
+         : current_ == "features/theme"
+             ? std::wstring(L"C++ · 移动外观 SDK，已随 Android 目标编译检查。C / Rust "
+                            L"对应入口见移动端接入文档。\n\n")
+             : std::wstring(
+                   L"C++ · 与桌面同源，已随 Android 目标编译检查。\n"
+                   L"移动宿主使用 WidgetHost::setContent；C / Rust 控件接入仍待补齐。\n\n" +
+                   std::wstring{})) +
+        unicode::fromUtf8(source));
     code_->setContentHeight(1400);
     code_->setScrollOffset(0);
+}
+void Workbench::typography(float scale, float size) {
+    fontScale_ = scale;
+    bodySize_ = size;
+    for (auto &entry : pages_)
+        textPageMetrics(entry.second.get(), scale, size);
+}
+void Workbench::syncAppearance() {
+    OneUiMobileAppearanceStateV1 state{};
+    appearance_.state(state);
+    if (state.revision == appearanceRevision_ && state.applied_revision == appliedRevision_)
+        return;
+    const bool changed = state.revision != appearanceRevision_;
+    appearanceRevision_ = state.revision;
+    appliedRevision_ = state.applied_revision;
+    dark_ = state.effective_theme == ONEUI_MOBILE_THEME_DARK;
+    if (changed)
+        applyTheme();
+    for (auto &entry : pages_)
+        refreshAppearancePage(entry.second.get());
 }
 std::string Workbench::diagnostics() const {
     std::ostringstream out;
     out << " pageId=" << current_ << " pages=" << pages_.size()
         << " catalog=" << pageCatalog().size() << " drawer=" << drawer_ << " wide=" << wide_
         << " code=" << codeOpen_ << " activePage=" << pageActive_;
+    OneUiMobileAppearanceStateV1 state{};
+    appearance_.state(state);
+    out << " systemTheme=" << state.system_theme << " themeMode=" << state.options.theme_mode
+        << " appearanceRevision=" << state.revision
+        << " appliedRevision=" << state.applied_revision;
     for (const auto &entry : pages_) {
-        const auto detail = plotDiagnostics(entry.second.get());
+        const auto detail =
+            plotDiagnostics(entry.second.get()) + textPageDiagnostics(entry.second.get());
         if (!detail.empty())
             out << " retained[" << entry.first << "]{" << detail << " }";
     }

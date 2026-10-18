@@ -14,6 +14,7 @@ def main():
     parser.add_argument("--packages", type=Path, required=True)
     parser.add_argument("--work", type=Path, required=True)
     parser.add_argument("--target", required=True)
+    parser.add_argument("--version", help="Select an immutable version when historical packages coexist")
     parser.add_argument("--cmake", default="cmake")
     parser.add_argument("--report", type=Path, required=True)
     args = parser.parse_args()
@@ -27,7 +28,8 @@ def main():
     args.report.parent.mkdir(parents=True, exist_ok=True)
     with log_path.open("w", encoding="utf-8") as log:
         for linkage in ("shared", "static"):
-            package = list(args.packages.glob("*-" + args.target + "-" + linkage + ".zip"))
+            prefix = "oneui-" + args.version if args.version else "*"
+            package = list(args.packages.glob(prefix + "-" + args.target + "-" + linkage + ".zip"))
             if len(package) != 1:
                 raise ValueError("Expected exactly one versioned package per target")
             if root.exists():
