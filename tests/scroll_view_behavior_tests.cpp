@@ -416,6 +416,74 @@ void testHorizontalThumbDragUpdatesAndClampsOffset() {
     expectNear("ScrollView horizontal thumb drag clamps start", scroll.horizontalScrollOffset(), 0.0f);
 }
 
+void testVerticalThumbDragUpdatesAndClampsOffset() {
+    auto content = std::make_shared<LayoutProbe>(oneui::Size{0.0f, 0.0f});
+    oneui::ScrollView scroll;
+    // Viewport 100 tall, content 400: thumb 25 tall, inset 5 -> travel 65, max 300.
+    scroll.setFrame(oneui::Rect{10.0f, 20.0f, 100.0f, 100.0f});
+    scroll.setContent(content);
+    scroll.setContentHeight(400.0f);
+    scroll.setScrollbarStyle(oneui::Color{1, 2, 3, 255}, 3.0f);
+
+    // The painted thumb is 3px wide at x 102..105; press 4px to its left,
+    // still inside the 13px gutter, near the thumb's top.
+    expectEqual("ScrollView vertical gutter press grabs the thumb",
+                scroll.onMouseDown(oneui::MouseEvent{oneui::Point{98.0f, 30.0f}, oneui::MouseButton::Left}) ? 1 : 0,
+                1);
+    scroll.onMouseMove(oneui::MouseEvent{oneui::Point{98.0f, 30.0f + 32.5f}});
+    expectNear("ScrollView vertical thumb drag maps track travel to offset", scroll.scrollOffset(), 150.0f);
+    scroll.onMouseMove(oneui::MouseEvent{oneui::Point{98.0f, 500.0f}});
+    expectNear("ScrollView vertical thumb drag clamps end", scroll.scrollOffset(), 300.0f);
+    expectEqual("ScrollView vertical thumb release handled",
+                scroll.onMouseUp(oneui::MouseEvent{oneui::Point{98.0f, 500.0f}, oneui::MouseButton::Left}) ? 1 : 0,
+                1);
+    scroll.onMouseMove(oneui::MouseEvent{oneui::Point{98.0f, 30.0f}});
+    expectNear("ScrollView vertical drag ends on release", scroll.scrollOffset(), 300.0f);
+}
+
+void testVerticalTrackClickPagesByOneViewport() {
+    auto content = std::make_shared<LayoutProbe>(oneui::Size{0.0f, 0.0f});
+    oneui::ScrollView scroll;
+    scroll.setFrame(oneui::Rect{10.0f, 20.0f, 100.0f, 100.0f});
+    scroll.setContent(content);
+    scroll.setContentHeight(400.0f);
+
+    // Below the thumb (thumb occupies y 25..50 at offset 0).
+    scroll.onMouseDown(oneui::MouseEvent{oneui::Point{105.0f, 110.0f}, oneui::MouseButton::Left});
+    scroll.onMouseUp(oneui::MouseEvent{oneui::Point{105.0f, 110.0f}, oneui::MouseButton::Left});
+    expectNear("ScrollView track click below the thumb pages down", scroll.scrollOffset(), 100.0f);
+    scroll.onMouseDown(oneui::MouseEvent{oneui::Point{105.0f, 22.0f}, oneui::MouseButton::Left});
+    scroll.onMouseUp(oneui::MouseEvent{oneui::Point{105.0f, 22.0f}, oneui::MouseButton::Left});
+    expectNear("ScrollView track click above the thumb pages up", scroll.scrollOffset(), 0.0f);
+}
+
+void testUnchangedContentHeightKeepsWheelMotion() {
+    auto content = std::make_shared<LayoutProbe>(oneui::Size{0.0f, 0.0f});
+    oneui::ScrollView scroll;
+    scroll.setFrame(oneui::Rect{0.0f, 0.0f, 120.0f, 100.0f});
+    scroll.setContent(content);
+    scroll.setContentHeight(600.0f);
+    scroll.setWheelStep(40.0f);
+
+    scroll.onMouseWheel(wheelEvent(-3.0f, 1000.0));
+    scroll.tickAnimations(1008.0);
+    // A binding refresh re-applies the same height while the wheel animates.
+    scroll.setContentHeight(600.0f);
+    scroll.tickAnimations(1.0e15);
+    expectNear("ScrollView wheel target survives an unchanged content height", scroll.scrollOffset(), 120.0f);
+
+    // A real change that keeps the offset in range also keeps the motion.
+    scroll.onMouseWheel(wheelEvent(-2.0f, 2000.0));
+    scroll.tickAnimations(2008.0);
+    scroll.setContentHeight(700.0f);
+    scroll.tickAnimations(1.0e15);
+    expectNear("ScrollView wheel target survives a growing content height", scroll.scrollOffset(), 200.0f);
+
+    // Shrinking below the current offset still clamps.
+    scroll.setContentHeight(150.0f);
+    expectNear("ScrollView shrinking content clamps the offset", scroll.scrollOffset(), 50.0f);
+}
+
 void testChromeAndScrollbarStyleCanBeCustomized() {
     auto content = std::make_shared<LayoutProbe>(oneui::Size{0.0f, 0.0f});
     oneui::ScrollView scroll;
@@ -469,6 +537,9 @@ int main() {
     testHorizontalOffsetAppliesToContentLayout();
     testHorizontalThumbPaintsWhenContentOverflows();
     testHorizontalThumbDragUpdatesAndClampsOffset();
+    testVerticalThumbDragUpdatesAndClampsOffset();
+    testVerticalTrackClickPagesByOneViewport();
+    testUnchangedContentHeightKeepsWheelMotion();
     testChromeAndScrollbarStyleCanBeCustomized();
     testCssStyleBoxPaintsWhenDefaultChromeIsHidden();
 

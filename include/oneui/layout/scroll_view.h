@@ -46,6 +46,9 @@ private:
     void resetInteractionState() override;
     Rect horizontalThumbRect() const;
     Rect verticalThumbRect() const;
+    // Pointer target for the vertical scrollbar: the full track height and
+    // the whole reserved gutter width, so a thin painted thumb stays easy to grab.
+    Rect verticalScrollbarHitRect() const;
     float resolvedContentWidth() const;
     float resolvedContentHeight() const;
     float clampHorizontalOffset(float offset) const;
@@ -73,6 +76,9 @@ private:
     bool draggingHorizontalThumb_ = false;
     float dragStartX_ = 0.0f;
     float dragStartHorizontalOffset_ = 0.0f;
+    bool draggingVerticalThumb_ = false;
+    float dragStartY_ = 0.0f;
+    float dragStartVerticalOffset_ = 0.0f;
 };
 
 } // namespace oneui

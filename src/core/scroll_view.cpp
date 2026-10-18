@@ -41,9 +41,18 @@ void ScrollView::setContentWidth(float width) {
 }
 
 void ScrollView::setContentHeight(float height) {
-    contentHeight_ = std::max(0.0f, height);
-    scrollOffset_ = clampOffset(scrollOffset_);
-    resetScrollMotion(scrollOffset_);
+    const float next = std::max(0.0f, height);
+    // Declarative bindings re-apply an unchanged height on unrelated refreshes;
+    // that must not cancel a wheel scroll that is still animating.
+    if (std::fabs(next - contentHeight_) <= 0.001f) {
+        return;
+    }
+    contentHeight_ = next;
+    const float clamped = clampOffset(scrollOffset_);
+    if (std::fabs(clamped - scrollOffset_) > 0.001f || !scrollMotion_.running()) {
+        scrollOffset_ = clamped;
+        resetScrollMotion(scrollOffset_);
+    }
     invalidate();
 }
 
@@ -155,6 +164,20 @@ bool ScrollView::onMouseMove(const MouseEvent& event) {
         return false;
     }
 
+    if (draggingVerticalThumb_) {
+        const Rect viewport = viewportRect();
+        const Rect thumb = verticalThumbRect();
+        const float trackTravel = std::max(0.0f, viewport.height - thumb.height - scrollbarInset_ * 2.0f);
+        const float maxOffset = maxScrollOffset();
+        if (trackTravel <= 0.001f || maxOffset <= 0.001f) {
+            return true;
+        }
+        const float delta = event.position.y - dragStartY_;
+        setScrollOffset(dragStartVerticalOffset_ + delta / trackTravel * maxOffset);
+        // The drag owns the pointer until release, even when the offset is clamped.
+        return true;
+    }
+
     if (!draggingHorizontalThumb_) {
         return View::onMouseMove(event);
     }
@@ -185,6 +208,21 @@ bool ScrollView::onMouseDown(const MouseEvent& event) {
         return false;
     }
 
+    if (event.button == MouseButton::Left && hasVerticalOverflow()
+        && verticalScrollbarHitRect().contains(event.position)) {
+        const Rect thumb = verticalThumbRect();
+        if (event.position.y >= thumb.y && event.position.y <= thumb.y + thumb.height) {
+            draggingVerticalThumb_ = true;
+            dragStartY_ = event.position.y;
+            dragStartVerticalOffset_ = scrollOffset_;
+        } else {
+            // A click on the track pages by one viewport toward the click.
+            const float page = viewportRect().height;
+            setScrollOffset(scrollOffset_ + (event.position.y < thumb.y ? -page : page));
+        }
+        return true;
+    }
+
     if (hasHorizontalOverflow() && horizontalThumbRect().contains(event.position)) {
         draggingHorizontalThumb_ = true;
         dragStartX_ = event.position.x;
@@ -205,6 +243,10 @@ bool ScrollView::onMouseDown(const MouseEvent& event) {
 }
 
 bool ScrollView::onMouseUp(const MouseEvent& event) {
+    if (draggingVerticalThumb_) {
+        draggingVerticalThumb_ = false;
+        return true;
+    }
     if (draggingHorizontalThumb_) {
         (void)event;
         draggingHorizontalThumb_ = false;
@@ -369,6 +411,18 @@ void ScrollView::layoutChildren() {
 void ScrollView::resetInteractionState() {
     View::resetInteractionState();
     draggingHorizontalThumb_ = false;
+    draggingVerticalThumb_ = false;
+}
+
+Rect ScrollView::verticalScrollbarHitRect() const {
+    if (!hasVerticalOverflow()) {
+        return Rect{};
+    }
+    // The content already leaves this gutter free (see layoutChildren), so
+    // the wider target never steals presses from the content.
+    const Rect viewport = viewportRect();
+    const float width = std::max(10.0f, scrollbarThickness_ + scrollbarInset_ * 2.0f);
+    return Rect{viewport.x + viewport.width - width, viewport.y, width, viewport.height};
 }
 
 Rect ScrollView::horizontalThumbRect() const {
