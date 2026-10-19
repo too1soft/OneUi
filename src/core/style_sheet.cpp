@@ -20,6 +20,7 @@ void StyleSheet::addRule(StyleRule rule) {
     rules_.push_back(std::move(rule));
     selectors_.push_back(std::move(compiled));
     resolveCache_.clear();
+    layoutCache_.clear();
     ++version_;
 }
 
@@ -30,6 +31,7 @@ void StyleSheet::setCustomProperty(std::string name, std::string value) {
     }
     customProperties_[std::move(name)] = trim(std::move(value));
     resolveCache_.clear();
+    layoutCache_.clear();
     ++version_;
 }
 

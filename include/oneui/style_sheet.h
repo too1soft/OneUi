@@ -166,6 +166,9 @@ private:
     std::vector<CompiledSelector> selectors_;
     std::map<std::string, std::string> customProperties_;
     mutable std::unordered_map<std::string, StyleBox> resolveCache_;
+    // Declarative mounts re-resolve base layouts on every flush; cache them
+    // under the same key and invalidation as resolveCache_.
+    mutable std::unordered_map<std::string, StyleLayout> layoutCache_;
     std::size_t version_ = 0;
 };
 

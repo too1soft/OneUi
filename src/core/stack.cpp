@@ -24,6 +24,7 @@ Rect Stack::paintBounds() const {
 Stack::Stack(StackDirection direction) : direction_(direction) {}
 
 void Stack::setDirection(StackDirection direction) {
+    if (direction_ == direction) return;
     direction_ = direction;
     invalidate();
 }
@@ -56,6 +57,15 @@ void Stack::setFlex(const std::shared_ptr<Widget>& child, StackFlex flex) {
     flex.min = nonnegative(flex.min);
     flex.max = std::isnan(flex.max) ? flex.min : std::max(flex.min, flex.max);
     if (flex.basis) flex.basis = nonnegative(*flex.basis);
+    // Style replay sets the same flex on every flush; only a change relayouts.
+    if (auto it = flex_.find(child); it != flex_.end()) {
+        const auto& old = it->second;
+        if (old.grow == flex.grow && old.shrink == flex.shrink && old.basis == flex.basis &&
+            old.min == flex.min && old.max == flex.max && old.contentBasis == flex.contentBasis &&
+            old.width == flex.width && old.height == flex.height &&
+            old.minWidth == flex.minWidth && old.minHeight == flex.minHeight)
+            return;
+    }
     flex_[child] = flex;
     invalidate();
 }

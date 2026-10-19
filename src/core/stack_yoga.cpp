@@ -26,6 +26,7 @@ bool Stack::setEngine(StackEngine engine) {
 
 bool Stack::setWrap(bool enabled) {
     if (enabled && engine_ != StackEngine::Yoga) return false;
+    if (wrap_ == enabled) return true;
     wrap_ = enabled;
     invalidate();
     return true;
