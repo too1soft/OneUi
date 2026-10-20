@@ -1,0 +1,17 @@
+[package]
+name = "windows-compat"
+version = "0.2.0"
+edition = "2021"
+rust-version = "1.91"
+license = "MIT"
+description = "Locked Windows identity and support policy; no third-party runtime DLLs"
+
+[lib]
+path = "src/lib.rs"
+
+[features]
+contracts = ["dep:serde", "dep:serde_json"]
+
+[dependencies]
+serde = {version = "=1.0.229", optional = true}
+serde_json = {version = "=1.0.151", optional = true}
