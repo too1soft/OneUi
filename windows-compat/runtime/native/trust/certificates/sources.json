@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "bundleVersion": "2026-09-14-r1",
+  "scope": "process-local-authenticode-only",
+  "certificates": [
+    {
+      "symbol": "certum_root",
+      "file": "certum-trusted-network-ca-2.der",
+      "url": "https://repository.certum.pl/ctnca2.cer",
+      "sha256": "b676f2eddae8775cd36cb0f63cd1d4603961f49e6265ba013a2f0307b6d0b804",
+      "sha1FingerprintForIdentificationOnly": "D3DD483E2BBF4C05E8AF10F5FA7626CFD3DC3092"
+    },
+    {
+      "symbol": "digicert_root",
+      "file": "digicert-trusted-root-g4.der",
+      "url": "https://cacerts.digicert.com/DigiCertTrustedRootG4.crt",
+      "sha256": "552f7bdcf1a7af9e6ce672017f4f12abf77240c78e761ac203d1d9d20ac89988",
+      "sha1FingerprintForIdentificationOnly": "DDFB16CD4931C973A2037D3FC83A4D7D775D05E4"
+    }
+  ]
+}

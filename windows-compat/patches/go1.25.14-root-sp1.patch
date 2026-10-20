@@ -1,0 +1,41 @@
+diff --git a/src/internal/syscall/windows/at_windows.go b/src/internal/syscall/windows/at_windows.go
+index f654e03..7e00602 100644
+--- a/src/internal/syscall/windows/at_windows.go
++++ b/src/internal/syscall/windows/at_windows.go
+@@ -120,6 +120,36 @@ func Openat(dirfd syscall.Handle, name string, flag uint64, perm uint32) (_ sysc
+ 		nil,
+ 		0,
+ 	)
++	// Original Windows 7 SP1 rejects OBJ_DONT_REPARSE. Keep the
++	// handle-relative boundary: Root walks one component at a time. Open the
++	// component itself, then inspect that SAME handle before truncating or
++	// returning it. Never resolve a path and reopen it (a junction swap could
++	// otherwise escape Root). Unknown/multi-component callers fail closed.
++	if err == STATUS_INVALID_PARAMETER && flag&O_NOFOLLOW_ANY != 0 {
++		if name == ".." {
++			return syscall.InvalidHandle, syscall.ELOOP
++		}
++		for _, c := range name {
++			if c == '\\' || c == '/' || c == ':' {
++				return syscall.InvalidHandle, syscall.ELOOP
++			}
++		}
++		objAttrs.Attributes &^= OBJ_DONT_REPARSE
++		err = NtCreateFile(&h, SYNCHRONIZE|access, objAttrs, &IO_STATUS_BLOCK{}, nil,
++			fileAttrs, FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE, disposition,
++			FILE_SYNCHRONOUS_IO_NONALERT|FILE_OPEN_FOR_BACKUP_INTENT|FILE_OPEN_REPARSE_POINT|options, nil, 0)
++		if err == nil && flag&O_OPEN_REPARSE == 0 {
++			var info syscall.ByHandleFileInformation
++			if e := syscall.GetFileInformationByHandle(h, &info); e != nil {
++				syscall.CloseHandle(h)
++				return syscall.InvalidHandle, e
++			}
++			if info.FileAttributes&syscall.FILE_ATTRIBUTE_REPARSE_POINT != 0 {
++				syscall.CloseHandle(h)
++				return syscall.InvalidHandle, syscall.ELOOP
++			}
++		}
++	}
+ 	if err != nil {
+ 		return h, ntCreateFileError(err, flag)
+ 	}
