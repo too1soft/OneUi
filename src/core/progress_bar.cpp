@@ -157,6 +157,10 @@ void ProgressBar::paint(Canvas& canvas) {
     canvas.fillRect(rect, style.trackBackground, style.radius);
     const Color fill = disabled() ? style.disabledFill : style.fill;
     if (indeterminate_) {
+        // The animated segment starts and ends outside its track. A parent
+        // layout does not necessarily clip its children to their frames.
+        canvas.save();
+        canvas.clipRect(rect);
         const float fraction = 0.28f;
         const float position = static_cast<float>(indeterminatePhase_);
         if (rect.height > rect.width * 1.5f) {
@@ -170,6 +174,7 @@ void ProgressBar::paint(Canvas& canvas) {
             const float x = rect.x - fillWidth + travel * position;
             canvas.fillRect(Rect{x, rect.y, fillWidth, rect.height}, fill, style.radius);
         }
+        canvas.restore();
         return;
     }
     if (progress <= 0.0f) {

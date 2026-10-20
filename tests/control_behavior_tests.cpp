@@ -4087,6 +4087,19 @@ void testTableRichDetailsAndCellActions() {
     expectEqual("Table disabled action does not run",calls,2);
 }
 
+void testBusyProgressClipsItsTrack() {
+    for (const auto frame : {oneui::Rect{37, 41, 200, 10}, oneui::Rect{37, 41, 10, 200}}) {
+        oneui::ProgressBar progress;
+        progress.setFrame(frame);
+        progress.setIndeterminate(true);
+        RecordingCanvas canvas;
+        progress.paint(canvas);
+        expectEqual("Animated leading edge is clipped", static_cast<int>(canvas.clips.size()), 1);
+        if (!canvas.clips.empty()) expectRect("Busy clip respects track orientation", canvas.clips[0], frame);
+        expectEqual("Busy paint balances canvas state", canvas.saves, canvas.restores);
+    }
+}
+
 void testProgressBarSegmentBoundsAndValidation() {
     oneui::ProgressBar bar;
     bar.setFrame({0,0,200,4});
@@ -8299,6 +8312,7 @@ int main() {
     testTableRichCellsAndColumnDividerVisibility();
     testWidgetSizeObserverUsesCommittedGeometryAndStableChildren();
     testTableRichDetailsAndCellActions();
+    testBusyProgressClipsItsTrack();
     testProgressBarSegmentBoundsAndValidation();
     testTableEmptyStyleOverrideKeepsDefaultPaint();
     testTableDisabledStyleAndClearRestoresDefault();
