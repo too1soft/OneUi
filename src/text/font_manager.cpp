@@ -69,10 +69,10 @@ sk_sp<SkTypeface> makeTypefaceFromData(sk_sp<SkData> data) {
     auto platform = makePlatformFontManager();
     auto face = platform ? platform->makeFromData(data) : nullptr;
 #if defined(ONEUI_PORTABLE_FONT_LOADER)
-    // Win7 DirectWrite can open a variable font while silently ignoring its
-    // axes. That leaves every requested weight at the default (often 100).
-    // Use the existing FreeType closure when it exposes axes the native
-    // backend cannot see; retain native rendering for supported static fonts.
+    // Some native backends cannot open application fonts; Win7 DirectWrite
+    // can also open a variable font while ignoring all of its axes, leaving
+    // every requested weight at the default (often 100). Prefer the existing
+    // FreeType loader only for missing faces or missing variation support.
     if (!face || face->getVariationDesignParameters({}) <= 0) {
         auto portable = SkFontMgr_New_Custom_Empty();
         auto portableFace = portable ? portable->makeFromData(std::move(data)) : nullptr;
