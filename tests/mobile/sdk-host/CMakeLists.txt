@@ -46,3 +46,12 @@ target_include_directories(oneui_mobile_layout_tests PRIVATE
     "${_root}/examples/performance_lab")
 target_link_libraries(oneui_mobile_layout_tests PRIVATE ${_libraries} ${_system})
 add_test(NAME oneui_mobile_layout_tests COMMAND oneui_mobile_layout_tests)
+
+add_executable(oneui_mobile_text_tests ../text_input_tests.cpp ../selection_tests.cpp "${_root}/src/mobile/text_input.cpp")
+target_compile_features(oneui_mobile_text_tests PRIVATE cxx_std_17)
+target_compile_options(oneui_mobile_text_tests PRIVATE /utf-8)
+target_compile_definitions(oneui_mobile_text_tests PRIVATE ONEUI_STATIC ONEUI_MOBILE_STATIC)
+set_property(TARGET oneui_mobile_text_tests PROPERTY MSVC_RUNTIME_LIBRARY MultiThreaded)
+target_include_directories(oneui_mobile_text_tests PRIVATE "${ONEUI_SDK_DIR}/include" "${_root}/include")
+target_link_libraries(oneui_mobile_text_tests PRIVATE ${_libraries} ${_system})
+add_test(NAME oneui_mobile_text_tests COMMAND oneui_mobile_text_tests)

@@ -2,6 +2,7 @@
 //! are implied. Native hosts drive lifecycle, surface availability and frame time.
 //! A Runtime is UI-thread confined and cannot be sent or shared across threads.
 mod ffi;
+pub mod appearance;
 pub use ffi::{Frame, Viewport};
 use std::{ffi::c_void, marker::PhantomData, ptr::NonNull, rc::Rc};
 

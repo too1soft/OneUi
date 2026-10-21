@@ -1,0 +1,15 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="net.too1.oneui.inputtests">
+  <application android:label="OneUI input protocol fixture" android:allowBackup="false">
+    <service android:name="net.too1.oneui.inputtests.TestKeyboard" android:label="OneUI test keyboard"
+        android:permission="android.permission.BIND_INPUT_METHOD" android:exported="true">
+      <intent-filter><action android:name="android.view.InputMethod" /></intent-filter>
+      <meta-data android:name="android.view.im" android:resource="@xml/method" />
+    </service>
+  </application>
+  <instrumentation android:name="net.too1.oneui.inputtests.InputProtocol"
+      android:targetPackage="net.too1.oneui.lab" android:functionalTest="true" />
+  <instrumentation android:name="net.too1.oneui.inputtests.MenuInspector"
+      android:targetPackage="net.too1.oneui.lab" android:functionalTest="true" />
+  <instrumentation android:name="net.too1.oneui.inputtests.SelectionProtocol"
+      android:targetPackage="net.too1.oneui.lab" android:functionalTest="true" />
+</manifest>

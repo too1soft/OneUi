@@ -1,6 +1,6 @@
 # OneUI 移动端支持
 
-状态：**Android 已接入共享 Skia GPU 控件、两级导航及基础布局／基础控件／图表／粒子四种页面体验；完整移动试验台及 SDK 仍在开发，尚不可正式发布。**
+状态：**Android 已接入共享 Skia GPU 控件、两级导航、基础布局／基础控件／图表／粒子，以及系统主题、系统栏外观、普通文字输入和输入页字号体验；完整移动试验台及 SDK 仍在开发，尚不可正式发布。**
 
 用户已决定推进 Android、iOS 和原生 HarmonyOS 支持。已有桌面 SDK 和官网
 `0.1.0-preview.1` 下载包没有加入移动能力，也没有被本轮源码变更覆盖。
@@ -99,6 +99,57 @@ PC 尚未完成的迁移或语言入口应保留为缺项，不能据此降低�
 执行顺序保持公共层 → Android 完整试验台 → iOS / 原生 HarmonyOS 同一目录对齐。
 阶段性测试记录继续有效，但只能证明其明示范围；最终完成以 MLAB-A1～A8 为准。
 
+### 基础能力优先级
+
+按用户最新方向，先补齐影响所有页面的宿主能力，再继续页面迁移：
+
+| 能力 | 当前 Android 状态 | 后续验收 |
+|---|---|---|
+| 系统深浅色、应用跟随/覆盖、状态栏/导航栏外观 | 公共 C++/C/Rust 接口及 Android 适配已接入；API 36 模拟器通过 | 最低系统和 ARM64 真机；iOS/HarmonyOS 适配未实现 |
+| 安全区域、系统返回、前后台与 Surface 重建 | 现有宿主回归已覆盖，并纳入外观回归 | 平板/多窗口、键盘避让、进程被终止后的业务恢复 |
+| IME、文本选区、系统字号与无障碍 | 部分实现 | 普通输入、组合协议与输入页字号已接；普通字段手柄已接；候选窗/读屏/全目录字号待补 |
+| 权限、剪贴板/文件/分享、通知唤起 | 移动端未完成 | 原生权限允许/拒绝/取消、后台限制及唤起 |
+| 相机、传感器、支付 | 移动端未实现 | 后续按实际平台和服务商分别接入 |
+
+此顺序不取消 PC 对齐清单。移动系统缺少的托盘等能力仍须明确报告限制，不伪造桌面行为。
+
+### 外观 SDK 与 Android 系统栏
+
+- 公共接口：[C++ Appearance](../include/oneui/mobile/appearance.h)、
+  [版本化 C ABI](../include/oneui/mobile/appearance_c.h)、
+  [安全 Rust 包装](../bindings/rust/oneui-mobile/src/appearance.rs)。旧 Runtime V1 结构和桌面 ABI 43 不变。
+- 分开读取 `system_theme` 与 `effective_theme`：固定深色不改变系统的真实主题值。
+  默认跟随系统；未知系统主题明确返回 0，界面回退浅色；不擅自更改设备设置。
+- `setOptions` 仅接受请求。没有连接原生宿主时 `host_available=0`；
+  接入层成功应用后才确认当前 `revision`，`applied_revision` 不代表 GPU 已呈现。
+  相同状态不产生新版本，没有查询定时器；所有调用与销毁限创建线程。
+- 每栏独立的不透明 `0xAARRGGBB` 背景色，图标支持自动/浅色/深色；自动按相对亮度选择对比度。
+  非法枚举、透明色被原子拒绝，保留原样式。当前不提供隐藏系统栏和内容穿透的全屏接口。
+- Android 可复用的接入层是
+  [SystemAppearance.java](../platform/android/java/net/too1/oneui/SystemAppearance.java)，
+  安装到 SDK `share/oneui/android/java`。Activity 把 Surface 放入 `content()`，
+  首次启动、配置变化和恢复前台时把 `systemTheme()` 交给 C++ `observe`；
+  读取已解析的颜色/图标调用 `apply`，成功后确认相同 revision。
+  此 Java 类不持有 C++ 裸指针；具体 JNI 连接示例见 `mobile/android/host.cpp` 和 `LabActivity.java`。
+- Android 15+ edge-to-edge 下，在透明系统栏后绘制真实保护背景，设置实际系统图标样式。
+  状态栏、导航栏、刘海、横屏侧边安全区仅扣减一次；Surface 已位于安全区内，
+  C++ viewport 边距传零。应用内标题区由 OneUI 控件绘制，示例将其与顶部颜色同步，
+  不是系统窗口标题栏。[Android 官方说明](https://developer.android.com/develop/ui/views/layout/edge-to-edge-manually)
+- `features/theme` 的六个按钮提供跟随/浅色/深色与三套配色；页面展示系统主题、应用模式与接入结果。
+  切页、旋转、前后台和 Surface 重建保留状态；进程退出后默认跟随系统。
+  语言切换、系统字号、主题持久化尚未接入，不能将该页算作完整通过。
+
+真实、参与编译的接入示例：
+[C++](../examples/performance_lab/mobile/appearance_snippet.cpp)、
+[C](../tests/mobile/appearance_c_tests.c)、
+[Rust](../bindings/rust/oneui-mobile/tests/appearance.rs)。原生宿主同样需要接入，不能只创建公共状态对象便宣称具备系统服务。
+
+自动验证：公共构建新增 `oneui_mobile_appearance_tests`、`oneui_mobile_appearance_c_tests`；
+Rust 增加外观行为及不可跨线程的 compile-fail 检查；
+`scripts/test-android-appearance.py --adb <adb> --serial emulator-5554`
+通过真实触摸、系统夜间模式和截图像素核对外观、安全区域、旋转/后台/Surface 与空闲停绘。
+脚本恢复设备夜间模式及旋转设置，覆盖固定报告 `out/mobile-current/android-appearance-test.json`。
+
 ## 当前源码
 
 - `include/oneui/mobile/c_api.h`：独立移动 ABI 1，旧桌面 ABI 43 及结构布局不变。
@@ -163,7 +214,7 @@ cmake -S . -B out/mobile-current/android-arm64-v8a \
 cmake --build out/mobile-current/android-arm64-v8a
 ```
 
-上述命令仅生成原生基础库。实际 GPU 控件使用下文的 Android 试验台构建选项；输入法宿主仍未完成。
+上述命令仅生成原生基础库。实际 GPU 控件使用下文的 Android 试验台构建选项；普通输入已使用独立 TextInputSession/EditorSurface 接入，完整 IME 验收仍未完成。
 `android-24` 是此阶段的配置示例，尚未经过最低系统真机认证。
 iOS / OHOS 工具链同样只能使用 `ONEUI_MOBILE_RUNTIME_ONLY=ON` 构建公共层；
 完整 SDK 配置会明确报错，防止错误地链接 Cocoa 或 Linux X11/GTK。
@@ -262,8 +313,8 @@ OneUI 复用 `out/mobile-current/android-x86_64`，通过 `ONEUI_BUILD_ANDROID_L
 
 `examples/performance_lab/mobile/workbench.*` 从 PC 的 `pageCatalog()` 读取完整 27 项目录。
 手机使用可滚动的两级目录，内容宽度达到 840 逻辑像素后保留侧栏；判定依据为当前 Surface
-宽度，不判断设备型号。未接入的 23 项显示“待接入”且禁用，不创建空白页面冒充实现。
-四种实际体验仍需完成各自能力组与移动原生验收，不能把“四个入口已接入”计作最终完成四页。
+宽度，不判断设备型号。未接入的 21 项显示“待接入”且禁用，不创建空白页面冒充实现。
+六种实际体验仍需完成各自能力组与移动原生验收，不能把入口已接入计作整页完成。
 
 | 已接入 ID | 真实实现与本阶段边界 |
 |---|---|
@@ -271,6 +322,8 @@ OneUI 复用 `out/mobile-current/android-x86_64`，通过 `ONEUI_BUILD_ANDROID_L
 | `features/controls` | 从 PC 控件页抽出同一 `createBasicControlsPage`；按钮、禁用、勾选、开关、单选、选择、滑块与进度；完整能力组验收仍待补齐 |
 | `performance/charts` | 复用 `plots.hpp` 的三条曲线及 360 / 1200 / 4000 点档位；开始／暂停、切换负载 |
 | `performance/particles` | 同源 500 / 2500 / 10000 粒子和五种路径；Android mesh 实验路径未启用，明确回退到批量绘制 |
+| `features/theme` | 系统主题查询/跟随/覆盖、上下系统栏颜色及图标、应用标题区示例；本地化、字号等未完成 |
+| `features/text` | 原 OneUI 单多行输入、预编辑/提交、选区手柄与撤销、密码命令、键盘避让、输入页 SP 字号；完整 IME/读屏待补 |
 
 ### 当前按钮与生命周期契约
 
@@ -279,7 +332,7 @@ OneUI 复用 `out/mobile-current/android-x86_64`，通过 `ONEUI_BUILD_ANDROID_L
   导航变更在输入分发结束后执行，不在控件回调中拆卸正在分发事件的树。
 - **深色／浅色：** 应用共享主题，保持各页状态。移动壳将单列交互控件的触摸框提高到至少
   48 逻辑像素，不改桌面控件默认尺寸；字体随系统字号放大仍是待完成项。
-- **查看接入代码／收起代码：** 默认收起；展开后停用被遮住的页。直接展示仓库四个 C++
+- **查看接入代码／收起代码：** 默认收起；展开后停用被遮住的页。直接展示仓库六个 C++
   片段，CMake 将相同源文件加入 Android 目标实际编译；尚无移动控件 C / Rust 对应入口时
   明示待补齐，不生成虚构示例。公共 Runtime 的 C / Rust 包装不等于控件语言接入已完成。
 - **系统返回：** 先关闭目录，再关闭代码面板；其他页面回到保留的基础布局页，根页退出
@@ -364,7 +417,7 @@ python -B scripts/test-android-probe.py `
 本轮具体结果统一记录在 `out/mobile-current/validation.json`；没有实际执行的项目
 必须是 pending，不能用代码检查或桌面单元测试替代原生设备验收。
 
-- Android：其余 23 个页面入口的实际实现、已接入页面的完整能力组覆盖与语言示例、完整手势/惯性、IME、TalkBack、字号放大、arm64 和最低系统兼容、真机后台/旋转/GPU 恢复及功耗。
+- Android：其余 21 个页面入口的实际实现、已接入页面的完整能力组覆盖与语言示例、完整手势/惯性、中文候选实测/选区连续滚动、TalkBack、全目录字号放大、arm64 和最低系统兼容、真机后台/旋转/GPU 恢复及功耗。
 - iOS：iPhone SDK、UIKit/Metal 宿主、Scene/IME/安全区域/VoiceOver、签名及真机。
 - HarmonyOS：对应 SDK、XComponent 宿主、ArkTS 桥、原生设备、输入法/无障碍。
 - 三端：统一试验台、系统能力插件、预编译分发与可复核构建来源。
@@ -372,3 +425,154 @@ python -B scripts/test-android-probe.py `
 原生参考：[Android 输入](https://developer.android.com/ndk/reference/group/input)、
 [NativeWindow](https://developer.android.com/ndk/reference/group/a-native-window)、
 [UIKit 生命周期](https://developer.apple.com/documentation/uikit/managing-your-app-s-life-cycle)。
+
+## Android 文字输入基础增量（2026-10-09）
+
+`features/text` 为第六个真实页面，仍是局部覆盖：普通 `TextField` / `TextArea`、
+单多行编辑、全选、撤销重做、系统键盘避让、页面实例及已提交文字保留。
+新增 `oneui/mobile/text_input.h` 的 `TextInputSession`，原控件及桌面 ABI 43 不变；
+Android SDK 适配器 `platform/android/java/net/too1/oneui/EditorSurface.java` 使用实际
+`InputConnection` 连接原 C++ 控件，没有用隐藏 EditText 替代 OneUI 绘制。
+
+- JNI 边界统一 UTF-16 索引；Windows 的 16 位 wchar_t 与 Android 的 32 位 wchar_t
+  分别验证中文、emoji、选区及码点删除。非法代理项、半个代理对的选区被拒绝。
+- `setComposingText` 只显示预编辑，提交才进入控件撤销栈；切换焦点、外部撤销/改文、
+  后台关闭连接后，旧 session 不能写入新编辑器。预编辑被取消不冒充已保存草稿。
+- Android `SystemAppearance` 对系统栏/刘海与 IME 使用最大遮挡值，一次调整 Surface；
+  C++ viewport 不再扣减键盘高度。Surface 尺寸变化保留焦点，布局后滚动到光标。
+- Android `TypedValue.applyDimension(SP, 16, metrics)` 换算本页字体，不把 fontScale
+  当作屏幕 DPI，也不自行假设高版本系统线性缩放。200% 系统字号与输入框高度一起调整。
+  **目前只覆盖输入页的文字/输入框；全目录字号、按钮字号和 TalkBack 仍待完善。**
+- `WidgetHost::paintWhenNeeded` 在动画检查后才调用 Canvas 工厂；光标闪烁之间没有
+  无效 GPU 帧。`callbacks` 是动画检查次数，`frames` 是成功交换次数，都不等于显示器
+  实际呈现 FPS。当前仍有按刷新率检查光标的回调，低频唤醒优化待后续调度接口。
+
+接入顺序：同一 UI 线程创建 WidgetHost、控件根和 TextInputSession；EditorSurface.Bridge
+转发 snapshot/apply。用户点击后 `sync(true)`，其他编辑/布局后 `sync(false)`；后台/销毁前
+先 suspend Java 连接，再 reset C++ session。取消原控件指针状态后调用
+`restoreComposition()` 恢复仍有效的预编辑，布局变化后 `revealCaret()`。
+可编译片段是 `examples/performance_lab/mobile/text_snippet.cpp`，随 Android 目标编译。
+**这一控件宿主入口的 C/Rust 包装仍待接入**，不把已有 Runtime/Appearance 语言包装算作完成。
+
+验证入口：
+
+```powershell
+python -B scripts/build-android-ime-test.py --sdk <AndroidSdk> --java-home <JDK17>
+python -B scripts/test-android-text.py --adb <AndroidSdk>/platform-tools/adb.exe --serial emulator-5554
+```
+
+测试夹具在单独 APK 中，包含实际 Android Instrumentation 和 InputMethodService；
+真实系统 IME 窗口、触摸按键、InputConnection、JNI 和 C++ 控件均参与测试，
+结束恢复原输入法、字号/旋转设置并卸载夹具。夹具用于可复现的组合输入和键盘区域验证，
+**不能替代 Gboard/其他中文输入法的候选窗、手写、语音、浮动键盘体验验收**。
+本机 Gboard 验证期间曾显示浮动手写工具栏，系统报告 IME 底部遮挡为 0；不伪造为停靠键盘。
+固定报告 `out/mobile-current/android-text-test.json`、`ime-protocol.log`；
+C++ 同一测试源 `tests/mobile/text_input_tests.cpp` 分别运行 Windows 和 Android。
+
+仍未支持：选区边缘连续滚动/放大镜、全方向键与复杂双向文字、自动填充、
+读屏、富内容/手写/语音及复杂输入法兼容；自定义编辑器不是 TextField 时不开放本桥。
+iOS/HarmonyOS 的原生输入与字体接入、C/Rust 控件宿主和移动预编译发行仍未完成。
+
+原生依据：[InputConnection](https://developer.android.com/reference/android/view/inputmethod/InputConnection)、
+[Android 14 非线性字号](https://developer.android.com/about/versions/14/features#non-linear-font-scaling)。
+
+## Android 密码与编辑菜单增量（2026-10-10）
+
+密码仍由原 OneUI `TextField::setPasswordMode(true)` 绘制。公共 C++
+`TextInputSession::snapshot()` 在敏感模式只返回每 UTF-16 单元一个遮罩字符及选区；
+`apply()` 拒绝写入敏感字段，避免将遮罩覆盖原文。`editSensitive()` 提供提交、
+预编辑、选区、组合区域、完成、按 UTF-16/码点删除和移动光标命令。
+原文只在 C++ 编辑路径内保留，不作为 JNI 查询结果传给 Java。
+输入的字符本身仍会经过用户选用的输入法，不能把这一设计解释为防止恶意键盘记录。
+
+Android `SensitiveConnection` 不创建含密码的 Editable；周边文字、选中文字、
+提取文字和快照查询返回空结果。使用密码输入类型和不参与个性学习的请求标志，
+拦截直接调用的复制/剪切；支持粘贴、全选、方向键扩选和预编辑。
+非法 UTF-16、切换密码模式、外部改文、切换焦点及后台恢复后的旧连接均受校验。
+
+`EditorSurface.Bridge` 追加 `sensitive()` 与 `containsEditor()`，默认返回不支持；
+已有普通输入宿主源码可继续使用，但要接入密码命令和长按菜单必须实现这两个方法。
+每次原生触摸处理更新焦点并 `sync(false)` 后调用 `onEditorTouch(event)`；其返回 true 时不再因抬手弹出键盘。应用返回事件先调用 `dismissEditingActions()` 关闭菜单，再处理页面返回。菜单使用 Android 浮动
+ActionMode，普通选区支持全选/复制/剪切/粘贴，密码仅全选/粘贴。
+普通字段的选词与拖柄见下述后续增量；密码仍仅菜单，放大镜或自动填充尚未接入。
+
+试验台 `功能／文字输入与字体` 新增密码框、全选密码及清空密码按钮。结果与诊断
+仅记录长度、选区和变化次数，不输出内容；演示中请使用合成数据。
+同一进程中的旋转、Surface 重建和后台恢复保留已提交内容；进程终止后不承诺恢复密码。
+
+验证命令（先构建当前 APK 和独立 IME 夹具）：
+
+```powershell
+python -B scripts/test-android-secure-input.py --adb <AndroidSdk>/platform-tools/adb.exe --serial emulator-5554
+```
+
+固定结果为 `out/mobile-current/android-secure-test.json` 与 `secure-protocol.log`。
+测试分为真实 InputConnection 协议和系统长按菜单两部分，不以 mock 或伪文字接口替代。
+这些 API36/x86_64 证据不覆盖最低 API28、ARM64、iOS/HarmonyOS，也不构成安全认证。
+
+原生接口依据：[EditorInfo](https://developer.android.com/reference/android/view/inputmethod/EditorInfo)、
+[InputConnection](https://developer.android.com/reference/android/view/inputmethod/InputConnection)。
+
+本轮回归还发现一次旧构建的模拟器 ANR：栈停在键盘尺寸变化后的
+`eglChooseConfig → QemuPipeStream`，不是文字替换算法。已去掉同一 ANativeWindow
+尺寸变化时重复销毁/创建 EGL 与 Ganesh 的路径；新窗口、Surface 真正销毁或已有
+渲染错误仍完整重建。`gpuContexts` 记录成功创建上下文的次数，`gpuResizes` 记录
+同一窗口接受的尺寸更新；两者不是帧率。输入测试要求键盘开合保留 GPU 上下文。
+原始最小堆栈保存在 `out/mobile-current/input-anr.log`。驱动级阻塞与真机功耗仍需
+真实设备验证，不能用一次模拟器回归宣布全部解决。
+
+上一轮密码/菜单候选在 API36 模拟器通过 39 组回归：布局 8、导航 9、外观 8、
+普通输入 8、密码与原生菜单 6；所有报告对应同一个 APK SHA256，见
+`out/mobile-current/input-validation.json`。Windows 冻结 SDK 的 3 个 CTest
+与 Android wchar32 输入测试通过。测试夹具已从模拟器卸载，输入法、字号和旋转设置已恢复。
+这只是当前 Android 增量证据：完整 27 页仍有缺项，不能代替三端发布验收。
+
+## Android 光标与选区手柄增量（2026-10-10）
+
+`TextInputSession::selectionGeometry()` 返回会话、UTF-16 两端索引、裁剪区域及
+两个光标矩形；坐标与 `Widget::frame()` 一致。几何来自 `TextField` 的同一排版，
+不在 Java 重新测量文本。无焦点、不可编辑、完全被裁剪、密码模式或预编辑期间
+返回零会话。`selectAtPoint(session, SelectionEdge, Point)` 支持插入光标、anchor、
+caret 三种模式；保留另一端并允许交叉，拒绝旧会话及非有限坐标。
+
+Android `EditorSurface.Bridge` 的 `selectionGeometry()`、`selectAt()` 默认不支持；
+宿主实现时把逻辑坐标乘以实际渲染 scale，返回 View 内物理像素；同时实现
+`cancelPointers()`，取消 native pointer 并 pumpInput，不清除焦点或选区。通过
+`EditorSurface.beforeEditorTouch(event)` 先让手柄处理事件；返回 true 后不得再
+向 OneUI 转发该触摸流。普通触摸仍沿用 native pointer → `sync(false)` →
+`onEditorTouch(event)` 的顺序。`cancelSelectionGesture()` 在尺寸变化前取消进行中
+拖动；后台/销毁沿用 `suspend()`。手柄用 Android 主题 Drawable，颜色通过
+`setSelectionHandleColor()` 跟随 OneUI 明暗 accent。只在几何变化时更新叠层。
+
+普通字段点击显示插入手柄，长按按系统 Locale 分词选中并显示原生菜单。
+长按从收到 DOWN 后使用系统超时/移动阈值计时，避免忙布局后的旧时间戳立即触发；
+选词成功后取消底层拖选，接管剩余触摸流，避免后续 MOVE 把整个单词缩成一个字。
+双端拖动保持逻辑 anchor/caret，取消和第二根手指恢复开始选区，前提是会话仍有效。
+外部编辑、切页或后台不向失效会话回写。手柄触摸范围为 48dp；不可见端点隐藏。
+`getSelectionHandleBounds()` 仅提供可见触摸矩形，不包含文字内容。
+
+密码的现有公共几何查询刻意关闭，本轮保持其点击定位及全选/粘贴菜单，
+不通过导出原文或猜测字宽生成密码手柄。选区边缘自动连续滚动、放大镜、
+TalkBack、复杂双向文字及不同输入法的候选体验仍需后续原生验证。
+C/Rust 控件宿主尚未接入本交互，不能把 C++ helper 当成三语言已完整覆盖。
+
+定向测试：`scripts/test-android-selection.py` 使用独立 instrumentation 夹具，
+通过 Android 输入分发注入真实触摸事件，校验单多行、插入手柄、双端扩缩、交叉、
+取消、多指及 Unicode 边界。公共几何同源测试在 Windows wchar16 和 Android wchar32
+分别运行。固定结果：`out/mobile-current/android-selection-test.json`、
+`selection-protocol.log`；实际构建与完整剩余范围以当前 `input-validation.json` 为准。
+
+本轮同一 API36/x86_64 APK 已通过 54 组完整回归：选区 21、布局 8、导航 9、
+系统外观 8、普通输入 8。密码协议已通过，但密码与原生菜单套件尚未全部通过；
+测试中发现布局/输入法时序问题，随后模拟器系统输入法服务超时，冷启动因 C 盘
+空间不足被拒绝。原生菜单及密码生命周期仍须恢复环境后重验，不能沿用前一 APK
+的通过记录。Windows 冻结 SDK 3/3 CTest 与 Android wchar32 输入测试通过。
+选区包含单/多行、跨端、取消、多指、公开尺寸变化取消回调、
+Unicode 和后台隐藏；该回调测试不代表已验证系统旋转过程中的拖动。
+测试驱动等待实际前台状态、系统主题确认、键盘绑定/显示及最新窗口几何，
+不把固定休眠后的旧状态作为结果。长按使用系统超时与移动阈值；模拟器计时与
+IME 候选交互、真机响应延迟/功耗仍需单独验证，不能视为移动端发布验收完成。
+
+叠层接口依据：[Android ViewOverlay](https://developer.android.com/reference/android/view/ViewOverlay)。
+手柄尖端定位参考 [Android Editor 的 selection handle hotspot](https://android.googlesource.com/platform/frameworks/base/+/master/core/java/android/widget/Editor.java)，
+按原生图形内的尖端位置对齐光标，避免把图形外沿误作文字边界。

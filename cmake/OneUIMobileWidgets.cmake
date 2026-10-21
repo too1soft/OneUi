@@ -1,7 +1,7 @@
 # This optional bridge uses the same controls as the desktop SDK. It is kept
 # separate from the small no-renderer runtime so Android NDK contract builds do
 # not accidentally require desktop Skia/text libraries.
-add_library(oneui_mobile_widgets STATIC src/mobile/widget_host.cpp src/mobile/touch_scroll.cpp)
+add_library(oneui_mobile_widgets STATIC src/mobile/widget_host.cpp src/mobile/touch_scroll.cpp src/mobile/text_input.cpp)
 add_library(OneUI::mobile_widgets ALIAS oneui_mobile_widgets)
 target_include_directories(oneui_mobile_widgets PUBLIC include)
 target_link_libraries(oneui_mobile_widgets PUBLIC OneUI::mobile_runtime oneui)

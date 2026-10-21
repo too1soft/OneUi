@@ -1,5 +1,6 @@
 #pragma once
 #include "demo_page.hpp"
+#include "oneui/mobile/appearance.h"
 #include <map>
 
 namespace lab::mobile {
@@ -19,8 +20,14 @@ class Workbench final {
     std::string diagnostics() const;
     void describeControls(std::ostream &out) const;
     bool dark() const { return dark_; }
+    oneui::mobile::Appearance &appearance() { return appearance_; }
+    void syncAppearance();
+    void typography(float scale, float bodySize);
 
   private:
+    oneui::mobile::Appearance appearance_;
+    float fontScale_ = 1, bodySize_ = 16;
+    uint64_t appearanceRevision_ = 0, appliedRevision_ = 0;
     std::shared_ptr<oneui::View> root_;
     std::shared_ptr<oneui::Panel> content_;
     std::shared_ptr<oneui::ScrollView> navigation_, code_;

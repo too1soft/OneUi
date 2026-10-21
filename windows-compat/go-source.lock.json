@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "version": "1.25.14",
+  "sourceURL": "https://github.com/golang/go.git",
+  "sourceCommit": "08118a942518cc18db507ec182acffe7364a92a3",
+  "upstreamPatchURL": "https://github.com/XTLS/go-win7.git",
+  "upstreamPatchCommit": "ccc83255f9ad36e06b119066d0b704944afeeb9a",
+  "bootstrapExeSha256": "7609132b0d289bf42ca9dba23b849824ecdf4af5323094e9cfb5ea1633e3866a",
+  "patches": [
+    {"path": "patches/go1.25.14-core.patch", "sha256": "16758c38727ccdf48443cd387643ab54882a4b4efeb7832ffb4fb299234d2e21"},
+    {"path": "patches/go1.25.14-sp1.patch", "sha256": "4c090fd16536de543075ad5923948580ce091b073897b4fddd0d70435dedc5ed"},
+    {"path": "patches/go1.25.14-root-sp1.patch", "sha256": "9c89783f8ca4e03128fb1c265b0c28cbaf271e834e3052bde0f4683caf0fb655"},
+    {"path": "patches/go1.25.14-readdir-sp1.patch", "sha256": "247324b657caacef5699e3d23289cee3fa278601b9e03b9d04093906e00f0d34"}
+  ],
+  "status": "candidate-awaiting-native-acceptance",
+  "review": "Keep Go 1.25.14 handle-relative os.Root implementation. Reject upstream src/os path-only deletion fallback. Return BCrypt NTSTATUS rather than stale GetLastError. Retain TLS and signature verification."
+}

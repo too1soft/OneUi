@@ -25,6 +25,9 @@ class ONEUI_MOBILE_API Runtime final {
     OneUiMobileResult state(OneUiMobileStateV1 &state) const;
 
   private:
+    // The widget bridge ticks animations without repainting an unchanged frame
+    // (notably between caret blinks). This adds no public/C ABI state.
+    friend class WidgetHost;
     OneUiMobileResult writable() const;
     bool drawable() const;
     void resetPointers();

@@ -28,6 +28,11 @@ class WidgetHost final {
     // Runtime for native mobile controls; optional vertical ScrollView pan is
     // handled above. Full gesture/pinch arbitration is not provided.
     OneUiMobileResult paint(Canvas &canvas, uint64_t timeNs);
+    // Tick without acquiring a GPU framebuffer when nothing changed. The
+    // factory runs only when a paint is needed; its Canvas stays caller-owned.
+    // EMPTY can still require animation ticks (e.g. between caret blinks).
+    OneUiMobileResult paintWhenNeeded(const std::function<Canvas *()> &canvasFactory,
+                                      uint64_t timeNs);
 
   private:
     struct State;

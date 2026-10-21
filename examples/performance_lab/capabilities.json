@@ -475,7 +475,8 @@
         "include/oneui/controls/select.h",
         "include/oneui/controls/progress_bar.h",
         "include/oneui/controls/interactive_surface.h",
-        "include/oneui/controls/separator.h"
+        "include/oneui/controls/separator.h",
+        "include/oneui/mobile/android.h"
       ],
       "interactions": [
         "点击/禁用",
@@ -493,7 +494,7 @@
         "rust": "partial",
         "one": "not_applicable"
       },
-      "note": "ButtonBridge 是 C++ 产品组合 helper；RadioGroup 的 Rust 入口目前为 raw。",
+      "note": "ButtonBridge 是 C++ 产品组合 helper；RadioGroup 的 Rust 入口目前为 raw。 mobile/android.h是Android触控事件适配入口，完整惯性/多手势仍待补齐。",
       "migration": "partial",
       "examples": [
         {
@@ -517,7 +518,8 @@
         "include/oneui/controls/text_field.h",
         "include/oneui/controls/text_input_bridge.h",
         "include/oneui/controls/label.h",
-        "include/oneui/fonts.h"
+        "include/oneui/fonts.h",
+        "include/oneui/mobile/text_input.h"
       ],
       "interactions": [
         "中文/Emoji/双向文字",
@@ -527,7 +529,10 @@
       ],
       "tests": [
         "tests/text_layout_tests.cpp",
-        "tests/system_fonts_tests.cpp"
+        "tests/system_fonts_tests.cpp",
+        "tests/mobile/text_input_tests.cpp",
+        "tests/mobile/android-ime/InputProtocol.java",
+        "scripts/test-android-text.py"
       ],
       "languages": {
         "cpp": "available",
@@ -535,7 +540,7 @@
         "rust": "partial",
         "one": "not_applicable"
       },
-      "note": "系统 IME 仍须原生验收；TextInputBridge 为 C++ helper。",
+      "note": "系统 IME 仍须原生验收；TextInputBridge 为 C++ helper。 移动 TextInputSession/Android EditorSurface 已接普通单多行输入与 UTF-16 预编辑；移动密码命令桥与原生长按编辑菜单已接入；密码查询/复制/剪切受限。Android 普通字段已接光标/双端选区手柄与长按选词；密码几何仍关闭。移动 C/Rust 控件宿主、读屏及选区连续滚动仍待接入。",
       "migration": "partial",
       "examples": [
         {
@@ -549,6 +554,13 @@
         {
           "language": "rust",
           "path": "examples/performance_lab/snippets/rust/text.rs"
+        }
+      ],
+      "mobile_examples": [
+        {
+          "language": "cpp",
+          "path": "examples/performance_lab/mobile/text_snippet.cpp",
+          "compiled_by": "oneui_mobile_lab"
         }
       ]
     },
@@ -730,7 +742,10 @@
         "include/oneui/platform/monitor.h",
         "include/oneui/controls/window_title_bar.h",
         "include/oneui/layout/title_bar_bridge.h",
-        "include/oneui/title_bar_presentation_c.h"
+        "include/oneui/title_bar_presentation_c.h",
+        "include/oneui/mobile/c_api.h",
+        "include/oneui/mobile/runtime.h",
+        "include/oneui/mobile/widget_host.h"
       ],
       "interactions": [
         "实际/请求状态",
@@ -740,7 +755,10 @@
       ],
       "tests": [
         "tests/application_lifecycle_tests.cpp",
-        "tests/desktop_input_tests.cpp"
+        "tests/desktop_input_tests.cpp",
+        "tests/mobile/runtime_tests.cpp",
+        "tests/mobile/c_api_tests.c",
+        "scripts/test-android-navigation.py"
       ],
       "languages": {
         "cpp": "available",
@@ -748,7 +766,7 @@
         "rust": "partial",
         "one": "not_applicable"
       },
-      "note": "系统可能拒绝位置、聚焦及窗口状态请求；Wayland 限制需呈现。",
+      "note": "系统可能拒绝位置、聚焦及窗口状态请求；Wayland 限制需呈现。 移动Runtime/WidgetHost提供生命周期、Surface和按需调度；不等于桌面窗口管理能力在手机上全部可用。",
       "migration": "partial",
       "examples": [
         {
@@ -962,16 +980,24 @@
         "include/oneui/material3_tokens.h",
         "include/oneui/ui_density.h",
         "include/oneui/ui_native_theme.h",
-        "include/oneui/ui_theme.h"
+        "include/oneui/ui_theme.h",
+        "include/oneui/mobile/appearance.h",
+        "include/oneui/mobile/appearance_c.h"
       ],
       "interactions": [
         "浅深主题",
         "密度",
         "本地化",
-        "继承与状态样式"
+        "继承与状态样式",
+        "移动系统主题读取、跟随与手动覆盖",
+        "移动状态栏/导航栏背景与图标明暗"
       ],
       "tests": [
-        "tests/style_scope_tests.cpp"
+        "tests/style_scope_tests.cpp",
+        "tests/mobile/appearance_tests.cpp",
+        "tests/mobile/appearance_c_tests.c",
+        "bindings/rust/oneui-mobile/tests/appearance.rs",
+        "scripts/test-android-appearance.py"
       ],
       "languages": {
         "cpp": "available",
@@ -979,12 +1005,29 @@
         "rust": "partial",
         "one": "not_applicable"
       },
-      "note": "高层主题组合为 C++/.one；C/Rust 可设置样式与本地化。",
+      "note": "高层主题组合为 C++/.one；C/Rust 可设置样式与本地化。 移动Appearance拥有C++/C/Rust入口及Android系统接入；API36模拟器验证，最低系统/真机及iOS/HarmonyOS尚待验收，移动本地化/系统字号未完成。",
       "migration": "partial",
       "examples": [
         {
           "language": "cpp",
           "path": "examples/performance_lab/snippets/cpp/theme.cpp"
+        }
+      ],
+      "mobile_examples": [
+        {
+          "language": "cpp",
+          "path": "examples/performance_lab/mobile/appearance_snippet.cpp",
+          "compiled_by": "oneui_mobile_lab (Android)"
+        },
+        {
+          "language": "c",
+          "path": "tests/mobile/appearance_c_tests.c",
+          "compiled_by": "oneui_mobile_appearance_c_tests (host)"
+        },
+        {
+          "language": "rust",
+          "path": "bindings/rust/oneui-mobile/tests/appearance.rs",
+          "compiled_by": "oneui-mobile / tests::appearance (host)"
         }
       ]
     },

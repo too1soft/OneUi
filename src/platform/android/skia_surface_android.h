@@ -1,4 +1,5 @@
 #pragma once
+#include <cstdint>
 #include <memory>
 #include <string>
 struct ANativeWindow;
@@ -19,6 +20,9 @@ class SkiaSurface final {
     bool present();
     const std::string &renderer() const;
     const std::string &error() const;
+    uint64_t contextCount() const;
+    uint64_t resizeCount() const;
+
   private:
     struct State;
     std::unique_ptr<State> state_;

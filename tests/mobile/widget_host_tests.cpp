@@ -30,6 +30,33 @@ class Probe final : public Widget {
     void paint(Canvas &) override { ++paints; }
     void dirty() { invalidate(); }
 };
+class TickOnly final : public Widget {
+  public:
+    bool tickAnimations(double) override { return true; }
+    void paint(Canvas &) override {}
+    void dirty() { invalidate(); }
+};
+void animationTickDoesNotAcquireGpuFrame() {
+    mobile::WidgetHost host;
+    ready(host);
+    auto widget = std::make_shared<TickOnly>();
+    host.setContent(widget);
+    test_support::RecordingCanvas canvas;
+    int acquired = 0;
+    auto factory = [&]() -> Canvas * {
+        ++acquired;
+        return &canvas;
+    };
+    host.paintWhenNeeded(factory, 1);
+    host.paintWhenNeeded(factory, 2);
+    const auto before = acquired;
+    for (uint64_t i = 3; i < 123; ++i)
+        require(host.paintWhenNeeded(factory, i) == ONEUI_MOBILE_EMPTY,
+                "unchanged animation tick painted");
+    require(acquired == before, "unchanged ticks acquired GPU frames");
+    widget->dirty();
+    require(host.paintWhenNeeded(factory, 123) == ONEUI_MOBILE_OK, "invalidation lost");
+}
 void retainedWidgetAndIdle() {
     auto child = std::make_shared<Probe>();
     test_support::RecordingCanvas canvas;
@@ -106,36 +133,47 @@ void verticalPanCancelsTapAndKeepsHorizontalControl() {
     auto lower = std::make_shared<Panel>();
     int clicks = 0;
     button->setOnClick([&] { ++clicks; });
-    content->add(button); content->setFlex(button, {0, 0, 120, 120});
-    content->add(lower); content->setFlex(lower, {0, 0, 600, 600});
+    content->add(button);
+    content->setFlex(button, {0, 0, 120, 120});
+    content->add(lower);
+    content->setFlex(lower, {0, 0, 600, 600});
     auto scroll = std::make_shared<ScrollView>();
     scroll->setContent(content);
-    host.setContent(scroll); host.setTouchScrolling(true);
+    host.setContent(scroll);
+    host.setTouchScrolling(true);
     test_support::RecordingCanvas canvas;
     host.paint(canvas, 1);
     uint64_t time = 1;
     auto pointer = [&](int phase, float x, float y) {
-        require(host.runtime().pushPointer({3, phase, ONEUI_MOBILE_TOUCH,
-            x * 3, y * 3, 1, time++, 0}) == ONEUI_MOBILE_OK, "pan pointer");
+        require(host.runtime().pushPointer(
+                    {3, phase, ONEUI_MOBILE_TOUCH, x * 3, y * 3, 1, time++, 0}) == ONEUI_MOBILE_OK,
+                "pan pointer");
         require(host.pumpInput() == ONEUI_MOBILE_OK, "pan dispatch");
     };
-    pointer(ONEUI_MOBILE_DOWN, 50, 80); pointer(ONEUI_MOBILE_UP, 50, 80);
+    pointer(ONEUI_MOBILE_DOWN, 50, 80);
+    pointer(ONEUI_MOBILE_UP, 50, 80);
     require(clicks == 1, "tap still clicks");
-    pointer(ONEUI_MOBILE_DOWN, 50, 80); pointer(ONEUI_MOBILE_MOVE, 51, 35);
+    pointer(ONEUI_MOBILE_DOWN, 50, 80);
+    pointer(ONEUI_MOBILE_MOVE, 51, 35);
     pointer(ONEUI_MOBILE_UP, 51, 35);
     require(clicks == 1 && scroll->scrollOffset() >= 44, "vertical pan scrolls without clicking");
     const float offset = scroll->scrollOffset();
-    pointer(ONEUI_MOBILE_DOWN, 50, 60); pointer(ONEUI_MOBILE_MOVE, 90, 61);
+    pointer(ONEUI_MOBILE_DOWN, 50, 60);
+    pointer(ONEUI_MOBILE_MOVE, 90, 61);
     pointer(ONEUI_MOBILE_UP, 90, 61);
     require(scroll->scrollOffset() == offset, "horizontal gesture stays with child");
     const int beforeCancel = clicks;
-    pointer(ONEUI_MOBILE_DOWN, 50, 60); pointer(ONEUI_MOBILE_MOVE, 50, 30);
-    host.runtime().setSurface(false); host.pumpInput();
-    host.runtime().setSurface(true); host.paint(canvas, 2);
+    pointer(ONEUI_MOBILE_DOWN, 50, 60);
+    pointer(ONEUI_MOBILE_MOVE, 50, 30);
+    host.runtime().setSurface(false);
+    host.pumpInput();
+    host.runtime().setSurface(true);
+    host.paint(canvas, 2);
     require(clicks == beforeCancel, "surface cancellation cannot click during pan");
     host.setTouchScrolling(false);
     const float disabledOffset = scroll->scrollOffset();
-    pointer(ONEUI_MOBILE_DOWN, 50, 60); pointer(ONEUI_MOBILE_MOVE, 50, 20);
+    pointer(ONEUI_MOBILE_DOWN, 50, 60);
+    pointer(ONEUI_MOBILE_MOVE, 50, 20);
     pointer(ONEUI_MOBILE_UP, 50, 20);
     require(scroll->scrollOffset() == disabledOffset, "pan remains opt-in");
 }
@@ -143,6 +181,7 @@ void verticalPanCancelsTapAndKeepsHorizontalControl() {
 int main() {
     try {
         retainedWidgetAndIdle();
+        animationTickDoesNotAcquireGpuFrame();
         cancelledTapCannotClick();
         verticalPanCancelsTapAndKeepsHorizontalControl();
     } catch (const std::exception &e) {

@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "policyVersion": "0.1.0",
+  "architectures": {"x86": {"go": "386", "cpu": "sse2"}, "x86_64": {"go": "amd64", "cpu": "x86-64-v1"}},
+  "profiles": {
+    "modern": {"minimumOS": "10.0.0", "oneui": "win10", "go": "official"},
+    "legacy": {"minimumOS": "6.1.7601", "oneui": "win7", "go": "patched"}
+  },
+  "targets": ["win7-sp1-original-x86", "win7-sp1-original-x86_64", "win8-x86", "win8-x86_64", "win81-x86", "win81-x86_64", "win10-x86", "win10-x86_64", "win11-x86_64"],
+  "toolchains": {
+    "go": {"version": "1.25.14", "sourceCommit": "08118a942518cc18db507ec182acffe7364a92a3", "autoToolchain": false},
+    "rustUpdater": {"version": "1.91.0", "targets": ["i686-win7-windows-msvc", "x86_64-win7-windows-msvc"]},
+    "legacyNative": {"msvc": "14.44.35207", "windowsSDK": "10.0.22621.0", "crt": "static"},
+    "legacyCGO": {"crt": "msvcrt", "status": "pending-toolchain-qualification"}
+  },
+  "updaterProfiles": ["legacy"],
+  "releaseRequires": ["build", "imports", "native", "business", "trust"],
+  "status": "implementation-in-progress"
+}

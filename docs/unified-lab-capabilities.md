@@ -168,21 +168,23 @@ Canvas 是 C++ API；不为 C/Rust 展示不存在的绘图接口。
 
 关键行为：点击/禁用；选择与键盘；进度联动；交互 Begin/Commit/Cancel。
 
-ButtonBridge 是 C++ 产品组合 helper；RadioGroup 的 Rust 入口目前为 raw。
+ButtonBridge 是 C++ 产品组合 helper；RadioGroup 的 Rust 入口目前为 raw。 mobile/android.h是Android触控事件适配入口，完整惯性/多手势仍待补齐。
 
 测试入口：[control_behavior_tests.cpp](../tests/control_behavior_tests.cpp)、[interaction_c_api_tests.cpp](../tests/interaction_c_api_tests.cpp)。
 
-公开头文件：[controls/button.h](../include/oneui/controls/button.h)、[controls/button_bridge.h](../include/oneui/controls/button_bridge.h)、[controls/icon_button.h](../include/oneui/controls/icon_button.h)、[controls/checkbox.h](../include/oneui/controls/checkbox.h)、[controls/switch.h](../include/oneui/controls/switch.h)、[controls/radio_group.h](../include/oneui/controls/radio_group.h)、[controls/slider.h](../include/oneui/controls/slider.h)、[controls/select.h](../include/oneui/controls/select.h)、[controls/progress_bar.h](../include/oneui/controls/progress_bar.h)、[controls/interactive_surface.h](../include/oneui/controls/interactive_surface.h)、[controls/separator.h](../include/oneui/controls/separator.h)。
+公开头文件：[controls/button.h](../include/oneui/controls/button.h)、[controls/button_bridge.h](../include/oneui/controls/button_bridge.h)、[controls/icon_button.h](../include/oneui/controls/icon_button.h)、[controls/checkbox.h](../include/oneui/controls/checkbox.h)、[controls/switch.h](../include/oneui/controls/switch.h)、[controls/radio_group.h](../include/oneui/controls/radio_group.h)、[controls/slider.h](../include/oneui/controls/slider.h)、[controls/select.h](../include/oneui/controls/select.h)、[controls/progress_bar.h](../include/oneui/controls/progress_bar.h)、[controls/interactive_surface.h](../include/oneui/controls/interactive_surface.h)、[controls/separator.h](../include/oneui/controls/separator.h)、[mobile/android.h](../include/oneui/mobile/android.h)。
 
 ## 文字输入与字体 · `features/text`
 
 关键行为：中文/Emoji/双向文字；选区/撤销/重做；密码及多行；字体枚举。
 
-系统 IME 仍须原生验收；TextInputBridge 为 C++ helper。
+系统 IME 仍须原生验收；TextInputBridge 为 C++ helper。 移动 TextInputSession/Android EditorSurface 已接普通单多行输入与 UTF-16 预编辑；移动密码命令桥与原生长按编辑菜单已接入；密码查询/复制/剪切受限。Android 普通字段已接光标/双端选区手柄与长按选词；密码几何仍关闭。移动 C/Rust 控件宿主、读屏及选区连续滚动仍待接入。
 
-测试入口：[text_layout_tests.cpp](../tests/text_layout_tests.cpp)、[system_fonts_tests.cpp](../tests/system_fonts_tests.cpp)。
+测试入口：[text_layout_tests.cpp](../tests/text_layout_tests.cpp)、[system_fonts_tests.cpp](../tests/system_fonts_tests.cpp)、[text_input_tests.cpp](../tests/mobile/text_input_tests.cpp)、[InputProtocol.java](../tests/mobile/android-ime/InputProtocol.java)、[test-android-text.py](../scripts/test-android-text.py)。
 
-公开头文件：[controls/text_field.h](../include/oneui/controls/text_field.h)、[controls/text_input_bridge.h](../include/oneui/controls/text_input_bridge.h)、[controls/label.h](../include/oneui/controls/label.h)、[fonts.h](../include/oneui/fonts.h)。
+公开头文件：[controls/text_field.h](../include/oneui/controls/text_field.h)、[controls/text_input_bridge.h](../include/oneui/controls/text_input_bridge.h)、[controls/label.h](../include/oneui/controls/label.h)、[fonts.h](../include/oneui/fonts.h)、[mobile/text_input.h](../include/oneui/mobile/text_input.h)。
+
+移动接入示例（独立目标，不能代表桌面或三端验收）：[cpp](../examples/performance_lab/mobile/text_snippet.cpp) — `oneui_mobile_lab`。
 
 ## 列表/表格/树及重排 · `features/data`
 
@@ -228,11 +230,11 @@ Mac 顶部菜单；Windows/Linux 窗口内菜单。托盘依赖桌面环境。
 
 关键行为：实际/请求状态；全屏/置顶/调整尺寸；尺寸约束/位置恢复；关闭取消/异步确认。
 
-系统可能拒绝位置、聚焦及窗口状态请求；Wayland 限制需呈现。
+系统可能拒绝位置、聚焦及窗口状态请求；Wayland 限制需呈现。 移动Runtime/WidgetHost提供生命周期、Surface和按需调度；不等于桌面窗口管理能力在手机上全部可用。
 
-测试入口：[application_lifecycle_tests.cpp](../tests/application_lifecycle_tests.cpp)、[desktop_input_tests.cpp](../tests/desktop_input_tests.cpp)。
+测试入口：[application_lifecycle_tests.cpp](../tests/application_lifecycle_tests.cpp)、[desktop_input_tests.cpp](../tests/desktop_input_tests.cpp)、[runtime_tests.cpp](../tests/mobile/runtime_tests.cpp)、[c_api_tests.c](../tests/mobile/c_api_tests.c)、[test-android-navigation.py](../scripts/test-android-navigation.py)。
 
-公开头文件：[platform/window.h](../include/oneui/platform/window.h)、[platform/window_state.h](../include/oneui/platform/window_state.h)、[platform/monitor.h](../include/oneui/platform/monitor.h)、[controls/window_title_bar.h](../include/oneui/controls/window_title_bar.h)、[layout/title_bar_bridge.h](../include/oneui/layout/title_bar_bridge.h)、[title_bar_presentation_c.h](../include/oneui/title_bar_presentation_c.h)。
+公开头文件：[platform/window.h](../include/oneui/platform/window.h)、[platform/window_state.h](../include/oneui/platform/window_state.h)、[platform/monitor.h](../include/oneui/platform/monitor.h)、[controls/window_title_bar.h](../include/oneui/controls/window_title_bar.h)、[layout/title_bar_bridge.h](../include/oneui/layout/title_bar_bridge.h)、[title_bar_presentation_c.h](../include/oneui/title_bar_presentation_c.h)、[mobile/c_api.h](../include/oneui/mobile/c_api.h)、[mobile/runtime.h](../include/oneui/mobile/runtime.h)、[mobile/widget_host.h](../include/oneui/mobile/widget_host.h)。
 
 ## 应用生命周期/多窗口 · `features/multiwindow`
 
@@ -286,13 +288,15 @@ C++ 响应式层与 Rust 自有状态；C 使用 setter/callback。
 
 ## 主题与本地化 · `features/theme`
 
-关键行为：浅深主题；密度；本地化；继承与状态样式。
+关键行为：浅深主题；密度；本地化；继承与状态样式；移动系统主题读取、跟随与手动覆盖；移动状态栏/导航栏背景与图标明暗。
 
-高层主题组合为 C++/.one；C/Rust 可设置样式与本地化。
+高层主题组合为 C++/.one；C/Rust 可设置样式与本地化。 移动Appearance拥有C++/C/Rust入口及Android系统接入；API36模拟器验证，最低系统/真机及iOS/HarmonyOS尚待验收，移动本地化/系统字号未完成。
 
-测试入口：[style_scope_tests.cpp](../tests/style_scope_tests.cpp)。
+测试入口：[style_scope_tests.cpp](../tests/style_scope_tests.cpp)、[appearance_tests.cpp](../tests/mobile/appearance_tests.cpp)、[appearance_c_tests.c](../tests/mobile/appearance_c_tests.c)、[appearance.rs](../bindings/rust/oneui-mobile/tests/appearance.rs)、[test-android-appearance.py](../scripts/test-android-appearance.py)。
 
-公开头文件：[style_sheet.h](../include/oneui/style_sheet.h)、[localization.h](../include/oneui/localization.h)、[material3_tokens.h](../include/oneui/material3_tokens.h)、[ui_density.h](../include/oneui/ui_density.h)、[ui_native_theme.h](../include/oneui/ui_native_theme.h)、[ui_theme.h](../include/oneui/ui_theme.h)。
+公开头文件：[style_sheet.h](../include/oneui/style_sheet.h)、[localization.h](../include/oneui/localization.h)、[material3_tokens.h](../include/oneui/material3_tokens.h)、[ui_density.h](../include/oneui/ui_density.h)、[ui_native_theme.h](../include/oneui/ui_native_theme.h)、[ui_theme.h](../include/oneui/ui_theme.h)、[mobile/appearance.h](../include/oneui/mobile/appearance.h)、[mobile/appearance_c.h](../include/oneui/mobile/appearance_c.h)。
+
+移动接入示例（独立目标，不能代表桌面或三端验收）：[cpp](../examples/performance_lab/mobile/appearance_snippet.cpp) — `oneui_mobile_lab (Android)`、[c](../tests/mobile/appearance_c_tests.c) — `oneui_mobile_appearance_c_tests (host)`、[rust](../bindings/rust/oneui-mobile/tests/appearance.rs) — `oneui-mobile / tests::appearance (host)`。
 
 ## 运行时/无障碍/诊断/互操作 · `features/diagnostics`
 

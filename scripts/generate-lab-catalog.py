@@ -44,6 +44,14 @@ def validate(root, catalog):
                 template_test = root / 'examples/performance_lab/snippets/template_check.cpp'
                 if 'build_' + path.stem + '(' not in template_test.read_text(encoding='utf-8'):
                     raise ValueError('Template is not instantiated by the compilation test: ' + str(path))
+        mobile_languages = set()
+        for example in group.get('mobile_examples', []):
+            language, path = example['language'], root / example['path']
+            if language in mobile_languages or language not in {'cpp', 'c', 'rust', 'one'}:
+                raise ValueError('Invalid/duplicate mobile example: ' + group['page'])
+            mobile_languages.add(language)
+            if not path.is_file() or not path.read_text(encoding='utf-8').strip() or not example.get('compiled_by'):
+                raise ValueError('Missing mobile source or target: ' + str(path))
     public = {path.relative_to(root).as_posix() for path in (root / 'include/oneui').rglob('*.h')}
     if assigned != public:
         raise ValueError('Unassigned public headers: ' + ', '.join(sorted(public - assigned)) +
@@ -94,6 +102,10 @@ def markdown(groups, output):
                   '测试入口：' + '、'.join('[' + Path(p).name + '](../' + p + ')' for p in group['tests']) + '。', '',
                   '公开头文件：' + '、'.join('[' + p.removeprefix('include/oneui/') + '](../' + p + ')'
                                              for p in group['headers']) + '。']
+        if group.get('mobile_examples'):
+            lines += ['', '移动接入示例（独立目标，不能代表桌面或三端验收）：' + '、'.join(
+                '[' + e['language'] + '](../' + e['path'] + ') — `' + e['compiled_by'] + '`'
+                for e in group['mobile_examples']) + '。']
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_bytes(('\n'.join(lines) + '\n').encode('utf-8'))
 

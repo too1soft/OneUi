@@ -1,0 +1,68 @@
+diff --git a/src/os/dir_windows.go b/src/os/dir_windows.go
+index 52d5acd..ada01b1 100644
+--- a/src/os/dir_windows.go
++++ b/src/os/dir_windows.go
+@@ -122,7 +122,7 @@ func (file *File) readdir(n int, mode readdirMode) (names []string, dirents []Di
+ 	for n != 0 {
+ 		// Refill the buffer if necessary
+ 		if d.bufp == 0 {
+-			err = windows.GetFileInformationByHandleEx(file.pfd.Sysfd, d.class, (*byte)(unsafe.Pointer(&(*d.buf)[0])), uint32(len(*d.buf)))
++			err = windows.ReadDirectoryInformation(file.pfd.Sysfd, d.class, (*byte)(unsafe.Pointer(&(*d.buf)[0])), uint32(len(*d.buf)))
+ 			runtime.KeepAlive(file)
+ 			if err != nil {
+ 				if err == syscall.ERROR_NO_MORE_FILES {
+diff --git a/src/internal/syscall/windows/readdir_sp1_windows.go b/src/internal/syscall/windows/readdir_sp1_windows.go
+new file mode 100644
+--- /dev/null
++++ b/src/internal/syscall/windows/readdir_sp1_windows.go
+@@ -0,0 +1,50 @@
++// Copyright 2026 The Go Authors. All rights reserved.
++// Use of this source code is governed by a BSD-style
++// license that can be found in the LICENSE file.
++
++package windows
++
++import (
++	"runtime"
++	"syscall"
++	"unsafe"
++)
++
++var procNtQueryDirectoryFile = modntdll.NewProc("NtQueryDirectoryFile")
++
++// ReadDirectoryInformation keeps the handle-relative enumeration used by
++// os.Root. Win7 lacks the Win32 FileFullDirectoryInfo classes, but provides
++// the equivalent native FileFullDirectoryInformation class. Never fall back
++// to reopening a directory by its path (which could have been replaced).
++func ReadDirectoryInformation(handle syscall.Handle, class uint32, info *byte, size uint32) error {
++	err := GetFileInformationByHandleEx(handle, class, info, size)
++	if err != syscall.Errno(87) || (class != FileFullDirectoryInfo && class != FileFullDirectoryRestartInfo) {
++		return err
++	}
++	var restart uintptr
++	if class == FileFullDirectoryRestartInfo {
++		restart = 1
++	}
++	var iosb IO_STATUS_BLOCK
++	r1, _, _ := syscall.SyscallN(procNtQueryDirectoryFile.Addr(), uintptr(handle), 0, 0, 0,
++		uintptr(unsafe.Pointer(&iosb)), uintptr(unsafe.Pointer(info)), uintptr(size), 2, 0, 0, restart)
++	status := NTStatus(r1)
++	if status == 0x103 { // STATUS_PENDING: do not return while the buffer is in use.
++		_, waitErr := syscall.WaitForSingleObject(handle, syscall.INFINITE)
++		if waitErr != nil {
++			// A valid directory handle remains owned by os.File during this call.
++			// A caller concurrently closing a raw handle violates that ownership.
++			return waitErr
++		}
++		status = iosb.Status
++	}
++	runtime.KeepAlive(info)
++	runtime.KeepAlive(&iosb)
++	if status != 0 {
++		return status.Errno()
++	}
++	if iosb.Information == 0 {
++		return syscall.ERROR_NO_MORE_FILES
++	}
++	return nil
++}
