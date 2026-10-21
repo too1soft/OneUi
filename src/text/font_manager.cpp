@@ -69,14 +69,16 @@ sk_sp<SkTypeface> makeTypefaceFromData(sk_sp<SkData> data) {
     auto platform = makePlatformFontManager();
     auto face = platform ? platform->makeFromData(data) : nullptr;
 #if defined(ONEUI_PORTABLE_FONT_LOADER)
-    // CoreText and Win7 DirectWrite cannot open some application font formats,
-    // including the pinned CBDT color-emoji acceptance font.
-    // Keep native rendering for supported fonts, and decode application font
-    // bytes with the pinned static FreeType backend only when native loading
-    // fails. Never install fonts or change modern system font discovery.
-    if (!face) {
+    // Some native backends cannot open application fonts; Win7 DirectWrite
+    // can also open a variable font while ignoring all of its axes, leaving
+    // every requested weight at the default (often 100). Prefer the existing
+    // FreeType loader only for missing faces or missing variation support.
+    if (!face || face->getVariationDesignParameters({}) <= 0) {
         auto portable = SkFontMgr_New_Custom_Empty();
-        if (portable) face = portable->makeFromData(std::move(data));
+        auto portableFace = portable ? portable->makeFromData(std::move(data)) : nullptr;
+        if (portableFace && (!face || portableFace->getVariationDesignParameters({}) > 0)) {
+            face = std::move(portableFace);
+        }
     }
 #endif
     return face;
