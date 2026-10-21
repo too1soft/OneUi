@@ -62,7 +62,7 @@ Value Runtime::constant(uint32_t index) const {
     return value;
 }
 std::string narrow(const std::wstring &text) {
-    return std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>>{}.to_bytes(text);
+    return unicode::toUtf8(text);
 }
 void setScalar(ui::Mount &factory, ui::Element &e, const std::string &name, const Value &v) {
     if (name == "host" || name == "pane-key")

@@ -1,4 +1,7 @@
+pub mod application_events;
 pub mod data;
+#[cfg(target_os = "macos")]
+pub use application_events::*;
 pub mod interaction;
 pub mod platform;
 

@@ -2,17 +2,15 @@
 // Generated C++ adapters share the frozen foreign-VM protocol with Rust.
 #include "oneui/oneui_view_c_api.h"
 #include "oneui/ui_declarative.h"
-#include <codecvt>
-#include <locale>
 #include <limits>
 
 namespace oneui::ui::view {
 inline std::string utf8(const std::wstring &s) {
-    return std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>>{}.to_bytes(s);
+    return unicode::toUtf8(s);
 }
 inline std::string utf8(const std::string &s) { return s; }
 inline std::wstring wide(const std::string &s) {
-    return std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>>{}.from_bytes(s);
+    return unicode::fromUtf8(s);
 }
 template<class T> auto fieldImpl(T &v, int) -> decltype(v.get()) { return v.get(); }
 template<class T> T &fieldImpl(T &v, long) { return v; }

@@ -66,16 +66,28 @@ fn main() {
                         destination.display()
                     )
                 });
-                fs::copy(&runtime, destination.join("oneui.dll")).unwrap_or_else(|error| {
-                    panic!(
-                        "failed to copy {} into {}: {error}",
-                        runtime.display(),
-                        destination.display()
-                    )
-                });
+                copy_runtime_if_changed(&runtime, &destination.join("oneui.dll")).unwrap_or_else(
+                    |error| {
+                        panic!(
+                            "failed to copy {} into {}: {error}",
+                            runtime.display(),
+                            destination.display()
+                        )
+                    },
+                );
             }
         }
     }
+}
+
+fn copy_runtime_if_changed(source: &Path, destination: &Path) -> std::io::Result<()> {
+    if destination.is_file()
+        && fs::metadata(source)?.len() == fs::metadata(destination)?.len()
+        && fs::read(source)? == fs::read(destination)?
+    {
+        return Ok(());
+    }
+    fs::copy(source, destination).map(|_| ())
 }
 
 fn link_sdk(sdk: &Path) {

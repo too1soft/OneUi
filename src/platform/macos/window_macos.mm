@@ -1,4 +1,5 @@
 #include "window_operations_macos.h"
+#include "application_events_macos.h"
 #include "dock_drag_macos.h"
 #include "include/core/SkFontMgr.h"
 #include "include/ports/SkFontMgr_mac_ct.h"
@@ -136,6 +137,7 @@ class CocoaWindow final : public platform::DesktopWindow {
         static bool launched = false;
         if (!launched) {
             [NSApplication sharedApplication];
+            installOpenUriEvents();
             [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
             [NSApp finishLaunching];
             launched = true;

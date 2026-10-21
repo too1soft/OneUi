@@ -34,6 +34,16 @@ MSVC bundled-static 的 DLL 通过 product 运行库审计；本轮 MinGW 回归
 
 ## 后端选择与能力
 
+### Rust 应用接入增量
+
+`oneui::desktop::open_uri` / `open_path` 提供系统处理器激活：URI 先检查 scheme 语法、长度和控制字符；Unix 使用单个原样参数调用 `/usr/bin/open` 或 `xdg-open`，不拼 shell。应用仍须执行自己的 scheme 和权限策略。
+
+`clipboard_text_with_limit(max_bytes)` 在分配前检查原生所需字节数，并拒绝读取期间增大的结果；`clipboard_text()` 保留接口，默认上限 16 MiB。它们须在平台 UI 线程使用，Wayland 的交互序号约束仍然适用。
+
+Mac 新增可选 C 入口 `oneui_macos_set_open_uri_callback`（`oneui/application_events.h`），不改变现有 ABI 45 结构。AppKit 在首次窗口初始化时安装 URL Apple Event 接收器；未订阅时暂存最多 32 条、每条最多 8192 字节的冷启动事件。Rust `application_events::OpenUriSubscription` 是进程唯一、不可跨线程的主线程订阅；释放时先清原生回调再释放闭包，回调允许释放订阅并隔离 panic。应用同时处理 argv 和订阅事件；打包需在 Info.plist 声明 scheme。旧 SDK 即使 ABI 数值相同也可能缺少这一入口，Mac 消费者必须使用匹配的新构建。
+
+本次增量已做 Linux 原生构建及 Rust 绑定检查；当前变更的 AppKit 编译、冷/热 URL 启动与退订仍需 Mac 实机验证，不沿用旧版 Mac 验收记录。
+
 `ONEUI_LINUX_BACKEND=auto|x11|wayland` 在首次创建连接时读取。`auto` 在有
 `WAYLAND_DISPLAY` 时优先连接 Wayland；初始化失败且有 `DISPLAY` 时打印原因并尝试 X11。
 显式选择不会静默回退，错误的值直接失败。没有桌面会话不伪造一个空窗口。

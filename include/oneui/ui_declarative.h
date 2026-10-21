@@ -38,12 +38,11 @@
 #include "oneui/controls/menu.h"
 #include "oneui/controls/table.h"
 #include "oneui/clipboard.h"
-#include <codecvt>
-#include <locale>
+#include "oneui/unicode.h"
 #include <set>
 
 namespace oneui::ui {
-inline std::wstring wide(const std::string& s) { return std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>>{}.from_bytes(s); }
+inline std::wstring wide(const std::string& s) { return unicode::fromUtf8(s); }
 struct Element : Node {
     std::vector<std::shared_ptr<Widget>> collapsible;
     std::string component, classes;

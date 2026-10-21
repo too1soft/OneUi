@@ -50,6 +50,16 @@ macro_rules! native_tests {
 }
 
 native_tests! {
+fn bounded_clipboard_reads_preserve_unicode_and_reject_oversized_payloads() {
+    let _guard = window_test_lock().lock().unwrap();
+    let window = Window::new(&WindowOptions::default()).unwrap();
+    assert!(window.capabilities().clipboard());
+    let previous = super::clipboard_text();
+    assert!(super::set_clipboard_text("OneUI 中文🙂"));
+    assert_eq!(super::clipboard_text_with_limit(4), None);
+    assert_eq!(super::clipboard_text_with_limit(128).as_deref(), Some("OneUI 中文🙂"));
+    if let Some(previous) = previous { assert!(super::set_clipboard_text(&previous)); }
+}
 fn keyed_revisions_preserve_identity_and_reject_inactive_producers() {
     let _guard=window_test_lock().lock().unwrap();
     let window=Window::new(&WindowOptions::default()).unwrap();let d=window.dispatcher();

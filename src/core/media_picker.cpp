@@ -1,7 +1,6 @@
 #include "oneui/controls/media_picker.h"
 #include "picker_styles.h"
-#include <codecvt>
-#include <locale>
+#include "oneui/unicode.h"
 #include <stdexcept>
 namespace oneui {
 MediaPicker::MediaPicker():preview_(std::make_shared<MediaPreview>()),choose_(std::make_shared<Button>(L"Choose image")),
@@ -22,10 +21,10 @@ void MediaPicker::styleScopeChanged() {
 void MediaPicker::setConfig(MediaPickerConfig value) {
     config_=std::move(value);preview_->setSource(config_.asset);
     auto filename=config_.asset.substr(config_.asset.find_last_of("/\\")==std::string::npos?0:config_.asset.find_last_of("/\\")+1);
-    auto fallback=config_.asset.empty()?std::wstring(L"No image selected"):std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>>{}.from_bytes(filename);
+    auto fallback=config_.asset.empty()?std::wstring(L"No image selected"):unicode::fromUtf8(filename);
     auto text=config_.loading?L"Loading image…":!config_.error.empty()?config_.error:config_.label.empty()?fallback:config_.label;
     label_->setText(text);preview_->setAccessibleDescription(config_.label);
-    auto path=std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>>{}.from_bytes(config_.asset);label_->setTooltip(path);
+    auto path=unicode::fromUtf8(config_.asset);label_->setTooltip(path);
     choose_->setDisabled(config_.loading);clear_->setDisabled(config_.loading||config_.asset.empty());cancel_->setVisible(config_.loading);
     layoutChildren();invalidate();
 }

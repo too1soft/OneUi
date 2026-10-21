@@ -7,7 +7,9 @@
 mod style_sheet;
 pub use style_sheet::{StyleSheet, StyleSheetError};
 mod clipboard;
-pub use clipboard::{clipboard_text, set_clipboard_text};
+pub use clipboard::{clipboard_text, clipboard_text_with_limit, set_clipboard_text};
+pub mod application_events;
+pub mod desktop;
 mod window_operations;
 #[cfg(test)]
 use window_operations::parse_multiple_file_dialog_output;
