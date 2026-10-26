@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.20)
 get_filename_component(root "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
 set(pending "${root}/include/oneui/oneui_c_api.h")
+# Optional platform C services have independent public headers.
+list(APPEND pending "${root}/include/oneui/application_events.h")
 set(seen "")
 set(header "")
 while(pending)

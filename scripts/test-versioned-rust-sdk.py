@@ -13,6 +13,7 @@ p = argparse.ArgumentParser()
 for field in ("packages", "work", "cargo-target", "report"):
     p.add_argument("--" + field, type=Path, required=True)
 p.add_argument("--target", required=True)
+p.add_argument("--version", help="Select an immutable version when historical packages coexist")
 p.add_argument("--cargo", default="cargo")
 p.add_argument("--rust-target", default="")
 args = p.parse_args()
@@ -29,7 +30,8 @@ with args.report.with_suffix(".log").open("w", encoding="utf-8") as log:
             shutil.rmtree(root)
         root.mkdir(parents=True)
         (root / ".oneui-owned-fixture").write_text("OneUI packaged Rust consumer")
-        packages = list(args.packages.glob("*-" + args.target + "-" + linkage + ".zip"))
+        prefix = "oneui-" + args.version if args.version else "*"
+        packages = list(args.packages.glob(prefix + "-" + args.target + "-" + linkage + ".zip"))
         if len(packages) != 1:
             raise ValueError("Select exactly one SDK release")
         sdk, project = root / "sdk", root / "consumer"

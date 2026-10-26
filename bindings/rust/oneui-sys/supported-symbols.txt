@@ -639,3 +639,6 @@ oneui_view_dock_action
 oneui_view_dock_item_metrics
 oneui_view_workspace_tab_drag
 oneui_view_element_visible
+
+# Optional macOS application service.
+oneui_macos_set_open_uri_callback
