@@ -42,6 +42,11 @@ class CocoaWindow;
 @interface OneUiNativeDelegate : NSObject <NSWindowDelegate>
 @property(nonatomic, assign) oneui::macos::CocoaWindow *owner;
 @end
+// Dock reopen events and the default application menu's Quit item.
+@interface OneUiApplicationActions : NSObject
+- (void)handleReopen:(NSAppleEventDescriptor *)event reply:(NSAppleEventDescriptor *)reply;
+- (void)quit:(id)sender;
+@end
 
 namespace oneui::macos {
 static std::vector<CocoaWindow *> windows;
@@ -139,8 +144,12 @@ class CocoaWindow final : public platform::DesktopWindow {
         if (!launched) {
             [NSApplication sharedApplication];
             installOpenUriEvents();
+            if (!NSApp.mainMenu) NSApp.mainMenu = defaultMainMenu(applicationActions());
             [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
             [NSApp finishLaunching];
+            // After finishLaunching, which installs AppKit's own reopen handler.
+            [[NSAppleEventManager sharedAppleEventManager] setEventHandler:applicationActions()
+                andSelector:@selector(handleReopen:reply:) forEventClass:0x61657674 andEventID:0x72617070];
             launched = true;
         }
         native_ = [[OneUiNativeWindow alloc]
@@ -384,6 +393,27 @@ class CocoaWindow final : public platform::DesktopWindow {
             [buttons[i] setFrameOrigin:NSMakePoint(kTrafficLightLeading + i * kTrafficLightStep, y)];
     }
     void didExitFullScreen() { layoutTrafficLights(); }
+    // Clicking the Dock icon with no visible window brings back a window that
+    // was closed to the tray (or minimized), as macOS users expect.
+    static void reopenFromDock() {
+        for (auto* item : windows)
+            if (item->native_ && item->shown_ && item->native_.visible && !item->native_.miniaturized) return;
+        for (auto* item : windows)
+            if (item->native_ && !item->isClosed()) {
+                item->activate();
+                return;
+            }
+    }
+    // Quit goes through the first window's close request with force-exit, so
+    // the application can confirm running work exactly as from the tray.
+    static void quitFromMenu() {
+        for (auto* item : windows)
+            if (!item->isClosed()) {
+                item->requestTrayExit();
+                return;
+            }
+        [NSApp terminate:nil];
+    }
     bool prepareContentTransfer(Widget* subtree) override {
         assertUiThread();
         if (subtree && subtree->focused()) [view_ cancelComposition];
@@ -509,6 +539,45 @@ class CocoaWindow final : public platform::DesktopWindow {
         [native_ setFrame:NSMakeRect(fitted.x, fitted.y, fitted.width, fitted.height) display:NO];
     }
     static constexpr CGFloat kTrafficLightLeading = 14, kTrafficLightStep = 20;
+    // Receives kCoreEventClass/kAEReopenApplication and the default Quit item.
+    static OneUiApplicationActions* applicationActions() {
+        static OneUiApplicationActions* actions = [OneUiApplicationActions new];
+        return actions;
+    }
+    // Standard application and Window menus until the app installs its own
+    // menu bar (CocoaMenuBar restores this one when it goes away).
+    static NSMenu* defaultMainMenu(OneUiApplicationActions* actions) {
+        const bool chinese = [NSLocale.preferredLanguages.firstObject hasPrefix:@"zh"];
+        auto text = [chinese](NSString* zh, NSString* en) { return chinese ? zh : en; };
+        NSString* name = NSBundle.mainBundle.infoDictionary[@"CFBundleName"] ?: NSProcessInfo.processInfo.processName;
+        NSMenu* bar = [NSMenu new];
+        NSMenu* app = [[NSMenu alloc] initWithTitle:name];
+        [app addItemWithTitle:[NSString stringWithFormat:text(@"关于 %@", @"About %@"), name]
+                       action:@selector(orderFrontStandardAboutPanel:) keyEquivalent:@""];
+        [app addItem:NSMenuItem.separatorItem];
+        [app addItemWithTitle:[NSString stringWithFormat:text(@"隐藏 %@", @"Hide %@"), name] action:@selector(hide:) keyEquivalent:@"h"];
+        NSMenuItem* others = [app addItemWithTitle:text(@"隐藏其他", @"Hide Others")
+                                            action:@selector(hideOtherApplications:) keyEquivalent:@"h"];
+        others.keyEquivalentModifierMask = NSEventModifierFlagCommand | NSEventModifierFlagOption;
+        [app addItemWithTitle:text(@"全部显示", @"Show All") action:@selector(unhideAllApplications:) keyEquivalent:@""];
+        [app addItem:NSMenuItem.separatorItem];
+        NSMenuItem* quit = [app addItemWithTitle:[NSString stringWithFormat:text(@"退出 %@", @"Quit %@"), name]
+                                          action:@selector(quit:) keyEquivalent:@"q"];
+        quit.target = actions;
+        NSMenuItem* appItem = [NSMenuItem new];
+        appItem.submenu = app;
+        [bar addItem:appItem];
+        NSMenu* window = [[NSMenu alloc] initWithTitle:text(@"窗口", @"Window")];
+        [window addItemWithTitle:text(@"最小化", @"Minimize") action:@selector(performMiniaturize:) keyEquivalent:@"m"];
+        [window addItemWithTitle:text(@"缩放", @"Zoom") action:@selector(performZoom:) keyEquivalent:@""];
+        [window addItem:NSMenuItem.separatorItem];
+        [window addItemWithTitle:text(@"前置全部窗口", @"Bring All to Front") action:@selector(arrangeInFront:) keyEquivalent:@""];
+        NSMenuItem* windowItem = [NSMenuItem new];
+        windowItem.submenu = window;
+        [bar addItem:windowItem];
+        NSApp.windowsMenu = window;
+        return bar;
+    }
     void applyCaptionAppearance() {
         const bool overlay = options_.borderless;
         native_.titlebarAppearsTransparent = overlay;
@@ -537,6 +606,18 @@ class CocoaWindow final : public platform::DesktopWindow {
     OneUiNativeDelegate *delegate_ = nil;
 };
 } // namespace oneui::macos
+
+@implementation OneUiApplicationActions
+- (void)handleReopen:(NSAppleEventDescriptor *)event reply:(NSAppleEventDescriptor *)reply {
+    (void)event;
+    (void)reply;
+    oneui::macos::CocoaWindow::reopenFromDock();
+}
+- (void)quit:(id)sender {
+    (void)sender;
+    oneui::macos::CocoaWindow::quitFromMenu();
+}
+@end
 
 @implementation OneUiNativeDelegate
 - (BOOL)windowShouldClose:(NSWindow *)sender {
