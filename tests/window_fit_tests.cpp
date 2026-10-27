@@ -23,13 +23,13 @@ int main() {
     // 1600x1000 default on a 1512x945 point MacBook work area below a 37pt menu bar.
     const WindowFitRect macbook{0, 0, 1512, 945};
     const auto mac = initialWindowRect({0, 0, 1600, 1000}, macbook);
-    check(near(mac.width, 1512 * 0.9) && near(mac.height, 945 * 0.9), "oversized extents shrink to 90%");
+    check(near(mac.width, 1512 * 0.9) && near(mac.height, 945 * 0.95), "oversized width/height shrink to 90%/95%");
     check(near(mac.x, (1512 - mac.width) / 2) && near(mac.y, (945 - mac.height) / 2), "fitted frame is centered");
 
     // Only the overflowing extent shrinks; a width that fits is kept.
     const auto tall = initialWindowRect({100, 100, 1200, 1000}, {0, 40, 1920, 960});
-    check(near(tall.width, 1200) && near(tall.height, 864), "fitting width is preserved");
-    check(near(tall.y, 40 + 48), "centered inside an offset work area");
+    check(near(tall.width, 1200) && near(tall.height, 912), "fitting width is preserved");
+    check(near(tall.y, 40 + 24), "centered inside an offset work area");
 
     // A frame that already fits is returned unchanged, position included.
     const auto fits = initialWindowRect({10, 20, 1600, 1000}, {0, 0, 2560, 1400});

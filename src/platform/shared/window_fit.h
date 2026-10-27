@@ -24,12 +24,14 @@ inline bool windowExceedsArea(const WindowFitRect& frame, const WindowFitRect& a
 // A requested first-show size larger than the screen (1600x1000 on a 1440x900
 // point MacBook) would open partly off screen. Oversized extents shrink to a
 // share of the work area so the result does not read as maximized; extents
-// that already fit are kept. The frame is centered in the work area.
+// that already fit are kept. Height keeps a larger share: work areas are
+// already wide (menu bar and Dock take height), so 90% of both reads flat.
+// The frame is centered in the work area.
 inline WindowFitRect initialWindowRect(WindowFitRect frame, const WindowFitRect& area) {
-    constexpr double share = 0.9;
+    constexpr double widthShare = 0.9, heightShare = 0.95;
     if (!windowExceedsArea(frame, area)) return frame;
-    if (frame.width > area.width) frame.width = std::max(1.0, area.width * share);
-    if (frame.height > area.height) frame.height = std::max(1.0, area.height * share);
+    if (frame.width > area.width) frame.width = std::max(1.0, area.width * widthShare);
+    if (frame.height > area.height) frame.height = std::max(1.0, area.height * heightShare);
     frame.x = area.x + (area.width - frame.width) / 2;
     frame.y = area.y + (area.height - frame.height) / 2;
     return frame;
