@@ -159,6 +159,7 @@ class CocoaWindow final : public platform::DesktopWindow {
         delegate_.owner = this;
         native_.delegate = delegate_;
         native_.contentView = view_;
+        applyCaptionAppearance();
         setMinimumClientSize(minimum_);
         fileDropChanged(acceptsFileDrop());
         native_.acceptsMouseMovedEvents = YES;
@@ -311,8 +312,10 @@ class CocoaWindow final : public platform::DesktopWindow {
     void setBorderless(bool value) override {
         assertUiThread();
         options_.borderless = value;
-        if (native_)
+        if (native_) {
             native_.styleMask = styleMask();
+            applyCaptionAppearance();
+        }
     }
     void toggleMaximize() override {
         initialize();
@@ -347,12 +350,40 @@ class CocoaWindow final : public platform::DesktopWindow {
         setFrameIntervalMs(1000.0 / std::max(1.0, refresh));
         resize({static_cast<float>(size.width), static_cast<float>(size.height)}, native_.backingScaleFactor);
         [view_.inputContext invalidateCharacterCoordinates];
+        layoutTrafficLights();
     }
     void nativeFocus(bool value) {
         const auto alive = lifetime_;
         if (!value) [view_ cancelComposition];
         if (*alive && !isClosed()) focus(value);
     }
+    void setTitleBarDragMetrics(float height, float reserved) override {
+        DesktopWindow::setTitleBarDragMetrics(height, reserved);
+        captionHeight_ = height;
+        layoutTrafficLights();
+    }
+    // Borderless windows keep a transparent system title bar on macOS. The
+    // system traffic lights sit over the app caption, vertically centered in
+    // its height and starting kTrafficLightLeading points from the left edge.
+    void layoutTrafficLights() {
+        if (!native_ || !options_.borderless || (native_.styleMask & NSWindowStyleMaskFullScreen)) return;
+        NSButton* buttons[] = {[native_ standardWindowButton:NSWindowCloseButton],
+                               [native_ standardWindowButton:NSWindowMiniaturizeButton],
+                               [native_ standardWindowButton:NSWindowZoomButton]};
+        if (!buttons[0] || !buttons[1] || !buttons[2]) return;
+        NSView* container = buttons[0].superview.superview; // NSTitlebarContainerView
+        if (!container) return;
+        const NSSize button = buttons[0].frame.size;
+        const CGFloat caption = std::max<CGFloat>(captionHeight_ * contentScale_, button.height);
+        NSRect bar = container.frame;
+        bar.size.height = caption;
+        bar.origin.y = native_.frame.size.height - caption;
+        container.frame = bar;
+        const CGFloat y = std::round((caption - button.height) / 2);
+        for (int i = 0; i < 3; ++i)
+            [buttons[i] setFrameOrigin:NSMakePoint(kTrafficLightLeading + i * kTrafficLightStep, y)];
+    }
+    void didExitFullScreen() { layoutTrafficLights(); }
     bool prepareContentTransfer(Widget* subtree) override {
         assertUiThread();
         if (subtree && subtree->focused()) [view_ cancelComposition];
@@ -407,7 +438,8 @@ class CocoaWindow final : public platform::DesktopWindow {
         e.alt = event.modifierFlags & NSEventModifierFlagOption;
         e.clickCount = event.clickCount;
         if (action == 1 && e.button == MouseButton::Left && dragRegion(e.position)) {
-            [native_ performWindowDragWithEvent:event];
+            if (event.clickCount == 2) titleBarDoubleClick();
+            else [native_ performWindowDragWithEvent:event];
             return;
         }
         mouse(e, action);
@@ -439,7 +471,10 @@ class CocoaWindow final : public platform::DesktopWindow {
     }
 
   protected:
-    void contentScaleChanged() override { setMinimumClientSize(minimum_); }
+    void contentScaleChanged() override {
+        setMinimumClientSize(minimum_);
+        layoutTrafficLights();
+    }
     void fileDropChanged(bool enabled) override {
         updateDraggedTypes(view_, enabled);
     }
@@ -473,14 +508,31 @@ class CocoaWindow final : public platform::DesktopWindow {
         const auto fitted = platform::initialWindowRect(current, work);
         [native_ setFrame:NSMakeRect(fitted.x, fitted.y, fitted.width, fitted.height) display:NO];
     }
+    static constexpr CGFloat kTrafficLightLeading = 14, kTrafficLightStep = 20;
+    void applyCaptionAppearance() {
+        const bool overlay = options_.borderless;
+        native_.titlebarAppearsTransparent = overlay;
+        native_.titleVisibility = overlay ? NSWindowTitleHidden : NSWindowTitleVisible;
+        if (overlay) native_.tabbingMode = NSWindowTabbingModeDisallowed;
+        layoutTrafficLights();
+    }
+    // The app caption covers the system title bar, so its empty area follows
+    // the user's "double-click a window's title bar" preference here.
+    void titleBarDoubleClick() {
+        NSString* action = [NSUserDefaults.standardUserDefaults stringForKey:@"AppleActionOnDoubleClick"];
+        if ([action isEqualToString:@"Minimize"]) [native_ miniaturize:nil];
+        else if (![action isEqualToString:@"None"]) [native_ zoom:nil];
+    }
     NSWindowStyleMask styleMask() const {
         if (options_.borderless)
-            return NSWindowStyleMaskBorderless | (options_.resizable ? NSWindowStyleMaskResizable : 0);
+            return NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskMiniaturizable |
+                   NSWindowStyleMaskFullSizeContentView | (options_.resizable ? NSWindowStyleMaskResizable : 0);
         return NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskMiniaturizable |
                (options_.resizable ? NSWindowStyleMaskResizable : 0);
     }
     NSWindow *native_ = nil;
     Size minimum_{};
+    float captionHeight_ = 0;
     OneUiNativeView *view_ = nil;
     OneUiNativeDelegate *delegate_ = nil;
 };
@@ -502,6 +554,10 @@ class CocoaWindow final : public platform::DesktopWindow {
     (void)n;
     if (_owner)
         _owner->resized();
+}
+- (void)windowDidExitFullScreen:(NSNotification *)n {
+    (void)n;
+    if (_owner) _owner->didExitFullScreen();
 }
 - (void)windowDidChangeScreen:(NSNotification *)n {
     (void)n;
@@ -536,6 +592,11 @@ class CocoaWindow final : public platform::DesktopWindow {
 }
 - (BOOL)isFlipped {
     return YES;
+}
+// The transparent title bar overlaps this view; dragging is decided by the
+// app caption (dragRegion), not by AppKit's title-bar click handling.
+- (BOOL)mouseDownCanMoveWindow {
+    return NO;
 }
 - (BOOL)acceptsFirstResponder {
     return YES;
