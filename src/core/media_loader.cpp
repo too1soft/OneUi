@@ -31,7 +31,7 @@ class Loader {
         auto size=std::filesystem::file_size(path,error);if(error||size>maxFile)return failure("limit","Encoded image exceeds 32 MiB");
         auto time=std::filesystem::last_write_time(path,error);if(error)return failure("io","Cannot read image revision");
         auto canonical=std::filesystem::absolute(path).lexically_normal().u8string();
-        auto key=std::string(canonical.begin(),canonical.end())+":"+std::to_string(size)+":"+std::to_string(time.time_since_epoch().count());
+        auto key=std::string(canonical.begin(),canonical.end())+":"+std::to_string(size)+":"+std::to_string(static_cast<long long>(time.time_since_epoch().count()));
         for(auto it=cache_.begin();it!=cache_.end();++it)if(it->key==key) {
             auto value=*it;cache_.erase(it);cache_.push_back(value);return value.pixels;
         }
