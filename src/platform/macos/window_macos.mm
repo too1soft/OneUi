@@ -9,6 +9,7 @@
 #include "platform/shared/key_mapping.h"
 #include "platform/shared/skia_canvas.h"
 #include "platform/shared/text_input.h"
+#include "platform/shared/window_fit.h"
 #import <Cocoa/Cocoa.h>
 #include <algorithm>
 #include <stdexcept>
@@ -161,6 +162,7 @@ class CocoaWindow final : public platform::DesktopWindow {
         setMinimumClientSize(minimum_);
         fileDropChanged(acceptsFileDrop());
         native_.acceptsMouseMovedEvents = YES;
+        fitInitialFrame();
         [native_ center];
         [native_ makeFirstResponder:view_];
         windows.push_back(this);
@@ -459,6 +461,18 @@ class CocoaWindow final : public platform::DesktopWindow {
     }
 
   private:
+    // Requested sizes are logical points; a 1600x1000 default is larger than
+    // most MacBook screens, and AppKit does not constrain borderless frames.
+    void fitInitialFrame() {
+        NSScreen* screen = native_.screen ?: NSScreen.mainScreen;
+        if (!screen) return;
+        const NSRect frame = native_.frame, area = screen.visibleFrame;
+        const platform::WindowFitRect current{frame.origin.x, frame.origin.y, frame.size.width, frame.size.height};
+        const platform::WindowFitRect work{area.origin.x, area.origin.y, area.size.width, area.size.height};
+        if (!platform::windowExceedsArea(current, work)) return;
+        const auto fitted = platform::initialWindowRect(current, work);
+        [native_ setFrame:NSMakeRect(fitted.x, fitted.y, fitted.width, fitted.height) display:NO];
+    }
     NSWindowStyleMask styleMask() const {
         if (options_.borderless)
             return NSWindowStyleMaskBorderless | (options_.resizable ? NSWindowStyleMaskResizable : 0);

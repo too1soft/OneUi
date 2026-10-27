@@ -20,6 +20,7 @@
 #include "internal/animation_wake.h"
 #include "platform/shared/skia_canvas.h"
 #include "platform/shared/title_bar_hit.h"
+#include "platform/shared/window_fit.h"
 #include "platform/win32/compat_win32.h"
 #include "platform/win32/window_shadow.h"
 

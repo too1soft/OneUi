@@ -61,6 +61,7 @@
 
         if (hwnd_) {
             dpiScale_ = dpiScaleForWindowHandle(hwnd_);
+            fitInitialWindowToWorkArea();
 #ifdef ONEUI_ENABLE_TEST_FRAME_CAPTURE
             // CreateWindow may query size limits before WM_NCCREATE installs
             // our instance. Reapply the requested test canvas with our handler active.
@@ -85,6 +86,32 @@
         if (hwnd_ && options_.fullscreen) {
             applyWindowState();
         }
+    }
+
+    // CreateWindowEx does not constrain popup windows, so a large requested
+    // size on a small or high-scale display would open past the work area.
+    void fitInitialWindowToWorkArea() {
+        RECT window{};
+        MONITORINFO monitorInfo{};
+        monitorInfo.cbSize = sizeof(monitorInfo);
+        const HMONITOR monitor = MonitorFromWindow(hwnd_, MONITOR_DEFAULTTONEAREST);
+        if (!GetWindowRect(hwnd_, &window) || !monitor || !GetMonitorInfoW(monitor, &monitorInfo)) {
+            return;
+        }
+        const RECT& work = monitorInfo.rcWork;
+        const platform::WindowFitRect current{
+            static_cast<double>(window.left), static_cast<double>(window.top),
+            static_cast<double>(window.right - window.left), static_cast<double>(window.bottom - window.top)};
+        const platform::WindowFitRect area{
+            static_cast<double>(work.left), static_cast<double>(work.top),
+            static_cast<double>(work.right - work.left), static_cast<double>(work.bottom - work.top)};
+        if (!platform::windowExceedsArea(current, area)) {
+            return;
+        }
+        const auto fitted = platform::initialWindowRect(current, area);
+        SetWindowPos(hwnd_, nullptr, static_cast<int>(std::lround(fitted.x)), static_cast<int>(std::lround(fitted.y)),
+                     static_cast<int>(std::lround(fitted.width)), static_cast<int>(std::lround(fitted.height)),
+                     SWP_NOZORDER | SWP_NOACTIVATE);
     }
 
     static LRESULT CALLBACK windowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
