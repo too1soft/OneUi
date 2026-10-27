@@ -184,6 +184,7 @@ extern "C" {
         window: *mut OneUiWindow,
         family: OneUiUtf8String,
     );
+    pub fn oneui_window_set_content_scale(window: *mut OneUiWindow, scale: c_float);
     pub fn oneui_window_post_owned(
         window: *mut OneUiWindow,
         callback: OneUiVoidCallback,

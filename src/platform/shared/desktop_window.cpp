@@ -747,10 +747,12 @@ void DesktopWindow::setTitleBarInteractiveInsets(float l, float r) {
     interactiveTrailing_ = r;
 }
 bool DesktopWindow::dragRegion(Point p) const {
-    if (!options_.borderless || p.y < 0 || p.y >= titleHeight_ || p.x >= logicalSize_.width - reservedWidth_)
+    // Title-bar metrics arrive in content units, like Win32's normalized scale.
+    const float s = contentScale_;
+    if (!options_.borderless || p.y < 0 || p.y >= titleHeight_ * s || p.x >= logicalSize_.width - reservedWidth_ * s)
         return false;
     if (titleBarControlAt(content_, clientPoint(p))) return false;
-    return interactiveLeading_ < 0 || interactiveTrailing_ < 0 || p.x < interactiveLeading_ ||
-           p.x >= logicalSize_.width - interactiveTrailing_;
+    return interactiveLeading_ < 0 || interactiveTrailing_ < 0 || p.x < interactiveLeading_ * s ||
+           p.x >= logicalSize_.width - interactiveTrailing_ * s;
 }
 } // namespace oneui::platform
