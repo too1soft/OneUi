@@ -39,9 +39,19 @@ void dataMenus() {
     check(rejected,"cyclic submenu rejected");
     test_support::RecordingCanvas canvas;
     menu->paint(canvas);
-    check(std::any_of(canvas.texts.begin(),canvas.texts.end(),[](const auto& text) {
-        return text.text.find(L"Ctrl+C")!=std::wstring::npos && text.text.find(L"\u2713")!=std::wstring::npos;
-    }),"check mark and shortcut hint rendered");
+    const auto marked=std::find_if(canvas.texts.begin(),canvas.texts.end(),[](const auto& text) {
+        return text.text==L"\u2713 Checked";
+    });
+    const auto hint=std::find_if(canvas.texts.begin(),canvas.texts.end(),[](const auto& text) {
+        return text.text==L"Ctrl+C";
+    });
+    // Menu paints the semantic title and right-aligned shortcut separately.
+    // Verify both and their row geometry, rather than an obsolete joined string.
+    check(marked!=canvas.texts.end() && hint!=canvas.texts.end() &&
+          marked->rect.width>0 && hint->rect.width>0 &&
+          marked->rect.x+marked->rect.width<=hint->rect.x+0.5f &&
+          marked->rect.y==hint->rect.y && hint->align==TextAlign::Right,
+          "check mark and separate, aligned shortcut hint rendered");
 
     DataMenuEntry header; header.id="group"; header.text=L"Group"; header.header=true;
     auto grouped=entries; grouped.insert(grouped.begin(),header);
