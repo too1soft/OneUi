@@ -1,3 +1,4 @@
+#include "table_style_override.h"
 #include "oneui/controls/table.h"
 #include "internal/widget_presentation.h"
 

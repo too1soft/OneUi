@@ -49,7 +49,29 @@ inline std::optional<IconSymbol> namedIcon(std::string_view name) {
         {"folder-native",IconSymbol::Folder},{"file-native",IconSymbol::File},
         {"download-native",IconSymbol::Download},{"chevron-down",IconSymbol::ChevronDown},
         {"plus-native",IconSymbol::Plus},{"chevron-up",IconSymbol::ChevronUp},
+        {"double-chevron-right",IconSymbol::OutlineDoubleChevronRight},{"circle-user",IconSymbol::OutlineCircleUser},
+        {"notebook-outline",IconSymbol::OutlineNotebook},{"checklist-outline",IconSymbol::OutlineChecklist},
+        {"code-brackets",IconSymbol::OutlineCodeBrackets},{"square-terminal",IconSymbol::OutlineSquareTerminal},
+{"star-filled",IconSymbol::FilledStar},{"star-outline",IconSymbol::OutlineStar},{"clock",IconSymbol::OutlineClock},{"circle-slash",IconSymbol::OutlineCircleSlash},{"hash",IconSymbol::OutlineHash},{"sort-arrows",IconSymbol::OutlineSortArrows},{"list-outline",IconSymbol::OutlineList},
+        {"archive",IconSymbol::OutlineArchive},{"hard-drive",IconSymbol::OutlineHardDrive},
+        {"clipboard-paste",IconSymbol::OutlineClipboardPaste},{"network",IconSymbol::OutlineNetwork},
+        {"plug-zap",IconSymbol::OutlinePlugZap},{"chevrons-up-down",IconSymbol::OutlineChevronsUpDown},
+        {"activity",IconSymbol::OutlineActivity},
+        {"clipboard-copy",IconSymbol::OutlineClipboardCopy},
+        {"copy-plus",IconSymbol::OutlineCopyPlus},
+        {"folder-input",IconSymbol::OutlineFolderInput},
+        {"columns-2",IconSymbol::OutlineColumns2},
+        {"monitor-play",IconSymbol::OutlineMonitorPlay},
+        {"sliders-horizontal",IconSymbol::OutlineSlidersHorizontal},
+        {"keyboard",IconSymbol::OutlineKeyboard},
+        {"shield-check",IconSymbol::OutlineShieldCheck},
+        {"cloud",IconSymbol::OutlineCloud},
+        {"info",IconSymbol::OutlineInfo},
+        {"circle-user-round",IconSymbol::OutlineCircleUser},
+        {"git-branch",IconSymbol::OutlineGitBranch},{"app-window",IconSymbol::OutlineAppWindow},
         {"sparkles",IconSymbol::OutlineWorkbenchSparkles}
+        ,{"compass-outline",IconSymbol::OutlineCompass},{"wand-sparkles",IconSymbol::OutlineWandSparkles}
+        ,{"book-open",IconSymbol::OutlineBookOpen},{"package-plus",IconSymbol::OutlinePackagePlus},{"blocks",IconSymbol::OutlineBlocks}
     };
     for(const auto& entry:entries)if(entry.name==name)return entry.symbol;
     return {};

@@ -6,6 +6,7 @@
 #include "oneui/view.h"
 
 #include <functional>
+#include <array>
 #include <memory>
 #include <optional>
 #include <string>
@@ -21,6 +22,7 @@ namespace oneui {
 // 遮罩（scrim）与居中定位属 overlay 编排，由调用方通过 OverlayHost 完成。
 class ONEUI_API Dialog final : public View {
 public:
+    struct TextPart { std::wstring text; Rect frame; Color color; float fontSize; int fontWeight; };
     Dialog(std::wstring title = {}, std::wstring subtitle = {});
 
     void setTitle(std::wstring title);
@@ -28,6 +30,12 @@ public:
     void setIconSymbol(IconSymbol symbol);
     void clearIconSymbol();
     void setCloseVisible(bool visible);
+    // Optional chrome variants; defaults preserve the standard inset dialog.
+    void setEdgeToEdgeContent(bool enabled);
+    void setCloseCentered(bool enabled);
+    void setHeaderHeight(float height);
+    void setHeaderTextLayout(float titleTop, float titleHeight, float subtitleTop, float subtitleHeight);
+    std::array<TextPart,2> textParts() const;
     void setOnClose(std::function<void()> callback);
     void setContent(std::shared_ptr<Widget> content);
     void setActions(std::shared_ptr<Widget> actions);
@@ -63,6 +71,10 @@ private:
     std::wstring subtitle_;
     std::optional<IconSymbol> icon_;
     bool closeVisible_ = true;
+    bool edgeToEdgeContent_ = false;
+    bool closeCentered_ = false;
+    float headerHeight_ = 48.0f;
+    std::array<float,4> headerTextLayout_{1.0f,25.0f,27.0f,20.0f};
     bool closeHovered_ = false;
     bool closePressed_ = false;
     std::function<void()> onClose_;

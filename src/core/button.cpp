@@ -12,6 +12,9 @@
 #include <utility>
 
 namespace oneui {
+ButtonStyle Button::currentPaintStyle() const { return visualStyle(resolvedStyle()); }
+void Button::setIconColor(std::optional<Color> color) { iconColor_ = color; invalidate(); }
+void Button::setCaptionOffsetY(float offset) { captionOffsetY_ = std::isfinite(offset) ? std::clamp(offset,-32.0f,32.0f) : 0.0f; invalidate(); }
 namespace {
 
 void applyFocusRingOverride(FocusRingStyle& style, const FocusRingStyleOverride& override) {
@@ -315,16 +318,17 @@ void Button::paint(Canvas& canvas) {
         contentClip.canvas = &canvas;
     }
     const std::wstring& label = this->text();
+    const auto captionRect = [this](Rect bounds) { bounds.y += captionOffsetY_; return bounds; };
     if (icon_ && !trailingText_.empty()) {
         const float inset = style.padding ? 0.0f : std::min(12.0f, rect.width / 4.0f);
         const float side = style.iconSize.value_or(style.fontSize + 2.0f);
         const float countWidth = canvas.measureTextWidth(trailingText_, style.fontSize, style.fontWeight);
         const Rect iconRect{rect.x + inset, rect.y + (rect.height-side)/2, side, side};
-        paintIcon(canvas, *icon_, iconRect, style.foreground, Color{0,0,0,0}, 1.6f);
+        paintIcon(canvas, *icon_, iconRect, disabled() ? style.foreground : iconColor_.value_or(style.foreground), Color{0,0,0,0}, 1.6f);
         const Rect countRect{rect.x+rect.width-inset-countWidth,rect.y,countWidth,rect.height};
         const Rect textRect{iconRect.x+side+8,rect.y,std::max(0.0f,countRect.x-8-iconRect.x-side-8),rect.height};
-        canvas.drawTextStyledEllipsized(label,textRect,style.foreground,style.fontSize,TextAlign::Left,style.fontWeight);
-        canvas.drawTextStyledEllipsized(trailingText_,countRect,style.foreground,style.fontSize,TextAlign::Right,style.fontWeight);
+        canvas.drawTextStyledEllipsized(label, captionRect(textRect),style.foreground,style.fontSize,TextAlign::Left,style.fontWeight);
+        canvas.drawTextStyledEllipsized(trailingText_, captionRect(countRect),style.foreground,style.fontSize,TextAlign::Right,style.fontWeight);
         return;
     }
     if (!icon_ && !trailingIcon_) {
@@ -342,11 +346,11 @@ void Button::paint(Canvas& canvas) {
                 rect.y,
                 trailingWidth,
                 rect.height};
-            canvas.drawTextStyledEllipsized(label, labelRect, style.foreground, style.fontSize, contentAlign_, style.fontWeight);
-            canvas.drawTextStyledEllipsized(trailingText_, trailingRect, style.foreground, style.fontSize, TextAlign::Right, style.fontWeight);
+            canvas.drawTextStyledEllipsized(label, captionRect(labelRect), style.foreground, style.fontSize, contentAlign_, style.fontWeight);
+            canvas.drawTextStyledEllipsized(trailingText_, captionRect(trailingRect), style.foreground, style.fontSize, TextAlign::Right, style.fontWeight);
             return;
         }
-        canvas.drawTextStyledEllipsized(label, rect, style.foreground, style.fontSize, contentAlign_, style.fontWeight);
+        canvas.drawTextStyledEllipsized(label, captionRect(rect), style.foreground, style.fontSize, contentAlign_, style.fontWeight);
         return;
     }
 
@@ -364,8 +368,8 @@ void Button::paint(Canvas& canvas) {
             rect.y,
             std::max(0.0f, iconRect.x - gap - (rect.x + inset)),
             rect.height};
-        canvas.drawTextStyled(label, labelRect, style.foreground, style.fontSize, contentAlign_, style.fontWeight);
-        paintIcon(canvas, *trailingIcon_, iconRect, style.foreground, Color{0, 0, 0, 0}, 1.6f);
+        canvas.drawTextStyled(label, captionRect(labelRect), style.foreground, style.fontSize, contentAlign_, style.fontWeight);
+        paintIcon(canvas, *trailingIcon_, iconRect, disabled() ? style.foreground : iconColor_.value_or(style.foreground), Color{0, 0, 0, 0}, 1.6f);
         return;
     }
 
@@ -404,14 +408,14 @@ void Button::paint(Canvas& canvas) {
                  : rect.y + (rect.height - iconSide) / 2.0f,
         iconSide,
         iconSide};
-    paintIcon(canvas, *icon_, iconRect, style.foreground, Color{0, 0, 0, 0}, 1.6f);
+    paintIcon(canvas, *icon_, iconRect, disabled() ? style.foreground : iconColor_.value_or(style.foreground), Color{0, 0, 0, 0}, 1.6f);
     if (!fittedLabel.empty()) {
         const Rect textRect{
             iconRect.x + iconSide + gap,
             rect.y,
             std::max(0.0f, rect.x + rect.width - (iconRect.x + iconSide + gap)),
             rect.height};
-        canvas.drawTextStyled(fittedLabel, textRect, style.foreground, style.fontSize, TextAlign::Left, style.fontWeight);
+        canvas.drawTextStyled(fittedLabel, captionRect(textRect), style.foreground, style.fontSize, TextAlign::Left, style.fontWeight);
     }
     if (trailingIcon_) {
         const Rect trailingRect{
@@ -419,7 +423,7 @@ void Button::paint(Canvas& canvas) {
             rect.y + (rect.height - iconSide) / 2.0f,
             iconSide,
             iconSide};
-        paintIcon(canvas, *trailingIcon_, trailingRect, style.foreground, Color{0, 0, 0, 0}, 1.6f);
+        paintIcon(canvas, *trailingIcon_, trailingRect, disabled() ? style.foreground : iconColor_.value_or(style.foreground), Color{0, 0, 0, 0}, 1.6f);
     }
 }
 

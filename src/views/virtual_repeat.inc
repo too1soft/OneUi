@@ -27,6 +27,9 @@ std::shared_ptr<Instance> Runtime::buildVirtual(uint32_t node, const Scopes& con
             auto row = runtime->build(runtime->image.records[oneview::TMPL][repeat[5]][1], nested);
             row->parent = owner;
             runtime->update(row);
+            // These descendants are assembled after the initial stylesheet pass.
+            // Resolve dimensions into their new parents before measuring the row.
+            runtime->factory.styles()->applyBaseLayouts();
             if (owner->published) activate(row);
             owner->rows.emplace(key, row);
             return row->element.widget;

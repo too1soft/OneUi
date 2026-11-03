@@ -1,6 +1,7 @@
 #include "oneui/ui_declarative.h"
 #include "oneui/layout/virtual_template_list.h"
 #include "data_menu.h"
+#include "chart_properties.h"
 #include <sstream>
 #include <cmath>
 #include "tabs_presentation.h"
@@ -23,26 +24,7 @@ void Mount::set(Element &e, const std::string &key, const std::wstring &value) {
             state->setIcon(*icon);return;
         }
     }
-    if(e.component=="TimeSeriesChart" && key=="grid-style") {
-        std::wistringstream input(value); int vertical; float width; wchar_t extra;
-        if(!(input>>vertical>>width) || (input>>extra) || vertical<0 || vertical>16 || !std::isfinite(width) || width<=0)
-            throw std::invalid_argument("Chart grid-style requires count and positive line width");
-        e.as<TimeSeriesChart>()->setGridStyle(vertical,width);return;
-    }
-    if(e.component=="TimeSeriesChart" && key=="fill-extent") {
-        if(value==L"plot") e.as<TimeSeriesChart>()->setFillExtent(TimeSeriesFillExtent::Plot);
-        else if(value==L"series") e.as<TimeSeriesChart>()->setFillExtent(TimeSeriesFillExtent::Series);
-        else throw std::invalid_argument("Chart fill-extent must be plot or series");
-        return;
-    }
-    if(e.component=="TimeSeriesChart" && key=="plot-insets") {
-        std::wistringstream input(value); Insets insets{}; wchar_t extra;
-        if(!(input>>insets.top>>insets.right>>insets.bottom>>insets.left) || (input>>extra) ||
-           !std::isfinite(insets.top) || !std::isfinite(insets.right) || !std::isfinite(insets.bottom) || !std::isfinite(insets.left) ||
-           insets.top<0 || insets.right<0 || insets.bottom<0 || insets.left<0)
-            throw std::invalid_argument("Chart plot-insets requires four nonnegative numbers");
-        e.as<TimeSeriesChart>()->setPlotInsets(insets);return;
-    }
+    if(e.component=="TimeSeriesChart" && chart_property::applyText(*e.as<TimeSeriesChart>(),key,value)) return;
     if (e.component == "CodeEditor") {
         auto editor = e.as<CodeEditor>();
         if (key == "text") { editor->setBoundText(value); return; }
@@ -63,12 +45,18 @@ void Mount::set(Element &e, const std::string &key, const std::wstring &value) {
         e.as<Popup>()->setPreferredPlacement(found->second); return;
     }
     if(e.component=="DataMenu") {
+        if(key=="density") {if(value!=L"compact"&&value!=L"comfortable")throw std::invalid_argument("Menu density must be compact or comfortable");e.as<views::DataMenu>()->setDensity(value==L"compact");return;}
         if(key=="title") { e.as<views::DataMenu>()->setTitle(value); return; }
         if(key=="subtitle") { e.as<views::DataMenu>()->setSubtitle(value); return; }
     }
     if(e.component=="GridItem" && key=="grid-key") {e.as<TemplateGridItem>()->setKey(value);return;}
     if (e.component == "Overlay" && (key == "horizontal-align" || key == "vertical-align")) {
         e.as<TemplateOverlay>()->setAlignment(key, value); return;
+    }
+    if (e.component == "Select" && key == "indicator-icon") {
+        const auto symbol = value.empty() ? std::optional<IconSymbol>{} : namedIcon(std::string(value.begin(), value.end()));
+        if (!value.empty() && !symbol) throw std::invalid_argument("Unknown select indicator icon");
+        e.as<Select>()->setIndicatorIcon(symbol); return;
     }
     if (key == "prefix-icon" || key == "trailing-icon") {
         const auto symbol = value.empty() ? std::optional<IconSymbol>{} : namedIcon(std::string(value.begin(), value.end()));
@@ -93,6 +81,13 @@ void Mount::set(Element &e, const std::string &key, const std::wstring &value) {
         auto dialog=e.as<Dialog>();
         if(key=="title"){dialog->setTitle(value);return;}
         if(key=="subtitle"){dialog->setSubtitle(value);return;}
+        if(key=="header-text-layout") {
+            std::wistringstream input(value);float top,height,subTop,subHeight;wchar_t extra;
+            if(!(input>>top>>height>>subTop>>subHeight)||(input>>extra)||!std::isfinite(top)||!std::isfinite(height)||!std::isfinite(subTop)||!std::isfinite(subHeight)
+                ||top<0||height<=0||subTop<0||subHeight<=0||top>512||height>512||subTop>512||subHeight>512)
+                throw std::invalid_argument("Dialog header-text-layout requires four finite line-box dimensions");
+            dialog->setHeaderTextLayout(top,height,subTop,subHeight);return;
+        }
         if(key=="icon") {
             if(value.empty())dialog->clearIconSymbol();
             else {
@@ -259,6 +254,10 @@ void Mount::set(Element &e, const std::string &key, const std::string &value) {
         set(e, key, wide(value));
 }
 void Mount::set(Element &e, const std::string &key, bool value) {
+    if (e.component == "Dialog") {
+        if (key == "edge-to-edge-content") { e.as<Dialog>()->setEdgeToEdgeContent(value); return; }
+        if (key == "close-centered") { e.as<Dialog>()->setCloseCentered(value); return; }
+    }
     if(e.component=="VirtualList" && key=="multiple") {e.as<VirtualList>()->setSelectionMode(value ? SelectionMode::Multiple : SelectionMode::Single);return;}
     if (key == "follow-end") { e.as<VirtualTemplateList>()->setFollowEnd(value); return; }
     if (key == "activate-on-single-click") { e.as<VirtualList>()->setActivateOnSingleClick(value); return; }
@@ -340,6 +339,7 @@ void Mount::set(Element &e, const std::string &key, bool value) {
         throw std::invalid_argument("Invalid bool property");
 }
 void Mount::set(Element &e, const std::string &key, float value) {
+    if (e.component == "Dialog" && key == "header-height") { e.as<Dialog>()->setHeaderHeight(value); return; }
     if (e.component == "DataGrid") {
         if (key == "row-height") { e.as<DataGrid>()->setRowHeight(value); return; }
         if (key == "header-height") { e.as<DataGrid>()->setHeaderHeight(value); return; }

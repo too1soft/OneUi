@@ -11,6 +11,7 @@ using namespace viewtest;
 #include "rich_table_contract.inc"
 #include "rich_table_reorder.inc"
 #include "chart_contract.inc"
+#include "dialog_caption_contract.inc"
 #include "virtual_template_contract.inc"
 #include "tabs_sizing.inc"
 #include "scroll_size.inc"
@@ -22,6 +23,7 @@ int main(int argc, char **argv) {
     try {
         virtualTemplateContract(argv[1]);
         chartContract(argv[1]);
+        dialogCaptionContract();
         surfaceDrag(argv[1]);
         {
             // The typed contract must admit the metrics consumed by native Tabs,

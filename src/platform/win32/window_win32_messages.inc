@@ -217,11 +217,8 @@
                 POINT screenPoint{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
                 if (ClientToScreen(hwnd_, &screenPoint)) {
                     const LPARAM screenPosition = MAKELPARAM(screenPoint.x, screenPoint.y);
-                    if (hitTestBorderlessWindow(screenPosition) == HTCAPTION
-                        && restoreBorderlessForCaptionDrag(screenPoint.x, screenPoint.y)) {
-                        return DefWindowProcW(
-                            hwnd_, WM_NCLBUTTONDOWN, HTCAPTION, screenPosition);
-                    }
+                    if (hitTestBorderlessWindow(screenPosition) == HTCAPTION)
+                        return beginBorderlessCaptionDrag(screenPosition);
                 }
             }
             SetFocus(hwnd_);
@@ -384,10 +381,7 @@
                 // makes the caption appear non-draggable.  Treat that boundary
                 // state like maximized chrome and restore it beneath the pointer
                 // before entering the native move loop.
-                restoreBorderlessForCaptionDrag(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
-                ReleaseCapture();
-                return DefWindowProcW(
-                    hwnd_, WM_SYSCOMMAND, SC_MOVE | HTCAPTION, lParam);
+                return beginBorderlessCaptionDrag(lParam);
             }
             return DefWindowProcW(hwnd_, message, wParam, lParam);
         case WM_NCLBUTTONDBLCLK:

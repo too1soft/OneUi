@@ -120,9 +120,12 @@ void Tabs::paint(Canvas& canvas) {
             itemTextAlign(i),
             itemStyle.fontWeight); }
         if (documentMode_ && static_cast<std::size_t>(i) < itemStatusColors_.size() && itemStatusColors_[i].a > 0) {
-            const float right = closable_ ? closeRect(i).x - 8.0f : itemRect.x + itemRect.width - 7.0f;
+            // A status-only document tab leads with its dot; protocol icons
+            // retain the existing trailing-status contract.
+            const float right = !icon.has_value() ? itemRect.x + 16.0f :
+                closable_ ? closeRect(i).x - 8.0f : itemRect.x + itemRect.width - 7.0f;
             const Color color = disabled() ? itemStyle.itemForeground : itemStatusColors_[i];
-            canvas.fillEllipse(Rect{right - 6.0f, itemRect.y + (itemRect.height - 6.0f) * .5f + (active ? 0.5f : 0.0f), 6.0f, 6.0f}, color);
+            canvas.fillEllipse(Rect{right - 6.0f, itemRect.y + (itemRect.height - 6.0f) * .5f, 6.0f, 6.0f}, color);
         }
         if (showClose) {
             const Rect iconRect = closeRect(i);

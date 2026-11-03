@@ -141,3 +141,8 @@ r.at("InteractiveSurface").events.push_back({3,"contextMenu",{{"x",3},{"y",3}}})
 
 r.at("InteractiveSurface").events.push_back({4,"drag",{{"phase",2},{"origin_x",3},{"origin_y",3},{"x",3},{"y",3},{"alt",1},{"control",1},{"shift",1}}});
 ++r.at("InteractiveSurface").version;
+
+// Native composite interaction states are observable without emulating controls.
+r.at("InteractiveSurface").events.push_back({5,"hover",{{"hovered",1}}});
+r.at("InteractiveSurface").events.push_back({6,"focus",{{"focused",1}}});
+++r.at("InteractiveSurface").version;

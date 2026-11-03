@@ -860,6 +860,10 @@ bool paintOutlineIcon(Canvas& canvas, IconSymbol symbol, Rect rect, Color color)
         path.moveTo(p(7,3));path.lineTo(p(7,8));path.lineTo(p(15,8));
         canvas.strokePath(path,color,stroke,true); return true; }
     #include "workbench_outline_icons.inc"
+    #include "shell_outline_icons.inc"
+    #include "host_outline_icons.inc"
+    #include "settings_outline_icons.inc"
+    #include "plugin_outline_icons.inc"
     default: return false;
     }
 }

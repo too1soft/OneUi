@@ -22,6 +22,8 @@ void virtualTemplateContract(const char* runtimeFile) {
     const auto outer = image.records[oneview::TMPL][image.root][1];
     image.records[oneview::TMPL][image.root][1] = image.records[oneview::EDGE][image.records[oneview::NODE][outer][3] + 21][1];
     c.start();
+    c.runtime->factory.styles()->appendScoped(
+        "button {width:41px;height:29px;min-width:41px;min-height:29px;padding:0px;flex-shrink:0;}");
     const auto instance = c.runtime->root;
     auto list = instance->element.as<oneui::VirtualTemplateList>();
     expect(list && instance->rows.empty(), "virtual templates wait for a viewport");
@@ -87,7 +89,10 @@ void virtualTemplateContract(const char* runtimeFile) {
     oneui::test_support::RecordingCanvas rowLayout;
     list->paint(rowLayout);
     const auto frame = button->frame();
-    expect(frame.width > 0 && frame.height > 0, "streamed row action receives real layout");
+    if (std::abs(frame.width - 41) >= .01f || std::abs(frame.height - 29) >= .01f)
+        std::cerr << "virtual action frame " << frame.width << "x" << frame.height << '\n';
+    expect(std::abs(frame.width - 41) < .01f && std::abs(frame.height - 29) < .01f,
+           "late virtual row actions retain authored CSS dimensions after streaming");
     list->onMouseDown({{frame.x + 8, frame.y + 8}, oneui::MouseButton::Left});
     list->onMouseUp({{frame.x + 8, frame.y + 8}, oneui::MouseButton::Left});
     expect(messages[999]->invokes == 1 && messages[0]->invokes == 0, "template command targets its stable message VM");

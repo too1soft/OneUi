@@ -59,10 +59,10 @@ void Tabs::updateCompactMetrics(Canvas& canvas) {
     for (std::size_t index = 0; index < items_.size(); ++index) {
         const TabsStyle style = resolvedItemStyle(static_cast<int>(index));
         const bool hasIcon = index < itemIcons_.size() && itemIcons_[index].has_value();
-        const float leadingInset = documentMode_ ? 11.0f + (hasIcon ? 23.0f : 0.0f) : style.textInset + (hasIcon ? 20.0f : 0.0f);
         const bool status = documentMode_ && index < itemStatusColors_.size() && itemStatusColors_[index].a > 0;
+        const float leadingInset = documentMode_ ? 10.0f + (hasIcon ? 23.0f : status ? 13.0f : 0.0f) : style.textInset + (hasIcon ? 20.0f : 0.0f);
         // Measure the same reserved space that textRect removes when painting.
-        const float trailingInset = documentMode_ ? (closable_ ? 29.0f : 7.0f) + (status ? 21.0f : 0.0f) : (closable_ ? std::max(27.0f, style.textInset) : style.textInset);
+        const float trailingInset = documentMode_ ? (closable_ ? 26.0f : 7.0f) + (status && hasIcon ? 21.0f : 0.0f) : (closable_ ? std::max(27.0f, style.textInset) : style.textInset);
         const float measured = canvas.measureTextWidth(items_[index], style.fontSize, style.fontWeight);
         const float desired = style.itemInset.left + style.itemInset.right
             + leadingInset + measured + trailingInset
@@ -142,11 +142,11 @@ Rect Tabs::textRect(int index) const {
     const bool hasIcon = static_cast<std::size_t>(index) < itemIcons_.size() &&
         itemIcons_[static_cast<std::size_t>(index)].has_value();
     const bool status = documentMode_ && static_cast<std::size_t>(index) < itemStatusColors_.size() && itemStatusColors_[index].a > 0;
-    const float leadingInset = documentMode_ ? 12.0f + (active ? 1.0f : 0.0f) + (hasIcon ? 23.0f : 0.0f) : style.textInset + (hasIcon ? 20.0f : 0.0f);
-    const float trailingInset = documentMode_ ? (closable_ ? 29.0f : 7.0f) + (status ? 21.0f : 0.0f) + 3.0f + (active ? 1.0f : 0.0f) : (showClose ? 27.0f : style.textInset);
+    const float leadingInset = documentMode_ ? 10.0f + (hasIcon ? 23.0f : status ? 13.0f : 0.0f) : style.textInset + (hasIcon ? 20.0f : 0.0f);
+    const float trailingInset = documentMode_ ? (closable_ ? 26.0f : 7.0f) + (status && hasIcon ? 21.0f : 0.0f) + 3.0f + (active ? 1.0f : 0.0f) : (showClose ? 27.0f : style.textInset);
     return Rect{
         item.x + leadingInset,
-        item.y + (documentMode_ ? (active ? 0.5f : -0.5f) : 0.0f),
+        item.y,
         std::max(0.0f, item.width - leadingInset - trailingInset),
         item.height};
 }
@@ -157,7 +157,7 @@ Rect Tabs::closeRect(int index) const {
         const float side = std::min(24.0f, cell.height);
         const bool active = index == selectedIndex();
         return Rect{cell.x + cell.width - 5.0f - side - (active ? 1.0f : 0.0f),
-            cell.y + (cell.height-side)*.5f + 3.0f + (active ? 0.5f : 0.0f), side, side};
+            cell.y + (cell.height-side)*.5f, side, side};
     }
     const Rect item = itemRect(index).inset(Insets{4.0f});
     const float side = std::min(22.0f, item.height);

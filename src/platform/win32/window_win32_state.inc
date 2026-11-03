@@ -112,6 +112,17 @@
         return HTNOWHERE;
     }
 
+    LRESULT beginBorderlessCaptionDrag(LPARAM screenPosition) {
+        const POINT origin{GET_X_LPARAM(screenPosition), GET_Y_LPARAM(screenPosition)};
+        // A click on a maximized title bar must leave its state untouched.
+        // Wait for the native drag threshold before restoring under the pointer.
+        const auto alive = callbackWindowAlive_;
+        if (!DragDetect(hwnd_, origin) || !alive->load(std::memory_order_acquire)) return 0;
+        restoreBorderlessForCaptionDrag(origin.x, origin.y);
+        ReleaseCapture();
+        return DefWindowProcW(hwnd_, WM_SYSCOMMAND, SC_MOVE | HTCAPTION, screenPosition);
+    }
+
     bool restoreBorderlessForCaptionDrag(int screenX, int screenY) {
         if (!hwnd_) {
             return false;

@@ -1,9 +1,12 @@
 #include "oneui/platform/window.h"
 #include "oneui/controls/button.h"
+#include "oneui/layout/overlay_host.h"
+#include "oneui/layout/panel.h"
 #include "oneui/view.h"
 #include "support/recording_canvas.h"
 
 #include <windows.h>
+#include <windowsx.h>
 #include <gl/GL.h>
 #include <chrono>
 #include <future>
@@ -186,6 +189,52 @@ void testPreMountStyleAnimationResumes() {
     });
 }
 
+void testBorderlessCaptionRoutesControlsAndKeepsSingleClickState() {
+    oneui::WindowOptions options;
+    options.visible = false;
+    options.borderless = true;
+    options.width = 800;
+    options.height = 600;
+    auto window = oneui::Window::create(options);
+    window->initialize();
+    window->setTitleBarDragMetrics(40, 138);
+    auto root = std::make_shared<oneui::OverlayHost>();
+    auto bar = std::make_shared<oneui::View>();
+    auto search = std::make_shared<oneui::Button>(L"Search");
+    auto account = std::make_shared<oneui::Button>(L"Account");
+    bar->add(search);
+    bar->add(account);
+    root->setContent(bar);
+    window->setContent(root);
+    root->setFrame({0, 0, 800, 600});
+    bar->setFrame(root->frame());
+    search->setFrame({300, 6, 200, 28});
+    account->setFrame({610, 4, 32, 32});
+    const auto hwnd = static_cast<HWND>(window->nativeHandle());
+    auto point = [&](int x) {
+        POINT p{static_cast<LONG>(x * window->dpiScale()),
+                static_cast<LONG>(20 * window->dpiScale())};
+        ClientToScreen(hwnd, &p);
+        return MAKELPARAM(p.x, p.y);
+    };
+    expectTrue("nested search remains a client control",
+        SendMessageW(hwnd, WM_NCHITTEST, 0, point(400)) == HTCLIENT);
+    expectTrue("account before window buttons remains client",
+        SendMessageW(hwnd, WM_NCHITTEST, 0, point(625)) == HTCLIENT);
+    expectTrue("blank caption still belongs to native drag",
+        SendMessageW(hwnd, WM_NCHITTEST, 0, point(120)) == HTCAPTION);
+    for (bool maximized : {true, false}) {
+        SendMessageW(hwnd, WM_NCLBUTTONDBLCLK, HTCAPTION, point(120));
+        expectTrue("double click toggles exactly once", window->state().maximized == maximized);
+        // Feed the native threshold detector a completed stationary click;
+        // this sends messages only to this hidden test window, no OS input.
+        PostMessageW(hwnd, WM_LBUTTONUP, 0, 0);
+        SendMessageW(hwnd, WM_NCLBUTTONDOWN, HTCAPTION, point(120));
+        expectTrue("following single click preserves window state", window->state().maximized == maximized);
+    }
+    window->close();
+}
+
 } // namespace
 
 int main() {
@@ -198,5 +247,6 @@ int main() {
     testSecondaryWindowAnimation();
     testCloseRestoresOtherWindowsGpuContext();
     testPreMountStyleAnimationResumes();
+    testBorderlessCaptionRoutesControlsAndKeepsSingleClickState();
     return failures == 0 ? 0 : 1;
 }

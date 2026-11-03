@@ -1,4 +1,5 @@
 #pragma once
+#include "oneui/controls/data_grid.h"
 #include "oneui/controls/template_table.h"
 #include "oneui/controls/template_overlay.h"
 #include "oneui/controls/template_grid_item.h"
@@ -170,6 +171,8 @@ private:
         if (auto v = std::dynamic_pointer_cast<Label>(w)) {
             v->setFontFamily(box.fontFamily.value_or(std::wstring{}));
             v->setColor(box.foreground.value_or(Color{30,40,35,255})); v->setFontSize(box.fontSize.value_or(14)); v->setFontWeight(box.fontWeight.value_or(400));
+            v->setLetterSpacing(box.letterSpacing.value_or(0.0f));
+            v->setTabularNumbers(box.tabularNumbers.value_or(false));
             v->setPadding(box.padding.value_or(Insets{}));
             v->setBoxStyle(box.background.color.value_or(Color{0,0,0,0}), box.borderColor.value_or(Color{0,0,0,0}),
                            box.borderWidth.value_or(box.borderColor ? 1.0f : 0.0f), box.radius.value_or(0.0f));
@@ -180,13 +183,18 @@ private:
             // Content's horizontal shell owns decoration/padding, while gap
             // belongs to its vertical body. Neither changes the authored tree.
             if (auto body = entry.content.lock()) { v->setGap(0); body->setGap(box.gap.value_or(0)); }
-        } else if (auto v = std::dynamic_pointer_cast<Button>(w)) v->setStyleOverride(buttonStyleOverrideFromStyleSheet(sheet,n));
+        } else if (auto v = std::dynamic_pointer_cast<Button>(w)) {
+            v->setIconColor(sheet.resolveLayout(n).iconColor);
+            v->setCaptionOffsetY(box.titleOffsetY.value_or(0));
+            v->setStyleOverride(buttonStyleOverrideFromStyleSheet(sheet,n));
+        }
         else if (auto v = std::dynamic_pointer_cast<TextField>(w)) {
             v->setStyleOverride(textFieldStyleOverrideFromStyleSheet(sheet,n));
             v->setFontSize(box.fontSize.value_or(14));
         }
         else if (auto v = std::dynamic_pointer_cast<Checkbox>(w)) v->setStyleOverride(checkboxStyleOverrideFromStyleSheet(sheet,n));
         else if (auto v = std::dynamic_pointer_cast<TreeView>(w)) v->setStyleOverride(treeViewStyleOverrideFromStyleSheet(sheet,n));
+        else if (auto v = std::dynamic_pointer_cast<DataGrid>(w)) v->setStyleOverride(tableStyleOverrideFromStyleSheet(sheet,n));
         else if (auto v = std::dynamic_pointer_cast<CodeEditor>(w)) v->setStyle(codeEditorStyleFromStyleSheet(sheet,n));
         else if (auto v = std::dynamic_pointer_cast<Switch>(w)) v->setStyleOverride(switchStyleOverrideFromStyleSheet(sheet,n));
         else if (auto v = std::dynamic_pointer_cast<Select>(w)) v->setStyleOverride(selectStyleOverrideFromStyleSheet(sheet,n));

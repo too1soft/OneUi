@@ -9,7 +9,7 @@ enum class ValueType { None, Text, Boolean, Integer, Number, Strings, Columns, R
     X(GridItem, "grid-item", "grid-key", None) \
     X(Overlay, "overlay-host", "overlay-width overlay-height inset-left inset-right inset-top inset-bottom horizontal-align vertical-align overlay-visible", None) \
     X(TemplateTable, "scroll-view", "minimum-width header-height content-height content-width wheel-step scroll-offset horizontal-offset", None) \
-    X(Dialog, "dialog", "title subtitle icon close-visible", None) \
+    X(Dialog, "dialog", "title subtitle icon close-visible edge-to-edge-content close-centered header-height header-text-layout", None) \
     X(PaneGrid, "workspace-collection", "nodes groups active-group active-pane maximized revision ack-request ack-accepted navigation-serial navigation-edge navigation-mode drag-domain gap divider-hit motion-ms resize-idle-ms motion", None) \
     X(Pane, "workspace-item", "pane-key closing close-request min-width min-height", None) \
     X(PaneHeader, "pane-header", "pane-key number title path active broadcast-role broadcast-hint broadcast-label viewing-history can-close can-split can-maximize split-label maximize-label close-label live-label menu-label tooltip", None) \
@@ -56,7 +56,7 @@ enum class ValueType { None, Text, Boolean, Integer, Number, Strings, Columns, R
     X(Status, "label", "text tone", None) \
     X(Tabs, "tabs", "items selectedKey closable presentation reorderable drag-domain drag-kind drag-sources decorations item-min item-max edit-key sizing", Text) \
     X(SplitView, "split-view", "orientation ratio first-min second-min second-collapsed collapsed-extent", Number) \
-    X(TimeSeriesChart, "chart", "series range-min range-max axis-labels sample-positions smooth area-fill dashed-grid axes-visible latest-point line-width fill-alpha grid-lines plot-insets grid-style fill-extent scroll-rate", None) \
+    X(TimeSeriesChart, "chart", "series range-min range-max axis-labels sample-positions smooth area-fill dashed-grid axes-visible latest-point line-width fill-alpha grid-lines plot-insets grid-style fill-extent scroll-rate thresholds threshold-style latest-style secondary-style", None) \
     X(Icon, "icon", "symbol size", None) \
     X(NativeHost, "native-host", "host themed resize-policy", None) \
     X(Column, "stack", "align justify wrap", None) \
@@ -74,13 +74,13 @@ enum class ValueType { None, Text, Boolean, Integer, Number, Strings, Columns, R
     X(Input, "input", "text placeholder password password-mask read-only prefix-icon accessible-name placeholder-when-focused", Text) \
     X(SearchInput, "input", "text placeholder prefix-icon placeholder-when-focused", Text) \
     X(Switch, "switch", "text checked", Boolean) \
-    X(Select, "select", "items selectedIndex", Integer) \
+    X(Select, "select", "items selectedIndex indicator-icon", Integer) \
     X(SegmentedControl, "tabs", "items selectedIndex", Integer) \
     X(Button, "button", "text variant icon tooltip content-align trailing-text trailing-icon shortcut", None) \
     X(DataTable, "table", "items columns selectedKey item-key", Text) \
     X(List, "list", "items selectedIndex", Integer) \
     X(VirtualList, "virtual-list", "items selectedIndex row-height scroll-offset multiple trailing-width trailing-gap activate-on-single-click", Integer) \
-    X(DataMenu, "menu", "title subtitle items", None) \
+    X(DataMenu, "menu", "title subtitle items density", None) \
     X(Popup, "popup", "open anchor-x anchor-y anchor-width anchor-height content-width content-height placement", None) \
     X(MountPoint, "panel", "", None) \
     X(StateView, "state-view", "title message action icon", None) \
@@ -144,7 +144,7 @@ constexpr ValueType propertyType(Kind kind,std::string_view key) {
         if(key=="reorder-enabled"||key=="item-drag-enabled")return ValueType::Boolean;
         if(key=="column-gap"||key=="row-gap"||key=="item-height")return ValueType::Number;
     }
-    if(kind==Kind::Dialog&&key=="close-visible")return ValueType::Boolean;
+    if(kind==Kind::Dialog&&contains("close-visible edge-to-edge-content close-centered",key))return ValueType::Boolean;
     if(kind==Kind::FontPicker&&key=="selected")return ValueType::Text;
     if(kind==Kind::Table && contains("multiple selection-column sort-descending column-dividers",key))return ValueType::Boolean;
     if(kind==Kind::Table && key=="sort-column")return ValueType::Integer;

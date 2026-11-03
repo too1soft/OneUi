@@ -1,4 +1,5 @@
 #include "data_grid_surface.h"
+#include "table_style_override.h"
 
 #include "oneui/icon.h"
 
@@ -41,6 +42,7 @@ TableStyle DataGridSurface::style() const {
     style.fontSize = 13.0f;
     style.headerFontSize = 12.0f;
     style.cellPadding = Insets{0.0f, 8.0f};
+    if (styleOverride) detail::applyTableStyleOverride(style, *styleOverride);
     return style;
 }
 
@@ -68,7 +70,7 @@ void DataGridSurface::paint(Canvas& canvas) {
     if (focusVisible() || focused())
         canvas.strokeRect(f, focused() ? withAlpha(theme().focusOutline, 140) : s.border, 0.0f, 1.0f);
     else
-        canvas.strokeRect(f, s.border, 0.0f, 1.0f);
+        canvas.strokeRect(f, s.border, s.radius, s.borderWidth);
 }
 
 void DataGridSurface::paintHeader(Canvas& canvas, const TableStyle& s) {
@@ -96,7 +98,7 @@ void DataGridSurface::paintHeader(Canvas& canvas, const TableStyle& s) {
         }
         const float titleWidth = canvas.measureTextWidth(column.title, s.headerFontSize, 600);
         const Rect titleRect{leading, cell.y, std::max(0.0f, label.x + label.width - leading), cell.height};
-        canvas.drawTextStyledEllipsized(column.title, titleRect, theme().text, s.headerFontSize, TextAlign::Left, 600);
+        canvas.drawTextStyledEllipsized(column.title, titleRect, s.cellForeground, s.headerFontSize, TextAlign::Left, 600);
         if (!column.detail.empty() && titleWidth + 12.0f < titleRect.width) {
             const Rect detail{leading + titleWidth + 6.0f, cell.y, titleRect.width - titleWidth - 6.0f, cell.height};
             canvas.drawTextStyledEllipsized(column.detail, detail, s.detailForeground, 11.0f, TextAlign::Left, 400);
@@ -132,6 +134,7 @@ void DataGridSurface::paintRows(Canvas& canvas, const TableStyle& s) {
     for (std::int64_t index = first; index < last; ++index) {
         const float y = static_cast<float>(body.y + index * static_cast<double>(rowHeight) - scroll_);
         const Rect line{f.x, y, body.width, rowHeight};
+        if (styleOverride && styleOverride->rowHovered && index % 2 == 1) canvas.fillRect(line, s.rowHovered);
         const DataGridRow* r = row(index);
         if (r && has(r->classes, "deleted")) canvas.fillRect(line, withAlpha(t.formField.errorColor, 28));
         else if (r && has(r->classes, "inserted")) canvas.fillRect(line, withAlpha(t.success, 26));
@@ -171,7 +174,7 @@ void DataGridSurface::paintCell(Canvas& canvas, const TableStyle& s, const DataG
     if (has(classes, "modified")) canvas.fillRect(rect, withAlpha(t.warning, 40));
     else if (has(classes, "error")) canvas.fillRect(rect, withAlpha(t.formField.errorColor, 40));
     Color color = s.cellForeground;
-    if (has(classes, "null") || has(classes, "muted")) color = t.textSubtle;
+    if (has(classes, "null") || has(classes, "muted")) color = s.detailForeground;
     TextAlign align = columns[column].alignment;
     if (has(classes, "number") && !has(classes, "null")) align = TextAlign::Right;
     const Rect text = rect.inset(s.cellPadding);

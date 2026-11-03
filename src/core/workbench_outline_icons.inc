@@ -343,20 +343,22 @@
         canvas.strokePath(path,color,stroke,true); return true;
     }
     case IconSymbol::OutlineWorkbenchBroadcast: {
-        // Hand-written: a source with two signal arcs on each side.
+        // Lucide radio-tower, matching the approved terminal toolbar.
+        canvas.strokeEllipse(r(10,7,4,4),color,stroke);
         CanvasPath path;
-        path.moveTo(p(13.50000000f,12.00000000f));
-        path.cubicTo(p(13.50000000f,12.82842712f),p(12.82842712f,13.50000000f),p(12.00000000f,13.50000000f));
-        path.cubicTo(p(11.17157288f,13.50000000f),p(10.50000000f,12.82842712f),p(10.50000000f,12.00000000f));
-        path.cubicTo(p(10.50000000f,11.17157288f),p(11.17157288f,10.50000000f),p(12.00000000f,10.50000000f));
-        path.cubicTo(p(12.82842712f,10.50000000f),p(13.50000000f,11.17157288f),p(13.50000000f,12.00000000f));
-        path.moveTo(p(15.18198051f,8.81801949f));
-        path.cubicTo(p(16.93933982f,10.57537879f),p(16.93933982f,13.42462121f),p(15.18198051f,15.18198051f));
-        path.moveTo(p(8.81801949f,8.81801949f));
-        path.cubicTo(p(7.06066018f,10.57537879f),p(7.06066018f,13.42462121f),p(8.81801949f,15.18198051f));
-        path.moveTo(p(17.65685424f,6.34314576f));
-        path.cubicTo(p(20.78104856f,9.46734008f),p(20.78104856f,14.53265992f),p(17.65685424f,17.65685424f));
-        path.moveTo(p(6.34314576f,6.34314576f));
-        path.cubicTo(p(3.21895144f,9.46734008f),p(3.21895144f,14.53265992f),p(6.34314576f,17.65685424f));
+        path.moveTo(p(4.90000000f,16.10000000f));
+        path.cubicTo(p(1.00000000f,12.20000000f),p(1.00000000f,5.80000000f),p(4.90000000f,1.90000000f));
+        path.moveTo(p(7.80000000f,4.70000000f));
+        path.cubicTo(p(5.84825536f,6.72226667f),p(5.51873230f,9.81154535f),p(7.00000000f,12.20000000f));
+        path.moveTo(p(16.20000000f,4.80000000f));
+        path.cubicTo(p(18.20000000f,6.80000000f),p(18.46000000f,9.91000000f),p(17.00000000f,12.27000000f));
+        path.moveTo(p(19.10000000f,1.90000000f));
+        path.cubicTo(p(20.97228089f,3.76844595f),p(22.02444032f,6.30490530f),p(22.02444032f,8.95000000f));
+        path.cubicTo(p(22.02444032f,11.59509470f),p(20.97228089f,14.13155405f),p(19.10000000f,16.00000000f));
+        path.moveTo(p(9.50000000f,18.00000000f));
+        path.lineTo(p(14.50000000f,18.00000000f));
+        path.moveTo(p(8.00000000f,22.00000000f));
+        path.lineTo(p(12.00000000f,11.00000000f));
+        path.lineTo(p(16.00000000f,22.00000000f));
         canvas.strokePath(path,color,stroke,true); return true;
     }
