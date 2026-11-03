@@ -938,6 +938,30 @@ fields are `detail`, `icon`, `trailing_icon`, `badge` (UTF-8), `alignment`,
 colors use RRGGBBAA, with -1 selecting the native default. Cell types and value
 ranges are checked before publishing native rows.
 
+Rows may additionally expose read-only `visible:bool` (default `true` when
+omitted). A false row stays in the source list with its existing model/cell
+leases and cached values, but occupies no native row. Updating visibility
+instead of removing/reinserting thousands of live records makes filter/restore
+operations reuse the same cells. Native events and selection indices always
+map through the visible keys. Hidden cell changes are validated and cached;
+restoring visibility publishes their latest values. Failed conversions retain
+the previous native rows, visibility and selection atomically.
+
+Selection/visibility-only changes do not re-read unchanged cells. Real cell
+notifications and cell-list changes still invalidate their cached data.
+Remove dead source records explicitly; visibility is a presentation mask,
+and the cache remains bounded by the actual source list, including its hidden
+records. Closing the view releases both visible and hidden leases. This is an
+additive rich-row convention without a C ABI change; applications using the
+mask must ship the matching runtime rather than an older DLL that ignores it.
+
+Rust `StableList::update_range(index, count, fields)` publishes one UPDATE for
+a contiguous group of existing records. It preserves item identities and
+rejects empty/out-of-range/overflowing ranges without advancing the revision.
+Use explicit scalar field IDs for a visibility/selection mask; empty fields
+mean all item fields, including nested lists. Runtime key lookup for a batch
+uses a final-position index rather than scanning every key for every item.
+
 Columns use `oneui.v1.Column`. `multiple`, `row-height`, `header-height`,
 `selection-column`, `selection-column-width`, `scroll-offset`, `sort-column`
 and `sort-descending` configure the existing virtualized native Table.

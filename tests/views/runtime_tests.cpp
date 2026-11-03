@@ -10,6 +10,7 @@ using namespace viewtest;
 #include "tree_contract.inc"
 #include "rich_table_contract.inc"
 #include "rich_table_reorder.inc"
+#include "rich_table_visibility.inc"
 #include "chart_contract.inc"
 #include "dialog_caption_contract.inc"
 #include "virtual_template_contract.inc"
@@ -261,6 +262,7 @@ int main(int argc, char **argv) {
         treeContract(argv[1]);
         richTableContract(argv[1]);
         richTableReorderContract(argv[1]);
+        richTableVisibilityContract(argv[1]);
         tabsSizing(argv[1]);
         scrollSize(argv[1]);
         popupSurface(argv[1]);

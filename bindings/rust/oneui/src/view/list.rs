@@ -135,8 +135,24 @@ impl<T> StableList<T> {
     }
     /// Call after mutating the existing item's state. Never replaces its Rc.
     pub fn update(&mut self, index: usize, properties: &[PropertyId]) -> VmResult<ListChange> {
-        let key = self.key(index).ok_or(ViewError::BAD_KEY)?.to_owned();
-        let mut change = self.change(4, index, 0, vec![key])?;
+        self.update_range(index, 1, properties)
+    }
+    /// Updates a contiguous group with one notification, retaining every Rc.
+    pub fn update_range(
+        &mut self,
+        index: usize,
+        count: usize,
+        properties: &[PropertyId],
+    ) -> VmResult<ListChange> {
+        let end = index.checked_add(count).ok_or(ViewError::BAD_KEY)?;
+        if count == 0 || end > self.len() {
+            return Err(ViewError::BAD_KEY);
+        }
+        let keys = self.entries[index..end]
+            .iter()
+            .map(|(key, _)| key.clone())
+            .collect();
+        let mut change = self.change(4, index, 0, keys)?;
         change.properties = properties.iter().map(|p| p.get()).collect();
         Ok(change)
     }
@@ -177,5 +193,26 @@ impl<T> StableList<T> {
         let change = self.change(sys::ONEUI_LIST_REORDER, 0, 0, keys)?;
         self.entries = reordered;
         Ok(change)
+    }
+}
+
+#[cfg(test)]
+mod range_tests {
+    use super::*;
+    #[test]
+    fn range_updates_retain_records_and_reject_invalid_bounds_without_a_revision() {
+        let mut list = StableList::new();
+        let first = Rc::new(RefCell::new(1));
+        list.insert(0, "a", first.clone()).unwrap();
+        list.insert(1, "b", Rc::new(RefCell::new(2))).unwrap();
+        let before = list.revision();
+        for (index, count) in [(0, 0), (1, 2), (usize::MAX, 2)] {
+            assert!(list.update_range(index, count, &[]).is_err());
+            assert_eq!(list.revision(), before);
+        }
+        let change = list.update_range(0, 2, &[PropertyId::new(1)]).unwrap();
+        assert_eq!(change.keys, ["a", "b"]);
+        assert_eq!((change.before, change.after), (before, before + 1));
+        assert!(Rc::ptr_eq(list.get(0).unwrap(), &first));
     }
 }

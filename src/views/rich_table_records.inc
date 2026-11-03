@@ -20,12 +20,14 @@ void Runtime::applyRichTableRows(Instance& instance,ListState& state) {
     std::unordered_map<std::string,size_t> indices;
     for(size_t i=0;i<state.keys.size();++i)indices.emplace(state.keys[i],i);
     std::map<std::string,Cache::Row> prepared;
+    bool visibilityChanged=false;
     auto value=[&](const std::shared_ptr<Scope>& scope,const char* name,Value fallback) {
         const auto& fields=image.schema.model(scope->table.model_id).properties;
         const auto found=fields.find(name);
         return found==fields.end()?fallback:read(scope,found->second.id);
     };
     auto integer=[](int64_t n){Value v;v.tag=2;v.integer=n;return v;};
+    auto boolean=[](bool b){Value v;v.tag=1;v.integer=b;return v;};
     auto number=[](double n){Value v;v.tag=3;v.number=n;return v;};
     auto text=[](){Value v;v.tag=4;return v;};
     auto color=[](int64_t rgba)->std::optional<Color> {
@@ -43,7 +45,25 @@ void Runtime::applyRichTableRows(Instance& instance,ListState& state) {
         Cache::Row row;row.scope=state.items[at->second];
         const auto& fields=image.schema.model(row.scope->table.model_id).properties;
         row.selected=bool(read(row.scope,fields.at("selected").id).integer);
-        row.cells=list(row.scope,fields.at("cells").id).items;
+        const auto visible=value(row.scope,"visible",boolean(true));
+        check(visible.tag==1,ONEUI_VIEW_TYPE,"Table row visibility type");
+        row.visible=bool(visible.integer);
+        auto old=cache->rows.find(key);
+        const bool same=old!=cache->rows.end() && old->second.scope==row.scope;
+        visibilityChanged|=same && old->second.visible!=row.visible;
+        const auto cellsField=fields.at("cells").id;
+        row.cellsVersion=row.scope->versions[cellsField];
+        // Selection/filter changes do not invalidate cell values or leases.
+        if(same && row.cellsVersion==old->second.cellsVersion &&
+           std::none_of(old->second.cells.begin(),old->second.cells.end(),
+                        [&](const auto& cell){return instance.recordDirty.count(cell.get());})) {
+            row.cells=old->second.cells;
+            row.value=old->second.value;
+            prepared.emplace(key,std::move(row));
+            continue;
+        }
+        row.cells=list(row.scope,cellsField).items;
+        auto nativeCells=std::make_shared<std::vector<TableCell>>();
         for(const auto& cell:row.cells) {
             TableCell native;
             native.text=unicode::fromUtf8(value(cell,"text",text()).text);
@@ -64,12 +84,13 @@ void Runtime::applyRichTableRows(Instance& instance,ListState& state) {
                   ONEUI_VIEW_TYPE,"Table cell presentation range");
             native.alignment=TextAlign(align);native.fontWeight=int(weight);
             native.fontSize=float(size);native.iconSize=float(iconSize);
-            row.value.push_back(std::move(native));
+            nativeCells->push_back(std::move(native));
         }
+        row.value=std::move(nativeCells);
         prepared.emplace(key,std::move(row));
     }
     auto commit=[cache,prepared=std::move(prepared),keys=state.keys,serial=state.serial,
-                 source=&state,reset,&instance]() mutable {
+                 source=&state,reset=reset||visibilityChanged,&instance]() mutable {
         struct Applying {Instance& node;bool old;Applying(Instance& n):node(n),old(n.applying){n.applying=true;}
             ~Applying(){node.applying=old;}} applying(instance);
         auto table=instance.element.as<Table>();
@@ -86,9 +107,12 @@ void Runtime::applyRichTableRows(Instance& instance,ListState& state) {
             for(auto& cell:row.cells)cache->owners[cell.get()]=key;
             cache->rows[key]=std::move(row);
         }
+        const auto allKeys=keys;
+        keys.erase(std::remove_if(keys.begin(),keys.end(),
+            [&](const auto& key){return !cache->rows.at(key).visible;}),keys.end());
         if(reset) {
             std::vector<std::vector<TableCell>> rows;rows.reserve(keys.size());
-            for(const auto& key:keys)rows.push_back(cache->rows.at(key).value);
+            for(const auto& key:keys)rows.push_back(*cache->rows.at(key).value);
             std::unordered_map<std::string,int> destinations;
             for (size_t i=0;i<keys.size();++i) destinations.emplace(keys[i],int(i));
             std::vector<int> mapping;
@@ -98,7 +122,7 @@ void Runtime::applyRichTableRows(Instance& instance,ListState& state) {
                 mapping.push_back(found==destinations.end()?-1:found->second);
             }
             check(table->reconcileRichRows(std::move(rows),mapping),ONEUI_VIEW_TYPE,"Table row identity mapping");
-            std::set<std::string> live(keys.begin(),keys.end());
+            std::set<std::string> live(allKeys.begin(),allKeys.end());
             for(auto it=cache->rows.begin();it!=cache->rows.end();) {
                 if(live.count(it->first)){++it;continue;}
                 cache->owners.erase(it->second.scope.get());
@@ -107,7 +131,7 @@ void Runtime::applyRichTableRows(Instance& instance,ListState& state) {
             }
         } else {
             for(size_t i=0;i<keys.size();++i)
-                if(prepared.count(keys[i]))table->updateRichRow(i,cache->rows.at(keys[i]).value);
+                if(prepared.count(keys[i]))table->updateRichRow(i,*cache->rows.at(keys[i]).value);
         }
         cache->selected.clear();
         for(size_t i=0;i<keys.size();++i)if(cache->rows.at(keys[i]).selected)cache->selected.push_back(int(i));
