@@ -204,6 +204,7 @@ function(oneui_register_native_tests)
     set_tests_properties(oneui_developer_tools_window_tests PROPERTIES TIMEOUT 15)
     if(WIN32)
         oneui_add_native_test(oneui_win32_accessibility_tests tests/win32_accessibility_tests.cpp)
+        set_tests_properties(oneui_win32_accessibility_tests PROPERTIES TIMEOUT 30)
         oneui_add_native_test(oneui_win32_notification_activation_tests tests/win32_notification_activation_tests.cpp)
         # This opt-in target moves the real pointer; do not add it to ordinary CTest.
         add_executable(oneui_win32_dock_drag_tests tests/win32_dock_drag_tests.cpp)

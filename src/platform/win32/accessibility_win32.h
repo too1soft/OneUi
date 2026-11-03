@@ -3,6 +3,7 @@
 // the same semantics used by OneUI controls. COM marshals calls to the UI STA.
 #include <windows.h>
 #include <oleacc.h>
+#include <UIAutomation.h>
 #include <atomic>
 #include <cmath>
 #include <functional>
@@ -247,4 +248,21 @@ private:
     std::shared_ptr<Context> context_;
     std::vector<Entry> children_;
 };
+inline void retireProvider(HWND window, IAccessible*& ownedProvider) {
+    auto* provider = ownedProvider;
+    ownedProvider = nullptr;
+    // Clear UIA's event map while the initial reference keeps MSAA alive.
+    // An application which never used UIA must not load it during shutdown.
+    HMODULE automation = nullptr;
+    if (window && GetModuleHandleExW(0, L"UIAutomationCore.dll", &automation)) {
+        const auto clear = reinterpret_cast<decltype(&UiaReturnRawElementProvider)>(
+            GetProcAddress(automation, "UiaReturnRawElementProvider"));
+        if (clear) clear(window, 0, 0, nullptr);
+        FreeLibrary(automation);
+    }
+    if (provider) {
+        CoDisconnectObject(provider, 0);
+        provider->Release();
+    }
+}
 } // namespace oneui::win32_accessibility

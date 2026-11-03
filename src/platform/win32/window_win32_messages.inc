@@ -450,10 +450,12 @@
             return DefWindowProcW(hwnd_, message, wParam, lParam);
         case WM_DESTROY:
             callbackWindowAlive_->store(false, std::memory_order_release);
+            retireAccessibilityProvider();
             return 0;
         case WM_NCDESTROY:
         {
             callbackWindowAlive_->store(false, std::memory_order_release);
+            if (accessibilityProvider_) retireAccessibilityProvider();
             captureNormalPlacement();
             hideInternalTrayIcon();
             acceptingPostedCallbacks_.store(false, std::memory_order_release);
