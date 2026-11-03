@@ -22,6 +22,8 @@
                 }
                 return LresultFromObject(IID_IAccessible,wParam,accessibilityProvider_);
             }
+            // Do not create an OS proxy while our provider is shutting down.
+            if (!callbackWindowAlive_->load()) return 0;
             return DefWindowProcW(hwnd_,message,wParam,lParam);
         case WM_DROPFILES:
         {
@@ -133,6 +135,7 @@
                     closeToTray_ = false; // 强制真正退出，绕过“关闭到托盘”
                     hideInternalTrayIcon();
                     if (hwnd_) {
+                        callbackWindowAlive_->store(false, std::memory_order_release);
                         DestroyWindow(hwnd_);
                     }
                     return 0;
@@ -446,6 +449,7 @@
             updateImePosition(true);
             return DefWindowProcW(hwnd_, message, wParam, lParam);
         case WM_DESTROY:
+            callbackWindowAlive_->store(false, std::memory_order_release);
             return 0;
         case WM_NCDESTROY:
         {

@@ -378,6 +378,9 @@
             else restoreFromTray(); // Never leave a window without a recovery path.
             return;
         }
+        // DestroyWindow can reenter COM through accessibility hooks before
+        // WM_NCDESTROY. Retained providers must already reject those calls.
+        callbackWindowAlive_->store(false, std::memory_order_release);
         DestroyWindow(hwnd_);
     }
 

@@ -2,6 +2,7 @@
 #include "oneui/controls/button.h"
 #include "oneui/controls/text_field.h"
 #include <iostream>
+#include "win32_accessibility_lifecycle.inc"
 
 int main(){
     using namespace oneui;
@@ -64,7 +65,9 @@ int main(){
     VARIANT parentId=focus;--parentId.lVal;VARIANT state{};provider->get_accState(parentId,&state);check(!(state.lVal&STATE_SYSTEM_FOCUSED),"routing parent does not claim accessible keyboard focus");
     provider->get_accState(focus,&state);check(state.lVal&STATE_SYSTEM_FOCUSED,"focused leaf reports focused state");
     alive->store(false);check(FAILED(action->accDoDefaultAction(first)),"stale window action fails closed");
-    provider->Release();DestroyWindow(window);CoUninitialize();
+    provider->Release();DestroyWindow(window);
+    check(accessibilityStopsBeforeWindowDestruction(), "Closing invalidates accessibility before native teardown");
+    CoUninitialize();
     if(!failures)std::cout<<"Windows accessibility behavior passed\n";
     return failures?1:0;
 }
