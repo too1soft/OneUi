@@ -382,6 +382,7 @@ void View::focusChild(Widget* child, bool focusVisible) {
 }
 
 bool View::focusNext(bool reverse, bool focusVisible) {
+    layoutChildren();
     const auto focusable = focusableChildren();
     if (focusable.empty()) {
         return false;
@@ -407,6 +408,7 @@ bool View::focusNext(bool reverse, bool focusVisible) {
 }
 
 bool View::focusFirstLeaf() {
+    layoutChildren();
     const auto focusable = focusableChildren();
     if (focusable.empty()) {
         return false;
@@ -418,6 +420,7 @@ bool View::focusFirstLeaf() {
 }
 
 bool View::focusLastLeaf() {
+    layoutChildren();
     const auto focusable = focusableChildren();
     if (focusable.empty()) {
         return false;

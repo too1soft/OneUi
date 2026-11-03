@@ -87,6 +87,9 @@ bool View::onFocusChanged(bool focused) {
     if (!focused && focusedChild_) {
         focusedChild_->onFocusChanged(false);
     } else if (focused) {
+        // Offscreen containers may not have painted yet. Prepare this focus
+        // branch before descending so controls never receive zero-width focus.
+        layoutChildren();
         if (focusedChild_ && !isChildInteractive(focusedChild_)) {
             focusChild(nullptr);
         }

@@ -3,6 +3,7 @@
 #include "oneui/layout/stack.h"
 #include "oneui/controls/table.h"
 #include "oneui/controls/virtual_list.h"
+#include "oneui/controls/button.h"
 
 #include <cmath>
 #include <iostream>
@@ -522,6 +523,8 @@ void testCssStyleBoxPaintsWhenDefaultChromeIsHidden() {
     expectColor("ScrollView CSS background color", canvas.fillRects.front().color, oneui::Color{18, 24, 36, 255});
 }
 
+#include "scroll_view_focus_tests.inc"
+
 } // namespace
 
 int main() {
@@ -542,6 +545,7 @@ int main() {
     testUnchangedContentHeightKeepsWheelMotion();
     testChromeAndScrollbarStyleCanBeCustomized();
     testCssStyleBoxPaintsWhenDefaultChromeIsHidden();
+    testUnpaintedFocusTargetsAreLaidOutAndRevealed();
 
     if (failures != 0) {
         std::cerr << failures << " scroll view behavior test(s) failed.\n";

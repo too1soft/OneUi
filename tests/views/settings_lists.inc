@@ -90,9 +90,28 @@ void settingsLists(const char* runtimeFile) {
     expect(flow->direction() == oneui::StackDirection::Row && flow->gap() == 12,
            "repeat retains parent row direction and spacing");
     expect(surfaceFlow->gap() == 8, "repeat inherits surface content spacing");
+    expect(flow->wrap(), "repeat inherits authored wrapping");
     c.runtime->root->element.widget->setFrame({0, 0, 600, 900});
     oneui::test_support::RecordingCanvas canvas;
     c.runtime->root->element.widget->paint(canvas);
+    auto parentFlow = c.runtime->root->children[2]->element.as<oneui::Stack>();
+    const auto originalFrame = parentFlow->frame();
+    auto first = flow->children().at(0), second = flow->children().at(1);
+    const auto firstSize = first->preferredSize(), secondSize = second->preferredSize();
+    first->setPreferredSize({44,24}); second->setPreferredSize({44,24});
+    parentFlow->setFrame({0,0,70,100}); parentFlow->paint(canvas);
+    expect(second->frame().y >= first->frame().y + first->frame().height &&
+               second->frame().x + second->frame().width <= 70.5f,
+           "repeated items wrap within the authored row bounds");
+    c.vm.values[visible].integer = 0;
+    c.runtime->notify(c.runtime->rootScope, visible); c.runtime->flush();
+    expect(!flow->wrap(), "repeat tracks a wrapping binding disabled after mount");
+    c.vm.values[visible].integer = 1;
+    c.runtime->notify(c.runtime->rootScope, visible); c.runtime->flush();
+    expect(flow->wrap() && flow->children().at(0) == first && flow->children().at(1) == second,
+           "wrapping changes retain keyed item identity");
+    first->setPreferredSize(firstSize); second->setPreferredSize(secondSize);
+    parentFlow->setFrame(originalFrame);
     auto surface = c.runtime->root->children[3]->element.widget;
     expect(surface->frame().height == 96, "initial bound basis reaches parent flex");
     c.vm.values[height].number = 128;

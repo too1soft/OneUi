@@ -195,6 +195,9 @@ void Runtime::flushPass() {
         }
         staging = false;
         styles->applyBaseLayouts();
+        // Authored flow bindings commit after child repeats were visited.
+        // Refresh their implementation groups without invalidating unchanged layouts.
+        refreshRepeatLayouts(root);
         scopes.erase(
             std::remove_if(scopes.begin(), scopes.end(), [](const auto &s) { return s->closed; }),
             scopes.end());

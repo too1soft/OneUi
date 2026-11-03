@@ -39,9 +39,14 @@ public:
     bool onMouseUp(const MouseEvent& event) override;
     bool onMouseWheel(const MouseWheelEvent& event) override;
     bool onKeyDown(const KeyEvent& event) override;
+    bool onFocusChanged(bool focused) override;
+    bool focusFirstLeaf() override;
+    bool focusLastLeaf() override;
+    bool requestFocus(Widget* descendant, bool focusVisible = true) override;
     bool tickAnimations(double nowMs) override;
 
 private:
+    void scrollFocusedIntoView();
     void layoutChildren() override;
     void resetInteractionState() override;
     Rect horizontalThumbRect() const;
