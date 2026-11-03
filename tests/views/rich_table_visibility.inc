@@ -63,7 +63,22 @@ void richTableVisibilityContract(const char* runtimeFile) {
     mask(true);
     expect(table->richRows().size()==2 && first.reads==cellReads && table->selectedIndex()==1,
            "batched restore retains cells and the selected business key");
+    // A remove+insert with a reused key is a new scope, even when its foreign
+    // VM pointer is unchanged. It must not take the UPDATE-only lease shortcut.
+    Vm replacement(c.image,"Cell");
+    replacement.text(replacement.key,"name");replacement.text(text,"Replacement scope");
+    c.a.lists[cells]={&replacement};c.vm.lists[c.rows]={&c.b,&c.a};
+    auto splice=[&](uint32_t kind,uint64_t index) {
+        OneUiUtf8String key{"a",1};
+        OneUiViewListChange change{};change.struct_size=sizeof(change);change.kind=kind;
+        change.before_revision=c.vm.revision++;change.after_revision=c.vm.revision;
+        change.index=index;change.count=change.key_count=1;change.keys=&key;
+        c.runtime->notifyList(c.runtime->rootScope,c.rows,change);
+    };
+    splice(ONEUI_LIST_REMOVE,0);splice(ONEUI_LIST_INSERT,1);c.runtime->flush();
+    expect(table->richRows()[1][0].text==L"Replacement scope" && table->selectedIndex()==0,
+           "coalesced structural changes reacquire cells and preserve selected key identity");
     c.runtime->close();
-    expect(first.retains==first.releases && second.retains==second.releases,
+    expect(first.retains==first.releases && second.retains==second.releases && replacement.retains==replacement.releases,
            "visible and hidden records release their leases at view close");
 }

@@ -177,7 +177,7 @@ struct Runtime : std::enable_shared_from_this<Runtime> {
     void notifyList(const std::shared_ptr<Scope> &, uint32_t, const OneUiViewListChange &);
     void enqueue();
     void observe(const std::shared_ptr<Scope> &, uint32_t);
-    void mark(const std::shared_ptr<Scope> &, uint32_t);
+    void mark(const std::shared_ptr<Scope> &, uint32_t, const ListState* reportedList = nullptr);
     void flush();
     void flushPass();
     void update(const std::shared_ptr<Instance> &);
@@ -195,7 +195,7 @@ struct Runtime : std::enable_shared_from_this<Runtime> {
     void install(const std::shared_ptr<Instance> &, uint32_t owner, const Scopes &);
     void wire(const std::shared_ptr<Instance> &);
     void wireRichTable(const std::shared_ptr<Instance>&);
-    void applyRichTableRows(Instance&, ListState&);
+    void applyRichTableRows(Instance&,ListState&,const std::shared_ptr<Scope>&,uint32_t);
     void repeat(const std::shared_ptr<Instance> &);
     std::shared_ptr<Instance> buildVirtual(uint32_t, const Scopes&);
     void virtualRepeat(const std::shared_ptr<Instance>&);
@@ -225,7 +225,7 @@ struct Runtime : std::enable_shared_from_this<Runtime> {
     std::shared_ptr<Scope> renderScope(const std::shared_ptr<Scope> &, const std::shared_ptr<Instance> &,
                                      const std::string &key);
     static std::string hostKey(const ScopePath &, const std::string &);
-    void applyList(Instance &, const std::string &, ListState &);
+    void applyList(Instance &, const std::string &, ListState &, const std::shared_ptr<Scope>&, uint32_t);
     void applyTableRows(Instance &, ListState &);
 };
 std::string narrow(const std::wstring &);

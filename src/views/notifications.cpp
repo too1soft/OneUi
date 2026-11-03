@@ -1,5 +1,6 @@
 #include "internal/view_profile.h"
 #include "runtime.h"
+#include "rich_table_cache.h"
 namespace oneui::views {
 void Runtime::observe(const std::shared_ptr<Scope> &scope, uint32_t id) {
     auto node = observing.lock();
@@ -13,14 +14,18 @@ void Runtime::observe(const std::shared_ptr<Scope> &scope, uint32_t id) {
                      [&](auto &weak) { return weak.lock() == node; }))
         observers.push_back(node);
 }
-void Runtime::mark(const std::shared_ptr<Scope> &scope, uint32_t id) {
+void Runtime::mark(const std::shared_ptr<Scope> &scope, uint32_t id, const ListState* reportedList) {
     ++scope->versions[id];
     auto found = scope->observers.find(id);
     if (found == scope->observers.end())
         return;
     for (auto &weak : found->second) {
-        if (auto node=weak.lock(); node && (node->tableCache || node->richTableCache))
-            node->recordDirty.insert(scope.get());
+        if (auto node=weak.lock(); node && (node->tableCache || node->richTableCache)) {
+            // The source UPDATE already carries these record keys. Keep scalar
+            // invalidation/versioning, without recording the same table work twice.
+            const bool reported=reportedList && node->richTableCache && node->richTableCache->source==reportedList;
+            if(!reported)node->recordDirty.insert(scope.get());
+        }
         for (auto node = weak.lock(); node; node = node->parent.lock())
             node->dirty = true;
     }

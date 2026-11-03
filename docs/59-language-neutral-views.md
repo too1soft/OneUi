@@ -1228,3 +1228,27 @@ NativeHost 内部控件和其回调不参与模板回调槽重载。
 ### DataMenu 相同记录重放
 
 DataMenu 的绑定事务允许重放相同记录快照。完全相同的记录字段（id、parent、text、shortcut、icon、disabled、checked、danger、separator、header）及顺序不重建原生 Menu，保留当前滚动和子菜单路径；title/subtitle 的同值重放同样保留状态。任何字段、顺序或成员变化继续验证并重建，非法输入保持旧状态。事件回调每次绑定照常替换，后续激活使用最新回调；此规则不缓存或跳过事件重绑，也不对全局 StableList 版本做去重。
+
+### Table 源列表筛选元数据
+
+大列表可使用源 VM 的成对可选属性，避免筛选时逐行通知 `visible`。例如
+`<Table :items="rows"/>` 的源 model 可追加：
+
+```text
+r rows_filter_active:bool
+r rows_filter_keys:list<RowKey>
+```
+
+其中 `RowKey` 使用普通带 key 的 record model，业务 key 必须与 `rows` 中的 key 相同。
+属性前缀取实际源列表属性名；不同列表的筛选元数据互不影响。两个属性必须同时存在，
+类型分别为 bool 和 list，否则返回 `ONEUI_VIEW_TYPE`；两者都缺省时保持原有行为。
+
+`filter_active=false` 显示全部源行，忽略键集合；true 时只显示集合中的源行，空集合
+表示无匹配项。键集合不改变源列表顺序；已有行级 `visible` 仍与集合筛选共同生效。
+未知源 key 返回 `ONEUI_VIEW_BAD_KEY`，不发布部分结果，修正后可以恢复。源成员和筛选
+集合必须在同一事务中保持一致。普通 scalar/list 通知即可更新筛选，无须 RESET 源行。
+
+筛选隐藏的源记录和单元格租约保留，读数更新照常校验；恢复显示时使用最新数据，选择、
+原生事件和滚动锚点仍按业务 key 映射。源中已删除的记录继续释放，不因筛选无限积累。
+该能力没有修改 C ABI 或 Table 组件描述符；新增的 VM schema 属性需要匹配的 provider
+和 IR，客户端须使用包含本节实现的 native runtime。

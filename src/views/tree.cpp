@@ -206,7 +206,7 @@ void Runtime::apply(const std::shared_ptr<Instance> &instance, Binding &binding)
     instance->applying = true;
     try {
         if (property.tag == 5)
-            applyList(*instance, name, list(scope, property.id));
+            applyList(*instance, name, list(scope, property.id), scope, property.id);
         else {
             auto value = read(scope, property.id);
             if (name == "disabled")

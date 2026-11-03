@@ -10,12 +10,13 @@
 #include "oneui/controls/code_editor.h"
 #include "oneui/ui_icon_names.h"
 namespace oneui::views {
-void Runtime::applyList(Instance &instance, const std::string &property, ListState &state) {
+void Runtime::applyList(Instance &instance, const std::string &property, ListState &state,
+                        const std::shared_ptr<Scope>& owner,uint32_t sourceProperty) {
     ONEUI_VIEW_TIME(Rows);
     if(applyDataMenu(*this,instance,state))return;
     if(workspaceList(instance,property,state))return;
     if(instance.element.component=="Table" && property=="items") {
-        applyRichTableRows(instance,state);return;
+        applyRichTableRows(instance,state,owner,sourceProperty);return;
     }
     auto &e = instance.element;
     auto wide = [](const std::string &s) { ONEUI_VIEW_TIME(Conversion); return unicode::fromUtf8(s); };
