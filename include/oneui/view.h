@@ -75,6 +75,7 @@ protected:
     Widget* pressedChild() const { return pressedChild_; }
     void focusChild(Widget* child, bool focusVisible = false);
     bool focusNext(bool reverse, bool focusVisible = true);
+    static void focusFirstKeyboardStop(Widget* target);
     bool hasInteractionState() const override;
     void resetInteractionState() override;
 

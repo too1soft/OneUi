@@ -106,6 +106,7 @@ private:
     Widget* focusedOverlay() const;
     void focusOverlay(Widget* child, bool focusVisible = false);
     bool focusNextOverlay(bool reverse, bool focusVisible = true);
+    bool navigateTab(const KeyEvent& event, bool hasParentScope);
     std::vector<Widget*> focusableOverlays() const;
     bool restorePreviousOverlayFocus();
     bool containsOverlay(const Widget* child) const;

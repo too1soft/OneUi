@@ -1,5 +1,6 @@
 #include "oneui/controls/button.h"
 #include "oneui/controls/dialog.h"
+#include "oneui/controls/interactive_surface.h"
 #include "oneui/controls/menu.h"
 #include "oneui/controls/popup.h"
 #include "oneui/controls/select.h"
@@ -1171,6 +1172,7 @@ void testNestedOverlayHostPropagatesElevatedSelectToAncestors() {
     expectEqual("Nested OverlayHost commits option outside dialog", select->selectedIndex(), 2);
 }
 
+#include "overlay_host_tab_tests.inc"
 } // namespace
 
 int main() {
@@ -1246,6 +1248,8 @@ int main() {
     testNestedOverlayHostPropagatesElevatedSelectToAncestors();
     testContentFocusIsExclusiveWithModalAndSafeAfterReplacement();
     testKeyboardDispatchScopeRestoresAfterExceptionAndReentry();
+    testNestedModelessTabReturnsThroughContentAndSiblingControls();
+    testRepeatedTabCyclesPreserveTheSurfaceActionBeforeItsChild();
 
     if (failures != 0) {
         std::cerr << failures << " overlay host behavior test(s) failed\n";
