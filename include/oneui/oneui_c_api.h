@@ -562,6 +562,8 @@ ONEUI_API int oneui_font_register_memory(
  * Worker-thread use is recommended; see oneui/fonts.h for platform semantics. */
 typedef void (*OneUiFontFamilyCallback)(OneUiUtf8String family, int monospaced, void* user_data);
 ONEUI_API int oneui_enumerate_system_fonts(OneUiFontFamilyCallback callback, void* user_data);
+/* Same callback contract, including process-local OneUI-registered fonts. */
+ONEUI_API int oneui_enumerate_available_fonts(OneUiFontFamilyCallback callback, void* user_data);
 
 /* Widget-free unwrapped shaping, in logical pixels. Empty family uses the
  * default fallback. Same shaper as Label, including complex scripts and emoji.

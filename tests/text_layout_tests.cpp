@@ -9,6 +9,8 @@
 #include "include/core/SkCanvas.h"
 #include "include/core/SkImageInfo.h"
 #include "include/core/SkSurface.h"
+#include "oneui/fonts.h"
+#include <algorithm>
 #include <cmath>
 #include <iostream>
 #include <stdexcept>
@@ -49,6 +51,28 @@ int main() {
         }
         require(systemChinese->unresolvedGlyphs() == 0, "system font fallback must resolve Chinese glyphs");
 #endif
+        const std::string catalogAlias = "OneUI Embedded Font Catalog Test";
+        const auto latinData = SkData::MakeFromFileName(oneuiTestAsset("NotoSans-Regular.ttf").c_str());
+        const auto chineseData = SkData::MakeFromFileName(oneuiTestAsset("NotoSansCJKsc-Regular.otf").c_str());
+        require(latinData && chineseData, "catalog font fixtures must exist");
+        require(oneui::rendering::registerFontFromMemory(latinData->data(), latinData->size(), catalogAlias),
+                "first application face registers");
+        auto embedded = oneui::rendering::makeEmbeddedFontManager();
+        const auto styleCount = [&] { return embedded->matchFamily(catalogAlias.c_str())->count(); };
+        const auto firstCount = styleCount();
+        require(firstCount > 0, "registered family exposes native styles");
+        require(oneui::rendering::registerFontFromMemory(latinData->data(), latinData->size(), catalogAlias) &&
+                styleCount() == firstCount, "identical font registration stays idempotent");
+        require(oneui::rendering::registerFontFromMemory(chineseData->data(), chineseData->size(), catalogAlias) &&
+                styleCount() > firstCount, "additional faces in the same family are not discarded");
+        const auto installed = oneui::enumerateSystemFonts();
+        require(std::none_of(installed.begin(), installed.end(), [&](const auto& font) {
+                    return font.family == catalogAlias;
+                }), "system-only catalog preserves its exclusion contract");
+        const auto catalog = oneui::enumerateAvailableFonts();
+        require(std::count_if(catalog.begin(), catalog.end(), [&](const auto& font) {
+                    return font.family == catalogAlias && !font.monospaced;
+                }) == 1, "font catalogs expose a private application family once with its true pitch");
         auto emojiData = SkData::MakeFromFileName(oneuiTestAsset("NotoColorEmoji.ttf").c_str());
         require(emojiData && oneui::rendering::registerFontFromMemory(emojiData->data(), emojiData->size(), "OneUI Acceptance Emoji"),
                 "application color font registration must work without OS font installation");

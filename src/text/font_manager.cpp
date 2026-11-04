@@ -11,7 +11,7 @@
 #include <array>
 #include <mutex>
 #include <string>
-#include <unordered_set>
+#include <cstring>
 #if defined(_WIN32)
 #include "include/ports/SkTypeface_win.h"
 #elif defined(__APPLE__)
@@ -41,9 +41,14 @@ std::mutex& embeddedFontMutex() {
     return mutex;
 }
 
-std::unordered_set<std::string>& embeddedFontFamilies() {
-    static std::unordered_set<std::string> families;
-    return families;
+struct RegisteredFont {
+    std::string family;
+    sk_sp<SkData> data;
+};
+
+std::vector<RegisteredFont>& registeredFonts() {
+    static std::vector<RegisteredFont> fonts;
+    return fonts;
 }
 } // namespace
 
@@ -90,12 +95,15 @@ bool registerFontFromMemory(const void* data, std::size_t size, const std::strin
     }
 
     std::lock_guard<std::mutex> lock(embeddedFontMutex());
-    if (embeddedFontFamilies().find(familyAlias) != embeddedFontFamilies().end()) {
+    if (std::any_of(registeredFonts().begin(), registeredFonts().end(), [&](const auto& font) {
+            return font.family == familyAlias && font.data->size() == size &&
+                std::memcmp(font.data->data(), data, size) == 0;
+        })) {
         return true;
     }
 
     auto fontData = SkData::MakeWithCopy(data, size);
-    auto baseTypeface = makeTypefaceFromData(std::move(fontData));
+    auto baseTypeface = makeTypefaceFromData(fontData);
     if (!baseTypeface) {
         return false;
     }
@@ -103,42 +111,54 @@ bool registerFontFromMemory(const void* data, std::size_t size, const std::strin
     const SkString alias(familyAlias.c_str());
     constexpr std::array<int, 9> weights{100, 200, 300, 400, 500, 600, 700, 800, 900};
     std::size_t registered = 0;
-    for (const int weight : weights) {
-        const SkFontArguments::VariationPosition::Coordinate coordinate{
-            SkFontArguments::VariationPosition::Coordinate::wght,
-            static_cast<float>(weight)};
-        SkFontArguments arguments;
-        arguments.setVariationDesignPosition({&coordinate, 1});
-        auto instance = baseTypeface->makeClone(arguments);
-        if (instance) {
-            embeddedProvider()->registerTypeface(std::move(instance), alias);
-            ++registered;
+    if (baseTypeface->getVariationDesignParameters({}) > 0) {
+        for (const int weight : weights) {
+            const SkFontArguments::VariationPosition::Coordinate coordinate{
+                SkFontArguments::VariationPosition::Coordinate::wght,
+                static_cast<float>(weight)};
+            SkFontArguments arguments;
+            arguments.setVariationDesignPosition({&coordinate, 1});
+            auto instance = baseTypeface->makeClone(arguments);
+            if (instance) {
+                embeddedProvider()->registerTypeface(std::move(instance), alias);
+                ++registered;
+            }
         }
     }
     if (registered == 0) {
         embeddedProvider()->registerTypeface(std::move(baseTypeface), alias);
     }
-    embeddedFontFamilies().insert(familyAlias);
+    registeredFonts().push_back({familyAlias, std::move(fontData)});
     return true;
 }
 } // namespace oneui::rendering
 
 namespace oneui {
-std::vector<FontFamilyInfo> enumerateSystemFonts() {
+namespace {
+std::vector<FontFamilyInfo> fontCatalog(bool includeRegistered) {
     auto manager = rendering::makePlatformFontManager();
-    if (!manager) throw std::runtime_error("System font manager unavailable");
+    if (!manager && !includeRegistered) throw std::runtime_error("System font manager unavailable");
     std::vector<FontFamilyInfo> result;
-    const int count = manager->countFamilies();
-    result.reserve(static_cast<std::size_t>(std::max(count, 0)));
-    for (int i = 0; i < count; ++i) {
-        SkString name;
-        manager->getFamilyName(i, &name);
-        if (name.isEmpty()) continue;
-        auto styles = manager->createStyleSet(i);
-        auto face = styles ? styles->matchStyle(SkFontStyle::Normal()) : nullptr;
-        result.push_back({std::string(name.c_str(), name.size()), face && face->isFixedPitch()});
+    const auto append = [&](const sk_sp<SkFontMgr>& fonts) {
+        if (!fonts) return;
+        const int count = fonts->countFamilies();
+        for (int i = 0; i < count; ++i) {
+            SkString name;
+            fonts->getFamilyName(i, &name);
+            if (name.isEmpty()) continue;
+            auto styles = fonts->createStyleSet(i);
+            auto face = styles ? styles->matchStyle(SkFontStyle::Normal()) : nullptr;
+            result.push_back({std::string(name.c_str(), name.size()), face && face->isFixedPitch()});
+        }
+    };
+    if (includeRegistered) {
+        std::lock_guard<std::mutex> lock(rendering::embeddedFontMutex());
+        append(rendering::makeEmbeddedFontManager());
     }
-    std::sort(result.begin(), result.end(), [](const auto& a, const auto& b) {
+    append(manager);
+    if (!manager && result.empty()) throw std::runtime_error("System font manager unavailable");
+    // Match painting: application fonts take precedence over installed names.
+    std::stable_sort(result.begin(), result.end(), [](const auto& a, const auto& b) {
         return a.family < b.family;
     });
     result.erase(std::unique(result.begin(), result.end(), [](const auto& a, const auto& b) {
@@ -146,4 +166,8 @@ std::vector<FontFamilyInfo> enumerateSystemFonts() {
     }), result.end());
     return result;
 }
+} // namespace
+
+std::vector<FontFamilyInfo> enumerateSystemFonts() { return fontCatalog(false); }
+std::vector<FontFamilyInfo> enumerateAvailableFonts() { return fontCatalog(true); }
 } // namespace oneui

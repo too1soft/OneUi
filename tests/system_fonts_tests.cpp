@@ -47,6 +47,9 @@ int main() {
         }
         if (oneui_enumerate_system_fonts(nullptr, nullptr) != count)
             throw std::runtime_error("null callback must query the count");
+        if (oneui_enumerate_available_fonts(nullptr, nullptr) !=
+                static_cast<int>(oneui::enumerateAvailableFonts().size()))
+            throw std::runtime_error("available font C ABI must support count-only queries");
 #ifdef _WIN32
         if (cpp.empty() || std::none_of(cpp.begin(), cpp.end(), [](const auto& f) { return f.monospaced; }))
             throw std::runtime_error("Windows fixture must expose installed and fixed-pitch fonts");

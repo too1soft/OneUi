@@ -17,4 +17,8 @@ struct FontFamilyInfo {
 // after installation changes. Empty is valid on systems with no installed fonts;
 // throws std::runtime_error when the platform manager cannot be created.
 ONEUI_API std::vector<FontFamilyInfo> enumerateSystemFonts();
+// Font-picker snapshot including process-local application fonts, preferred
+// over installed families with the same name. Same ordering/pitch contract.
+// Can return registered fonts even when platform discovery is unavailable.
+ONEUI_API std::vector<FontFamilyInfo> enumerateAvailableFonts();
 } // namespace oneui
