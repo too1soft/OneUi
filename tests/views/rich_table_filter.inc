@@ -1,4 +1,59 @@
+void tableProjectionContract() {
+    oneui::Table table;
+    using Row=std::vector<oneui::TableCell>;
+    std::vector<std::shared_ptr<const Row>> source;
+    for(int i=0;i<3;++i) {
+        oneui::TableCell cell;cell.text=std::wstring(100,static_cast<wchar_t>(L'a'+i));cell.detail=L"detail";
+        source.push_back(std::make_shared<const Row>(Row{cell}));
+    }
+    expect(table.projectRichRows(source,{0,1,2},{}),"initial immutable row projection");
+    table.setSelectionMode(oneui::SelectionMode::Multiple);table.setSelectedIndices({1});
+    const auto first=table.richRows()[0].data(),last=table.richRows()[2].data();
+    for(int i=0;i<30;++i) {
+        expect(table.projectRichRows(source,{1},{-1,0,-1}) && table.selectedIndex()==0,
+               "filter remaps selected business row");
+        expect(table.projectRichRows(source,{0,1,2},{1}) && table.selectedIndex()==1,
+               "restore remaps selected business row");
+        expect(table.richRows()[0].data()==first && table.richRows()[2].data()==last,
+               "repeated filter restore moves existing cell storage");
+    }
+    expect(!table.projectRichRows(source,{0,0},{0,1,-1}) &&
+           !table.projectRichRows(source,{3},{-1,-1,0}) &&
+           !table.projectRichRows(source,{1},{0,0,-1}) &&
+           !table.projectRichRows(source,{1},{}) && table.richRows()[2].data()==last,
+           "invalid projection and identity mappings preserve published storage");
+    auto invalid=source;invalid[0].reset();
+    expect(!table.projectRichRows(invalid,{1},{-1,0,-1}) && table.rows().size()==3,
+           "null snapshots reject before mutation");
+    table.projectRichRows(source,{1},{-1,0,-1});
+    source[2]=std::make_shared<const Row>(Row{oneui::TableCell{L"updated while hidden"}});
+    expect(table.projectRichRows(source,{0,1,2},{1}) &&
+           table.rows()[2][0]==L"updated while hidden" && table.richRows()[0].data()==first,
+           "changed hidden snapshots replace only their own payload");
+    for(int operation=0;operation<8;++operation) {
+        table.projectRichRows(source,{0,1,2},std::vector<int>(table.rows().size(),-1));
+        switch(operation) {
+        case 0:table.setRows({{L"manual"}});break;
+        case 1:table.setRichRows({{oneui::TableCell{L"manual"}}});break;
+        case 2:table.updateRow(0,{L"manual"});break;
+        case 3:table.updateRichRow(0,{oneui::TableCell{L"manual"}});break;
+        case 4:table.insertRows(0,{{L"manual"}});break;
+        case 5:table.eraseRows(0,1);break;
+        case 6:table.moveRows(0,1,2);break;
+        case 7:table.reconcileRichRows({{oneui::TableCell{L"manual"}}},{0,-1,-1});break;
+        }
+        expect(table.projectRichRows(source,{0,1,2},std::vector<int>(table.rows().size(),-1)) &&
+               table.rows()[0][0]==source[0]->at(0).text && table.rows()[2][0]==L"updated while hidden",
+               "legacy row mutations invalidate retained projection payloads");
+    }
+    std::weak_ptr<const Row> hidden=source[2];
+    table.projectRichRows(source,{0},{0,-1,-1});source.resize(1);
+    expect(table.projectRichRows(source,{0},{0}) && hidden.expired(),
+           "source pruning releases hidden snapshots and payloads");
+    expect(table.projectRichRows({}, {}, {-1}) && table.rows().empty(),"empty source clears projection");
+}
 void richTableFilterContract(const char* runtimeFile) {
+    tableProjectionContract();
     const auto path=std::filesystem::path(runtimeFile).parent_path()/"Lists.oneview";
     Case c(path.string().c_str());
     auto& root=c.image.schema.models.at("Root");

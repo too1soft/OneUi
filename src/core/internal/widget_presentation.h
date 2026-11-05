@@ -5,10 +5,20 @@
 
 namespace oneui { class IconButton; }
 namespace oneui::internal {
+struct TableRowProjection {
+    struct Payload {
+        std::vector<TableCell> rich;
+        std::vector<std::wstring> plain;
+    };
+    std::vector<std::shared_ptr<const std::vector<TableCell>>> source;
+    std::vector<std::shared_ptr<Payload>> payloads;
+    std::vector<std::size_t> active;
+};
 struct TablePresentation {
     std::vector<TableColumn> authored;
     std::optional<std::vector<float>> widths;
     std::optional<float> selectionWidth;
+    std::unique_ptr<TableRowProjection> rows;
 };
 struct FlexPresentation {
     std::weak_ptr<Widget> child;

@@ -231,10 +231,11 @@ void Runtime::apply(const std::shared_ptr<Instance> &instance, Binding &binding)
         instance->applying = false;
         throw;
     } catch (const std::invalid_argument &) {
-        fail(ONEUI_VIEW_TYPE, "Component property value rejected", r[6]);
+        const auto message = "Component property value rejected (" + name + ")";
+        fail(ONEUI_VIEW_TYPE, message.c_str(), r[6]);
         this->error.section_kind = BIND;
         instance->applying = false;
-        throw Failure(ONEUI_VIEW_TYPE, "Component property value rejected");
+        throw Failure(ONEUI_VIEW_TYPE, message.c_str());
     } catch (...) {
         instance->applying = false;
         throw;

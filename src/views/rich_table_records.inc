@@ -116,8 +116,10 @@ void Runtime::applyRichTableRows(Instance& instance,ListState& state,
         updatedCells.insert(key);
         prepared.emplace_back(key,std::move(row));
     }
+    const bool projectFilter=filterChanged && !reset && updatedCells.empty();
     auto commit=[cache,prepared=std::move(prepared),metadata=std::move(metadata),keys=state.keys,serial=state.serial,
                  updatedCells=std::move(updatedCells),filter=std::move(filter),source=&state,
+                 projectFilter,
                  reset=reset||visibilityChanged||filterChanged,prune,&instance]() mutable {
         ONEUI_VIEW_TIME(Rows);
         struct Applying {Instance& node;bool old;Applying(Instance& n):node(n),old(n.applying){n.applying=true;}
@@ -147,6 +149,16 @@ void Runtime::applyRichTableRows(Instance& instance,ListState& state,
             cache->rows[key]=std::move(row);
         }
         const auto allKeys=prune ? keys : std::vector<std::string>{};
+        std::vector<std::shared_ptr<const std::vector<TableCell>>> snapshots;
+        std::vector<size_t> projection;
+        if(projectFilter) {
+            snapshots.reserve(keys.size());projection.reserve(keys.size());
+            for(size_t i=0;i<keys.size();++i) {
+                const auto& row=cache->rows.at(keys[i]);
+                snapshots.push_back(row.value);
+                if(row.visible && (!filter.active || filter.keys.count(keys[i])))projection.push_back(i);
+            }
+        }
         keys.erase(std::remove_if(keys.begin(),keys.end(),
             [&](const auto& key){return !cache->rows.at(key).visible || (filter.active && !filter.keys.count(key));}),keys.end());
         if(reset) {
@@ -154,7 +166,7 @@ void Runtime::applyRichTableRows(Instance& instance,ListState& state,
             for(auto& [_,row]:cache->rows)row.nextIndex=-1;
             for(size_t i=0;i<keys.size();++i) {
                 auto& row=cache->rows.at(keys[i]);row.nextIndex=int(i);
-                rows.push_back(*row.value);
+                if(!projectFilter)rows.push_back(*row.value);
             }
             std::vector<int> mapping;
             mapping.reserve(cache->keys.size());
@@ -162,7 +174,10 @@ void Runtime::applyRichTableRows(Instance& instance,ListState& state,
                 const auto found=cache->rows.find(key);
                 mapping.push_back(found==cache->rows.end()?-1:found->second.nextIndex);
             }
-            check(table->reconcileRichRows(std::move(rows),mapping),ONEUI_VIEW_TYPE,"Table row identity mapping");
+            const bool applied=projectFilter
+                ? table->projectRichRows(snapshots,projection,mapping)
+                : table->reconcileRichRows(std::move(rows),mapping);
+            check(applied,ONEUI_VIEW_TYPE,"Table row identity mapping");
             if(prune) {
                 std::unordered_set<std::string> live(allKeys.begin(),allKeys.end());
                 for(auto it=cache->rows.begin();it!=cache->rows.end();) {
