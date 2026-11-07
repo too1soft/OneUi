@@ -181,7 +181,8 @@ void settingsLists(const char* runtimeFile) {
     c.runtime->notify(c.runtime->rootScope, c.title);
     c.runtime->notify(c.runtime->rootScope, spans);
     c.runtime->flush();
-    expect(rich->textSpans()[0].start == 1 && rich->textSpans()[0].end == 3,
+    const auto nativeEnd = std::wstring(L"\u4e2d\U0001f680").size();
+    expect(rich->textSpans()[0].start == 1 && rich->textSpans()[0].end == nativeEnd,
            "UTF8 byte spans convert supplementary characters to native offsets");
     for (const auto range : {std::pair<int,int>{1,7}, {3,8}, {3,3}}) {
         span.values[spanStart].integer = range.first;
