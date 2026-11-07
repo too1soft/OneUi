@@ -228,6 +228,12 @@ void Runtime::wire(const std::shared_ptr<Instance> &instance) {
             else if (name == "activate")
                 grid->setOnActivate([fire, integer](std::int64_t row, int column) { fire({integer(row), integer(column)}); });
         }
+        else if ((name == "hover" || name == "focus") && element.component == "InteractiveSurface") {
+            auto surface = element.as<InteractiveSurface>();
+            auto changed = [fire](bool state) { Value v; v.tag = 1; v.integer = state; fire({v}); };
+            if (name == "hover") surface->setOnHoverChanged(changed);
+            else surface->setOnFocusChanged(changed);
+        }
         else if (name == "click") {
             if(auto surface=element.as<InteractiveSurface>())surface->setOnClick([fire]{fire({});});
             else element.as<Button>()->setOnClick([fire] { fire({}); });

@@ -110,6 +110,7 @@ struct StyleBox {
 
 // New presentation properties are separate from the frozen StyleBox ABI.
 struct StyleLayout {
+    std::optional<Color> iconColor;
     std::optional<float> maxWidth,maxHeight;
     std::optional<std::vector<float>> tableColumnWidths;
     std::optional<float> tableSelectionWidth;

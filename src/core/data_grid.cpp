@@ -17,6 +17,15 @@ DataGrid::DataGrid()
 
 DataGrid::~DataGrid() = default;
 
+void DataGrid::setStyleOverride(TableStyleOverride style) {
+    surface_->styleOverride = std::move(style);
+    surface_->refresh();
+}
+void DataGrid::clearStyleOverride() {
+    surface_->styleOverride.reset();
+    surface_->refresh();
+}
+
 void DataGrid::setColumns(std::vector<DataGridColumn> columns) {
     if (editing_ && editColumn_ >= static_cast<int>(columns.size())) cancelEdit();
     surface_->columns = std::move(columns);

@@ -27,7 +27,9 @@ public:
     int addItem(std::wstring text, std::optional<IconSymbol> icon = std::nullopt, bool danger = false);
     void addSeparator();
     void clearItems();
+    void setItemMetrics(float itemHeight, float separatorHeight);
     void setItemDisabled(int index, bool disabled);
+    void setItemShortcut(int index, std::wstring shortcut);
     void setOnItemActivated(std::function<void(int)> callback);
     void setStyleSheet(std::shared_ptr<StyleSheet> sheet, StyleNode node);
 
@@ -53,6 +55,7 @@ private:
         enum class Kind { Header, Item, Separator };
         Kind kind = Kind::Item;
         std::wstring title;
+        std::wstring shortcut;
         std::wstring subtitle;
         std::optional<IconSymbol> icon;
         bool danger = false;
@@ -71,6 +74,7 @@ private:
 
     std::vector<Entry> entries_;
     int itemCount_ = 0;
+    float itemHeight_ = 34.0f, separatorHeight_ = 9.0f;
     int hoveredEntry_ = -1;
     int keyboardEntry_ = -1;
     std::optional<Point> lastPointerPosition_;

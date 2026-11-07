@@ -755,6 +755,12 @@ void testTabsCompactSizingAndCloseInteraction() {
 void testDocumentTabsIndicatorAndOutlineStayWithSelectedItem() {
     oneui::StyleSheet sheet;
     std::string error;
+    const auto typed = oneui::ui::syntax::css("Text.metric {letter-spacing:-0.65px;font-variant-numeric:tabular-nums;}");
+    oneui::StyleSheet typedSheet;
+    expectTrue("typed numeric label styling reaches the native parser", typedSheet.addRulesFromCss(typed, &error));
+    const auto typedNumeric = typedSheet.resolve({"label", {"one-Text", "metric"}, oneui::StyleStateNone});
+    expectNear("typed metric tracking is retained", typedNumeric.letterSpacing.value_or(0), -0.65f);
+    expectTrue("typed metric tabular figures are retained", typedNumeric.tabularNumbers.value_or(false));
     expectTrue("document styling parses", sheet.addRulesFromCss(
         "tabs { tab-indicator-inset: 11px; tab-indicator-height: 2px; tab-outline-width: 1px; tab-trailing-inset: 2px; tab-indicator-color: #007aff; }"
         "label { letter-spacing: -.44px; font-variant-numeric: tabular-nums; }"

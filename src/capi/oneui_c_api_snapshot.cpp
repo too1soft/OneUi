@@ -5,6 +5,7 @@
 #include "oneui/controls/dialog.h"
 #include "oneui/controls/icon_button.h"
 #include "oneui/controls/label.h"
+#include "oneui/controls/time_series_chart.h"
 #include "oneui/controls/list.h"
 #include "oneui/controls/virtual_list.h"
 #include "oneui/controls/nav_item.h"
@@ -272,6 +273,8 @@ void appendDebugTableRows(std::ostringstream& stream, const oneui::Table& table)
     stream << ']';
 }
 
+#include "oneui_c_api_caption_snapshot.inc"
+
 void appendDebugNode(
     std::ostringstream& stream,
     const oneui::Widget* widget,
@@ -368,11 +371,44 @@ void appendDebugNode(
         stream << "},\"paintFontSize\":";
         appendJsonNumber(stream, label->fontSize());
         stream << ",\"paintFontWeight\":" << label->fontWeight();
+        stream << ",\"paintLetterSpacing\":";
+        appendJsonNumber(stream, label->textOptions().letterSpacing);
+        stream << ",\"paintTabularNumbers\":" << (label->textOptions().tabularNumbers ? "true" : "false");
+        stream << ",\"configuredLineHeight\":";
+        appendJsonNumber(stream, label->lineHeight());
+        stream << ",\"textWrapping\":" << (label->textWrapping() ? "true" : "false");
+        stream << ",\"fontFamilyRequest\":";
+        appendJsonString(stream, utf8FromWide(label->textFontFamily()));
         stream << ",\"textAlign\":";
         appendJsonString(stream, label->textAlign() == oneui::TextAlign::Right ? "right" :
             label->textAlign() == oneui::TextAlign::Center ? "center" : "left");
+    } else if (const auto* button=dynamic_cast<const oneui::Button*>(widget)) {
+        appendButtonCaption(stream,*button);
     } else {
         stream << "null";
+    }
+    if (const auto* dialog=dynamic_cast<const oneui::Dialog*>(widget)) appendDialogParts(stream,*dialog);
+    if (const auto* chart = dynamic_cast<const oneui::TimeSeriesChart*>(widget)) {
+        stream << ",\"chartThresholds\":[";
+        bool first = true;
+        for (const auto& threshold : chart->thresholds()) {
+            if (!first) stream << ',';
+            first = false;
+            stream << "{\"value\":";
+            appendJsonNumber(stream, threshold.value);
+            stream << ",\"color\":[" << unsigned(threshold.color.r) << ',' << unsigned(threshold.color.g) << ','
+                   << unsigned(threshold.color.b) << ',' << unsigned(threshold.color.a) << "]}";
+        }
+        stream << "],\"thresholdDash\":[";
+        appendJsonNumber(stream, chart->thresholdDashLength()); stream << ',';
+        appendJsonNumber(stream, chart->thresholdGapLength()); stream << ']';
+        stream << ",\"chartLatestStyle\":[" << chart->latestPointSeries() << ',';
+        appendJsonNumber(stream,chart->latestPointWidth());stream << ',';
+        appendJsonNumber(stream,chart->latestPointHeight());stream << ',';
+        appendJsonNumber(stream,chart->latestPointOutline());stream << ']';
+        stream << ",\"chartSecondaryStyle\":[";
+        appendJsonNumber(stream,chart->secondarySeriesWidth());stream << ',';
+        appendJsonNumber(stream,chart->secondarySeriesOpacity());stream << ']';
     }
     stream << ",\"rowHeight\":";
     if (const auto* list = dynamic_cast<const oneui::VirtualList*>(widget)) {

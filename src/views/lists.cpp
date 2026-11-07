@@ -1,6 +1,8 @@
 #include "internal/view_profile.h"
 #include "runtime.h"
 #include <unordered_set>
+#include <unordered_map>
+#include <string_view>
 namespace oneui::views {
 void Runtime::auditListIdentity(const std::shared_ptr<Scope> &scope, uint32_t property,
                                 const ListState &state, const std::vector<std::string> &keys) {
@@ -153,13 +155,19 @@ void Runtime::refreshList(const std::shared_ptr<Scope> &scope, uint32_t property
             }
         }
     }
+    // UPDATE ranges can cover thousands of records. Resolve the final key
+    // positions once instead of scanning the entire key vector per item.
+    std::unordered_map<std::string_view, size_t> updateIndices;
+    if (std::any_of(state.pending.begin(), state.pending.end(),
+                    [](const Delta& d) { return d.kind == ONEUI_LIST_UPDATE; }))
+        for (size_t i = 0; i < keys.size(); ++i) updateIndices.emplace(keys[i], i);
     for (const auto &d : state.pending)
         if (d.kind == ONEUI_LIST_UPDATE) {
             for (const auto &key : d.keys) {
-                auto at = std::find(keys.begin(), keys.end(), key);
-                if (at == keys.end())
+                auto at = updateIndices.find(key);
+                if (at == updateIndices.end())
                     continue;
-                auto child = next[size_t(at - keys.begin())];
+                auto child = next[at->second];
                 const auto &model = image.schema.model(child->table.model_id);
                 for (const auto &entry : model.properties)
                     if (d.properties.empty() || std::find(d.properties.begin(), d.properties.end(),

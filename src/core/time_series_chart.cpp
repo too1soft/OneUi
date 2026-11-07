@@ -1,6 +1,7 @@
 #include "oneui/controls/time_series_chart.h"
 #include "internal/animation_wake.h"
 #include "internal/ui_clock.h"
+#include "time_series_curve.h"
 
 #include <algorithm>
 #include <cmath>
@@ -14,14 +15,12 @@ namespace oneui {
 namespace {
 constexpr double liveTransitionMs = 450.0;
 // A live chart that stops receiving data stops sliding after this long.
-constexpr double liveMaximumScrollSeconds = 12.0;
-// Live charts repaint on steps of one UI clock shared by every chart, so charts
-// fed together repaint in the same frame, and well below the display rate: a
-// slide moves a few pixels a second and an eased update needs no more than
-// 32 fps. Each repaint presents the whole window, so this bounds idle cost.
-// Ease steps divide slide steps, so a slide never adds frames to an ease.
-constexpr double liveSlideStepMs = 125.0;
-constexpr double liveEaseStepMs = liveSlideStepMs / 4.0;
+constexpr double liveMaximumScrollSeconds = 60.0;
+// Shared cadence keeps co-sampled charts in one presentation. Subpixel motion
+// stays continuous even in a wide one-minute window; new samples ease at 60 Hz.
+constexpr double liveSlideStepMs = 1000.0 / 30.0;
+constexpr double liveEaseStepMs = 1000.0 / 60.0;
+constexpr float liveSlideQuantumPx = 0.01f;
 double easeOut(double t) {
     t = std::clamp(t, 0.0, 1.0);
     return 1.0 - (1.0 - t) * (1.0 - t) * (1.0 - t);
@@ -82,7 +81,9 @@ void TimeSeriesChart::setRange(double minimum, double maximum) {
 }
 
 void TimeSeriesChart::setScrollRate(double rate) {
-    scrollRate_ = std::isfinite(rate) && rate > 0.0 ? rate : 0.0;
+    const double next = std::isfinite(rate) && rate > 0.0 ? rate : 0.0;
+    if (next == scrollRate_) return;
+    scrollRate_ = next;
     dataTimeMs_ = internal::uiTimeMs();
     if (scrollRate_ > 0.0) requestAnimationFrame();
     invalidate();
@@ -119,7 +120,7 @@ bool TimeSeriesChart::tickAnimations(double nowMs) {
     const bool sliding = scrollRate_ > 0.0 && nowMs - dataTimeMs_ < liveMaximumScrollSeconds * 1000.0;
     // An ease repaints once per ease step, and once more when it ends so the
     // final value is shown. Slow slides repaint only once they have moved by
-    // half a pixel.
+    // a hundredth of a logical pixel.
     const double easeStep = clockStep(nowMs, liveEaseStepMs);
     const bool easeRepaint = easing ? easeStep != paintedEaseStep_ : easePending_;
     easePending_ = easing;
@@ -129,7 +130,7 @@ bool TimeSeriesChart::tickAnimations(double nowMs) {
     }
     const float width = plotRect().width;
     const float shift = static_cast<float>(liveShift(nowMs)) * width;
-    const bool repaint = easeRepaint || std::abs(shift - paintedShiftPx_) >= 0.5f;
+    const bool repaint = easeRepaint || std::abs(shift - paintedShiftPx_) >= liveSlideQuantumPx;
     if (repaint) invalidate();
 
     // Nothing changes before the next ease step or the slide step that moves
@@ -139,7 +140,7 @@ bool TimeSeriesChart::tickAnimations(double nowMs) {
     if (sliding) {
         const double pixelsPerMs = scrollRate_ * width / 1000.0;
         const double from = repaint ? shift : paintedShiftPx_;
-        double slideMs = pixelsPerMs > 0.0 ? dataTimeMs_ + (from + 0.5) / pixelsPerMs : nowMs;
+        double slideMs = pixelsPerMs > 0.0 ? dataTimeMs_ + (from + liveSlideQuantumPx) / pixelsPerMs : nowMs;
         slideMs = std::ceil(slideMs / liveSlideStepMs) * liveSlideStepMs;
         if (slideMs <= nowMs) slideMs = (clockStep(nowMs, liveSlideStepMs) + 1.0) * liveSlideStepMs;
         wakeMs = std::min(wakeMs, std::min(slideMs, dataTimeMs_ + liveMaximumScrollSeconds * 1000.0));
@@ -158,7 +159,7 @@ double TimeSeriesChart::maximum() const {
 }
 
 void TimeSeriesChart::setGridLines(int count) {
-    gridLines_ = std::clamp(count, 2, 8);
+    gridLines_ = std::clamp(count, 0, 8);
     invalidate();
 }
 
@@ -179,6 +180,7 @@ void TimeSeriesChart::setAxisLabels(std::vector<std::wstring> labels) {
 
 void TimeSeriesChart::setStyleBox(const StyleBox& style) {
     gridColor_ = style.borderColor;
+    latestPointBackground_ = style.background.color;
     axisLabelColor_ = style.placeholderColor ? style.placeholderColor : style.foreground;
     axisLabelSize_ = style.fontSize.value_or(11.0f);
     axisLabelGap_ = std::max(0.0f, style.gap.value_or(6.0f));
@@ -207,6 +209,17 @@ void TimeSeriesChart::setLatestPointSize(float width, float height) {
     latestPointWidth_ = std::min(width, 128.0f);
     latestPointHeight_ = std::min(height, 128.0f);
     invalidate();
+}
+
+void TimeSeriesChart::setLatestPointStyle(int series, float width, float height, float outline) {
+    if (series < -1 || !std::isfinite(width) || !std::isfinite(height) || !std::isfinite(outline)
+        || width<=0 || height<=0 || width>128 || height>128 || outline<0 || outline>32) return;
+    latestPointSeries_=series; latestPointWidth_=width; latestPointHeight_=height; latestPointOutline_=outline;
+    invalidate();
+}
+void TimeSeriesChart::setSecondarySeriesStyle(float width, float opacity) {
+    if (!std::isfinite(width) || !std::isfinite(opacity) || width<=0 || width>32 || opacity<0 || opacity>1) return;
+    secondarySeriesWidth_=width; secondarySeriesOpacity_=opacity; invalidate();
 }
 
 float TimeSeriesChart::sampleProgress(std::size_t index, std::size_t count) const {
@@ -273,6 +286,13 @@ void TimeSeriesChart::setThresholds(std::vector<TimeSeriesChartThreshold> thresh
 
 const std::vector<TimeSeriesChartThreshold>& TimeSeriesChart::thresholds() const {
     return thresholds_;
+}
+
+void TimeSeriesChart::setThresholdDashStyle(float dash, float gap) {
+    if (!std::isfinite(dash) || !std::isfinite(gap) || dash < 0.5f || gap < 0.5f || dash > 128 || gap > 128) return;
+    thresholdDashLength_ = dash;
+    thresholdGapLength_ = gap;
+    invalidate();
 }
 
 void TimeSeriesChart::setInspectionIndex(int index, bool pinned) {
@@ -393,6 +413,8 @@ void TimeSeriesChart::updateInspection(int index, bool pinned, bool notify) {
 }
 
 void TimeSeriesChart::paint(Canvas& canvas) {
+    if (latestPointBackground_ && latestPointBackground_->a>0)
+        canvas.fillRect(frame(),*latestPointBackground_);
     const Rect rect = plotRect();
     if (rect.width <= 2.0f || rect.height <= 2.0f) {
         return;
@@ -462,18 +484,18 @@ void TimeSeriesChart::paint(Canvas& canvas) {
         }
         const double normalized = (threshold.value - minimum_) / span;
         const float y = rect.y + rect.height * static_cast<float>(1.0 - normalized);
-        for (float x = rect.x; x < rect.x + rect.width; x += 8.0f) {
+        for (float x = rect.x; x < rect.x + rect.width; x += thresholdDashLength_ + thresholdGapLength_) {
             canvas.drawLine(
                 Point{x, y},
-                Point{std::min(rect.x + rect.width, x + 4.0f), y},
+                Point{std::min(rect.x + rect.width, x + thresholdDashLength_), y},
                 threshold.color,
                 1.0f);
         }
     }
 
     canvas.save();
-    const float dotInsetX = std::max(3.0f, latestPointWidth_ * 0.5f);
-    const float dotInsetY = std::max(3.0f, latestPointHeight_ * 0.5f);
+    const float dotInsetX = std::max(3.0f, latestPointWidth_ * 0.5f + latestPointOutline_);
+    const float dotInsetY = std::max(3.0f, latestPointHeight_ * 0.5f + latestPointOutline_);
     // A sliding chart clips exactly at its left edge so old samples leave cleanly.
     const float clipLeft = shift > 0.0f ? rect.x : rect.x - dotInsetX;
     canvas.clipRect(Rect{clipLeft, rect.y - dotInsetY, rect.x + rect.width + dotInsetX - clipLeft, rect.height + 2 * dotInsetY});
@@ -482,7 +504,9 @@ void TimeSeriesChart::paint(Canvas& canvas) {
         if (item.values.empty()) {
             continue;
         }
-        const Color color = disabled() ? theme().disabledForeground : item.color;
+        Color color = disabled() ? theme().disabledForeground : item.color;
+        const float strokeWidth = seriesIndex>0 && secondarySeriesWidth_>0 ? secondarySeriesWidth_ : lineWidth_;
+        if (seriesIndex>0) color.a=static_cast<unsigned char>(std::lround(color.a*secondarySeriesOpacity_));
         const std::size_t last = item.values.size() - 1;
         const auto yAt = [&](double value) {
             const double normalized = std::clamp((value - minimum_) / span, 0.0, 1.0);
@@ -527,38 +551,7 @@ void TimeSeriesChart::paint(Canvas& canvas) {
                 for (std::size_t pointIndex = 1; pointIndex < points.size(); ++pointIndex)
                     linePath.lineTo(points[pointIndex]);
             } else {
-                // Monotone cubic (Steffen): smooth, but never overshoots
-                // between samples, so a curve cannot dip below its data.
-                const std::size_t count = points.size();
-                std::vector<float> slopes(count, 0.0f);
-                const auto secant = [&](std::size_t k) {
-                    const float h = points[k + 1].x - points[k].x;
-                    return h > 0.0001f ? (points[k + 1].y - points[k].y) / h : 0.0f;
-                };
-                for (std::size_t k = 1; k + 1 < count; ++k) {
-                    const float h0 = points[k].x - points[k - 1].x;
-                    const float h1 = points[k + 1].x - points[k].x;
-                    const float s0 = secant(k - 1);
-                    const float s1 = secant(k);
-                    if (s0 * s1 <= 0.0f || h0 + h1 <= 0.0001f) continue;
-                    const float p = (s0 * h1 + s1 * h0) / (h0 + h1);
-                    const float bound = std::min({std::abs(s0), std::abs(s1), 0.5f * std::abs(p)});
-                    slopes[k] = (s0 > 0.0f ? 1.0f : -1.0f) * 2.0f * bound;
-                }
-                const auto endSlope = [&](std::size_t neighbor, std::size_t secantIndex) {
-                    const float s = secant(secantIndex);
-                    const float m = (3.0f * s - slopes[neighbor]) * 0.5f;
-                    return m * s <= 0.0f ? 0.0f : (std::abs(m) > 3.0f * std::abs(s) ? 3.0f * s : m);
-                };
-                slopes.front() = endSlope(1, 0);
-                slopes.back() = endSlope(count - 2, count - 2);
-                for (std::size_t k = 0; k + 1 < count; ++k) {
-                    const float third = (points[k + 1].x - points[k].x) / 3.0f;
-                    linePath.cubicTo(
-                        Point{points[k].x + third, points[k].y + slopes[k] * third},
-                        Point{points[k + 1].x - third, points[k + 1].y - slopes[k + 1] * third},
-                        points[k + 1]);
-                }
+                chart_curve::appendMonotone(linePath, points);
             }
             if (item.fill.value_or(areaFill_) && points.size() > 1) {
                 CanvasPath areaPath = linePath;
@@ -568,7 +561,7 @@ void TimeSeriesChart::paint(Canvas& canvas) {
                 Color fillStart = color;
                 fillStart.a = fillAlpha_;
                 Color fillEnd = color;
-                fillEnd.a = 0;
+                fillEnd.a = fillExtent_ == TimeSeriesFillExtent::Solid ? fillAlpha_ : 0;
                 Rect gradient = rect;
                 if (fillExtent_ == TimeSeriesFillExtent::Series) {
                     float top = rect.y + rect.height;
@@ -581,13 +574,19 @@ void TimeSeriesChart::paint(Canvas& canvas) {
                 canvas.fillPathLinearGradient(areaPath, gradient, fillStart, fillEnd, 180.0f);
             }
             if (item.dashed) {
-                canvas.strokePathDashed(linePath, color, lineWidth_, 4.0f, 3.0f);
+                canvas.strokePathDashed(linePath, color, strokeWidth, 4.0f, 3.0f);
             } else {
-                canvas.strokePath(linePath, color, lineWidth_, true);
+                canvas.strokePath(linePath, color, strokeWidth, true);
             }
         }
-        if (latestPointVisible_ && std::isfinite(item.values.back())) {
+        if (latestPointVisible_ && (latestPointSeries_<0 || static_cast<std::size_t>(latestPointSeries_)==seriesIndex)
+            && std::isfinite(item.values.back())) {
             const auto point = shift > 0.0f ? holdPoint() : pointAt(last);
+            if (latestPointOutline_>0) {
+                const auto background=latestPointBackground_.value_or(theme().surface);
+                canvas.fillEllipse(Rect{point.x-latestPointWidth_*0.5f-latestPointOutline_,point.y-latestPointHeight_*0.5f-latestPointOutline_,
+                    latestPointWidth_+2*latestPointOutline_,latestPointHeight_+2*latestPointOutline_},background);
+            }
             canvas.fillEllipse(Rect{point.x - latestPointWidth_ * 0.5f, point.y - latestPointHeight_ * 0.5f, latestPointWidth_, latestPointHeight_}, color);
         }
     }

@@ -9,6 +9,7 @@
 #include <utility>
 
 namespace oneui {
+void Select::setIndicatorIcon(std::optional<IconSymbol> icon) { indicatorIcon_ = icon; invalidate(); }
 namespace {
 
 void applyFocusRingOverride(FocusRingStyle& style, const FocusRingStyleOverride& override) {
@@ -233,8 +234,12 @@ void Select::paint(Canvas& canvas) {
 
     const float cx = rect.x + rect.width - 20.0f;
     const float cy = rect.y + rect.height / 2.0f + 1.0f;
-    canvas.drawLine(Point{cx - 5.0f, cy - 3.0f}, Point{cx, cy + 2.0f}, fieldStyle.arrowColor, 1.5f);
-    canvas.drawLine(Point{cx, cy + 2.0f}, Point{cx + 5.0f, cy - 3.0f}, fieldStyle.arrowColor, 1.5f);
+    if (indicatorIcon_) {
+        paintIcon(canvas, *indicatorIcon_, Rect{cx-6.0f,cy-7.0f,12.0f,12.0f},fieldStyle.arrowColor,Color{0,0,0,0},1.1f);
+    } else {
+        canvas.drawLine(Point{cx - 5.0f, cy - 3.0f}, Point{cx, cy + 2.0f}, fieldStyle.arrowColor, 1.5f);
+        canvas.drawLine(Point{cx, cy + 2.0f}, Point{cx + 5.0f, cy - 3.0f}, fieldStyle.arrowColor, 1.5f);
+    }
 
     if (!popup_.open || !interactive() || items_.empty()) {
         return;

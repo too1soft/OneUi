@@ -33,6 +33,8 @@ enum class TimeSeriesFillExtent {
     /// From the series' highest point to the baseline, so a low curve still
     /// shows the whole gradient beneath it.
     Series,
+    /// Constant opacity below the curve, without a vertical gradient.
+    Solid,
 };
 
 struct TimeSeriesChartThreshold {
@@ -64,6 +66,15 @@ public:
     void setLatestPointVisible(bool visible);
     // Invalid or non-positive sizes are ignored; the default is 5 x 5.
     void setLatestPointSize(float width, float height);
+    // -1 retains markers on every series; a nonnegative index selects one.
+    void setLatestPointStyle(int series, float width, float height, float outline);
+    int latestPointSeries() const { return latestPointSeries_; }
+    float latestPointWidth() const { return latestPointWidth_; }
+    float latestPointHeight() const { return latestPointHeight_; }
+    float latestPointOutline() const { return latestPointOutline_; }
+    void setSecondarySeriesStyle(float width, float opacity);
+    float secondarySeriesWidth() const { return secondarySeriesWidth_; }
+    float secondarySeriesOpacity() const { return secondarySeriesOpacity_; }
     void setSmoothCurves(bool enabled);
     void setAreaFill(bool enabled);
     void setFillExtent(TimeSeriesFillExtent extent);
@@ -80,6 +91,9 @@ public:
     void setPlotInsets(Insets insets);
     void setThresholds(std::vector<TimeSeriesChartThreshold> thresholds);
     const std::vector<TimeSeriesChartThreshold>& thresholds() const;
+    void setThresholdDashStyle(float dash, float gap);
+    float thresholdDashLength() const { return thresholdDashLength_; }
+    float thresholdGapLength() const { return thresholdGapLength_; }
     void setInspectionIndex(int index, bool pinned = false);
     int inspectionIndex() const;
     bool inspectionPinned() const;
@@ -110,6 +124,8 @@ private:
 
     std::vector<TimeSeriesChartSeries> series_;
     std::vector<TimeSeriesChartThreshold> thresholds_;
+    float thresholdDashLength_ = 4.0f;
+    float thresholdGapLength_ = 4.0f;
     double minimum_ = 0.0;
     double maximum_ = 1.0;
     int gridLines_ = 4;
@@ -122,6 +138,11 @@ private:
     float axisLabelGap_ = 6.0f;
     std::vector<double> samplePositions_;
     bool latestPointVisible_ = false;
+    int latestPointSeries_ = -1;
+    float latestPointOutline_ = 0.0f;
+    std::optional<Color> latestPointBackground_;
+    float secondarySeriesWidth_ = 0.0f;
+    float secondarySeriesOpacity_ = 1.0f;
     float latestPointWidth_ = 5.0f;
     float latestPointHeight_ = 5.0f;
     bool smoothCurves_ = true;

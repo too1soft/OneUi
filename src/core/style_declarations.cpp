@@ -29,7 +29,7 @@ bool applyDeclaration(
     if (isCustomPropertyName(name)) {
         return true;
     }
-    if (name == "order" || name == "max-width" || name == "max-height" ||
+    if (name == "icon-color" || name == "order" || name == "max-width" || name == "max-height" ||
         name == "table-column-widths" || name == "table-selection-width" ||
         (name == "flex-basis" && !value.empty() && value.back() == '%')) {
         const auto* previous = ruleLayout(rule);
@@ -90,7 +90,7 @@ bool applyDeclaration(
             rule.box.foreground = *color;
             return true;
         }
-    } else if (name == "placeholder-color") {
+    } else if (name == "placeholder-color" || name == "subtitle-color") {
         if (auto color = parseStyleColor(value)) {
             rule.box.placeholderColor = *color;
             return true;
@@ -212,7 +212,7 @@ bool applyDeclaration(
             rule.box.fontWeight = std::clamp(static_cast<int>(*fontWeight), 100, 900);
             return true;
         }
-    } else if (name == "detail-font-size") {
+    } else if (name == "detail-font-size" || name == "subtitle-font-size") {
         if (auto fontSize = parsePx(value)) {
             rule.box.detailFontSize = *fontSize;
             return true;

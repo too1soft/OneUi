@@ -1,6 +1,7 @@
 #pragma once
 #include "oneui/controls/text_field.h"
 #include "oneui/view.h"
+#include "oneui/style.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -93,6 +94,8 @@ public:
     void setRowNumbersVisible(bool visible);
     void setEditable(bool editable);
     bool editable() const;
+    void setStyleOverride(TableStyleOverride style);
+    void clearStyleOverride();
 
     void setSelection(DataGridSelection selection);
     const DataGridSelection& selection() const;

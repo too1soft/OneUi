@@ -9,6 +9,7 @@
 #include "platform/shared/key_mapping.h"
 #include "platform/shared/skia_canvas.h"
 #include "platform/shared/text_input.h"
+#include "platform/shared/window_fit.h"
 #import <Cocoa/Cocoa.h>
 #include <algorithm>
 #include <stdexcept>
@@ -40,6 +41,11 @@ class CocoaWindow;
 @end
 @interface OneUiNativeDelegate : NSObject <NSWindowDelegate>
 @property(nonatomic, assign) oneui::macos::CocoaWindow *owner;
+@end
+// Dock reopen events and the default application menu's Quit item.
+@interface OneUiApplicationActions : NSObject
+- (void)handleReopen:(NSAppleEventDescriptor *)event reply:(NSAppleEventDescriptor *)reply;
+- (void)quit:(id)sender;
 @end
 
 namespace oneui::macos {
@@ -138,8 +144,12 @@ class CocoaWindow final : public platform::DesktopWindow {
         if (!launched) {
             [NSApplication sharedApplication];
             installOpenUriEvents();
+            if (!NSApp.mainMenu) NSApp.mainMenu = defaultMainMenu(applicationActions());
             [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
             [NSApp finishLaunching];
+            // After finishLaunching, which installs AppKit's own reopen handler.
+            [[NSAppleEventManager sharedAppleEventManager] setEventHandler:applicationActions()
+                andSelector:@selector(handleReopen:reply:) forEventClass:0x61657674 andEventID:0x72617070];
             launched = true;
         }
         native_ = [[OneUiNativeWindow alloc]
@@ -160,9 +170,11 @@ class CocoaWindow final : public platform::DesktopWindow {
         delegate_.owner = this;
         native_.delegate = delegate_;
         native_.contentView = view_;
+        applyCaptionAppearance();
         setMinimumClientSize(minimum_);
         fileDropChanged(acceptsFileDrop());
         native_.acceptsMouseMovedEvents = YES;
+        fitInitialFrame();
         [native_ center];
         [native_ makeFirstResponder:view_];
         windows.push_back(this);
@@ -346,11 +358,60 @@ class CocoaWindow final : public platform::DesktopWindow {
         setFrameIntervalMs(1000.0 / std::max(1.0, refresh));
         resize({static_cast<float>(size.width), static_cast<float>(size.height)}, native_.backingScaleFactor);
         [view_.inputContext invalidateCharacterCoordinates];
+        layoutTrafficLights();
     }
     void nativeFocus(bool value) {
         const auto alive = lifetime_;
         if (!value) [view_ cancelComposition];
         if (*alive && !isClosed()) focus(value);
+    }
+    void setTitleBarDragMetrics(float height, float reserved) override {
+        DesktopWindow::setTitleBarDragMetrics(height, reserved);
+        captionHeight_ = height;
+        layoutTrafficLights();
+    }
+    // Borderless windows keep a transparent system title bar on macOS. The
+    // system traffic lights sit over the app caption, vertically centered in
+    // its height and starting kTrafficLightLeading points from the left edge.
+    void layoutTrafficLights() {
+        if (!native_ || !options_.borderless || (native_.styleMask & NSWindowStyleMaskFullScreen)) return;
+        NSButton* buttons[] = {[native_ standardWindowButton:NSWindowCloseButton],
+                               [native_ standardWindowButton:NSWindowMiniaturizeButton],
+                               [native_ standardWindowButton:NSWindowZoomButton]};
+        if (!buttons[0] || !buttons[1] || !buttons[2]) return;
+        NSView* container = buttons[0].superview.superview; // NSTitlebarContainerView
+        if (!container) return;
+        const NSSize button = buttons[0].frame.size;
+        const CGFloat caption = std::max<CGFloat>(captionHeight_ * contentScale_, button.height);
+        NSRect bar = container.frame;
+        bar.size.height = caption;
+        bar.origin.y = native_.frame.size.height - caption;
+        container.frame = bar;
+        const CGFloat y = std::round((caption - button.height) / 2);
+        for (int i = 0; i < 3; ++i)
+            [buttons[i] setFrameOrigin:NSMakePoint(kTrafficLightLeading + i * kTrafficLightStep, y)];
+    }
+    void didExitFullScreen() { layoutTrafficLights(); }
+    // Clicking the Dock icon with no visible window brings back a window that
+    // was closed to the tray (or minimized), as macOS users expect.
+    static void reopenFromDock() {
+        for (auto* item : windows)
+            if (item->native_ && item->shown_ && item->native_.visible && !item->native_.miniaturized) return;
+        for (auto* item : windows)
+            if (item->native_ && !item->isClosed()) {
+                item->activate();
+                return;
+            }
+    }
+    // Quit goes through the first window's close request with force-exit, so
+    // the application can confirm running work exactly as from the tray.
+    static void quitFromMenu() {
+        for (auto* item : windows)
+            if (!item->isClosed()) {
+                item->requestTrayExit();
+                return;
+            }
+        [NSApp terminate:nil];
     }
     bool prepareContentTransfer(Widget* subtree) override {
         assertUiThread();
@@ -406,7 +467,8 @@ class CocoaWindow final : public platform::DesktopWindow {
         e.alt = event.modifierFlags & NSEventModifierFlagOption;
         e.clickCount = event.clickCount;
         if (action == 1 && e.button == MouseButton::Left && dragRegion(e.position)) {
-            [native_ performWindowDragWithEvent:event];
+            if (event.clickCount == 2) titleBarDoubleClick();
+            else [native_ performWindowDragWithEvent:event];
             return;
         }
         mouse(e, action);
@@ -438,7 +500,10 @@ class CocoaWindow final : public platform::DesktopWindow {
     }
 
   protected:
-    void contentScaleChanged() override { setMinimumClientSize(minimum_); }
+    void contentScaleChanged() override {
+        setMinimumClientSize(minimum_);
+        layoutTrafficLights();
+    }
     void fileDropChanged(bool enabled) override {
         updateDraggedTypes(view_, enabled);
     }
@@ -464,21 +529,102 @@ class CocoaWindow final : public platform::DesktopWindow {
         if (!native_)
             return;
         native_.styleMask = styleMask();
+        applyCaptionAppearance();
         native_.hasShadow = YES;
         [native_ invalidateShadow];
     }
+    // Requested sizes are logical points; a 1600x1000 default is larger than
+    // most MacBook screens, and AppKit does not constrain borderless frames.
+    void fitInitialFrame() {
+        NSScreen* screen = native_.screen ?: NSScreen.mainScreen;
+        if (!screen) return;
+        const NSRect frame = native_.frame, area = screen.visibleFrame;
+        const platform::WindowFitRect current{frame.origin.x, frame.origin.y, frame.size.width, frame.size.height};
+        const platform::WindowFitRect work{area.origin.x, area.origin.y, area.size.width, area.size.height};
+        if (!platform::windowExceedsArea(current, work)) return;
+        const auto fitted = platform::initialWindowRect(current, work);
+        [native_ setFrame:NSMakeRect(fitted.x, fitted.y, fitted.width, fitted.height) display:NO];
+    }
+    static constexpr CGFloat kTrafficLightLeading = 14, kTrafficLightStep = 20;
+    // Receives kCoreEventClass/kAEReopenApplication and the default Quit item.
+    static OneUiApplicationActions* applicationActions() {
+        static OneUiApplicationActions* actions = [OneUiApplicationActions new];
+        return actions;
+    }
+    // Standard application and Window menus until the app installs its own
+    // menu bar (CocoaMenuBar restores this one when it goes away).
+    static NSMenu* defaultMainMenu(OneUiApplicationActions* actions) {
+        const bool chinese = [NSLocale.preferredLanguages.firstObject hasPrefix:@"zh"];
+        auto text = [chinese](NSString* zh, NSString* en) { return chinese ? zh : en; };
+        NSString* name = NSBundle.mainBundle.infoDictionary[@"CFBundleName"] ?: NSProcessInfo.processInfo.processName;
+        NSMenu* bar = [NSMenu new];
+        NSMenu* app = [[NSMenu alloc] initWithTitle:name];
+        [app addItemWithTitle:[NSString stringWithFormat:text(@"关于 %@", @"About %@"), name]
+                       action:@selector(orderFrontStandardAboutPanel:) keyEquivalent:@""];
+        [app addItem:NSMenuItem.separatorItem];
+        [app addItemWithTitle:[NSString stringWithFormat:text(@"隐藏 %@", @"Hide %@"), name] action:@selector(hide:) keyEquivalent:@"h"];
+        NSMenuItem* others = [app addItemWithTitle:text(@"隐藏其他", @"Hide Others")
+                                            action:@selector(hideOtherApplications:) keyEquivalent:@"h"];
+        others.keyEquivalentModifierMask = NSEventModifierFlagCommand | NSEventModifierFlagOption;
+        [app addItemWithTitle:text(@"全部显示", @"Show All") action:@selector(unhideAllApplications:) keyEquivalent:@""];
+        [app addItem:NSMenuItem.separatorItem];
+        NSMenuItem* quit = [app addItemWithTitle:[NSString stringWithFormat:text(@"退出 %@", @"Quit %@"), name]
+                                          action:@selector(quit:) keyEquivalent:@"q"];
+        quit.target = actions;
+        NSMenuItem* appItem = [NSMenuItem new];
+        appItem.submenu = app;
+        [bar addItem:appItem];
+        NSMenu* window = [[NSMenu alloc] initWithTitle:text(@"窗口", @"Window")];
+        [window addItemWithTitle:text(@"最小化", @"Minimize") action:@selector(performMiniaturize:) keyEquivalent:@"m"];
+        [window addItemWithTitle:text(@"缩放", @"Zoom") action:@selector(performZoom:) keyEquivalent:@""];
+        [window addItem:NSMenuItem.separatorItem];
+        [window addItemWithTitle:text(@"前置全部窗口", @"Bring All to Front") action:@selector(arrangeInFront:) keyEquivalent:@""];
+        NSMenuItem* windowItem = [NSMenuItem new];
+        windowItem.submenu = window;
+        [bar addItem:windowItem];
+        NSApp.windowsMenu = window;
+        return bar;
+    }
+    void applyCaptionAppearance() {
+        const bool overlay = options_.borderless;
+        native_.titlebarAppearsTransparent = overlay;
+        native_.titleVisibility = overlay ? NSWindowTitleHidden : NSWindowTitleVisible;
+        if (overlay) native_.tabbingMode = NSWindowTabbingModeDisallowed;
+        layoutTrafficLights();
+    }
+    // The app caption covers the system title bar, so its empty area follows
+    // the user's "double-click a window's title bar" preference here.
+    void titleBarDoubleClick() {
+        NSString* action = [NSUserDefaults.standardUserDefaults stringForKey:@"AppleActionOnDoubleClick"];
+        if ([action isEqualToString:@"Minimize"]) [native_ miniaturize:nil];
+        else if (![action isEqualToString:@"None"]) [native_ zoom:nil];
+    }
     NSWindowStyleMask styleMask() const {
         if (options_.borderless)
-            return NSWindowStyleMaskBorderless | (options_.resizable ? NSWindowStyleMaskResizable : 0);
+            return NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskMiniaturizable |
+                   NSWindowStyleMaskFullSizeContentView | (options_.resizable ? NSWindowStyleMaskResizable : 0);
         return NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskMiniaturizable |
                (options_.resizable ? NSWindowStyleMaskResizable : 0);
     }
     NSWindow *native_ = nil;
     Size minimum_{};
+    float captionHeight_ = 0;
     OneUiNativeView *view_ = nil;
     OneUiNativeDelegate *delegate_ = nil;
 };
 } // namespace oneui::macos
+
+@implementation OneUiApplicationActions
+- (void)handleReopen:(NSAppleEventDescriptor *)event reply:(NSAppleEventDescriptor *)reply {
+    (void)event;
+    (void)reply;
+    oneui::macos::CocoaWindow::reopenFromDock();
+}
+- (void)quit:(id)sender {
+    (void)sender;
+    oneui::macos::CocoaWindow::quitFromMenu();
+}
+@end
 
 @implementation OneUiNativeDelegate
 - (BOOL)windowShouldClose:(NSWindow *)sender {
@@ -496,6 +642,10 @@ class CocoaWindow final : public platform::DesktopWindow {
     (void)n;
     if (_owner)
         _owner->resized();
+}
+- (void)windowDidExitFullScreen:(NSNotification *)n {
+    (void)n;
+    if (_owner) _owner->didExitFullScreen();
 }
 - (void)windowDidChangeScreen:(NSNotification *)n {
     (void)n;
@@ -530,6 +680,11 @@ class CocoaWindow final : public platform::DesktopWindow {
 }
 - (BOOL)isFlipped {
     return YES;
+}
+// The transparent title bar overlaps this view; dragging is decided by the
+// app caption (dragRegion), not by AppKit's title-bar click handling.
+- (BOOL)mouseDownCanMoveWindow {
+    return NO;
 }
 - (BOOL)acceptsFirstResponder {
     return YES;

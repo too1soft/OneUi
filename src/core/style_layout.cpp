@@ -5,6 +5,11 @@
 
 namespace oneui::style_detail {
 bool layoutDeclaration(StyleLayout& result, const std::string& name, const std::string& value) {
+    if (name == "icon-color") {
+        const auto color = parseStyleColor(value);
+        if (!color) return false;
+        result.iconColor = *color; return true;
+    }
     if (name == "max-width" || name == "max-height") {
         const auto number = parsePx(value);
         if (!number || !std::isfinite(*number) || *number < 0) return false;
@@ -71,6 +76,7 @@ StyleLayout StyleSheet::resolveLayout(const StyleNode& node) const {
             resolved.flexBasisPercent = current.flexBasisPercent;
         }
         if (current.flexOrder) resolved.flexOrder = current.flexOrder;
+        if (current.iconColor) resolved.iconColor = current.iconColor;
         if (current.maxWidth) resolved.maxWidth = current.maxWidth;
         if (current.maxHeight) resolved.maxHeight = current.maxHeight;
         if (current.tableColumnWidths) resolved.tableColumnWidths = current.tableColumnWidths;

@@ -47,7 +47,7 @@ inline std::set<std::string> componentCssProperties(const std::string& tag) {
     if (tag == "menu") return {"background", "background-color", "color", "placeholder-color", "border-color", "border-width", "border-radius", "padding", "font-size", "font-weight", "box-shadow"};
     if (tag == "reorderable-grid") return {"padding","gap","grid-min-column-width","outline-color","outline-width","border-color"};
     if (tag == "popup") return {"background", "background-color", "color", "border-color", "border-width", "border-radius", "padding", "gap", "box-shadow"};
-    if (tag == "dialog") return {"background", "background-color", "color", "border-color", "border-width", "border-radius", "padding", "font-size", "font-weight", "box-shadow"};
+    if (tag == "dialog") return {"background", "background-color", "color", "border-color", "border-width", "border-radius", "padding", "font-size", "font-weight", "subtitle-color", "subtitle-font-size", "box-shadow"};
     if (tag == "pane-grid-part") return {"background","background-color"};
     if (tag == "dock-workspace-part") return {"background","background-color","border-color","border-width","border-radius","box-shadow","color"};
     if (tag == "pane-header-part") return {"background","background-color","color","border-color","border-width","border-radius","padding","font-size","font-weight","font-family"};
@@ -62,11 +62,12 @@ inline std::set<std::string> componentCssProperties(const std::string& tag) {
     if (tag == "tree-view") return {"background-color","content-background-color","color","placeholder-color","border-color","border-width","border-radius","content-radius","padding","font-size","font-weight","detail-font-size","detail-font-weight","text-inset","title-offset-y","detail-offset-y","outline-color","outline-width","outline-offset"};
     if (tag=="split-view") return {}; // semantic native theme
     if (tag == "list" || tag == "virtual-list") return {"background-color","content-background-color","color","placeholder-color","border-color","border-width","border-radius","content-radius","padding","font-size","font-weight","detail-font-size","detail-font-weight","text-inset","title-offset-y","detail-offset-y","scrollbar-color","scrollbar-width","outline-color","outline-width","outline-offset"};
-    if (tag == "chart") return {"color","border-color","font-size","gap"};
+    if (tag == "chart") return {"color","background-color","border-color","font-size","gap"};
     if (tag == "native-host") return {}; // foreign content owns its styling
     if (tag == "panes") return {"gap","padding","background-color","border-color","border-width","border-radius","box-shadow"};
     if (tag == "reveal") return {"transition-duration","transition-timing-function"};
-    if (tag == "label") return {"color","font-size","font-weight","font-family","padding","background-color","border-color","border-width","border-radius"};
+    if (tag == "label") return {"color","font-size","font-weight","font-family","letter-spacing","font-variant-numeric","padding","background-color","border-color","border-width","border-radius"};
+    if (tag == "data-grid") return {"background-color","content-background-color","color","placeholder-color","border-color","border-width","border-radius","font-size","detail-font-size","scrollbar-color","scrollbar-width","padding"};
     if (tag == "code-editor") return {"background-color","color","placeholder-color","caret-color","selection-color","content-background-color","border-color","border-width","border-radius","scrollbar-color"};
     if (tag == "stack") return {"background","box-shadow","background-color","border-color","border-width","border-radius","padding","gap"};
     if (tag == "scroll-view") return {"background","box-shadow","background-color","border-color","border-width","border-radius","padding","color","scrollbar-color","scrollbar-width"};
@@ -74,7 +75,7 @@ inline std::set<std::string> componentCssProperties(const std::string& tag) {
     if (tag != "switch" && tag != "checkbox") keys.insert("padding");
     if (tag == "button" || tag == "input" || tag == "tabs" || tag == "select" || tag == "table") keys.insert("font-size");
       if (tag == "button" || tag == "tabs") keys.insert("font-weight");
-      if (tag == "button") { keys.insert("icon-size"); keys.insert("gap"); keys.insert("opacity"); }
+      if (tag == "button") { keys.insert("icon-size"); keys.insert("icon-color"); keys.insert("title-offset-y"); keys.insert("gap"); keys.insert("opacity"); }
     if (tag == "tabs") {
         for (const auto* key : {"content-background-color", "content-radius", "text-inset",
              "tab-indicator-color", "tab-indicator-inset", "tab-indicator-height",
@@ -151,7 +152,7 @@ inline std::string css(std::string source, const std::string& scope = {}, const 
                 else if(tag=="dock-workspace-part")states={"hover","pressed","focus","disabled","selected"};
                 else if(tag=="input")states={"hover","focus","disabled","read-only"};
                 else if(tag=="switch" || tag=="checkbox" || tag=="select" || tag=="tabs")states={"hover","pressed","focus","disabled","selected"};
-            else if(tag=="table" || tag=="list" || tag=="virtual-list")states={"hover","pressed","selected"};
+            else if(tag=="table" || tag=="data-grid" || tag=="list" || tag=="virtual-list")states={"hover","pressed","selected"};
                 else if(tag=="tree-view")states={"hover","pressed","selected","focus","disabled"};
                 if(tag=="switch" || tag=="checkbox")states.insert("checked");
                 if(!states.count(pseudo))fail("State is not consumed by "+tag+": "+pseudo);

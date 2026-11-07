@@ -4,6 +4,68 @@ bool View::hasTextComposition() const {
 }
 
 // Keyboard dispatch and descendant focus traversal for View.
+void View::focusFirstKeyboardStop(Widget* target) {
+    if (auto* surface = dynamic_cast<InteractiveSurface*>(target)) {
+        // Enter the row's semantic action before its nested controls. The
+        // public focusFirstLeaf() still explicitly enters its descendants.
+        surface->focusChild(nullptr, true);
+    } else {
+        target->focusFirstLeaf();
+    }
+}
+
+bool View::focusNext(bool reverse, bool focusVisible) {
+    layoutChildren();
+    const auto focusable = focusableChildren();
+    if (focusable.empty()) {
+        return false;
+    }
+
+    auto it = std::find(focusable.begin(), focusable.end(), focusedChild_);
+    int index = it == focusable.end() ? (reverse ? static_cast<int>(focusable.size()) : -1)
+                                      : static_cast<int>(it - focusable.begin());
+    index += reverse ? -1 : 1;
+
+    // Nested views bubble at their boundary; only the keyboard scope wraps.
+    if (index < 0 || index >= static_cast<int>(focusable.size())) {
+        return false;
+    }
+
+    Widget* target = focusable[static_cast<std::size_t>(index)];
+    focusChild(target, focusVisible);
+    // A composite may restore its previous leaf during onFocusChanged.
+    if (reverse) {
+        target->focusLastLeaf();
+    } else if (focusVisible && target->activeFocusChild()) {
+        focusFirstKeyboardStop(target);
+    }
+    return true;
+}
+
+bool View::focusFirstLeaf() {
+    layoutChildren();
+    const auto focusable = focusableChildren();
+    if (focusable.empty()) {
+        return false;
+    }
+    focusChild(focusable.front(), true);
+    // The same child may still hold its last leaf after a scope wraps.
+    focusFirstKeyboardStop(focusable.front());
+    return true;
+}
+
+bool View::focusLastLeaf() {
+    layoutChildren();
+    const auto focusable = focusableChildren();
+    if (focusable.empty()) {
+        return false;
+    }
+    Widget* last = focusable.back();
+    focusChild(last, true);
+    last->focusLastLeaf();
+    return true;
+}
+
 bool View::onKeyDown(const KeyEvent& event) {
     const internal::KeyDispatchScope dispatch(this);
     if (!interactive()) {
@@ -87,6 +149,9 @@ bool View::onFocusChanged(bool focused) {
     if (!focused && focusedChild_) {
         focusedChild_->onFocusChanged(false);
     } else if (focused) {
+        // Offscreen containers may not have painted yet. Prepare this focus
+        // branch before descending so controls never receive zero-width focus.
+        layoutChildren();
         if (focusedChild_ && !isChildInteractive(focusedChild_)) {
             focusChild(nullptr);
         }

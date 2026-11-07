@@ -8,6 +8,7 @@
 #include <fstream>
 #include <filesystem>
 #include <sstream>
+#include <stdexcept>
 #include <iomanip>
 #include "oneui/platform/window.h"
 #include "oneui/platform/dpi.h"
@@ -20,6 +21,7 @@
 #include "internal/animation_wake.h"
 #include "platform/shared/skia_canvas.h"
 #include "platform/shared/title_bar_hit.h"
+#include "platform/shared/window_fit.h"
 #include "platform/win32/compat_win32.h"
 #include "platform/win32/window_shadow.h"
 
@@ -95,6 +97,7 @@
 #include <vector>
 
 #include "platform/win32/accessibility_win32.h"
+#include "platform/win32/com_runtime_win32.h"
 
 namespace oneui {
 namespace {

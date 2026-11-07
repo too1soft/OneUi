@@ -16,4 +16,7 @@ struct ONEUI_API RuntimeConfig {
     static RuntimeConfig fromEnvironment();
 };
 
+// Read once per process. Layout QA can opt into style metadata in release builds.
+bool layoutSnapshotStylesEnabled();
+
 } // namespace oneui::internal

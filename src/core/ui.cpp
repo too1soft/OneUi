@@ -27,6 +27,8 @@ void Builder::style(const std::shared_ptr<Widget>& widget, std::string classes) 
         if (box.foreground) label->setColor(*box.foreground);
         if (box.fontSize) label->setFontSize(*box.fontSize);
         if (box.fontWeight) label->setFontWeight(*box.fontWeight);
+        label->setLetterSpacing(box.letterSpacing.value_or(0.0f));
+        label->setTabularNumbers(box.tabularNumbers.value_or(false));
     } else if (auto stack = std::dynamic_pointer_cast<Stack>(widget)) {
         node.tag = "stack"; const auto box = sheet_->resolve(node);
         stack->setStyleBox(box);

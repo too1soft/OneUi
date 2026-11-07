@@ -2,12 +2,15 @@
 #include "oneui/controls/button.h"
 #include "oneui/controls/text_field.h"
 #include <iostream>
+#include "win32_accessibility_lifecycle.inc"
+#include "win32_com_runtime_tests.inc"
 
 int main(){
     using namespace oneui;
     int failures=0;
     auto check=[&](bool value,const char* name){if(!value){std::cerr<<name<<"\n";++failures;}};
     CoInitializeEx(nullptr,COINIT_APARTMENTTHREADED);
+    check(graphicsCallbacksHaveAnImplicitMta(), "Graphics callbacks have an implicit MTA without changing the UI STA");
     const HWND window=CreateWindowExW(0,L"STATIC",L"OneUI accessibility test",WS_OVERLAPPED,0,0,400,300,nullptr,nullptr,GetModuleHandleW(nullptr),nullptr);
     auto alive=std::make_shared<std::atomic_bool>(true);
     auto root=std::make_shared<View>();root->setFrame({0,0,400,300});
@@ -64,7 +67,10 @@ int main(){
     VARIANT parentId=focus;--parentId.lVal;VARIANT state{};provider->get_accState(parentId,&state);check(!(state.lVal&STATE_SYSTEM_FOCUSED),"routing parent does not claim accessible keyboard focus");
     provider->get_accState(focus,&state);check(state.lVal&STATE_SYSTEM_FOCUSED,"focused leaf reports focused state");
     alive->store(false);check(FAILED(action->accDoDefaultAction(first)),"stale window action fails closed");
-    provider->Release();DestroyWindow(window);CoUninitialize();
+    check(pendingAccessibilityCallsAreDisconnected(window, provider), "Retired server rejects pending cross-apartment COM calls");
+    DestroyWindow(window);
+    check(accessibilityStopsBeforeWindowDestruction(), "Closing invalidates accessibility before native teardown");
+    CoUninitialize();
     if(!failures)std::cout<<"Windows accessibility behavior passed\n";
     return failures?1:0;
 }

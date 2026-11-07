@@ -32,6 +32,10 @@ extern "C" {
         callback: Option<unsafe extern "C" fn(OneUiUtf8String, c_int, *mut c_void)>,
         user_data: *mut c_void,
     ) -> c_int;
+    pub fn oneui_enumerate_available_fonts(
+        callback: Option<unsafe extern "C" fn(OneUiUtf8String, c_int, *mut c_void)>,
+        user_data: *mut c_void,
+    ) -> c_int;
     pub fn oneui_double_click_interval_ms() -> u32;
     // 0 = column, 1 = row. These values are part of the stable C ABI.
     pub fn oneui_stack_create(direction: OneUiStackDirection) -> *mut OneUiWidget;

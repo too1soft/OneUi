@@ -3,6 +3,69 @@
 #include <algorithm>
 
 namespace oneui {
+bool OverlayHost::navigateTab(const KeyEvent& event, bool hasParentScope) {
+    const auto life = lifetimeToken();
+    Widget* active = isInteractive(focusedOverlay_) ? focusedOverlay_ :
+        (isInteractive(content_.get()) ? content_.get() : nullptr);
+    if (active && active->onKeyDown(event)) return true;
+    if (life.expired()) return true;
+
+    if (hasActiveFocusTrap()) {
+        if (!isInteractive(focusedOverlay_)) return false;
+        if (event.shift) focusedOverlay_->focusLastLeaf();
+        else focusedOverlay_->focusFirstLeaf();
+        return true;
+    }
+    // An open popup owns its local keyboard cycle even when light-dismiss is
+    // modeless. Ordinary overlay layout layers still bubble at their boundary.
+    if (auto* popup = dynamic_cast<Popup*>(active); popup && popup->isOpen()) {
+        if (event.shift) popup->focusLastLeaf();
+        else popup->focusFirstLeaf();
+        return true;
+    }
+
+    // Content comes before modeless overlays, in their existing hit order.
+    // Let the active subtree finish before advancing to another focus domain.
+    auto order = focusableOverlays();
+    if (isInteractive(content_.get()) && content_->isFocusable()) {
+        order.insert(order.begin(), content_.get());
+    }
+    if (order.empty()) return false;
+    const auto current = std::find(order.begin(), order.end(), active);
+    int index = current == order.end() ?
+        (event.shift ? static_cast<int>(order.size()) : -1) :
+        static_cast<int>(current - order.begin());
+    index += event.shift ? -1 : 1;
+    if (index < 0 || index >= static_cast<int>(order.size())) {
+        // A nested modeless host must return control to its parent's sibling;
+        // only the outer keyboard scope wraps around the entire route.
+        if (hasParentScope) return false;
+        index = event.shift ? static_cast<int>(order.size()) - 1 : 0;
+    }
+    Widget* target = order[static_cast<std::size_t>(index)];
+    // Focus callbacks may remove a layer; keep its widget alive until this key
+    // finishes, without extending the lifetime of the host itself.
+    std::shared_ptr<Widget> targetOwner;
+    if (target == content_.get()) {
+        targetOwner = content_;
+    } else {
+        const auto entry = std::find_if(overlays_.begin(), overlays_.end(),
+            [target](const OverlayEntry& entry) { return entry.child.get() == target; });
+        if (entry == overlays_.end()) return false;
+        targetOwner = entry->child;
+    }
+    if (target == content_.get()) {
+        focusOverlay(nullptr);
+        focusChild(target, true);
+    } else {
+        focusOverlay(target, true);
+    }
+    if (life.expired()) return true;
+    if (event.shift) targetOwner->focusLastLeaf();
+    else focusFirstKeyboardStop(targetOwner.get());
+    return true;
+}
+
 bool OverlayHost::focusFirstLeaf() {
     if (!hasActiveFocusTrap() && content_ && content_->visible() && !content_->disabled() &&
         content_->isFocusable()) {

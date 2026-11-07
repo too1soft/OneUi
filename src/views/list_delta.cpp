@@ -4,12 +4,15 @@
 namespace oneui::views {
 bool Runtime::refreshDelta(const std::shared_ptr<Scope>& scope, uint32_t property,
                           ListState& state, const OneUiViewListInfo& info) {
+    ONEUI_VIEW_TIME(Delta);
     // Validate the complete sequence before acquiring or publishing anything.
     auto keys = state.keys;
     auto items = state.items;
     auto revision = state.revision;
     std::vector<std::shared_ptr<Scope>> removed, created;
-    std::vector<std::pair<std::shared_ptr<Scope>, std::vector<uint32_t>>> dirty;
+    // Pending deltas remain stable until publication. A batch shares its field
+    // mask instead of allocating the same vector for every affected record.
+    std::vector<std::pair<std::shared_ptr<Scope>, const std::vector<uint32_t>*>> dirty;
     try {
         for (const auto& d : state.pending) {
             check(d.before == revision && d.index <= keys.size(), ONEUI_VIEW_STALE_CHANGE,
@@ -40,7 +43,7 @@ bool Runtime::refreshDelta(const std::shared_ptr<Scope>& scope, uint32_t propert
                       ONEUI_VIEW_STALE_CHANGE, "Delta range/key mismatch");
                 if (d.kind == ONEUI_LIST_UPDATE) {
                     for (size_t i=index;i<index+count;++i) if (items[i])
-                        dirty.emplace_back(items[i], d.properties);
+                        dirty.emplace_back(items[i], &d.properties);
                 } else {
                     std::vector<std::shared_ptr<Scope>> moving(items.begin()+index, items.begin()+index+count);
                     items.erase(items.begin()+index, items.begin()+index+count);
@@ -89,12 +92,19 @@ bool Runtime::refreshDelta(const std::shared_ptr<Scope>& scope, uint32_t propert
                 throw;
             }
         }
+        const std::vector<uint32_t>* previousFields=nullptr;
+        std::vector<const oneview::Property*> mask;
         for (auto& [child,fields] : dirty) {
-            for (const auto& [_,p] : image.schema.model(model).properties)
-                if (fields.empty() || std::find(fields.begin(),fields.end(),p.id)!=fields.end()) {
-                    child->dirty.insert(p.id); mark(child,p.id);
-                    if (p.tag==5) child->lists[p.id].reset=true;
-                }
+            if(fields!=previousFields) {
+                mask.clear();previousFields=fields;
+                for(const auto& [_,p]:image.schema.model(model).properties)
+                    if(fields->empty() || std::find(fields->begin(),fields->end(),p.id)!=fields->end())
+                        mask.push_back(&p);
+            }
+            for(const auto* p:mask) {
+                child->dirty.insert(p->id);mark(child,p->id,&state);
+                if(p->tag==5)child->lists[p->id].reset=true;
+            }
         }
         if (staging) {
             auto previous=state; previous.reset=true; previous.pending.clear();

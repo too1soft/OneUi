@@ -28,6 +28,7 @@ public:
         add(menu_);
         menu_->setOnItemActivated([this](int index) { activate(index); });
     }
+    void setDensity(bool compact) {menu_->setItemMetrics(compact?26.0f:34.0f,compact?11.0f:9.0f);}
     void setTitle(std::wstring value) { if (title_ != value) { title_ = std::move(value); rebuild(); } }
     void setSubtitle(std::wstring value) { if (subtitle_ != value) { subtitle_ = std::move(value); rebuild(); } }
     void setOnActivated(std::function<void(std::string)> action) { action_ = std::move(action); }
@@ -101,10 +102,10 @@ private:
             if (entry.separator) { menu_->addSeparator(); continue; }
             if (entry.header) { menu_->addHeader(entry.text, L""); continue; }
             auto label = entry.checked ? L"\u2713 " + entry.text : entry.text;
-            if (!entry.shortcut.empty()) label += L"    " + entry.shortcut;
             if (hasChildren(entry.id)) label += L"  \u203a";
             const int index = menu_->addItem(label, entry.icon, entry.danger);
             menu_->setItemDisabled(index, entry.disabled);
+            menu_->setItemShortcut(index,entry.shortcut);
             visible_.push_back(int(i));
         }
         invalidate();

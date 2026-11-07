@@ -1,6 +1,7 @@
 #pragma once
 
 #include "oneui/export.h"
+#include "oneui/icon.h"
 #include "oneui/reactive.h"
 #include "oneui/style.h"
 #include "oneui/widget.h"
@@ -15,6 +16,7 @@ namespace oneui {
 class ONEUI_API Select final : public Widget {
 public:
     Select();
+    void setIndicatorIcon(std::optional<IconSymbol> icon);
 
     void setItems(std::vector<std::wstring> items);
     void setSelectedIndex(int index);
@@ -70,6 +72,7 @@ private:
     void closePopupSurface(PopupLightDismissReason reason = PopupLightDismissReason::Reset);
 
     std::vector<std::wstring> items_;
+    std::optional<IconSymbol> indicatorIcon_;
     int selectedIndex_ = 0;
     bool hovered_ = false;
     std::optional<Point> lastHoverPosition_;

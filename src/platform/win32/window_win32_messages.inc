@@ -22,6 +22,8 @@
                 }
                 return LresultFromObject(IID_IAccessible,wParam,accessibilityProvider_);
             }
+            // Do not create an OS proxy while our provider is shutting down.
+            if (!callbackWindowAlive_->load()) return 0;
             return DefWindowProcW(hwnd_,message,wParam,lParam);
         case WM_DROPFILES:
         {
@@ -133,6 +135,7 @@
                     closeToTray_ = false; // 强制真正退出，绕过“关闭到托盘”
                     hideInternalTrayIcon();
                     if (hwnd_) {
+                        callbackWindowAlive_->store(false, std::memory_order_release);
                         DestroyWindow(hwnd_);
                     }
                     return 0;
@@ -217,11 +220,8 @@
                 POINT screenPoint{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
                 if (ClientToScreen(hwnd_, &screenPoint)) {
                     const LPARAM screenPosition = MAKELPARAM(screenPoint.x, screenPoint.y);
-                    if (hitTestBorderlessWindow(screenPosition) == HTCAPTION
-                        && restoreBorderlessForCaptionDrag(screenPoint.x, screenPoint.y)) {
-                        return DefWindowProcW(
-                            hwnd_, WM_NCLBUTTONDOWN, HTCAPTION, screenPosition);
-                    }
+                    if (hitTestBorderlessWindow(screenPosition) == HTCAPTION)
+                        return beginBorderlessCaptionDrag(screenPosition);
                 }
             }
             SetFocus(hwnd_);
@@ -384,10 +384,7 @@
                 // makes the caption appear non-draggable.  Treat that boundary
                 // state like maximized chrome and restore it beneath the pointer
                 // before entering the native move loop.
-                restoreBorderlessForCaptionDrag(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
-                ReleaseCapture();
-                return DefWindowProcW(
-                    hwnd_, WM_SYSCOMMAND, SC_MOVE | HTCAPTION, lParam);
+                return beginBorderlessCaptionDrag(lParam);
             }
             return DefWindowProcW(hwnd_, message, wParam, lParam);
         case WM_NCLBUTTONDBLCLK:
@@ -452,10 +449,13 @@
             updateImePosition(true);
             return DefWindowProcW(hwnd_, message, wParam, lParam);
         case WM_DESTROY:
+            callbackWindowAlive_->store(false, std::memory_order_release);
+            retireAccessibilityProvider();
             return 0;
         case WM_NCDESTROY:
         {
             callbackWindowAlive_->store(false, std::memory_order_release);
+            if (accessibilityProvider_) retireAccessibilityProvider();
             captureNormalPlacement();
             hideInternalTrayIcon();
             acceptingPostedCallbacks_.store(false, std::memory_order_release);

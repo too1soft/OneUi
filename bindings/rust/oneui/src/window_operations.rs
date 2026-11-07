@@ -184,6 +184,18 @@ impl UiDispatcher {
         });
         Ok(())
     }
+
+    /// Changes the window-wide content scale on the owning thread; see
+    /// [`crate::Window::set_content_scale`].
+    pub fn set_content_scale(&self, scale: f32) -> Result<(), Error> {
+        if std::thread::current().id() != self.state.ui_thread {
+            return Err(Error::WrongThread);
+        }
+        self.state.with_raw(|raw| unsafe {
+            sys::oneui_window_set_content_scale(raw, scale);
+        });
+        Ok(())
+    }
 }
 
 impl UiDispatcher {

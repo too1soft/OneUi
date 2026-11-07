@@ -1,3 +1,4 @@
+#include "table_style_override.h"
 #include "oneui/controls/table.h"
 #include "internal/widget_presentation.h"
 
@@ -82,6 +83,7 @@ void Table::setRows(std::vector<std::vector<std::wstring>> rows) {
         for (const auto& text : row) richRow.push_back(TableCell{text});
         richRows.push_back(std::move(richRow));
     }
+    clearRowProjection();
     rows_ = std::move(rows);
     richRows_ = std::move(richRows);
     const int dragSource = reorderSourceIndex_;
@@ -134,6 +136,7 @@ void Table::setRichRows(std::vector<std::vector<TableCell>> rows) {
     const bool wasUninitialized = selection_.itemCount() == 0
         && previousIndices.empty()
         && selection_.activeIndex() < 0;
+    clearRowProjection();
     rows_ = std::move(plainRows);
     richRows_ = std::move(rows);
     itemDragIds_.clear();
@@ -154,6 +157,7 @@ void Table::setRichRows(std::vector<std::vector<TableCell>> rows) {
 bool Table::updateRow(std::size_t index, std::vector<std::wstring> row) {
     if (index >= rows_.size()) return false;
     if (rows_[index] == row) return true;
+    clearRowProjection();
     rows_[index] = row;
     std::vector<TableCell> richRow;
     richRow.reserve(row.size());
@@ -168,6 +172,7 @@ bool Table::updateRichRow(std::size_t index, std::vector<TableCell> row) {
     std::vector<std::wstring> plainRow;
     plainRow.reserve(row.size());
     for (const auto& cell : row) plainRow.push_back(cell.text);
+    clearRowProjection();
     rows_[index] = std::move(plainRow);
     richRows_[index] = std::move(row);
     invalidate();

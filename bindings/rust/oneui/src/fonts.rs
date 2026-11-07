@@ -15,6 +15,16 @@ pub struct FontFamilyInfo {
 /// OS discovery may block: run on a worker, cache in the application, and call
 /// again when a user requests refresh after installing fonts.
 pub fn enumerate_system_fonts() -> Result<Vec<FontFamilyInfo>, Error> {
+    enumerate_fonts(false)
+}
+
+/// Available font-picker families, including process-private application fonts.
+/// Embedded faces take precedence over installed faces with the same name.
+pub fn enumerate_available_fonts() -> Result<Vec<FontFamilyInfo>, Error> {
+    enumerate_fonts(true)
+}
+
+fn enumerate_fonts(available: bool) -> Result<Vec<FontFamilyInfo>, Error> {
     struct Collection {
         fonts: Vec<FontFamilyInfo>,
         failed: bool,
@@ -43,7 +53,12 @@ pub fn enumerate_system_fonts() -> Result<Vec<FontFamilyInfo>, Error> {
         failed: false,
     };
     let count = unsafe {
-        sys::oneui_enumerate_system_fonts(Some(collect), (&mut state as *mut Collection).cast())
+        let data = (&mut state as *mut Collection).cast();
+        if available {
+            sys::oneui_enumerate_available_fonts(Some(collect), data)
+        } else {
+            sys::oneui_enumerate_system_fonts(Some(collect), data)
+        }
     };
     if count < 0 || state.failed || count as usize != state.fonts.len() {
         Err(Error::FontEnumerationFailed)
@@ -54,10 +69,27 @@ pub fn enumerate_system_fonts() -> Result<Vec<FontFamilyInfo>, Error> {
 
 /// Widget-free unwrapped text shaping in logical pixels, using Label's shaper.
 /// An empty family uses OneUI's default font fallback. Invalid options fail.
-pub fn measure_text_width(text: &str, family: &str, size: f32, weight: i32, scale: f32) -> Result<f32, Error> {
+pub fn measure_text_width(
+    text: &str,
+    family: &str,
+    size: f32,
+    weight: i32,
+    scale: f32,
+) -> Result<f32, Error> {
     let mut width = 0.0;
-    let ok = unsafe { sys::oneui_text_measure_width_utf8(
-        sys::OneUiUtf8String::from_str(text), sys::OneUiUtf8String::from_str(family),
-        size, weight, scale, &mut width) };
-    if ok == 1 { Ok(width) } else { Err(Error::InvalidTextOptions) }
+    let ok = unsafe {
+        sys::oneui_text_measure_width_utf8(
+            sys::OneUiUtf8String::from_str(text),
+            sys::OneUiUtf8String::from_str(family),
+            size,
+            weight,
+            scale,
+            &mut width,
+        )
+    };
+    if ok == 1 {
+        Ok(width)
+    } else {
+        Err(Error::InvalidTextOptions)
+    }
 }

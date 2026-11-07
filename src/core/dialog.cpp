@@ -4,6 +4,7 @@
 #include "oneui/style.h"
 
 #include <algorithm>
+#include <cmath>
 #include <utility>
 
 namespace oneui {
@@ -89,6 +90,14 @@ void Dialog::setCloseVisible(bool visible) {
 void Dialog::setOnClose(std::function<void()> callback) {
     onClose_ = std::move(callback);
 }
+void Dialog::setEdgeToEdgeContent(bool enabled) { edgeToEdgeContent_ = enabled; invalidate(); }
+void Dialog::setCloseCentered(bool enabled) { closeCentered_ = enabled; invalidate(); }
+void Dialog::setHeaderHeight(float height) { headerHeight_ = std::max(28.0f, height); invalidate(); }
+void Dialog::setHeaderTextLayout(float titleTop,float titleHeight,float subtitleTop,float subtitleHeight) {
+    const std::array<float,4> value{titleTop,titleHeight,subtitleTop,subtitleHeight};
+    if (std::any_of(value.begin(),value.end(),[](float n){return !std::isfinite(n)||n<0||n>512;}) || titleHeight<=0 || subtitleHeight<=0) return;
+    headerTextLayout_=value;invalidate();
+}
 
 void Dialog::setContent(std::shared_ptr<Widget> content) {
     content_ = std::move(content);
@@ -129,7 +138,7 @@ Dialog::HeaderLayout Dialog::headerLayout() const {
     const Rect content = frame().inset(surface.padding.value_or(Insets{16.0f, 20.0f}));
 
     HeaderLayout layout;
-    layout.height = 48.0f;
+    layout.height = headerHeight_;
     float textLeft = content.x;
     if (icon_) {
         layout.icon = Rect{content.x, content.y + (layout.height - kIconBadgeSize) / 2.0f, kIconBadgeSize, kIconBadgeSize};
@@ -140,6 +149,10 @@ Dialog::HeaderLayout Dialog::headerLayout() const {
     layout.close = closeVisible_
         ? Rect{bounds.x + bounds.width - kCloseInset - kCloseSize, bounds.y + kCloseInset, kCloseSize, kCloseSize}
         : Rect{};
+    if (closeVisible_ && closeCentered_) {
+        layout.close = Rect{content.x + content.width - kCloseSize,
+            content.y + (layout.height - kCloseSize) / 2.0f, kCloseSize, kCloseSize};
+    }
     const float textRight = closeVisible_
         ? std::min(content.x + content.width, layout.close.x - 8.0f)
         : content.x + content.width;
@@ -147,8 +160,8 @@ Dialog::HeaderLayout Dialog::headerLayout() const {
     if (subtitle_.empty()) {
         layout.title = Rect{textLeft, content.y, textWidth, layout.height};
     } else {
-        layout.title = Rect{textLeft, content.y + 1.0f, textWidth, 25.0f};
-        layout.subtitle = Rect{textLeft, content.y + 27.0f, textWidth, 20.0f};
+        layout.title = Rect{textLeft, content.y + headerTextLayout_[0], textWidth, headerTextLayout_[1]};
+        layout.subtitle = Rect{textLeft, content.y + headerTextLayout_[2], textWidth, headerTextLayout_[3]};
     }
     return layout;
 }
@@ -159,7 +172,8 @@ Rect Dialog::contentArea() const {
 }
 
 void Dialog::layoutChildren() {
-    const Rect content = contentArea();
+    Rect content = contentArea();
+    if (edgeToEdgeContent_) { content.x = frame().x; content.width = frame().width; }
     const float headerHeight = headerLayout().height;
     float actionsHeight = 0.0f;
     if (actions_ && actions_->visible()) {
@@ -178,6 +192,13 @@ void Dialog::layoutChildren() {
         const float bottom = content.y + content.height - actionsHeight - (actionsHeight > 0.0f ? kSlotGap : 0.0f);
         content_->setFrame(Rect{content.x, top, content.width, std::max(0.0f, bottom - top)});
     }
+}
+
+std::array<Dialog::TextPart,2> Dialog::textParts() const {
+    const auto surface=resolvedSurface();const auto header=headerLayout();
+    const auto subtitleStyle=(styleSheet_?*styleSheet_:fallbackSheet()).resolve({"label",{"dialog-subtitle"},StyleStateNone});
+    return {{{title_,header.title,surface.foreground.value_or(Color{32,33,36}),surface.fontSize.value_or(17.0f),surface.fontWeight.value_or(600)},
+        {subtitle_,header.subtitle,surface.placeholderColor.value_or(subtitleStyle.foreground.value_or(Color{90,100,114})),surface.detailFontSize.value_or(subtitleStyle.fontSize.value_or(13.0f)),400}}};
 }
 
 void Dialog::paint(Canvas& canvas) {
@@ -200,17 +221,17 @@ void Dialog::paint(Canvas& canvas) {
             1.6f);
     }
 
-    const Color titleColor = surface.foreground.value_or(Color{32, 33, 36});
+    const auto parts=textParts();const auto& title=parts[0];
     canvas.drawTextStyledEllipsized(
-        title_,
-        header.title,
-        titleColor,
-        surface.fontSize.value_or(17.0f),
+        title.text,
+        title.frame,
+        title.color,
+        title.fontSize,
         TextAlign::Left,
-        surface.fontWeight.value_or(600));
+        title.fontWeight);
     if (!subtitle_.empty()) {
-        const auto subtitleStyle = sheet.resolve(StyleNode{"label", {"dialog-subtitle"}, StyleStateNone});
-        canvas.drawTextEllipsized(subtitle_, header.subtitle, subtitleStyle.foreground.value_or(Color{90, 100, 114}), subtitleStyle.fontSize.value_or(13.0f), TextAlign::Left);
+        const auto& subtitle=parts[1];
+        canvas.drawTextEllipsized(subtitle.text,subtitle.frame,subtitle.color,subtitle.fontSize,TextAlign::Left);
     }
 
     if (closeVisible_) {

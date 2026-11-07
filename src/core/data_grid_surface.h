@@ -24,6 +24,7 @@ public:
     bool rowNumbers = true;
     bool editable = false;
     DataGridSelection selection;
+    std::optional<TableStyleOverride> styleOverride;
 
     // Callbacks.
     std::function<void(std::int64_t, std::int64_t)> onViewport;

@@ -13,3 +13,6 @@ P("DataMenu", 11, "title", 4, 3, "")
 P("DataMenu", 12, "subtitle", 4, 3, "")
 P("DataMenu", 13, "items", 5, 2, "@menu.item")
 r.at("DataMenu").events.push_back({1,"menuActivated",{{"id",4}}});
+
+P("DataMenu", 14, "density", 4, 3, "")
+++r.at("DataMenu").version;

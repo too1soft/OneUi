@@ -111,6 +111,9 @@ void Menu::setItemDisabled(int index, bool disabled) {
     }
 }
 
+void Menu::setItemShortcut(int index, std::wstring shortcut) {
+    for(auto& entry:entries_)if(entry.itemIndex==index){entry.shortcut=std::move(shortcut);invalidate();return;}
+}
 void Menu::setOnItemActivated(std::function<void(int)> callback) {
     onItemActivated_ = std::move(callback);
 }
@@ -121,15 +124,20 @@ void Menu::setStyleSheet(std::shared_ptr<StyleSheet> sheet, StyleNode node) {
     invalidate();
 }
 
+void Menu::setItemMetrics(float itemHeight, float separatorHeight) {
+    itemHeight_=std::clamp(itemHeight,20.0f,60.0f);
+    separatorHeight_=std::clamp(separatorHeight,1.0f,24.0f);
+    scrollOffset_=0; invalidate();
+}
 float Menu::entryHeight(const Entry& entry) const {
     switch (entry.kind) {
     case Entry::Kind::Header:
         return kHeaderHeight;
     case Entry::Kind::Separator:
-        return kSeparatorHeight;
+        return separatorHeight_;
     case Entry::Kind::Item:
     default:
-        return kItemHeight;
+        return itemHeight_;
     }
 }
 
@@ -148,6 +156,7 @@ float Menu::preferredHeight() const {
 StyleBox Menu::resolvedSurface() const {
     const StyleSheet& sheet = styleSheet_ ? *styleSheet_ : fallbackSheet();
     StyleNode node = styleNode_;
+    if(itemHeight_==26.0f)node.classes.push_back("compact-menu");
     node.state = disabled() ? StyleStateDisabled : StyleStateNone;
     return sheet.resolve(node);
 }
@@ -156,6 +165,7 @@ StyleBox Menu::resolvedItemStyle(const Entry& entry, bool hovered, bool pressed)
     const StyleSheet& sheet = styleSheet_ ? *styleSheet_ : fallbackSheet();
     StyleNode node{"button", {"menu-item"}, StyleStateNone};
     node.classes.insert(node.classes.end(), styleNode_.classes.begin(), styleNode_.classes.end());
+    if(itemHeight_==26.0f)node.classes.push_back("compact-menu");
     if (entry.danger) {
         node.classes.push_back("danger");
     }
@@ -237,13 +247,13 @@ void Menu::paint(Canvas& canvas) {
                 paintIcon(canvas, *entry.icon, iconRect, foreground, Color{0, 0, 0, 0}, 1.5f);
                 textX += kItemIconSize + kItemGap;
             }
-            canvas.drawTextStyledEllipsized(
-                entry.title,
-                Rect{textX, rect.y, std::max(0.0f, rect.x + rect.width - kItemPaddingX - textX), rect.height},
-                foreground,
-                item.fontSize.value_or(13.0f),
-                TextAlign::Left,
-                item.fontWeight.value_or(400));
+            const float hintWidth=entry.shortcut.empty()?0.0f:canvas.measureTextWidth(entry.shortcut,12.0f,400)+10.0f;
+            canvas.drawTextStyledEllipsized(entry.title,
+                Rect{textX,rect.y,std::max(0.0f,rect.x+rect.width-kItemPaddingX-textX-hintWidth),rect.height},
+                foreground,item.fontSize.value_or(13.0f),TextAlign::Left,item.fontWeight.value_or(400));
+            if(!entry.shortcut.empty())canvas.drawTextEllipsized(entry.shortcut,
+                Rect{rect.x+rect.width-kItemPaddingX-hintWidth,rect.y,hintWidth,rect.height},
+                foreground,12.0f,TextAlign::Right);
             break;
         }
         }
@@ -266,7 +276,7 @@ void Menu::revealEntry(int index) {
 }
 bool Menu::onMouseWheel(const MouseWheelEvent& event) {
     if(!interactive() || !contains(event.position) || maxScrollOffset()<=0 || !std::isfinite(event.deltaY)) return false;
-    scrollOffset_=std::clamp(scrollOffset_-event.deltaY*kItemHeight,0.0f,maxScrollOffset());
+    scrollOffset_=std::clamp(scrollOffset_-event.deltaY*itemHeight_,0.0f,maxScrollOffset());
     keyboardEntry_=hoveredEntry_=pressedEntry_=-1;
     lastPointerPosition_.reset();
     invalidate();
@@ -330,6 +340,14 @@ bool Menu::isFocusable() const {
 
 bool Menu::onKeyDown(const KeyEvent& event) {
     if (!interactive() || entries_.empty()) return false;
+    if(event.pressed && !event.control && !event.alt && !event.meta()) {
+        for(const auto& entry:entries_) {
+            if(entry.kind!=Entry::Kind::Item || entry.disabled || entry.shortcut.empty())continue;
+            const bool match=(entry.shortcut==L"Del" && event.key==Key::Delete) ||
+                (entry.shortcut.size()==1 && event.virtualKey==static_cast<unsigned int>(entry.shortcut[0]));
+            if(match && onItemActivated_){auto action=onItemActivated_;const auto index=entry.itemIndex;action(index);return true;}
+        }
+    }
     if (event.key == Key::Down || event.key == Key::Up || event.key == Key::Home || event.key == Key::End) {
         const int count = static_cast<int>(entries_.size());
         const int step = event.key == Key::Up || event.key == Key::End ? -1 : 1;
@@ -359,6 +377,7 @@ bool Menu::onKeyDown(const KeyEvent& event) {
 
 bool Menu::onFocusChanged(bool focused) {
     Widget::onFocusChanged(focused);
+    if(focused && itemHeight_==26.0f){KeyEvent event{};event.key=Key::Home;onKeyDown(event);}
     if (!focused && keyboardEntry_ >= 0) {
         keyboardEntry_ = -1;
         invalidate();

@@ -275,47 +275,7 @@ bool OverlayHost::onKeyDown(const KeyEvent &event) {
     }
 
     if (event.key == Key::Tab) {
-        // 模态 overlay 在自身内部回绕；非模态 overlay 按层级参与 Tab 序。
-        // Without focusable overlays, only the outer dispatch scope wraps;
-        // nested content boundaries bubble to their parent's next sibling.
-        if (focusedOverlay_ && isInteractive(focusedOverlay_)) {
-            // Composite light-dismiss popups contain real form controls too.
-            // Traverse that subtree before moving to another overlay.
-            const auto life = lifetimeToken();
-            if (focusedOverlay_->onKeyDown(event))
-                return true;
-            if (life.expired())
-                return true;
-            if (hasActiveFocusTrap() && focusedOverlay_) {
-                if (event.shift)
-                    focusedOverlay_->focusLastLeaf();
-                else
-                    focusedOverlay_->focusFirstLeaf();
-                return true;
-            }
-        }
-        if (focusNextOverlay(event.shift, true)) {
-            if (focusedOverlay_) {
-                if (event.shift)
-                    focusedOverlay_->focusLastLeaf();
-                else
-                    focusedOverlay_->focusFirstLeaf();
-            }
-            return true;
-        }
-        if (content_ && content_->visible() && !content_->disabled()) {
-            if (content_->onKeyDown(event)) {
-                return true;
-            }
-            if (dispatch.hasParent() && !hasActiveFocusTrap()) return false;
-            if (event.shift) {
-                content_->focusLastLeaf();
-            } else {
-                content_->focusFirstLeaf();
-            }
-            return true;
-        }
-        return false;
+        return navigateTab(event, dispatch.hasParent());
     }
 
     if (focusedOverlay_ && !isInteractive(focusedOverlay_)) {

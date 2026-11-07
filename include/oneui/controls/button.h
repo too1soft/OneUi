@@ -28,6 +28,8 @@ public:
     void setVariant(ButtonVariant variant);
     void setIcon(IconSymbol symbol);
     void clearIcon();
+    void setIconColor(std::optional<Color> color);
+    void setCaptionOffsetY(float offset);
     void setTrailingIcon(IconSymbol symbol);
     void clearTrailingIcon();
     void setContentAlign(TextAlign align);
@@ -42,6 +44,8 @@ public:
     // Measures current text/icons and resolved padding using the window font
     // environment. Call after applying styles; does not change preferredSize.
     Size naturalContentSize() const;
+    // The same resolved/interpolated style used by paint, for read-only inspection.
+    ButtonStyle currentPaintStyle() const;
     Size naturalSize() const override { return naturalContentSize(); }
 
     Rect paintBounds() const override;
@@ -69,6 +73,8 @@ private:
     ButtonVariant variant_ = ButtonVariant::Primary;
     std::optional<IconSymbol> icon_;
     std::optional<IconSymbol> trailingIcon_;
+    std::optional<Color> iconColor_;
+    float captionOffsetY_ = 0;
     TextAlign contentAlign_ = TextAlign::Center;
     std::wstring trailingText_;
     std::optional<ButtonStyleOverride> styleOverride_;

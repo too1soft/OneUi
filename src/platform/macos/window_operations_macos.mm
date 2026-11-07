@@ -1,4 +1,5 @@
 #include "window_operations_macos.h"
+#include "platform/shared/window_fit.h"
 #import <AppKit/AppKit.h>
 #include <cmath>
 
@@ -91,12 +92,21 @@ bool restorePlacement(void *handle, const WindowPlacement &p) {
     if (!window || p.width <= 0 || p.height <= 0)
         return false;
     NSRect frame = NSMakeRect(p.x, p.y, p.width, p.height);
-    bool intersects = false;
-    for (NSScreen *screen in NSScreen.screens)
-        intersects |= NSIntersectsRect(frame, screen.visibleFrame);
-    if (!intersects)
+    // Fit to the screen holding most of the frame, as Win32 does with rcWork;
+    // a placement saved on a larger display must not reopen off screen.
+    NSScreen *target = nil;
+    CGFloat best = 0;
+    for (NSScreen *screen in NSScreen.screens) {
+        const NSRect overlap = NSIntersectionRect(frame, screen.visibleFrame);
+        const CGFloat area = overlap.size.width * overlap.size.height;
+        if (area > best) { best = area; target = screen; }
+    }
+    if (!target)
         return false;
-    [window setFrame:frame display:YES];
+    const NSRect work = target.visibleFrame;
+    const auto fitted = platform::fitWindowRect({frame.origin.x, frame.origin.y, frame.size.width, frame.size.height},
+                                                {work.origin.x, work.origin.y, work.size.width, work.size.height});
+    [window setFrame:NSMakeRect(fitted.x, fitted.y, fitted.width, fitted.height) display:YES];
     if (bool(window.zoomed) != p.maximized)
         [window zoom:nil];
     return true;

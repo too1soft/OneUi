@@ -3,6 +3,7 @@
 #include "oneui/view.h"
 #include "internal/key_dispatch_scope.h"
 #include "oneui/controls/popup.h"
+#include "oneui/controls/interactive_surface.h"
 
 #include <algorithm>
 #include <stdexcept>
@@ -387,53 +388,6 @@ void View::focusChild(Widget* child, bool focusVisible) {
         focusedChild_->onFocusChanged(true);
         focusedChild_->setFocusVisible(focusVisible);
     }
-}
-
-bool View::focusNext(bool reverse, bool focusVisible) {
-    const auto focusable = focusableChildren();
-    if (focusable.empty()) {
-        return false;
-    }
-
-    auto it = std::find(focusable.begin(), focusable.end(), focusedChild_);
-    int index = it == focusable.end() ? (reverse ? static_cast<int>(focusable.size()) : -1)
-                                      : static_cast<int>(it - focusable.begin());
-    index += reverse ? -1 : 1;
-
-    // 不回绕：越界即到本层边界，返回 false 交给上层继续冒泡（回绕由焦点作用域负责）。
-    if (index < 0 || index >= static_cast<int>(focusable.size())) {
-        return false;
-    }
-
-    Widget* target = focusable[static_cast<std::size_t>(index)];
-    focusChild(target, focusVisible);
-    // 进入容器：正向落到其首个叶子（focusChild→onFocusChanged 已处理），反向落到末叶子。
-    if (reverse) {
-        target->focusLastLeaf();
-    }
-    return true;
-}
-
-bool View::focusFirstLeaf() {
-    const auto focusable = focusableChildren();
-    if (focusable.empty()) {
-        return false;
-    }
-    focusChild(focusable.front(), true);
-    // The same child may still hold its last leaf after a scope wraps.
-    focusable.front()->focusFirstLeaf();
-    return true;
-}
-
-bool View::focusLastLeaf() {
-    const auto focusable = focusableChildren();
-    if (focusable.empty()) {
-        return false;
-    }
-    Widget* last = focusable.back();
-    focusChild(last, true);
-    last->focusLastLeaf(); // 若是容器，递归到末叶
-    return true;
 }
 
 bool View::hitTest(Point point) const {

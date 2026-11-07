@@ -90,6 +90,7 @@ set(ONEUI_CORE_SOURCES
     src/core/reorderable_grid.cpp
     src/core/scroll_trace.cpp
     src/core/scroll_view.cpp
+    src/core/scroll_view_input.cpp
     src/core/selection_model.cpp
     src/core/select.cpp
     src/core/separator.cpp

@@ -62,6 +62,8 @@ const std::map<std::string, ComponentContract> &registry()
         ++r.at("Input").version; // Explicit accessible-name contract, property ID 17.
         ++r.at("Input").version; // Placeholder visible while focused, property ID 18.
         ++r.at("Checkbox").version; // Tooltip property ID 13.
+        ++r.at("Dialog").version; // Optional edge-to-edge slots and header/close alignment, IDs 15-17.
+        ++r.at("Select").version; // Optional indicator icon, appended property ID 13.
         ++r.at("DockWorkspace").version; // Caption and raise-on-press properties IDs 21-24.
         ++r.at("DockWorkspace").version; // Drop policy properties IDs 25-27.
         ++r.at("Scroll").version; // Explicit content width, appended property ID 15.
@@ -70,13 +72,15 @@ const std::map<std::string, ComponentContract> &registry()
         ++r.at("Scroll").version; // Viewport size event, no native layout change.
         ++r.at("TimeSeriesChart").version; // Fill extent, property ID 26; optional series fill/dashed.
         ++r.at("TimeSeriesChart").version; // Live scroll rate, property ID 27.
+        ++r.at("TimeSeriesChart").version; // Threshold rows and dash style, appended IDs 28-29.
+        ++r.at("TimeSeriesChart").version; // Latest-marker and secondary-line styles, appended IDs 30-31.
         r.at("Scroll").events.push_back({1,"viewport-size-changed",{{"width",3},{"height",3}}});
         ++r.at("SearchInput").version; // Optional prefix icon; absent keeps old rendering.
         ++r.at("VirtualList").version; // Optional row selection and typed multi-selection events.
         ++r.at("FontPicker").version;
         // Read-only class bindings preserve static and scoped classes. Keep the
         // reviewed extension limited to the presentation nodes that need it.
-        for (const auto *name : {"Surface", "Text", "Column", "Row"}) {
+        for (const auto *name : {"Surface", "Text", "Column", "Row", "Dialog"}) {
             auto &contract = r.at(name);
             ++contract.version;
             for (auto &property : contract.properties)
@@ -95,6 +99,7 @@ const std::map<std::string, ComponentContract> &registry()
         for (auto &property : r.at("Menu").properties)
             if (property.name == "items") property.record = "@native-menu.item";
         ++r.at("Table").version; // Native table tooltip.
+        ++r.at("Dialog").version; // Optional header line boxes, appended property ID18.
         // Detect authoring metadata drift before publishing a contract hash.
         // Intentional changes require a reviewed registry/version update.
         using namespace oneui::ui::schema;

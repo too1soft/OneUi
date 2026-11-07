@@ -9,6 +9,7 @@
 #include "oneui/widget.h"
 
 #include <functional>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
@@ -68,6 +69,11 @@ public:
     // Replace keyed rows while remapping active row, range anchor and selection.
     bool reconcileRichRows(std::vector<std::vector<TableCell>> rows,
                            const std::vector<int>& oldToNew);
+    // Project immutable source rows without recopying unchanged hidden cells.
+    // Source snapshots must remain immutable. Invalid mappings leave rows intact.
+    bool projectRichRows(const std::vector<std::shared_ptr<const std::vector<TableCell>>>& source,
+                         const std::vector<std::size_t>& visible,
+                         const std::vector<int>& oldToNew);
     // Structural deltas preserve selection, keyboard anchor and pixel scroll.
     // MOVE destination is measured after removal, matching OneView's protocol.
     bool insertRows(std::size_t index, std::vector<std::vector<std::wstring>> rows);
@@ -121,6 +127,7 @@ public:
     AccessibilityInfo accessibilityInfo() const override;
 
 private:
+    void clearRowProjection();
     void remapRowsState(const std::vector<int>& oldToNew);
     TableStyle resolvedStyle() const;
     float columnWidth(int index, float remainingWidth, int flexibleCount) const;

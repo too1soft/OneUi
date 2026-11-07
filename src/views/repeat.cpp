@@ -16,7 +16,10 @@ void Runtime::refreshRepeatLayouts(const std::shared_ptr<Instance>& instance) {
         if(auto parent=instance->parent.lock())
             if(auto flow=parent->element.content?parent->element.content:parent->element.as<Stack>()) {
                 auto group=instance->element.as<Stack>();
-                group->setDirection(flow->direction());group->setGap(flow->gap());group->setAlign(flow->align());
+                if(group->direction()!=flow->direction())group->setDirection(flow->direction());
+                if(group->gap()!=flow->gap())group->setGap(flow->gap());
+                if(group->align()!=flow->align())group->setAlign(flow->align());
+                if(group->wrap()!=flow->wrap())group->setWrap(flow->wrap());
             }
     for(auto& child:instance->children)refreshRepeatLayouts(child);
     for(auto& [_,row]:instance->rows)refreshRepeatLayouts(row);
@@ -33,6 +36,7 @@ void Runtime::repeat(const std::shared_ptr<Instance> &instance) {
                 group->setDirection(flow->direction());
                 group->setGap(flow->gap());
                 group->setAlign(flow->align());
+                group->setWrap(flow->wrap());
             }
     const auto &r = image.records[REPT][image.records[NODE][instance->node][9]];
     auto &items = list(instance->scopes.at(r[3] & 0xffff), r[1]);

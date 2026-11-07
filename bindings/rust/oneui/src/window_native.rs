@@ -210,6 +210,16 @@ impl Window {
         });
     }
 
+    /// Scales the whole client area on top of the monitor DPI (1.0 = 100%).
+    /// Layout sees a correspondingly larger or smaller logical client size;
+    /// the native window keeps its size. Win32 accepts 1.0..=2.25, the
+    /// macOS and Linux backends 0.25..=4.0; other values are clamped or ignored.
+    pub fn set_content_scale(&self, scale: f32) {
+        self.state.with_raw(|raw| unsafe {
+            sys::oneui_window_set_content_scale(raw, scale);
+        });
+    }
+
     pub fn show(&self) {
         self.state.with_raw(|raw| unsafe {
             sys::oneui_window_show(raw);

@@ -20,6 +20,9 @@
             developerTools_=std::make_shared<internal::DeveloperRecorder>(options);
         }
 #endif
+        if (FAILED(win32::ensureBackgroundComRuntime())) {
+            throw std::runtime_error("Unable to initialize COM for native background callbacks");
+        }
         accessibilityComResult_ = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
         animationFrameTimer_ = CreateWaitableTimerExW(
             nullptr,
@@ -37,7 +40,6 @@
 
     ~Win32Window() override {
         callbackWindowAlive_->store(false, std::memory_order_release);
-        if(accessibilityProvider_){accessibilityProvider_->Release();accessibilityProvider_=nullptr;}
         acceptingPostedCallbacks_.store(false, std::memory_order_release);
         discardPostedCallbacks();
         if (content_) {
@@ -48,12 +50,17 @@
         if (hwnd_) {
             DestroyWindow(hwnd_);
         }
+        if (accessibilityProvider_) retireAccessibilityProvider();
         if (animationFrameTimer_) {
             CancelWaitableTimer(animationFrameTimer_);
             CloseHandle(animationFrameTimer_);
             animationFrameTimer_ = nullptr;
         }
         if (SUCCEEDED(accessibilityComResult_)) CoUninitialize();
+    }
+
+    void retireAccessibilityProvider() {
+        win32_accessibility::retireProvider(hwnd_, accessibilityProvider_);
     }
 
     void syncTitleBarWindowState() {
@@ -378,6 +385,9 @@
             else restoreFromTray(); // Never leave a window without a recovery path.
             return;
         }
+        // DestroyWindow can reenter COM through accessibility hooks before
+        // WM_NCDESTROY. Retained providers must already reject those calls.
+        callbackWindowAlive_->store(false, std::memory_order_release);
         DestroyWindow(hwnd_);
     }
 

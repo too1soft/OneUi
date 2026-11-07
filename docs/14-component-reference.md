@@ -563,6 +563,10 @@ Skia Canvas 的矩形描边对非正或非有限线宽不绘制；CSS `border-wi
 
 `set_header_height`、`set_column_dividers_visible` 允许紧凑无竖线表头。CSS 普通 `content-background` 为表头底色，`:selected/:hover/:active` 的 `background` 为相应行底色。无障碍语义和应用快捷键说明不能替代尚未完成的 Win32 UIA 桥接。
 
+C++ `projectRichRows(source, visible, oldToNew)` 可反复投影不可变富行快照，隐藏和恢复时移动已转换的单元格存储。`source` 的每项是非空 `shared_ptr<const vector<TableCell>>`，更新内容须提供新快照，不能通过其他可变别名修改旧快照；`visible` 为无重复的源索引。`oldToNew` 按旧可见行列出新索引或 `-1`，沿用选择、键盘锚点及滚动重映射。非法映射拒绝且不替换已发布行。
+
+载荷只保留当前源快照的行，源裁剪释放隐藏内容；传统 `setRows/setRichRows/reconcileRichRows`、增删移动及单行更新使缓存失效。这一 C++ 接口不改变公开类布局，未新增 C ABI/Rust 方法。OneView 键筛选在源结构与单元格未变化时使用该路径，事件仍按原业务 key 派发。
+
 ### ProgressBar：分段容量
 
 `set_segments(&[ProgressSegment { fraction, color, label }])` 表示总容量的非重叠占比；每段复制标签，负数、NaN 或无穷拒绝并保持旧状态。各段按剩余容量截断，绘制、总 `value`、可访问文字保持相同口径。空数组归零；`set_value/bind_value` 恢复原单色模式。公共控件保留横向、纵向、平滑更新及禁用态；业务负责提供真实口径和主题可辨识颜色，不得将有交集的统计值直接叠加。

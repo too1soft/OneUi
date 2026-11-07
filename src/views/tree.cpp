@@ -98,7 +98,7 @@ std::shared_ptr<Instance> Runtime::build(uint32_t node, const Scopes &context, c
         auto host = std::make_shared<ui::NativeHostView>();
         result->element = ui::Element(ui::Node(host), type);
         result->element.classes = classes;
-        styles->add(result->element);
+        styles->addFresh(result->element);
         const auto &record = image.records[HOST][n[9]];
         if (!(record[2] & 2)) hosts.emplace(image.strings[record[1]], host);
     } else if (type == "PaneGrid" || type == "DockWorkspace" || type == "ReorderableGrid") {
@@ -108,7 +108,7 @@ std::shared_ptr<Instance> Runtime::build(uint32_t node, const Scopes &context, c
         else container=std::make_shared<DockWorkspaceView>();
         result->element = ui::Element(ui::Node(container), type);
         result->element.classes = classes;
-        styles->add(result->element);
+        styles->addFresh(result->element);
     } else if (type == "Pane") {
         auto pane=std::make_shared<PaneView>();
         for(auto& child:children) {
@@ -117,7 +117,7 @@ std::shared_ptr<Instance> Runtime::build(uint32_t node, const Scopes &context, c
         }
         result->element=ui::Element(ui::Node(pane),type);
         result->element.classes=classes;
-        styles->add(result->element);
+        styles->addFresh(result->element);
     } else if (type == "DockItem") {
         auto item=std::make_shared<DockItemView>();
         for(auto& child:children) {
@@ -127,7 +127,8 @@ std::shared_ptr<Instance> Runtime::build(uint32_t node, const Scopes &context, c
             if(child.component=="PanelFooter")item->footer=child.widget;
         }
         result->element=ui::Element(ui::Node(item),type);
-        result->element.classes=classes;styles->add(result->element);
+        result->element.classes = classes;
+        styles->addFresh(result->element);
     } else
         result->element = factory.make(type, children, classes);
     if (n[10] != none) {
@@ -206,7 +207,7 @@ void Runtime::apply(const std::shared_ptr<Instance> &instance, Binding &binding)
     instance->applying = true;
     try {
         if (property.tag == 5)
-            applyList(*instance, name, list(scope, property.id));
+            applyList(*instance, name, list(scope, property.id), scope, property.id);
         else {
             auto value = read(scope, property.id);
             if (name == "disabled")
@@ -231,10 +232,11 @@ void Runtime::apply(const std::shared_ptr<Instance> &instance, Binding &binding)
         instance->applying = false;
         throw;
     } catch (const std::invalid_argument &) {
-        fail(ONEUI_VIEW_TYPE, "Component property value rejected", r[6]);
+        const auto message = "Component property value rejected (" + name + ")";
+        fail(ONEUI_VIEW_TYPE, message.c_str(), r[6]);
         this->error.section_kind = BIND;
         instance->applying = false;
-        throw Failure(ONEUI_VIEW_TYPE, "Component property value rejected");
+        throw Failure(ONEUI_VIEW_TYPE, message.c_str());
     } catch (...) {
         instance->applying = false;
         throw;
