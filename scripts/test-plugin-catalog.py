@@ -18,6 +18,7 @@ def main():
     parser.add_argument('--catalog', type=Path, required=True)
     parser.add_argument('--target', default='windows-modern-x86_64')
     parser.add_argument('--msvc', action='store_true')
+    parser.add_argument('--cli', type=Path, help='Use a prebuilt CLI on the native test host')
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     spec = importlib.util.spec_from_file_location('plugin_checks', root / 'scripts/test-plugin-sdk.py')
@@ -36,10 +37,14 @@ def main():
             shutil.copy2(args.catalog.parent / artifact['file'], registry / artifact['file'])
     (registry / 'releases.json').write_text('{"schemaVersion":1,"releases":[]}\n', encoding='utf-8')
     env = helper.msvc_environment(os.environ.copy()) if args.msvc else os.environ.copy()
-    binary = output / ('oneui-site-plugins.exe' if os.name == 'nt' else 'oneui-site-plugins')
+    binary = args.cli.resolve() if args.cli else output / ('oneui-site-plugins.exe' if os.name == 'nt' else 'oneui-site-plugins')
     with (output / 'catalog-consumer.log').open('w', encoding='utf-8') as log:
-        subprocess.run(['go', 'build', '-trimpath', '-o', str(binary), '.'],
-                       cwd=root / 'website/server', env=env, stdout=log, stderr=subprocess.STDOUT, check=True)
+        if args.cli:
+            if not binary.is_file():
+                raise ValueError('The prebuilt CLI is missing')
+        else:
+            subprocess.run(['go', 'build', '-trimpath', '-o', str(binary), '.'],
+                           cwd=root / 'website/server', env=env, stdout=log, stderr=subprocess.STDOUT, check=True)
         with socket.socket() as available:
             available.bind(('127.0.0.1', 0))
             port = available.getsockname()[1]

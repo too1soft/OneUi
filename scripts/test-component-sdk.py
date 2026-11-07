@@ -3,9 +3,52 @@ import argparse
 import json
 import os
 from pathlib import Path
+import platform
+import plistlib
+import re
 import runpy
 import shutil
 import subprocess
+
+
+def macos_bundle(work, application, runtime, run):
+    """The host owns Bundle assembly; the registrar only stages Windows DLLs."""
+    bundle = work / 'StatusConsumer.app'
+    contents = bundle / 'Contents'
+    binary = contents / 'MacOS/status_app'
+    library = contents / 'Frameworks/liboneui.dylib'
+    binary.parent.mkdir(parents=True)
+    library.parent.mkdir()
+    shutil.copy2(application, binary)
+    shutil.copy2(runtime, library)
+    (contents / 'Info.plist').write_bytes(plistlib.dumps(dict(
+        CFBundleIdentifier='org.oneui.status-consumer', CFBundleExecutable='status_app',
+        CFBundleName='OneUI Status Consumer', CFBundlePackageType='APPL',
+        CFBundleVersion='1', CFBundleShortVersionString='0.1.0')))
+    run('install_name_tool', '-id', '@rpath/liboneui.dylib', library)
+    for path, rpath in ((binary, '@executable_path/../Frameworks'), (library, '@loader_path')):
+        dependencies = [line.strip().split(' (')[0]
+                        for line in run('otool', '-L', path).splitlines()[1:]]
+        for dependency in dependencies:
+            if dependency.endswith('/liboneui.dylib') and dependency != '@rpath/liboneui.dylib':
+                run('install_name_tool', '-change', dependency, '@rpath/liboneui.dylib', path)
+        old_paths = re.findall(r'cmd LC_RPATH\s+cmdsize \d+\s+path (.*?) \(offset',
+                               run('otool', '-l', path))
+        for old in old_paths:
+            run('install_name_tool', '-delete_rpath', old, path)
+        run('install_name_tool', '-add_rpath', rpath, path)
+        run('codesign', '--force', '--sign', '-', path)
+    run('codesign', '--force', '--sign', '-', '--identifier', 'org.oneui.status-consumer', bundle)
+    run('codesign', '--verify', '--deep', '--strict', bundle)
+    # Reject every non-system dependency that is not supplied by this Bundle.
+    for path in (binary, library):
+        for line in run('otool', '-L', path).splitlines()[1:]:
+            dependency = line.strip().split(' (')[0]
+            if dependency.startswith(('/System/Library/', '/usr/lib/')):
+                continue
+            if not dependency.startswith('@rpath/') or not (library.parent / dependency[7:]).is_file():
+                raise RuntimeError('Runtime dependency escapes the Bundle: ' + dependency)
+    return binary
 
 
 def main():
@@ -22,7 +65,12 @@ def main():
         shutil.rmtree(work)
     work.mkdir()
     build = args.build.resolve()
-    env = runpy.run_path(str(root / 'scripts/test-plugin-sdk.py'))['msvc_environment'](os.environ.copy())
+    env = os.environ.copy()
+    if os.name == 'nt':
+        env = runpy.run_path(str(root / 'scripts/test-plugin-sdk.py'))['msvc_environment'](env)
+    system = platform.system()
+    if system not in ('Windows', 'Darwin', 'Linux'):
+        raise RuntimeError('Unsupported native consumer platform: ' + system)
 
     def run(*cmd):
         result = subprocess.run(list(map(str, cmd)), env=env, capture_output=True, text=True, errors='replace')
@@ -40,9 +88,14 @@ def main():
             shutil.copy2(root / 'cmake' / name, sdk / 'cmake' / name)
         (sdk / 'lib').mkdir()
         (sdk / 'bin').mkdir()
-        shutil.copy2(build / 'oneui.lib', sdk / 'lib/oneui.lib')
-        for name in ('oneui.dll', 'oneui-viewc.exe'):
-            shutil.copy2(build / name, sdk / 'bin' / name)
+        if os.name == 'nt':
+            shutil.copy2(build / 'oneui.lib', sdk / 'lib/oneui.lib')
+            shutil.copy2(build / 'oneui.dll', sdk / 'bin/oneui.dll')
+        else:
+            name = 'liboneui.dylib' if system == 'Darwin' else 'liboneui.so'
+            shutil.copy2(build / name, sdk / 'lib' / name)
+        name = 'oneui-viewc.exe' if os.name == 'nt' else 'oneui-viewc'
+        shutil.copy2(build / name, sdk / 'bin' / name)
     source = work / 'plugin-source'
     shutil.copytree(root / 'plugins/status', source)
     plugin_build, prefix = work / 'plugin-build', work / 'installed-plugin'
@@ -58,15 +111,25 @@ def main():
     run('cmake', '-S', app_source, '-B', app_build, '-G', 'Ninja', '-DCMAKE_BUILD_TYPE=Release',
         f'-DOneUI_DIR={sdk / "cmake"}', f'-DCMAKE_PREFIX_PATH={prefix}')
     run('cmake', '--build', app_build, '--parallel', '4')
+    application = app_build / ('status_app.exe' if os.name == 'nt' else 'status_app')
+    if system == 'Darwin':
+        application = macos_bundle(work, application, sdk / 'lib/liboneui.dylib', run)
+    elif system == 'Linux':
+        runtime = work / 'runtime'
+        runtime.mkdir()
+        shutil.copy2(sdk / 'lib/liboneui.so', runtime / 'liboneui.so')
+        env['LD_LIBRARY_PATH'] = str(runtime)
     # A missing SDK proves runtime copying follows the linked package closure.
     sdk.rename(work / 'sdk-hidden')
     try:
-        output = run(app_build / 'status_app.exe')
+        output = run(application)
     finally:
         (work / 'sdk-hidden').rename(sdk)
     report = dict(independentSource=True, prebuiltSDK=True, noFrameworkBuild=True,
                   installedPlugin=True, compilerContracts=True, propertyBinding=True,
-                  keyboardEvent=True, accessibility=True, lateCallbackClosed=True, runtimeStaging=True)
+                  keyboardEvent=True, accessibility=True, lateCallbackClosed=True, runtimeStaging=True,
+                  platform=system, architecture=platform.machine(),
+                  hostBundle=system == 'Darwin', releaseSigningVerified=False)
     (root / 'out/plugins-current/component-verification.json').write_text(json.dumps(report, indent=2) + '\n')
     print(output.strip())
     shutil.rmtree(work)

@@ -62,3 +62,25 @@ OneUI 提供 UI 必需底座、标准组件、可独立开发的扩展协议和�
 此入口只验证服务 SDK 与插件契约；不替代外部组件、包管理、官网、原生系统权限或网络连通性验收。完整交付以上述全部条件为准。
 
 组件与安装链验证入口为 `scripts/test-component-sdk.py`：支持开发构建的已编译库，或通过 `--sdk/--plugin` 验证已解包的不可变 SDK/组件产物；独立源码、页面契约、属性通知、键盘事件、无障碍和 SDK 移走后的运行均检查。运行时失败/重载/线程/关闭门测试为 `oneui_component_tests`。Go 包管理集成与锁并发测试在 `website/server`。发布器 `publish-portal.py` 与 `portal_remote.py` 在原生产锁下预检完整 SDK/插件/工具闭包，原子切换程序及清单；失败恢复历史程序与清单，正式文件保持不可变。`test-portal-publish.py` 使用临时目录覆盖成功、失败回滚、历史变更、并发变更和损坏 CLI。
+
+## macOS 原生验证
+
+`python -B scripts/verify-plugins-macos.py` 使用已有 `oneui-mac` SSH alias 和 known_hosts，在远端固定的 `~/.cache/oneui-release-review/plugins-current` 中获取明确的 Git 提交，复用现有 Skia、CMake、Ninja 和 Yoga 输入。原有 Mac 工程和构建目录不修改。可用 `--source-commit` 固定来源，用 `--cli <Darwin arm64 可执行文件>` 增加原生 CLI 的真实 HTTP 安装链验证。验证脚本的覆盖版本哈希单独记录；生产源码从已提交版本取得。
+
+2026-11-07 的实机环境为 macOS 15.5、Apple Silicon arm64、AppleClang 17.0.0；已验证源码为 `d04e954c75667dbba8f7114bb05f41065153b9fa`，核心 ABI 46。
+
+| 范围 | 实际结果 |
+| --- | --- |
+| renderer-free 服务 SDK | 静态/动态生命周期、C ABI、SDK 迁移及独立插件消费者通过 |
+| 核心与原生后端 | 14/14，含外部组件、运行时、重载、C API、弹层生命周期、Cocoa、软件和 Metal 渲染 |
+| Rust ABI | 2022 项布局/函数指针检查、四种值的跨语言往返、647 项编译器签名检查通过 |
+| 真实 SDK ZIP | C/C++ 静态/动态消费者 4/4，Rust 静态/动态消费者 2/2 |
+| 外部组件 | 只消费已编译 SDK；`.one` 契约、绑定、事件、无障碍和迟到回调关闭通过 |
+| 宿主 Bundle | 运行库封装、相对 RPATH、依赖闭包、SDK 移走后的执行、ad-hoc 签名完整性通过 |
+| Darwin arm64 CLI | 真实 HTTP 下载、依赖锁、生成 CMake、原生消费者、离线恢复和移除，静态/动态均通过 |
+
+实跑修复了 OverlayHost 的派生内容先销毁、基类焦点后访问所导致的悬空指针；销毁前断开祖先回调并释放焦点，增加独占和外部保留内容的回归。C++ 适配器和运行时显式清零 OneUiValue 的完整存储，保持未用 union 字节必须为零的协议，增加预填脏字节和真实回调测试。Rust 的 macOS URI 回调改为匹配 C 的 `char`，WChar 改为匹配本机有符号 wchar_t；ABI 检查包含对应的原生声明。两处富文本测试改为按本机 wchar_t 长度验证补充字符，不削弱 UTF-8 边界检查。Windows 相关控件/弹层/运行时回归、组件和 C++ 适配器回归及 1375 项布局、646 项签名检查通过。
+
+固定机器报告为 `out/plugins-current/macos/verification.json`；验收包保留在 `dist/oneui-macos-validation`，本机复制的 2 个 SDK ZIP、4 个原生插件 ZIP 和 CLI 全部核对 SHA256。Mac 的本轮源码测试副本及编译缓存已通过 `--cleanup-only --source-commit <已验提交>` 清理；保留压缩包、CLI、报告和有界日志。该清理要求已通过且提交匹配的报告、所有权标记、无活动使用者和无符号链接，不删除其他固定工作目录。
+
+这些是本地验证包，尚未加入官网正式目录，不覆盖已发布的 preview.4。实际执行系统为 macOS 15.5；13.0 是构建部署基线。Developer ID 签名、公证、Intel、其他系统版本及真实 VPN 流量不在本轮证据内。非 macOS 平台的 Rust WChar 声明需在各自原生 ABI 验证中核对，本轮保留其既有声明。
