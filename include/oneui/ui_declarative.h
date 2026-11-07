@@ -217,6 +217,22 @@ private:
         else if (auto v = std::dynamic_pointer_cast<AdaptivePanes>(w)) v->setStyleBox(box);
         else if (auto v = std::dynamic_pointer_cast<Reveal>(w)) v->setTransition({box.transitionDurationMs.value_or(220),box.transitionEasing.value_or(EasingCurve::EaseOutCubic)});
     }
+    void beginRegistration(const Element& e) {
+        ++treeVersion_;
+        if (e.widget->diagnosticSource().file.empty())
+            e.widget->setDiagnosticSource({e.component, {}, 0});
+    }
+    void pruneEntries() {
+        entries_.erase(std::remove_if(entries_.begin(), entries_.end(),
+            [](const Entry& entry) { return entry.widget.expired(); }), entries_.end());
+    }
+    void appendEntry(const Element& e) {
+        localThemes_.erase(e.widget.get()); // A new widget may reuse a retired address.
+        entries_.push_back({e.widget, e.component, e.classes, e.content});
+        apply(entries_.back(), sheet_);
+        if (std::dynamic_pointer_cast<ThemeScope>(e.widget))
+            refreshLocalThemes();
+    }
 public:
     const std::vector<std::string>& queryDiagnostics() const{return queryDiagnostics_;}
     ONEUI_API void inheritTransient(const std::shared_ptr<StyleSheet>& sheet);
@@ -250,13 +266,17 @@ public:
         }
     }
     void add(const Element& e) {
-        ++treeVersion_;
-        if(e.widget->diagnosticSource().file.empty())e.widget->setDiagnosticSource({e.component,{},0});
-        entries_.erase(std::remove_if(entries_.begin(),entries_.end(),[](auto& entry){return entry.widget.expired();}),entries_.end());
+        beginRegistration(e);
+        pruneEntries();
         for (auto& entry : entries_) if (entry.widget.lock() == e.widget) { entry.component=e.component;entry.classes = e.classes; apply(entry,sheet_); return; }
-        localThemes_.erase(e.widget.get()); // A new widget may reuse a retired address.
-        entries_.push_back({e.widget,e.component,e.classes,e.content}); apply(entries_.back(),sheet_);
-        if(auto scope=std::dynamic_pointer_cast<ThemeScope>(e.widget)){refreshLocalThemes();}
+        appendEntry(e);
+    }
+    // For a widget just constructed by the factory. Existing widgets go through add().
+    void addFresh(const Element& e) {
+        beginRegistration(e);
+        if (entries_.size() == entries_.capacity())
+            pruneEntries();
+        appendEntry(e);
     }
     void replace(const std::string& validatedCss,Density density=Density::Comfortable) {
         StyleSheet next; std::string error;
@@ -273,7 +293,7 @@ public:
         next.setTransientStyleSheet(sheet_.transientStyleSheet());
         sheet_ = std::move(next);density_=density;queries_.clear();localThemes_.clear();themeParents_.clear();
         restoreQueryLayouts();
-        entries_.erase(std::remove_if(entries_.begin(),entries_.end(),[](auto& e) { return e.widget.expired(); }),entries_.end());
+        pruneEntries();
         applyAll();
     }
     std::size_t size() const { return std::count_if(entries_.begin(),entries_.end(),[](const auto& e){return !e.widget.expired();}); }
@@ -355,7 +375,7 @@ public:
         const auto found=natives_->find(name);
         if(found==natives_->end())throw std::invalid_argument("Missing NativeHost registration: "+name);
         Element result(Node(std::make_shared<NativeHostView>(found->second.widget,found->second.owner)),"NativeHost");
-        result.classes=scope_; styles_->add(result); return result;
+        result.classes=scope_; styles_->addFresh(result); return result;
     }
     void locate(const Element& e,std::string file,int line) { styles_->locate(e,std::move(file),line); }
     void flush() {

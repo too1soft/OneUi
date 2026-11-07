@@ -7,6 +7,7 @@
 #include "oneui/controls/tree_view.h"
 #include "oneui/controls/code_editor.h"
 #include "oneui/layout/panel.h"
+#include "internal/runtime_config.h"
 namespace oneui::ui {
 Element Mount::make(std::string type, std::vector<Element> children, std::string classes) {
     if (type == "NativeHost")
@@ -432,7 +433,7 @@ Element Mount::make(std::string type, std::vector<Element> children, std::string
             }
         }
     }
-    styles_->add(e);
+    styles_->addFresh(e);
     return e;
 }
 } // namespace oneui::ui
@@ -444,28 +445,24 @@ void StyleRegistry::inheritTransient(const std::shared_ptr<StyleSheet>& sheet) {
     for(const auto& entry:entries_)if(entry.component=="Select")apply(entry,sheet_);
 }
 namespace {
-#if ONEUI_DEVELOPER_TOOLS
 thread_local std::map<const Widget*,StyleDiagnostic> diagnostics;
-#endif
 }
 void rememberStyleDiagnostic(const std::shared_ptr<Widget>& widget,const StyleNode& node,const StyleBox& box) {
-#if ONEUI_DEVELOPER_TOOLS
+    if (!internal::layoutSnapshotStylesEnabled()) return;
     if(diagnostics.size()%256==0) {
         for(auto it=diagnostics.begin();it!=diagnostics.end();) {
             if(it->second.widget.expired())it=diagnostics.erase(it);else ++it;
         }
     }
     diagnostics[widget.get()]={widget,node,box};
-#endif
 }
 std::vector<StyleDiagnostic> styleDiagnostics() {
     std::vector<StyleDiagnostic> result;
-#if ONEUI_DEVELOPER_TOOLS
+    if (!internal::layoutSnapshotStylesEnabled()) return result;
     for(auto it=diagnostics.begin();it!=diagnostics.end();) {
         if(it->second.widget.expired())it=diagnostics.erase(it);
         else {result.push_back(it->second);++it;}
     }
-#endif
     return result;
 }
 }

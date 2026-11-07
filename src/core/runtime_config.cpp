@@ -43,4 +43,13 @@ RuntimeConfig RuntimeConfig::fromEnvironment() {
 #endif
     return result;
 }
+
+bool layoutSnapshotStylesEnabled() {
+#if ONEUI_DEVELOPER_TOOLS
+    return true;
+#else
+    static const bool enabled = environment("ONEUI_LAYOUT_SNAPSHOT_STYLES") == L"1";
+    return enabled;
+#endif
+}
 } // namespace oneui::internal
