@@ -7,6 +7,32 @@
 using namespace oneui;
 using namespace oneui::ui;
 void check(bool ok,const char *message) { if(!ok)throw std::runtime_error(message); }
+void scalarStorageContract() {
+    using Scalar = oneui::ui::view::Value;
+    alignas(Scalar) unsigned char storage[sizeof(Scalar)];
+    std::memset(storage, 0xa5, sizeof(storage));
+    auto *scalar = new (storage) Scalar;
+    const auto *bytes = reinterpret_cast<const unsigned char *>(&scalar->pod);
+    check(std::all_of(bytes, bytes + sizeof(scalar->pod), [](unsigned char b) { return b == 0; }),
+          "default C++ scalar clears complete union storage");
+    scalar->~Scalar();
+    const uint8_t hash[32]{};
+    oneui::ui::view::Adapter adapter(hash, 1);
+    for (const auto &value : {Scalar::boolean(true), Scalar::integer(INT64_MIN),
+                              Scalar::number(-0.25), Scalar::string(std::string("UTF-8"))}) {
+        adapter.get = [value](uint32_t) { return value; };
+        OneUiValue result;
+        std::memset(&result, 0xa5, sizeof(result));
+        check(adapter.table.get(&adapter, 1, &result) == 0 && result.reserved == 0,
+              "C++ callback writes a canonical scalar");
+        if (result.tag != ONEUI_VALUE_UTF8) {
+            const size_t used = result.tag == ONEUI_VALUE_BOOL ? sizeof(uint32_t) : sizeof(uint64_t);
+            const auto *data = reinterpret_cast<const unsigned char *>(&result.as);
+            check(std::all_of(data + used, data + sizeof(result.as), [](unsigned char b) { return b == 0; }),
+                  "C++ callback clears inactive union bytes after copies and returns");
+        }
+    }
+}
 void snapshot(const std::shared_ptr<Widget> &widget,std::wostream &out) {
     out << L'(';
     if(auto label=std::dynamic_pointer_cast<Label>(widget))out << L"Text:" << label->text();
@@ -45,6 +71,7 @@ void buttonBorderDifferential() {
 }
 int main() {
     try {
+        scalarStorageContract();
         DiffVm a,b;
         Mount oldMount,newMount;
         setMotionEnabled(false);

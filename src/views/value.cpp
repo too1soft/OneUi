@@ -33,7 +33,8 @@ Value Value::copy(const OneUiValue &v) {
     return result;
 }
 OneUiValue Value::borrow() const {
-    OneUiValue v{};
+    OneUiValue v;
+    std::memset(&v, 0, sizeof(v));
     v.tag = tag;
     if (tag == 1)
         v.as.boolean = uint32_t(integer);

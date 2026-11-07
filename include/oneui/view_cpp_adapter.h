@@ -2,6 +2,7 @@
 // Generated C++ adapters share the frozen foreign-VM protocol with Rust.
 #include "oneui/oneui_view_c_api.h"
 #include "oneui/ui_declarative.h"
+#include <cstring>
 #include <limits>
 
 namespace oneui::ui::view {
@@ -18,6 +19,9 @@ template<class T> decltype(auto) field(T &v) { return fieldImpl(v, 0); }
 struct Value {
     OneUiValue pod{};
     std::string text;
+    // Value-initializing a union only initializes its first member. The C
+    // protocol also requires the remaining storage bytes to be zero.
+    Value() noexcept { std::memset(&pod, 0, sizeof(pod)); }
     template<class T> static Value boolean(T v) {
         static_assert(std::is_same_v<T,bool>,"Schema bool requires C++ bool");
         Value r;r.pod.tag=1;r.pod.as.boolean=v;return r;
