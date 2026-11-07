@@ -11,7 +11,7 @@ mod types;
 pub use ffi::*;
 pub use types::*;
 
-pub const UTF8_ABI_VERSION: c_uint = 45;
+pub const UTF8_ABI_VERSION: c_uint = 46;
 
 mod title_bar_presentation;
 pub use title_bar_presentation::*;
@@ -28,3 +28,5 @@ mod window_api;
 pub use window_api::*;
 mod media_api;
 pub use media_api::*;
+mod components;
+pub use components::*;

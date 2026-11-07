@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "example.counter",
+  "version": "0.1.0",
+  "plugin_abi": 1,
+  "kind": "service",
+  "license": "MIT",
+  "entry": "example_counter_descriptor_v1",
+  "cmake_package": "ExampleCounter",
+  "cmake_target": "Example::counter",
+  "services": [{"id": "example.counter.value", "abi": 1}],
+  "dependencies": [],
+  "native_dependencies": [],
+  "platforms": ["windows", "linux", "macos", "android", "ios", "harmonyos"]
+}

@@ -12,6 +12,8 @@
 #include <string>
 
 namespace oneui {
+class StyleSheet;
+struct StyleNode;
 namespace internal { class DeveloperRecorder; struct WidgetPresentationAccess; }
 
 enum class MouseButton {
@@ -152,6 +154,11 @@ class StyleSheet;
 class ONEUI_API Widget {
 public:
     Widget();
+    // The owner follows this widget when a native handle outlives its view.
+    void attachExtensionOwner(std::shared_ptr<void>,
+        std::function<void(const StyleSheet &, const StyleNode &)>);
+    bool hasExtensionOwner() const;
+    void applyExtensionStyle(const StyleSheet &, const StyleNode &);
     // Inherited presentation scope; retained children and later insertions share
     // the same context. An explicit local scope wins over its parent's scope.
     void setStyleScope(std::shared_ptr<StyleSheet> sheet);
@@ -164,7 +171,7 @@ public:
         static const DiagnosticSource anonymous{"Widget",{},0};
         return diagnosticSource_ ? *diagnosticSource_ : anonymous;
     }
-    virtual ~Widget() { lifetime_.reset(); }
+    virtual ~Widget();
 
     void setFrame(Rect frame);
     /// Notifies after committing changed dimensions, before children are laid out.
@@ -354,6 +361,8 @@ private:
     Binding<bool> disabledBinding_;
     Binding<bool> visibleBinding_;
     Rect lastPaintInvalidation_{};
+    struct ExtensionAttachment;
+    std::shared_ptr<ExtensionAttachment> extension_;
 };
 
 } // namespace oneui

@@ -48,8 +48,8 @@ inline constexpr uint32_t repeatTransparent = 1u << 16, repeatExplicit = 1u << 1
 // SLOT flags (word 3): bit 0 is supply ownership, bit 1 is the root contract.
 inline constexpr uint32_t slotSupplied = 1u, slotSingleRoot = 2u;
 void requireWorkspace(Image &, uint32_t bits);
-Bytes writeImage(const Image &image);
-Image readImage(const Bytes &bytes);
+Bytes writeImage(const Image &image, const ComponentContracts *known = nullptr);
+Image readImage(const Bytes &bytes, const ComponentContracts *known = nullptr);
 void validateImage(const Image &image);
 void validateGraph(const Image &image);
 uint32_t componentRoot(const Image &image, uint32_t node);

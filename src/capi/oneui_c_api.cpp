@@ -20,9 +20,6 @@
 using namespace oneui::capi;
 
 #include <mutex>
-std::shared_ptr<oneui::Widget> oneui::retainNativeWidget(const OneUiWidget* handle) {
-    return handle ? handle->widget : nullptr;
-}
 
 struct OneUiFocusBookmark {
     std::weak_ptr<oneui::Widget> target;

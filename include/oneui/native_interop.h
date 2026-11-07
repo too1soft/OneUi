@@ -10,4 +10,7 @@ namespace oneui {
 // Retaining the native widget does not retain foreign callback storage: pass
 // its owner to Mount::registerNative or keep the foreign owner alive separately.
 ONEUI_API std::shared_ptr<Widget> retainNativeWidget(const OneUiWidget* handle);
+// New owned C handle; the caller destroys it or transfers it to a component
+// factory. C++ subclasses require the matching SDK and toolchain.
+ONEUI_API OneUiWidget* createNativeWidgetHandle(std::shared_ptr<Widget> widget);
 }

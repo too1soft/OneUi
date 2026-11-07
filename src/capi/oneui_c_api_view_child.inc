@@ -49,6 +49,7 @@ void createChildMount(OneUiViewMount* handle, OneUiUtf8String name,
     }
     child->externalCss = parent->externalCss;
     child->density = parent->density;
+    child->components = parent->components;
     child->child = true;
     child->parentView = view;
     auto weak = std::weak_ptr<Mount>(child);

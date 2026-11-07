@@ -10,8 +10,9 @@ struct Mounted {
 }
 Element mount(Mount &mount,const uint8_t *bytes,size_t length,
               const OneUiViewModelVTable *table,void *vm) {
-    auto image=oneview::readImage(oneview::Bytes(bytes,bytes+length));
-    auto runtime=std::make_shared<views::Runtime>(std::move(image),mount.clipboard(),mount.styles());
+    auto registry=mount.components();
+    auto image=oneview::readImage(oneview::Bytes(bytes,bytes+length),registry?&registry->contracts:nullptr);
+    auto runtime=std::make_shared<views::Runtime>(std::move(image),mount.clipboard(),mount.styles(),registry);
     runtime->initialize(table,vm,true);
     std::function<void(const std::shared_ptr<views::Instance>&)> references=[&](const auto &node) {
         auto ref=runtime->image.records[oneview::NODE][node->node][7];

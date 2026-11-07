@@ -5,7 +5,7 @@
 
 namespace oneview
 {
-Image readImage(const Bytes &b)
+Image readImage(const Bytes &b, const ComponentContracts *known)
 {
     require(b.size() >= 128 && b.size() <= max_file, "BAD_IR/LIMIT: file size");
     Cursor h(b, 0, 128);
@@ -113,7 +113,7 @@ Image readImage(const Bytes &b)
             }
             else
             {
-                image.components = decodeComponents(data);
+                image.components = decodeComponents(data, known);
                 require(image.components.size() == e.count, "BAD_IR: component count");
             }
         }

@@ -1,6 +1,7 @@
 #pragma once
 #include "ast.h"
 #include "ir.h"
+#include "component_extensions.h"
 #include <set>
 
 namespace oneview
@@ -28,6 +29,7 @@ class ViewCompiler
 {
   public:
     Image image;
+    ComponentContracts components = registry();
     std::vector<fs::path> dependencies;
     Image compile(const fs::path &input, const fs::path &schema, const std::string &name);
 

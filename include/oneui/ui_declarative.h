@@ -1,4 +1,6 @@
 #pragma once
+struct OneUiComponentRegistry;
+namespace oneui::views::components { struct Registry; }
 #include "oneui/controls/data_grid.h"
 #include "oneui/controls/template_table.h"
 #include "oneui/controls/template_overlay.h"
@@ -98,7 +100,7 @@ private:
             else {filtered=supplied;for(auto token:semanticColorTokens)if(auto v=local->second->customProperty(std::string("--")+token))filtered->setCustomProperty(std::string("--")+token,*v);effective=&*filtered;}
         }
         const auto& sheet=*effective;
-        StyleNode n; n.tag = syntax::components().at(entry.component); n.classes.push_back("one-" + entry.component);
+        StyleNode n; n.tag = syntax::componentTag(entry.component); n.classes.push_back("one-" + entry.component);
         std::istringstream tokens(entry.classes); for (std::string c; tokens >> c;) n.classes.push_back(c);
         if(!entry.variant.empty())n.classes.push_back(entry.variant);
         if(!entry.appearance.empty())n.classes.push_back("surface-"+entry.appearance);
@@ -114,6 +116,7 @@ private:
             table->setScrollOffset(row*tableRowHeight(density_));
         }
         auto box = sheet.resolve(n);
+        if (w->hasExtensionOwner()) w->applyExtensionStyle(sheet,n);
         if(entry.component=="DataMenu") {
             auto menu=std::dynamic_pointer_cast<Menu>(std::dynamic_pointer_cast<View>(w)->children().front());
             menu->setStyleSheet(std::make_shared<StyleSheet>(sheet),n); return;
@@ -289,7 +292,7 @@ public:
                 throw std::invalid_argument("Gradient is not consumed by "+tag+" in "+rule.selector);
         }
         // Force variable resolution before committing the sheet.
-        for (auto& entry : entries_) { StyleNode n{syntax::components().at(entry.component), {"one-"+entry.component},0}; next.resolve(n); }
+        for (auto& entry : entries_) { StyleNode n{syntax::componentTag(entry.component), {"one-"+entry.component},0}; next.resolve(n); }
         next.setTransientStyleSheet(sheet_.transientStyleSheet());
         sheet_ = std::move(next);density_=density;queries_.clear();localThemes_.clear();themeParents_.clear();
         restoreQueryLayouts();
@@ -336,6 +339,7 @@ class Mount {
     using NativeEntries = std::map<std::string, NativeEntry>;
     std::shared_ptr<NativeEntries> natives_ = std::make_shared<NativeEntries>();
     std::shared_ptr<Clipboard> clipboard_;
+    std::shared_ptr<const oneui::views::components::Registry> components_;
 public:
     explicit Mount(std::function<void()> schedule = {}, std::shared_ptr<StyleRegistry> styles = std::make_shared<StyleRegistry>(),
                    std::shared_ptr<Clipboard> clipboard = defaultMountClipboard())
@@ -346,6 +350,8 @@ public:
     std::string scope() const { return scope_; }
     auto styles() const { return styles_; }
     auto clipboard() const { return clipboard_; }
+    ONEUI_API void setComponents(OneUiComponentRegistry *registry);
+    auto components() const { return components_; }
     auto scheduler() const { return schedule_; }
     void attachNative(const std::string& name,const std::shared_ptr<NativeHostView>& host) {
         const auto found=natives_->find(name);

@@ -7,7 +7,12 @@ if(APPLE)
 endif()
 install(DIRECTORY "${PROJECT_SOURCE_DIR}/include/oneui" DESTINATION include)
 install(FILES "${PROJECT_SOURCE_DIR}/cmake/OneUIConfig.cmake"
-    "${PROJECT_SOURCE_DIR}/cmake/OneUITargets.cmake" DESTINATION cmake)
+    "${PROJECT_SOURCE_DIR}/cmake/OneUITargets.cmake"
+    "${PROJECT_SOURCE_DIR}/cmake/OneUIView.cmake"
+    "${PROJECT_SOURCE_DIR}/cmake/OneUIComponents.cmake"
+    "${PROJECT_SOURCE_DIR}/cmake/OneUIPluginRuntimes.cmake" DESTINATION cmake)
+install(DIRECTORY "${PROJECT_SOURCE_DIR}/tools/viewc" DESTINATION tools)
+install(DIRECTORY "${PROJECT_SOURCE_DIR}/src/views/format" DESTINATION src/views)
 install(DIRECTORY "${PROJECT_SOURCE_DIR}/docs/" DESTINATION docs FILES_MATCHING PATTERN "*.md")
 install(FILES "${PROJECT_SOURCE_DIR}/README.md" "${PROJECT_SOURCE_DIR}/README_EN.md"
     "${PROJECT_SOURCE_DIR}/LICENSE" DESTINATION . OPTIONAL)

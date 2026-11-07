@@ -1,9 +1,13 @@
+if(NOT TARGET oneui-viewc AND EXISTS "${CMAKE_CURRENT_LIST_DIR}/../bin/oneui-viewc${CMAKE_EXECUTABLE_SUFFIX}")
+    add_executable(oneui-viewc IMPORTED GLOBAL)
+    set_target_properties(oneui-viewc PROPERTIES IMPORTED_LOCATION "${CMAKE_CURRENT_LIST_DIR}/../bin/oneui-viewc${CMAKE_EXECUTABLE_SUFFIX}")
+endif()
 if(NOT TARGET oneui-viewc)
     set(viewc_root "${CMAKE_CURRENT_LIST_DIR}/../tools/viewc")
     add_executable(oneui-viewc
         "${viewc_root}/main.cpp" "${viewc_root}/emit_rust.cpp" "${viewc_root}/emit_cpp.cpp" "${CMAKE_CURRENT_LIST_DIR}/../src/views/format/binary.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/../src/views/format/schema.cpp" "${viewc_root}/schema_parser.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/../src/views/format/component_contract.cpp" "${viewc_root}/compiler.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/../src/views/format/component_contract.cpp" "${CMAKE_CURRENT_LIST_DIR}/../src/views/format/component_extensions.cpp" "${viewc_root}/compiler.cpp"
         "${viewc_root}/lower.cpp" "${viewc_root}/lower_attributes.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/../src/views/format/validate.cpp" "${CMAKE_CURRENT_LIST_DIR}/../src/views/format/ir_writer.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/../src/views/format/ir_reader.cpp" "${CMAKE_CURRENT_LIST_DIR}/../src/views/format/ir_validate.cpp"
@@ -17,7 +21,7 @@ endif()
 
 # oneui_target_view(app NAME Settings SOURCE settings.one VM_HEADER vm.h)
 function(oneui_target_view target)
-    cmake_parse_arguments(VIEW "" "NAME;SOURCE;SCHEMA;VM_HEADER" "" ${ARGN})
+    cmake_parse_arguments(VIEW "" "NAME;SOURCE;SCHEMA;VM_HEADER" "COMPONENTS" ${ARGN})
     if(NOT VIEW_NAME OR NOT VIEW_SOURCE)
         message(FATAL_ERROR "oneui_target_view needs NAME and SOURCE")
     endif()
@@ -30,9 +34,19 @@ function(oneui_target_view target)
         set(schema "${directory}/${stem}.oneschema")
     endif()
     set(output "${CMAKE_CURRENT_BINARY_DIR}/views/${VIEW_NAME}.g.h")
+    get_target_property(_components "${target}" ONEUI_COMPONENT_FILES)
+    if(NOT _components)
+        set(_components "")
+    endif()
+    list(APPEND _components ${VIEW_COMPONENTS})
+    list(REMOVE_DUPLICATES _components)
+    set(_component_args "")
+    foreach(_contract IN LISTS _components)
+        list(APPEND _component_args --components "${_contract}")
+    endforeach()
     add_custom_command(OUTPUT "${output}"
-        COMMAND oneui-viewc --emit cpp --schema "${schema}" --input "${source}" --output "${output}" --name "${VIEW_NAME}" --vm-header "${VIEW_VM_HEADER}" --depfile "${output}.d"
-        DEPENDS oneui-viewc "${source}" "${schema}"
+        COMMAND oneui-viewc --emit cpp --schema "${schema}" --input "${source}" --output "${output}" --name "${VIEW_NAME}" --vm-header "${VIEW_VM_HEADER}" --depfile "${output}.d" ${_component_args}
+        DEPENDS oneui-viewc "${source}" "${schema}" ${_components}
         DEPFILE "${output}.d"
         VERBATIM)
     target_sources(${target} PRIVATE "${output}")

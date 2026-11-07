@@ -4,7 +4,7 @@ OneUiViewResult oneui_view_reload(OneUiView *view,const uint8_t *bytes,size_t le
     return call(__func__,[&] {
         check(bytes && length && length<=oneview::max_file,ONEUI_VIEW_INVALID_ARGUMENT,"Reload IR required");
         auto value=runtime(view);
-        value->reload(oneview::readImage(oneview::Bytes(bytes,bytes+length)));
+        value->reload(oneview::readImage(oneview::Bytes(bytes,bytes+length),value->componentRegistry ? &value->componentRegistry->contracts : nullptr));
         view->root.widget=value->root->element.widget;
         pruneHostHandles(view);
     });

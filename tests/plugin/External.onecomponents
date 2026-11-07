@@ -1,0 +1,9 @@
+oneui-components 1
+component Test_Meter 1 leaf
+property 1000 title utf8 3
+property 1001 checked bool 6
+property 1002 offset f64 1
+property 1003 count i64 1
+model 1001
+event 1 activate 0
+end

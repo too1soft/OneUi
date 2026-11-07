@@ -200,6 +200,7 @@ pub fn generate(source: &Path, output: &Path, manifest: &Path, target: &str) -> 
         .unwrap()
         .lines()
         .filter(|line| line.starts_with("oneui_"))
+        .filter(|line| *line != "oneui_macos_set_open_uri_callback" || target.contains("apple"))
         .map(str::to_string)
         .collect::<BTreeSet<_>>();
     assert_eq!(

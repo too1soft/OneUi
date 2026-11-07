@@ -1,0 +1,6 @@
+oneui-components 1
+component OneUI_Status 1 leaf
+property 1000 label utf8 3
+property 1001 value f64 3
+event 1 activate 0
+end

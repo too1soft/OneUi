@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "oneui.status",
+  "version": "0.1.0",
+  "plugin_abi": 1,
+  "kind": "component",
+  "license": "MIT",
+  "entry": "oneui_status_component_v1",
+  "cmake_package": "OneUIStatus",
+  "cmake_target": "OneUI::status",
+  "components": [{"name": "OneUI_Status", "version": 1}],
+  "dependencies": [],
+  "native_dependencies": ["OneUI"],
+  "platforms": ["windows", "linux", "macos", "android", "ios", "harmonyos"]
+}

@@ -202,8 +202,8 @@ uint32_t ViewCompiler::lower(Source &s, Node n, const std::vector<Scope> &scopes
         image.records[NODE][index][9] = slot;
         return index;
     }
-    auto entry = registry().find(n.tag);
-    if (entry == registry().end())
+    auto entry = components.find(n.tag);
+    if (entry == components.end())
         at.fail("COMPONENT: unknown component " + n.tag);
     const auto &c = entry->second;
     if(c.name=="PaneHeader") {

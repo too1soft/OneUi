@@ -1,0 +1,6 @@
+<template view-model="Root">
+  <Test_Meter ref="meter" class="meter" :title="title" v-model="checked" offset="-2.5" count="9000000000000000000" @activate="click" />
+</template>
+<style scoped>
+Test_Meter.meter { width: 200px; height: 48px; color: #123456; background-color: #abcdee; }
+</style>

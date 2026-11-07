@@ -97,6 +97,10 @@ def main():
     common = {"include/" + p.relative_to(headers).as_posix(): p
               for p in headers.rglob("*") if p.is_file()}
     common.update(collect_bindings(source))
+    for name in ('OneUIComponents.cmake','OneUIPluginRuntimes.cmake','OneUIView.cmake'):
+        common['cmake/' + name] = source / 'cmake' / name
+    for doc in ('plugin-packages.md','plugin-services.md','plugin-components.md','plugin-platforms.md'):
+        common['docs/' + doc] = source / 'docs' / doc
     # The .one template compiler ships with every package so applications can build views
     # without a OneUI source checkout.
     viewc = (args.input / "bin/oneui-viewc.exe") if args.platform == "windows" else (args.build / "oneui-viewc")
@@ -126,7 +130,7 @@ def main():
         else:
             entries.update({"lib/" + p.name: p for p in archives})
         entries["cmake/OneUIConfig.cmake"] = cmake_files(args.platform, args.architecture,
-            linkage, [p.name for p in archives], system, frameworks, args.version)
+            linkage, [p.name for p in archives], system, frameworks, args.version, abi)
         entries["cmake/OneUIConfigVersion.cmake"] = ('set(PACKAGE_VERSION "' + args.version.split("-", 1)[0] + '")\nif(PACKAGE_FIND_VERSION VERSION_GREATER PACKAGE_VERSION)\nset(PACKAGE_VERSION_COMPATIBLE FALSE)\nelse()\nset(PACKAGE_VERSION_COMPATIBLE TRUE)\nendif()\nif(PACKAGE_FIND_VERSION VERSION_EQUAL PACKAGE_VERSION)\nset(PACKAGE_VERSION_EXACT TRUE)\nendif()\n').encode()
         names = [p.stem.removeprefix("lib") if args.platform != "windows" else p.stem for p in archives]
         manifest = dict(schemaVersion=1, distributionVersion=1, version=args.version,

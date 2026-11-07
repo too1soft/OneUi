@@ -19,7 +19,7 @@ void ViewCompiler::attributes(Source &s, const Node &n, const std::vector<Scope>
     {
         require(n.text.find("{{") == std::string::npos, "EXPRESSION: use :text, interpolation is unsupported");
         auto &p = c.property("text");
-        validateStatic(c.name, p.name, n.text);
+        validateComponentStatic(c, p.name, n.text);
         written.insert(p.id);
         image.add(PROP, {index, p.id, value(p.tag, n.text), span(s, n), ownerKind});
     }
@@ -76,7 +76,7 @@ void ViewCompiler::attributes(Source &s, const Node &n, const std::vector<Scope>
             }
             else
             {
-                validateStatic(c.name, key, a.value);
+                validateComponentStatic(c, key, a.value);
                 image.add(PROP, {index, p.id, value(p.tag, a.value), span(s, a), ownerKind});
             }
         }

@@ -43,6 +43,7 @@ foreach(fixture SlotSingle SlotWrapped SlotFallback)
     add_dependencies(oneui_view_test_ir oneui_view_${fixture}_ir)
 endforeach()
 add_executable(oneui_view_runtime_tests tests/views/runtime_tests.cpp)
+include("${PROJECT_SOURCE_DIR}/cmake/OneUIComponentTests.cmake")
 add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/TabsSizing.oneview"
     COMMAND oneui-viewc --emit ir --input "${PROJECT_SOURCE_DIR}/tests/views/TabsSizing.one"
         --schema "${PROJECT_SOURCE_DIR}/tests/views/TabsSizing.oneschema" --name TabsSizing

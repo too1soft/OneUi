@@ -3,6 +3,7 @@ set(ONEUI_VIEW_FORMAT_SOURCES
     src/views/format/binary.cpp
     src/views/format/schema.cpp
     src/views/format/component_contract.cpp
+    src/views/format/component_extensions.cpp
     src/views/format/ir_writer.cpp
     src/views/format/ir_reader.cpp
     src/views/format/ir_validate.cpp
@@ -12,6 +13,9 @@ set(ONEUI_VIEW_FORMAT_SOURCES
 set(ONEUI_VIEW_RUNTIME_SOURCES
     ${ONEUI_VIEW_FORMAT_SOURCES}
     src/views/component_factory.cpp
+    src/views/components/instance.cpp
+    src/views/components/host.cpp
+    src/views/components/mount.cpp
     src/views/component_properties.cpp
     src/views/value.cpp
     src/views/lifetime.cpp

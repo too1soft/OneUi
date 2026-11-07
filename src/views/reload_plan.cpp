@@ -52,6 +52,7 @@ ReloadPlan::~ReloadPlan() {
         try {(*it)();}catch(...){}
 }
 void ReloadPlan::match(const std::shared_ptr<Instance> &a,const std::shared_ptr<Instance> &b) {
+    if (a->extension || b->extension) return; // Factory instances commit as a new widget.
     if(identity(old,*a)!=identity(next,*b) || !sameScopes(*a,*b))return;
     matches.emplace(b.get(),a);
     std::map<std::string,std::shared_ptr<Instance>> previous;

@@ -43,7 +43,7 @@ void requireWorkspace(Image &image, uint32_t bits) {
     if (!image.count(WSC1)) image.add(WSC1, {1, bits, 0, 0});
     else image.records[WSC1][0][1] |= bits;
 }
-Bytes writeImage(const Image &image)
+Bytes writeImage(const Image &image, const ComponentContracts *known)
 {
     std::array<Bytes, 20> sections;
     Bytes strings;
@@ -99,7 +99,7 @@ Bytes writeImage(const Image &image)
     patch(b, 16, b.size(), 8);
     require(b.size() <= max_file, "LIMIT: file");
     // The public writer cannot publish an image the independent loader rejects.
-    readImage(b);
+    readImage(b,known);
     return b;
 }
 } // namespace oneview

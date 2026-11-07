@@ -15,7 +15,7 @@ def bytes_hash(data):
     return hashlib.sha256(data).hexdigest()
 
 
-def cmake_files(platform, architecture, linkage, archives, system, frameworks, version):
+def cmake_files(platform, architecture, linkage, archives, system, frameworks, version, abi=0):
     static = linkage == "static"
     library = "oneui_static.lib" if platform == "windows" else "liboneui_static.a"
     runtime = {"windows": "bin/oneui.dll", "linux": "lib/liboneui.so", "macos": "lib/liboneui.dylib"}[platform]
@@ -24,6 +24,8 @@ def cmake_files(platform, architecture, linkage, archives, system, frameworks, v
         'get_filename_component(_ONEUI_ROOT "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)',
         'set(ONEUI_SDK_LINKAGE "' + linkage + '")',
         'set(ONEUI_SDK_VERSION "' + version + '")',
+        'set(ONEUI_SDK_ABI "' + str(abi) + '")',
+        'include("${CMAKE_CURRENT_LIST_DIR}/OneUIComponents.cmake")',
         "if(TARGET OneUI::oneui)",
         "  return()",
         "endif()",

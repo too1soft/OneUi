@@ -26,6 +26,10 @@ inline const std::map<std::string, std::string>& components() {
     }();
     return value;
 }
+inline std::string componentTag(const std::string &name) {
+    const auto found = components().find(name);
+    return found == components().end() ? "widget" : found->second;
+}
 inline bool pagePattern(const std::string& tag) { return tag=="SettingsPage" || tag=="ListPage" || tag=="DetailPage"; }
 inline bool property(const std::string& tag, const std::string& key) {
     const auto* spec=schema::component(tag);
@@ -89,6 +93,7 @@ inline std::set<std::string> componentCssProperties(const std::string& tag) {
     return keys;
 }
 inline std::set<std::string> cssProperties(const std::string& tag) {
+    if(tag=="widget") return {"color","background-color","border-color","border-width","border-radius","font-size"};
     auto keys = componentCssProperties(tag);
     // Material opacity affects only the corresponding fill, never text/children.
     if (keys.count("background") || keys.count("background-color")) keys.insert("background-opacity");
@@ -106,10 +111,10 @@ inline std::string stripComments(std::string source) {
 }
 // Deliberately small CSS dialect: typed simple selectors, states and variables.
 // Unknown/unconsumed properties are errors rather than successful no-ops.
-inline std::string css(std::string source, const std::string& scope = {}, const std::string& file = "<style>", int startLine = 1, bool insideQuery=false) {
+inline std::string css(std::string source, const std::string& scope = {}, const std::string& file = "<style>", int startLine = 1, bool insideQuery=false, const std::set<std::string>& external = {}) {
     source = stripComments(std::move(source));
     std::string output; std::size_t pos = 0;
-    const std::regex selectorPattern(R"(^([A-Za-z][A-Za-z0-9-]*)(\.[A-Za-z_][A-Za-z0-9_-]*)*(:(hover|pressed|focus|disabled|selected|checked|read-only))?$)");
+    const std::regex selectorPattern(R"(^([A-Za-z][A-Za-z0-9_-]*)(\.[A-Za-z_][A-Za-z0-9_-]*)*(:(hover|pressed|focus|disabled|selected|checked|read-only))?$)");
     while (pos < source.size()) {
         if (trim(source.substr(pos)).empty()) break;
         const int line = startLine + int(std::count(source.begin(), source.begin() + pos, '\n'));
@@ -124,7 +129,7 @@ inline std::string css(std::string source, const std::string& scope = {}, const 
             unsigned depth=1;close=open+1;
             for(;close<source.size()&&depth;++close){if(source[close]=='{')++depth;else if(source[close]=='}')--depth;}
             if(depth)fail("Unclosed container query");--close;
-            output+=selector+" {\n"+css(source.substr(open+1,close-open-1),scope,file,line,true)+"}\n";
+            output+=selector+" {\n"+css(source.substr(open+1,close-open-1),scope,file,line,true,external)+"}\n";
             pos=close+1;continue;
         }
         const auto body = source.substr(open + 1, close - open - 1);
@@ -138,6 +143,8 @@ inline std::string css(std::string source, const std::string& scope = {}, const 
             auto component = components().find(type);
             if (component != components().end()) {
                 tag = component->second; mapped = tag + ".one-" + type + selector.substr(type.size());
+            } else if(external.count(type)) {
+                tag="widget"; mapped=tag+".one-"+type+selector.substr(type.size());
             } else if(!classOnly) {
                 tag = type;
                 bool found = tag=="state-view-part" || tag=="pane-header-part" || tag=="pane-grid-part" || tag=="dock-workspace-part"; for (auto& c : components()) if (c.second == tag) found = true;
@@ -147,7 +154,8 @@ inline std::string css(std::string source, const std::string& scope = {}, const 
             if(colon!=selector.npos) {
                 pseudo=selector.substr(colon+1);
                 std::set<std::string> states;
-                if(tag=="button"||tag=="interactive-surface")states={"hover","pressed","focus","disabled"};
+                if(tag=="widget")states={"hover","pressed","focus","disabled","selected","checked","read-only"};
+                else if(tag=="button"||tag=="interactive-surface")states={"hover","pressed","focus","disabled"};
                 else if(tag=="state-view"||tag=="state-view-part"||tag=="pane-header-part"||tag=="pane-grid-part")states={"hover","pressed","focus","disabled"};
                 else if(tag=="dock-workspace-part")states={"hover","pressed","focus","disabled","selected"};
                 else if(tag=="input")states={"hover","focus","disabled","read-only"};

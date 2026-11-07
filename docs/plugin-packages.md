@@ -4,7 +4,7 @@ OneUI 插件让应用按需接入原生服务和扩展组件。应用选择包�
 
 ## 安装 VPN 插件
 
-准备 `oneui-site` 命令、CMake、Ninja 和目标包对应的编译器。在应用项目目录执行：
+从[开发者中心](https://oneui.too1.net/developers#tools-title)下载 `oneui-site` 命令，准备 CMake、Ninja 和目标包对应的编译器。在应用项目目录执行：
 
 ```sh
 oneui-site plugin add --id oneui.vpn --version "^0.1.0" \

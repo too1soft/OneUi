@@ -544,7 +544,7 @@ enum {
     OneUiTerminalCellOverline = 1u << 11
 };
 
-#define ONEUI_UTF8_ABI_VERSION 45u
+#define ONEUI_UTF8_ABI_VERSION 46u
 
 /*
  * Copies and registers a process-local font under family_alias. Call before

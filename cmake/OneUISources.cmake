@@ -5,6 +5,7 @@ set(ONEUI_WINDOW_SERVICE_SOURCES
 )
 
 set(ONEUI_CORE_SOURCES
+    src/core/widget_extension.cpp
     src/core/workspace_frame_probe.cpp
     src/core/native_menu.cpp
     src/core/application_menu.cpp
@@ -208,6 +209,7 @@ set(ONEUI_C_API_SOURCES
     src/capi/oneui_c_api_runtime.cpp
     src/capi/oneui_c_api_view_scope.cpp
     src/capi/oneui_c_api_view.cpp
+    src/capi/oneui_c_api_components.cpp
     src/capi/oneui_c_api_view_reload.cpp
     src/capi/oneui_c_api_view_mount.cpp
     src/capi/oneui_c_api_view_notifier.cpp

@@ -1,0 +1,5 @@
+model StatusVM {
+  r label: utf8
+  r value: f64
+  command activate()
+}

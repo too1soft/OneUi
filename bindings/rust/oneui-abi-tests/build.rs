@@ -78,6 +78,7 @@ fn main() {
                     | "OneUiView"
                     | "OneUiViewMount"
                     | "OneUiViewNotifier"
+                    | "OneUiComponentRegistry"
                     | "OneUiValueUtf8"
             )
         })

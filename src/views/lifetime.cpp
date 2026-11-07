@@ -1,5 +1,6 @@
 #include "internal/view_profile.h"
 #include "runtime.h"
+#include "components/instance.h"
 #include "oneui/layout/virtual_template_list.h"
 #include <cstring>
 namespace oneui::views {
@@ -29,10 +30,11 @@ Callback::~Callback() {
     }
 }
 Runtime::Runtime(oneview::Image im, std::shared_ptr<Clipboard> clipboard,
-                 std::shared_ptr<ui::StyleRegistry> sharedStyles)
+                 std::shared_ptr<ui::StyleRegistry> sharedStyles,
+                 std::shared_ptr<const components::Registry> registry)
     : image(std::move(im)), hash(oneview::sha256(image.schema.encode())),
       styles(sharedStyles ? std::move(sharedStyles) : std::make_shared<ui::StyleRegistry>()),
-      factory({}, styles, std::move(clipboard)) {
+      factory({}, styles, std::move(clipboard)), componentRegistry(std::move(registry)) {
     error.struct_size = sizeof(error);
     error.record_index = oneview::none;
     error.source_map_index = oneview::none;
@@ -118,6 +120,7 @@ void Runtime::closeScope(const std::shared_ptr<Scope> &scope) {
     if (!scope || scope->closed)
         return;
     scope->closed = true;
+    components::closeScope(*this,scope);
     for (auto &entry : scope->lists)
         for (auto &item : entry.second.items)
             closeScope(item);

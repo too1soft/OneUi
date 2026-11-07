@@ -1,0 +1,6 @@
+<template view-model="StatusVM">
+  <OneUI_Status :label="label" :value="value" @activate="activate" name="Transfer status"/>
+</template>
+<style scoped>
+OneUI_Status { width: 260px; height: 72px; color: #246bce; background-color: #f0f4fa; border-radius: 10px; }
+</style>

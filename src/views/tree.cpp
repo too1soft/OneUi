@@ -1,5 +1,6 @@
 #include "oneui/ui_theme.h"
 #include "runtime.h"
+#include "components/instance.h"
 #include "oneui/layout/pane_grid.h"
 #include "oneui/layout/dock_workspace_view.h"
 namespace oneui::views {
@@ -129,6 +130,8 @@ std::shared_ptr<Instance> Runtime::build(uint32_t node, const Scopes &context, c
         result->element=ui::Element(ui::Node(item),type);
         result->element.classes = classes;
         styles->addFresh(result->element);
+    } else if (components::create(*this,result,type,children,classes)) {
+        // The registered factory owns creation; common properties use Mount.
     } else
         result->element = factory.make(type, children, classes);
     if (n[10] != none) {
@@ -154,8 +157,9 @@ void Runtime::install(const std::shared_ptr<Instance> &instance, uint32_t owner,
             const auto &contract =
                 image.components[image.records[NODE][componentRoot(image, owner)][1]];
             overrideProperty(r[1]);
-            if(!workspaceScalar(*instance,contract.property(r[1]).name,constant(r[2])))
-                setScalar(factory, instance->element, contract.property(r[1]).name, constant(r[2]));
+            auto value = constant(r[2]);
+            if (!components::set(instance,r[1],value.borrow()) && !workspaceScalar(*instance,contract.property(r[1]).name,value))
+                setScalar(factory, instance->element, contract.property(r[1]).name, value);
             if (contract.property(r[1]).name == "disabled")
                 instance->authoredDisabled = bool(constant(r[2]).integer);
         }
@@ -217,7 +221,7 @@ void Runtime::apply(const std::shared_ptr<Instance> &instance, Binding &binding)
                     if (!binding.baseClasses) binding.baseClasses = instance->element.classes;
                     instance->element.classes = *binding.baseClasses;
                     factory.set(instance->element, "class", value.text);
-                } else if(!workspaceScalar(*instance,name,value))
+                } else if(!components::set(instance,r[1],value.borrow()) && !workspaceScalar(*instance,name,value))
                     setScalar(factory, instance->element, name, value);
                 if (name == "basis")
                     if (auto parent = instance->parent.lock())

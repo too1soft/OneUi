@@ -15,6 +15,7 @@ struct Mount : std::enable_shared_from_this<Mount> {
     std::weak_ptr<Runtime> active;
     std::string externalCss;
     ui::Density density = ui::Density::Comfortable;
+    std::shared_ptr<const oneui::views::components::Registry> components;
     bool closed = false, reserved = false;
     std::weak_ptr<Runtime> parentView;
     // Only explicit destination children insert an extra owned Panel.

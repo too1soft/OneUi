@@ -253,20 +253,21 @@ Bytes encodeComponents(const std::vector<ComponentContract> &components)
     }
     return b;
 }
-std::vector<ComponentContract> decodeComponents(const Bytes &b)
+std::vector<ComponentContract> decodeComponents(const Bytes &b, const ComponentContracts *known)
 {
+    const auto &available = known ? *known : registry();
     Cursor c(b);
     require(c.get(8) == 0x0031504d4f43564full, "BAD_IR: COMP magic");
     auto n = c.u32();
-    require(n <= registry().size(), "BAD_IR: component count");
+    require(n <= available.size(), "BAD_IR: component count");
     std::vector<ComponentContract> result;
     for (uint32_t i = 0; i < n; ++i)
     {
         auto name = c.str();
-        auto known = registry().find(name);
-        require(known != registry().end() && (result.empty() || result.back().name < name),
+        auto current = available.find(name);
+        require(current != available.end() && (result.empty() || result.back().name < name),
                 "BAD_IR: unknown/unsorted component");
-        result.push_back(decodeComponentContract(c, known->second));
+        result.push_back(decodeComponentContract(c, current->second));
     }
     c.done();
     return result;

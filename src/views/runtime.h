@@ -4,11 +4,13 @@
 #include "oneui/command.h"
 #include "oneui/subscription.h"
 #include "oneui/ui_declarative.h"
+#include "components/registry.h"
 #include <atomic>
 #include <thread>
 #include <unordered_map>
 
 namespace oneui::views {
+namespace components { struct InstanceState; }
 struct Runtime;
 struct Scope;
 struct Instance;
@@ -83,6 +85,8 @@ struct SlotBody {
 };
 using Slots = std::map<std::string, SlotBody>;
 struct Instance {
+    ~Instance();
+    std::shared_ptr<components::InstanceState> extension;
     std::weak_ptr<Runtime> owner;
     uint32_t node = 0;
     ui::Element element{ui::Node(nullptr), ""};
@@ -135,6 +139,9 @@ struct Runtime : std::enable_shared_from_this<Runtime> {
     std::thread::id thread = std::this_thread::get_id();
     std::shared_ptr<ui::StyleRegistry> styles = std::make_shared<ui::StyleRegistry>();
     ui::Mount factory;
+    std::shared_ptr<const components::Registry> componentRegistry;
+    std::shared_ptr<std::vector<std::weak_ptr<components::InstanceState>>> componentInstances =
+        std::make_shared<std::vector<std::weak_ptr<components::InstanceState>>>();
     std::shared_ptr<Scope> rootScope;
     std::shared_ptr<Instance> root;
     std::vector<std::shared_ptr<Scope>> scopes;
@@ -158,7 +165,8 @@ struct Runtime : std::enable_shared_from_this<Runtime> {
     std::vector<std::weak_ptr<Runtime>> deferredSchedules;
     OneUiViewError error{};
     Runtime(oneview::Image image, std::shared_ptr<Clipboard> clipboard = {},
-            std::shared_ptr<ui::StyleRegistry> sharedStyles = {});
+            std::shared_ptr<ui::StyleRegistry> sharedStyles = {},
+            std::shared_ptr<const components::Registry> componentRegistry = {});
     ~Runtime();
     void fail(int result, const char *message, uint32_t span = oneview::none);
     void alive() const;

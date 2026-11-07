@@ -25,9 +25,10 @@ struct ComponentContract
     const ComponentEvent &event(const std::string &name) const;
     const ComponentEvent &event(uint32_t id) const;
 };
-const std::map<std::string, ComponentContract> &registry();
+using ComponentContracts = std::map<std::string, ComponentContract>;
+const ComponentContracts &registry();
 Bytes encodeComponents(const std::vector<ComponentContract> &components);
-std::vector<ComponentContract> decodeComponents(const Bytes &bytes);
+std::vector<ComponentContract> decodeComponents(const Bytes &bytes, const ComponentContracts *known = nullptr);
 void addBuiltins(Schema &schema);
 void validateRecord(const Model&, const std::string& projection);
 void validateRecord(const Schema&, const Model&, const std::string& projection);

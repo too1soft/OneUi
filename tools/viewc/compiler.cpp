@@ -38,7 +38,7 @@ Source &ViewCompiler::load(const fs::path &path, uint32_t importSpan)
                 !n.text.empty())
                 at.fail("TEMPLATE_IMPORT: name and src required");
             auto alias = n.attrs.at("name").value, target = n.attrs.at("src").value;
-            if (!std::regex_match(alias, std::regex("[A-Z][A-Za-z0-9_]*")) || registry().count(alias) ||
+            if (!std::regex_match(alias, std::regex("[A-Z][A-Za-z0-9_]*")) || components.count(alias) ||
                 target.empty() || fs::path(target).is_absolute() || target.find(':') != std::string::npos ||
                 !s.imports.emplace(alias, absolute.parent_path() / target).second)
                 at.fail("TEMPLATE_IMPORT: invalid/duplicate import");
@@ -64,7 +64,9 @@ Source &ViewCompiler::load(const fs::path &path, uint32_t importSpan)
     require(scopeNames.insert(scope).second, "CSS_SCOPE: hash collision");
     for (auto &n : stored.styles)
     {
-        auto lowered = oneui::ui::syntax::css(n.text, scope, stored.relative, n.line);
+        std::set<std::string> external;
+        for(const auto &[name,_]:components)if(externalComponent(name))external.insert(name);
+        auto lowered = oneui::ui::syntax::css(n.text, scope, stored.relative, n.line,false,external);
         if(lowered.find("@container")!=std::string::npos)requireWorkspace(image,workspaceQueries);
         image.add(
             CSS, {stored.scope, image.sid(n.text), image.sid(lowered), image.sid(stored.relative), span(stored, n), 0});

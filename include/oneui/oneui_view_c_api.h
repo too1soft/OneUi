@@ -352,4 +352,5 @@ ONEUI_API OneUiViewResult oneui_view_code_editor_history(OneUiView *view, OneUiU
 #ifdef __cplusplus
 }
 #endif
+#include "oneui/oneui_component_c_api.h"
 #endif

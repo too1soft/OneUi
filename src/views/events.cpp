@@ -11,6 +11,7 @@ void Runtime::wire(const std::shared_ptr<Instance> &instance) {
     if (image.records[oneview::NODE][instance->node][0] != 1)
         return;
     instance->owner = weak_from_this();
+    if (instance->extension) return;
     wireWorkspace(instance);
     wirePicker(instance);
     if(instance->element.component=="Table") {wireRichTable(instance);return;}

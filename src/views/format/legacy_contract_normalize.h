@@ -16,6 +16,7 @@ inline void normalizeLegacyContracts(Image& image) {
         for (auto& record : image.records[section]) {
             const auto index = component(record.at(0));
             const auto& old = historical.at(index);
+            if (!registry().count(old.name)) continue;
             const auto& property = old.property(record.at(1));
             const auto& current = registry().at(old.name).property(property.name);
             const bool chartRecord = old.name == "TimeSeriesChart" && old.version == 1 &&
@@ -30,6 +31,7 @@ inline void normalizeLegacyContracts(Image& image) {
     for (auto& record : image.records[EVNT]) {
         const auto index = component(record.at(0));
         const auto& old = historical.at(index);
+        if (!registry().count(old.name)) continue;
         const auto& event = old.event(record.at(1));
         const auto& events = registry().at(old.name).events;
         const auto found = std::find_if(events.begin(), events.end(),
@@ -43,7 +45,7 @@ inline void normalizeLegacyContracts(Image& image) {
         record[1] = found->id;
     }
     for (auto& contract : image.components)
-        contract = registry().at(contract.name);
+        if (registry().count(contract.name)) contract = registry().at(contract.name);
     // PROP/BIND owners may be CALL nodes or imported/slot component roots; using
     // componentRoot above gives all of them the same name-based mapping. This
     // includes tools VirtualList v2 IDs 15..17 -> current IDs 16..18.

@@ -137,10 +137,10 @@ struct Vm {
         values[id].text = std::move(text);
     }
 };
-inline oneview::Image load(const char *path) {
+inline oneview::Image load(const char *path, const oneview::ComponentContracts *components = nullptr) {
     std::ifstream in(path, std::ios::binary);
     expect(bool(in), "missing IR fixture");
-    return oneview::readImage(oneview::Bytes(std::istreambuf_iterator<char>(in), {}));
+    return oneview::readImage(oneview::Bytes(std::istreambuf_iterator<char>(in), {}),components);
 }
 inline uint32_t id(const oneview::Image &image, const char *model, const char *name) {
     return image.schema.model(model).properties.at(name).id;
@@ -150,8 +150,8 @@ struct Case {
     Vm vm, a, b;
     std::shared_ptr<Runtime> runtime;
     uint32_t title, rows;
-    explicit Case(const char *file)
-        : image(load(file)), vm(image, "Root"), a(image, "Item"), b(image, "Item"),
+    explicit Case(const char *file, std::shared_ptr<const oneui::views::components::Registry> components = {})
+        : image(load(file,components?&components->contracts:nullptr)), vm(image, "Root"), a(image, "Item"), b(image, "Item"),
           title(id(image, "Root", "title")), rows(id(image, "Root", "rows")) {
         vm.text(title, "initial");
         vm.values[id(image, "Root", "visible")].integer = 1;
@@ -165,7 +165,7 @@ struct Case {
             const auto& props=image.schema.model("Root").properties;
             if(props.count(property))vm.lists[props.at(property).id]={};
         }
-        runtime = std::make_shared<Runtime>(image);
+        runtime = std::make_shared<Runtime>(image,nullptr,nullptr,std::move(components));
     }
     void start() { runtime->initialize(&vm.table, &vm); }
     ~Case() { runtime->close(); }

@@ -1,4 +1,5 @@
 #include "validation.h"
+#include "component_extensions.h"
 #include <cmath>
 
 namespace oneview
@@ -134,13 +135,15 @@ void validateImage(const Image &im)
             uint64_t bits = uint64_t(v[2]) | (uint64_t(v[3]) << 32);
             double f;
             std::memcpy(&f, &bits, 8);
-            require(f >= 0 && f <= std::numeric_limits<float>::max(), "BAD_IR: numeric range");
-            oneui::ui::syntax::validateLayoutNumber(p.name, float(f));
+            if (!externalComponent(c.name) || p.id < 1000) {
+                require(f >= 0 && f <= std::numeric_limits<float>::max(), "BAD_IR: numeric range");
+                oneui::ui::syntax::validateLayoutNumber(p.name, float(f));
+            }
         }
         if (v[0] == 4)
             text = im.strings[v[2]];
         if (v[0] != 3)
-            validateStatic(c.name, p.name, text);
+            validateComponentStatic(c, p.name, text);
     }
     uint32_t last = 0;
     for (auto &r : im.records[BIND])
@@ -245,7 +248,9 @@ void validateImage(const Image &im)
         auto name = std::filesystem::path(file).stem().generic_string();
         scopeBytes.insert(scopeBytes.end(), name.begin(), name.end());
         auto scope = "one-s-" + hex(sha256(scopeBytes)).substr(0, 16);
-        require(oneui::ui::syntax::css(im.strings[r[1]], scope, file, 1) == im.strings[r[2]],
+        std::set<std::string> external;
+        for(const auto &c:im.components)if(!registry().count(c.name))external.insert(c.name);
+        require(oneui::ui::syntax::css(im.strings[r[1]], scope, file, 1,false,external) == im.strings[r[2]],
                 "BAD_IR: lowered CSS/scope mismatch");
         if(im.strings[r[2]].find("@container")!=std::string::npos)
             require(im.count(WSC1)&&(im.records[WSC1][0][1]&workspaceQueries),"VERSION: container query capability");

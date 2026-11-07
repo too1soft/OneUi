@@ -32,7 +32,7 @@ def selected_files(prefix, patterns):
 
 
 def package(source, prefix, recipe, package_id, target, linkage, output):
-    folder = {'oneui.native-sdk': 'native-sdk', 'oneui.vpn': 'vpn'}[package_id]
+    folder = {'oneui.native-sdk': 'native-sdk', 'oneui.vpn': 'vpn', 'oneui.status': 'status'}[package_id]
     manifest = json.loads((source / 'plugins' / folder / 'oneui-plugin.json').read_text(encoding='utf-8'))
     windows = recipe['system'] == 'Windows'
     if package_id == 'oneui.native-sdk':
@@ -51,10 +51,16 @@ def package(source, prefix, recipe, package_id, target, linkage, output):
             for path in (prefix / 'share/oneui' / platform).rglob('*'):
                 if path.is_file() and not path.is_symlink():
                     files[path.relative_to(prefix).as_posix()] = path.read_bytes()
-    else:
+    elif package_id == 'oneui.vpn':
         patterns = ['include/oneui/plugins/vpn.h', 'lib/cmake/OneUIVpnPlugin/*',
                     'lib/oneui_vpn_plugin.lib' if windows else 'lib/liboneui_vpn_plugin.a']
         files = selected_files(prefix, patterns)
+    else:
+        if recipe.get('coreABI')!=46 or linkage!='shared':
+            raise ValueError('Status 0.1 requires shared OneUI ABI 46')
+        patterns=['include/oneui/plugins/status.h','lib/cmake/OneUIStatus/*',
+                  'share/oneui/plugins/oneui.status/*','lib/oneui_status.lib' if windows else 'lib/liboneui_status.a']
+        files=selected_files(prefix,patterns)
     files['oneui-plugin.json'] = (json.dumps(manifest, ensure_ascii=False, indent=2) + '\n').encode()
     files['LICENSE'] = (source / 'LICENSE').read_bytes()
     files['oneui-package-build.json'] = (json.dumps(recipe, sort_keys=True, indent=2) + '\n').encode()
@@ -87,7 +93,8 @@ def package(source, prefix, recipe, package_id, target, linkage, output):
                 'validation': 'native Plugin SDK and independent consumer', 'limitations': [],
                 'systemDependencies': []}
     description = {'oneui.native-sdk': '无渲染依赖的插件运行时与原生 VPN SDK。',
-                   'oneui.vpn': '通过插件服务接入 OneUI VPN 会话与原生宿主。'}[package_id]
+                   'oneui.vpn': '通过插件服务接入 OneUI VPN 会话与原生宿主。',
+                   'oneui.status': '带进度显示、键盘激活和无障碍语义的状态组件，适用于 OneUI ABI 46。'}[package_id]
     return {'manifest': manifest, 'description': description,
             'sourceCommit': recipe['sourceCommit'], 'artifacts': [artifact]}
 
@@ -99,6 +106,7 @@ def main():
     parser.add_argument('--target', required=True)
     parser.add_argument('--linkage', choices=['static', 'shared'], required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--package', choices=['native','oneui.status'],default='native')
     args = parser.parse_args()
     if not re.fullmatch(r'(windows|linux|macos|android|ios|harmonyos)-[a-z0-9_.]+-(x86_64|arm64|x86|armv7)', args.target):
         raise ValueError('Invalid plugin target')
@@ -127,7 +135,7 @@ def main():
     args.output.mkdir(parents=True, exist_ok=True)
     catalog_path = args.output / 'plugins.json'
     catalog = json.loads(catalog_path.read_text(encoding='utf-8')) if catalog_path.exists() else {'schemaVersion': 1, 'packages': []}
-    for package_id in ('oneui.native-sdk', 'oneui.vpn'):
+    for package_id in (('oneui.status',) if args.package=='oneui.status' else ('oneui.native-sdk','oneui.vpn')):
         release = package(source, args.prefix, recipe, package_id, args.target, args.linkage, args.output)
         existing = next((p for p in catalog['packages'] if p['manifest']['id'] == package_id and p['manifest']['version'] == release['manifest']['version']), None)
         if existing:

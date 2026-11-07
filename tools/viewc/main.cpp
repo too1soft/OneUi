@@ -32,19 +32,22 @@ int main(int argc, char **argv)
     try
     {
         std::map<std::string, std::string> args;
+        std::vector<fs::path> componentFiles;
         const std::set<std::string> options = {"--input", "--output", "--name",   "--vm-header", "--depfile",
                                                "--emit",  "--schema", "--verify", "--roundtrip", "--ir-output"};
         for (int i = 1; i < argc; i += 2)
         {
+            if (i + 1 < argc && std::string(argv[i]) == "--components") { componentFiles.emplace_back(argv[i+1]); continue; }
             if (i + 1 >= argc || !options.count(argv[i]) || !args.emplace(argv[i], argv[i + 1]).second)
                 throw std::runtime_error("CLI: unknown, duplicate or unpaired option");
         }
+        const auto components = oneview::loadComponentExtensions(componentFiles);
         if (args.count("--roundtrip"))
         {
             if (args.size() != 2 || !args.count("--output"))
                 throw std::runtime_error("CLI: --roundtrip FILE --output FILE");
             auto data = read(args.at("--roundtrip"));
-            auto bytes = oneview::writeImage(oneview::readImage(oneview::Bytes(data.begin(), data.end())));
+            auto bytes = oneview::writeImage(oneview::readImage(oneview::Bytes(data.begin(), data.end()), &components), &components);
             output(args.at("--output"), std::string(bytes.begin(), bytes.end()));
             return 0;
         }
@@ -54,7 +57,7 @@ int main(int argc, char **argv)
                 throw std::runtime_error("CLI: --verify FILE is standalone");
             auto data = read(args.at("--verify"));
             oneview::Bytes bytes(data.begin(), data.end());
-            auto image = oneview::readImage(bytes);
+            auto image = oneview::readImage(bytes, &components);
             std::cout << "OneView 1." << (unsigned(bytes[10]) | (unsigned(bytes[11]) << 8))
                       << " nodes=" << image.count(oneview::NODE)
                       << " templates=" << image.count(oneview::TMPL)
@@ -75,8 +78,9 @@ int main(int argc, char **argv)
             if (!args.count("--schema") || (emit != "cpp" && args.count("--vm-header")))
                 throw std::runtime_error("CLI: ir requires --schema and does not accept --vm-header");
             oneview::ViewCompiler compiler;
+            compiler.components = components;
             auto image = compiler.compile(args.at("--input"), args.at("--schema"), name);
-            auto bytes = oneview::writeImage(image);
+            auto bytes = oneview::writeImage(image, &components);
             if (emit == "cpp") generated = oneview::emitCpp(image, bytes, name, args["--vm-header"],
                 fs::weakly_canonical(args.at("--input")).parent_path());
             else if (emit == "rust") generated = oneview::emitRust(image, bytes);
@@ -84,6 +88,7 @@ int main(int argc, char **argv)
             if (args.count("--ir-output"))
                 output(args.at("--ir-output"), std::string(bytes.begin(), bytes.end()));
             dependencies = compiler.dependencies;
+            dependencies.insert(dependencies.end(), componentFiles.begin(), componentFiles.end());
         }
         else
             throw std::runtime_error("CLI: supported emitters: ir, rust, cpp");

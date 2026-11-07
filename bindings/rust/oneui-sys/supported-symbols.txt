@@ -644,3 +644,9 @@ oneui_view_element_visible
 
 # Optional macOS application service.
 oneui_macos_set_open_uri_callback
+
+oneui_component_abi_version
+oneui_component_registry_create_v1
+oneui_component_registry_register_v1
+oneui_component_registry_destroy
+oneui_view_mount_set_components_v1

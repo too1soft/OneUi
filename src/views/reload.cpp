@@ -1,4 +1,5 @@
 #include "reload_plan.h"
+#include "components/instance.h"
 #include "oneui/ui_theme.h"
 namespace oneui::views {
 namespace {
@@ -21,7 +22,8 @@ struct Candidate {
     size_t previous;
     bool committed=false;
     Candidate(Runtime &r,oneview::Image image):owner(r),
-        value(std::make_shared<Runtime>(std::move(image),r.factory.clipboard())),previous(r.scopes.size()) {
+        value(std::make_shared<Runtime>(std::move(image),r.factory.clipboard(),nullptr,r.componentRegistry)),previous(r.scopes.size()) {
+        value->componentInstances=r.componentInstances;
         for(auto &scope:r.scopes)snapshots.emplace_back(scope);
         value->rootScope=r.rootScope;value->scopes=r.scopes;value->renderScopes=r.renderScopes;
     }
@@ -53,7 +55,7 @@ void refresh(Runtime &r,const std::shared_ptr<Instance> &node) {
         const auto &contract=r.image.components[r.image.records[oneview::NODE][root][1]];
         for(auto &p:r.image.records[oneview::PROP])
             if(p[0]==owner && contract.property(p[1]).name!="class")
-                if(!r.workspaceScalar(*node,contract.property(p[1]).name,r.constant(p[2])))
+                if(!components::set(node,p[1],r.constant(p[2]).borrow()) && !r.workspaceScalar(*node,contract.property(p[1]).name,r.constant(p[2])))
                     setScalar(r.factory,node->element,contract.property(p[1]).name,r.constant(p[2]));
     }
     node->applying=false;
