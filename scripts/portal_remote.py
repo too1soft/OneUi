@@ -1,5 +1,8 @@
 """Atomic website, SDK, plugin catalog and CLI deployment for the OneUI mount."""
-import fcntl
+try:
+    import fcntl
+except ImportError:
+    fcntl = None  # Windows publishers may import the JSON canonicalizer only.
 import hashlib
 import json
 import os
@@ -59,6 +62,16 @@ def catalog(root, name, default):
     return json.loads(p.read_text())
 
 
+def canonical(value):
+    # Go encodes omitted optional slices as null. This is the same declaration,
+    # while non-null metadata and all artifact hashes remain exact.
+    if isinstance(value, dict):
+        return {k: canonical(v) for k, v in value.items() if v is not None}
+    if isinstance(value, list):
+        return [canonical(v) for v in value]
+    return value
+
+
 def downloads(root):
     items = []
     for release in catalog(root, 'releases.json', {})['releases']:
@@ -89,7 +102,7 @@ def restart(config, expected):
             for name, endpoint in zip(METADATA, ('releases', 'plugins', 'tools')):
                 if expected.get(name) is not None:
                     with urllib.request.urlopen(base + '/api/' + endpoint, timeout=3) as r:
-                        matches = matches and json.load(r) == expected[name]
+                        matches = matches and canonical(json.load(r)) == canonical(expected[name])
             if matches:
                 return health
         except OSError:
@@ -150,14 +163,28 @@ def main(request):
                 raise ValueError('Production changed; re-plan')
             if shutil.disk_usage(root).free < request['bytes'] + 1024**3:
                 raise ValueError('Insufficient deployment space')
+            present=[]
+            for name, item in request.get('files', {}).items():
+                if not re.fullmatch(r'oneui[.-][A-Za-z0-9._-]+',name):
+                    raise ValueError('Invalid artifact path')
+                path=root/name
+                if path.exists():
+                    regular(path)
+                    if path.stat().st_size!=item['size'] or digest(path)!=item['sha256']:
+                        raise ValueError('Immutable artifact differs: '+name)
+                    present.append(name)
             stage.mkdir(mode=0o700)
             atomic(stage / 'transaction.json', json.dumps(request).encode(), 0o600)
-            return dict(stage=str(stage))
+            for name in present:
+                os.link(root/name,stage/name)
+            return dict(stage=str(stage),present=present)
         if action == 'rollback':
             receipt = json.loads((state / 'receipt.json').read_text())
             if stamp(root) != receipt['after']:
                 raise ValueError('Another deployment completed; rollback refused')
             return dict(status='rolled-back', health=restore(config, root, state))
+        if action=='abort' and not stage.exists():
+            return dict(status='already-clean')
         transaction = json.loads((stage / 'transaction.json').read_text())
         if transaction['token'] != request['token']:
             raise ValueError('Not the staging owner')
@@ -188,7 +215,10 @@ def main(request):
             raise ValueError('Candidate binary must be a verified published CLI')
         os.link(binary, stage / 'oneui')
         os.chmod(stage / 'oneui', 0o755)
-        command(['docker', 'exec', 'oneui', '/app/.oneui-portal/stage/oneui', '--data', '/app/.oneui-portal/stage', '--check'])
+        check=command(['docker', 'exec', 'oneui', '/app/.oneui-portal/stage/oneui', '--data', '/app/.oneui-portal/stage', '--check'])
+        wanted='OK: {} releases, {} verified downloads'.format(len(expected['releases.json']['releases']),len(files))
+        if wanted not in check:
+            raise RuntimeError('Staged server did not load complete package set: '+check)
         for name in (*METADATA, 'oneui', 'SHA256SUMS'):
             backup = state / ('previous-' + name)
             if (root / name).exists():
@@ -205,6 +235,10 @@ def main(request):
                 atomic(root / name, (stage / name).read_bytes())
             atomic(root / 'SHA256SUMS', ''.join(a['sha256']+'  '+n+'\n' for n,a in sorted(files.items())).encode())
             atomic(root / 'oneui', binary.read_bytes(), 0o755)
+            root_check=command(['docker','exec','oneui','/app/oneui','--data','/app','--check'])
+            atomic(state/'last-check.json',json.dumps(dict(expected=wanted,stage=check,root=root_check)).encode(),0o600)
+            if wanted not in root_check:
+                raise RuntimeError('Installed server did not load complete package set: '+root_check)
             health = restart(config, expected)
             atomic(state / 'receipt.json', json.dumps(dict(token=request['token'], after=stamp(root))).encode(), 0o600)
         except BaseException:
@@ -212,7 +246,7 @@ def main(request):
             raise
         finally:
             clear(stage)
-        return dict(status='published', health=health, stamp=stamp(root))
+        return dict(status='published', health=health, stamp=stamp(root),check=check)
 
 
 if __name__ == '__main__':

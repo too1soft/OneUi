@@ -8,6 +8,7 @@ import urllib.request
 
 from release_payload import prepare, merge
 from release_ssh import connect, python
+from portal_remote import canonical
 
 
 def digest(path):
@@ -31,7 +32,7 @@ def public(config, catalogs, files):
     evidence = []
     for name, endpoint in zip(('releases.json', 'plugins.json', 'tools.json'), ('releases', 'plugins', 'tools')):
         with opener.open(base + '/api/' + endpoint, timeout=30) as response:
-            if json.load(response) != catalogs[name]:
+            if canonical(json.load(response)) != canonical(catalogs[name]):
                 raise ValueError('Public catalog differs: ' + name)
     for route, heading in (('/developers', '开发者中心'), ('/plugins', '插件目录'), ('/docs/plugin-components', '开发和使用组件包')):
         with opener.open(base + route, timeout=30) as response:
@@ -86,10 +87,14 @@ def main():
         result = dict(status='plan', plan=plan)
         if args.apply:
             token = str(uuid.uuid4())
-            stage = remote(client, config, 'begin', token=token, base=before['stamp'], binary=binary, bytes=plan['bytes'])['stage']
+            staged = remote(client, config, 'begin', token=token, base=before['stamp'], binary=binary, bytes=plan['bytes'],
+                files={n:dict(size=f.stat().st_size,sha256=digest(f)) for n,f in files.items()})
+            stage=staged['stage']
             try:
                 with client.open_sftp() as sftp:
                     for name, path in files.items():
+                        if name in staged['present']:
+                            continue
                         print('Uploading ' + name, flush=True)
                         sftp.put(str(path), stage + '/' + name, confirm=True)
                         sftp.chmod(stage + '/' + name, 0o644)

@@ -33,6 +33,8 @@ class Transactions(unittest.TestCase):
         def command(args):
             if args[:2] == ['docker','inspect']:
                 return json.dumps([dict(Type='bind', Source=str(self.root), Destination='/app')])
+            if args[-1]=='--check':
+                return 'OK: 1 releases, 1 verified downloads'
             return ''
         patch.object(remote, 'command', side_effect=command).start()
         self.restart = patch.object(remote, 'restart', return_value={'status':'ok'}).start()
@@ -81,6 +83,19 @@ class Transactions(unittest.TestCase):
         stage=self.stage();(stage/'oneui-site-0.1.0-preview.4-linux-amd64').write_bytes(b'tampered')
         with self.assertRaisesRegex(ValueError,'integrity'):self.call('commit',token=self.token)
         self.restart.assert_not_called()
+
+    def test_optional_null_is_equivalent_but_real_changes_are_not(self):
+        self.assertEqual(remote.canonical({'manifest':{}}),remote.canonical({'manifest':{'services':None}}))
+        self.assertNotEqual(remote.canonical({'version':1}),remote.canonical({'version':2}))
+
+    def test_retry_reuses_identical_immutable_files(self):
+        name='oneui-site-0.1.0-preview.4-linux-amd64'
+        file=self.root/name;file.write_bytes(b'new program')
+        result=self.call('begin',token=self.token,base=self.call('inspect')['stamp'],binary=name,bytes=100,
+            files={name:dict(size=11,sha256=remote.digest(file))})
+        self.assertEqual(result['present'],[name])
+        self.call('abort',token=self.token)
+        self.assertEqual(self.call('abort',token=self.token)['status'],'already-clean')
 
 
 if __name__ == '__main__':
