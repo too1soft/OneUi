@@ -234,6 +234,6 @@ set(ONEUI_WIN32_SOURCES
 
 # Modern SkCodec headers contain C++20 designated initializers. Keep this
 # implementation-only requirement local; public headers remain C++17.
-set_property(SOURCE src/core/media_loader.cpp APPEND PROPERTY COMPILE_OPTIONS
+set_property(SOURCE src/core/media_loader.cpp src/core/image_view_codec.cpp APPEND PROPERTY COMPILE_OPTIONS
     "$<$<CXX_COMPILER_ID:MSVC>:/std:c++20>"
     "$<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-std=c++20>")
