@@ -56,11 +56,17 @@ impl OpenUriSubscription {
     }
 }
 #[cfg(target_os = "macos")]
-unsafe extern "C" fn receive(bytes: *const u8, length: usize, data: *mut std::ffi::c_void) {
+unsafe extern "C" fn receive(
+    bytes: *const std::ffi::c_char,
+    length: usize,
+    data: *mut std::ffi::c_void,
+) {
     if bytes.is_null() || data.is_null() || length > 8192 {
         return;
     }
-    let Ok(uri) = std::str::from_utf8(unsafe { std::slice::from_raw_parts(bytes, length) }) else {
+    let Ok(uri) =
+        std::str::from_utf8(unsafe { std::slice::from_raw_parts(bytes.cast::<u8>(), length) })
+    else {
         return;
     };
     // A user callback may drop its subscription. Retain the handler until this
