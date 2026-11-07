@@ -1,0 +1,4 @@
+include(CMakeFindDependencyMacro)
+find_dependency(Threads)
+include("${CMAKE_CURRENT_LIST_DIR}/OneUIPluginTargets.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/OneUIPlugins.cmake")

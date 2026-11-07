@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "oneui.vpn",
+  "version": "0.1.0",
+  "plugin_abi": 1,
+  "kind": "service",
+  "license": "MIT",
+  "entry": "oneui_vpn_plugin_descriptor_v1",
+  "cmake_package": "OneUIVpnPlugin",
+  "cmake_target": "OneUI::vpn_plugin",
+  "services": [{ "id": "oneui.vpn.sessions", "abi": 1 }],
+  "dependencies": [],
+  "native_dependencies": ["OneUIPlugin", "OneUIVpn"],
+  "platforms": ["windows", "linux", "macos", "android", "ios", "harmonyos"]
+}

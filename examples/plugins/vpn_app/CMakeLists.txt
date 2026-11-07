@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 3.16)
+project(oneui_vpn_plugin_consumer LANGUAGES C CXX)
+find_package(OneUIVpnPlugin 0.1 CONFIG REQUIRED)
+add_executable(vpn_plugin_consumer main.c)
+target_link_libraries(vpn_plugin_consumer PRIVATE OneUI::vpn_plugin)
+oneui_target_plugins(vpn_plugin_consumer REGISTRAR register_app_plugins PLUGINS OneUI::vpn_plugin)
+set_target_properties(vpn_plugin_consumer PROPERTIES LINKER_LANGUAGE CXX)
