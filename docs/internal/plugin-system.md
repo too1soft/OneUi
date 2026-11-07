@@ -22,6 +22,16 @@ OneUI 提供 UI 必需底座、标准组件、可独立开发的扩展协议和�
 
 `plugins/vpn` 是独立 CMake 包，只消费已安装的 OneUIPlugin 和 OneUIVpn。服务 `oneui.vpn.sessions` 复用现有 VPN 状态机及平台宿主契约，不复制 JNI、Swift、ArkTS 或 VPN 引擎实现。跟踪会话，关闭时发起断开；收到真实 STOPPED 前返回 BUSY 并保留会话。框架仍可单独分发 renderer-free VPN SDK。
 
+## 外部组件协议
+
+组件扩展使用 `oneui_component_c_api.h` 的独立 v1 协议，OneUI C++ Widget 布局升级到核心 ABI 46。`.onecomponents` 声明命名空间、契约版本、子节点规则、标量属性与语义事件；自定义属性 ID 从 1000 开始。编译器与运行时读取同一份文件，并在任何工厂/VM 回调前逐项校验。属性支持 static/bind/model，事件支持有界命名标量参数。
+
+每个 Mount 保留不可变注册快照，子 Mount 继承；没有进程全局注册表。工厂数据按显式 retain/release 配对，Widget 通过延迟分配的附件持有实例上下文；上下文使用弱引用指向 Widget 与语义节点。关闭/替换先断开事件门再释放 ViewModel；外部持有的 Widget 可以晚于页面销毁，不能再写回已关闭的 VM。失败 create 配对释放部分实例；失败 reload 保留原页面。v1 组件重载重新建原生实例，跨重载状态放在 VM/服务。
+
+`host.emit/change/style` 分别连接语义事件、双向绑定和主题。所有操作使用 UI 线程，创建/更新中的可变事件被拒绝。外部类型选择器降低为 Widget 类型加命名空间类，布局共用原路径；绘制、原生输入与无障碍由组件实现。公开 C++ native handle helper 将 Widget 所有权转交给 C 协议，必须匹配 SDK ABI/编译器/CRT。
+
+`plugins/status` 为独立官方组件包，返回真正的 Widget 子类，提供进度绘制、键盘/指针激活、焦点与无障碍信息；不是 NativeHost 占位。`oneui_target_components` 生成注册器并把包契约传给 `oneui_target_view`。包管理器分别生成服务与组件 target 列表，解析时拒绝组件命名空间冲突。`plugins/service-template` 与 status 消费者提供可复制的源码模板。
+
 ## 包、项目锁与构建装配
 
 插件的 `oneui-plugin.json` 声明包 SemVer、Plugin ABI、服务/组件/SDK 类型、CMake 导出、平台及包依赖。SDK 包提供编译依赖，不注册运行时实例；服务/组件包才进入生成的应用注册器。`oneui.native-sdk` 分发 renderer-free Plugin/VPN SDK，`oneui.vpn` 独立依赖它。包级依赖与运行时服务依赖分别验证。
@@ -50,3 +60,5 @@ OneUI 提供 UI 必需底座、标准组件、可独立开发的扩展协议和�
 `python -B scripts/test-plugin-sdk.py` 检查服务运行时、真 C ABI、VPN 清理重试、静态/动态 SDK、SDK 移动目录、源码树外插件构建及独立消费者。Windows 可加 `--msvc` 验证 MSVC。固定工作目录 `out/plugins-current`，不重建 Skia。
 
 此入口只验证服务 SDK 与插件契约；不替代外部组件、包管理、官网、原生系统权限或网络连通性验收。完整交付以上述全部条件为准。
+
+组件与安装链验证入口为 `scripts/test-component-sdk.py`：支持开发构建的已编译库，或通过 `--sdk/--plugin` 验证已解包的不可变 SDK/组件产物；独立源码、页面契约、属性通知、键盘事件、无障碍和 SDK 移走后的运行均检查。运行时失败/重载/线程/关闭门测试为 `oneui_component_tests`。Go 包管理集成与锁并发测试在 `website/server`。发布器 `publish-portal.py` 与 `portal_remote.py` 在原生产锁下预检完整 SDK/插件/工具闭包，原子切换程序及清单；失败恢复历史程序与清单，正式文件保持不可变。`test-portal-publish.py` 使用临时目录覆盖成功、失败回滚、历史变更、并发变更和损坏 CLI。
