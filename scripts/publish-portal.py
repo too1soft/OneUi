@@ -18,7 +18,7 @@ def digest(path):
 
 def remote(client, config, action, **fields):
     source = Path(__file__).with_name('portal_remote.py').read_text()
-    return json.loads(python(client, source, dict(config=config, action=action, **fields)))
+    return json.loads(python(client, source, dict(config=config, action=action, **fields), timeout=420 if action=='commit' else 120))
 
 
 def public(config, catalogs, files):

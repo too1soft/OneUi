@@ -45,6 +45,6 @@ def run(client, args, payload=None, timeout=120):
     return output
 
 
-def python(client, source, payload=None):
+def python(client, source, payload=None, timeout=120):
     return run(client, ["python3", "-c", source],
-               None if payload is None else json.dumps(payload))
+               None if payload is None else json.dumps(payload), timeout=timeout)

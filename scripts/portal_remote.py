@@ -93,22 +93,28 @@ def downloads(root):
 
 def restart(config, expected):
     command(['docker', 'restart', '--time', '15', 'oneui'])
-    for _ in range(20):
+    observed={}
+    deadline=time.monotonic()+120
+    while time.monotonic()<deadline:
         try:
             base = 'http://127.0.0.1:23187'
             with urllib.request.urlopen(base + '/healthz', timeout=3) as r:
                 health = json.load(r)
+            observed={'health':health,'catalogs':{}}
             matches = health.get('status') == 'ok'
             for name, endpoint in zip(METADATA, ('releases', 'plugins', 'tools')):
                 if expected.get(name) is not None:
                     with urllib.request.urlopen(base + '/api/' + endpoint, timeout=3) as r:
-                        matches = matches and canonical(json.load(r)) == canonical(expected[name])
+                        actual=json.load(r)
+                        observed['catalogs'][name]=actual
+                        matches = matches and canonical(actual) == canonical(expected[name])
             if matches:
                 return health
-        except OSError:
-            pass
+        except OSError as error:
+            observed['error']=str(error)
         time.sleep(0.5)
-    raise RuntimeError('Production did not load the exact staged catalogs')
+    atomic(Path('/apps/oneui/.oneui-portal/last-health.json'),json.dumps(dict(observed=observed,expected=expected)).encode(),0o600)
+    raise RuntimeError('Production did not load the exact staged catalogs: '+str(observed.get('health'))+' '+observed.get('error',''))
 
 
 def clear(stage):
