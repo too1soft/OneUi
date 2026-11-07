@@ -1,0 +1,13 @@
+// Merge these entries into the product's Stage module.json5. The extension
+// subclass installs only the packet-engine binding; do not copy SDK code.
+{
+  "module": {
+    "extensionAbilities": [{
+      "name": "ProductVpnExtensionAbility",
+      "srcEntry": "./ets/vpn/ProductVpnExtensionAbility.ets",
+      "type": "vpn",
+      "exported": false
+    }],
+    "requestPermissions": [{ "name": "ohos.permission.INTERNET" }, { "name": "ohos.permission.GET_NETWORK_INFO" }]
+  }
+}

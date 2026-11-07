@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+from mobile_build_budget import guarded_run
 
 
 def main():
@@ -16,6 +17,8 @@ def main():
     parser.add_argument('--ndk', type=Path, required=True)
     parser.add_argument('--abi', choices=['x86_64', 'arm64-v8a'], default='x86_64')
     parser.add_argument('--jobs', type=int, choices=range(1, 9), default=3)
+    parser.add_argument('--artifact-audit', type=Path)
+    parser.add_argument('--ssh-host')
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     source = root / 'third_party/skia'
@@ -52,8 +55,8 @@ def main():
     gn = source / 'bin' / ('gn.exe' if os.name == 'nt' else 'gn')
     subprocess.run([str(gn), 'gen', str(build), '--root=' + str(source),
                     '--script-executable=' + sys.executable], check=True)
-    subprocess.run(['ninja', '-C', str(build), '-j', str(args.jobs),
-                    'skia', 'skparagraph', 'skshaper', 'skunicode_icu'], check=True)
+    guarded_run(['ninja', '-C', str(build), '-j', str(args.jobs),
+                    'skia', 'skparagraph', 'skshaper', 'skunicode_icu'], build, args.artifact_audit, args.ssh_host)
 
 
 if __name__ == '__main__':

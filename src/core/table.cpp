@@ -10,7 +10,7 @@
 #include <charconv>
 #include "internal/ui_clock.h"
 #include <cmath>
-#if defined(__APPLE__) && defined(_LIBCPP_VERSION)
+#if (defined(__APPLE__) || defined(__OHOS__)) && defined(_LIBCPP_VERSION)
 #include <locale>
 #include <sstream>
 #endif

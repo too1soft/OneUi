@@ -65,6 +65,11 @@ elseif(ANDROID)
     # Skia's Android font manager reads system font configuration with FreeType.
     # ICU data is embedded in the pinned Android archive; no desktop fontconfig.
     target_link_libraries(oneui_text PUBLIC log)
+elseif(CMAKE_SYSTEM_NAME STREQUAL "OHOS")
+    target_compile_definitions(oneui_text PRIVATE ONEUI_FONTMGR_DIRECTORY=1)
+    # The directory fallback derives from SkFontMgr, which the pinned GN
+    # build compiles without C++ RTTI.
+    set_property(SOURCE src/text/font_manager.cpp APPEND PROPERTY COMPILE_OPTIONS -fno-rtti)
 else()
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(ONEUI_TEXT_FONTCONFIG REQUIRED IMPORTED_TARGET fontconfig)

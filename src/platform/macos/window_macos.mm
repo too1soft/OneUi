@@ -148,6 +148,8 @@ class CocoaWindow final : public platform::DesktopWindow {
                         backing:NSBackingStoreBuffered
                           defer:NO];
         native_.releasedWhenClosed = NO;
+        // AppKit leaves borderless NSWindows shadowless unless opted in.
+        native_.hasShadow = YES;
         native_.title = nativeText(options_.title);
         native_.level = options_.topmost ? NSFloatingWindowLevel : NSNormalWindowLevel;
         view_ =
@@ -309,8 +311,7 @@ class CocoaWindow final : public platform::DesktopWindow {
     void setBorderless(bool value) override {
         assertUiThread();
         options_.borderless = value;
-        if (native_)
-            native_.styleMask = styleMask();
+        applyStyleMask();
     }
     void toggleMaximize() override {
         initialize();
@@ -324,7 +325,7 @@ class CocoaWindow final : public platform::DesktopWindow {
     bool restore() override { initialize();return restoreWindow(nativeHandle()); }
     bool maximize() override { initialize();return maximizeWindow(nativeHandle()); }
     bool setTopmost(bool enabled) override { initialize();if(!topmostWindow(nativeHandle(),enabled))return false;options_.topmost=enabled;queueStateChange();return true; }
-    bool setResizable(bool enabled) override { assertUiThread();if(isClosed())return false;options_.resizable=enabled;if(native_)native_.styleMask=styleMask();queueStateChange();return true; }
+    bool setResizable(bool enabled) override { assertUiThread();if(isClosed())return false;options_.resizable=enabled;applyStyleMask();queueStateChange();return true; }
     bool setClientSize(Size size) override { initialize();return resizeWindow(nativeHandle(),size,contentScale_); }
     bool setMaximumClientSize(Size size) override { initialize();return constrainWindow(nativeHandle(),size,contentScale_); }
     bool setOwner(Window* owner) override {
@@ -459,6 +460,13 @@ class CocoaWindow final : public platform::DesktopWindow {
     }
 
   private:
+    void applyStyleMask() {
+        if (!native_)
+            return;
+        native_.styleMask = styleMask();
+        native_.hasShadow = YES;
+        [native_ invalidateShadow];
+    }
     NSWindowStyleMask styleMask() const {
         if (options_.borderless)
             return NSWindowStyleMaskBorderless | (options_.resizable ? NSWindowStyleMaskResizable : 0);

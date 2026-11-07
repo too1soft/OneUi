@@ -1,0 +1,12 @@
+cmake_minimum_required(VERSION 3.16)
+project(oneui_harmony_native LANGUAGES CXX)
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "OHOS")
+    message(FATAL_ERROR "This library requires the official OHOS toolchain; Node tests use a separate host harness")
+endif()
+find_package(OneUIVpnJson CONFIG REQUIRED)
+find_package(OneUIVpnPosix CONFIG REQUIRED)
+add_library(oneui_native_services SHARED module.cpp napi_support.cpp native_module_napi.cpp
+    native_callbacks.cpp native_port_napi.cpp native_session_napi.cpp native_blob_files_napi.cpp native_network_napi.cpp native_channel_napi.cpp)
+target_compile_features(oneui_native_services PRIVATE cxx_std_17)
+target_link_libraries(oneui_native_services PRIVATE OneUI::vpn_json OneUI::vpn_posix ace_napi.z)
+target_link_options(oneui_native_services PRIVATE -Wl,--no-undefined -Wl,-z,max-page-size=16384 -Wl,-soname,liboneui_native_services.so)

@@ -38,6 +38,9 @@ public:
     bool hasTextComposition() const override;
 
     Rect paintBounds() const override;
+    // Resolve container geometry without presenting an intermediate frame.
+    // Used when focus/IME adjustments need current descendant bounds.
+    void layoutSubtree();
     void paint(Canvas& canvas) override;
     bool onMouseMove(const MouseEvent& event) override;
     bool onMouseDown(const MouseEvent& event) override;

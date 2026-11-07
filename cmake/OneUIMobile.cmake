@@ -55,6 +55,10 @@ install(FILES "${CMAKE_CURRENT_BINARY_DIR}/OneUIMobileConfig.cmake"
     "${CMAKE_CURRENT_BINARY_DIR}/OneUIMobileConfigVersion.cmake"
     DESTINATION "${_oneui_mobile_package}")
 if(BUILD_TESTING AND NOT CMAKE_CROSSCOMPILING)
+    add_executable(oneui_mobile_remote_tests tests/mobile/remote_interaction_tests.cpp)
+    target_include_directories(oneui_mobile_remote_tests PRIVATE include)
+    target_compile_features(oneui_mobile_remote_tests PRIVATE cxx_std_17)
+    add_test(NAME oneui_mobile_remote_tests COMMAND oneui_mobile_remote_tests)
     enable_language(C)
     add_executable(oneui_mobile_runtime_tests tests/mobile/runtime_tests.cpp)
     target_link_libraries(oneui_mobile_runtime_tests PRIVATE OneUI::mobile_runtime)

@@ -118,8 +118,13 @@ elseif(ONEUI_SKIA_MODE STREQUAL "bundled-static")
         # The pinned macOS Skia archive includes the CoreGraphics image
         # generator and CoreText font manager. Carry GN's framework closure to
         # core-only tests and static consumers, not only the Cocoa window DLL.
-        target_link_libraries(oneui_skia INTERFACE
-            "-framework AppKit" "-framework ApplicationServices" "-framework Metal" "-framework QuartzCore")
+        if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+            target_link_libraries(oneui_skia INTERFACE "-framework UIKit" "-framework CoreGraphics"
+                "-framework CoreText" "-framework ImageIO" "-framework QuartzCore")
+        else()
+            target_link_libraries(oneui_skia INTERFACE
+                "-framework AppKit" "-framework ApplicationServices" "-framework Metal" "-framework QuartzCore")
+        endif()
     endif()
 else()
     message(FATAL_ERROR "Unknown ONEUI_SKIA_MODE: ${ONEUI_SKIA_MODE}")

@@ -9,6 +9,7 @@
 namespace oneui {
 namespace {
 
+#if !defined(__ANDROID__)
 std::optional<wchar_t> fluentGlyph(IconSymbol symbol) {
     switch (symbol) {
     case IconSymbol::Search: return L'\uE721';
@@ -61,6 +62,8 @@ float fluentOpticalSize(Rect rect) {
     if (extent <= 56.0f) return std::min(extent, 48.0f);
     return std::min(extent, 64.0f);
 }
+
+#endif
 
 Point p(Rect rect, float x, float y) {
     return Point{rect.x + rect.width * x, rect.y + rect.height * y};
@@ -308,6 +311,9 @@ std::vector<IconPrimitive> buildIconPrimitives(
         primitives.push_back(shape(IconPrimitiveKind::Circle, r(rect, 0.47f, 0.26f, 0.06f, 0.06f), color, sw, true));
         break;
     case IconSymbol::Link:
+        primitives.push_back(poly(rect, {Point{.44f,.32f},Point{.63f,.13f},Point{.82f,.13f},Point{.91f,.22f},Point{.91f,.41f},Point{.66f,.66f},Point{.48f,.66f}}, color, sw));
+        primitives.push_back(poly(rect, {Point{.56f,.68f},Point{.37f,.87f},Point{.18f,.87f},Point{.09f,.78f},Point{.09f,.59f},Point{.34f,.34f},Point{.52f,.34f}}, color, sw));
+        primitives.push_back(line(rect,.35f,.65f,.65f,.35f,color,sw));
         break;
     case IconSymbol::Share:
         primitives.push_back(shape(IconPrimitiveKind::Circle, r(rect, 0.08f, 0.39f, 0.18f, 0.18f), color, sw));
@@ -436,6 +442,9 @@ std::vector<IconPrimitive> buildIconPrimitives(
 
 void paintIcon(Canvas& canvas, IconSymbol symbol, Rect rect, Color color, Color accent, float strokeWidth) {
     if (paintOutlineIcon(canvas,symbol,rect,color)) return;
+#if !defined(__ANDROID__)
+    // Android uses the bundled vector geometry, including compatibility hosts.
+    // Desktop icon-font availability must never leave mobile glyphs blank.
     if (const auto glyph = fluentGlyph(symbol)) {
         const std::wstring fluentFamily = L"Segoe Fluent Icons";
         const std::wstring mdlFamily = L"Segoe MDL2 Assets";
@@ -458,6 +467,7 @@ void paintIcon(Canvas& canvas, IconSymbol symbol, Rect rect, Color color, Color 
             return;
         }
     }
+#endif
     for (const auto& primitive : buildIconPrimitives(symbol, rect, color, accent, strokeWidth)) {
         switch (primitive.kind) {
         case IconPrimitiveKind::Line:

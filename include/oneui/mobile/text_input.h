@@ -48,6 +48,10 @@ class TextInputSession final {
     // Move: first is -1/+1 codepoint, second is whether to extend selection.
     bool editSensitive(uint64_t session, SensitiveEdit command, const std::u16string &text = {},
                        int first = 0, int second = 0);
+    // Directed IME commands for either editor kind. Secret text stays in this
+    // native session; callers receive the same redacted snapshots as above.
+    bool editCommand(uint64_t session, SensitiveEdit command, const std::u16string &text = {},
+                     int first = 0, int second = 0);
     bool containsPoint(Point point);
     SelectionGeometry selectionGeometry();
     // Retains the opposite endpoint and session, including crossed selections.

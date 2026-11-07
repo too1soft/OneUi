@@ -62,6 +62,7 @@ public final class EditorSurface extends SurfaceView {
         default SelectionGeometry selectionGeometry() { return null; }
         default boolean selectAt(long session, int edge, float x, float y) { return false; }
         default void cancelPointers() { }
+        default int inputType(Snapshot state) { return InputType.TYPE_CLASS_TEXT; }
         void changed();
     }
     private final Bridge bridge;
@@ -111,7 +112,15 @@ public final class EditorSurface extends SurfaceView {
             if (session == 0) manager.hideSoftInputFromWindow(getWindowToken(), 0);
         }
         if (showKeyboard && session != 0) {
-            requestFocus(); manager.showSoftInput(this, InputMethodManager.SHOW_IMPLICIT);
+            requestFocus();
+            post(() -> {
+                if (!hasWindowFocus() || !isFocused() || current == null || current.session != session) return;
+                if (android.os.Build.VERSION.SDK_INT >= 30 && getWindowInsetsController() != null) {
+                    getWindowInsetsController().show(android.view.WindowInsets.Type.ime());
+                } else {
+                    manager.showSoftInput(this, InputMethodManager.SHOW_IMPLICIT);
+                }
+            });
         }
         selection.update();
     }
@@ -119,9 +128,9 @@ public final class EditorSurface extends SurfaceView {
     @Override public InputConnection onCreateInputConnection(EditorInfo info) {
         requireUi();
         if (!onCheckIsTextEditor()) return null;
-        info.inputType = InputType.TYPE_CLASS_TEXT | (current.sensitive ?
+        info.inputType = current.sensitive ? InputType.TYPE_CLASS_TEXT |
             InputType.TYPE_TEXT_VARIATION_PASSWORD | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS :
-            current.multiline ? InputType.TYPE_TEXT_FLAG_MULTI_LINE : 0);
+            bridge.inputType(current) | (current.multiline ? InputType.TYPE_TEXT_FLAG_MULTI_LINE : 0);
         info.imeOptions = EditorInfo.IME_FLAG_NO_EXTRACT_UI | EditorInfo.IME_FLAG_NO_FULLSCREEN |
             EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING |
             (current.multiline ? EditorInfo.IME_ACTION_NONE : EditorInfo.IME_ACTION_DONE);

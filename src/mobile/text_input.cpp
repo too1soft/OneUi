@@ -40,6 +40,11 @@ struct TextInputSession::State {
     EditingState editing;
     TextInputState base;
     uint64_t serial = 0;
+    uint64_t revealedSession = 0;
+    int revealedAnchor = -1, revealedCaret = -1;
+    Size revealedViewport{};
+    float revealedFieldHeight = 0, revealedCaretHeight = 0;
+    bool revealPending = false;
     void check() const {
         if (thread != std::this_thread::get_id())
             throw std::logic_error("TextInputSession requires its UI thread");
@@ -57,6 +62,8 @@ void TextInputSession::reset() {
     s.field.reset();
     s.editing = {};
     s.base = {};
+    s.revealedSession = 0;
+    s.revealPending = false;
 }
 EditingState TextInputSession::snapshot() {
     auto &s = *state_;
@@ -139,6 +146,9 @@ bool TextInputSession::applyInternal(const EditingState &next, bool sensitive) {
         reset();
         return false;
     }
+    s.revealPending = s.revealPending || next.text != s.editing.text ||
+        next.anchor != s.editing.anchor || next.caret != s.editing.caret ||
+        next.composingStart != s.editing.composingStart || next.composingEnd != s.editing.composingEnd;
     s.editing = next;
     s.editing.multiline = field->multiline();
     s.base = liveState(*field);
@@ -155,8 +165,14 @@ bool TextInputSession::editSensitive(uint64_t session, SensitiveEdit command,
                                      const std::u16string &text, int first, int second) {
     if (!session || snapshot().session != session || !state_->editing.sensitive)
         return false;
+    return editCommand(session, command, text, first, second);
+}
+bool TextInputSession::editCommand(uint64_t session, SensitiveEdit command,
+                                  const std::u16string &text, int first, int second) {
+    if (!session || snapshot().session != session)
+        return false;
     auto next = state_->editing;
-    return edit(next, command, text, first, second) && applyInternal(next, true);
+    return edit(next, command, text, first, second) && applyInternal(next, next.sensitive);
 }
 bool TextInputSession::containsPoint(Point point) {
     state_->check();
@@ -232,18 +248,35 @@ bool TextInputSession::selectAtPoint(uint64_t session, SelectionEdge edge, Point
 void TextInputSession::revealCaret() {
     auto &s = *state_;
     s.check();
+    const auto editing = snapshot();
     auto field = focused(s.root.lock());
     if (!field)
         return;
     auto node = s.root.lock();
+    const Size viewport{node->frame().width, node->frame().height};
+    const auto caret = field->textInputCaretRect();
+    const float fieldHeight = field->frame().height;
+    if (!s.revealPending && s.revealedSession == editing.session &&
+        s.revealedAnchor == editing.anchor && s.revealedCaret == editing.caret &&
+        s.revealedViewport.width == viewport.width && s.revealedViewport.height == viewport.height &&
+        s.revealedFieldHeight == fieldHeight && s.revealedCaretHeight == caret.height)
+        return; // Painting a manually scrolled page must not pull it back to the editor.
+    s.revealPending = false;
+    s.revealedSession = editing.session;
+    s.revealedAnchor = editing.anchor; s.revealedCaret = editing.caret;
+    s.revealedViewport = viewport;
+    s.revealedFieldHeight = fieldHeight; s.revealedCaretHeight = caret.height;
     for (unsigned depth = 0; node && depth < 128; ++depth) {
         if (auto scroll = std::dynamic_pointer_cast<ScrollView>(node)) {
-            const auto caret = field->textInputCaretRect();
             const auto box = scroll->frame();
-            const float top = box.y + 8, bottom = box.y + box.height - 8;
+            const auto visible = field->frame().height <= box.height ? field->frame() : caret;
+            const float margin = std::min(8.f, std::max(0.f, (box.height - visible.height) / 2));
+            const float top = box.y + margin, bottom = box.y + box.height - margin;
             if (bottom > top) {
+                // Keep a normal input's full border and padding above the IME.
+                // Oversized multiline editors still follow the insertion caret.
                 const float delta =
-                    caret.y < top ? caret.y - top : std::max(0.f, caret.y + caret.height - bottom);
+                    visible.y < top ? visible.y - top : std::max(0.f, visible.y + visible.height - bottom);
                 if (delta != 0)
                     scroll->setScrollOffset(scroll->scrollOffset() + delta);
             }

@@ -33,6 +33,14 @@ bool intersects(Rect lhs, Rect rhs) {
 
 } // namespace
 
+void View::layoutSubtree() {
+    layoutChildren();
+    const auto children = children_;
+    for (const auto& child : children)
+        if (child->visible())
+            if (auto view = std::dynamic_pointer_cast<View>(child)) view->layoutSubtree();
+}
+
 View::~View() {
     // Destruction only detaches ownership. Emitting invalidation while a view
     // hierarchy is being torn down can re-enter an ancestor that is itself in

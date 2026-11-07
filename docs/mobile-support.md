@@ -1,5 +1,7 @@
 # OneUI 移动端支持
 
+2026-11-04 新增独立可选的 [VPN 系统服务 SDK](vpn-sdk.md)：Android、iOS、原生 HarmonyOS 都保留适配入口，通用能力不在网云连重复实现。鸿蒙新增共享 Widget 光栅/N-API 宿主、IMEKit、加密存储与私有 IPC；主机联合检查已通过，真实鸿蒙 SDK/HAP 尚未编译。Android 最新五组运行时及真实系统 VPN 检查通过；最新 Swift 清理修订待 Mac 恢复后重编。具体边界见文档；这不改变下列完整移动试验台的验收状态。
+
 状态：**Android 已接入共享 Skia GPU 控件、两级导航、基础布局／基础控件／图表／粒子，以及系统主题、系统栏外观、普通文字输入和输入页字号体验；完整移动试验台及 SDK 仍在开发，尚不可正式发布。**
 
 用户已决定推进 Android、iOS 和原生 HarmonyOS 支持。已有桌面 SDK 和官网
@@ -576,3 +578,5 @@ IME 候选交互、真机响应延迟/功耗仍需单独验证，不能视为移
 叠层接口依据：[Android ViewOverlay](https://developer.android.com/reference/android/view/ViewOverlay)。
 手柄尖端定位参考 [Android Editor 的 selection handle hotspot](https://android.googlesource.com/platform/frameworks/base/+/master/core/java/android/widget/Editor.java)，
 按原生图形内的尖端位置对齐光标，避免把图形外沿误作文字边界。
+
+移动应用宿主补充：Android、iOS、HarmonyOS 的 NativeTaskScope 可持有跨请求原生资源，取消后等待工作退出，清理失败保留所有者重试。`oneui.open-url` 由宿主验证 HTTPS 后交给系统打开，不把系统浏览器接入复制到产品。Android IME 导致 Surface 尺寸改变时保留编辑会话，真实 Surface 丢失仍执行原有失活流程。长表单可用 OneUI Stack 的测量结果设置 ScrollView 内容高度，统一复用触摸滚动及光标避让。Android 已构建与验证，iOS 最新源码仍需 Mac 重编，HarmonyOS 仍不代表官方 SDK/HAP 编译。

@@ -100,7 +100,9 @@ void CodeEditorImpl::paint(Canvas& canvas, bool focused, bool caretVisible) {
     canvas.save();
     canvas.clipRect(Rect{text.x - 4.0f, text.y, text.width + 4.0f, text.height});
     for (auto row = firstRow; row < lastRow; ++row) {
-        const auto [line, segment] = lineOfRow(row);
+        const auto position = lineOfRow(row);
+        const auto line = position.first;
+        const auto segment = position.second;
         const auto& content = doc.line(line);
         const auto segs = segments(line);
         const std::size_t segStart = segs[segment];

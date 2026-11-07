@@ -29,6 +29,8 @@ public:
     ImageView();
 
     bool setRgbaPixels(const std::uint8_t* pixels, std::size_t length, int width, int height, int stride);
+    // Bounded in-memory PNG data URI. No file, network access or decode cache.
+    bool setPngDataUri(const std::string& uri);
     void clearImage();
     bool hasImage() const { return !pixels_.empty(); }
     int imageWidth() const { return width_; }

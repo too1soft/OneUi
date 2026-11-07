@@ -70,6 +70,7 @@ set(ONEUI_CORE_SOURCES
     src/core/interactive_surface.cpp
     src/core/icon_view.cpp
     src/core/image_view.cpp
+    src/core/image_view_codec.cpp
     src/core/label.cpp
     src/core/list.cpp
     src/core/log_view.cpp

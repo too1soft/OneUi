@@ -13,6 +13,7 @@ import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
+import java.util.function.IntConsumer;
 
 /** Android API 28+ adapter for OneUI mobile Appearance.
  * Own one per Activity, place the GPU Surface inside content(), and forward
@@ -24,14 +25,21 @@ public final class SystemAppearance extends FrameLayout {
     private final Activity activity;
     private final FrameLayout content;
     private final Paint paint = new Paint();
+    private final IntConsumer imeInset;
     private int left, top, right, bottom, imeBottom;
     private int statusColor = 0xfff5f7f4, navigationColor = 0xfff5f7f4;
     private int appliedIcons;
 
     public SystemAppearance(Activity owner) {
+        this(owner, null);
+    }
+
+    /** Keep the GPU surface at its normal size and deliver IME occlusion separately. */
+    public SystemAppearance(Activity owner, IntConsumer imeInset) {
         super(owner);
         requireUi();
         activity = owner;
+        this.imeInset = Build.VERSION.SDK_INT >= 30 ? imeInset : null;
         setWillNotDraw(false);
         setBackgroundColor(statusColor);
         content = new FrameLayout(owner);
@@ -49,8 +57,9 @@ public final class SystemAppearance extends FrameLayout {
         if (Build.VERSION.SDK_INT >= 29) Api29.configure(window, this);
         setOnApplyWindowInsetsListener((view, insets) -> {
             if (Build.VERSION.SDK_INT >= 30) {
-                android.graphics.Insets safe = insets.getInsets(
-                    WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
+                int safeTypes = WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout();
+                android.graphics.Insets safe = this.imeInset == null ? insets.getInsets(safeTypes)
+                    : insets.getInsetsIgnoringVisibility(safeTypes);
                 left = safe.left; top = safe.top; right = safe.right; bottom = safe.bottom;
                 imeBottom = insets.getInsets(WindowInsets.Type.ime()).bottom;
             } else {
@@ -63,10 +72,23 @@ public final class SystemAppearance extends FrameLayout {
                     bottom = Math.max(bottom, insets.getDisplayCutout().getSafeInsetBottom());
                 }
             }
-            setPadding(left, top, right, Math.max(bottom, imeBottom));
+            setPadding(left, top, right, this.imeInset == null ? Math.max(bottom, imeBottom) : bottom);
+            publishImeInset();
             invalidate();
             return insets;
         });
+    }
+    @Override protected void onSizeChanged(int w, int h, int oldW, int oldH) {
+        super.onSizeChanged(w, h, oldW, oldH);
+        publishImeInset();
+    }
+    private void publishImeInset() {
+        if (imeInset == null) return;
+        // Some compatibility windows still resize their content for the IME.
+        // Subtract only the portion the framework hasn't already taken away.
+        int windowHeight = activity.getWindowManager().getCurrentWindowMetrics().getBounds().height();
+        int alreadyResized = getHeight() == 0 ? 0 : Math.max(0, windowHeight - getHeight());
+        imeInset.accept(Math.max(0, imeBottom - bottom - alreadyResized));
     }
     public FrameLayout content() { return content; }
     /** 0 = unknown, 1 = light, 2 = dark. Does not change device preferences. */
@@ -86,11 +108,12 @@ public final class SystemAppearance extends FrameLayout {
         int mask = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
         int flags = (!lightStatusIcons ? View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR : 0) |
             (!lightNavigationIcons ? View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR : 0);
+        // Keep legacy decor flags in sync as well. Configuration changes can
+        // reapply them after WindowInsetsController has already acknowledged.
+        View decor = window.getDecorView();
+        decor.setSystemUiVisibility((decor.getSystemUiVisibility() & ~mask) | flags);
         if (Build.VERSION.SDK_INT >= 30) {
             if (!Api30.icons(window, lightStatusIcons, lightNavigationIcons)) return false;
-        } else {
-            View decor = window.getDecorView();
-            decor.setSystemUiVisibility((decor.getSystemUiVisibility() & ~mask) | flags);
         }
         statusColor = status; navigationColor = navigation;
         appliedIcons = (lightStatusIcons ? 1 : 0) | (lightNavigationIcons ? 2 : 0);

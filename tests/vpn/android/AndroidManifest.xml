@@ -1,0 +1,13 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="net.too1.oneui.vpntest">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SYSTEM_EXEMPTED" />
+    <application android:label="OneUI VPN runtime check" android:icon="@android:drawable/ic_dialog_info" android:debuggable="true" android:allowBackup="false" android:extractNativeLibs="true">
+        <activity android:name=".FixtureActivity" android:exported="false" />
+        <service android:name=".FixtureService" android:exported="false" android:permission="android.permission.BIND_VPN_SERVICE" android:foregroundServiceType="systemExempted">
+            <intent-filter><action android:name="android.net.VpnService" /></intent-filter>
+        </service>
+    </application>
+    <instrumentation android:name=".SystemVpnChecks" android:targetPackage="net.too1.oneui.vpntest" android:functionalTest="true" />
+</manifest>

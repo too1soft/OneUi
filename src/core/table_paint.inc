@@ -16,8 +16,8 @@ std::optional<float> percentValue(const std::wstring& text) {
     const auto end = ascii.data() + last;
     if (begin < end && *begin == '+') ++begin;
     float value = 0;
-#if defined(__APPLE__) && defined(_LIBCPP_VERSION)
-    // Apple SDK libc++ does not always provide floating-point from_chars.
+#if (defined(__APPLE__) || defined(__OHOS__)) && defined(_LIBCPP_VERSION)
+    // These SDK versions of libc++ can lack floating-point from_chars.
     // Keep decimal parsing independent of the application's global locale.
     if (begin == end || *begin == '+') return {};
     const std::string number(begin, end);

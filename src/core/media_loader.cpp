@@ -7,9 +7,25 @@
 #include <fstream>
 #include <mutex>
 #include <thread>
+#include <algorithm>
 namespace oneui::internal {
 namespace {
 constexpr size_t maxFile=32*1024*1024,maxPixels=16*1024*1024,cacheLimit=32*1024*1024;
+std::string fileRevision(std::filesystem::file_time_type time) {
+    // libc++ uses a 128-bit file-clock representation on macOS. Preserve all
+    // revision digits instead of narrowing the cache key or changing precision.
+    auto ticks=time.time_since_epoch().count();
+    const bool negative=ticks<0;
+    std::string value;
+    do {
+        const auto digit=ticks%10;
+        value.push_back(char('0'+int(digit<0 ? -digit : digit)));
+        ticks/=10;
+    } while(ticks!=0);
+    if(negative)value.push_back('-');
+    std::reverse(value.begin(),value.end());
+    return value;
+}
 std::shared_ptr<MediaPixels> failure(const char* code,const char* message) {
     auto r=std::make_shared<MediaPixels>();r->code=code;r->message=message;return r;
 }
@@ -31,7 +47,7 @@ class Loader {
         auto size=std::filesystem::file_size(path,error);if(error||size>maxFile)return failure("limit","Encoded image exceeds 32 MiB");
         auto time=std::filesystem::last_write_time(path,error);if(error)return failure("io","Cannot read image revision");
         auto canonical=std::filesystem::absolute(path).lexically_normal().u8string();
-        auto key=std::string(canonical.begin(),canonical.end())+":"+std::to_string(size)+":"+std::to_string(time.time_since_epoch().count());
+        auto key=std::string(canonical.begin(),canonical.end())+":"+std::to_string(size)+":"+fileRevision(time);
         for(auto it=cache_.begin();it!=cache_.end();++it)if(it->key==key) {
             auto value=*it;cache_.erase(it);cache_.push_back(value);return value.pixels;
         }

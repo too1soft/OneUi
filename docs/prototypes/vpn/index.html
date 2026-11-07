@@ -1,0 +1,294 @@
+<!-- Generated review artifact. Edit index.template.html and demo-session.js. -->
+<!doctype html>
+<html lang="zh-CN">
+  <meta charset="utf-8" /><meta
+    name="viewport"
+    content="width=device-width,initial-scale=1"
+  />
+  <title>OneUI · VPN 交互契约</title>
+  <style>
+    :root {
+      font-family: system-ui, sans-serif;
+      color: #202938;
+      background: #f7f9fb;
+      accent-color: #2468ee;
+      color-scheme: light;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      max-width: 920px;
+      margin: 40px auto;
+      padding: 0 24px;
+      line-height: 1.7;
+    }
+    h1 {
+      font-size: 28px;
+      margin-bottom: 8px;
+    }
+    h2 {
+      font-size: 19px;
+      margin-top: 32px;
+    }
+    p {
+      max-width: 70ch;
+    }
+    button,
+    select {
+      font: inherit;
+      min-height: 44px;
+      padding: 8px 16px;
+      border: 1px solid #c4ccd6;
+      border-radius: 8px;
+      background: white;
+      color: inherit;
+    }
+    button {
+      cursor: pointer;
+    }
+    button:hover {
+      background: #eaf1ff;
+    }
+    button:disabled {
+      opacity: 0.45;
+      cursor: default;
+    }
+    :focus-visible {
+      outline: 3px solid #2468ee;
+      outline-offset: 3px;
+    }
+    ::selection {
+      background: #c9dfff;
+    }
+    label {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    output {
+      display: block;
+      font-size: 24px;
+      font-weight: 650;
+      padding: 20px 0;
+    }
+    pre {
+      background: white;
+      padding: 20px;
+      overflow: auto;
+      border: 1px solid #e2e6ea;
+      border-radius: 8px;
+      max-height: 240px;
+    }
+    dialog {
+      max-width: 430px;
+      border: 0;
+      border-radius: 16px;
+      padding: 28px;
+      box-shadow: 0 12px 50px #17223030;
+    }
+    dialog::backdrop {
+      background: #17223055;
+    }
+    small {
+      color: #526176;
+    }
+    a {
+      color: #0057d6;
+      text-underline-offset: 3px;
+    }
+    @media (prefers-reduced-motion: no-preference) {
+      output {
+        transition: color 0.2s ease-out;
+      }
+    }
+    @media (max-width: 500px) {
+      body {
+        margin: 20px auto;
+        padding: 0 16px;
+      }
+    }
+  </style>
+  <h1>VPN 交互契约</h1>
+  <p>
+    OneUI 通用 VPN
+    模块的可交互演示。所有连接使用模拟事件，不会创建系统网卡、请求生产接口或改变本机网络。
+  </p>
+  <label
+    >平台
+    <select id="platform">
+      <option>Android</option>
+      <option>iOS</option>
+      <option>HarmonyOS</option>
+    </select></label
+  >
+  <h2>会话</h2>
+  <output id="state" aria-live="polite">未连接</output>
+  <p id="error" role="alert"></p>
+  <div class="actions">
+    <button id="start">请求连接</button
+    ><button id="stop" disabled>取消 / 断开</button
+    ><button id="revoke" disabled>模拟撤销授权</button>
+  </div>
+  <label><input type="checkbox" id="failure" /> 模拟引擎连接失败</label>
+  <h2>实际事件</h2>
+  <pre id="events" aria-live="polite">idle</pre>
+  <p>
+    <small
+      >系统隧道建立后还需等待引擎回执。取消会等待清理；旧尝试的回调不会启动新连接。三端使用相同契约，平台代码负责真实授权与资源。</small
+    >
+  </p>
+  <dialog id="permission">
+    <h2>允许添加 VPN 连接？</h2>
+    <p id="permission-copy"></p>
+    <div class="actions">
+      <button id="deny">不允许</button><button id="allow">允许</button>
+    </div>
+  </dialog>
+  <script>
+    /* Interactive documentation only. Native production code uses OneUI::vpn.
+ * This single reusable simulation also drives consuming product prototypes. */
+class OneUiVpnDemoSession {
+  constructor(changed) {
+    this.changed = changed;
+    this.state = "idle";
+    this.attempt = 0;
+    this.cleanupPending = false;
+    this.error = "";
+    this.timers = new Set();
+  }
+  emit() {
+    this.changed(this);
+  }
+  later(delay, callback) {
+    const attempt = this.attempt;
+    const id = setTimeout(() => {
+      this.timers.delete(id);
+      if (attempt === this.attempt) callback();
+    }, delay);
+    this.timers.add(id);
+  }
+  clear() {
+    this.timers.forEach(clearTimeout);
+    this.timers.clear();
+  }
+  start() {
+    if (this.cleanupPending || !["idle", "error"].includes(this.state))
+      return false;
+    this.clear();
+    this.attempt++;
+    this.error = "";
+    this.cleanupPending = true;
+    this.state = "authorizing";
+    this.emit();
+    return true;
+  }
+  authorize(allowed, engineFailure = false) {
+    if (this.state !== "authorizing") return;
+    if (!allowed) {
+      this.fail("未获得 VPN 授权，请重试并允许添加连接。");
+      return;
+    }
+    this.state = "establishing";
+    this.emit();
+    this.later(250, () => {
+      if (this.state !== "establishing") return;
+      this.state = "tunnel-ready";
+      this.emit();
+      this.later(450, () => {
+        if (this.state !== "tunnel-ready") return;
+        if (engineFailure) this.fail("暂时无法连接网络，请检查网络后重试。");
+        else {
+          this.state = "connected";
+          this.emit();
+        }
+      });
+    });
+  }
+  fail(message) {
+    this.clear();
+    this.error = message;
+    this.state = "error";
+    this.emit();
+    this.later(200, () => {
+      this.cleanupPending = false;
+      this.emit();
+    });
+  }
+  stop() {
+    if (!this.cleanupPending) return;
+    this.clear();
+    this.error = "";
+    this.state = "stopping";
+    this.emit();
+    this.later(200, () => {
+      this.cleanupPending = false;
+      this.state = "idle";
+      this.emit();
+    });
+  }
+  revoke() {
+    if (this.cleanupPending) this.fail("VPN 授权已被撤销，请重新连接并授权。");
+  }
+}
+
+  </script>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const labels = {
+      idle: "未连接",
+      authorizing: "等待系统授权",
+      establishing: "正在创建系统隧道",
+      "tunnel-ready": "正在连接组网引擎",
+      connected: "已连接",
+      stopping: "正在断开并清理",
+      error: "连接失败",
+    };
+    const log = [];
+    const session = new OneUiVpnDemoSession((s) => {
+      location.hash =
+        s.state === "authorizing" ? "authorization" : "session/" + s.state;
+      $("state").textContent = labels[s.state];
+      $("error").textContent = s.error;
+      $("start").disabled =
+        s.cleanupPending || !["idle", "error"].includes(s.state);
+      $("stop").disabled = !s.cleanupPending || s.state === "stopping";
+      $("revoke").disabled = s.state !== "connected";
+      log.push(
+        `attempt ${s.attempt}: ${s.state}${s.cleanupPending ? " · native resources pending" : ""}`,
+      );
+      $("events").textContent = log.slice(-14).join("\n");
+    });
+    $("start").onclick = () => {
+      if (!session.start()) return;
+      location.hash = "authorization";
+      $("permission-copy").textContent =
+        $("platform").value +
+        " 将显示系统授权界面。此处仅演示允许、拒绝和取消的结果。";
+      $("permission").showModal();
+    };
+    $("allow").onclick = () => {
+      $("permission").close();
+      location.hash = "session";
+      session.authorize(true, $("failure").checked);
+    };
+    $("deny").onclick = () => {
+      $("permission").close();
+      location.hash = "session";
+      session.authorize(false);
+    };
+    $("permission").oncancel = () => {
+      location.hash = "session";
+      session.stop();
+    };
+    $("stop").onclick = () => session.stop();
+    $("revoke").onclick = () => session.revoke();
+    session.emit();
+  </script>
+</html>
