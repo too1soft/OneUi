@@ -12,7 +12,9 @@ pub type OneUiTerminalPointerAction = c_int;
 /// Native C wchar_t, not a fixed-width UTF-16 buffer. Prefer UTF-8 entrypoints.
 #[cfg(windows)]
 pub type WChar = u16;
-#[cfg(not(windows))]
+#[cfg(target_os = "macos")]
+pub type WChar = i32;
+#[cfg(all(not(windows), not(target_os = "macos")))]
 pub type WChar = u32;
 
 #[repr(C)]

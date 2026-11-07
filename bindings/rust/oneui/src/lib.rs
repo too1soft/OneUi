@@ -887,7 +887,7 @@ fn wide_null_terminated(value: &str) -> Vec<sys::WChar> {
     {
         value
             .chars()
-            .map(u32::from)
+            .map(|ch| ch as sys::WChar)
             .chain(std::iter::once(0))
             .collect()
     }
@@ -902,7 +902,7 @@ fn wide_to_string(value: &[sys::WChar]) -> String {
     {
         value
             .iter()
-            .map(|&ch| char::from_u32(ch).unwrap_or(char::REPLACEMENT_CHARACTER))
+            .map(|&ch| char::from_u32(ch as u32).unwrap_or(char::REPLACEMENT_CHARACTER))
             .collect()
     }
 }
