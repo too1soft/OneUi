@@ -110,6 +110,44 @@ void contentDestroysHost() {
     host->onMouseDown(press());
     require(!host, "Content callback did not destroy its host");
 }
+class FocusProbe final : public Widget {
+  public:
+    FocusProbe(int &losses, bool &destroyedFocused)
+        : losses_(losses), destroyedFocused_(destroyedFocused) {}
+    ~FocusProbe() override { destroyedFocused_ = focused(); }
+    void paint(Canvas &) override {}
+    bool isFocusable() const override { return true; }
+    bool onFocusChanged(bool focused) override {
+        const bool changed = Widget::onFocusChanged(focused);
+        if (changed && !focused)
+            ++losses_;
+        return changed;
+    }
+  private:
+    int &losses_;
+    bool &destroyedFocused_;
+};
+void destructionReleasesContentFocus(bool retainContent) {
+    int losses = 0, invalidations = 0;
+    bool destroyedFocused = false;
+    auto host = std::make_unique<OverlayHost>();
+    auto content = std::make_shared<FocusProbe>(losses, destroyedFocused);
+    host->setContent(content);
+    host->setInvalidator([&] { ++invalidations; });
+    require(host->focusFirstLeaf() && content->focused(), "Content did not acquire inherited focus");
+    if (!retainContent)
+        content.reset();
+    const int before = invalidations;
+    host.reset();
+    require(losses == 1, "Content focus was not released before its owner was destroyed");
+    require(!destroyedFocused, "Content was destroyed while still focused");
+    require(invalidations == before, "Host teardown invalidated its ancestor");
+    if (content) {
+        require(!content->focused(), "Retained content kept focus after host destruction");
+        content->setVisible(false);
+        require(invalidations == before, "Retained content called its disposed host");
+    }
+}
 } // namespace
 int main() {
     try {
@@ -118,6 +156,8 @@ int main() {
         releaseRemovesItsOverlay();
         wheelMutatesOverlayOrder();
         contentDestroysHost();
+        destructionReleasesContentFocus(false);
+        destructionReleasesContentFocus(true);
         std::cout << "Overlay lifetime tests passed (self-removal, owner destruction, release "
                      "retention, wheel mutation).\n";
         return 0;

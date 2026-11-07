@@ -78,8 +78,11 @@ void virtualTemplateContract(const char* runtimeFile) {
     expect(messages[0]->reads[textId] == firstReads && messages[999]->reads[textId] > targetReads, "stream update reads only changed message presentation");
     expect(label->text().find(L'\x4e2d') != std::wstring::npos && list->scrollOffset() == list->maxScrollOffset(), "Unicode stream and end anchoring survive layout");
     const auto& spans = label->textSpans();
+    // Native spans use wchar_t offsets: a supplementary character is one
+    // code unit on macOS/Linux and a surrogate pair on Windows.
+    const auto emojiEnd = std::wstring(L"UTF-8 \u4e2d\u6587 \U0001f600").size();
     expect(spans.size() == 2 && spans[0].start == 6 && spans[0].end == 8 && spans[0].foreground.r == 0x1c &&
-               spans[1].start == 9 && spans[1].end == 11 && spans[1].monospace && spans[1].foreground.g == 0xf5,
+               spans[1].start == 9 && spans[1].end == emojiEnd && spans[1].monospace && spans[1].foreground.g == 0xf5,
            "dark and light Unicode spans reach the streamed row");
     expect(spans[0].fontWeight == 650 && spans[0].italic && !spans[0].underline,
            "optional weight and italic fields reach the first span");

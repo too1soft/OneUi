@@ -33,12 +33,19 @@ void OverlayHost::setTextEnvironment(std::wstring family, float scale) {
 }
 
 OverlayHost::~OverlayHost() {
+    // Content lives in this derived class, outside View::children_. Release
+    // inherited focus while that owner is still alive; View's destructor runs
+    // after content_ is destroyed. Teardown must not invalidate an ancestor.
+    Widget::setInvalidator({});
+    Widget::setRectInvalidator({});
+    Widget::setAnimationScheduler({});
     if (content_) {
         content_->detachFromOwner(this);
     }
     for (const auto &entry : overlays_) {
         entry.child->detachFromOwner(this);
     }
+    focusChild(nullptr);
 }
 
 void OverlayHost::setContent(std::shared_ptr<Widget> child) {
