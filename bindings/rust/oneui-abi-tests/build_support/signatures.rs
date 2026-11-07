@@ -190,7 +190,7 @@ pub fn generate(source: &Path, output: &Path, manifest: &Path, target: &str) -> 
         ctest::expand(source, &[], target.to_string()).expect("expand actual FFI declarations");
     let tree = syn::parse_file(&expanded).expect("parse expanded Rust FFI");
     let mut generator = Generator {
-        output: "#include <stdint.h>\n#include <oneui/oneui_c_api.h>\n".into(),
+        output: "#include <stdint.h>\n#include <oneui/oneui_c_api.h>\n#include <oneui/application_events.h>\n".into(),
         next_type: 0,
         functions: BTreeSet::new(),
         symbol_checks: Vec::new(),

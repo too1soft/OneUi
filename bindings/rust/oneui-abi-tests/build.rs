@@ -48,6 +48,7 @@ fn main() {
     let mut generator = ctest::TestGenerator::new();
     generator
         .header("oneui/oneui_c_api.h")
+        .header("oneui/application_events.h")
         .include(root.join("include"))
         .skip_private(true)
         // On Windows, rustc may take an import thunk's address while C uses
