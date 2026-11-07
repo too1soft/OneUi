@@ -17,6 +17,7 @@ type Catalog struct {
 	Releases      []Release `json:"releases"`
 	root          *os.Root
 	files         map[string]download
+	plugins       *PluginCatalog
 }
 
 type Release struct {
@@ -108,6 +109,9 @@ func loadCatalog(directory string) (*Catalog, error) {
 				}
 			}
 		}
+	}
+	if err := loadPluginCatalog(&catalog); err != nil {
+		return nil, err
 	}
 	success = true
 	return &catalog, nil

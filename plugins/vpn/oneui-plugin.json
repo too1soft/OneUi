@@ -9,7 +9,7 @@
   "cmake_package": "OneUIVpnPlugin",
   "cmake_target": "OneUI::vpn_plugin",
   "services": [{ "id": "oneui.vpn.sessions", "abi": 1 }],
-  "dependencies": [],
+  "dependencies": [{ "id": "oneui.native-sdk", "version": "^0.1.0" }],
   "native_dependencies": ["OneUIPlugin", "OneUIVpn"],
   "platforms": ["windows", "linux", "macos", "android", "ios", "harmonyos"]
 }

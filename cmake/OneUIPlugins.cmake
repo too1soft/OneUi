@@ -1,4 +1,5 @@
 include_guard(GLOBAL)
+include("${CMAKE_CURRENT_LIST_DIR}/OneUIPluginRuntimes.cmake")
 
 # Build-time registration of explicitly selected, resident plugin packages.
 # Target metadata is exported by each plugin's own CMake package.
@@ -68,5 +69,6 @@ function(oneui_target_plugins application)
     target_sources("${application}" PRIVATE "${_directory}/plugins.cpp")
     target_include_directories("${application}" PRIVATE "${_directory}")
     target_link_libraries("${application}" PRIVATE OneUI::plugin ${_targets})
+    _oneui_stage_plugin_runtimes("${application}" OneUI::plugin ${_targets})
     set_target_properties("${application}" PROPERTIES ONEUI_PLUGIN_REGISTRAR "${PLUGIN_REGISTRAR}")
 endfunction()

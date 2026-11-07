@@ -34,6 +34,9 @@ func run(args []string) error {
 	if len(args) > 0 && args[0] == "sdk" {
 		return runSDK(args[1:])
 	}
+	if len(args) > 0 && args[0] == "plugin" {
+		return runPlugin(args[1:])
+	}
 	executable, err := os.Executable()
 	if err != nil {
 		return err

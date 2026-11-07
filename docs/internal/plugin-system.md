@@ -22,6 +22,18 @@ OneUI 提供 UI 必需底座、标准组件、可独立开发的扩展协议和�
 
 `plugins/vpn` 是独立 CMake 包，只消费已安装的 OneUIPlugin 和 OneUIVpn。服务 `oneui.vpn.sessions` 复用现有 VPN 状态机及平台宿主契约，不复制 JNI、Swift、ArkTS 或 VPN 引擎实现。跟踪会话，关闭时发起断开；收到真实 STOPPED 前返回 BUSY 并保留会话。框架仍可单独分发 renderer-free VPN SDK。
 
+## 包、项目锁与构建装配
+
+插件的 `oneui-plugin.json` 声明包 SemVer、Plugin ABI、服务/组件/SDK 类型、CMake 导出、平台及包依赖。SDK 包提供编译依赖，不注册运行时实例；服务/组件包才进入生成的应用注册器。`oneui.native-sdk` 分发 renderer-free Plugin/VPN SDK，`oneui.vpn` 独立依赖它。包级依赖与运行时服务依赖分别验证。
+
+`oneui-site plugin add/remove/restore/list` 读取项目 `oneui.plugins.json`，在既有 `oneui.lock.json` 的 `plugins` 字段按目标保存完整依赖闭包；SDK 的 `entries` 字段保留。两类命令复用同一写入锁。解析支持完整 SemVer、^、~、比较条件、OR，进行确定的版本回溯、循环、构建导出冲突和服务提供者冲突检查。缺失目标产物不回退到另一个平台。
+
+在线安装复用 SDK 的 TLS/同源下载、完整归档及逐文件 SHA256 校验。缓存拒绝未列入清单的文件及符号链接；离线恢复只使用锁内版本和已验证缓存。移除只改应用依赖，不删除其他项目共享的缓存。本地源码显式引用，Git 源必须为无内嵌凭据的 HTTPS URL 和完整提交 SHA，恢复时检查工作树与忽略文件漂移；安装命令不执行插件源码。
+
+恢复后生成 `.oneui/plugins/<target>-<linkage>/OneUIProjectPlugins.cmake`。注册器只包含已选择的插件；声明变化或路径移动后需要重新恢复。Windows 构建按 CMake 依赖闭包复制运行库，独立消费者在 SDK 目录不存在时仍可启动。源码包只编译插件自身，不隐式编译 OneUI/Skia。
+
+`scripts/package-plugins.py` 从 Release 安装目录和配置时生成的构建回执打包，不接受脏来源或来源提交漂移。固定时间/顺序的归档包含包描述、许可证、来源/工具链与完整文件清单；同版本产物不可覆盖。SHA256 是完整性校验，不称为发布者签名。
+
 ## 完整交付必须覆盖的验收
 
 1. 当前代码提交、推送、合入远端 main，并独立核对远端 SHA；保留历史冻结工作树。

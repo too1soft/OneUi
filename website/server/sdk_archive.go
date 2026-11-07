@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"path"
@@ -49,10 +50,13 @@ func verifySDK(directory, expected string) error {
 	if manifest.SchemaVersion != 1 || len(manifest.Files) == 0 {
 		return fmt.Errorf("missing SDK file inventory")
 	}
+	seen := map[string]bool{"sdk-manifest.json": true}
 	for _, entry := range manifest.Files {
-		if !safeArchivePath(entry.Path) || !shaPattern.MatchString(entry.SHA256) {
+		key := strings.ToLower(entry.Path)
+		if !safeArchivePath(entry.Path) || !shaPattern.MatchString(entry.SHA256) || entry.Size < 0 || seen[key] {
 			return fmt.Errorf("invalid SDK file inventory")
 		}
+		seen[key] = true
 		info, err := root.Lstat(entry.Path)
 		if err != nil || !info.Mode().IsRegular() {
 			return fmt.Errorf("invalid SDK file %s", entry.Path)
@@ -68,7 +72,18 @@ func verifySDK(directory, expected string) error {
 			return fmt.Errorf("SDK file mismatch: %s", entry.Path)
 		}
 	}
-	return nil
+	return fs.WalkDir(root.FS(), ".", func(name string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		if entry.Type()&os.ModeSymlink != 0 || !seen[strings.ToLower(name)] {
+			return fmt.Errorf("unlisted or symbolic SDK file: %s", name)
+		}
+		return nil
+	})
 }
 
 func fetchSDK(client *http.Client, origin string, artifact Artifact, cache, destination string) (string, error) {

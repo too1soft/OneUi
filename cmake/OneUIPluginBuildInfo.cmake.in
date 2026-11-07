@@ -1,0 +1,11 @@
+# Compiler/platform guard for this installed native Plugin SDK.
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "@CMAKE_SYSTEM_NAME@" OR
+   NOT CMAKE_SIZEOF_VOID_P EQUAL @CMAKE_SIZEOF_VOID_P@)
+    message(FATAL_ERROR "OneUI Plugin SDK target differs from the application's target")
+endif()
+if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "@CMAKE_CXX_COMPILER_ID@")
+    message(FATAL_ERROR "This OneUI Plugin SDK requires @CMAKE_CXX_COMPILER_ID@")
+endif()
+if(MSVC)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "@CMAKE_MSVC_RUNTIME_LIBRARY@")
+endif()

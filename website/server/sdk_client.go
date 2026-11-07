@@ -15,8 +15,9 @@ import (
 )
 
 type SDKLock struct {
-	SchemaVersion int                  `json:"schemaVersion"`
-	Entries       map[string]LockedSDK `json:"entries"`
+	SchemaVersion int                         `json:"schemaVersion"`
+	Entries       map[string]LockedSDK        `json:"entries"`
+	Plugins       map[string]PluginTargetLock `json:"plugins,omitempty"`
 }
 
 type LockedSDK struct {

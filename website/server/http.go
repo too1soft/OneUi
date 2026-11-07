@@ -24,6 +24,15 @@ func newHandler(catalog *Catalog, assets fs.FS) http.Handler {
 		w.Header().Set("Cache-Control", "no-cache")
 		_ = json.NewEncoder(w).Encode(catalog)
 	})
+	mux.HandleFunc("GET /api/plugins", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-cache")
+		plugins := catalog.plugins
+		if plugins == nil {
+			plugins = &PluginCatalog{SchemaVersion: 1, Packages: []PluginRelease{}}
+		}
+		_ = json.NewEncoder(w).Encode(plugins)
+	})
 	mux.HandleFunc("GET /files/{name}", func(w http.ResponseWriter, r *http.Request) {
 		entry, ok := catalog.files[r.PathValue("name")]
 		if !ok {

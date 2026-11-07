@@ -82,9 +82,15 @@ def validate(root, output, linkage, env):
         consumer_env['PATH'] = str(relocated / 'bin') + os.pathsep + env.get('PATH', '')
         consumer_env['LD_LIBRARY_PATH'] = str(relocated / 'lib') + os.pathsep + env.get('LD_LIBRARY_PATH', '')
         consumer_env['DYLD_LIBRARY_PATH'] = str(relocated / 'lib') + os.pathsep + env.get('DYLD_LIBRARY_PATH', '')
+        if os.name == 'nt' and linkage == 'shared':
+            # Prove generated registration staged the DLL dependency closure.
+            # The installed SDK is gone before the independent program starts.
+            remove_fixture(relocated, output)
+            consumer_env = env.copy()
         run([app_build / ('vpn_plugin_consumer.exe' if os.name == 'nt' else 'vpn_plugin_consumer')], consumer_env, log)
     result = {'linkage': linkage, 'lifecycle': 'pass', 'c_consumer': 'pass',
-              'external_plugin_build': 'pass', 'relocation': 'pass', 'renderer_required': False}
+              'external_plugin_build': 'pass', 'relocation': 'pass', 'renderer_required': False,
+              'runtime_staging': 'pass' if os.name == 'nt' and linkage == 'shared' else 'not_required_by_this_target'}
     # Retain build caches for the current implementation; remove disposable
     # consumer sources, test copies and install fixtures after successful QA.
     for path in (relocated, source, plugin_build, app_build):

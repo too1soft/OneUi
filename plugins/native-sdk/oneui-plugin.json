@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "oneui.native-sdk",
+  "version": "0.1.0",
+  "plugin_abi": 1,
+  "kind": "sdk",
+  "license": "MIT",
+  "entry": "",
+  "cmake_package": "OneUIPlugin",
+  "cmake_target": "OneUI::plugin",
+  "services": [],
+  "dependencies": [],
+  "native_dependencies": ["OneUIVpn"],
+  "platforms": ["windows", "linux", "macos", "android", "ios", "harmonyos"]
+}
