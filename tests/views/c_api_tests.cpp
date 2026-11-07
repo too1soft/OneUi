@@ -94,7 +94,7 @@ int main(int argc, char **argv) {
         childDestinationTeardownContract(argv[1]);
         virtualTemplateMetricsContract(argv[1]);
         overlayFocusNativeWindowContract();
-        expect(oneui_utf8_abi_version() == 45 && oneui_view_protocol_version() == 1,
+        expect(oneui_utf8_abi_version() == ONEUI_UTF8_ABI_VERSION && oneui_view_protocol_version() == ONEUI_VIEW_PROTOCOL_VERSION,
                "ABI and protocol versions");
         {
             ApiCase c(argv[1]);

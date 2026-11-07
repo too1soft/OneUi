@@ -9,6 +9,7 @@ import types
 import unittest
 from unittest.mock import patch
 import uuid
+import io
 
 if os.name == 'nt':
     sys.modules['fcntl'] = types.SimpleNamespace(LOCK_EX=1, LOCK_NB=2, flock=lambda *_: None)
@@ -16,6 +17,7 @@ if os.name == 'nt':
 spec = importlib.util.spec_from_file_location('portal_remote', Path(__file__).with_name('portal_remote.py'))
 remote = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(remote)
+restart_real=remote.restart
 
 
 class Transactions(unittest.TestCase):
@@ -96,6 +98,19 @@ class Transactions(unittest.TestCase):
         self.assertEqual(result['present'],[name])
         self.call('abort',token=self.token)
         self.assertEqual(self.call('abort',token=self.token)['status'],'already-clean')
+
+    def test_full_integrity_scan_may_take_longer_than_ten_seconds(self):
+        elapsed=[0.0]
+        def request(url,timeout):
+            if elapsed[0]<11:
+                raise ConnectionResetError('Download integrity scan still running')
+            value={'status':'ok'} if url.endswith('/healthz') else self.old
+            return io.BytesIO(json.dumps(value).encode())
+        with patch.object(remote.time,'monotonic',side_effect=lambda:elapsed[0]), \
+             patch.object(remote.time,'sleep',side_effect=lambda seconds:elapsed.__setitem__(0,elapsed[0]+seconds)), \
+             patch.object(remote.urllib.request,'urlopen',side_effect=request):
+            self.assertEqual(restart_real(self.config,{'releases.json':self.old})['status'],'ok')
+        self.assertEqual(elapsed[0],11)
 
 
 if __name__ == '__main__':
