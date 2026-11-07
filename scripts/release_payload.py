@@ -70,8 +70,7 @@ def prepare(packages, version, targets, published_at, output):
         raise ValueError('Missing source revision')
     release['notes'] += [
         'ABI ' + str(release['abi']) + '；头文件、Rust 包与 DLL 必须成套升级，不可混用历史版本。',
-        '本次发布仅验证所列产物和下载；尚未完成的原生验收、签名状态以包旁说明为准。',
-        '官网内嵌文档仍为 preview.1 快照；本版本接口以下载包中的头文件、绑定和清单为准。']
+        '预编译包适用于所列目标；组件扩展需匹配 SDK ABI 和 C++ 工具链。']
     output.mkdir(parents=True, exist_ok=True)
     dlls = module('prepare-website-dlls')
     # Reuse the existing extraction/immutability checks on a one-release catalog.

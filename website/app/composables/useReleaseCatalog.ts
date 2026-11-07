@@ -11,4 +11,4 @@ export interface Release {
 export function useReleaseCatalog() {
   return useFetch<{ schemaVersion: number, releases: Release[] }>('/api/releases', { server: false })
 }
-export function fileSize(value: number) { return (value / 1048576).toFixed(1) + ' MiB' }
+export function fileSize(value: number) { return value < 1048576 ? Math.max(1, Math.round(value / 1024)) + ' KiB' : (value / 1048576).toFixed(1) + ' MiB' }

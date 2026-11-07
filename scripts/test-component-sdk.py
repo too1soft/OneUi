@@ -11,6 +11,8 @@ import subprocess
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--build', type=Path, default=Path('out/plugins-current/ui'))
+    parser.add_argument('--sdk', type=Path, help='Validate the extracted immutable SDK package')
+    parser.add_argument('--plugin', type=Path, help='Validate an extracted prebuilt component package')
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     work = root / 'out/plugins-current/component-sdk'
@@ -29,22 +31,28 @@ def main():
         return result.stdout
 
     sdk = work / 'sdk'
-    shutil.copytree(root / 'include', sdk / 'include')
-    (sdk / 'cmake').mkdir()
-    for name in ('OneUIConfig.cmake', 'OneUITargets.cmake', 'OneUIComponents.cmake', 'OneUIPluginRuntimes.cmake', 'OneUIView.cmake'):
-        shutil.copy2(root / 'cmake' / name, sdk / 'cmake' / name)
-    (sdk / 'lib').mkdir()
-    (sdk / 'bin').mkdir()
-    shutil.copy2(build / 'oneui.lib', sdk / 'lib/oneui.lib')
-    for name in ('oneui.dll', 'oneui-viewc.exe'):
-        shutil.copy2(build / name, sdk / 'bin' / name)
+    if args.sdk:
+        shutil.copytree(args.sdk, sdk)
+    else:
+        shutil.copytree(root / 'include', sdk / 'include')
+        (sdk / 'cmake').mkdir()
+        for name in ('OneUIConfig.cmake', 'OneUITargets.cmake', 'OneUIComponents.cmake', 'OneUIPluginRuntimes.cmake', 'OneUIView.cmake'):
+            shutil.copy2(root / 'cmake' / name, sdk / 'cmake' / name)
+        (sdk / 'lib').mkdir()
+        (sdk / 'bin').mkdir()
+        shutil.copy2(build / 'oneui.lib', sdk / 'lib/oneui.lib')
+        for name in ('oneui.dll', 'oneui-viewc.exe'):
+            shutil.copy2(build / name, sdk / 'bin' / name)
     source = work / 'plugin-source'
     shutil.copytree(root / 'plugins/status', source)
     plugin_build, prefix = work / 'plugin-build', work / 'installed-plugin'
-    run('cmake', '-S', source, '-B', plugin_build, '-G', 'Ninja', '-DCMAKE_BUILD_TYPE=Release',
-        '-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded', f'-DOneUI_DIR={sdk / "cmake"}', f'-DCMAKE_INSTALL_PREFIX={prefix}')
-    run('cmake', '--build', plugin_build, '--parallel', '4')
-    run('cmake', '--install', plugin_build)
+    if args.plugin:
+        shutil.copytree(args.plugin,prefix)
+    else:
+        run('cmake', '-S', source, '-B', plugin_build, '-G', 'Ninja', '-DCMAKE_BUILD_TYPE=Release',
+            '-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded', f'-DOneUI_DIR={sdk / "cmake"}', f'-DCMAKE_INSTALL_PREFIX={prefix}')
+        run('cmake', '--build', plugin_build, '--parallel', '4')
+        run('cmake', '--install', plugin_build)
     app_source, app_build = work / 'app-source', work / 'app-build'
     shutil.copytree(root / 'examples/plugins/status_app', app_source)
     run('cmake', '-S', app_source, '-B', app_build, '-G', 'Ninja', '-DCMAKE_BUILD_TYPE=Release',

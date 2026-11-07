@@ -32,7 +32,7 @@ func generatePluginCMake(directory, target string, project PluginProject, lock P
 			fmt.Fprintf(&source, "list(PREPEND CMAKE_PREFIX_PATH %s)\n", cmakeLiteral(paths[id]))
 		}
 	}
-	var targets []string
+	var targets, components []string
 	for _, id := range order {
 		p := lock.Packages[id]
 		if p.Source.Path != "" || p.Source.Git != "" {
@@ -40,11 +40,14 @@ func generatePluginCMake(directory, target string, project PluginProject, lock P
 		} else {
 			fmt.Fprintf(&source, "find_package(%s CONFIG REQUIRED)\n", p.Manifest.CMakePackage)
 		}
-		if p.Manifest.Kind != "sdk" {
+		if p.Manifest.Kind == "component" {
+			components = append(components, p.Manifest.CMakeTarget)
+		} else if p.Manifest.Kind != "sdk" {
 			targets = append(targets, p.Manifest.CMakeTarget)
 		}
 	}
 	fmt.Fprintf(&source, "set(ONEUI_PLUGIN_TARGETS %s)\n", strings.Join(targets, " "))
+	fmt.Fprintf(&source, "set(ONEUI_COMPONENT_TARGETS %s)\n", strings.Join(components, " "))
 	output := filepath.Join(directory, ".oneui", "plugins", target, "OneUIProjectPlugins.cmake")
 	if err = os.MkdirAll(filepath.Dir(output), 0755); err != nil {
 		return "", err

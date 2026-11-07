@@ -33,6 +33,15 @@ func newHandler(catalog *Catalog, assets fs.FS) http.Handler {
 		}
 		_ = json.NewEncoder(w).Encode(plugins)
 	})
+	mux.HandleFunc("GET /api/tools", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-cache")
+		catalogue := catalog.tools
+		if catalogue == nil {
+			catalogue = &ToolCatalog{SchemaVersion: 1, Tools: []ToolDownload{}}
+		}
+		_ = json.NewEncoder(w).Encode(catalogue)
+	})
 	mux.HandleFunc("GET /files/{name}", func(w http.ResponseWriter, r *http.Request) {
 		entry, ok := catalog.files[r.PathValue("name")]
 		if !ok {

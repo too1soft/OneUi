@@ -19,6 +19,7 @@ const primary = new Map([
   ['sdk-platforms', '桌面与平台'], ['sdk-rust', '语言接入']
 ])
 function category(name) {
+  if (name.startsWith('plugin-')) return '插件与扩展'
   if (primary.has(name)) return primary.get(name)
   if (/style|layout|authoring|declarative|form-field|composition|effects|motion/.test(name)) return '布局与样式'
   if (/component|list|tree|popup|shell|terminal|fonts|workspace-docking/.test(name)) return '控件与交互'
@@ -62,5 +63,5 @@ const documents = files.filter(name => name !== 'README.md').map(filename => {
 })
 documents.sort((a,b) => Number(primary.has(b.slug)) - Number(primary.has(a.slug)) || a.slug.localeCompare(b.slug))
 fs.mkdirSync(path.join(site, 'app/data'), { recursive: true })
-fs.writeFileSync(path.join(site, 'app/data/docs.generated.json'), JSON.stringify({ version: '0.1.0-preview.1', documents }))
+fs.writeFileSync(path.join(site, 'app/data/docs.generated.json'), JSON.stringify({ version: '0.1.0-preview.4', documents }))
 console.log('Prepared ' + documents.length + ' bundled documents.')

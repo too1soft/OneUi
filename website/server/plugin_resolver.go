@@ -132,6 +132,7 @@ func resolvePlugins(catalog PluginCatalog, roots map[string]string, target strin
 
 func validatePluginExports(selected pluginSelection) error {
 	targets, packages, services := map[string]string{}, map[string]string{}, map[string]string{}
+	components := map[string]string{}
 	for id, p := range selected {
 		for _, entry := range []struct {
 			key   string
@@ -148,6 +149,12 @@ func validatePluginExports(selected pluginSelection) error {
 				return fmt.Errorf("service provider conflict between %s and %s: %s", previous, id, key)
 			}
 			services[key] = id
+		}
+		for _, component := range p.Manifest.Components {
+			if previous, exists := components[component.Name]; exists {
+				return fmt.Errorf("component name conflict between %s and %s: %s", previous, id, component.Name)
+			}
+			components[component.Name] = id
 		}
 	}
 	return nil

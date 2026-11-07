@@ -2,7 +2,7 @@
 const expanded = ref(false)
 const color = useColorMode()
 const route = useRoute()
-const links = [{ to: '/', label: '概览' }, { to: '/downloads', label: '下载' }, { to: '/docs', label: '文档' }, { to: '/docs/14-component-reference', label: '组件参考' }]
+const links = [{ to: '/', label: '概览' }, { to: '/downloads', label: '下载' }, { to: '/developers', label: '开发者中心' }, { to: '/plugins', label: '插件' }, { to: '/docs', label: '文档' }]
 watch(() => route.path, () => { expanded.value = false })
 </script>
 

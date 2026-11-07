@@ -168,8 +168,8 @@ def main():
             profile=args.profile, linkage=linkage, file=name, size=destination.stat().st_size,
             sha256=digest(destination), manifestSha256=bytes_hash(encoded),
             minimumOS=args.minimum_os, toolchain=args.toolchain,
-            signature="未进行正式发布签名", validation="预览包；消费者验证结果见交付报告",
-            limitations=["完整原生发布验收尚未完成"], systemDependencies=system + frameworks))
+            signature="未进行正式发布签名", validation="C/C++ 原生 SDK，包含匹配接口与构建文件",
+            limitations=["按所列系统、架构和工具链使用；系统依赖由应用环境提供。"], systemDependencies=system + frameworks))
     record = output / ("artifacts-" + "-".join([args.platform, args.profile, args.architecture]) + ".json")
     record.write_text(json.dumps(artifacts, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({"artifacts": artifacts}, ensure_ascii=False))

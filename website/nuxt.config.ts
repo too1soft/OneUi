@@ -3,7 +3,7 @@ import { resolve } from 'node:path'
 export default defineNuxtConfig({
   modules: ['@nuxt/ui'],
 
-  css: ['~/assets/css/main.css'],
+  css: ['~/assets/css/main.css', '~/assets/css/developers.css'],
 
   devtools: { enabled: false },
 
@@ -45,7 +45,7 @@ export default defineNuxtConfig({
       publicDir: resolve('server/web')
     },
     prerender: {
-      routes: ['/', '/downloads', '/docs'],
+      routes: ['/', '/downloads', '/developers', '/plugins', '/docs'],
       crawlLinks: true,
       failOnError: true
     }

@@ -17,6 +17,10 @@ type PluginService struct {
 	ID  string `json:"id"`
 	ABI int    `json:"abi"`
 }
+type PluginComponent struct {
+	Name    string `json:"name"`
+	Version int    `json:"version"`
+}
 type PluginManifest struct {
 	SchemaVersion      int                `json:"schema_version"`
 	ID                 string             `json:"id"`
@@ -28,6 +32,7 @@ type PluginManifest struct {
 	CMakePackage       string             `json:"cmake_package"`
 	CMakeTarget        string             `json:"cmake_target"`
 	Services           []PluginService    `json:"services"`
+	Components         []PluginComponent  `json:"components,omitempty"`
 	Dependencies       []PluginDependency `json:"dependencies"`
 	NativeDependencies []string           `json:"native_dependencies"`
 	Platforms          []string           `json:"platforms"`
@@ -45,6 +50,7 @@ type PluginCatalog struct {
 }
 
 var pluginID = regexp.MustCompile(`^[a-z][a-z0-9_.-]{0,127}$`)
+var componentName = regexp.MustCompile(`^[A-Z][A-Za-z0-9]*_[A-Za-z0-9_]+$`)
 var cIdentifier = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 var cmakeTarget = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_.-]*$`)
 var pluginPlatforms = map[string]bool{"windows": true, "linux": true, "macos": true, "android": true, "ios": true, "harmonyos": true}
@@ -66,6 +72,16 @@ func (m PluginManifest) validate() error {
 		return fmt.Errorf("invalid plugin metadata limits")
 	}
 	seen := map[string]bool{}
+	if len(m.Components) > 256 || (m.Kind == "component" && len(m.Components) == 0) || (m.Kind != "component" && len(m.Components) > 0) {
+		return fmt.Errorf("component packages must declare their components")
+	}
+	for _, component := range m.Components {
+		if len(component.Name) > 128 || !componentName.MatchString(component.Name) || component.Version < 1 || component.Version > 65535 || seen[component.Name] {
+			return fmt.Errorf("invalid/duplicate component contract")
+		}
+		seen[component.Name] = true
+	}
+	seen = map[string]bool{}
 	for _, platform := range m.Platforms {
 		if !pluginPlatforms[platform] || seen[platform] {
 			return fmt.Errorf("invalid/duplicate plugin platform")
