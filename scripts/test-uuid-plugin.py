@@ -19,7 +19,7 @@ def main():
     root = Path(__file__).resolve().parents[1]
     work = root / 'out/plugins-current/uuid'
     work.mkdir(parents=True, exist_ok=True)
-    output = root / 'dist/oneui-uuid'
+    output = root / 'dist/oneui-uuid/0.1.0'
     output.mkdir(parents=True, exist_ok=True)
     cli = root / 'dist/oneui-tools/0.1.0-preview.4/oneui-site-0.1.0-preview.4-windows-amd64.exe'
     helper = runpy.run_path(str(root / 'scripts/test-plugin-sdk.py'))

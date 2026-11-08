@@ -19,7 +19,7 @@ def main():
     p.add_argument('--linkage', choices=['static', 'shared'], required=True)
     args = p.parse_args()
     source = Path(__file__).resolve().parent
-    recipe = json.loads((args.build / 'uuid-build-Release.json').read_text())
+    recipe = json.loads((args.build / 'uuid-build-Release.json').read_text(encoding='utf-8'))
     if recipe['configuration'] != 'Release' or recipe['system'] != 'Windows' or recipe['pointerBytes'] != 8:
         raise ValueError('This release recipe requires Windows x86_64 Release')
     expected = 'SHARED_LIBRARY' if args.linkage == 'shared' else 'STATIC_LIBRARY'
@@ -36,7 +36,7 @@ def main():
     commit = subprocess.check_output(['git', '-C', str(source), 'rev-parse', 'HEAD'], text=True).strip()
     if not re.fullmatch('[0-9a-f]{40}', commit):
         raise ValueError('Missing plugin source identity')
-    manifest = json.loads((source / 'oneui-plugin.json').read_text())
+    manifest = json.loads((source / 'oneui-plugin.json').read_text(encoding='utf-8'))
     files = {}
     for path in sorted(args.prefix.rglob('*')):
         if path.is_symlink():
@@ -75,7 +75,7 @@ def main():
         signature='unsigned', validation='Native UUID service and independent C/C++ consumers',
         limitations=[], systemDependencies=['bcrypt'])
     catalog_path = args.output / 'plugins.json'
-    catalog = json.loads(catalog_path.read_text()) if catalog_path.exists() else dict(schemaVersion=1, packages=[])
+    catalog = json.loads(catalog_path.read_text(encoding='utf-8')) if catalog_path.exists() else dict(schemaVersion=1, packages=[])
     record = next((item for item in catalog['packages'] if item['manifest']['id'] == manifest['id']), None)
     if record is None:
         record = dict(manifest=manifest, description='通过系统随机数服务生成标准小写 UUIDv4，无需 OneUI 渲染器。',
