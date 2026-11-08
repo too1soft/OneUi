@@ -2,14 +2,14 @@
 
 `oneui.uuid` 为应用生成标准小写 UUIDv4，可用于本地记录 ID、任务 ID 和请求关联 ID。它使用系统随机数服务，不需要 OneUI 窗口、渲染器或 Skia。
 
-Windows 后端调用 BCrypt；macOS 源码后端调用 Security.framework。当前预编译下载提供 Windows 10/11 x64，使用 MSVC 19.50 与静态 CRT。下载项的 `static/shared` 表示所消费的 Plugin SDK 链接方式；UUID 插件本身以静态库随应用链接。
+Windows 后端调用 BCrypt；macOS 后端调用 Security.framework。`0.1.1` 预编译下载提供 Windows 10/11 x64（MSVC 19.50、静态 CRT）和 macOS 13 起的 Apple Silicon arm64（Apple Clang 17、libc++）。下载项的 `static/shared` 表示所消费的 Plugin SDK 链接方式；UUID 插件本身以静态库随应用链接。
 
 ## 安装到应用
 
 在现有应用目录执行：
 
 ```powershell
-oneui-site plugin add --id oneui.uuid --version ^0.1.0 `
+oneui-site plugin add --id oneui.uuid --version ^0.1.1 `
   --project . --target windows-modern-x86_64 --linkage shared `
   --url https://oneui.too1.net
 ```
@@ -25,7 +25,17 @@ set_target_properties(my_uuid_app PROPERTIES LINKER_LANGUAGE CXX)
 oneui_target_plugins(my_uuid_app REGISTRAR register_uuid_plugins PLUGINS OneUI::uuid)
 ```
 
-静态 Plugin SDK 将命令中的 `shared` 与 CMake 路径中的 `-shared` 一起改为 `static`。Windows 动态运行库会按目标依赖复制到可执行文件目录。
+macOS 使用原生 arm64 版 `oneui-site`，在终端执行：
+
+```sh
+oneui-site plugin add --id oneui.uuid --version '^0.1.1' \
+  --project . --target macos-native-arm64 --linkage shared \
+  --url https://oneui.too1.net
+```
+
+将上述 CMake 中的 `windows-modern-x86_64-shared` 改为 `macos-native-arm64-shared`。静态 Plugin SDK 将命令中的 `shared` 与 CMake 路径中的 `-shared` 一起改为 `static`。
+
+Plugin SDK `0.1.1` 会按目标依赖把 Windows DLL 和 macOS dylib 复制到可执行文件目录；macOS 消费目标同时使用 `@loader_path` 查找随应用分发的库。分发时保留这些运行库，无需随附开发用 SDK 缓存。最终应用的 Developer ID 签名和公证按应用的发布流程完成。
 
 ## 申请服务并生成 ID
 
@@ -64,6 +74,8 @@ cmake --build build
 ./build/my_uuid_app.exe
 ```
 
+macOS 安装 Xcode Command Line Tools、CMake 3.24 起的版本和 Ninja 后，使用相同构建命令并运行 `./build/my_uuid_app`。可通过 `--linkage static` 选择不需要 Plugin SDK 动态库的配置。
+
 结果形如 `f54d6285-9bd7-4b9c-a2f0-54758971d709`。函数写入 36 个 ASCII 字符及末尾 NUL，因此缓冲区至少为 37 字节，内存由调用方持有。
 
 ## 线程、错误和关闭
@@ -80,6 +92,8 @@ oneui-site plugin remove --id oneui.uuid --project . --target windows-modern-x86
 ```
 
 离线恢复使用项目锁与已校验缓存；文件被改动时会报错。移除依赖后，也应从应用源码和 CMake 中移除对应服务调用与注册目标，再重新构建应用。
+
+macOS 对应命令将目标改为 `--target macos-native-arm64`，其余锁定、离线恢复和移除规则相同。`oneui.uuid 0.1.1` 依赖 `oneui.native-sdk ^0.1.1`；已有 `0.1.0` 锁可继续使用，也可重新执行添加命令升级。
 
 ## 独立开发与源码
 

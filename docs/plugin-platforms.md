@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | Windows | CMake 导入库、生成注册器、依赖闭包复制 DLL | 插件管理自身句柄、订阅和原生回调 |
 | Linux | CMake 静态/动态库、应用 rpath 或系统安装路径 | 应用提供桌面环境及包列出的系统库 |
-| macOS | CMake 库、应用 Bundle 与签名 | 系统框架、entitlement 和应用扩展由宿主打包 |
+| macOS | Plugin SDK 0.1.1 起复制依赖 dylib 并设置 @loader_path；最终应用负责 Bundle 与签名 | 系统框架、entitlement 和应用扩展由宿主打包 |
 | Android | NDK CMake 链接插件，JNI 适配层加入应用模块 | Java/Kotlin 宿主申请权限，Service 管理系统资源 |
 | iOS | 原生 C/C++ 库随 App/Extension 链接，Swift/ObjC 宿主接入 | entitlement、扩展 Target 和系统授权由应用配置 |
 | 鸿蒙 | OHOS CMake/N-API 模块链接，ArkTS 宿主注册 | Ability/ExtensionAbility 处理权限与生命周期 |

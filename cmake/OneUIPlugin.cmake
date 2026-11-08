@@ -44,7 +44,7 @@ install(TARGETS oneui_plugin EXPORT OneUIPluginTargets
 install(DIRECTORY include/oneui/plugin DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/oneui")
 install(EXPORT OneUIPluginTargets NAMESPACE OneUI:: DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/OneUIPlugin")
 write_basic_package_version_file("${CMAKE_CURRENT_BINARY_DIR}/OneUIPluginConfigVersion.cmake"
-    VERSION 0.1.0 COMPATIBILITY SameMinorVersion)
+    VERSION 0.1.1 COMPATIBILITY SameMinorVersion)
 install(FILES "${CMAKE_CURRENT_LIST_DIR}/OneUIPluginConfig.cmake"
     "${CMAKE_CURRENT_LIST_DIR}/OneUIPlugins.cmake"
     "${CMAKE_CURRENT_LIST_DIR}/OneUIPluginRuntimes.cmake"

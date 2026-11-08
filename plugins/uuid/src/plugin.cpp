@@ -80,7 +80,7 @@ OneUiPluginResult detach(void *opaque) noexcept {
 }
 
 const OneUiPluginDescriptorV1 descriptor{
-    sizeof(descriptor), 1, "oneui.uuid", {0, 1, 0}, nullptr, 0, nullptr, attach, detach};
+    sizeof(descriptor), 1, "oneui.uuid", {0, 1, 1}, nullptr, 0, nullptr, attach, detach};
 } // namespace
 
 const OneUiPluginDescriptorV1 *oneui_uuid_plugin_descriptor_v1(void) { return &descriptor; }

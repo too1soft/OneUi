@@ -89,7 +89,7 @@ def package(source, prefix, recipe, package_id, target, linkage, output):
                 'size': destination.stat().st_size, 'sha256': digest(destination),
                 'manifestSha256': hashlib.sha256(encoded).hexdigest(),
                 'toolchain': recipe['compiler'] + ' ' + recipe['compilerVersion'] + ' / ' + recipe['runtime'],
-                'minimumOS': 'Windows 10' if windows else '', 'signature': 'unsigned',
+                'minimumOS': 'Windows 10' if windows else 'macOS 13.0' if recipe['system'] == 'Darwin' else '', 'signature': 'unsigned',
                 'validation': 'native Plugin SDK and independent consumer', 'limitations': [],
                 'systemDependencies': []}
     description = {'oneui.native-sdk': '无渲染依赖的插件运行时与原生 VPN SDK。',
@@ -106,7 +106,7 @@ def main():
     parser.add_argument('--target', required=True)
     parser.add_argument('--linkage', choices=['static', 'shared'], required=True)
     parser.add_argument('--output', type=Path, required=True)
-    parser.add_argument('--package', choices=['native','oneui.status'],default='native')
+    parser.add_argument('--package', choices=['native','oneui.native-sdk','oneui.status'],default='native')
     args = parser.parse_args()
     if not re.fullmatch(r'(windows|linux|macos|android|ios|harmonyos)-[a-z0-9_.]+-(x86_64|arm64|x86|armv7)', args.target):
         raise ValueError('Invalid plugin target')
@@ -116,6 +116,11 @@ def main():
                        'android': 'Android', 'ios': 'iOS', 'harmonyos': 'OHOS'}[args.target.split('-')[0]]
     if recipe['configuration'] != 'Release' or recipe['system'] != expected_system or recipe['linkage'].lower() != args.linkage:
         raise ValueError('Build recipe differs from the requested release target/linkage')
+    if expected_system == 'Darwin':
+        cache = (args.build / 'CMakeCache.txt').read_text(encoding='utf-8')
+        if not re.search(r'^CMAKE_OSX_DEPLOYMENT_TARGET:[^=]+=13\.0$', cache, re.MULTILINE):
+            raise ValueError('Mac release requires an explicit macOS 13.0 deployment target')
+        recipe['deploymentTarget'] = '13.0'
     if recipe['sourceDirty'] or not re.fullmatch(r'[0-9a-f]{40}', recipe['sourceCommit']):
         raise ValueError('Plugin publication requires an identified clean build revision')
     commit = subprocess.check_output(['git', '-C', str(source), 'rev-parse', 'HEAD'], text=True).strip()
@@ -135,7 +140,7 @@ def main():
     args.output.mkdir(parents=True, exist_ok=True)
     catalog_path = args.output / 'plugins.json'
     catalog = json.loads(catalog_path.read_text(encoding='utf-8')) if catalog_path.exists() else {'schemaVersion': 1, 'packages': []}
-    for package_id in (('oneui.status',) if args.package=='oneui.status' else ('oneui.native-sdk','oneui.vpn')):
+    for package_id in ((args.package,) if args.package != 'native' else ('oneui.native-sdk','oneui.vpn')):
         release = package(source, args.prefix, recipe, package_id, args.target, args.linkage, args.output)
         existing = next((p for p in catalog['packages'] if p['manifest']['id'] == package_id and p['manifest']['version'] == release['manifest']['version']), None)
         if existing:

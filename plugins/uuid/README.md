@@ -1,6 +1,6 @@
 # OneUI UUID
 
-独立的 UUIDv4 原生服务插件，使用系统随机数服务；不需要 OneUI 渲染器。公开服务为 `oneui.uuid.generator`，Plugin ABI 1。Windows 使用 BCrypt，macOS 源码后端使用 Security.framework。
+独立的 UUIDv4 原生服务插件，使用系统随机数服务；不需要 OneUI 渲染器。公开服务为 `oneui.uuid.generator`，Plugin ABI 1。Windows 使用 BCrypt，macOS 使用 Security.framework。0.1.1 提供 Windows x64 和 macOS 13 起的 Apple Silicon arm64 下载。
 
 从官网下载的 Plugin SDK 构建插件：
 
@@ -12,5 +12,7 @@ cmake --install build
 ```
 
 Windows 使用匹配 SDK 的 MSVC x64 开发环境和静态 CRT。通过 `oneui-site plugin add --id oneui.uuid --version ^0.1.0` 安装时，可由项目锁管理该 SDK 依赖。
+
+macOS 选择 `--target macos-native-arm64 --linkage shared` 或 `static`，依赖 `oneui.native-sdk ^0.1.1`。动态库由生成的 CMake 注册入口复制到应用目录；分发时保留这些库，并按应用流程完成正式签名与公证。
 
 完整命令、CMake、C API 示例和错误规则见 [UUID 插件接入指南](../../docs/plugin-uuid.md)。

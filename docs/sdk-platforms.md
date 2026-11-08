@@ -15,6 +15,8 @@ Linux 包适用于所列 Ubuntu/glibc 环境。macOS Intel、Linux ARM64 尚无�
 
 无渲染依赖的原生服务使用独立 `oneui.native-sdk` 包和 Plugin ABI 1，与核心 SDK 的平台矩阵分别管理。服务插件的目标产物见[插件目录](https://oneui.too1.net/plugins)；UI 组件包另需满足核心 SDK ABI 要求。
 
+`oneui.native-sdk 0.1.1` 和 [UUID 插件](plugin-uuid.md)提供 Windows modern x86_64 与 macOS native arm64 的静态/动态 SDK 配置。macOS 部署目标为 13.0，使用 Apple Clang 17 / libc++，不需要核心 UI SDK 或 Skia。
+
 ## Linux 系统依赖
 
 OneUI 与随附 Skia 库已经编译，但 GTK、GLib、X11、Wayland、图形驱动与系统字体仍由目标系统提供。Ubuntu 24.04 动态运行所需的直接依赖包括：

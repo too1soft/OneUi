@@ -1,10 +1,16 @@
 include_guard(GLOBAL)
 
 # Follow CMake target dependencies, so consumers do not need to hand-copy the
-# DLLs of each plugin or its native SDK. Operating-system libraries are ignored.
+# DLLs/dylibs of each plugin or its native SDK. System libraries are ignored.
 function(_oneui_stage_plugin_runtimes application)
-    if(NOT WIN32)
+    if(NOT WIN32 AND NOT CMAKE_SYSTEM_NAME STREQUAL "Darwin")
         return()
+    endif()
+    if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+        # Imported SDK libraries have @rpath identities. Prefer the staged copy
+        # beside the consumer even after its build-time SDK cache is removed.
+        set_property(TARGET "${application}" APPEND PROPERTY BUILD_RPATH "@loader_path")
+        set_property(TARGET "${application}" APPEND PROPERTY INSTALL_RPATH "@loader_path")
     endif()
     set(_pending ${ARGN})
     set(_visited "")

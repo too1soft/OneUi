@@ -20,11 +20,20 @@ def main():
     args = p.parse_args()
     source = Path(__file__).resolve().parent
     recipe = json.loads((args.build / 'uuid-build-Release.json').read_text(encoding='utf-8'))
-    if recipe['configuration'] != 'Release' or recipe['system'] != 'Windows' or recipe['pointerBytes'] != 8:
-        raise ValueError('This release recipe requires Windows x86_64 Release')
+    windows = recipe['system'] == 'Windows'
+    macos = recipe['system'] == 'Darwin'
+    if recipe['configuration'] != 'Release' or not (windows or macos) or recipe['pointerBytes'] != 8:
+        raise ValueError('This release recipe requires Windows x86_64 or macOS arm64 Release')
     expected = 'SHARED_LIBRARY' if args.linkage == 'shared' else 'STATIC_LIBRARY'
-    if recipe['sdkType'] != expected or recipe['compiler'] != 'MSVC':
+    if recipe['sdkType'] != expected or recipe['compiler'] != ('MSVC' if windows else 'AppleClang'):
         raise ValueError('Plugin linkage/toolchain differs from the consumed SDK')
+    if recipe['processor'].lower() not in (('amd64', 'x86_64', 'x64') if windows else ('arm64', 'aarch64')):
+        raise ValueError('Plugin architecture differs from the release target')
+    if macos:
+        cache = (args.build / 'CMakeCache.txt').read_text(encoding='utf-8')
+        if not re.search(r'^CMAKE_OSX_DEPLOYMENT_TARGET:[^=]+=13\.0$', cache, re.MULTILINE):
+            raise ValueError('Mac release requires an explicit macOS 13.0 deployment target')
+        recipe['deploymentTarget'] = '13.0'
     for name, key in [('src/plugin.cpp', 'sourceSha256'), ('include/oneui/plugins/uuid.h', 'headerSha256')]:
         if digest(source / name) != recipe[key]:
             raise ValueError('Plugin source changed after configuration')
@@ -43,7 +52,8 @@ def main():
             raise ValueError('No symbolic links in plugin archives')
         if path.is_file():
             files[path.relative_to(args.prefix).as_posix()] = path.read_bytes()
-    if 'lib/oneui_uuid.lib' not in files or 'lib/cmake/OneUIUuid/OneUIUuidConfig.cmake' not in files:
+    library = 'lib/oneui_uuid.lib' if windows else 'lib/liboneui_uuid.a'
+    if library not in files or 'lib/cmake/OneUIUuid/OneUIUuidConfig.cmake' not in files:
         raise ValueError('Incomplete plugin install')
     files['oneui-plugin.json'] = (json.dumps(manifest, indent=2) + '\n').encode()
     files['LICENSE'] = (source / 'LICENSE').read_bytes()
@@ -53,7 +63,7 @@ def main():
                  for name, data in sorted(files.items())]
     encoded = (json.dumps(dict(schemaVersion=1, files=inventory), indent=2) + '\n').encode()
     files['sdk-manifest.json'] = encoded
-    target = 'windows-modern-x86_64'
+    target = 'windows-modern-x86_64' if windows else 'macos-native-arm64'
     name = f"{manifest['id']}-{manifest['version']}-{target}-{args.linkage}.zip"
     args.output.mkdir(parents=True, exist_ok=True)
     destination = args.output / name
@@ -68,12 +78,14 @@ def main():
         temporary.unlink()
         raise ValueError('A published artifact cannot be replaced')
     temporary.replace(destination)
-    artifact = dict(id=target + '-' + args.linkage, platform='windows', profile='modern',
-        architecture='x86_64', linkage=args.linkage, file=name, size=destination.stat().st_size,
+    artifact = dict(id=target + '-' + args.linkage, platform='windows' if windows else 'macos',
+        profile='modern' if windows else 'native', architecture='x86_64' if windows else 'arm64',
+        linkage=args.linkage, file=name, size=destination.stat().st_size,
         sha256=digest(destination), manifestSha256=hashlib.sha256(encoded).hexdigest(),
-        minimumOS='Windows 10', toolchain='MSVC ' + recipe['compilerVersion'] + ' / MultiThreaded',
+        minimumOS='Windows 10' if windows else 'macOS 13.0',
+        toolchain=recipe['compiler'] + ' ' + recipe['compilerVersion'] + (' / MultiThreaded' if windows else ' / libc++'),
         signature='unsigned', validation='Native UUID service and independent C/C++ consumers',
-        limitations=[], systemDependencies=['bcrypt'])
+        limitations=[], systemDependencies=['bcrypt'] if windows else ['Security', 'c++'])
     catalog_path = args.output / 'plugins.json'
     catalog = json.loads(catalog_path.read_text(encoding='utf-8')) if catalog_path.exists() else dict(schemaVersion=1, packages=[])
     record = next((item for item in catalog['packages'] if item['manifest']['id'] == manifest['id']), None)

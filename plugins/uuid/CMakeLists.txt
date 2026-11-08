@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
-project(OneUIUuid VERSION 0.1.0 LANGUAGES CXX)
-find_package(OneUIPlugin CONFIG REQUIRED)
+project(OneUIUuid VERSION 0.1.1 LANGUAGES CXX)
+find_package(OneUIPlugin 0.1.1 CONFIG REQUIRED)
 add_library(oneui_uuid STATIC src/plugin.cpp)
 add_library(OneUI::uuid ALIAS oneui_uuid)
 target_compile_features(oneui_uuid PUBLIC cxx_std_17)
