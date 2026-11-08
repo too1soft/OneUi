@@ -65,3 +65,48 @@ func TestComponentPackagesRejectNamespaceConflicts(t *testing.T) {
 		t.Fatal("missing component namespace accepted")
 	}
 }
+
+func TestMacToolDownloadValidatesTargetAndIntegrity(t *testing.T) {
+	for _, scenario := range []string{"valid", "wrong architecture", "wrong platform", "wrong filename", "wrong hash"} {
+		t.Run(scenario, func(t *testing.T) {
+			directory, _ := fixture(t)
+			data := []byte("native arm64 CLI fixture")
+			tool := ToolDownload{Platform: "macos", Architecture: "arm64", Version: "0.1.0-preview.6",
+				File: "oneui-site-0.1.0-preview.6-darwin-arm64", Size: int64(len(data)), SHA256: hashBytes(data)}
+			switch scenario {
+			case "wrong architecture":
+				tool.Architecture = "x86_64"
+			case "wrong platform":
+				tool.Platform = "linux"
+			case "wrong filename":
+				tool.File = "oneui-site-0.1.0-preview.6-linux-amd64"
+			case "wrong hash":
+				tool.SHA256 = hashBytes([]byte("different CLI"))
+			}
+			if err := os.WriteFile(filepath.Join(directory, tool.File), data, 0600); err != nil {
+				t.Fatal(err)
+			}
+			encoded, _ := json.Marshal(ToolCatalog{SchemaVersion: 1, Tools: []ToolDownload{tool}})
+			if err := os.WriteFile(filepath.Join(directory, "tools.json"), encoded, 0600); err != nil {
+				t.Fatal(err)
+			}
+			catalog, err := loadCatalog(directory)
+			if scenario != "valid" {
+				if err == nil {
+					catalog.root.Close()
+					t.Fatal("inconsistent Mac CLI accepted")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer catalog.root.Close()
+			response := httptest.NewRecorder()
+			newHandler(catalog, fstest.MapFS{}).ServeHTTP(response, httptest.NewRequest("GET", "/files/"+tool.File, nil))
+			if response.Code != 200 || response.Body.String() != string(data) {
+				t.Fatal("Mac CLI download differs", response.Code)
+			}
+		})
+	}
+}

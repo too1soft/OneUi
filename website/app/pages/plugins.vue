@@ -11,7 +11,7 @@ const packages = computed(() => (data.value?.packages || []).filter(p => {
 const selectedTargets = reactive<Record<string,string>>({})
 function reset() { query.value='';kind.value='all';platform.value='all' }
 function command(p: import('~/composables/usePluginCatalog').PluginRelease) {
-  const target=p.artifacts.find(a=>a.id===selectedTargets[p.manifest.id]) || p.artifacts[0]
+  const target=p.artifacts.find(a=>a.id===selectedTargets[`${p.manifest.id}@${p.manifest.version}`]) || p.artifacts[0]
   return target ? `oneui-site plugin add --project . --id ${p.manifest.id} --version "^${p.manifest.version}" --target ${target.platform}-${target.profile}-${target.architecture} --linkage ${target.linkage}` : ''
 }
 </script>
@@ -30,7 +30,7 @@ function command(p: import('~/composables/usePluginCatalog').PluginRelease) {
         <div class="plugin-platforms"><span v-for="system in p.manifest.platforms" :key="system">{{ platforms[system] }}</span></div>
         <details class="plugin-details"><summary>查看接口、依赖与安装 <UIcon name="i-lucide-chevron-down" /></summary><div class="plugin-details-content">
           <dl><template v-if="p.manifest.services?.length"><dt>服务</dt><dd v-for="s in p.manifest.services" :key="s.id"><code>{{ s.id }}</code> · ABI {{ s.abi }}</dd></template><template v-if="p.manifest.components?.length"><dt>组件</dt><dd v-for="c in p.manifest.components" :key="c.name"><code>{{ c.name }}</code> · 契约 {{ c.version }}</dd></template><dt>包依赖</dt><dd>{{ p.manifest.dependencies?.map(d=>`${d.id} ${d.version}`).join('，') || '无包级依赖' }}</dd></dl>
-          <template v-if="p.artifacts.length"><label>预编译目标<select :value="selectedTargets[p.manifest.id] || p.artifacts[0]?.id" @change="selectedTargets[p.manifest.id] = ($event.target as HTMLSelectElement).value"><option v-for="a in p.artifacts" :key="a.id" :value="a.id">{{ a.id }}</option></select></label><CopyCode :code="command(p)" label="安装到当前项目" /><ul class="plugin-downloads"><li v-for="a in p.artifacts" :key="a.file"><a :href="'/files/'+a.file">{{ a.id }} <UIcon name="i-lucide-arrow-down-to-line" /></a><small>{{ a.toolchain }} · {{ fileSize(a.size) }}</small><details><summary>SHA256</summary><code>{{ a.sha256 }}</code></details></li></ul></template>
+          <template v-if="p.artifacts.length"><label>预编译目标<select :value="selectedTargets[`${p.manifest.id}@${p.manifest.version}`] || p.artifacts[0]?.id" @change="selectedTargets[`${p.manifest.id}@${p.manifest.version}`] = ($event.target as HTMLSelectElement).value"><option v-for="a in p.artifacts" :key="a.id" :value="a.id">{{ a.id }}</option></select></label><CopyCode :code="command(p)" label="安装到当前项目" /><ul class="plugin-downloads"><li v-for="a in p.artifacts" :key="a.file"><a :href="'/files/'+a.file">{{ a.id }} <UIcon name="i-lucide-arrow-down-to-line" /></a><small>{{ a.toolchain }} · {{ fileSize(a.size) }}</small><details><summary>SHA256</summary><code>{{ a.sha256 }}</code></details></li></ul></template>
           <NuxtLink class="text-link" :to="p.manifest.kind==='component'?'/docs/plugin-components':'/docs/plugin-services'">{{ p.manifest.kind==='component'?'组件接入与开发':'服务接入与开发' }} <UIcon name="i-lucide-arrow-right" /></NuxtLink>
         </div></details>
       </article>

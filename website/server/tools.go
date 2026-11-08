@@ -19,7 +19,7 @@ type ToolCatalog struct {
 	Tools         []ToolDownload `json:"tools"`
 }
 
-var toolFile = regexp.MustCompile(`^oneui-site-[0-9]+\.[0-9]+\.[0-9]+(?:-[a-zA-Z0-9.]+)?-(windows-amd64\.exe|linux-amd64)$`)
+var toolFile = regexp.MustCompile(`^oneui-site-[0-9]+\.[0-9]+\.[0-9]+(?:-[a-zA-Z0-9.]+)?-(windows-amd64\.exe|linux-amd64|darwin-arm64)$`)
 
 func loadToolCatalog(c *Catalog) error {
 	c.tools = &ToolCatalog{SchemaVersion: 1, Tools: []ToolDownload{}}
@@ -38,17 +38,19 @@ func loadToolCatalog(c *Catalog) error {
 		return fmt.Errorf("invalid tool catalog")
 	}
 	for _, t := range c.tools.Tools {
-		if !toolFile.MatchString(t.File) || t.Architecture != "x86_64" || (t.Platform != "windows" && t.Platform != "linux") || t.Size <= 0 || t.Size > 512<<20 || !shaPattern.MatchString(t.SHA256) {
+		targets := map[string]struct{ architecture, suffix string }{
+			"windows": {"x86_64", "windows-amd64.exe"},
+			"linux":   {"x86_64", "linux-amd64"},
+			"macos":   {"arm64", "darwin-arm64"},
+		}
+		target, supported := targets[t.Platform]
+		if !toolFile.MatchString(t.File) || !supported || t.Architecture != target.architecture || t.Size <= 0 || t.Size > 512<<20 || !shaPattern.MatchString(t.SHA256) {
 			return fmt.Errorf("invalid tool download")
 		}
 		if _, err = parsePluginVersion(t.Version); err != nil {
 			return err
 		}
-		suffix := "linux-amd64"
-		if t.Platform == "windows" {
-			suffix = "windows-amd64.exe"
-		}
-		if t.File != "oneui-site-"+t.Version+"-"+suffix {
+		if t.File != "oneui-site-"+t.Version+"-"+target.suffix {
 			return fmt.Errorf("tool target metadata differs")
 		}
 		if _, exists := c.files[t.File]; exists {
