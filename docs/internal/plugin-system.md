@@ -84,3 +84,21 @@ OneUI 提供 UI 必需底座、标准组件、可独立开发的扩展协议和�
 固定机器报告为 `out/plugins-current/macos/verification.json`；验收包保留在 `dist/oneui-macos-validation`，本机复制的 2 个 SDK ZIP、4 个原生插件 ZIP 和 CLI 全部核对 SHA256。Mac 的本轮源码测试副本及编译缓存已通过 `--cleanup-only --source-commit <已验提交>` 清理；保留压缩包、CLI、报告和有界日志。该清理要求已通过且提交匹配的报告、所有权标记、无活动使用者和无符号链接，不删除其他固定工作目录。
 
 这些是本地验证包，尚未加入官网正式目录，不覆盖已发布的 preview.4。实际执行系统为 macOS 15.5；13.0 是构建部署基线。Developer ID 签名、公证、Intel、其他系统版本及真实 VPN 流量不在本轮证据内。非 macOS 平台的 Rust WChar 声明需在各自原生 ABI 验证中核对，本轮保留其既有声明。
+
+## 独立 UUID 插件与公网消费验证
+
+2026-11-08 新增 `plugins/uuid`，服务 `oneui.uuid.generator` ABI 1。插件通过 Windows BCrypt / macOS Security 源码后端生成 UUIDv4，不依赖渲染器。用户指定本轮先验证 Windows，因此仅发布 Windows modern x86_64 的静态/动态 Plugin SDK 配置，macOS 后端没有计入本轮实跑或预编译发布。
+
+插件拥有独立 CMake、公开 C 头、安装配置、包描述及 `package.py`；消费示例在 `examples/plugins/uuid_app`。添加插件未修改核心、运行时注册器或官方插件打包器。验证复制插件与消费工程到框架源目录之外，Plugin SDK 只从正式官网取得；编译命令不包含框架或 Skia 源码。
+
+固定入口 `python -X utf8 -B scripts/test-uuid-plugin.py` 验证构建、打包及本地真实 HTTP 目录；加 `--public --cli <官网CLI>` 验证生产目录。两条链均检查完整依赖锁、生成 CMake、C/C++ 运行、移走全部 SDK/插件缓存后的执行、离线恢复、缓存篡改拒绝及锁文件保持、移除后无悬空依赖。静态/动态各生成 4096 个原生 UUID，检查格式、版本/variant 位、样本重复、缓冲区边界、线程所有权、运行时隔离和租约阻止关闭。样本重复检查不是数学上的唯一性保证；系统随机数失败分支未注入模拟故障。
+
+本地 26 个阶段、公网 16 个阶段全部符合预期，其中每条链的两次篡改检查预期返回非零。公网使用 CLI `0.1.0-preview.5`，C/C++ 消费案例 4/4 通过。包源码提交为 `82c10b000b601f9394914e0b15c9c755f7a72ab3`，两个约 10 KiB 的 ZIP 在 `dist/oneui-uuid/0.1.0`。
+
+官网已发布该插件、`/docs/plugin-uuid` 教程及修正后的 SDK 版本/平台说明。站点/CLI 版本为 preview.5，核心 SDK 最新公开版本仍为 preview.4 / ABI 46。此次 `publish-portal.py --site-only` 保留完整 SDK 目录，追加插件与 CLI，保留历史 CLI 文件可下载；预检 4 个 SDK 发行记录、36 个下载通过。公网完整哈希核对 6 个输入文件，既有 SDK 目录与发布前逐字段一致。Go 测试及 7 个发布回滚/历史保护用例通过。
+
+机器证据为 `out/plugins-current/uuid/local-verification.json`、`public-verification.json` 和 `portal-publication.json`。真实本地浏览器验证了 UUID 筛选、依赖/目标/下载信息及新教程；复制按钮显示成功反馈，但浏览器剪贴板读取没有返回文本，未计为字节级复制校验。公网浏览器导航超时，公网正文、API、文件哈希和实际安装链已独立通过，不声称完成全部公网 UI 交互。截图 `website-local-same-build.png` 明确来自同版本地站点。
+
+MyStudio 完整交互原型 `UB8SsDjCeQh96dOVhAQ2` v3 增加 UUID，实际走查了不支持目标、失败重试、成功、离线恢复和移除。所有操作为模拟；原生插件的实跑证据由上述独立测试提供。
+
+验收结束后两个临时预览服务器已停止。对 `out/plugins-current/uuid` 内本轮 bootstrap、build、cache、consumer、external-build、installed、registry 目录及两份发布辅助脚本的清理请求被自动审批审查以 `blocked by policy` 拒绝，未执行删除，未尝试绕过。上述临时文件保留；正式版本包、报告、有界日志和截图继续保留。

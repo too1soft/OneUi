@@ -15,17 +15,19 @@ from urllib.request import urlopen
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--public', action='store_true', help='Verify the production registry after publication')
+    p.add_argument('--cli', type=Path, help='Select the published CLI executable to validate')
     args = p.parse_args()
     root = Path(__file__).resolve().parents[1]
     work = root / 'out/plugins-current/uuid'
     work.mkdir(parents=True, exist_ok=True)
     output = root / 'dist/oneui-uuid/0.1.0'
     output.mkdir(parents=True, exist_ok=True)
-    cli = root / 'dist/oneui-tools/0.1.0-preview.4/oneui-site-0.1.0-preview.4-windows-amd64.exe'
+    cli = args.cli.resolve() if args.cli else root / 'dist/oneui-tools/0.1.0-preview.4/oneui-site-0.1.0-preview.4-windows-amd64.exe'
     helper = runpy.run_path(str(root / 'scripts/test-plugin-sdk.py'))
     env = helper['msvc_environment'](os.environ.copy())
     phase = 'public' if args.public else 'local'
-    report = dict(phase=phase, passed=False, platform='windows-modern-x86_64', checks=[])
+    report = dict(phase=phase, passed=False, platform='windows-modern-x86_64', checks=[],
+                  cliVersion=subprocess.check_output([str(cli), '--version'], text=True).strip())
     with (work / (phase + '.log')).open('w', encoding='utf-8') as log:
         def run(name, values, succeeds=True):
             command = list(map(str, values))
