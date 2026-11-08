@@ -1,17 +1,19 @@
 # 预编译 SDK 平台矩阵
 
-这里描述当前 0.1.0-preview.1 下载包。平台实现、自动化测试、真实系统验收和发布签名分别记录。全部包目前处于预览渠道。
+按操作系统、架构、链接方式和 ABI 选择 SDK。最新公开核心 SDK 为 `0.1.0-preview.4`（ABI 46，Windows modern x86_64）；其他目标提供下表所列的历史版本。全部包通过预览渠道分发。
 
-| 目标 | 产物 | 系统与工具链 | 已有证据 / 限制 |
+| 目标 | 产物 | 系统与工具链 | 公开下载版本 |
 |---|---|---|---|
-| Windows modern x86 | DLL / LIB | MSVC 19.50，静态 CRT；Windows 10/11 目标 | Windows 10 x64 主机运行 x86 消费者；不代替独立 x86 系统验证 |
-| Windows modern x86_64 | DLL / LIB | MSVC 19.50，静态 CRT；Windows 10/11 目标 | Windows 10 x64 SDK/消费者回归；Windows 11 完整原生验收待完成 |
-| Windows legacy x86 | DLL / LIB | MSVC 19.44，静态 CRT；Win7 SP1 起 | Win7 SP1 x86 虚拟机已运行定向 SDK 与消费者测试；不代表全部业务和硬件验收 |
-| Windows legacy x86_64 | DLL / LIB | MSVC 19.44，静态 CRT；Win7 SP1 起 | 编译和 Windows 10 主机回归；Win7 x64 原生验收待完成 |
-| macOS arm64 | dylib / a | 部署目标 macOS 13；Apple Clang / libc++ | 物理 Mac 构建与消费者验证；通知等历史原生交互证据不等于本下载包全面认证 |
-| Linux x86_64 | so / a | Ubuntu 24.04；Clang 18 / libstdc++；glibc 至少 2.38 | WSLg / Xvfb 自动回归；真实 X11/Wayland 桌面、输入法、跨屏 DPI 待验收 |
+| Windows modern x86 | DLL / LIB | MSVC 19.50，静态 CRT；Windows 10/11 | preview.1 / ABI 43 |
+| Windows modern x86_64 | DLL / LIB | MSVC 19.50，静态 CRT；Windows 10/11 | preview.4 / ABI 46 |
+| Windows legacy x86 | DLL / LIB | MSVC 19.44，静态 CRT；Win7 SP1 起 | preview.1 / ABI 43 |
+| Windows legacy x86_64 | DLL / LIB | MSVC 19.44，静态 CRT；Win7 SP1 起 | preview.1 / ABI 43 |
+| macOS arm64 | dylib / a | 部署目标 macOS 13；Apple Clang / libc++ | preview.1 / ABI 43 |
+| Linux x86_64 | so / a | Ubuntu 24.04；Clang 18 / libstdc++；glibc 至少 2.38 | preview.1 / ABI 43 |
 
-Linux 当前按 Ubuntu 24.04 构建，不能仅凭架构相同就宣称兼容旧 glibc、麒麟、UOS 或其他发行版。macOS Intel、Linux ARM64 暂无此版本预编译包。
+Linux 包适用于所列 Ubuntu/glibc 环境。macOS Intel、Linux ARM64 尚无上述核心 SDK 预编译下载项。各版本头文件、Rust 绑定和运行库必须成套使用。
+
+无渲染依赖的原生服务使用独立 `oneui.native-sdk` 包和 Plugin ABI 1，与核心 SDK 的平台矩阵分别管理。服务插件的目标产物见[插件目录](https://oneui.too1.net/plugins)；UI 组件包另需满足核心 SDK ABI 要求。
 
 ## Linux 系统依赖
 
@@ -46,8 +48,6 @@ sudo apt install build-essential cmake pkg-config libgtk-3-dev \
 
 静态包仍会链接 Cocoa、Metal、UserNotifications 等系统框架。通知冷启动需要正确的应用包身份及权限流程，不能仅靠一个裸命令行消费者替代完整应用验收。
 
-## 移动端开发状态
+## 移动应用
 
-Android、iOS 和原生 HarmonyOS 已开始开发，**目前没有移动 UI SDK 下载包**。
-公共运行时与原生宿主的阶段、接口和未完成项见 [移动端支持](mobile-support.md)。
-上述桌面发行目标和现有预编译包保持各自的验收范围。
+Android、iOS 与 HarmonyOS 的宿主接口及接入方式见[移动端支持](mobile-support.md)。下载中心当前提供上述桌面目标；移动宿主按对应的平台工程配置接入。

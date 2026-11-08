@@ -15,6 +15,8 @@ cmake --install build
 
 使用[包安装指南](plugin-packages.md)把插件添加到应用。应用调用生成的注册器，再启动运行时。实际 VPN 封装见 [plugins/vpn](../plugins/vpn/src/plugin.cpp)。
 
+[UUID 插件示例](plugin-uuid.md)展示了从系统随机数接口到独立服务包的完整接入：公开 C 头、平台实现、安装命令、生成注册器、租约调用和离线恢复。
+
 ## 服务接口与版本
 
 服务头只暴露 C 兼容类型、不透明实例和函数表。表首包含 `struct_size` 与 `abi_version`。申请服务租约时指定服务 ID 和 ABI，取得后再次检查函数表大小与版本。C++ STL 类型、异常和语言所有的字符串不穿过此边界。
