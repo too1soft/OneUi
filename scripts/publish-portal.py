@@ -60,20 +60,27 @@ def main():
     p.add_argument('--published-at', required=True)
     p.add_argument('--apply', action='store_true')
     p.add_argument('--password-stdin', action='store_true')
+    p.add_argument('--site-only', action='store_true', help='Publish site/tools/plugins while preserving all SDK releases')
     args = p.parse_args()
     config = json.loads(args.config.read_text())
-    release, files = prepare(args.sdk, args.version, ['windows-modern-x86_64'], args.published_at, args.sdk)
+    release, files = (None, {}) if args.site_only else prepare(
+        args.sdk, args.version, ['windows-modern-x86_64'], args.published_at, args.sdk)
     incoming = json.loads((args.plugins / 'plugins.json').read_text(encoding='utf-8'))
     tools = json.loads((args.tools / 'tools.json').read_text())
     for package in incoming['packages']:
         for artifact in package['artifacts']:
             files[artifact['file']] = args.plugins / artifact['file']
     for tool in tools['tools']:
-        files[tool['file']] = args.tools / tool['file']
+        path = args.tools / tool['file']
+        if not path.exists():
+            path = args.tools.parent / tool['version'] / tool['file']
+            if not path.resolve().is_relative_to(args.tools.parent.resolve()):
+                raise ValueError('Tool version escaped the release directory')
+        files[tool['file']] = path
     binary = next(t['file'] for t in tools['tools'] if t['platform'] == 'linux')
     with connect(config, args.password_stdin) as client:
         before = remote(client, config, 'inspect')
-        catalog = merge(before['catalogs']['releases.json'], release)
+        catalog = before['catalogs']['releases.json'] if args.site_only else merge(before['catalogs']['releases.json'], release)
         plugins = before['catalogs']['plugins.json'] or {'schemaVersion': 1, 'packages': []}
         for package in incoming['packages']:
             existing = next((v for v in plugins['packages'] if v['manifest']['id'] == package['manifest']['id'] and v['manifest']['version'] == package['manifest']['version']), None)
@@ -82,7 +89,9 @@ def main():
             if not existing:
                 plugins['packages'].append(package)
         catalogs = {'releases.json': catalog, 'plugins.json': plugins, 'tools.json': tools}
-        plan = dict(version=args.version, sourceCommit=release['sourceCommit'], artifacts=len(files),
+        source_commit = release['sourceCommit'] if release else json.loads(
+            (args.tools / 'build.json').read_text())['sourceCommit']
+        plan = dict(version=args.version, siteOnly=args.site_only, sourceCommit=source_commit, artifacts=len(files),
                     bytes=sum(f.stat().st_size for f in files.values()), previousVersions=len(before['catalogs']['releases.json']['releases']))
         result = dict(status='plan', plan=plan)
         if args.apply:
