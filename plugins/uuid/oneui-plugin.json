@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "oneui.uuid",
+  "version": "0.1.0",
+  "plugin_abi": 1,
+  "kind": "service",
+  "license": "MIT",
+  "entry": "oneui_uuid_plugin_descriptor_v1",
+  "cmake_package": "OneUIUuid",
+  "cmake_target": "OneUI::uuid",
+  "services": [{ "id": "oneui.uuid.generator", "abi": 1 }],
+  "dependencies": [{ "id": "oneui.native-sdk", "version": "^0.1.0" }],
+  "native_dependencies": ["OneUIPlugin"],
+  "platforms": ["windows", "macos"]
+}

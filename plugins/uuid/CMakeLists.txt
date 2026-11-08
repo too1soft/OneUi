@@ -1,0 +1,31 @@
+cmake_minimum_required(VERSION 3.24)
+project(OneUIUuid VERSION 0.1.0 LANGUAGES CXX)
+find_package(OneUIPlugin CONFIG REQUIRED)
+add_library(oneui_uuid STATIC src/plugin.cpp)
+add_library(OneUI::uuid ALIAS oneui_uuid)
+target_compile_features(oneui_uuid PUBLIC cxx_std_17)
+target_link_libraries(oneui_uuid PUBLIC OneUI::plugin)
+if(WIN32)
+    target_link_libraries(oneui_uuid PRIVATE bcrypt)
+elseif(APPLE AND NOT IOS)
+    target_link_libraries(oneui_uuid PRIVATE "-framework Security")
+else()
+    message(FATAL_ERROR "OneUI UUID has Windows and macOS backends only")
+endif()
+target_include_directories(oneui_uuid PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> $<INSTALL_INTERFACE:include>)
+get_target_property(_sdk_type OneUI::plugin TYPE)
+file(SHA256 "${CMAKE_CURRENT_SOURCE_DIR}/src/plugin.cpp" _source_hash)
+file(SHA256 "${CMAKE_CURRENT_SOURCE_DIR}/include/oneui/plugins/uuid.h" _header_hash)
+file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/uuid-build-$<CONFIG>.json" CONTENT
+    "{\"configuration\":\"$<CONFIG>\",\"system\":\"${CMAKE_SYSTEM_NAME}\",\"processor\":\"${CMAKE_SYSTEM_PROCESSOR}\",\"pointerBytes\":${CMAKE_SIZEOF_VOID_P},\"compiler\":\"${CMAKE_CXX_COMPILER_ID}\",\"compilerVersion\":\"${CMAKE_CXX_COMPILER_VERSION}\",\"sdkType\":\"${_sdk_type}\",\"sourceSha256\":\"${_source_hash}\",\"headerSha256\":\"${_header_hash}\"}\n")
+set_target_properties(oneui_uuid PROPERTIES EXPORT_NAME uuid POSITION_INDEPENDENT_CODE ON
+    ONEUI_PLUGIN_ID oneui.uuid ONEUI_PLUGIN_ENTRY oneui_uuid_plugin_descriptor_v1
+    ONEUI_PLUGIN_HEADER oneui/plugins/uuid.h ONEUI_PLUGIN_ABI 1
+    EXPORT_PROPERTIES "ONEUI_PLUGIN_ID;ONEUI_PLUGIN_ENTRY;ONEUI_PLUGIN_HEADER;ONEUI_PLUGIN_ABI")
+include(GNUInstallDirs)
+install(TARGETS oneui_uuid EXPORT OneUIUuidTargets ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install(FILES oneui-plugin.json LICENSE DESTINATION share/oneui/plugins/oneui.uuid)
+install(EXPORT OneUIUuidTargets NAMESPACE OneUI:: DESTINATION lib/cmake/OneUIUuid)
+install(FILES cmake/OneUIUuidConfig.cmake DESTINATION lib/cmake/OneUIUuid)
