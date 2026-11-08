@@ -43,6 +43,7 @@ class Verification:
         self.report = dict(passed=False, platform=self.target, host=platform.platform(), checks=[],
             sourceCommit=subprocess.check_output(['git', '-C', str(self.source), 'rev-parse', 'HEAD'], text=True).strip(),
             validatorSha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+            cliSha256=hashlib.sha256(self.cli.read_bytes()).hexdigest(),
             cliVersion=subprocess.check_output([str(self.cli), '--version'], text=True).strip())
         self.log = (self.work / (self.phase + '.log')).open('w', encoding='utf-8')
 

@@ -102,3 +102,30 @@ OneUI 提供 UI 必需底座、标准组件、可独立开发的扩展协议和�
 MyStudio 完整交互原型 `UB8SsDjCeQh96dOVhAQ2` v3 增加 UUID，实际走查了不支持目标、失败重试、成功、离线恢复和移除。所有操作为模拟；原生插件的实跑证据由上述独立测试提供。
 
 验收结束后两个临时预览服务器已停止。对 `out/plugins-current/uuid` 内本轮 bootstrap、build、cache、consumer、external-build、installed、registry 目录及两份发布辅助脚本的清理请求被自动审批审查以 `blocked by policy` 拒绝，未执行删除，未尝试绕过。上述临时文件保留；正式版本包、报告、有界日志和截图继续保留。
+
+## UUID 0.1.1：macOS 实机、公网安装与发布
+
+2026-11-08 用户确认 Mac 恢复在线并要求补齐验证和发布。实机为 macOS 15.5 / arm64、Apple Clang 17。`oneui.uuid` 和 renderer-free `oneui.native-sdk` 发布 `0.1.1`，服务 ABI 保持 1，UUID 依赖 SDK `^0.1.1`。两个包各有 Windows modern x86_64 和 macOS native arm64 的静态/动态 SDK 配置，共新增 8 个 ZIP。UUID 自身仍为静态库，macOS 调用 Security.framework；核心 UI SDK 的 ABI、版本和正式目录没有变化。
+
+Mac 验证暴露出动态库装配缺口：原 `OneUIPluginRuntimes.cmake` 只处理 Windows DLL。现增加 Darwin 依赖闭包复制以及消费目标的 `@loader_path`，保留应用已有 RPATH。新版独立 SDK 和 UUID 使用新补丁版本，未放宽目录或包的不可变校验、未覆盖 0.1.0。UUID 打包器核对 AppleClang、arm64、Release、SDK 链接方式、源码/头文件哈希及显式 macOS 13.0 部署目标；SDK 打包器也校验该部署目标，并可只打包 `oneui.native-sdk`。
+
+包源码固定为 `b62a54757dba37671121e434aa3d699dd4486cbe`。从干净 Git 快照构建 SDK，将 UUID 和消费者复制到框架源码目录之外。`scripts/test-uuid-release.py` 同时承担两平台构建、真实 HTTP 目录与公网消费验证，旧 `test-uuid-plugin.py` 保留为兼容入口，避免维护两套相同流程。Mac 入口为 `verify-uuid-macos.py --source-commit b62a547 --cli <Darwin arm64 CLI>`，使用既有 SSH alias 与 known_hosts；`--public` 在 Mac 从正式 HTTPS 目录下载 CLI 并核对固定 SHA256，`--cleanup-only` 只清理报告通过且源码提交匹配的自有测试目录。
+
+| 验证 | macOS arm64 | Windows x86_64 |
+| --- | --- | --- |
+| 本地阶段 | 38 个符合预期 | 34 个符合预期 |
+| 公网阶段 | 20 个符合预期 | 16 个符合预期 |
+| SDK 生命周期 CTest | static/shared 各 5/5 | static/shared 各 5/5 |
+| UUID C/C++ 消费者 | 每条链 static/shared 共 4/4 | 每条链 static/shared 共 4/4 |
+
+每条链的两次缓存篡改检查预期退出 1。各配置生成 4096 个 UUID，覆盖格式、版本/variant、样本重复、缓冲区边界、空参数、错误线程、运行时隔离及租约阻止关闭。整体 SDK/插件缓存移走后仍实际运行；完整依赖锁、离线恢复、篡改拒绝且锁不变、移除后无悬空依赖均通过。Mac 额外检查 Mach-O 依赖与可执行文件的 ad-hoc 签名完整性，`vtool` 确认随应用复制的 SDK 动态库 `minos 13.0` / SDK 15.5。没有将样本重复检查称为唯一性证明，也没有注入系统 RNG 失败。
+
+站点和三平台 CLI 由另一干净提交 `f4baabf6bfb21297e16e63f57968c6f038c4e330` 构建，未夹带工作区并行的 Android/mobile/docs 改动。官网/CLI 更新至 preview.6，新增 Windows/Linux x64 和 Mac arm64 CLI，原 CLI 地址保留。Mac CLI SHA256 为 `29447463329c2d596c1ca708d5854f67dfa75f977e3cb53f27dd928387dd4ca2`，在 Mac 原生执行并检查签名完整性；公网消费测试使用这一正式下载的 CLI。
+
+`publish-portal.py --site-only` 发布成功，健康检查为 `preview.6` / 47 downloads；完整预检 `4 releases, 47 verified downloads`。15 个输入文件的公网全量下载哈希一致。发布前后核心 SDK 目录完全一致，旧插件与旧工具记录逐字段保持。Go 测试包含 Mac CLI 下载、架构/平台/文件名不一致以及哈希篡改拒绝；7 个发布事务/回滚/历史保护用例通过。公网 `/docs/plugin-uuid`、`/docs/sdk-platforms`、`/docs/plugin-platforms` 正文 200 且与新版内容相符。
+
+真实本地同版浏览器检查新版与历史 UUID 的独立目标选择、Mac shared 安装命令、复制反馈及开发者中心的 Mac CLI 下载；桌面和 390px 布局均走查。剪贴板字节内容未复核，不声称完成公网 UI 点击流程。完整原型 `UB8SsDjCeQh96dOVhAQ2` v4 已上传，包含两种 Mac 目标、版本和分发提示；实际点击了 Mac 动态配置的失败、重试、成功、离线恢复及移除，模拟与原生验证分别记录。
+
+证据在 `out/plugins-current/uuid-macos` 下：`mac/`、`windows/` 的 local/public 报告与日志、`portal-publication.json`、`public-catalog-and-docs.json`、前后目录快照及 `website-local-same-build.png`。正式 8 个插件 ZIP 在 `dist/oneui-plugins/0.1.1`，CLI 在 `dist/oneui-tools/0.1.0-preview.6`。适用范围为原生 arm64，实际系统 15.5；13.0 是部署基线，未覆盖 Intel、其他系统实机、Developer ID 与公证，先前本地完整 UI SDK 包仍未加入正式目录。
+
+Mac 自有源码、构建/安装目录、消费工程、缓存与额外 CLI 副本共 16 个路径已清理，保留正式 ZIP、官方 CLI、报告和有界日志；明细为 `mac/cleanup.json`。两个本轮临时预览服务器已停止。Windows `out/plugins-current/uuid-macos` 内自有临时构建目录、克隆、预览数据和辅助脚本清理被自动审批审查以 `blocked by policy` 拒绝，未执行删除、未重试；依赖 junction 及其目标均保留。早期工作目录错误生成的空目录 `website/dist/oneui-plugins/0.1.1` 也保留，未涉及正式交付路径。
