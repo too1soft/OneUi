@@ -233,8 +233,11 @@ private:
         localThemes_.erase(e.widget.get()); // A new widget may reuse a retired address.
         entries_.push_back({e.widget, e.component, e.classes, e.content});
         apply(entries_.back(), sheet_);
-        if (std::dynamic_pointer_cast<ThemeScope>(e.widget))
-            refreshLocalThemes();
+        // Construction is bottom-up. Only this new subtree can have changed;
+        // replaying every sibling scope makes a page of previews quadratic.
+        // An enclosing scope will propagate its inherited tokens when added.
+        if (auto scope = std::dynamic_pointer_cast<ThemeScope>(e.widget))
+            applyLocalTheme(scope, sheet_);
     }
 public:
     const std::vector<std::string>& queryDiagnostics() const{return queryDiagnostics_;}
