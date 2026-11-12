@@ -48,3 +48,54 @@ Pixel drawing moved from `skia_canvas.cpp` (1109 to 1093 physical lines) into
 `skia_pixel_image.cpp` (70 lines). The canvas keeps adapters; image ownership and
 renderer-resource lifetime now have their own boundary. Other canvas text,
 gradient and shadow responsibilities remain in the existing file.
+
+## Android picture recording and raster ownership
+
+Android now records an immutable `SkPicture` on the widget owner thread. A
+dedicated `PictureRasterWorker` owns EGL/Ganesh, including creation, replay,
+swapping, reset and backend destruction. Its EGL context stays current on that
+exclusive thread. Widget state and application services remain on the UI thread;
+the worker receives pictures and source stamps, never Widget pointers/callbacks.
+
+One picture may be in flight and one pending; a newer submission replaces the
+pending picture. Released pictures can invoke pixel-owner callbacks, so retirement
+occurs outside the queue mutex. Lifecycle operations discard pending work and
+wait for in-flight work before returning. Each attach/reset advances a generation;
+old completions do not change the new generation's counters. A rendering failure
+latches the surface unavailable and discards its pending picture until recovery.
+
+`SkiaSurface::present()` now acknowledges queue acceptance. The private host's
+`frames` field counts queued pictures, and remains separate from actual swaps.
+`latestThreadRenderStatistics()` observes the most recently painted surface on
+the calling UI thread, without retaining the surface. Counters reset per generation,
+except the backend's context/resize totals. Non-Android callers receive no snapshot.
+
+`FramePaintScope` records only nonzero application frame IDs actually drawn through
+`RealtimeFrameView` and intersecting the current clip. Frame ID zero opts static
+images out. At most 16 simultaneous sources are recorded, with explicit overflow.
+Source identities survive frame replacement but are renewed after clearing a view.
+`sourceFrameChangesSwapped` compares source/frame pairs in adjacent successfully
+swapped pictures. It includes reappearing sources and is not a globally unique
+frame count. Successful EGL swaps are not compositor presentation fences.
+
+The reference remains RustDesk's bounded RGBA notification and Flutter image
+lifetime. The auxiliary Flutter source at engine
+`69c8c61792f04cc809dfef0c910414fb9afc06cd`, `Shell::OnAnimatorDraw`, posts drawing
+to its raster task runner. That source explains the thread boundary; the actual
+RustDesk APK's Flutter engine version has not been verified. This OneUI worker is
+an independent implementation, without copied RustDesk or Flutter source.
+
+Native Android tests check slow raster backpressure, latest-picture retention,
+duplicate repaint accounting, controlled failure, generation retirement,
+pixel-release callback reentry, backend thread/destruction ownership, nested and
+clipped paint traces, and more than 16 successive (non-concurrent) frame sources.
+All three Android ABIs compile/link these tests; only x86_64 executes on the owned
+emulator. A public HEVC candidate has additionally passed real input and Home
+recovery with a fresh consumed source ID reaching a post-foreground native swap.
+The public website and shared SDK remain unchanged; full RustDesk performance
+and physical-device acceptance are still unproven.
+
+The former 220-line `skia_surface_android.cpp` is now a 90-line recording adapter.
+Its existing EGL lifecycle moved to `egl_picture_backend.cpp` (151 lines); bounded
+picture scheduling and completion ownership reside in `picture_raster_worker.cpp`
+(157 lines). The large shared canvas does not acquire these responsibilities.

@@ -2,6 +2,7 @@
 
 #include "oneui/color.h"
 #include "oneui/pixel_image.h"
+#include "oneui/frame_paint_trace.h"
 
 #include <algorithm>
 #include <cstring>
@@ -14,6 +15,7 @@ namespace oneui {
 struct RealtimeFrameView::StoredVideoFrame {
     std::shared_ptr<const void> owner;
     std::shared_ptr<const PixelImage> image;
+    std::uint64_t sourceId = 0;
     std::shared_ptr<std::vector<std::uint8_t>> mutablePixels;
     const std::uint8_t* pixels = nullptr;
     std::size_t pixelBytes = 0;
@@ -231,6 +233,7 @@ bool RealtimeFrameView::submitOwnedFrame(
     std::shared_ptr<StoredVideoFrame> previous;
     {
         std::lock_guard<std::mutex> lock(mutex_);
+        stored->sourceId = latestFrame_ ? latestFrame_->sourceId : nextFramePaintSource();
         previous = std::exchange(latestFrame_, std::move(stored));
     }
     // The owner can invoke an application release callback. Never run it while
@@ -469,6 +472,9 @@ void RealtimeFrameView::paint(Canvas& canvas) {
         } else {
             canvas.drawPixels(content, snapshot->pixels, snapshot->width, snapshot->height, snapshot->stride, canvasFormat);
         }
+        const auto clip = canvas.clipBounds();
+        const auto visible = clip ? intersectRects(content, *clip) : content;
+        if (visible.width > 0 && visible.height > 0) noteFramePaint(snapshot->sourceId, snapshot->frameId);
         return;
     }
 

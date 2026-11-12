@@ -83,6 +83,7 @@ set(ONEUI_CORE_SOURCES
     src/core/overlay_host_focus.cpp
     src/core/panel.cpp
     src/core/pixel_image.cpp
+    src/core/frame_paint_trace.cpp
     src/core/popup.cpp
     src/core/product_shell.cpp
     src/core/progress_bar.cpp

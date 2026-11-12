@@ -6,8 +6,9 @@ struct ANativeWindow;
 namespace oneui {
 class Canvas;
 namespace mobile {
-// UI-thread EGL/Ganesh surface. Widget ownership stays with WidgetHost across
-// detach/attach. Each surface owns its GL context; EGL display ownership is shared.
+// UI-thread picture recording with one pending picture and one raster thread.
+// Widgets stay on their owner thread. EGL/Ganesh and native-window operations
+// belong exclusively to the raster thread. Release Canvas before present/reset.
 class SkiaSurface final {
   public:
     SkiaSurface();
@@ -17,6 +18,7 @@ class SkiaSurface final {
     bool attach(ANativeWindow *acquiredWindow, int width, int height);
     void reset();
     std::unique_ptr<Canvas> begin(float scale);
+    // True means the picture was queued. Actual EGL swaps have separate stats.
     bool present();
     const std::string &renderer() const;
     const std::string &error() const;
