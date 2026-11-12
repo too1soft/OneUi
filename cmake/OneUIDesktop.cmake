@@ -3,6 +3,7 @@ set(_oneui_desktop_sources
     src/platform/shared/accessibility.cpp
     src/platform/shared/desktop_window.cpp
     src/platform/shared/skia_canvas.cpp
+    src/platform/shared/skia_pixel_image.cpp
     src/platform/shared/skia_path.cpp
     src/platform/shared/skia_gl_setup.cpp)
 find_package(Threads REQUIRED)

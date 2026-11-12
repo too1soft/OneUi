@@ -82,6 +82,7 @@ set(ONEUI_CORE_SOURCES
     src/core/overlay_host_pointer.cpp
     src/core/overlay_host_focus.cpp
     src/core/panel.cpp
+    src/core/pixel_image.cpp
     src/core/popup.cpp
     src/core/product_shell.cpp
     src/core/progress_bar.cpp
@@ -228,6 +229,7 @@ set(ONEUI_WIN32_SOURCES
     src/platform/win32/clipboard_win32.cpp
     src/platform/win32/monitor_win32.cpp
     src/platform/shared/skia_canvas.cpp
+    src/platform/shared/skia_pixel_image.cpp
     src/platform/shared/skia_path.cpp
     src/platform/shared/skia_gl_setup.cpp
     src/platform/win32/window_event_loop_win32.cpp

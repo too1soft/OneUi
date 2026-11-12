@@ -2,6 +2,7 @@
 #include "skia_canvas.h"
 #include "internal/unicode.h"
 #include "skia_path.h"
+#include "skia_pixel_image.h"
 #include "text/text_layout.h"
 #include "text/font_family_list.h"
 #if defined(ONEUI_CIRCLE_MESH_EXPERIMENT)
@@ -138,7 +139,7 @@ struct TextBlobEntry {
 #if defined(ONEUI_CIRCLE_MESH_EXPERIMENT)
 #include "circle_mesh_experiment.inc"
 #endif
-class SkiaCanvasImpl final : public Canvas {
+class SkiaCanvasImpl final : public Canvas, public PixelImageCanvas {
   public:
     explicit SkiaCanvasImpl(SkCanvas &canvas, const std::wstring *defaultFontFamily = nullptr,
                             std::optional<Rect> viewportBounds = std::nullopt)
@@ -693,28 +694,11 @@ class SkiaCanvasImpl final : public Canvas {
 
     void drawPixels(Rect rect, const std::uint8_t *pixels, int width, int height, int stride,
                     CanvasPixelFormat format) override {
-        if (!pixels || width <= 0 || height <= 0 || stride <= 0 || rect.width <= 0.0f ||
-            rect.height <= 0.0f) {
-            return;
-        }
+        drawSkiaPixels(canvas_, rect, pixels, width, height, stride, format);
+    }
 
-        SkColorType colorType = kBGRA_8888_SkColorType;
-        if (format == CanvasPixelFormat::Rgba8888) {
-            colorType = kRGBA_8888_SkColorType;
-        }
-
-        const SkImageInfo imageInfo = SkImageInfo::Make(width, height, colorType, kPremul_SkAlphaType);
-        const SkPixmap pixmap(imageInfo, pixels, static_cast<size_t>(stride));
-        sk_sp<SkImage> image = SkImages::RasterFromPixmapCopy(pixmap);
-        if (!image) {
-            return;
-        }
-
-        SkPaint paint;
-        paint.setAntiAlias(true);
-        // 高质量采样：缩放（尤其缩小，如把大 logo 缩到小尺寸）时用三次 Mitchell 滤波，
-        // 避免最近邻的糊边与锯齿。视频按 1:1/放大提交时同样清晰。
-        canvas_.drawImageRect(image, toSkRect(rect), SkSamplingOptions(SkCubicResampler::Mitchell()), &paint);
+    void drawPixelImage(Rect rect, const std::shared_ptr<const PixelImage>& image) override {
+        drawSkiaPixelImage(canvas_, rect, image);
     }
 
   private:

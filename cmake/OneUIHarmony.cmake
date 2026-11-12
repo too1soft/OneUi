@@ -25,7 +25,8 @@ include(${CMAKE_CURRENT_LIST_DIR}/OneUIYoga.cmake)
 include(${CMAKE_CURRENT_LIST_DIR}/OneUITheme.cmake)
 add_library(oneui_harmony_application SHARED
     src/mobile/widget_host.cpp src/mobile/touch_scroll.cpp src/mobile/text_input.cpp src/mobile/application.cpp
-    src/mobile/native_module_posix.cpp src/platform/shared/skia_canvas.cpp src/platform/shared/skia_path.cpp
+    src/mobile/native_module_posix.cpp src/platform/shared/skia_canvas.cpp
+    src/platform/shared/skia_pixel_image.cpp src/platform/shared/skia_path.cpp
     src/platform/harmonyos/application_surface.cpp platform/harmonyos/native/napi_support.cpp
     platform/harmonyos/native/application_module.cpp platform/harmonyos/native/application_napi.cpp
     platform/harmonyos/native/application_input_napi.cpp)

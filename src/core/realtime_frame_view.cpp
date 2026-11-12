@@ -1,6 +1,7 @@
 #include "oneui/controls/realtime_frame_view.h"
 
 #include "oneui/color.h"
+#include "oneui/pixel_image.h"
 
 #include <algorithm>
 #include <cstring>
@@ -9,6 +10,21 @@
 #include <utility>
 
 namespace oneui {
+
+struct RealtimeFrameView::StoredVideoFrame {
+    std::shared_ptr<const void> owner;
+    std::shared_ptr<const PixelImage> image;
+    std::shared_ptr<std::vector<std::uint8_t>> mutablePixels;
+    const std::uint8_t* pixels = nullptr;
+    std::size_t pixelBytes = 0;
+    int width = 0;
+    int height = 0;
+    int stride = 0;
+    PixelFormat format = PixelFormat::Bgra8888;
+    std::uint64_t frameId = 0;
+    std::uint64_t timestampUs = 0;
+};
+
 namespace {
 
 int bytesPerPixel(PixelFormat format) {
@@ -196,6 +212,12 @@ bool RealtimeFrameView::submitOwnedFrame(
     }
 
     auto stored = std::make_shared<StoredVideoFrame>();
+    CanvasPixelFormat canvasFormat = CanvasPixelFormat::Bgra8888;
+    if (!toCanvasPixelFormat(frame.format, canvasFormat)) return false;
+    stored->image = PixelImage::makeOwned(
+        static_cast<const std::uint8_t*>(frame.data), pixelBytes,
+        frame.width, frame.height, sourceStride, canvasFormat, owner);
+    if (!stored->image) return false;
     stored->owner = std::move(owner);
     stored->pixels = static_cast<const std::uint8_t*>(frame.data);
     stored->pixelBytes = pixelBytes;
@@ -262,6 +284,7 @@ bool RealtimeFrameView::submitDamage(
     }
 
     std::shared_ptr<const void> releasedOwner;
+    std::shared_ptr<const PixelImage> releasedImage;
     ScaleMode mode = ScaleMode::Fit;
     ImageContentAlignment horizontalAlignment = ImageContentAlignment::Center;
     ImageContentAlignment verticalAlignment = ImageContentAlignment::Center;
@@ -283,6 +306,7 @@ bool RealtimeFrameView::submitDamage(
                     static_cast<std::size_t>(compactStride));
             }
             releasedOwner = std::move(latestFrame_->owner);
+            releasedImage = std::move(latestFrame_->image);
             latestFrame_->mutablePixels = std::move(pixels);
             latestFrame_->pixels = latestFrame_->mutablePixels->data();
             latestFrame_->pixelBytes = latestFrame_->mutablePixels->size();
@@ -311,6 +335,7 @@ bool RealtimeFrameView::submitDamage(
     // The old full-frame owner may call application code while being released.
     // Keep that callback outside the view lock.
     releasedOwner.reset();
+    releasedImage.reset();
 
     const Rect bounds = frame();
     const Rect content = scaledContentRect(
@@ -439,7 +464,11 @@ void RealtimeFrameView::paint(Canvas& canvas) {
 
     CanvasPixelFormat canvasFormat = CanvasPixelFormat::Bgra8888;
     if (snapshot && snapshot->pixels && toCanvasPixelFormat(snapshot->format, canvasFormat)) {
-        canvas.drawPixels(content, snapshot->pixels, snapshot->width, snapshot->height, snapshot->stride, canvasFormat);
+        if (snapshot->image) {
+            drawPixelImage(canvas, content, snapshot->image);
+        } else {
+            canvas.drawPixels(content, snapshot->pixels, snapshot->width, snapshot->height, snapshot->stride, canvasFormat);
+        }
         return;
     }
 

@@ -96,18 +96,7 @@ public:
     AccessibilityInfo accessibilityInfo() const override;
 
 private:
-    struct StoredVideoFrame {
-        std::shared_ptr<const void> owner;
-        std::shared_ptr<std::vector<std::uint8_t>> mutablePixels;
-        const std::uint8_t* pixels = nullptr;
-        std::size_t pixelBytes = 0;
-        int width = 0;
-        int height = 0;
-        int stride = 0;
-        PixelFormat format = PixelFormat::Bgra8888;
-        std::uint64_t frameId = 0;
-        std::uint64_t timestampUs = 0;
-    };
+    struct StoredVideoFrame;
 
     Size videoSizeLocked() const;
 
