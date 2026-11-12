@@ -12,6 +12,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace oneui {
@@ -138,6 +139,19 @@ struct StyleNode {
 
 class ONEUI_API StyleSheet {
 public:
+    StyleSheet() = default;
+    // Resolution caches are derived from rules/tokens. Local theme previews
+    // immediately change tokens, so copying those caches only to discard them
+    // makes cold mounts allocate thousands of unused StyleBox values.
+    StyleSheet(const StyleSheet& other)
+        : transient_(other.transient_), rules_(other.rules_), selectors_(other.selectors_),
+          customProperties_(other.customProperties_), version_(other.version_) {}
+    StyleSheet(StyleSheet&&) noexcept = default;
+    StyleSheet& operator=(StyleSheet&&) noexcept = default;
+    StyleSheet& operator=(const StyleSheet& other) {
+        if (this != &other) *this = StyleSheet(other);
+        return *this;
+    }
     void addRule(StyleRule rule);
     // Optional palette for transient surfaces (dialogs/popups and select menus).
     // Weak reference: the application retains the variant, avoiding sheet cycles.
@@ -147,6 +161,9 @@ public:
     std::optional<std::string> customProperty(const std::string& name) const;
     bool addRulesFromCss(const std::string& css, std::string* error = nullptr);
     StyleBox resolve(const StyleNode& node) const;
+    // Resolve native palette declarations through the same CSS parser. A bounded
+    // per-thread cache shares identical token snapshots across theme copies.
+    StyleBox resolveTokens(const std::string& declarations) const;
     StyleLayout resolveLayout(const StyleNode& node) const;
     const std::vector<StyleRule>& rules() const;
     const std::map<std::string, std::string>& customProperties() const;

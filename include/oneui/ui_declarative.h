@@ -147,7 +147,7 @@ private:
         }
         if(auto slider=std::dynamic_pointer_cast<Slider>(w)){applyNativeTheme(*slider,sheet);return;}
         if(std::dynamic_pointer_cast<FontPicker>(w)||std::dynamic_pointer_cast<MediaPicker>(w)||std::dynamic_pointer_cast<MediaPreview>(w)){w->setStyleScope(std::make_shared<StyleSheet>(sheet));return;}
-        if(auto icon=std::dynamic_pointer_cast<IconView>(w)) {icon->setColor(box.foreground.value_or(nativePalette(sheet).ink));return;}
+        if(auto icon=std::dynamic_pointer_cast<IconView>(w)) {icon->setColor(box.foreground?*box.foreground:nativePalette(sheet).ink);return;}
         if(auto tabs=std::dynamic_pointer_cast<Tabs>(w)) {
             bool authored=false;
             for(auto state:{StyleStateNone,StyleStateHover,StyleStateActive,StyleStateSelected,StyleStateDisabled,StyleStateFocus}) {
@@ -244,11 +244,11 @@ public:
     ONEUI_API void inheritTransient(const std::shared_ptr<StyleSheet>& sheet);
     void variant(const Element& e,const std::wstring& value) {
         if((e.component!="Button" && e.component!="ToolButton") || (value!=L"normal" && value!=L"primary" && value!=L"danger" && value!=L"ghost"))throw std::invalid_argument("Button variant must be normal, primary or danger");
-        for(auto& entry:entries_)if(entry.widget.lock()==e.widget){entry.variant=std::string(value.begin(),value.end());apply(entry,sheet_);return;}
+        for(auto it=entries_.rbegin();it!=entries_.rend();++it)if(it->widget.lock()==e.widget){it->variant=std::string(value.begin(),value.end());apply(*it,sheet_);return;}
     }
     void appearance(const Element& e,const std::wstring& value) {
         if(e.component!="Surface" || (value!=L"flat" && value!=L"outlined" && value!=L"raised" && value!=L"tinted"))throw std::invalid_argument("Surface appearance must be flat, outlined, raised or tinted");
-        for(auto& entry:entries_)if(entry.widget.lock()==e.widget){entry.appearance=std::string(value.begin(),value.end());apply(entry,sheet_);return;}
+        for(auto it=entries_.rbegin();it!=entries_.rend();++it)if(it->widget.lock()==e.widget){it->appearance=std::string(value.begin(),value.end());apply(*it,sheet_);return;}
     }
     void invalid(const std::shared_ptr<Widget>& widget,bool value) {
         for(auto& entry:entries_)if(entry.widget.lock()==widget) {
@@ -257,7 +257,7 @@ public:
     }
     void locate(const Element& e,std::string file,int line) {
         e.widget->setDiagnosticSource({e.component,file,line});
-        for(auto& entry:entries_) if(entry.widget.lock()==e.widget) {entry.file=std::move(file);entry.line=line;return;}
+        for(auto it=entries_.rbegin();it!=entries_.rend();++it) if(it->widget.lock()==e.widget) {it->file=std::move(file);it->line=line;return;}
     }
     std::map<const Widget*,Source> sources() const {
         std::map<const Widget*,Source> result;
@@ -273,6 +273,12 @@ public:
     }
     void add(const Element& e) {
         beginRegistration(e);
+        // Property installation normally targets the widget just constructed.
+        // Updating it must not prune and scan every older sibling each time.
+        if (!entries_.empty() && entries_.back().widget.lock() == e.widget) {
+            auto& entry=entries_.back();entry.component=e.component;entry.classes=e.classes;
+            apply(entry,sheet_);return;
+        }
         pruneEntries();
         for (auto& entry : entries_) if (entry.widget.lock() == e.widget) { entry.component=e.component;entry.classes = e.classes; apply(entry,sheet_); return; }
         appendEntry(e);
