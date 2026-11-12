@@ -115,6 +115,10 @@ public final class EditorSurface extends SurfaceView {
             requestFocus();
             post(() -> {
                 if (!hasWindowFocus() || !isFocused() || current == null || current.session != session) return;
+                // Virtual editors share one View. The IME may have closed its
+                // connection without changing the native editor's session.
+                // Rebind on an explicit tap before showing the keyboard.
+                manager.restartInput(this);
                 if (android.os.Build.VERSION.SDK_INT >= 30 && getWindowInsetsController() != null) {
                     getWindowInsetsController().show(android.view.WindowInsets.Type.ime());
                 } else {
