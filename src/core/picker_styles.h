@@ -4,12 +4,9 @@
 namespace oneui {
 inline StyleBox pickerColors(const StyleSheet& sheet) {
     if(!sheet.customProperty("--surface"))return {};
-    StyleSheet colors;
-    for(auto& property:sheet.customProperties())colors.setCustomProperty(property.first,property.second);
     // A partial application palette must not discard every supplied color just
     // because an unrelated optional token is absent.
-    colors.addRulesFromCss("picker {background-color:var(--surface,#f5f7f4);color:var(--ink,#1c2b23);selection-color:var(--selection,#d6eadb);border-color:var(--line,#c6d0c8);}");
-    auto box=colors.resolve({"picker",{},0});
+    auto box=sheet.resolveTokens("background-color:var(--surface,#f5f7f4);color:var(--ink,#1c2b23);selection-color:var(--selection,#d6eadb);border-color:var(--line,#c6d0c8);");
     if(!sheet.customProperty("--selection")) {
         auto bg=box.background.color.value_or(Color{245,247,244});
         auto fg=box.foreground.value_or(Color{28,43,35});

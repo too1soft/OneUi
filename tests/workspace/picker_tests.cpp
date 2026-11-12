@@ -104,7 +104,9 @@ void localDecode() {
     for(int i=0;i<1000&&preview.loading();++i){preview.tickAnimations(i);std::this_thread::sleep_for(std::chrono::milliseconds(1));}
     check(code=="not-found","local missing resource reports error");
 }
+#include "style_rule_cache.inc"
 void themes() {
+    styleRuleCache();
     auto styles=std::make_shared<ui::StyleRegistry>();styles->replace(ui::declarativeTheme());ui::Mount mount({},styles,{});
     std::vector<ui::Element> scopes;std::vector<std::shared_ptr<Label>> labels;
     for(int i=0;i<12;++i) {

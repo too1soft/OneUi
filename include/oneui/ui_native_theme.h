@@ -23,13 +23,9 @@ inline NativePalette nativePalette(const StyleSheet &sheet) {
     // Resolve through the parser, including custom token indirection. No second color parser.
     if (!sheet.customProperty("--surface"))
         return {};
-    StyleSheet tokens;
-    for (const auto &item : sheet.customProperties())
-        tokens.setCustomProperty(item.first, item.second);
-    std::string error;
     // A partial palette is valid. One absent token must not discard all other
     // resolved colors and silently turn native controls back to light defaults.
-    std::string css = "native {";
+    std::string css;
     for (const auto &entry : {std::pair{"--surface", "background-color"},
                              {"--ink", "color"}, {"--muted", "placeholder-color"},
                              {"--line", "border-color"}, {"--selection", "selection-color"},
@@ -37,9 +33,7 @@ inline NativePalette nativePalette(const StyleSheet &sheet) {
         if (sheet.customProperty(entry.first))
             css += std::string(entry.second) + ":var(" + entry.first + ");";
     }
-    if (!tokens.addRulesFromCss(css + "}", &error))
-        return {};
-    const auto box = tokens.resolve({"native", {}, 0});
+    const auto box = sheet.resolveTokens(css);
     NativePalette p;
     p.surface = box.background.color.value_or(p.surface);
     p.ink = box.foreground.value_or(p.ink);

@@ -79,6 +79,16 @@ StyleBox StyleSheet::resolve(const StyleNode& node) const {
     for (const auto* rule : matchingRules(node)) {
         StyleBox current = rule->box;
         if (!rule->declarations.empty()) {
+            // A declaration depends on this sheet's tokens, not on the node
+            // matching its selector. Share it across classes and pseudo-states.
+            // Token/rule edits already invalidate the entire resolve cache.
+            const auto declarationKey = std::string(1, '\x1f') + "declaration:" +
+                std::to_string(std::size_t(rule - rules_.data()));
+            if (auto cached = resolveCache_.find(declarationKey); cached != resolveCache_.end()) {
+                current = cached->second;
+                resolved = mergeStyleBox(std::move(resolved), current);
+                continue;
+            }
             StyleRule dynamicRule;
             for (const auto& [property, value] : rule->declarations) {
                 // The declaration was validated when the CSS was loaded. A
@@ -91,6 +101,7 @@ StyleBox StyleSheet::resolve(const StyleNode& node) const {
                 }
             }
             current = mergeStyleBox(std::move(current), dynamicRule.box);
+            resolveCache_.emplace(declarationKey, current);
         }
         resolved = mergeStyleBox(std::move(resolved), current);
     }
@@ -101,6 +112,28 @@ StyleBox StyleSheet::resolve(const StyleNode& node) const {
 
 const std::vector<StyleRule>& StyleSheet::rules() const {
     return rules_;
+}
+
+StyleBox StyleSheet::resolveTokens(const std::string& declarations) const {
+    struct Cached {
+        std::map<std::string, std::string> tokens;
+        std::string declarations;
+        StyleBox box;
+    };
+    thread_local std::vector<Cached> cache;
+    for (const auto& entry : cache)
+        if (entry.declarations == declarations && entry.tokens == customProperties_)
+            return entry.box;
+    StyleSheet palette;
+    for (const auto& [name, value] : customProperties_)
+        palette.setCustomProperty(name, value);
+    if (!palette.addRulesFromCss("tokens {" + declarations + "}")) return {};
+    auto box = palette.resolve({"tokens", {}, 0});
+    // Include every custom property: callers may reference arbitrary names.
+    // Bound ownership so theme editing cannot grow this forever.
+    if (cache.size() == 16) cache.erase(cache.begin());
+    cache.push_back({customProperties_, declarations, box});
+    return box;
 }
 
 const std::map<std::string, std::string>& StyleSheet::customProperties() const {
