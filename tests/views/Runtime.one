@@ -10,7 +10,7 @@
     <Surface name="child-slot" grow="1"/>
     <Checkbox text="permission" tooltip="Permission toggle" v-model="checked"/>
     <InteractiveSurface @drag="drag"><Text text="Drag"/></InteractiveSurface>
-  <Row :class="title"><Text text="first"/><Text text="second"/><Progress value="0.5" class="paint-progress"/><TimeSeriesChart :series="series" :sample-positions="positions" :axis-labels="labels" range-min="0" range-max="100" thresholds="80 163 166 171 140" threshold-style="2 4" grid-lines="3" grid-style="0 0.7" smooth="false" area-fill="false" dashed-grid="false" axes-visible="false" latest-point="true" line-width="1.8" fill-alpha="24" plot-insets="10 8 19 36" @inspection="inspect"/></Row>
+  <Row :class="title"><Text text="first"/><Text text="second"/><Progress value="0.5" class="paint-progress"/><TimeSeriesChart :series="series" :sample-positions="positions" :axis-labels="labels" :range-min="range_min" :range-max="range_max" thresholds="80 163 166 171 140" threshold-style="2 4" grid-lines="3" grid-style="0 0.7" smooth="false" area-fill="false" dashed-grid="false" axes-visible="false" latest-point="true" line-width="1.8" fill-alpha="24" plot-insets="10 8 19 36" @inspection="inspect"/></Row>
   </Column>
 </template>
 

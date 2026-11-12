@@ -221,7 +221,7 @@ void Runtime::apply(const std::shared_ptr<Instance> &instance, Binding &binding)
                     if (!binding.baseClasses) binding.baseClasses = instance->element.classes;
                     instance->element.classes = *binding.baseClasses;
                     factory.set(instance->element, "class", value.text);
-                } else if(!components::set(instance,r[1],value.borrow()) && !workspaceScalar(*instance,name,value))
+                } else if(!components::set(instance,r[1],value.borrow()) && !chartRangeScalar(*instance,name,value) && !workspaceScalar(*instance,name,value))
                     setScalar(factory, instance->element, name, value);
                 if (name == "basis")
                     if (auto parent = instance->parent.lock())

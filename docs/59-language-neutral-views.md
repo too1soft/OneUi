@@ -1141,6 +1141,13 @@ supported. `sample-positions` uses NumberItem; `axis-labels` uses StringItem.
 
 The template can bind `range-min/max`, `smooth`, `area-fill`, `axes-visible`,
 `latest-point`, `dashed-grid`, `line-width`, `fill-alpha`, and `grid-lines`.
+
+Dynamic range endpoint bindings are read as one finite f64 pair; bind both
+endpoints when replacing a range. Negative and large close coordinates retain
+their values, and an invalid pair preserves the previous native range. See the
+[range-binding maintenance note](internal/chart-range-bindings.md) for the
+notification, compatibility and validation contract.
+
 `plot-insets` is four finite nonnegative numbers in top/right/bottom/left order;
 `grid-style` is vertical line count and stroke width (for example `0 0.7`).
 `@inspection(index:i64,pinned:bool)` forwards native hover/pin/clear semantics.

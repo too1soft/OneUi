@@ -1,4 +1,5 @@
 model Root {
+    r range_min:f64 r range_max:f64
     r series:list<ChartSeries> r positions:list<oneui.v1.NumberItem> r labels:list<oneui.v1.StringItem>
     command inspect(index:i64,pinned:bool)
     rw title: utf8

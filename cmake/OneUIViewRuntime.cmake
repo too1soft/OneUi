@@ -32,6 +32,7 @@ set(ONEUI_VIEW_RUNTIME_SOURCES
     src/views/pane_header_properties.cpp
     src/views/workspace_drag.cpp
     src/views/tree.cpp
+    src/views/chart_range.cpp
     src/views/notifications.cpp
     src/views/list_delta.cpp
     src/views/table_records.cpp

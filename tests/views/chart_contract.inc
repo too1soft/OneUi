@@ -1,5 +1,7 @@
 // Real IR -> record adapter -> native chart -> inspection event.
 #include <cmath>
+#include <limits>
+#include <iomanip>
 #include "../../src/core/time_series_curve.h"
 void chartContract(const char* file) {
  Case c(file);
@@ -43,5 +45,48 @@ void chartContract(const char* file) {
  expect(std::abs(harmonic[1]-1.6f)<0.0001f,"monotone curve uses the weighted harmonic tangent, not the arithmetic mean");
  const auto extrema=oneui::chart_curve::tangents({{0,0},{1,2},{3,1},{4,1}});
  expect(extrema[1]==0 && extrema[2]==0 && extrema[3]==0,"uneven spacing, extrema and flat runs do not overshoot");
+ const auto minimumId=id(c.image,"Root","range_min");
+ const auto maximumId=id(c.image,"Root","range_max");
+ // Notify both changed fields before flushing, in either order. The native
+ // setter must receive a coherent pair without f32 narrowing or a reset.
+ bool notifyMinimum=true;
+ for (const auto& range : std::vector<std::pair<double,double>>{
+     {17,21},{-8,-2},{-4,9},{1e15-8,1e15},{-1e15,-1e15+8},{0,1},{400,500}}) {
+     c.vm.values[minimumId].number=range.first;
+     c.vm.values[maximumId].number=range.second;
+     c.runtime->notify(c.runtime->rootScope,notifyMinimum?minimumId:maximumId);
+     c.runtime->notify(c.runtime->rootScope,notifyMinimum?maximumId:minimumId);
+     c.runtime->flush();
+     if (chart->minimum()!=range.first || chart->maximum()!=range.second)
+         std::cerr << std::setprecision(17) << "chart range expected " << range.first << ", " << range.second
+                   << "; actual " << chart->minimum() << ", " << chart->maximum() << '\n';
+     expect(chart->minimum()==range.first && chart->maximum()==range.second,
+            "bound f64 range updates both endpoints without layout rejection or narrowing");
+     notifyMinimum=!notifyMinimum;
+ }
+ c.vm.values[maximumId].number=600;
+ c.runtime->notify(c.runtime->rootScope,maximumId);c.runtime->flush();
+ expect(chart->minimum()==400 && chart->maximum()==600,"one changed maximum retains the unchanged minimum");
+ c.vm.values[minimumId].number=450;
+ c.runtime->notify(c.runtime->rootScope,minimumId);c.runtime->flush();
+ expect(chart->minimum()==450 && chart->maximum()==600,"one changed minimum retains the unchanged maximum");
+ for (const auto& range : std::vector<std::pair<double,double>>{
+     {5,5},{8,2},{std::numeric_limits<double>::quiet_NaN(),9},
+     {1,std::numeric_limits<double>::infinity()}}) {
+     c.vm.values[minimumId].number=range.first;
+     c.vm.values[maximumId].number=range.second;
+     bool rejected=false;
+     try {
+         c.runtime->notify(c.runtime->rootScope,0);
+         c.runtime->flush();
+     } catch (const oneui::views::Failure& error) {
+         rejected=error.result==ONEUI_VIEW_TYPE;
+     }
+     expect(rejected && chart->minimum()==450 && chart->maximum()==600,
+            "invalid paired range rejects before changing the native range");
+ }
+ c.vm.values[minimumId].number=-20;c.vm.values[maximumId].number=-10;
+ c.runtime->notify(c.runtime->rootScope,0);c.runtime->flush();
+ expect(chart->minimum()==-20 && chart->maximum()==-10,"valid range recovers after rejection");
  c.runtime->close();expect(series.retains==series.releases && point.retains==point.releases && missing.retains==missing.releases,"chart nested record leases balance");
 }

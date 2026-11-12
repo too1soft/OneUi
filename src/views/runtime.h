@@ -218,6 +218,7 @@ struct Runtime : std::enable_shared_from_this<Runtime> {
     void prepareDock(const std::shared_ptr<Instance>&, const std::vector<std::shared_ptr<Widget>>&);
     void wireDock(const std::shared_ptr<Instance>&);
     bool workspaceScalar(Instance&, const std::string&, const Value&);
+    bool chartRangeScalar(Instance&, const std::string&, const Value&);
     bool shortcutScalar(Instance&, const std::string&, const Value&);
     void registerShortcut(Instance&);
     void registerPendingShortcuts();
