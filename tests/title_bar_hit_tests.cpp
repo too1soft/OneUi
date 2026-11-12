@@ -47,7 +47,13 @@ int main() {
     auto modal = std::make_shared<oneui::Panel>();
     modal->setFrame({20, 60, 400, 200});
     root->addOverlay(modal, oneui::OverlayOptions::modal(3));
-    expectTrue("modal blocks dragging the underlying caption", titleBarControlAt(root, {650, 20}));
+    expectTrue("modal leaves the blank caption draggable", !titleBarControlAt(root, {650, 20}));
+    expectTrue("modal preserves caption control classification", titleBarControlAt(root, {400, 20}));
+    int backgroundClicks = 0;
+    search->setOnClick([&] { ++backgroundClicks; });
+    root->onMouseDown(oneui::MouseEvent{oneui::Point{400, 20}});
+    root->onMouseUp(oneui::MouseEvent{oneui::Point{400, 20}});
+    expectTrue("modal still blocks background clicks", backgroundClicks == 0);
     root->removeOverlay(modal.get());
     expectTrue("dismissed modal restores blank drag lane", !titleBarControlAt(root, {650, 20}));
     auto decorated = std::make_shared<oneui::OverlayHost>();

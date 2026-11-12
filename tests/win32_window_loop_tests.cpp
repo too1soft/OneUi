@@ -223,6 +223,19 @@ void testBorderlessCaptionRoutesControlsAndKeepsSingleClickState() {
         SendMessageW(hwnd, WM_NCHITTEST, 0, point(625)) == HTCLIENT);
     expectTrue("blank caption still belongs to native drag",
         SendMessageW(hwnd, WM_NCHITTEST, 0, point(120)) == HTCAPTION);
+    auto welcome = std::make_shared<oneui::Panel>();
+    welcome->setFrame({120, 100, 560, 420});
+    root->addOverlay(welcome, oneui::OverlayOptions::modal(100));
+    expectTrue("welcome modal keeps native caption drag available",
+        SendMessageW(hwnd, WM_NCHITTEST, 0, point(120)) == HTCAPTION);
+    expectTrue("modal does not turn the search control into a drag lane",
+        SendMessageW(hwnd, WM_NCHITTEST, 0, point(400)) == HTCLIENT);
+    int backgroundClicks = 0;
+    search->setOnClick([&] { ++backgroundClicks; });
+    root->onMouseDown(oneui::MouseEvent{oneui::Point{400, 20}});
+    root->onMouseUp(oneui::MouseEvent{oneui::Point{400, 20}});
+    expectTrue("welcome still blocks background control input", backgroundClicks == 0);
+    root->removeOverlay(welcome.get());
     for (bool maximized : {true, false}) {
         SendMessageW(hwnd, WM_NCLBUTTONDBLCLK, HTCAPTION, point(120));
         expectTrue("double click toggles exactly once", window->state().maximized == maximized);

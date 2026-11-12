@@ -29,7 +29,10 @@ inline bool titleBarControlAt(const std::shared_ptr<Widget>& widget, Point point
             const auto& layer = layers[*it];
             if (!layer.child || !layer.child->visible() || layer.child->disabled()) continue;
             if (layer.child->hitTest(point)) return titleBarControlAt(layer.child, point);
-            if (layer.blocksOutsidePointer) return true;
+            // Modal pointer blocking belongs to OverlayHost's event dispatch,
+            // not native caption classification. Keep real controls as client
+            // area while allowing a blank caption to move the entire window.
+            if (layer.blocksOutsidePointer) break;
         }
         if (overlay->content() && overlay->content()->hitTest(point))
             return titleBarControlAt(overlay->content(), point);
