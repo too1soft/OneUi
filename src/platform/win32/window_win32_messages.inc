@@ -103,6 +103,9 @@
             return 0;
         case WM_ERASEBKGND:
             return 1;
+        case WM_PRINTCLIENT:
+            printClient(reinterpret_cast<HDC>(wParam), lParam);
+            return 0;
         case WM_PAINT:
             submitInvalidations();
             paint();

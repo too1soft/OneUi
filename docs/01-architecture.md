@@ -263,3 +263,5 @@ Rust workspace另行验证 safe wrapper、dispatcher、callback 生命周期、p
 - ABI 仍处于 0.x 版本收敛期；
 - 布局 JSON 是结构/几何证据，不替代像素视觉测试；
 - 产品仍负责异步业务、数据持久化、路由和错误恢复，OneUI 不接管业务状态机。
+
+Windows 正常呈现、标准客户区打印及离屏布局的共享职责、消息契约、跨进程限制和实际测试见[客户区重绘维护手册](internal/win32-client-rendering.md)。标准打印已接入实际控件绘制；本机默认 OpenGL 的跨进程系统捕获仍须独立解决。

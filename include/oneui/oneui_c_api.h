@@ -527,6 +527,7 @@ typedef void (*OneUiFrameReleaseCallback)(const void* pixels, void* user_data);
 typedef void (*OneUiRawKeyCallback)(const OneUiRawKeyEvent* event, void* user_data);
 typedef int (*OneUiWindowRawKeyCallback)(const OneUiRawKeyEvent* event, void* user_data);
 typedef void (*OneUiTerminalPointerCallback)(const OneUiTerminalPointerEvent* event, void* user_data);
+typedef int (*OneUiTerminalLocalPointerCallback)(const OneUiTerminalPointerEvent* event, void* user_data);
 typedef void (*OneUiTerminalHyperlinkCallback)(unsigned int hyperlink_id, void* user_data);
 
 enum {
@@ -1729,6 +1730,10 @@ ONEUI_API void oneui_terminal_view_set_on_pointer(
     OneUiWidget* view,
     OneUiTerminalPointerCallback callback,
     void* user_data);
+// Return nonzero to consume local left-button input before native selection.
+// A hover outside the terminal has row/column UINT16_MAX.
+ONEUI_API void oneui_terminal_view_set_on_local_pointer(
+    OneUiWidget* view, OneUiTerminalLocalPointerCallback callback, void* user_data);
 ONEUI_API void oneui_terminal_view_set_on_hyperlink(
     OneUiWidget* view,
     OneUiTerminalHyperlinkCallback callback,

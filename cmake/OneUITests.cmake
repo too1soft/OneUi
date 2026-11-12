@@ -18,13 +18,13 @@ function(oneui_register_core_tests)
         foreach(suite schema diagnostics binary overlay rust workspace)
             add_test(NAME oneui_viewc_${suite}_tests COMMAND "${Python3_EXECUTABLE}" -B
                 "${PROJECT_SOURCE_DIR}/tests/viewc/test_${suite}.py"
-                "$<TARGET_FILE:oneui-viewc>" "${CMAKE_CURRENT_BINARY_DIR}/viewc-tests")
+                "$<TARGET_FILE:oneui-viewc>" "${PROJECT_SOURCE_DIR}/build/capture/viewc-tests")
         endforeach()
         add_test(NAME oneui_viewc_legacy_tests COMMAND "${Python3_EXECUTABLE}" -B
             "${PROJECT_SOURCE_DIR}/examples/declarative/test_compiler.py"
             "$<TARGET_FILE:oneui-viewc>" "${CMAKE_CXX_COMPILER}" "${PROJECT_SOURCE_DIR}/include")
         set_tests_properties(oneui_viewc_legacy_tests PROPERTIES
-            ENVIRONMENT "ONEUI_VIEWC_TEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/viewc-tests")
+            ENVIRONMENT "ONEUI_VIEWC_TEST_ROOT=${PROJECT_SOURCE_DIR}/build/capture/viewc-tests")
     endif()
     add_test(NAME oneui_build_space_tests COMMAND "${Python3_EXECUTABLE}"
         "${PROJECT_SOURCE_DIR}/tests/test_build_space.py")
@@ -100,6 +100,7 @@ function(oneui_register_core_tests)
         add_test(NAME oneui_linux_pipe_tests COMMAND oneui_linux_pipe_tests)
     endif()
     oneui_add_core_test(oneui_control_behavior_tests tests/control_behavior_tests.cpp)
+    oneui_add_core_test(oneui_select_rebinding_tests tests/select_rebinding_tests.cpp)
     oneui_add_core_test(oneui_background_opacity_tests tests/background_opacity_tests.cpp)
     oneui_add_core_test(oneui_style_scope_tests tests/style_scope_tests.cpp)
     oneui_add_core_test(oneui_composition_owner_tests tests/composition_owner_tests.cpp)
@@ -203,6 +204,12 @@ function(oneui_register_native_tests)
     target_include_directories(oneui_developer_tools_window_tests PRIVATE src)
     set_tests_properties(oneui_developer_tools_window_tests PROPERTIES TIMEOUT 15)
     if(WIN32)
+        oneui_add_native_test(oneui_win32_print_client_tests tests/win32_print_client_tests.cpp)
+        target_link_libraries(oneui_win32_print_client_tests PRIVATE user32 gdi32)
+        set_tests_properties(oneui_win32_print_client_tests PROPERTIES TIMEOUT 30 RUN_SERIAL TRUE)
+        add_test(NAME oneui_win32_print_client_software COMMAND oneui_win32_print_client_tests)
+        set_tests_properties(oneui_win32_print_client_software PROPERTIES
+            ENVIRONMENT "ONEUI_RENDERER=software" TIMEOUT 30 RUN_SERIAL TRUE)
         oneui_add_native_test(oneui_win32_accessibility_tests tests/win32_accessibility_tests.cpp)
         set_tests_properties(oneui_win32_accessibility_tests PROPERTIES TIMEOUT 30)
         oneui_add_native_test(oneui_win32_notification_activation_tests tests/win32_notification_activation_tests.cpp)

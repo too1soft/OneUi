@@ -1,7 +1,28 @@
 #include "terminal_view_helpers.h"
+#include <cmath>
 
 namespace oneui {
 using namespace terminal_detail;
+
+namespace {
+Color selectionForeground(Color selection, Color background) {
+    // Selection replaces a cell's background, so retaining an ANSI foreground
+    // can make ordinary light-theme text disappear on the default blue fill.
+    // Choose the higher-contrast neutral after compositing translucent fills;
+    // the cell data, ANSI styling and copied text remain unchanged.
+    const double alpha = selection.a / 255.0;
+    const auto linear = [&](std::uint8_t selected, std::uint8_t base) {
+        const double component = (selected * alpha + base * (1.0 - alpha)) / 255.0;
+        return component <= 0.04045 ? component / 12.92
+                                   : std::pow((component + 0.055) / 1.055, 2.4);
+    };
+    const double luminance = 0.2126 * linear(selection.r, background.r)
+        + 0.7152 * linear(selection.g, background.g)
+        + 0.0722 * linear(selection.b, background.b);
+    const double level = luminance + 0.05;
+    return level * level >= 0.0525 ? Color{0, 0, 0, 255} : Color{255, 255, 255, 255};
+}
+}
 
 namespace {
 void drawTerminalUnderline(
@@ -165,6 +186,7 @@ void TerminalView::paint(Canvas& canvas) {
         bool cursor = false;
     };
 
+    const Color selectedForeground = selectionForeground(selectionBackground_, background_);
     const auto styleFor = [&](const TerminalCell& cell, std::uint16_t row, std::uint16_t column) {
         PaintStyle style{cell.foreground, cell.background, cell.foreground};
         if (hasStyle(cell, TerminalCellInverse)) {
@@ -175,6 +197,7 @@ void TerminalView::paint(Canvas& canvas) {
         }
         if (cellSelected(row, column)) {
             style.background = selectionBackground_;
+            style.foreground = selectedForeground;
         }
         style.cursor = cursorPaintVisible() && cursor_.row == row && cursor_.column == column;
         if (style.cursor && focused() && cursorStyle_ == TerminalCursorStyle::Block) {
@@ -210,6 +233,38 @@ void TerminalView::paint(Canvas& canvas) {
                left.cursor == right.cursor;
     };
 
+    // Merge uniform background rows before painting text. Per-cell antialiasing
+    // otherwise exposes seams at fractional cell sizes, e.g. block hover fills.
+    std::vector<bool> filledRows(rows_, false);
+    const auto uniformBackground = [&](std::uint16_t row, Color& color) {
+        const auto* first = cellAt(row, firstColumn);
+        if (!first) return false;
+        color = styleFor(*first, row, firstColumn).background;
+        if (sameColor(color, background_)) return false;
+        for (std::uint16_t column = firstColumn + 1; column < lastColumn; ++column) {
+            const auto* cell = cellAt(row, column);
+            if (!cell || !sameColor(color, styleFor(*cell, row, column).background)) return false;
+        }
+        return true;
+    };
+    for (std::uint16_t row = firstRow; row < lastRow;) {
+        Color color{0, 0, 0, 0};
+        if (!uniformBackground(row, color)) { ++row; continue; }
+        auto end = static_cast<std::uint16_t>(row + 1);
+        for (; end < lastRow; ++end) {
+            Color next{0, 0, 0, 0};
+            if (!uniformBackground(end, next) || !sameColor(color, next)) break;
+        }
+        canvas.fillRect(Rect{
+            terminalBounds.x + metrics.cellWidth * firstColumn,
+            bounds.y + metrics.cellHeight * row,
+            metrics.cellWidth * (lastColumn - firstColumn),
+            metrics.cellHeight * (end - row),
+        }, color);
+        for (auto filled = row; filled < end; ++filled) filledRows[filled] = true;
+        row = end;
+    }
+
     const auto paintTextRun = [&](std::uint16_t row,
                                   std::uint16_t column,
                                   std::uint16_t span,
@@ -221,8 +276,8 @@ void TerminalView::paint(Canvas& canvas) {
             metrics.cellWidth * static_cast<float>(span),
             metrics.cellHeight,
         };
-        if (!sameColor(style.background, background_) ||
-            (style.cursor && focused() && cursorStyle_ == TerminalCursorStyle::Block)) {
+        if (!filledRows[row] && (!sameColor(style.background, background_) ||
+            (style.cursor && focused() && cursorStyle_ == TerminalCursorStyle::Block))) {
             canvas.fillRect(runRect, style.background);
         }
         if (style.textVisible && !text.empty()) {

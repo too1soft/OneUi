@@ -113,6 +113,7 @@ public:
 #include "window_win32_messages.inc"
 #include "window_win32_state.inc"
 #include "window_win32_scheduling.inc"
+#include "window_win32_client_render.inc"
 #include "window_win32_paint.inc"
 #include "window_win32_diagnostics.inc"
 #include "window_win32_pointer.inc"
@@ -164,6 +165,7 @@ public:
     RECT lastImeRect_{};
     bool swapIntervalEnabled_ = false;
     std::shared_ptr<Widget> content_;
+    bool clientContentPainting_ = false;
     RawKeyHandler rawKeyHandler_;
     std::wstring defaultFontFamily_;
     wchar_t pendingHighSurrogate_ = 0;

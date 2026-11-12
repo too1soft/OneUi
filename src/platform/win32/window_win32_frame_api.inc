@@ -46,24 +46,7 @@
         if (!hwnd_ || !content_ || !content_->visible()) {
             return;
         }
-        const Size logical = clientSize();
-        const Size physical = clientPixelSize();
-        const int width = std::max(1, static_cast<int>(std::ceil(physical.width)));
-        const int height = std::max(1, static_cast<int>(std::ceil(physical.height)));
-        auto surface = SkSurfaces::Raster(SkImageInfo::MakeN32Premul(width, height));
-        if (!surface) {
-            return;
-        }
-        SkCanvas* skCanvas = surface->getCanvas();
-        skCanvas->scale(normalizedDpiScale(), normalizedDpiScale());
-        auto canvasOwner = rendering::makeSkiaCanvas(
-            *skCanvas,
-            &defaultFontFamily_,
-            Rect{0.0f, 0.0f, logical.width, logical.height});
-        auto& canvas = *canvasOwner;
-        content_->setFrame(Rect{0.0f, 0.0f, logical.width, logical.height});
-        content_->paint(canvas);
-        paintTooltip(canvas);
+        renderClientSurface(SK_ColorTRANSPARENT, false);
     }
 
 #ifdef ONEUI_ENABLE_TEST_FRAME_CAPTURE
@@ -74,27 +57,10 @@
         if (!hwnd_ || !content_ || !content_->visible() || path.empty()) {
             return false;
         }
-        const Size logical = clientSize();
-        const Size physical = clientPixelSize();
-        const int width = std::max(1, static_cast<int>(std::ceil(physical.width)));
-        const int height = std::max(1, static_cast<int>(std::ceil(physical.height)));
-        auto surface = SkSurfaces::Raster(SkImageInfo::MakeN32Premul(width, height));
+        auto surface = renderClientSurface(SK_ColorTRANSPARENT, true);
         if (!surface) return false;
-
-        SkCanvas* skCanvas = surface->getCanvas();
-        skCanvas->clear(SK_ColorTRANSPARENT);
-        skCanvas->scale(normalizedDpiScale(), normalizedDpiScale());
-        auto canvasOwner = rendering::makeSkiaCanvas(
-            *skCanvas,
-            &defaultFontFamily_,
-            Rect{0.0f, 0.0f, logical.width, logical.height});
-        auto& canvas = *canvasOwner;
-        content_->setFrame(Rect{0.0f, 0.0f, logical.width, logical.height});
-        content_->paint(canvas);
-        paintTooltip(canvas);
-#if ONEUI_DEVELOPER_TOOLS
-        if(developerTools_ && developerTools_->options.overlay)paintDeveloperOverlay(canvas,*developerTools_,logical.width,logical.height);
-#endif
+        const int width = surface->width();
+        const int height = surface->height();
         SkPixmap pixels;
         if (!surface->peekPixels(&pixels)) return false;
 

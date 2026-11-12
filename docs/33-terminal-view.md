@@ -97,6 +97,38 @@ selection and copy semantics remain stable without repainting the whole view.
 Wide continuation cells reserve layout space for the preceding wide character
 and are not independently painted.
 
+## Selection foreground and terminal content
+
+Selection uses the configured selection fill, but it does not retain an
+arbitrary ANSI foreground on that fill. In a light terminal, an otherwise
+correct dark foreground could disappear against the default dark-blue
+selection. `src/core/terminal_paint.cpp` computes a neutral selected foreground
+once per paint, outside the per-cell style callback.
+
+The calculation composites each selection RGB component over the terminal
+background using the selection alpha, converts the resulting sRGB components
+to linear values, and computes relative luminance `L`. It chooses opaque black
+when `(L + 0.05)^2 >= 0.0525`, otherwise opaque white. This threshold selects
+the larger of black/white contrast ratios, rather than relying on whether the
+application is named dark or light. The calculation uses the configured
+terminal background RGB; it does not measure an arbitrary image or translucent
+desktop behind the terminal.
+
+The chosen foreground is a paint override for selected cells. Frame contents,
+ANSI attributes and copied text are unchanged, and unselected cells retain
+their normal effective styles. Consumers should verify both the visible
+selection and the copied text when changing terminal palettes. Explicit copy
+policy and clipboard access remain responsibilities of the embedding host;
+changing selection colors does not grant remote clipboard authority.
+
+The 2026-11-10 Windows consumer verification used iShell's actual private PTY
+window with the selected release OneUI DLL. Dark and light themes included a
+real selection, Chinese and ANSI output, copy assertions, normal and compact
+windows, privacy and completion. DLL SHA-256 was
+`f2552f1397f7f94bce830e2cb7c5437cc61110174d352fde453d3cae2f47fd03`.
+This is a bounded Windows consumer result, not evidence of macOS/Linux desktop,
+hardware keyboard, IME, every palette, or all framework behavior tests.
+
 ## Rust API
 
 The `oneui` safe binding exposes `TerminalView`, `TerminalCell`,

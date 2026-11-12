@@ -129,9 +129,7 @@
         if (content_ && content_->visible()) {
             const double contentStartMs = currentTimeMs();
             g_primitivePaintTrace = PrimitivePaintTrace{};
-            { ONEUI_VIEW_TIME(Layout); content_->setFrame(Rect{0.0f, 0.0f, logicalWidth, logicalHeight}); }
-            { internal::DiagnosticPaintSpan diagnostic(*content_); content_->paint(canvas); }
-            paintTooltip(canvas);
+            paintClientContent(canvas, logicalWidth, logicalHeight);
             recordContentPaint(currentTimeMs() - contentStartMs);
             recordPrimitivePaint(g_primitivePaintTrace);
             for (std::size_t i = 0; i < traceStageMs_.size(); ++i) traceStageMs_[i] += profile.data.ms[i];
