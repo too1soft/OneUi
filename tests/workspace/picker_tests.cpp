@@ -118,6 +118,13 @@ void themes() {
     int siblingInvalidations=0;scopes[1].widget->setInvalidator([&]{++siblingInvalidations;});
     auto first=scopes[0].as<ThemeScope>();auto revision=first->revision();first->setTokens({{"ink",0xff0000ff}});
     check(first->revision()==revision+1&&siblingInvalidations==0,"one theme delta does not restyle sibling");
+    auto extraText=mount.make("Text");mount.set(extraText,"text",L"New preview");
+    auto extra=mount.make("ThemeScope",{extraText});
+    check(siblingInvalidations==0,"registering a new preview does not restyle existing siblings");
+    auto outer=mount.make("ThemeScope",{extra});
+    outer.as<ThemeScope>()->setTokens({{"ink",0x123456ff}});
+    outer.widget->setFrame({0,0,100,30});canvas.texts.clear();outer.widget->paint(canvas);
+    check(!canvas.texts.empty()&&canvas.texts.back().color.r==0x12,"new outer scope propagates inherited tokens into nested scope");
     for(auto tokens:{std::vector<ThemeColorToken>{{"unknown",0}},{{"ink",-1}},{{"ink",0x100000000ll}},{{"ink",1},{"ink",2}}}) {
         bool rejected=false;try{first->setTokens(tokens);}catch(const std::invalid_argument&){rejected=true;}
         check(rejected&&first->tokens()[0].rgba==0xff0000ff,"invalid token batch preserves old theme");
