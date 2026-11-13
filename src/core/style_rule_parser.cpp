@@ -4,9 +4,51 @@
 #include <stdexcept>
 #include <algorithm>
 #include <cctype>
+#include <list>
 namespace oneui {
 namespace {
 using namespace style_detail;
+// Declaration validation and independent view mounts parse the same theme.
+// Keep only immutable parse results; every caller receives its own sheet,
+// tokens and resolution caches. Existing rules/tokens must still be reparsed
+// because an appended declaration can depend on the caller's environment.
+struct ParsedCssCache {
+    struct Entry {
+        std::string source;
+        StyleSheet sheet;
+    };
+    static constexpr size_t maxEntries = 8;
+    static constexpr size_t maxSourceBytes = 2 * 1024 * 1024;
+    static constexpr size_t maxRules = 8192;
+    std::list<Entry> entries;
+    size_t sourceBytes = 0, ruleCount = 0;
+
+    const StyleSheet* find(const std::string& source) {
+        auto found = std::find_if(entries.begin(), entries.end(),
+            [&](const Entry& entry) { return entry.source == source; });
+        if (found == entries.end()) return nullptr;
+        entries.splice(entries.begin(), entries, found);
+        return &entries.front().sheet;
+    }
+    void remember(const std::string& source, const StyleSheet& sheet) {
+        if (source.size() > maxSourceBytes || sheet.rules().size() > maxRules) return;
+        // Allocate before evicting or changing counters; a failed optimization
+        // must not turn successfully parsed CSS into a failed style update.
+        entries.push_front({source, sheet});
+        entries.front().sheet.setTransientStyleSheet({});
+        sourceBytes += source.size();
+        ruleCount += sheet.rules().size();
+        while (entries.size() > maxEntries || sourceBytes > maxSourceBytes || ruleCount > maxRules) {
+            sourceBytes -= entries.back().source.size();
+            ruleCount -= entries.back().sheet.rules().size();
+            entries.pop_back();
+        }
+    }
+};
+ParsedCssCache& parsedCssCache() {
+    thread_local ParsedCssCache cache;
+    return cache;
+}
 void parseRules(StyleSheet& sheet,const std::string& text,size_t begin,size_t end,
                 std::shared_ptr<const ContainerQuery> query={}) {
     size_t cursor=begin;
@@ -62,6 +104,15 @@ void parseRules(StyleSheet& sheet,const std::string& text,size_t begin,size_t en
 }
 bool StyleSheet::addRulesFromCss(const std::string& css,std::string* error) {
     try {
+        const bool independent = rules_.empty() && customProperties_.empty();
+        if (independent) {
+            if (const auto* cached = parsedCssCache().find(css)) {
+                auto candidate = *cached;
+                candidate.setTransientStyleSheet(transientStyleSheet());
+                *this = std::move(candidate);
+                return true;
+            }
+        }
         auto text=css;
         for(size_t start=0;(start=text.find("/*",start))!=std::string::npos;) {
             auto end=text.find("*/",start+2);
@@ -70,7 +121,12 @@ bool StyleSheet::addRulesFromCss(const std::string& css,std::string* error) {
         }
         // Parsing is transactional, including root tokens and query rules.
         auto candidate=*this;parseRules(candidate,text,0,text.size());
-        *this=std::move(candidate);return true;
+        *this=std::move(candidate);
+        if (independent) {
+            try { parsedCssCache().remember(css, *this); }
+            catch (const std::bad_alloc&) { /* Parse succeeded; caching is optional. */ }
+        }
+        return true;
     }catch(const std::exception& failure){if(error)*error=failure.what();return false;}
 }
 StyleSheet StyleSheet::forContainers(const std::map<std::string,Size>& sizes) const {
