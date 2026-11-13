@@ -28,6 +28,7 @@ void unregisterNativeWindow() {
 }
 int runWindowLoop() {
     const RunLoopScope loopScope;
+    const internal::InteractionInputScope loopInteraction(0, WM_NULL, 0);
     MSG message{};
     while (true) {
         // Win7's non-composited paint path can continuously enqueue paint

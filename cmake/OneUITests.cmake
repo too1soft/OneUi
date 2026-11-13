@@ -217,6 +217,15 @@ function(oneui_register_native_tests)
         target_include_directories(oneui_win32_accessibility_tests PRIVATE src)
         target_link_libraries(oneui_win32_accessibility_tests PRIVATE oleacc oleaut32 ole32 user32)
         find_package(Python3 COMPONENTS Interpreter REQUIRED)
+        # Separate process/source avoids inheriting a disabled writer singleton.
+        add_executable(oneui_interaction_trace_scope_tests
+            tests/interaction_trace_scope_tests.cpp src/core/interaction_trace.cpp)
+        target_include_directories(oneui_interaction_trace_scope_tests PRIVATE include src)
+        target_compile_definitions(oneui_interaction_trace_scope_tests PRIVATE
+            ONEUI_STATIC UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
+        target_link_libraries(oneui_interaction_trace_scope_tests PRIVATE user32)
+        add_test(NAME oneui_interaction_trace_scope_tests COMMAND oneui_interaction_trace_scope_tests)
+        set_tests_properties(oneui_interaction_trace_scope_tests PROPERTIES TIMEOUT 10)
         oneui_add_native_test(oneui_win32_window_loop_tests tests/win32_window_loop_tests.cpp)
         target_link_libraries(oneui_win32_window_loop_tests PRIVATE opengl32)
         target_compile_definitions(oneui_win32_window_loop_tests PRIVATE ONEUI_BUILDING_DLL)

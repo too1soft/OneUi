@@ -194,9 +194,13 @@ void markInteractionPhase(void* nativeWindow, std::uint64_t operation,
 }
 namespace internal {
 InteractionInputScope::InteractionInputScope(std::uintptr_t window, unsigned message, unsigned messageTime) {
-    if (!window || !isInteractionMessage(message) || !writer().enabled()) return;
+    if (!writer().enabled()) return;
     auto& state = threadState();
     previous_ = state.activeOperation; active_ = true;
+    // Each dispatch owns its scope, including paint/posted work reached by a
+    // nested loop. Only a real input dispatch may expose a current operation.
+    state.activeOperation = 0;
+    if (!window || !isInteractionMessage(message)) return;
     state.activeOperation = ++nextOperation;
     state.operations[state.operationSlot++ % state.operations.size()] = {state.activeOperation, window};
     state.windows[window].lastInput = state.activeOperation;
