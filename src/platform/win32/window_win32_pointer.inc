@@ -1,15 +1,14 @@
     void updateCursor(Point point, bool force = false) {
-        if (force && hasLastCursorPoint_ && point.x == lastCursorPoint_.x && point.y == lastCursorPoint_.y) {
-            SetCursor(cursorForKind(lastCursorKind_));
-            return;
-        }
-
         CursorKind next = CursorKind::Default;
         if (content_ && content_->visible()) {
             next = content_->cursor(point);
         }
 
-        if (!force && next == lastCursorKind_) {
+        // IME/text input can clear the OS cursor without changing our cached
+        // kind. Restore it on mouse movement, even inside the same terminal.
+        // A stationary pointer also needs a fresh hit test after the UI changes.
+        const HCURSOR cursor = cursorForKind(next);
+        if (!force && next == lastCursorKind_ && GetCursor() == cursor) {
             lastCursorPoint_ = point;
             hasLastCursorPoint_ = true;
             return;
@@ -18,7 +17,7 @@
         lastCursorKind_ = next;
         lastCursorPoint_ = point;
         hasLastCursorPoint_ = true;
-        SetCursor(cursorForKind(next));
+        SetCursor(cursor);
     }
 
     void dispatchMouseMove(Point point) {

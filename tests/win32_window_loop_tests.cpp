@@ -42,6 +42,37 @@ void testSettingChangeHasDefinedResult() {
     expectTrue("Settings change leaves the message loop usable", window->run() == 0 && completed);
 }
 
+void testPointerRestoresAfterTextInputAndContentChanges() {
+    class CursorSurface final : public oneui::Widget {
+    public:
+        oneui::CursorKind kind = oneui::CursorKind::Text;
+        void paint(oneui::Canvas&) override {}
+        oneui::CursorKind cursor(oneui::Point) const override { return kind; }
+    };
+    auto window = hiddenWindow();
+    auto surface = std::make_shared<CursorSurface>();
+    window->setContent(surface);
+    const auto hwnd = static_cast<HWND>(window->nativeHandle());
+    const HCURSOR previous = GetCursor();
+    const HCURSOR text = LoadCursor(nullptr, IDC_IBEAM);
+    SendMessageW(hwnd, WM_MOUSEMOVE, 0, MAKELPARAM(12, 12));
+    expectTrue("Terminal starts with a text pointer", GetCursor() == text);
+    SetCursor(nullptr); // An input method can clear the OS cursor independently.
+    SendMessageW(hwnd, WM_MOUSEMOVE, 0, MAKELPARAM(13, 12));
+    expectTrue("Moving inside the same terminal restores the pointer", GetCursor() == text);
+
+    POINT point{};
+    GetCursorPos(&point);
+    ScreenToClient(hwnd, &point);
+    surface->kind = oneui::CursorKind::Hidden;
+    SendMessageW(hwnd, WM_MOUSEMOVE, 0, MAKELPARAM(point.x, point.y));
+    expectTrue("A remote surface can deliberately hide its pointer", GetCursor() == nullptr);
+    surface->kind = oneui::CursorKind::Text;
+    SendMessageW(hwnd, WM_SETCURSOR, reinterpret_cast<WPARAM>(hwnd), MAKELPARAM(HTCLIENT, WM_MOUSEMOVE));
+    expectTrue("Changed content restores a stationary pointer", GetCursor() == text);
+    SetCursor(previous);
+}
+
 void testDestroyWithoutRunDoesNotQuitNextWindow() {
     for (int cycle = 0; cycle < 10; ++cycle) {
         { auto unused = hiddenWindow(); }
@@ -238,6 +269,7 @@ void testBorderlessCaptionRoutesControlsAndKeepsSingleClickState() {
 } // namespace
 
 int main() {
+    testPointerRestoresAfterTextInputAndContentChanges();
     testDestroyWithoutRunDoesNotQuitNextWindow();
     testSettingChangeHasDefinedResult();
     testOtherThreadDoesNotPreventExit();
