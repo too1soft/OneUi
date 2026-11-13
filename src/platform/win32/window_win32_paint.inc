@@ -24,6 +24,8 @@
 #endif
     void paint() {
         ONEUI_VIEW_TIME(Paint);
+        const auto inputLayout = inputLayout_;
+        internal::InputLayoutSnapshot::PaintScope inputPaint(*inputLayout);
         const auto interactionPaint = internal::beginInteractionPaint(reinterpret_cast<std::uintptr_t>(hwnd_));
         const double paintStartMs = currentTimeMs();
 #if ONEUI_DEVELOPER_TOOLS

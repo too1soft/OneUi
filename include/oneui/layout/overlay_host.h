@@ -94,6 +94,7 @@ protected:
     void resetInteractionState() override;
 
 private:
+    friend void internal::layoutWidgetSubtree(Widget& widget);
     struct OverlayFocusRecord {
         Widget* child = nullptr;
         bool focusVisible = false;

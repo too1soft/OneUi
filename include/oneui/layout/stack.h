@@ -90,6 +90,7 @@ public:
     void paint(Canvas& canvas) override;
 
 private:
+    friend void internal::layoutWidgetSubtree(Widget& widget);
     void layoutChildren() override;
     struct YogaState;
     mutable std::shared_ptr<YogaState> yoga_;
@@ -101,6 +102,8 @@ private:
     std::function<bool()> query_;
     bool yogaArranged_ = false;
     Size measureYoga(Size available) const;
+    std::shared_ptr<YogaState> prepareYogaLayout();
+    void layoutYogaSubtree();
     void paintYoga(Canvas& canvas);
 
     StackDirection direction_ = StackDirection::Column;

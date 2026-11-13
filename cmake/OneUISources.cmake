@@ -152,6 +152,7 @@ set(ONEUI_CORE_SOURCES
     src/core/tree_view.cpp
     src/core/validation_message.cpp
     src/core/view.cpp
+    src/core/layout_subtree.cpp
     src/core/view_reconcile.cpp
     src/core/virtual_list.cpp
     src/core/widget.cpp

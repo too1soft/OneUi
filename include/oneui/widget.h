@@ -13,8 +13,13 @@
 
 namespace oneui {
 class StyleSheet;
+class Widget;
 struct StyleNode;
-namespace internal { class DeveloperRecorder; struct WidgetPresentationAccess; }
+namespace internal {
+class DeveloperRecorder;
+struct WidgetPresentationAccess;
+void layoutWidgetSubtree(Widget& widget);
+}
 
 enum class MouseButton {
     None,
@@ -317,6 +322,9 @@ protected:
     // Size/content/style changes must still use invalidate().
     void invalidatePaint();
     void invalidateRect(Rect rect);
+    // A child's measurement change can move siblings anywhere in this
+    // container. Pure paint changes retain the child's precise damage.
+    void invalidateChildRect(Rect rect);
     void requestAnimationFrame();
     bool hasAnimationScheduler() const;
     void setFocused(bool focused);

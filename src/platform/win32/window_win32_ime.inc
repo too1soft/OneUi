@@ -79,6 +79,8 @@
             return;
         }
 
+        if (!prepareInputLayout()) return;
+
         const Rect logical = content_->textInputCaretRect();
         const float scale = normalizedDpiScale();
         const LONG left = static_cast<LONG>(std::lround(logical.x * scale));

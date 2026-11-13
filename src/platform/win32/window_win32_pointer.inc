@@ -1,4 +1,5 @@
     void updateCursor(Point point, bool force = false) {
+        if (!prepareInputLayout()) return;
         CursorKind next = CursorKind::Default;
         if (content_ && content_->visible()) {
             next = content_->cursor(point);
@@ -22,8 +23,9 @@
 
     void dispatchMouseMove(Point point) {
         trackMouseLeave();
-        if (!content_ || !content_->visible()) {
-            clearTooltip();
+        const auto alive = callbackWindowAlive_;
+        if (!prepareInputLayout()) {
+            if (alive->load(std::memory_order_acquire)) clearTooltip();
             return;
         }
 
@@ -158,7 +160,7 @@
     }
 
     void dispatchMouseWheel(WPARAM wParam, LPARAM lParam) {
-        if (!content_ || !content_->visible()) {
+        if (!prepareInputLayout()) {
             return;
         }
 

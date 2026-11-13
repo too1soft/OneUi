@@ -5,7 +5,7 @@
         int clickCount,
         const char* phase,
         Handler handler) {
-        if (!content_ || !content_->visible()) {
+        if (!prepareInputLayout()) {
             return;
         }
 
@@ -56,4 +56,19 @@
         if (TrackMouseEvent(&event)) {
             mouseLeaveTracking_ = true;
         }
+    }
+    bool prepareInputLayout() {
+        const auto alive = callbackWindowAlive_;
+        // Keep snapshot state alive if a size observer destroys this window.
+        const auto layout = inputLayout_;
+        for (int attempt = 0; attempt < 4; ++attempt) {
+            if (!hwnd_ || !content_ || !content_->visible()) return false;
+            const auto content = content_;
+            const Size size = clientSize();
+            const bool resolved = layout->prepare(content, Rect{0, 0, size.width, size.height});
+            if (!alive->load(std::memory_order_acquire)) return false;
+            if (content_ != content) continue;
+            return resolved && content->visible();
+        }
+        return false;
     }

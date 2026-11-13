@@ -499,6 +499,21 @@ void Widget::invalidateRect(Rect rect) {
     }
 }
 
+void Widget::invalidateChildRect(Rect rect) {
+    if (!paintInvalidation) {
+        // Ancestors contribute their allocated area in O(1). Asking a View
+        // for virtual paintBounds here would walk all siblings at every level
+        // for every child mutation. Child effects/overflow remain in rect;
+        // the root viewport covers any visible newly arranged siblings.
+        const Rect bounds = frame();
+        const float left = std::min(rect.x, bounds.x), top = std::min(rect.y, bounds.y);
+        const float right = std::max(rect.x + rect.width, bounds.x + bounds.width);
+        const float bottom = std::max(rect.y + rect.height, bounds.y + bounds.height);
+        rect = {left, top, right - left, bottom - top};
+    }
+    invalidateRect(rect);
+}
+
 void Widget::requestAnimationFrame() {
     if (animationScheduler_) {
         animationScheduler_();

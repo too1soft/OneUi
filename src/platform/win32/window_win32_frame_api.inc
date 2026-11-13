@@ -43,6 +43,8 @@
     }
 
     void prepareLayoutSnapshot() override {
+        const auto inputLayout = inputLayout_;
+        internal::InputLayoutSnapshot::PaintScope inputPaint(*inputLayout);
         if (!hwnd_ || !content_ || !content_->visible()) {
             return;
         }
@@ -68,6 +70,8 @@
 
 #ifdef ONEUI_ENABLE_TEST_FRAME_CAPTURE
     bool captureFramePng(const std::wstring& path) override {
+        const auto inputLayout = inputLayout_;
+        internal::InputLayoutSnapshot::PaintScope inputPaint(*inputLayout);
         // Opt-in deterministic QA: clear real window tooltip state before painting.
         // Normal windows and explicit tooltip captures preserve their behavior.
         if(const auto* clear=std::getenv("ONEUI_TEST_CAPTURE_CLEAR_TOOLTIP");clear && std::string(clear)=="1")clearTooltip();

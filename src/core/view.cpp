@@ -35,11 +35,7 @@ bool intersects(Rect lhs, Rect rhs) {
 } // namespace
 
 void View::layoutSubtree() {
-    layoutChildren();
-    const auto children = children_;
-    for (const auto& child : children)
-        if (child->visible())
-            if (auto view = std::dynamic_pointer_cast<View>(child)) view->layoutSubtree();
+    internal::layoutWidgetSubtree(*this);
 }
 
 View::~View() {
@@ -94,7 +90,7 @@ void View::setRectInvalidator(std::function<void(Rect)> invalidator) {
     for (const auto& child : children_) {
         child->refreshRectInvalidatorFromOwner(
             this,
-            [this](Rect rect) { invalidateRect(rect); });
+            [this](Rect rect) { invalidateChildRect(rect); });
     }
 }
 
@@ -119,7 +115,7 @@ void View::installChildCallbacks(Widget& child) {
     child.attachToOwner(
         this,
         [this] { invalidate(); },
-        [this](Rect rect) { invalidateRect(rect); },
+        [this](Rect rect) { invalidateChildRect(rect); },
         [this] { requestAnimationFrame(); });
 }
 

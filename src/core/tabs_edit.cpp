@@ -16,7 +16,7 @@ bool Tabs::beginEdit(int index) {
     if (!editor_) {
         editor_ = std::make_shared<TextField>();
         editor_->attachToOwner(this, [this] { invalidate(); },
-            [this](Rect rect) { invalidateRect(rect); }, [this] { requestAnimationFrame(); });
+            [this](Rect rect) { invalidateChildRect(rect); }, [this] { requestAnimationFrame(); });
         editor_->setOnSubmitted([this](const std::wstring&) { finishEdit(TabEditReason::Submitted); });
     }
     pressedIndex_ = pressedCloseIndex_ = contextPressedIndex_ = -1;

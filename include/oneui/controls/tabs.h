@@ -90,6 +90,7 @@ public:
     AccessibilityInfo accessibilityInfo() const override;
 
 private:
+    friend void internal::layoutWidgetSubtree(Widget& widget);
     void updateCompactMetrics(Canvas& canvas);
     float itemWidth(int index) const;
     float itemOffset(int index) const;

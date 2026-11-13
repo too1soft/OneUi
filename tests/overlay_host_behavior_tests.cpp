@@ -109,8 +109,8 @@ public:
         return focusable;
     }
 
-    void invalidateSelf() {
-        invalidate();
+    void repaintSelf() {
+        invalidatePaint();
     }
 
     void scheduleAnimationSelf() {
@@ -537,7 +537,7 @@ void testContentReceivesOverlayHostInvalidationAndAnimationCallbacks() {
         ++animationSchedules;
     });
 
-    content->invalidateSelf();
+    content->repaintSelf();
     content->scheduleAnimationSelf();
 
     expectEqual("OverlayHost content forwards rect invalidation", rectInvalidations, 1);

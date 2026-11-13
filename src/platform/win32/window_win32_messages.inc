@@ -173,9 +173,10 @@
             return DefWindowProcW(hwnd_, message, wParam, lParam);
         case WM_MOUSEMOVE:
         {
+            const auto alive = callbackWindowAlive_;
             const Point point = logicalPointFromLParam(lParam);
             dispatchMouseMove(point);
-            updateCursor(point);
+            if (alive->load(std::memory_order_acquire)) updateCursor(point);
             return 0;
         }
         case WM_SETCURSOR:
@@ -222,7 +223,10 @@
                 POINT screenPoint{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
                 if (ClientToScreen(hwnd_, &screenPoint)) {
                     const LPARAM screenPosition = MAKELPARAM(screenPoint.x, screenPoint.y);
-                    if (hitTestBorderlessWindow(screenPosition) == HTCAPTION)
+                    const auto alive = callbackWindowAlive_;
+                    const auto hit = hitTestBorderlessWindow(screenPosition);
+                    if (!alive->load(std::memory_order_acquire)) return 0;
+                    if (hit == HTCAPTION)
                         return beginBorderlessCaptionDrag(screenPosition);
                 }
             }
@@ -369,10 +373,13 @@
             }
             return DefWindowProcW(hwnd_, message, wParam, lParam);
         case WM_NCHITTEST:
-            if (const auto hit = hitTestBorderlessWindow(lParam); hit != HTNOWHERE) {
-                return hit;
-            }
+        {
+            const auto alive = callbackWindowAlive_;
+            const auto hit = hitTestBorderlessWindow(lParam);
+            if (!alive->load(std::memory_order_acquire)) return HTNOWHERE;
+            if (hit != HTNOWHERE) return hit;
             return DefWindowProcW(hwnd_, message, wParam, lParam);
+        }
         case WM_NCLBUTTONDOWN:
             // WS_POPUP windows do not get the shell's usual "drag a maximized
             // caption move loop from WM_NCLBUTTONDOWN alone. Restore beneath

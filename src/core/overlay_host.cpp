@@ -175,11 +175,11 @@ void OverlayHost::setInvalidator(std::function<void()> invalidator) {
 void OverlayHost::setRectInvalidator(std::function<void(Rect)> invalidator) {
     View::setRectInvalidator(std::move(invalidator));
     if (content_) {
-        content_->refreshRectInvalidatorFromOwner(this, [this](Rect rect) { invalidateRect(rect); });
+        content_->refreshRectInvalidatorFromOwner(this, [this](Rect rect) { invalidateChildRect(rect); });
     }
     for (const auto &entry : overlays_) {
         entry.child->refreshRectInvalidatorFromOwner(this,
-                                                  [this](Rect rect) { invalidateRect(rect); });
+                                                  [this](Rect rect) { invalidateChildRect(rect); });
     }
 }
 
@@ -356,10 +356,12 @@ std::vector<std::size_t> OverlayHost::hitOrder() const {
 
 void OverlayHost::layoutAnchoredOverlays() {
     const Rect host = frame();
-    for (auto &entry : overlays_) {
+    const auto snapshot = overlays_;
+    for (const auto &entry : snapshot) {
         if (!entry.child) {
             continue;
         }
+        if (!containsOverlay(entry.child.get())) continue;
         if (!entry.anchored) {
             continue;
         }
@@ -411,7 +413,7 @@ void OverlayHost::installOverlayHostCallbacks(Widget &child) {
     child.inheritStyleScope(styleScope(), this);
     child.setTextEnvironment(textFontFamily(), textDpiScale());
     child.attachToOwner(
-        this, [this] { invalidate(); }, [this](Rect rect) { invalidateRect(rect); },
+        this, [this] { invalidate(); }, [this](Rect rect) { invalidateChildRect(rect); },
         [this] { requestAnimationFrame(); });
 }
 

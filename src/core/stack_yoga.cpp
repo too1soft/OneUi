@@ -249,13 +249,15 @@ Size Stack::measureYoga(Size available) const {
     return yoga_->measure(available);
 }
 
-void Stack::paintYoga(Canvas& canvas) {
-    const bool outer = !yogaArranged_;
-    std::shared_ptr<YogaState> state;
-    if (outer) {
-        if (!yoga_) yoga_ = std::make_shared<YogaState>(this);
-        state = yoga_;
-        internal::FrameSpan span(internal::FrameStage::Layout);
+std::shared_ptr<Stack::YogaState> Stack::prepareYogaLayout() {
+    if (yogaArranged_) {
+        if (query_) query_();
+        return {};
+    }
+    if (!yoga_) yoga_ = std::make_shared<YogaState>(this);
+    const auto state = yoga_;
+    internal::FrameSpan span(internal::FrameStage::Layout);
+    try {
         state->calculate({frame().width, frame().height}, true);
         state->assign(*state->root, frame().x, frame().y);
         if(query_ && query_()) {
@@ -263,17 +265,35 @@ void Stack::paintYoga(Canvas& canvas) {
             state->calculate({frame().width,frame().height},true);
             state->assign(*state->root,frame().x,frame().y);
         }
+    } catch (...) {
+        state->clearAssigned();
+        throw;
     }
+    return state;
+}
+
+void Stack::layoutYogaSubtree() {
     struct Guard {
         std::shared_ptr<YogaState> state;
         ~Guard() { if (state) state->clearAssigned(); }
-    } guard{state};
-    if(!outer && query_)query_(); // Revalidate a previously rejected auto-size container.
+    } guard{prepareYogaLayout()};
+    const auto snapshot = children();
+    for (const auto& child : snapshot)
+        if (child) internal::layoutWidgetSubtree(*child);
+}
+
+void Stack::paintYoga(Canvas& canvas) {
+    struct Guard {
+        std::shared_ptr<YogaState> state;
+        ~Guard() { if (state) state->clearAssigned(); }
+    } guard{prepareYogaLayout()};
     if (styleBox_) paintStyleBox(canvas, frame(), *styleBox_);
     View::paint(canvas);
 }
 #else
 Size Stack::measureYoga(Size) const { return {}; }
+std::shared_ptr<Stack::YogaState> Stack::prepareYogaLayout() { return {}; }
+void Stack::layoutYogaSubtree() {}
 void Stack::paintYoga(Canvas&) {}
 #endif
 } // namespace oneui

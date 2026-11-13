@@ -83,6 +83,7 @@ protected:
     void resetInteractionState() override;
 
 private:
+    friend void internal::layoutWidgetSubtree(Widget& widget);
     void installChildCallbacks(Widget& child);
     static bool isChildInteractive(const Widget* child);
     Widget* hitTestChild(Point point) const;

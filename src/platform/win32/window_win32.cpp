@@ -20,6 +20,7 @@
 #include "internal/scroll_trace.h"
 #include "internal/interaction_trace.h"
 #include "internal/animation_wake.h"
+#include "internal/input_layout.h"
 #include "platform/shared/skia_canvas.h"
 #include "platform/shared/title_bar_hit.h"
 #include "platform/shared/window_fit.h"
@@ -166,6 +167,7 @@ public:
     RECT lastImeRect_{};
     bool swapIntervalEnabled_ = false;
     std::shared_ptr<Widget> content_;
+    std::shared_ptr<internal::InputLayoutSnapshot> inputLayout_ = std::make_shared<internal::InputLayoutSnapshot>();
     RawKeyHandler rawKeyHandler_;
     std::wstring defaultFontFamily_;
     wchar_t pendingHighSurrogate_ = 0;

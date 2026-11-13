@@ -168,6 +168,8 @@
         if (!content_ || !widget) {
             return false;
         }
+        ensureCreated();
+        if (!prepareInputLayout()) return false;
         bool focused = false;
         if (content_.get() == widget) {
             focused = widget->isFocusable();

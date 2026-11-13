@@ -25,7 +25,7 @@
         return exStyle;
     }
 
-    LRESULT hitTestBorderlessWindow(LPARAM lParam) const {
+    LRESULT hitTestBorderlessWindow(LPARAM lParam) {
         if (!hwnd_ || !options_.borderless || options_.fullscreen) {
             return HTNOWHERE;
         }
@@ -78,9 +78,12 @@
         }
 
         const bool inTitleBar = localY >= 0 && localY < titleBarHeight;
+        const auto alive = callbackWindowAlive_;
         // Caption controls may live on either edge. Use the rendered widget's
         // hit geometry rather than assuming every client uses Windows chrome.
-        if (inTitleBar && content_) {
+        const bool layoutReady = inTitleBar && prepareInputLayout();
+        if (!alive->load(std::memory_order_acquire)) return HTNOWHERE;
+        if (layoutReady) {
             const Point point{localX / dpiScale(), localY / dpiScale()};
             const auto hitsControl = [&](const auto& self, const std::shared_ptr<Widget>& widget) -> bool {
                 if (!widget || !widget->visible()) return false;

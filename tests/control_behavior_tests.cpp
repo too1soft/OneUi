@@ -185,8 +185,8 @@ public:
         ++paintCalls;
     }
 
-    void requestInvalidation() {
-        invalidate();
+    void requestPaintInvalidation() {
+        invalidatePaint();
     }
 
     int paintCalls = 0;
@@ -2222,7 +2222,7 @@ void testViewPropagatesChildDirtyRectWithoutFullInvalidation() {
         dirtyRects.push_back(rect);
     });
 
-    probe->requestInvalidation();
+    probe->requestPaintInvalidation();
 
     expectEqual("Child dirty rect avoids full invalidation", fullInvalidations, 0);
     expectEqual("Child dirty rect propagated once", static_cast<int>(dirtyRects.size()), 1);

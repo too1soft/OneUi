@@ -220,7 +220,7 @@ void FormField::setRectInvalidator(std::function<void(Rect)> invalidator) {
     if (child_) {
         child_->refreshRectInvalidatorFromOwner(
             this,
-            [this](Rect rect) { invalidateRect(rect); });
+            [this](Rect rect) { invalidateChildRect(rect); });
     }
     applyChildAccessibility();
 }
@@ -358,7 +358,7 @@ void FormField::installChildCallbacks() {
             updatePreferredSize();
             invalidate();
         },
-        [this](Rect rect) { invalidateRect(rect); },
+        [this](Rect rect) { invalidateChildRect(rect); },
         [this] { requestAnimationFrame(); });
 }
 
