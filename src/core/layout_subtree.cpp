@@ -1,5 +1,6 @@
 #include "oneui/view.h"
 #include "oneui/controls/form_field.h"
+#include "oneui/controls/popup.h"
 #include "oneui/controls/tabs.h"
 #include "oneui/controls/text_field.h"
 #include "oneui/layout/overlay_host.h"
@@ -12,6 +13,21 @@ namespace oneui::internal {
 // no event synthesis, raster surface, or new virtual ABI is needed.
 void layoutWidgetSubtree(Widget& widget) {
     if (!widget.visible()) return;
+    if (auto* popup = dynamic_cast<Popup*>(&widget)) {
+        const auto anchor = popup->anchor();
+        if (anchor && canLayoutOwnedChild(*anchor, popup)) {
+            popup->layoutAnchor();
+            if (popup->anchor() == anchor && canLayoutOwnedChild(*anchor, popup))
+                layoutWidgetSubtree(*anchor);
+        }
+        const auto content = popup->content();
+        if (popup->isOpen() && content && content->visible()) {
+            popup->layoutContent();
+            if (popup->isOpen() && popup->content() == content)
+                layoutWidgetSubtree(*content);
+        }
+        return;
+    }
     if (auto* stack = dynamic_cast<Stack*>(&widget)) {
         if (stack->engine_ == StackEngine::Yoga) {
             stack->layoutYogaSubtree();

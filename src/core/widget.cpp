@@ -185,6 +185,12 @@ void Widget::attachToOwner(
     attachAnimationSchedulerToOwner(owner, std::move(animationScheduler));
 }
 
+bool internal::canLayoutOwnedChild(const Widget& widget, const void* owner) {
+    return (!widget.invalidatorOwner_ || widget.invalidatorOwner_ == owner) &&
+           (!widget.rectInvalidatorOwner_ || widget.rectInvalidatorOwner_ == owner) &&
+           (!widget.animationSchedulerOwner_ || widget.animationSchedulerOwner_ == owner);
+}
+
 void Widget::attachInvalidatorToOwner(
     const void* owner,
     std::function<void()> invalidator) {

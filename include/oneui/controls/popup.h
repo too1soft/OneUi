@@ -105,6 +105,7 @@ public:
     bool tickAnimations(double nowMs) override;
 
 private:
+    friend void internal::layoutWidgetSubtree(Widget& widget);
     void installAnchorCallbacks();
     void installContentCallbacks();
     void styleScopeChanged() override;

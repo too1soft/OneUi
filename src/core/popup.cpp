@@ -585,6 +585,9 @@ Rect Popup::resolvedAnchorRect() const {
     if (anchorRect_) {
         return *anchorRect_;
     }
+    if (anchor_ && !internal::canLayoutOwnedChild(*anchor_, this)) {
+        return anchor_->frame();
+    }
     const Rect rect = frame();
     const Size preferred = anchor_ ? anchor_->preferredSize() : preferredSize();
     const float width = preferred.width > 0.0f ? std::min(preferred.width, rect.width) : rect.width;
@@ -603,18 +606,20 @@ Rect Popup::resolvedViewport() const {
 }
 
 void Popup::layoutAnchor() {
-    if (anchor_) {
-        anchor_->setFrame(resolvedAnchorRect());
+    const auto anchor = anchor_;
+    if (anchor && internal::canLayoutOwnedChild(*anchor, this)) {
+        anchor->setFrame(resolvedAnchorRect());
     }
 }
 
 void Popup::layoutContent() {
-    if (!isOpen() || !content_) {
+    const auto content = content_;
+    if (!isOpen() || !content) {
         return;
     }
     const PopupStyle style = resolvedStyle();
     const Rect outer = resolvedContentRect();
-    content_->setFrame(outer.inset(style.padding));
+    content->setFrame(outer.inset(style.padding));
 }
 
 void Popup::focusChild(Widget* child, bool focusVisible) {

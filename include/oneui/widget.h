@@ -19,6 +19,7 @@ namespace internal {
 class DeveloperRecorder;
 struct WidgetPresentationAccess;
 void layoutWidgetSubtree(Widget& widget);
+bool canLayoutOwnedChild(const Widget& widget, const void* owner);
 }
 
 enum class MouseButton {
@@ -336,6 +337,7 @@ protected:
 private:
     void invalidateImpl(bool paintOnly);
     friend class internal::DeveloperRecorder;
+    friend bool internal::canLayoutOwnedChild(const Widget& widget, const void* owner);
     friend struct internal::WidgetPresentationAccess;
     std::shared_ptr<StyleSheet> localStyleScope_;
     std::shared_ptr<StyleSheet> inheritedStyleScope_;
