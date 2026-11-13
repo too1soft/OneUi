@@ -3,14 +3,45 @@
         std::queue<std::function<void()>> callbacks;
         {
             std::lock_guard<std::mutex> lock(postedCallbacksMutex_);
-            callbacks.swap(postedCallbacks_);
+            postedCallbackMessagePending_ = false;
+            if (!deferredPostedCallbackBatches_.empty()) {
+                callbacks.swap(deferredPostedCallbackBatches_.front());
+                deferredPostedCallbackBatches_.pop_front();
+            } else callbacks.swap(postedCallbacks_);
         }
-
-        while (!callbacks.empty()) {
+        const auto started = std::chrono::steady_clock::now();
+        unsigned int dispatched = 0;
+        // A posted message is part of the native loop's budget, not permission
+        // to drain an arbitrary background batch. Keep this batch local while
+        // invoking callbacks: a nested native loop may run newly posted work,
+        // but must not reenter older callbacks held by its caller's batch.
+        while (!callbacks.empty() && dispatched < 32) {
             if (!alive->load(std::memory_order_acquire)) return;
             auto callback = std::move(callbacks.front());
             callbacks.pop();
             callback();
+            ++dispatched;
+            if (std::chrono::steady_clock::now() - started >= std::chrono::milliseconds(4)) break;
+        }
+        if (!alive->load(std::memory_order_acquire)) return;
+        // WM_PAINT is lower priority than posted messages. A continuously
+        // refilled queue must still reveal static content without an rAF.
+        if (!inputPaintPending_) flushPendingPaint();
+        if (!alive->load(std::memory_order_acquire)) return;
+        bool posted = true;
+        {
+            std::lock_guard<std::mutex> lock(postedCallbacksMutex_);
+            // Move the unprocessed batch in O(1), ahead of newer batches. Do
+            // not copy/requeue every remaining callback on each 4 ms yield.
+            if (!callbacks.empty()) deferredPostedCallbackBatches_.push_front(std::move(callbacks));
+            if ((!deferredPostedCallbackBatches_.empty() || !postedCallbacks_.empty()) && !postedCallbackMessagePending_) {
+                postedCallbackMessagePending_ = true;
+                posted = PostMessageW(hwnd_, kOneUiRunPostedCallbacks, 0, 0) != FALSE;
+            }
+        }
+        if (!posted) {
+            acceptingPostedCallbacks_.store(false, std::memory_order_release);
+            discardPostedCallbacks();
         }
     }
 
@@ -130,10 +161,13 @@
 
     void discardPostedCallbacks() {
         std::queue<std::function<void()>> callbacks;
+        std::deque<std::queue<std::function<void()>>> deferred;
         std::queue<std::function<void(double)>> frames;
         {
             std::lock_guard<std::mutex> lock(postedCallbacksMutex_);
             callbacks.swap(postedCallbacks_);
+            deferred.swap(deferredPostedCallbackBatches_);
+            postedCallbackMessagePending_ = false;
         }
         {
             std::lock_guard<std::mutex> lock(animationCallbacksMutex_);
@@ -259,6 +293,19 @@
         if (!hwnd_) {
             return;
         }
-        InvalidateRect(hwnd_, nullptr, FALSE);
-        flushInteractivePaint();
+        // Widgets normally supplied a precise invalidation already. Preserve
+        // it instead of expanding every handled click to the entire client.
+        if (!invalidationPending_) queueInvalidation(nullptr);
+        scheduleInputPaint();
+    }
+
+    void scheduleInputPaint() {
+        if (!hwnd_ || inputPaintPending_) return;
+        inputPaintPending_ = true;
+        requestAnimationFrame([this](double) { inputPaintPending_ = false; });
+        if (!animationFramePending_) {
+            // Timer creation failure must not leave invalidation held forever.
+            inputPaintPending_ = false;
+            submitInvalidations();
+        }
     }

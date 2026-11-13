@@ -23,6 +23,7 @@ public:
     void setPopupViewportProvider(std::function<Rect()>);
     const FontPickerConfig& config() const;
     void setOnSelectionRequested(std::function<void(std::string)>);
+    // Also requested on a closed -> open transition with an empty, idle catalog.
     void setOnRetryRequested(std::function<void()>);
     void setOpen(bool);
     bool open() const;

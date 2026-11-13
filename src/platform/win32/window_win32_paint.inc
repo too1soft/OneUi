@@ -24,6 +24,7 @@
 #endif
     void paint() {
         ONEUI_VIEW_TIME(Paint);
+        const auto interactionPaint = internal::beginInteractionPaint(reinterpret_cast<std::uintptr_t>(hwnd_));
         const double paintStartMs = currentTimeMs();
 #if ONEUI_DEVELOPER_TOOLS
         const auto diagnostics=developerTools_; // Safe if application disables tools during paint.
@@ -81,6 +82,7 @@
 
         if (!paintSurface_) {
             EndPaint(hwnd_, &paintStruct);
+            internal::traceInteractionPaint(interactionPaint, "paint_end", "unknown", 0);
             return;
         }
         if (allocatedSurface) {
@@ -94,6 +96,7 @@
         const int dirtyHeight = dirtyBottom - dirtyY;
         if (dirtyWidth <= 0 || dirtyHeight <= 0) {
             EndPaint(hwnd_, &paintStruct);
+            internal::traceInteractionPaint(interactionPaint, "paint_end", "unknown", 0);
             return;
         }
 
@@ -145,14 +148,21 @@
 #endif
         skCanvas->restore();
 
+        internal::traceInteractionPaint(interactionPaint, "content_paint_end",
+            gpuAvailable_ && grContext_ && windowSurface_ ? "opengl" : "software");
+
         if (gpuAvailable_ && grContext_ && windowSurface_) {
+            internal::traceInteractionPaint(interactionPaint, "submit_begin", "opengl");
             const double submitStartMs = currentTimeMs();
             SkCanvas* presentCanvas = windowSurface_->getCanvas();
             presentCanvas->clear(SK_ColorBLACK);
             paintSurface_->draw(presentCanvas, 0.0f, 0.0f);
             grContext_->flushAndSubmit();
+            internal::traceInteractionPaint(interactionPaint, "submit_end", "opengl");
             const double presentStarted = currentTimeMs();
+            internal::traceInteractionPaint(interactionPaint, "swap_begin", "opengl");
             const BOOL swapped = SwapBuffers(glDC_);
+            internal::traceInteractionPaint(interactionPaint, "swap_return", "opengl", swapped ? 1 : 0);
             internal::workspacePresentMs = currentTimeMs() - presentStarted;
             if (swapped && nvidiaDriver_) {
                 const double censusStarted = internal::workspaceFrameProbe ? currentTimeMs() : 0;
@@ -167,6 +177,7 @@
                 recordPaint(width, height, fullPaint, allocatedSurface, surfaceMs, currentTimeMs() - paintStartMs);
                 flushDeferredImePosition();
                 finishDiagnostics();
+                internal::traceInteractionPaint(interactionPaint, "paint_end", "opengl", 1);
                 return;
             }
             rendererInfo_.reason = "swap-buffers-failed";
@@ -179,11 +190,14 @@
             paintSurfaceHeight_ = 0;
             InvalidateRect(hwnd_, nullptr, FALSE);
             EndPaint(hwnd_, &paintStruct);
+            internal::traceInteractionPaint(interactionPaint, "paint_end", "opengl", 0);
             return;
         }
 
         SkPixmap pixmap;
+        bool blitSucceeded = false;
         if (paintSurface_->peekPixels(&pixmap)) {
+            internal::traceInteractionPaint(interactionPaint, "blit_begin", "software");
             const double blitStartMs = currentTimeMs();
             if (fullPaint) {
                 BITMAPINFO bitmapInfo{};
@@ -194,7 +208,7 @@
                 bitmapInfo.bmiHeader.biBitCount = 32;
                 bitmapInfo.bmiHeader.biCompression = BI_RGB;
 
-                StretchDIBits(
+                const int copied = StretchDIBits(
                     dc,
                     0,
                     0,
@@ -208,6 +222,7 @@
                     &bitmapInfo,
                     DIB_RGB_COLORS,
                     SRCCOPY);
+                blitSucceeded = copied != 0 && copied != GDI_ERROR;
             } else {
                 const std::size_t pixelCount = static_cast<std::size_t>(dirtyWidth) * static_cast<std::size_t>(dirtyHeight);
                 blitScratch_.resize(pixelCount);
@@ -228,7 +243,7 @@
                 bitmapInfo.bmiHeader.biBitCount = 32;
                 bitmapInfo.bmiHeader.biCompression = BI_RGB;
 
-                SetDIBitsToDevice(
+                blitSucceeded = SetDIBitsToDevice(
                     dc,
                     dirtyX,
                     dirtyY,
@@ -240,8 +255,9 @@
                     dirtyHeight,
                     blitScratch_.data(),
                     &bitmapInfo,
-                    DIB_RGB_COLORS);
+                    DIB_RGB_COLORS) != 0;
             }
+            internal::traceInteractionPaint(interactionPaint, "blit_return", "software", blitSucceeded ? 1 : 0);
             recordBlit(currentTimeMs() - blitStartMs);
         }
 
@@ -249,6 +265,7 @@
         recordPaint(width, height, fullPaint, allocatedSurface, surfaceMs, currentTimeMs() - paintStartMs);
         flushDeferredImePosition();
         finishDiagnostics();
+        internal::traceInteractionPaint(interactionPaint, "paint_end", "software", blitSucceeded ? 1 : 0);
     }
 
     static int alignedPaintSurfaceSize(int requested) {

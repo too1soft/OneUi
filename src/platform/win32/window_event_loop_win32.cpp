@@ -1,4 +1,5 @@
 #include "window_event_loop_win32.h"
+#include "internal/interaction_trace.h"
 #include <algorithm>
 #include <vector>
 namespace oneui::win32 {
@@ -44,6 +45,8 @@ int runWindowLoop() {
                 return static_cast<int>(message.wParam);
             }
             TranslateMessage(&message);
+            const internal::InteractionInputScope interaction(
+                reinterpret_cast<std::uintptr_t>(message.hwnd), message.message, message.time);
             DispatchMessageW(&message);
             if (++dispatched >= 64 || GetTickCount64() - batchStarted >= 8)
                 break;

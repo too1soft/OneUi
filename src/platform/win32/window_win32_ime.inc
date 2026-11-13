@@ -74,6 +74,11 @@
             return;
         }
 
+        if (!force && inputPaintPending_) {
+            imePositionAfterPaint_ = true;
+            return;
+        }
+
         const Rect logical = content_->textInputCaretRect();
         const float scale = normalizedDpiScale();
         const LONG left = static_cast<LONG>(std::lround(logical.x * scale));

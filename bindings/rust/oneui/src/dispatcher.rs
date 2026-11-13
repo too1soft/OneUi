@@ -2,7 +2,7 @@
 use super::{run_callback_guarded, sys, Error};
 use std::{
     ptr::NonNull,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, OnceLock},
 };
 
 pub(crate) struct WindowState {
@@ -32,8 +32,27 @@ struct AnimationFrameTask {
     task: Option<Box<dyn FnOnce(f64) + 'static>>,
 }
 
+enum UiTaskTrace {
+    Disabled,
+    Stderr,
+    File(std::path::PathBuf),
+}
+
+fn ui_task_trace() -> &'static UiTaskTrace {
+    static TRACE: OnceLock<UiTaskTrace> = OnceLock::new();
+    TRACE.get_or_init(|| {
+        if let Some(path) = std::env::var_os("ONEUI_UI_TRACE_FILE") {
+            UiTaskTrace::File(path.into())
+        } else if std::env::var_os("ONEUI_UI_TRACE").is_some() {
+            UiTaskTrace::Stderr
+        } else {
+            UiTaskTrace::Disabled
+        }
+    })
+}
+
 pub(crate) fn trace_ui_task(message: &str) {
-    if let Some(path) = std::env::var_os("ONEUI_UI_TRACE_FILE") {
+    if let UiTaskTrace::File(path) = ui_task_trace() {
         use std::io::Write;
 
         if let Ok(mut file) = std::fs::OpenOptions::new()
@@ -47,7 +66,7 @@ pub(crate) fn trace_ui_task(message: &str) {
                 std::thread::current().id()
             );
         }
-    } else if std::env::var_os("ONEUI_UI_TRACE").is_some() {
+    } else if matches!(ui_task_trace(), UiTaskTrace::Stderr) {
         eprintln!(
             "[oneui-ui] [thread={:?}] {message}",
             std::thread::current().id()
@@ -63,7 +82,16 @@ impl WindowState {
     #[track_caller]
     pub(crate) fn with_raw<R>(&self, action: impl FnOnce(*mut sys::OneUiWindow) -> R) -> Option<R> {
         let caller = std::panic::Location::caller();
-        let caller = format!("{}:{}:{}", caller.file(), caller.line(), caller.column());
+        let trace = |message: &str| {
+            if !matches!(ui_task_trace(), UiTaskTrace::Disabled) {
+                trace_ui_task(&format!(
+                    "{message} caller={}:{}:{}",
+                    caller.file(),
+                    caller.line(),
+                    caller.column()
+                ));
+            }
+        };
 
         // Native dialogs and other platform APIs may run a nested message loop.
         // A callback reached through that loop is still on the owning UI thread
@@ -73,10 +101,10 @@ impl WindowState {
         // so it cannot race between the copy and the call.
         if std::thread::current().id() == self.ui_thread {
             let raw = self.current_raw()?;
-            trace_ui_task(&format!("window raw copied on UI thread caller={caller}"));
-            trace_ui_task(&format!("window raw action entered caller={caller}"));
+            trace("window raw copied on UI thread");
+            trace("window raw action entered");
             let result = action(raw.as_ptr());
-            trace_ui_task(&format!("window raw action completed caller={caller}"));
+            trace("window raw action completed");
             return Some(result);
         }
 
@@ -85,22 +113,20 @@ impl WindowState {
         // a cross-thread post is being submitted.
         let raw = match self.raw.try_lock() {
             Ok(raw) => {
-                trace_ui_task(&format!("window raw lock acquired caller={caller}"));
+                trace("window raw lock acquired");
                 raw
             }
             Err(std::sync::TryLockError::WouldBlock) => {
-                trace_ui_task(&format!("window raw lock contended caller={caller}"));
+                trace("window raw lock contended");
                 let raw = self.raw.lock().expect("OneUI window state lock poisoned");
-                trace_ui_task(&format!(
-                    "window raw lock acquired after contention caller={caller}"
-                ));
+                trace("window raw lock acquired after contention");
                 raw
             }
             Err(std::sync::TryLockError::Poisoned(poisoned)) => poisoned.into_inner(),
         };
-        trace_ui_task(&format!("window raw action entered caller={caller}"));
+        trace("window raw action entered");
         let result = raw.as_ref().map(|raw| action(raw.as_ptr()));
-        trace_ui_task(&format!("window raw action completed caller={caller}"));
+        trace("window raw action completed");
         result
     }
 

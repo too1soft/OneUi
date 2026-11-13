@@ -32,6 +32,15 @@ auto hiddenWindow() {
     return window;
 }
 
+class PaintCounterSurface final : public oneui::Widget {
+public:
+    unsigned int paints = 0;
+    void paint(oneui::Canvas&) override { ++paints; }
+    bool onMouseMove(const oneui::MouseEvent&) override { invalidate(); return true; }
+    bool onMouseDown(const oneui::MouseEvent&) override { invalidate(); return true; }
+    bool onMouseUp(const oneui::MouseEvent&) override { invalidate(); return true; }
+};
+
 void testSettingChangeHasDefinedResult() {
     auto window = hiddenWindow();
     const auto hwnd = static_cast<HWND>(window->nativeHandle());
@@ -186,6 +195,119 @@ void testCloseRestoresOtherWindowsGpuContext() {
     primary->close();
 }
 
+void testPostedCallbackFloodYieldsToFrames() {
+    expectWorkerFinishes("Posted callback flood yields to animation", [](oneui::Window& window) {
+        unsigned int completed = 0;
+        unsigned int observed = 128;
+        bool ordered = true;
+        for (unsigned int index = 0; index < 128; ++index) {
+            window.post([&, index] {
+                ordered = ordered && completed == index;
+                ++completed;
+                Sleep(2);
+            });
+        }
+        window.requestAnimationFrame([&](double) {
+            observed = completed;
+            window.close();
+        });
+        return window.run() == 0 && ordered && observed > 0 && observed < 128;
+    });
+}
+
+void testPostedCallbacksPreserveFifoAcrossYield() {
+    expectWorkerFinishes("Posted callbacks retain FIFO after yielding", [](oneui::Window& window) {
+        unsigned int completed = 0;
+        bool ordered = true;
+        for (unsigned int index = 0; index < 96; ++index) {
+            window.post([&, index] {
+                ordered = ordered && completed++ == index;
+                if (index == 0) window.post([&] {
+                    ordered = ordered && completed == 96;
+                    window.close();
+                });
+            });
+        }
+        return window.run() == 0 && ordered && completed == 96;
+    });
+}
+
+void testPostedCallbackCanWakeNestedLoop() {
+    expectWorkerFinishes("Posted work wakes a nested native loop", [](oneui::Window& window) {
+        bool completed = false;
+        window.post([&] {
+            auto nested = hiddenWindow();
+            window.post([&] { completed = true; nested->close(); window.close(); });
+            nested->run();
+            window.close();
+        });
+        return window.run() == 0 && completed;
+    });
+}
+
+void testNestedLoopDoesNotReenterOuterPostedBatch() {
+    expectWorkerFinishes("Nested loop retains the outer posted batch", [](oneui::Window& window) {
+        std::vector<int> order;
+        window.post([&] {
+            order.push_back(1);
+            auto nested = hiddenWindow();
+            bool nestedDone = false;
+            window.post([&] { order.push_back(2); nestedDone = true; nested->close(); });
+            // Model a native modal loop without asking the shared OneUI loop
+            // to quit (that would legitimately cancel a yielded outer batch).
+            MSG message{};
+            while (!nestedDone && GetMessageW(&message, nullptr, 0, 0) > 0) {
+                TranslateMessage(&message);
+                DispatchMessageW(&message);
+            }
+            order.push_back(3);
+        });
+        window.post([&] { order.push_back(4); window.close(); });
+        return window.run() == 0 && order == std::vector<int>({1,2,3,4});
+    });
+}
+
+void testPostedCallbackFloodDoesNotStarveStaticPaint() {
+    expectWorkerFinishes("Posted callback flood reveals static content", [](oneui::Window& window) {
+        auto surface = std::make_shared<PaintCounterSurface>();
+        window.setContent(surface);
+        window.show();
+        unsigned int before = 0;
+        bool paintedBeforeEnd = false;
+        // Consume the initial content tick before starting work. There is no
+        // animation to rescue WM_PAINT from a perpetually nonempty post queue.
+        window.requestAnimationFrame([&](double) {
+            for (unsigned int index = 0; index < 80; ++index) window.post([&, index] {
+                if (index == 0) { before = surface->paints; window.requestRedraw(); }
+                else paintedBeforeEnd = paintedBeforeEnd || surface->paints > before;
+                if (index == 79) window.close();
+            });
+        });
+        return window.run() == 0 && paintedBeforeEnd;
+    });
+}
+
+void testPointerBurstPaintsOnceAfterDispatch() {
+    expectWorkerFinishes("Pointer burst coalesces paint outside input dispatch", [](oneui::Window& window) {
+        auto surface = std::make_shared<PaintCounterSurface>();
+        window.setContent(surface);
+        window.show();
+        const auto hwnd = static_cast<HWND>(window.nativeHandle());
+        SendMessageW(hwnd, WM_PAINT, 0, 0);
+        const unsigned int before = surface->paints;
+        for (unsigned int index = 0; index < 20; ++index)
+            SendMessageW(hwnd, WM_MOUSEMOVE, 0, MAKELPARAM(20 + index, 20));
+        SendMessageW(hwnd, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(30, 20));
+        SendMessageW(hwnd, WM_LBUTTONUP, 0, MAKELPARAM(30, 20));
+        const bool deferred = surface->paints == before;
+        unsigned int after = before;
+        window.requestAnimationFrame([&](double) {
+            window.post([&] { after = surface->paints; window.close(); });
+        });
+        return window.run() == 0 && deferred && after == before + 1;
+    });
+}
+
 void testPreMountStyleAnimationResumes() {
     expectWorkerFinishes("Pre-mount style animation reaches its target", [](oneui::Window& window) {
         oneui::setMotionEnabled(true);
@@ -277,6 +399,12 @@ int main() {
     testNestedLoopPropagatesQuit();
     testExplicitQuitIsPreserved();
     testSecondaryWindowAnimation();
+    testPostedCallbackFloodYieldsToFrames();
+    testPostedCallbacksPreserveFifoAcrossYield();
+    testPostedCallbackCanWakeNestedLoop();
+    testNestedLoopDoesNotReenterOuterPostedBatch();
+    testPostedCallbackFloodDoesNotStarveStaticPaint();
+    testPointerBurstPaintsOnceAfterDispatch();
     testCloseRestoresOtherWindowsGpuContext();
     testPreMountStyleAnimationResumes();
     testBorderlessCaptionRoutesControlsAndKeepsSingleClickState();

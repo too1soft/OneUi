@@ -90,6 +90,7 @@ set(ONEUI_CORE_SOURCES
     src/core/remote_input_region.cpp
     src/core/reorderable_grid.cpp
     src/core/scroll_trace.cpp
+    src/core/interaction_trace.cpp
     src/core/scroll_view.cpp
     src/core/scroll_view_input.cpp
     src/core/selection_model.cpp

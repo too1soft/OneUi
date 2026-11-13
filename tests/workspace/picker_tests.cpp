@@ -61,6 +61,31 @@ void fonts() {
     config.items.clear();config.error=L"Font service unavailable";picker->setConfig(config);check(picker->accessibilityInfo().value==label,"missing selected font retains prior label");
     bool rejected=false;try{config.size=-1;picker->setConfig(config);}catch(const std::invalid_argument&){rejected=true;}check(rejected,"invalid preview size rejected");
 }
+void lazyFontCatalog() {
+    FontPicker picker;
+    picker.setFrame({20,20,300,36});
+    FontPickerConfig config;config.selected="keep";picker.setConfig(config);
+    int requests=0;
+    picker.setOnRetryRequested([&] {
+        ++requests;
+        check(picker.open()&&picker.children()[1]->visible(),"catalog request observes completed open state");
+        auto loading=picker.config();loading.loading=true;
+        picker.setConfig(std::move(loading));
+    });
+    check(requests==0,"closed font picker does not fetch catalog");
+    picker.setOpen(true);
+    check(requests==1&&picker.config().loading&&picker.config().selected=="keep",
+          "first empty open requests catalog once and retains selected family");
+    picker.setOpen(true);picker.setOpen(false);picker.setOpen(true);
+    check(requests==1,"loading and unchanged open do not duplicate catalog requests");
+    config.loading=false;picker.setConfig(config);
+    check(requests==1,"open config update does not recursively reload empty catalog");
+    picker.setOpen(false);picker.setOpen(true);
+    check(requests==2,"empty idle catalog can retry on next open");
+    config.items={{"keep",L"Consolas",L"Existing",true}};picker.setConfig(config);
+    picker.setQuery(L"no match");picker.setOpen(false);picker.setOpen(true);
+    check(requests==2,"loaded catalog and filtered empty results do not refetch");
+}
 void mediaGeneration() {
     auto preview=std::make_shared<MediaPreview>();auto image=preview->image();
     std::vector<MediaPreview::Completion> completions;std::vector<std::shared_ptr<std::atomic<bool>>> cancels;
@@ -141,4 +166,4 @@ void themes() {
 #include "data_menu_replay.inc"
 #include "declarative_popup_tests.inc"
 }
-int main(){try{fonts();mediaGeneration();localDecode();themes();settingsControls();fontConfirmation();dataMenus();dataMenuReplay();declarativePopups();std::cout<<"pickers, menus and popups: 9 scenario groups passed\n";}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}
+int main(){try{fonts();lazyFontCatalog();mediaGeneration();localDecode();themes();settingsControls();fontConfirmation();dataMenus();dataMenuReplay();declarativePopups();std::cout<<"pickers, menus and popups: 10 scenario groups passed\n";}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

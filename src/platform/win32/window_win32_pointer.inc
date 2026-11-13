@@ -32,7 +32,7 @@
         MouseEvent event{point};
         const bool changed = content_->onMouseMove(event);
         if (changed) {
-            flushInteractivePaint();
+            scheduleInputPaint();
         }
     }
 
@@ -106,9 +106,9 @@
             return;
         }
 
-        // User input and live resize feedback should be rendered in the same message turn.
-        // Timer coalescing remains available for animation callbacks and non-interactive work,
-        // but pointer hover/focus/pressed states need immediate feedback to feel attached.
+        // Native live resize/state feedback can run inside the OS modal loop.
+        // Pointer/key input uses scheduleInputPaint so dispatch never waits for
+        // a SwapBuffers call per hover/down/up message.
         const bool traceScroll = internal::scrollTraceEnabled();
         const double startMs = traceScroll ? internal::scrollTraceNowMs() : 0.0;
         flushPendingPaint();

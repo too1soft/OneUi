@@ -18,6 +18,7 @@
 #include "oneui/view.h"
 #include "oneui/controls/window_title_bar.h"
 #include "internal/scroll_trace.h"
+#include "internal/interaction_trace.h"
 #include "internal/animation_wake.h"
 #include "platform/shared/skia_canvas.h"
 #include "platform/shared/title_bar_hit.h"
@@ -84,6 +85,7 @@
 #include <cstdint>
 #include <cmath>
 #include <cstring>
+#include <deque>
 #include <functional>
 #include <iterator>
 #include <map>
@@ -172,6 +174,8 @@ public:
     std::shared_ptr<std::atomic_bool> callbackWindowAlive_ = std::make_shared<std::atomic_bool>(true);
     std::mutex postedCallbacksMutex_;
     std::queue<std::function<void()>> postedCallbacks_;
+    std::deque<std::queue<std::function<void()>>> deferredPostedCallbackBatches_;
+    bool postedCallbackMessagePending_ = false; // Protected by postedCallbacksMutex_.
     std::mutex animationCallbacksMutex_;
     std::queue<std::function<void(double)>> animationCallbacks_;
     WINDOWPLACEMENT savedPlacement_{sizeof(WINDOWPLACEMENT)};
@@ -218,6 +222,7 @@ public:
     HMONITOR animationFrameMonitor_ = nullptr;
     double animationFrameIntervalMs_ = 1000.0 / 60.0;
     bool contentAnimationFramePending_ = false;
+    bool inputPaintPending_ = false;
     bool interactivePaintTimerActive_ = false;
     bool applyingWindowState_ = false;
     bool windowStatePaintPending_ = false;

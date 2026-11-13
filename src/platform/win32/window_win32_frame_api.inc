@@ -148,14 +148,19 @@
         if (!hwnd_ || !acceptingPostedCallbacks_.load(std::memory_order_acquire)) {
             return false;
         }
+        bool posted = true;
         {
             std::lock_guard<std::mutex> lock(postedCallbacksMutex_);
             if (!acceptingPostedCallbacks_.load(std::memory_order_relaxed)) {
                 return false;
             }
             postedCallbacks_.push(std::move(callback));
+            if (!postedCallbackMessagePending_) {
+                postedCallbackMessagePending_ = true;
+                posted = PostMessageW(hwnd_, kOneUiRunPostedCallbacks, 0, 0) != FALSE;
+            }
         }
-        if (!PostMessageW(hwnd_, kOneUiRunPostedCallbacks, 0, 0)) {
+        if (!posted) {
             acceptingPostedCallbacks_.store(false, std::memory_order_release);
             discardPostedCallbacks();
             return false;

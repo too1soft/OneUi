@@ -97,6 +97,11 @@ void FontPicker::setOpen(bool value) {
     s.retry->setVisible(value&&!s.config.loading&&(s.confirmation||!s.config.error.empty()));
     if(changed){if(value)requestFocus(s.search.get());else requestFocus(s.selected.get());}
     layoutChildren();invalidate();
+    // Empty catalogs can be fetched on demand. Complete the open/focus/layout
+    // transition before notifying the owner: it may synchronously setConfig.
+    if(changed&&value&&s.rows->items.empty()&&!s.config.loading&&s.retryRequested) {
+        auto callback=s.retryRequested;callback();
+    }
 }
 void FontPicker::setQuery(std::wstring query){state_->search->setText(std::move(query));filter();}
 const std::wstring& FontPicker::query() const{return state_->search->text();}

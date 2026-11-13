@@ -108,7 +108,9 @@
             paint();
             return 0;
         case kOneUiFlushInvalidations:
-            submitInvalidations();
+            // Input mutations and visual animation are sampled together. Do
+            // not expose an intermediate state before their scheduled frame.
+            if (!inputPaintPending_) submitInvalidations();
             return 0;
         case oneui::kTrayCallbackMessage:
             switch (LOWORD(lParam)) {
@@ -466,6 +468,7 @@
             shutdownGPU();
             destroyShadowWindow(); // 主窗销毁时一并销毁独立的伴随投影窗
             HWND destroyedHwnd = hwnd_;
+            internal::forgetInteractionWindow(reinterpret_cast<std::uintptr_t>(destroyedHwnd));
             SetWindowLongPtrW(hwnd_, GWLP_USERDATA, 0);
             hwnd_ = nullptr;
             win32::unregisterNativeWindow();
