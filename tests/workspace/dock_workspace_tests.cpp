@@ -1,5 +1,6 @@
 #include "oneui/layout/dock_workspace_view.h"
 #include "oneui/controls/drag_handle.h"
+#include "oneui/controls/terminal_view.h"
 #include "oneui/layout/stack.h"
 #include "oneui/style_sheet.h"
 #include "oneui/animation.h"
@@ -159,6 +160,58 @@ void dividerAndActions() {
     f.dock->requestAction(DockIntentKind::Redock,"sftp");check(f.events.back().kind==DockIntentKind::Redock,"redock intent");
     auto title=f.title(0);MouseEvent dbl{title};dbl.clickCount=2;f.root.onMouseDown(dbl);check(f.events.back().kind==DockIntentKind::Maximize,"title doubleclick maximize intent");
 }
+void dividerKeyboardFocus() {
+    Fixture f;
+    auto body=std::dynamic_pointer_cast<View>(f.items[0]->body.lock());
+    auto terminal=std::make_shared<TerminalView>();body->add(terminal);
+    terminal->setFrame(body->frame());
+    std::vector<Key> received;
+    terminal->setOnRawKey([&](const KeyEvent& key){received.push_back(key.key);});
+    auto divider=[&](bool horizontal) {
+        auto r=f.items[0]->frame();
+        Point p=horizontal?Point{r.x+r.width+4,r.y+10}:Point{r.x+50,r.y+r.height+4};
+        f.root.onMouseDown({p});f.root.onMouseUp({p});
+    };
+    auto press=[&](Key key) {KeyEvent e;e.key=key;return f.root.onKeyDown(e);};
+    for(bool horizontal:{false,true}) {
+        divider(horizontal);
+        auto r=terminal->frame();Point p{r.x+20,r.y+20};
+        f.root.onMouseDown({p});f.root.onMouseUp({p});
+        check(terminal->focused(),"terminal receives focus after divider click");
+        auto before=f.items[0]->frame();auto count=f.events.size();
+        for(auto key:{Key::Up,Key::Down,Key::Left,Key::Right,Key::Home,Key::End}) {
+            auto n=received.size();check(press(key),"terminal key handled");
+            check(received.size()==n+1&&received.back()==key,"divider must not steal terminal navigation");
+        }
+        now+=200;f.dock->tickAnimations(now);
+        check(f.events.size()==count&&near(f.items[0]->frame().height,before.height)&&
+              near(f.items[0]->frame().width,before.width),"terminal keys preserve dock geometry and emit no ratio");
+
+        divider(horizontal);
+        before=f.items[0]->frame();count=f.events.size();
+        check(press(horizontal?Key::Left:Key::Up),"explicit divider keyboard resize remains available");
+        check(horizontal?f.items[0]->frame().width<before.width:f.items[0]->frame().height<before.height,
+              "clicking divider returns keyboard ownership from terminal");
+        now+=200;f.dock->tickAnimations(now);
+        check(f.events.size()==count+1&&f.events.back().kind==DockIntentKind::Ratio,"divider keyboard commits once");
+
+        check(f.root.requestFocus(terminal.get()),"programmatic terminal focus succeeds");
+        count=f.events.size();auto n=received.size();
+        press(horizontal?Key::Right:Key::Down);now+=200;f.dock->tickAnimations(now);
+        check(received.size()==n+1&&f.events.size()==count,"programmatic focus also retires divider keyboard ownership");
+    }
+    // Unhandled descendant keys must not fall through to a previously used divider.
+    struct Unhandled : View {
+        bool isFocusable() const override{return true;}
+        bool onKeyDown(const KeyEvent&) override{return false;}
+    };
+    auto child=std::make_shared<Unhandled>();body->add(child);
+    divider(false);check(f.root.requestFocus(child.get()),"unhandled child focus");
+    auto before=f.items[0]->frame();auto count=f.events.size();
+    check(!press(Key::Home),"unhandled child navigation bubbles without resizing");
+    now+=200;f.dock->tickAnimations(now);
+    check(f.events.size()==count&&near(f.items[0]->frame().height,before.height),"unhandled child leaves ratio unchanged");
+}
 bool painted(const test_support::RecordingCanvas& c,Color color,const Rect* rect=nullptr) {
     for(const auto& call:c.fillRects)
         if(call.color.r==color.r&&call.color.g==color.g&&call.color.b==color.b&&
@@ -236,4 +289,4 @@ void previewMotion() {
     setPlatformMotionEnabled(true);
 }
 }
-int main(){try{internal::ScopedUiClock clock(clockNow);geometry();drag();dropPolicy();floatingResize();dividerAndActions();transactionalPointerAndPreview();previewMotion();presentationTransaction();headerGeometry();scopedPartsAndFloatingSurface();std::cout<<"dock workspace: 10 scenario groups passed\n";}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}
+int main(){try{internal::ScopedUiClock clock(clockNow);geometry();drag();dropPolicy();floatingResize();dividerAndActions();dividerKeyboardFocus();transactionalPointerAndPreview();previewMotion();presentationTransaction();headerGeometry();scopedPartsAndFloatingSurface();std::cout<<"dock workspace: 11 scenario groups passed\n";}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

@@ -94,6 +94,7 @@ public:
     bool onMouseMove(const MouseEvent&) override;
     bool onMouseUp(const MouseEvent&) override;
     bool onKeyDown(const KeyEvent&) override;
+    bool onFocusChanged(bool) override;
     CursorKind cursor(Point) const override;
     bool isFocusable() const override { return interactive(); }
 protected:

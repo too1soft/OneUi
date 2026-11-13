@@ -63,6 +63,8 @@ bool DockWorkspaceView::onMouseDown(const MouseEvent& e) {
     }
     auto divider=dividerAt(e.position);
     if(divider!=State::none) {
+        // The divider owns keyboard resizing until a pane regains focus.
+        focusChild(nullptr);
         auto& s=*state_;s.divider=s.focusedDivider=divider;s.beginRatio=s.nodes[divider].ratio;
         if(e.clickCount==2){s.nodes[divider].ratio=.5f;s.divider=State::none;layoutChildren();DockIntent event{DockIntentKind::Ratio,s.snapshot.nodes[divider].id};event.ratio=.5;emit(std::move(event));return true;}
         auto r=s.nodes[divider].divider;bool h=s.snapshot.nodes[divider].axis==DockAxis::Horizontal;
@@ -108,8 +110,12 @@ bool DockWorkspaceView::onMouseUp(const MouseEvent& e) {
     return View::onMouseUp(e);
 }
 bool DockWorkspaceView::onKeyDown(const KeyEvent& e) {
+    if(!interactive())return View::onKeyDown(e);
     auto& s=*state_;
     if(e.pressed&&e.key==Key::Escape&&(s.gesture!=State::Gesture::None||s.keyboardDirty||s.pendingRequest)) {resetInteractionState();return true;}
+    // A remembered divider is not the keyboard owner when a pane is focused.
+    // Delegate even unhandled keys; they must never fall through to resizing.
+    if(activeFocusChild())return View::onKeyDown(e);
     size_t i=s.focusedDivider;
     if(!e.pressed||e.alt||e.control||e.win||i==State::none||s.gesture!=State::Gesture::None||!s.snapshot.maximized.empty()||!s.snapshot.compactActive.empty())return View::onKeyDown(e);
     auto& n=s.nodes[i];bool h=s.snapshot.nodes[i].axis==DockAxis::Horizontal;float ratio=n.ratio;
@@ -121,6 +127,13 @@ bool DockWorkspaceView::onKeyDown(const KeyEvent& e) {
     if(!s.keyboardDirty)s.beginRatio=n.ratio;
     n.ratio=detail::splitAmount(extent,std::clamp(ratio,.001f,.999f),h?a.width:a.height,h?b.width:b.height)/extent;
     s.divider=i;s.keyboardDirty=true;s.idleAt=internal::uiTimeMs()+120;layoutChildren();invalidate();requestAnimationFrame();return true;
+}
+bool DockWorkspaceView::onFocusChanged(bool focused) {
+    // Entering the workspace through a divider must not automatically focus
+    // its first pane, as the generic View focus traversal normally does.
+    if(focused&&state_->focusedDivider!=State::none&&!focusedChild())
+        return Widget::onFocusChanged(focused);
+    return View::onFocusChanged(focused);
 }
 CursorKind DockWorkspaceView::cursor(Point p) const {
     auto [item,edge]=resizeAt(p);
