@@ -8,7 +8,9 @@ from pathlib import Path
 
 def load_shared(filename):
     project = Path(__file__).resolve().parents[1]
-    root = Path(os.environ.get('WINDOWS_COMPAT_ROOT', str(project.parent/'windows-compat'))).resolve()
+    bundled = project/'windows-compat'
+    default_root = bundled if bundled.is_dir() else project.parent/'windows-compat'
+    root = Path(os.environ.get('WINDOWS_COMPAT_ROOT', str(default_root))).resolve()
     lock = json.loads((project/'compat.lock.json').read_text(encoding='utf-8'))
     entries = lock['foundation']['files']
     if filename not in {item['path'] for item in entries}:
