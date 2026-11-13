@@ -477,7 +477,7 @@ void TimeSeriesChart::paint(Canvas& canvas) {
     paintedShiftPx_ = shift * rect.width;
     paintedEaseStep_ = clockStep(nowMs, liveEaseStepMs);
     const double shownMaximum = displayedMaximum(nowMs);
-    const double span = std::max(0.000001, shownMaximum - minimum_);
+    const double span = shownMaximum > minimum_ ? shownMaximum - minimum_ : 1.0;
     for (const auto& threshold : thresholds_) {
         if (threshold.value < minimum_ || threshold.value > shownMaximum) {
             continue;

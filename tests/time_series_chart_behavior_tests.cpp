@@ -302,5 +302,27 @@ int main() {
         expectTrue("it wakes for its next ease step", wake.dueMs() > clock + 1.0 && wake.dueMs() <= clock + 1.0 + 1000.0 / 60.0);
     }
     expectTrue("without a wake scope the chart keeps requesting frames", wide.tickAnimations(clock + 2.0));
+    // Accepted tiny data domains must use their actual range, not a hidden
+    // minimum span that flattens both the line and the endpoint marker.
+    for (const auto& domain : std::vector<std::pair<double, double>>{
+             {2e-9, 4e-9}, {-4e-9, -2e-9}}) {
+        oneui::TimeSeriesChart tiny;
+        tiny.setFrame({0, 0, 240, 120});
+        tiny.setPlotInsets({10, 10, 10, 10});
+        tiny.setRange(domain.first, domain.second);
+        tiny.setSeries({{L"tiny", oneui::Color{49, 139, 234, 255},
+                         {domain.first, domain.second}, false, false}});
+        tiny.setLatestPointVisible(true);
+        tiny.setGridLines(0);
+        tiny.setAxesVisible(false);
+        oneui::test_support::RecordingCanvas painted;
+        tiny.paint(painted);
+        expectEqual("tiny-domain endpoint exists", static_cast<int>(painted.fillEllipses.size()), 1);
+        if (!painted.fillEllipses.empty()) {
+            const auto rect = painted.fillEllipses.front().rect;
+            expectTrue("tiny-domain maximum reaches plot top",
+                       std::abs(rect.y + rect.height * 0.5f - 10.0f) < 0.001f);
+        }
+    }
     return failures == 0 ? 0 : 1;
 }

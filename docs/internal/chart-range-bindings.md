@@ -14,6 +14,11 @@ observation mechanism. It validates a finite `minimum < maximum` pair, then
 calls the native chart's double setter once. No float conversion, clamping,
 sorting, offset or normalization is applied to the data.
 
+The paint path also uses the accepted positive span directly. Its former fixed
+`1e-6` minimum silently flattened valid smaller domains even when the native
+endpoints were correct. The widget behavior test checks actual endpoint paint
+geometry for positive and negative domains with a `2e-9` span.
+
 An unbound counterpart uses the native widget's current endpoint. Applications
 should bind both endpoints when replacing a complete data range; update both
 model fields and notify each changed property before flushing. The runtime's
