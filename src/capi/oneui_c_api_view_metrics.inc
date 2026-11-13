@@ -6,18 +6,25 @@
 #include "oneui/controls/virtual_list.h"
 #include "oneui/layout/virtual_template_list.h"
 namespace {
-std::shared_ptr<oneui::Widget> namedViewElement(const std::shared_ptr<Runtime>& value, OneUiUtf8String name) {
+std::shared_ptr<oneui::Widget> namedViewElement(const std::shared_ptr<Runtime>& value, OneUiUtf8String name,
+                                             bool firstVisible = false) {
         const auto key = text(name);
         check(!key.empty(), ONEUI_VIEW_INVALID_ARGUMENT, "Element name required");
         std::shared_ptr<oneui::Widget> found;
         std::function<void(const std::shared_ptr<oneui::Widget>&)> visit;
         visit = [&](const auto &widget) {
+            if (firstVisible && (found || !widget->visible())) return;
             if (oneui::views::narrow(widget->accessibleName()) == key) {
+                if (firstVisible) {
+                    const auto frame = widget->frame();
+                    if (frame.width > 0 && frame.height > 0) { found = widget; return; }
+                } else {
                 check(!found, ONEUI_VIEW_INVALID_ARGUMENT, "Ambiguous element name");
                 found = widget;
+                }
             }
             if (auto popup = std::dynamic_pointer_cast<oneui::Popup>(widget)) {
-                if (popup->content()) visit(popup->content());
+                if (popup->content() && (!firstVisible || popup->isOpen())) visit(popup->content());
             } else if (auto overlay = std::dynamic_pointer_cast<oneui::OverlayHost>(widget)) {
                 if (overlay->content()) visit(overlay->content());
                 for (const auto &entry : overlay->overlays()) visit(entry.child);
@@ -28,6 +35,20 @@ std::shared_ptr<oneui::Widget> namedViewElement(const std::shared_ptr<Runtime>& 
         check(bool(found), ONEUI_VIEW_NOT_FOUND, "Element not found");
         return found;
 }
+}
+OneUiViewResult oneui_view_first_visible_element_metrics(OneUiView *view, OneUiUtf8String name,
+                                                        OneUiViewElementMetrics *out) {
+    return call(__func__, [&] {
+        check(out && out->struct_size == sizeof(*out), ONEUI_VIEW_INVALID_ARGUMENT, "Metrics output size");
+        const auto value = runtime(view);
+        value->alive();
+        const auto frame = namedViewElement(value, name, true)->frame();
+        OneUiViewElementMetrics result{};
+        result.struct_size = sizeof(result);
+        result.x = frame.x; result.y = frame.y;
+        result.width = frame.width; result.height = frame.height;
+        *out = result;
+    });
 }
 OneUiViewResult oneui_view_mount_point(OneUiView *view, OneUiUtf8String name, OneUiWidget **out) {
     if (out) *out = nullptr;

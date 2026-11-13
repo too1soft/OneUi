@@ -14,6 +14,11 @@ pub struct OneUiViewElementMetrics {
     pub max_scroll_y: f32,
 }
 extern "C" {
+    pub fn oneui_view_first_visible_element_metrics(
+        view: *mut OneUiView,
+        name: OneUiUtf8String,
+        out: *mut OneUiViewElementMetrics,
+    ) -> i32;
     pub fn oneui_view_element_metrics(
         view: *mut OneUiView,
         name: OneUiUtf8String,

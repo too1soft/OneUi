@@ -283,6 +283,11 @@ typedef struct OneUiViewElementMetrics {
 } OneUiViewElementMetrics;
 ONEUI_API OneUiViewResult oneui_view_element_metrics(OneUiView *view,
     OneUiUtf8String name, OneUiViewElementMetrics *out);
+/** Last committed bounds of the first visible, positive-size named element.
+ * Ancestor visibility is respected. No layout/paint/VM flush occurs. This
+ * read-only query permits repeated labels; scroll fields are zero. */
+ONEUI_API OneUiViewResult oneui_view_first_visible_element_metrics(OneUiView *view,
+    OneUiUtf8String name, OneUiViewElementMetrics *out);
 /** Retain a uniquely named MountPoint as a Panel handle for page composition.
  * The caller owns the handle (oneui_widget_destroy). Lookup is UI-thread only,
  * outside callbacks. Non-MountPoint elements return TYPE; no raw child escapes. */

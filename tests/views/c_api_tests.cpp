@@ -79,6 +79,7 @@ struct ApiCase : Case {
 #include "child_destination_lifecycle.inc"
 #include "virtual_template_metrics.inc"
 #include "overlay_focus_window.inc"
+#include "first_visible_metrics.inc"
 int main(int argc, char **argv) {
     for (const auto name : {"note-outline", "box-outline", "sparkles-outline", "toolbox", "shield-outline", "globe", "import-outline", "sidebar-outline"}) {
         expect(oneui::ui::namedIcon(name).has_value(), "shell icon name");
@@ -87,6 +88,7 @@ int main(int argc, char **argv) {
     if (argc != 2)
         return 2;
     try {
+        firstVisibleMetricsContract(argv[1]);
         childMountContract(argv[1]);
         childDestinationContract(argv[1]);
         childDestinationCloseContract(argv[1]);

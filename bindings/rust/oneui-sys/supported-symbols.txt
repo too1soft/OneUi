@@ -610,6 +610,7 @@ oneui_view_code_editor_select_document
 oneui_view_code_editor_state
 oneui_view_code_editor_text
 oneui_view_element_metrics
+oneui_view_first_visible_element_metrics
 oneui_view_flush
 oneui_view_reload
 oneui_view_get_error

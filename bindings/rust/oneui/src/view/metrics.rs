@@ -11,6 +11,19 @@ pub struct ElementMetrics {
     pub max_scroll_y: f32,
 }
 impl View {
+    /// Last committed bounds of the first visible, positive-size named control.
+    /// Repeated labels are allowed; hidden ancestors are excluded. No flush or
+    /// paint occurs, so this is suitable for lightweight onboarding anchors.
+    pub fn first_visible_element_frame(&self, name: &str) -> VmResult<Rect> {
+        let mut value: sys::OneUiViewElementMetrics = unsafe { std::mem::zeroed() };
+        value.struct_size = std::mem::size_of_val(&value) as u32;
+        check(unsafe {
+            sys::oneui_view_first_visible_element_metrics(
+                self.raw.as_ptr(), sys::OneUiUtf8String::from_str(name), &mut value,
+            )
+        })?;
+        Ok(Rect { x: value.x, y: value.y, width: value.width, height: value.height })
+    }
     /// Last committed pane geometry, addressed by stable key rather than label.
     pub fn dock_item_frame(&self, workspace: &str, pane: &str) -> VmResult<Rect> {
         let mut value: sys::OneUiViewElementMetrics = unsafe { std::mem::zeroed() };
