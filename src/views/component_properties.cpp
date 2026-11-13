@@ -143,6 +143,12 @@ void Mount::set(Element &e, const std::string &key, const std::wstring &value) {
             throw std::invalid_argument("orientation must be horizontal or vertical");
         e.as<SplitView>()->setOrientation(value == L"horizontal" ? SplitOrientation::Horizontal
                                                                  : SplitOrientation::Vertical);
+    } else if (key == "direction") {
+        if (e.component != "Row" && e.component != "Column")
+            throw std::invalid_argument("direction requires Row or Column");
+        if (value != L"row" && value != L"column")
+            throw std::invalid_argument("direction must be row or column");
+        e.as<Stack>()->setDirection(value == L"row" ? StackDirection::Row : StackDirection::Column);
     } else if (key == "align") {
         if (e.content) {
             if (value != L"start" && value != L"center" && value != L"end")

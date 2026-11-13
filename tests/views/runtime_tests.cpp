@@ -13,6 +13,7 @@ using namespace viewtest;
 #include "rich_table_visibility.inc"
 #include "rich_table_filter.inc"
 #include "chart_contract.inc"
+#include "layout_direction_contract.inc"
 #include "dialog_caption_contract.inc"
 #include "virtual_template_contract.inc"
 #include "tabs_sizing.inc"
@@ -25,6 +26,7 @@ int main(int argc, char **argv) {
     try {
         virtualTemplateContract(argv[1]);
         chartContract(argv[1]);
+        layoutDirectionContract(argv[1]);
         dialogCaptionContract();
         surfaceDrag(argv[1]);
         {

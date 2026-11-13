@@ -4,13 +4,14 @@
 #include "legacy_branch_contracts.h"
 #include "legacy_input_contract.h"
 #include "legacy_virtual_list_contract.h"
+#include "legacy_layout_contract.h"
 
 namespace oneview {
 inline const std::vector<ComponentContract>& historicalComponentContracts() {
     static const auto contracts = [] {
         auto result = legacyBaselineControls();
         for (const auto* group : {&legacyBaselineWorkspace(), &legacyBranchContracts(),
-                                 &legacyVirtualListContracts(), &legacyInputContracts()})
+                                 &legacyVirtualListContracts(), &legacyInputContracts(), &legacyLayoutContracts()})
             result.insert(result.end(), group->begin(), group->end());
         return result;
     }();

@@ -1,5 +1,5 @@
 <template view-model="Root">
-  <Column>
+  <Column :direction="direction">
     <Text :class="title" :text="title"/>
     <Input v-model="title"/>
     <Button text="Run" @click="click"/>

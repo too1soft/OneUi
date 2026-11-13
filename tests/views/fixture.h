@@ -154,6 +154,8 @@ struct Case {
         : image(load(file,components?&components->contracts:nullptr)), vm(image, "Root"), a(image, "Item"), b(image, "Item"),
           title(id(image, "Root", "title")), rows(id(image, "Root", "rows")) {
         vm.text(title, "initial");
+        if (image.schema.model("Root").properties.count("direction"))
+            vm.text(id(image, "Root", "direction"), "column");
         if (image.schema.model("Root").properties.count("range_max"))
             vm.values[id(image, "Root", "range_max")].number = 100;
         vm.values[id(image, "Root", "visible")].integer = 1;
