@@ -36,6 +36,9 @@ inline bool titleBarControlAt(const std::shared_ptr<Widget>& widget, Point point
         }
         if (overlay->content() && overlay->content()->hitTest(point))
             return titleBarControlAt(overlay->content(), point);
+        // OverlayHost can be focusable while trapping a modal scope. It is
+        // still an ownership container, never a caption control by itself.
+        return false;
     }
     if (const auto view = std::dynamic_pointer_cast<View>(widget)) {
         const auto& children = view->children();

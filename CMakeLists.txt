@@ -363,3 +363,5 @@ endif()
 if(WIN32 AND TARGET oneui AND TARGET oneui-viewc)
     add_subdirectory(examples/workspace_interactions)
 endif()
+
+include(cmake/OneUIMsvcDependencies.cmake)
