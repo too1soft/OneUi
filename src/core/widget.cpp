@@ -6,7 +6,15 @@
 #include <atomic>
 
 namespace oneui {
-namespace { std::atomic<std::uint64_t> nextInputSession{1}; }
+namespace {
+std::atomic<std::uint64_t> nextInputSession{1};
+thread_local bool paintInvalidation = false;
+struct PaintInvalidationScope {
+    bool previous = paintInvalidation;
+    explicit PaintInvalidationScope(bool paintOnly) { paintInvalidation = paintOnly; }
+    ~PaintInvalidationScope() { paintInvalidation = previous; }
+};
+}
 Widget::Widget() : lifetime_(new int(0), internal::WidgetLifetime{}),
     textInputSession_(nextInputSession.fetch_add(1, std::memory_order_relaxed)) {}
 
@@ -452,7 +460,18 @@ void Widget::setFocused(bool focused) {
 }
 
 void Widget::invalidate() {
-    ++measureRevision_;
+    invalidateImpl(false);
+}
+
+void Widget::invalidatePaint() {
+    invalidateImpl(true);
+}
+
+void Widget::invalidateImpl(bool paintOnly) {
+    if (!paintOnly) ++measureRevision_;
+    // The flag follows synchronous rectangle propagation only. A normal content
+    // mutation during an invalidator callback resets it for that entire chain.
+    PaintInvalidationScope scope(paintOnly);
     if (rectInvalidator_) {
         const Rect current=paintBounds();Rect dirty=current;
         if(lastPaintInvalidation_.width>0 && lastPaintInvalidation_.height>0) {
@@ -468,11 +487,15 @@ void Widget::invalidate() {
 }
 
 void Widget::invalidateRect(Rect rect) {
-    ++measureRevision_;
+    if (!paintInvalidation) ++measureRevision_;
     if (rectInvalidator_) {
         rectInvalidator_(rect);
     } else {
-        invalidate();
+        if (paintInvalidation) {
+            if (invalidator_) invalidator_();
+        } else {
+            invalidate();
+        }
     }
 }
 

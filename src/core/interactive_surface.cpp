@@ -336,7 +336,7 @@ bool InteractiveSurface::tickAnimations(double nowMs) {
     running = backgroundTransition_.tick(nowMs) || running;
     running = borderTransition_.tick(nowMs) || running;
     if (running) {
-        invalidate();
+        invalidatePaint();
     }
     return running;
 }

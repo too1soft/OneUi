@@ -527,7 +527,7 @@ bool Button::tickAnimations(double nowMs) {
     running = foregroundTransition_.tick(nowMs) || running;
     running = borderTransition_.tick(nowMs) || running;
     if (running) {
-        invalidate();
+        invalidatePaint();
     }
     return running;
 }

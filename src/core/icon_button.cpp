@@ -210,7 +210,7 @@ void IconButton::beginVisualTransition(StyleBox from, StyleBox target) {
 bool IconButton::tickAnimations(double nowMs) {
     const bool running = visualTransition_.tick(nowMs);
     if (running) {
-        invalidate();
+        invalidatePaint();
     }
     return running;
 }

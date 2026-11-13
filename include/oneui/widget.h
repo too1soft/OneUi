@@ -313,6 +313,9 @@ protected:
     std::uint64_t textInputSession() const { return textInputSession_; }
     std::weak_ptr<int> lifetimeToken() const { return lifetime_; }
     void invalidate();
+    // Redraw visual changes without invalidating ancestor measurement caches.
+    // Size/content/style changes must still use invalidate().
+    void invalidatePaint();
     void invalidateRect(Rect rect);
     void requestAnimationFrame();
     bool hasAnimationScheduler() const;
@@ -323,6 +326,7 @@ protected:
     virtual void resetInteractionState();
 
 private:
+    void invalidateImpl(bool paintOnly);
     friend class internal::DeveloperRecorder;
     friend struct internal::WidgetPresentationAccess;
     std::shared_ptr<StyleSheet> localStyleScope_;
