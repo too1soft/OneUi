@@ -3,9 +3,9 @@
 use super::abi_types::{
     OneUiBoolCallback, OneUiColor, OneUiFrameReleaseCallback, OneUiIntCallback,
     OneUiRawKeyCallback, OneUiRect, OneUiRemotePointerCallback, OneUiTerminalCellUtf8,
-    OneUiTerminalHyperlinkCallback, OneUiTerminalPointerCallback, OneUiTerminalViewportCallback,
-    OneUiUtf8String, OneUiUtf8TextCallback, OneUiVideoFramePatch, OneUiVoidCallback, OneUiWidget,
-    WChar,
+    OneUiTerminalHyperlinkCallback, OneUiTerminalLocalPointerCallback,
+    OneUiTerminalPointerCallback, OneUiTerminalViewportCallback, OneUiUtf8String,
+    OneUiUtf8TextCallback, OneUiVideoFramePatch, OneUiVoidCallback, OneUiWidget, WChar,
 };
 use super::{
     OneUiPixelFormat, OneUiRemoteCursorMode, OneUiTerminalAuxiliaryButtonAction,
@@ -228,6 +228,11 @@ extern "C" {
     pub fn oneui_terminal_view_set_on_pointer(
         view: *mut OneUiWidget,
         callback: OneUiTerminalPointerCallback,
+        user_data: *mut c_void,
+    );
+    pub fn oneui_terminal_view_set_on_local_pointer(
+        view: *mut OneUiWidget,
+        callback: OneUiTerminalLocalPointerCallback,
         user_data: *mut c_void,
     );
     pub fn oneui_terminal_view_set_on_hyperlink(

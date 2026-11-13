@@ -1,5 +1,8 @@
 //! Terminal bindings.
 
+#[path = "terminal_local_pointer.rs"]
+mod local_pointer;
+
 use super::choice_controls::{run_bool_changed_callback, BoolChangedCallback};
 use super::key_event::RawKeyEvent;
 use super::terminal_render::{
@@ -358,6 +361,7 @@ pub struct TerminalView {
     raw_key_callback: Option<Box<TerminalRawKeyCallback>>,
     scroll_callback: Option<Box<TerminalScrollCallback>>,
     pointer_callback: Option<Box<TerminalPointerCallback>>,
+    local_pointer_callback: Option<Box<local_pointer::LocalPointerCallback>>,
     hyperlink_callback: Option<Box<TerminalHyperlinkCallback>>,
     viewport_callback: Option<Box<TerminalViewportCallback>>,
     cursor_callback: Option<Box<VoidCallback>>,
@@ -381,6 +385,7 @@ impl TerminalView {
             raw_key_callback: None,
             scroll_callback: None,
             pointer_callback: None,
+            local_pointer_callback: None,
             hyperlink_callback: None,
             viewport_callback: None,
             cursor_callback: None,
@@ -946,6 +951,7 @@ impl Drop for TerminalView {
         self.clear_scroll_callback();
         self.clear_pointer_callback();
         self.clear_hyperlink_callback();
+        self.clear_local_pointer_callback();
         self.clear_viewport_callback();
         self.clear_cursor_callback();
         self.clear_focus_callback();

@@ -116,6 +116,7 @@ public:
 #include "window_win32_messages.inc"
 #include "window_win32_state.inc"
 #include "window_win32_scheduling.inc"
+#include "window_win32_client_render.inc"
 #include "window_win32_paint.inc"
 #include "window_win32_diagnostics.inc"
 #include "window_win32_pointer.inc"
@@ -168,6 +169,7 @@ public:
     bool swapIntervalEnabled_ = false;
     std::shared_ptr<Widget> content_;
     std::shared_ptr<internal::InputLayoutSnapshot> inputLayout_ = std::make_shared<internal::InputLayoutSnapshot>();
+    bool clientContentPainting_ = false;
     RawKeyHandler rawKeyHandler_;
     std::wstring defaultFontFamily_;
     wchar_t pendingHighSurrogate_ = 0;
