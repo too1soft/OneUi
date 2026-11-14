@@ -15,6 +15,26 @@
         const auto content = content_;
         if (clear && content) content->setTextComposition({}, 0);
     }
+    LRESULT dispatchImeEndComposition(WPARAM wParam, LPARAM flags) {
+        const auto alive = callbackWindowAlive_;
+        const auto window = hwnd_;
+        const bool clientPreedit = content_ && content_->textInputState().drawsPreedit;
+        endImeComposition();
+        if (!alive->load(std::memory_order_acquire)) return 0;
+        requestRedraw();
+        return clientPreedit ? 0 : DefWindowProcW(window, WM_IME_ENDCOMPOSITION, wParam, flags);
+    }
+    LRESULT dispatchImeSetContext(WPARAM active, LPARAM flags) {
+        const auto alive = callbackWindowAlive_;
+        const auto window = hwnd_;
+        const bool clientPreedit = content_ && content_->textInputState().drawsPreedit;
+        if (!active) endImeComposition();
+        if (!alive->load(std::memory_order_acquire)) return 0;
+        if (clientPreedit) flags &= ~ISC_SHOWUICOMPOSITIONWINDOW;
+        if (active) updateImePosition(true);
+        if (!alive->load(std::memory_order_acquire)) return 0;
+        return DefWindowProcW(window, WM_IME_SETCONTEXT, active, flags);
+    }
     void cancelImeComposition() {
         if (!imeActive_) return;
         const auto alive = callbackWindowAlive_;
@@ -30,6 +50,18 @@
         }
     }
     LRESULT dispatchImeComposition(WPARAM wParam, LPARAM flags) {
+        // A zero-flags COMPOSITION explicitly cancels preedit. END can arrive
+        // later or not at all; retaining imeActive_ would swallow every raw key.
+        // https://learn.microsoft.com/windows/win32/intl/wm-ime-composition
+        if (flags == 0) {
+            const auto alive = callbackWindowAlive_;
+            const auto window = hwnd_;
+            const bool clientPreedit = content_ && content_->textInputState().drawsPreedit;
+            endImeComposition();
+            if (!alive->load(std::memory_order_acquire)) return 0;
+            requestRedraw();
+            return clientPreedit ? 0 : DefWindowProcW(window, WM_IME_COMPOSITION, wParam, flags);
+        }
         if (!imeTargetCurrent()) { cancelImeComposition(); return 0; }
         const auto window = hwnd_;
         const auto context = ImmGetContext(window);

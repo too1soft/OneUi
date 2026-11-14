@@ -451,15 +451,9 @@
         case WM_IME_COMPOSITION:
             return dispatchImeComposition(wParam, lParam);
         case WM_IME_ENDCOMPOSITION:
-            endImeComposition();
-            // The system owns the preedit window for controls such as the
-            // terminal. It must receive END as well as START, or the final
-            // composition text can remain floating after Enter.
-            return content_ && content_->textInputState().drawsPreedit ? 0 : DefWindowProcW(hwnd_, message, wParam, lParam);
+            return dispatchImeEndComposition(wParam, lParam);
         case WM_IME_SETCONTEXT:
-            if (content_ && content_->textInputState().drawsPreedit) lParam &= ~ISC_SHOWUICOMPOSITIONWINDOW;
-            updateImePosition(true);
-            return DefWindowProcW(hwnd_, message, wParam, lParam);
+            return dispatchImeSetContext(wParam, lParam);
         case WM_DESTROY:
             callbackWindowAlive_->store(false, std::memory_order_release);
             retireAccessibilityProvider();

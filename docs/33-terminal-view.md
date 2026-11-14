@@ -1,5 +1,10 @@
 # TerminalView
 
+The mouse pointer over ordinary terminal cells uses the system arrow. This keeps
+it distinct from the terminal's text caret and preserves the user's system
+pointer size and color. Hyperlinks still use the hand pointer, and drag selection
+and Shift selection are independent of this pointer shape.
+
 `TerminalView` is OneUI's native terminal presentation component. It renders a
 structured terminal frame without embedding a browser, parsing escape sequences,
 or owning a process. Keeping these responsibilities separate lets a product use

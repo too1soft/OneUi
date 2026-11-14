@@ -165,7 +165,10 @@ CursorKind TerminalView::cursor(Point point) const {
     if (hyperlinkAt(point) != 0) {
         return CursorKind::Pointer;
     }
-    return !mouseReporting_ ? CursorKind::Text : CursorKind::Default;
+    // Keep the system pointer distinct from the terminal's text caret on a
+    // canvas background. Selection remains a mouse interaction, independently
+    // of pointer shape; the system arrow preserves user size/color settings.
+    return CursorKind::Default;
 }
 
 AccessibilityInfo TerminalView::accessibilityInfo() const {

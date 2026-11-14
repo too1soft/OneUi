@@ -1054,8 +1054,8 @@ void testOsc8HyperlinksUseExplicitCtrlClickActivation() {
         terminal.cursor({6.0f, 10.0f}) == oneui::CursorKind::Pointer ? 1 : 0,
         1);
     expectEqual(
-        "terminal plain cell keeps text cursor",
-        terminal.cursor({30.0f, 10.0f}) == oneui::CursorKind::Text ? 1 : 0,
+        "terminal plain cell keeps the visible system arrow",
+        terminal.cursor({30.0f, 10.0f}) == oneui::CursorKind::Default ? 1 : 0,
         1);
 
     terminal.onMouseMove(oneui::MouseEvent{{6.0f, 10.0f}});
