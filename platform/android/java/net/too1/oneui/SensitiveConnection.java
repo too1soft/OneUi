@@ -16,17 +16,19 @@ import android.view.inputmethod.SurroundingText;
  */
 final class SensitiveConnection extends BaseInputConnection {
     private final EditorSurface surface;
-    private final long session;
+    private final long session, generation;
     private EditorSurface.Snapshot state;
     private boolean closed;
     private int batch;
     SensitiveConnection(EditorSurface surface, EditorSurface.Snapshot state) {
         super(surface, true);
         this.surface = surface; this.state = state; session = state.session;
+        generation = surface.connectionGeneration();
     }
     private boolean valid() {
-        EditorSurface.Snapshot live = surface.editing();
-        return !closed && live != null && live.sensitive && live.session == session;
+        if (closed) return false;
+        state = surface.connectionState(generation, session, true);
+        return state != null;
     }
     private boolean edit(int command, CharSequence text, int a, int b) {
         if (!valid() || text == null) return false;
