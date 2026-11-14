@@ -69,6 +69,8 @@ public final class EditorSurface extends SurfaceView {
     private final InputMethodManager manager;
     private Snapshot current;
     private InputConnection connection;
+    private Editable sharedEditable;
+    private long connectionGeneration;
     private final EditorActions actions;
     private final EditorSelection selection;
     private boolean active = true;
@@ -88,8 +90,7 @@ public final class EditorSurface extends SurfaceView {
     }
     public void resume() { requireUi(); active = true; sync(false); }
     public void suspend() {
-        requireUi(); selection.hide(); active = false;
-        if (connection != null) connection.closeConnection();
+        requireUi(); selection.hide(); invalidateConnections(); active = false;
         actions.dismiss();
         connection = null; current = null;
         manager.hideSoftInputFromWindow(getWindowToken(), 0);
@@ -105,8 +106,7 @@ public final class EditorSurface extends SurfaceView {
         if (previous != session) {
             selection.hide();
             actions.dismiss();
-            if (connection != null) connection.closeConnection();
-            connection = null;
+            invalidateConnections();
             if (session != 0) requestFocus();
             manager.restartInput(this);
             if (session == 0) manager.hideSoftInputFromWindow(getWindowToken(), 0);
@@ -115,6 +115,10 @@ public final class EditorSurface extends SurfaceView {
             requestFocus();
             post(() -> {
                 if (!hasWindowFocus() || !isFocused() || current == null || current.session != session) return;
+                // Virtual editors share one View. The IME may have closed its
+                // connection without changing the native editor's session.
+                // Rebind on an explicit tap before showing the keyboard.
+                manager.restartInput(this);
                 if (android.os.Build.VERSION.SDK_INT >= 30 && getWindowInsetsController() != null) {
                     getWindowInsetsController().show(android.view.WindowInsets.Type.ime());
                 } else {
@@ -135,7 +139,7 @@ public final class EditorSurface extends SurfaceView {
             EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING |
             (current.multiline ? EditorInfo.IME_ACTION_NONE : EditorInfo.IME_ACTION_DONE);
         info.initialSelStart = current.anchor; info.initialSelEnd = current.caret;
-        if (connection != null) connection.closeConnection();
+        // The system retires the prior connection after accepting its replacement.
         connection = current.sensitive ? new SensitiveConnection(this, current) : new Connection(current);
         return connection;
     }
@@ -183,6 +187,22 @@ public final class EditorSurface extends SurfaceView {
         current = next; bridge.changed(); return true;
     }
     Snapshot editing() { return active ? bridge.snapshot() : null; }
+    long connectionGeneration() { return connectionGeneration; }
+    Snapshot connectionState(long generation, long session, boolean sensitive) {
+        requireUi();
+        if (!active || generation != connectionGeneration) return null;
+        Snapshot live = bridge.snapshot();
+        return live != null && live.session == session && live.sensitive == sensitive ? live : null;
+    }
+    private void invalidateConnections() {
+        InputConnection previous = connection;
+        connection = null;
+        if (previous != null) previous.closeConnection();
+        ++connectionGeneration;
+        if (sharedEditable != null) {
+            sharedEditable.clear(); sharedEditable.clearSpans(); sharedEditable = null;
+        }
+    }
     boolean containsEditor(float x, float y) { return active && bridge.containsEditor(x, y); }
     InputConnection editorConnection() {
         if (connection == null) onCreateInputConnection(new EditorInfo());
@@ -199,25 +219,27 @@ public final class EditorSurface extends SurfaceView {
     }
     void hideKeyboard() { manager.hideSoftInputFromWindow(getWindowToken(), 0); }
     private final class Connection extends BaseInputConnection {
-        final long session;
+        final long session, generation;
         final Editable editable;
         boolean closed, constructing = true;
         int batch;
         Connection(Snapshot state) {
             super(EditorSurface.this, true);
-            session = state.session;
-            editable = new SpannableStringBuilder(state.text);
-            Selection.setSelection(editable, state.anchor, state.caret);
-            if (state.composingStart >= 0) super.setComposingRegion(state.composingStart, state.composingEnd);
+            session = state.session; generation = connectionGeneration;
+            boolean initialize = sharedEditable == null;
+            if (initialize) sharedEditable = new SpannableStringBuilder(state.text);
+            editable = sharedEditable;
+            if (initialize) {
+                Selection.setSelection(editable, state.anchor, state.caret);
+                if (state.composingStart >= 0) super.setComposingRegion(state.composingStart, state.composingEnd);
+            }
             constructing = false;
         }
         boolean valid() {
             requireUi();
-            if (closed || !active) return false;
-            Snapshot live = bridge.snapshot();
-            return live != null && live.session == session;
+            return !closed && connectionState(generation, session, false) != null;
         }
-        @Override public Editable getEditable() { return editable; }
+        @Override public Editable getEditable() { return constructing || valid() ? editable : null; }
         @Override public CharSequence getTextBeforeCursor(int length, int flags) {
             return valid() ? super.getTextBeforeCursor(length, flags) : null;
         }
@@ -248,6 +270,7 @@ public final class EditorSurface extends SurfaceView {
                 bridge.changed();
             } else {
                 closed = true;
+                invalidateConnections();
                 sync(false); // Reject malformed/stale state, never keep a divergent IME buffer.
                 manager.restartInput(EditorSurface.this);
             }
@@ -262,7 +285,7 @@ public final class EditorSurface extends SurfaceView {
         }
         @Override public boolean beginBatchEdit() { if (!constructing && !valid()) return false; ++batch; return true; }
         @Override public boolean endBatchEdit() {
-            if (batch <= 0) return false;
+            if (!valid() || batch <= 0) return false;
             --batch; boolean ok = flush(); return ok && batch > 0;
         }
         @Override public boolean commitText(CharSequence value, int cursor) { return mutate(() -> super.commitText(value, cursor)); }
@@ -333,6 +356,10 @@ public final class EditorSurface extends SurfaceView {
             }
             return false;
         }
-        @Override public void closeConnection() { closed = true; batch = 0; editable.clear(); }
+        @Override public void closeConnection() {
+            if (closed) return;
+            if (valid()) { batch = 0; flush(); }
+            closed = true; batch = 0;
+        }
     }
 }
