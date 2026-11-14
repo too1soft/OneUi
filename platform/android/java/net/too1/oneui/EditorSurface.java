@@ -139,7 +139,7 @@ public final class EditorSurface extends SurfaceView {
             EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING |
             (current.multiline ? EditorInfo.IME_ACTION_NONE : EditorInfo.IME_ACTION_DONE);
         info.initialSelStart = current.anchor; info.initialSelEnd = current.caret;
-        if (connection != null) connection.closeConnection();
+        // The system retires the prior connection after accepting its replacement.
         connection = current.sensitive ? new SensitiveConnection(this, current) : new Connection(current);
         return connection;
     }
