@@ -37,4 +37,6 @@ sk_sp<SkFontMgr> makeEmbeddedFontManager();
 // Copies font bytes and exposes weight instances under familyAlias without
 // installing anything into the operating system font directory.
 bool registerFontFromMemory(const void* data, std::size_t size, const std::string& familyAlias);
+// The caller guarantees immutable bytes valid for the whole process lifetime.
+bool registerFontFromStaticMemory(const void* data, std::size_t size, const std::string& familyAlias);
 } // namespace oneui::rendering

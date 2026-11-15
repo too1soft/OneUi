@@ -34,3 +34,21 @@ checks the safe Rust boundary. Windows executed locally on 2026-09-30. On
 2026-10-05, Linux x86_64 WSLg dynamic/static C++ and C ABI tests passed after
 fixing archive symbol visibility; the Rust suite was not rerun in that review.
 macOS remains unbuilt and untested. See the [platform validation record](37-native-desktop-backends.md).
+
+## Embedded font storage
+
+`oneui_font_register_memory` / Rust `register_font_from_memory` copy their input;
+temporary decoded font buffers can be dropped after the call. ABI 47 adds
+`oneui_font_register_static_memory` / Rust `register_font_from_static_memory` for
+immutable bytes that remain valid until process exit. The Rust API requires
+`&'static [u8]`, suitable for executable `include_bytes!` assets. It retains those
+bytes without another heap copy; it does not transfer ownership or install a
+system font. Dynamic/decompressed buffers must continue using the copying API.
+Both paths share alias validation, deduplication and variable-weight handling.
+
+The Rust registration and bundled-font helpers now live with enumeration and
+measurement in `fonts.rs`, with their original crate-root exports preserved.
+Windows Release validation covers the C/Rust ABI (1377 checks and 649 typed
+function signatures), rejection of a temporary Rust font buffer at compile time,
+and the product's normal/bold Latin/CJK rendering. This review did not run the
+new static-registration path on Linux or macOS.

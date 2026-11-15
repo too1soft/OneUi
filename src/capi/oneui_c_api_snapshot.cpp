@@ -28,6 +28,7 @@
 #include "oneui_c_api_snapshot_internal.h"
 #include "oneui/tabs_style_adapter.h"
 #include "oneui_c_api_window_internal.h"
+#include "oneui_c_api_memory_snapshot.h"
 #include <algorithm>
 #include <cmath>
 #include <climits>
@@ -452,7 +453,9 @@ std::string buildLayoutSnapshot(const OneUiWindow& window) {
     appendJsonNumber(stream, window.window->dpiScale());
     stream << ",\"client\":{\"width\":"; appendJsonNumber(stream, client.width);
     stream << ",\"height\":"; appendJsonNumber(stream, client.height);
-    stream << "},\"nodes\":[";
+    stream << '}';
+    appendMemorySnapshot(stream, *window.window);
+    stream << ",\"nodes\":[";
 
     struct PendingNode {
         std::shared_ptr<oneui::Widget> widget;

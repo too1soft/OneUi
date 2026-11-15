@@ -8,7 +8,14 @@
 
 namespace oneui {
 using namespace style_detail;
+void StyleSheet::detachRules() {
+    if (!ruleData_) ruleData_ = std::make_shared<RuleData>();
+    else if (!ruleData_.unique()) ruleData_ = std::make_shared<RuleData>(*ruleData_);
+}
 void StyleSheet::addRule(StyleRule rule) {
+    detachRules();
+    auto& rules_ = ruleData_->rules;
+    auto& selectors_ = ruleData_->selectors;
     if (rule.order == 0) {
         rule.order = static_cast<int>(rules_.size()) + 1;
     }
@@ -46,6 +53,9 @@ std::optional<std::string> StyleSheet::customProperty(const std::string& name) c
 
 std::vector<const StyleRule*> StyleSheet::matchingRules(const StyleNode& node) const {
     std::vector<const StyleRule*> matches;
+    if (!ruleData_) return matches;
+    const auto& rules_ = ruleData_->rules;
+    const auto& selectors_ = ruleData_->selectors;
     for (std::size_t index = 0; index < rules_.size(); ++index) {
         if(rules_[index].query)continue;
         const auto& compiled = selectors_[index];
@@ -83,7 +93,7 @@ StyleBox StyleSheet::resolve(const StyleNode& node) const {
             // matching its selector. Share it across classes and pseudo-states.
             // Token/rule edits already invalidate the entire resolve cache.
             const auto declarationKey = std::string(1, '\x1f') + "declaration:" +
-                std::to_string(std::size_t(rule - rules_.data()));
+                std::to_string(std::size_t(rule - ruleData_->rules.data()));
             if (auto cached = resolveCache_.find(declarationKey); cached != resolveCache_.end()) {
                 current = cached->second;
                 resolved = mergeStyleBox(std::move(resolved), current);
@@ -111,7 +121,8 @@ StyleBox StyleSheet::resolve(const StyleNode& node) const {
 }
 
 const std::vector<StyleRule>& StyleSheet::rules() const {
-    return rules_;
+    static const std::vector<StyleRule> empty;
+    return ruleData_ ? ruleData_->rules : empty;
 }
 
 StyleBox StyleSheet::resolveTokens(const std::string& declarations) const {

@@ -93,3 +93,63 @@ pub fn measure_text_width(
         Err(Error::InvalidTextOptions)
     }
 }
+
+/// Registers an application font directly from memory.
+///
+/// OneUI copies the bytes during this call and never installs the font into the
+/// operating system. Register fonts before constructing the first window so
+/// every text layout cache sees the same set of families.
+pub fn register_font_from_memory(data: &[u8], family_alias: &str) -> Result<(), Error> {
+    register_font(data, family_alias, sys::oneui_font_register_memory)
+}
+
+/// Registers immutable executable font bytes without copying them.
+///
+/// The static lifetime is required because native typefaces retain the bytes.
+/// ```compile_fail
+/// let bytes = vec![0_u8; 32];
+/// oneui::register_font_from_static_memory(&bytes, "Temporary").unwrap();
+/// ```
+pub fn register_font_from_static_memory(
+    data: &'static [u8],
+    family_alias: &str,
+) -> Result<(), Error> {
+    register_font(data, family_alias, sys::oneui_font_register_static_memory)
+}
+
+fn register_font(
+    data: &[u8],
+    family_alias: &str,
+    register: unsafe extern "C" fn(*const u8, usize, sys::OneUiUtf8String) -> std::ffi::c_int,
+) -> Result<(), Error> {
+    let family_alias = family_alias.trim();
+    if data.is_empty() || family_alias.is_empty() {
+        return Err(Error::FontRegistrationFailed);
+    }
+    let family_alias = sys::OneUiUtf8String::from_str(family_alias);
+    let registered = unsafe { register(data.as_ptr(), data.len(), family_alias) };
+    if registered == 1 {
+        Ok(())
+    } else {
+        Err(Error::FontRegistrationFailed)
+    }
+}
+
+/// Family alias for OneUI's optional bundled Simplified Chinese UI font.
+#[cfg(feature = "bundled-fonts")]
+pub const BUNDLED_UI_FONT_FAMILY: &str = "Noto Sans SC";
+
+/// SIL Open Font License text shipped with the bundled Noto Sans SC binary.
+#[cfg(feature = "bundled-fonts")]
+pub const BUNDLED_UI_FONT_LICENSE: &str =
+    include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/fonts/OFL.txt"));
+
+/// Registers the unmodified Noto Sans SC variable font embedded in this crate.
+#[cfg(feature = "bundled-fonts")]
+pub fn register_bundled_fonts() -> Result<(), Error> {
+    static FONT: &[u8] = include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/assets/fonts/NotoSansSC-wght.ttf"
+    ));
+    register_font_from_memory(FONT, BUNDLED_UI_FONT_FAMILY)
+}

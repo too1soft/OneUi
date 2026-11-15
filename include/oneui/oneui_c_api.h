@@ -545,7 +545,7 @@ enum {
     OneUiTerminalCellOverline = 1u << 11
 };
 
-#define ONEUI_UTF8_ABI_VERSION 46u
+#define ONEUI_UTF8_ABI_VERSION 47u
 
 /*
  * Copies and registers a process-local font under family_alias. Call before
@@ -553,6 +553,12 @@ enum {
  * one on success; zero for invalid UTF-8, invalid font data, or an empty alias.
  */
 ONEUI_API int oneui_font_register_memory(
+    const uint8_t* data,
+    size_t size,
+    OneUiUtf8String family_alias);
+/* No copy. data must be immutable and remain valid until process exit.
+ * Other validation and return values match oneui_font_register_memory. */
+ONEUI_API int oneui_font_register_static_memory(
     const uint8_t* data,
     size_t size,
     OneUiUtf8String family_alias);

@@ -144,7 +144,7 @@ public:
     // immediately change tokens, so copying those caches only to discard them
     // makes cold mounts allocate thousands of unused StyleBox values.
     StyleSheet(const StyleSheet& other)
-        : transient_(other.transient_), rules_(other.rules_), selectors_(other.selectors_),
+        : transient_(other.transient_), ruleData_(other.ruleData_),
           customProperties_(other.customProperties_), version_(other.version_) {}
     StyleSheet(StyleSheet&&) noexcept = default;
     StyleSheet& operator=(StyleSheet&&) noexcept = default;
@@ -177,11 +177,15 @@ private:
         bool valid = false;
         int specificity = 0;
     };
+    struct RuleData {
+        std::vector<StyleRule> rules;
+        std::vector<CompiledSelector> selectors;
+    };
+    // Component style snapshots and palette variants differ in tokens/caches,
+    // not in their immutable parsed rules. Only rule edits detach this storage.
+    void detachRules();
     std::weak_ptr<StyleSheet> transient_;
-    std::vector<StyleRule> rules_;
-    // Selector syntax is independent of theme tokens and node pseudo-state.
-    // Compile it once, instead of allocating strings for every cold resolve.
-    std::vector<CompiledSelector> selectors_;
+    std::shared_ptr<RuleData> ruleData_;
     std::map<std::string, std::string> customProperties_;
     mutable std::unordered_map<std::string, StyleBox> resolveCache_;
     // Declarative mounts re-resolve base layouts on every flush; cache them

@@ -1,5 +1,22 @@
 # StyleSheet
 
+## Snapshot ownership
+
+Component style callbacks and palette scopes receive independent `StyleSheet`
+snapshots. Copies share immutable parsed rules and compiled selectors. Editing
+tokens keeps the rules shared; appending a parsed or programmatic rule detaches
+the rule storage. Tokens, transient palette registrations and resolution caches
+remain local to each sheet. A component may outlive the sheet it was copied from.
+`forContainers()` reuses immutable storage when there are no query rules and
+still filters query-bearing sheets independently for each container size.
+
+This avoids retaining a full copy of the theme for every extension control.
+Copy/edit/failure isolation, container thresholds, transient palettes and
+component behavior have Release regression coverage. The C++ class's private
+storage layout changed: rebuild C++ consumers with these headers. C/Rust handles
+remain opaque; use the matching SDK binary and bindings. A reference returned by
+`rules()` is a read-only view and must not be retained across rule edits.
+
 `StyleSheet` is the first reusable CSS-like styling layer in OneUI. It is meant
 for native apps that need consistent surfaces, inputs, buttons, cards, shadows,
 and interactive states without hardcoding paint details in every product.

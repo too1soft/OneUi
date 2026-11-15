@@ -34,29 +34,6 @@ int oneui_enumerate_system_fonts(OneUiFontFamilyCallback callback, void* user_da
     } catch (...) { oneui::capi::recordCurrentException(__func__); return -1; }
 }
 
-int oneui_font_register_memory(
-    const uint8_t* data,
-    size_t size,
-    OneUiUtf8String family_alias) {
-    try {
-        if (!family_alias.data || family_alias.length == 0) {
-            return 0;
-        }
-        const std::string rawAlias(family_alias.data, family_alias.length);
-        if (rawAlias.find('\0') != std::string::npos) {
-            return 0;
-        }
-        const auto alias = utf8FromWide(utf8OrEmpty(family_alias));
-        if (alias != rawAlias) {
-            return 0;
-        }
-        return oneui::rendering::registerFontFromMemory(data, size, alias) ? 1 : 0;
-    } catch (...) {
-        oneui::capi::recordCurrentException(__func__);
-        return 0;
-    }
-}
-
 int oneui_clipboard_set_text(const wchar_t* text) {
     try {
         oneui::SystemClipboard clipboard;

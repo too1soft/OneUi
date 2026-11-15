@@ -54,7 +54,7 @@ namespace oneui {
 StyleLayout StyleSheet::resolveLayout(const StyleNode& node) const {
     using namespace style_detail;
     // No new allocations/sorting or declaration parsing for an ordinary sheet.
-    if (std::none_of(rules_.begin(), rules_.end(), [](const auto& rule) { return ruleLayout(rule); })) return {};
+    if (std::none_of(rules().begin(), rules().end(), [](const auto& rule) { return ruleLayout(rule); })) return {};
     const std::string cacheKey = resolveCacheKey(node);
     if (auto cached = layoutCache_.find(cacheKey); cached != layoutCache_.end()) return cached->second;
     StyleLayout resolved;

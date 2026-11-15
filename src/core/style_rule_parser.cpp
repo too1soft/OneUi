@@ -104,7 +104,7 @@ void parseRules(StyleSheet& sheet,const std::string& text,size_t begin,size_t en
 }
 bool StyleSheet::addRulesFromCss(const std::string& css,std::string* error) {
     try {
-        const bool independent = rules_.empty() && customProperties_.empty();
+        const bool independent = rules().empty() && customProperties_.empty();
         if (independent) {
             if (const auto* cached = parsedCssCache().find(css)) {
                 auto candidate = *cached;
@@ -130,8 +130,10 @@ bool StyleSheet::addRulesFromCss(const std::string& css,std::string* error) {
     }catch(const std::exception& failure){if(error)*error=failure.what();return false;}
 }
 StyleSheet StyleSheet::forContainers(const std::map<std::string,Size>& sizes) const {
+    if (std::none_of(rules().begin(), rules().end(), [](const auto& rule) { return bool(rule.query); }))
+        return *this;
     StyleSheet result;result.customProperties_=customProperties_;result.transient_=transient_;
-    for(auto rule:rules_) {
+    for(auto rule:rules()) {
         if(rule.query) {
             auto size=sizes.find(rule.query->name);
             if(size==sizes.end()||!rule.query->matches(size->second))continue;

@@ -32,3 +32,37 @@ int oneui_text_measure_width_utf8(OneUiUtf8String text, OneUiUtf8String family,
         return 1;
     } catch (...) { oneui::capi::recordCurrentException(__func__); return 0; }
 }
+
+namespace {
+int registerFontMemory(
+    const uint8_t* data,
+    size_t size,
+    OneUiUtf8String family_alias, bool staticData) {
+    try {
+        if (!family_alias.data || family_alias.length == 0) {
+            return 0;
+        }
+        const std::string rawAlias(family_alias.data, family_alias.length);
+        if (rawAlias.find('\0') != std::string::npos) {
+            return 0;
+        }
+        const auto alias = utf8FromWide(utf8OrEmpty(family_alias));
+        if (alias != rawAlias) {
+            return 0;
+        }
+        return (staticData ? oneui::rendering::registerFontFromStaticMemory(data, size, alias)
+                          : oneui::rendering::registerFontFromMemory(data, size, alias)) ? 1 : 0;
+    } catch (...) {
+        oneui::capi::recordCurrentException(__func__);
+        return 0;
+    }
+}
+
+}
+
+int oneui_font_register_memory(const uint8_t* data, size_t size, OneUiUtf8String alias) {
+    return registerFontMemory(data, size, alias, false);
+}
+int oneui_font_register_static_memory(const uint8_t* data, size_t size, OneUiUtf8String alias) {
+    return registerFontMemory(data, size, alias, true);
+}

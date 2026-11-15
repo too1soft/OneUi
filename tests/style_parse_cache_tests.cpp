@@ -86,6 +86,47 @@ void failureIsTransactionalAndRepeated() {
     }
 }
 
+void copiedComponentStylesStayIndependent() {
+    StyleSheet base;
+    parse(base, theme);
+    (void)base.resolve(button); // Populate a cache before component snapshots.
+    auto dark = base;
+    StyleSheet light;
+    light = base;
+    dark.setCustomProperty("--ink", "#eeeeee");
+    light.setCustomProperty("--ink", "#222222");
+    require(base.resolve(button).foreground->r == 0x12 &&
+        dark.resolve(button).foreground->r == 0xee &&
+        light.resolve(button).foreground->r == 0x22,
+        "component tokens and resolved caches remain local to each snapshot");
+    parse(dark, "button.cached {height: 61px; max-width: 73px;}");
+    require(dark.resolve(button).height == 61 && dark.resolveLayout(button).maxWidth == 73 &&
+        base.resolve(button).height == 32 && light.resolve(button).height == 32 &&
+        !light.resolveLayout(button).maxWidth, "appending rules detaches only the edited snapshot");
+    oneui::StyleRule programmatic;
+    programmatic.selector = "button.cached";
+    programmatic.box.height = 86;
+    light.addRule(programmatic);
+    require(light.resolve(button).height == 86 && dark.resolve(button).height == 61,
+        "programmatic rule edits preserve sibling snapshots too");
+    const auto before = dark.version();
+    std::string error;
+    require(!dark.addRulesFromCss(":root {--ink:#000000;} button.cached {height:wrong;}", &error) &&
+        dark.version() == before && dark.resolve(button).foreground->r == 0xee,
+        "failed edits preserve a shared snapshot and its cached palette");
+    auto responsive = base.forContainers({});
+    responsive.setCustomProperty("--ink", "#abcdef");
+    require(responsive.resolve(button).foreground->r == 0xab && base.resolve(button).foreground->r == 0x12,
+        "query-free responsive copies retain independent tokens");
+    auto moved = std::move(responsive);
+    parse(responsive, "button.cached {height: 19px;}");
+    require(responsive.resolve(button).height == 19 && moved.resolve(button).height == 32,
+        "moved-from sheets remain usable without changing their moved snapshot");
+    base = StyleSheet{};
+    require(dark.resolve(button).height == 61 && light.resolve(button).height == 86,
+        "component snapshots outlive the original sheet");
+}
+
 void queryAndLayoutCopiesSurviveOtherThemes() {
     const std::string css = "button.cached { max-width: 90px; } "
         "@container pane (width >= 100px) { button.cached { height: 48px; } }";
@@ -115,6 +156,7 @@ int main() {
         preserveCallerEnvironment();
         transientPalettesBelongToEachMount();
         failureIsTransactionalAndRepeated();
+        copiedComponentStylesStayIndependent();
         queryAndLayoutCopiesSurviveOtherThemes();
         std::exception_ptr workerError;
         std::thread worker([&] {

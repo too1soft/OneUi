@@ -157,7 +157,12 @@ mod window_native;
 mod window_activation;
 pub use application::{Application, ApplicationActivation, CloseDecision, QuitPolicy};
 pub use desktop_window::{DesktopWindowState, ModalSession, WindowStateSubscription};
-pub use fonts::{enumerate_available_fonts, enumerate_system_fonts, measure_text_width, FontFamilyInfo};
+pub use fonts::{
+    enumerate_available_fonts, enumerate_system_fonts, measure_text_width, register_font_from_memory,
+    register_font_from_static_memory, FontFamilyInfo,
+};
+#[cfg(feature = "bundled-fonts")]
+pub use fonts::{register_bundled_fonts, BUNDLED_UI_FONT_FAMILY, BUNDLED_UI_FONT_LICENSE};
 pub use localization::{set_builtin_text, BuiltinText, LocalizationError};
 pub use native_error::{clear_native_error, last_native_error, NativeError, NativeErrorCode};
 mod slider;
@@ -188,45 +193,6 @@ pub enum Error {
     InvalidImagePixels { reason: &'static str },
     FontRegistrationFailed,
     FontEnumerationFailed,
-}
-
-/// Registers an application font directly from memory.
-///
-/// OneUI copies the bytes during this call and never installs the font into the
-/// operating system. Register fonts before constructing the first window so
-/// every text layout cache sees the same set of families.
-pub fn register_font_from_memory(data: &[u8], family_alias: &str) -> Result<(), Error> {
-    let family_alias = family_alias.trim();
-    if data.is_empty() || family_alias.is_empty() {
-        return Err(Error::FontRegistrationFailed);
-    }
-    let family_alias = sys::OneUiUtf8String::from_str(family_alias);
-    let registered =
-        unsafe { sys::oneui_font_register_memory(data.as_ptr(), data.len(), family_alias) };
-    if registered == 1 {
-        Ok(())
-    } else {
-        Err(Error::FontRegistrationFailed)
-    }
-}
-
-/// Family alias for OneUI's optional bundled Simplified Chinese UI font.
-#[cfg(feature = "bundled-fonts")]
-pub const BUNDLED_UI_FONT_FAMILY: &str = "Noto Sans SC";
-
-/// SIL Open Font License text shipped with the bundled Noto Sans SC binary.
-#[cfg(feature = "bundled-fonts")]
-pub const BUNDLED_UI_FONT_LICENSE: &str =
-    include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/fonts/OFL.txt"));
-
-/// Registers the unmodified Noto Sans SC variable font embedded in this crate.
-#[cfg(feature = "bundled-fonts")]
-pub fn register_bundled_fonts() -> Result<(), Error> {
-    static FONT: &[u8] = include_bytes!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/assets/fonts/NotoSansSC-wght.ttf"
-    ));
-    register_font_from_memory(FONT, BUNDLED_UI_FONT_FAMILY)
 }
 
 /// Describes a panic caught at the Rust-to-OneUI callback boundary.

@@ -16,6 +16,11 @@ extern "C" {
         size: usize,
         family_alias: OneUiUtf8String,
     ) -> c_int;
+    pub fn oneui_font_register_static_memory(
+        data: *const u8,
+        size: usize,
+        family_alias: OneUiUtf8String,
+    ) -> c_int;
 
     pub fn oneui_window_create_utf8(options: *const OneUiWindowOptionsUtf8) -> *mut OneUiWindow;
     pub fn oneui_window_destroy(window: *mut OneUiWindow);

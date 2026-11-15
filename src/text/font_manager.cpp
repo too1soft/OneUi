@@ -165,7 +165,8 @@ sk_sp<SkTypeface> makeTypefaceFromData(sk_sp<SkData> data) {
     return face;
 }
 
-bool registerFontFromMemory(const void* data, std::size_t size, const std::string& familyAlias) {
+static bool registerFontFromMemoryImpl(const void* data, std::size_t size, const std::string& familyAlias,
+                                      bool copyData) {
     if (!data || size == 0 || familyAlias.empty()) {
         return false;
     }
@@ -178,7 +179,7 @@ bool registerFontFromMemory(const void* data, std::size_t size, const std::strin
         return true;
     }
 
-    auto fontData = SkData::MakeWithCopy(data, size);
+    auto fontData = copyData ? SkData::MakeWithCopy(data, size) : SkData::MakeWithoutCopy(data, size);
     auto baseTypeface = makeTypefaceFromData(fontData);
     if (!baseTypeface) {
         return false;
@@ -206,6 +207,12 @@ bool registerFontFromMemory(const void* data, std::size_t size, const std::strin
     }
     registeredFonts().push_back({familyAlias, std::move(fontData)});
     return true;
+}
+bool registerFontFromMemory(const void* data, std::size_t size, const std::string& familyAlias) {
+    return registerFontFromMemoryImpl(data, size, familyAlias, true);
+}
+bool registerFontFromStaticMemory(const void* data, std::size_t size, const std::string& familyAlias) {
+    return registerFontFromMemoryImpl(data, size, familyAlias, false);
 }
 } // namespace oneui::rendering
 
