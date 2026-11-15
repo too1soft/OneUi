@@ -3,8 +3,50 @@
 #include <cmath>
 using namespace viewtest;
 using namespace oneui;
+namespace {
+template<class T> struct CountedAllocation {
+    using value_type = T;
+    size_t* bytes;
+    explicit CountedAllocation(size_t* value) : bytes(value) {}
+    template<class U> CountedAllocation(const CountedAllocation<U>& other) : bytes(other.bytes) {}
+    T* allocate(size_t count) {
+        auto result = std::allocator<T>{}.allocate(count);
+        *bytes += count * sizeof(T);
+        return result;
+    }
+    void deallocate(T* value, size_t count) {
+        *bytes -= count * sizeof(T);
+        std::allocator<T>{}.deallocate(value, count);
+    }
+};
+void retiredLayoutsReleaseSharedAllocations() {
+    auto styles = std::make_shared<ui::StyleRegistry>();
+    styles->replace("stack.probe { height: 32px; }");
+    auto parent = std::make_shared<Stack>();
+    styles->addFresh(ui::Element(ui::Node(parent), "Column"));
+    size_t allocated = 0;
+    for (int cycle = 0; cycle != 100; ++cycle) {
+        auto child = std::allocate_shared<Stack>(CountedAllocation<Stack>(&allocated));
+        parent->add(child);
+        {
+            ui::Element entry(ui::Node(child), "Column");
+            entry.classes = "probe";
+            styles->addFresh(entry);
+        }
+        styles->applyBaseLayouts();
+        expect(child->preferredSize().height == 32, "live authored layout still resolves");
+        expect(parent->remove(child), "remove retired child and its parent-owned flex metadata");
+        child.reset();
+        expect(allocated > 0, "retired weak style metadata reproduces shared-allocation retention");
+        styles->applyBaseLayouts();
+        expect(allocated == 0, "layout flush releases the entire retired shared allocation");
+    }
+    expect(styles->size() == 1, "live parent survives repeated metadata cleanup");
+}
+}
 int main(int argc,char** argv) {
     try {
+        retiredLayoutsReleaseSharedAllocations();
         expect(argc==2,"IR argument");auto image=load(argv[1]);Vm vm(image,"QueryRoot");
         vm.values[id(image,"QueryRoot","detailsSelected")].integer=1;
         auto runtime=std::make_shared<Runtime>(image);runtime->initialize(&vm.table,&vm);

@@ -8,6 +8,7 @@ inline void StyleRegistry::updateAuthoredFlex(const std::shared_ptr<Widget>& wid
         found->second.flex=flex;
 }
 inline void StyleRegistry::applyBaseLayouts() {
+    pruneEntries();
     bool applied=false;
     std::map<const Widget*,std::shared_ptr<Stack>> parents;
     for (const auto& entry : entries_)

@@ -225,10 +225,7 @@ private:
         if (e.widget->diagnosticSource().file.empty())
             e.widget->setDiagnosticSource({e.component, {}, 0});
     }
-    void pruneEntries() {
-        entries_.erase(std::remove_if(entries_.begin(), entries_.end(),
-            [](const Entry& entry) { return entry.widget.expired(); }), entries_.end());
-    }
+    void pruneEntries();
     void appendEntry(const Element& e) {
         localThemes_.erase(e.widget.get()); // A new widget may reuse a retired address.
         entries_.push_back({e.widget, e.component, e.classes, e.content});
@@ -511,6 +508,7 @@ public:
 };
 using Slots = std::map<std::string,std::function<std::vector<Element>(Mount&)>>;
 } // namespace oneui::ui
+#include "oneui/ui_style_lifetime.h"
 #include "oneui/ui_container_styles.h"
 
 #include "oneui/ui_local_theme_styles.h"

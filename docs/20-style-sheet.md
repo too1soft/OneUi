@@ -280,3 +280,11 @@ new selector classes, copy isolation and layout results.
 These storage changes alter the private C++ `StyleSheet` layout. Rebuild C++
 consumers with matching headers and library. The opaque C API signatures remain
 unchanged; applications should still validate their exact DLL build fingerprint.
+
+Layout flush also collects retired `StyleRegistry` entries and their authored
+layout defaults, query state and local theme snapshots. A weak reference to a
+`make_shared` widget still retains its allocation after destruction; leaving old
+layout defaults in a long-lived registry can therefore grow memory across mounts.
+Live widgets retain their authored layout and palette. The container runtime test
+uses a counting `allocate_shared` allocator over 100 remove/flush cycles to verify
+that retired allocations reach zero while the live parent remains registered.
