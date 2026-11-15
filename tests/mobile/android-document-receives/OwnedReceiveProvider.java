@@ -24,8 +24,27 @@ public final class OwnedReceiveProvider extends DocumentsProvider {
     @Override public boolean onCreate() { return true; }
     static File bytes(Context context, String id) {
         File folder = new File(context.getFilesDir(), "provider-bytes");
-        folder.mkdirs();
-        return new File(folder, id);
+        try {
+            JSONObject all = nodes(context);
+            java.util.ArrayList<String> names = new java.util.ArrayList<>();
+            while (!id.equals("root")) {
+                JSONObject item = all.getJSONObject(id);
+                names.add(0, item.getString("name")); id = item.getString("parent");
+            }
+            File result = folder;
+            for (String name : names) result = new File(result, name);
+            if (!result.getCanonicalPath().equals(folder.getCanonicalPath())
+                    && !result.getCanonicalPath().startsWith(folder.getCanonicalPath() + File.separator))
+                throw new java.io.IOException("fixture content path escaped its private root");
+            return result;
+        } catch (Exception error) { throw new IllegalStateException(error); }
+    }
+    private static boolean live(Context context, JSONObject all, String id) throws Exception {
+        JSONObject item = all.getJSONObject(id);
+        try {
+            android.system.StructStat stat = android.system.Os.stat(bytes(context, id).getPath());
+            return stat.st_dev == item.getLong("device") && stat.st_ino == item.getLong("inode");
+        } catch (android.system.ErrnoException missing) { return false; }
     }
     private static JSONObject nodes(Context context) throws Exception {
         return new JSONObject(context.getSharedPreferences("provider-nodes", 0).getString("nodes", "{}"));
@@ -34,15 +53,22 @@ public final class OwnedReceiveProvider extends DocumentsProvider {
         if (!context.getSharedPreferences("provider-nodes", 0).edit().putString("nodes", nodes.toString()).commit())
             throw new java.io.IOException("fixture metadata commit failed");
     }
-    private static JSONObject node(String parent, String name, boolean directory) throws Exception {
-        return new JSONObject().put("parent", parent).put("name", name).put("directory", directory);
+    private static JSONObject node(String parent, String name, boolean directory, File file) throws Exception {
+        android.system.StructStat stat = android.system.Os.stat(file.getPath());
+        return new JSONObject().put("parent", parent).put("name", name).put("directory", directory)
+            .put("device", stat.st_dev).put("inode", stat.st_ino);
     }
     static void reset(Context context) throws Exception {
         synchronized (LOCK) {
-            JSONObject old = nodes(context);
-            for (var ids = old.keys(); ids.hasNext();) Files.deleteIfExists(bytes(context, ids.next()).toPath());
-            save(context, new JSONObject().put("root", node("", "root", true))
-                .put("selected", node("root", "selected", true)));
+            File folder = new File(context.getFilesDir(), "provider-bytes");
+            if (folder.exists()) try (var paths = Files.walk(folder.toPath())) {
+                var iterator = paths.sorted(java.util.Comparator.reverseOrder()).iterator();
+                while (iterator.hasNext()) Files.delete(iterator.next());
+            }
+            Files.createDirectory(folder.toPath());
+            File selected = new File(folder, "selected"); Files.createDirectory(selected.toPath());
+            save(context, new JSONObject().put("root", node("", "root", true, folder))
+                .put("selected", node("root", "selected", true, selected)));
             context.getSharedPreferences("provider-controls", 0).edit().clear().commit();
         }
     }
@@ -55,7 +81,7 @@ public final class OwnedReceiveProvider extends DocumentsProvider {
             JSONObject all = nodes(context);
             for (var ids = all.keys(); ids.hasNext();) {
                 String id = ids.next(); JSONObject item = all.getJSONObject(id);
-                if (parent.equals(item.getString("parent")) && name.equals(item.getString("name"))) return id;
+                if (parent.equals(item.getString("parent")) && name.equals(item.getString("name")) && live(context, all, id)) return id;
             }
             return null;
         }
@@ -70,7 +96,10 @@ public final class OwnedReceiveProvider extends DocumentsProvider {
     static int children(Context context, String parent) throws Exception {
         synchronized (LOCK) {
             int count = 0; JSONObject all = nodes(context);
-            for (var ids = all.keys(); ids.hasNext();) if (parent.equals(all.getJSONObject(ids.next()).getString("parent"))) count++;
+            for (var ids = all.keys(); ids.hasNext();) {
+                String id = ids.next();
+                if (parent.equals(all.getJSONObject(id).getString("parent")) && live(context, all, id)) count++;
+            }
             return count;
         }
     }
@@ -100,7 +129,7 @@ public final class OwnedReceiveProvider extends DocumentsProvider {
             try {
                 MatrixCursor cursor = new MatrixCursor(projection == null ? COLUMNS : projection);
                 JSONObject item = nodes(getContext()).optJSONObject(id);
-                if (item != null) row(cursor, id, item);
+                if (item != null && live(getContext(), nodes(getContext()), id)) row(cursor, id, item);
                 return cursor;
             } catch (Exception error) { throw new FileNotFoundException(error.toString()); }
         }
@@ -113,7 +142,7 @@ public final class OwnedReceiveProvider extends DocumentsProvider {
                 MatrixCursor cursor = new MatrixCursor(projection == null ? COLUMNS : projection);
                 for (var ids = all.keys(); ids.hasNext();) {
                     String id = ids.next(); JSONObject item = all.getJSONObject(id);
-                    if (parent.equals(item.getString("parent"))) row(cursor, id, item);
+                    if (parent.equals(item.getString("parent")) && live(getContext(), all, id)) row(cursor, id, item);
                 }
                 return cursor;
             } catch (Exception error) { throw new FileNotFoundException(error.toString()); }
@@ -123,7 +152,9 @@ public final class OwnedReceiveProvider extends DocumentsProvider {
         synchronized (LOCK) {
             try {
                 if (cancellation != null) cancellation.throwIfCanceled();
-                if (required(nodes(getContext()), id).getBoolean("directory")) throw new FileNotFoundException("not a file");
+                JSONObject all = nodes(getContext());
+                required(all, id);
+                if (!live(getContext(), all, id)) throw new FileNotFoundException("fixture document absent");
                 if (blockOpen) {
                     openEntered.countDown();
                     while (blockOpen) { if (cancellation != null) cancellation.throwIfCanceled(); Thread.sleep(10); }
@@ -132,6 +163,12 @@ public final class OwnedReceiveProvider extends DocumentsProvider {
                     ParcelFileDescriptor[] pair = ParcelFileDescriptor.createReliableSocketPair();
                     pair[1].closeWithError("injected provider close error");
                     return pair[0];
+                }
+                if (all.getJSONObject(id).getBoolean("directory")
+                        && getContext().getSharedPreferences("provider-controls", 0).getBoolean("directory-as-file", false)) {
+                    File regular = new File(getContext().getFilesDir(), "poison-directory-fd");
+                    Files.write(regular.toPath(), new byte[0]);
+                    return ParcelFileDescriptor.open(regular, ParcelFileDescriptor.MODE_READ_ONLY);
                 }
                 return ParcelFileDescriptor.open(bytes(getContext(), id), ParcelFileDescriptor.parseMode(mode));
             } catch (android.os.OperationCanceledException error) { throw error;
@@ -146,8 +183,9 @@ public final class OwnedReceiveProvider extends DocumentsProvider {
                 if (!required(all, parent).getBoolean("directory") || find(getContext(), parent, name) != null)
                     throw new FileNotFoundException("invalid or duplicate destination");
                 String id = UUID.randomUUID().toString(); boolean directory = Document.MIME_TYPE_DIR.equals(mime);
-                if (!directory) Files.write(bytes(getContext(), id).toPath(), new byte[0]);
-                save(getContext(), all.put(id, node(parent, name, directory)));
+                File created = new File(bytes(getContext(), parent), name);
+                if (directory) Files.createDirectory(created.toPath()); else Files.write(created.toPath(), new byte[0]);
+                save(getContext(), all.put(id, node(parent, name, directory, created)));
                 return id;
             } catch (Exception error) { throw new FileNotFoundException(error.toString()); }
         }
@@ -161,10 +199,16 @@ public final class OwnedReceiveProvider extends DocumentsProvider {
                 var controls = getContext().getSharedPreferences("provider-controls", 0);
                 if (publishing && controls.getBoolean("fail-publish", false)) throw new java.io.IOException("injected provider rename failure");
                 if (find(getContext(), parent, name) != null) throw new java.io.IOException("fixture rename never overwrites");
+                File previousFile = bytes(getContext(), id);
+                File nextFile = new File(bytes(getContext(), parent), name);
+                Files.move(previousFile.toPath(), nextFile.toPath());
                 item.put("name", name);
                 if (controls.getBoolean("change-ids", false)) {
                     String replacement = UUID.randomUUID().toString();
-                    if (!item.getBoolean("directory")) Files.move(bytes(getContext(), id).toPath(), bytes(getContext(), replacement).toPath());
+                    for (var ids = all.keys(); ids.hasNext();) {
+                        JSONObject child = all.getJSONObject(ids.next());
+                        if (id.equals(child.optString("parent"))) child.put("parent", replacement);
+                    }
                     all.remove(id); all.put(replacement, item); id = replacement;
                 }
                 save(getContext(), all);
@@ -185,7 +229,7 @@ public final class OwnedReceiveProvider extends DocumentsProvider {
                         && getContext().getSharedPreferences("provider-controls", 0).getBoolean("fail-delete-backup", false))
                     throw new java.io.IOException("injected backup deletion failure");
                 if (children(getContext(), id) != 0) throw new java.io.IOException("fixture folder not empty");
-                all.remove(id); save(getContext(), all); Files.deleteIfExists(bytes(getContext(), id).toPath());
+                Files.deleteIfExists(bytes(getContext(), id).toPath()); all.remove(id); save(getContext(), all);
             } catch (Exception error) { throw new FileNotFoundException(error.toString()); }
         }
     }

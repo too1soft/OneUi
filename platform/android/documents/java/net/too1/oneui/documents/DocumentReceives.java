@@ -14,7 +14,11 @@ final class DocumentReceives {
     private record Root(String selected, Uri uri, String prefix) { }
     private final ConcurrentHashMap<String, Root> roots = new ConcurrentHashMap<>();
     private final DocumentReceiveTransactions transactions;
-    DocumentReceives(DocumentReceiveJournal journal) { transactions = new DocumentReceiveTransactions(journal); }
+    private final DocumentReceiveDirectories directories;
+    DocumentReceives(DocumentReceiveJournal journal) {
+        transactions = new DocumentReceiveTransactions(journal);
+        directories = new DocumentReceiveDirectories(journal);
+    }
 
     Object execute(DocumentAccess owner, DocumentDescriptors descriptors, JSONObject request, CancellationSignal cancellation) throws Exception {
         String operation = request.getString("op");
@@ -37,7 +41,22 @@ final class DocumentReceives {
                 yield tree.children(directory, request.getInt("limit"));
             }
             case "receive-mkdir" -> { tree.mkdir(location(root, request.getString("path"))); yield true; }
+            case "receive-mkdir-exclusive" -> directories.create(tree, location(root, request.getString("path")), request.getString("key"));
+            case "receive-directory-handles" -> directories.handles(tree, location(root, request.getString("path")), request.getString("key"), descriptors, cancellation);
+            case "receive-directory-forget" -> directories.forget(tree, location(root, request.getString("path")), request.getString("key"));
+            case "receive-read" -> {
+                Uri file = tree.required(location(root, request.getString("path")));
+                JSONObject metadata = tree.metadata(file);
+                if (metadata.getBoolean("directory")) throw new IOException("The receive entry is not a file");
+                android.os.ParcelFileDescriptor fd = tree.resolver.openFileDescriptor(file, "r", cancellation);
+                if (fd == null) throw new IOException("Unable to read the received document");
+                yield descriptors.take(fd).put("entry", metadata);
+            }
             case "receive-open" -> transactions.open(tree, location(root, request.getString("path")), request, descriptors, cancellation);
+            case "receive-reopen" -> transactions.reopen(tree, request, descriptors, cancellation);
+            case "receive-status" -> transactions.status(tree, request.getString("key"));
+            case "receive-stage-stat" -> transactions.statOpen(tree, request.getString("key"), request.getString("descriptor"), descriptors);
+            case "receive-publish" -> transactions.publish(tree, location(root, request.getString("from")), location(root, request.getString("path")), request);
             case "receive-finish" -> transactions.finish(tree, request.getString("key"));
             case "receive-recover" -> transactions.recover(tree, request.getString("key"));
             case "receive-discard" -> transactions.discard(tree, request.getString("key"));

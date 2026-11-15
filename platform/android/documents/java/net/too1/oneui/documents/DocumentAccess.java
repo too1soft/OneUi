@@ -91,7 +91,7 @@ public final class DocumentAccess {
         String operation = request.getString("op");
         if (operation.equals("capabilities")) return new JSONObject().put("version", 2)
             .put("boundedListing", true).put("readCancellation", true).put("preciseModified", true).put("pinnedSources", true)
-            .put("receiveTransactions", 1);
+            .put("receiveTransactions", 1).put("receiveStorage", 1);
         if (operation.equals("home")) return home() == null ? JSONObject.NULL : home();
         if (operation.equals("close")) return descriptors.close(request);
         if (operation.startsWith("source-")) return sources.execute(this, descriptors, request, cancellation);

@@ -32,6 +32,17 @@ final class DocumentReceiveTransactions {
         catch (Exception failure) { lease.close(); throw failure; }
     }
 
+    JSONObject reopen(DocumentTree tree, JSONObject request, DocumentDescriptors descriptors, CancellationSignal cancellation) throws Exception {
+        String id = id(tree, request.getString("key"));
+        DocumentReceiveJournal.Lease lease = journal.lease(id);
+        try {
+            JSONObject value = existing(tree, id);
+            if (value == null) throw new java.io.FileNotFoundException("Receiving state is unavailable");
+            JSONObject input = new JSONObject(request.toString()).put("expected", JSONObject.NULL);
+            return openLocked(tree, value.getString("path"), id, input, descriptors, cancellation, lease);
+        } catch (Exception failure) { lease.close(); throw failure; }
+    }
+
     private JSONObject openLocked(DocumentTree tree, String path, String id, JSONObject request,
                                   DocumentDescriptors descriptors, CancellationSignal cancellation, DocumentReceiveJournal.Lease lease) throws Exception {
         if (tree.relative(path).length == 0 || !request.has("expected")) throw new IOException("A receive target and snapshot are required");
@@ -40,7 +51,8 @@ final class DocumentReceiveTransactions {
         if (value != null && !path.equals(value.getString("path"))) throw new IOException("The receive key changed its target");
         if (value != null && value.getString("stage").equals("publishing")) DocumentPublication.recover(tree, id, value, journal);
         if (value != null && value.getString("stage").equals("published")) {
-            JSONObject result = new JSONObject().put("stage", "published").put("transaction", id).put("entry", DocumentPublication.published(tree, value));
+            JSONObject result = new JSONObject().put("stage", "published").put("transaction", id)
+                .put("target", String.join("/", tree.relative(path))).put("entry", DocumentPublication.published(tree, value));
             lease.close();
             return result;
         }
@@ -86,8 +98,45 @@ final class DocumentReceiveTransactions {
                 JSONObject current = journal.read(id);
                 if (current != null) journal.save(id, current.put("ioFailed", !success));
             } finally { lease.close(); }
-        });
-        return token.put("transaction", id).put("path", path).put("stage", "receiving").put("created", created).put("entry", entry);
+        }, id);
+        return token.put("transaction", id).put("path", path).put("target", String.join("/", tree.relative(path)))
+            .put("stage", "receiving").put("created", created).put("entry", entry);
+    }
+    JSONObject status(DocumentTree tree, String key) throws Exception {
+        String id = id(tree, key);
+        try (DocumentReceiveJournal.Lease held = journal.lease(id)) {
+            JSONObject value = existing(tree, id);
+            if (value == null) return new JSONObject().put("stage", "absent");
+            DocumentPublication.recover(tree, id, value, journal);
+            return new JSONObject().put("stage", value.getString("stage"))
+                .put("target", String.join("/", tree.relative(value.getString("path"))));
+        }
+    }
+    JSONObject statOpen(DocumentTree tree, String key, String descriptor, DocumentDescriptors descriptors) throws Exception {
+        String id = id(tree, key);
+        if (!descriptors.belongsTo(descriptor, id)) throw new IOException("The receive descriptor is closed or belongs to another transaction");
+        JSONObject value = existing(tree, id);
+        if (value == null || !value.getString("stage").equals("receiving")) throw new IOException("The receiving document is unavailable");
+        DocumentPublication.checkParent(tree, value);
+        Uri uri = tree.resolve(DocumentAccess.parent(value.getString("path")) + "/" + value.getString("temporary"), false);
+        if (uri == null || !uri.toString().equals(value.optString("temporaryUri"))) throw new IOException("The receiving document changed");
+        JSONObject entry = tree.metadata(uri);
+        if (entry == null || entry.getBoolean("directory")) throw new IOException("The receiving document changed type");
+        return entry;
+    }
+    JSONObject publish(DocumentTree tree, String from, String target, JSONObject request) throws Exception {
+        String id = id(tree, request.getString("key"));
+        try (DocumentReceiveJournal.Lease held = journal.lease(id)) {
+            JSONObject value = existing(tree, id);
+            if (value == null) throw new java.io.FileNotFoundException("Receiving state is unavailable");
+            DocumentPublication.recover(tree, id, value, journal);
+            if (value.getString("stage").equals("published")) {
+                if (!target.equals(value.getString("path"))) throw new IOException("The completed publication changed its target");
+            } else DocumentReceiveTargets.bind(tree, id, value, from, target, request, journal);
+            boolean clean = DocumentPublication.publish(tree, id, value, journal);
+            return new JSONObject().put("stage", "published").put("cleanupPending", !clean)
+                .put("target", String.join("/", tree.relative(target))).put("entry", DocumentPublication.published(tree, value));
+        }
     }
     JSONObject finish(DocumentTree tree, String key) throws Exception {
         String id = id(tree, key);

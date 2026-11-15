@@ -253,6 +253,6 @@ final class ReceiveContracts {
     }
     void run() throws Exception {
         OwnedReceiveProvider.reset(context); ownershipAndResume(); conflictsAndFailures(); providerErrorsAndCancellation();
-        changedPublishedTargetKeepsBackup(); pinsLimitsAndLegacy();
+        changedPublishedTargetKeepsBackup(); new ReceivePublicationContracts(this).run(); pinsLimitsAndLegacy();
     }
 }

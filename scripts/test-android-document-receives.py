@@ -144,7 +144,8 @@ def main():
     parser.add_argument('--serial')
     args = parser.parse_args()
     stage = args.stage.resolve(strict=True)
-    assert (stage / '.owner').read_text().strip() == 'wangyunkong-go-saf-receive'
+    assert (stage / '.owner').read_text().strip() in {
+        'wangyunkong-go-saf-receive', 'wangyunkong-go-document-receiver', 'oneui-android-document-receive-test'}
     assert args.attempt > 0
     output = stage / str(args.attempt)
     if args.mode == 'build':
