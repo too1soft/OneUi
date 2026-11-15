@@ -27,6 +27,8 @@ final class DocumentWrites {
         String mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension);
         String id=UUID.randomUUID().toString(), receivingName=temporaryName(name,"download");
         JSONObject recovery=journal.begin(id,path,receivingName,temporaryName(name,"backup"));
+        recovery.put("original", original == null ? JSONObject.NULL : tree.metadata(original)).put("parentUri", parent.toString());
+        journal.save(id,recovery);
         Uri temporary = null;
         try {
             temporary=DocumentsContract.createDocument(tree.resolver,parent,mime==null?"application/octet-stream":mime,receivingName);
@@ -49,22 +51,7 @@ final class DocumentWrites {
         String id = token.getString("transaction");
         Pending item = pending.get(id);
         if (item == null || !item.path.equals(token.getString("path"))) throw new IOException("Invalid document transaction");
-        DocumentTree tree = item.tree;
-        Uri actual = tree.resolve(item.path, false);
-        if (!java.util.Objects.equals(actual, item.original)) throw new IOException("The destination changed during the transfer");
-        String name = item.path.substring(item.path.lastIndexOf('/') + 1);
-        journal.save(id,item.journal.put("stage","publishing"));
-        Uri backup = actual == null ? null : tree.renameChecked(actual,item.journal.getString("backup"));
-        if(backup!=null)journal.save(id,item.journal.put("backupUri",backup.toString()));
-        Uri published;
-        try { published=tree.renameChecked(item.temporary, name); }
-        catch (Exception error) {
-            if (backup != null) try { tree.renameChecked(backup, name); }
-            catch (Exception restore) { error.addSuppressed(restore); }
-            throw error;
-        }
-        journal.save(id,item.journal.put("stage","published").put("publishedUri",published.toString()));
-        if (backup != null && !DocumentsContract.deleteDocument(tree.resolver, backup))
+        if (!DocumentPublication.publish(item.tree,id,item.journal,journal))
             throw new IOException("File saved, but the previous copy could not be removed");
         journal.remove(id);pending.remove(id);
         return true;

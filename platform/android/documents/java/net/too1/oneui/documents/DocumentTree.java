@@ -18,17 +18,24 @@ final class DocumentTree {
     final Uri grant;
     final String prefix;
     private final CancellationSignal cancellation;
+    private final Uri boundRoot;
     private static final String[] COLUMNS = {Document.COLUMN_DOCUMENT_ID, Document.COLUMN_DISPLAY_NAME,
         Document.COLUMN_MIME_TYPE, Document.COLUMN_SIZE, Document.COLUMN_LAST_MODIFIED};
     DocumentTree(ContentResolver resolver, Uri grant, String prefix) {
         this(resolver, grant, prefix, null);
     }
     DocumentTree(ContentResolver resolver, Uri grant, String prefix, CancellationSignal cancellation) {
+        this(resolver, grant, prefix, cancellation, null);
+    }
+    private DocumentTree(ContentResolver resolver, Uri grant, String prefix, CancellationSignal cancellation, Uri boundRoot) {
         this.resolver = resolver; this.grant = grant; this.prefix = prefix;
         this.cancellation = cancellation;
+        this.boundRoot = boundRoot;
     }
-    Uri root() { return DocumentsContract.buildDocumentUriUsingTree(grant, DocumentsContract.getTreeDocumentId(grant)); }
+    DocumentTree bound(Uri root, String prefix) { return new DocumentTree(resolver, grant, prefix, cancellation, root); }
+    Uri root() { return boundRoot != null ? boundRoot : DocumentsContract.buildDocumentUriUsingTree(grant, DocumentsContract.getTreeDocumentId(grant)); }
     String rootName() throws Exception {
+        if (boundRoot != null) return "root";
         JSONObject entry = metadata(root());
         if (entry == null) throw new FileNotFoundException("The selected folder no longer exists");
         return entry.getString("name");
