@@ -148,6 +148,33 @@ void queryAndLayoutCopiesSurviveOtherThemes() {
     parse(restored, theme);
     require(restored.resolve(button).foreground->r == 0x12, "eviction cannot change subsequent parsing");
 }
+
+void transientNodeScopesDoNotAffectCascadeAfterEviction() {
+    StyleSheet sheet;
+    parse(sheet, theme + " button.cached { max-width: 90px; }");
+    for (int i = 0; i != 10000; ++i) {
+        const oneui::StyleNode scoped{"button", {"cached", "mount-" + std::to_string(i)},
+                                    i % 2 ? oneui::StyleStateHover : 0u};
+        require(sheet.resolve(scoped).foreground->r == 0x12, "scope churn preserves declarations");
+        require(sheet.resolveLayout(scoped).maxWidth == 90, "scope churn preserves layout");
+    }
+    sheet.setCustomProperty("--ink", "#abcdef");
+    require(sheet.resolve(button).foreground->r == 0xab, "token edits invalidate cached declarations");
+    parse(sheet, "button.cached { height: 49px; }");
+    require(sheet.resolve(button).height == 49, "rule edits invalidate cached declarations");
+    const oneui::StyleNode later{"button", {"latent", "cached", "cached"}, 0};
+    require(sheet.resolve(later).height == 49, "unmatched classes preserve the original cascade");
+    parse(sheet, "button.latent { height: 71px; }");
+    require(sheet.resolve(later).height == 71 && sheet.resolve(button).height == 49,
+            "a newly referenced class must invalidate canonical node keys");
+    StyleSheet generic;
+    parse(generic, ".cached { color: #123456; max-width: 90px; }");
+    for (int i = 0; i != 3000; ++i) {
+        const oneui::StyleNode node{"tag-" + std::to_string(i), {"cached"}, 0};
+        require(generic.resolve(node).foreground->r == 0x12 && generic.resolveLayout(node).maxWidth == 90,
+                "evicting distinct node tags preserves paint and layout results");
+    }
+}
 }
 
 int main() {
@@ -158,6 +185,7 @@ int main() {
         failureIsTransactionalAndRepeated();
         copiedComponentStylesStayIndependent();
         queryAndLayoutCopiesSurviveOtherThemes();
+        transientNodeScopesDoNotAffectCascadeAfterEviction();
         std::exception_ptr workerError;
         std::thread worker([&] {
             try { independentTokensAndRules(); }

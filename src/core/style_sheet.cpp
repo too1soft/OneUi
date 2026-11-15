@@ -1,4 +1,5 @@
 #include "style_css_internal.h"
+#include "style_cache_internal.h"
 #include "internal/unicode.h"
 #include <algorithm>
 #include <cctype>
@@ -24,9 +25,14 @@ void StyleSheet::addRule(StyleRule rule) {
     compiled.node = StyleNode{parsed.tag, parsed.classes, parsed.pseudos};
     compiled.valid = parsed.valid;
     compiled.specificity = selectorSpecificity(rule.selector);
+    if (compiled.valid) {
+        ruleData_->selectorClasses.insert(parsed.classes.begin(), parsed.classes.end());
+        ruleData_->selectorStates |= parsed.pseudos;
+    }
     rules_.push_back(std::move(rule));
     selectors_.push_back(std::move(compiled));
     resolveCache_.clear();
+    declarationCache_.clear();
     layoutCache_.clear();
     ++version_;
 }
@@ -38,6 +44,7 @@ void StyleSheet::setCustomProperty(std::string name, std::string value) {
     }
     customProperties_[std::move(name)] = trim(std::move(value));
     resolveCache_.clear();
+    declarationCache_.clear();
     layoutCache_.clear();
     ++version_;
 }
@@ -82,8 +89,21 @@ std::vector<const StyleRule*> StyleSheet::matchingRules(const StyleNode& node) c
     return matches;
 }
 
+std::string StyleSheet::nodeCacheKey(const StyleNode& node) const {
+    StyleNode relevant{node.tag, {}, node.state & (ruleData_ ? ruleData_->selectorStates : 0u)};
+    if (ruleData_) {
+        for (const auto& klass : node.classes)
+            if (ruleData_->selectorClasses.count(klass)) relevant.classes.push_back(klass);
+    }
+    // Selector matching tests class membership, never order or multiplicity.
+    // A new unmatched mount scope must not allocate a new cached result.
+    std::sort(relevant.classes.begin(), relevant.classes.end());
+    relevant.classes.erase(std::unique(relevant.classes.begin(), relevant.classes.end()), relevant.classes.end());
+    return resolveCacheKey(relevant);
+}
+
 StyleBox StyleSheet::resolve(const StyleNode& node) const {
-    const std::string cacheKey = resolveCacheKey(node);
+    const std::string cacheKey = nodeCacheKey(node);
     if (auto cached = resolveCache_.find(cacheKey); cached != resolveCache_.end()) return cached->second;
     StyleBox resolved;
     for (const auto* rule : matchingRules(node)) {
@@ -92,9 +112,8 @@ StyleBox StyleSheet::resolve(const StyleNode& node) const {
             // A declaration depends on this sheet's tokens, not on the node
             // matching its selector. Share it across classes and pseudo-states.
             // Token/rule edits already invalidate the entire resolve cache.
-            const auto declarationKey = std::string(1, '\x1f') + "declaration:" +
-                std::to_string(std::size_t(rule - ruleData_->rules.data()));
-            if (auto cached = resolveCache_.find(declarationKey); cached != resolveCache_.end()) {
+            const auto declarationKey = std::size_t(rule - ruleData_->rules.data());
+            if (auto cached = declarationCache_.find(declarationKey); cached != declarationCache_.end()) {
                 current = cached->second;
                 resolved = mergeStyleBox(std::move(resolved), current);
                 continue;
@@ -111,12 +130,12 @@ StyleBox StyleSheet::resolve(const StyleNode& node) const {
                 }
             }
             current = mergeStyleBox(std::move(current), dynamicRule.box);
-            resolveCache_.emplace(declarationKey, current);
+            declarationCache_.emplace(declarationKey, current);
         }
         resolved = mergeStyleBox(std::move(resolved), current);
     }
     resolved = resolveBackgroundOpacity(std::move(resolved));
-    resolveCache_.emplace(cacheKey, resolved);
+    rememberNodeStyle(resolveCache_, cacheKey, resolved);
     return resolved;
 }
 

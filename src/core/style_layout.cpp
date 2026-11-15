@@ -1,4 +1,5 @@
 #include "style_css_internal.h"
+#include "style_cache_internal.h"
 #include "style_layout_internal.h"
 #include <algorithm>
 #include <cmath>
@@ -55,7 +56,7 @@ StyleLayout StyleSheet::resolveLayout(const StyleNode& node) const {
     using namespace style_detail;
     // No new allocations/sorting or declaration parsing for an ordinary sheet.
     if (std::none_of(rules().begin(), rules().end(), [](const auto& rule) { return ruleLayout(rule); })) return {};
-    const std::string cacheKey = resolveCacheKey(node);
+    const std::string cacheKey = nodeCacheKey(node);
     if (auto cached = layoutCache_.find(cacheKey); cached != layoutCache_.end()) return cached->second;
     StyleLayout resolved;
     for (const auto* rule : matchingRules(node)) {
@@ -82,7 +83,7 @@ StyleLayout StyleSheet::resolveLayout(const StyleNode& node) const {
         if (current.tableColumnWidths) resolved.tableColumnWidths = current.tableColumnWidths;
         if (current.tableSelectionWidth) resolved.tableSelectionWidth = current.tableSelectionWidth;
     }
-    layoutCache_.emplace(cacheKey, resolved);
+    rememberNodeStyle(layoutCache_, cacheKey, resolved);
     return resolved;
 }
 } // namespace oneui

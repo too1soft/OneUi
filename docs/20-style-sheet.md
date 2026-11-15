@@ -259,3 +259,24 @@ Regression coverage: `oneui_style_scope_tests` exercises nested scopes, dynamic
 insertion, reparenting, scope removal, owner destruction, anchor isolation and
 Select popup state palettes. Product render fixtures should additionally test
 actual photo backgrounds and the application's transient CSS.
+
+### Resolved-style cache lifetime
+
+Component snapshots share immutable rules and compiled selectors; tokens and
+resolved results belong to each snapshot. Paint and layout node-result caches
+each retain at most 1,024 entries. Their keys include the tag, only classes and
+pseudo states referenced by this sheet's selectors, and sorted unique class
+membership. Transient mount identifiers that no selector uses therefore reuse
+the same result. Rule edits rebuild the relevant selector metadata and invalidate
+these caches, including when a previously unused class becomes meaningful.
+
+Token-dependent declarations have a separate numeric rule-index cache bounded
+by the rule count. Token or rule edits invalidate it together with node results;
+node eviction cannot discard this declaration cache or change cascade order.
+Cache eviction only affects recomputation, never the resolved style. The style
+parse/cache regression exercises scope churn, distinct-tag eviction, token edits,
+new selector classes, copy isolation and layout results.
+
+These storage changes alter the private C++ `StyleSheet` layout. Rebuild C++
+consumers with matching headers and library. The opaque C API signatures remain
+unchanged; applications should still validate their exact DLL build fingerprint.

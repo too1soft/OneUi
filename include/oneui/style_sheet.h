@@ -12,6 +12,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -172,6 +173,7 @@ public:
 
 private:
     std::vector<const StyleRule*> matchingRules(const StyleNode& node) const;
+    std::string nodeCacheKey(const StyleNode& node) const;
     struct CompiledSelector {
         StyleNode node;
         bool valid = false;
@@ -180,6 +182,8 @@ private:
     struct RuleData {
         std::vector<StyleRule> rules;
         std::vector<CompiledSelector> selectors;
+        std::unordered_set<std::string> selectorClasses;
+        StylePseudoMask selectorStates = 0;
     };
     // Component style snapshots and palette variants differ in tokens/caches,
     // not in their immutable parsed rules. Only rule edits detach this storage.
@@ -188,6 +192,9 @@ private:
     std::shared_ptr<RuleData> ruleData_;
     std::map<std::string, std::string> customProperties_;
     mutable std::unordered_map<std::string, StyleBox> resolveCache_;
+    // Rule declarations depend only on this sheet's tokens. Their cache is
+    // bounded by rule count and does not compete with transient node scopes.
+    mutable std::unordered_map<std::size_t, StyleBox> declarationCache_;
     // Declarative mounts re-resolve base layouts on every flush; cache them
     // under the same key and invalidation as resolveCache_.
     mutable std::unordered_map<std::string, StyleLayout> layoutCache_;
