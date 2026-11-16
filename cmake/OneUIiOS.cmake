@@ -12,7 +12,8 @@ target_compile_definitions(oneui_core PRIVATE ONEUI_BUILDING_DLL)
 include(${CMAKE_CURRENT_LIST_DIR}/OneUIYoga.cmake)
 include(${CMAKE_CURRENT_LIST_DIR}/OneUITheme.cmake)
 add_library(oneui_ios_application STATIC src/mobile/widget_host.cpp src/mobile/touch_scroll.cpp src/mobile/text_input.cpp src/mobile/application.cpp
-    src/platform/shared/skia_canvas.cpp src/platform/shared/skia_path.cpp src/platform/ios/application_view.mm src/platform/ios/application_ime.mm)
+    src/platform/shared/skia_canvas.cpp src/platform/shared/skia_pixel_image.cpp src/platform/shared/skia_path.cpp
+    src/platform/ios/application_view.mm src/platform/ios/application_ime.mm)
 target_include_directories(oneui_ios_application PUBLIC include PRIVATE src)
 target_link_libraries(oneui_ios_application PUBLIC oneui_core OneUI::mobile_runtime
     "-framework UIKit" "-framework CoreGraphics" "-framework CoreText" "-framework QuartzCore")
