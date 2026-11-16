@@ -3,7 +3,7 @@
 #include "include/core/SkFontArguments.h"
 #include "include/core/SkFontMgr.h"
 #include "include/core/SkTypeface.h"
-#include "modules/skparagraph/include/TypefaceFontProvider.h"
+#include "embedded_font_provider.h"
 
 #include "oneui/fonts.h"
 #include <algorithm>
@@ -104,8 +104,8 @@ private:
 };
 #endif
 
-sk_sp<paragraph::TypefaceFontProvider> embeddedProvider() {
-    static auto provider = sk_make_sp<paragraph::TypefaceFontProvider>();
+sk_sp<EmbeddedFontProvider> embeddedProvider() {
+    static auto provider = sk_make_sp<EmbeddedFontProvider>();
     return provider;
 }
 
@@ -186,25 +186,7 @@ static bool registerFontFromMemoryImpl(const void* data, std::size_t size, const
     }
 
     const SkString alias(familyAlias.c_str());
-    constexpr std::array<int, 9> weights{100, 200, 300, 400, 500, 600, 700, 800, 900};
-    std::size_t registered = 0;
-    if (baseTypeface->getVariationDesignParameters({}) > 0) {
-        for (const int weight : weights) {
-            const SkFontArguments::VariationPosition::Coordinate coordinate{
-                SkFontArguments::VariationPosition::Coordinate::wght,
-                static_cast<float>(weight)};
-            SkFontArguments arguments;
-            arguments.setVariationDesignPosition({&coordinate, 1});
-            auto instance = baseTypeface->makeClone(arguments);
-            if (instance) {
-                embeddedProvider()->registerTypeface(std::move(instance), alias);
-                ++registered;
-            }
-        }
-    }
-    if (registered == 0) {
-        embeddedProvider()->registerTypeface(std::move(baseTypeface), alias);
-    }
+    embeddedProvider()->add(std::move(baseTypeface), alias);
     registeredFonts().push_back({familyAlias, std::move(fontData)});
     return true;
 }

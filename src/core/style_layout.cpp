@@ -66,7 +66,7 @@ StyleLayout StyleSheet::resolveLayout(const StyleNode& node) const {
         if (!rule->declarations.empty()) {
             StyleRule dynamic;
             for (const auto& [property, value] : rule->declarations)
-                if (!applyDeclaration(dynamic, property, value, customProperties_, nullptr)) {
+                if (!applyDeclaration(dynamic, property, value, customProperties(), nullptr)) {
                     dynamic = *rule; break;
                 }
             if (const auto* layout = ruleLayout(dynamic)) current = *layout;

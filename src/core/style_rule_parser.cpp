@@ -104,7 +104,7 @@ void parseRules(StyleSheet& sheet,const std::string& text,size_t begin,size_t en
 }
 bool StyleSheet::addRulesFromCss(const std::string& css,std::string* error) {
     try {
-        const bool independent = rules().empty() && customProperties_.empty();
+        const bool independent = rules().empty() && customProperties().empty();
         if (independent) {
             if (const auto* cached = parsedCssCache().find(css)) {
                 auto candidate = *cached;

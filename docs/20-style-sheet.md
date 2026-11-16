@@ -262,8 +262,10 @@ actual photo backgrounds and the application's transient CSS.
 
 ### Resolved-style cache lifetime
 
-Component snapshots share immutable rules and compiled selectors; tokens and
-resolved results belong to each snapshot. Paint and layout node-result caches
+Component snapshots share immutable rules, compiled selectors and token maps;
+resolved results belong to each snapshot. Token edits detach the map only when
+the value actually changes, so changing one snapshot cannot restyle another.
+Paint and layout node-result caches
 each retain at most 1,024 entries. Their keys include the tag, only classes and
 pseudo states referenced by this sheet's selectors, and sorted unique class
 membership. Transient mount identifiers that no selector uses therefore reuse
@@ -288,3 +290,17 @@ layout defaults in a long-lived registry can therefore grow memory across mounts
 Live widgets retain their authored layout and palette. The container runtime test
 uses a counting `allocate_shared` allocator over 100 remove/flush cycles to verify
 that retired allocations reach zero while the live parent remains registered.
+
+### Embedded variable font lifetime
+
+Embedded variable families advertise the same nine weights without constructing
+all nine typefaces during registration. The provider creates and caches a weight
+on its first request. Static regular/bold faces, aliases, enumeration and the base
+provider's legacy default-family fallback retain their previous behavior. Missing
+or null family names allow platform fallback safely. Advertised weights respect
+the font's actual axis limits; glyph data ownership is unchanged.
+
+`oneui_font_lazy_tests` verifies lazy enumeration, concurrent reuse, invalid
+families and all weights. Passing a variable font file as its sole argument also
+checks actual glyph coverage and variation coordinates. Applications must still
+check their own Latin/CJK advances and render their chosen fallback stack.

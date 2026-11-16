@@ -175,6 +175,25 @@ void transientNodeScopesDoNotAffectCascadeAfterEviction() {
                 "evicting distinct node tags preserves paint and layout results");
     }
 }
+
+void copiedTokenTablesStaySharedUntilAnActualEdit() {
+    StyleSheet base;
+    parse(base, theme);
+    std::vector<StyleSheet> snapshots(1000, base);
+    for (auto& copy : snapshots) {
+        require(&copy.customProperties() == &base.customProperties(), "component copies share the token table");
+        copy.setCustomProperty("--ink", *base.customProperty("--ink"));
+        require(&copy.customProperties() == &base.customProperties(), "unchanged tokens do not detach storage");
+        require(copy.resolve(button).foreground->r == 0x12, "sharing preserves token resolution");
+    }
+    snapshots.front().setCustomProperty("--ink", "#abcdef");
+    require(&snapshots.front().customProperties() != &base.customProperties(), "token edit detaches only its snapshot");
+    require(snapshots.front().resolve(button).foreground->r == 0xab &&
+            snapshots.back().resolve(button).foreground->r == 0x12, "edited and retained palettes stay independent");
+    StyleSheet moved = std::move(snapshots.front());
+    require(snapshots.front().customProperties().empty() && moved.resolve(button).foreground->r == 0xab,
+            "moved-from token storage remains valid");
+}
 }
 
 int main() {
@@ -186,6 +205,7 @@ int main() {
         copiedComponentStylesStayIndependent();
         queryAndLayoutCopiesSurviveOtherThemes();
         transientNodeScopesDoNotAffectCascadeAfterEviction();
+        copiedTokenTablesStaySharedUntilAnActualEdit();
         std::exception_ptr workerError;
         std::thread worker([&] {
             try { independentTokensAndRules(); }

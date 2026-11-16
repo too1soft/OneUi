@@ -190,7 +190,8 @@ private:
     void detachRules();
     std::weak_ptr<StyleSheet> transient_;
     std::shared_ptr<RuleData> ruleData_;
-    std::map<std::string, std::string> customProperties_;
+    // Component snapshots retain immutable tokens; only token edits detach.
+    std::shared_ptr<std::map<std::string, std::string>> customProperties_;
     mutable std::unordered_map<std::string, StyleBox> resolveCache_;
     // Rule declarations depend only on this sheet's tokens. Their cache is
     // bounded by rule count and does not compete with transient node scopes.

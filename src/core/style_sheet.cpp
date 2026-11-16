@@ -42,7 +42,14 @@ void StyleSheet::setCustomProperty(std::string name, std::string value) {
     if (name.size() <= 2) {
         return;
     }
-    customProperties_[std::move(name)] = trim(std::move(value));
+    value = trim(std::move(value));
+    const auto current = customProperty(name);
+    if (!current || *current != value) {
+        if (!customProperties_) customProperties_ = std::make_shared<std::map<std::string, std::string>>();
+        else if (!customProperties_.unique())
+            customProperties_ = std::make_shared<std::map<std::string, std::string>>(*customProperties_);
+        (*customProperties_)[std::move(name)] = std::move(value);
+    }
     resolveCache_.clear();
     declarationCache_.clear();
     layoutCache_.clear();
@@ -51,8 +58,9 @@ void StyleSheet::setCustomProperty(std::string name, std::string value) {
 
 std::optional<std::string> StyleSheet::customProperty(const std::string& name) const {
     const std::string key = normalizedCustomPropertyName(name);
-    auto found = customProperties_.find(key);
-    if (found == customProperties_.end()) {
+    const auto& tokens = customProperties();
+    auto found = tokens.find(key);
+    if (found == tokens.end()) {
         return std::nullopt;
     }
     return found->second;
@@ -124,7 +132,7 @@ StyleBox StyleSheet::resolve(const StyleNode& node) const {
                 // failed runtime resolution leaves the last valid parsed box
                 // in place instead of partially applying a theme.
                 if (!applyDeclaration(
-                        dynamicRule, property, value, customProperties_, nullptr)) {
+                        dynamicRule, property, value, customProperties(), nullptr)) {
                     dynamicRule.box = rule->box;
                     break;
                 }
@@ -146,16 +154,17 @@ const std::vector<StyleRule>& StyleSheet::rules() const {
 
 StyleBox StyleSheet::resolveTokens(const std::string& declarations) const {
     struct Cached {
-        std::map<std::string, std::string> tokens;
+        std::shared_ptr<const std::map<std::string, std::string>> tokens;
         std::string declarations;
         StyleBox box;
     };
     thread_local std::vector<Cached> cache;
     for (const auto& entry : cache)
-        if (entry.declarations == declarations && entry.tokens == customProperties_)
+        if (entry.declarations == declarations && (entry.tokens == customProperties_ ||
+            (entry.tokens && *entry.tokens == customProperties())))
             return entry.box;
     StyleSheet palette;
-    for (const auto& [name, value] : customProperties_)
+    for (const auto& [name, value] : customProperties())
         palette.setCustomProperty(name, value);
     if (!palette.addRulesFromCss("tokens {" + declarations + "}")) return {};
     auto box = palette.resolve({"tokens", {}, 0});
@@ -167,7 +176,8 @@ StyleBox StyleSheet::resolveTokens(const std::string& declarations) const {
 }
 
 const std::map<std::string, std::string>& StyleSheet::customProperties() const {
-    return customProperties_;
+    static const std::map<std::string, std::string> empty;
+    return customProperties_ ? *customProperties_ : empty;
 }
 
 std::size_t StyleSheet::version() const {
