@@ -55,6 +55,11 @@ bool TerminalView::onMouseDown(const MouseEvent& event) {
         pressedHyperlink_ = hyperlinkId;
         return true;
     }
+    if (event.button == MouseButton::Left && reportLocalPointer(TerminalPointerAction::Press, event)) {
+        localPointerPressed_ = true;
+        clearSelection();
+        return true;
+    }
     if (mouseReporting_ && !event.shift && onPointer_) {
         reportedButton_ = event.button;
         reportPointer(
@@ -140,6 +145,7 @@ bool TerminalView::handleAuxiliaryButton(const MouseEvent& event) {
 
 bool TerminalView::onMouseMove(const MouseEvent& event) {
     if (draggingScrollback_) { dragScrollback(event.position.y); return true; }
+    if (!selecting_ && reportLocalPointer(TerminalPointerAction::Move, event)) return true;
     const std::uint32_t hyperlinkId = interactive() && contains(event.position)
                                           ? hyperlinkAt(event.position)
                                           : 0;
@@ -186,6 +192,11 @@ bool TerminalView::onMouseMove(const MouseEvent& event) {
 
 bool TerminalView::onMouseUp(const MouseEvent& event) {
     if (draggingScrollback_) { dragScrollback(event.position.y); draggingScrollback_ = false; return true; }
+    if (localPointerPressed_) {
+        localPointerPressed_ = false;
+        reportLocalPointer(TerminalPointerAction::Release, event);
+        return true;
+    }
     if (pressedHyperlink_ != 0) {
         const std::uint32_t hyperlinkId = pressedHyperlink_;
         pressedHyperlink_ = 0;
@@ -282,6 +293,18 @@ void TerminalView::reportPointer(
     });
 }
 
+bool TerminalView::reportLocalPointer(TerminalPointerAction action, const MouseEvent& event) {
+    if (!onLocalPointer_) return false;
+    const bool inside = interactive() && contains(event.position);
+    if (!inside && !localPointerActive_) return false;
+    localPointerActive_ = inside;
+    const auto position = inside ? cellPositionFromPoint(event.position) : TextPosition{65535, 65535};
+    return onLocalPointer_(TerminalPointerEvent{
+        action, event.button, event.position, position.row, position.column, 0,
+        event.shift, event.control, event.alt,
+    });
+}
+
 std::uint32_t TerminalView::hyperlinkAt(Point point) const {
     if (!contains(point) || rows_ == 0 || columns_ == 0) {
         return 0;
@@ -325,10 +348,12 @@ void TerminalView::invalidateHyperlink(std::uint32_t hyperlinkId) {
 }
 
 bool TerminalView::hasInteractionState() const {
-    return draggingScrollback_ || selecting_ || reportedButton_ != MouseButton::None || pressedHyperlink_ != 0;
+    return localPointerActive_ || localPointerPressed_ || draggingScrollback_ || selecting_ || reportedButton_ != MouseButton::None || pressedHyperlink_ != 0;
 }
 
 void TerminalView::resetInteractionState() {
+    if (localPointerActive_) reportLocalPointer(TerminalPointerAction::Move, MouseEvent{{-1, -1}, MouseButton::None});
+    localPointerPressed_ = false;
     draggingScrollback_ = false;
     selecting_ = false;
     reportedButton_ = MouseButton::None;

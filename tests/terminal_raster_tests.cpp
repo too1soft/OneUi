@@ -89,9 +89,84 @@ static void zeroBorderDoesNotPaint() {
     }
 }
 
+static void uniformBlockBackgroundHasNoCellSeams() {
+    for (const float scale : {1.0f, 1.25f, 1.5f, 2.0f}) {
+        auto surface = SkSurfaces::Raster(SkImageInfo::MakeN32Premul(800, 400));
+        surface->getCanvas()->clear(SK_ColorBLACK);
+        surface->getCanvas()->scale(scale, scale);
+        auto canvas = oneui::rendering::makeSkiaCanvas(*surface->getCanvas());
+        oneui::TerminalView terminal;
+        terminal.setFrame({0, 0, 500, 160});
+        terminal.setFontSize(13.5f);
+        terminal.setLineHeight(1.4f);
+        terminal.setCursor({0, 0, false});
+        terminal.setCursorBlinking(false);
+        std::vector<oneui::TerminalCell> cells(5 * 50);
+        const oneui::Color fill{185, 191, 203, 255};
+        for (auto& cell : cells) cell.background = fill;
+        terminal.setGrid(5, 50, std::move(cells));
+        terminal.paint(*canvas);
+        SkPixmap pixels;
+        if (!surface->peekPixels(&pixels)) throw std::runtime_error("pixels unavailable");
+        // Interior blank cells must be a single solid block at every scale.
+        for (int y = static_cast<int>(5 * scale); y < static_cast<int>(70 * scale); ++y)
+            for (int x = static_cast<int>(25 * scale); x < static_cast<int>(250 * scale); ++x) {
+                const auto pixel = pixels.getColor(x, y);
+                if (std::abs(static_cast<int>(SkColorGetR(pixel)) - fill.r) > 1 ||
+                    std::abs(static_cast<int>(SkColorGetG(pixel)) - fill.g) > 1 ||
+                    std::abs(static_cast<int>(SkColorGetB(pixel)) - fill.b) > 1)
+                    throw std::runtime_error("uniform terminal block background has cell seams");
+            }
+    }
+}
+
+static void localPointerRoutingPreservesSelectionAndProtocol() {
+    oneui::TerminalView terminal;
+    terminal.setFrame({0, 0, 500, 160});
+    terminal.setFontSize(13.5f);
+    terminal.setLineHeight(1.4f);
+    terminal.setCursorBlinking(false);
+    std::vector<oneui::TerminalCell> cells(5 * 50);
+    for (auto& cell : cells) cell.text = L"a";
+    terminal.setGrid(5, 50, std::move(cells));
+    auto surface = SkSurfaces::Raster(SkImageInfo::MakeN32Premul(500, 160));
+    auto canvas = oneui::rendering::makeSkiaCanvas(*surface->getCanvas());
+    terminal.paint(*canvas);
+    bool outside = false;
+    int consumed = 0, remote = 0;
+    terminal.setOnLocalPointer([&](const oneui::TerminalPointerEvent& event) {
+        outside |= event.row == 65535 && event.column == 65535;
+        if (event.action == oneui::TerminalPointerAction::Press && event.row == 0) {
+            ++consumed;
+            return true;
+        }
+        return false;
+    });
+    terminal.setOnPointer([&](const auto&) { ++remote; });
+    terminal.onMouseDown({{15, 8}, oneui::MouseButton::Left});
+    terminal.onMouseUp({{15, 8}, oneui::MouseButton::Left});
+    if (consumed != 1 || terminal.hasSelection() || remote)
+        throw std::runtime_error("local header press did not consume before selection");
+    terminal.onMouseDown({{15, 32}, oneui::MouseButton::Left});
+    terminal.onMouseMove({{60, 32}, oneui::MouseButton::Left});
+    terminal.onMouseUp({{60, 32}, oneui::MouseButton::Left});
+    if (!terminal.hasSelection() || terminal.selectedText().empty())
+        throw std::runtime_error("unhandled local pointer broke text selection");
+    terminal.onMouseMove({{-1, -1}, oneui::MouseButton::None});
+    if (!outside) throw std::runtime_error("local hover exit was not delivered");
+    terminal.clearSelection();
+    terminal.setMouseReporting(true);
+    terminal.onMouseDown({{15, 50}, oneui::MouseButton::Left});
+    terminal.onMouseUp({{15, 50}, oneui::MouseButton::Left});
+    if (remote != 2 || terminal.hasSelection())
+        throw std::runtime_error("unhandled local pointer broke remote mouse reporting");
+}
+
 int main() {
     try {
         zeroBorderDoesNotPaint();
+        uniformBlockBackgroundHasNoCellSeams();
+        localPointerRoutingPreservesSelectionAndProtocol();
 #ifdef _WIN32
         auto surface = SkSurfaces::Raster(SkImageInfo::MakeN32Premul(240,80));
         const std::wstring direct=L"Segoe UI", stack=L"Missing OneUI Test Font, 'Segoe UI', 'Microsoft YaHei UI'";

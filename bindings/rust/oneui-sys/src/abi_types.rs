@@ -420,6 +420,9 @@ pub type OneUiFileDropCallback = Option<
 >;
 pub type OneUiTerminalPointerCallback =
     Option<unsafe extern "C" fn(event: *const OneUiTerminalPointerEvent, user_data: *mut c_void)>;
+pub type OneUiTerminalLocalPointerCallback = Option<
+    unsafe extern "C" fn(event: *const OneUiTerminalPointerEvent, user_data: *mut c_void) -> c_int,
+>;
 pub type OneUiTerminalHyperlinkCallback =
     Option<unsafe extern "C" fn(hyperlink_id: c_uint, user_data: *mut c_void)>;
 pub type OneUiTerminalViewportCallback =

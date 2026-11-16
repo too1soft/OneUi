@@ -485,6 +485,24 @@ void oneui_terminal_view_set_on_pointer(
     }
 }
 
+void oneui_terminal_view_set_on_local_pointer(
+    OneUiWidget* view, OneUiTerminalLocalPointerCallback callback, void* user_data) {
+    if (auto* nativeView = asWidget<oneui::TerminalView>(view)) {
+        if (!callback) {
+            nativeView->setOnLocalPointer(nullptr);
+            return;
+        }
+        nativeView->setOnLocalPointer([callback, user_data](const oneui::TerminalPointerEvent& event) {
+            const OneUiTerminalPointerEvent cEvent{
+                toCTerminalPointerAction(event.action), toCButton(event.button),
+                event.position.x, event.position.y, event.row, event.column, event.wheelDelta,
+                event.shift ? 1 : 0, event.control ? 1 : 0, event.alt ? 1 : 0,
+            };
+            return callback(&cEvent, user_data) != 0;
+        });
+    }
+}
+
 void oneui_terminal_view_set_on_hyperlink(
     OneUiWidget* view,
     OneUiTerminalHyperlinkCallback callback,

@@ -154,6 +154,7 @@ mod localization;
 mod native_error;
 mod window_callbacks;
 mod window_native;
+mod window_activation;
 pub use application::{Application, ApplicationActivation, CloseDecision, QuitPolicy};
 pub use desktop_window::{DesktopWindowState, ModalSession, WindowStateSubscription};
 pub use fonts::{enumerate_available_fonts, enumerate_system_fonts, measure_text_width, FontFamilyInfo};

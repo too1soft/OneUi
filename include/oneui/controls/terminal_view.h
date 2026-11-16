@@ -110,6 +110,7 @@ public:
     using RawKeyCallback = std::function<void(const KeyEvent&)>;
     using ScrollCallback = std::function<void(int)>;
     using PointerCallback = std::function<void(const TerminalPointerEvent&)>;
+    using LocalPointerCallback = std::function<bool(const TerminalPointerEvent&)>;
     using HyperlinkCallback = std::function<void(std::uint32_t)>;
     using ViewportChangedCallback = std::function<void(TerminalViewport)>;
     using FocusChangedCallback = std::function<void(bool)>;
@@ -179,6 +180,9 @@ public:
     void setOnRawKey(RawKeyCallback callback);
     void setOnScroll(ScrollCallback callback);
     void setOnPointer(PointerCallback callback);
+    // Local overlays may consume a left press before selection. Unhandled
+    // events keep native selection/mouse reporting. Outside hover uses row/column 65535.
+    void setOnLocalPointer(LocalPointerCallback callback);
     void setOnHyperlink(HyperlinkCallback callback);
     void setOnViewportChanged(ViewportChangedCallback callback);
     void holdViewportNotifications(bool hold) override;
@@ -285,6 +289,7 @@ private:
         bool control,
         bool alt);
     bool handleAuxiliaryButton(const MouseEvent& event);
+    bool reportLocalPointer(TerminalPointerAction action, const MouseEvent& event);
     bool cellSelected(std::uint16_t row, std::uint16_t column) const;
     bool hasInteractionState() const override;
     void resetInteractionState() override;
@@ -331,6 +336,9 @@ private:
     RawKeyCallback onRawKey_;
     ScrollCallback onScroll_;
     PointerCallback onPointer_;
+    LocalPointerCallback onLocalPointer_;
+    bool localPointerActive_ = false;
+    bool localPointerPressed_ = false;
     HyperlinkCallback onHyperlink_;
     std::function<void()> onCursorChanged_;
     ViewportChangedCallback onViewportChanged_;

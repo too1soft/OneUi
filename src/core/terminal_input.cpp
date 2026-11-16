@@ -26,6 +26,12 @@ void TerminalView::setOnPointer(PointerCallback callback) {
     pointerWheelRemainder_ = 0.0f;
 }
 
+void TerminalView::setOnLocalPointer(LocalPointerCallback callback) {
+    onLocalPointer_ = std::move(callback);
+    localPointerActive_ = false;
+    localPointerPressed_ = false;
+}
+
 void TerminalView::setRightButtonAction(TerminalAuxiliaryButtonAction action) {
     rightButtonAction_ = action;
 }

@@ -153,6 +153,9 @@ Select::Select() {
 }
 
 void Select::setItems(std::vector<std::wstring> items) {
+    if (items_ == items && selectedIndex() == effectiveSelectedIndex()) {
+        return;
+    }
     const int previous = effectiveSelectedIndex();
     items_ = std::move(items);
     const int next = effectiveSelectedIndex();
@@ -503,6 +506,10 @@ void Select::assignSelectedIndex(int index) {
     const int next = std::clamp(index, 0, maxIndex);
 
     selectedBinding_.set(next, selectedIndex_);
+    if (previous != next && popup_.open) {
+        popup_.hoveredIndex = next;
+        revealPopupIndex(next);
+    }
     invalidate();
     if (previous != next && onChanged_) {
         onChanged_(next);

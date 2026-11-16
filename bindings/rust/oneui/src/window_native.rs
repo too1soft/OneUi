@@ -244,12 +244,6 @@ impl Window {
             .unwrap_or(true)
     }
 
-    pub fn activate(&self) {
-        self.state.with_raw(|raw| unsafe {
-            sys::oneui_window_activate(raw);
-        });
-    }
-
     pub fn run(&self) -> i32 {
         self.state
             .current_raw()
