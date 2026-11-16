@@ -73,6 +73,7 @@ public:
     bool paintsAboveSiblings() const override;
     bool onMouseMove(const MouseEvent& event) override;
     bool onMouseDown(const MouseEvent& event) override;
+    bool takesFocusOnPointer() const override;
     bool onMouseUp(const MouseEvent& event) override;
     bool onMouseWheel(const MouseWheelEvent& event) override;
     bool onKeyDown(const KeyEvent& event) override;

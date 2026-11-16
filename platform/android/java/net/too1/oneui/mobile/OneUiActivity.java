@@ -58,6 +58,7 @@ public abstract class OneUiActivity extends Activity implements SurfaceHolder.Ca
     // Opt-in raw input for controls such as remote canvases. The product owns
     // capture/hit testing; ordinary widgets continue through the shared host.
     protected boolean interceptPointer(MotionEvent event) { return false; }
+    protected void safeAreaChanged(float left,float top,float right,float bottom) { }
     protected void servicesDetached() { }
     protected boolean serviceActivityResult(int request, int result, Intent data) { return false; }
     protected final void event(byte[] payload) { deliver(0, 0, payload); }
@@ -75,11 +76,32 @@ public abstract class OneUiActivity extends Activity implements SurfaceHolder.Ca
         });
     }
     private void drainRequests() {
-        if (host == 0) return;
-        for (NativeRequest request : NativeApplication.requests(host)) {
-            if (inFlight.size() >= 16) { java.util.Arrays.fill(request.payload, (byte)0); deliver(request.id, -2, null); continue; }
+        if (host == 0 || inFlight.size() >= 16) return;
+        // Leave excess work in the bounded native queue until a completion frees a slot.
+        // Rejecting it produces error/rebuild feedback loops during lifecycle bursts.
+        for (NativeRequest request : NativeApplication.requestsLimited(host, 16 - inFlight.size())) {
             inFlight.put(request.id, request);
             java.util.concurrent.atomic.AtomicBoolean replied = new java.util.concurrent.atomic.AtomicBoolean();
+            if (request.action.equals("oneui.show-keyboard")) {
+                surface.sync(true);
+                deliver(request.id, 0, null);
+                continue;
+            }
+            if (request.action.equals("oneui.editor-backspace")) {
+                boolean handled = surface.sendEditorKey(android.view.KeyEvent.KEYCODE_DEL);
+                deliver(request.id, handled ? 0 : -4, null);
+                continue;
+            }
+            if(request.action.equals("oneui.window-mode")){
+                try{
+                    org.json.JSONObject data=new org.json.JSONObject(new String(request.payload,java.nio.charset.StandardCharsets.UTF_8));
+                    chrome.setImmersive(data.optBoolean("immersive"));
+                    if(data.optBoolean("keepAwake"))getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                    else getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                    deliver(request.id,0,null);
+                }catch(Exception failure){deliver(request.id,-4,null);}
+                continue;
+            }
 			if (request.action.equals("oneui.open-url")) {
 				try {
 					String raw = new String(request.payload, java.nio.charset.StandardCharsets.UTF_8);
@@ -106,11 +128,15 @@ public abstract class OneUiActivity extends Activity implements SurfaceHolder.Ca
         servicesAttached();
         host = NativeApplication.create();
         chrome = new SystemAppearance(this, this::updateEditorInset);
+        chrome.setSafeAreaListener(values->safeAreaChanged(values[0],values[1],values[2],values[3]));
         FrameLayout root = chrome.content();
         surface = new EditorSurface(this, new EditorSurface.Bridge() {
             public EditorSurface.Snapshot snapshot() { return host == 0 ? null : NativeApplication.editing(host); }
             public boolean apply(long session, String text, int a, int b, int start, int end) {
                 return host != 0 && NativeApplication.edit(host, session, text, a, b, start, end);
+            }
+            public boolean key(long session, int key) {
+                return host != 0 && NativeApplication.editorKey(host, session, key);
             }
             public boolean sensitive(long session, int command, String text, int first, int second) {
                 return host != 0 && NativeApplication.sensitiveEdit(host, session, command, text, first, second);
@@ -166,6 +192,11 @@ public abstract class OneUiActivity extends Activity implements SurfaceHolder.Ca
             public boolean sensitive() {
                 EditorSurface.Snapshot state=host==0?null:NativeApplication.editing(host);
                 return state!=null && state.sensitive;
+            }
+            public boolean setProgress(NativeUiNode node,float value){
+                if(host==0||!available)return false;
+                boolean changed=NativeApplication.setProgress(host,node.sourceIndex,node.name,value);
+                if(changed){surface.sync(false);requestFrame();drainRequests();}return changed;
             }
             public String editorText() {
                 EditorSurface.Snapshot state=host==0?null:NativeApplication.editing(host);
@@ -247,6 +278,7 @@ public abstract class OneUiActivity extends Activity implements SurfaceHolder.Ca
     @Override protected void onStart() { super.onStart(); started = true; }
     @Override protected void onResume() {
         super.onResume(); resumed = true;
+        if(chrome!=null)chrome.reapplyImmersive();
         if (host != 0) observeSystem();
         syncAppearance(); activate();
     }

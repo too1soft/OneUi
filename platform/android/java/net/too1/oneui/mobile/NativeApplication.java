@@ -6,6 +6,7 @@ import net.too1.oneui.EditorSurface;
 /** Linked from OneUI's prebuilt host archive into the application widget module.
  * Its Activity loads that module before invoking these owner-thread methods. */
 public final class NativeApplication {
+    public static native boolean editorKey(long host, long session, int key);
     private NativeApplication() { }
     public static native long create();
     public static native void destroy(long host);
@@ -23,6 +24,7 @@ public final class NativeApplication {
     public static native long[] appearance(long host);
     public static native void acknowledgeAppearance(long host, long revision);
     public static native NativeRequest[] requests(long host);
+    public static native NativeRequest[] requestsLimited(long host, int limit);
     public static native void reply(long host, long request, int code, byte[] payload);
     public static native EditorSurface.Snapshot editing(long host);
     public static native boolean edit(long host, long session, String text, int anchor, int caret, int start, int end);
@@ -31,5 +33,6 @@ public final class NativeApplication {
     public static native EditorSurface.SelectionGeometry selectionGeometry(long host);
     public static native boolean selectAt(long host, long session, int edge, float x, float y);
     public static native NativeUiNode[] inspect(long host);
+    public static native boolean setProgress(long host,int index,String name,float value);
     public static native void typography(long host, float scale, float bodySize);
 }

@@ -74,7 +74,9 @@ EditingState TextInputSession::snapshot() {
         return {};
     }
     const auto live = liveState(*field);
-    if (field != s.field.lock() || live.session != s.base.session || live.text != s.base.text ||
+    const bool preeditCleared = s.editing.composingStart >= 0 &&
+        s.editing.composingEnd > s.editing.composingStart && !field->hasTextComposition();
+    if (field != s.field.lock() || live.session != s.base.session || live.text != s.base.text || preeditCleared ||
         live.anchor != s.base.anchor || live.caret != s.base.caret ||
         live.sensitive != s.base.sensitive || field->multiline() != s.editing.multiline) {
         reset();
@@ -93,6 +95,14 @@ EditingState TextInputSession::snapshot() {
     return visible;
 }
 bool TextInputSession::apply(const EditingState &next) { return applyInternal(next, false); }
+bool TextInputSession::key(uint64_t session, Key key) {
+    if (!session || snapshot().session != session) return false;
+    auto field = state_->field.lock();
+    if (!field) return false;
+    KeyEvent event;
+    event.key = key;
+    return field->onKeyDown(event);
+}
 bool TextInputSession::applyInternal(const EditingState &next, bool sensitive) {
     auto &s = *state_;
     if (!next.session || snapshot().session != next.session)

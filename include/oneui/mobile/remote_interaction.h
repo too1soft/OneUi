@@ -8,7 +8,7 @@
 
 namespace oneui::mobile {
 enum class RemoteTouchPhase { Down, Move, Up, Cancel };
-enum class RemoteTouchMode { Direct, Trackpad };
+enum class RemoteTouchMode { Direct, Trackpad, Pan };
 struct RemoteTouchSample {
     int id = 0;
     RemoteTouchPhase phase = RemoteTouchPhase::Cancel;
@@ -54,6 +54,9 @@ class RemoteInteraction final {
         cancel();
         mode_ = mode;
     }
+    void armDrag() { cancel(); dragArmed_ = true; }
+    bool dragArmed() const { return dragArmed_; }
+    void scroll(float x,float y) { if(enabled_&&valid()&&std::isfinite(x)&&std::isfinite(y))emit(0,false,x,y); }
     void setEnabled(bool enabled) {
         if (!enabled)
             cancel();
@@ -78,6 +81,7 @@ class RemoteInteraction final {
         if (dragging_)
             emit(1, false);
         dragging_ = false;
+        dragArmed_ = false;
         multi_ = false;
         moved_ = false;
         zoomGesture_ = false;
@@ -101,7 +105,7 @@ class RemoteInteraction final {
                 multi_ = true;
                 if (zoom_ && points_.size() == 2) {
                     pinchStart_ = distance(points_.begin()->second, points_.rbegin()->second);
-                    zoomGesture_ = mode_ == RemoteTouchMode::Direct && zoom_->zoom() > 1.f;
+                    zoomGesture_ = mode_ != RemoteTouchMode::Trackpad && zoom_->zoom() > 1.f;
                     multiOrigin_ = midpoint(points_.begin()->second, points_.rbegin()->second);
                     multiLast_ = multiOrigin_;
                     scrolling_ = false;
@@ -116,9 +120,12 @@ class RemoteInteraction final {
             down_ = sample.timeMs;
             moved_ = false;
             multi_ = false;
-            if (mode_ == RemoteTouchMode::Direct)
+            if (mode_ != RemoteTouchMode::Trackpad)
                 cursor_ = mapFit(sample.position);
-            if (lastTap_ && (mode_ != RemoteTouchMode::Direct || !zoom_ || zoom_->contains(sample.position)) &&
+            if (mode_ == RemoteTouchMode::Pan && dragArmed_) {
+                dragArmed_=false;
+                if(!zoom_||zoom_->contains(sample.position)){dragging_=true;emit(1,true);}
+            } else if (mode_ != RemoteTouchMode::Pan && lastTap_ && (mode_ != RemoteTouchMode::Direct || !zoom_ || zoom_->contains(sample.position)) &&
                 sample.timeMs >= lastTap_ && sample.timeMs - lastTap_ < 300 &&
                 distance(sample.position, lastTapPosition_) < 24) {
                 dragging_ = true;
@@ -136,7 +143,11 @@ class RemoteInteraction final {
             if (multi_) {
                 moveMultiple(sample, previous, current == points_.begin());
             } else {
-                if (mode_ == RemoteTouchMode::Direct)
+                if(mode_==RemoteTouchMode::Pan&&!dragging_){
+                    if(moved_&&zoom_&&zoom_->transform(previous,sample.position,1.f)&&zoomChanged_)zoomChanged_();
+                    return;
+                }
+                if (mode_ != RemoteTouchMode::Trackpad)
                     cursor_ = mapFit(sample.position);
                 else
                     cursor_ = clamp({cursor_.x + (sample.position.x - previous.x) * 1.5f,
@@ -155,8 +166,8 @@ class RemoteInteraction final {
             dragging_ = false;
             lastTap_ = 0;
         } else if (!multi_ && !moved_ &&
-                   (mode_ != RemoteTouchMode::Direct || !zoom_ || zoom_->contains(sample.position))) {
-            if (mode_ == RemoteTouchMode::Direct)
+                   (mode_ == RemoteTouchMode::Trackpad || !zoom_ || zoom_->contains(sample.position))) {
+            if (mode_ != RemoteTouchMode::Trackpad)
                 cursor_ = mapFit(sample.position);
             const auto elapsed = sample.timeMs >= down_ ? sample.timeMs - down_ : 0;
             const int button = elapsed >= 500 ? 3 : 1;
@@ -226,6 +237,6 @@ class RemoteInteraction final {
     uint64_t down_ = 0, lastTap_ = 0;
     RemoteTouchMode mode_ = RemoteTouchMode::Trackpad;
     float pinchStart_ = 0;
-    bool enabled_ = true, moved_ = false, multi_ = false, dragging_ = false, zoomGesture_ = false, scrolling_ = false;
+    bool enabled_ = true, moved_ = false, multi_ = false, dragging_ = false, zoomGesture_ = false, scrolling_ = false, dragArmed_ = false;
 };
 } // namespace oneui::mobile

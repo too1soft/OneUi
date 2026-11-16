@@ -1,6 +1,7 @@
 #pragma once
 
 #include "oneui/mobile/presentation.h"
+#include "oneui/mobile/remote_control_style.h"
 #include <array>
 #include <cstdint>
 #include <functional>
@@ -47,8 +48,8 @@ inline std::shared_ptr<Stack> remoteModifierRow(const RemoteModifierKeys &state,
     row->setGap(8);
     row->setPreferredSize({0, std::max(48.f, 48 * scale)});
     for (int index = 0; index < 4; ++index) {
-        auto key = actionButton(labels[index], [toggle, index] { toggle(index); }, palette,
-                                state.pressed(index) ? ActionKind::Primary : ActionKind::Secondary, scale);
+        auto key = remoteControlButton(labels[index], [toggle, index] { toggle(index); }, palette,
+                                       RemoteControlStyle::Modifier,state.pressed(index),scale);
         key->setAccessibleRole(AccessibilityRole::CheckBox);
         auto info = key->accessibilityState();
         info.checked = state.pressed(index);

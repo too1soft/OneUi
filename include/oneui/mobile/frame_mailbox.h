@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <cstring>
 #include <memory>
+#include <new>
 #include <mutex>
 #include <vector>
 
@@ -16,29 +17,38 @@ class FrameMailbox final {
         uint64_t sequence = 0;
     };
     bool submit(const void *data, size_t bytes, int width, int height, int stride) {
-        if (!data || width < 1 || height < 1 || width > 5120 || height > 2880 ||
-            stride < width * 4 || stride > 5120 * 4 || size_t(stride) * height > bytes)
+        if (!data || !validFrameDimensions(width,height) ||
+            stride < width * 4 || stride > maxFrameSide * 4 || size_t(stride) * height > bytes)
             return false;
-        auto pixels = std::make_shared<std::vector<uint8_t>>(size_t(width) * height * 4);
+        std::shared_ptr<std::vector<uint8_t>> pixels;
+        try { pixels = std::make_shared<std::vector<uint8_t>>(size_t(width) * height * 4); }
+        catch(const std::bad_alloc &) { return false; }
         for (int row = 0; row < height; ++row)
             std::memcpy(pixels->data() + size_t(row) * width * 4,
                         static_cast<const uint8_t *>(data) + size_t(row) * stride,
                         size_t(width) * 4);
-        std::lock_guard<std::mutex> lock(mutex_);
-        latest_ = {std::move(pixels), width, height, width * 4, ++sequence_};
-        return true;
+        return submitOwned(std::move(pixels), width, height, width * 4);
     }
     bool submitNv12(const void *data, size_t bytes, int width, int height, int stride) {
-        if (!data || width < 2 || height < 2 || width > 5120 || height > 2880 || width % 2 ||
-            height % 2 || stride < width || stride > 5120 ||
+        if (!data || width < 2 || height < 2 || !validFrameDimensions(width,height) || width % 2 ||
+            height % 2 || stride < width || stride > maxFrameSide ||
             size_t(stride) * (height + height / 2) > bytes)
             return false;
-        auto pixels = std::make_shared<std::vector<uint8_t>>(size_t(width) * height * 4);
+        std::shared_ptr<std::vector<uint8_t>> pixels;
+        try { pixels = std::make_shared<std::vector<uint8_t>>(size_t(width) * height * 4); }
+        catch(const std::bad_alloc &) { return false; }
         if (!nv12ToRgba(static_cast<const uint8_t *>(data), bytes, width, height, stride,
                         pixels->data(), pixels->size(), width * 4))
             return false;
+        return submitOwned(std::move(pixels), width, height, width * 4);
+    }
+    // The producer relinquishes writes; the consumer retains these exact pixels.
+    bool submitOwned(std::shared_ptr<std::vector<uint8_t>> pixels, int width, int height, int stride) {
+        if (!pixels || !validFrameDimensions(width,height) || stride < width * 4 ||
+            stride > maxFrameSide * 4 || size_t(stride) * height > pixels->size())
+            return false;
         std::lock_guard<std::mutex> lock(mutex_);
-        latest_ = {std::move(pixels), width, height, width * 4, ++sequence_};
+        latest_ = {std::move(pixels), width, height, stride, ++sequence_};
         return true;
     }
     Frame take() {
@@ -50,6 +60,16 @@ class FrameMailbox final {
     void clear() {
         std::lock_guard<std::mutex> lock(mutex_);
         latest_ = {};
+    }
+    uint64_t sequence() {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return sequence_;
+    }
+    // A queued lifecycle notification may arrive after newer pixels were submitted.
+    void clearThrough(uint64_t sequence) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (latest_.sequence <= sequence)
+            latest_ = {};
     }
 
   private:

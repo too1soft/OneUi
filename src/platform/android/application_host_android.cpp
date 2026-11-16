@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <utility>
+#include <algorithm>
 #include "oneui/canvas.h"
 
 namespace oneui::mobile::android {
@@ -110,7 +111,7 @@ extern "C" JNIEXPORT jlongArray JNICALL JNI_METHOD(appearance)(JNIEnv *env, jcla
 extern "C" JNIEXPORT void JNICALL JNI_METHOD(acknowledgeAppearance)(JNIEnv *env, jclass, jlong handle, jlong revision) {
     if (auto *host = applicationSurface(env, handle)) host->core.application().appearance().acknowledge(uint64_t(revision));
 }
-extern "C" JNIEXPORT jobjectArray JNICALL JNI_METHOD(requests)(JNIEnv *env, jclass, jlong handle) {
+static jobjectArray takeRequests(JNIEnv *env, jlong handle, jint limit) {
     auto *host = applicationSurface(env, handle);
     if (!host) return nullptr;
     auto klass = env->FindClass("net/too1/oneui/mobile/NativeRequest");
@@ -119,7 +120,8 @@ extern "C" JNIEXPORT jobjectArray JNICALL JNI_METHOD(requests)(JNIEnv *env, jcla
     if (!constructor) return nullptr;
     std::vector<oneui::mobile::ApplicationRequest> requests;
     oneui::mobile::ApplicationRequest request;
-    while (host->core.services().take(request)) requests.push_back(std::move(request));
+    while (requests.size() < static_cast<size_t>(std::max(0, std::min(16, limit))) &&
+           host->core.services().take(request)) requests.push_back(std::move(request));
     auto result = env->NewObjectArray(jsize(requests.size()), klass, nullptr);
     if (!result) return nullptr;
     for (size_t i = 0; i < requests.size(); ++i) {
@@ -134,6 +136,12 @@ extern "C" JNIEXPORT jobjectArray JNICALL JNI_METHOD(requests)(JNIEnv *env, jcla
         env->DeleteLocalRef(value); env->DeleteLocalRef(action); env->DeleteLocalRef(data);
     }
     return result;
+}
+extern "C" JNIEXPORT jobjectArray JNICALL JNI_METHOD(requests)(JNIEnv *env, jclass, jlong handle) {
+    return takeRequests(env, handle, 16);
+}
+extern "C" JNIEXPORT jobjectArray JNICALL JNI_METHOD(requestsLimited)(JNIEnv *env, jclass, jlong handle, jint limit) {
+    return takeRequests(env, handle, limit);
 }
 extern "C" JNIEXPORT void JNICALL JNI_METHOD(reply)(JNIEnv *env, jclass, jlong handle, jlong id, jint code, jbyteArray data) {
     auto *host = applicationSurface(env, handle);

@@ -216,7 +216,7 @@ bool View::onMouseDown(const MouseEvent& event) {
         pressedChild_ = &child;
         const bool handled = child.onMouseDown(event);
         if (handled) {
-            focusChild(&child, false);
+            if (child.takesFocusOnPointer()) focusChild(&child, false);
             return true;
         }
         pressedChild_ = nullptr;
@@ -230,7 +230,7 @@ bool View::onMouseDown(const MouseEvent& event) {
 
         pressedChild_ = &child;
         const bool handled = child.onMouseDown(event);
-        if (handled || child.isFocusable()) {
+        if ((handled || child.isFocusable()) && child.takesFocusOnPointer()) {
             focusChild(&child, false);
         }
         // Composite views participate in keyboard focus because they own
@@ -242,6 +242,10 @@ bool View::onMouseDown(const MouseEvent& event) {
     focusChild(nullptr);
     pressedChild_ = nullptr;
     return false;
+}
+
+bool View::takesFocusOnPointer() const {
+    return Widget::takesFocusOnPointer() && (!pressedChild_ || pressedChild_->takesFocusOnPointer());
 }
 
 bool View::onMouseUp(const MouseEvent& event) {

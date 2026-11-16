@@ -2,9 +2,27 @@
 #include <jni.h>
 #include "oneui/mobile/widget_snapshot.h"
 #include "mobile/text_editing.h"
+#include <cmath>
 
 using namespace oneui::mobile::android;
 #define JNI_METHOD(name) Java_net_too1_oneui_mobile_NativeApplication_##name
+extern "C" JNIEXPORT jboolean JNICALL JNI_METHOD(editorKey)(JNIEnv *env, jclass, jlong value,
+                                                            jlong session, jint key) {
+    auto *h = applicationSurface(env, value);
+    if (!h) return false;
+    OneUiMobileStateV1 runtime{};
+    h->runtime().state(runtime);
+    if (runtime.lifecycle != ONEUI_MOBILE_ACTIVE) return false;
+    oneui::Key mapped;
+    switch (key) {
+    case 67: mapped = oneui::Key::Backspace; break;
+    case 112: mapped = oneui::Key::Delete; break;
+    case 21: mapped = oneui::Key::Left; break;
+    case 22: mapped = oneui::Key::Right; break;
+    default: return false;
+    }
+    return h->input.key(uint64_t(session), mapped);
+}
 extern "C" JNIEXPORT jobject JNICALL JNI_METHOD(editing)(JNIEnv *env, jclass, jlong value) {
     auto *h = applicationSurface(env, value);
     if (!h)
@@ -132,7 +150,7 @@ extern "C" JNIEXPORT jobjectArray JNICALL JNI_METHOD(inspect)(JNIEnv* env,jclass
     const auto nodes = oneui::mobile::widgetSnapshot(h->core.application().root());
     auto cls = env->FindClass("net/too1/oneui/mobile/NativeUiNode");
     if (!cls) return nullptr;
-    auto ctor = env->GetMethodID(cls,"<init>","(Ljava/lang/String;IFFFFZZZZFFFF)V");
+    auto ctor = env->GetMethodID(cls,"<init>","(Ljava/lang/String;IFFFFZZZZFFFFIFFFF)V");
     if (!ctor) return nullptr;
     auto result = env->NewObjectArray(jsize(nodes.size()),cls,nullptr);
     if (!result) return nullptr;
@@ -143,10 +161,25 @@ extern "C" JNIEXPORT jobjectArray JNICALL JNI_METHOD(inspect)(JNIEnv* env,jclass
         auto item = env->NewObject(cls,ctor,label,jint(node.role),node.bounds.x,node.bounds.y,
             node.bounds.width,node.bounds.height,jboolean(node.disabled),jboolean(node.selected),
             jboolean(node.checked),jboolean(node.focused),node.layoutBounds.x,node.layoutBounds.y,
-            node.layoutBounds.width,node.layoutBounds.height);
+            node.layoutBounds.width,node.layoutBounds.height,jint(i),node.minimum,node.maximum,node.value,node.step);
         env->SetObjectArrayElement(result,jsize(i),item);
         env->DeleteLocalRef(item);env->DeleteLocalRef(label);
         if (env->ExceptionCheck()) return nullptr;
     }
     return result;
+}
+extern "C" JNIEXPORT jboolean JNICALL JNI_METHOD(setProgress)(JNIEnv* env,jclass,jlong handle,jint index,jstring name,jfloat value) {
+    auto* host=applicationSurface(env,handle);
+    if(!host||!name||index<0||!std::isfinite(value))return false;
+    const auto nodes=oneui::mobile::widgetSnapshot(host->core.application().root());
+    if(static_cast<size_t>(index)>=nodes.size())return false;
+    const auto& node=nodes[static_cast<size_t>(index)];
+    if(node.disabled)return false;
+    auto slider=node.rangeTarget.lock();if(!slider)return false;
+    const auto size=env->GetStringLength(name);if(size<0||size>512)return false;
+    const auto* chars=env->GetStringChars(name,nullptr);if(!chars)return false;
+    const std::u16string expected(reinterpret_cast<const char16_t*>(chars),static_cast<size_t>(size));
+    env->ReleaseStringChars(name,chars);
+    if(expected!=oneui::mobile::editing::encode(node.name))return false;
+    return slider->setValueFromInput(value);
 }

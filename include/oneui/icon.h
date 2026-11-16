@@ -166,7 +166,9 @@ enum class IconSymbol {
     OutlineWandSparkles,
     OutlineBookOpen,
     OutlinePackagePlus,
-    OutlineBlocks
+    OutlineBlocks,
+    OutlineEye,
+    OutlineEyeOff
 };
 
 enum class IconPrimitiveKind {

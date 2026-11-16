@@ -71,7 +71,7 @@ inline std::optional<IconSymbol> namedIcon(std::string_view name) {
         {"git-branch",IconSymbol::OutlineGitBranch},{"app-window",IconSymbol::OutlineAppWindow},
         {"sparkles",IconSymbol::OutlineWorkbenchSparkles}
         ,{"compass-outline",IconSymbol::OutlineCompass},{"wand-sparkles",IconSymbol::OutlineWandSparkles}
-        ,{"book-open",IconSymbol::OutlineBookOpen},{"package-plus",IconSymbol::OutlinePackagePlus},{"blocks",IconSymbol::OutlineBlocks}
+        ,{"book-open",IconSymbol::OutlineBookOpen},{"package-plus",IconSymbol::OutlinePackagePlus},{"blocks",IconSymbol::OutlineBlocks},{"eye",IconSymbol::OutlineEye},{"eye-off",IconSymbol::OutlineEyeOff}
     };
     for(const auto& entry:entries)if(entry.name==name)return entry.symbol;
     return {};
