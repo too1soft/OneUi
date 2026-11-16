@@ -81,6 +81,9 @@ public final class EditorSurface extends SurfaceView {
         manager = (InputMethodManager) context.getSystemService(Context.INPUT_METHOD_SERVICE);
         selection = new EditorSelection(this);
         setFocusable(true); setFocusableInTouchMode(true);
+        // OneUI paints focus inside the GPU surface. Android's fallback
+        // highlight would tint the entire canvas after keyboard navigation.
+        if (android.os.Build.VERSION.SDK_INT >= 26) setDefaultFocusHighlightEnabled(false);
         // Stylus handwriting/geometry is not exposed by this adapter yet.
         if (android.os.Build.VERSION.SDK_INT >= 33) setAutoHandwritingEnabled(false);
     }
