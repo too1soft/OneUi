@@ -1,0 +1,6 @@
+# Vendored engines and generated consumer/QA trees are not SDK-owned source.
+/third_party/
+/out/
+/build/
+/dist/
+/website/node_modules/
