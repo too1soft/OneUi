@@ -22,6 +22,7 @@ public:
     void setStyleOverride(CheckboxStyleOverride style);
     void clearStyleOverride();
     void setOnChanged(std::function<void(bool)> callback);
+    void setLabelFontSize(float size);
 
     void paint(Canvas& canvas) override;
     bool onMouseMove(const MouseEvent& event) override;
@@ -44,6 +45,7 @@ private:
     std::optional<CheckboxStyleOverride> styleOverride_;
     Binding<bool> checkedBinding_;
     std::function<void(bool)> onChanged_;
+    float labelFontSize_ = 0;
 };
 
 } // namespace oneui
