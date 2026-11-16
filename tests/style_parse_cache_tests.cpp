@@ -31,6 +31,34 @@ void independentTokensAndRules() {
     require(first.resolve(button).height == 45, "a later mount cannot rewrite the first view");
 }
 
+void sharedRulesDetachWithoutSharingThemeState() {
+    StyleSheet original;
+    parse(original, theme);
+    (void)original.resolve(button); // Warm the source's derived cache first.
+    StyleSheet local = original;
+    require(local.rules().data() == original.rules().data(),
+        "control palette copies must share rule storage instead of duplicating it");
+    local.setCustomProperty("--ink", "#abcdef");
+    require(local.rules().data() == original.rules().data(),
+        "token-only theme edits must keep the common immutable rules");
+    require(local.resolve(button).foreground->r == 0xab &&
+        original.resolve(button).foreground->r == 0x12,
+        "local theme caches must resolve their own tokens after a warm copy");
+    parse(local, "button.cached { height: 61px; max-width: 95px; }");
+    require(local.rules().data() != original.rules().data() && original.rules().size() == 1,
+        "rule edits must detach before changing the shared rule sequence");
+    require(original.resolve(button).height == 32 && local.resolve(button).height == 61 &&
+        !original.resolveLayout(button).maxWidth && local.resolveLayout(button).maxWidth == 95,
+        "detached visual and layout rules preserve both cascades");
+    auto survivor = local;
+    local = StyleSheet{};
+    require(survivor.resolve(button).height == 61, "a copy owns its rules after the source is reset");
+    StyleSheet moved = std::move(survivor);
+    parse(survivor, theme);
+    require(moved.resolve(button).height == 61 && survivor.resolve(button).height == 32,
+        "moved-from sheets remain reusable and independent");
+}
+
 void preserveCallerEnvironment() {
     const std::string css = "button.cached { color: var(--ink, #010203); }";
     StyleSheet plain;
@@ -112,6 +140,7 @@ void queryAndLayoutCopiesSurviveOtherThemes() {
 int main() {
     try {
         independentTokensAndRules();
+        sharedRulesDetachWithoutSharingThemeState();
         preserveCallerEnvironment();
         transientPalettesBelongToEachMount();
         failureIsTransactionalAndRepeated();

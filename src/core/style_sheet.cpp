@@ -8,17 +8,29 @@
 
 namespace oneui {
 using namespace style_detail;
+const StyleSheet::RuleStorage& StyleSheet::ruleStorage() const {
+    static const RuleStorage empty;
+    return ruleStorage_ ? *ruleStorage_ : empty;
+}
+
+StyleSheet::RuleStorage& StyleSheet::mutableRuleStorage() {
+    if (!ruleStorage_) ruleStorage_ = std::make_shared<RuleStorage>();
+    else if (!ruleStorage_.unique()) ruleStorage_ = std::make_shared<RuleStorage>(*ruleStorage_);
+    return *ruleStorage_;
+}
+
 void StyleSheet::addRule(StyleRule rule) {
+    auto& storage = mutableRuleStorage();
     if (rule.order == 0) {
-        rule.order = static_cast<int>(rules_.size()) + 1;
+        rule.order = static_cast<int>(storage.rules.size()) + 1;
     }
     const ParsedSelector parsed = parseSelector(rule.selector);
     CompiledSelector compiled;
     compiled.node = StyleNode{parsed.tag, parsed.classes, parsed.pseudos};
     compiled.valid = parsed.valid;
     compiled.specificity = selectorSpecificity(rule.selector);
-    rules_.push_back(std::move(rule));
-    selectors_.push_back(std::move(compiled));
+    storage.rules.push_back(std::move(rule));
+    storage.selectors.push_back(std::move(compiled));
     resolveCache_.clear();
     layoutCache_.clear();
     ++version_;
@@ -45,6 +57,8 @@ std::optional<std::string> StyleSheet::customProperty(const std::string& name) c
 }
 
 std::vector<const StyleRule*> StyleSheet::matchingRules(const StyleNode& node) const {
+    const auto& rules_ = ruleStorage().rules;
+    const auto& selectors_ = ruleStorage().selectors;
     std::vector<const StyleRule*> matches;
     for (std::size_t index = 0; index < rules_.size(); ++index) {
         if(rules_[index].query)continue;
@@ -83,7 +97,7 @@ StyleBox StyleSheet::resolve(const StyleNode& node) const {
             // matching its selector. Share it across classes and pseudo-states.
             // Token/rule edits already invalidate the entire resolve cache.
             const auto declarationKey = std::string(1, '\x1f') + "declaration:" +
-                std::to_string(std::size_t(rule - rules_.data()));
+                std::to_string(std::size_t(rule - rules().data()));
             if (auto cached = resolveCache_.find(declarationKey); cached != resolveCache_.end()) {
                 current = cached->second;
                 resolved = mergeStyleBox(std::move(resolved), current);
@@ -111,7 +125,7 @@ StyleBox StyleSheet::resolve(const StyleNode& node) const {
 }
 
 const std::vector<StyleRule>& StyleSheet::rules() const {
-    return rules_;
+    return ruleStorage().rules;
 }
 
 StyleBox StyleSheet::resolveTokens(const std::string& declarations) const {
