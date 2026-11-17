@@ -103,6 +103,10 @@ Rust `WChar` 随目标平台变化，safe 层不假设两个字节。推荐使�
 删除已接入 ICU 字素边界，绘制/测量使用共享 SkParagraph；完整一致性与原生 IME 仍待验收。
 macOS 编辑快捷键使用 Command，原始事件的 Control/Meta 保留物理含义。
 
+桌面 `MouseWheelEvent.deltaY` 使用可带小数的滚轮步数，控件再按自己的行高或 `wheelStep` 转换为位移。Win32 保留 `rawDelta / WHEEL_DELTA`。Cocoa 普通滚轮保留 `scrollingDeltaY`，精细触控板按默认每步 40 点转换为小数步数；不能先把普通滚轮乘 40，也不能将触控板点数直接当作步数，否则设置页会再次放大位移。此转换不改变方向，且保留小于一格的输入。AppKit 的两类原始单位见 [scrollingDeltaY](https://developer.apple.com/documentation/appkit/nsevent/scrollingdeltay)。
+
+Mac 原生单位回归入口为 `oneui_macos_backend_tests --wheel-units`（CTest：`oneui_macos_wheel_units`），覆盖实际 NSView 事件适配器、普通滚轮、40 点触控板输入及小数位移。通用 `oneui_scroll_view_behavior_tests` 继续检查控件自己的步长、动画和边界行为；Windows 同时运行窗口循环与浮层生命周期回归。
+
 Wayland 状态提交/取消及候选窗定位遵循
 [text-input-v3 协议](https://chromium.googlesource.com/external/anongit.freedesktop.org/git/wayland/wayland-protocols/+/refs/heads/master/unstable/text-input/text-input-unstable-v3.xml)。
 剪贴板发送是有期限的非阻塞传输；接收端关闭管道不能通过 SIGPIPE 终止宿主，也不改变进程全局信号策略。

@@ -800,7 +800,9 @@ class CocoaWindow final : public platform::DesktopWindow {
     NSPoint p = [self convertPoint:e.locationInWindow fromView:nil];
     oneui::MouseWheelEvent value;
     value.position = {static_cast<float>(p.x), static_cast<float>(p.y)};
-    value.deltaY = e.scrollingDeltaY * (e.hasPreciseScrollingDeltas ? 1.f : 40.f);
+    // Controls consume wheel steps and apply their own row/line distance.
+    // AppKit precision deltas are already points; the default step is 40 points.
+    value.deltaY = static_cast<float>(e.scrollingDeltaY / (e.hasPreciseScrollingDeltas ? 40. : 1.));
     value.shift = e.modifierFlags & NSEventModifierFlagShift;
     value.control = e.modifierFlags & NSEventModifierFlagControl;
     value.alt = e.modifierFlags & NSEventModifierFlagOption;

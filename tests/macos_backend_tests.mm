@@ -13,6 +13,18 @@
 #include <stdexcept>
 #include <thread>
 #include <vector>
+#include <string_view>
+
+@interface OneUiTestWheelEvent : NSEvent
+@property(nonatomic) CGFloat sampleDelta;
+@property(nonatomic) BOOL precise;
+@end
+@implementation OneUiTestWheelEvent
+- (NSPoint)locationInWindow { return NSMakePoint(24, 24); }
+- (CGFloat)scrollingDeltaY { return self.sampleDelta; }
+- (BOOL)hasPreciseScrollingDeltas { return self.precise; }
+- (NSEventModifierFlags)modifierFlags { return 0; }
+@end
 
 // Deliberately calls the real NSView input protocol on the process main
 // thread. These tests require AppKit; portable offset tests run on every OS.
@@ -20,6 +32,40 @@ namespace {
 int failures = 0;
 void check(bool value, const char* name) {
     if (!value) { std::cerr << name << '\n'; ++failures; }
+}
+void testWheelUnits() {
+    class WheelProbe final : public oneui::Widget {
+    public:
+        float delta = 0.f;
+        int calls = 0;
+        bool onMouseWheel(const oneui::MouseWheelEvent& event) override {
+            delta = event.deltaY;
+            ++calls;
+            return true;
+        }
+        void paint(oneui::Canvas&) override {}
+    };
+    auto window = oneui::Window::create(L"Cocoa wheel units", 320, 200);
+    window->initialize();
+    auto probe = std::make_shared<WheelProbe>();
+    window->setContent(probe);
+    probe->setFrame({0, 0, 320, 200});
+    NSWindow* native = (__bridge NSWindow*)window->nativeHandle();
+    OneUiTestWheelEvent* event = [OneUiTestWheelEvent new];
+    event.sampleDelta = -1.;
+    [native.contentView scrollWheel:event];
+    check(probe->calls == 1 && std::abs(probe->delta + 1.f) < .0001f,
+          "Discrete Mac wheel retains one step instead of forty steps");
+    event.precise = YES;
+    event.sampleDelta = -40.;
+    [native.contentView scrollWheel:event];
+    check(probe->calls == 2 && std::abs(probe->delta + 1.f) < .0001f,
+          "Forty trackpad points normalize to one wheel step");
+    event.sampleDelta = .25;
+    [native.contentView scrollWheel:event];
+    check(probe->calls == 3 && std::abs(probe->delta - .00625f) < .00001f,
+          "Trackpad fractional deltas and direction remain precise");
+    window->close();
 }
 NSEvent* modifierEvent(NSWindow* window, unsigned short key, NSEventModifierFlags flags) {
     return [NSEvent keyEventWithType:NSEventTypeFlagsChanged location:NSZeroPoint
@@ -295,9 +341,13 @@ void testModalLifetimeAndScaling() {
 }
 } // namespace
 
-int main() {
+int main(int argc, char** argv) {
     @autoreleasepool {
-        @try { testApplicationMenu(); testNativeInput(); testNativeServices(); testModalLifetimeAndScaling(); testNativeAccessibility(); testNativeAccessibleTextAndValue(); }
+        @try {
+            testWheelUnits();
+            if (argc > 1 && std::string_view(argv[1]) == "--wheel-units") return failures ? 1 : 0;
+            testApplicationMenu(); testNativeInput(); testNativeServices(); testModalLifetimeAndScaling(); testNativeAccessibility(); testNativeAccessibleTextAndValue();
+        }
         @catch (NSException* error) {
             std::cerr << "AppKit exception: " << error.reason.UTF8String << '\n';
             return 1;
