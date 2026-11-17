@@ -56,6 +56,7 @@ set(ONEUI_CORE_SOURCES
     src/core/tabs_style.cpp
     src/core/tabs_paint.cpp
     src/core/terminal_selection.cpp
+    src/core/terminal_selection_scroll.cpp
     src/core/terminal_paint.cpp
     src/core/terminal_pointer.cpp
     src/core/terminal_input.cpp

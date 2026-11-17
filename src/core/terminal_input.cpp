@@ -74,7 +74,11 @@ bool TerminalView::onKeyDown(const KeyEvent& event) {
         pasteFromClipboard();
         return true;
     }
-    if (!isModifierKey(event) && hasSelection()) {
+    // The host's smart copy action needs the selection before it is cleared.
+    // With no selection the same Ctrl+C still reaches the terminal session.
+    // Modified actions can also create a selection (for example Select All).
+    // Committed text/paste still clears it through their own input paths.
+    if (!isModifierKey(event) && !event.control && !event.alt && !event.meta() && hasSelection()) {
         clearSelection();
     }
     if (onRawKey_) {

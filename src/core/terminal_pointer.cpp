@@ -6,6 +6,7 @@ using namespace terminal_detail;
 void TerminalView::setScrollback(std::uint64_t historyRows, std::uint64_t offset) {
     historyRows = std::min<std::uint64_t>(historyRows, 1000000000);
     offset = std::min(draggingScrollback_ ? scrollbackOffset_ : offset, historyRows);
+    selectionScrolled(historyRows, offset);
     if (historyRows_ == historyRows && scrollbackOffset_ == offset) return;
     historyRows_ = historyRows;
     scrollbackOffset_ = offset;
@@ -44,6 +45,7 @@ bool TerminalView::onMouseDown(const MouseEvent& event) {
     const auto thumb = scrollbackThumbRect();
     if (event.button == MouseButton::Left && thumb.height > 0.0f &&
         event.position.x >= frame().x + frame().width - 10.0f && onScroll_) {
+        clearSelection();
         draggingScrollback_ = true;
         scrollbackGrab_ = event.position.y >= thumb.y && event.position.y <= thumb.y + thumb.height
             ? event.position.y - thumb.y : thumb.height * .5f;
@@ -60,7 +62,7 @@ bool TerminalView::onMouseDown(const MouseEvent& event) {
         clearSelection();
         return true;
     }
-    if (mouseReporting_ && !event.shift && onPointer_) {
+    if (mouseReporting_ && !event.shift && !selecting_ && onPointer_) {
         reportedButton_ = event.button;
         reportPointer(
             TerminalPointerAction::Press,
@@ -79,6 +81,7 @@ bool TerminalView::onMouseDown(const MouseEvent& event) {
         return false;
     }
 
+    if (!event.shift) clearSelection();
     const SelectionSnapshot previous = selectionSnapshot();
     const TextPosition cellPosition = normalizedCellPosition(cellPositionFromPoint(event.position));
     const double nowMs = currentTimeMs();
@@ -109,6 +112,8 @@ bool TerminalView::onMouseDown(const MouseEvent& event) {
         hasSelection_ = true;
     }
     selecting_ = true;
+    selectionPointer_ = event.position;
+    selectionScrollLastMs_ = 0.0;
     invalidateSelectionDelta(previous);
     return true;
 }
@@ -154,25 +159,11 @@ bool TerminalView::onMouseMove(const MouseEvent& event) {
         setHoveredHyperlink(hyperlinkId);
     }
     if (selecting_) {
-        const SelectionSnapshot previous = selectionSnapshot();
-        const TextPosition previousAnchor = selectionAnchor_;
-        const TextPosition previousCaret = selectionCaret_;
-        switch (selectionMode_) {
-        case SelectionMode::Word:
-            extendWordSelection(cellPositionFromPoint(event.position));
-            break;
-        case SelectionMode::Line:
-            extendLineSelection(cellPositionFromPoint(event.position).row);
-            break;
-        case SelectionMode::Character:
-            selectionCaret_ = positionFromPoint(event.position);
-            break;
+        selectionPointer_ = event.position;
+        updateSelectionCaret(event.position);
+        if (event.position.y < frame().y || event.position.y >= frame().y + frame().height) {
+            requestAnimationFrame();
         }
-        if (previousAnchor == selectionAnchor_ && previousCaret == selectionCaret_) {
-            return hyperlinkChanged;
-        }
-        hasSelection_ = !(selectionAnchor_ == selectionCaret_);
-        invalidateSelectionDelta(previous);
         return true;
     }
     if (mouseReporting_ && onPointer_ && contains(event.position) &&
@@ -207,6 +198,7 @@ bool TerminalView::onMouseUp(const MouseEvent& event) {
         return true;
     }
     if (selecting_) {
+        updateSelectionCaret(event.position);
         selecting_ = false;
         if (selectionAnchor_ == selectionCaret_) {
             hasSelection_ = false;
@@ -237,7 +229,7 @@ bool TerminalView::onMouseWheel(const MouseWheelEvent& event) {
         return false;
     }
 
-    if (mouseReporting_ && !event.shift && onPointer_) {
+    if (mouseReporting_ && !event.shift && !selecting_ && onPointer_) {
         pointerWheelRemainder_ += std::clamp(event.deltaY, -100.0f, 100.0f);
         const int steps = static_cast<int>(pointerWheelRemainder_);
         if (steps != 0) {
@@ -263,6 +255,21 @@ bool TerminalView::onMouseWheel(const MouseWheelEvent& event) {
         return true;
     }
     wheelRowRemainder_ -= static_cast<float>(rows);
+    if (selecting_) {
+        // Preserve the anchor while the wheel moves the visible end of a drag.
+        // Keep each step overlapping so every intervening row is captured.
+        if (!selectionScrollPending_) {
+            const int limit = std::max(1, static_cast<int>(rows_) - 1);
+            const auto target = std::clamp<std::int64_t>(
+                static_cast<std::int64_t>(scrollbackOffset_) + std::clamp(rows, -limit, limit), 0, historyRows_);
+            const int delta = static_cast<int>(target - static_cast<std::int64_t>(scrollbackOffset_));
+            if (delta) {
+                selectionScrollPending_ = true;
+                onScroll_(delta);
+            }
+        }
+        return true;
+    }
     clearSelection();
     onScroll_(rows);
     return true;
@@ -284,7 +291,7 @@ void TerminalView::reportPointer(
         action,
         button,
         point,
-        position.row,
+        static_cast<std::uint16_t>(position.row),
         position.column,
         wheelDelta,
         shift,
@@ -300,7 +307,7 @@ bool TerminalView::reportLocalPointer(TerminalPointerAction action, const MouseE
     localPointerActive_ = inside;
     const auto position = inside ? cellPositionFromPoint(event.position) : TextPosition{65535, 65535};
     return onLocalPointer_(TerminalPointerEvent{
-        action, event.button, event.position, position.row, position.column, 0,
+        action, event.button, event.position, static_cast<std::uint16_t>(position.row), position.column, 0,
         event.shift, event.control, event.alt,
     });
 }
@@ -356,6 +363,7 @@ void TerminalView::resetInteractionState() {
     localPointerPressed_ = false;
     draggingScrollback_ = false;
     selecting_ = false;
+    selectionScrollPending_ = false;
     reportedButton_ = MouseButton::None;
     pressedHyperlink_ = 0;
     setHoveredHyperlink(0);

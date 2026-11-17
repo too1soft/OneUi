@@ -8,6 +8,7 @@ void TerminalView::selectAll() {
         return;
     }
     const SelectionSnapshot previous = selectionSnapshot();
+    selectionRows_.clear();
     selectionAnchor_ = TextPosition{0, 0};
     selectionCaret_ = TextPosition{
         static_cast<std::uint16_t>(rows_ - 1),
@@ -44,6 +45,9 @@ void TerminalView::setSelection(
     selectionCaret_ = clampPosition(endRow, endColumn);
     hasSelection_ = !(selectionAnchor_ == selectionCaret_);
     selecting_ = false;
+    selectionRows_.clear();
+    selectionScrollPending_ = false;
+    selectionScrollLastMs_ = 0.0;
     invalidateSelectionDelta(previous);
 }
 
@@ -53,6 +57,9 @@ void TerminalView::clearSelection() {
     selectionCaret_ = {};
     hasSelection_ = false;
     selecting_ = false;
+    selectionRows_.clear();
+    selectionScrollPending_ = false;
+    selectionScrollLastMs_ = 0.0;
     invalidateSelectionDelta(previous);
 }
 
@@ -68,36 +75,13 @@ std::wstring TerminalView::selectedText() const {
     const TextPosition start = selectionStart();
     const TextPosition end = selectionEnd();
     std::wstring result;
-    for (std::uint32_t rowValue = start.row; rowValue <= end.row && rowValue < rows_; ++rowValue) {
-        const auto row = static_cast<std::uint16_t>(rowValue);
-        std::uint16_t from = row == start.row ? std::min(start.column, columns_) : 0;
-        const std::uint16_t to = row == end.row ? std::min(end.column, columns_) : columns_;
-        if (from > 0) {
-            const TerminalCell* first = cellAt(row, from);
-            if (first && hasStyle(*first, TerminalCellWideContinuation)) {
-                --from;
-            }
-        }
-
-        std::wstring line;
-        for (std::uint16_t column = from; column < to; ++column) {
-            const TerminalCell* cell = cellAt(row, column);
-            if (!cell || hasStyle(*cell, TerminalCellWideContinuation)) {
-                continue;
-            }
-            if (cell->text.empty()) {
-                line.push_back(L' ');
-            } else {
-                line += cell->text;
-            }
-        }
-        while (!line.empty() && line.back() == L' ') {
-            line.pop_back();
-        }
-        if (rowValue != start.row) {
+    for (auto row = start.row; row <= end.row; ++row) {
+        const auto from = row == start.row ? std::min(start.column, columns_) : 0;
+        const auto to = row == end.row ? std::min(end.column, columns_) : columns_;
+        if (row != start.row) {
             result += L"\r\n";
         }
-        result += line;
+        result += selectedRowText(row, from, to);
     }
     return result;
 }
@@ -159,7 +143,9 @@ TerminalView::SelectionSnapshot TerminalView::selectionSnapshot() const {
     }
 
     const auto linearIndex = [&](TextPosition position) {
-        const std::size_t row = std::min<std::size_t>(position.row, rows_);
+        const auto row = static_cast<std::size_t>(std::clamp<std::int64_t>(position.row, 0, rows_));
+        if (position.row < 0) return std::size_t{0};
+        if (position.row >= rows_) return cells_.size();
         const std::size_t column = std::min<std::size_t>(position.column, columns_);
         return std::min(cells_.size(), row * static_cast<std::size_t>(columns_) + column);
     };
@@ -244,7 +230,7 @@ TerminalView::TextPosition TerminalView::cellPositionFromPoint(Point point) cons
 }
 
 TerminalView::TextPosition TerminalView::normalizedCellPosition(TextPosition position) const {
-    if (position.row >= rows_ || position.column >= columns_) {
+    if (position.row < 0 || position.row >= rows_ || position.column >= columns_) {
         return position;
     }
     const TerminalCell* cell = cellAt(position.row, position.column);

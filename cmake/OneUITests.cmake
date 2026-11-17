@@ -132,6 +132,7 @@ function(oneui_register_core_tests)
     oneui_add_core_test(oneui_realtime_frame_view_behavior_tests tests/realtime_frame_view_behavior_tests.cpp)
     oneui_add_core_test(oneui_remote_input_region_behavior_tests tests/remote_input_region_behavior_tests.cpp)
     oneui_add_core_test(oneui_terminal_view_behavior_tests tests/terminal_view_behavior_tests.cpp)
+    oneui_add_core_test(oneui_terminal_selection_scroll_tests tests/terminal_selection_scroll_tests.cpp)
     add_executable(oneui_terminal_raster_tests tests/terminal_raster_tests.cpp
         src/platform/shared/skia_canvas.cpp src/platform/shared/skia_path.cpp)
     target_include_directories(oneui_terminal_raster_tests PRIVATE src)

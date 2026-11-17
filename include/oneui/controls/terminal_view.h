@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -214,7 +215,7 @@ private:
     };
 
     struct TextPosition {
-        std::uint16_t row = 0;
+        std::int64_t row = 0;
         std::uint16_t column = 0;
 
         bool operator==(const TextPosition& other) const {
@@ -266,6 +267,11 @@ private:
     void selectLineAt(std::uint16_t row);
     void extendWordSelection(TextPosition position);
     void extendLineSelection(std::uint16_t row);
+    void updateSelectionCaret(Point point);
+    void rememberSelectionViewport();
+    void selectionScrolled(std::uint64_t historyRows, std::uint64_t offset);
+    bool tickSelectionScroll(double nowMs);
+    std::wstring selectedRowText(std::int64_t row, std::uint16_t from, std::uint16_t to) const;
     void restartCursorBlink();
     bool cursorPaintVisible() const;
     void rebuildBlinkCellCounts();
@@ -328,6 +334,10 @@ private:
     int clickCount_ = 0;
     double lastClickMs_ = 0.0;
     bool selecting_ = false;
+    Point selectionPointer_{};
+    double selectionScrollLastMs_ = 0.0;
+    bool selectionScrollPending_ = false;
+    std::map<std::int64_t, std::vector<std::wstring>> selectionRows_;
     bool hasSelection_ = false;
     bool copyOnSelect_ = false;
     std::shared_ptr<Clipboard> clipboard_;

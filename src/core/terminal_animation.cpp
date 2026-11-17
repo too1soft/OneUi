@@ -4,6 +4,7 @@ namespace oneui {
 using namespace terminal_detail;
 
 bool TerminalView::tickAnimations(double nowMs) {
+    const bool selectionScrollActive = tickSelectionScroll(nowMs);
     const bool cursorActive = focused() && cursorBlinking_ && cursor_.visible;
     if (cursorActive) {
         const double elapsed = std::fmod(
@@ -55,7 +56,7 @@ bool TerminalView::tickAnimations(double nowMs) {
             bellStartMs_ = 0.0;
         }
     }
-    return cursorActive || textBlinkActive || bellActive;
+    return cursorActive || textBlinkActive || bellActive || selectionScrollActive;
 }
 
 void TerminalView::flashBell() {
