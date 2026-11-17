@@ -1,4 +1,5 @@
 #pragma once
+#include "oneui/mobile/frame_dimensions.h"
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -8,9 +9,9 @@ namespace oneui::mobile {
 // the renderer; the current shared FrameView accepts BGRA/RGBA, not NV12.
 inline bool nv12ToRgba(const uint8_t *source, size_t sourceBytes, int width, int height,
                        int sourceStride, uint8_t *target, size_t targetBytes, int targetStride) {
-    if (!source || !target || width < 2 || height < 2 || width > 5120 || height > 2880 ||
-        width % 2 || height % 2 || sourceStride < width || sourceStride > 5120 ||
-        targetStride < width * 4 || targetStride > 5120 * 4 ||
+    if (!source || !target || width < 2 || height < 2 || !validFrameDimensions(width,height) ||
+        width % 2 || height % 2 || sourceStride < width || sourceStride > maxFrameSide ||
+        targetStride < width * 4 || targetStride > maxFrameSide * 4 ||
         size_t(sourceStride) * (height + height / 2) > sourceBytes ||
         size_t(targetStride) * height > targetBytes)
         return false;

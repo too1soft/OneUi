@@ -138,7 +138,7 @@ bool OverlayHost::onMouseDown(const MouseEvent &event) {
         const bool handled = child->onMouseDown(event);
         if (life.expired())
             return true;
-        if (containsOverlay(child.get()) && (handled || child->isFocusable())) {
+        if (containsOverlay(child.get()) && (handled || child->isFocusable()) && child->takesFocusOnPointer()) {
             focusOverlay(child.get(), false);
         }
         return true;
@@ -148,19 +148,19 @@ bool OverlayHost::onMouseDown(const MouseEvent &event) {
     if (content_ && content_->visible() && !content_->disabled() &&
         content_->hitTest(event.position)) {
         pressedContent_ = content_.get();
-        if (focusedOverlay_) {
-            focusedOverlay_->onFocusChanged(false);
-            focusedOverlay_ = nullptr;
-            overlayFocusHistory_.clear();
-            previousFocusedChild_ = nullptr;
-            previousFocusVisible_ = false;
-        }
         const auto content = content_;
         const auto life = lifetimeToken();
         const bool handled = content->onMouseDown(event);
         if (life.expired())
             return handled;
-        if (content_ == content && (handled || content->isFocusable())) {
+        if (content_ == content && content->takesFocusOnPointer() && (handled || content->isFocusable())) {
+            if (focusedOverlay_) {
+                focusedOverlay_->onFocusChanged(false);
+                focusedOverlay_ = nullptr;
+                overlayFocusHistory_.clear();
+                previousFocusedChild_ = nullptr;
+                previousFocusVisible_ = false;
+            }
             content->onFocusChanged(true);
             content->setFocusVisible(false);
         }
@@ -172,6 +172,13 @@ bool OverlayHost::onMouseDown(const MouseEvent &event) {
     pressedContent_ = nullptr;
     focusOverlay(nullptr);
     return View::onMouseDown(event);
+}
+
+bool OverlayHost::takesFocusOnPointer() const {
+    if (!Widget::takesFocusOnPointer()) return false;
+    if (pressedOverlay_) return pressedOverlay_->takesFocusOnPointer();
+    if (pressedContent_) return pressedContent_->takesFocusOnPointer();
+    return View::takesFocusOnPointer();
 }
 
 bool OverlayHost::onMouseUp(const MouseEvent &event) {

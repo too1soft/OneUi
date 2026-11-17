@@ -2,6 +2,12 @@
 #include <oneui/canvas.h>
 
 namespace oneui::mobile {
+inline void paintFitIcon(Canvas &canvas,Rect r,Color color){
+    const float s=r.width/24;
+    const auto line=[&](float x,float y,float toX,float toY){canvas.drawLine({r.x+x*s,r.y+y*s},{r.x+toX*s,r.y+toY*s},color,1.5f*s);};
+    line(8,3,3,3);line(3,3,3,8);line(16,3,21,3);line(21,3,21,8);
+    line(3,16,3,21);line(3,21,8,21);line(21,16,21,21);line(21,21,16,21);
+}
 inline void paintKeyboardIcon(Canvas &canvas, Rect r, Color color) {
     const float s = r.width / 24;
     const auto point = [r, s](float x, float y) { return Point{r.x + x * s, r.y + y * s}; };
@@ -18,6 +24,15 @@ inline void paintTouchpadIcon(Canvas &canvas, Rect r, Color color) {
     canvas.strokeRect({r.x + 3 * s, r.y + 2 * s, 18 * s, 20 * s}, color, 3 * s, 1.5f * s);
     canvas.drawLine({r.x + 3 * s, r.y + 16 * s}, {r.x + 21 * s, r.y + 16 * s}, color, 1.5f * s);
     canvas.drawLine({r.x + 12 * s, r.y + 16 * s}, {r.x + 12 * s, r.y + 22 * s}, color, 1.5f * s);
+}
+
+inline void paintBackspaceIcon(Canvas &canvas, Rect r, Color color) {
+    const float s = r.width / 24;
+    const Point points[] = {{9,5},{21,5},{21,19},{9,19},{2,12},{9,5}};
+    for(int i=1;i<6;++i)canvas.drawLine({r.x+points[i-1].x*s,r.y+points[i-1].y*s},
+        {r.x+points[i].x*s,r.y+points[i].y*s},color,1.5f*s);
+    canvas.drawLine({r.x+12*s,r.y+9*s},{r.x+18*s,r.y+15*s},color,1.5f*s);
+    canvas.drawLine({r.x+18*s,r.y+9*s},{r.x+12*s,r.y+15*s},color,1.5f*s);
 }
 
 inline void paintPointerIcon(Canvas &canvas, Rect r, Color color) {

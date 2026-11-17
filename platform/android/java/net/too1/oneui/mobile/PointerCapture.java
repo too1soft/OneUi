@@ -10,13 +10,25 @@ import java.util.function.Consumer;
 public final class PointerCapture {
     private final RectF bounds = new RectF();
     private boolean captured;
+    private RectF[] exclusions=new RectF[0];
+    public void exclusions(float[] rectangles) {
+        if(rectangles==null||rectangles.length%4!=0||rectangles.length>64)throw new IllegalArgumentException("Bounded exclusion rectangles required");
+        RectF[] next=new RectF[rectangles.length/4];
+        for(int i=0;i<next.length;++i){int n=i*4;
+            for(int j=0;j<4;++j)if(!Float.isFinite(rectangles[n+j]))throw new IllegalArgumentException("Finite rectangle required");
+            if(rectangles[n+2]<0||rectangles[n+3]<0)throw new IllegalArgumentException("Positive rectangle required");
+            next[i]=new RectF(rectangles[n],rectangles[n+1],rectangles[n]+rectangles[n+2],rectangles[n+1]+rectangles[n+3]);}
+        exclusions=next;
+    }
     public void bounds(float x, float y, float width, float height) { bounds.set(x, y, x+width, y+height); }
-    public void clear() { bounds.setEmpty(); captured = false; }
+    public void clear() { bounds.setEmpty(); captured = false; exclusions=new RectF[0]; }
     public boolean dispatch(MotionEvent event, float density, Consumer<byte[]> sink) {
         if (!(density > 0)) return false;
         int action = event.getActionMasked();
-        if (action == MotionEvent.ACTION_DOWN)
+        if (action == MotionEvent.ACTION_DOWN){
             captured = bounds.contains(event.getX()/density, event.getY()/density);
+            for(RectF rectangle:exclusions)if(rectangle.contains(event.getX()/density,event.getY()/density))captured=false;
+        }
         if (!captured) return false;
         int phase = action == MotionEvent.ACTION_CANCEL ? 3 : action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_POINTER_UP ? 2 :
                     action == MotionEvent.ACTION_MOVE ? 1 : 0;

@@ -2,7 +2,7 @@
 """Compile OneUI once, then assemble a fixed prebuilt SDK for app consumers.
 
 Uses the installed NDK and already built, pinned Skia. Does not install apps or
-download dependencies. Audit the project-wide artifact budget before invoking.
+download dependencies. Reuse the fixed build directory between invocations.
 """
 import argparse
 import json
@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
-import zipfile
+from oneui_android_java_sdk import build_java_sdk, digest
 
 
 def main():
@@ -19,13 +19,28 @@ def main():
     parser.add_argument('--sdk', type=Path, required=True)
     parser.add_argument('--abi', choices=['x86_64', 'arm64-v8a'], default='x86_64')
     parser.add_argument('--jobs', type=int, default=4, choices=range(1, 9))
+    parser.add_argument('--work-root', type=Path, help='Isolated fixed native/SDK output directory')
+    parser.add_argument('--skia-source', type=Path, help='Existing pinned Skia source checkout')
+    parser.add_argument('--skia-build', type=Path, help='Matching existing Skia archives')
     options = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
-    build = root / 'out/mobile-current' / ('android-' + options.abi)
-    sdk = root / 'out/mobile-current/widget-sdk' / options.abi
-    skia = root / 'out/mobile-current' / ('skia-' + options.abi)
+    work = options.work_root or root / 'out/mobile-current'
+    if options.work_root:
+        work.mkdir(parents=True, exist_ok=True)
+        marker = work / 'owner.json'
+        expected = {'owner': 'oneui-android-sdk-build', 'source': str(root.resolve())}
+        if marker.is_file():
+            if json.loads(marker.read_text(encoding='utf-8')) != expected:
+                raise RuntimeError('Build directory belongs to another source checkout')
+        elif any(work.iterdir()):
+            raise RuntimeError('Refusing to use a nonempty unowned build directory')
+        else:
+            marker.write_text(json.dumps(expected, indent=2) + '\n', encoding='utf-8')
+    build = work / ('android-' + options.abi)
+    sdk = work / 'widget-sdk' / options.abi
+    skia = options.skia_build or root / 'out/mobile-current' / ('skia-' + options.abi)
+    skia_source = options.skia_source or root / 'third_party/skia'
     build.mkdir(parents=True, exist_ok=True); sdk.mkdir(parents=True, exist_ok=True)
-    if shutil.disk_usage(build).free < 22 * 1024**3: raise RuntimeError('Insufficient disk headroom')
     if not (skia / 'libskia.a').is_file(): raise RuntimeError('Build the matching pinned Android Skia first')
     checks = []
 
@@ -37,6 +52,7 @@ def main():
         '-DONEUI_BUILD_ANDROID_APPLICATION_HOST=ON', '-DONEUI_BUILD_ANDROID_LAB=OFF',
         '-DONEUI_BUILD_VPN=ON', '-DONEUI_VPN_ANDROID_NATIVE=ON', '-DONEUI_BUILD_JSON=ON', '-DONEUI_ENABLE_YOGA=OFF',
         '-DONEUI_BUNDLED_SKIA_OUT=' + str(skia),
+        '-DONEUI_BUNDLED_SKIA_ROOT=' + str(skia_source),
         '-DCMAKE_TOOLCHAIN_FILE=' + str(options.ndk / 'build/cmake/android.toolchain.cmake'),
         '-DANDROID_ABI=' + options.abi, '-DANDROID_PLATFORM=android-28', '-DANDROID_STL=c++_shared')
     run('cmake', '--build', build, '--parallel', options.jobs, '--target', 'oneui_android_application_host', 'oneui_vpn_native', 'oneui_native_services', 'oneui_vpn', 'oneui_json')
@@ -71,15 +87,10 @@ def main():
         'png.txt': 'third_party/skia/third_party/externals/libpng/LICENSE',
         'webp.txt': 'third_party/skia/third_party/externals/libwebp/COPYING',
         'zlib.txt': 'third_party/skia/third_party/externals/zlib/LICENSE'}
-    for name, source in notices.items(): shutil.copy2(root / source, licenses / name)
-    classes = build / 'java-sdk'; classes.mkdir(exist_ok=True)
-    jar = options.sdk / 'platforms/android-36/android.jar'
-    jdk = Path(os.environ['JAVA_HOME']) / 'bin'
-    sources = sorted((root / 'platform/android/java').rglob('*.java'))
-    run(jdk / 'javac.exe', '-encoding', 'UTF-8', '-source', '8', '-target', '8',
-        '-bootclasspath', str(jar) + ';' + str(options.sdk / 'build-tools/36.1.0/core-lambda-stubs.jar'), '-d', classes, *sources)
-    with zipfile.ZipFile(sdk / 'oneui-android.jar', 'w', zipfile.ZIP_DEFLATED) as output:
-        for path in classes.rglob('*.class'): output.write(path, path.relative_to(classes).as_posix())
+    for name, source in notices.items():
+        path = skia_source / source.removeprefix('third_party/skia/') if source.startswith('third_party/skia/') else root / source
+        shutil.copy2(path, licenses / name)
+    java = build_java_sdk(root, options.sdk, build / 'java-sdk', sdk / 'oneui-android.jar')
     cmake = sdk / 'lib/cmake/OneUIAndroid'; cmake.mkdir(parents=True, exist_ok=True)
     (cmake / 'OneUIAndroidConfig.cmake').write_text('''get_filename_component(_oneui_sdk "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
 add_library(OneUI::android_application STATIC IMPORTED)
@@ -93,9 +104,16 @@ set_target_properties(OneUI::android_application PROPERTIES
 ''', encoding='utf-8')
     report = {'abi': options.abi, 'minimum_api': 28, 'ndk': options.ndk.name, 'sdk': str(sdk),
               'archive_bytes': archive.stat().st_size, 'build_commands_passed': len(checks),
+              'archiveSHA256': digest(archive), 'java': java,
+              'sourceCommit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root, text=True).strip(),
+              'sourceDirty': bool(subprocess.check_output(['git', 'status', '--porcelain=v1', '--untracked-files=no'], cwd=root)),
+              'skiaSourceCommit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=skia_source, text=True).strip(),
+              'nativeInputs': {str(path): digest(path) for path in archives},
+              'yyjsonInputs': {name: digest(root / 'third_party/yyjson' / name)
+                               for name in ('src/yyjson.c', 'src/yyjson.h', 'LICENSE')},
               'scope': 'Prebuilt shared-widget application host and native services; application must define its widget factory'}
     (sdk / 'verification.json').write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
-    print(json.dumps(report))
+    print(json.dumps({key: value for key, value in report.items() if key not in ('java', 'nativeInputs')}))
 
 
 if __name__ == '__main__': main()

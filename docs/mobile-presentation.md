@@ -37,3 +37,40 @@ Android 的 `OneUiActivity` 接受手指、鼠标主键及明确来自触摸屏�
 `PuzzleSlider` 仅负责展示和人工输入，不识别缺口、不自动求解，也不请求验证码服务。产品传入背景、拼图 PNG data URI、源图尺寸及纵坐标，再调用 `setDisplayWidth` 设置布局宽度；释放时回调源图横坐标，键盘方向键调整、Enter/Space 提交，取消按压不会提交。产品自行处理服务事务、刷新、过期、错误和取消。
 
 `ImageView::setPngDataUri` 在 OneUI 内严格解码有界静态 PNG：限制编码长度、像素尺寸和帧数，失败返回 false。验证码 ID、一次性证明、手机号和 provider 协议不进入控件；挑战图片只在内存显示，不写入截图、日志或缓存。消费者须使用包含此新增方法实现的匹配 SDK，不能只替换头文件后链接旧库。
+
+## Android 远程展示 SDK 的完整来源
+
+远程控制组件与其依赖随 SDK 的 `include/oneui/mobile` 一同发布，包括虚拟文本编辑器、远程键盘条、
+工具条、画面尺寸/邮箱、缩放和平移、滚轮、底部弹层及表单/文件行。产品正常构建直接使用 SDK 头文件，
+不应隐式读取另一份工作区中的未提交头文件。只有显式 SDK 开发实验可以指定源码覆盖层。
+
+`Widget::setFocusOnPointer(false)` 允许辅助触摸动作保留当前编辑器；View 与 OverlayHost 按实际被按下的子控件
+传递该策略。默认仍获取指针焦点，键盘和辅助功能焦点保持可用。取消按压不得触发点击或改变编辑会话。
+`TextInputSession::key` 必须校验当前会话，仅把按键交给当前有焦点的编辑器；陈旧会话不能修改另一个字段。
+Android 的空上下文编辑器可通过 `Bridge.key` 接收删除和左右方向键，普通字段保留本地编辑行为。
+外部提交并清空预编辑后必须创建新会话，旧 composing 缓冲区不能重新写回。
+
+OneUiActivity 的服务桥最多保留 16 个 in-flight 请求，用 `requestsLimited` 取出尚可处理的数量。
+超过并发容量的工作留在原生有界队列，完成回执释放容量后继续调度，不丢弃请求并制造重建循环。
+共享请求包括显示键盘、编辑器退格和窗口模式；业务请求继续交由产品处理。
+沉浸式窗口重新应用于 resume，安全区变化通过 `safeAreaChanged` 通知产品；IME 与导航区不重复扣除。
+GPU 画布保留输入焦点，关闭系统默认焦点高亮，避免 Android 在 GPU 内容上叠加焦点着色。
+
+Java 与原生的 inspect 节点构造签名须一起发布。滑块 range 信息只包含语义范围及值；显式 setProgress
+另行校验有限数值、节点索引、名称、目标类型和禁用状态。inspect 本身仍是有界只读快照。
+
+构建器可在独立固定目录重建 SDK，并复用已核验的 Skia 依赖：
+
+```powershell
+python -B scripts/build-android-application-sdk.py --abi x86_64 `
+  --ndk C:/Android/sdk/ndk/29.0.14206865 --sdk C:/Android/sdk `
+  --work-root D:/OneUIBuild/android-sdk `
+  --skia-source E:/Dependencies/skia --skia-build E:/Dependencies/skia-x86_64
+```
+
+arm64-v8a 需单独指定匹配的 Skia 输出。Skia 与 yyjson 源码按原有依赖说明准备；不得混用其他修订的头文件和库。
+独立输出目录由 owner 标记绑定源码工作区，不覆盖共享安装目录，也不设构建产物大小上限。
+Java 构建编译全部适配器源码，清除本构建器拥有的旧 class，按固定 ZIP 顺序、时间戳和权限生成 JAR；
+不从旧 JAR 替换几个 class 后声称整个 SDK 来自当前源码。
+verification.json 记录源码提交及脏状态、Skia 提交、原生输入和归档哈希、Java 源码/class/JAR 哈希与实际编译器。
+同一 Java 输入应可重建相同 JAR。源码可追溯、编译通过、原生测试、实际 Android 合成/输入以及公网验收分别提供证据。

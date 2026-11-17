@@ -864,6 +864,7 @@ bool paintOutlineIcon(Canvas& canvas, IconSymbol symbol, Rect rect, Color color)
     #include "host_outline_icons.inc"
     #include "settings_outline_icons.inc"
     #include "plugin_outline_icons.inc"
+    #include "input_outline_icons.inc"
     default: return false;
     }
 }

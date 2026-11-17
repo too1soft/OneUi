@@ -15,7 +15,7 @@ struct ApplicationSurface final {
     int width = 0, height = 0, editorInset = 0;
     bool reveal = false;
     int error = 0;
-    uint64_t frames = 0;
+    uint64_t frames = 0; // Queued pictures; actual EGL swaps use RenderStatistics.
     Runtime &runtime() { return core.runtime(); }
     OneUiMobileResult layout() {
         return core.viewport({float(width), float(std::max(1, height - editorInset)), scale, 0, 0, 0, 0, 0});

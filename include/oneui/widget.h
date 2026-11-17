@@ -267,6 +267,10 @@ public:
     virtual Rect textInputCaretRect() const;
     virtual bool onFocusChanged(bool focused);
     virtual bool isFocusable() const;
+    // Auxiliary touch actions may preserve an active editor. Keyboard and
+    // accessibility focus remain available; the default pointer policy is unchanged.
+    void setFocusOnPointer(bool value) { focusOnPointer_ = value; }
+    virtual bool takesFocusOnPointer() const { return focusOnPointer_; }
     // tabStop：是否参与 Tab 焦点遍历。窗口按钮、纯装饰性可点区域设 false，排除出 Tab 序。
     // 默认 true；焦点收集（focusableChildren/focusableOverlays）会同时要求 isFocusable && tabStop。
     bool tabStop() const;
@@ -352,6 +356,7 @@ private:
     bool visible_ = true;
     bool layoutVisible_ = true;
     bool tabStop_ = true;
+    bool focusOnPointer_ = true;
     AccessibilityRole accessibilityRole_ = AccessibilityRole::None;
     std::wstring accessibleName_;
     std::wstring accessibleDescription_;

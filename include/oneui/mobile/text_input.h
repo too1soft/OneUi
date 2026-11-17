@@ -43,6 +43,9 @@ class TextInputSession final {
     TextInputSession &operator=(const TextInputSession &) = delete;
     EditingState snapshot();
     bool apply(const EditingState &state);
+    // IME keys which have no local text to edit (e.g. remote Backspace).
+    // Returns false for stale sessions; dispatch remains with the focused field.
+    bool key(uint64_t session, Key key);
     // Commit/Compose: first is Android's relative newCursorPosition.
     // Select/Region: first/second are UTF-16 offsets. Delete: before/after counts.
     // Move: first is -1/+1 codepoint, second is whether to extend selection.

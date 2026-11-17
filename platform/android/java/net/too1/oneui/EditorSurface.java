@@ -57,6 +57,7 @@ public final class EditorSurface extends SurfaceView {
     public interface Bridge {
         Snapshot snapshot();
         boolean apply(long session, String text, int anchor, int caret, int start, int end);
+        default boolean key(long session, int key) { return false; }
         default boolean sensitive(long session, int command, String text, int first, int second) { return false; }
         default boolean containsEditor(float x, float y) { return false; }
         default SelectionGeometry selectionGeometry() { return null; }
@@ -81,6 +82,9 @@ public final class EditorSurface extends SurfaceView {
         manager = (InputMethodManager) context.getSystemService(Context.INPUT_METHOD_SERVICE);
         selection = new EditorSelection(this);
         setFocusable(true); setFocusableInTouchMode(true);
+        // OneUI paints focus inside the GPU surface. Android's fallback
+        // highlight would tint the entire canvas after keyboard navigation.
+        if (android.os.Build.VERSION.SDK_INT >= 26) setDefaultFocusHighlightEnabled(false);
         // Stylus handwriting/geometry is not exposed by this adapter yet.
         if (android.os.Build.VERSION.SDK_INT >= 33) setAutoHandwritingEnabled(false);
     }
@@ -119,16 +123,22 @@ public final class EditorSurface extends SurfaceView {
                 // connection without changing the native editor's session.
                 // Rebind on an explicit tap before showing the keyboard.
                 manager.restartInput(this);
+                manager.showSoftInput(this, InputMethodManager.SHOW_IMPLICIT);
                 if (android.os.Build.VERSION.SDK_INT >= 30 && getWindowInsetsController() != null) {
                     getWindowInsetsController().show(android.view.WindowInsets.Type.ime());
-                } else {
-                    manager.showSoftInput(this, InputMethodManager.SHOW_IMPLICIT);
                 }
             });
         }
         selection.update();
     }
     @Override public boolean onCheckIsTextEditor() { return active && current != null && current.session != 0; }
+    public boolean sendEditorKey(int key) {
+        requireUi();
+        if (connection == null) return false;
+        boolean handled = connection.sendKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, key));
+        connection.sendKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, key));
+        return handled;
+    }
     @Override public InputConnection onCreateInputConnection(EditorInfo info) {
         requireUi();
         if (!onCheckIsTextEditor()) return null;
@@ -293,9 +303,21 @@ public final class EditorSurface extends SurfaceView {
         @Override public boolean setComposingRegion(int start, int end) { return mutate(() -> super.setComposingRegion(start, end)); }
         @Override public boolean finishComposingText() { return mutate(() -> super.finishComposingText()); }
         @Override public boolean setSelection(int start, int end) { return mutate(() -> super.setSelection(start, end)); }
-        @Override public boolean deleteSurroundingText(int before, int after) { return mutate(() -> super.deleteSurroundingText(before, after)); }
+        private boolean emptyDelete(int before, int after) {
+            if (!valid() || editable.length() != 0 || before < 0 || after < 0 || before > 1024 || after > 1024 || before + after == 0) return false;
+            // Only empty-context editors can consume these keys. Ordinary
+            // forms retain Android's normal deletion and composition behavior.
+            int count = Math.min(1024, before + after);
+            for (int i = 0; i < count; ++i)
+                if (!bridge.key(session, i < before ? KeyEvent.KEYCODE_DEL : KeyEvent.KEYCODE_FORWARD_DEL)) return false;
+            bridge.changed();
+            return true;
+        }
+        @Override public boolean deleteSurroundingText(int before, int after) {
+            return emptyDelete(before, after) || mutate(() -> super.deleteSurroundingText(before, after));
+        }
         @Override public boolean deleteSurroundingTextInCodePoints(int before, int after) {
-            return mutate(() -> super.deleteSurroundingTextInCodePoints(before, after));
+            return emptyDelete(before, after) || mutate(() -> super.deleteSurroundingTextInCodePoints(before, after));
         }
         @Override public ExtractedText getExtractedText(ExtractedTextRequest request, int flags) {
             if (!valid()) return null;
@@ -331,6 +353,7 @@ public final class EditorSurface extends SurfaceView {
             if (key == KeyEvent.KEYCODE_ENTER)
                 return current.multiline ? commitText("\n", 1) : performEditorAction(EditorInfo.IME_ACTION_DONE);
             if (key == KeyEvent.KEYCODE_DPAD_LEFT || key == KeyEvent.KEYCODE_DPAD_RIGHT) {
+                if (editable.length() == 0 && bridge.key(session, key)) { bridge.changed(); return true; }
                 int direction = key == KeyEvent.KEYCODE_DPAD_LEFT ? -1 : 1;
                 int caret = b;
                 if ((direction < 0 && b > 0) || (direction > 0 && b < editable.length()))

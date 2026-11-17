@@ -42,7 +42,9 @@ public:
 protected:
     void layoutChildren() override;
 private:
-    bool acceptsInput() const { return open_ && !running() && visible() && !disabled(); }
+    // Fade keeps the final hit geometry. Opening it must not eat a visible
+    // button's first tap; expansion still waits for its moving layout to settle.
+    bool acceptsInput() const { return open_ && (preset_ == RevealPreset::Fade || !running()) && visible() && !disabled(); }
     std::uint64_t motionRevision_=0;
     bool open_=true, reduced_=false;
     RevealPreset preset_=RevealPreset::Expand;

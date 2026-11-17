@@ -29,6 +29,36 @@ public final class SystemAppearance extends FrameLayout {
     private int left, top, right, bottom, imeBottom;
     private int statusColor = 0xfff5f7f4, navigationColor = 0xfff5f7f4;
     private int appliedIcons;
+    private boolean immersive;
+    private int previousCutoutMode;
+    private java.util.function.Consumer<float[]> safeAreaListener;
+    public void setSafeAreaListener(java.util.function.Consumer<float[]> listener){safeAreaListener=listener;publishSafeArea();}
+    public void setImmersive(boolean value){
+        requireUi();if(immersive==value)return;
+        WindowManager.LayoutParams attributes=activity.getWindow().getAttributes();
+        if(value){previousCutoutMode=attributes.layoutInDisplayCutoutMode;attributes.layoutInDisplayCutoutMode=Build.VERSION.SDK_INT>=30?
+            WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS:WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;}
+        else attributes.layoutInDisplayCutoutMode=previousCutoutMode;
+        activity.getWindow().setAttributes(attributes);
+        immersive=value;reapplyImmersive();requestApplyInsets();
+    }
+    public void reapplyImmersive(){
+        requireUi();Window window=activity.getWindow();
+        if(Build.VERSION.SDK_INT>=30){
+            WindowInsetsController controller=window.getInsetsController();
+            if(controller!=null){controller.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+                if(immersive)controller.hide(WindowInsets.Type.systemBars());else controller.show(WindowInsets.Type.systemBars());}
+        }else{
+            int flags=View.SYSTEM_UI_FLAG_LAYOUT_STABLE|View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN|View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION;
+            if(immersive)flags|=View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYSTEM_UI_FLAG_HIDE_NAVIGATION|View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY;
+            window.getDecorView().setSystemUiVisibility(flags);
+        }
+    }
+    private void publishSafeArea(){if(safeAreaListener!=null){float density=getResources().getDisplayMetrics().density;
+        // The IME already includes its navigation/gesture area. A dock above
+        // the IME must not reserve the same bottom inset a second time.
+        float contentBottom=immersive&&imeBottom>0?0:bottom/density;
+        safeAreaListener.accept(new float[]{left/density,top/density,right/density,contentBottom});}}
 
     public SystemAppearance(Activity owner) {
         this(owner, null);
@@ -72,8 +102,10 @@ public final class SystemAppearance extends FrameLayout {
                     bottom = Math.max(bottom, insets.getDisplayCutout().getSafeInsetBottom());
                 }
             }
-            setPadding(left, top, right, this.imeInset == null ? Math.max(bottom, imeBottom) : bottom);
+            setPadding(immersive?0:left, immersive?0:top, immersive?0:right,
+                this.imeInset == null ? Math.max(immersive?0:bottom, imeBottom) : immersive?0:bottom);
             publishImeInset();
+            publishSafeArea();
             invalidate();
             return insets;
         });
@@ -88,7 +120,7 @@ public final class SystemAppearance extends FrameLayout {
         // Subtract only the portion the framework hasn't already taken away.
         int windowHeight = activity.getWindowManager().getCurrentWindowMetrics().getBounds().height();
         int alreadyResized = getHeight() == 0 ? 0 : Math.max(0, windowHeight - getHeight());
-        imeInset.accept(Math.max(0, imeBottom - bottom - alreadyResized));
+        imeInset.accept(Math.max(0, imeBottom - (immersive?0:bottom) - alreadyResized));
     }
     public FrameLayout content() { return content; }
     /** 0 = unknown, 1 = light, 2 = dark. Does not change device preferences. */

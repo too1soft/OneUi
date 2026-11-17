@@ -7,6 +7,8 @@
 using namespace oneui;
 using namespace oneui::mobile;
 void testSelectionGeometry();
+void testExternallyClearedPreedit();
+void testEmptyContextKeys();
 void check(bool value, const char *what) {
     if (!value)
         throw std::runtime_error(what);
@@ -14,6 +16,8 @@ void check(bool value, const char *what) {
 int main() {
     try {
         testSelectionGeometry();
+        testExternallyClearedPreedit();
+        testEmptyContextKeys();
         auto root = std::make_shared<View>();
         auto field = std::make_shared<TextField>();
         auto second = std::make_shared<TextArea>();

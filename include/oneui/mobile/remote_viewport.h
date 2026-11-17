@@ -34,6 +34,14 @@ class RemoteViewport final {
         origin_ = {};
         constrain();
     }
+    void setMaximumZoom(float value) { if(positive(value)&&value>=1){maximumZoom_=value;zoom_=std::min(zoom_,value);constrain();} }
+    void fill(bool preserveCenter=false) {
+        if(!valid())return;
+        const auto anchor=preserveCenter?project(center()):RemotePoint{remote_.width/2,remote_.height/2};
+        const float fit=std::min(local_.width/remote_.width,local_.height/remote_.height);
+        zoom_=std::clamp(std::max(local_.width/remote_.width,local_.height/remote_.height)/fit,1.f,maximumZoom_);
+        place(anchor,center());
+    }
     bool valid() const {
         return positive(local_.width) && positive(local_.height) &&
                positive(remote_.width) && positive(remote_.height);
@@ -62,7 +70,7 @@ class RemoteViewport final {
         const auto anchor = project(from);
         const auto previous = origin_;
         const float previousZoom = zoom_;
-        zoom_ = std::clamp(zoom_ * factor, 1.f, 5.f);
+        zoom_ = std::clamp(zoom_ * factor, 1.f, maximumZoom_);
         place(anchor, to);
         return previousZoom != zoom_ || previous.x != origin_.x || previous.y != origin_.y;
     }
@@ -86,5 +94,6 @@ class RemoteViewport final {
     RemoteExtent local_, remote_;
     RemotePoint origin_;
     float zoom_ = 1;
+    float maximumZoom_ = 5;
 };
 } // namespace oneui::mobile

@@ -26,6 +26,7 @@ final class NativeAccessibility extends View.AccessibilityDelegate {
         boolean sensitive();
         String editorText();
         void scroll(boolean forward);
+        default boolean setProgress(NativeUiNode node,float value){return false;}
     }
     private static final int NONE = Integer.MIN_VALUE;
     private final View view;
@@ -175,6 +176,8 @@ final class NativeAccessibility extends View.AccessibilityDelegate {
                 passwordNodes.remove(id);
         }
         result.setPassword(node.role == 3 && passwordNodes.contains(id));
+        if(node.hasRange())result.setRangeInfo(AccessibilityNodeInfo.RangeInfo.obtain(
+            AccessibilityNodeInfo.RangeInfo.RANGE_TYPE_FLOAT,node.minimum,node.maximum,node.value));
         float scale = view.getResources().getDisplayMetrics().density;
         Rect bounds = new Rect((int) (node.x * scale), (int) (node.y * scale),
             (int) Math.ceil((node.x + node.width) * scale), (int) Math.ceil((node.y + node.height) * scale));
@@ -190,6 +193,11 @@ final class NativeAccessibility extends View.AccessibilityDelegate {
                                        : AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS);
         if (!node.disabled && actionable(node.role)) {
             result.addAction(AccessibilityNodeInfo.ACTION_CLICK);
+            if(node.hasRange()){
+                result.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_PROGRESS);
+                result.addAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD);
+                result.addAction(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD);
+            }
             if (node.role == 3) {
                 result.addAction(AccessibilityNodeInfo.ACTION_FOCUS);
                 result.addAction(AccessibilityNodeInfo.ACTION_SET_TEXT);
@@ -224,6 +232,19 @@ final class NativeAccessibility extends View.AccessibilityDelegate {
         }
         if (node.disabled)
             return false;
+        if(node.hasRange()&&(action==AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_PROGRESS.getId()
+            ||action==AccessibilityNodeInfo.ACTION_SCROLL_FORWARD||action==AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)){
+            float step=node.step>0?node.step:(node.maximum-node.minimum)/20;
+            float value=action==AccessibilityNodeInfo.ACTION_SCROLL_FORWARD?node.value+step:node.value-step;
+            if(action==AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_PROGRESS.getId()){
+                if(args==null||!args.containsKey(AccessibilityNodeInfo.ACTION_ARGUMENT_PROGRESS_VALUE))return false;
+                value=args.getFloat(AccessibilityNodeInfo.ACTION_ARGUMENT_PROGRESS_VALUE,Float.NaN);
+            }
+            if(!Float.isFinite(value))return false;
+            boolean changed=bridge.setProgress(node,Math.max(node.minimum,Math.min(node.maximum,value)));
+            if(changed){refreshNodes();send(id,AccessibilityEvent.TYPE_VIEW_SELECTED);}
+            return changed;
+        }
         if (action == AccessibilityNodeInfo.ACTION_CLICK || action == AccessibilityNodeInfo.ACTION_FOCUS) {
             if (!actionable(node.role) || (action == AccessibilityNodeInfo.ACTION_FOCUS && node.role != 3))
                 return false;
@@ -288,7 +309,7 @@ final class NativeAccessibility extends View.AccessibilityDelegate {
         view.getParent().requestSendAccessibilityEvent(view, event);
     }
     private static boolean actionable(int role) {
-        return role == 1 || role == 3 || role == 4 || role == 5 || role == 7 || role == 10;
+        return role == 1 || role == 3 || role == 4 || role == 5 || role == 7 || role == 8 || role == 10;
     }
     private static String className(int role) {
         switch (role) {

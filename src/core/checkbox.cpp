@@ -3,6 +3,7 @@
 #include "oneui/style.h"
 
 #include <utility>
+#include <cmath>
 
 namespace oneui {
 namespace {
@@ -142,6 +143,12 @@ void Checkbox::setOnChanged(std::function<void(bool)> callback) {
     onChanged_ = std::move(callback);
 }
 
+void Checkbox::setLabelFontSize(float size) {
+    if (!std::isfinite(size) || size < 0 || size > 256 || labelFontSize_ == size) return;
+    labelFontSize_ = size;
+    invalidate();
+}
+
 void Checkbox::paint(Canvas& canvas) {
     const Rect rect = frame();
     const float side=std::min(16.0f,std::min(rect.width,rect.height));
@@ -164,7 +171,7 @@ void Checkbox::paint(Canvas& canvas) {
         canvas.drawLine(Point{box.x + 4.0f, box.y + 8.0f}, Point{box.x + 7.0f, box.y + 11.0f}, style.checkColor, 2.0f);
         canvas.drawLine(Point{box.x + 7.0f, box.y + 11.0f}, Point{box.x + 12.0f, box.y + 5.0f}, style.checkColor, 2.0f);
     }
-    canvas.drawTextEllipsized(text_, Rect{rect.x + 26.0f, rect.y, rect.width - 26.0f, rect.height}, style.labelColor, theme().fontMd, TextAlign::Left);
+    canvas.drawTextEllipsized(text_, Rect{rect.x + 26.0f, rect.y, rect.width - 26.0f, rect.height}, style.labelColor, labelFontSize_ > 0 ? labelFontSize_ : theme().fontMd, TextAlign::Left);
 }
 
 bool Checkbox::onMouseMove(const MouseEvent& event) {

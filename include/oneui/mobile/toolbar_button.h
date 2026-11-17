@@ -19,6 +19,8 @@ class ToolbarButton final : public Widget {
         painter_ = std::move(painter);
         invalidate();
     }
+    void setTitle(std::wstring title){title_=std::move(title);setAccessibleName(title_);invalidate();}
+    void setIconOnly(bool value) { iconOnly_=value; invalidate(); }
     bool isFocusable() const override { return !disabled(); }
     AccessibilityInfo accessibilityInfo() const override {
         auto info = Widget::accessibilityInfo();
@@ -27,16 +29,25 @@ class ToolbarButton final : public Widget {
     }
     void paint(Canvas &canvas) override {
         const auto r = frame();
-        const auto ink = disabled() ? palette_.secondary : selected_ ? palette_.tint : palette_.secondary;
-        canvas.fillRect(r, pressed_ || focusVisible() ? palette_.pressed : palette_.surface, 8);
-        const float side = 24 * scale_;
-        const Rect iconRect{r.x + (r.width - side) / 2, r.y + 9 * scale_, side, side};
+        auto ink = selected_ ? palette_.tint : palette_.secondary;
+        if(disabled())ink.a=110;
+        canvas.fillRect(r, pressed_ || hovered_ || selected_ ? palette_.pressed : palette_.surface, 8);
+        if(focusVisible())canvas.strokeRect(r,palette_.tint,8,1.5f);
+        const float side = 22 * scale_;
+        const float line = 17 * scale_;
+        const float top = r.y + (r.height - (iconOnly_ ? side : side + 4 * scale_ + line)) / 2;
+        const Rect iconRect{r.x + (r.width - side) / 2, top, side, side};
         if (painter_)
             painter_(canvas, iconRect, ink);
         else
             paintIcon(canvas, icon_, iconRect, ink);
-        canvas.drawTextStyledEllipsized(title_, {r.x, r.y + 36 * scale_, r.width, 19 * scale_},
-                                        ink, 11 * scale_, TextAlign::Center, 550);
+        if(!iconOnly_)canvas.drawTextStyledEllipsized(title_, {r.x, top + side + 4 * scale_, r.width, line},
+                                        ink, 11 * scale_, TextAlign::Center, 500);
+    }
+    bool onMouseMove(const MouseEvent &event) override {
+        const bool hovered=!disabled()&&frame().contains(event.position);
+        if(hovered_!=hovered){hovered_=hovered;invalidate();}
+        return hovered;
     }
     bool onMouseDown(const MouseEvent &event) override {
         pressed_ = !disabled() && event.button == MouseButton::Left && frame().contains(event.position);
@@ -58,16 +69,17 @@ class ToolbarButton final : public Widget {
     }
 
   protected:
-    bool hasInteractionState() const override { return pressed_; }
+    bool hasInteractionState() const override { return pressed_ || hovered_; }
     void resetInteractionState() override {
         pressed_ = false;
+        hovered_ = false;
         invalidate();
     }
 
   private:
     std::wstring title_;
     IconSymbol icon_;
-    bool selected_, pressed_ = false;
+    bool selected_, pressed_ = false, hovered_ = false, iconOnly_ = false;
     ControlPalette palette_;
     std::function<void()> action_;
     GlyphPainter painter_;
