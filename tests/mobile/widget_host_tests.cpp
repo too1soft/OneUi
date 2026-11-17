@@ -4,6 +4,8 @@
 #include "oneui/layout/scroll_view.h"
 #include "oneui/layout/stack.h"
 #include "oneui/mobile/widget_host.h"
+#include "oneui/mobile/bottom_sheet.h"
+#include "oneui/mobile/action_row.h"
 #include "support/recording_canvas.h"
 #include <iostream>
 #include <stdexcept>
@@ -244,6 +246,41 @@ void overlayPanUsesVisibleLayerAndHonorsModalBoundary() {
     pan(50, 150, -50);
     require(background->scrollOffset() >= 49, "overlay host content scrolls after dismissal");
 }
+void bottomSheetScrollsFromGapsBetweenRows() {
+    mobile::WidgetHost host;
+    host.runtime().setViewport({1080, 1920, 2.625f, 0, 0, 0, 0, 0});
+    host.runtime().setSurface(true);
+    host.runtime().setLifecycle(ONEUI_MOBILE_ACTIVE);
+    host.setTouchScrolling(true);
+    auto body = std::make_shared<Stack>();
+    body->setGap(18);
+    auto palette = mobile::controlPalette(false);
+    for (int i = 0; i < 18; ++i)
+        body->add(std::make_shared<mobile::ActionRow>(L"tool", IconSymbol::Copy, palette, [] {}));
+    auto footer = mobile::actionButton(L"return", [] {}, palette, mobile::ActionKind::Text);
+    auto sheet = std::make_shared<mobile::BottomSheet>(std::make_shared<Panel>(), L"tools", body,
+                                                      palette, 1, [] {}, false, footer);
+    sheet->resize({1080/2.625f, 1920/2.625f});
+    host.setContent(sheet);
+    test_support::RecordingCanvas canvas;
+    host.paint(canvas, 1);
+    const auto initial = body->children().front()->frame();
+    uint64_t time = 10;
+    auto pan = [&](float from, float to) {
+        for (int i = 0; i <= 21; ++i) {
+            const int phase = i == 0 ? ONEUI_MOBILE_DOWN : i == 21 ? ONEUI_MOBILE_UP : ONEUI_MOBILE_MOVE;
+            const float y = from + (to-from)*std::min(i,20)/20;
+            require(host.runtime().pushPointer({3, phase, ONEUI_MOBILE_TOUCH,
+                        320, y*2.625f, 1, time++, 0}) == ONEUI_MOBILE_OK, "sheet pan pointer");
+            require(host.pumpInput() == ONEUI_MOBILE_OK, "sheet pan dispatch");
+            host.paint(canvas, time);
+        }
+    };
+    pan(620, 280);
+    require(body->children().front()->frame().y < initial.y-300, "sheet scrolls upwards");
+    pan(280, 620);
+    require(std::abs(body->children().front()->frame().y-initial.y) < 1, "sheet returns downwards");
+}
 } // namespace
 int main() {
     try {
@@ -252,6 +289,7 @@ int main() {
         cancelledTapCannotClick();
         verticalPanCancelsTapAndKeepsHorizontalControl();
         overlayPanUsesVisibleLayerAndHonorsModalBoundary();
+        bottomSheetScrollsFromGapsBetweenRows();
     } catch (const std::exception &e) {
         std::cerr << e.what() << '\n';
         return 1;
