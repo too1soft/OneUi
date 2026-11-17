@@ -111,6 +111,8 @@ void invalidCssAndDependencies() {
     mount.styles()->replace(".outer{container-name:o;container-type:size;}.inner{container-name:i;container-type:size;}@container o (width > 1px){.inner{height:200px;}}");
     outer.widget->setFrame({0,0,500,500});test_support::RecordingCanvas canvas;outer.widget->paint(canvas);
     check(!mount.styles()->queryDiagnostics().empty(),"dependent nested container diagnosed instead of oscillating");
+    for(int frame=0;frame<40;++frame)outer.widget->paint(canvas);
+    check(mount.styles()->queryDiagnostics().size()<=32,"repeated invalid layouts remain non-fatal with bounded diagnostics");
 }
 void maxWidthClamps() {
     for(auto engine:{StackEngine::Yoga,StackEngine::Legacy}) {

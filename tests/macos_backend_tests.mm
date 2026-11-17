@@ -5,8 +5,10 @@
 #include "oneui/controls/progress_bar.h"
 #include "oneui/platform/window.h"
 #include "oneui/oneui_c_api.h"
+#include "oneui/ui_declarative.h"
 #include "platform/shared/desktop_window.h"
 #include "platform/shared/native_desktop_services.h"
+#include "support/recording_canvas.h"
 #include <iostream>
 #include <cmath>
 #include <limits>
@@ -66,6 +68,27 @@ void testWheelUnits() {
     check(probe->calls == 3 && std::abs(probe->delta - .00625f) < .00001f,
           "Trackpad fractional deltas and direction remain precise");
     window->close();
+}
+void testRecoverableContainerQuery() {
+    oneui::ui::Mount mount({}, std::make_shared<oneui::ui::StyleRegistry>(), {});
+    auto inner = mount.make("Column", {mount.make("Text")}, "inner");
+    auto outer = mount.make("Column", {inner}, "outer");
+    mount.styles()->replace(".outer{container-name:o;container-type:size;}"
+        ".inner{container-name:i;container-type:size;}"
+        "@container o (width > 1px){.inner{height:200px;}}");
+    auto window = oneui::Window::create(L"Recoverable terminal layout", 500, 500);
+    window->initialize();
+    window->setContent(outer.widget);
+    bool continued = false;
+    window->post([&] {
+        oneui::test_support::RecordingCanvas canvas;
+        outer.widget->setFrame({0, 0, 500, 500});
+        outer.widget->paint(canvas);
+        check(!mount.styles()->queryDiagnostics().empty(), "Invalid nested query records a diagnostic");
+        window->post([&] { continued = true; window->close(); });
+    });
+    const auto result = window->run();
+    check(result == 0 && continued, "Invalid query does not unwind the Cocoa event loop");
 }
 NSEvent* modifierEvent(NSWindow* window, unsigned short key, NSEventModifierFlags flags) {
     return [NSEvent keyEventWithType:NSEventTypeFlagsChanged location:NSZeroPoint
@@ -344,8 +367,13 @@ void testModalLifetimeAndScaling() {
 int main(int argc, char** argv) {
     @autoreleasepool {
         @try {
+            if (argc > 1 && std::string_view(argv[1]) == "--container-recovery") {
+                testRecoverableContainerQuery();
+                return failures ? 1 : 0;
+            }
             testWheelUnits();
             if (argc > 1 && std::string_view(argv[1]) == "--wheel-units") return failures ? 1 : 0;
+            testRecoverableContainerQuery();
             testApplicationMenu(); testNativeInput(); testNativeServices(); testModalLifetimeAndScaling(); testNativeAccessibility(); testNativeAccessibleTextAndValue();
         }
         @catch (NSException* error) {

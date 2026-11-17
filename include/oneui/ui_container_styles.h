@@ -94,6 +94,16 @@ inline void StyleRegistry::applyLayout(const Entry& entry,const StyleBox& box,co
     }
 }
 inline bool StyleRegistry::evaluateQuery(const std::shared_ptr<Stack>& container) {
+    // Invalid query dependencies are recoverable layout diagnostics, not
+    // exceptions that may unwind the native window event loop on Cocoa.
+    const auto reject=[&](const std::string& message) {
+        container->setSizeContainment(false);
+        if(queryDiagnostics_.empty()||queryDiagnostics_.back()!=message) {
+            if(queryDiagnostics_.size()==32)queryDiagnostics_.erase(queryDiagnostics_.begin());
+            queryDiagnostics_.push_back(message);
+        }
+        return false;
+    };
     try {
         auto& state=queries_[container.get()];auto frame=container->frame();
         if(state.version==sheet_.version()&&state.treeVersion==treeVersion_&&
@@ -112,13 +122,13 @@ inline bool StyleRegistry::evaluateQuery(const std::shared_ptr<Stack>& container
         auto base=sheet_.resolve(nodeFor(*entries.at(container.get())));
         for(const auto& rule:sheet_.rules())if(rule.query&&rule.query->name==base.containerName &&
             selectorMatches(rule.selector,nodeFor(*entries.at(container.get()))))
-            throw std::invalid_argument("CONTAINER_DEPENDENCY: a container cannot query its own size");
+            return reject("CONTAINER_DEPENDENCY: a container cannot query its own size");
         auto parent=std::dynamic_pointer_cast<Stack>(parents[container.get()]);
         if(parent) {
             auto flex=parent->explicitFlex(container);bool column=parent->direction()==StackDirection::Column;
             bool main=bool(column?base.height:base.width)||(flex&&(flex->basis.has_value()||flex->grow>0));
             bool cross=parent->align()==StackAlign::Stretch||bool(column?base.width:base.height);
-            if(!main||!cross)throw std::invalid_argument("CONTAINER_SIZE: parent must allocate both axes independently");
+            if(!main||!cross)return reject("CONTAINER_SIZE: parent must allocate both axes independently");
         }
         std::map<std::string,Size> sizes;
         std::vector<std::shared_ptr<Widget>> ancestors;
@@ -148,15 +158,15 @@ inline bool StyleRegistry::evaluateQuery(const std::shared_ptr<Stack>& container
                 auto node=nodeFor(*found->second);auto box=effective.resolve(node);auto unconditional=sheet_.resolve(node);
                 nested=bool(unconditional.containerName);
                 if(nested&&!(unconditional.width&&unconditional.height))
-                    throw std::invalid_argument("CONTAINER_DEPENDENCY: nested query containers require fixed independent width and height");
+                    return reject("CONTAINER_DEPENDENCY: nested query containers require fixed independent width and height");
                 if(nested)for(const auto& rule:sheet_.rules())if(rule.query&&selectorMatches(rule.selector,node)) {
                     const auto& b=rule.box;
                     if(b.width||b.height||b.minWidth||b.minHeight||b.flexBasis||b.flexGrow||b.flexShrink||b.padding||b.display||
                        std::any_of(rule.declarations.begin(),rule.declarations.end(),[](const auto& declaration){return declaration.first=="flex-basis"||declaration.first=="order"||declaration.first=="max-width"||declaration.first=="max-height";}))
-                        throw std::invalid_argument("CONTAINER_DEPENDENCY: ancestor query changes a measured container");
+                        return reject("CONTAINER_DEPENDENCY: ancestor query changes a measured container");
                 }
                 if((box.flexDirection||box.flexWrap)&&!std::dynamic_pointer_cast<Stack>(widget))
-                    throw std::invalid_argument("CONTAINER_CONSUMPTION: layout output requires Stack");
+                    return reject("CONTAINER_CONSUMPTION: layout output requires Stack");
                 pending.push_back({found->second,std::move(box),std::dynamic_pointer_cast<Stack>(parents[widget.get()]),effective.resolveLayout(node)});
             }
             if(!nested)if(auto view=std::dynamic_pointer_cast<View>(widget))for(auto& child:view->children())work.push_back(child);
@@ -174,12 +184,7 @@ inline bool StyleRegistry::evaluateQuery(const std::shared_ptr<Stack>& container
         container->setSizeContainment(true);
         return !pending.empty();
     }catch(const std::exception& error) {
-        container->setSizeContainment(false);
-        if(queryDiagnostics_.empty()||queryDiagnostics_.back()!=error.what()) {
-            if(queryDiagnostics_.size()==32)queryDiagnostics_.erase(queryDiagnostics_.begin());
-            queryDiagnostics_.push_back(error.what());
-        }
-        return false;
+        return reject(error.what());
     }
 }
 } // namespace oneui::ui

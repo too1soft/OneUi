@@ -107,6 +107,8 @@ macOS 编辑快捷键使用 Command，原始事件的 Control/Meta 保留物理�
 
 Mac 原生单位回归入口为 `oneui_macos_backend_tests --wheel-units`（CTest：`oneui_macos_wheel_units`），覆盖实际 NSView 事件适配器、普通滚轮、40 点触控板输入及小数位移。通用 `oneui_scroll_view_behavior_tests` 继续检查控件自己的步长、动画和边界行为；Windows 同时运行窗口循环与浮层生命周期回归。
 
+布局阶段遇到无效容器查询依赖时，`StyleRegistry::evaluateQuery` 直接拒绝该查询并记录有界诊断，保留独立尺寸、自查询和嵌套依赖等限制。此类可恢复的校验结果不应通过 C++ 异常穿过 Cocoa 事件循环，避免终端工作区首次布局使窗口退出。Mac 回归入口为 `oneui_macos_backend_tests --container-recovery`（CTest：`oneui_macos_container_recovery`），检查诊断产生后仍能执行下一个窗口回调并正常关闭；通用 `oneui_container_query_tests` 检查反复布局时诊断最多保留 32 条。
+
 Wayland 状态提交/取消及候选窗定位遵循
 [text-input-v3 协议](https://chromium.googlesource.com/external/anongit.freedesktop.org/git/wayland/wayland-protocols/+/refs/heads/master/unstable/text-input/text-input-unstable-v3.xml)。
 剪贴板发送是有期限的非阻塞传输；接收端关闭管道不能通过 SIGPIPE 终止宿主，也不改变进程全局信号策略。
