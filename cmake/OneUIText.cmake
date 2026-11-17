@@ -60,6 +60,11 @@ if(WIN32)
     target_compile_definitions(oneui_text PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
 elseif(APPLE)
     target_compile_definitions(oneui_text PRIVATE ONEUI_PORTABLE_FONT_LOADER=1)
+    if(ONEUI_SKIA_MODE STREQUAL "bundled-static")
+        # The pinned Apple Skia archive omits RTTI. Our lazy font provider
+        # subclasses TypefaceFontProvider and must use the same RTTI setting.
+        set_property(SOURCE src/text/font_manager.cpp APPEND PROPERTY COMPILE_OPTIONS -fno-rtti)
+    endif()
     target_link_libraries(oneui_text PUBLIC "-framework CoreText" "-framework CoreGraphics" "-framework CoreFoundation")
 elseif(ANDROID)
     # Skia's Android font manager reads system font configuration with FreeType.
