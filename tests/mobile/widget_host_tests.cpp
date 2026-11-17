@@ -1,5 +1,6 @@
 #include "oneui/controls/button.h"
 #include "oneui/layout/panel.h"
+#include "oneui/layout/overlay_host.h"
 #include "oneui/layout/scroll_view.h"
 #include "oneui/layout/stack.h"
 #include "oneui/mobile/widget_host.h"
@@ -177,6 +178,72 @@ void verticalPanCancelsTapAndKeepsHorizontalControl() {
     pointer(ONEUI_MOBILE_UP, 50, 20);
     require(scroll->scrollOffset() == disabledOffset, "pan remains opt-in");
 }
+void overlayPanUsesVisibleLayerAndHonorsModalBoundary() {
+    mobile::WidgetHost host;
+    ready(host);
+    host.setTouchScrolling(true);
+    int clicks = 0;
+    auto makeScroll = [&] {
+        auto button = std::make_shared<Button>(L"tap or scroll overlay");
+        button->setPreferredSize({0, 720});
+        button->setOnClick([&] { ++clicks; });
+        auto scroll = std::make_shared<ScrollView>();
+        scroll->setContent(button);
+        return scroll;
+    };
+    auto background = makeScroll();
+    auto sheetScroll = makeScroll();
+    auto sheet = std::make_shared<OverlayHost>();
+    sheet->setContent(sheetScroll);
+    auto root = std::make_shared<OverlayHost>();
+    root->setContent(background);
+    root->addAnchoredOverlay(sheet, OverlayOptions::modal(5), {160, 200}, {}, 1, 1);
+    // A later, lower layer must never win over the visible sheet.
+    auto lower = makeScroll();
+    root->addAnchoredOverlay(lower, OverlayOptions::modeless(1), {180, 240}, {}, 1, 1);
+    host.setContent(root);
+    test_support::RecordingCanvas canvas;
+    host.paint(canvas, 1);
+    uint64_t time = 10;
+    auto pointer = [&](int phase, float x, float y) {
+        require(host.runtime().pushPointer(
+                    {3, phase, ONEUI_MOBILE_TOUCH, x * 3, y * 3, 1, time++, 0}) == ONEUI_MOBILE_OK,
+                "overlay pointer");
+        require(host.pumpInput() == ONEUI_MOBILE_OK, "overlay dispatch");
+    };
+    auto pan = [&](float x, float y, float delta) {
+        pointer(ONEUI_MOBILE_DOWN, x, y);
+        pointer(ONEUI_MOBILE_MOVE, x, y + delta);
+        pointer(ONEUI_MOBILE_UP, x, y + delta);
+    };
+    const auto frame = sheetScroll->frame();
+    const float x = frame.x + 40, y = frame.y + 100;
+    pointer(ONEUI_MOBILE_DOWN, x, y);
+    pointer(ONEUI_MOBILE_UP, x, y);
+    require(clicks == 1, "overlay tap stays usable");
+    pan(x, y, -50);
+    require(sheetScroll->scrollOffset() >= 49 && clicks == 1,
+            "nested overlay pan scrolls without activating its row");
+    require(background->scrollOffset() == 0 && lower->scrollOffset() == 0,
+            "overlay pan cannot scroll lower layers");
+    pan(x, y, 50);
+    require(sheetScroll->scrollOffset() == 0, "overlay scrolls back to top");
+    pan(5, 150, -50);
+    require(background->scrollOffset() == 0 && lower->scrollOffset() == 0,
+            "modal backdrop blocks background scrolling");
+    auto blocker = std::make_shared<Panel>();
+    root->addAnchoredOverlay(blocker, OverlayOptions::modeless(5), {160, 200}, {}, 1, 1);
+    host.paint(canvas, 2);
+    pan(x, y, -50);
+    require(sheetScroll->scrollOffset() == 0, "later equal layer blocks covered scroller");
+    blocker->setDisabled(true);
+    pan(x, y, -50);
+    require(sheetScroll->scrollOffset() >= 49, "disabled overlay remains pointer transparent");
+    root->clearOverlays();
+    host.paint(canvas, 3);
+    pan(50, 150, -50);
+    require(background->scrollOffset() >= 49, "overlay host content scrolls after dismissal");
+}
 } // namespace
 int main() {
     try {
@@ -184,6 +251,7 @@ int main() {
         animationTickDoesNotAcquireGpuFrame();
         cancelledTapCannotClick();
         verticalPanCancelsTapAndKeepsHorizontalControl();
+        overlayPanUsesVisibleLayerAndHonorsModalBoundary();
     } catch (const std::exception &e) {
         std::cerr << e.what() << '\n';
         return 1;
