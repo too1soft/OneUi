@@ -9,6 +9,7 @@
 #include "oneui/controls/code_editor.h"
 namespace oneui::views {
 void Runtime::wire(const std::shared_ptr<Instance> &instance) {
+    const oneui::detail::view_mount_timing::Scope measure(oneui::detail::view_mount_timing::Events);
     if (image.records[oneview::NODE][instance->node][0] != 1)
         return;
     instance->owner = weak_from_this();

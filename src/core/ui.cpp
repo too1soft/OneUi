@@ -2,8 +2,8 @@
 #include "oneui/style_adapter.h"
 #include "oneui/controls/text_field.h"
 #include "oneui/controls/switch.h"
+#include "oneui/detail/style_classes.h"
 #include "ui_theme.h"
-#include <sstream>
 #include <stdexcept>
 #include <cmath>
 
@@ -18,8 +18,7 @@ Builder::Builder(StackEngine engine, std::string css, bool layoutCache) : sheet_
 void Builder::style(const std::shared_ptr<Widget>& widget, std::string classes) const {
     if (!widget) throw std::invalid_argument("Null component");
     StyleNode node;
-    std::istringstream tokens(classes);
-    for (std::string token; tokens >> token;) node.classes.push_back(token);
+    oneui::detail::appendStyleClasses(node.classes, classes);
     if (auto button = std::dynamic_pointer_cast<Button>(widget)) {
         node.tag = "button"; button->setStyleOverride(buttonStyleOverrideFromStyleSheet(*sheet_, node));
     } else if (auto label = std::dynamic_pointer_cast<Label>(widget)) {

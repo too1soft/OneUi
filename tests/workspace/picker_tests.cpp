@@ -152,6 +152,15 @@ void themes() {
     outer.as<ThemeScope>()->setTokens({{"ink",0x123456ff}});
     outer.widget->setFrame({0,0,100,30});canvas.texts.clear();outer.widget->paint(canvas);
     check(!canvas.texts.empty()&&canvas.texts.back().color.r==0x12,"new outer scope propagates inherited tokens into nested scope");
+    extra.as<ThemeScope>()->setTokens({{"ink",0x876543ff}});
+    canvas.texts.clear();outer.widget->paint(canvas);
+    check(!canvas.texts.empty()&&canvas.texts.back().color.r==0x87,"nested scope overrides its inherited palette");
+    extra.as<ThemeScope>()->setTokens({});
+    canvas.texts.clear();outer.widget->paint(canvas);
+    check(!canvas.texts.empty()&&canvas.texts.back().color.r==0x12,"clearing a nested palette restores its parent");
+    outer.as<ThemeScope>()->setTokens({});
+    canvas.texts.clear();outer.widget->paint(canvas);
+    check(!canvas.texts.empty()&&canvas.texts.back().color.r==28,"clearing an ancestor restores the base palette under empty scopes");
     for(auto tokens:{std::vector<ThemeColorToken>{{"unknown",0}},{{"ink",-1}},{{"ink",0x100000000ll}},{{"ink",1},{"ink",2}}}) {
         bool rejected=false;try{first->setTokens(tokens);}catch(const std::invalid_argument&){rejected=true;}
         check(rejected&&first->tokens()[0].rgba==0xff0000ff,"invalid token batch preserves old theme");

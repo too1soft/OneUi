@@ -19,6 +19,7 @@ Image readImage(const Bytes &b, const ComponentContracts *known)
     auto nd = h.u32();
     require(h.u32() == 0 && h.u32() == 1, "VERSION: flags/hash algorithm");
     Image image;
+    bool usedHistorical = false;
     image.root = h.u32();
     Hash schemaHash{}, componentHash{};
     for (auto &v : schemaHash)
@@ -91,13 +92,14 @@ Image readImage(const Bytes &b, const ComponentContracts *known)
             uint64_t previous = c.get(8);
             require(previous == 0, "BAD_IR: string origin");
             image.strings.clear();
+            image.strings.reserve(e.count);
             for (uint32_t i = 0; i < e.count; ++i)
             {
                 auto next = c.get(8);
                 require(next >= previous && next <= length && next - previous <= 1024 * 1024, "BAD_IR: string offset");
                 std::string s(b.begin() + size_t(blob + previous), b.begin() + size_t(blob + next));
                 require(utf8(s), "BAD_IR: UTF-8");
-                image.strings.push_back(s);
+                image.strings.push_back(std::move(s));
                 previous = next;
             }
             require(previous == length && image.strings[0].empty(), "BAD_IR: string sentinel");
@@ -113,24 +115,30 @@ Image readImage(const Bytes &b, const ComponentContracts *known)
             }
             else
             {
-                image.components = decodeComponents(data, known);
+                image.components = decodeComponents(data, known, &usedHistorical);
                 require(image.components.size() == e.count, "BAD_IR: component count");
             }
         }
-        else
+        else {
+            auto& records = image.records[e.kind];
+            records.reserve(e.count);
             for (uint32_t i = 0; i < e.count; ++i)
             {
                 Record record;
+                record.reserve(e.stride / 4);
                 for (uint32_t j = 0; j < e.stride / 4; ++j)
                     record.push_back(c.u32());
-                image.records[e.kind].push_back(record);
+                records.push_back(std::move(record));
             }
+        }
     }
     validateImage(image);
     for (const auto& slot : image.records[SLOT])
         require(!(slot[3] & slotSingleRoot) || minor >= 1, "VERSION: single-root slot requires minor 1");
     validateGraph(image);
-    normalizeLegacyContracts(image);
+    // Exact built-in contracts already validated in their final form. An
+    // older descriptor (even at the same version) may still remap IDs.
+    if (known || usedHistorical) normalizeLegacyContracts(image);
     return image;
 }
 } // namespace oneview

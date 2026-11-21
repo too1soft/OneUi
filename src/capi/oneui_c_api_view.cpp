@@ -1,4 +1,6 @@
 #include "oneui_c_api_view_internal.h"
+#include "../internal/scroll_trace.h"
+#include "oneui/detail/view_mount_timing.h"
 // Included implementations provide stable-key workspace geometry and child mounts.
 namespace oneui::capi::views {
 std::shared_ptr<Runtime> runtime(OneUiView *view) {
@@ -20,7 +22,16 @@ OneUiViewResult oneui_view_instantiate(OneUiViewMount *mountHandle, const uint8_
                                        OneUiView **out) {
     if (out)
         *out = nullptr;
-    return call(__func__, [&] {
+    namespace timing = oneui::detail::view_mount_timing;
+    timing::Measurements measurements;
+    bool traced = false;
+    try {
+        traced = oneui::internal::scrollTraceEnabled();
+    } catch (...) {
+        // Diagnostics must not change the mount result.
+    }
+    const auto result = call(__func__, [&] {
+        const timing::Scope measure(timing::Instantiate, traced ? &measurements : nullptr);
         check(out && mountHandle && bytes && length && length <= oneview::max_file,
               ONEUI_VIEW_INVALID_ARGUMENT, "IR/mount/out required");
         auto mount = mountHandle->value;
@@ -31,7 +42,10 @@ OneUiViewResult oneui_view_instantiate(OneUiViewMount *mountHandle, const uint8_
             check(mount->destination->children().empty(), ONEUI_VIEW_BUSY, "Destination occupied");
         else
             check(!mount->window->rootContent, ONEUI_VIEW_BUSY, "Window content occupied");
-        auto image = oneview::readImage(oneview::Bytes(bytes, bytes + length),mount->components ? &mount->components->contracts : nullptr);
+        auto image = [&] {
+            const timing::Scope measureRead(timing::ReadImage);
+            return oneview::readImage(oneview::Bytes(bytes, bytes + length), mount->components ? &mount->components->contracts : nullptr);
+        }();
         auto view = std::make_shared<Runtime>(std::move(image), std::make_shared<oneui::SystemClipboard>(),nullptr,mount->components);
         view->externalCss=mount->externalCss;
         view->density=mount->density;
@@ -43,7 +57,10 @@ OneUiViewResult oneui_view_instantiate(OneUiViewMount *mountHandle, const uint8_
             auto handle = std::make_unique<OneUiView>();
             handle->value = view;
             handle->root.widget = view->root->element.widget;
-            mount->publish(view);
+            {
+                const timing::Scope measurePublish(timing::Publish);
+                mount->publish(view);
+            }
             view->alive();
             *out = handle.release();
             mount->reserved = false;
@@ -53,6 +70,21 @@ OneUiViewResult oneui_view_instantiate(OneUiViewMount *mountHandle, const uint8_
             throw;
         }
     });
+    if (traced) try {
+        const auto object = reinterpret_cast<std::uintptr_t>(mountHandle);
+        for (std::size_t stage = 0; stage < timing::Count; ++stage) {
+            if (!measurements.calls[stage]) continue;
+            oneui::internal::ScrollTraceEvent event;
+            event.component = "view_mount";
+            event.phase = timing::names[stage];
+            event.object = object;
+            event.durationMs = std::chrono::duration<double, std::milli>(measurements.exclusive[stage]).count();
+            event.detailA = measurements.calls[stage];
+            event.detailB = std::chrono::duration<double, std::milli>(measurements.total).count();
+            oneui::internal::writeScrollTrace(event);
+        }
+    } catch (...) { }
+    return result;
 }
 OneUiWidget *oneui_view_root(OneUiView *view) {
     OneUiWidget *result = nullptr;

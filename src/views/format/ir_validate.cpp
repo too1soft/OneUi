@@ -7,7 +7,9 @@ namespace oneview
 void validateImage(const Image &im)
 {
     auto count = [&](Section k) { return im.count(k); };
-    auto index = [&](Section k, uint32_t i) { require(i < count(k), "BAD_IR: index in section " + std::to_string(k)); };
+    auto index = [&](Section k, uint32_t i) {
+        if (i >= count(k)) throw Error("BAD_IR: index in section " + std::to_string(k));
+    };
     auto sid = [&](uint32_t i) { require(i < im.strings.size(), "BAD_IR: string ID"); };
     auto span = [&](uint32_t i) {
         if (i != none)

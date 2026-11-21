@@ -120,6 +120,7 @@ std::string StyleSheet::nodeCacheKey(const StyleNode& node) const {
 }
 
 StyleBox StyleSheet::resolve(const StyleNode& node) const {
+    if (!ruleData_ || ruleData_->rules.empty()) return {};
     const std::string cacheKey = nodeCacheKey(node);
     if (auto cached = resolveCache_.find(cacheKey); cached != resolveCache_.end()) return cached->second;
     StyleBox resolved;

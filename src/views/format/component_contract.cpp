@@ -255,7 +255,8 @@ Bytes encodeComponents(const std::vector<ComponentContract> &components)
     }
     return b;
 }
-std::vector<ComponentContract> decodeComponents(const Bytes &b, const ComponentContracts *known)
+std::vector<ComponentContract> decodeComponents(const Bytes &b, const ComponentContracts *known,
+                                                bool *usedHistorical)
 {
     const auto &available = known ? *known : registry();
     Cursor c(b);
@@ -263,15 +264,20 @@ std::vector<ComponentContract> decodeComponents(const Bytes &b, const ComponentC
     auto n = c.u32();
     require(n <= available.size(), "BAD_IR: component count");
     std::vector<ComponentContract> result;
+    result.reserve(n);
+    bool historical = false;
     for (uint32_t i = 0; i < n; ++i)
     {
         auto name = c.str();
         auto current = available.find(name);
         require(current != available.end() && (result.empty() || result.back().name < name),
                 "BAD_IR: unknown/unsorted component");
-        result.push_back(decodeComponentContract(c, current->second));
+        const auto& contract = decodeComponentContract(c, current->second);
+        historical |= &contract != &current->second;
+        result.push_back(contract);
     }
     c.done();
+    if (usedHistorical) *usedHistorical = historical;
     return result;
 }
 void addBuiltins(Schema &schema)

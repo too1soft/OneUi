@@ -10,6 +10,8 @@ namespace oneui::views::components { struct Registry; }
 #include "oneui/controls/media_picker.h"
 #include "oneui/controls/card.h"
 #include "oneui/layout/theme_scope.h"
+#include "oneui/detail/style_classes.h"
+#include "oneui/detail/view_mount_timing.h"
 #include "oneui/controls/pane_header.h"
 #include "oneui/controls/drag_handle.h"
 #include "oneui/controls/reveal.h"
@@ -90,13 +92,14 @@ private:
     std::vector<std::string> queryDiagnostics_;
     std::map<const Widget*,std::shared_ptr<StyleSheet>> localThemes_;
     std::map<const ThemeScope*,std::shared_ptr<StyleSheet>> themeParents_;
-    void applyLocalTheme(const std::shared_ptr<ThemeScope>&,const StyleSheet&);
+    void applyLocalTheme(const std::shared_ptr<ThemeScope>&, const std::shared_ptr<StyleSheet>& parent = {});
     void refreshLocalThemes();
     void configureQuery(const std::shared_ptr<Widget>&,const StyleBox&);
     bool evaluateQuery(const std::shared_ptr<Stack>&);
     void applyLayout(const Entry&,const StyleBox&,const std::shared_ptr<Stack>&,const StyleLayout& = {});
     void restoreQueryLayouts();
     void apply(const Entry& entry, const StyleSheet& supplied) {
+        const oneui::detail::view_mount_timing::Scope measure(oneui::detail::view_mount_timing::Style);
         auto w = entry.widget.lock(); if (!w) return;
         // Base style replay can reset query display and native preferred sizes
         // even when applyBaseLayouts finds no flex/dimension declaration.
@@ -110,7 +113,7 @@ private:
         }
         const auto& sheet=*effective;
         StyleNode n; n.tag = syntax::componentTag(entry.component); n.classes.push_back("one-" + entry.component);
-        std::istringstream tokens(entry.classes); for (std::string c; tokens >> c;) n.classes.push_back(c);
+        oneui::detail::appendStyleClasses(n.classes, entry.classes);
         if(!entry.variant.empty())n.classes.push_back(entry.variant);
         if(!entry.appearance.empty())n.classes.push_back("surface-"+entry.appearance);
         if(!entry.tone.empty()) n.classes.push_back("tone-"+entry.tone);
@@ -243,7 +246,7 @@ private:
         // replaying every sibling scope makes a page of previews quadratic.
         // An enclosing scope will propagate its inherited tokens when added.
         if (auto scope = std::dynamic_pointer_cast<ThemeScope>(e.widget))
-            applyLocalTheme(scope, sheet_);
+            applyLocalTheme(scope);
     }
 public:
     const std::vector<std::string>& queryDiagnostics() const{return queryDiagnostics_;}

@@ -5,6 +5,7 @@
 #include "oneui/layout/dock_workspace_view.h"
 namespace oneui::views {
 using namespace oneview;
+namespace timing = oneui::detail::view_mount_timing;
 namespace {
 void activate(const std::shared_ptr<Instance> &node) noexcept {
     node->published = true;
@@ -18,14 +19,20 @@ void Runtime::initialize(const OneUiViewModelVTable *table, void *vm, bool share
     try {
         checkTable(table, image.schema.root); // No foreign callback before schema verification.
         rootScope = acquire({table, vm}, image.schema.root, false);
-        std::string css = sharedStyles ? "" :
-            (externalCss.empty() ? ui::declarativeTheme() : externalCss);
-        for (const auto &r : image.records[CSS])
-            css += '\n' + image.strings[r[2]];
-        if (sharedStyles) styles->appendScoped(css);
-        else styles->replace(css, density);
+        {
+            const timing::Scope measure(timing::StyleParse);
+            std::string css = sharedStyles ? "" :
+                (externalCss.empty() ? ui::declarativeTheme() : externalCss);
+            for (const auto &r : image.records[CSS])
+                css += '\n' + image.strings[r[2]];
+            if (sharedStyles) styles->appendScoped(css);
+            else styles->replace(css, density);
+        }
         root = build(image.records[TMPL][image.root][1], {rootScope});
-        update(root);
+        {
+            const timing::Scope measure(timing::InitialUpdate);
+            update(root);
+        }
         registerPendingShortcuts();
         styles->applyBaseLayouts();
         prepareWorkspaceIndex();
@@ -41,8 +48,9 @@ void Runtime::initialize(const OneUiViewModelVTable *table, void *vm, bool share
     }
 }
 std::shared_ptr<Instance> Runtime::build(uint32_t node, const Scopes &context, const Slots &slots) {
+    const timing::Scope measure(timing::Build);
     alive();
-    const auto n = image.records[NODE][node];
+    const auto& n = image.records[NODE][node];
     std::shared_ptr<Instance> result;
     if (n[0] == 3) {
         const auto &call = image.records[CALL][n[9]];
@@ -87,14 +95,17 @@ std::shared_ptr<Instance> Runtime::build(uint32_t node, const Scopes &context, c
     }
     if (image.components[n[1]].name == "VirtualTemplateList") return buildVirtual(node, context);
     std::vector<ui::Element> children;
+    children.reserve(n[4]);
+    result->children.reserve(n[4]);
     for (uint32_t i = 0; i < n[4]; ++i) {
         auto child = build(image.records[EDGE][n[3] + i][1], context, slots);
         if (!child->transparent) children.push_back(child->element);
         child->parent = result;
         result->children.push_back(child);
     }
-    auto type = image.components[n[1]].name;
-    const std::string classes = scopeClasses.count(n[8]) ? scopeClasses.at(n[8]) : "";
+    const auto& type = image.components[n[1]].name;
+    const auto scopeClass = scopeClasses.find(n[8]);
+    const std::string classes = scopeClass == scopeClasses.end() ? "" : scopeClass->second;
     if (type == "NativeHost") {
         auto host = std::make_shared<ui::NativeHostView>();
         result->element = ui::Element(ui::Node(host), type);
@@ -133,7 +144,7 @@ std::shared_ptr<Instance> Runtime::build(uint32_t node, const Scopes &context, c
     } else if (components::create(*this,result,type,children,classes)) {
         // The registered factory owns creation; common properties use Mount.
     } else
-        result->element = factory.make(type, children, classes);
+        result->element = factory.make(type, std::move(children), classes);
     if (n[10] != none) {
         const auto &span = image.records[SMAP][n[10]];
         factory.locate(result->element, image.strings[span[0]], int(span[1]));
@@ -144,6 +155,7 @@ std::shared_ptr<Instance> Runtime::build(uint32_t node, const Scopes &context, c
 }
 void Runtime::install(const std::shared_ptr<Instance> &instance, uint32_t owner,
                       const Scopes &context) {
+    const timing::Scope measure(timing::Properties);
     instance->owners.push_back(owner);
     auto overrideProperty = [&](uint32_t property) {
         instance->bindings.erase(
@@ -175,6 +187,7 @@ void Runtime::install(const std::shared_ptr<Instance> &instance, uint32_t owner,
         apply(instance, binding);
         instance->bindings.push_back(std::move(binding));
     }
+    const timing::Scope measureEvents(timing::Events);
     for (const auto &r : ownerRecords.get(image, EVNT, owner)) {
         instance->events.erase(std::remove_if(instance->events.begin(), instance->events.end(),
                                               [&](const Record &e) { return e[1] == r[1]; }),
@@ -188,6 +201,7 @@ void Runtime::install(const std::shared_ptr<Instance> &instance, uint32_t owner,
     }
 }
 void Runtime::apply(const std::shared_ptr<Instance> &instance, Binding &binding) {
+    const timing::Scope measure(timing::Properties);
     Observation observation(*this, instance);
     auto scope = binding.scope.lock();
     if (!scope || scope->closed)

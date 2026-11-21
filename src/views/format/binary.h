@@ -21,6 +21,11 @@ inline void require(bool ok, const std::string &message)
     if (!ok)
         throw Error(message);
 }
+inline void require(bool ok, const char *message)
+{
+    if (!ok)
+        throw Error(message);
+}
 inline void put(Bytes &b, uint64_t value, unsigned size = 4)
 {
     for (unsigned i = 0; i < size; ++i)

@@ -28,7 +28,8 @@ struct ComponentContract
 using ComponentContracts = std::map<std::string, ComponentContract>;
 const ComponentContracts &registry();
 Bytes encodeComponents(const std::vector<ComponentContract> &components);
-std::vector<ComponentContract> decodeComponents(const Bytes &bytes, const ComponentContracts *known = nullptr);
+std::vector<ComponentContract> decodeComponents(const Bytes &bytes, const ComponentContracts *known = nullptr,
+                                                bool *usedHistorical = nullptr);
 void addBuiltins(Schema &schema);
 void validateRecord(const Model&, const std::string& projection);
 void validateRecord(const Schema&, const Model&, const std::string& projection);

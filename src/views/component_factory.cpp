@@ -10,6 +10,7 @@
 #include "internal/runtime_config.h"
 namespace oneui::ui {
 Element Mount::make(std::string type, std::vector<Element> children, std::string classes) {
+    const oneui::detail::view_mount_timing::Scope measure(oneui::detail::view_mount_timing::Create);
     if (type == "NativeHost")
         throw std::invalid_argument("Use nativeHost(name) after registerNative");
     if (type == "Workspace") {
@@ -110,8 +111,10 @@ Element Mount::make(std::string type, std::vector<Element> children, std::string
     std::vector<Node> nodes;
     for (auto &child : children)
         nodes.push_back(child);
-    Builder b(StackEngine::Yoga, "");
-    Node node = b.column({});
+    // Every branch constructs the real node. The empty Builder stylesheet
+    // and engine stay the same for all controls constructed on this thread.
+    thread_local const Builder b(StackEngine::Yoga, "");
+    Node node{nullptr};
     std::shared_ptr<Stack> content;
     if(type=="StateView")node=b.native(std::make_shared<StateView>());
     else if(type=="Menu")node=b.native(std::make_shared<Menu>());

@@ -8,9 +8,11 @@ inline void StyleRegistry::updateAuthoredFlex(const std::shared_ptr<Widget>& wid
         found->second.flex=flex;
 }
 inline void StyleRegistry::applyBaseLayouts() {
+    const oneui::detail::view_mount_timing::Scope measure(oneui::detail::view_mount_timing::BaseLayout);
     pruneEntries();
     bool applied=false;
-    std::map<const Widget*,std::shared_ptr<Stack>> parents;
+    std::unordered_map<const Widget*,std::shared_ptr<Stack>> parents;
+    parents.reserve(entries_.size());
     for (const auto& entry : entries_)
         if (auto stack = std::dynamic_pointer_cast<Stack>(entry.widget.lock()))
             for (const auto& child : stack->children()) parents[child.get()] = stack;
@@ -18,8 +20,7 @@ inline void StyleRegistry::applyBaseLayouts() {
         auto parent = parents.find(widget.get());
         if (parent == parents.end()) continue;
         StyleNode node{syntax::components().at(entry.component), {"one-"+entry.component}, 0};
-        std::istringstream words(entry.classes);
-        for (std::string word; words >> word;) node.classes.push_back(word);
+        oneui::detail::appendStyleClasses(node.classes, entry.classes);
         const auto box = sheet_.resolve(node);
         const auto layout = sheet_.resolveLayout(node);
         if (box.width || box.height || box.minWidth || box.minHeight || layout.maxWidth || layout.maxHeight ||
@@ -37,7 +38,7 @@ inline void StyleRegistry::restoreQueryLayouts() {
     for(const auto& entry:entries_)if(auto widget=entry.widget.lock()) {
         auto found=layoutDefaults_.find(widget.get());if(found==layoutDefaults_.end())continue;
         StyleNode node{syntax::components().at(entry.component),{"one-"+entry.component},0};
-        std::istringstream words(entry.classes);for(std::string word;words>>word;)node.classes.push_back(word);
+        oneui::detail::appendStyleClasses(node.classes, entry.classes);
         applyLayout(entry,sheet_.resolve(node),found->second.parent.lock(),sheet_.resolveLayout(node));
     }
 }
@@ -110,7 +111,7 @@ inline bool StyleRegistry::evaluateQuery(const std::shared_ptr<Stack>& container
            state.measured.width==frame.width&&state.measured.height==frame.height)return false;
         auto nodeFor=[](const Entry& entry) {
             StyleNode node{syntax::components().at(entry.component),{"one-"+entry.component},0};
-            std::istringstream words(entry.classes);for(std::string word;words>>word;)node.classes.push_back(word);
+            oneui::detail::appendStyleClasses(node.classes, entry.classes);
             return node;
         };
         std::map<const Widget*,const Entry*> entries;
