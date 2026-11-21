@@ -1,5 +1,6 @@
 #include "internal/frame_profile.h"
 #include "text_layout.h"
+#include "text_layout_cache.h"
 #include "font_family_list.h"
 #include "foreground_painter.h"
 #include "internal/unicode.h"
@@ -17,9 +18,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
-#include <list>
 #include <stdexcept>
-#include <tuple>
 
 #ifdef ONEUI_EMBEDDED_ICU
 bool SkLoadICU();
@@ -28,25 +27,7 @@ bool SkLoadICU();
 namespace oneui::text {
 namespace p = skia::textlayout;
 namespace {
-constexpr std::size_t MaxCacheEntries = 512;
-constexpr std::size_t MaxCacheTextBytes = 1024 * 1024;
-
-struct Key {
-    std::wstring value;
-    LayoutOptions options;
-    bool operator==(const Key& other) const {
-        const auto& a = options;
-        const auto& b = other.options;
-        return value == other.value &&
-            std::tie(a.family, a.fallbackFamily, a.size, a.weight, a.width, a.lineHeight,
-                     a.scale, a.align, a.maxLines, a.ellipsis, a.text.direction, a.text.wrap, a.text.locale, a.text.letterSpacing, a.text.tabularNumbers) ==
-            std::tie(b.family, b.fallbackFamily, b.size, b.weight, b.width, b.lineHeight,
-                     b.scale, b.align, b.maxLines, b.ellipsis, b.text.direction, b.text.wrap, b.text.locale, b.text.letterSpacing, b.text.tabularNumbers) &&
-            a.spans == b.spans;
-    }
-};
-struct CacheEntry { Key key; std::shared_ptr<Layout> layout; };
-thread_local std::list<CacheEntry> cache;
+thread_local detail::LayoutCache cache;
 thread_local LayoutStats counters;
 thread_local sk_sp<p::FontCollection> testFonts;
 thread_local std::vector<SkString> testFontFamilies;
@@ -282,12 +263,8 @@ std::shared_ptr<Layout> Layout::make(const std::wstring& value, const LayoutOpti
     }
     if (options.text.locale.empty()) options.text.locale = "und";
     if (options.text.wrap == TextWrapMode::NoWrap && !options.ellipsis) options.width = 1000000.0f;
-    Key key{options.sensitive ? std::wstring{} : value, options};
     if (!options.sensitive) {
-        auto found = std::find_if(cache.begin(), cache.end(), [&](const auto& item) { return item.key == key; });
-        if (found != cache.end()) {
-            auto result = found->layout;
-            cache.splice(cache.begin(), cache, found);
+        if (auto result = cache.find(value, options)) {
             ++counters.cacheHits;
             return result;
         }
@@ -338,17 +315,10 @@ std::shared_ptr<Layout> Layout::make(const std::wstring& value, const LayoutOpti
         } while (start <= value.size());
     } else impl->shape();
     auto result = std::shared_ptr<Layout>(new Layout(std::move(impl)));
-    const auto bytes = value.size() * sizeof(wchar_t);
     // Cache leaf paragraphs only; composite entries would keep evicted children
     // alive outside the cache's accounting and duplicate whole documents.
-    if (!options.sensitive && result->impl_->parts.empty() && bytes <= MaxCacheTextBytes / 8) {
-        while (!cache.empty() && (cache.size() >= MaxCacheEntries || counters.cachedTextBytes + bytes > MaxCacheTextBytes)) {
-            counters.cachedTextBytes -= cache.back().key.value.size() * sizeof(wchar_t);
-            cache.pop_back();
-        }
-        cache.push_front({std::move(key), result});
-        counters.cachedTextBytes += bytes;
-    }
+    if (!options.sensitive && result->impl_->parts.empty())
+        cache.insert(value, options, result);
     return result;
 }
 
@@ -517,7 +487,12 @@ void Layout::paint(SkCanvas& canvas, Point origin, Color color) const {
         impl_->inlineForegrounds);
     impl_->paragraph->paint(&painter, origin.x, origin.y);
 }
-LayoutStats Layout::stats() { auto result = counters; result.cachedEntries = cache.size(); return result; }
+LayoutStats Layout::stats() {
+    auto result = counters;
+    result.cachedEntries = cache.size();
+    result.cachedTextBytes = cache.textBytes();
+    return result;
+}
 void Layout::clearCache() { cache.clear(); counters = {}; }
 void Layout::installTestFonts(const std::vector<std::string>& paths) {
     clearCache(); testFonts.reset(); testFontFamilies.clear();

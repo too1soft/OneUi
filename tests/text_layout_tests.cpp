@@ -219,6 +219,26 @@ int main() {
         auto secret = Layout::make(L"test-only secret", sensitive);
         require(Layout::stats().cachedTextBytes == cacheBefore, "sensitive layouts never enter shared cache");
         require(secret->height() > 0, "private layout remains usable");
+        require(Layout::make(L"test-only secret", sensitive) != secret,
+                "private layouts must remain outside the lookup index");
+
+        Layout::clearCache();
+        auto oldest = Layout::make(L"oldest");
+        auto promoted = Layout::make(L"promoted");
+        for (int i = 0; i < 510; ++i) Layout::make(L"row " + std::to_wstring(i));
+        require(Layout::stats().cachedEntries == 512, "layout index retains the entry limit");
+        require(Layout::make(L"promoted") == promoted, "a hit promotes the entry in the LRU");
+        Layout::make(L"newest");
+        require(Layout::make(L"promoted") == promoted, "eviction preserves a promoted layout");
+        require(Layout::make(L"oldest") != oldest, "eviction must remove the old index entry");
+        LayoutOptions variant;
+        variant.text.letterSpacing = 0.5f;
+        auto alternate = Layout::make(L"promoted", variant);
+        require(alternate != promoted && Layout::make(L"promoted", variant) == alternate &&
+                Layout::make(L"promoted") == promoted, "index collisions must compare the full layout identity");
+        Layout::clearCache();
+        require(Layout::stats().cachedEntries == 0 && Layout::stats().cachedTextBytes == 0,
+                "clearing a layout cache resets the index and byte count");
         std::cout << "Text layout tests passed (Unicode 15.1, real SkParagraph)\n";
         return 0;
     } catch (const std::exception& error) {
