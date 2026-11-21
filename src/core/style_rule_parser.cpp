@@ -30,6 +30,19 @@ struct ParsedCssCache {
         entries.splice(entries.begin(), entries, found);
         return &entries.front().sheet;
     }
+
+    const Entry* findPrefix(const std::string& source) {
+        auto best = entries.end();
+        for (auto it = entries.begin(); it != entries.end(); ++it) {
+            const auto length = it->source.size();
+            if (length == 0 || length >= source.size() || source[length] != '\n' ||
+                (best != entries.end() && length <= best->source.size())) continue;
+            if (source.compare(0, length, it->source) == 0) best = it;
+        }
+        if (best == entries.end()) return nullptr;
+        entries.splice(entries.begin(), entries, best);
+        return &entries.front();
+    }
     void remember(const std::string& source, const StyleSheet& sheet) {
         if (source.size() > maxSourceBytes || sheet.rules().size() > maxRules) return;
         // Allocate before evicting or changing counters; a failed optimization
@@ -113,14 +126,21 @@ bool StyleSheet::addRulesFromCss(const std::string& css,std::string* error) {
                 return true;
             }
         }
+        // View mounts validate their base theme before appending scoped CSS on
+        // a new line. A cached, complete prefix already has compiled rules and
+        // tokens. Start at that boundary and retain the full source for errors.
+        const auto* prefix = independent ? parsedCssCache().findPrefix(css) : nullptr;
+        const auto startOfRules = prefix ? prefix->source.size() : 0;
+        auto candidate = prefix ? prefix->sheet : *this;
+        if (prefix) candidate.setTransientStyleSheet(transientStyleSheet());
         auto text=css;
-        for(size_t start=0;(start=text.find("/*",start))!=std::string::npos;) {
+        for(size_t start=startOfRules;(start=text.find("/*",start))!=std::string::npos;) {
             auto end=text.find("*/",start+2);
             if(end==std::string::npos)throw std::invalid_argument("CSS: unclosed comment");
             for(;start<end+2;++start)if(text[start]!='\n')text[start]=' ';
         }
         // Parsing is transactional, including root tokens and query rules.
-        auto candidate=*this;parseRules(candidate,text,0,text.size());
+        parseRules(candidate,text,startOfRules,text.size());
         *this=std::move(candidate);
         if (independent) {
             try { parsedCssCache().remember(css, *this); }

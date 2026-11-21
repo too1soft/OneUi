@@ -70,3 +70,17 @@ CPU sampling that suspends threads is diagnostic only. It cannot be used as an
 input-latency benchmark. Private-function attribution from a relinked MAP file
 was qualified by matching export/unwind address ranges; the DLLs were not byte
 identical. Module bases must be derived separately for each process run.
+
+## Reuse the compiled base theme
+
+View mounts validate the external theme before appending the scoped stylesheet
+on a new line. The thread-local CSS cache can seed that combined parse with the
+longest matching complete stylesheet. The parser compiles only the remaining
+rules. Keeping the original source preserves error line and column numbers.
+Rule and token mutations detach from the cached base. The result retains the
+existing cascade order and the caller's transient stylesheet.
+
+The workspace style regression compares a cached prefix with a complete parse,
+including scoped overrides, late token definitions and invalid CSS rollback.
+Use the view mount trace for phase times and an independent foreground capture
+for the first visible response and the settled Settings canvas.

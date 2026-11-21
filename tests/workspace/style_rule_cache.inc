@@ -31,4 +31,27 @@ void styleRuleCache() {
     check(copy.resolveTokens(palette).foreground->r==first.foreground->r,"copies never reuse another palette's colors");
     for(int i=0;i<24;++i){alias.setCustomProperty("--unused",std::to_string(i));alias.resolveTokens(palette);}
     check(copy.resolveTokens(palette).foreground->r==0x11,"evicted palettes recompute correctly");
+
+    const std::string theme = ":root {--preview-ink:#203040;}\nlabel.preview {color:var(--preview-ink);}";
+    const std::string scoped = "\n/* Scope comment */\nlabel.preview {font-size:12px;}"
+                               "\n:root {--preview-ink:#405060;}";
+    const StyleNode preview{"label", {"preview"}, StyleStateNone};
+    StyleSheet base, combined, cold;
+    check(base.addRulesFromCss(theme, &error), "base theme enters CSS cache");
+    combined.setTransientStyleSheet(transient);
+    check(combined.addRulesFromCss(theme + scoped, &error), "scoped CSS builds on a cached theme");
+    check(cold.addRulesFromCss("/* cold stylesheet */\n" + theme + scoped, &error),
+          "same cascade can be parsed in one pass");
+    const auto resolved = combined.resolve(preview);
+    const auto expected = cold.resolve(preview);
+    check(resolved.foreground->r == 0x40 && resolved.foreground->r == expected.foreground->r &&
+          resolved.fontSize == 12 && resolved.fontSize == expected.fontSize &&
+          combined.version() == cold.version() && combined.transientStyleSheet() == transient,
+          "cached prefix preserves cascade, token references, version and transient stylesheet");
+    check(base.resolve(preview).foreground->r == 0x20 &&
+          !base.resolve(preview).fontSize, "scoped styles leave the cached theme intact");
+    StyleSheet invalid;
+    check(!invalid.addRulesFromCss(theme + "\nlabel.preview {font-size:invalid;}", &error) &&
+          error.find("CSS:3:1:") == 0 && invalid.rules().empty() && invalid.customProperties().empty(),
+          "failed scoped CSS keeps original source coordinates and publishes no rules");
 }
