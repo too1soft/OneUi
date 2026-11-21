@@ -33,6 +33,14 @@
             if (std::chrono::steady_clock::now() - started >= std::chrono::milliseconds(4)) break;
         }
         if (!alive->load(std::memory_order_acquire)) return;
+        if (dispatched && internal::scrollTraceEnabled()) {
+            const auto elapsed = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count();
+            if (elapsed >= 2.0) {
+                internal::writeScrollTrace(internal::ScrollTraceEvent{
+                    "win32", "posted_work", reinterpret_cast<std::uintptr_t>(hwnd_), 0, 0, 0, 0, 0, 0,
+                    elapsed, static_cast<double>(dispatched), 0});
+            }
+        }
         // WM_PAINT is lower priority than posted messages. A continuously
         // refilled queue must still reveal static content without an rAF.
         if (!inputPaintPending_) flushPendingPaint();

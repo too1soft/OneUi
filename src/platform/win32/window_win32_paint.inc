@@ -28,10 +28,11 @@
         internal::InputLayoutSnapshot::PaintScope inputPaint(*inputLayout);
         const auto interactionPaint = internal::beginInteractionPaint(reinterpret_cast<std::uintptr_t>(hwnd_));
         const double paintStartMs = currentTimeMs();
+        const bool traceLayout = interactionPaint.paintSequence != 0 && internal::scrollTraceEnabled();
 #if ONEUI_DEVELOPER_TOOLS
         const auto diagnostics=developerTools_; // Safe if application disables tools during paint.
         internal::DiagnosticSession diagnosticSession(diagnostics.get());
-        internal::FrameProfileSession profile(renderTraceEnabled_ || bool(diagnostics));
+        internal::FrameProfileSession profile(renderTraceEnabled_ || bool(diagnostics) || traceLayout);
         const double beforeContent=rendererInfo_.contentMs, beforeSubmit=rendererInfo_.submitMs, beforeBlit=rendererInfo_.blitMs;
         if(diagnostics)diagnostics->beginFrame(paintStartMs);
         const auto finishDiagnostics=[&] {
@@ -45,7 +46,7 @@
             diagnostics->finishFrame(currentTimeMs(),contentAnimationFramePending_,frame);
         };
 #else
-        internal::FrameProfileSession profile(renderTraceEnabled_);
+        internal::FrameProfileSession profile(renderTraceEnabled_ || traceLayout);
         const auto finishDiagnostics=[] {};
 #endif
         RECT clientRect{};
@@ -146,6 +147,13 @@
 
         internal::traceInteractionPaint(interactionPaint, "content_paint_end",
             gpuAvailable_ && grContext_ && windowSurface_ ? "opengl" : "software");
+        if (traceLayout) {
+            internal::writeScrollTrace(internal::ScrollTraceEvent{
+                "win32", "paint_layout", interactionPaint.window, 0, 0, 0, 0, 0, 0,
+                profile.data.ms[static_cast<size_t>(internal::FrameStage::Layout)],
+                static_cast<double>(interactionPaint.paintSequence),
+                profile.data.ms[static_cast<size_t>(internal::FrameStage::TextLayout)]});
+        }
 
         if (gpuAvailable_ && grContext_ && windowSurface_) {
             internal::traceInteractionPaint(interactionPaint, "submit_begin", "opengl");

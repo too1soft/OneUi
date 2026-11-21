@@ -51,6 +51,28 @@ void testSettingChangeHasDefinedResult() {
     expectTrue("Settings change leaves the message loop usable", window->run() == 0 && completed);
 }
 
+void testMoveDoesNotPublishWindowState() {
+    auto window = hiddenWindow();
+    const auto hwnd = static_cast<HWND>(window->nativeHandle());
+    RECT initial{};
+    GetWindowRect(hwnd, &initial);
+    unsigned notifications = 0;
+    auto observer = window->observeState([&](const oneui::WindowState&) { ++notifications; });
+    const auto common = SWP_NOACTIVATE | SWP_NOZORDER;
+    SetWindowPos(hwnd, nullptr, initial.left + 20, initial.top + 10, 0, 0, common | SWP_NOSIZE);
+    window->post([&] {
+        expectTrue("Position-only move does not publish unchanged client state", notifications == 0);
+        const unsigned beforeResize = notifications;
+        SetWindowPos(hwnd, nullptr, 0, 0, initial.right - initial.left + 20,
+                     initial.bottom - initial.top + 20, common | SWP_NOMOVE);
+        window->post([&, beforeResize] {
+            expectTrue("Size change still publishes client state", notifications == beforeResize + 1);
+            window->close();
+        });
+    });
+    expectTrue("Window state move test finishes normally", window->run() == 0);
+}
+
 void testPointerRestoresAfterTextInputAndContentChanges() {
     class CursorSurface final : public oneui::Widget {
     public:
@@ -407,6 +429,7 @@ int main() {
     testPointerRestoresAfterTextInputAndContentChanges();
     testDestroyWithoutRunDoesNotQuitNextWindow();
     testSettingChangeHasDefinedResult();
+    testMoveDoesNotPublishWindowState();
     testOtherThreadDoesNotPreventExit();
     testAlreadyClosedWindowReturns();
     testNestedLoopPropagatesQuit();

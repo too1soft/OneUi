@@ -1,5 +1,8 @@
     LRESULT handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
-        if(message==WM_SHOWWINDOW||message==WM_SIZE||message==WM_ACTIVATE||message==WM_WINDOWPOSCHANGED||message==WM_STYLECHANGED||message==WM_DPICHANGED)queueStateChange();
+        if (message == WM_SHOWWINDOW || message == WM_SIZE || message == WM_ACTIVATE ||
+            message == WM_STYLECHANGED || message == WM_DPICHANGED) {
+            queueStateChange();
+        }
         if (taskbarCreatedMessage_ != 0 && message == taskbarCreatedMessage_) {
             internalTrayVisible_ = false;
             if (closeToTray_ || trayEnabled_) {
@@ -207,10 +210,11 @@
             return 0;
         case WM_ENTERSIZEMOVE:
             interactiveResizeActive_ = true;
+            interactiveSizeChanged_ = false;
             return 0;
         case WM_EXITSIZEMOVE:
             interactiveResizeActive_ = false;
-            requestDeferredFullPaint();
+            if (std::exchange(interactiveSizeChanged_, false)) requestDeferredFullPaint();
             printRenderTrace(true);
             return 0;
         case WM_MOUSEWHEEL:
@@ -260,6 +264,14 @@
             return 0;
         case WM_WINDOWPOSCHANGED:
         {
+            const auto* position = reinterpret_cast<const WINDOWPOS*>(lParam);
+            // Position is not part of WindowState. WM_SIZE, WM_ACTIVATE and
+            // WM_DPICHANGED still cover client size, activation and scale.
+            // Position messages also carry visibility and z-order changes.
+            if (position && ((position->flags & (SWP_NOSIZE | SWP_NOZORDER)) !=
+                    (SWP_NOSIZE | SWP_NOZORDER) || (position->flags & (SWP_SHOWWINDOW | SWP_HIDEWINDOW)))) {
+                queueStateChange();
+            }
             // 位置/尺寸/Z 序变化（含失焦→再激活）后，重定位伴随投影并把它重新压到主窗正
             // 下方——修复“失焦后投影消失、要移动一下才回来”。必须先走默认处理，好派生出
             // WM_MOVE/WM_SIZE（区域圆角重算依赖 WM_SIZE）。
@@ -321,6 +333,7 @@
             return 0;
         }
         case WM_SIZE:
+            if (interactiveResizeActive_) interactiveSizeChanged_ = true;
 #if ONEUI_DEVELOPER_TOOLS
             if(developerTools_)developerTools_->resetCadence();
 #endif
