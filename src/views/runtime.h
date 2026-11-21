@@ -1,5 +1,6 @@
 #pragma once
 #include "format/ir.h"
+#include "owner_records.h"
 #include "oneui/oneui_view_c_api.h"
 #include "oneui/command.h"
 #include "oneui/subscription.h"
@@ -134,6 +135,7 @@ struct Callback {
 };
 struct Runtime : std::enable_shared_from_this<Runtime> {
     oneview::Image image;
+    OwnerRecords ownerRecords;
     std::array<uint8_t, 32> hash{};
     std::map<uint32_t, std::string> scopeClasses;
     std::thread::id thread = std::this_thread::get_id();

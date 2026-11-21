@@ -102,6 +102,7 @@ void Runtime::reload(oneview::Image replacement) {
         for(auto &scope:candidate.value->scopes)
             if(scope->notifier)scope->notifier->runtime=weak_from_this();
         image=std::move(candidate.value->image);
+        ownerRecords=std::move(candidate.value->ownerRecords);
         scopeClasses=std::move(candidate.value->scopeClasses);
         root=std::move(nextRoot);hosts=std::move(candidate.value->hosts);
         scopes=std::move(candidate.value->scopes);

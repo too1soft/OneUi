@@ -148,7 +148,12 @@ inline bool StyleRegistry::evaluateQuery(const std::shared_ptr<Stack>& container
         }
         state.measured={frame.width,frame.height};
         if(state.version==sheet_.version()&&state.treeVersion==treeVersion_&&matches==state.matches)return false;
-        auto effective=sheet_.forContainers(sizes);
+        if (!state.effective || state.effectiveVersion != sheet_.version() || state.effectiveMatches != matches) {
+            state.effective = sheet_.forContainers(sizes);
+            state.effectiveVersion = sheet_.version();
+            state.effectiveMatches = matches;
+        }
+        const auto& effective = *state.effective;
         struct Pending {const Entry* entry;StyleBox box;std::shared_ptr<Stack> parent;StyleLayout layout;};
         std::vector<Pending> pending;
         std::vector<std::shared_ptr<Widget>> work(container->children().begin(),container->children().end());

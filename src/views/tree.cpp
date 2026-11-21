@@ -152,44 +152,40 @@ void Runtime::install(const std::shared_ptr<Instance> &instance, uint32_t owner,
                 [&](const Binding &b) { return b.kind == BIND && b.record[1] == property; }),
             instance->bindings.end());
     };
-    for (const auto &r : image.records[PROP])
-        if (r[0] == owner) {
-            const auto &contract =
-                image.components[image.records[NODE][componentRoot(image, owner)][1]];
-            overrideProperty(r[1]);
-            auto value = constant(r[2]);
-            if (!components::set(instance,r[1],value.borrow()) && !workspaceScalar(*instance,contract.property(r[1]).name,value))
-                setScalar(factory, instance->element, contract.property(r[1]).name, value);
-            if (contract.property(r[1]).name == "disabled")
-                instance->authoredDisabled = bool(constant(r[2]).integer);
-        }
-    for (const auto &r : image.records[BIND])
-        if (r[0] == owner) {
-            overrideProperty(r[1]);
-            Binding binding{r, context.at(r[3] & 0xffff), BIND};
-            const auto& contract = image.components[image.records[NODE][componentRoot(image, owner)][1]];
-            if (!(instance->element.component == "Text" && contract.property(r[1]).name == "spans"))
-                apply(instance, binding);
-            instance->bindings.push_back(std::move(binding));
-        }
-    for (const auto &r : image.records[COND])
-        if (r[0] == owner) {
-            Binding binding{r, context.at(r[3] & 0xffff), COND};
+    for (const auto &r : ownerRecords.get(image, PROP, owner)) {
+        const auto &contract =
+            image.components[image.records[NODE][componentRoot(image, owner)][1]];
+        overrideProperty(r[1]);
+        auto value = constant(r[2]);
+        if (!components::set(instance,r[1],value.borrow()) && !workspaceScalar(*instance,contract.property(r[1]).name,value))
+            setScalar(factory, instance->element, contract.property(r[1]).name, value);
+        if (contract.property(r[1]).name == "disabled")
+            instance->authoredDisabled = bool(constant(r[2]).integer);
+    }
+    for (const auto &r : ownerRecords.get(image, BIND, owner)) {
+        overrideProperty(r[1]);
+        Binding binding{r, context.at(r[3] & 0xffff), BIND};
+        const auto& contract = image.components[image.records[NODE][componentRoot(image, owner)][1]];
+        if (!(instance->element.component == "Text" && contract.property(r[1]).name == "spans"))
             apply(instance, binding);
-            instance->bindings.push_back(std::move(binding));
-        }
-    for (const auto &r : image.records[EVNT])
-        if (r[0] == owner) {
-            instance->events.erase(std::remove_if(instance->events.begin(), instance->events.end(),
-                                                  [&](const Record &e) { return e[1] == r[1]; }),
-                                   instance->events.end());
-            // CALL is invoked with the same scope vector; records retain caller lexical depth.
-            instance->events.push_back(r);
-            auto &command = image.schema.model(r[4]).command(r[2]);
-            for (auto id : {command.when, command.busy})
-                if (id)
-                    read(context.at(r[3] & 0xffff), id);
-        }
+        instance->bindings.push_back(std::move(binding));
+    }
+    for (const auto &r : ownerRecords.get(image, COND, owner)) {
+        Binding binding{r, context.at(r[3] & 0xffff), COND};
+        apply(instance, binding);
+        instance->bindings.push_back(std::move(binding));
+    }
+    for (const auto &r : ownerRecords.get(image, EVNT, owner)) {
+        instance->events.erase(std::remove_if(instance->events.begin(), instance->events.end(),
+                                              [&](const Record &e) { return e[1] == r[1]; }),
+                               instance->events.end());
+        // CALL is invoked with the same scope vector; records retain caller lexical depth.
+        instance->events.push_back(r);
+        auto &command = image.schema.model(r[4]).command(r[2]);
+        for (auto id : {command.when, command.busy})
+            if (id)
+                read(context.at(r[3] & 0xffff), id);
+    }
 }
 void Runtime::apply(const std::shared_ptr<Instance> &instance, Binding &binding) {
     Observation observation(*this, instance);

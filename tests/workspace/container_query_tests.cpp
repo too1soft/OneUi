@@ -37,6 +37,23 @@ void stackChildren() {
         other->insert(0,a);check(other->children()[0]==a,"explicit remove insert retains widget");
     }
 }
+void projectedSelectorsAndTokens() {
+    StyleSheet source;
+    check(source.addRulesFromCss(
+        ":root{--ink:#123456;} .cell{color:var(--ink);height:12px;}"
+        ".cell:hover{height:18px;}"
+        "@container frame (width >= 300px){.cell{height:24px;max-width:90px;order:3;}}"), "projection CSS");
+    auto narrow=source.forContainers({{"frame",{299,100}}});
+    auto wide=source.forContainers({{"frame",{300,100}}});
+    const StyleNode normal{"label",{"cell"},0},hover{"label",{"cell"},StyleStateHover};
+    check(narrow.resolve(normal).height==12&&wide.resolve(normal).height==24,"projection retains rule order and exact tier");
+    check(wide.resolve(hover).height==18,"compiled specificity survives projection");
+    check(wide.resolveLayout(normal).maxWidth==90&&wide.resolveLayout(normal).flexOrder==3,"query layout metadata survives query removal");
+    wide.setCustomProperty("--ink","#abcdef");
+    check(wide.resolve(normal).foreground->r==0xab&&source.resolve(normal).foreground->r==0x12,"projected token/cache ownership remains independent");
+    StyleRule extra;extra.selector=".cell";extra.box.height=31;wide.addRule(extra);
+    check(wide.resolve(normal).height==31&&source.resolve(normal).height==12,"projected rule edits detach from source");
+}
 const char* css=R"CSS(
 .frame {container-name:sftp;container-type:size;}
 .tree, .browser, .details {flex-grow:1;flex-basis:0px;}
@@ -143,6 +160,6 @@ void maxWidthClamps() {
     check(!mount.styles()->queryDiagnostics().empty(),"cross-axis max-width diagnosed");
 }
 }
-int main(){try{comparisons();stackChildren();layout(StackEngine::Yoga);layout(StackEngine::Legacy);invalidCssAndDependencies();maxWidthClamps();displayOnlyReplay();
-    std::cout<<"PASS container queries and Stack: 7 groups\n";return 0;
+int main(){try{comparisons();stackChildren();layout(StackEngine::Yoga);layout(StackEngine::Legacy);invalidCssAndDependencies();maxWidthClamps();displayOnlyReplay();projectedSelectorsAndTokens();
+    std::cout<<"PASS container queries and Stack: 8 groups\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

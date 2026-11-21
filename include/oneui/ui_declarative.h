@@ -72,7 +72,16 @@ private:
     std::vector<Entry> entries_;
     StyleSheet sheet_;
     Density density_=Density::Comfortable;
-    struct QueryState {std::vector<bool> matches;std::size_t version=~size_t{},treeVersion=0;Size measured{-1,-1};};
+    struct QueryState {
+        std::vector<bool> matches;
+        std::size_t version=~size_t{},treeVersion=0;
+        Size measured{-1,-1};
+        // Base-style replay can require reapplying a query without changing
+        // its rules or tier. Keep that container's derived caches usable.
+        std::optional<StyleSheet> effective;
+        std::size_t effectiveVersion=~size_t{};
+        std::vector<bool> effectiveMatches;
+    };
     struct LayoutDefaults {Size size;StackDirection direction=StackDirection::Column;bool wrap=false;std::optional<StackFlex> flex;std::weak_ptr<Stack> parent;std::weak_ptr<Widget> widget;};
     size_t treeVersion_=0;
     std::map<const Widget*,QueryState> queries_;

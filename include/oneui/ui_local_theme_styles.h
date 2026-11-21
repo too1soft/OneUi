@@ -12,13 +12,21 @@ inline void StyleRegistry::applyLocalTheme(const std::shared_ptr<ThemeScope>& sc
             applyLocalTheme(scope,*parent);
         }
     });
+    // Preview galleries have many descendants. Index this immutable replay
+    // once, rather than scanning all registered siblings for every child.
+    std::unordered_map<const Widget*,const Entry*> entries;
+    entries.reserve(entries_.size());
+    for (const auto& entry : entries_)
+        if (auto widget = entry.widget.lock()) entries.emplace(widget.get(), &entry);
     std::vector<std::shared_ptr<Widget>> work(scope->children().begin(),scope->children().end());
     while(!work.empty()) {
         auto widget=work.back();work.pop_back();
         // NativeHost terminal palettes are deliberately outside this contract.
         if(std::dynamic_pointer_cast<NativeHostView>(widget))continue;
         if(auto nested=std::dynamic_pointer_cast<ThemeScope>(widget)){applyLocalTheme(nested,*sheet);continue;}
-        for(auto& entry:entries_)if(entry.widget.lock()==widget){localThemes_[widget.get()]=sheet;apply(entry,sheet_);break;}
+        if(auto found=entries.find(widget.get());found!=entries.end()) {
+            localThemes_[widget.get()]=sheet;apply(*found->second,sheet_);
+        }
         if(auto view=std::dynamic_pointer_cast<View>(widget))for(auto& child:view->children())work.push_back(child);
     }
 }

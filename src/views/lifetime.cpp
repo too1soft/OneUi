@@ -32,7 +32,7 @@ Callback::~Callback() {
 Runtime::Runtime(oneview::Image im, std::shared_ptr<Clipboard> clipboard,
                  std::shared_ptr<ui::StyleRegistry> sharedStyles,
                  std::shared_ptr<const components::Registry> registry)
-    : image(std::move(im)), hash(oneview::sha256(image.schema.encode())),
+    : image(std::move(im)), ownerRecords(image), hash(oneview::sha256(image.schema.encode())),
       styles(sharedStyles ? std::move(sharedStyles) : std::make_shared<ui::StyleRegistry>()),
       factory({}, styles, std::move(clipboard)), componentRegistry(std::move(registry)) {
     error.struct_size = sizeof(error);

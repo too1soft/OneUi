@@ -133,13 +133,27 @@ StyleSheet StyleSheet::forContainers(const std::map<std::string,Size>& sizes) co
     if (std::none_of(rules().begin(), rules().end(), [](const auto& rule) { return bool(rule.query); }))
         return *this;
     StyleSheet result;result.customProperties_=customProperties_;result.transient_=transient_;
-    for(auto rule:rules()) {
+    result.ruleData_ = std::make_shared<RuleData>();
+    result.ruleData_->rules.reserve(rules().size());
+    result.ruleData_->selectors.reserve(rules().size());
+    for(std::size_t index = 0; index < rules().size(); ++index) {
+        auto rule = rules()[index];
         if(rule.query) {
             auto size=sizes.find(rule.query->name);
             if(size==sizes.end()||!rule.query->matches(size->second))continue;
             clearRuleQuery(rule);
         }
-        result.addRule(std::move(rule));
+        // Filtering changes query eligibility, never selector syntax. Reuse
+        // the compiled selector instead of parsing every theme rule again on
+        // each container layout. Tokens and resolution caches remain local.
+        const auto& selector = ruleData_->selectors[index];
+        result.ruleData_->rules.push_back(std::move(rule));
+        result.ruleData_->selectors.push_back(selector);
+        if (selector.valid) {
+            result.ruleData_->selectorClasses.insert(selector.node.classes.begin(), selector.node.classes.end());
+            result.ruleData_->selectorStates |= selector.node.state;
+        }
+        ++result.version_;
     }
     return result;
 }
