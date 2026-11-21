@@ -1,5 +1,6 @@
 #include "runtime.h"
 #include "pointer_event_slots.h"
+#include "viewport_event_slot.h"
 #include "rich_table_events.inc"
 #include "oneui/controls/popup.h"
 #include "data_menu.h"
@@ -132,20 +133,16 @@ void Runtime::wire(const std::shared_ptr<Instance> &instance) {
     }
     if (element.component == "InteractiveSurface")
         preparePointerEventSlots(instance, 0, pointerEventMask(*instance))();
+    if (element.component == "Scroll") {
+        if (hasViewportSizeEvent(*instance)) element.widget->setOnSizeChanged(viewportSizeCallback(instance));
+        return;
+    }
     for (const auto &event : contract.events) {
         auto name = event.name;
         auto fire = eventDispatcher(node, event.id);
         if(name=="inspection" && element.component=="TimeSeriesChart")
             element.as<TimeSeriesChart>()->setOnInspectionChanged([fire](int index,bool pinned) {
                 Value i,p;i.tag=2;i.integer=index;p.tag=1;p.integer=pinned;fire({i,p});
-            });
-        else if(name=="viewport-size-changed" && element.component=="Scroll")
-            // Keep the dispatcher even without a current EVNT: reload may add
-            // a binding while retaining this native widget and Instance.
-            element.widget->setOnSizeChanged([fire](Size size) {
-                Value width,height;width.tag=height.tag=3;
-                width.number=size.width;height.number=size.height;
-                fire({width,height});
             });
         else if(name=="menuActivated" && element.component=="DataMenu")
             element.as<DataMenu>()->setOnActivated([fire](std::string id) {

@@ -103,14 +103,10 @@
         }
 
         SkCanvas* skCanvas = paintSurface_->getCanvas();
-        auto rawCanvasOwner = rendering::makeSkiaCanvas(
-            *skCanvas,
-            nullptr,
-            Rect{0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height)});
-        auto& rawCanvas = *rawCanvasOwner;
         const bool fullPaint = dirtyX == 0 && dirtyY == 0 && dirtyWidth == width && dirtyHeight == height;
         if (fullPaint) {
-            rawCanvas.clear(colors::Surface);
+            const auto background = colors::Surface;
+            skCanvas->clear(SkColorSetARGB(background.a, background.r, background.g, background.b));
         }
 
         skCanvas->save();

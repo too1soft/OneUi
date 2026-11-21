@@ -46,17 +46,7 @@ void Runtime::notify(const std::shared_ptr<Scope> &scope, uint32_t property) {
         throw Failure(ONEUI_VIEW_REENTRANT, "Notification during read/cleanup");
     }
     const auto &model = image.schema.model(scope->table.model_id);
-    if (property) {
-        try {
-            model.property(property);
-        } catch (...) {
-            throw Failure(ONEUI_VIEW_UNKNOWN_ID, "Unknown property");
-        }
-    }
-    for (const auto &entry : model.properties) {
-        const auto &p = entry.second;
-        if (property && p.id != property)
-            continue;
+    auto invalidate = [&](const oneview::Property& p) {
         scope->dirty.insert(p.id);
         mark(scope, p.id);
         if (p.tag == 5) {
@@ -65,6 +55,17 @@ void Runtime::notify(const std::shared_ptr<Scope> &scope, uint32_t property) {
             list.pending.clear();
             list.queuedBytes = 0;
         }
+    };
+    if (property) {
+        const oneview::Property* changed;
+        try {
+            changed = &model.property(property);
+        } catch (...) {
+            throw Failure(ONEUI_VIEW_UNKNOWN_ID, "Unknown property");
+        }
+        invalidate(*changed);
+    } else {
+        for (const auto& entry : model.properties) invalidate(entry.second);
     }
     enqueue();
 }

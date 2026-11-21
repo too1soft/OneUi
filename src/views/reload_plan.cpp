@@ -1,5 +1,6 @@
 #include "reload_plan.h"
 #include "pointer_event_slots.h"
+#include "viewport_event_slot.h"
 namespace oneui::views {
 namespace {
 std::string identity(const Runtime &runtime,const Instance &node) {
@@ -126,6 +127,14 @@ void ReloadPlan::prepare() {
         const auto oldPointer = pointerEventMask(*previous), newPointer = pointerEventMask(*candidate);
         if (oldPointer != newPointer)
             properties.push_back(preparePointerEventSlots(previous, oldPointer, newPointer));
+        const bool oldViewportEvent = hasViewportSizeEvent(*previous);
+        const bool newViewportEvent = hasViewportSizeEvent(*candidate);
+        if (oldViewportEvent != newViewportEvent) {
+            auto callback = newViewportEvent ? viewportSizeCallback(previous) : std::function<void(Size)>{};
+            properties.push_back([widget = previous->element.widget, callback = std::move(callback)]() mutable {
+                widget->setOnSizeChanged(std::move(callback));
+            });
+        }
         auto before=authored(old,*previous),after=authored(next,*candidate);
         for(auto &[name,_]:before)
             if(!after.count(name) && name!="class")

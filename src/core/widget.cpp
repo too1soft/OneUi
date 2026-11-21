@@ -62,9 +62,10 @@ void Widget::setFrame(Rect frame) {
     }
     const bool resized = frame_.width != frame.width || frame_.height != frame.height;
     frame_ = frame;
+    if (!resized || !onSizeChanged_) return;
     // Copy permits clearing/replacing the observer from inside its callback.
     const auto callback = onSizeChanged_;
-    if (resized && callback) callback(Size{frame.width, frame.height});
+    callback(Size{frame.width, frame.height});
 }
 
 void Widget::setOnSizeChanged(std::function<void(Size)> callback) {
