@@ -105,3 +105,11 @@ iShell普通Release随后重建，实际消费本次普通DLL。GUI SHA-256为7e
 独立finish逐张核对28图身份、摘要及尺寸，ship仅覆盖两尺寸的局部原生Calendar界面。输入是目标窗口原生消息，布局DPI为1；实际renderer/device未查询。该消费结果与前文独立C++窗口的OpenGL无效捕获诊断分别成立，不相互覆盖，也不推广为所有GPU、WGC或其他平台通过。
 
 消费侧完整模块、失败历史、复现及剩余分支见ishell_oneui仓库docs/plugins/native-calendar-window.md，原始报告为其target/check-evidence/host-terminal/native-plugin-calendar下的self-2/report.json及supplement/report.json。当前图不使用QA DLL；本节没有新增框架构建或重复执行前述10/2项测试。
+
+## 11. OpenGL 磁盘着色器缓存
+
+Ganesh 在首次绘制新内容时会同步请求持久化编译结果。Windows 的缓存把键和值复制到有界队列，由线程池串行提交文件。绘制线程在磁盘写入期间仍能从队列读到该条目。找不到文件、无法调度或队列已满时，渲染继续使用已经编译的程序。
+
+后台批处理持有 DLL 引用，回调返回后由线程池释放。写入使用各进程独立的临时文件，成功关闭后原子替换，读取仍核对完整键和字节长度。磁盘格式兼容已有条目。当前只有 Windows 把写入交给线程池。
+
+Windows API 依据见 [TrySubmitThreadpoolCallback](https://learn.microsoft.com/en-us/windows/win32/api/threadpoolapiset/nf-threadpoolapiset-trysubmitthreadpoolcallback) 和 [FreeLibraryWhenCallbackReturns](https://learn.microsoft.com/en-us/windows/win32/api/threadpoolapiset/nf-threadpoolapiset-freelibrarywhencallbackreturns)。
