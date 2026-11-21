@@ -426,8 +426,10 @@ void testBorderlessCaptionRoutesControlsAndKeepsSingleClickState() {
 } // namespace
 
 int main() {
-    testPointerRestoresAfterTextInputAndContentChanges();
+    // Run with the renderer still cold so closing an unused window also
+    // exercises teardown of the driver startup worker on supported hardware.
     testDestroyWithoutRunDoesNotQuitNextWindow();
+    testPointerRestoresAfterTextInputAndContentChanges();
     testSettingChangeHasDefinedResult();
     testMoveDoesNotPublishWindowState();
     testOtherThreadDoesNotPreventExit();

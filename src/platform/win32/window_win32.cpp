@@ -2,6 +2,7 @@
 #include "window_event_loop_win32.h"
 #include "window_dispatch_trace_win32.h"
 #include "window_win32_paint_trace.h"
+#include "window_win32_gpu_warmup.h"
 #include "internal/frame_profile.h"
 #include "internal/developer_tools.h"
 #include "internal/runtime_config.h"
@@ -158,6 +159,7 @@ public:
     Size minimumClientSize_{};
     bool clientSizeChangedFramePending_ = false;
     bool windowActive_ = false;
+    win32::NvidiaOpenGlWarmup gpuWarmup_;
     HGLRC glContext_ = nullptr;
     HDC glDC_ = nullptr;
     sk_sp<GrDirectContext> grContext_;

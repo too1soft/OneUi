@@ -113,3 +113,9 @@ Ganesh 在首次绘制新内容时会同步请求持久化编译结果。Windows
 后台批处理持有 DLL 引用，回调返回后由线程池释放。写入使用各进程独立的临时文件，成功关闭后原子替换，读取仍核对完整键和字节长度。磁盘格式兼容已有条目。当前只有 Windows 把写入交给线程池。
 
 Windows API 依据见 [TrySubmitThreadpoolCallback](https://learn.microsoft.com/en-us/windows/win32/api/threadpoolapiset/nf-threadpoolapiset-trysubmitthreadpoolcallback) 和 [FreeLibraryWhenCallbackReturns](https://learn.microsoft.com/en-us/windows/win32/api/threadpoolapiset/nf-threadpoolapiset-freelibrarywhencallbackreturns)。
+
+## 12. NVIDIA OpenGL 启动预热
+
+启用 OpenGL 的窗口在隐藏状态初始化时，Win32 检查所在显示设备。匹配 NVIDIA 后，进程只尝试启动一次后台预热。工作线程在该显示设备的坐标范围创建自己的隐藏窗口、设备上下文和 OpenGL 上下文。两次交换后触发驱动线程枚举，再在工作线程执行 `glFinish`。窗口装配可以在这段时间继续，预热资源由创建它们的线程释放，窗口销毁时等待该工作线程退出。
+
+实际窗口使用自己的 WGL 上下文。首次绘制中的 NVIDIA 检查点继续覆盖预热失败、其他显示设备和直接可见的窗口。跟踪事件 `gpu_startup_warmup` 记录工作线程耗时及是否成功，实际窗口首帧的着色器编译和桌面呈现各有独立计时。线程与上下文约束见 [wglMakeCurrent 文档](https://learn.microsoft.com/en-us/windows/win32/api/wingdi/nf-wingdi-wglmakecurrent)。

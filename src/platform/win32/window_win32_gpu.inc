@@ -28,15 +28,7 @@
         glDC_ = GetDC(hwnd_);
         if (!glDC_) { rendererInfo_.reason = "window-dc-failed"; return; }
 
-        PIXELFORMATDESCRIPTOR pfd = {};
-        pfd.nSize = sizeof(PIXELFORMATDESCRIPTOR);
-        pfd.nVersion = 1;
-        pfd.dwFlags = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER;
-        pfd.iPixelType = PFD_TYPE_RGBA;
-        pfd.cColorBits = 32;
-        pfd.cDepthBits = 0;
-        pfd.cStencilBits = 0;
-        pfd.iLayerType = PFD_MAIN_PLANE;
+        const auto pfd = win32::openGlWindowPixelFormat();
 
         int pixelFormat = ChoosePixelFormat(glDC_, &pfd);
         if (!pixelFormat || !SetPixelFormat(glDC_, pixelFormat, &pfd)) {

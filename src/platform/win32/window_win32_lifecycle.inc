@@ -267,6 +267,9 @@
 
     void initialize() override {
         ensureCreated();
+        if (hwnd_ && runtimeConfig_.gpuEnabled && !gpuInitializationAttempted_ && !options_.visible) {
+            gpuWarmup_.start(hwnd_);
+        }
     }
 
     void show() override {
