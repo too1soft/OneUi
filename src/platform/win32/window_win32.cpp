@@ -101,6 +101,7 @@
 #include <vector>
 
 #include "platform/win32/accessibility_win32.h"
+#include "platform/win32/accessibility_uia_win32.h"
 #include "platform/win32/com_runtime_win32.h"
 
 namespace oneui {
@@ -138,6 +139,7 @@ public:
     bool suppressKeyText_ = false;
     HANDLE animationFrameTimer_ = nullptr;
     IAccessible* accessibilityProvider_=nullptr;
+    win32_accessibility::AutomationProvider accessibilityAutomation_;
     HRESULT accessibilityComResult_=E_FAIL;
     WindowOptions options_;
     float dpiScale_ = 1.0f;

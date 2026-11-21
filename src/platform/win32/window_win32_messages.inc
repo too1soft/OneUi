@@ -11,23 +11,29 @@
             return 0;
         }
         switch (message) {
-        case WM_GETOBJECT:
-            if (static_cast<DWORD>(lParam)==static_cast<DWORD>(OBJID_CLIENT) && content_
+        case WM_GETOBJECT: {
+            const auto objectId = static_cast<LONG>(lParam);
+            if ((objectId == OBJID_CLIENT || objectId == UiaRootObjectId) && content_
                 && SUCCEEDED(accessibilityComResult_) && callbackWindowAlive_->load()) {
-                if(!accessibilityProvider_){
-                    auto context=std::make_shared<win32_accessibility::Context>();
-                    context->window=hwnd_;context->alive=callbackWindowAlive_;
-                    context->root=[this]{return content_;};
-                    context->focus=[this](Widget* widget){return requestFocus(widget,true);};
-                    context->scale=[this]{return dpiScale();};
-                    accessibilityProvider_=new win32_accessibility::Provider(context);
-                    context->provider=accessibilityProvider_;
+                if (!accessibilityProvider_) {
+                    auto context = std::make_shared<win32_accessibility::Context>();
+                    context->window = hwnd_;
+                    context->alive = callbackWindowAlive_;
+                    context->root = [this] { return content_; };
+                    context->focus = [this](Widget* widget) { return requestFocus(widget, true); };
+                    context->scale = [this] { return dpiScale(); };
+                    accessibilityProvider_ = new win32_accessibility::Provider(context);
+                    context->provider = accessibilityProvider_;
                 }
-                return LresultFromObject(IID_IAccessible,wParam,accessibilityProvider_);
+                if (objectId == OBJID_CLIENT)
+                    return LresultFromObject(IID_IAccessible, wParam, accessibilityProvider_);
+                if (const auto result = accessibilityAutomation_.reply(hwnd_, wParam, lParam, accessibilityProvider_))
+                    return result;
             }
             // Do not create an OS proxy while our provider is shutting down.
             if (!callbackWindowAlive_->load()) return 0;
             return DefWindowProcW(hwnd_,message,wParam,lParam);
+        }
         case WM_DROPFILES:
         {
             const HDROP drop = reinterpret_cast<HDROP>(wParam);

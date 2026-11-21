@@ -60,6 +60,7 @@
     }
 
     void retireAccessibilityProvider() {
+        accessibilityAutomation_.disconnect();
         win32_accessibility::retireProvider(hwnd_, accessibilityProvider_);
     }
 

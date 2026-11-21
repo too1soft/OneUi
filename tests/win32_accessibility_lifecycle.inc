@@ -6,6 +6,7 @@ namespace {
 struct AccessibilityCloseProbe {
     WNDPROC previous{};
     IAccessible* accessible{};
+    decltype(&UiaHasServerSideProvider) hasAutomationProvider{};
     bool observed = false;
     bool disconnected = false;
 };
@@ -16,7 +17,8 @@ LRESULT CALLBACK accessibilityCloseWindowProc(HWND window, UINT message, WPARAM 
         LONG children = -1;
         probe->observed = true;
         probe->disconnected = probe->accessible->get_accChildCount(&children) == CO_E_OBJNOTCONNECTED
-            && children == 0;
+            && children == 0
+            && (!probe->hasAutomationProvider || !probe->hasAutomationProvider(window));
     }
     return CallWindowProcW(probe->previous, window, message, wp, lp);
 }
@@ -43,12 +45,20 @@ bool accessibilityStopsBeforeWindowDestruction() {
     const bool custom = SUCCEEDED(probe.accessible->get_accDescription(self, &description))
         && description && std::wstring(description) == L"OneUI lifecycle provider";
     SysFreeString(description);
-    const bool live = custom && SUCCEEDED(probe.accessible->get_accChildCount(&children));
+    const HMODULE automation = LoadLibraryExW(L"UIAutomationCore.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    if (automation && GetProcAddress(automation, "UiaProviderFromIAccessible")
+        && GetProcAddress(automation, "UiaDisconnectProvider")) {
+        probe.hasAutomationProvider = reinterpret_cast<decltype(probe.hasAutomationProvider)>(
+            GetProcAddress(automation, "UiaHasServerSideProvider"));
+    }
+    const bool live = custom && SUCCEEDED(probe.accessible->get_accChildCount(&children))
+        && (!probe.hasAutomationProvider || probe.hasAutomationProvider(native));
     SetPropW(native, L"OneUIAccessibilityCloseProbe", &probe);
     probe.previous = reinterpret_cast<WNDPROC>(SetWindowLongPtrW(native, GWLP_WNDPROC,
         reinterpret_cast<LONG_PTR>(&accessibilityCloseWindowProc)));
     window->close();
     probe.accessible->Release();
+    if (automation) FreeLibrary(automation);
     return live && probe.observed && probe.disconnected && !IsWindow(native);
 }
 
