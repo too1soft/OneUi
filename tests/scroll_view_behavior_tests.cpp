@@ -290,15 +290,18 @@ void testAcceleratedWheelPacketsStayInOneContinuousMotion() {
     scroll.setWheelStep(54.0f);
 
     scroll.onMouseWheel(wheelEvent(-1.0f, 1000.0));
+    scroll.tickAnimations(1080.0);
+    expectBetween("ScrollView begins moving before reaching its target",
+                  scroll.scrollOffset(), 0.01f, 54.0f);
     scroll.tickAnimations(1250.0);
     const float leadPacketOffset = scroll.scrollOffset();
-    expectBetween("ScrollView lead packet stays within its target",
-                  leadPacketOffset, 0.01f, 54.0f);
+    expectEqual("ScrollView lead packet reaches its visible target",
+                leadPacketOffset == 54.0f ? 1 : 0, 1);
 
     scroll.onMouseWheel(wheelEvent(-6.0f, 1258.0));
     const float retargetOffset = scroll.scrollOffset();
-    expectEqual("ScrollView accelerated packet catches up without restarting",
-                retargetOffset > leadPacketOffset ? 1 : 0, 1);
+    expectEqual("ScrollView accelerated packet starts without moving backward",
+                retargetOffset >= leadPacketOffset ? 1 : 0, 1);
     scroll.tickAnimations(1274.0);
     expectEqual("ScrollView accelerated packet continues on the next frame",
                 scroll.scrollOffset() > retargetOffset ? 1 : 0, 1);
@@ -306,6 +309,24 @@ void testAcceleratedWheelPacketsStayInOneContinuousMotion() {
     scroll.tickAnimations(1.0e15);
     expectNear("ScrollView accelerated packets preserve their full distance",
                scroll.scrollOffset(), 378.0f);
+}
+
+void testWheelProjectionSettlesWithinHalfAPhysicalPixel() {
+    oneui::ScrollView scroll;
+    scroll.setFrame({0, 0, 120, 100});
+    scroll.setContent(std::make_shared<LayoutProbe>(oneui::Size{0, 900}));
+    scroll.setWheelStep(40);
+    scroll.onMouseWheel(wheelEvent(-1.0f, 1000.0));
+    scroll.tickAnimations(1180.0);
+    expectNear("ScrollView presents the target once remaining travel is subpixel",
+               scroll.scrollOffset(), 40.0f);
+    scroll.onMouseWheel(wheelEvent(-1.0f, 1180.0));
+    const float first = scroll.scrollOffset();
+    scroll.tickAnimations(1180.1);
+    expectEqual("An extending packet cannot move the viewport backward",
+                scroll.scrollOffset() >= first ? 1 : 0, 1);
+    scroll.tickAnimations(1.0e15);
+    expectNear("ScrollView still applies both wheel packets", scroll.scrollOffset(), 80.0f);
 }
 
 void testSmoothScrollMotionPreservesVelocityWhenTargetExtends() {
@@ -535,6 +556,7 @@ int main() {
     testBatchedWheelDeltaIsDistributedAcrossFrames();
     testWheelDirectionChangeDropsOpposingQueuedMotion();
     testAcceleratedWheelPacketsStayInOneContinuousMotion();
+    testWheelProjectionSettlesWithinHalfAPhysicalPixel();
     testSmoothScrollMotionPreservesVelocityWhenTargetExtends();
     testKeyboardScrollsVerticalAndHorizontalOffsets();
     testHorizontalOffsetAppliesToContentLayout();

@@ -3,6 +3,7 @@
 #include "oneui/style.h"
 #include "oneui/layout/stack.h"
 #include "internal/scroll_trace.h"
+#include "internal/wheel_motion.h"
 
 #include <algorithm>
 #include <cmath>
@@ -309,7 +310,7 @@ bool ScrollView::advanceScrollMotion(double nowMs) {
 
     const float previous = scrollOffset_;
     scrollMotion_.tick(nowMs);
-    scrollOffset_ = clampOffset(scrollMotion_.value());
+    scrollOffset_ = clampOffset(internal::wheelPresentationOffset(scrollMotion_, previous, textDpiScale()));
     if (std::fabs(scrollOffset_ - previous) > 0.001f) {
         layoutChildren();
         invalidate();

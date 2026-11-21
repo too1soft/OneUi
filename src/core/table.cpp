@@ -1,5 +1,6 @@
 #include "table_style_override.h"
 #include "oneui/controls/table.h"
+#include "internal/wheel_motion.h"
 #include "internal/widget_presentation.h"
 
 #include "oneui/icon.h"
@@ -440,8 +441,9 @@ bool Table::advanceScrollMotion(double nowMs) {
     if (!scrollMotion_.running()) return false;
     const float previous = scrollOffset_;
     scrollMotion_.tick(nowMs);
-    scrollOffset_ = std::clamp(scrollMotion_.value(), 0.0f, maxScrollOffset());
-    if (std::fabs(scrollOffset_ - previous) > 0.001f) invalidate();
+    scrollOffset_ = std::clamp(internal::wheelPresentationOffset(scrollMotion_, previous, textDpiScale()),
+                               0.0f, maxScrollOffset());
+    if (std::fabs(scrollOffset_ - previous) > 0.001f) invalidatePaint();
     return true;
 }
 
