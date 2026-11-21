@@ -25,15 +25,13 @@ struct RunLoopScope {
     RunLoopScope &operator=(const RunLoopScope &) = delete;
 };
 
-bool peekMessage(MSG& message) {
+bool peekMessage(MSG& message, bool& priorityInput) {
     const DispatchTraceScope trace("peek_message");
-    // Win32 normally retrieves posted work before hardware input. When we
-    // have just serviced OneUI callbacks, give the input queue one turn.
-    // Always return to the unfiltered order on the following iteration.
-    if (std::exchange(g_inputTurnRequested, false) &&
-        PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE | PM_QS_INPUT))
-        return true;
-    return PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE) != FALSE;
+    // Win32 normally retrieves posted work before hardware input. A yielded
+    // batch gives pending input one turn, then restores the usual order.
+    priorityInput = std::exchange(g_inputTurnRequested, false) &&
+        PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE | PM_QS_INPUT) != FALSE;
+    return priorityInput || PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE) != FALSE;
 }
 
 void tickFrameSource(const ThreadFrameSource& source) {
@@ -65,7 +63,8 @@ int runWindowLoop() {
             DispatchTraceScope trace("message_batch");
             const ULONGLONG batchStarted = GetTickCount64();
             unsigned int dispatched = 0;
-            while (peekMessage(message)) {
+            bool priorityInput = false;
+            while (peekMessage(message, priorityInput)) {
                 if (message.message == WM_QUIT) {
                     // A nested loop must pass the thread's exit request back
                     // to its caller instead of consuming it on its behalf.
@@ -79,8 +78,14 @@ int runWindowLoop() {
                 const internal::InteractionInputScope interaction(
                     reinterpret_cast<std::uintptr_t>(message.hwnd), message.message, message.time);
                 DispatchMessageW(&message);
-                if (++dispatched >= 64 || GetTickCount64() - batchStarted >= 8)
+                if (++dispatched >= 64 || GetTickCount64() - batchStarted >= 8) {
+                    // The thread also dispatches messages for native helpers,
+                    // including COM's private window. A slow helper can consume
+                    // this entire batch without entering OneUI's callback path.
+                    // A prioritized input message cannot claim another turn.
+                    if (!priorityInput) g_inputTurnRequested = true;
                     break;
+                }
             }
             trace.setDispatched(dispatched);
         }
