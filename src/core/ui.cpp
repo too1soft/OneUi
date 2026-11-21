@@ -59,7 +59,7 @@ Node Builder::button(std::wstring value, std::function<void()> action, std::stri
 Node Builder::stack(StackDirection direction, std::vector<Node> children, std::string role) const {
     auto stack = std::make_shared<Stack>(direction); stack->setEngine(engine_); stack->setLayoutCacheEnabled(layoutCache_);
     stack->setAlign(direction == StackDirection::Row ? StackAlign::Center : StackAlign::Stretch);
-    style(stack, std::move(role));
+    if (!sheet_->rules().empty()) style(stack, std::move(role));
     for (const auto& child : children) {
         const auto& f = child.flex;
         if (!child.widget || !std::isfinite(f.grow) || f.grow < 0 || !std::isfinite(f.shrink) || f.shrink < 0 ||

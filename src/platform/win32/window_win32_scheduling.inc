@@ -9,12 +9,10 @@
                 deferredPostedCallbackBatches_.pop_front();
             } else callbacks.swap(postedCallbacks_);
         }
-        // An edit has already invalidated its native pixels, while its model
-        // callback may have posted expensive follow-up work. Reveal that input
-        // before entering the work; waiting for the frame timer lets a single
-        // long callback delay even the first glyph. Keep the scheduled frame
-        // for animation/IME reconciliation and preserve the held batch's FIFO.
-        if (inputPaintPending_ && !callbacks.empty()) {
+        // Reveal keyboard edits before potentially expensive model work.
+        // Pointer commands can replace the invalidated content entirely and
+        // should run before drawing its hover or release state.
+        if (!callbacks.empty() && std::exchange(inputPaintBeforePostedWork_, false)) {
             flushPendingPaint();
             if (!alive->load(std::memory_order_acquire)) return;
         }
@@ -307,23 +305,30 @@
         queueInvalidation(&dirty);
     }
 
-    void requestInteractiveRedraw() {
+    enum class InputPaint { Coalesced, BeforePostedWork };
+
+    void requestInteractiveRedraw(InputPaint policy = InputPaint::Coalesced) {
         if (!hwnd_) {
             return;
         }
         // Widgets normally supplied a precise invalidation already. Preserve
         // it instead of expanding every handled click to the entire client.
         if (!invalidationPending_) queueInvalidation(nullptr);
+        if (policy == InputPaint::BeforePostedWork) inputPaintBeforePostedWork_ = true;
         scheduleInputPaint();
     }
 
     void scheduleInputPaint() {
         if (!hwnd_ || inputPaintPending_) return;
         inputPaintPending_ = true;
-        requestAnimationFrame([this](double) { inputPaintPending_ = false; });
+        requestAnimationFrame([this](double) {
+            inputPaintPending_ = false;
+            inputPaintBeforePostedWork_ = false;
+        });
         if (!animationFramePending_) {
             // Timer creation failure must not leave invalidation held forever.
             inputPaintPending_ = false;
+            inputPaintBeforePostedWork_ = false;
             submitInvalidations();
         }
     }

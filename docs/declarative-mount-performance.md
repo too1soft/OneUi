@@ -111,3 +111,12 @@ output and diagnostics for 3,884 cases. The iShell cold Settings trace measures
 external stylesheet validation in `settings.styles` and scoped parsing in
 `view_mount/style_parse`. Its frontend comparison measures the first visible
 content and the settled canvas independently of both intervals.
+
+## Assemble form rows with their final parents
+
+Declarative `FormRow` builds its label and control columns first, then inserts
+both into the row. The field receives its final parent once. The two columns
+keep their stretch, basis, classes and validation widgets. The native factory
+projects children into Builder nodes only for Builder paths that consume them.
+New Builder stacks with an empty stylesheet keep their default style until
+the runtime applies the authored stylesheet.

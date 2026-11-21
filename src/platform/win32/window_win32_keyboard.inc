@@ -101,7 +101,7 @@
         if (!alive->load(std::memory_order_acquire)) return true;
         if (consumed) {
             suppressKeyText_ = true;
-            requestInteractiveRedraw();
+            requestInteractiveRedraw(InputPaint::BeforePostedWork);
             return true;
         }
         if (dispatchCommandKey(event)) {
@@ -118,7 +118,7 @@
         const auto content = content_;
         if (content->onKeyDown(event)) {
             if (!alive->load(std::memory_order_acquire)) return true;
-            requestInteractiveRedraw();
+            requestInteractiveRedraw(InputPaint::BeforePostedWork);
             updateImePosition();
             return true;
         }
@@ -134,7 +134,7 @@
         const bool consumed = raw && raw(event);
         if (!alive->load(std::memory_order_acquire)) return true;
         if (consumed) {
-            requestInteractiveRedraw();
+            requestInteractiveRedraw(InputPaint::BeforePostedWork);
             return true;
         }
         if (!content_ || !content_->visible()) {
@@ -143,7 +143,7 @@
         const auto content = content_;
         if (content->onKeyUp(event)) {
             if (!alive->load(std::memory_order_acquire)) return true;
-            requestInteractiveRedraw();
+            requestInteractiveRedraw(InputPaint::BeforePostedWork);
             return true;
         }
         return false;
@@ -204,6 +204,6 @@
         const auto alive = callbackWindowAlive_;
         const auto content = content_;
         if (content->onTextCommitted(text) && alive->load(std::memory_order_acquire)) {
-            requestInteractiveRedraw();
+            requestInteractiveRedraw(InputPaint::BeforePostedWork);
         }
     }

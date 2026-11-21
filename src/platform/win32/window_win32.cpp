@@ -233,6 +233,7 @@ public:
     double animationFrameIntervalMs_ = 1000.0 / 60.0;
     bool contentAnimationFramePending_ = false;
     bool inputPaintPending_ = false;
+    bool inputPaintBeforePostedWork_ = false;
     bool interactivePaintTimerActive_ = false;
     bool applyingWindowState_ = false;
     bool windowStatePaintPending_ = false;

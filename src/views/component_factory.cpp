@@ -108,12 +108,48 @@ Element Mount::make(std::string type, std::vector<Element> children, std::string
         styles_->add(page);
         return page;
     }
-    std::vector<Node> nodes;
-    for (auto &child : children)
-        nodes.push_back(child);
     // Every branch constructs the real node. The empty Builder stylesheet
     // and engine stay the same for all controls constructed on this thread.
     thread_local const Builder b(StackEngine::Yoga, "");
+    if (type == "FormRow") {
+        if (children.size() != 1)
+            throw std::invalid_argument("FormRow needs one control");
+        auto& control = children.front();
+        const bool readOnly = control.component == "Text" || control.component == "Status";
+        auto label = make("Text", {}, readOnly ? "field-label read-only-label" : "field-label");
+        auto hint = make("Text", {}, "muted");
+        hint.widget->setVisible(false);
+        auto labels = make("Column", {label, hint}, "field-copy");
+        labels.basis(260).grow();
+        if (control.component == "Text") {
+            control.classes += " field-value";
+            styles_->add(control);
+        }
+        auto error = make("ValidationMessage");
+        error.widget->setVisible(false);
+        auto controlColumn = make("Column", {control, error}, "field-control");
+        controlColumn.basis(300).grow();
+        // The control belongs to this column from creation; the column's
+        // cross-axis stretch supplies its width.
+        auto controlFlex = control.flex;
+        controlFlex.basis.reset();
+        controlFlex.grow = 0;
+        controlColumn.as<Stack>()->setFlex(control.widget, controlFlex);
+        Element row(b.flow({labels, controlColumn}), type);
+        row.classes = classes + " " + scope_;
+        row.fieldControl = control.widget;
+        row.title = label.as<Label>();
+        row.hint = hint.as<Label>();
+        row.error = error.as<Label>();
+        styles_->addFresh(row);
+        return row;
+    }
+    const auto childNodes = [&children] {
+        std::vector<Node> nodes;
+        nodes.reserve(children.size());
+        for (const auto& child : children) nodes.push_back(child);
+        return nodes;
+    };
     Node node{nullptr};
     std::shared_ptr<Stack> content;
     if(type=="StateView")node=b.native(std::make_shared<StateView>());
@@ -258,9 +294,9 @@ Element Mount::make(std::string type, std::vector<Element> children, std::string
     } else if (type == "DataTable")
         node = b.native(std::make_shared<Table>()).grow();
     else if (type == "Scroll") {
-        if (nodes.size() != 1)
+        if (children.size() != 1)
             throw std::invalid_argument("Scroll needs one child");
-        node = b.scroll(nodes.front()).grow();
+        node = b.scroll(children.front()).grow();
     } else if (type == "SidebarLayout" || type == "MasterDetail") {
         if (children.size() != 2)
             throw std::invalid_argument(type + " requires exactly two children");
@@ -277,16 +313,16 @@ Element Mount::make(std::string type, std::vector<Element> children, std::string
             throw std::invalid_argument("Reveal needs one child");
         node = b.native(std::make_shared<Reveal>(children.front().widget)).shrink(0);
     } else if (type == "Content") {
-        auto body = b.column(nodes);
+        auto body = b.column(childNodes());
         body.basis(880).max(880).grow();
         content = body.as<Stack>();
         node = b.row({body});
         node.as<Stack>()->setAlign(StackAlign::Start);
-    } else if (type == "Toolbar" || type == "ActionBar" || type == "Row" || type == "FormRow" ||
+    } else if (type == "Toolbar" || type == "ActionBar" || type == "Row" ||
                type == "FormGrid" || type == "TitleBar" || type == "SessionBar" ||
                type == "PanelHeader" || type == "PanelFooter" || type == "StatusBar" ||
                type == "WorkspaceBody")
-        node = b.flow(nodes);
+        node = b.flow(childNodes());
     else if (type == "MountPoint") {
         // An attachment boundary paints nothing; Panel defaults to a white
         // fill and a 1px light border.
@@ -296,7 +332,7 @@ Element Mount::make(std::string type, std::vector<Element> children, std::string
         node = b.native(slot);
     }
     else if (syntax::components().count(type))
-        node = b.column(nodes);
+        node = b.column(childNodes());
     else
         throw std::invalid_argument("Unknown component: " + type);
     Element e(node, type);
@@ -378,38 +414,7 @@ Element Mount::make(std::string type, std::vector<Element> children, std::string
             e.as<Stack>()->setFlex(child.widget, {1, 1, 320, 0});
         }
     }
-    if (type == "FormRow") {
-        if (children.size() != 1)
-            throw std::invalid_argument("FormRow needs one control");
-        const bool readOnly =
-            children.front().component == "Text" || children.front().component == "Status";
-        auto label = make("Text", {}, readOnly ? "field-label read-only-label" : "field-label"),
-             hint = make("Text", {}, "muted");
-        hint.widget->setVisible(false);
-        auto labels = make("Column", {label, hint}, "field-copy");
-        labels.basis(260).grow();
-        auto control = children.front();
-        e.fieldControl = control.widget;
-        if (control.component == "Text") {
-            control.classes += " field-value";
-            styles_->add(control);
-        }
-        auto error = make("ValidationMessage");
-        error.widget->setVisible(false);
-        e.error = error.as<Label>();
-        auto controlColumn = make("Column", {control, error}, "field-control");
-        controlColumn.basis(300).grow();
-        e.title = label.as<Label>();
-        e.hint = hint.as<Label>();
-        // Control width is supplied by the column's cross-axis stretch.
-        auto controlFlex = control.flex;
-        controlFlex.basis.reset();
-        controlFlex.grow = 0;
-        controlColumn.as<Stack>()->setFlex(control.widget, controlFlex);
-        e.as<Stack>()->reconcileChildren({labels.widget, controlColumn.widget});
-        e.as<Stack>()->setFlex(labels.widget, labels.flex);
-        e.as<Stack>()->setFlex(controlColumn.widget, controlColumn.flex);
-    } else if (type == "Page" || type == "Header" || type == "Section" || type == "EmptyState" ||
+    if (type == "Page" || type == "Header" || type == "Section" || type == "EmptyState" ||
                type == "LoadingState") {
         auto title =
             make("Text", {}, type == "Page" || type == "Header" ? "heading" : "section-title");

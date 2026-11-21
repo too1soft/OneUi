@@ -5,16 +5,18 @@ update. The Win32 backend coalesces input drawing until an animation frame, but
 the posted update can be dispatched before that timer. One long callback then
 blocks even the first visible glyph.
 
-Before executing an already extracted callback batch, the backend flushes any
-pending input paint. It checks window lifetime after drawing. The original frame
-request still reconciles animations and IME; the callback batch keeps its FIFO,
-existing 32-callback / 4ms budget and isolation from nested message loops. This
-does not add a delay, a busy loop, a queue thread or a change to focus policy.
+Before executing an already extracted callback batch, the backend flushes
+pending keyboard feedback. It checks window lifetime after drawing. Pointer
+commands can replace the old view in that batch, so their hover and release
+states stay coalesced with the scheduled frame. The original frame request
+still reconciles animations and IME. The callback batch retains FIFO, its
+32-callback / 4ms budget and isolation from nested message loops.
 
-`oneui_win32_input_priority_tests` creates an owned native window, posts a text
-event and queues model work from its handler. It checks that input paint precedes
-the first callback and that all callbacks remain ordered. The previous backend
-fails the paint-order assertion while its FIFO and loop-result checks pass.
+`oneui_win32_input_priority_tests` creates an owned native window and posts a
+pointer release followed by a text event. It checks that the pointer command
+runs before painting the old state, that text paints before the first model
+callback, and that all callbacks remain ordered. The previous backend fails
+the pointer ordering assertion while the keyboard and FIFO checks pass.
 
 Run it with the existing loop, geometry and IME contracts:
 

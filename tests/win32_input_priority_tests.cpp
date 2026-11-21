@@ -11,9 +11,23 @@ class InputSurface final : public oneui::Widget {
 public:
     oneui::Window* window = nullptr;
     bool typed = false, painted = false, paintedBeforeWork = false;
+    bool clickReceived = false, clickCommitted = false, paintedOldClickState = false;
     std::vector<int> order;
-    void paint(oneui::Canvas&) override { if (typed) painted = true; }
+    void paint(oneui::Canvas&) override {
+        if (typed) painted = true;
+        if (clickReceived && !clickCommitted) paintedOldClickState = true;
+    }
     bool isFocusable() const override { return true; }
+    bool onMouseUp(const oneui::MouseEvent&) override {
+        clickReceived = true;
+        invalidate();
+        window->post([this] {
+            clickCommitted = true;
+            const auto hwnd = static_cast<HWND>(window->nativeHandle());
+            PostMessageW(hwnd, WM_CHAR, L'x', 0);
+        });
+        return true;
+    }
     bool onTextInput(wchar_t) override {
         if (typed) return true;
         typed = true;
@@ -44,7 +58,7 @@ int main() {
     window->show();
     if (!window->requestFocus(surface.get())) return 2;
     const auto hwnd = static_cast<HWND>(window->nativeHandle());
-    window->post([hwnd] { PostMessageW(hwnd, WM_CHAR, L'x', 0); });
+    window->post([hwnd] { PostMessageW(hwnd, WM_LBUTTONUP, 0, MAKELPARAM(20, 20)); });
     std::atomic_bool finished{false};
     std::thread watchdog([&] {
         for (int i = 0; i < 200 && !finished; ++i) Sleep(10);
@@ -58,7 +72,9 @@ int main() {
     finished = true;
     watchdog.join();
     const bool fifo = surface->order == std::vector<int>{0, 1, 2};
+    const bool clickBeforePaint = surface->clickCommitted && !surface->paintedOldClickState;
     std::cout << "inputPaintBeforeQueuedWork=" << surface->paintedBeforeWork
+              << " clickCommittedBeforePaint=" << clickBeforePaint
               << " callbacksInOrder=" << fifo << " loopResult=" << result << '\n';
-    return result == 0 && fifo && surface->paintedBeforeWork ? 0 : 1;
+    return result == 0 && fifo && clickBeforePaint && surface->paintedBeforeWork ? 0 : 1;
 }
