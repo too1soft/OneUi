@@ -6,7 +6,7 @@
 namespace oneui::internal {
 // Opt-in wall-clock attribution. Categories can overlap; recursive spans of
 // the same category are counted only once. This is not GPU timestamp timing.
-enum class FrameStage : std::size_t { Layout, TextLayout, Fill, Path, Count };
+enum class FrameStage : std::size_t { Layout, TextLayout, Fill, Path, ShaderCacheLoad, ShaderCacheStore, Count };
 struct FrameProfile {
     std::array<double, static_cast<std::size_t>(FrameStage::Count)> ms{};
     std::array<unsigned, static_cast<std::size_t>(FrameStage::Count)> depth{};

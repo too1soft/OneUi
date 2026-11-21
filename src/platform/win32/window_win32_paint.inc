@@ -161,13 +161,29 @@
             SkCanvas* presentCanvas = windowSurface_->getCanvas();
             presentCanvas->clear(SK_ColorBLACK);
             paintSurface_->draw(presentCanvas, 0.0f, 0.0f);
-            grContext_->flushAndSubmit();
+            const double copyEndMs = traceLayout ? currentTimeMs() : 0.0;
+            grContext_->flush();
+            const double flushEndMs = traceLayout ? currentTimeMs() : 0.0;
+            grContext_->submit(GrSyncCpu::kNo);
+            const double submitEndMs = traceLayout ? currentTimeMs() : 0.0;
             internal::traceInteractionPaint(interactionPaint, "submit_end", "opengl");
             const double presentStarted = currentTimeMs();
             internal::traceInteractionPaint(interactionPaint, "swap_begin", "opengl");
             const BOOL swapped = SwapBuffers(glDC_);
             internal::traceInteractionPaint(interactionPaint, "swap_return", "opengl", swapped ? 1 : 0);
             internal::workspacePresentMs = currentTimeMs() - presentStarted;
+            if (traceLayout) {
+                const double sequence = static_cast<double>(interactionPaint.paintSequence);
+                const auto recordGpuPhase = [&](const char* phase, double elapsed, double extra = 0.0) {
+                    internal::writeScrollTrace(internal::ScrollTraceEvent{
+                        "win32", phase, interactionPaint.window, 0, 0, 0, 0, 0, 0, elapsed, sequence, extra});
+                };
+                recordGpuPhase("paint_gpu_copy", copyEndMs - submitStartMs);
+                recordGpuPhase("paint_gpu_flush", flushEndMs - copyEndMs);
+                recordGpuPhase("paint_gpu_submit", submitEndMs - flushEndMs);
+                recordGpuPhase("paint_shader_cache", profile.data.ms[static_cast<size_t>(internal::FrameStage::ShaderCacheLoad)],
+                    profile.data.ms[static_cast<size_t>(internal::FrameStage::ShaderCacheStore)]);
+            }
             if (swapped && nvidiaDriver_) {
                 const double censusStarted = internal::workspaceFrameProbe ? currentTimeMs() : 0;
                 absorbDriverThreadCensus();

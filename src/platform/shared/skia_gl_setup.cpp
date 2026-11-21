@@ -1,4 +1,5 @@
 #include "platform/shared/skia_gl_setup.h"
+#include "internal/frame_profile.h"
 
 #include "include/core/SkData.h"
 #include "include/core/SkString.h"
@@ -83,6 +84,7 @@ public:
     explicit DiskShaderCache(fs::path directory) : directory_(std::move(directory)) {}
 
     sk_sp<SkData> load(const SkData& key) override {
+        const internal::FrameSpan timing(internal::FrameStage::ShaderCacheLoad);
         std::lock_guard lock(mutex_);
         std::ifstream file(entryPath(key), std::ios::binary);
         if (!file) {
@@ -110,6 +112,7 @@ public:
     }
 
     void store(const SkData& key, const SkData& data, const SkString&) override {
+        const internal::FrameSpan timing(internal::FrameStage::ShaderCacheStore);
         if (data.size() > kMaxEntryBytes) {
             return;
         }
