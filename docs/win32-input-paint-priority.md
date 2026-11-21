@@ -50,6 +50,8 @@ in iShell's `docs/native-migration/responsiveness-3x-4x.md`.
 
 A client press or wheel gesture dismisses the current Win32 tooltip and
 cancels its pending timer. Navigation and scrolling can replace the widget
-under a stationary pointer. A subsequent mouse move can arm a new hover.
+under a stationary pointer. A new pointer position or a leave and reentry can
+arm another hover. Repeated move messages at the same coordinates leave the
+tooltip dismissed.
 Arming or discarding a hidden tooltip leaves the paint state intact. Hiding
 a visible tooltip requests a redraw.

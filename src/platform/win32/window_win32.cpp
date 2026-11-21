@@ -247,6 +247,7 @@ public:
     std::wstring hoveredTooltip_;
     Point tooltipPoint_{};
     bool tooltipVisible_ = false;
+    bool tooltipWaitForMove_ = false;
     sk_sp<SkSurface> paintSurface_;
     sk_sp<SkSurface> windowSurface_;
     int paintSurfaceWidth_ = 0;

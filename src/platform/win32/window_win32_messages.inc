@@ -208,6 +208,7 @@
             hasLastCursorPoint_ = false;
             SetCursor(cursorForKind(CursorKind::Default));
             clearTooltip();
+            tooltipWaitForMove_ = false;
             if (content_) {
                 if (content_->clearInteractionState()) {
                     requestInteractiveRedraw();

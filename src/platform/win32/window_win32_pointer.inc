@@ -39,6 +39,10 @@
     }
 
     void updateTooltip(Point point) {
+        if (tooltipWaitForMove_) {
+            if (point.x == tooltipPoint_.x && point.y == tooltipPoint_.y) return;
+            tooltipWaitForMove_ = false;
+        }
         const std::wstring* next = content_ ? content_->tooltipAt(point) : nullptr;
         const std::wstring nextText = next ? *next : std::wstring{};
         tooltipPoint_ = point;
@@ -63,6 +67,14 @@
         }
         hoveredTooltip_.clear();
         if (std::exchange(tooltipVisible_, false)) requestRedraw();
+    }
+
+    void dismissTooltipAt(Point point) {
+        clearTooltip();
+        // Native capture and hit testing can resend a move at the same
+        // position after an interaction. Wait for the cursor to move.
+        tooltipPoint_ = point;
+        tooltipWaitForMove_ = true;
     }
 
     void paintTooltip(Canvas& canvas) const {
@@ -145,7 +157,7 @@
         LPARAM lParam,
         MouseButton button = MouseButton::Left,
         int clickCount = 1) {
-        clearTooltip();
+        dismissTooltipAt(logicalPointFromLParam(lParam));
         dispatchMouse(lParam, button, clickCount, "pointer_down", [](Widget& widget, const MouseEvent& event) {
             return widget.onMouseDown(event);
         });
@@ -158,7 +170,10 @@
     }
 
     void dispatchMouseWheel(WPARAM wParam, LPARAM lParam) {
-        clearTooltip();
+        POINT point{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+        ScreenToClient(hwnd_, &point);
+        const Point logicalPoint = logicalPointFromClientPixels(point.x, point.y);
+        dismissTooltipAt(logicalPoint);
         if (!prepareInputLayout()) {
             return;
         }
@@ -172,8 +187,6 @@
             scrollTraceLastWheelMessageMs_ = inputStartMs;
         }
 
-        POINT point{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
-        ScreenToClient(hwnd_, &point);
         const short rawDelta = GET_WHEEL_DELTA_WPARAM(wParam);
         const float delta = static_cast<float>(rawDelta) / static_cast<float>(WHEEL_DELTA);
         if (traceScroll) {
@@ -183,7 +196,7 @@
                 static_cast<double>(rawDelta), static_cast<double>(WHEEL_DELTA)});
         }
         MouseWheelEvent event{
-            logicalPointFromClientPixels(point.x, point.y),
+            logicalPoint,
             delta,
             (GET_KEYSTATE_WPARAM(wParam) & MK_SHIFT) != 0,
             (GET_KEYSTATE_WPARAM(wParam) & MK_CONTROL) != 0,

@@ -116,24 +116,28 @@ void verify() {
         constexpr WPARAM tooltipTimer = 0x4f12;
         const auto scale = window->dpiScale();
         const auto pixel = [scale](float logical) { return static_cast<int>(logical * scale); };
-        const auto move = [&] {
-            SendMessageW(hwnd, WM_MOUSEMOVE, 0, MAKELPARAM(pixel(14), pixel(14)));
+        const auto move = [&](float x) {
+            SendMessageW(hwnd, WM_MOUSEMOVE, 0, MAKELPARAM(pixel(x), pixel(14)));
         };
         const auto tooltipPainted = [&] {
             SendMessageW(hwnd, WM_TIMER, tooltipTimer, 0);
             SendMessageW(hwnd, WM_PRINTCLIENT, reinterpret_cast<WPARAM>(image.dc), PRF_CLIENT);
             return image.at(pixel(35), pixel(37)) != rgb(pattern->left);
         };
-        move();
+        move(14);
         SendMessageW(hwnd, WM_RBUTTONDOWN, MK_RBUTTON, MAKELPARAM(pixel(14), pixel(14)));
         check(!tooltipPainted(), "click cancels pending tooltip even if its timer arrives");
-        move();
-        check(tooltipPainted(), "moving again restores normal tooltip hover");
-        POINT wheelPoint{pixel(14), pixel(14)};
+        move(14);
+        check(!tooltipPainted(), "a repeated move at the click position leaves the tooltip dismissed");
+        move(16);
+        check(tooltipPainted(), "changing the pointer position restores normal tooltip hover");
+        POINT wheelPoint{pixel(16), pixel(14)};
         ClientToScreen(hwnd, &wheelPoint);
         SendMessageW(hwnd, WM_MOUSEWHEEL, MAKEWPARAM(0, WHEEL_DELTA),
             MAKELPARAM(wheelPoint.x, wheelPoint.y));
         check(!tooltipPainted(), "wheel dismisses an already visible tooltip");
+        move(16);
+        check(!tooltipPainted(), "a repeated move at the wheel position leaves the tooltip dismissed");
         SendMessageW(hwnd, WM_MOUSELEAVE, 0, 0);
         image.clear();
         SendMessageW(hwnd, WM_PRINTCLIENT, reinterpret_cast<WPARAM>(image.dc), PRF_CLIENT | PRF_CHECKVISIBLE);
