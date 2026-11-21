@@ -182,8 +182,11 @@ private:
     struct RuleData {
         std::vector<StyleRule> rules;
         std::vector<CompiledSelector> selectors;
+        std::unordered_map<std::string, std::vector<std::size_t>> candidatesByTag;
         std::unordered_set<std::string> selectorClasses;
         StylePseudoMask selectorStates = 0;
+        bool hasLayoutRules = false;
+        void indexLastRule();
     };
     // Component style snapshots and palette variants differ in tokens/caches,
     // not in their immutable parsed rules. Only rule edits detach this storage.

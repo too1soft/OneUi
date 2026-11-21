@@ -397,18 +397,9 @@
             return DefWindowProcW(hwnd_, message, wParam, lParam);
         }
         case WM_NCLBUTTONDOWN:
-            // WS_POPUP windows do not get the shell's usual "drag a maximized
-            // caption move loop from WM_NCLBUTTONDOWN alone. Restore beneath
-            // the pointer when needed, then explicitly enter SC_MOVE while the
-            // physical button is still down. This keeps accessory controls
-            // interactive and makes every HTCAPTION lane actually draggable.
             if (options_.borderless && wParam == HTCAPTION && !options_.fullscreen) {
-                // A persisted normal placement can exactly fill the monitor
-                // work area even though it is not marked maximized.  The shell
-                // move loop clamps that rectangle back to the work area and
-                // makes the caption appear non-draggable.  Treat that boundary
-                // state like maximized chrome and restore it beneath the pointer
-                // before entering the native move loop.
+                // A maximized or work-area-sized WS_POPUP needs explicit
+                // restoration. Ordinary captions use the system move handler.
                 return beginBorderlessCaptionDrag(lParam);
             }
             return DefWindowProcW(hwnd_, message, wParam, lParam);

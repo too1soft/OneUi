@@ -1,6 +1,7 @@
 #include "oneui/controls/interactive_surface.h"
 
 #include "internal/scroll_trace.h"
+#include "internal/interaction_reset.h"
 
 #include "internal/ui_clock.h"
 #include <utility>
@@ -151,7 +152,7 @@ bool InteractiveSurface::onMouseMove(const MouseEvent& event) {
         pressed_ = false;
     }
     beginVisualTransition(previous, resolvedStyle());
-    invalidate();
+    invalidatePaint();
     return true;
 }
 
@@ -369,6 +370,7 @@ void InteractiveSurface::resetInteractionState() {
     if (wasHovered && onHoverChanged_) {
         onHoverChanged_(false);
     }
+    internal::InteractionReset::markPaintOnly(*this);
 }
 
 InteractiveSurfaceStateStyle InteractiveSurface::resolvedStyle() const {

@@ -1,4 +1,5 @@
 #include "oneui/platform/window.h"
+#include "oneui/controls/button.h"
 #include "oneui/layout/overlay_host.h"
 #include "oneui/view.h"
 #include <windows.h>
@@ -192,6 +193,47 @@ void layoutObserversCanReplaceOrDestroyTheWindow() {
         "a layout size observer can destroy its window safely");
 }
 
+void colorOnlyHoverKeepsTheInputLayout() {
+    class ButtonRoot final : public oneui::View {
+    public:
+        std::shared_ptr<oneui::Button> button = std::make_shared<oneui::Button>(L"Hover");
+        int layouts = 0;
+        ButtonRoot() { add(button); }
+    protected:
+        void layoutChildren() override {
+            ++layouts;
+            button->setFrame({40, 40, 120, 50});
+        }
+    };
+    Fixture f;
+    auto root = std::make_shared<ButtonRoot>();
+    f.window->setContent(root);
+    const auto move = [&](float x) {
+        SendMessageW(f.hwnd, WM_MOUSEMOVE, 0, f.point(x, 60));
+    };
+    move(240);
+    const auto firstLayout = root->layouts;
+    for (int i = 0; i < 32; ++i) {
+        move(60);
+        move(240);
+    }
+    std::cout << "Color-only hover layout passes over 64 moves: "
+              << root->layouts - firstLayout << '\n';
+    check(root->layouts == firstLayout, "color-only hover never invalidates measurement");
+
+    oneui::ButtonStyleOverride styles;
+    styles.hovered.emplace();
+    styles.hovered->fontSize = 28;
+    root->button->setStyleOverride(styles);
+    move(240);
+    const auto beforeFontHover = root->layouts;
+    move(60);
+    check(root->layouts > beforeFontHover, "hover that changes intrinsic size still updates layout");
+    const auto duringFontHover = root->layouts;
+    move(240);
+    check(root->layouts > duringFontHover, "clearing a size-changing hover still updates layout");
+}
+
 void overlayOwnedTreesAndQueuedNavigation() {
     Fixture f;
     f.establishOldGeometry();
@@ -239,6 +281,7 @@ int main() {
     deferredMount();
     resizeAndCapture();
     hoverAndFocus();
+    colorOnlyHoverKeepsTheInputLayout();
     layoutObserversCanReplaceOrDestroyTheWindow();
     overlayOwnedTreesAndQueuedNavigation();
     return failures ? 1 : 0;

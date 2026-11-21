@@ -30,21 +30,26 @@ void Stack::setDirection(StackDirection direction) {
 }
 
 void Stack::setGap(float gap) {
+    if (gap_ == gap) return;
     gap_ = gap;
     invalidate();
 }
 
 void Stack::setPadding(Insets padding) {
+    if (padding_.top == padding.top && padding_.right == padding.right &&
+        padding_.bottom == padding.bottom && padding_.left == padding.left) return;
     padding_ = padding;
     invalidate();
 }
 
 void Stack::setAlign(StackAlign align) {
+    if (align_ == align) return;
     align_ = align;
     invalidate();
 }
 
 void Stack::setJustify(StackJustify justify) {
+    if (justify_ == justify) return;
     justify_ = justify;
     invalidate();
 }
@@ -71,9 +76,10 @@ void Stack::setFlex(const std::shared_ptr<Widget>& child, StackFlex flex) {
 }
 
 void Stack::clearFlex(const std::shared_ptr<Widget>& child) {
-    flex_.erase(child);
-    if (auto* state = internal::WidgetPresentationAccess::find(*this)) state->flex.erase(child.get());
-    invalidate();
+    bool changed = flex_.erase(child) != 0;
+    if (auto* state = internal::WidgetPresentationAccess::find(*this))
+        changed = state->flex.erase(child.get()) != 0 || changed;
+    if (changed) invalidate();
 }
 
 StackFlex Stack::itemFlex(const std::shared_ptr<Widget>& child, float preferred) const {

@@ -1,6 +1,7 @@
 #include "oneui/controls/icon_button.h"
 
 #include "internal/ui_clock.h"
+#include "internal/interaction_reset.h"
 #include <algorithm>
 #include <utility>
 
@@ -110,7 +111,7 @@ bool IconButton::onMouseMove(const MouseEvent &event) {
         pressed_ = false;
     }
     beginVisualTransition(previous, resolvedStyle());
-    invalidate();
+    invalidatePaint();
     return true;
 }
 
@@ -228,6 +229,7 @@ void IconButton::resetInteractionState() {
     hovered_ = false;
     pressed_ = false;
     visualTransition_.reset(resolvedStyle());
+    internal::InteractionReset::markPaintOnly(*this);
 }
 
 } // namespace oneui

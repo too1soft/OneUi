@@ -52,6 +52,10 @@ Windows 时钟依据：[消息时间](https://learn.microsoft.com/en-us/windows/
 
 Win32 默认先取 posted 消息，再取硬件输入。OneUI 每批执行过 `Window::post` 回调后，用一次 `PM_QS_INPUT` 优先取已经排队的输入，再恢复默认选择顺序。没有待处理输入时，同一轮继续按默认顺序取消息。回调的 FIFO、合并唤醒、绘制和退出规则沿用原有契约。使用 `tests/win32_hardware_input_fixture.cpp` 在专用前台窗口中验证，`PostMessage` 伪造的键盘消息只能作为 posted 对照。
 
+按钮和交互表面的纯视觉悬停进出使用绘制失效，保留后续输入的布局快照。`Button` 以两种状态的字号、字重、内边距和图标尺寸/间距判断是否需要重新测量。内置控件清除悬停时可以声明该次清理只影响绘制，自定义控件沿用原有测量失效契约。Win32 输入布局测试同时覆盖颜色悬停零额外布局与字体变化前后各重新布局。
+
+普通无边框窗口将标题栏按下直接交给系统移动处理。已最大化或与工作区边界重合时，仍等待 `DragDetect` 确认拖动，再恢复窗口并进入系统移动循环，以保留单击状态和拖回行为。
+
 当输入取消息前有长尾时，可同时启用 `ONEUI_SCROLL_TRACE`，记录耗时至少 1ms 的 `peek_message`、`translate_dispatch`、`window_proc`、`message_batch` 和 `frame_source_tick`。这些区间可能嵌套，不能累加。日志时间为区间结束，`duration_ms` 为墙钟耗时，`detail_a` 为派发或窗口过程的 Win32 消息号，`detail_b` 为消息批次已派发数量。`PeekMessageW` 本身可以执行同步发送的窗口过程。用同一窗口及帧序号的 `paint_layout` 和 `content_paint_end` 对齐两个 trace 的时钟；外部输入探针应另记录实际 `SendInput` 调用边界。详细跟踪有测量开销，独立 Release 前台复验应关闭跟踪。
 
 输入反馈复用高精度 frame 调度：鼠标 hover/down/up、键盘反馈产生的局部脏区先合并，`kOneUiFlushInvalidations` 暂缓提交，当前帧完成动画采样后统一绘制，避免每个输入消息在 UI 线程同步等待 SwapBuffers。已有局部失效不会被每个 handled click 扩大为整窗。合帧期间的 caret 位置也交由已有 paint 尾部刷新，避免提前用旧布局向 IME 往返定位；强制 IME 上下文更新不延迟。原生 live resize 与窗口状态切换仍可同步绘制，因为它们可能在操作系统模态消息循环内运行。静态绘制 flood 与 pointer burst 测试分别验证无动画时的绘制公平性，以及连续输入消息无同步 paint、随后一帧仅绘制一次。

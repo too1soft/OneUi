@@ -115,8 +115,30 @@
         return HTNOWHERE;
     }
 
+    static constexpr int kCaptionWorkAreaTolerance = 2;
+
+    static bool captionFillsWorkArea(const RECT& rect, const RECT& work) {
+        return std::abs(rect.left - work.left) <= kCaptionWorkAreaTolerance
+            && std::abs(rect.top - work.top) <= kCaptionWorkAreaTolerance
+            && std::abs(rect.right - work.right) <= kCaptionWorkAreaTolerance
+            && std::abs(rect.bottom - work.bottom) <= kCaptionWorkAreaTolerance;
+    }
+
     LRESULT beginBorderlessCaptionDrag(LPARAM screenPosition) {
         const POINT origin{GET_X_LPARAM(screenPosition), GET_Y_LPARAM(screenPosition)};
+        if (!borderlessMaximized_) {
+            RECT rect{};
+            MONITORINFO monitor{};
+            monitor.cbSize = sizeof(monitor);
+            const auto nearest = MonitorFromPoint(origin, MONITOR_DEFAULTTONEAREST);
+            if (!GetWindowRect(hwnd_, &rect) || !nearest || !GetMonitorInfoW(nearest, &monitor)
+                || !captionFillsWorkArea(rect, monitor.rcWork)) {
+                // The system can move an ordinary window directly. A separate
+                // DragDetect capture would consume the first movement before
+                // the system's own move loop sees it.
+                return DefWindowProcW(hwnd_, WM_NCLBUTTONDOWN, HTCAPTION, screenPosition);
+            }
+        }
         // A click on a maximized title bar must leave its state untouched.
         // Wait for the native drag threshold before restoring under the pointer.
         const auto alive = callbackWindowAlive_;
@@ -155,14 +177,8 @@
         const RECT& work = monitorInfo.rcWork;
         const int workWidth = std::max(1L, work.right - work.left);
         const int workHeight = std::max(1L, work.bottom - work.top);
-        constexpr int kWorkAreaMatchTolerance = 2;
-        const bool fillsWorkArea =
-            std::abs(maximizedRect.left - work.left) <= kWorkAreaMatchTolerance
-            && std::abs(maximizedRect.top - work.top) <= kWorkAreaMatchTolerance
-            && std::abs(maximizedRect.right - work.right) <= kWorkAreaMatchTolerance
-            && std::abs(maximizedRect.bottom - work.bottom) <= kWorkAreaMatchTolerance;
         const bool wasBorderlessMaximized = borderlessMaximized_;
-        if (!wasBorderlessMaximized && !fillsWorkArea) {
+        if (!wasBorderlessMaximized && !captionFillsWorkArea(maximizedRect, work)) {
             return false;
         }
 
@@ -177,8 +193,8 @@
         // A normal placement persisted at the exact work-area dimensions is
         // not a useful restore target.  Match the familiar restore-from-
         // maximized gesture while retaining enough room for dense workspaces.
-        if (restoreWidth >= workWidth - kWorkAreaMatchTolerance
-            && restoreHeight >= workHeight - kWorkAreaMatchTolerance) {
+        if (restoreWidth >= workWidth - kCaptionWorkAreaTolerance
+            && restoreHeight >= workHeight - kCaptionWorkAreaTolerance) {
             restoreWidth = std::max(1, static_cast<int>(std::lround(workWidth * 0.78)));
             restoreHeight = std::max(1, static_cast<int>(std::lround(workHeight * 0.80)));
         }

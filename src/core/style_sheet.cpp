@@ -1,5 +1,6 @@
 #include "style_css_internal.h"
 #include "style_cache_internal.h"
+#include "style_layout_internal.h"
 #include "internal/unicode.h"
 #include <algorithm>
 #include <cctype>
@@ -9,6 +10,16 @@
 
 namespace oneui {
 using namespace style_detail;
+void StyleSheet::RuleData::indexLastRule() {
+    const auto& rule = rules.back();
+    const auto& selector = selectors.back();
+    hasLayoutRules = hasLayoutRules || ruleLayout(rule) != nullptr;
+    if (!selector.valid) return;
+    selectorClasses.insert(selector.node.classes.begin(), selector.node.classes.end());
+    selectorStates |= selector.node.state;
+    if (!rule.query) candidatesByTag[selector.node.tag].push_back(rules.size() - 1);
+}
+
 void StyleSheet::detachRules() {
     if (!ruleData_) ruleData_ = std::make_shared<RuleData>();
     else if (!ruleData_.unique()) ruleData_ = std::make_shared<RuleData>(*ruleData_);
@@ -25,12 +36,9 @@ void StyleSheet::addRule(StyleRule rule) {
     compiled.node = StyleNode{parsed.tag, parsed.classes, parsed.pseudos};
     compiled.valid = parsed.valid;
     compiled.specificity = selectorSpecificity(rule.selector);
-    if (compiled.valid) {
-        ruleData_->selectorClasses.insert(parsed.classes.begin(), parsed.classes.end());
-        ruleData_->selectorStates |= parsed.pseudos;
-    }
     rules_.push_back(std::move(rule));
     selectors_.push_back(std::move(compiled));
+    ruleData_->indexLastRule();
     resolveCache_.clear();
     declarationCache_.clear();
     layoutCache_.clear();
@@ -71,28 +79,29 @@ std::vector<const StyleRule*> StyleSheet::matchingRules(const StyleNode& node) c
     if (!ruleData_) return matches;
     const auto& rules_ = ruleData_->rules;
     const auto& selectors_ = ruleData_->selectors;
-    for (std::size_t index = 0; index < rules_.size(); ++index) {
-        if(rules_[index].query)continue;
-        const auto& compiled = selectors_[index];
-        if (!compiled.valid ||
-            (!compiled.node.tag.empty() && compiled.node.tag != node.tag) ||
-            (node.state & compiled.node.state) != compiled.node.state) {
-            continue;
+    const auto appendMatches = [&](const std::string& tag) {
+        const auto candidates = ruleData_->candidatesByTag.find(tag);
+        if (candidates == ruleData_->candidatesByTag.end()) return;
+        for (const auto index : candidates->second) {
+            const auto& selector = selectors_[index].node;
+            if ((node.state & selector.state) == selector.state &&
+                std::all_of(selector.classes.begin(), selector.classes.end(),
+                    [&](const std::string& klass) { return hasClass(node, klass); })) {
+                matches.push_back(&rules_[index]);
+            }
         }
-        if (!std::all_of(compiled.node.classes.begin(), compiled.node.classes.end(),
-                [&](const std::string& klass) { return hasClass(node, klass); })) {
-            continue;
-        }
-        matches.push_back(&rules_[index]);
-    }
-
-    std::stable_sort(matches.begin(), matches.end(), [&](const StyleRule* lhs, const StyleRule* rhs) {
+    };
+    appendMatches({});
+    if (!node.tag.empty()) appendMatches(node.tag);
+    std::sort(matches.begin(), matches.end(), [&](const StyleRule* lhs, const StyleRule* rhs) {
         const auto left = selectors_[size_t(lhs - rules_.data())].specificity;
         const auto right = selectors_[size_t(rhs - rules_.data())].specificity;
         if (left != right) {
             return left < right;
         }
-        return lhs->order < rhs->order;
+        if (lhs->order != rhs->order) return lhs->order < rhs->order;
+        // Tag buckets are collected separately. Ties still use source order.
+        return lhs < rhs;
     });
     return matches;
 }

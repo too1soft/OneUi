@@ -125,6 +125,26 @@ void testContentExtentUsesPreferredChildrenGapAndPadding() {
     expectNear("Stack content height", stack.contentHeight(), 99.0f);
 }
 
+void testRepeatedLayoutValuesDoNotInvalidate() {
+    oneui::Stack stack(oneui::StackDirection::Column);
+    auto child = std::make_shared<LayoutProbe>(oneui::Size{80.0f, 28.0f});
+    stack.add(child);
+    stack.setGap(7.0f);
+    stack.setPadding(oneui::Insets{2.0f, 3.0f, 4.0f, 5.0f});
+    int invalidations = 0;
+    stack.setInvalidator([&] { ++invalidations; });
+    stack.setGap(7.0f);
+    stack.setPadding(oneui::Insets{2.0f, 3.0f, 4.0f, 5.0f});
+    stack.setAlign(stack.align());
+    stack.setJustify(oneui::StackJustify::Start);
+    stack.clearFlex(child);
+    expectNear("Unchanged layout values cause no invalidations", float(invalidations), 0.0f);
+    stack.setGap(8.0f);
+    stack.setFlexPresentation(child, {50.0f, 0});
+    stack.clearFlex(child);
+    expectNear("Actual changes still invalidate the stack", float(invalidations), 3.0f);
+}
+
 } // namespace
 
 int main() {
@@ -132,6 +152,7 @@ int main() {
     testColumnDistributesRemainingHeightToFlexibleChildren();
     testStackStyleBoxPaintsContainerBackground();
     testContentExtentUsesPreferredChildrenGapAndPadding();
+    testRepeatedLayoutValuesDoNotInvalidate();
 
     if (failures != 0) {
         std::cerr << failures << " stack behavior test(s) failed.\n";

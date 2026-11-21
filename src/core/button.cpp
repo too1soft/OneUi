@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cmath>
 #include "internal/ui_clock.h"
+#include "internal/interaction_reset.h"
 #include "internal/scroll_trace.h"
 #include <utility>
 
@@ -16,6 +17,15 @@ ButtonStyle Button::currentPaintStyle() const { return visualStyle(resolvedStyle
 void Button::setIconColor(std::optional<Color> color) { iconColor_ = color; invalidate(); }
 void Button::setCaptionOffsetY(float offset) { captionOffsetY_ = std::isfinite(offset) ? std::clamp(offset,-32.0f,32.0f) : 0.0f; invalidate(); }
 namespace {
+
+bool changesButtonMeasurement(const ButtonStyle& before, const ButtonStyle& after) {
+    const auto oldPadding = before.padding.value_or(Insets{0.0f, 12.0f});
+    const auto newPadding = after.padding.value_or(Insets{0.0f, 12.0f});
+    return before.fontSize != after.fontSize || before.fontWeight != after.fontWeight
+        || before.iconSize != after.iconSize || before.iconGap != after.iconGap
+        || oldPadding.top != newPadding.top || oldPadding.right != newPadding.right
+        || oldPadding.bottom != newPadding.bottom || oldPadding.left != newPadding.left;
+}
 
 void applyFocusRingOverride(FocusRingStyle& style, const FocusRingStyleOverride& override) {
     if (override.color) {
@@ -442,8 +452,10 @@ bool Button::onMouseMove(const MouseEvent& event) {
     if (!hovered_) {
         pressed_ = false;
     }
-    beginVisualTransition(previous, resolvedStyle());
-    invalidate();
+    const auto next = resolvedStyle();
+    beginVisualTransition(previous, next);
+    if (changesButtonMeasurement(previous, next)) invalidate();
+    else invalidatePaint();
     return true;
 }
 
@@ -606,6 +618,7 @@ bool Button::hasInteractionState() const {
 }
 
 void Button::resetInteractionState() {
+    const auto previous = resolvedStyle();
     if (pressed_ && internal::scrollTraceEnabled()) {
         internal::writeScrollTrace(internal::ScrollTraceEvent{
             "button", "pressed_reset", reinterpret_cast<std::uintptr_t>(this)});
@@ -613,6 +626,7 @@ void Button::resetInteractionState() {
     hovered_ = false;
     pressed_ = false;
     const ButtonStyle target = resolvedStyle();
+    if (!changesButtonMeasurement(previous, target)) internal::InteractionReset::markPaintOnly(*this);
     shadowTransition_.reset(target.shadows);
     backgroundTransition_.reset(target.background);
     foregroundTransition_.reset(target.foreground);

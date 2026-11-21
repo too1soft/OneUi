@@ -1,4 +1,5 @@
 #include "oneui/widget.h"
+#include "internal/interaction_reset.h"
 #include "internal/widget_presentation.h"
 
 #include <utility>
@@ -156,8 +157,9 @@ bool Widget::clearInteractionState() {
     if (!hasInteractionState()) {
         return false;
     }
+    internal::InteractionReset reset(*this);
     resetInteractionState();
-    invalidate();
+    invalidateImpl(reset.paintOnly());
     return true;
 }
 

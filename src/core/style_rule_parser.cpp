@@ -149,10 +149,7 @@ StyleSheet StyleSheet::forContainers(const std::map<std::string,Size>& sizes) co
         const auto& selector = ruleData_->selectors[index];
         result.ruleData_->rules.push_back(std::move(rule));
         result.ruleData_->selectors.push_back(selector);
-        if (selector.valid) {
-            result.ruleData_->selectorClasses.insert(selector.node.classes.begin(), selector.node.classes.end());
-            result.ruleData_->selectorStates |= selector.node.state;
-        }
+        result.ruleData_->indexLastRule();
         ++result.version_;
     }
     return result;
