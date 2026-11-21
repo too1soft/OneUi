@@ -45,6 +45,12 @@ struct Image
 };
 inline constexpr uint32_t workspaceHosts = 1, workspaceCollections = 2, workspaceQueries = 4;
 inline constexpr uint32_t repeatTransparent = 1u << 16, repeatExplicit = 1u << 17;
+// COND mode bits occupy the high half of its packed mode/depth word.
+inline constexpr uint32_t conditionInverse = 1, conditionLiteral = 2, conditionMountOnly = 4;
+inline constexpr uint32_t mountConditionMinor = 2;
+inline bool supportsMountConditionChildren(const ComponentContract& parent) {
+    return parent.name == "Column" || parent.name == "Row" || parent.name == "Surface";
+}
 // SLOT flags (word 3): bit 0 is supply ownership, bit 1 is the root contract.
 inline constexpr uint32_t slotSupplied = 1u, slotSingleRoot = 2u;
 void requireWorkspace(Image &, uint32_t bits);

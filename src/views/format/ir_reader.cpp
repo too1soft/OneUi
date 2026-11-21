@@ -135,6 +135,9 @@ Image readImage(const Bytes &b, const ComponentContracts *known)
     validateImage(image);
     for (const auto& slot : image.records[SLOT])
         require(!(slot[3] & slotSingleRoot) || minor >= 1, "VERSION: single-root slot requires minor 1");
+    for (const auto& condition : image.records[COND])
+        require(!((condition[3] >> 16) & conditionMountOnly) || minor >= mountConditionMinor,
+                "VERSION: v-if-once requires minor 2");
     validateGraph(image);
     // Exact built-in contracts already validated in their final form. An
     // older descriptor (even at the same version) may still remap IDs.

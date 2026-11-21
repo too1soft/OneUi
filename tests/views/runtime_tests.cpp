@@ -20,10 +20,12 @@ using namespace viewtest;
 #include "scroll_size.inc"
 #include "popup_surface.inc"
 #include "input_placeholder.inc"
+#include "mount_conditions.inc"
 int main(int argc, char **argv) {
     if (argc != 2)
         return 2;
     try {
+        mountConditions(argv[1]);
         virtualTemplateContract(argv[1]);
         chartContract(argv[1]);
         layoutDirectionContract(argv[1]);

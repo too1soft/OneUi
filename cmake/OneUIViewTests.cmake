@@ -11,6 +11,13 @@ add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/Overlay.oneview"
     DEPENDS oneui-viewc tests/views/Overlay.one tests/views/Imported.one tests/views/Runtime.oneschema VERBATIM)
 add_custom_target(oneui_view_overlay_ir DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/Overlay.oneview")
 add_dependencies(oneui_view_test_ir oneui_view_overlay_ir)
+add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/MountConditions.oneview"
+    COMMAND oneui-viewc --emit ir --input "${PROJECT_SOURCE_DIR}/tests/views/MountConditions.one"
+        --schema "${PROJECT_SOURCE_DIR}/tests/views/Runtime.oneschema" --name MountConditions
+        --output "${CMAKE_CURRENT_BINARY_DIR}/MountConditions.oneview"
+    DEPENDS oneui-viewc tests/views/MountConditions.one tests/views/Imported.one tests/views/Runtime.oneschema VERBATIM)
+add_custom_target(oneui_view_mount_conditions_ir DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/MountConditions.oneview")
+add_dependencies(oneui_view_test_ir oneui_view_mount_conditions_ir)
 add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/Advanced.oneview"
     COMMAND oneui-viewc --emit ir --input "${PROJECT_SOURCE_DIR}/tests/views/Advanced.one"
         --schema "${PROJECT_SOURCE_DIR}/tests/views/Runtime.oneschema" --name Advanced

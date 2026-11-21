@@ -1,0 +1,9 @@
+<import name="Optional" src="Imported.one"/>
+<template view-model="Root">
+  <Column>
+    <Text v-if-once="false" :text="title"/>
+    <Optional v-if-once="visible" @click="click"/>
+    <Text v-if="visible" text="reactive"/>
+    <Text v-if-once="true" text="constant"/>
+  </Column>
+</template>

@@ -195,12 +195,21 @@ void validateImage(const Image &im)
     for (auto &r : im.records[COND])
     {
         index(NODE, r[0]);
-        require(im.records[NODE][r[0]][0] != 2, "BAD_IR: condition on repeat");
+        const auto& node = im.records[NODE][r[0]];
+        require(node[0] != 2, "BAD_IR: condition on repeat");
         auto mode = r[3] >> 16;
-        require(r[0] >= last && mode <= 3 && r[5] == 0 && conditions.insert(r[0]).second, "BAD_IR: condition");
+        require(r[0] >= last && mode <= (conditionInverse | conditionLiteral | conditionMountOnly) &&
+                r[5] == 0 && conditions.insert(r[0]).second, "BAD_IR: condition");
+        if (mode & conditionMountOnly) {
+            const auto parent = node[2];
+            require(!(mode & conditionInverse) && (node[0] == 1 || node[0] == 3) &&
+                    parent != none && im.records[NODE][parent][0] == 1 &&
+                    supportsMountConditionChildren(im.components[im.records[NODE][parent][1]]),
+                    "BAD_IR: unsupported v-if-once placement");
+        }
         last = r[0];
         span(r[4]);
-        if (mode & 2)
+        if (mode & conditionLiteral)
         {
             index(VALU, r[1]);
             require(im.records[VALU][r[1]][0] == 1, "BAD_IR: bool constant");

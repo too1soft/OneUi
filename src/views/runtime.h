@@ -203,6 +203,7 @@ struct Runtime : std::enable_shared_from_this<Runtime> {
                            const std::vector<std::string> &);
     std::shared_ptr<Instance> build(uint32_t node, const Scopes &, const Slots & = {});
     void install(const std::shared_ptr<Instance> &, uint32_t owner, const Scopes &);
+    bool includeOnMount(uint32_t node, const Scopes& context);
     void wire(const std::shared_ptr<Instance> &);
     void wireRichTable(const std::shared_ptr<Instance>&);
     void applyRichTableRows(Instance&,ListState&,const std::shared_ptr<Scope>&,uint32_t);

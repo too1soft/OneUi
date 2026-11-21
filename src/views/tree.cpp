@@ -98,7 +98,9 @@ std::shared_ptr<Instance> Runtime::build(uint32_t node, const Scopes &context, c
     children.reserve(n[4]);
     result->children.reserve(n[4]);
     for (uint32_t i = 0; i < n[4]; ++i) {
-        auto child = build(image.records[EDGE][n[3] + i][1], context, slots);
+        const auto childNode = image.records[EDGE][n[3] + i][1];
+        if (ownerRecords.hasMountConditions() && !includeOnMount(childNode, context)) continue;
+        auto child = build(childNode, context, slots);
         if (!child->transparent) children.push_back(child->element);
         child->parent = result;
         result->children.push_back(child);
@@ -153,6 +155,18 @@ std::shared_ptr<Instance> Runtime::build(uint32_t node, const Scopes &context, c
     wire(result);
     return result;
 }
+bool Runtime::includeOnMount(uint32_t node, const Scopes& context) {
+    for (const auto& record : ownerRecords.get(image, COND, node)) {
+        const auto mode = record[3] >> 16;
+        if (!(mode & conditionMountOnly)) continue;
+        if (mode & conditionLiteral) return constant(record[1]).integer != 0;
+        // Evaluating this predicate establishes the tree's shape. Model
+        // notifications are observed only by the retained, live bindings.
+        const Observation unobserved(*this, {});
+        return read(context.at(record[3] & 0xffff), record[1]).integer != 0;
+    }
+    return true;
+}
 void Runtime::install(const std::shared_ptr<Instance> &instance, uint32_t owner,
                       const Scopes &context) {
     const timing::Scope measure(timing::Properties);
@@ -183,6 +197,7 @@ void Runtime::install(const std::shared_ptr<Instance> &instance, uint32_t owner,
         instance->bindings.push_back(std::move(binding));
     }
     for (const auto &r : ownerRecords.get(image, COND, owner)) {
+        if ((r[3] >> 16) & conditionMountOnly) continue;
         Binding binding{r, context.at(r[3] & 0xffff), COND};
         apply(instance, binding);
         instance->bindings.push_back(std::move(binding));

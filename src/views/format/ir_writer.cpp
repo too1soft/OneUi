@@ -69,7 +69,9 @@ Bytes writeImage(const Image &image, const ComponentContracts *known)
     patch(b, 8, 1, 2);
     const bool singleRoot = std::any_of(image.records[SLOT].begin(), image.records[SLOT].end(),
         [](const auto& slot) { return slot[3] & slotSingleRoot; });
-    patch(b, 10, singleRoot ? 1 : 0, 2);
+    const bool mountCondition = std::any_of(image.records[COND].begin(), image.records[COND].end(),
+        [](const auto& condition) { return (condition[3] >> 16) & conditionMountOnly; });
+    patch(b, 10, mountCondition ? mountConditionMinor : singleRoot ? 1 : 0, 2);
     patch(b, 12, 128);
     patch(b, 24, 128, 8);
     patch(b, 32, last);

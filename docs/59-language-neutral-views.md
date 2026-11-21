@@ -174,7 +174,7 @@ model ThemeItem key id {
 | 9 BIND | 36 | `node U, component_property_id U, vm_property_id U, depth H, mode H, model_id U, flags U, span U, reserved U, owner_kind U`；mode=1 单向/2 双向，flags/reserved=0 |
 | 10 EVNT | 36 | `node U, component_event_id U, command_id U, depth H, flags H, model_id U, arg_start U, arg_count U, span U, owner_kind U` |
 | 11 EARG | 16 | `source_kind U, source_index U, type_tag U, span U`；kind=1 事件参数位置/2 VALU 索引，严格对应命令签名，不支持任意表达式 |
-| 12 COND | 24 | `node U, property_or_value U, model_id U, depth H, mode H, span U, reserved U`；mode bit0=inverse、bit1=常量（指向 bool VALU），其他位 0；否则引用 bool property |
+| 12 COND | 24 | `node U, property_or_value U, model_id U, depth H, mode H, span U, reserved U`。mode bit0=inverse、bit1=常量（指向 bool VALU）、bit2=仅挂载时求值（IR 1.2），其余位为零。非常量引用 bool property。 |
 | 13 REPT | 32 | `node U, list_property_id U, parent_model U, depth H, flags H, item_model U, body_template U, key_property_id U, span U` |
 | 14 CALL | 24 | `node U, template_index U, slot_start U, slot_count U, span U, reserved U`；v1 共享调用点 VM |
 | 15 SLOT | 32 | `owner_index U, name_sid U, body_template U, flags U, capture_depth U, capture_model U, span U, reserved U` |
@@ -880,13 +880,21 @@ basis、flex 和父布局规则直接适用。**未标记的插槽继续始终�
 清零为默认包装，置位为 single；同字段的 bit 0 仍为 `0=TMPL 声明`、
 `1=CALL 供给`。原 offset 16 的 capture_depth 保持零。供给的 single 位由声明派生，
 loader 要求同名声明与供给一致，并拒绝缺失的必填供给和任何未知 flags 位。
-不新增段、不改变 stride。使用 single 的文件写为 **IR 1.1**，其余仍为 **IR 1.0**；
+不新增段、不改变 stride。使用 single 的文件至少写为 **IR 1.1**，基础格式仍为 **IR 1.0**。
 loader 拒绝将 single 标记放入 minor 0 文件。
 
 本扩展使用旧 reader 已强制为零的 SLOT flags 未知位 作为必需语义能力标记，按本次裁决
 不新增 required 段，也不升 major。旧 reader 即使忽略 minor，也会因未知 flags 拒绝，
 不会错误显示；这是第 3.4 节 required capability 规则在既有记录标志上的具体应用。
 不含插槽的 Basic 黄金字节保持本轮组件契约更新后的独立参考结果不变。
+
+### 挂载时选择固定分支
+
+`v-if-once="property"` 在创建实例时读取布尔字段或常量。条件为假时跳过整个分支，包括控件、子模板和绑定。后续通知沿用已选分支。新挂载、重新创建的列表项和热重载会重新求值。可变可见性仍用 `v-if`。
+
+该指令适用于原生 Column、Row 或 Surface 的直接组件和导入子项。这些父级允许可变数量的子项，页面根、插槽出口和要求固定子项数量的父级保留原有契约。它可以用于由固定字段类型或构建时语言选择决定的表单分支。被跳过的分支没有控件引用。
+
+使用该指令的文件写为 IR 1.2，由 COND mode 的 bit 2 标记必需语义。旧运行时会拒绝该标记。其余模板维持已有的 IR 版本。
 
 Rust `ViewMount::from_dispatcher` 可将声明式页面挂入当前窗口中的空 Panel。
 挂载验证遍历 OverlayHost 和 Popup，仍拒绝其他窗口的节点。外部 CSS 在首次实例化前

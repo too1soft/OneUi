@@ -25,7 +25,7 @@ uint32_t ViewCompiler::lower(Source &s, Node n, const std::vector<Scope> &scopes
     n.attrs.erase("view-id");
     if (n.attrs.count("v-for"))
     {
-        if (n.attrs.count("v-if") || n.attrs.count("v-else"))
+        if (n.attrs.count("v-if") || n.attrs.count("v-if-once") || n.attrs.count("v-else"))
             at.fail("REPEAT: put conditions inside v-for");
         auto attr = n.attrs.at("v-for");
         std::smatch match;
@@ -70,20 +70,30 @@ uint32_t ViewCompiler::lower(Source &s, Node n, const std::vector<Scope> &scopes
     }
     if (n.attrs.count(":key"))
         at.fail("REPEAT_KEY: key without v-for");
-    if (n.attrs.count("v-if"))
+    const bool mountOnly = n.attrs.count("v-if-once") != 0;
+    if (mountOnly) {
+        if (n.attrs.count("v-if") || n.attrs.count("v-else"))
+            at.fail("CONDITION: v-if-once cannot be combined with v-if or v-else");
+        if (n.tag == "slot" || parent == none || image.records[NODE][parent][0] != 1 ||
+            !supportsMountConditionChildren(image.components.at(image.records[NODE][parent][1])))
+            at.fail("CONDITION: v-if-once requires a direct component or import child of Column, Row or Surface");
+    }
+    if (mountOnly || n.attrs.count("v-if"))
     {
-        auto a = n.attrs.at("v-if");
-        auto inv = n.attrs.count("v-else") ? 1u : 0u;
+        const char* key = mountOnly ? "v-if-once" : "v-if";
+        auto a = n.attrs.at(key);
+        const auto mode = mountOnly ? conditionMountOnly :
+            (n.attrs.count("v-else") ? conditionInverse : 0u);
         if (a.value == "true" || a.value == "false")
-            image.add(COND, {index, value(1, a.value), scopes[0].model, (2u | inv) << 16, span(s, a), 0});
+            image.add(COND, {index, value(1, a.value), scopes[0].model, (conditionLiteral | mode) << 16, span(s, a), 0});
         else
         {
             auto p = resolve(s, a, scopes);
             if (p.tag != 1)
                 at.fail("CONDITION_TYPE: bool required");
-            image.add(COND, {index, p.id, p.model, p.depth | (inv << 16), span(s, a), 0});
+            image.add(COND, {index, p.id, p.model, p.depth | (mode << 16), span(s, a), 0});
         }
-        n.attrs.erase("v-if");
+        n.attrs.erase(key);
         n.attrs.erase("v-else");
     }
     else if (n.attrs.count("v-else"))
