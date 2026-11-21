@@ -41,6 +41,22 @@ void contracts() {
         require(error("/* unclosed") == "Unclosed CSS comment", "comments still validated");
     }
     require(css("/* comment */\nButton {width:10px;}") == "button.one-Button {width:10px;}\n", "comment normalization");
+    require(css("Button._kind-2.item:pressed { ; width:0.5px; flex-basis:12.5%; order:-02; ; }") ==
+            "button.one-Button._kind-2.item:pressed { ; width:0.5px; flex-basis:12.5%; order:-02; ; }\n",
+            "simple selector and numeric tokens preserve authored CSS");
+    require(css("._kind.item { gap:0px; }", "page") == "._kind.item.page { gap:0px; }\n",
+            "scope can follow multiple class-only selectors");
+    for (const auto* selector : {"", ".:hover", ".part:hover", "Button._kind.", "Button..item",
+                                 "Button.9item", "Button:hover:focus", "Button item"})
+        require(error(std::string(selector) + " {color:red;}").find("Use one simple selector") != std::string::npos,
+                "reject selectors outside the typed grammar");
+    for (const auto* measurement : {".5px", "5.px", "+5px", "5e1px", "5 px", "5%"})
+        require(error(std::string("Button {width:") + measurement + ";}").find("finite nonnegative px") != std::string::npos,
+                "width requires an unsigned decimal with the px unit");
+    require(error("Button {order:+1;}").find("order requires an integer") != std::string::npos,
+            "order retains its signed-integer grammar");
+    require(error("Button {color:red; stray;}").find("Expected property: value") != std::string::npos,
+            "declaration without a colon gets a diagnostic");
     const auto failure = error("Button {color:#fff;}\n\nInput {width:-1px;}", "lines.one", 10);
     require(failure.rfind("lines.one:10:1:", 0) == 0, "preserve existing rule diagnostic position");
 }

@@ -4,7 +4,6 @@
 #include <cmath>
 #include <map>
 #include <initializer_list>
-#include <regex>
 #include <set>
 #include <sstream>
 #include <stdexcept>
@@ -14,6 +13,7 @@
 #include "oneui/ui_component_schema.h"
 #include "oneui/ui_icon_names.h"
 #include "oneui/detail/container_query_parse.h"
+#include "oneui/detail/typed_css_lexemes.h"
 #include "oneui/detail/validated_css_cache.h"
 
 namespace oneui::ui::syntax {
@@ -141,11 +141,6 @@ inline std::string css(std::string source, const std::string& scope = {}, const 
     if (const auto* result = cache.find(source, scope, insideQuery, external)) return *result;
     std::string output; std::size_t pos = 0;
     output.reserve(source.size());
-    static const std::regex selectorPattern(R"(^([A-Za-z][A-Za-z0-9_-]*)(\.[A-Za-z_][A-Za-z0-9_-]*)*(:(hover|pressed|focus|disabled|selected|checked|read-only))?$)");
-    static const std::regex classPattern(R"(^\.[A-Za-z_][A-Za-z0-9_-]*(\.[A-Za-z_][A-Za-z0-9_-]*)*$)");
-    static const std::regex pixelsPattern(R"(^[0-9]+(\.[0-9]+)?px$)");
-    static const std::regex basisPattern(R"(^[0-9]+(\.[0-9]+)?(px|%)$)");
-    static const std::regex orderPattern(R"(^-?[0-9]+$)");
     while (pos < source.size()) {
         if (source.find_first_not_of(" \t\r\n", pos) == source.npos) break;
         // Keep identical diagnostic positions, but do not rescan the entire
@@ -165,12 +160,13 @@ inline std::string css(std::string source, const std::string& scope = {}, const 
             output+=selector+" {\n"+css(source.substr(open+1,close-open-1),scope,file,line(),true,external)+"}\n";
             pos=close+1;continue;
         }
-        const auto body = source.substr(open + 1, close - open - 1);
+        const auto body = std::string_view(source).substr(open + 1, close - open - 1);
         if (body.find('{') != body.npos) fail("Nested CSS rules are unsupported");
         std::string mapped = selector, tag, pseudo;
         if (selector != ":root") {
-            const bool classOnly=std::regex_match(selector,classPattern);
-            if (!classOnly && !std::regex_match(selector, selectorPattern)) fail("Use one simple selector, without descendants or commas: " + selector);
+            const bool classOnly = !selector.empty() && selector.front() == '.';
+            if (selector.empty() || !detail::simpleSelector(selector, classOnly))
+                fail("Use one simple selector, without descendants or commas: " + selector);
             const auto endTag = selector.find_first_of(".:");
             const auto type = selector.substr(0, endTag);
             auto component = components().find(type);
@@ -201,33 +197,36 @@ inline std::string css(std::string source, const std::string& scope = {}, const 
             if (!scope.empty()) { const auto pseudo = mapped.find(':'); mapped.insert(pseudo == mapped.npos ? mapped.size() : pseudo, "." + scope); }
         }
         const auto& consumedProperties = cachedCssProperties(tag);
-        std::istringstream declarations(body); std::string declaration;
-        while (std::getline(declarations, declaration, ';')) {
-            declaration = trim(declaration); if (declaration.empty()) continue;
+        auto declarations = body;
+        while (!declarations.empty()) {
+            const auto end = declarations.find(';');
+            const auto declaration = declarations.substr(0, end);
+            declarations.remove_prefix(end == declarations.npos ? declarations.size() : end + 1);
+            if (declaration.find_first_not_of(" \t\r\n") == declaration.npos) continue;
             const auto colon = declaration.find(':');
             if (colon == declaration.npos) fail("Expected property: value");
-            const auto property = trim(declaration.substr(0, colon));
-            const auto cssValue=trim(declaration.substr(colon+1));
+            const auto property = trim(std::string(declaration.substr(0, colon)));
+            const auto cssValue = trim(std::string(declaration.substr(colon + 1)));
             if(property=="container-type"&&cssValue!="size")fail("CONTAINER_SIZE: only size is supported");
             if(property=="display"&&cssValue!="none"&&cssValue!="flex")fail("CSS_LAYOUT: display expects none/flex");
             if(property=="flex-direction"&&cssValue!="row"&&cssValue!="column")fail("CSS_LAYOUT: flex-direction expects row/column");
             if(property=="flex-wrap"&&cssValue!="wrap"&&cssValue!="nowrap")fail("CSS_LAYOUT: flex-wrap expects wrap/nowrap");
             if(cssPropertyIs(property,{"width","height","min-width","min-height","max-width","max-height"}) &&
-               cssValue.rfind("var(",0)!=0&&!std::regex_match(cssValue,pixelsPattern))fail("CSS_LAYOUT: finite nonnegative px required");
-            if(property=="flex-basis" && cssValue.rfind("var(",0)!=0 && !std::regex_match(cssValue,basisPattern))fail("CSS_LAYOUT: flex-basis requires finite nonnegative px or percentage");
-            if(property=="order" && cssValue.rfind("var(",0)!=0 && !std::regex_match(cssValue,orderPattern))fail("CSS_LAYOUT: order requires an integer");
+               cssValue.rfind("var(",0)!=0&&!detail::lengthValue(cssValue))fail("CSS_LAYOUT: finite nonnegative px required");
+            if(property=="flex-basis" && cssValue.rfind("var(",0)!=0 && !detail::lengthValue(cssValue, true))fail("CSS_LAYOUT: flex-basis requires finite nonnegative px or percentage");
+            if(property=="order" && cssValue.rfind("var(",0)!=0 && !detail::integerValue(cssValue))fail("CSS_LAYOUT: order requires an integer");
             if(property=="table-column-widths" && cssValue.rfind("var(",0)!=0) {
                 std::istringstream tokens(cssValue);std::string token;bool any=false;
                 while(tokens>>token) {
                     any=true;if(token=="auto")continue;
-                    if(!std::regex_match(token,pixelsPattern))fail("CSS_LAYOUT: table columns require auto or nonnegative px");
+                    if(!detail::lengthValue(token))fail("CSS_LAYOUT: table columns require auto or nonnegative px");
                     try {if(!std::isfinite(std::stof(token)))fail("CSS_LAYOUT: finite table width required");}
                     catch(const std::out_of_range&){fail("CSS_LAYOUT: table width exceeds finite range");}
                 }
                 if(!any)fail("CSS_LAYOUT: nonempty table column widths required");
             }
             if(property=="table-selection-width" && cssValue.rfind("var(",0)!=0) {
-                if(!std::regex_match(cssValue,pixelsPattern))fail("CSS_LAYOUT: table selection width requires px");
+                if(!detail::lengthValue(cssValue))fail("CSS_LAYOUT: table selection width requires px");
                 try {const auto n=std::stof(cssValue);if(n<24||n>128)fail("CSS_LAYOUT: table selection width requires 24..128px");}
                 catch(const std::out_of_range&){fail("CSS_LAYOUT: table selection width exceeds range");}
             }
@@ -235,17 +234,17 @@ inline std::string css(std::string source, const std::string& scope = {}, const 
                 try {const auto n=std::stoll(cssValue);if(n < -1000000 || n > 1000000)fail("CSS_LAYOUT: order exceeds range");}
                 catch(const std::out_of_range&){fail("CSS_LAYOUT: order exceeds range");}
             }
-            if (trim(declaration.substr(colon + 1)).empty()) fail("Empty CSS value");
+            if (cssValue.empty()) fail("Empty CSS value");
             if (selector == ":root") {
                 if (property.rfind("--", 0) != 0) fail(":root only accepts custom properties");
                 if (!scope.empty()) fail("Scoped :root tokens are unsupported; put shared tokens in external CSS");
             } else if(insideQuery && (property=="container-name"||property=="container-type"))fail("CONTAINER_DEPENDENCY: query cannot establish a container");
             else if (!consumedProperties.count(property) && !cssPropertyIs(property,{"display","width","height","min-width","min-height","max-width","max-height","flex-basis","flex-grow","flex-shrink","order"}) &&
                      !((tag=="stack"||tag.empty())&&cssPropertyIs(property,{"container-name","container-type","flex-direction","flex-wrap","gap"}))) fail("Property is not consumed by " + tag + ": " + property);
-            else if(property=="background-color" && lowerValue(trim(declaration.substr(colon+1))).find("gradient(")!=std::string::npos) fail("Use background for gradients on supported components");
+            else if(property=="background-color" && lowerValue(cssValue).find("gradient(")!=std::string::npos) fail("Use background for gradients on supported components");
             else if(tag=="table" && !pseudo.empty() && property!="background-color") fail("DataTable row states only consume background-color");
         }
-        output += mapped + " {" + body + "}\n";
+        output.append(mapped).append(" {").append(body).append("}\n");
         pos = close + 1;
     }
     if (source.size() <= detail::ValidatedCssCache::maxBytes / 2)

@@ -98,3 +98,16 @@ keep their constructor defaults until the authored stylesheet is applied.
 Replaying the same label font metrics is a no-op. A label foreground change
 invalidates its paint bounds while size and weight changes still invalidate
 measurement.
+
+## Typed CSS validation before mounting
+
+The typed CSS validator scans simple selectors and numeric length and order
+tokens directly. Declaration views borrow the stylesheet while validation
+preserves the authored body for lowering. Container query parsing, property
+rules, and diagnostic source positions follow the existing contract.
+
+The Release comparison against the previous validator produced identical
+output and diagnostics for 3,884 cases. The iShell cold Settings trace measures
+external stylesheet validation in `settings.styles` and scoped parsing in
+`view_mount/style_parse`. Its frontend comparison measures the first visible
+content and the settled canvas independently of both intervals.
