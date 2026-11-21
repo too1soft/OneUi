@@ -29,6 +29,8 @@
         const auto interactionPaint = internal::beginInteractionPaint(reinterpret_cast<std::uintptr_t>(hwnd_));
         const double paintStartMs = currentTimeMs();
         const bool traceLayout = interactionPaint.paintSequence != 0 && internal::scrollTraceEnabled();
+        using PaintTrace = internal::Win32PaintTrace;
+        PaintTrace paintTrace(traceLayout);
 #if ONEUI_DEVELOPER_TOOLS
         const auto diagnostics=developerTools_; // Safe if application disables tools during paint.
         internal::DiagnosticSession diagnosticSession(diagnostics.get());
@@ -63,8 +65,10 @@
                 static_cast<GLsizei>(clientRect.right - clientRect.left),
                 static_cast<GLsizei>(clientRect.bottom - clientRect.top));
         }
+        paintTrace.mark(PaintTrace::GlSetup);
         PAINTSTRUCT paintStruct{};
         HDC paintDc = BeginPaint(hwnd_, &paintStruct);
+        paintTrace.mark(PaintTrace::NativePaint);
         HDC dc = useGPU ? glDC_ : paintDc;
         RECT dirtyRect = paintStruct.rcPaint;
 #if ONEUI_DEVELOPER_TOOLS
@@ -82,6 +86,7 @@
         const double surfaceStartMs = currentTimeMs();
         const bool allocatedSurface = ensurePaintSurfaceCapacity(width, height);
         const double surfaceMs = currentTimeMs() - surfaceStartMs;
+        paintTrace.mark(PaintTrace::Surface);
 
         if (!paintSurface_) {
             EndPaint(hwnd_, &paintStruct);
@@ -128,6 +133,7 @@
             canvas.fillRect(dirtyCanvasRect, colors::Surface, 0.0f);
         }
 
+        paintTrace.mark(PaintTrace::Canvas);
         if (content_ && content_->visible()) {
             const double contentStartMs = currentTimeMs();
             g_primitivePaintTrace = PrimitivePaintTrace{};
@@ -136,6 +142,7 @@
             recordPrimitivePaint(g_primitivePaintTrace);
             for (std::size_t i = 0; i < traceStageMs_.size(); ++i) traceStageMs_[i] += profile.data.ms[i];
         }
+        paintTrace.mark(PaintTrace::Tree);
 
         if (!fullPaint) {
             canvas.restore();
@@ -144,6 +151,7 @@
         if(diagnostics && diagnostics->options.overlay)paintDeveloperOverlay(canvas,*diagnostics,logicalWidth,logicalHeight);
 #endif
         skCanvas->restore();
+        paintTrace.mark(PaintTrace::End);
 
         internal::traceInteractionPaint(interactionPaint, "content_paint_end",
             gpuAvailable_ && grContext_ && windowSurface_ ? "opengl" : "software");
@@ -198,6 +206,7 @@
                 flushDeferredImePosition();
                 finishDiagnostics();
                 internal::traceInteractionPaint(interactionPaint, "paint_end", "opengl", 1);
+                paintTrace.write(interactionPaint.window, static_cast<double>(interactionPaint.paintSequence));
                 return;
             }
             rendererInfo_.reason = "swap-buffers-failed";
@@ -286,6 +295,7 @@
         flushDeferredImePosition();
         finishDiagnostics();
         internal::traceInteractionPaint(interactionPaint, "paint_end", "software", blitSucceeded ? 1 : 0);
+        paintTrace.write(interactionPaint.window, static_cast<double>(interactionPaint.paintSequence));
     }
 
     static int alignedPaintSurfaceSize(int requested) {

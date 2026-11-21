@@ -55,3 +55,18 @@ arm another hover. Repeated move messages at the same coordinates leave the
 tooltip dismissed.
 Arming or discarding a hidden tooltip leaves the paint state intact. Hiding
 a visible tooltip requests a redraw.
+
+## Paint preparation and UI-thread activity
+
+With both `ONEUI_INTERACTION_TRACE` and `ONEUI_SCROLL_TRACE` enabled, a
+Win32 paint adds budget rows for backend setup, `BeginPaint`, render-target
+preparation, canvas setup, widget painting and final recording. Match
+`detail_a` to the interaction trace's paint sequence on the same HWND.
+`duration_ms` is elapsed wall time. `detail_b` is the UI thread's cycle
+delta or -1 when the cycle counter was unavailable.
+
+The rows are written after presentation. The row timestamp is the write
+time. Use the recorded durations and the interaction timestamps to locate
+the measured work. CPU cycles and elapsed time together help distinguish
+continued thread activity from a gap with no recorded activity. Wait and
+runnable states require separate scheduler evidence.
