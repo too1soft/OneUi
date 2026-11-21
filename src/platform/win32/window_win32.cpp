@@ -1,5 +1,6 @@
 #include "internal/view_profile.h"
 #include "window_event_loop_win32.h"
+#include "window_dispatch_trace_win32.h"
 #include "internal/frame_profile.h"
 #include "internal/developer_tools.h"
 #include "internal/runtime_config.h"

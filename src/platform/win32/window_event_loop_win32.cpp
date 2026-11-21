@@ -1,6 +1,8 @@
 #include "window_event_loop_win32.h"
+#include "window_dispatch_trace_win32.h"
 #include "internal/interaction_trace.h"
 #include <algorithm>
+#include <utility>
 #include <vector>
 namespace oneui::win32 {
 namespace {
@@ -9,15 +11,35 @@ namespace {
 // outside run() must not leave an exit message for a future window.
 thread_local int g_liveWindowCount = 0;
 thread_local unsigned int g_runLoopDepth = 0;
+thread_local bool g_inputTurnRequested = false;
 
 thread_local std::vector<ThreadFrameSource> g_frameSources;
 
 struct RunLoopScope {
     RunLoopScope() { ++g_runLoopDepth; }
-    ~RunLoopScope() { --g_runLoopDepth; }
+    ~RunLoopScope() {
+        if (--g_runLoopDepth == 0)
+            g_inputTurnRequested = false;
+    }
     RunLoopScope(const RunLoopScope &) = delete;
     RunLoopScope &operator=(const RunLoopScope &) = delete;
 };
+
+bool peekMessage(MSG& message) {
+    const DispatchTraceScope trace("peek_message");
+    // Win32 normally retrieves posted work before hardware input. When we
+    // have just serviced OneUI callbacks, give the input queue one turn.
+    // Always return to the unfiltered order on the following iteration.
+    if (std::exchange(g_inputTurnRequested, false) &&
+        PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE | PM_QS_INPUT))
+        return true;
+    return PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE) != FALSE;
+}
+
+void tickFrameSource(const ThreadFrameSource& source) {
+    const DispatchTraceScope trace("frame_source_tick");
+    source.tick();
+}
 
 } // namespace
 void registerFrameSource(ThreadFrameSource source) { g_frameSources.push_back(std::move(source)); }
@@ -25,6 +47,10 @@ void registerNativeWindow() { ++g_liveWindowCount; }
 void unregisterNativeWindow() {
     if (--g_liveWindowCount == 0 && g_runLoopDepth > 0)
         PostQuitMessage(0);
+}
+void requestInputTurnAfterPostedWork() {
+    if (g_runLoopDepth > 0)
+        g_inputTurnRequested = true;
 }
 int runWindowLoop() {
     const RunLoopScope loopScope;
@@ -35,22 +61,28 @@ int runWindowLoop() {
         // messages. Draining until empty starves the waitable frame timer,
         // freezing animations despite an otherwise responsive message loop.
         // Bound each batch so input and animation handles both get service.
-        const ULONGLONG batchStarted = GetTickCount64();
-        unsigned int dispatched = 0;
-        while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE)) {
-            if (message.message == WM_QUIT) {
-                // A nested loop must pass the thread's exit request back
-                // to its caller instead of consuming it on its behalf.
-                if (g_runLoopDepth > 1)
-                    PostQuitMessage(static_cast<int>(message.wParam));
-                return static_cast<int>(message.wParam);
+        {
+            DispatchTraceScope trace("message_batch");
+            const ULONGLONG batchStarted = GetTickCount64();
+            unsigned int dispatched = 0;
+            while (peekMessage(message)) {
+                if (message.message == WM_QUIT) {
+                    // A nested loop must pass the thread's exit request back
+                    // to its caller instead of consuming it on its behalf.
+                    if (g_runLoopDepth > 1)
+                        PostQuitMessage(static_cast<int>(message.wParam));
+                    return static_cast<int>(message.wParam);
+                }
+                const DispatchTraceScope dispatch(
+                    "translate_dispatch", reinterpret_cast<std::uintptr_t>(message.hwnd), message.message);
+                TranslateMessage(&message);
+                const internal::InteractionInputScope interaction(
+                    reinterpret_cast<std::uintptr_t>(message.hwnd), message.message, message.time);
+                DispatchMessageW(&message);
+                if (++dispatched >= 64 || GetTickCount64() - batchStarted >= 8)
+                    break;
             }
-            TranslateMessage(&message);
-            const internal::InteractionInputScope interaction(
-                reinterpret_cast<std::uintptr_t>(message.hwnd), message.message, message.time);
-            DispatchMessageW(&message);
-            if (++dispatched >= 64 || GetTickCount64() - batchStarted >= 8)
-                break;
+            trace.setDispatched(dispatched);
         }
 
         // All windows on this UI thread share the message loop. Waiting
@@ -70,7 +102,7 @@ int runWindowLoop() {
             if (!alive || !alive->load())
                 continue;
             if (WaitForSingleObject(source.timer, 0) == WAIT_OBJECT_0) {
-                source.tick();
+                tickFrameSource(source);
                 ticked = true;
             } else if (handles.size() < MAXIMUM_WAIT_OBJECTS - 1) {
                 handles.push_back(source.timer);
@@ -87,7 +119,7 @@ int runWindowLoop() {
             const auto &source = waiting[waitResult - WAIT_OBJECT_0];
             auto alive = source.alive.lock();
             if (alive && alive->load())
-                source.tick();
+                tickFrameSource(source);
             continue;
         }
         if (waitResult == WAIT_TIMEOUT)

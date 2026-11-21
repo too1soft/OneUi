@@ -12,5 +12,6 @@ struct ThreadFrameSource {
 void registerFrameSource(ThreadFrameSource source);
 void registerNativeWindow();
 void unregisterNativeWindow();
+void requestInputTurnAfterPostedWork();
 int runWindowLoop();
 } // namespace oneui::win32

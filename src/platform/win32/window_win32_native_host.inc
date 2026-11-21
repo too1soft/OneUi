@@ -115,6 +115,7 @@
     }
 
     static LRESULT CALLBACK windowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
+        const win32::DispatchTraceScope trace("window_proc", reinterpret_cast<std::uintptr_t>(hwnd), message);
         auto* window = reinterpret_cast<Win32Window*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
 
         if (message == WM_NCCREATE) {

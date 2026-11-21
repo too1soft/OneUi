@@ -32,6 +32,7 @@
             ++dispatched;
             if (std::chrono::steady_clock::now() - started >= std::chrono::milliseconds(4)) break;
         }
+        if (dispatched) win32::requestInputTurnAfterPostedWork();
         if (!alive->load(std::memory_order_acquire)) return;
         if (dispatched && internal::scrollTraceEnabled()) {
             const auto elapsed = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count();

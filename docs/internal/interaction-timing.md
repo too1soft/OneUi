@@ -50,4 +50,8 @@ Windows 时钟依据：[消息时间](https://learn.microsoft.com/en-us/windows/
 
 `oneui_win32_window_loop_tests` 的 callback flood 测试验证批量后台回调尚未执行完时 frame 已获服务，FIFO 测试验证让出后新增回调不超越旧队列。Rust dispatcher 的日志配置只读取一次，禁用日志时不格式化调用位置或 trace 文本。
 
+Win32 默认先取 posted 消息，再取硬件输入。OneUI 每批执行过 `Window::post` 回调后，用一次 `PM_QS_INPUT` 优先取已经排队的输入，再恢复默认选择顺序。没有待处理输入时，同一轮继续按默认顺序取消息。回调的 FIFO、合并唤醒、绘制和退出规则沿用原有契约。使用 `tests/win32_hardware_input_fixture.cpp` 在专用前台窗口中验证，`PostMessage` 伪造的键盘消息只能作为 posted 对照。
+
+当输入取消息前有长尾时，可同时启用 `ONEUI_SCROLL_TRACE`，记录耗时至少 1ms 的 `peek_message`、`translate_dispatch`、`window_proc`、`message_batch` 和 `frame_source_tick`。这些区间可能嵌套，不能累加。日志时间为区间结束，`duration_ms` 为墙钟耗时，`detail_a` 为派发或窗口过程的 Win32 消息号，`detail_b` 为消息批次已派发数量。`PeekMessageW` 本身可以执行同步发送的窗口过程。用同一窗口及帧序号的 `paint_layout` 和 `content_paint_end` 对齐两个 trace 的时钟；外部输入探针应另记录实际 `SendInput` 调用边界。详细跟踪有测量开销，独立 Release 前台复验应关闭跟踪。
+
 输入反馈复用高精度 frame 调度：鼠标 hover/down/up、键盘反馈产生的局部脏区先合并，`kOneUiFlushInvalidations` 暂缓提交，当前帧完成动画采样后统一绘制，避免每个输入消息在 UI 线程同步等待 SwapBuffers。已有局部失效不会被每个 handled click 扩大为整窗。合帧期间的 caret 位置也交由已有 paint 尾部刷新，避免提前用旧布局向 IME 往返定位；强制 IME 上下文更新不延迟。原生 live resize 与窗口状态切换仍可同步绘制，因为它们可能在操作系统模态消息循环内运行。静态绘制 flood 与 pointer burst 测试分别验证无动画时的绘制公平性，以及连续输入消息无同步 paint、随后一帧仅绘制一次。
