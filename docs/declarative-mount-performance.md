@@ -84,3 +84,17 @@ The workspace style regression compares a cached prefix with a complete parse,
 including scoped overrides, late token definitions and invalid CSS rollback.
 Use the view mount trace for phase times and an independent foreground capture
 for the first visible response and the settled Settings canvas.
+
+## Selector keys and widget defaults
+
+Style resolution borrows the existing selector class strings when forming the
+canonical cache key. Common selectors fit in inline storage. The ordered key
+continues to distinguish semantic classes, pseudo-states and component tags.
+Long class lists use the same normalization. Paint and layout caches retain
+their existing bounds and rule/token invalidation.
+
+New labels and buttons built against the declarative factory's empty Builder
+keep their constructor defaults until the authored stylesheet is applied.
+Replaying the same label font metrics is a no-op. A label foreground change
+invalidates its paint bounds while size and weight changes still invalidate
+measurement.

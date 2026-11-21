@@ -44,14 +44,17 @@ void Builder::style(const std::shared_ptr<Widget>& widget, std::string classes) 
 }
 Node Builder::native(std::shared_ptr<Widget> value) const { if (!value) throw std::invalid_argument("Null component"); return Node{std::move(value)}; }
 Node Builder::text(std::wstring value, std::string role) const {
-    auto label = std::make_shared<Label>(std::move(value)); style(label, std::move(role)); return Node{label};
+    auto label = std::make_shared<Label>(std::move(value));
+    if (!sheet_->rules().empty()) style(label, std::move(role));
+    return Node{label};
 }
 Node Builder::paragraph(std::wstring value, std::string role) const {
     auto node = text(std::move(value), std::move(role)); node.as<Label>()->setTextWrapping(true); return node.shrink(0);
 }
 Node Builder::button(std::wstring value, std::function<void()> action, std::string role) const {
     auto button = std::make_shared<Button>(std::move(value)); button->setOnClick(std::move(action));
-    style(button, std::move(role)); return Node{button}.shrink(0);
+    if (!sheet_->rules().empty()) style(button, std::move(role));
+    return Node{button}.shrink(0);
 }
 Node Builder::stack(StackDirection direction, std::vector<Node> children, std::string role) const {
     auto stack = std::make_shared<Stack>(direction); stack->setEngine(engine_); stack->setLayoutCacheEnabled(layoutCache_);

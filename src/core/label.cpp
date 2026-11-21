@@ -57,8 +57,10 @@ void Label::bindText(State<std::wstring>& state) {
 }
 
 void Label::setColor(Color color) {
+    if (color_.r == color.r && color_.g == color.g && color_.b == color.b && color_.a == color.a)
+        return;
     color_ = color;
-    invalidate();
+    invalidatePaint();
 }
 
 void Label::setStatusIndicator(float diameter, float gap) {
@@ -68,11 +70,13 @@ void Label::setStatusIndicator(float diameter, float gap) {
 }
 
 void Label::setFontSize(float size) {
+    if (fontSize_ == size) return;
     fontSize_ = size;
     invalidate();
 }
 
 void Label::setFontWeight(int weight) {
+    if (fontWeight_ == weight) return;
     fontWeight_ = weight;
     invalidate();
 }

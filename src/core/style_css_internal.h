@@ -35,6 +35,5 @@ struct ParsedSelector {
 
 ParsedSelector parseSelector(const std::string&);
 bool hasClass(const StyleNode&,const std::string&);
-std::string resolveCacheKey(const StyleNode&);
 bool applyDeclaration(StyleRule&,const std::string&,const std::string&,const std::map<std::string,std::string>&,std::string*);
 }

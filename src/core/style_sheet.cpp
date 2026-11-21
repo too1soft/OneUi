@@ -3,9 +3,11 @@
 #include "style_layout_internal.h"
 #include "internal/unicode.h"
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cmath>
 #include <cstdlib>
+#include <string_view>
 #include <sstream>
 
 namespace oneui {
@@ -107,16 +109,36 @@ std::vector<const StyleRule*> StyleSheet::matchingRules(const StyleNode& node) c
 }
 
 std::string StyleSheet::nodeCacheKey(const StyleNode& node) const {
-    StyleNode relevant{node.tag, {}, node.state & (ruleData_ ? ruleData_->selectorStates : 0u)};
-    if (ruleData_) {
-        for (const auto& klass : node.classes)
-            if (ruleData_->selectorClasses.count(klass)) relevant.classes.push_back(klass);
+    // Every lookup uses this key, including cache hits. Normal component
+    // selectors fit in inline storage and can borrow the existing strings.
+    std::array<std::string_view, 8> inlineClasses;
+    std::vector<std::string_view> overflow;
+    auto* relevant = inlineClasses.data();
+    if (node.classes.size() > inlineClasses.size()) {
+        overflow.resize(node.classes.size());
+        relevant = overflow.data();
     }
+    std::size_t count = 0;
+    for (const auto& klass : node.classes)
+        if (ruleData_->selectorClasses.count(klass)) relevant[count++] = klass;
     // Selector matching tests class membership, never order or multiplicity.
     // A new unmatched mount scope must not allocate a new cached result.
-    std::sort(relevant.classes.begin(), relevant.classes.end());
-    relevant.classes.erase(std::unique(relevant.classes.begin(), relevant.classes.end()), relevant.classes.end());
-    return resolveCacheKey(relevant);
+    std::sort(relevant, relevant + count);
+    const auto end = std::unique(relevant, relevant + count);
+    const auto state = std::to_string(node.state & ruleData_->selectorStates);
+    std::size_t size = node.tag.size() + state.size() + 2;
+    for (auto it = relevant; it != end; ++it) size += it->size() + 1;
+    std::string key;
+    key.reserve(size);
+    key.append(node.tag);
+    key.push_back('\x1f');
+    for (auto it = relevant; it != end; ++it) {
+        key.append(*it);
+        key.push_back('\x1e');
+    }
+    key.push_back('\x1f');
+    key.append(state);
+    return key;
 }
 
 StyleBox StyleSheet::resolve(const StyleNode& node) const {

@@ -46,19 +46,6 @@ bool hasClass(const StyleNode& node, const std::string& klass) {
     return std::find(node.classes.begin(), node.classes.end(), klass) != node.classes.end();
 }
 
-std::string resolveCacheKey(const StyleNode& node) {
-    std::string key;
-    key.reserve(node.tag.size() + node.classes.size() * 12 + 16);
-    key.append(node.tag);
-    key.push_back('\x1f');
-    for (const auto& klass : node.classes) {
-        key.append(klass);
-        key.push_back('\x1e');
-    }
-    key.push_back('\x1f');
-    key.append(std::to_string(node.state));
-    return key;
-}
 } // namespace oneui::style_detail
 namespace oneui {
 using namespace style_detail;

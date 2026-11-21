@@ -222,6 +222,24 @@ void copiedTokenTablesStaySharedUntilAnActualEdit() {
     require(snapshots.front().customProperties().empty() && moved.resolve(button).foreground->r == 0xab,
             "moved-from token storage remains valid");
 }
+
+void longSelectorsKeepCanonicalCacheKeys() {
+    StyleSheet sheet;
+    parse(sheet, "button.a.b.c.d.e.f.g.h.i:hover { height: 48px; max-width: 90px; }");
+    const oneui::StyleNode wide{"button",
+        {"i", "h", "g", "ignored-scope", "f", "e", "d", "c", "b", "a", "a"},
+        oneui::StyleStateHover};
+    require(sheet.resolve(wide).height == 48 && sheet.resolveLayout(wide).maxWidth == 90,
+        "selectors with more classes than inline storage match in both cascades");
+    auto different = wide;
+    different.classes.erase(different.classes.begin());
+    require(!sheet.resolve(different).height && !sheet.resolveLayout(different).maxWidth,
+        "a missing class cannot reuse a cached result");
+    different = wide;
+    different.state = oneui::StyleStateNone;
+    require(!sheet.resolve(different).height && !sheet.resolveLayout(different).maxWidth,
+        "a different pseudo-state cannot reuse a cached result");
+}
 }
 
 int main() {
@@ -235,6 +253,7 @@ int main() {
         queryAndLayoutCopiesSurviveOtherThemes();
         transientNodeScopesDoNotAffectCascadeAfterEviction();
         copiedTokenTablesStaySharedUntilAnActualEdit();
+        longSelectorsKeepCanonicalCacheKeys();
         std::exception_ptr workerError;
         std::thread worker([&] {
             try { independentTokensAndRules(); }

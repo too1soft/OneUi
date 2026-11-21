@@ -146,6 +146,25 @@ bool reentrantContentChange() {
 }
 
 int main() {
+    {
+        Label label(L"Settings");
+        const auto revision = label.measureRevision();
+        int redraws = 0;
+        label.setInvalidator([&] { ++redraws; });
+        label.setFontSize(label.fontSize());
+        label.setFontWeight(label.fontWeight());
+        label.setColor({12, 34, 56});
+        label.setColor({12, 34, 56});
+        if (label.measureRevision() != revision || redraws != 1) {
+            std::cerr << "FAIL: label style replay or recoloring invalidated measure\n";
+            return 1;
+        }
+        label.setFontSize(label.fontSize() + 1);
+        if (label.measureRevision() == revision) {
+            std::cerr << "FAIL: label font size change did not invalidate measure\n";
+            return 1;
+        }
+    }
     if (!childDamageDoesNotScanSiblings()) {
         std::cerr << "FAIL: child damage propagation scanned unrelated siblings\n";
         return 1;
