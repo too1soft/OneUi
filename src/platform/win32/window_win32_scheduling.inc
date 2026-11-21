@@ -9,6 +9,15 @@
                 deferredPostedCallbackBatches_.pop_front();
             } else callbacks.swap(postedCallbacks_);
         }
+        // An edit has already invalidated its native pixels, while its model
+        // callback may have posted expensive follow-up work. Reveal that input
+        // before entering the work; waiting for the frame timer lets a single
+        // long callback delay even the first glyph. Keep the scheduled frame
+        // for animation/IME reconciliation and preserve the held batch's FIFO.
+        if (inputPaintPending_ && !callbacks.empty()) {
+            flushPendingPaint();
+            if (!alive->load(std::memory_order_acquire)) return;
+        }
         const auto started = std::chrono::steady_clock::now();
         unsigned int dispatched = 0;
         // A posted message is part of the native loop's budget, not permission

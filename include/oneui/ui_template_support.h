@@ -3,15 +3,18 @@
 #include <cctype>
 #include <cmath>
 #include <map>
+#include <initializer_list>
 #include <regex>
 #include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <vector>
 #include "oneui/ui_component_schema.h"
 #include "oneui/ui_icon_names.h"
 #include "oneui/detail/container_query_parse.h"
+#include "oneui/detail/validated_css_cache.h"
 
 namespace oneui::ui::syntax {
 inline std::string trim(std::string s) {
@@ -100,6 +103,25 @@ inline std::set<std::string> cssProperties(const std::string& tag) {
     if (keys.count("content-background-color")) keys.insert("content-background-opacity");
     return keys;
 }
+inline bool cssPropertyIs(const std::string& property, std::initializer_list<std::string_view> choices) {
+    return std::find(choices.begin(), choices.end(), std::string_view(property)) != choices.end();
+}
+// The dialect's native tags are fixed by the component schema. A declaration
+// checks an immutable property set instead of rebuilding its tree of strings.
+inline const std::set<std::string>& cachedCssProperties(const std::string& tag) {
+    static const auto properties = [] {
+        std::map<std::string, std::set<std::string>> result;
+        for (const auto& component : components())
+            result.try_emplace(component.second, cssProperties(component.second));
+        for (const auto* part : {"", "widget", "state-view-part", "pane-header-part",
+                                 "pane-grid-part", "dock-workspace-part"})
+            result.try_emplace(part, cssProperties(part));
+        return result;
+    }();
+    const auto found = properties.find(tag);
+    // Unknown native selectors are rejected before reaching declarations.
+    return found == properties.end() ? properties.at("") : found->second;
+}
 inline std::string stripComments(std::string source) {
     std::size_t at = 0;
     while ((at = source.find("/*", at)) != source.npos) {
@@ -112,13 +134,24 @@ inline std::string stripComments(std::string source) {
 // Deliberately small CSS dialect: typed simple selectors, states and variables.
 // Unknown/unconsumed properties are errors rather than successful no-ops.
 inline std::string css(std::string source, const std::string& scope = {}, const std::string& file = "<style>", int startLine = 1, bool insideQuery=false, const std::set<std::string>& external = {}) {
+    // Comment removal preserves positions/newlines and is also responsible for
+    // rejecting unclosed comments before any cached result can be accepted.
     source = stripComments(std::move(source));
+    auto& cache = detail::validatedCssCache();
+    if (const auto* result = cache.find(source, scope, insideQuery, external)) return *result;
     std::string output; std::size_t pos = 0;
-    const std::regex selectorPattern(R"(^([A-Za-z][A-Za-z0-9_-]*)(\.[A-Za-z_][A-Za-z0-9_-]*)*(:(hover|pressed|focus|disabled|selected|checked|read-only))?$)");
+    output.reserve(source.size());
+    static const std::regex selectorPattern(R"(^([A-Za-z][A-Za-z0-9_-]*)(\.[A-Za-z_][A-Za-z0-9_-]*)*(:(hover|pressed|focus|disabled|selected|checked|read-only))?$)");
+    static const std::regex classPattern(R"(^\.[A-Za-z_][A-Za-z0-9_-]*(\.[A-Za-z_][A-Za-z0-9_-]*)*$)");
+    static const std::regex pixelsPattern(R"(^[0-9]+(\.[0-9]+)?px$)");
+    static const std::regex basisPattern(R"(^[0-9]+(\.[0-9]+)?(px|%)$)");
+    static const std::regex orderPattern(R"(^-?[0-9]+$)");
     while (pos < source.size()) {
-        if (trim(source.substr(pos)).empty()) break;
-        const int line = startLine + int(std::count(source.begin(), source.begin() + pos, '\n'));
-        auto fail = [&](const std::string& message) { throw std::runtime_error(file + ":" + std::to_string(line) + ":1: " + message); };
+        if (source.find_first_not_of(" \t\r\n", pos) == source.npos) break;
+        // Keep identical diagnostic positions, but do not rescan the entire
+        // already-validated prefix for every successful rule.
+        const auto line = [&] { return startLine + int(std::count(source.begin(), source.begin() + pos, '\n')); };
+        auto fail = [&](const std::string& message) { throw std::runtime_error(file + ":" + std::to_string(line()) + ":1: " + message); };
         const auto open = source.find('{', pos);
         auto close = source.find('}', pos);
         if (open == source.npos || close == source.npos || close < open) fail("Malformed CSS rule");
@@ -129,14 +162,14 @@ inline std::string css(std::string source, const std::string& scope = {}, const 
             unsigned depth=1;close=open+1;
             for(;close<source.size()&&depth;++close){if(source[close]=='{')++depth;else if(source[close]=='}')--depth;}
             if(depth)fail("Unclosed container query");--close;
-            output+=selector+" {\n"+css(source.substr(open+1,close-open-1),scope,file,line,true,external)+"}\n";
+            output+=selector+" {\n"+css(source.substr(open+1,close-open-1),scope,file,line(),true,external)+"}\n";
             pos=close+1;continue;
         }
         const auto body = source.substr(open + 1, close - open - 1);
         if (body.find('{') != body.npos) fail("Nested CSS rules are unsupported");
         std::string mapped = selector, tag, pseudo;
         if (selector != ":root") {
-            const bool classOnly=std::regex_match(selector,std::regex(R"(^\.[A-Za-z_][A-Za-z0-9_-]*(\.[A-Za-z_][A-Za-z0-9_-]*)*$)"));
+            const bool classOnly=std::regex_match(selector,classPattern);
             if (!classOnly && !std::regex_match(selector, selectorPattern)) fail("Use one simple selector, without descendants or commas: " + selector);
             const auto endTag = selector.find_first_of(".:");
             const auto type = selector.substr(0, endTag);
@@ -167,6 +200,7 @@ inline std::string css(std::string source, const std::string& scope = {}, const 
             }
             if (!scope.empty()) { const auto pseudo = mapped.find(':'); mapped.insert(pseudo == mapped.npos ? mapped.size() : pseudo, "." + scope); }
         }
+        const auto& consumedProperties = cachedCssProperties(tag);
         std::istringstream declarations(body); std::string declaration;
         while (std::getline(declarations, declaration, ';')) {
             declaration = trim(declaration); if (declaration.empty()) continue;
@@ -178,22 +212,22 @@ inline std::string css(std::string source, const std::string& scope = {}, const 
             if(property=="display"&&cssValue!="none"&&cssValue!="flex")fail("CSS_LAYOUT: display expects none/flex");
             if(property=="flex-direction"&&cssValue!="row"&&cssValue!="column")fail("CSS_LAYOUT: flex-direction expects row/column");
             if(property=="flex-wrap"&&cssValue!="wrap"&&cssValue!="nowrap")fail("CSS_LAYOUT: flex-wrap expects wrap/nowrap");
-            if(std::set<std::string>{"width","height","min-width","min-height","max-width","max-height"}.count(property) &&
-               cssValue.rfind("var(",0)!=0&&!std::regex_match(cssValue,std::regex(R"(^[0-9]+(\.[0-9]+)?px$)")))fail("CSS_LAYOUT: finite nonnegative px required");
-            if(property=="flex-basis" && cssValue.rfind("var(",0)!=0 && !std::regex_match(cssValue,std::regex(R"(^[0-9]+(\.[0-9]+)?(px|%)$)")))fail("CSS_LAYOUT: flex-basis requires finite nonnegative px or percentage");
-            if(property=="order" && cssValue.rfind("var(",0)!=0 && !std::regex_match(cssValue,std::regex(R"(^-?[0-9]+$)")))fail("CSS_LAYOUT: order requires an integer");
+            if(cssPropertyIs(property,{"width","height","min-width","min-height","max-width","max-height"}) &&
+               cssValue.rfind("var(",0)!=0&&!std::regex_match(cssValue,pixelsPattern))fail("CSS_LAYOUT: finite nonnegative px required");
+            if(property=="flex-basis" && cssValue.rfind("var(",0)!=0 && !std::regex_match(cssValue,basisPattern))fail("CSS_LAYOUT: flex-basis requires finite nonnegative px or percentage");
+            if(property=="order" && cssValue.rfind("var(",0)!=0 && !std::regex_match(cssValue,orderPattern))fail("CSS_LAYOUT: order requires an integer");
             if(property=="table-column-widths" && cssValue.rfind("var(",0)!=0) {
                 std::istringstream tokens(cssValue);std::string token;bool any=false;
                 while(tokens>>token) {
                     any=true;if(token=="auto")continue;
-                    if(!std::regex_match(token,std::regex(R"(^[0-9]+(\.[0-9]+)?px$)")))fail("CSS_LAYOUT: table columns require auto or nonnegative px");
+                    if(!std::regex_match(token,pixelsPattern))fail("CSS_LAYOUT: table columns require auto or nonnegative px");
                     try {if(!std::isfinite(std::stof(token)))fail("CSS_LAYOUT: finite table width required");}
                     catch(const std::out_of_range&){fail("CSS_LAYOUT: table width exceeds finite range");}
                 }
                 if(!any)fail("CSS_LAYOUT: nonempty table column widths required");
             }
             if(property=="table-selection-width" && cssValue.rfind("var(",0)!=0) {
-                if(!std::regex_match(cssValue,std::regex(R"(^[0-9]+(\.[0-9]+)?px$)")))fail("CSS_LAYOUT: table selection width requires px");
+                if(!std::regex_match(cssValue,pixelsPattern))fail("CSS_LAYOUT: table selection width requires px");
                 try {const auto n=std::stof(cssValue);if(n<24||n>128)fail("CSS_LAYOUT: table selection width requires 24..128px");}
                 catch(const std::out_of_range&){fail("CSS_LAYOUT: table selection width exceeds range");}
             }
@@ -206,14 +240,16 @@ inline std::string css(std::string source, const std::string& scope = {}, const 
                 if (property.rfind("--", 0) != 0) fail(":root only accepts custom properties");
                 if (!scope.empty()) fail("Scoped :root tokens are unsupported; put shared tokens in external CSS");
             } else if(insideQuery && (property=="container-name"||property=="container-type"))fail("CONTAINER_DEPENDENCY: query cannot establish a container");
-            else if (!cssProperties(tag).count(property) && !std::set<std::string>{"display","width","height","min-width","min-height","max-width","max-height","flex-basis","flex-grow","flex-shrink","order"}.count(property) &&
-                     !((tag=="stack"||tag.empty())&&std::set<std::string>{"container-name","container-type","flex-direction","flex-wrap","gap"}.count(property))) fail("Property is not consumed by " + tag + ": " + property);
+            else if (!consumedProperties.count(property) && !cssPropertyIs(property,{"display","width","height","min-width","min-height","max-width","max-height","flex-basis","flex-grow","flex-shrink","order"}) &&
+                     !((tag=="stack"||tag.empty())&&cssPropertyIs(property,{"container-name","container-type","flex-direction","flex-wrap","gap"}))) fail("Property is not consumed by " + tag + ": " + property);
             else if(property=="background-color" && lowerValue(trim(declaration.substr(colon+1))).find("gradient(")!=std::string::npos) fail("Use background for gradients on supported components");
             else if(tag=="table" && !pseudo.empty() && property!="background-color") fail("DataTable row states only consume background-color");
         }
         output += mapped + " {" + body + "}\n";
         pos = close + 1;
     }
+    if (source.size() <= detail::ValidatedCssCache::maxBytes / 2)
+        cache.remember(source, scope, insideQuery, external, output);
     return output;
 }
 } // namespace oneui::ui::syntax
