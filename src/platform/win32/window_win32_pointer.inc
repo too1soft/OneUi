@@ -49,23 +49,20 @@
             KillTimer(hwnd_, kOneUiTooltipTimer);
         }
         hoveredTooltip_ = nextText;
-        tooltipVisible_ = false;
+        const bool wasVisible = std::exchange(tooltipVisible_, false);
         if (!hoveredTooltip_.empty() && hwnd_) {
             SetTimer(hwnd_, kOneUiTooltipTimer, kOneUiTooltipDelayMs, nullptr);
         }
-        requestRedraw();
+        if (wasVisible) requestRedraw();
     }
 
     void clearTooltip() {
+        if (hoveredTooltip_.empty() && !tooltipVisible_) return;
         if (hwnd_) {
             KillTimer(hwnd_, kOneUiTooltipTimer);
         }
-        if (hoveredTooltip_.empty() && !tooltipVisible_) {
-            return;
-        }
         hoveredTooltip_.clear();
-        tooltipVisible_ = false;
-        requestRedraw();
+        if (std::exchange(tooltipVisible_, false)) requestRedraw();
     }
 
     void paintTooltip(Canvas& canvas) const {
@@ -148,6 +145,7 @@
         LPARAM lParam,
         MouseButton button = MouseButton::Left,
         int clickCount = 1) {
+        clearTooltip();
         dispatchMouse(lParam, button, clickCount, "pointer_down", [](Widget& widget, const MouseEvent& event) {
             return widget.onMouseDown(event);
         });
@@ -160,6 +158,7 @@
     }
 
     void dispatchMouseWheel(WPARAM wParam, LPARAM lParam) {
+        clearTooltip();
         if (!prepareInputLayout()) {
             return;
         }

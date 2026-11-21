@@ -30,6 +30,10 @@ public:
     oneui::Color left{25, 59, 95};
     oneui::Color right{214, 99, 44};
     oneui::Color bottom{40, 95, 56};
+    const std::wstring* tooltipAt(oneui::Point) const override {
+        static const std::wstring hint = L"Tool tip test";
+        return &hint;
+    }
     void paint(oneui::Canvas& canvas) override {
         const auto bounds = frame();
         canvas.fillRect({0, 0, bounds.width, bounds.height}, left);
@@ -107,6 +111,30 @@ void verify() {
         SendMessageW(hwnd, WM_PRINTCLIENT, reinterpret_cast<WPARAM>(image.dc), PRF_CLIENT);
         verifyPattern(image, *pattern, rect.right, rect.bottom);
         std::cout << "never-presented hidden window checked\n";
+        // Deliver the real Win32 hover timer directly so this test can also
+        // exercise a timer message that was already queued before dismissal.
+        constexpr WPARAM tooltipTimer = 0x4f12;
+        const auto scale = window->dpiScale();
+        const auto pixel = [scale](float logical) { return static_cast<int>(logical * scale); };
+        const auto move = [&] {
+            SendMessageW(hwnd, WM_MOUSEMOVE, 0, MAKELPARAM(pixel(14), pixel(14)));
+        };
+        const auto tooltipPainted = [&] {
+            SendMessageW(hwnd, WM_TIMER, tooltipTimer, 0);
+            SendMessageW(hwnd, WM_PRINTCLIENT, reinterpret_cast<WPARAM>(image.dc), PRF_CLIENT);
+            return image.at(pixel(35), pixel(37)) != rgb(pattern->left);
+        };
+        move();
+        SendMessageW(hwnd, WM_RBUTTONDOWN, MK_RBUTTON, MAKELPARAM(pixel(14), pixel(14)));
+        check(!tooltipPainted(), "click cancels pending tooltip even if its timer arrives");
+        move();
+        check(tooltipPainted(), "moving again restores normal tooltip hover");
+        POINT wheelPoint{pixel(14), pixel(14)};
+        ClientToScreen(hwnd, &wheelPoint);
+        SendMessageW(hwnd, WM_MOUSEWHEEL, MAKEWPARAM(0, WHEEL_DELTA),
+            MAKELPARAM(wheelPoint.x, wheelPoint.y));
+        check(!tooltipPainted(), "wheel dismisses an already visible tooltip");
+        SendMessageW(hwnd, WM_MOUSELEAVE, 0, 0);
         image.clear();
         SendMessageW(hwnd, WM_PRINTCLIENT, reinterpret_cast<WPARAM>(image.dc), PRF_CLIENT | PRF_CHECKVISIBLE);
         check(image.at(rect.right / 5, rect.bottom / 5) == untouched, "hidden PRF_CHECKVISIBLE does not draw");

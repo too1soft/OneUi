@@ -45,3 +45,11 @@ on the same thread. Queue multiple timed helper messages and send hardware
 mouse input during the first handler. Record both button edges and check that
 all helper messages complete in their original order. Consumer evidence is
 in iShell's `docs/native-migration/responsiveness-3x-4x.md`.
+
+## Hover timers across input
+
+A client press or wheel gesture dismisses the current Win32 tooltip and
+cancels its pending timer. Navigation and scrolling can replace the widget
+under a stationary pointer. A subsequent mouse move can arm a new hover.
+Arming or discarding a hidden tooltip leaves the paint state intact. Hiding
+a visible tooltip requests a redraw.
