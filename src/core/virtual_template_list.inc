@@ -1,4 +1,5 @@
 #include "oneui/layout/virtual_template_list.h"
+#include "internal/scroll_trace.h"
 #include <limits>
 #include <algorithm>
 #include <cmath>
@@ -142,6 +143,13 @@ void VirtualTemplateList::layoutChildren() {
     for (const auto& [key, row] : mounted_) if (!keep.count(key)) removed.push_back(key);
     reconcileChildren(std::move(children));
     for (const auto& key : removed) { mounted_.erase(key); if (retire_) retire_(key); }
+    if (internal::scrollTraceEnabled() && !this->children().empty()) {
+        const Rect first = this->children().front()->frame();
+        internal::writeScrollTrace(internal::ScrollTraceEvent{
+            "virtual_template", "layout", reinterpret_cast<std::uintptr_t>(this),
+            viewport.height, offset_, tops_.back(), double(mounted_.size()), width_,
+            maxScrollOffset(), 0.0, first.y, first.height});
+    }
 }
 Rect VirtualTemplateList::thumb() const {
     auto f = frame();
