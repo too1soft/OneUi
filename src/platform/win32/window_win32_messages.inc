@@ -22,6 +22,17 @@
                     context->root = [this] { return content_; };
                     context->focus = [this](Widget* widget) { return requestFocus(widget, true); };
                     context->scale = [this] { return dpiScale(); };
+                    context->frameRevision = [] { return internal::accessibilityFrameRevision; };
+                    if (internal::scrollTraceEnabled()) {
+                        const auto window = reinterpret_cast<std::uintptr_t>(hwnd_);
+                        context->recordSnapshot = [window](double elapsed, std::size_t visited, std::size_t children) {
+                            internal::ScrollTraceEvent event{"win32-a11y", "snapshot_rebuild", window};
+                            event.durationMs = elapsed;
+                            event.detailA = static_cast<double>(visited);
+                            event.detailB = static_cast<double>(children);
+                            internal::writeScrollTrace(event);
+                        };
+                    }
                     accessibilityProvider_ = new win32_accessibility::Provider(context);
                     context->provider = accessibilityProvider_;
                 }

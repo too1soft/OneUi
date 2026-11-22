@@ -2,6 +2,9 @@
 #include "internal/interaction_reset.h"
 #include "internal/widget_presentation.h"
 #include "paint_invalidation_scope.h"
+#if defined(_WIN32)
+#include "internal/accessibility_frame_revision.h"
+#endif
 
 #include <utility>
 #include <algorithm>
@@ -71,6 +74,11 @@ void Widget::setFrame(Rect frame) {
         return;
     }
     const bool resized = frame_.width != frame.width || frame_.height != frame.height;
+#if defined(_WIN32)
+    if (resized && internal::hasAccessibleFrame(frame_) != internal::hasAccessibleFrame(frame)) {
+        ++internal::accessibilityFrameRevision;
+    }
+#endif
     frame_ = frame;
     if (!resized || !onSizeChanged_) return;
     // Copy permits clearing/replacing the observer from inside its callback.

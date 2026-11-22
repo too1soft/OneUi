@@ -5,16 +5,15 @@
 #include <oleacc.h>
 #include <UIAutomation.h>
 #include <atomic>
+#include <chrono>
 #include <cmath>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <vector>
-#include "oneui/layout/overlay_host.h"
-#include "oneui/controls/popup.h"
 #include "oneui/controls/text_field.h"
-#include "oneui/controls/window_title_bar.h"
 #include "oneui/localization.h"
-#include <unordered_set>
+#include "accessibility_snapshot_win32.h"
 
 namespace oneui::win32_accessibility {
 struct Context {
@@ -24,29 +23,10 @@ struct Context {
     std::function<std::shared_ptr<Widget>()> root;
     std::function<bool(Widget*)> focus;
     std::function<float()> scale;
+    std::function<std::uint64_t()> frameRevision;
+    std::function<void(double, std::size_t, std::size_t)> recordSnapshot;
     bool valid() const { auto value=alive.lock(); return value && value->load() && IsWindow(window); }
 };
-inline void collect(const std::shared_ptr<Widget>& widget,
-                    std::vector<std::shared_ptr<Widget>>& output,
-                    std::unordered_set<Widget*>& visited) {
-    if (!widget || !widget->visible() || !visited.insert(widget.get()).second) return;
-    const auto frame=widget->frame();
-    if (frame.width<=0 || frame.height<=0) return;
-    const auto info=widget->accessibilityInfo();
-    if (info.role!=AccessibilityRole::None || !info.name.empty()) output.push_back(widget);
-    if (auto host=std::dynamic_pointer_cast<OverlayHost>(widget)) {
-        const OverlayEntry* modal=nullptr;
-        for (const auto& entry:host->overlays()) if (entry.child && entry.child->visible() && entry.trapsFocus
-            && (!modal || entry.layer>=modal->layer)) modal=&entry;
-        if (modal) { collect(modal->child,output,visited); return; }
-        collect(host->content(),output,visited);
-        for (const auto& entry:host->overlays()) collect(entry.child,output,visited);
-    }
-    if (auto view=std::dynamic_pointer_cast<View>(widget))
-        for (const auto& child:view->children()) collect(child,output,visited);
-    if (auto popup=std::dynamic_pointer_cast<Popup>(widget); popup && popup->isOpen())
-        collect(popup->content(),output,visited);
-}
 inline LONG role(AccessibilityRole value) {
     switch(value) {
     case AccessibilityRole::Button:return ROLE_SYSTEM_PUSHBUTTON;
@@ -127,7 +107,7 @@ public:
         if(w->disabled()||state.disabled)flags|=STATE_SYSTEM_UNAVAILABLE;
         if(!w->visible())flags|=STATE_SYSTEM_INVISIBLE;
         if(w->isFocusable())flags|=STATE_SYSTEM_FOCUSABLE;
-        if(caption(child)==TitleBarButtonId::None && w==focusedTarget())flags|=STATE_SYSTEM_FOCUSED;
+        if(w->focused() && caption(child)==TitleBarButtonId::None && w==focusedTarget())flags|=STATE_SYSTEM_FOCUSED;
         if(state.selected)flags|=STATE_SYSTEM_SELECTED;
         if(state.checked)flags|=STATE_SYSTEM_CHECKED;
         if(state.pressed)flags|=STATE_SYSTEM_PRESSED;
@@ -220,22 +200,38 @@ private:
     static bool self(const VARIANT& child){return child.vt==VT_I4&&child.lVal==CHILDID_SELF;}
     static HRESULT missing(BSTR* out){if(!out)return E_POINTER;*out=nullptr;return S_FALSE;}
     static HRESULT string(const std::wstring& value,BSTR* out){if(!out)return E_POINTER;*out=SysAllocStringLen(value.data(),static_cast<UINT>(value.size()));return *out?S_OK:E_OUTOFMEMORY;}
-    struct Entry {
-        std::weak_ptr<Widget> widget;
-        TitleBarButtonId button=TitleBarButtonId::None;
-        std::shared_ptr<Widget> lock() const { return widget.lock(); }
+    struct SnapshotKey {
+        std::weak_ptr<Widget> root;
+        std::uint64_t treeRevision;
+        std::uint64_t frameRevision;
     };
     TitleBarButtonId caption(const VARIANT& child) const {
         if(child.vt!=VT_I4||child.lVal<1||static_cast<std::size_t>(child.lVal)>children_.size())return TitleBarButtonId::None;
         return children_[child.lVal-1].button;
     }
-    void refresh(){
-        children_.clear();if(!context_->valid())return;
-        std::vector<std::shared_ptr<Widget>> found;std::unordered_set<Widget*> seen;collect(context_->root(),found,seen);
-        for(auto& w:found){
-            children_.push_back({w});
-            if(std::dynamic_pointer_cast<WindowTitleBar>(w))
-                for(auto id:{TitleBarButtonId::Minimize,TitleBarButtonId::Maximize,TitleBarButtonId::Close})children_.push_back({w,id});
+    void refresh() {
+        if (!context_->valid()) {
+            children_.clear();
+            snapshot_.reset();
+            return;
+        }
+        const auto root = context_->root();
+        const auto treeRevision = root ? root->measureRevision() : 0;
+        const auto frameRevision = context_->frameRevision ? context_->frameRevision() : 0;
+        if (context_->frameRevision && snapshot_ && snapshot_->root.lock() == root &&
+            snapshot_->treeRevision == treeRevision && snapshot_->frameRevision == frameRevision) return;
+
+        using Clock = std::chrono::steady_clock;
+        const auto started = context_->recordSnapshot ? Clock::now() : Clock::time_point{};
+        std::vector<ChildEntry> next;
+        next.reserve(children_.size());
+        std::unordered_set<Widget*> seen;
+        collect(root, next, seen);
+        children_ = std::move(next);
+        snapshot_ = SnapshotKey{root, treeRevision, frameRevision};
+        if (context_->recordSnapshot) {
+            const auto elapsed = std::chrono::duration<double, std::milli>(Clock::now() - started).count();
+            context_->recordSnapshot(elapsed, seen.size(), children_.size());
         }
     }
     std::shared_ptr<Widget> resolve(const VARIANT& child){
@@ -246,7 +242,8 @@ private:
     }
     std::atomic<ULONG> refs_{1};
     std::shared_ptr<Context> context_;
-    std::vector<Entry> children_;
+    std::vector<ChildEntry> children_;
+    std::optional<SnapshotKey> snapshot_;
 };
 inline void retireProvider(HWND window, IAccessible*& ownedProvider) {
     auto* provider = ownedProvider;
