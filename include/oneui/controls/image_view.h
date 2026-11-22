@@ -4,9 +4,11 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <vector>
+#include <memory>
 
 namespace oneui {
+
+namespace rendering { class RasterImage; }
 
 enum class ImageContentMode {
     Contain = 0,
@@ -32,7 +34,7 @@ public:
     // Bounded in-memory PNG data URI. No file, network access or decode cache.
     bool setPngDataUri(const std::string& uri);
     void clearImage();
-    bool hasImage() const { return !pixels_.empty(); }
+    bool hasImage() const { return bool(image_); }
     int imageWidth() const { return width_; }
     int imageHeight() const { return height_; }
 
@@ -49,10 +51,9 @@ public:
     void paint(Canvas& canvas) override;
 
 private:
-    std::vector<std::uint8_t> pixels_;
+    std::shared_ptr<const rendering::RasterImage> image_;
     int width_ = 0;
     int height_ = 0;
-    int stride_ = 0;
     ImageContentMode contentMode_ = ImageContentMode::Contain;
     ImageContentAlignment horizontalAlignment_ = ImageContentAlignment::Center;
     ImageContentAlignment verticalAlignment_ = ImageContentAlignment::Center;

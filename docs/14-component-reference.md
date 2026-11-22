@@ -264,8 +264,8 @@ Begin/Update/Commit/Cancel，程序设值不触发该回调；Escape、隐藏、
 
 ## ImageView
 
-`setRgbaPixels` 复制调用方 RGBA 缓冲；图片控件不接管应用的解码任务。
-`ImageContentMode` 支持 Contain、Cover、Stretch、ActualSize；水平和垂直对齐分别支持
+`setRgbaPixels` 复制调用方的 RGBA 缓冲。Skia 绘制复用同一个不可变图片，窗口缩放和重绘可以继续使用已有的 GPU 纹理，直到替换或清除像素。
+图片解码由调用方负责。`ImageContentMode` 支持 Contain、Cover、Stretch、ActualSize，水平和垂直对齐分别支持
 Start、Center、End。背景与圆角由控件处理，C ABI 和安全 Rust 提供对应入口。
 高频远程画面使用 RealtimeFrameView 的帧提交与合并更新接口。
 

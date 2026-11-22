@@ -1,4 +1,5 @@
 #include "internal/frame_profile.h"
+#include "internal/raster_image.h"
 #include "skia_canvas.h"
 #include "internal/unicode.h"
 #include "skia_path.h"
@@ -52,6 +53,7 @@
 
 namespace oneui::rendering {
 thread_local PrimitivePaintTrace g_primitivePaintTrace;
+
 namespace {
 SkColor toSkColor(Color c) { return SkColorSetARGB(c.a, c.r, c.g, c.b); }
 SkRect toSkRect(Rect r) { return SkRect::MakeXYWH(r.x, r.y, r.width, r.height); }
@@ -138,7 +140,7 @@ struct TextBlobEntry {
 #if defined(ONEUI_CIRCLE_MESH_EXPERIMENT)
 #include "circle_mesh_experiment.inc"
 #endif
-class SkiaCanvasImpl final : public Canvas {
+class SkiaCanvasImpl final : public Canvas, public RasterImageCanvas {
   public:
     explicit SkiaCanvasImpl(SkCanvas &canvas, const std::wstring *defaultFontFamily = nullptr,
                             std::optional<Rect> viewportBounds = std::nullopt)
@@ -710,14 +712,23 @@ class SkiaCanvasImpl final : public Canvas {
             return;
         }
 
+        drawImage(rect, *image);
+    }
+
+    void drawRasterImage(Rect rect, const RasterImage& raster) override {
+        // A stable, immutable SkImage lets Ganesh reuse its texture across paints.
+        if (raster.skImage) drawImage(rect, *raster.skImage);
+    }
+
+  private:
+    void drawImage(Rect rect, const SkImage& image) {
         SkPaint paint;
         paint.setAntiAlias(true);
         // 高质量采样：缩放（尤其缩小，如把大 logo 缩到小尺寸）时用三次 Mitchell 滤波，
         // 避免最近邻的糊边与锯齿。视频按 1:1/放大提交时同样清晰。
-        canvas_.drawImageRect(image, toSkRect(rect), SkSamplingOptions(SkCubicResampler::Mitchell()), &paint);
+        canvas_.drawImageRect(&image, toSkRect(rect), SkSamplingOptions(SkCubicResampler::Mitchell()), &paint);
     }
 
-  private:
     static sk_sp<SkFontMgr> fontManager() {
         static auto manager = makePlatformFontManager();
         return manager;

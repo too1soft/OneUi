@@ -1,4 +1,5 @@
 #include "oneui/controls/image_view.h"
+#include "internal/raster_image.h"
 
 #include <algorithm>
 #include <cmath>
@@ -17,7 +18,7 @@ bool ImageView::setRgbaPixels(
     int width,
     int height,
     int stride) {
-    if (!pixels || width <= 0 || height <= 0 || stride < width * 4) {
+    if (!pixels || width <= 0 || height <= 0 || stride <= 0 || width > stride / 4) {
         return false;
     }
     const auto rows = static_cast<std::size_t>(height);
@@ -25,22 +26,25 @@ bool ImageView::setRgbaPixels(
     if (rows > std::numeric_limits<std::size_t>::max() / rowBytes || length < rows * rowBytes) {
         return false;
     }
-    pixels_.assign(pixels, pixels + rows * rowBytes);
+    auto bytes = SkData::MakeWithCopy(pixels, rows * rowBytes);
+    if (!bytes) {
+        return false;
+    }
+    const auto info = SkImageInfo::Make(width, height, kRGBA_8888_SkColorType, kPremul_SkAlphaType);
+    image_ = std::make_shared<const rendering::RasterImage>(std::move(bytes), info, rowBytes);
     width_ = width;
     height_ = height;
-    stride_ = stride;
     invalidate();
     return true;
 }
 
 void ImageView::clearImage() {
-    if (pixels_.empty()) {
+    if (!image_) {
         return;
     }
-    pixels_.clear();
+    image_.reset();
     width_ = 0;
     height_ = 0;
-    stride_ = 0;
     invalidate();
 }
 
@@ -86,7 +90,7 @@ void ImageView::paint(Canvas& canvas) {
     if (background_.a != 0) {
         canvas.fillRect(bounds, background_, cornerRadius_);
     }
-    if (pixels_.empty() || bounds.width <= 0.0f || bounds.height <= 0.0f) {
+    if (!image_ || bounds.width <= 0.0f || bounds.height <= 0.0f) {
         return;
     }
 
@@ -116,7 +120,13 @@ void ImageView::paint(Canvas& canvas) {
 
     canvas.save();
     canvas.clipRect(bounds);
-    canvas.drawPixels(target, pixels_.data(), width_, height_, stride_, CanvasPixelFormat::Rgba8888);
+    if (auto* rasterCanvas = dynamic_cast<rendering::RasterImageCanvas*>(&canvas)) {
+        rasterCanvas->drawRasterImage(target, *image_);
+    } else {
+        const auto& pixels = image_->pixels;
+        canvas.drawPixels(target, static_cast<const std::uint8_t*>(pixels.addr()),
+            width_, height_, static_cast<int>(pixels.rowBytes()), CanvasPixelFormat::Rgba8888);
+    }
     canvas.restore();
 }
 
