@@ -5,6 +5,9 @@
 #include "skia_path.h"
 #include "text/text_layout.h"
 #include "text/font_family_list.h"
+#if defined(ONEUI_SKIA_RASTER_SSE2)
+#include "platform/win32/skia_raster_sse2.h"
+#endif
 #if defined(ONEUI_CIRCLE_MESH_EXPERIMENT)
 #include "circle_mesh_experiment.h"
 #include "include/core/SkMesh.h"
@@ -55,6 +58,13 @@ namespace oneui::rendering {
 thread_local PrimitivePaintTrace g_primitivePaintTrace;
 
 namespace {
+#if defined(ONEUI_SKIA_RASTER_SSE2)
+[[maybe_unused]] const bool skiaRasterInitialized = [] {
+    win32::installSkiaRasterSse2();
+    return true;
+}();
+#endif
+
 SkColor toSkColor(Color c) { return SkColorSetARGB(c.a, c.r, c.g, c.b); }
 SkRect toSkRect(Rect r) { return SkRect::MakeXYWH(r.x, r.y, r.width, r.height); }
 double currentTimeMs() {

@@ -128,6 +128,8 @@ dist/OneUI-SDK-msvc-bundled-static.zip
 
 从源码构建 Skia 很大且耗时，所以它与日常 OneUI 构建分离。SDK 用户和终端用户不应该执行这一步；这是发布工程任务。
 
+Windows x64 的 MSVC 静态构建在 Skia 150 上启用 SSE2 的纯色行混合和 A8 文字掩码混合。原始构建把这两条热路径编成了标量代码，CPU 特性检测后仍选到相同的实现。启动时安装的混合函数保留 Skia 的像素舍入、行距与尾部处理。`oneui_win32_skia_raster_tests` 覆盖不同宽度、所有源透明度和行距为零的重复掩码行。
+
 依赖补丁不止早期的 WIC GUID 修正：还包括固定 ICU 的 Bidi 修复及 Win7 DirectWrite /
 字体回退补丁。配方、哈希校验与适用范围见[补丁维护说明](../third_party/patches/README.md)。
 “静态 Skia”指链接方式，不代表只能软件渲染；Win32 GPU 路径见[渲染说明](39-rendering-and-validation.md)。

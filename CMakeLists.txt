@@ -126,6 +126,10 @@ endif()
 
 if(WIN32 AND ONEUI_BUILD_PLATFORM_WIN32)
     add_library(oneui_platform_win32 OBJECT ${ONEUI_WIN32_SOURCES})
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC" AND ONEUI_SKIA_MODE STREQUAL "bundled-static")
+        target_sources(oneui_platform_win32 PRIVATE src/platform/win32/skia_raster_sse2.cpp)
+        target_compile_definitions(oneui_platform_win32 PRIVATE ONEUI_SKIA_RASTER_SSE2=1)
+    endif()
 
     target_link_libraries(oneui_platform_win32
         PUBLIC
