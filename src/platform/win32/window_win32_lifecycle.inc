@@ -24,6 +24,9 @@
             throw std::runtime_error("Unable to initialize COM for native background callbacks");
         }
         accessibilityComResult_ = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+        if (SUCCEEDED(accessibilityComResult_)) {
+            win32_accessibility::selectSystemProxyForOfficeConflict();
+        }
         animationFrameTimer_ = CreateWaitableTimerExW(
             nullptr,
             nullptr,

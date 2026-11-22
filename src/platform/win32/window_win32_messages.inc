@@ -25,8 +25,11 @@
                     accessibilityProvider_ = new win32_accessibility::Provider(context);
                     context->provider = accessibilityProvider_;
                 }
-                if (objectId == OBJID_CLIENT)
+                if (objectId == OBJID_CLIENT) {
+                    const win32::DispatchTraceScope trace("msaa_marshal",
+                        reinterpret_cast<std::uintptr_t>(hwnd_), WM_GETOBJECT);
                     return LresultFromObject(IID_IAccessible, wParam, accessibilityProvider_);
+                }
                 if (const auto result = accessibilityAutomation_.reply(hwnd_, wParam, lParam, accessibilityProvider_))
                     return result;
             }

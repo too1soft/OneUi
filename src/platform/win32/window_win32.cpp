@@ -3,6 +3,7 @@
 #include "window_dispatch_trace_win32.h"
 #include "window_win32_paint_trace.h"
 #include "window_win32_gpu_warmup.h"
+#include "accessibility_proxy_win32.h"
 #include "internal/frame_profile.h"
 #include "internal/developer_tools.h"
 #include "internal/runtime_config.h"
