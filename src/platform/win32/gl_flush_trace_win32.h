@@ -21,7 +21,8 @@ inline bool win32GlTraceEnabled() {
 
 enum class GlPhase : std::size_t {
     Compile, Link, CompileStatus, LinkStatus, ProgramQuery, BinaryRead, BinaryWrite, ProgramUse,
-    TextureAllocate, TextureUpload, BufferUpload, Draw, Flush, Finish, Sync, ErrorQuery, Count
+    TextureAllocate, TextureUpload, BufferUpload, Draw, Flush, Finish, Sync, ErrorQuery,
+    Uniform, BufferMap, VertexSetup, Framebuffer, TextureState, RasterState, Count
 };
 
 class GlCallTrace {
@@ -67,14 +68,16 @@ public:
             "gl_compile", "gl_link", "gl_compile_status", "gl_link_status", "gl_program_query",
             "gl_binary_read", "gl_binary_write",
             "gl_program_use", "gl_texture_allocate", "gl_texture_upload", "gl_buffer_upload",
-            "gl_draw", "gl_flush", "gl_finish", "gl_sync", "gl_error_query"
+            "gl_draw", "gl_flush", "gl_finish", "gl_sync", "gl_error_query",
+            "gl_uniform", "gl_buffer_map", "gl_vertex_setup", "gl_framebuffer", "gl_texture_state", "gl_raster_state"
         };
         constexpr std::array submitPhases{
             "gl_submit_compile", "gl_submit_link", "gl_submit_compile_status", "gl_submit_link_status",
             "gl_submit_program_query", "gl_submit_binary_read", "gl_submit_binary_write",
             "gl_submit_program_use", "gl_submit_texture_allocate", "gl_submit_texture_upload",
             "gl_submit_buffer_upload", "gl_submit_draw", "gl_submit_flush", "gl_submit_finish",
-            "gl_submit_sync", "gl_submit_error_query"
+            "gl_submit_sync", "gl_submit_error_query", "gl_submit_uniform", "gl_submit_buffer_map",
+            "gl_submit_vertex_setup", "gl_submit_framebuffer", "gl_submit_texture_state", "gl_submit_raster_state"
         };
         const auto& phases = duringSubmit ? submitPhases : flushPhases;
         static_assert(flushPhases.size() == static_cast<std::size_t>(GlPhase::Count));
@@ -125,11 +128,41 @@ public:
         wrap<GlPhase::BinaryRead, &Functions::fProgramBinary>();
         wrap<GlPhase::BinaryWrite, &Functions::fGetProgramBinary>();
         wrap<GlPhase::ProgramUse, &Functions::fUseProgram>();
+        wrap<GlPhase::ProgramQuery, &Functions::fGetUniformLocation>();
+        wrap<GlPhase::Uniform, &Functions::fUniform1i>();
+        wrap<GlPhase::Uniform, &Functions::fUniform1fv>();
+        wrap<GlPhase::Uniform, &Functions::fUniform2fv>();
+        wrap<GlPhase::Uniform, &Functions::fUniform3fv>();
+        wrap<GlPhase::Uniform, &Functions::fUniform4fv>();
+        wrap<GlPhase::Uniform, &Functions::fUniformMatrix3fv>();
+        wrap<GlPhase::Uniform, &Functions::fUniformMatrix4fv>();
         wrap<GlPhase::TextureAllocate, &Functions::fTexImage2D>();
         wrap<GlPhase::TextureAllocate, &Functions::fTexStorage2D>();
         wrap<GlPhase::TextureUpload, &Functions::fTexSubImage2D>();
+        wrap<GlPhase::TextureState, &Functions::fActiveTexture>();
+        wrap<GlPhase::TextureState, &Functions::fBindTexture>();
+        wrap<GlPhase::TextureState, &Functions::fTexParameteri>();
         wrap<GlPhase::BufferUpload, &Functions::fBufferData>();
         wrap<GlPhase::BufferUpload, &Functions::fBufferSubData>();
+        wrap<GlPhase::BufferMap, &Functions::fMapBuffer>();
+        wrap<GlPhase::BufferMap, &Functions::fMapBufferRange>();
+        wrap<GlPhase::BufferMap, &Functions::fUnmapBuffer>();
+        wrap<GlPhase::VertexSetup, &Functions::fBindBuffer>();
+        wrap<GlPhase::VertexSetup, &Functions::fBindVertexArray>();
+        wrap<GlPhase::VertexSetup, &Functions::fEnableVertexAttribArray>();
+        wrap<GlPhase::VertexSetup, &Functions::fDisableVertexAttribArray>();
+        wrap<GlPhase::VertexSetup, &Functions::fVertexAttribPointer>();
+        wrap<GlPhase::VertexSetup, &Functions::fVertexAttribIPointer>();
+        wrap<GlPhase::Framebuffer, &Functions::fBindFramebuffer>();
+        wrap<GlPhase::Framebuffer, &Functions::fFramebufferTexture2D>();
+        wrap<GlPhase::Framebuffer, &Functions::fCheckFramebufferStatus>();
+        wrap<GlPhase::Framebuffer, &Functions::fBlitFramebuffer>();
+        wrap<GlPhase::Framebuffer, &Functions::fReadPixels>();
+        wrap<GlPhase::RasterState, &Functions::fClear>();
+        wrap<GlPhase::RasterState, &Functions::fEnable>();
+        wrap<GlPhase::RasterState, &Functions::fDisable>();
+        wrap<GlPhase::RasterState, &Functions::fScissor>();
+        wrap<GlPhase::RasterState, &Functions::fViewport>();
         wrap<GlPhase::Draw, &Functions::fDrawArrays>();
         wrap<GlPhase::Draw, &Functions::fDrawElements>();
         wrap<GlPhase::Draw, &Functions::fDrawRangeElements>();
@@ -137,6 +170,7 @@ public:
         wrap<GlPhase::Draw, &Functions::fDrawElementsInstanced>();
         wrap<GlPhase::Flush, &Functions::fFlush>();
         wrap<GlPhase::Finish, &Functions::fFinish>();
+        wrap<GlPhase::Sync, &Functions::fFenceSync>();
         wrap<GlPhase::Sync, &Functions::fWaitSync>();
         wrap<GlPhase::Sync, &Functions::fClientWaitSync>();
         wrap<GlPhase::ErrorQuery, &Functions::fGetError>();
