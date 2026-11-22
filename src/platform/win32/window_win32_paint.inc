@@ -206,7 +206,8 @@
                 flushDeferredImePosition();
                 finishDiagnostics();
                 internal::traceInteractionPaint(interactionPaint, "paint_end", "opengl", 1);
-                paintTrace.write(interactionPaint.window, static_cast<double>(interactionPaint.paintSequence));
+                paintTrace.write(interactionPaint.window, static_cast<double>(interactionPaint.paintSequence),
+                    RECT{dirtyX, dirtyY, dirtyRight, dirtyBottom}, profile.data);
                 return;
             }
             rendererInfo_.reason = "swap-buffers-failed";
@@ -295,7 +296,8 @@
         flushDeferredImePosition();
         finishDiagnostics();
         internal::traceInteractionPaint(interactionPaint, "paint_end", "software", blitSucceeded ? 1 : 0);
-        paintTrace.write(interactionPaint.window, static_cast<double>(interactionPaint.paintSequence));
+        paintTrace.write(interactionPaint.window, static_cast<double>(interactionPaint.paintSequence),
+            RECT{dirtyX, dirtyY, dirtyRight, dirtyBottom}, profile.data);
     }
 
     static int alignedPaintSurfaceSize(int requested) {

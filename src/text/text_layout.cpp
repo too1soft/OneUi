@@ -105,7 +105,8 @@ struct Layout::Impl {
         return boundaries;
     }
 
-    void shape() {
+    void buildParagraph() {
+        internal::FrameSpan buildSpan(internal::FrameStage::TextBuild);
         p::TextStyle style;
         const std::string family = options.family.empty() ? defaultFamily(options.fallbackFamily) : unicode::toUtf8(options.family);
         std::vector<SkString> families;
@@ -133,6 +134,7 @@ struct Layout::Impl {
         paragraphStyle.setStrutStyle(strut);
         bool rtl = options.text.direction == TextDirection::RTL;
         if (options.text.direction == TextDirection::Auto) {
+            internal::FrameSpan bidiSpan(internal::FrameStage::TextBidi);
             UErrorCode error = U_ZERO_ERROR;
             auto* bidi = ubidi_open();
             ubidi_setPara(bidi, reinterpret_cast<const UChar*>(index.utf16.data()), static_cast<int32_t>(index.utf16.size()), UBIDI_DEFAULT_LTR, nullptr, &error);
@@ -196,6 +198,11 @@ struct Layout::Impl {
         }
         addTextRange(cursor, index.wideTo8.size() - 1);
         paragraph = builder->Build();
+    }
+
+    void shape() {
+        buildParagraph();
+        internal::FrameSpan shapeSpan(internal::FrameStage::TextShape);
         const float layoutWidth = options.text.wrap == TextWrapMode::NoWrap && !options.ellipsis ? 1000000.0f : options.width;
         paragraph->layout(layoutWidth);
         // No-wrap text aligns within its natural width; callers place the block.
@@ -263,12 +270,16 @@ std::shared_ptr<Layout> Layout::make(const std::wstring& value, const LayoutOpti
     if (options.text.locale.empty()) options.text.locale = "und";
     if (options.text.wrap == TextWrapMode::NoWrap && !options.ellipsis) options.width = 1000000.0f;
     if (!options.sensitive) {
+        internal::FrameSpan cacheSpan(internal::FrameStage::TextCache);
         if (auto result = cache.find(value, options)) {
             ++counters.cacheHits;
             return result;
         }
     }
-    auto impl = std::make_unique<Impl>(value, options);
+    auto impl = [&] {
+        internal::FrameSpan indexSpan(internal::FrameStage::TextIndex);
+        return std::make_unique<Impl>(value, options);
+    }();
     // Each hard paragraph has its own base direction and cache entry. Edits in
     // one paragraph reuse the shaped results for all unchanged paragraphs.
     if (options.spans.empty() && value.find(L'\n') != std::wstring::npos) {

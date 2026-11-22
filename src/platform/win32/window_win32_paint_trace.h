@@ -1,10 +1,12 @@
 #pragma once
 
+#include "internal/frame_profile.h"
 #include "internal/scroll_trace.h"
 
 #include <windows.h>
 #include <array>
 #include <cstddef>
+#include <utility>
 
 namespace oneui::internal {
 
@@ -24,7 +26,8 @@ public:
         sample.hasCycles = QueryThreadCycleTime(GetCurrentThread(), &sample.cycles) != FALSE;
     }
 
-    void write(std::uintptr_t window, double paintSequence) const {
+    void write(std::uintptr_t window, double paintSequence, const RECT& damage,
+               const FrameProfile& profile) const {
         if (!enabled_) return;
         constexpr const char* phases[]{ "paint_backend_setup", "paint_begin_native", "paint_surface",
                                        "paint_canvas_setup", "paint_widget_tree", "paint_record_finish" };
@@ -41,6 +44,30 @@ public:
                 ? static_cast<double>(after.cycles - before.cycles) : -1.0;
             writeScrollTrace(event);
         }
+
+        ScrollTraceEvent event;
+        event.component = "win32";
+        event.object = window;
+        event.detailA = paintSequence;
+        constexpr std::pair<FrameStage, const char*> textStages[] = {
+            {FrameStage::TextCache, "text_cache"},
+            {FrameStage::TextIndex, "text_index"},
+            {FrameStage::TextBuild, "text_build"},
+            {FrameStage::TextBidi, "text_bidi"},
+            {FrameStage::TextShape, "text_shape"},
+        };
+        for (const auto& [stage, name] : textStages) {
+            event.phase = name;
+            event.durationMs = profile.ms[static_cast<std::size_t>(stage)];
+            if (event.durationMs > 0.0) writeScrollTrace(event);
+        }
+        event.phase = "paint_damage";
+        event.inputDelta = damage.left;
+        event.offset = damage.top;
+        event.target = damage.right - damage.left;
+        event.velocity = damage.bottom - damage.top;
+        event.durationMs = 0.0;
+        writeScrollTrace(event);
     }
 
 private:
