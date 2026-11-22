@@ -50,6 +50,7 @@ $env:ONEUI_RENDER_TRACE_FILE = Join-Path $PWD "out/render-default.log"
 ## 已有优化与边界
 
 - 控件通过矩形失效传播局部重绘；窗口按物理像素 dirty rect 裁剪。
+- `View::paint` 先用子控件的布局边框判断能否直接绘制。布局边框错开裁剪区时，再检查包含后代和越界绘制的边界，使弹窗、阴影和溢出的内容可以进入裁剪区。
 - Win32 交互绘制由定时器调度合并；不同事件、resize 和刷新入口仍需分别测量。
 - 软件 backing surface 预留增长容量，GPU surface 按当前窗口尺寸管理。
 - 文字共享布局与缓存见[文字引擎状态](38-text-and-interaction-engine.md)。

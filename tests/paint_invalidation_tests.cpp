@@ -110,6 +110,38 @@ bool childDamageDoesNotScanSiblings() {
     return bounded && overflowPreserved && overflowPaintLocal;
 }
 
+bool clipChecksSkipVisibleDescendantBoundsAndKeepOverflow() {
+    struct Leaf final : Widget {
+        mutable unsigned boundsReads = 0;
+        unsigned paints = 0;
+        Rect paintBounds() const override { ++boundsReads; return frame(); }
+        void paint(Canvas&) override { ++paints; }
+    };
+    View root;
+    auto visible = std::make_shared<View>();
+    visible->setFrame({0, 0, 100, 100});
+    auto visibleLeaf = std::make_shared<Leaf>();
+    visibleLeaf->setFrame({5, 5, 20, 20});
+    visible->add(visibleLeaf);
+    root.add(visible);
+
+    auto outside = std::make_shared<View>();
+    outside->setFrame({120, 15, 30, 30});
+    auto overflow = std::make_shared<Leaf>();
+    overflow->setFrame({22, 22, 20, 20});
+    outside->add(overflow);
+    auto clipped = std::make_shared<Leaf>();
+    clipped->setFrame({125, 20, 15, 15});
+    outside->add(clipped);
+    root.add(outside);
+
+    test_support::RecordingCanvas canvas;
+    canvas.clipOverride = Rect{0, 0, 80, 80};
+    root.paint(canvas);
+    return visibleLeaf->paints == 1 && visibleLeaf->boundsReads == 0 &&
+        overflow->paints == 1 && overflow->boundsReads == 1 && clipped->paints == 0;
+}
+
 bool reentrantContentChange() {
     auto root = std::make_shared<Stack>();
     root->setEngine(StackEngine::Yoga);
@@ -170,6 +202,10 @@ bool terminalOutputPreservesLayout() {
 }
 
 int main() {
+    if (!clipChecksSkipVisibleDescendantBoundsAndKeepOverflow()) {
+        std::cerr << "FAIL: clip bounds traversal or overflow paint changed\n";
+        return 1;
+    }
     {
         Label label(L"Settings");
         const auto revision = label.measureRevision();

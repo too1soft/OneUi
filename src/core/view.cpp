@@ -133,12 +133,18 @@ void View::paint(Canvas& canvas) {
     { internal::FrameSpan span(internal::FrameStage::Layout); layoutChildren(); }
     const auto clip = canvas.clipBounds();
     const bool canCullByClip = clip && clip->width > 0.0f && clip->height > 0.0f;
+    const auto intersectsClip = [&](const Widget& child) {
+        // An on-clip frame can paint directly. Check the expanded bounds when
+        // the frame misses the clip, since shadows and popups can extend past it.
+        return !canCullByClip || intersects(child.frame(), *clip) ||
+               intersects(child.paintBounds(), *clip);
+    };
     bool hasAboveSiblings = false;
     for (const auto& child : children_) {
         if (!child->visible()) {
             continue;
         }
-        if (canCullByClip && !intersects(child->paintBounds(), *clip)) {
+        if (!intersectsClip(*child)) {
             continue;
         }
         if (child->paintsAboveSiblings()) {
@@ -157,7 +163,7 @@ void View::paint(Canvas& canvas) {
         if (!child->visible() || !child->paintsAboveSiblings()) {
             continue;
         }
-        if (canCullByClip && !intersects(child->paintBounds(), *clip)) {
+        if (!intersectsClip(*child)) {
             continue;
         }
         internal::DiagnosticPaintSpan diagnostic(*child);
