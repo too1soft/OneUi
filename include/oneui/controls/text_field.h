@@ -31,6 +31,7 @@ public:
     void setPlaceholder(std::wstring placeholder);
     void setPlaceholderVisibleWhenFocused(bool visible) { placeholderVisibleWhenFocused_ = visible; invalidate(); }
     bool placeholderVisibleWhenFocused() const { return placeholderVisibleWhenFocused_; }
+    void setCoalesceEditPaint(bool enabled) { coalesceEditPaint_ = enabled; }
     void setText(std::wstring text);
     const std::wstring& text() const;
     void setCaretIndex(std::size_t index);
@@ -165,6 +166,7 @@ private:
 
     std::wstring placeholder_;
     bool placeholderVisibleWhenFocused_ = false;
+    bool coalesceEditPaint_ = false;
     std::wstring text_;
     std::wstring composition_;
     std::size_t compositionCaret_ = 0;

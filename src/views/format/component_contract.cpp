@@ -65,6 +65,7 @@ const std::map<std::string, ComponentContract> &registry()
         ++r.at("Input").version; // Explicit password mask, appended property ID 15.
         ++r.at("Input").version; // Explicit accessible-name contract, property ID 17.
         ++r.at("Input").version; // Placeholder visible while focused, property ID 18.
+        ++r.at("Input").version; // Opt-in coalescing for committed edits, property ID 19.
         ++r.at("Checkbox").version; // Tooltip property ID 13.
         ++r.at("Dialog").version; // Optional edge-to-edge slots and header/close alignment, IDs 15-17.
         ++r.at("Select").version; // Optional indicator icon, appended property ID 13.

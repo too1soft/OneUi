@@ -5,6 +5,7 @@
 #include "oneui/style.h"
 #include "oneui/style_sheet.h"
 #include "internal/animation_wake.h"
+#include "internal/edit_presentation.h"
 #include "internal/unicode.h"
 #include "text/text_layout.h"
 
@@ -1156,6 +1157,8 @@ bool TextField::assignText(std::wstring text, std::size_t nextCaretIndex, bool r
         return false;
     }
 
+    if (coalesceEditPaint_) internal::EditPresentationScope::coalesce();
+
     if (recordUndo) {
         undoStack_.push_back(TextEditEntry{before, makeEditSnapshot()});
         redoStack_.clear();
@@ -1200,6 +1203,7 @@ bool TextField::restoreEditSnapshot(const TextEditSnapshot& snapshot) {
     invalidateTextContents();
 
     const std::wstring current = text_;
+    if (current != previous && coalesceEditPaint_) internal::EditPresentationScope::coalesce();
     const auto callback = onChanged_;
     if (callback) callback(current);
     return true;

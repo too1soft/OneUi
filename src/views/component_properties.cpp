@@ -294,6 +294,7 @@ void Mount::set(Element &e, const std::string &key, bool value) {
     }
     if(e.component=="Popup" && key=="open") {e.as<Popup>()->setOpen(value);return;}
     if(key=="placeholder-when-focused") {e.as<TextField>()->setPlaceholderVisibleWhenFocused(value);return;}
+    if(key=="coalesce-edit-paint") {e.as<TextField>()->setCoalesceEditPaint(value);return;}
     if(e.component=="ReorderableGrid") {
         if(key=="reorder-enabled"){e.as<ReorderableGrid>()->setReorderEnabled(value);return;}
         if(key=="item-drag-enabled"){e.as<ReorderableGrid>()->setItemDragEnabled(value);return;}

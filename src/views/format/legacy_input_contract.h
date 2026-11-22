@@ -6,7 +6,8 @@ namespace oneview {
 // placeholder-when-focused (ID 18) was appended. Never derive historical rows
 // from the mutable current registry.
 inline const std::vector<ComponentContract>& legacyInputContracts() {
-    static const std::vector<ComponentContract> contracts = {
+    static const auto contracts = [] {
+        std::vector<ComponentContract> inputs = {
         {"Input", "leaf", 4, 11, {
             {1, 3, 1, "basis", ""},
             {2, 4, 1, "class", ""},
@@ -28,7 +29,13 @@ inline const std::vector<ComponentContract>& legacyInputContracts() {
         }, {
             {1, "submit", {}},
         }},
-    };
+        };
+        auto withPlaceholder = inputs.front();
+        ++withPlaceholder.version;
+        withPlaceholder.properties.push_back({18, 1, 3, "placeholder-when-focused", ""});
+        inputs.push_back(std::move(withPlaceholder));
+        return inputs;
+    }();
     return contracts;
 }
 } // namespace oneview

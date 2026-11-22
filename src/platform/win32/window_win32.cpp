@@ -26,6 +26,7 @@
 #include "internal/scroll_trace.h"
 #include "internal/interaction_trace.h"
 #include "internal/animation_wake.h"
+#include "internal/edit_presentation.h"
 #include "internal/input_layout.h"
 #include "platform/shared/skia_canvas.h"
 #include "platform/shared/title_bar_hit.h"

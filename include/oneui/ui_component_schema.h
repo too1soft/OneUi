@@ -71,7 +71,7 @@ enum class ValueType { None, Text, Boolean, Integer, Number, Strings, Columns, R
     X(ValidationMessage, "label", "text", None) \
     X(TextArea, "input", "text placeholder line-height read-only", Text) \
     X(Checkbox, "checkbox", "text checked tooltip", Boolean) \
-    X(Input, "input", "text placeholder password password-mask read-only prefix-icon accessible-name placeholder-when-focused", Text) \
+    X(Input, "input", "text placeholder password password-mask read-only prefix-icon accessible-name placeholder-when-focused coalesce-edit-paint", Text) \
     X(SearchInput, "input", "text placeholder prefix-icon placeholder-when-focused", Text) \
     X(Switch, "switch", "text checked", Boolean) \
     X(Select, "select", "items selectedIndex indicator-icon", Integer) \
@@ -138,6 +138,7 @@ constexpr ValueType propertyType(Kind kind,std::string_view key) {
     if(!supports(kind,key))return ValueType::None;
     if(kind==Kind::VirtualList && key=="multiple")return ValueType::Boolean;
     if(key=="placeholder-when-focused")return ValueType::Boolean;
+    if(key=="coalesce-edit-paint")return ValueType::Boolean;
     if(key=="clip-content")return ValueType::Boolean;
     if(kind==Kind::Popup && contains("anchor-x anchor-y anchor-width anchor-height",key))return ValueType::Number;
     if(kind==Kind::ReorderableGrid) {
