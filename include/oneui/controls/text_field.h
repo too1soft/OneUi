@@ -159,6 +159,7 @@ private:
     Rect verticalScrollbarTrack() const;
     Rect verticalScrollbarThumb() const;
     void invalidateTextMetrics();
+    void invalidateTextContents();
     bool hasInteractionState() const override;
     void resetInteractionState() override;
 

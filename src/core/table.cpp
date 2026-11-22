@@ -2,6 +2,7 @@
 #include "oneui/controls/table.h"
 #include "internal/wheel_motion.h"
 #include "internal/widget_presentation.h"
+#include "internal/scroll_trace.h"
 
 #include "oneui/icon.h"
 #include "oneui/style.h"

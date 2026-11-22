@@ -51,6 +51,12 @@ void Table::paint(Canvas& canvas) {
     }
     if (columns_.empty()) return;
 
+    if (internal::scrollTraceEnabled()) {
+        internal::writeScrollTrace(internal::ScrollTraceEvent{
+            "table", "paint", reinterpret_cast<std::uintptr_t>(this), rect.x, rect.y,
+            rect.width, rect.height, 0, 0, 0, static_cast<double>(rows_.size()), 0});
+    }
+
     const float headerHeight = std::max(1.0f, style.headerHeight);
     const Rect headerRect{rect.x, rect.y, rect.width, std::min(rect.height, headerHeight)};
     const Rect contentRect{rect.x, rect.y + headerHeight, rect.width, std::max(0.0f, rect.height - headerHeight)};

@@ -1,6 +1,7 @@
 #include "oneui/controls/button.h"
 #include "oneui/controls/label.h"
 #include "oneui/controls/terminal_view.h"
+#include "oneui/controls/text_field.h"
 #include "oneui/layout/stack.h"
 #include "support/recording_canvas.h"
 #include <chrono>
@@ -201,6 +202,39 @@ bool terminalOutputPreservesLayout() {
     return root->layoutStats().calculations > before;
 }
 
+bool textEditingPreservesAssignedLayout() {
+    auto root = std::make_shared<Stack>();
+    auto field = std::make_shared<TextField>(L"Filter");
+    root->setEngine(StackEngine::Yoga);
+    root->add(field);
+    root->setFrame({0, 0, 800, 600});
+    field->onFocusChanged(true);
+    test_support::RecordingCanvas canvas;
+    root->paint(canvas);
+    Rect damage{};
+    root->setRectInvalidator([&](Rect rect) { damage = rect; });
+    const auto revision = root->measureRevision();
+    const auto calculations = root->layoutStats().calculations;
+    if (!field->onTextCommitted(L"search")) return false;
+    const Rect box = field->frame();
+    const bool editDamageIsLocal = damage.x == box.x && damage.y == box.y &&
+        damage.width == box.width && damage.height == box.height;
+    field->setSelectionRange(1, 5);
+    field->setTextComposition(L"ほ", 1);
+    field->setTextComposition({}, 0);
+    if (!field->undo() || !field->text().empty()) return false;
+    root->paint(canvas);
+    if (!editDamageIsLocal || root->measureRevision() != revision ||
+        root->layoutStats().calculations != calculations) return false;
+
+    struct ContentSizedField final : TextField {
+        Size naturalSize() const override { return {static_cast<float>(text().size()), 40}; }
+    } custom;
+    const auto customRevision = custom.measureRevision();
+    custom.setText(L"Content size changes");
+    return custom.measureRevision() != customRevision && custom.naturalSize().width > 0;
+}
+
 int main() {
     if (!clipChecksSkipVisibleDescendantBoundsAndKeepOverflow()) {
         std::cerr << "FAIL: clip bounds traversal or overflow paint changed\n";
@@ -231,6 +265,10 @@ int main() {
     }
     if (!terminalOutputPreservesLayout()) {
         std::cerr << "FAIL: terminal paint damage expanded or invalidated layout\n";
+        return 1;
+    }
+    if (!textEditingPreservesAssignedLayout()) {
+        std::cerr << "FAIL: text edit damage expanded or custom measurement was skipped\n";
         return 1;
     }
     bool layoutDamagePassed = true;

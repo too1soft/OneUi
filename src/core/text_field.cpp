@@ -11,6 +11,7 @@
 #include <algorithm>
 #include "internal/ui_clock.h"
 #include <cmath>
+#include <typeinfo>
 #include <utility>
 
 namespace oneui {
@@ -255,7 +256,7 @@ bool TextField::setTextPosition(TextPosition position) {
         textLayout_->logical->floor(offset) != offset) return false;
     setCaretIndexInternal(offset);
     caretAffinity_ = position.affinity;
-    ensureCaretVisible(); invalidate();
+    ensureCaretVisible(); invalidateTextContents();
     return true;
 }
 
@@ -355,7 +356,7 @@ void TextField::setSelectionRange(std::size_t start, std::size_t end) {
     caretIndex_ = textLayout_->logical->floor(std::min(end, size));
     hasSelection_ = selectionAnchor_ != caretIndex_;
     ensureCaretVisible();
-    invalidate();
+    invalidateTextContents();
 }
 
 std::size_t TextField::selectionStart() const {
@@ -421,7 +422,7 @@ void TextField::clearSelection() {
     }
     hasSelection_ = false;
     selectionAnchor_ = caretIndex();
-    invalidate();
+    invalidateTextContents();
 }
 
 bool TextField::copySelectionToClipboard(Clipboard& clipboard) const {
@@ -563,7 +564,7 @@ void TextField::setVerticalScrollOffset(float offset) {
         return;
     }
     verticalScrollOffset_ = next;
-    invalidate();
+    invalidateTextContents();
 }
 
 float TextField::verticalScrollOffset() const {
@@ -652,12 +653,12 @@ void TextField::bindText(State<std::wstring>& state) {
         if (!applyingInternalTextChange_) {
             clearEditHistory();
         }
-        invalidate();
+        invalidateTextContents();
     });
     text_ = value();
     setCaretIndexInternal(text_.size());
     clearEditHistory();
-    invalidate();
+    invalidateTextContents();
 }
 
 void TextField::setOnChanged(std::function<void(const std::wstring&)> callback) {
@@ -887,7 +888,7 @@ bool TextField::onKeyDown(const KeyEvent& event) {
         const auto target = textLayout_->display->moveVisual(current, direction);
         setCaretIndexInternal(fromDisplayOffset(target.offset), event.shift);
         caretAffinity_ = target.affinity;
-        ensureCaretVisible(); invalidate();
+        ensureCaretVisible(); invalidateTextContents();
         return true;
     }
 
@@ -1037,10 +1038,12 @@ bool TextField::replaceTextRange(std::size_t start, std::size_t end, const std::
 }
 void TextField::setTextComposition(std::wstring text, std::size_t caret) {
     if (!editable() && !text.empty()) return;
+    const auto nextCaret = unicode::boundary(text, caret);
+    if (text == composition_ && nextCaret == compositionCaret_) return;
     composition_ = std::move(text);
-    compositionCaret_ = unicode::boundary(composition_, caret);
+    compositionCaret_ = nextCaret;
     invalidateTextMetrics();
-    invalidate();
+    invalidateTextContents();
 }
 Rect TextField::textInputCaretRect() const {
     ensureTextLayout();
@@ -1113,7 +1116,7 @@ bool TextField::tickAnimations(double nowMs) {
         needsPaint = true;
     }
     if (needsPaint) {
-        invalidate();
+        invalidateTextContents();
     }
     return keepScheduling;
 }
@@ -1158,7 +1161,6 @@ bool TextField::assignText(std::wstring text, std::size_t nextCaretIndex, bool r
         redoStack_.clear();
     }
 
-    invalidate();
     restartCaretBlink();
     const auto callback = onChanged_;
     if (callback) callback(current);
@@ -1181,7 +1183,7 @@ bool TextField::restoreEditSnapshot(const TextEditSnapshot& snapshot) {
         selectionAnchor_ = std::min(snapshot.selectionAnchor, value().size());
         hasSelection_ = snapshot.hasSelection && selectionAnchor_ != caretIndex_;
         ensureCaretVisible();
-        invalidate();
+        invalidateTextContents();
         return false;
     }
 
@@ -1195,7 +1197,7 @@ bool TextField::restoreEditSnapshot(const TextEditSnapshot& snapshot) {
     selectionAnchor_ = std::min(snapshot.selectionAnchor, text_.size());
     hasSelection_ = snapshot.hasSelection && selectionAnchor_ != caretIndex_;
     ensureCaretVisible();
-    invalidate();
+    invalidateTextContents();
 
     const std::wstring current = text_;
     const auto callback = onChanged_;
@@ -1213,7 +1215,7 @@ void TextField::clampCaret() {
     const std::size_t next = textLayout_->logical->floor(caretIndex_);
     if (next != caretIndex_) {
         caretIndex_ = next;
-        invalidate();
+        invalidateTextContents();
     }
     ensureCaretVisible();
 }
@@ -1249,7 +1251,6 @@ void TextField::setCaretIndexInternal(std::size_t index, bool extendSelection) {
     }
     ensureCaretVisible();
     restartCaretBlink();
-    invalidate();
 }
 
 bool TextField::deleteSelection() {
@@ -1337,7 +1338,7 @@ void TextField::beginVisualTransition(TextFieldStyle from, TextFieldStyle target
 void TextField::restartCaretBlink() {
     caretBlinkStartMs_ = currentTimeMs();
     caretBlinkVisible_ = true;
-    invalidate();
+    invalidateTextContents();
     if (focused() && editable()) {
         requestAnimationFrame();
     }
@@ -1362,7 +1363,7 @@ bool TextField::moveCaretVertically(int direction, bool extendSelection) {
     const auto target = textLayout_->display->moveVertical(position, direction, x);
     setCaretIndexInternal(fromDisplayOffset(target.offset), extendSelection);
     caretAffinity_ = target.affinity; verticalCaretX_ = x;
-    ensureCaretVisible(); invalidate();
+    ensureCaretVisible(); invalidateTextContents();
     return true;
 }
 
@@ -1426,6 +1427,17 @@ Rect TextField::verticalScrollbarThumb() const {
 
 
 void TextField::invalidateTextMetrics() { textLayout_.reset(); }
+
+void TextField::invalidateTextContents() {
+    // Built-in text controls draw inside a layout-assigned box. Derived
+    // controls may measure their content, so keep their layout notification.
+    const auto& kind = typeid(*this);
+    if (kind == typeid(TextField) || kind == typeid(TextArea)) {
+        invalidatePaint();
+    } else {
+        invalidate();
+    }
+}
 
 
 
