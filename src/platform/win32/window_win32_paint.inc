@@ -171,10 +171,12 @@
             paintSurface_->draw(presentCanvas, 0.0f, 0.0f);
             const double copyEndMs = traceLayout ? currentTimeMs() : 0.0;
             const bool traceGl = traceLayout && internal::win32GlTraceEnabled();
-            std::optional<internal::GlFlushTrace> glTrace;
+            std::optional<internal::GlCallTrace> glTrace;
+            std::optional<internal::GlCallTrace> glSubmitTrace;
             ULONG64 cyclesBeforeFlush = 0, cyclesAfterFlush = 0;
+            ULONG64 cyclesBeforeSubmit = 0, cyclesAfterSubmit = 0;
             if (traceGl) {
-                const internal::GlFlushTrace::Scope scope(&glTrace.emplace());
+                const internal::GlCallTrace::Scope scope(&glTrace.emplace());
                 QueryThreadCycleTime(GetCurrentThread(), &cyclesBeforeFlush);
                 grContext_->flush();
                 QueryThreadCycleTime(GetCurrentThread(), &cyclesAfterFlush);
@@ -182,7 +184,14 @@
                 grContext_->flush();
             }
             const double flushEndMs = traceLayout ? currentTimeMs() : 0.0;
-            grContext_->submit(GrSyncCpu::kNo);
+            if (traceGl) {
+                const internal::GlCallTrace::Scope scope(&glSubmitTrace.emplace());
+                QueryThreadCycleTime(GetCurrentThread(), &cyclesBeforeSubmit);
+                grContext_->submit(GrSyncCpu::kNo);
+                QueryThreadCycleTime(GetCurrentThread(), &cyclesAfterSubmit);
+            } else {
+                grContext_->submit(GrSyncCpu::kNo);
+            }
             const double submitEndMs = traceLayout ? currentTimeMs() : 0.0;
             internal::traceInteractionPaint(interactionPaint, "submit_end", "opengl");
             const double presentStarted = currentTimeMs();
@@ -203,6 +212,10 @@
                         recordGpuPhase("paint_gpu_flush_cycles", 0.0,
                             static_cast<double>(cyclesAfterFlush - cyclesBeforeFlush));
                     glTrace->write(interactionPaint.window, sequence);
+                    if (cyclesBeforeSubmit && cyclesAfterSubmit >= cyclesBeforeSubmit)
+                        recordGpuPhase("paint_gpu_submit_cycles", 0.0,
+                            static_cast<double>(cyclesAfterSubmit - cyclesBeforeSubmit));
+                    glSubmitTrace->write(interactionPaint.window, sequence, true);
                 }
                 recordGpuPhase("paint_gpu_submit", submitEndMs - flushEndMs);
                 recordGpuPhase("paint_shader_cache", profile.data.ms[static_cast<size_t>(internal::FrameStage::ShaderCacheLoad)],

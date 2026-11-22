@@ -21,24 +21,24 @@ inline bool win32GlTraceEnabled() {
 
 enum class GlPhase : std::size_t {
     Compile, Link, CompileStatus, LinkStatus, ProgramQuery, BinaryRead, BinaryWrite, ProgramUse,
-    TextureAllocate, TextureUpload, BufferUpload, Draw, Sync, Count
+    TextureAllocate, TextureUpload, BufferUpload, Draw, Flush, Finish, Sync, ErrorQuery, Count
 };
 
-class GlFlushTrace {
+class GlCallTrace {
     struct Sample {
         double milliseconds = 0.0;
         unsigned calls = 0;
     };
 
-    static inline thread_local GlFlushTrace* active_ = nullptr;
+    static inline thread_local GlCallTrace* active_ = nullptr;
     std::array<Sample, static_cast<std::size_t>(GlPhase::Count)> stages_{};
 
 public:
     class Scope {
-        GlFlushTrace* previous_ = active_;
+        GlCallTrace* previous_ = active_;
 
     public:
-        explicit Scope(GlFlushTrace* trace) { active_ = trace; }
+        explicit Scope(GlCallTrace* trace) { active_ = trace; }
         ~Scope() { active_ = previous_; }
         Scope(const Scope&) = delete;
         Scope& operator=(const Scope&) = delete;
@@ -62,14 +62,22 @@ public:
         }
     };
 
-    void write(std::uintptr_t window, double sequence) const {
-        constexpr std::array phases{
+    void write(std::uintptr_t window, double sequence, bool duringSubmit = false) const {
+        constexpr std::array flushPhases{
             "gl_compile", "gl_link", "gl_compile_status", "gl_link_status", "gl_program_query",
             "gl_binary_read", "gl_binary_write",
             "gl_program_use", "gl_texture_allocate", "gl_texture_upload", "gl_buffer_upload",
-            "gl_draw", "gl_sync"
+            "gl_draw", "gl_flush", "gl_finish", "gl_sync", "gl_error_query"
         };
-        static_assert(phases.size() == static_cast<std::size_t>(GlPhase::Count));
+        constexpr std::array submitPhases{
+            "gl_submit_compile", "gl_submit_link", "gl_submit_compile_status", "gl_submit_link_status",
+            "gl_submit_program_query", "gl_submit_binary_read", "gl_submit_binary_write",
+            "gl_submit_program_use", "gl_submit_texture_allocate", "gl_submit_texture_upload",
+            "gl_submit_buffer_upload", "gl_submit_draw", "gl_submit_flush", "gl_submit_finish",
+            "gl_submit_sync", "gl_submit_error_query"
+        };
+        const auto& phases = duringSubmit ? submitPhases : flushPhases;
+        static_assert(flushPhases.size() == static_cast<std::size_t>(GlPhase::Count));
         for (std::size_t i = 0; i < phases.size(); ++i) {
             const auto& sample = stages_[i];
             if (!sample.calls) continue;
@@ -94,7 +102,7 @@ class TracedWin32GlInterface final : public GrGLInterface {
     void wrap() {
         if (!(fFunctions.*Function)) return;
         fFunctions.*Function = [native = native_.get()](auto... args) -> decltype(auto) {
-            const GlFlushTrace::Span timer(Phase);
+            const GlCallTrace::Span timer(Phase);
             return (native->fFunctions.*Function)(args...);
         };
     }
@@ -109,7 +117,7 @@ public:
         if (fFunctions.fGetProgramiv) {
             fFunctions.fGetProgramiv = [native = native_.get()](GrGLuint program, GrGLenum name, GrGLint* result) {
                 constexpr GrGLenum linkStatus = 0x8B82; // GL_LINK_STATUS
-                const GlFlushTrace::Span timer(name == linkStatus ? GlPhase::LinkStatus : GlPhase::ProgramQuery);
+                const GlCallTrace::Span timer(name == linkStatus ? GlPhase::LinkStatus : GlPhase::ProgramQuery);
                 native->fFunctions.fGetProgramiv(program, name, result);
             };
         }
@@ -127,10 +135,11 @@ public:
         wrap<GlPhase::Draw, &Functions::fDrawRangeElements>();
         wrap<GlPhase::Draw, &Functions::fDrawArraysInstanced>();
         wrap<GlPhase::Draw, &Functions::fDrawElementsInstanced>();
-        wrap<GlPhase::Sync, &Functions::fFlush>();
-        wrap<GlPhase::Sync, &Functions::fFinish>();
+        wrap<GlPhase::Flush, &Functions::fFlush>();
+        wrap<GlPhase::Finish, &Functions::fFinish>();
         wrap<GlPhase::Sync, &Functions::fWaitSync>();
         wrap<GlPhase::Sync, &Functions::fClientWaitSync>();
+        wrap<GlPhase::ErrorQuery, &Functions::fGetError>();
     }
 };
 
