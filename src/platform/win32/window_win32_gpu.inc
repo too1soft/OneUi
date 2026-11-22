@@ -68,7 +68,9 @@
         traceGpu("context-current");
         GrContextOptions contextOptions;
         contextOptions.fPersistentCache = rendering::shaderCache();
-        grContext_ = GrDirectContexts::MakeGL(contextOptions);
+        grContext_ = internal::win32GlTraceEnabled()
+            ? GrDirectContexts::MakeGL(internal::makeWin32GlTraceInterface(), contextOptions)
+            : GrDirectContexts::MakeGL(contextOptions);
         if (!grContext_) {
             rendererInfo_.reason = "ganesh-context-failed";
             traceGpu("ganesh-context-failed");

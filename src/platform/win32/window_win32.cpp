@@ -2,6 +2,7 @@
 #include "window_event_loop_win32.h"
 #include "window_dispatch_trace_win32.h"
 #include "window_win32_paint_trace.h"
+#include "gl_flush_trace_win32.h"
 #include "window_win32_gpu_warmup.h"
 #include "accessibility_proxy_win32.h"
 #include "internal/frame_profile.h"
@@ -14,6 +15,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <iomanip>
+#include <optional>
 #include "oneui/platform/window.h"
 #include "oneui/platform/dpi.h"
 

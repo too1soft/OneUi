@@ -170,7 +170,17 @@
             presentCanvas->clear(SK_ColorBLACK);
             paintSurface_->draw(presentCanvas, 0.0f, 0.0f);
             const double copyEndMs = traceLayout ? currentTimeMs() : 0.0;
-            grContext_->flush();
+            const bool traceGl = traceLayout && internal::win32GlTraceEnabled();
+            std::optional<internal::GlFlushTrace> glTrace;
+            ULONG64 cyclesBeforeFlush = 0, cyclesAfterFlush = 0;
+            if (traceGl) {
+                const internal::GlFlushTrace::Scope scope(&glTrace.emplace());
+                QueryThreadCycleTime(GetCurrentThread(), &cyclesBeforeFlush);
+                grContext_->flush();
+                QueryThreadCycleTime(GetCurrentThread(), &cyclesAfterFlush);
+            } else {
+                grContext_->flush();
+            }
             const double flushEndMs = traceLayout ? currentTimeMs() : 0.0;
             grContext_->submit(GrSyncCpu::kNo);
             const double submitEndMs = traceLayout ? currentTimeMs() : 0.0;
@@ -188,6 +198,12 @@
                 };
                 recordGpuPhase("paint_gpu_copy", copyEndMs - submitStartMs);
                 recordGpuPhase("paint_gpu_flush", flushEndMs - copyEndMs);
+                if (traceGl) {
+                    if (cyclesBeforeFlush && cyclesAfterFlush >= cyclesBeforeFlush)
+                        recordGpuPhase("paint_gpu_flush_cycles", 0.0,
+                            static_cast<double>(cyclesAfterFlush - cyclesBeforeFlush));
+                    glTrace->write(interactionPaint.window, sequence);
+                }
                 recordGpuPhase("paint_gpu_submit", submitEndMs - flushEndMs);
                 recordGpuPhase("paint_shader_cache", profile.data.ms[static_cast<size_t>(internal::FrameStage::ShaderCacheLoad)],
                     profile.data.ms[static_cast<size_t>(internal::FrameStage::ShaderCacheStore)]);
