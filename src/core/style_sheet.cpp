@@ -19,7 +19,12 @@ void StyleSheet::RuleData::indexLastRule() {
     if (!selector.valid) return;
     selectorClasses.insert(selector.node.classes.begin(), selector.node.classes.end());
     selectorStates |= selector.node.state;
-    if (!rule.query) candidatesByTag[selector.node.tag].push_back(rules.size() - 1);
+    if (rule.query) return;
+    // A classed selector is only a candidate for nodes which have its first class.
+    if (selector.node.classes.empty())
+        candidatesByTag[selector.node.tag].push_back(rules.size() - 1);
+    else
+        candidatesByClass[selector.node.classes.front()].push_back(rules.size() - 1);
 }
 
 void StyleSheet::detachRules() {
@@ -81,20 +86,24 @@ std::vector<const StyleRule*> StyleSheet::matchingRules(const StyleNode& node) c
     if (!ruleData_) return matches;
     const auto& rules_ = ruleData_->rules;
     const auto& selectors_ = ruleData_->selectors;
-    const auto appendMatches = [&](const std::string& tag) {
-        const auto candidates = ruleData_->candidatesByTag.find(tag);
-        if (candidates == ruleData_->candidatesByTag.end()) return;
+    const auto appendMatches = [&](const auto& buckets, const std::string& key) {
+        const auto candidates = buckets.find(key);
+        if (candidates == buckets.end()) return;
         for (const auto index : candidates->second) {
             const auto& selector = selectors_[index].node;
-            if ((node.state & selector.state) == selector.state &&
+            if ((selector.tag.empty() || selector.tag == node.tag) &&
+                (node.state & selector.state) == selector.state &&
                 std::all_of(selector.classes.begin(), selector.classes.end(),
                     [&](const std::string& klass) { return hasClass(node, klass); })) {
                 matches.push_back(&rules_[index]);
             }
         }
     };
-    appendMatches({});
-    if (!node.tag.empty()) appendMatches(node.tag);
+    appendMatches(ruleData_->candidatesByTag, {});
+    if (!node.tag.empty()) appendMatches(ruleData_->candidatesByTag, node.tag);
+    for (auto klass = node.classes.begin(); klass != node.classes.end(); ++klass)
+        if (std::find(node.classes.begin(), klass, *klass) == klass)
+            appendMatches(ruleData_->candidatesByClass, *klass);
     std::sort(matches.begin(), matches.end(), [&](const StyleRule* lhs, const StyleRule* rhs) {
         const auto left = selectors_[size_t(lhs - rules_.data())].specificity;
         const auto right = selectors_[size_t(rhs - rules_.data())].specificity;
@@ -102,7 +111,7 @@ std::vector<const StyleRule*> StyleSheet::matchingRules(const StyleNode& node) c
             return left < right;
         }
         if (lhs->order != rhs->order) return lhs->order < rhs->order;
-        // Tag buckets are collected separately. Ties still use source order.
+        // Candidate buckets are collected separately. Ties still use source order.
         return lhs < rhs;
     });
     return matches;

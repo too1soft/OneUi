@@ -120,3 +120,18 @@ keep their stretch, basis, classes and validation widgets. The native factory
 projects children into Builder nodes only for Builder paths that consume them.
 New Builder stacks with an empty stylesheet keep their default style until
 the runtime applies the authored stylesheet.
+
+## Native widget allocation and selector candidates
+
+Widget lifetime tokens share a single allocation with their ownership control
+block. Optional presentation state is created on demand and stays owned by
+that block. The token uses the existing Widget layout and exposes
+`std::weak_ptr<int>`.
+
+Cold stylesheet resolution uses the required class of a selector to find
+candidate rules. Classless selectors use the existing tag buckets. Matching
+still checks the tag, all required classes, and the pseudo-state. Visual and
+layout resolution both sort matching rules by specificity, explicit order,
+and source position. Repeated classes on a widget contribute each rule once.
+Label and Stack handle their common style properties before dispatching to
+the specialized control adapters.

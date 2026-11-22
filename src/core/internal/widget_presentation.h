@@ -1,7 +1,7 @@
 #pragma once
 #include "oneui/controls/table.h"
 #include "oneui/layout/stack.h"
-#include <stdexcept>
+#include <type_traits>
 
 namespace oneui { class IconButton; }
 namespace oneui::internal {
@@ -30,24 +30,29 @@ struct WidgetPresentation {
     std::shared_ptr<IconButton> paneHeaderMore;
     float tabsLastPaintWidth = -1.0f;
 };
-// Owned by Widget's existing lifetime control block. No address-keyed global
-// registry, no strong child references, and no Widget/derived layout changes.
-// Widget is noncopyable (its existing unique_ptr member); access follows the
-// same owning UI thread as its ordinary mutable presentation state.
+// The public token aliases the first member of the object in its control block.
+// Optional presentation state is allocated only when a widget needs it.
 struct WidgetLifetime {
-    std::unique_ptr<WidgetPresentation> presentation;
-    void operator()(int* token) { presentation.reset(); delete token; }
+    int token = 0;
+    WidgetPresentation* presentation = nullptr;
+    ~WidgetLifetime() { delete presentation; }
+    WidgetLifetime() = default;
+    WidgetLifetime(const WidgetLifetime&) = delete;
 };
+static_assert(std::is_standard_layout_v<WidgetLifetime>);
+
 struct WidgetPresentationAccess {
+    static WidgetLifetime& owner(const Widget& widget) {
+        // A standard-layout object and its first member are pointer-interconvertible.
+        return *reinterpret_cast<WidgetLifetime*>(widget.lifetime_.get());
+    }
     static WidgetPresentation* find(const Widget& widget) {
-        auto owner = std::get_deleter<WidgetLifetime>(widget.lifetime_);
-        return owner ? owner->presentation.get() : nullptr;
+        return owner(widget).presentation;
     }
     static WidgetPresentation& get(Widget& widget) {
-        auto owner = std::get_deleter<WidgetLifetime>(widget.lifetime_);
-        if (!owner) throw std::logic_error("Widget presentation lifetime unavailable");
-        if (!owner->presentation) owner->presentation = std::make_unique<WidgetPresentation>();
-        return *owner->presentation;
+        auto& presentation = owner(widget).presentation;
+        if (!presentation) presentation = new WidgetPresentation();
+        return *presentation;
     }
     static TablePresentation& table(Table& widget, const std::vector<TableColumn>& initial) {
         auto& value = get(widget).table;

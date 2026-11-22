@@ -16,7 +16,11 @@ struct PaintInvalidationScope {
     ~PaintInvalidationScope() { paintInvalidation = previous; }
 };
 }
-Widget::Widget() : lifetime_(new int(0), internal::WidgetLifetime{}),
+Widget::Widget() : lifetime_([] {
+        auto owner = std::make_shared<internal::WidgetLifetime>();
+        auto* token = &owner->token;
+        return std::shared_ptr<int>(std::move(owner), token);
+    }()),
     textInputSession_(nextInputSession.fetch_add(1, std::memory_order_relaxed)) {}
 
 std::shared_ptr<StyleSheet> Widget::styleScope() const {

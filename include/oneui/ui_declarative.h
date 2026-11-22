@@ -121,7 +121,7 @@ private:
         if(entry.component=="Input" || entry.component=="SearchInput" || entry.component=="Select") {
             const auto size=w->preferredSize();w->setPreferredSize({size.width,controlHeight(density_)});
         }
-        if(auto table=std::dynamic_pointer_cast<Table>(w); table && entry.component=="DataTable") {
+        if(auto* table=entry.component=="DataTable" ? dynamic_cast<Table*>(w.get()) : nullptr) {
             // Retain the top business row when changing density.
             const float row=table->rowHeight()>0?table->scrollOffset()/table->rowHeight():0;
             table->setRowHeight(tableRowHeight(density_));table->setHeaderHeight(controlHeight(density_));
@@ -138,6 +138,25 @@ private:
         if(auto page=std::dynamic_pointer_cast<ContainerPage>(w))page->setDisplay(box.display);
         else if(box.display)w->setLayoutVisible(*box.display);
         if(box.width||box.height) {auto size=w->preferredSize();w->setPreferredSize({box.width.value_or(size.width),box.height.value_or(size.height)});}
+        if (auto* v = dynamic_cast<Label*>(w.get())) {
+            v->setFontFamily(box.fontFamily.value_or(std::wstring{}));
+            v->setColor(box.foreground.value_or(Color{30,40,35,255})); v->setFontSize(box.fontSize.value_or(14)); v->setFontWeight(box.fontWeight.value_or(400));
+            v->setLetterSpacing(box.letterSpacing.value_or(0.0f));
+            v->setTabularNumbers(box.tabularNumbers.value_or(false));
+            v->setPadding(box.padding.value_or(Insets{}));
+            v->setBoxStyle(box.background.color.value_or(Color{0,0,0,0}), box.borderColor.value_or(Color{0,0,0,0}),
+                           box.borderWidth.value_or(box.borderColor ? 1.0f : 0.0f), box.radius.value_or(0.0f));
+            return;
+        }
+        if (auto* v = dynamic_cast<Stack*>(w.get())) {
+            v->setStyleBox(box); v->setGap(box.gap.value_or(0)); v->setPadding(box.padding.value_or(Insets{}));
+            if(box.flexDirection)v->setDirection(*box.flexDirection=="row"?StackDirection::Row:StackDirection::Column);
+            if(box.flexWrap&&!v->setWrap(*box.flexWrap))throw std::invalid_argument("CSS flex-wrap requires Yoga");
+            // Content's horizontal shell owns decoration/padding, while gap
+            // belongs to its vertical body. Neither changes the authored tree.
+            if (auto body = entry.content.lock()) { v->setGap(0); body->setGap(box.gap.value_or(0)); }
+            return;
+        }
         if(entry.component=="PaneGrid")w->setStyleScope(std::make_shared<StyleSheet>(sheet));
         if(auto dock=std::dynamic_pointer_cast<DockWorkspaceView>(w))dock->setStyleSheet(std::make_shared<StyleSheet>(sheet),n);
         if(auto header=std::dynamic_pointer_cast<PaneHeader>(w)) {
@@ -183,22 +202,7 @@ private:
         }
         if(std::dynamic_pointer_cast<SplitView>(w)) {applyNativeTheme(*w,sheet);return;}
         if(auto chart=std::dynamic_pointer_cast<TimeSeriesChart>(w)) {applyNativeTheme(*w,sheet);if(box.foreground || box.borderColor || box.fontSize || box.gap)chart->setStyleBox(box);return;}
-        if (auto v = std::dynamic_pointer_cast<Label>(w)) {
-            v->setFontFamily(box.fontFamily.value_or(std::wstring{}));
-            v->setColor(box.foreground.value_or(Color{30,40,35,255})); v->setFontSize(box.fontSize.value_or(14)); v->setFontWeight(box.fontWeight.value_or(400));
-            v->setLetterSpacing(box.letterSpacing.value_or(0.0f));
-            v->setTabularNumbers(box.tabularNumbers.value_or(false));
-            v->setPadding(box.padding.value_or(Insets{}));
-            v->setBoxStyle(box.background.color.value_or(Color{0,0,0,0}), box.borderColor.value_or(Color{0,0,0,0}),
-                           box.borderWidth.value_or(box.borderColor ? 1.0f : 0.0f), box.radius.value_or(0.0f));
-        } else if (auto v = std::dynamic_pointer_cast<Stack>(w)) {
-            v->setStyleBox(box); v->setGap(box.gap.value_or(0)); v->setPadding(box.padding.value_or(Insets{}));
-            if(box.flexDirection)v->setDirection(*box.flexDirection=="row"?StackDirection::Row:StackDirection::Column);
-            if(box.flexWrap&&!v->setWrap(*box.flexWrap))throw std::invalid_argument("CSS flex-wrap requires Yoga");
-            // Content's horizontal shell owns decoration/padding, while gap
-            // belongs to its vertical body. Neither changes the authored tree.
-            if (auto body = entry.content.lock()) { v->setGap(0); body->setGap(box.gap.value_or(0)); }
-        } else if (auto v = std::dynamic_pointer_cast<Button>(w)) {
+        if (auto v = std::dynamic_pointer_cast<Button>(w)) {
             v->setIconColor(sheet.resolveLayout(n).iconColor);
             v->setCaptionOffsetY(box.titleOffsetY.value_or(0));
             v->setStyleOverride(buttonStyleOverrideFromStyleSheet(sheet,n));

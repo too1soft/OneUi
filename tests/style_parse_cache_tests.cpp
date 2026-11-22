@@ -240,6 +240,25 @@ void longSelectorsKeepCanonicalCacheKeys() {
     require(!sheet.resolve(different).height && !sheet.resolveLayout(different).maxWidth,
         "a different pseudo-state cannot reuse a cached result");
 }
+
+void classBucketsKeepSourceOrder() {
+    StyleSheet sheet;
+    parse(sheet, ".accent { height: 25px; max-width: 80px; } "
+                 "button { width: 120px; } label.accent { height: 15px; }");
+    for (const auto& [selector, height] : {std::pair{"button.b", 31.0f}, {"button.a", 32.0f}}) {
+        oneui::StyleRule rule;
+        rule.selector = selector;
+        rule.box.height = height;
+        rule.order = 100;
+        sheet.addRule(std::move(rule));
+    }
+    const oneui::StyleNode selected{"button", {"a", "b", "accent", "b"}, 0};
+    require(sheet.resolve(selected).height == 32 && sheet.resolve(selected).width == 120 &&
+                sheet.resolveLayout(selected).maxWidth == 80,
+        "class candidates respect tag, wildcard rules and source order across buckets");
+    require(sheet.resolve({"input", {"accent", "a", "b"}, 0}).height == 25,
+        "the class bucket cannot leak a tag-specific rule to another control");
+}
 }
 
 int main() {
@@ -254,6 +273,7 @@ int main() {
         transientNodeScopesDoNotAffectCascadeAfterEviction();
         copiedTokenTablesStaySharedUntilAnActualEdit();
         longSelectorsKeepCanonicalCacheKeys();
+        classBucketsKeepSourceOrder();
         std::exception_ptr workerError;
         std::thread worker([&] {
             try { independentTokensAndRules(); }

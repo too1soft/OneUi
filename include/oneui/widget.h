@@ -358,7 +358,7 @@ private:
     const void* rectInvalidatorOwner_ = nullptr;
     const void* animationSchedulerOwner_ = nullptr;
     std::uint64_t measureRevision_ = 0;
-    std::shared_ptr<int> lifetime_ = std::make_shared<int>(0);
+    std::shared_ptr<int> lifetime_;
     std::uint64_t textInputSession_ = 0;
     bool focused_ = false;
     bool focusVisible_ = false;
