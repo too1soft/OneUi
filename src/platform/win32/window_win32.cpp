@@ -241,6 +241,7 @@ public:
     bool interactiveResizeActive_ = false;
     bool clientSizeChangedAtPaint_ = false;
     bool interactiveSizeChanged_ = false;
+    double lastLiveResizePaintMs_ = 0.0;
     bool renderTraceEnabled_ = false;
     std::wstring renderTraceFilePath_;
     double scrollTraceLastWheelMessageMs_ = 0.0;

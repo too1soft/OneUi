@@ -1,3 +1,12 @@
+    bool postedPaintDue() {
+        if (inputPaintPending_) return false;
+        if (!interactiveResizeActive_ || lastLiveResizePaintMs_ == 0.0) return true;
+        // Leave a freshly painted size to the native loop. A callback flood
+        // can still paint once the refresh and native timer interval elapse.
+        const double interval = std::max<double>(USER_TIMER_MINIMUM, animationFrameIntervalMs());
+        return currentTimeMs() - lastLiveResizePaintMs_ >= interval;
+    }
+
     void runPostedCallbacks() {
         const auto alive = callbackWindowAlive_;
         std::queue<std::function<void()>> callbacks;
@@ -42,7 +51,7 @@
         }
         // WM_PAINT is lower priority than posted messages. A continuously
         // refilled queue must still reveal static content without an rAF.
-        if (!inputPaintPending_) flushPendingPaint();
+        if (postedPaintDue()) flushPendingPaint();
         if (!alive->load(std::memory_order_acquire)) return;
         bool posted = true;
         {

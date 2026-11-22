@@ -82,3 +82,10 @@ loop can dispatch this paint even while the outer loop's waitable animation
 timer is unserviced. An input event before that paint still resolves current
 layout for hit testing. Ending sizing schedules a final paint for any pending
 geometry.
+
+After a live size has been painted, posted callback batches leave further
+painting to the native loop for at least one display interval or the Win32
+timer minimum, whichever is longer. Once that interval elapses, a queued
+callback can still present pending damage to prevent a sustained callback
+load from starving drawing. Native paint requests and the last size on exit
+follow the regular resize path.

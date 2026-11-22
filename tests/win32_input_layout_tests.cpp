@@ -203,6 +203,48 @@ void liveResizeCoalescesPaint() {
         "ending live resize displays the final window geometry");
 }
 
+void postedWorkCoalescesWithLiveResizePaint() {
+    Fixture f;
+    ShowWindow(f.hwnd, SW_SHOWNOACTIVATE);
+    UpdateWindow(f.hwnd);
+    SendMessageW(f.hwnd, WM_ENTERSIZEMOVE, 0, 0);
+    RECT outer{};
+    GetWindowRect(f.hwnd, &outer);
+    check(SetWindowPos(f.hwnd, nullptr, 0, 0, outer.right - outer.left + 40,
+        outer.bottom - outer.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE) != FALSE,
+        "posted work fixture resizes");
+    UpdateWindow(f.hwnd);
+
+    int completed = 0;
+    const auto runBatch = [&] {
+        const int wanted = completed + 1;
+        if (!f.window->post([&] {
+            ++completed;
+            f.window->requestRedraw();
+        })) return false;
+        MSG message{};
+        while (completed != wanted && PeekMessageW(&message, f.hwnd, WM_APP, WM_APP + 255, PM_REMOVE))
+            DispatchMessageW(&message);
+        return completed == wanted;
+    };
+    const int beforePosted = f.root->paints;
+    for (int i = 0; i < 8; ++i) {
+        if (!runBatch()) break;
+    }
+    const int duringPosted = f.root->paints - beforePosted;
+    std::cout << "Live resize posted batches: " << completed << ", paints: " << duringPosted << '\n';
+    check(completed == 8 && duringPosted < completed,
+        "live resize skips redundant synchronous paints from posted callbacks");
+    const int beforeDeadline = f.root->paints;
+    Sleep(80);
+    check(runBatch() && f.root->paints > beforeDeadline,
+        "posted callbacks can still present when the live resize frame becomes due");
+    SendMessageW(f.hwnd, WM_EXITSIZEMOVE, 0, 0);
+    const int beforeEnd = f.root->paints;
+    check(runBatch() && f.root->paints > beforeEnd,
+        "posted callbacks can present promptly again after live resize");
+}
+
 void hoverAndFocus() {
     Fixture f;
     const HCURSOR previous = GetCursor();
@@ -330,6 +372,7 @@ int main() {
     deferredMount();
     resizeAndCapture();
     liveResizeCoalescesPaint();
+    postedWorkCoalescesWithLiveResizePaint();
     hoverAndFocus();
     colorOnlyHoverKeepsTheInputLayout();
     layoutObserversCanReplaceOrDestroyTheWindow();

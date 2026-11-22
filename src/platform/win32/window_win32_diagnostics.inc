@@ -68,6 +68,7 @@
         ++rendererInfo_.paints;
         rendererInfo_.paintMs += elapsedMs;
         const double nowMs = currentTimeMs();
+        if (interactiveResizeActive_ && interactiveSizeChanged_) lastLiveResizePaintMs_ = nowMs;
         double frameIntervalMs = 0.0;
         if (internal::scrollTraceEnabled()) {
             const double traceNowMs = internal::scrollTraceNowMs();

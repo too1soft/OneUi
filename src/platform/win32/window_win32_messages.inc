@@ -223,6 +223,7 @@
         case WM_ENTERSIZEMOVE:
             interactiveResizeActive_ = true;
             interactiveSizeChanged_ = false;
+            lastLiveResizePaintMs_ = 0.0;
             return 0;
         case WM_EXITSIZEMOVE:
             interactiveResizeActive_ = false;
