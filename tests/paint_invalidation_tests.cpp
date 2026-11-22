@@ -235,6 +235,44 @@ bool textEditingPreservesAssignedLayout() {
     return custom.measureRevision() != customRevision && custom.naturalSize().width > 0;
 }
 
+bool clippedSizeContainerLimitsLayoutDamage(StackEngine engine) {
+    auto root = std::make_shared<View>();
+    auto container = std::make_shared<Stack>();
+    auto child = std::make_shared<PaintProbe>();
+    auto sibling = std::make_shared<PaintProbe>();
+    container->setEngine(engine);
+    container->setSizeContainment(true);
+    container->setClipContent(true);
+    root->add(container);
+    root->add(sibling);
+    container->add(child);
+    root->setFrame({0, 0, 600, 440});
+    const Rect bounds{220, 50, 300, 320};
+    container->setFrame(bounds);
+    child->setPreferredSize({120, 60});
+    test_support::RecordingCanvas canvas;
+    root->paint(canvas);
+    const auto sameRect = [](Rect a, Rect b) {
+        return a.x == b.x && a.y == b.y && a.width == b.width && a.height == b.height;
+    };
+    if (canvas.clips.size() != 1 || !sameRect(canvas.clips.front(), bounds) || canvas.saves != canvas.restores)
+        return false;
+
+    Rect damage{};
+    root->setRectInvalidator([&](Rect rect) { damage = rect; });
+    const auto revision = root->measureRevision();
+    child->setPreferredSize({120, 360});
+    if (root->measureRevision() == revision || !sameRect(damage, bounds)) return false;
+
+    container->setSizeContainment(false);
+    child->setPreferredSize({120, 420});
+    if (!sameRect(damage, root->frame())) return false;
+    container->setSizeContainment(true);
+    container->setClipContent(false);
+    child->setPreferredSize({120, 460});
+    return !sameRect(damage, bounds) && damage.width >= root->frame().width;
+}
+
 int main() {
     if (!clipChecksSkipVisibleDescendantBoundsAndKeepOverflow()) {
         std::cerr << "FAIL: clip bounds traversal or overflow paint changed\n";
@@ -269,6 +307,11 @@ int main() {
     }
     if (!textEditingPreservesAssignedLayout()) {
         std::cerr << "FAIL: text edit damage expanded or custom measurement was skipped\n";
+        return 1;
+    }
+    if (!clippedSizeContainerLimitsLayoutDamage(StackEngine::Legacy) ||
+        !clippedSizeContainerLimitsLayoutDamage(StackEngine::Yoga)) {
+        std::cerr << "FAIL: clipped size container damage or layout revision changed\n";
         return 1;
     }
     bool layoutDamagePassed = true;

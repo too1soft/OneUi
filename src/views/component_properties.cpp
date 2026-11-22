@@ -336,6 +336,10 @@ void Mount::set(Element &e, const std::string &key, bool value) {
             throw std::invalid_argument("wrap requires Row or Column");
         e.as<Stack>()->setWrap(value);
         styles_->invalidateBaseLayouts();
+    } else if (key == "clip-content") {
+        if (e.component != "Row" && e.component != "Column")
+            throw std::invalid_argument("clip-content requires Row or Column");
+        e.as<Stack>()->setClipContent(value);
     } else if (key == "detail-open")
         e.as<AdaptivePanes>()->setDetailOpen(value);
     else if (key == "open")

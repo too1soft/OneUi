@@ -59,8 +59,8 @@ enum class ValueType { None, Text, Boolean, Integer, Number, Strings, Columns, R
     X(TimeSeriesChart, "chart", "series range-min range-max axis-labels sample-positions smooth area-fill dashed-grid axes-visible latest-point line-width fill-alpha grid-lines plot-insets grid-style fill-extent scroll-rate thresholds threshold-style latest-style secondary-style", None) \
     X(Icon, "icon", "symbol size", None) \
     X(NativeHost, "native-host", "host themed resize-policy", None) \
-    X(Column, "stack", "align justify wrap direction", None) \
-    X(Row, "stack", "align justify wrap direction", None) \
+    X(Column, "stack", "align justify wrap direction clip-content", None) \
+    X(Row, "stack", "align justify wrap direction clip-content", None) \
     X(Content, "stack", "max-width align", None) \
     X(FormRow, "stack", "label hint error", None) \
     X(FormGrid, "stack", "min-column-width", None) \
@@ -138,6 +138,7 @@ constexpr ValueType propertyType(Kind kind,std::string_view key) {
     if(!supports(kind,key))return ValueType::None;
     if(kind==Kind::VirtualList && key=="multiple")return ValueType::Boolean;
     if(key=="placeholder-when-focused")return ValueType::Boolean;
+    if(key=="clip-content")return ValueType::Boolean;
     if(kind==Kind::Popup && contains("anchor-x anchor-y anchor-width anchor-height",key))return ValueType::Number;
     if(kind==Kind::ReorderableGrid) {
         if(key=="column-count")return ValueType::Integer;

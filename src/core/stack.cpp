@@ -159,13 +159,33 @@ Size Stack::naturalSize() const {
 float Stack::contentWidth() const { return naturalSize().width; }
 float Stack::contentHeight() const { return naturalSize().height; }
 
+void Stack::setClipContent(bool value) {
+    if (clipContent_ == value) return;
+    clipContent_ = value;
+    invalidate();
+}
+
+void Stack::paintChildren(Canvas& canvas) {
+    if (!clipContent_) {
+        View::paint(canvas);
+        return;
+    }
+    canvas.save();
+    struct Restore {
+        Canvas& canvas;
+        ~Restore() { canvas.restore(); }
+    } restore{canvas};
+    canvas.clipRect(frame());
+    View::paint(canvas);
+}
+
 void Stack::paint(Canvas& canvas) {
     if (engine_ == StackEngine::Yoga) { paintYoga(canvas); return; }
     if(query_){layoutChildren();query_();}
     if (styleBox_) {
         paintStyleBox(canvas, frame(), *styleBox_);
     }
-    View::paint(canvas);
+    paintChildren(canvas);
 }
 
 void Stack::layoutChildren() {

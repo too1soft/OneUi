@@ -1,4 +1,5 @@
 #include "oneui/widget.h"
+#include "oneui/layout/stack.h"
 #include "internal/interaction_reset.h"
 #include "internal/widget_presentation.h"
 #include "paint_invalidation_scope.h"
@@ -14,14 +15,17 @@ namespace oneui {
 namespace {
 std::atomic<std::uint64_t> nextInputSession{1};
 thread_local bool paintInvalidation = false;
+thread_local bool boundedLayoutInvalidation = false;
 }
-detail::PaintInvalidationScope::PaintInvalidationScope(bool paintOnly)
-    : previous_(paintInvalidation) {
+detail::PaintInvalidationScope::PaintInvalidationScope(bool paintOnly, bool boundedLayout)
+    : previous_(paintInvalidation), previousBoundedLayout_(boundedLayoutInvalidation) {
     paintInvalidation = paintOnly;
+    boundedLayoutInvalidation = boundedLayout;
 }
 
 detail::PaintInvalidationScope::~PaintInvalidationScope() {
     paintInvalidation = previous_;
+    boundedLayoutInvalidation = previousBoundedLayout_;
 }
 
 Widget::Widget() : lifetime_([] {
@@ -526,12 +530,22 @@ void Widget::invalidateRect(Rect rect) {
 }
 
 void Widget::invalidateChildRect(Rect rect) {
-    if (!paintInvalidation) {
+    if (!paintInvalidation && !boundedLayoutInvalidation) {
+        const Rect bounds = frame();
+        const auto* stack = dynamic_cast<const Stack*>(this);
+        if (rectInvalidator_ && bounds.width > 0 && bounds.height > 0 &&
+            stack && stack->sizeContained() && stack->clipsContent()) {
+            // Its outer allocation is independent of the children. Keep
+            // the layout revision for input and accessibility, but all old
+            // and newly arranged child pixels are clipped to this rectangle.
+            const detail::PaintInvalidationScope bounded(false, true);
+            invalidateRect(bounds);
+            return;
+        }
         // Ancestors contribute their allocated area in O(1). Asking a View
         // for virtual paintBounds here would walk all siblings at every level
         // for every child mutation. Child effects/overflow remain in rect;
         // the root viewport covers any visible newly arranged siblings.
-        const Rect bounds = frame();
         const float left = std::min(rect.x, bounds.x), top = std::min(rect.y, bounds.y);
         const float right = std::max(rect.x + rect.width, bounds.x + bounds.width);
         const float bottom = std::max(rect.y + rect.height, bounds.y + bounds.height);

@@ -288,7 +288,7 @@ void Stack::paintYoga(Canvas& canvas) {
         ~Guard() { if (state) state->clearAssigned(); }
     } guard{prepareYogaLayout()};
     if (styleBox_) paintStyleBox(canvas, frame(), *styleBox_);
-    View::paint(canvas);
+    paintChildren(canvas);
 }
 #else
 Size Stack::measureYoga(Size) const { return {}; }

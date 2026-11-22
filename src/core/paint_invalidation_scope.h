@@ -2,10 +2,10 @@
 
 namespace oneui::detail {
 
-// Propagate a paint-only rectangle through the existing synchronous chain.
+// Carry paint and layout damage through the existing synchronous chain.
 class PaintInvalidationScope {
 public:
-    explicit PaintInvalidationScope(bool paintOnly);
+    explicit PaintInvalidationScope(bool paintOnly, bool boundedLayout = false);
     ~PaintInvalidationScope();
 
     PaintInvalidationScope(const PaintInvalidationScope&) = delete;
@@ -13,6 +13,7 @@ public:
 
 private:
     bool previous_;
+    bool previousBoundedLayout_;
 };
 
 } // namespace oneui::detail

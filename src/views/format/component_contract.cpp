@@ -60,6 +60,8 @@ const std::map<std::string, ComponentContract> &registry()
         ++r.at("Text").version;
         ++r.at("Row").version; // Optional bound direction, appended property ID 14.
         ++r.at("Column").version;
+        ++r.at("Row").version; // Optional content clipping, appended property ID 15.
+        ++r.at("Column").version;
         ++r.at("Input").version; // Explicit password mask, appended property ID 15.
         ++r.at("Input").version; // Explicit accessible-name contract, property ID 17.
         ++r.at("Input").version; // Placeholder visible while focused, property ID 18.

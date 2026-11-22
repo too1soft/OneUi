@@ -63,6 +63,8 @@ public:
     bool wrap() const {return wrap_;}
     void setSizeContainment(bool value){if(sizeContained_!=value){sizeContained_=value;invalidate();}}
     bool sizeContained() const {return sizeContained_;}
+    void setClipContent(bool value);
+    bool clipsContent() const { return clipContent_; }
     void setContainerQuery(std::function<bool()> evaluate){query_=std::move(evaluate);}
     std::optional<StackFlex> explicitFlex(const std::shared_ptr<Widget>& child) const {
         auto found=flex_.find(child);return found==flex_.end()?std::optional<StackFlex>{}:found->second;
@@ -99,12 +101,14 @@ private:
     StackEngine engine_ = StackEngine::Legacy;
     bool wrap_ = false;
     bool sizeContained_ = false;
+    bool clipContent_ = false;
     std::function<bool()> query_;
     bool yogaArranged_ = false;
     Size measureYoga(Size available) const;
     std::shared_ptr<YogaState> prepareYogaLayout();
     void layoutYogaSubtree();
     void paintYoga(Canvas& canvas);
+    void paintChildren(Canvas& canvas);
 
     StackDirection direction_ = StackDirection::Column;
     float gap_ = 0.0f;
