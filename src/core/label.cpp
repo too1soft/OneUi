@@ -226,18 +226,22 @@ void Label::paint(Canvas& canvas) {
         const auto heightLimit = std::max(1, static_cast<int>(bounds.height / style.lineHeight));
         style.maxLines = maxLines_ > 0 ? std::min(maxLines_, heightLimit) : heightLimit;
     } else style.maxLines = 1;
-    text::LayoutOptions options;
-    options.text = style.options; options.family = style.fontFamily;
-    options.size = style.fontSize; options.weight = style.fontWeight;
-    options.width = std::max(0.0f, bounds.width - inset); options.lineHeight = style.lineHeight;
-    options.scale = textDpiScale(); options.align = align_;
-    options.maxLines = style.maxLines; options.ellipsis = true;
-    options.spans = style.spans;
-    const auto layout = text::Layout::make(text(), options);
     auto area = bounds;
     area.x += inset;
     area.width -= inset;
-    if (!textWrapping_) area.y += (bounds.height - layout->height()) / 2;
+    if (!textWrapping_) {
+        // Single-line labels are vertically centered. Wrapped labels start
+        // at the top and only need the layout made by drawTextBlock.
+        text::LayoutOptions options;
+        options.text = style.options; options.family = style.fontFamily;
+        options.size = style.fontSize; options.weight = style.fontWeight;
+        options.width = std::max(0.0f, area.width);
+        options.scale = style.dpiScale; options.align = style.align;
+        options.maxLines = style.maxLines; options.ellipsis = style.ellipsis;
+        options.spans = style.spans;
+        const auto layout = text::Layout::make(text(), options);
+        area.y += (bounds.height - layout->height()) / 2;
+    }
     canvas.save(); canvas.clipRect(bounds);
     const Color foreground = disabled() ? Color{148, 163, 184} : color_;
     if (diameter > 0) {
