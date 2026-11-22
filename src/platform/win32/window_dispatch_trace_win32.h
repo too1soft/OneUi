@@ -24,7 +24,10 @@ public:
     DispatchTraceScope(const DispatchTraceScope&) = delete;
     DispatchTraceScope& operator=(const DispatchTraceScope&) = delete;
 
-    void setDispatched(unsigned int count) { dispatched_ = count; }
+    void setBatchResult(unsigned int count, bool budgetExhausted) {
+        message_ = budgetExhausted;
+        dispatched_ = count;
+    }
 
 private:
     const char* phase_;

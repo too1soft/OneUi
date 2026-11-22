@@ -2,6 +2,7 @@
 #include "window_dispatch_trace_win32.h"
 #include "internal/interaction_trace.h"
 #include <algorithm>
+#include <chrono>
 #include <utility>
 #include <vector>
 namespace oneui::win32 {
@@ -108,8 +109,11 @@ int runWindowLoop() {
         // Bound each batch so input and animation handles both get service.
         {
             DispatchTraceScope trace("message_batch");
-            const ULONGLONG batchStarted = GetTickCount64();
+            // The system tick can advance by more than the entire budget
+            // during a short batch, yielding to a frame with callbacks queued.
+            const auto batchDeadline = std::chrono::steady_clock::now() + std::chrono::milliseconds{8};
             unsigned int dispatched = 0;
+            bool budgetExhausted = false;
             bool priorityInput = false;
             QueuedMouseRelease pendingRelease;
             while (peekMessage(message, priorityInput, pendingRelease)) {
@@ -126,16 +130,17 @@ int runWindowLoop() {
                 const internal::InteractionInputScope interaction(
                     reinterpret_cast<std::uintptr_t>(message.hwnd), message.message, message.time);
                 DispatchMessageW(&message);
-                if (++dispatched >= 64 || GetTickCount64() - batchStarted >= 8) {
+                if (++dispatched >= 64 || std::chrono::steady_clock::now() >= batchDeadline) {
                     // The thread also dispatches messages for native helpers,
                     // including COM's private window. A slow helper can consume
                     // this entire batch without entering OneUI's callback path.
                     // A prioritized input message cannot claim another turn.
                     if (!priorityInput) g_inputTurnRequested = true;
+                    budgetExhausted = true;
                     break;
                 }
             }
-            trace.setDispatched(dispatched);
+            trace.setBatchResult(dispatched, budgetExhausted);
         }
 
         // All windows on this UI thread share the message loop. Waiting
