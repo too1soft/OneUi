@@ -273,7 +273,14 @@ int main() {
     outer->setFrame({0, 0, 1200, 800});
     outer->paint(canvas);
     const auto frame = button->frame();
+    const auto hoverStart = std::chrono::steady_clock::now();
     button->onMouseMove({{frame.x + 1, frame.y + 1}});
+    const int hoverRedraws = redraws;
+    const double hoverStartMs = std::chrono::duration<double, std::milli>(hoverStart.time_since_epoch()).count();
+    if (!button->tickAnimations(hoverStartMs + 4) || redraws != hoverRedraws) {
+        std::cerr << "FAIL: color samples that repeat the first frame scheduled a redraw\n";
+        return 1;
+    }
     outer->paint(canvas); // The hover state change itself may affect layout.
     const auto before = outer->layoutStats().calculations;
     const auto started = std::chrono::steady_clock::now();

@@ -6937,6 +6937,9 @@ void testAnimationTransitionsInterpolateAndComplete() {
     oneui::FloatTransition alpha(0.0f);
     alpha.animateTo(1.0f, 1000.0, oneui::TransitionSpec{100.0, oneui::EasingCurve::Linear});
     expectEqual("FloatTransition starts running", alpha.running() ? 1 : 0, 1);
+    const float firstAlpha = alpha.value();
+    alpha.tick(1004.0);
+    expectNear("FloatTransition high-refresh frame keeps the initial advance", alpha.value(), firstAlpha);
     expectEqual("FloatTransition mid tick handled", alpha.tick(1050.0) ? 1 : 0, 1);
     expectNear("FloatTransition mid value", alpha.value(), 0.5f);
     expectEqual("FloatTransition complete tick handled", alpha.tick(1100.0) ? 1 : 0, 1);
@@ -6945,6 +6948,9 @@ void testAnimationTransitionsInterpolateAndComplete() {
 
     oneui::ColorTransition color(oneui::Color{0, 10, 20, 30});
     color.animateTo(oneui::Color{100, 110, 120, 130}, 0.0, oneui::TransitionSpec{100.0, oneui::EasingCurve::Linear});
+    const auto firstColor = color.value();
+    color.tick(4.0);
+    expectEqual("ColorTransition high-refresh frame keeps the initial advance", color.value().r, firstColor.r);
     color.tick(50.0);
     expectEqual("ColorTransition red halfway", color.value().r, 50);
     expectEqual("ColorTransition alpha halfway", color.value().a, 80);

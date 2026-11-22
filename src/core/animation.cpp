@@ -99,7 +99,9 @@ bool FloatTransition::tick(double nowMs) {
         return false;
     }
     if(!motionEnabled()){reset(target_);return true;}
-    const double raw = normalizedProgress(nowMs, startMs_, spec_.durationMs);
+    // A high-refresh frame can arrive before the input-time visual sample.
+    const double raw = normalizedProgress(
+        std::max(nowMs, startMs_ + kFirstVisualFrameMs), startMs_, spec_.durationMs);
     value_ = interpolateFloat(from_, target_, applyEasing(spec_.easing, raw));
     if (raw >= 1.0) {
         value_ = target_;
@@ -294,7 +296,9 @@ bool ColorTransition::tick(double nowMs) {
         return false;
     }
     if(!motionEnabled()){reset(target_);return true;}
-    const double raw = normalizedProgress(nowMs, startMs_, spec_.durationMs);
+    // A high-refresh frame can arrive before the input-time visual sample.
+    const double raw = normalizedProgress(
+        std::max(nowMs, startMs_ + kFirstVisualFrameMs), startMs_, spec_.durationMs);
     value_ = interpolateColor(from_, target_, applyEasing(spec_.easing, raw));
     if (raw >= 1.0) {
         value_ = target_;

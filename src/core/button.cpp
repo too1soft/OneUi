@@ -533,15 +533,20 @@ bool Button::isFocusable() const {
 }
 
 bool Button::tickAnimations(double nowMs) {
-    bool running = false;
-    running = shadowTransition_.tick(nowMs) || running;
-    running = backgroundTransition_.tick(nowMs) || running;
-    running = foregroundTransition_.tick(nowMs) || running;
-    running = borderTransition_.tick(nowMs) || running;
-    if (running) {
-        invalidatePaint();
+    bool changed = shadowTransition_.tick(nowMs);
+    bool advanced = changed;
+    for (auto* transition : {&backgroundTransition_, &foregroundTransition_, &borderTransition_}) {
+        const auto previous = transition->value();
+        if (!transition->tick(nowMs)) continue;
+        advanced = true;
+        const auto current = transition->value();
+        changed = changed || current.r != previous.r || current.g != previous.g ||
+            current.b != previous.b || current.a != previous.a;
     }
-    return running;
+    // Continue sampling the transition even if its quantized colors have
+    // reached the same values as the previous frame.
+    if (changed) invalidatePaint();
+    return advanced;
 }
 
 AccessibilityInfo Button::accessibilityInfo() const {
