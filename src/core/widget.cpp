@@ -1,6 +1,7 @@
 #include "oneui/widget.h"
 #include "internal/interaction_reset.h"
 #include "internal/widget_presentation.h"
+#include "paint_invalidation_scope.h"
 
 #include <utility>
 #include <algorithm>
@@ -10,12 +11,16 @@ namespace oneui {
 namespace {
 std::atomic<std::uint64_t> nextInputSession{1};
 thread_local bool paintInvalidation = false;
-struct PaintInvalidationScope {
-    bool previous = paintInvalidation;
-    explicit PaintInvalidationScope(bool paintOnly) { paintInvalidation = paintOnly; }
-    ~PaintInvalidationScope() { paintInvalidation = previous; }
-};
 }
+detail::PaintInvalidationScope::PaintInvalidationScope(bool paintOnly)
+    : previous_(paintInvalidation) {
+    paintInvalidation = paintOnly;
+}
+
+detail::PaintInvalidationScope::~PaintInvalidationScope() {
+    paintInvalidation = previous_;
+}
+
 Widget::Widget() : lifetime_([] {
         auto owner = std::make_shared<internal::WidgetLifetime>();
         auto* token = &owner->token;
@@ -484,7 +489,7 @@ void Widget::invalidateImpl(bool paintOnly) {
     if (!paintOnly) ++measureRevision_;
     // The flag follows synchronous rectangle propagation only. A normal content
     // mutation during an invalidator callback resets it for that entire chain.
-    PaintInvalidationScope scope(paintOnly);
+    detail::PaintInvalidationScope scope(paintOnly);
     if (rectInvalidator_) {
         const Rect current=paintBounds();Rect dirty=current;
         if(lastPaintInvalidation_.width>0 && lastPaintInvalidation_.height>0) {

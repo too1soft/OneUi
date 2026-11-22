@@ -49,7 +49,7 @@ void TerminalView::selectionScrolled(std::uint64_t historyRows, std::uint64_t of
     for (auto* position : {&selectionAnchor_, &selectionCaret_, &selectionOriginStart_, &selectionOriginEnd_}) {
         position->row += delta;
     }
-    invalidate();
+    invalidatePaint();
     if (selecting_) requestAnimationFrame();
 }
 

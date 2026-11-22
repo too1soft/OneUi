@@ -1,4 +1,5 @@
 #include "terminal_view_helpers.h"
+#include "paint_invalidation_scope.h"
 
 namespace oneui {
 using namespace terminal_detail;
@@ -182,9 +183,10 @@ Rect TerminalView::cellRect(TextPosition position) const {
 
 void TerminalView::invalidateCell(TextPosition position) {
     if (!hasGridMetrics_ || position.row >= rows_ || position.column >= columns_) {
-        invalidate();
+        invalidatePaint();
         return;
     }
+    const detail::PaintInvalidationScope paintOnly(true);
     invalidateRect(cellRect(normalizedCellPosition(position)));
 }
 
@@ -193,7 +195,7 @@ void TerminalView::invalidateCellRange(std::size_t firstCell, std::size_t count)
         return;
     }
     if (!hasGridMetrics_ || columns_ == 0 || firstCell >= cells_.size()) {
-        invalidate();
+        invalidatePaint();
         return;
     }
 
@@ -206,6 +208,7 @@ void TerminalView::invalidateCellRange(std::size_t firstCell, std::size_t count)
     const float contentX = contentBounds(bounds, lastMetrics_).x;
     const float width = std::max(1.0f, lastMetrics_.cellWidth);
     const float height = std::max(1.0f, lastMetrics_.cellHeight);
+    const detail::PaintInvalidationScope paintOnly(true);
 
     if (firstRow == lastRow) {
         invalidateRect(Rect{

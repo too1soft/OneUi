@@ -11,7 +11,7 @@ void TerminalView::setScrollback(std::uint64_t historyRows, std::uint64_t offset
     historyRows_ = historyRows;
     scrollbackOffset_ = offset;
     if (!historyRows_) draggingScrollback_ = false;
-    invalidate();
+    invalidatePaint();
 }
 
 Rect TerminalView::scrollbackThumbRect() const {

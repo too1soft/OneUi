@@ -465,6 +465,7 @@ void testTerminalUpdatesInvalidateOnlyDirtyCells() {
     std::vector<oneui::Rect> dirtyRects;
     terminal.setInvalidator([&] { ++fullInvalidations; });
     terminal.setRectInvalidator([&](oneui::Rect rect) { dirtyRects.push_back(rect); });
+    const auto originalMeasure = terminal.measureRevision();
 
     terminal.updateCells(5, {
         oneui::TerminalCell{L"X"},
@@ -489,6 +490,12 @@ void testTerminalUpdatesInvalidateOnlyDirtyCells() {
     terminal.setCursor(oneui::TerminalCursor{2, 3, true});
     expectEqual("terminal cursor movement invalidates old and new cells", static_cast<int>(dirtyRects.size()), 2);
     expectEqual("terminal cursor movement avoids full invalidation", fullInvalidations, 0);
+    terminal.setScrollback(100, 0);
+    expectEqual("terminal output, cursor and scrollbar do not invalidate layout",
+        terminal.measureRevision() == originalMeasure, true);
+    terminal.setFontSize(22.0f);
+    expectEqual("terminal font changes still invalidate layout",
+        terminal.measureRevision() != originalMeasure, true);
 }
 
 void testSelectionInvalidatesOnlyItsChangedCells() {

@@ -1,4 +1,5 @@
 #include "terminal_view_helpers.h"
+#include "paint_invalidation_scope.h"
 
 namespace oneui {
 using namespace terminal_detail;
@@ -297,6 +298,7 @@ void TerminalView::setFirstVisibleLineNumber(std::uint64_t lineNumber) {
     }
 
     const Rect bounds = frame();
+    const detail::PaintInvalidationScope paintOnly(true);
     invalidateRect(Rect{bounds.x, bounds.y, nextGutter, bounds.height});
 }
 

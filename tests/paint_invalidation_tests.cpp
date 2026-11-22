@@ -1,5 +1,6 @@
 #include "oneui/controls/button.h"
 #include "oneui/controls/label.h"
+#include "oneui/controls/terminal_view.h"
 #include "oneui/layout/stack.h"
 #include "support/recording_canvas.h"
 #include <chrono>
@@ -145,6 +146,29 @@ bool reentrantContentChange() {
     return redraws == 1;
 }
 
+bool terminalOutputPreservesLayout() {
+    auto root = std::make_shared<Stack>();
+    auto terminal = std::make_shared<TerminalView>();
+    root->setEngine(StackEngine::Yoga);
+    root->add(terminal);
+    root->setFrame({0, 0, 800, 600});
+    terminal->setGrid(4, 12, {});
+    test_support::RecordingCanvas canvas;
+    root->paint(canvas);
+    const auto before = root->layoutStats().calculations;
+    Rect damage{};
+    root->setRectInvalidator([&](Rect rect) { damage = rect; });
+    terminal->updateCells(1, {TerminalCell{L"X"}});
+    if (damage.width <= 0 || damage.width >= root->frame().width) return false;
+    terminal->setCursor({0, 1, true});
+    terminal->setScrollback(25, 0);
+    root->paint(canvas);
+    if (root->layoutStats().calculations != before) return false;
+    terminal->setFontSize(terminal->fontSize() + 1);
+    root->paint(canvas);
+    return root->layoutStats().calculations > before;
+}
+
 int main() {
     {
         Label label(L"Settings");
@@ -167,6 +191,10 @@ int main() {
     }
     if (!childDamageDoesNotScanSiblings()) {
         std::cerr << "FAIL: child damage propagation scanned unrelated siblings\n";
+        return 1;
+    }
+    if (!terminalOutputPreservesLayout()) {
+        std::cerr << "FAIL: terminal paint damage expanded or invalidated layout\n";
         return 1;
     }
     bool layoutDamagePassed = true;

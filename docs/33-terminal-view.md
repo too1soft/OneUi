@@ -73,6 +73,11 @@ column capacity calculated from the view's actual native canvas and monospace
 font metrics. Session controllers should resize their PTY or remote terminal
 only after this callback, rather than duplicating font or pixel calculations.
 
+Cell, cursor, selection-scroll, and scrollbar updates preserve the surrounding
+layout cache. The renderer still receives the required damage, including
+the old and new cursor cells. Font and viewport geometry changes continue
+through normal layout and viewport reporting.
+
 ## Style Flags
 
 The ABI-stable style bits are:
