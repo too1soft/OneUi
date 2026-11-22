@@ -1,6 +1,6 @@
 # OneUI 可访问性架构草案
 
-这份文档描述 OneUI 的可访问性方向。当前运行时已经有 `Widget` 基础语义 API，可以声明 role、name、description、value 和部分 state；`Button`、`TextField`、`Checkbox`、`Select`、`Slider`、`RadioGroup`、`Tabs`、`List`、`Table` 已经开始提供默认语义，`FormField` 会把 label/helper/error/required/invalid 同步到子控件。Windows 已新增初步 MSAA 桥，可由系统 UIA legacy bridge 读取；尚未完成原生 UIA pattern、屏幕阅读器和 OS 输入端到端验收。macOS Accessibility 与 Linux AT-SPI 尚未实现。
+这份文档描述 OneUI 的可访问性方向。`Widget` 可以声明角色、名称、描述、值和部分状态。常用按钮、输入、选择、列表和表格控件提供默认语义。`FormField` 把标签、帮助、错误、必填和无效状态同步给子控件。Windows 提供 MSAA 和原生 UI Automation fragment provider。屏幕阅读器和操作系统交互的完整验收仍在进行。macOS Accessibility 与 Linux AT-SPI 尚未实现。
 
 ## 目标
 
@@ -113,6 +113,8 @@ struct AccessibilityState {
 平台桥接不应直接读取业务状态。它应该读取 OneUI 语义树，这样跨平台行为才能一致。
 
 Windows MSAA 桥在窗口树和可枚举的布局区域不变时复用子项顺序及标题栏按钮映射。控件增删、显隐、弹窗和模态覆盖变化通过内容失效更新子项。布局将控件分配到零面积或恢复为可枚举区域时也会更新子项。位置、焦点和属性随查询实时读取。
+
+Windows 的 UI Automation 查询通过同一份投影读取属性、导航、命中测试和焦点。片段有独立的运行时 ID，兄弟控件增删导致顺序变化时，仍然存在的控件保留其 ID。过期片段返回元素不可用。窗口的默认非客户区由 Windows 提供。普通按钮的 Invoke 和编辑框的 Value 走 OneUI 原生动作，其余控件模式请求由系统 MSAA 适配器处理。直接使用 MSAA 的客户端可按原有顺序枚举子项。
 
 自定义控件通过 `accessibilityInfo()` 派生角色或名称时，可枚举子项变化与其余内容变化一样走 `invalidate()`。`oneui_win32_accessibility_tests` 覆盖快照复用、空树、显隐、真实窗口的零面积帧、弹窗、模态覆盖和标题栏操作。
 

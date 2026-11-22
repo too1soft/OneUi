@@ -227,6 +227,7 @@ set(ONEUI_WIN32_SOURCES
     src/platform/win32/notification_identity_win32.cpp
     src/platform/win32/notification_activation_win32.cpp
     src/platform/win32/application_registration_win32.cpp
+    src/platform/win32/accessibility_uia_win32.cpp
     src/platform/win32/compat_win32.cpp
     src/platform/win32/clipboard_win32.cpp
     src/platform/win32/monitor_win32.cpp

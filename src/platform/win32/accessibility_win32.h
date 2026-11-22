@@ -8,8 +8,10 @@
 #include <chrono>
 #include <cmath>
 #include <functional>
+#include <map>
 #include <memory>
 #include <optional>
+#include <unordered_map>
 #include <vector>
 #include "oneui/controls/text_field.h"
 #include "oneui/localization.h"
@@ -53,6 +55,35 @@ inline LONG role(AccessibilityRole value) {
 class Provider final : public IAccessible, public IOleWindow {
 public:
     explicit Provider(std::shared_ptr<Context> context) : context_(std::move(context)) {}
+    bool available() const { return context_->valid(); }
+
+    LONG firstFragment(bool last) {
+        refreshFragments();
+        return children_.empty() ? 0 : (last ? children_.back() : children_.front()).fragmentId;
+    }
+
+    LONG siblingFragment(LONG id, int step) {
+        refreshFragments();
+        const auto found = fragments_->indices.find(id);
+        if (found == fragments_->indices.end()) return 0;
+        const auto index = static_cast<std::ptrdiff_t>(found->second) + step;
+        return index >= 0 && static_cast<std::size_t>(index) < children_.size()
+            ? children_[index].fragmentId : 0;
+    }
+
+    bool fragmentAvailable(LONG id) {
+        if (!available()) return false;
+        if (id == CHILDID_SELF) return true;
+        refreshFragments();
+        return fragments_->indices.count(id) != 0;
+    }
+
+    LONG fragmentFromChild(const VARIANT& child) {
+        refreshFragments();
+        if (child.vt != VT_I4 || child.lVal <= 0 ||
+            static_cast<std::size_t>(child.lVal) > children_.size()) return 0;
+        return children_[child.lVal - 1].fragmentId;
+    }
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID id,void** result) override {
         if(!result)return E_POINTER; *result=nullptr;
         if(id==IID_IUnknown || id==IID_IDispatch || id==IID_IAccessible){*result=static_cast<IAccessible*>(this);AddRef();return S_OK;}
@@ -205,13 +236,66 @@ private:
         std::uint64_t treeRevision;
         std::uint64_t frameRevision;
     };
+    // MSAA still enumerates positional child IDs. The UIA fragments and any
+    // pattern objects they hand out use a separate, never reused child ID.
+    // A client retaining a fragment must not act on the next control to take
+    // the same position after a removal or page change.
+    static constexpr LONG firstFragmentId = 0x40000000;
+    struct FragmentIndex {
+        LONG nextId = firstFragmentId;
+        std::unordered_map<LONG, std::size_t> indices;
+    };
+
+    void updateFragments(std::vector<ChildEntry>& next, const std::vector<ChildEntry>& previous) {
+        using Key = std::pair<std::weak_ptr<Widget>, TitleBarButtonId>;
+        const auto compare = [](const Key& a, const Key& b) {
+            if (a.first.owner_before(b.first)) return true;
+            if (b.first.owner_before(a.first)) return false;
+            return a.second < b.second;
+        };
+        std::map<Key, LONG, decltype(compare)> retained(compare);
+        for (const auto& entry : previous) {
+            if (entry.fragmentId) retained.emplace(Key{entry.widget, entry.button}, entry.fragmentId);
+        }
+        fragments_->indices.clear();
+        fragments_->indices.reserve(next.size());
+        for (std::size_t index = 0; index < next.size(); ++index) {
+            auto& entry = next[index];
+            const auto found = retained.find(Key{entry.widget, entry.button});
+            if (found != retained.end()) entry.fragmentId = found->second;
+            else if (fragments_->nextId < LONG_MAX) entry.fragmentId = fragments_->nextId++;
+            if (entry.fragmentId) fragments_->indices.emplace(entry.fragmentId, index);
+        }
+    }
+
+    void refreshFragments() {
+        if (!fragments_) {
+            fragments_.emplace();
+            // The snapshot may already be warm from an MSAA request.
+            updateFragments(children_, {});
+        }
+        refresh();
+    }
+
+    const ChildEntry* entryFor(LONG id) const {
+        if (id < 1) return nullptr;
+        if (id < firstFragmentId) {
+            const auto index = static_cast<std::size_t>(id - 1);
+            return index < children_.size() ? &children_[index] : nullptr;
+        }
+        if (!fragments_) return nullptr;
+        const auto entry = fragments_->indices.find(id);
+        return entry != fragments_->indices.end() ? &children_[entry->second] : nullptr;
+    }
+
     TitleBarButtonId caption(const VARIANT& child) const {
-        if(child.vt!=VT_I4||child.lVal<1||static_cast<std::size_t>(child.lVal)>children_.size())return TitleBarButtonId::None;
-        return children_[child.lVal-1].button;
+        const auto* entry = child.vt == VT_I4 ? entryFor(child.lVal) : nullptr;
+        return entry ? entry->button : TitleBarButtonId::None;
     }
     void refresh() {
         if (!context_->valid()) {
             children_.clear();
+            if (fragments_) fragments_->indices.clear();
             snapshot_.reset();
             return;
         }
@@ -227,6 +311,7 @@ private:
         next.reserve(children_.size());
         std::unordered_set<Widget*> seen;
         collect(root, next, seen);
+        if (fragments_) updateFragments(next, children_);
         children_ = std::move(next);
         snapshot_ = SnapshotKey{root, treeRevision, frameRevision};
         if (context_->recordSnapshot) {
@@ -237,13 +322,15 @@ private:
     std::shared_ptr<Widget> resolve(const VARIANT& child){
         if(!context_->valid()||child.vt!=VT_I4)return {};
         if(self(child))return context_->root();
-        if(child.lVal<1)return {};if(children_.empty())refresh();
-        const auto index=static_cast<std::size_t>(child.lVal-1);return index<children_.size()?children_[index].lock():nullptr;
+        if (child.lVal >= firstFragmentId || children_.empty()) refresh();
+        const auto* entry = entryFor(child.lVal);
+        return entry ? entry->lock() : nullptr;
     }
     std::atomic<ULONG> refs_{1};
     std::shared_ptr<Context> context_;
     std::vector<ChildEntry> children_;
     std::optional<SnapshotKey> snapshot_;
+    std::optional<FragmentIndex> fragments_;
 };
 inline void retireProvider(HWND window, IAccessible*& ownedProvider) {
     auto* provider = ownedProvider;

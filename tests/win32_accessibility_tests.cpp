@@ -5,6 +5,7 @@
 #include "win32_accessibility_lifecycle.inc"
 #include "win32_accessibility_snapshot.inc"
 #include "win32_com_runtime_tests.inc"
+#include "win32_uia_fragments.inc"
 
 int main(){
     using namespace oneui;
@@ -15,6 +16,7 @@ int main(){
     const HWND window=CreateWindowExW(0,L"STATIC",L"OneUI accessibility test",WS_OVERLAPPED,0,0,400,300,nullptr,nullptr,GetModuleHandleW(nullptr),nullptr);
     testAccessibleSnapshot(check, window);
     check(snapshotTracksNativeFrameChanges(), "Native snapshot observes zero-area and restored frames without layout invalidation");
+    testNativeAutomationFragments(check);
     auto alive=std::make_shared<std::atomic_bool>(true);
     auto root=std::make_shared<View>();root->setFrame({0,0,400,300});
     auto button=std::make_shared<Button>(L"Action");button->setFrame({10,10,100,32});

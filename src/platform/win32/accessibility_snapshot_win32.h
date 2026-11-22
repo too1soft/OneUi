@@ -14,6 +14,7 @@ namespace oneui::win32_accessibility {
 struct ChildEntry {
     std::weak_ptr<Widget> widget;
     TitleBarButtonId button = TitleBarButtonId::None;
+    long fragmentId = 0;
     std::shared_ptr<Widget> lock() const { return widget.lock(); }
 };
 
