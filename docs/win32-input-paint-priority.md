@@ -37,16 +37,25 @@ COM apartment's hidden window. Separate stacks recorded UI Automation calling
 MSAA while the apartment was processing these messages. [Microsoft COM STA documentation](https://learn.microsoft.com/windows/win32/com/single-threaded-apartments)
 
 When a regular dispatch exhausts the native message batch's time or count
-budget, the loop gives queued hardware input one turn. The next dequeue
-uses the ordinary Windows order. A message already dequeued on the priority
-turn cannot renew it. The current handler finishes before this check, and
-the existing frame sources are serviced at the same batch boundary.
+budget, the loop gives queued hardware input one turn. A prioritized client
+mouse press can also get its matching release in the same batch, when the
+release is already the next hardware input for that window. The release
+uses the regular dispatch path and consumes this one continuation. Input
+order and the frame-service boundary are preserved.
 
-For verification, use a visible application window and a message-only helper
-on the same thread. Queue multiple timed helper messages and send hardware
-mouse input during the first handler. Record both button edges and check that
-all helper messages complete in their original order. Consumer evidence is
-in iShell's `docs/native-migration/responsiveness-3x-4x.md`.
+On Windows, a probe restricted to the input category can miss an already
+observed button-up. A non-removing range probe can make it visible again.
+The loop then confirms that the same release is at the front of the full
+hardware queue. [Microsoft `PeekMessageW` documentation](https://learn.microsoft.com/windows/win32/api/winuser/nf-winuser-peekmessagew)
+
+The opt-in `tests/win32_click_turn_fixture.cpp` uses a visible window and a
+message-only helper on the same thread. Compile it against the selected
+production DLL and run it with `click`, `twice`, `held` or `interleaved`.
+It reports when each hardware event arrives and how many of five helper
+messages have completed. In `click`, both edges should arrive after the
+first helper. The other modes exercise the batch limit, a held button and
+keyboard input between the button edges. Consumer evidence is in iShell's
+`docs/native-migration/responsiveness-3x-4x.md`.
 
 ## Hover timers across input
 

@@ -25,13 +25,60 @@ struct RunLoopScope {
     RunLoopScope &operator=(const RunLoopScope &) = delete;
 };
 
-bool peekMessage(MSG& message, bool& priorityInput) {
+struct QueuedMouseRelease {
+    HWND window = nullptr;
+    UINT message = WM_NULL;
+};
+
+UINT matchingClientRelease(UINT press) {
+    switch (press) {
+    case WM_LBUTTONDOWN:
+    case WM_LBUTTONDBLCLK:
+        return WM_LBUTTONUP;
+    case WM_RBUTTONDOWN:
+        return WM_RBUTTONUP;
+    case WM_MBUTTONDOWN:
+        return WM_MBUTTONUP;
+    default:
+        return WM_NULL;
+    }
+}
+
+bool peekMatchingMouseRelease(const QueuedMouseRelease& release) {
+    MSG next{};
+    constexpr auto inputProbe = PM_NOREMOVE | PM_QS_INPUT;
+    if (!PeekMessageW(&next, nullptr, 0, 0, inputProbe)) {
+        // The input-category probe can miss an already observed button-up.
+        // A non-removing range probe can expose it again. Recheck the full
+        // hardware queue so an intervening message keeps its place.
+        if (!PeekMessageW(&next, nullptr, WM_NCMOUSEMOVE, WM_MOUSELAST, PM_NOREMOVE) ||
+            !PeekMessageW(&next, nullptr, 0, 0, inputProbe))
+            return false;
+    }
+    return next.hwnd == release.window && next.message == release.message;
+}
+
+bool peekMessage(MSG& message, bool& priorityInput, QueuedMouseRelease& pendingRelease) {
     const DispatchTraceScope trace("peek_message");
+    const auto release = std::exchange(pendingRelease, {});
+    if (release.window && peekMatchingMouseRelease(release) &&
+        PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE | PM_QS_INPUT)) {
+        // Dequeue at the head even if a reentrant sent message changed it.
+        // This continuation is single-use and cannot arm another release.
+        priorityInput = true;
+        return true;
+    }
+
     // Win32 normally retrieves posted work before hardware input. A yielded
-    // batch gives pending input one turn, then restores the usual order.
+    // batch gives pending input one turn. Finish a client button press if
+    // its matching release is already next in the input queue.
     priorityInput = std::exchange(g_inputTurnRequested, false) &&
         PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE | PM_QS_INPUT) != FALSE;
-    return priorityInput || PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE) != FALSE;
+    if (!priorityInput)
+        return PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE) != FALSE;
+    if (const auto matching = matchingClientRelease(message.message); matching != WM_NULL)
+        pendingRelease = {message.hwnd, matching};
+    return true;
 }
 
 void tickFrameSource(const ThreadFrameSource& source) {
@@ -64,7 +111,8 @@ int runWindowLoop() {
             const ULONGLONG batchStarted = GetTickCount64();
             unsigned int dispatched = 0;
             bool priorityInput = false;
-            while (peekMessage(message, priorityInput)) {
+            QueuedMouseRelease pendingRelease;
+            while (peekMessage(message, priorityInput, pendingRelease)) {
                 if (message.message == WM_QUIT) {
                     // A nested loop must pass the thread's exit request back
                     // to its caller instead of consuming it on its behalf.
