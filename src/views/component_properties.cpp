@@ -149,6 +149,7 @@ void Mount::set(Element &e, const std::string &key, const std::wstring &value) {
         if (value != L"row" && value != L"column")
             throw std::invalid_argument("direction must be row or column");
         e.as<Stack>()->setDirection(value == L"row" ? StackDirection::Row : StackDirection::Column);
+        styles_->invalidateBaseLayouts();
     } else if (key == "align") {
         if (e.content) {
             if (value != L"start" && value != L"center" && value != L"end")
@@ -165,6 +166,7 @@ void Mount::set(Element &e, const std::string &key, const std::wstring &value) {
                                                          : StackAlign::Stretch);
         } else
             throw std::invalid_argument("align requires Row, Column or Content");
+        styles_->invalidateBaseLayouts();
     } else if (key == "justify") {
         if (e.component != "Row" && e.component != "Column")
             throw std::invalid_argument("justify requires Row or Column");
@@ -234,8 +236,10 @@ void Mount::set(Element &e, const std::string &key, const std::wstring &value) {
             w->setText(value);
         else if (auto w = e.as<Button>()) {
             w->setText(value);
-            if (e.component == "ToolButton")
+            if (e.component == "ToolButton") {
                 w->setPreferredSize({value.empty() ? 32.0f : 0.0f, 32});
+                styles_->invalidateBaseLayouts();
+            }
         } else if (auto w = e.as<Checkbox>())
             w->setText(value);
         else if (auto w = e.as<Switch>())
@@ -331,6 +335,7 @@ void Mount::set(Element &e, const std::string &key, bool value) {
         if (e.component != "Row" && e.component != "Column")
             throw std::invalid_argument("wrap requires Row or Column");
         e.as<Stack>()->setWrap(value);
+        styles_->invalidateBaseLayouts();
     } else if (key == "detail-open")
         e.as<AdaptivePanes>()->setDetailOpen(value);
     else if (key == "open")
@@ -377,7 +382,9 @@ void Mount::set(Element &e, const std::string &key, float value) {
         if(key=="content-width"||key=="content-height") {
             auto size=popup->content()->preferredSize();
             if(key=="content-width")size.width=std::max(1.0f,value);else size.height=std::max(1.0f,value);
-            popup->content()->setPreferredSize(size);return;
+            popup->content()->setPreferredSize(size);
+            styles_->invalidateBaseLayouts();
+            return;
         }
     }
     if(e.component=="ReorderableGrid") {
@@ -440,6 +447,7 @@ void Mount::set(Element &e, const std::string &key, float value) {
     if (key == "size") {
         e.widget->setPreferredSize({value, value});
         if (e.component == "Icon") e.as<IconView>()->setGlyphSize(value);
+        styles_->invalidateBaseLayouts();
         return;
     }
     if (key == "ratio") {
@@ -467,12 +475,14 @@ void Mount::set(Element &e, const std::string &key, float value) {
             throw std::invalid_argument("min-column-width requires FormGrid");
         for (auto &child : e.as<Stack>()->children())
             e.as<Stack>()->setFlex(child, {1, 1, value, 0});
+        styles_->invalidateBaseLayouts();
         return;
     }
     if (key == "max-width") {
         if (!e.content)
             throw std::invalid_argument("max-width is only supported on Content");
         e.as<Stack>()->setFlex(e.content, {1, 1, value, 0, value, true});
+        styles_->invalidateBaseLayouts();
         return;
     }
     if (key == "grow")

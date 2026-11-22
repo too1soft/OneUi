@@ -195,7 +195,7 @@ void Runtime::flushPass() {
             retired.clear();
         }
         staging = false;
-        styles->applyBaseLayouts();
+        styles->refreshBaseLayouts();
         // Authored flow bindings commit after child repeats were visited.
         // Refresh their implementation groups without invalidating unchanged layouts.
         refreshRepeatLayouts(root);

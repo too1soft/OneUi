@@ -109,6 +109,11 @@ void displayOnlyReplay() {
     test_support::RecordingCanvas canvas;
     auto paint=[&]{shell.widget->setFrame({0,0,400,100});shell.widget->paint(canvas);};
     paint();check(child.widget->visible(),"display-only query enables child");
+    child.as<Label>()->setText(L"Updated model text");
+    const auto revision = shell.widget->measureRevision();
+    mount.styles()->refreshBaseLayouts();
+    check(child.widget->visible() && shell.widget->measureRevision() == revision,
+          "data updates preserve the active container layout before paint");
     mount.styles()->applyBaseLayouts();
     check(!child.widget->visible(),"display-only base write actually replaced query");
     paint();check(child.widget->visible(),"same-size query reapplied after display-only base write");
@@ -116,6 +121,22 @@ void displayOnlyReplay() {
     check(!child.widget->visible(),"base applyAll actually replaced display query");
     paint();check(child.widget->visible(),"same-size query reapplied after base applyAll");
     check(mount.styles()->queryDiagnostics().empty(),"display-only query remains valid");
+}
+void refreshAuthoredLayout() {
+    ui::Mount mount({}, std::make_shared<ui::StyleRegistry>(), {});
+    auto child = mount.make("Text", {}, "cell");
+    auto first = mount.make("Row", {child});
+    auto second = mount.make("Row");
+    mount.styles()->replace(".cell{width:80px;}");
+    mount.set(child, "grow", 2.0f);
+    mount.styles()->refreshBaseLayouts();
+    const auto initial = first.as<Stack>()->explicitFlex(child.widget);
+    check(initial && initial->grow == 2 && initial->width == 80, "authored flex refresh keeps CSS width");
+    first.as<Stack>()->remove(child.widget);
+    second.as<Stack>()->add(child.widget);
+    mount.styles()->refreshBaseLayouts();
+    const auto moved = second.as<Stack>()->explicitFlex(child.widget);
+    check(moved && moved->width == 80, "parent changes refresh base layout for retained widgets");
 }
 void invalidCssAndDependencies() {
     StyleSheet sheet;std::string error;
@@ -160,6 +181,6 @@ void maxWidthClamps() {
     check(!mount.styles()->queryDiagnostics().empty(),"cross-axis max-width diagnosed");
 }
 }
-int main(){try{comparisons();stackChildren();layout(StackEngine::Yoga);layout(StackEngine::Legacy);invalidCssAndDependencies();maxWidthClamps();displayOnlyReplay();projectedSelectorsAndTokens();
-    std::cout<<"PASS container queries and Stack: 8 groups\n";return 0;
+int main(){try{comparisons();stackChildren();layout(StackEngine::Yoga);layout(StackEngine::Legacy);invalidCssAndDependencies();maxWidthClamps();displayOnlyReplay();refreshAuthoredLayout();projectedSelectorsAndTokens();
+    std::cout<<"PASS container queries and Stack: 9 groups\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

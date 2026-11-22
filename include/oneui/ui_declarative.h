@@ -66,6 +66,8 @@ public:
     // Resolve authored CSS dimensions into the parent's Yoga constraints after
     // assembly. Native leaf measurement must not override explicit CSS sizes.
     void applyBaseLayouts();
+    void refreshBaseLayouts();
+    void invalidateBaseLayouts() { ++baseLayoutRevision_; }
     // Bound layout attributes remain the base beneath CSS/container overrides.
     void updateAuthoredFlex(const std::shared_ptr<Widget>& widget, const StackFlex& flex);
     struct Source { std::string component, file; int line=0; };
@@ -88,6 +90,9 @@ private:
     size_t treeVersion_=0;
     std::map<const Widget*,QueryState> queries_;
     std::map<const Widget*,LayoutDefaults> layoutDefaults_;
+    std::unordered_map<const Widget*, std::weak_ptr<Stack>> baseLayoutParents_;
+    std::uint64_t baseLayoutRevision_ = 1;
+    std::uint64_t appliedBaseLayoutRevision_ = 0;
     std::shared_ptr<int> queryLifetime_=std::make_shared<int>(0);
     std::vector<std::string> queryDiagnostics_;
     std::map<const Widget*,std::shared_ptr<StyleSheet>> localThemes_;
@@ -100,6 +105,7 @@ private:
     void configureQuery(const std::shared_ptr<Widget>&,const StyleBox&);
     bool evaluateQuery(const std::shared_ptr<Stack>&);
     void applyLayout(const Entry&,const StyleBox&,const std::shared_ptr<Stack>&,const StyleLayout& = {});
+    void applyBaseLayouts(bool force);
     void restoreQueryLayouts();
     void apply(const Entry& entry, const StyleSheet& supplied) {
         const oneui::detail::view_mount_timing::Scope measure(oneui::detail::view_mount_timing::Style);
@@ -107,7 +113,10 @@ private:
         // Base style replay can reset query display and native preferred sizes
         // even when applyBaseLayouts finds no flex/dimension declaration.
         // Preserve cached storage, but force the same-size query to reapply.
-        if(&supplied==&sheet_)for(auto& query:queries_)query.second.version=~size_t{};
+        if (&supplied == &sheet_) {
+            invalidateBaseLayouts();
+            for (auto& query : queries_) query.second.version = ~size_t{};
+        }
         std::optional<StyleSheet> filtered;
         const StyleSheet* effective=&supplied;
         if(auto local=localThemes_.find(w.get());local!=localThemes_.end()) {
@@ -335,6 +344,7 @@ public:
     }
     void remapWidgets(const std::map<const Widget*,std::shared_ptr<Widget>>& replacements) {
         queries_.clear();layoutDefaults_.clear();++treeVersion_;
+        invalidateBaseLayouts();
         entryIndices_.reset();
         for(auto& entry:entries_) {
             if(auto widget=entry.widget.lock()) {

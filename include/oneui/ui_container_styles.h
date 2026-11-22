@@ -3,19 +3,36 @@
 // declarative composition; the parser/evaluator and isolated layout are core.
 namespace oneui::ui {
 inline void StyleRegistry::updateAuthoredFlex(const std::shared_ptr<Widget>& widget,const StackFlex& flex) {
+    invalidateBaseLayouts();
     auto found=layoutDefaults_.find(widget.get());
     if(found!=layoutDefaults_.end() && found->second.widget.lock()==widget)
         found->second.flex=flex;
 }
 inline void StyleRegistry::applyBaseLayouts() {
+    applyBaseLayouts(true);
+}
+inline void StyleRegistry::refreshBaseLayouts() {
+    applyBaseLayouts(false);
+}
+inline void StyleRegistry::applyBaseLayouts(bool force) {
     const oneui::detail::view_mount_timing::Scope measure(oneui::detail::view_mount_timing::BaseLayout);
     pruneEntries();
-    bool applied=false;
+    const auto revision = baseLayoutRevision_;
     std::unordered_map<const Widget*,std::shared_ptr<Stack>> parents;
     parents.reserve(entries_.size());
     for (const auto& entry : entries_)
         if (auto stack = std::dynamic_pointer_cast<Stack>(entry.widget.lock()))
             for (const auto& child : stack->children()) parents[child.get()] = stack;
+
+    // Ordinary data changes leave the current container-query overrides in
+    // place. Restoring base style here would reapply the same query in paint.
+    if (!force && appliedBaseLayoutRevision_ == revision && baseLayoutParents_.size() == parents.size() &&
+        std::all_of(parents.begin(), parents.end(), [&](const auto& item) {
+            const auto old = baseLayoutParents_.find(item.first);
+            return old != baseLayoutParents_.end() && old->second.lock() == item.second;
+        })) return;
+
+    bool applied=false;
     for (const auto& entry : entries_) if (auto widget = entry.widget.lock()) {
         auto parent = parents.find(widget.get());
         if (parent == parents.end()) continue;
@@ -33,6 +50,10 @@ inline void StyleRegistry::applyBaseLayouts() {
     // Base dimensions can replace an active query override without changing
     // the measured size or matched tier. Reapply it on the next layout pass.
     if(applied)for(auto& entry:queries_)entry.second.version=~size_t{};
+    baseLayoutParents_.clear();
+    baseLayoutParents_.reserve(parents.size());
+    for (const auto& item : parents) baseLayoutParents_.emplace(item.first, item.second);
+    appliedBaseLayoutRevision_ = revision;
 }
 inline void StyleRegistry::restoreQueryLayouts() {
     for(const auto& entry:entries_)if(auto widget=entry.widget.lock()) {
