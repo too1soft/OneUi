@@ -76,7 +76,8 @@ struct Layout::Impl {
     LayoutOptions options;
     detail::TextIndex index;
     mutable std::vector<std::size_t> boundaries;
-    std::vector<Line> lines;
+    std::size_t lineCount = 0;
+    mutable std::vector<Line> lines;
     std::unique_ptr<p::Paragraph> paragraph;
     std::vector<Part> parts;
     std::vector<SkColor> inlineForegrounds;
@@ -204,17 +205,38 @@ struct Layout::Impl {
         width = std::max(0.0f, paragraph->getLongestLine());
         height = paragraph->getHeight();
         baseline = paragraph->getAlphabeticBaseline();
-        std::vector<p::LineMetrics> metrics;
-        paragraph->getLineMetrics(metrics);
-        for (const auto& line : metrics) {
-            lines.push_back({index.utf8ToWide.at(std::min(line.fStartIndex, index.utf8.size())),
-                             index.utf8ToWide.at(std::min(line.fEndIndex, index.utf8.size())),
-                             static_cast<float>(line.fBaseline - line.fAscent),
-                             static_cast<float>(line.fAscent + line.fDescent),
-                             static_cast<float>(line.fBaseline), static_cast<float>(line.fWidth)});
-        }
-        if (lines.empty()) lines.push_back({0, 0, 0, height, baseline, 0});
+        lineCount = std::max(std::size_t{1}, paragraph->lineNumber());
         ++counters.layouts;
+    }
+
+    const std::vector<Line>& lineGeometry() const {
+        if (!lines.empty()) return lines;
+        // SkParagraph's metrics walk glyph styles on every line. Measuring
+        // and painting labels only need the shaped dimensions and line count.
+        std::vector<Line> resolved;
+        resolved.reserve(lineCount);
+        if (paragraph) {
+            std::vector<p::LineMetrics> metrics;
+            paragraph->getLineMetrics(metrics);
+            for (const auto& line : metrics) {
+                resolved.push_back({index.utf8ToWide.at(std::min(line.fStartIndex, index.utf8.size())),
+                                    index.utf8ToWide.at(std::min(line.fEndIndex, index.utf8.size())),
+                                    static_cast<float>(line.fBaseline - line.fAscent),
+                                    static_cast<float>(line.fAscent + line.fDescent),
+                                    static_cast<float>(line.fBaseline), static_cast<float>(line.fWidth)});
+            }
+            if (resolved.empty()) resolved.push_back({0, 0, 0, height, baseline, 0});
+        } else {
+            for (const auto& part : parts) {
+                for (auto line : part.layout->lines()) {
+                    line.start += part.start; line.end += part.start;
+                    line.top += part.y; line.baseline += part.y;
+                    resolved.push_back(line);
+                }
+            }
+        }
+        lines = std::move(resolved);
+        return lines;
     }
 };
 
@@ -265,8 +287,8 @@ std::shared_ptr<Layout> Layout::make(const std::wstring& value, const LayoutOpti
             auto part = make(value.substr(start, textEnd - start), paragraphOptions);
             bool lastVisible = false;
             if (options.maxLines) {
-                const auto remaining = options.maxLines - impl->lines.size();
-                if (part->lines().size() >= remaining) {
+                const auto remaining = options.maxLines - impl->lineCount;
+                if (part->lineCount() >= remaining) {
                     // Only the final visible paragraph needs the hidden tail to
                     // let SkParagraph place its ellipsis. Earlier hard paragraphs
                     // retain independent Auto directions and cache identities.
@@ -279,11 +301,7 @@ std::shared_ptr<Layout> Layout::make(const std::wstring& value, const LayoutOpti
                 }
             }
             impl->parts.push_back({start, end, impl->height, part});
-            for (auto line : part->lines()) {
-                line.start += start; line.end += start;
-                line.top += impl->height; line.baseline += impl->height;
-                impl->lines.push_back(line);
-            }
+            impl->lineCount += part->lineCount();
             if (start == 0) impl->baseline = part->baseline();
             impl->width = std::max(impl->width, part->width());
             impl->height += part->height();
@@ -308,7 +326,8 @@ int Layout::unresolvedGlyphs() const {
     for (const auto& part : impl_->parts) count += part.layout->unresolvedGlyphs();
     return count;
 }
-const std::vector<Line>& Layout::lines() const { return impl_->lines; }
+std::size_t Layout::lineCount() const { return impl_->lineCount; }
+const std::vector<Line>& Layout::lines() const { return impl_->lineGeometry(); }
 const std::vector<std::size_t>& Layout::graphemes() const { return impl_->graphemes(); }
 std::size_t Layout::floor(std::size_t offset) const {
     const auto& offsets = graphemes();

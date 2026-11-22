@@ -104,7 +104,8 @@ int main() {
                 "lazy graphemes and UTF-16 selection agree after a replacement");
         auto crlf = Layout::make(L"a\r\nb\n");
         require(crlf->next(1) == 3, "CRLF must form one grapheme");
-        require(crlf->lines().size() == 3 && crlf->height() > 0, "hard paragraphs and trailing empty line");
+        require(crlf->lineCount() == 3 && crlf->lines().size() == 3 && crlf->height() > 0,
+                "hard paragraphs and trailing empty line agree with the measured line count");
 
         auto latin = Layout::make(L"office");
         require(latin->width() > 0 && latin->height() > 0, "layout must work before paint");
@@ -137,7 +138,8 @@ int main() {
         require(down.offset > 0, "vertical navigation uses visual lines");
         wrapped.maxLines = 2; wrapped.ellipsis = true;
         auto ellipsized = Layout::make(L"abc\n\u05d0\u05d1\u05d2\nhidden", wrapped);
-        require(ellipsized->lines().size() == 2 && ellipsized->width() <= wrapped.width + 1, "narrow paragraph ellipsis obeys max lines");
+        require(ellipsized->lineCount() == 2 && ellipsized->lines().size() == 2 &&
+                ellipsized->width() <= wrapped.width + 1, "narrow paragraph ellipsis obeys max lines");
 
         LayoutOptions paragraphWrap;
         paragraphWrap.text.wrap = oneui::TextWrapMode::WordWrap;

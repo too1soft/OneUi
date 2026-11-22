@@ -61,6 +61,7 @@ public:
     float height() const;
     float baseline() const;
     int unresolvedGlyphs() const;
+    std::size_t lineCount() const;
     const std::vector<Line>& lines() const;
     const std::vector<std::size_t>& graphemes() const;
     std::size_t previous(std::size_t offset) const;

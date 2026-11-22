@@ -180,7 +180,7 @@ Size Label::measure(Size available) const {
     const auto layout = text::Layout::make(text(), options);
     return {std::min(available.width, std::ceil(layout->width() + inset)) + horizontal,
             std::ceil(std::max({layout->height(), indicatorDiameter_,
-                static_cast<float>(layout->lines().size()) * options.lineHeight})) + vertical};
+                static_cast<float>(layout->lineCount()) * options.lineHeight})) + vertical};
 }
 
 void Label::setPadding(Insets padding) {
