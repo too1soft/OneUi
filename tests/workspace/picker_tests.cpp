@@ -168,6 +168,18 @@ void themes() {
     auto plain=mount.make("Text");mount.set(plain,"text",L"Global");plain.widget->setFrame({0,0,100,30});canvas.texts.clear();plain.widget->paint(canvas);
     check(canvas.texts.back().color.r==28,"global theme unchanged");
     first->setTokens({});canvas.texts.clear();scopes[0].widget->paint(canvas);check(canvas.texts.back().color.r==28,"empty local tokens inherit parent");
+
+    // Retire earlier registrations and compact the registry before replaying
+    // a surviving scope. Its descendant must still get the updated color.
+    scopes.erase(scopes.begin() + 1);
+    labels.erase(labels.begin() + 1);
+    styles->applyBaseLayouts();
+    const auto survivingScope = scopes.back().as<ThemeScope>();
+    survivingScope->setTokens({{"ink", 0x345678ff}});
+    canvas.texts.clear();
+    survivingScope->paint(canvas);
+    check(!canvas.texts.empty() && canvas.texts.back().color.r == 0x34,
+          "palette replay finds surviving registrations after compaction");
 }
 #include "settings_controls.inc"
 #include "font_confirmation.inc"

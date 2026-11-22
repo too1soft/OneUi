@@ -135,3 +135,13 @@ layout resolution both sort matching rules by specificity, explicit order,
 and source position. Repeated classes on a widget contribute each rule once.
 Label and Stack handle their common style properties before dispatching to
 the specialized control adapters.
+
+## Local palette replay
+
+The declarative style registry builds its widget index when a local palette
+first needs to look up a descendant. Later scopes, such as the cards in a
+theme gallery, reuse the index and style only their own affected descendants.
+Registrations append their indices as the tree grows. Compaction and widget
+remapping invalidate the index. Each lookup verifies the live widget before
+applying style. This keeps entries eligible for cleanup and handles address
+reuse during a view's lifetime.

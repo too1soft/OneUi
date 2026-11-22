@@ -92,6 +92,9 @@ private:
     std::vector<std::string> queryDiagnostics_;
     std::map<const Widget*,std::shared_ptr<StyleSheet>> localThemes_;
     std::map<const ThemeScope*,std::shared_ptr<StyleSheet>> themeParents_;
+    using EntryIndices = std::unordered_map<const Widget*, std::size_t>;
+    std::optional<EntryIndices> entryIndices_;
+    const Entry* indexedEntry(const std::shared_ptr<Widget>& widget);
     void applyLocalTheme(const std::shared_ptr<ThemeScope>&, const std::shared_ptr<StyleSheet>& parent = {});
     void refreshLocalThemes();
     void configureQuery(const std::shared_ptr<Widget>&,const StyleBox&);
@@ -245,6 +248,8 @@ private:
     void appendEntry(const Element& e) {
         localThemes_.erase(e.widget.get()); // A new widget may reuse a retired address.
         entries_.push_back({e.widget, e.component, e.classes, e.content});
+        if (entryIndices_)
+            (*entryIndices_)[e.widget.get()] = entries_.size() - 1;
         apply(entries_.back(), sheet_);
         // Construction is bottom-up. Only this new subtree can have changed;
         // replaying every sibling scope makes a page of previews quadratic.
@@ -330,6 +335,7 @@ public:
     }
     void remapWidgets(const std::map<const Widget*,std::shared_ptr<Widget>>& replacements) {
         queries_.clear();layoutDefaults_.clear();++treeVersion_;
+        entryIndices_.reset();
         for(auto& entry:entries_) {
             if(auto widget=entry.widget.lock()) {
                 auto found=replacements.find(widget.get());

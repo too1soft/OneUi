@@ -19,9 +19,8 @@ inline void StyleRegistry::applyLocalTheme(const std::shared_ptr<ThemeScope>& sc
             applyLocalTheme(scope, inherited);
         }
     });
-    // Preview galleries have many descendants. Index this immutable replay
-    // once, rather than scanning all registered siblings for every child.
-    std::optional<std::unordered_map<const Widget*, const Entry*>> entries;
+    // Each scope visits only its descendants. Reuse their registry indices
+    // across replays so a gallery doesn't index every earlier sibling per card.
     std::vector<std::shared_ptr<Widget>> work(scope->children().begin(),scope->children().end());
     while(!work.empty()) {
         auto widget=work.back();work.pop_back();
@@ -30,16 +29,10 @@ inline void StyleRegistry::applyLocalTheme(const std::shared_ptr<ThemeScope>& sc
         if(auto nested=std::dynamic_pointer_cast<ThemeScope>(widget)){applyLocalTheme(nested,sheet);continue;}
         const auto previous = localThemes_.find(widget.get());
         if (sheet != (previous == localThemes_.end() ? nullptr : previous->second)) {
-            if (!entries) {
-                entries.emplace();
-                entries->reserve(entries_.size());
-                for (const auto& entry : entries_)
-                    if (auto live = entry.widget.lock()) entries->emplace(live.get(), &entry);
-            }
-            if (auto found = entries->find(widget.get()); found != entries->end()) {
+            if (const auto* entry = indexedEntry(widget)) {
                 if (sheet) localThemes_[widget.get()] = sheet;
                 else localThemes_.erase(previous);
-                apply(*found->second, sheet_);
+                apply(*entry, sheet_);
             }
         }
         if(auto view=std::dynamic_pointer_cast<View>(widget))for(auto& child:view->children())work.push_back(child);
