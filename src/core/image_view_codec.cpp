@@ -1,5 +1,5 @@
 #include "include/codec/SkCodec.h"
-#if __has_include("include/codec/SkPngDecoder.h")
+#if defined(ONEUI_PINNED_LIBPNG_DECODER) && __has_include("include/codec/SkPngDecoder.h")
 #include "include/codec/SkPngDecoder.h"
 #define ONEUI_HAS_PNG_DECODER 1
 #endif
@@ -46,7 +46,7 @@ bool ImageView::setPngDataUri(const std::string &uri) {
         return false;
     // This API already rejects every non-PNG signature. Calling the generic
     // codec registry here needlessly roots JPEG/WebP and other image decoders.
-#if ONEUI_HAS_PNG_DECODER
+#ifdef ONEUI_HAS_PNG_DECODER
     SkCodec::Result decodeResult;
     auto codec = SkPngDecoder::Decode(SkData::MakeWithCopy(bytes.data(), bytes.size()), &decodeResult);
 #else

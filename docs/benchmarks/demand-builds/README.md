@@ -1,5 +1,7 @@
 # OneUI 按需构建实测
 
+真实 OneUpdate 整包、ICU/字体配置、72 组画面和 Win7 流程的后续结果见 [OneUpdate 安装包实测](oneupdate.md)；下文保留首轮测试界面的独立数据。
+
 2026-11-22，Windows x64。实现提交 `05a6f3330fe6668a06e9c885026ba103a9fce8e9`，基线 `dde054e3f85235b556bfec50d56635bab464ce6a`。
 
 ## 结果

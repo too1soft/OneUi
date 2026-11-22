@@ -33,6 +33,12 @@ if(ONEUI_SKIA_MODE STREQUAL "msys2-dynamic")
             skia
     )
 elseif(ONEUI_SKIA_MODE STREQUAL "bundled-static")
+    if(WIN32 AND MSVC)
+        # The pinned Windows closure includes the libpng decoder. System Skia
+        # distributions may select a different PNG backend; keep their registry.
+        set_property(SOURCE src/core/image_view_codec.cpp APPEND PROPERTY
+            COMPILE_DEFINITIONS ONEUI_PINNED_LIBPNG_DECODER=1)
+    endif()
     if(MSVC)
         # The bundled Skia archives are built with the static MSVC runtime.
         # Match it for every OneUI target in this build to avoid CRT mixing.

@@ -101,7 +101,7 @@ std::vector<RegisteredFont>& registeredFonts() {
     return fonts;
 }
 bool canCreateWeightsLazily(SkTypeface& face) {
-#if ONEUI_LAZY_EMBEDDED_FONTS
+#if ONEUI_LAZY_EMBEDDED_FONTS && defined(_WIN32)
     // Other axes/ranges retain the established eager path. The nine styles
     // must have exactly the same metadata as their native weight instances.
     SkFontParameters::Variation::Axis axis;

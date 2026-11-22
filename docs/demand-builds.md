@@ -66,8 +66,10 @@ Windows bundled-static 构建提供通用的文本服务配置，同一套源码
 
 构建生成 `generated/icu-text.json`，记录输入、输出和每项保留资源的 SHA-256。`oneui_icu_data_profile_tests` 在独立进程比较完整包和文本包的语言相关断行与规范化；Unicode 官方用例继续覆盖完整文字引擎。
 
-应用字体默认按首次使用的字重创建实例，字体字节、字符覆盖和九档字重均保留。只有单个 `wght` 轴且范围恰为 100–900 的字体启用延迟路径，其他字体沿用原有实例化方式。可用 `ONEUI_LAZY_EMBEDDED_FONTS=OFF` 回到预创建方式。`oneui_embedded_font_profile_tests <variable.ttf>` 比较实际字体各档样式、字形数、匹配结果与三种字号的逐像素结果。
+Windows 应用字体默认按首次使用的字重创建实例，字体字节、字符覆盖和九档字重均保留。只有单个 `wght` 轴且范围恰为 100–900 的字体启用延迟路径，其他字体以及尚未完成原生验证的其他平台沿用原有实例化方式。可用 `ONEUI_LAZY_EMBEDDED_FONTS=OFF` 回到预创建方式。`oneui_embedded_font_profile_tests <variable.ttf>` 比较实际字体各档样式、字形数、匹配结果与三种字号的逐像素结果。
 
 SDK 打包器支持 `--linkage static`，不要求额外构建 DLL/viewc。清单记录 ICU、字体和 IPO 配置。Rust 读取 `staticIpo` 后使用 `static:-bundle`，把 MSVC `/GL` 归档留给最终 MSVC 链接器，避免 LLVM rlib 归档器丢失不透明对象的符号；因此最终链接时仍须提供对应 SDK。旧 SDK 没有此标志时保持原有行为。
 
-真实 OneUpdate 对比使用 `rebase-oneupdate-test-bundle.py` 保持 V3 包的配置、签名计划、业务载荷、Agent、Logo 和尾部逐字节不变，只替换外壳。`measure-oneupdate-startup.py` 使用独立空目录，测量进程创建到安装器既有 `ui_window_visible` 日志点的耗时、CPU 和内存，不触发安装。`compare-oneupdate-frames.py` 使用安装器原有的预览/帧导出接口比较三套主题与六种状态；验证构建启用帧导出，生产体积构建关闭。帧导出采用光栅绘制，不能当作 GPU 截图或端到端安装验收。
+真实 OneUpdate 对比使用 `rebase-oneupdate-test-bundle.py` 默认保持旧版 V3 包的配置、签名计划、业务载荷、Agent、Logo 和尾部逐字节不变，只替换外壳。包含 `installed_shell` 绝对偏移/差分描述的新包会被拒绝，必须由 Worker 重新组装，不能直接换头。单独的 `--acceptance-admin-policy` 仅用于隔离虚拟机的静默流程夹具，会显式改变同意策略；体积对比与交付测试包不使用此选项。
+
+`measure-oneupdate-startup.py` 使用独立空目录，测量进程创建到安装器既有 `ui_window_visible` 日志点的耗时、CPU 和内存，不触发安装。`compare-oneupdate-frames.py` 比较三套主题与六种状态；`prepare-oneupdate-acceptance.py` 只在经过哈希核对的 OneUpdate 源码副本中添加 `cfg(test)` 夹具，排空 UI 更新后等待 500 ms 动画稳定，再调用原有帧导出。生产体积构建关闭帧导出。PNG 要求字节完全一致；布局保留原始哈希，仅规范化不可见节点的瞬时绘制颜色。帧导出采用光栅绘制，不能当作 GPU 截图或端到端安装验收。实际整包数据、Win7 流程和验证范围见 [OneUpdate 实测报告](benchmarks/demand-builds/oneupdate.md)。
