@@ -4,6 +4,7 @@
 #include "window_win32_paint_trace.h"
 #include "gl_flush_trace_win32.h"
 #include "window_win32_gpu_warmup.h"
+#include "window_win32_deferred_gl.h"
 #include "accessibility_proxy_win32.h"
 #include "internal/frame_profile.h"
 #include "internal/developer_tools.h"
@@ -69,6 +70,7 @@
 #include "include/core/SkMilestone.h"
 #include "include/core/SkPaint.h"
 #include "include/core/SkPath.h"
+#include "include/core/SkPictureRecorder.h"
 #if SK_MILESTONE >= 150
 #include "include/core/SkPathBuilder.h"
 #endif
@@ -164,6 +166,9 @@ public:
     bool clientSizeChangedFramePending_ = false;
     bool windowActive_ = false;
     win32::NvidiaOpenGlWarmup gpuWarmup_;
+    win32::DeferredStartupGl deferredStartupGl_;
+    bool deferredGlReady_ = false;
+    bool deferredGlScheduled_ = false;
     HGLRC glContext_ = nullptr;
     HDC glDC_ = nullptr;
     sk_sp<GrDirectContext> grContext_;

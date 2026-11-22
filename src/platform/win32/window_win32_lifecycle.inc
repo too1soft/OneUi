@@ -270,7 +270,8 @@
 
     void initialize() override {
         ensureCreated();
-        if (hwnd_ && runtimeConfig_.gpuEnabled && !gpuInitializationAttempted_ && !options_.visible) {
+        if (hwnd_ && runtimeConfig_.gpuEnabled && !gpuInitializationAttempted_ && !options_.visible &&
+            !deferredStartupGl_.arm(hwnd_)) {
             gpuWarmup_.start(hwnd_);
         }
     }

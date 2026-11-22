@@ -178,6 +178,12 @@
         case kOneUiRunPostedCallbacks:
             runPostedCallbacks();
             return 0;
+        case win32::deferredGlReadyMessage:
+            if (deferredStartupGl_.pending()) {
+                deferredGlReady_ = true;
+                scheduleDeferredGlAdoption();
+            }
+            return 0;
         case kOneUiFinishWindowStatePaint:
             flushWindowStatePaint();
             return 0;
@@ -482,6 +488,7 @@
             return dispatchImeSetContext(wParam, lParam);
         case WM_DESTROY:
             callbackWindowAlive_->store(false, std::memory_order_release);
+            deferredStartupGl_.cancel();
             retireAccessibilityProvider();
             return 0;
         case WM_NCDESTROY:

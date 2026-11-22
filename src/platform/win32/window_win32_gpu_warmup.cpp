@@ -104,25 +104,6 @@ bool warmColorQuadProgram() {
     return context->submit(GrSyncCpu::kNo);
 }
 
-bool warmDriver(StartupSurface& surface, POINT origin) {
-    if (!surface.open(origin)) return false;
-    const auto* vendor = reinterpret_cast<const char*>(glGetString(GL_VENDOR));
-    if (!vendor || !std::strstr(vendor, "NVIDIA")) return false;
-    for (int i = 0; i < 2; ++i) {
-        glClear(GL_COLOR_BUFFER_BIT);
-        if (!SwapBuffers(surface.dc)) return false;
-    }
-    // The two swaps make the driver observe this context before a new thread
-    // triggers its process-wide enumeration. Finish on this worker's context.
-    try {
-        std::thread([] {}).join();
-    } catch (const std::system_error&) {
-        return false;
-    }
-    glFinish();
-    return true;
-}
-
 void warmColorQuadInBackground(bool trace) {
     const double started = trace ? internal::scrollTraceNowMs() : 0.0;
     bool warmed = false;
@@ -139,6 +120,28 @@ void warmColorQuadInBackground(bool trace) {
 }
 
 } // namespace
+
+bool nvidiaWindowDisplayOrigin(HWND window, POINT& origin) {
+    return nvidiaDisplayOrigin(window, origin);
+}
+
+bool warmNvidiaDriverThreadCensus(HDC dc) {
+    const auto* vendor = reinterpret_cast<const char*>(glGetString(GL_VENDOR));
+    if (!vendor || !std::strstr(vendor, "NVIDIA")) return false;
+    for (int i = 0; i < 2; ++i) {
+        glClear(GL_COLOR_BUFFER_BIT);
+        if (!SwapBuffers(dc)) return false;
+    }
+    // Let the driver observe the scratch context before starting the thread
+    // that triggers process-wide enumeration. Finish on the worker context.
+    try {
+        std::thread([] {}).join();
+    } catch (const std::system_error&) {
+        return false;
+    }
+    glFinish();
+    return true;
+}
 
 PIXELFORMATDESCRIPTOR openGlWindowPixelFormat() noexcept {
     PIXELFORMATDESCRIPTOR format{};
@@ -165,7 +168,7 @@ void NvidiaOpenGlWarmup::start(HWND window) {
             const bool trace = internal::scrollTraceEnabled();
             const double started = trace ? internal::scrollTraceNowMs() : 0.0;
             StartupSurface surface;
-            const bool warmed = warmDriver(surface, origin);
+            const bool warmed = surface.open(origin) && warmNvidiaDriverThreadCensus(surface.dc);
             if (trace) {
                 internal::writeScrollTrace(internal::ScrollTraceEvent{
                     "win32", "gpu_startup_warmup", 0, 0, 0, 0, 0, 0, 0,

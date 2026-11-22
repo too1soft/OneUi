@@ -16,7 +16,7 @@
     }
 
     void initGPU() {
-        if (gpuInitializationAttempted_ || !hwnd_) {
+        if (gpuInitializationAttempted_ || !hwnd_ || deferredStartupGl_.pending()) {
             return;
         }
         gpuInitializationAttempted_ = true;
@@ -81,17 +81,76 @@
             return;
         }
 
+        publishCurrentGpu(tempContext);
+    }
+
+    void publishCurrentGpu(HGLRC context) {
         const auto swapInterval = reinterpret_cast<WglSwapIntervalExtProc>(
             wglGetProcAddress("wglSwapIntervalEXT"));
         swapIntervalEnabled_ = swapInterval && swapInterval(1) == TRUE;
 
-        glContext_ = tempContext;
+        glContext_ = context;
         gpuAvailable_ = true;
         traceGpu("ganesh-ready");
         std::fprintf(
             stderr,
             "OneUI GPU rendering enabled (OpenGL+Skia Ganesh, vsync=%s)\n",
             swapIntervalEnabled_ ? "on" : "dwm-fallback");
+    }
+
+    bool canAdoptDeferredGl() const {
+        return deferredGlReady_ && hwnd_ && IsWindowVisible(hwnd_) && !IsIconic(hwnd_) &&
+            !interactiveResizeActive_ && callbackWindowAlive_->load(std::memory_order_acquire);
+    }
+
+    void scheduleDeferredGlAdoption() {
+        if (deferredGlScheduled_ || !canAdoptDeferredGl()) return;
+        deferredGlScheduled_ = true;
+        requestAnimationFrame([this](double) {
+            deferredGlScheduled_ = false;
+            if (!canAdoptDeferredGl()) return;
+            deferredGlReady_ = false;
+            auto prepared = deferredStartupGl_.take();
+            gpuInitializationAttempted_ = true;
+            const bool tracing = internal::scrollTraceEnabled();
+            const double started = tracing ? internal::scrollTraceNowMs() : 0.0;
+            const bool adopted = prepared && adoptDeferredGl(*prepared);
+            if (tracing) {
+                internal::writeScrollTrace(internal::ScrollTraceEvent{
+                    "win32", "deferred_gl_ui_adopt", reinterpret_cast<std::uintptr_t>(hwnd_),
+                    0, 0, 0, 0, 0, 0, internal::scrollTraceNowMs() - started,
+                    adopted ? 1.0 : 0.0, 0.0});
+            }
+            if (adopted) requestRedraw();
+            else rendererInfo_.reason = "deferred-opengl-unavailable";
+        });
+    }
+
+    bool adoptDeferredGl(win32::PreparedStartupGl& prepared) {
+        if (MonitorFromWindow(hwnd_, MONITOR_DEFAULTTONULL) != prepared.monitor) return false;
+        HDC dc = GetDC(hwnd_);
+        if (!dc) return false;
+        PIXELFORMATDESCRIPTOR actual{};
+        if (!DescribePixelFormat(dc, prepared.format, sizeof(actual), &actual) ||
+            std::memcmp(&actual, &prepared.descriptor, sizeof(actual)) != 0 ||
+            !SetPixelFormat(dc, prepared.format, &prepared.descriptor)) {
+            ReleaseDC(hwnd_, dc);
+            return false;
+        }
+        const auto previousContext = wglGetCurrentContext();
+        const auto previousDC = wglGetCurrentDC();
+        if (!wglMakeCurrent(dc, prepared.context)) {
+            if (previousContext) wglMakeCurrent(previousDC, previousContext);
+            ReleaseDC(hwnd_, dc);
+            return false;
+        }
+        glDC_ = dc;
+        if (const auto* device = glGetString(GL_RENDERER))
+            rendererInfo_.device = reinterpret_cast<const char*>(device);
+        nvidiaDriver_ = true;
+        grContext_ = std::move(prepared.ganesh);
+        publishCurrentGpu(std::exchange(prepared.context, nullptr));
+        return true;
     }
 
     void shutdownGPU() {

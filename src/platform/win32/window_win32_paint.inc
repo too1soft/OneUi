@@ -110,6 +110,11 @@
 
         SkCanvas* skCanvas = paintSurface_->getCanvas();
         const bool fullPaint = dirtyX == 0 && dirtyY == 0 && dirtyWidth == width && dirtyHeight == height;
+        std::optional<SkPictureRecorder> recorder;
+        if (!useGPU && fullPaint && IsWindowVisible(hwnd_) && deferredStartupGl_.shouldCapture()) {
+            recorder.emplace();
+            skCanvas = recorder->beginRecording(SkRect::MakeWH(static_cast<float>(width), static_cast<float>(height)));
+        }
         if (fullPaint) {
             const auto background = colors::Surface;
             skCanvas->clear(SkColorSetARGB(background.a, background.r, background.g, background.b));
@@ -151,6 +156,12 @@
         if(diagnostics && diagnostics->options.overlay)paintDeveloperOverlay(canvas,*diagnostics,logicalWidth,logicalHeight);
 #endif
         skCanvas->restore();
+        sk_sp<SkPicture> startupPicture;
+        if (recorder) {
+            canvasOwner.reset();
+            startupPicture = recorder->finishRecordingAsPicture();
+            paintSurface_->getCanvas()->drawPicture(startupPicture);
+        }
         paintTrace.mark(PaintTrace::End);
 
         internal::traceInteractionPaint(interactionPaint, "content_paint_end",
@@ -222,9 +233,17 @@
                     profile.data.ms[static_cast<size_t>(internal::FrameStage::ShaderCacheStore)]);
             }
             if (swapped && nvidiaDriver_) {
-                const double censusStarted = internal::workspaceFrameProbe ? currentTimeMs() : 0;
+                const double censusStarted = internal::workspaceFrameProbe || traceLayout ? currentTimeMs() : 0;
                 absorbDriverThreadCensus();
-                if (censusStarted) internal::workspaceCensusMs = currentTimeMs() - censusStarted;
+                if (censusStarted) {
+                    const double censusMs = currentTimeMs() - censusStarted;
+                    if (internal::workspaceFrameProbe) internal::workspaceCensusMs = censusMs;
+                    if (traceLayout) {
+                        internal::writeScrollTrace(internal::ScrollTraceEvent{
+                            "win32", "paint_driver_census", interactionPaint.window, 0, 0, 0, 0, 0, 0,
+                            censusMs, static_cast<double>(interactionPaint.paintSequence), 0});
+                    }
+                }
             }
             const double submitMs = currentTimeMs() - submitStartMs;
             traceSubmitMs_ += submitMs;
@@ -321,6 +340,10 @@
         }
 
         EndPaint(hwnd_, &paintStruct);
+        if (blitSucceeded && startupPicture) {
+            deferredStartupGl_.submitPicture(std::move(startupPicture), width, height);
+        }
+        scheduleDeferredGlAdoption();
         recordPaint(width, height, fullPaint, allocatedSurface, surfaceMs, currentTimeMs() - paintStartMs);
         flushDeferredImePosition();
         finishDiagnostics();
