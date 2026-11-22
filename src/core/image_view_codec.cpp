@@ -1,4 +1,8 @@
 #include "include/codec/SkCodec.h"
+#if __has_include("include/codec/SkPngDecoder.h")
+#include "include/codec/SkPngDecoder.h"
+#define ONEUI_HAS_PNG_DECODER 1
+#endif
 #include "include/core/SkData.h"
 #include "oneui/controls/image_view.h"
 #include <cstring>
@@ -40,7 +44,14 @@ bool ImageView::setPngDataUri(const std::string &uri) {
     constexpr uint8_t magic[]{137, 80, 78, 71, 13, 10, 26, 10};
     if (bytes.size() < sizeof(magic) || std::memcmp(bytes.data(), magic, sizeof(magic)))
         return false;
+    // This API already rejects every non-PNG signature. Calling the generic
+    // codec registry here needlessly roots JPEG/WebP and other image decoders.
+#if ONEUI_HAS_PNG_DECODER
+    SkCodec::Result decodeResult;
+    auto codec = SkPngDecoder::Decode(SkData::MakeWithCopy(bytes.data(), bytes.size()), &decodeResult);
+#else
     auto codec = SkCodec::MakeFromData(SkData::MakeWithCopy(bytes.data(), bytes.size()));
+#endif
     if (!codec || codec->getFrameCount() != 1)
         return false;
     const auto info = codec->getInfo();

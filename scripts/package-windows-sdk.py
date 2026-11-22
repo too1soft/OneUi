@@ -32,8 +32,9 @@ def source_identity(source):
     for folder in ("include", "src", "cmake"):
         for item in inventory(source / folder):
             entries.append(dict(item, path=folder + "/" + item["path"]))
-    path = source / "CMakeLists.txt"
-    entries.append(dict(path=path.name, size=path.stat().st_size, sha256=digest(path)))
+    for name in ("CMakeLists.txt", "scripts/embed-compressed-binary.py", "scripts/prepare-icu-data.py"):
+        path = source / name
+        entries.append(dict(path=name, size=path.stat().st_size, sha256=digest(path)))
     entries.sort(key=lambda item: item["path"])
     encoded = json.dumps(entries, sort_keys=True, separators=(",", ":")).encode()
     return entries, hashlib.sha256(encoded).hexdigest()
@@ -43,6 +44,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for option in ("source", "build", "output", "licenses"):
         parser.add_argument("--" + option, required=True, type=Path)
+    parser.add_argument("--linkage", choices=("both", "static"), default="both")
     args = parser.parse_args()
     source, build, output, licenses = (getattr(args, key).resolve()
                                        for key in ("source", "build", "output", "licenses"))
@@ -75,9 +77,10 @@ def main():
                "libjpeg-turbo.md", "libjpeg-IJG.txt", "libpng.txt", "libwebp.txt",
                "libwebp-patents.txt", "zlib.txt", "expat.txt"]
     copies = [(path, "lib/" + path.name) for path in archives]
-    copies += [(build / "oneui.dll", "bin/oneui.dll"),
-               (build / "oneui-viewc.exe", "bin/oneui-viewc.exe"),
-               (build / "oneui.lib", "lib/oneui.lib")]
+    if args.linkage == "both":
+        copies += [(build / "oneui.dll", "bin/oneui.dll"),
+                   (build / "oneui-viewc.exe", "bin/oneui-viewc.exe"),
+                   (build / "oneui.lib", "lib/oneui.lib")]
     copies += [(licenses / name, "licenses/" + name) for name in notices]
     if yoga:
         copies.append((build / "licenses/Yoga-LICENSE.txt", "licenses/Yoga-LICENSE.txt"))
@@ -100,7 +103,10 @@ def main():
     manifest = {key: recipe[key] for key in ("schemaVersion", "profile", "architecture", "configuration")}
     manifest.update(kind="oneui-sdk", crt="static", abiVersion=version,
                     staticLibraries=static_names, systemLibraries=recipe["systemLibraries"],
-                    features=dict(yoga=yoga, developerTools=False, testFrameCapture=False),
+                    features=dict(yoga=yoga, developerTools=False, testFrameCapture=False,
+                                  staticIpo="ONEUI_STATIC_IPO:BOOL=ON" in cache,
+                                  icuDataProfile=("text" if "ONEUI_ICU_DATA_PROFILE:STRING=text" in cache else "full"),
+                                  lazyEmbeddedFonts="ONEUI_LAZY_EMBEDDED_FONTS:BOOL=ON" in cache),
                     sourceCommit=subprocess.check_output(["git", "-C", str(source), "rev-parse", "HEAD"], text=True).strip(),
                     sourceDirty=bool(subprocess.check_output(["git", "-C", str(source), "status", "--porcelain"], text=True)),
                     sourceInputs=inventory(source / "include"), sourceTreeSha256=source_hash,

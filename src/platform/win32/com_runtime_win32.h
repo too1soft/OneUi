@@ -8,11 +8,15 @@ namespace oneui::win32 {
 // apartment. Keep one process-wide implicit MTA available for their callbacks.
 inline HRESULT ensureBackgroundComRuntime() {
     struct ProcessUsage {
-        CO_MTA_USAGE_COOKIE cookie = nullptr;
+        // Win7 headers intentionally omit the Win8 cookie and declaration.
+        // The documented cookie is an opaque PVOID; resolve the entry point
+        // without requiring the newer SDK declarations at compile time.
+        using IncrementUsage = HRESULT(WINAPI*)(void**);
+        void* cookie = nullptr;
         HRESULT result = S_FALSE;
         ProcessUsage() {
             const auto ole = GetModuleHandleW(L"ole32.dll");
-            const auto increment = ole ? reinterpret_cast<decltype(&CoIncrementMTAUsage)>(
+            const auto increment = ole ? reinterpret_cast<IncrementUsage>(
                 GetProcAddress(ole, "CoIncrementMTAUsage")) : nullptr;
             // Dynamic lookup preserves Windows 7 compatibility.
             if (increment) result = increment(&cookie);

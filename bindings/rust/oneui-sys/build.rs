@@ -166,8 +166,15 @@ fn link_sdk(sdk: &Path) {
         "cargo:rerun-if-changed={}",
         sdk.join("sdk-manifest.json").display()
     );
+    // LLVM's rlib archiver cannot re-index MSVC /GL object members. Keep
+    // toolchain-specific IPO archives intact for the final MSVC linker.
+    let static_kind = if manifest["features"]["staticIpo"].as_bool() == Some(true) {
+        "static:-bundle="
+    } else {
+        "static="
+    };
     for (file, kind) in [
-        ("static-libraries.txt", "static="),
+        ("static-libraries.txt", static_kind),
         ("system-libraries.txt", ""),
     ] {
         let path = sdk.join(file);

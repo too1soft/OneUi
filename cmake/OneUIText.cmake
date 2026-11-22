@@ -23,7 +23,13 @@ else()
     endforeach()
 endif()
 
-add_library(oneui_text STATIC src/text/text_layout.cpp src/text/font_manager.cpp src/text/canvas_text.cpp)
+include("${CMAKE_CURRENT_LIST_DIR}/OneUIIcuData.cmake")
+option(ONEUI_LAZY_EMBEDDED_FONTS "Create embedded variable-font weight instances on first use" ON)
+add_library(oneui_text STATIC src/text/text_layout.cpp src/text/font_manager.cpp
+    src/text/embedded_fonts.cpp src/text/canvas_text.cpp)
+target_compile_definitions(oneui_text PRIVATE ONEUI_LAZY_EMBEDDED_FONTS=$<BOOL:${ONEUI_LAZY_EMBEDDED_FONTS}>)
+set_property(SOURCE src/text/embedded_fonts.cpp APPEND PROPERTY COMPILE_OPTIONS
+    "$<$<CXX_COMPILER_ID:MSVC>:/GR->" "$<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-fno-rtti>")
 set_target_properties(oneui_text PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(oneui_text PRIVATE include src)
 target_link_libraries(oneui_text PUBLIC oneui_skia)
@@ -40,6 +46,7 @@ if(ONEUI_SKIA_MODE STREQUAL "bundled-static")
             target_compile_definitions(oneui_text PRIVATE ONEUI_PORTABLE_FONT_LOADER=1)
         endif()
         set(_oneui_icu_data "${ONEUI_BUNDLED_SKIA_ROOT}/third_party/externals/icu/common/icudtl.dat")
+        oneui_prepare_icu_data("${_oneui_icu_data}" _oneui_icu_data)
         set(_oneui_icu_source "${CMAKE_CURRENT_BINARY_DIR}/generated/icu_data.cpp")
         file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/generated")
         find_package(Python3 COMPONENTS Interpreter REQUIRED)
@@ -50,6 +57,10 @@ if(ONEUI_SKIA_MODE STREQUAL "bundled-static")
                 --symbol oneuiEmbeddedIcuData
             DEPENDS "${_oneui_icu_data}" "${CMAKE_CURRENT_SOURCE_DIR}/scripts/embed-compressed-binary.py" VERBATIM)
         target_sources(oneui_text PRIVATE src/text/icu_data_win32.cpp "${_oneui_icu_source}")
+        # Data-only arrays need no IPO IR. MSVC /GL otherwise expands each
+        # literal byte into a large intermediate object without runtime gain.
+        set_property(SOURCE "${_oneui_icu_source}" APPEND PROPERTY COMPILE_OPTIONS
+            "$<$<CXX_COMPILER_ID:MSVC>:/GL->")
         target_compile_definitions(oneui_text PRIVATE ONEUI_EMBEDDED_ICU=1)
         target_include_directories(oneui_text PRIVATE "${ONEUI_BUNDLED_SKIA_ROOT}/third_party/externals/zlib")
         target_link_libraries(oneui_text PUBLIC bcrypt)

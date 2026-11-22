@@ -44,8 +44,11 @@ pub fn link(sdk: &Path) -> bool {
     if mode == "shared" {
         println!("cargo:rustc-link-lib=dylib=oneui");
     } else {
+        let kind = if os == "windows" && manifest["features"]["staticIpo"].as_bool() == Some(true) {
+            "static:-bundle"
+        } else { "static" };
         for library in manifest["staticLibraries"].as_array().expect("Static closure missing") {
-            println!("cargo:rustc-link-lib=static={}",library.as_str().expect("Invalid archive name"));
+            println!("cargo:rustc-link-lib={kind}={}",library.as_str().expect("Invalid archive name"));
         }
         for library in manifest["systemLibraries"].as_array().expect("System closure missing") {
             println!("cargo:rustc-link-lib={}",library.as_str().expect("Invalid system library"));

@@ -141,6 +141,7 @@ def main():
             frameworks=frameworks, minimumOS=args.minimum_os, toolchain=args.toolchain,
             files=inventory(entries))
         if frozen:
+            manifest["features"] = frozen.get("features", {})
             manifest["upstreamManifestSha256"] = digest(args.input / "sdk-manifest.json")
             manifest["sourceTreeSha256"] = frozen["sourceTreeSha256"]
         else:
