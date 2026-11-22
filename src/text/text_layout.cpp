@@ -1,6 +1,7 @@
 #include "internal/frame_profile.h"
 #include "text_layout.h"
 #include "text_layout_cache.h"
+#include "text_index.h"
 #include "font_family_list.h"
 #include "foreground_painter.h"
 #include "internal/unicode.h"
@@ -73,10 +74,8 @@ struct Layout::Impl {
     struct Part { std::size_t start; std::size_t end; float y; std::shared_ptr<Layout> layout; };
     struct Stop { Position position; Rect bounds; };
     LayoutOptions options;
-    std::string utf8;
-    std::u16string utf16;
-    std::vector<std::size_t> wideTo8, wideTo16, utf8ToWide, utf16ToWide;
-    std::vector<std::size_t> boundaries;
+    detail::TextIndex index;
+    mutable std::vector<std::size_t> boundaries;
     std::vector<Line> lines;
     std::unique_ptr<p::Paragraph> paragraph;
     std::vector<Part> parts;
@@ -85,46 +84,24 @@ struct Layout::Impl {
     mutable bool stopsReady = false;
     float width = 0, height = 0, baseline = 0;
 
-    explicit Impl(const std::wstring& value, LayoutOptions opts) : options(std::move(opts)) {
-        wideTo8.resize(value.size() + 1);
-        wideTo16.resize(value.size() + 1);
-        for (std::size_t i = 0; i < value.size();) {
-            const auto end = unicode::next(value, i);
-            auto bytes = unicode::toUtf8(std::wstring_view(value).substr(i, end - i));
-            for (std::size_t j = i; j < end; ++j) {
-                wideTo8[j] = utf8.size();
-                wideTo16[j] = utf16.size();
-            }
-            utf8ToWide.insert(utf8ToWide.end(), bytes.size(), i);
-            utf8 += bytes;
-            const auto scalar = unicode::fromUtf8(bytes);
-            if constexpr (sizeof(wchar_t) == 2) {
-                for (const auto unit : scalar) { utf16.push_back(static_cast<char16_t>(unit)); utf16ToWide.push_back(i); }
-            } else {
-                const auto cp = static_cast<std::uint32_t>(scalar.front());
-                if (cp > 0xFFFF) {
-                    utf16.push_back(static_cast<char16_t>(0xD800 + ((cp - 0x10000) >> 10)));
-                    utf16ToWide.push_back(i);
-                    utf16.push_back(static_cast<char16_t>(0xDC00 + ((cp - 0x10000) & 0x3FF)));
-                } else utf16.push_back(static_cast<char16_t>(cp));
-                utf16ToWide.push_back(i);
-            }
-            i = end;
-        }
-        wideTo8.back() = utf8.size();
-        wideTo16.back() = utf16.size();
-        utf8ToWide.push_back(value.size());
-        utf16ToWide.push_back(value.size());
-        if (utf8.size() > static_cast<std::size_t>(std::numeric_limits<int>::max()))
-            throw std::length_error("OneUI paragraph exceeds the text engine's index range");
+    explicit Impl(const std::wstring& value, LayoutOptions opts)
+        : options(std::move(opts)), index(value) {}
+
+    const std::vector<std::size_t>& graphemes() const {
+        // Measuring and drawing use the shaped paragraph. Editing and
+        // truncation request the native grapheme offsets on first use.
+        if (!boundaries.empty()) return boundaries;
+        std::vector<std::size_t> resolved;
         auto breaker = unicodeEngine()->makeBreakIterator(options.text.locale.c_str(), SkUnicode::BreakType::kGraphemes);
-        if (!breaker || !breaker->setText(utf8.data(), static_cast<int>(utf8.size())))
+        if (!breaker || !breaker->setText(index.utf8.data(), static_cast<int>(index.utf8.size())))
             throw std::runtime_error("OneUI could not create a grapheme iterator");
-        for (auto index = breaker->first(); !breaker->isDone(); index = breaker->next()) {
-            boundaries.push_back(utf8ToWide.at(static_cast<std::size_t>(index)));
-        }
-        if (boundaries.empty() || boundaries.front() != 0) boundaries.insert(boundaries.begin(), 0);
-        if (boundaries.back() != value.size()) boundaries.push_back(value.size());
+        for (auto offset = breaker->first(); !breaker->isDone(); offset = breaker->next())
+            resolved.push_back(index.utf8ToWide.at(static_cast<std::size_t>(offset)));
+        if (resolved.empty() || resolved.front() != 0) resolved.insert(resolved.begin(), 0);
+        const auto end = index.utf8ToWide.back();
+        if (resolved.back() != end) resolved.push_back(end);
+        boundaries = std::move(resolved);
+        return boundaries;
     }
 
     void shape() {
@@ -157,7 +134,7 @@ struct Layout::Impl {
         if (options.text.direction == TextDirection::Auto) {
             UErrorCode error = U_ZERO_ERROR;
             auto* bidi = ubidi_open();
-            ubidi_setPara(bidi, reinterpret_cast<const UChar*>(utf16.data()), static_cast<int32_t>(utf16.size()), UBIDI_DEFAULT_LTR, nullptr, &error);
+            ubidi_setPara(bidi, reinterpret_cast<const UChar*>(index.utf16.data()), static_cast<int32_t>(index.utf16.size()), UBIDI_DEFAULT_LTR, nullptr, &error);
             rtl = (ubidi_getParaLevel(bidi) & 1) != 0;
             ubidi_close(bidi);
             if (U_FAILURE(error)) throw std::runtime_error("OneUI could not resolve paragraph direction");
@@ -170,9 +147,9 @@ struct Layout::Impl {
         auto builder = p::ParagraphBuilder::make(paragraphStyle, fonts(), unicodeEngine());
         const auto addTextRange = [&](std::size_t start, std::size_t end) {
             if (end <= start) return;
-            const auto byteStart = wideTo8.at(start);
-            const auto byteEnd = wideTo8.at(end);
-            builder->addText(utf8.data() + byteStart, byteEnd - byteStart);
+            const auto byteStart = index.wideTo8.at(start);
+            const auto byteEnd = index.wideTo8.at(end);
+            builder->addText(index.utf8.data() + byteStart, byteEnd - byteStart);
         };
         std::size_t cursor = 0;
         for (const auto& span : options.spans) {
@@ -216,7 +193,7 @@ struct Layout::Impl {
             builder->pop();
             cursor = span.end;
         }
-        addTextRange(cursor, wideTo8.size() - 1);
+        addTextRange(cursor, index.wideTo8.size() - 1);
         paragraph = builder->Build();
         const float layoutWidth = options.text.wrap == TextWrapMode::NoWrap && !options.ellipsis ? 1000000.0f : options.width;
         paragraph->layout(layoutWidth);
@@ -230,8 +207,8 @@ struct Layout::Impl {
         std::vector<p::LineMetrics> metrics;
         paragraph->getLineMetrics(metrics);
         for (const auto& line : metrics) {
-            lines.push_back({utf8ToWide.at(std::min(line.fStartIndex, utf8.size())),
-                             utf8ToWide.at(std::min(line.fEndIndex, utf8.size())),
+            lines.push_back({index.utf8ToWide.at(std::min(line.fStartIndex, index.utf8.size())),
+                             index.utf8ToWide.at(std::min(line.fEndIndex, index.utf8.size())),
                              static_cast<float>(line.fBaseline - line.fAscent),
                              static_cast<float>(line.fAscent + line.fDescent),
                              static_cast<float>(line.fBaseline), static_cast<float>(line.fWidth)});
@@ -332,21 +309,23 @@ int Layout::unresolvedGlyphs() const {
     return count;
 }
 const std::vector<Line>& Layout::lines() const { return impl_->lines; }
-const std::vector<std::size_t>& Layout::graphemes() const { return impl_->boundaries; }
+const std::vector<std::size_t>& Layout::graphemes() const { return impl_->graphemes(); }
 std::size_t Layout::floor(std::size_t offset) const {
-    auto it = std::upper_bound(impl_->boundaries.begin(), impl_->boundaries.end(), offset);
-    return it == impl_->boundaries.begin() ? 0 : *std::prev(it);
+    const auto& offsets = graphemes();
+    auto it = std::upper_bound(offsets.begin(), offsets.end(), offset);
+    return it == offsets.begin() ? 0 : *std::prev(it);
 }
 std::size_t Layout::ceil(std::size_t offset) const {
-    auto it = std::lower_bound(impl_->boundaries.begin(), impl_->boundaries.end(), offset);
-    return it == impl_->boundaries.end() ? impl_->boundaries.back() : *it;
+    const auto& offsets = graphemes();
+    auto it = std::lower_bound(offsets.begin(), offsets.end(), offset);
+    return it == offsets.end() ? offsets.back() : *it;
 }
 std::size_t Layout::previous(std::size_t offset) const { return floor(offset ? offset - 1 : 0); }
 std::size_t Layout::next(std::size_t offset) const {
-    return offset >= impl_->wideTo8.size() - 1 ? impl_->wideTo8.size() - 1 : ceil(offset + 1);
+    return offset >= impl_->index.wideTo8.size() - 1 ? impl_->index.wideTo8.size() - 1 : ceil(offset + 1);
 }
-std::size_t Layout::utf8Offset(std::size_t offset) const { return impl_->wideTo8.at(std::min(offset, impl_->wideTo8.size() - 1)); }
-std::size_t Layout::wideOffset(std::size_t offset) const { return impl_->utf8ToWide.at(std::min(offset, impl_->utf8.size())); }
+std::size_t Layout::utf8Offset(std::size_t offset) const { return impl_->index.wideTo8.at(std::min(offset, impl_->index.wideTo8.size() - 1)); }
+std::size_t Layout::wideOffset(std::size_t offset) const { return impl_->index.utf8ToWide.at(std::min(offset, impl_->index.utf8.size())); }
 
 Position Layout::hitTest(Point point) const {
     // A document click only needs the paragraph under the pointer. Do not
@@ -381,12 +360,12 @@ Rect Layout::caret(Position pos) const {
             r.y += part.y; return r;
         }
     }
-    if (impl_->utf8.empty()) return {0, 0, 1, std::max(1.0f, height())};
-    const bool usePrevious = pos.offset > 0 && (pos.affinity == TextAffinity::Upstream || pos.offset == impl_->boundaries.back());
+    if (impl_->index.utf8.empty()) return {0, 0, 1, std::max(1.0f, height())};
+    const bool usePrevious = pos.offset > 0 && (pos.affinity == TextAffinity::Upstream || pos.offset == impl_->index.utf8ToWide.back());
     const auto start = usePrevious ? previous(pos.offset) : pos.offset;
     const auto end = usePrevious ? pos.offset : next(pos.offset);
-    auto boxes = impl_->paragraph->getRectsForRange(static_cast<unsigned>(impl_->wideTo16[start]),
-        static_cast<unsigned>(impl_->wideTo16[end]), p::RectHeightStyle::kMax, p::RectWidthStyle::kTight);
+    auto boxes = impl_->paragraph->getRectsForRange(static_cast<unsigned>(impl_->index.wideTo16[start]),
+        static_cast<unsigned>(impl_->index.wideTo16[end]), p::RectHeightStyle::kMax, p::RectWidthStyle::kTight);
     if (boxes.empty()) return {0, 0, 1, std::max(1.0f, height())};
     const auto& box = usePrevious ? boxes.back() : boxes.front();
     const bool rtl = box.direction == p::TextDirection::kRtl;
@@ -459,14 +438,14 @@ std::vector<Rect> Layout::selection(std::size_t start, std::size_t end) const {
         }
     }
     if (!impl_->paragraph) return result;
-    for (const auto& box : impl_->paragraph->getRectsForRange(static_cast<unsigned>(impl_->wideTo16[start]),
-        static_cast<unsigned>(impl_->wideTo16[end]), p::RectHeightStyle::kMax, p::RectWidthStyle::kTight)) result.push_back(rect(box.rect));
+    for (const auto& box : impl_->paragraph->getRectsForRange(static_cast<unsigned>(impl_->index.wideTo16[start]),
+        static_cast<unsigned>(impl_->index.wideTo16[end]), p::RectHeightStyle::kMax, p::RectWidthStyle::kTight)) result.push_back(rect(box.rect));
     return result;
 }
 
 std::pair<std::size_t, std::size_t> Layout::word(std::size_t offset) const {
     auto breaker = unicodeEngine()->makeBreakIterator(impl_->options.text.locale.c_str(), SkUnicode::BreakType::kWords);
-    if (!breaker || !breaker->setText(impl_->utf8.data(), static_cast<int>(impl_->utf8.size())))
+    if (!breaker || !breaker->setText(impl_->index.utf8.data(), static_cast<int>(impl_->index.utf8.size())))
         throw std::runtime_error("OneUI could not create a word iterator");
     const auto target = utf8Offset(offset);
     std::size_t before = 0;

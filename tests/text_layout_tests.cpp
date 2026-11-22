@@ -91,6 +91,17 @@ int main() {
         auto combining = Layout::make(L"e\u0301x");
         require(combining->next(0) == 2 && combining->floor(1) == 0, "combining mark boundary");
         require(combining->utf8Offset(2) == 3 && combining->wideOffset(3) == 2, "UTF-8 mapping");
+        const std::wstring supplementary = L"\U0001F600";
+        const std::wstring malformed = L"a" + std::wstring(1, static_cast<wchar_t>(0xD800)) + supplementary + L"b";
+        auto replaced = Layout::make(malformed);
+        require(replaced->width() == Layout::make(L"a\uFFFD" + supplementary + L"b")->width(),
+                "malformed wide input shapes as a replacement character");
+        const auto afterEmoji = 2 + supplementary.size();
+        require(replaced->utf8Offset(2) == 4 && replaced->utf8Offset(afterEmoji) == 8 &&
+                replaced->wideOffset(7) == 2 && replaced->next(2) == afterEmoji,
+                "replacement and supplementary scalars retain native and byte offsets");
+        require(replaced->selection(2, afterEmoji).size() == 1,
+                "lazy graphemes and UTF-16 selection agree after a replacement");
         auto crlf = Layout::make(L"a\r\nb\n");
         require(crlf->next(1) == 3, "CRLF must form one grapheme");
         require(crlf->lines().size() == 3 && crlf->height() > 0, "hard paragraphs and trailing empty line");
