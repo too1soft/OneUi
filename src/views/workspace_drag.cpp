@@ -1,3 +1,4 @@
+#include "oneui/component_selection.h"
 #include "workspace_cache.h"
 #include "workspace_drag_external.h"
 #include "oneui/layout/workspace_drag.h"
@@ -15,7 +16,7 @@ Value number(double value){Value v;v.tag=3;v.number=value;return v;}
 Value integer(int64_t value){Value v;v.tag=2;v.integer=value;return v;}
 }
 bool Runtime::dragScalar(Instance& instance,const std::string& name,const Value& value) {
-    if(instance.element.component=="DragHandle") {
+    if(ONEUI_COMPONENT_IS(instance.element.component, DragHandle)) {
         auto w=instance.element.as<DragHandle>();
         if(name=="source")w->source=value.text;
         else if(name=="domain")w->domain=value.text;
@@ -26,7 +27,7 @@ bool Runtime::dragScalar(Instance& instance,const std::string& name,const Value&
         } else return false;
         return true;
     }
-    if(instance.element.component=="DropSurface") {
+    if(ONEUI_COMPONENT_IS(instance.element.component, DropSurface)) {
         auto w=instance.element.as<DropSurface>();
         if(name=="domain")w->domain=value.text;
         else if(name=="role") {check(value.text=="tab-strip",ONEUI_VIEW_TYPE,"Invalid drop role");w->role=value.text;}
@@ -58,7 +59,7 @@ bool Runtime::dragScalar(Instance& instance,const std::string& name,const Value&
     return true;
 }
 bool Runtime::dragList(Instance& instance,const std::string& name,ListState& state) {
-    if(instance.element.component=="Tabs" && name=="decorations") {
+    if(ONEUI_COMPONENT_IS(instance.element.component, Tabs) && name=="decorations") {
         std::vector<std::optional<IconSymbol>> icons;
         std::vector<Color> colors;
         for(const auto& item:state.items) {
@@ -116,10 +117,10 @@ void workspaceTabDrag(Runtime& runtime,const std::string& name,const std::string
 }
 void Runtime::wireDrag(const std::shared_ptr<Instance>& instance) {
     std::weak_ptr<Instance> weak=instance;
-    if(instance->element.component=="DropSurface") {
+    if(ONEUI_COMPONENT_IS(instance->element.component, DropSurface)) {
         auto surface=instance->element.as<DropSurface>();
         if(auto d=domain(*this,surface->domain))d->registerTabs(image.strings[image.records[oneview::NODE][instance->node][11]],surface);
-    } else if(instance->element.component=="DragHandle") {
+    } else if(ONEUI_COMPONENT_IS(instance->element.component, DragHandle)) {
         instance->element.as<DragHandle>()->setOnActivated([weak](const MouseEvent& event) {
             auto item=weak.lock();if(!item)return;
             emitComponentEvent(weak,"activated",{string(item->element.as<DragHandle>()->source),
@@ -143,7 +144,7 @@ void Runtime::wireDrag(const std::shared_ptr<Instance>& instance) {
             }
             emitComponentEvent(weak,"dragStateChanged",{string(w->source),integer(phase)});
         });
-    } else if(instance->element.component=="PaneHeader") {
+    } else if(ONEUI_COMPONENT_IS(instance->element.component, PaneHeader)) {
         instance->element.as<PaneHeader>()->setOnDrag([weak](int phase,Point point) {
             auto item=weak.lock();auto owner=item?item->owner.lock():nullptr;if(!owner||owner->closing)return;
             auto parent=item->parent.lock();while(parent && parent->element.component!="PaneGrid")parent=parent->parent.lock();
@@ -152,7 +153,7 @@ void Runtime::wireDrag(const std::shared_ptr<Instance>& instance) {
             if(phase==0)d->begin(item->element.as<PaneHeader>()->config().pane,point);
             else if(phase==1)d->move(point);else if(phase==2)d->release(point);else d->cancel();
         });
-    } else if(instance->element.component=="Tabs") {
+    } else if(ONEUI_COMPONENT_IS(instance->element.component, Tabs)) {
         auto tabs=instance->element.as<Tabs>();
         tabs->setOnContextMenuRequested([weak](int index,Point point) {
             auto item=weak.lock();if(!item)return;

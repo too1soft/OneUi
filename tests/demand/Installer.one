@@ -1,0 +1,9 @@
+<template view-model="Installer">
+  <Column>
+    <Text ref="title" :text="title"/>
+    <Input ref="path" v-model="path"/>
+    <Checkbox ref="consent" v-model="consent"/>
+    <Progress ref="progress" :value="progress"/>
+    <Row><Button ref="install" text="安装 / Install" @click="install"/></Row>
+  </Column>
+</template>

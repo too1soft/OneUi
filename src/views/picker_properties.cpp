@@ -1,10 +1,11 @@
+#include "oneui/component_selection.h"
 #include "picker_cache.h"
 #include "internal/unicode.h"
 #include <cmath>
 namespace oneui::views {
 bool Runtime::pickerScalar(Instance& instance,const std::string& name,const Value& value) {
     auto& e=instance.element;const auto& type=e.component;
-    if(type=="MediaSlot"&&name=="slot-name") {
+    if(ONEUI_COMPONENT_IS(type, MediaSlot)&&name=="slot-name") {
         check(name=="slot-name"&&(value.text=="empty"||value.text=="error"||value.text=="preview"||value.text=="loading"),ONEUI_VIEW_TYPE,"Invalid media slot");
         e.as<MediaSlotView>()->name=value.text;return true;
     }
@@ -12,7 +13,7 @@ bool Runtime::pickerScalar(Instance& instance,const std::string& name,const Valu
     auto old=instance.pickerCache;
     auto next=old?std::make_shared<Instance::PickerCache>(*old):std::make_shared<Instance::PickerCache>();
     auto wide=[&]{return unicode::fromUtf8(value.text);};
-    if(type=="FontPicker") {
+    if(ONEUI_COMPONENT_IS(type, FontPicker)) {
         if(name=="selected")next->font.selected=value.text;
         else if(name=="error")next->font.error=wide();
         else if(name=="preview-text")next->font.previewText=wide();
@@ -27,7 +28,7 @@ bool Runtime::pickerScalar(Instance& instance,const std::string& name,const Valu
         else if(name=="search-label")next->searchLabel=wide();
         else if(name=="retry-label")next->retryLabel=wide();
         else return false;
-    } else if(type=="MediaPicker") {
+    } else if(ONEUI_COMPONENT_IS(type, MediaPicker)) {
         if(name=="asset")next->media.asset=value.text;
         else if(name=="label")next->media.label=wide();
         else if(name=="error")next->media.error=wide();
@@ -37,7 +38,7 @@ bool Runtime::pickerScalar(Instance& instance,const std::string& name,const Valu
         else if(name=="cancel-label")next->cancelLabel=wide();
         else if(name=="accept")check(value.text=="image",ONEUI_VIEW_TYPE,"MediaPicker accept must be image");
         else return false;
-    } else if(type=="MediaPreview") {
+    } else if(ONEUI_COMPONENT_IS(type, MediaPreview)) {
         if(name=="source")next->source=value.text;
         else if(name=="fit")next->fit=value.text;
         else if(name=="position")next->position=value.text;
@@ -55,14 +56,14 @@ bool Runtime::pickerScalar(Instance& instance,const std::string& name,const Valu
 }
 bool Runtime::pickerList(Instance& instance,const std::string& name,ListState& list) {
     const auto& type=instance.element.component;
-    if(!((type=="FontPicker"&&(name=="items"||name=="monospace-items"))||(type=="ThemeScope"&&name=="tokens")))return false;
+    if(!((ONEUI_COMPONENT_IS(type, FontPicker)&&(name=="items"||name=="monospace-items"))||(ONEUI_COMPONENT_IS(type, ThemeScope)&&name=="tokens")))return false;
     auto old=instance.pickerCache;
     auto next=old?std::make_shared<Instance::PickerCache>(*old):std::make_shared<Instance::PickerCache>();
     auto field=[&](const std::shared_ptr<Scope>& scope,const char* key){return read(scope,image.schema.model(scope->table.model_id).properties.at(key).id);};
-    if(type=="FontPicker"&&name=="monospace-items") {
+    if(ONEUI_COMPONENT_IS(type, FontPicker)&&name=="monospace-items") {
         next->monospaceKeys.clear();
         for(auto& item:list.items)next->monospaceKeys.push_back(field(item,"value").text);
-    } else if(type=="FontPicker") {
+    } else if(ONEUI_COMPONENT_IS(type, FontPicker)) {
         next->font.items.clear();next->font.items.reserve(list.items.size());
         for(size_t i=0;i<list.items.size();++i)next->font.items.push_back({list.keys[i],unicode::fromUtf8(field(list.items[i],"family").text),unicode::fromUtf8(field(list.items[i],"label").text),bool(field(list.items[i],"available").integer)});
     } else {
@@ -77,7 +78,7 @@ void Runtime::preparePicker(const std::shared_ptr<Instance>& instance) {
     if(type!="FontPicker"&&type!="MediaPicker"&&type!="MediaPreview"&&type!="Slider"&&type!="ThemeScope")return;
     if(!instance->pickerCache)instance->pickerCache=std::make_shared<Instance::PickerCache>();
     auto c=instance->pickerCache;std::function<void()> apply;
-    if(type=="FontPicker") {
+    if(ONEUI_COMPONENT_IS(type, FontPicker)) {
         check(std::isfinite(c->font.size)&&c->font.size>0,ONEUI_VIEW_TYPE,"Invalid font size");
         apply=[w=instance->element.as<FontPicker>(),c]{
             w->setTriggerLabel(c->triggerLabel);w->setConfig(c->font);
@@ -86,9 +87,9 @@ void Runtime::preparePicker(const std::shared_ptr<Instance>& instance) {
             if(!c->searchLabel.empty())w->setSearchLabel(c->searchLabel);
             w->setRetryLabel(c->retryLabel);
         };
-    } else if(type=="MediaPicker")apply=[w=instance->element.as<MediaPicker>(),c]{w->setChooseLabel(c->chooseLabel);w->setClearLabel(c->clearLabel);w->setCancelLabel(c->cancelLabel);w->setConfig(c->media);};
-    else if(type=="ThemeScope")apply=[w=instance->element.as<ThemeScope>(),c]{w->setTokens(c->colors);};
-    else if(type=="MediaPreview") {
+    } else if(ONEUI_COMPONENT_IS(type, MediaPicker))apply=[w=instance->element.as<MediaPicker>(),c]{w->setChooseLabel(c->chooseLabel);w->setClearLabel(c->clearLabel);w->setCancelLabel(c->cancelLabel);w->setConfig(c->media);};
+    else if(ONEUI_COMPONENT_IS(type, ThemeScope))apply=[w=instance->element.as<ThemeScope>(),c]{w->setTokens(c->colors);};
+    else if(ONEUI_COMPONENT_IS(type, MediaPreview)) {
         check(c->fit=="contain"||c->fit=="cover"||c->fit=="stretch"||c->fit=="auto",ONEUI_VIEW_TYPE,"Invalid media fit");
         check(std::set<std::string>{"top-left","top","top-right","left","center","right","bottom-left","bottom","bottom-right"}.count(c->position),ONEUI_VIEW_TYPE,"Invalid media position");
         check(std::isfinite(c->opacity)&&c->opacity>=0&&c->opacity<=1,ONEUI_VIEW_TYPE,"Invalid media opacity");

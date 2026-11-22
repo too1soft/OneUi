@@ -1,3 +1,4 @@
+#include "oneui/component_selection.h"
 #include "runtime.h"
 
 namespace oneui::views {
@@ -41,7 +42,7 @@ void Runtime::prepareWorkspaceIndex() {
                 check(added || at->second == scope, ONEUI_VIEW_BAD_KEY,
                       "Duplicate workspace scope path");
             }
-        if (n->element.component == "NativeHost") {
+        if (ONEUI_COMPONENT_IS(n->element.component, NativeHost)) {
             const auto &record =
                 image.records[oneview::HOST][image.records[oneview::NODE][n->node][9]];
             const auto key = hostKey(n->scopes.front()->path, image.strings[record[1]]);

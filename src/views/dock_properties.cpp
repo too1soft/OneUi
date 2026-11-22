@@ -1,9 +1,10 @@
+#include "oneui/component_selection.h"
 #include "workspace_cache.h"
 #include <cmath>
 namespace oneui::views {
 bool Runtime::dockScalar(Instance& instance,const std::string& name,const Value& v) {
     auto& e=instance.element;
-    if(e.component=="DockItem") {
+    if(ONEUI_COMPONENT_IS(e.component, DockItem)) {
         auto p=e.as<DockItemView>();
         if(name=="pane-key") {
             check(!v.text.empty()&&(p->key.empty()||p->key==v.text),ONEUI_VIEW_TYPE,"Dock item identity cannot change");

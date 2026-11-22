@@ -1,9 +1,10 @@
+#include "oneui/component_selection.h"
 #include "workspace_cache.h"
 #include "internal/unicode.h"
 namespace oneui::views {
 bool Runtime::paneHeaderScalar(Instance& instance,const std::string& name,const Value& value) {
     auto& e=instance.element;
-    if(e.component=="HeaderSlot" && name=="slot-name") {
+    if(ONEUI_COMPONENT_IS(e.component, HeaderSlot) && name=="slot-name") {
         check(value.text=="identity"||value.text=="actions"||value.text=="menu",ONEUI_VIEW_TYPE,"Header slot name");
         e.as<PaneHeaderSlot>()->name=value.text;return true;
     }

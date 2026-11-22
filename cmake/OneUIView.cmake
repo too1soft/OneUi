@@ -5,7 +5,7 @@ endif()
 if(NOT TARGET oneui-viewc)
     set(viewc_root "${CMAKE_CURRENT_LIST_DIR}/../tools/viewc")
     add_executable(oneui-viewc
-        "${viewc_root}/main.cpp" "${viewc_root}/emit_rust.cpp" "${viewc_root}/emit_cpp.cpp" "${CMAKE_CURRENT_LIST_DIR}/../src/views/format/binary.cpp"
+        "${viewc_root}/main.cpp" "${viewc_root}/emit_rust.cpp" "${viewc_root}/emit_cpp.cpp" "${viewc_root}/requirements.cpp" "${CMAKE_CURRENT_LIST_DIR}/../src/views/format/binary.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/../src/views/format/schema.cpp" "${viewc_root}/schema_parser.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/../src/views/format/component_contract.cpp" "${CMAKE_CURRENT_LIST_DIR}/../src/views/format/component_extensions.cpp" "${viewc_root}/compiler.cpp"
         "${viewc_root}/lower.cpp" "${viewc_root}/lower_attributes.cpp"
@@ -34,6 +34,7 @@ function(oneui_target_view target)
         set(schema "${directory}/${stem}.oneschema")
     endif()
     set(output "${CMAKE_CURRENT_BINARY_DIR}/views/${VIEW_NAME}.g.h")
+    set(requirements "${CMAKE_CURRENT_BINARY_DIR}/views/${VIEW_NAME}.requirements.json")
     get_target_property(_components "${target}" ONEUI_COMPONENT_FILES)
     if(NOT _components)
         set(_components "")
@@ -44,11 +45,13 @@ function(oneui_target_view target)
     foreach(_contract IN LISTS _components)
         list(APPEND _component_args --components "${_contract}")
     endforeach()
-    add_custom_command(OUTPUT "${output}"
-        COMMAND oneui-viewc --emit cpp --schema "${schema}" --input "${source}" --output "${output}" --name "${VIEW_NAME}" --vm-header "${VIEW_VM_HEADER}" --depfile "${output}.d" ${_component_args}
+    add_custom_command(OUTPUT "${output}" "${requirements}"
+        COMMAND oneui-viewc --emit cpp --schema "${schema}" --input "${source}" --output "${output}" --name "${VIEW_NAME}" --vm-header "${VIEW_VM_HEADER}" --depfile "${output}.d" --requirements "${requirements}" ${_component_args}
         DEPENDS oneui-viewc "${source}" "${schema}" ${_components}
         DEPFILE "${output}.d"
         VERBATIM)
     target_sources(${target} PRIVATE "${output}")
+    set_property(TARGET ${target} APPEND PROPERTY ONEUI_VIEW_REQUIREMENTS "${requirements}")
     target_include_directories(${target} PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/views" "${CMAKE_CURRENT_SOURCE_DIR}")
 endfunction()
+include("${CMAKE_CURRENT_LIST_DIR}/OneUIDemand.cmake")

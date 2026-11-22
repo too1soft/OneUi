@@ -1,6 +1,7 @@
 #include "compiler.h"
 #include "emit_rust.h"
 #include "emit_cpp.h"
+#include "requirements.h"
 
 namespace
 {
@@ -34,7 +35,7 @@ int main(int argc, char **argv)
         std::map<std::string, std::string> args;
         std::vector<fs::path> componentFiles;
         const std::set<std::string> options = {"--input", "--output", "--name",   "--vm-header", "--depfile",
-                                               "--emit",  "--schema", "--verify", "--roundtrip", "--ir-output"};
+                                               "--emit",  "--schema", "--verify", "--roundtrip", "--ir-output", "--requirements"};
         for (int i = 1; i < argc; i += 2)
         {
             if (i + 1 < argc && std::string(argv[i]) == "--components") { componentFiles.emplace_back(argv[i+1]); continue; }
@@ -81,6 +82,8 @@ int main(int argc, char **argv)
             compiler.components = components;
             auto image = compiler.compile(args.at("--input"), args.at("--schema"), name);
             auto bytes = oneview::writeImage(image, &components);
+            if (args.count("--requirements"))
+                output(args.at("--requirements"), oneview::emitRequirements(image));
             if (emit == "cpp") generated = oneview::emitCpp(image, bytes, name, args["--vm-header"],
                 fs::weakly_canonical(args.at("--input")).parent_path());
             else if (emit == "rust") generated = oneview::emitRust(image, bytes);

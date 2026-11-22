@@ -8,8 +8,10 @@ from contextlib import contextmanager
 from pathlib import Path
 import shutil
 import uuid
+import os
 
-SCRATCH = Path(__file__).resolve().parents[1] / 'build/capture/viewc-tests'
+SCRATCH = Path(os.environ.get('ONEUI_VIEWC_TEST_ROOT',
+    Path(__file__).resolve().parents[1] / 'build/capture/viewc-tests'))
 
 
 @contextmanager

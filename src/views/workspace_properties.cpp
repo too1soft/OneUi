@@ -1,3 +1,4 @@
+#include "oneui/component_selection.h"
 #include "workspace_cache.h"
 #include <cmath>
 
@@ -7,14 +8,14 @@ bool Runtime::workspaceScalar(Instance& instance,const std::string& name,const V
     if(shortcutScalar(instance,name,v))return true;
     if(pickerScalar(instance,name,v))return true;
     if(dockScalar(instance,name,v))return true;
-    if(e.component=="ContainerPage"&&name=="selected"){e.as<ContainerPage>()->setSelected(bool(v.integer));return true;}
+    if(ONEUI_COMPONENT_IS(e.component, ContainerPage)&&name=="selected"){e.as<ContainerPage>()->setSelected(bool(v.integer));return true;}
     if(dragScalar(instance,name,v))return true;
     if(paneHeaderScalar(instance,name,v))return true;
-    if(e.component=="NativeHost" && name=="resize-policy") {
+    if(ONEUI_COMPONENT_IS(e.component, NativeHost) && name=="resize-policy") {
         check(v.text=="immediate"||v.text=="settled",ONEUI_VIEW_TYPE,"Invalid resize policy");
         e.as<ui::NativeHostView>()->setSettledViewport(v.text=="settled");return true;
     }
-    if(e.component=="Pane") {
+    if(ONEUI_COMPONENT_IS(e.component, Pane)) {
         auto p=e.as<PaneView>();
         if(staging)rollbacks.push_back([&instance]{for(auto& b:instance.bindings)b.previous.reset();});
         if(name=="pane-key") {

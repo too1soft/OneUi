@@ -1,3 +1,4 @@
+#include "oneui/component_selection.h"
 #include "runtime.h"
 
 namespace oneui::views {
@@ -22,7 +23,7 @@ void Runtime::workspaceChildren(const std::shared_ptr<Instance> &instance) {
                 widgets.push_back(rows.at(key)->element.widget);
         }
     }
-    if(type=="ReorderableGrid") {
+    if(ONEUI_COMPONENT_IS(type, ReorderableGrid)) {
         // Validate the complete projection before publishing a list transaction.
         auto items=oneui::templateGridItems(widgets);
         auto grid=instance->element.as<oneui::ReorderableGrid>();
@@ -34,7 +35,7 @@ void Runtime::workspaceChildren(const std::shared_ptr<Instance> &instance) {
     // Identity-only workspaces (including ABI 44 scope fixtures) have no dock
     // projection. Keep their structural children usable without inventing a
     // geometry snapshot; authored geometry still validates transactionally.
-    if (type == "DockWorkspace" && instance->workspaceCache) {
+    if (ONEUI_COMPONENT_IS(type, DockWorkspace) && instance->workspaceCache) {
         prepareDock(instance, widgets);
         return;
     }
@@ -46,7 +47,7 @@ void Runtime::workspaceChildren(const std::shared_ptr<Instance> &instance) {
     else
         plan->commit();
     }
-    if (type == "PaneGrid")
+    if (ONEUI_COMPONENT_IS(type, PaneGrid))
         prepareWorkspace(instance,widgets);
 }
 } // namespace oneui::views

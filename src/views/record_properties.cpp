@@ -1,3 +1,4 @@
+#include "oneui/component_selection.h"
 #include "internal/view_profile.h"
 #include "internal/unicode.h"
 #include "runtime.h"
@@ -15,7 +16,7 @@ void Runtime::applyList(Instance &instance, const std::string &property, ListSta
     ONEUI_VIEW_TIME(Rows);
     if(applyDataMenu(*this,instance,state))return;
     if(workspaceList(instance,property,state))return;
-    if(instance.element.component=="Table" && property=="items") {
+    if(ONEUI_COMPONENT_IS(instance.element.component, Table) && property=="items") {
         applyRichTableRows(instance,state,owner,sourceProperty);return;
     }
     auto &e = instance.element;
@@ -40,7 +41,7 @@ void Runtime::applyList(Instance &instance, const std::string &property, ListSta
             }
         }
     }
-    if (e.component == "Text" && property == "spans") {
+    if (ONEUI_COMPONENT_IS(e.component, Text) && property == "spans") {
         auto label = e.as<Label>();
         const auto bytes = unicode::toUtf8(label->text());
         auto boundary = [&](int64_t offset) {
@@ -82,7 +83,7 @@ void Runtime::applyList(Instance &instance, const std::string &property, ListSta
             spans.push_back(span); previousEnd = end;
         }
         label->setRichText(label->text(), std::move(spans));
-    } else if (e.component == "Menu") {
+    } else if (ONEUI_COMPONENT_IS(e.component, Menu)) {
         // Validate the entire replacement before touching native interaction state.
         struct Entry {
             std::string kind;
@@ -108,7 +109,7 @@ void Runtime::applyList(Instance &instance, const std::string &property, ListSta
             else if (entry.kind == "separator") menu->addSeparator();
             else menu->setItemDisabled(menu->addItem(entry.title, entry.icon, entry.danger), entry.disabled);
         }
-    } else if (e.component == "TreeView" && property == "items") {
+    } else if (ONEUI_COMPONENT_IS(e.component, TreeView) && property == "items") {
         std::vector<TreeItem> values;
         for(size_t i=0;i<state.items.size();++i) {
             const auto& item=state.items[i];
@@ -117,7 +118,7 @@ void Runtime::applyList(Instance &instance, const std::string &property, ListSta
                 bool(field(item,"expanded").integer)});
         }
         e.as<TreeView>()->setItems(std::move(values));
-    } else if (e.component == "VirtualList") {
+    } else if (ONEUI_COMPONENT_IS(e.component, VirtualList)) {
         std::vector<VirtualListItem> values;
         std::vector<int> selected;
         bool selectionProvided = false;
@@ -157,11 +158,11 @@ void Runtime::applyList(Instance &instance, const std::string &property, ListSta
         }
         e.as<VirtualList>()->setRichItems(std::move(values));
         if (selectionProvided) e.as<VirtualList>()->setSelectedIndices(selected);
-    } else if (e.component == "List") {
+    } else if (ONEUI_COMPONENT_IS(e.component, List)) {
         std::vector<ListItem> values;
         for (const auto &item : state.items) values.push_back({wide(field(item, "title").text), wide(field(item, "detail").text)});
         factory.set(e, property, values);
-    } else if (e.component == "Select" || e.component == "SegmentedControl") {
+    } else if (ONEUI_COMPONENT_IS(e.component, Select) || ONEUI_COMPONENT_IS(e.component, SegmentedControl)) {
         std::vector<std::wstring> values;
         for (const auto &item : state.items)
             values.push_back(wide(field(item, "value").text));
@@ -170,15 +171,15 @@ void Runtime::applyList(Instance &instance, const std::string &property, ListSta
             factory.set(e, property, values);
             instance.stringLists[property] = std::move(values);
         }
-    } else if (e.component == "Tabs") {
+    } else if (ONEUI_COMPONENT_IS(e.component, Tabs)) {
         std::vector<ui::TabItem> values;
         for (size_t i = 0; i < state.items.size(); ++i)
             values.push_back(
                 {wide(state.keys[i]), wide(field(state.items[i], "title").text)});
         factory.set(e, property, values);
-    } else if (e.component == "DataTable" && property == "items") {
+    } else if (ONEUI_COMPONENT_IS(e.component, DataTable) && property == "items") {
         applyTableRows(instance, state);
-    } else if ((e.component == "DataTable" || e.component == "Table") && property == "columns") {
+    } else if ((ONEUI_COMPONENT_IS(e.component, DataTable) || ONEUI_COMPONENT_IS(e.component, Table)) && property == "columns") {
         std::vector<TableColumn> columns;
         for (const auto &item : state.items) {
             TableColumn c;
@@ -193,15 +194,15 @@ void Runtime::applyList(Instance &instance, const std::string &property, ListSta
             columns.push_back(std::move(c));
         }
         factory.set(e, property, columns);
-    } else if (e.component == "TimeSeriesChart" && property == "axis-labels") {
+    } else if (ONEUI_COMPONENT_IS(e.component, TimeSeriesChart) && property == "axis-labels") {
         std::vector<std::wstring> labels;
         for(const auto& item:state.items)labels.push_back(wide(field(item,"value").text));
         e.as<TimeSeriesChart>()->setAxisLabels(std::move(labels));
-    } else if (e.component == "TimeSeriesChart" && property == "sample-positions") {
+    } else if (ONEUI_COMPONENT_IS(e.component, TimeSeriesChart) && property == "sample-positions") {
         std::vector<double> positions;
         for(const auto& item:state.items)positions.push_back(field(item,"value").number);
         check(e.as<TimeSeriesChart>()->setSamplePositions(std::move(positions)),ONEUI_VIEW_TYPE,"Chart sample positions");
-    } else if (e.component == "CodeEditor" && property == "decorations") {
+    } else if (ONEUI_COMPONENT_IS(e.component, CodeEditor) && property == "decorations") {
         std::vector<CodeDecoration> decorations;
         for (const auto &item : state.items) {
             CodeDecoration d;
@@ -221,7 +222,7 @@ void Runtime::applyList(Instance &instance, const std::string &property, ListSta
             decorations.push_back(std::move(d));
         }
         e.as<CodeEditor>()->setBoundDecorations(std::move(decorations));
-    } else if (e.component == "CodeEditor" && property == "completion-items") {
+    } else if (ONEUI_COMPONENT_IS(e.component, CodeEditor) && property == "completion-items") {
         std::vector<CodeCompletionItem> items;
         items.reserve(state.items.size());
         for (const auto &item : state.items) {
@@ -238,7 +239,7 @@ void Runtime::applyList(Instance &instance, const std::string &property, ListSta
             items.push_back(std::move(c));
         }
         e.as<CodeEditor>()->setCompletionItems(std::move(items));
-    } else if (e.component == "TreeView" && property == "tree-items") {
+    } else if (ONEUI_COMPONENT_IS(e.component, TreeView) && property == "tree-items") {
         // Highlight ranges arrive in Unicode scalar values; the tree uses UTF-16 offsets.
         auto utf16 = [](const std::wstring &text, std::int64_t scalars) {
             std::size_t at = 0;
@@ -278,7 +279,7 @@ void Runtime::applyList(Instance &instance, const std::string &property, ListSta
             tree->setRetainExpansion(true);
         }
         tree->setItems(std::move(items));
-    } else if (e.component == "DataGrid" && property == "grid-columns") {
+    } else if (ONEUI_COMPONENT_IS(e.component, DataGrid) && property == "grid-columns") {
         std::vector<DataGridColumn> columns;
         for (const auto &item : state.items) {
             DataGridColumn c;
@@ -295,7 +296,7 @@ void Runtime::applyList(Instance &instance, const std::string &property, ListSta
             columns.push_back(std::move(c));
         }
         e.as<DataGrid>()->setColumns(std::move(columns));
-    } else if (e.component == "DataGrid" && property == "grid-rows") {
+    } else if (ONEUI_COMPONENT_IS(e.component, DataGrid) && property == "grid-rows") {
         // The VM supplies only the materialized window; its first row index is window-start.
         std::vector<DataGridRow> rows;
         rows.reserve(state.items.size());
@@ -311,7 +312,7 @@ void Runtime::applyList(Instance &instance, const std::string &property, ListSta
         }
         auto grid = e.as<DataGrid>();
         grid->setWindow(grid->windowStart(), std::move(rows));
-    } else if (e.component == "TimeSeriesChart") {
+    } else if (ONEUI_COMPONENT_IS(e.component, TimeSeriesChart)) {
         std::vector<TimeSeriesChartSeries> series;
         for (const auto &item : state.items) {
             TimeSeriesChartSeries s;

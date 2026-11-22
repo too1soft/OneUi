@@ -239,16 +239,18 @@ if(WIN32 AND ONEUI_BUILD_PLATFORM_WIN32)
     )
 
     if(ONEUI_BUILD_STATIC)
+        include(cmake/OneUIStatic.cmake)
+        oneui_prepare_static_objects(oneui_platform_win32)
         add_library(oneui_static STATIC
             ${ONEUI_C_API_SOURCES}
-            $<TARGET_OBJECTS:oneui_core>
-            $<TARGET_OBJECTS:oneui_views>
-            $<TARGET_OBJECTS:oneui_platform_win32>
+            $<TARGET_OBJECTS:oneui_core_static_objects>
+            $<TARGET_OBJECTS:oneui_views_static_objects>
+            $<TARGET_OBJECTS:oneui_platform_win32_static_objects>
         )
 
         target_link_libraries(oneui_static
             PUBLIC
-                oneui_text
+                oneui_text_static_objects
                 oneui_skia
                 user32
                 gdi32
@@ -288,6 +290,7 @@ if(WIN32 AND ONEUI_BUILD_PLATFORM_WIN32)
             OUTPUT_NAME "oneui_static"
         )
 
+        oneui_static_link_options(oneui_static)
         add_library(OneUI::oneui_static ALIAS oneui_static)
     endif()
 
@@ -362,4 +365,8 @@ endif()
 
 if(WIN32 AND TARGET oneui AND TARGET oneui-viewc)
     add_subdirectory(examples/workspace_interactions)
+endif()
+
+if(BUILD_TESTING AND WIN32 AND ONEUI_BUILD_STATIC AND ONEUI_BUILD_VIEWC)
+    include(cmake/OneUIDemandTests.cmake)
 endif()

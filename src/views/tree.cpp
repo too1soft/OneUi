@@ -1,3 +1,4 @@
+#include "oneui/component_selection.h"
 #include "oneui/ui_theme.h"
 #include "runtime.h"
 #include "components/instance.h"
@@ -95,37 +96,37 @@ std::shared_ptr<Instance> Runtime::build(uint32_t node, const Scopes &context, c
     }
     auto type = image.components[n[1]].name;
     const std::string classes = scopeClasses.count(n[8]) ? scopeClasses.at(n[8]) : "";
-    if (type == "NativeHost") {
+    if (ONEUI_COMPONENT_IS(type, NativeHost)) {
         auto host = std::make_shared<ui::NativeHostView>();
         result->element = ui::Element(ui::Node(host), type);
         result->element.classes = classes;
         styles->addFresh(result->element);
         const auto &record = image.records[HOST][n[9]];
         if (!(record[2] & 2)) hosts.emplace(image.strings[record[1]], host);
-    } else if (type == "PaneGrid" || type == "DockWorkspace" || type == "ReorderableGrid") {
+    } else if (ONEUI_COMPONENT_IS(type, PaneGrid) || ONEUI_COMPONENT_IS(type, DockWorkspace) || ONEUI_COMPONENT_IS(type, ReorderableGrid)) {
         std::shared_ptr<View> container;
-        if(type=="PaneGrid")container=std::make_shared<PaneGrid>();
-        else if(type=="ReorderableGrid")container=std::make_shared<ReorderableGrid>();
+        if(ONEUI_COMPONENT_IS(type, PaneGrid))container=std::make_shared<PaneGrid>();
+        else if(ONEUI_COMPONENT_IS(type, ReorderableGrid))container=std::make_shared<ReorderableGrid>();
         else container=std::make_shared<DockWorkspaceView>();
         result->element = ui::Element(ui::Node(container), type);
         result->element.classes = classes;
         styles->addFresh(result->element);
-    } else if (type == "Pane") {
+    } else if (ONEUI_COMPONENT_IS(type, Pane)) {
         auto pane=std::make_shared<PaneView>();
         for(auto& child:children) {
             pane->add(child.widget);
-            if(child.component=="PaneHeader")pane->header=child.widget;
+            if(ONEUI_COMPONENT_IS(child.component, PaneHeader))pane->header=child.widget;
         }
         result->element=ui::Element(ui::Node(pane),type);
         result->element.classes=classes;
         styles->addFresh(result->element);
-    } else if (type == "DockItem") {
+    } else if (ONEUI_COMPONENT_IS(type, DockItem)) {
         auto item=std::make_shared<DockItemView>();
         for(auto& child:children) {
             item->add(child.widget);
-            if(child.component=="PanelHeader")item->header=child.widget;
-            if(child.component=="PanelBody")item->body=child.widget;
-            if(child.component=="PanelFooter")item->footer=child.widget;
+            if(ONEUI_COMPONENT_IS(child.component, PanelHeader))item->header=child.widget;
+            if(ONEUI_COMPONENT_IS(child.component, PanelBody))item->body=child.widget;
+            if(ONEUI_COMPONENT_IS(child.component, PanelFooter))item->footer=child.widget;
         }
         result->element=ui::Element(ui::Node(item),type);
         result->element.classes = classes;
@@ -168,7 +169,7 @@ void Runtime::install(const std::shared_ptr<Instance> &instance, uint32_t owner,
             overrideProperty(r[1]);
             Binding binding{r, context.at(r[3] & 0xffff), BIND};
             const auto& contract = image.components[image.records[NODE][componentRoot(image, owner)][1]];
-            if (!(instance->element.component == "Text" && contract.property(r[1]).name == "spans"))
+            if (!(ONEUI_COMPONENT_IS(instance->element.component, Text) && contract.property(r[1]).name == "spans"))
                 apply(instance, binding);
             instance->bindings.push_back(std::move(binding));
         }
@@ -274,16 +275,16 @@ void Runtime::update(const std::shared_ptr<Instance> &instance) {
         repeat(instance);
         return;
     }
-    if (instance->element.component == "VirtualTemplateList") {
+    if (ONEUI_COMPONENT_IS(instance->element.component, VirtualTemplateList)) {
         virtualRepeat(instance);
         return;
     }
     // A table's disabled command must not disable row selection itself.
     // Button clicks use command availability as their enabled state; other
     // events are gated individually in invoke(), matching Mount::tableEvent.
-    if (!instance->events.empty() && (instance->element.component=="Button" ||
-                                     instance->element.component=="ToolButton" ||
-                                     instance->element.component=="InteractiveSurface")) {
+    if (!instance->events.empty() && (ONEUI_COMPONENT_IS(instance->element.component, Button) ||
+                                     ONEUI_COMPONENT_IS(instance->element.component, ToolButton) ||
+                                     ONEUI_COMPONENT_IS(instance->element.component, InteractiveSurface))) {
         bool gated = instance->authoredDisabled;
         for (auto &e : instance->events) {
             const auto &cmd = image.schema.model(e[4]).command(e[2]);

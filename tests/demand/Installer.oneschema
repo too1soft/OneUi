@@ -1,0 +1,7 @@
+model Installer {
+    r title: utf8
+    rw path: utf8
+    rw consent: bool
+    r progress: f64
+    command install()
+}

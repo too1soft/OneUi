@@ -1,3 +1,4 @@
+#include "oneui/component_selection.h"
 #include "runtime.h"
 #include "pointer_event_slots.h"
 #include "rich_table_events.inc"
@@ -14,7 +15,7 @@ void Runtime::wire(const std::shared_ptr<Instance> &instance) {
     if (instance->extension) return;
     wireWorkspace(instance);
     wirePicker(instance);
-    if(instance->element.component=="Table") {wireRichTable(instance);return;}
+    if(ONEUI_COMPONENT_IS(instance->element.component, Table)) {wireRichTable(instance);return;}
     auto node = std::weak_ptr<Instance>(instance);
     auto mutate = [node](uint32_t id, Value value) {
         auto item = node.lock();
@@ -65,50 +66,50 @@ void Runtime::wire(const std::shared_ptr<Instance> &instance) {
     const auto &contract = image.components[image.records[oneview::NODE][rootNode][1]];
     if (contract.modelProperty) {
         auto id = contract.modelProperty;
-        if (element.component == "Input" || element.component == "SearchInput" || element.component == "TextArea")
+        if (ONEUI_COMPONENT_IS(element.component, Input) || ONEUI_COMPONENT_IS(element.component, SearchInput) || ONEUI_COMPONENT_IS(element.component, TextArea))
             element.as<TextField>()->setOnChanged([mutate, id](const std::wstring &text) {
                 Value v;
                 v.tag = 4;
                 v.text = narrow(text);
                 mutate(id, v);
             });
-        else if (element.component == "Slider")
+        else if (ONEUI_COMPONENT_IS(element.component, Slider))
             element.as<Slider>()->setOnChanged([mutate,id](double value){Value v;v.tag=3;v.number=value;mutate(id,v);});
-        else if (element.component == "Checkbox")
+        else if (ONEUI_COMPONENT_IS(element.component, Checkbox))
             element.as<Checkbox>()->setOnChanged([mutate, id](bool value) {
                 Value v; v.tag = 1; v.integer = value; mutate(id, v);
             });
-        else if (element.component == "Switch")
+        else if (ONEUI_COMPONENT_IS(element.component, Switch))
             element.as<Switch>()->setOnChanged([mutate, id](bool value) {
                 Value v;
                 v.tag = 1;
                 v.integer = value;
                 mutate(id, v);
             });
-        else if (element.component == "List")
+        else if (ONEUI_COMPONENT_IS(element.component, List))
             element.as<List>()->setOnChanged([mutate, id](int value) {
                 Value v; v.tag = 2; v.integer = value; mutate(id, v);
             });
-        else if (element.component == "VirtualList")
+        else if (ONEUI_COMPONENT_IS(element.component, VirtualList))
             element.as<VirtualList>()->setOnChanged([mutate, id](int value) {
                 Value v; v.tag = 2; v.integer = value; mutate(id, v);
             });
-        else if (element.component == "SegmentedControl")
+        else if (ONEUI_COMPONENT_IS(element.component, SegmentedControl))
             element.as<Tabs>()->setOnChanged([mutate, id](int value) {
                 Value v; v.tag = 2; v.integer = value; mutate(id, v);
             });
-        else if (element.component == "Select")
+        else if (ONEUI_COMPONENT_IS(element.component, Select))
             element.as<Select>()->setOnChanged([mutate, id](int value) {
                 Value v;
                 v.tag = 2;
                 v.integer = value;
                 mutate(id, v);
             });
-        else if (element.component == "TreeView")
+        else if (ONEUI_COMPONENT_IS(element.component, TreeView))
             element.as<TreeView>()->setOnSelectionChanged([mutate, id](const std::wstring &key) {
                 Value v; v.tag = 4; v.text = narrow(key); mutate(id, v);
             });
-        else if (element.component == "SplitView")
+        else if (ONEUI_COMPONENT_IS(element.component, SplitView))
             element.as<SplitView>()->setOnSplitRatioChanged([mutate, id](float value) {
                 Value v;
                 v.tag = 3;
@@ -130,16 +131,16 @@ void Runtime::wire(const std::shared_ptr<Instance> &instance) {
                 tree->setOnSelectionChanged(selection);
         }
     }
-    if (element.component == "InteractiveSurface")
+    if (ONEUI_COMPONENT_IS(element.component, InteractiveSurface))
         preparePointerEventSlots(instance, 0, pointerEventMask(*instance))();
     for (const auto &event : contract.events) {
         auto name = event.name;
         auto fire = eventDispatcher(node, event.id);
-        if(name=="inspection" && element.component=="TimeSeriesChart")
+        if(name=="inspection" && ONEUI_COMPONENT_IS(element.component, TimeSeriesChart))
             element.as<TimeSeriesChart>()->setOnInspectionChanged([fire](int index,bool pinned) {
                 Value i,p;i.tag=2;i.integer=index;p.tag=1;p.integer=pinned;fire({i,p});
             });
-        else if(name=="viewport-size-changed" && element.component=="Scroll")
+        else if(name=="viewport-size-changed" && ONEUI_COMPONENT_IS(element.component, Scroll))
             // Keep the dispatcher even without a current EVNT: reload may add
             // a binding while retaining this native widget and Instance.
             element.widget->setOnSizeChanged([fire](Size size) {
@@ -147,23 +148,23 @@ void Runtime::wire(const std::shared_ptr<Instance> &instance) {
                 width.number=size.width;height.number=size.height;
                 fire({width,height});
             });
-        else if(name=="menuActivated" && element.component=="DataMenu")
+        else if(name=="menuActivated" && ONEUI_COMPONENT_IS(element.component, DataMenu))
             element.as<DataMenu>()->setOnActivated([fire](std::string id) {
                 Value value; value.tag=4; value.text=std::move(id); fire({value});
             });
-        else if(name=="reorderRequested" && element.component=="ReorderableGrid")
+        else if(name=="reorderRequested" && ONEUI_COMPONENT_IS(element.component, ReorderableGrid))
             element.as<ReorderableGrid>()->setOnReorderRequested([fire](const std::wstring& source,int target) {
                 Value key,index;key.tag=4;key.text=narrow(source);index.tag=2;index.integer=target;
                 fire({key,index});
             });
-        else if(name=="itemDrag" && element.component=="ReorderableGrid")
+        else if(name=="itemDrag" && ONEUI_COMPONENT_IS(element.component, ReorderableGrid))
             element.as<ReorderableGrid>()->setOnItemDrag([fire](const ItemDragEvent& event) {
                 Value key,phase,x,y;key.tag=4;key.text=narrow(event.sourceId);
                 phase.tag=2;phase.integer=static_cast<int>(event.phase);
                 x.tag=y.tag=3;x.number=event.position.x;y.number=event.position.y;
                 fire({key,phase,x,y});
             });
-        else if (element.component == "CodeEditor") {
+        else if (ONEUI_COMPONENT_IS(element.component, CodeEditor)) {
             auto editor = element.as<CodeEditor>();
             const auto integer = [](std::uint64_t value) { Value v; v.tag = 2; v.integer = static_cast<std::int64_t>(value); return v; };
             if (name == "changed")
@@ -183,7 +184,7 @@ void Runtime::wire(const std::shared_ptr<Instance> &instance) {
                     Value v; v.tag = 4; v.text = narrow(id); fire({v});
                 });
         }
-        else if (element.component == "TreeView") {
+        else if (ONEUI_COMPONENT_IS(element.component, TreeView)) {
             auto tree = element.as<TreeView>();
             const auto text = [](const std::wstring &value) { Value v; v.tag = 4; v.text = narrow(value); return v; };
             if (name == "expand")
@@ -200,7 +201,7 @@ void Runtime::wire(const std::shared_ptr<Instance> &instance) {
                     fire({text(key), x, y});
                 });
         }
-        else if (element.component == "DataGrid") {
+        else if (ONEUI_COMPONENT_IS(element.component, DataGrid)) {
             auto grid = element.as<DataGrid>();
             const auto integer = [](std::int64_t value) { Value v; v.tag = 2; v.integer = value; return v; };
             const auto number = [](double value) { Value v; v.tag = 3; v.number = value; return v; };
@@ -229,7 +230,7 @@ void Runtime::wire(const std::shared_ptr<Instance> &instance) {
             else if (name == "activate")
                 grid->setOnActivate([fire, integer](std::int64_t row, int column) { fire({integer(row), integer(column)}); });
         }
-        else if ((name == "hover" || name == "focus") && element.component == "InteractiveSurface") {
+        else if ((name == "hover" || name == "focus") && ONEUI_COMPONENT_IS(element.component, InteractiveSurface)) {
             auto surface = element.as<InteractiveSurface>();
             auto changed = [fire](bool state) { Value v; v.tag = 1; v.integer = state; fire({v}); };
             if (name == "hover") surface->setOnHoverChanged(changed);
@@ -241,15 +242,15 @@ void Runtime::wire(const std::shared_ptr<Instance> &instance) {
         }
         else if (name == "action")
             element.as<StateView>()->setOnAction([fire] { fire({}); });
-        else if (name == "activated" && element.component == "Menu")
+        else if (name == "activated" && ONEUI_COMPONENT_IS(element.component, Menu))
             element.as<Menu>()->setOnItemActivated([fire](int index) {
                 Value v; v.tag = 2; v.integer = index; fire({v});
             });
         else if (name == "submit")
             element.as<TextField>()->setOnSubmitted([fire](const std::wstring &) { fire({}); });
-        else if (name == "closed" && element.component == "Popup")
+        else if (name == "closed" && ONEUI_COMPONENT_IS(element.component, Popup))
             element.as<Popup>()->setOnClosed([fire] { fire({}); });
-        else if (name == "close" && element.component == "Dialog")
+        else if (name == "close" && ONEUI_COMPONENT_IS(element.component, Dialog))
             element.as<Dialog>()->setOnClose([fire] { fire({}); });
         else if (name == "close")
             element.tabs->closed = [fire](std::wstring key) {
@@ -258,7 +259,7 @@ void Runtime::wire(const std::shared_ptr<Instance> &instance) {
                 v.text = narrow(key);
                 fire({v});
             };
-        else if (name == "selectionChanged" && element.component == "VirtualList")
+        else if (name == "selectionChanged" && ONEUI_COMPONENT_IS(element.component, VirtualList))
             element.as<VirtualList>()->setOnSelectionChanged([fire, node, previous = element.as<VirtualList>()->selectedIndices()](const std::vector<int>& selected) mutable {
                 auto instance = node.lock();
                 const std::set<int> old(previous.begin(), previous.end()), next(selected.begin(), selected.end());
@@ -272,7 +273,7 @@ void Runtime::wire(const std::shared_ptr<Instance> &instance) {
                     fire({index, chosen});
                 }
             });
-        else if (name == "activate" && element.component == "VirtualList")
+        else if (name == "activate" && ONEUI_COMPONENT_IS(element.component, VirtualList))
             element.as<VirtualList>()->setOnActivated([fire](int) { fire({}); });
         else if (name == "activate")
             element.as<Table>()->setOnActivated([fire](int) { fire({}); });

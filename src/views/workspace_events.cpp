@@ -1,3 +1,4 @@
+#include "oneui/component_selection.h"
 #include "runtime.h"
 #include "oneui/layout/pane_grid.h"
 namespace oneui::views {
@@ -20,7 +21,7 @@ void emitComponentEvent(const std::weak_ptr<Instance>& weak,const std::string& n
 void Runtime::wireWorkspace(const std::shared_ptr<Instance>& instance) {
     wireDrag(instance);
     wireDock(instance);
-    if(instance->element.component=="PaneHeader") {
+    if(ONEUI_COMPONENT_IS(instance->element.component, PaneHeader)) {
         std::weak_ptr<Instance> weak=instance;
         instance->element.as<PaneHeader>()->setOnIntent([weak](PaneHeaderAction action,Point point) {
             auto item=weak.lock();if(!item)return;
@@ -70,7 +71,7 @@ void Runtime::wireWorkspace(const std::shared_ptr<Instance>& instance) {
             std::vector<std::shared_ptr<Instance>> pending{owner->root};
             while(!pending.empty()) {
                 auto candidate=pending.back();pending.pop_back();
-                if(candidate->element.component=="DropSurface" &&
+                if(ONEUI_COMPONENT_IS(candidate->element.component, DropSurface) &&
                    owner->image.strings[owner->image.records[oneview::NODE][candidate->node][11]]==intent.target) {
                     emitComponentEvent(candidate,"dropRequested",std::move(args));return;
                 }

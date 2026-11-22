@@ -1,3 +1,4 @@
+#include "oneui/component_selection.h"
 #include "oneui/ui_declarative.h"
 #include "oneui/layout/virtual_template_list.h"
 #include "data_menu.h"
@@ -13,7 +14,7 @@
 namespace oneui::ui {
 void Mount::set(Element &e, const std::string &key, const std::wstring &value) {
     if (key == "accessible-name") { e.widget->setAccessibleName(value); return; }
-    if(e.component=="StateView") {
+    if(ONEUI_COMPONENT_IS(e.component, StateView)) {
         auto state=e.as<StateView>();
         if(key=="title"){state->setTitle(value);return;}
         if(key=="message"){state->setMessage(value);return;}
@@ -24,18 +25,18 @@ void Mount::set(Element &e, const std::string &key, const std::wstring &value) {
             state->setIcon(*icon);return;
         }
     }
-    if(e.component=="TimeSeriesChart" && chart_property::applyText(*e.as<TimeSeriesChart>(),key,value)) return;
-    if (e.component == "CodeEditor") {
+    if(ONEUI_COMPONENT_IS(e.component, TimeSeriesChart) && chart_property::applyText(*e.as<TimeSeriesChart>(),key,value)) return;
+    if (ONEUI_COMPONENT_IS(e.component, CodeEditor)) {
         auto editor = e.as<CodeEditor>();
         if (key == "text") { editor->setBoundText(value); return; }
         if (key == "comment-prefix") { editor->setCommentPrefix(value); return; }
         if (key == "language") { editor->setLanguage(parseCodeLanguage(unicode::toUtf8(value))); return; }
     }
-    if (e.component == "TreeView") {
+    if (ONEUI_COMPONENT_IS(e.component, TreeView)) {
         if (key == "selected-id") { e.as<TreeView>()->setSelectedId(value); return; }
         if (key == "loading-text") { e.as<TreeView>()->setLoadingText(value); return; }
     }
-    if(e.component=="Popup" && key=="placement") {
+    if(ONEUI_COMPONENT_IS(e.component, Popup) && key=="placement") {
         const std::map<std::wstring,PopupPreferredPlacement> placements{
             {L"bottom-start",PopupPreferredPlacement::BottomStart}, {L"bottom-end",PopupPreferredPlacement::BottomEnd},
             {L"top-start",PopupPreferredPlacement::TopStart}, {L"top-end",PopupPreferredPlacement::TopEnd},
@@ -44,16 +45,16 @@ void Mount::set(Element &e, const std::string &key, const std::wstring &value) {
         if(found==placements.end())throw std::invalid_argument("Unknown popup placement");
         e.as<Popup>()->setPreferredPlacement(found->second); return;
     }
-    if(e.component=="DataMenu") {
+    if(ONEUI_COMPONENT_IS(e.component, DataMenu)) {
         if(key=="density") {if(value!=L"compact"&&value!=L"comfortable")throw std::invalid_argument("Menu density must be compact or comfortable");e.as<views::DataMenu>()->setDensity(value==L"compact");return;}
         if(key=="title") { e.as<views::DataMenu>()->setTitle(value); return; }
         if(key=="subtitle") { e.as<views::DataMenu>()->setSubtitle(value); return; }
     }
-    if(e.component=="GridItem" && key=="grid-key") {e.as<TemplateGridItem>()->setKey(value);return;}
-    if (e.component == "Overlay" && (key == "horizontal-align" || key == "vertical-align")) {
+    if(ONEUI_COMPONENT_IS(e.component, GridItem) && key=="grid-key") {e.as<TemplateGridItem>()->setKey(value);return;}
+    if (ONEUI_COMPONENT_IS(e.component, Overlay) && (key == "horizontal-align" || key == "vertical-align")) {
         e.as<TemplateOverlay>()->setAlignment(key, value); return;
     }
-    if (e.component == "Select" && key == "indicator-icon") {
+    if (ONEUI_COMPONENT_IS(e.component, Select) && key == "indicator-icon") {
         const auto symbol = value.empty() ? std::optional<IconSymbol>{} : namedIcon(std::string(value.begin(), value.end()));
         if (!value.empty() && !symbol) throw std::invalid_argument("Unknown select indicator icon");
         e.as<Select>()->setIndicatorIcon(symbol); return;
@@ -77,7 +78,7 @@ void Mount::set(Element &e, const std::string &key, const std::wstring &value) {
         else e.as<Button>()->setContentAlign(align);
         return;
     }
-    if(e.component=="Dialog") {
+    if(ONEUI_COMPONENT_IS(e.component, Dialog)) {
         auto dialog=e.as<Dialog>();
         if(key=="title"){dialog->setTitle(value);return;}
         if(key=="subtitle"){dialog->setSubtitle(value);return;}
@@ -98,8 +99,8 @@ void Mount::set(Element &e, const std::string &key, const std::wstring &value) {
             return;
         }
     }
-    if(e.component=="FontPicker" && key=="trigger-label") {e.as<FontPicker>()->setTriggerLabel(value);return;}
-    if(e.component=="MediaPicker") {
+    if(ONEUI_COMPONENT_IS(e.component, FontPicker) && key=="trigger-label") {e.as<FontPicker>()->setTriggerLabel(value);return;}
+    if(ONEUI_COMPONENT_IS(e.component, MediaPicker)) {
         if(key=="choose-label"){e.as<MediaPicker>()->setChooseLabel(value);return;}
         if(key=="clear-label"){e.as<MediaPicker>()->setClearLabel(value);return;}
         if(key=="cancel-label"){e.as<MediaPicker>()->setCancelLabel(value);return;}
@@ -150,7 +151,7 @@ void Mount::set(Element &e, const std::string &key, const std::wstring &value) {
             e.as<Stack>()->setJustify(value == L"center" ? StackJustify::Center
                                       : value == L"end"  ? StackJustify::End
                                                          : StackJustify::Start);
-        } else if (e.component == "Row" || e.component == "Column") {
+        } else if (ONEUI_COMPONENT_IS(e.component, Row) || ONEUI_COMPONENT_IS(e.component, Column)) {
             if (value != L"start" && value != L"center" && value != L"end" && value != L"stretch")
                 throw std::invalid_argument("align must be start, center, end or stretch");
             e.as<Stack>()->setAlign(value == L"start"    ? StackAlign::Start
@@ -191,7 +192,7 @@ void Mount::set(Element &e, const std::string &key, const std::wstring &value) {
                                                  (value.empty() ? L"" : L" " + value));
     } else if (key == "name") {
         e.widget->setAccessibleName(value);
-        if (e.component == "ToolButton")
+        if (ONEUI_COMPONENT_IS(e.component, ToolButton))
             e.widget->setTooltip(value);
     } else if (key == "tooltip")
         e.widget->setTooltip(value);
@@ -228,7 +229,7 @@ void Mount::set(Element &e, const std::string &key, const std::wstring &value) {
             w->setText(value);
         else if (auto w = e.as<Button>()) {
             w->setText(value);
-            if (e.component == "ToolButton")
+            if (ONEUI_COMPONENT_IS(e.component, ToolButton))
                 w->setPreferredSize({value.empty() ? 32.0f : 0.0f, 32});
         } else if (auto w = e.as<Checkbox>())
             w->setText(value);
@@ -238,7 +239,7 @@ void Mount::set(Element &e, const std::string &key, const std::wstring &value) {
             if (w->text() != value)
                 w->setText(value);
         }
-        if (e.component == "ValidationMessage")
+        if (ONEUI_COMPONENT_IS(e.component, ValidationMessage))
             e.widget->setVisible(!value.empty());
     } else
         throw std::invalid_argument("Invalid text property: " + key);
@@ -254,14 +255,14 @@ void Mount::set(Element &e, const std::string &key, const std::string &value) {
         set(e, key, wide(value));
 }
 void Mount::set(Element &e, const std::string &key, bool value) {
-    if (e.component == "Dialog") {
+    if (ONEUI_COMPONENT_IS(e.component, Dialog)) {
         if (key == "edge-to-edge-content") { e.as<Dialog>()->setEdgeToEdgeContent(value); return; }
         if (key == "close-centered") { e.as<Dialog>()->setCloseCentered(value); return; }
     }
-    if(e.component=="VirtualList" && key=="multiple") {e.as<VirtualList>()->setSelectionMode(value ? SelectionMode::Multiple : SelectionMode::Single);return;}
+    if(ONEUI_COMPONENT_IS(e.component, VirtualList) && key=="multiple") {e.as<VirtualList>()->setSelectionMode(value ? SelectionMode::Multiple : SelectionMode::Single);return;}
     if (key == "follow-end") { e.as<VirtualTemplateList>()->setFollowEnd(value); return; }
     if (key == "activate-on-single-click") { e.as<VirtualList>()->setActivateOnSingleClick(value); return; }
-    if(e.component=="TimeSeriesChart") {
+    if(ONEUI_COMPONENT_IS(e.component, TimeSeriesChart)) {
         auto chart=e.as<TimeSeriesChart>();
         if(key=="smooth"){chart->setSmoothCurves(value);return;}
         if(key=="area-fill"){chart->setAreaFill(value);return;}
@@ -269,7 +270,7 @@ void Mount::set(Element &e, const std::string &key, bool value) {
         if(key=="axes-visible"){chart->setAxesVisible(value);return;}
         if(key=="latest-point"){chart->setLatestPointVisible(value);return;}
     }
-    if (e.component == "CodeEditor") {
+    if (ONEUI_COMPONENT_IS(e.component, CodeEditor)) {
         auto editor = e.as<CodeEditor>();
         if (key == "read-only") { editor->setReadOnly(value); return; }
         if (key == "word-wrap") { editor->setWordWrap(value); return; }
@@ -278,13 +279,13 @@ void Mount::set(Element &e, const std::string &key, bool value) {
         if (key == "insert-spaces") { editor->setInsertSpaces(value); return; }
         if (key == "completion-open") { editor->setCompletionOpen(value); return; }
     }
-    if (e.component == "DataGrid") {
+    if (ONEUI_COMPONENT_IS(e.component, DataGrid)) {
         if (key == "row-numbers") { e.as<DataGrid>()->setRowNumbersVisible(value); return; }
         if (key == "editable") { e.as<DataGrid>()->setEditable(value); return; }
     }
-    if(e.component=="Popup" && key=="open") {e.as<Popup>()->setOpen(value);return;}
+    if(ONEUI_COMPONENT_IS(e.component, Popup) && key=="open") {e.as<Popup>()->setOpen(value);return;}
     if(key=="placeholder-when-focused") {e.as<TextField>()->setPlaceholderVisibleWhenFocused(value);return;}
-    if(e.component=="ReorderableGrid") {
+    if(ONEUI_COMPONENT_IS(e.component, ReorderableGrid)) {
         if(key=="reorder-enabled"){e.as<ReorderableGrid>()->setReorderEnabled(value);return;}
         if(key=="item-drag-enabled"){e.as<ReorderableGrid>()->setItemDragEnabled(value);return;}
     }
@@ -339,15 +340,15 @@ void Mount::set(Element &e, const std::string &key, bool value) {
         throw std::invalid_argument("Invalid bool property");
 }
 void Mount::set(Element &e, const std::string &key, float value) {
-    if (e.component == "Dialog" && key == "header-height") { e.as<Dialog>()->setHeaderHeight(value); return; }
-    if (e.component == "DataGrid") {
+    if (ONEUI_COMPONENT_IS(e.component, Dialog) && key == "header-height") { e.as<Dialog>()->setHeaderHeight(value); return; }
+    if (ONEUI_COMPONENT_IS(e.component, DataGrid)) {
         if (key == "row-height") { e.as<DataGrid>()->setRowHeight(value); return; }
         if (key == "header-height") { e.as<DataGrid>()->setHeaderHeight(value); return; }
     }
-    if (e.component == "TreeView" && key == "row-height") { e.as<TreeView>()->setRowHeight(value); return; }
-    if (e.component == "CodeEditor" && key == "font-size") { e.as<CodeEditor>()->setFontSize(value); return; }
+    if (ONEUI_COMPONENT_IS(e.component, TreeView) && key == "row-height") { e.as<TreeView>()->setRowHeight(value); return; }
+    if (ONEUI_COMPONENT_IS(e.component, CodeEditor) && key == "font-size") { e.as<CodeEditor>()->setFontSize(value); return; }
     syntax::validateLayoutNumber(key, value);
-    if(e.component=="TimeSeriesChart") {
+    if(ONEUI_COMPONENT_IS(e.component, TimeSeriesChart)) {
         auto chart=e.as<TimeSeriesChart>();
         if(key=="range-min"){chart->setRange(value,chart->maximum());return;}
         if(key=="range-max"){chart->setRange(chart->minimum(),value);return;}
@@ -357,7 +358,7 @@ void Mount::set(Element &e, const std::string &key, float value) {
             chart->setScrollRate(value);return;
         }
     }
-    if(e.component=="Popup") {
+    if(ONEUI_COMPONENT_IS(e.component, Popup)) {
         auto popup=e.as<Popup>();
         if(key.rfind("anchor-",0)==0) {
             auto rect=popup->anchorRect().value_or(Rect{});
@@ -374,12 +375,12 @@ void Mount::set(Element &e, const std::string &key, float value) {
             popup->content()->setPreferredSize(size);return;
         }
     }
-    if(e.component=="ReorderableGrid") {
+    if(ONEUI_COMPONENT_IS(e.component, ReorderableGrid)) {
         if(key=="column-gap"){e.as<ReorderableGrid>()->setColumnGap(value);return;}
         if(key=="row-gap"){e.as<ReorderableGrid>()->setRowGap(value);return;}
         if(key=="item-height"){e.as<ReorderableGrid>()->setItemHeight(value);return;}
     }
-    if (e.component == "Overlay" && (key.rfind("overlay-",0)==0 || key.rfind("inset-",0)==0)) {
+    if (ONEUI_COMPONENT_IS(e.component, Overlay) && (key.rfind("overlay-",0)==0 || key.rfind("inset-",0)==0)) {
         e.as<TemplateOverlay>()->setNumber(key,value); return;
     }
     if (auto table = e.as<TemplateTable>()) {
@@ -402,7 +403,7 @@ void Mount::set(Element &e, const std::string &key, float value) {
         return;
     }
     if(key == "scrollbar-inset") {e.as<ScrollView>()->setScrollbarInset(value);return;}
-    if(e.component=="VirtualList" && (key=="trailing-width" || key=="trailing-gap")) {
+    if(ONEUI_COMPONENT_IS(e.component, VirtualList) && (key=="trailing-width" || key=="trailing-gap")) {
         auto list=e.as<VirtualList>();auto metrics=list->richMetrics();
         if(key=="trailing-width")metrics.trailingWidth=value;else metrics.trailingGap=value;
         list->setRichMetrics(metrics);return;
@@ -411,13 +412,13 @@ void Mount::set(Element &e, const std::string &key, float value) {
     if (key == "content-width") { e.as<ScrollView>()->setContentWidth(value); return; }
     if (key == "wheel-step") { e.as<ScrollView>()->setWheelStep(value); return; }
     if (key == "scroll-offset") {
-        if (e.component == "VirtualList") e.as<VirtualList>()->setScrollOffset(value);
-        else if(e.component=="Table") e.as<Table>()->setScrollOffset(value);
+        if (ONEUI_COMPONENT_IS(e.component, VirtualList)) e.as<VirtualList>()->setScrollOffset(value);
+        else if(ONEUI_COMPONENT_IS(e.component, Table)) e.as<Table>()->setScrollOffset(value);
         else e.as<ScrollView>()->setScrollOffset(value);
         return;
     }
     if (key == "row-height") {
-        if(e.component=="Table")e.as<Table>()->setRowHeight(value);
+        if(ONEUI_COMPONENT_IS(e.component, Table))e.as<Table>()->setRowHeight(value);
         else e.as<VirtualList>()->setRowHeight(value);
         return;
     }
@@ -433,7 +434,7 @@ void Mount::set(Element &e, const std::string &key, float value) {
     }
     if (key == "size") {
         e.widget->setPreferredSize({value, value});
-        if (e.component == "Icon") e.as<IconView>()->setGlyphSize(value);
+        if (ONEUI_COMPONENT_IS(e.component, Icon)) e.as<IconView>()->setGlyphSize(value);
         return;
     }
     if (key == "ratio") {
@@ -484,14 +485,14 @@ void Mount::set(Element &e, const std::string &key, float value) {
     styles_->updateAuthoredFlex(e.widget,e.flex);
 }
 void Mount::set(Element &e, const std::string &key, int value) {
-    if(e.component=="TimeSeriesChart") {
+    if(ONEUI_COMPONENT_IS(e.component, TimeSeriesChart)) {
         if(key=="grid-lines") {e.as<TimeSeriesChart>()->setGridLines(value);return;}
         if(key=="fill-alpha") {
             if(value<0 || value>255)throw std::invalid_argument("Chart fill-alpha range");
             e.as<TimeSeriesChart>()->setFillAlpha(static_cast<unsigned char>(value));return;
         }
     }
-    if (e.component == "CodeEditor") {
+    if (ONEUI_COMPONENT_IS(e.component, CodeEditor)) {
         if (key == "text-revision") {
             if (value < 0) throw std::invalid_argument("text-revision must not be negative");
             e.as<CodeEditor>()->setBoundRevision(static_cast<std::uint64_t>(value));
@@ -504,7 +505,7 @@ void Mount::set(Element &e, const std::string &key, int value) {
             return;
         }
     }
-    if (e.component == "DataGrid") {
+    if (ONEUI_COMPONENT_IS(e.component, DataGrid)) {
         auto grid = e.as<DataGrid>();
         if (key == "row-count") { grid->setRowCount(value); return; }
         if (key == "window-start") { grid->setWindowStart(value); return; }
@@ -522,7 +523,7 @@ void Mount::set(Element &e, const std::string &key, int value) {
         grid->setSelection(selection);
         return;
     }
-    if(e.component=="ReorderableGrid" && key=="column-count") {
+    if(ONEUI_COMPONENT_IS(e.component, ReorderableGrid) && key=="column-count") {
         if(value<1)throw std::invalid_argument("column-count must be positive");
         e.as<ReorderableGrid>()->setColumnCount(value);return;
     }
@@ -534,20 +535,20 @@ void Mount::set(Element &e, const std::string &key, int value) {
         e.as<Label>()->setMaxLines(value);
     }
     else if (key == "selectedIndex") {
-        if (e.component == "List") e.as<List>()->setSelectedIndex(value);
-        else if (e.component == "VirtualList") e.as<VirtualList>()->setSelectedIndex(value);
-        else if (e.component == "SegmentedControl") e.as<Tabs>()->setSelectedIndex(value);
+        if (ONEUI_COMPONENT_IS(e.component, List)) e.as<List>()->setSelectedIndex(value);
+        else if (ONEUI_COMPONENT_IS(e.component, VirtualList)) e.as<VirtualList>()->setSelectedIndex(value);
+        else if (ONEUI_COMPONENT_IS(e.component, SegmentedControl)) e.as<Tabs>()->setSelectedIndex(value);
         else e.as<Select>()->setSelectedIndex(value);
     }
     else
         set(e, key, float(value));
 }
 void Mount::set(Element &e, const std::string &, const std::vector<std::wstring> &items) {
-    if (e.component == "SegmentedControl") e.as<Tabs>()->setItems(items);
+    if (ONEUI_COMPONENT_IS(e.component, SegmentedControl)) e.as<Tabs>()->setItems(items);
     else e.as<Select>()->setItems(items);
 }
 void Mount::set(Element &e, const std::string &, const std::vector<ListItem> &items) {
-    if (e.component == "List") e.as<List>()->setItems(items);
+    if (ONEUI_COMPONENT_IS(e.component, List)) e.as<List>()->setItems(items);
     else e.as<VirtualList>()->setItems(items);
 }
 void Mount::set(Element &e, const std::string &, const std::vector<TableColumn> &columns) {

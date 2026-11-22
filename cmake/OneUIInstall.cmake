@@ -9,6 +9,8 @@ install(DIRECTORY "${PROJECT_SOURCE_DIR}/include/oneui" DESTINATION include)
 install(FILES "${PROJECT_SOURCE_DIR}/cmake/OneUIConfig.cmake"
     "${PROJECT_SOURCE_DIR}/cmake/OneUITargets.cmake"
     "${PROJECT_SOURCE_DIR}/cmake/OneUIView.cmake"
+    "${PROJECT_SOURCE_DIR}/cmake/OneUIDemand.cmake"
+    "${PROJECT_SOURCE_DIR}/cmake/OneUIStatic.cmake"
     "${PROJECT_SOURCE_DIR}/cmake/OneUIComponents.cmake"
     "${PROJECT_SOURCE_DIR}/cmake/OneUIPluginRuntimes.cmake" DESTINATION cmake)
 install(DIRECTORY "${PROJECT_SOURCE_DIR}/tools/viewc" DESTINATION tools)
