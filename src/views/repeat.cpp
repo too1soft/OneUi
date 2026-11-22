@@ -1,3 +1,4 @@
+#include "internal/scroll_trace.h"
 #include "runtime.h"
 namespace oneui::views {
 using namespace oneview;
@@ -26,6 +27,8 @@ void Runtime::refreshRepeatLayouts(const std::shared_ptr<Instance>& instance) {
 }
 void Runtime::repeat(const std::shared_ptr<Instance> &instance) {
     Observation observation(*this, instance);
+    const bool trace = internal::scrollTraceEnabled();
+    const auto start = trace ? internal::scrollTraceNowMs() : 0.0;
     // A normal repeat is an implementation group in its authored stack.
     // Preserve the surrounding flow and spacing across keyed item instances.
     if (!instance->transparent)
@@ -51,6 +54,8 @@ void Runtime::repeat(const std::shared_ptr<Instance> &instance) {
     std::map<std::string, std::shared_ptr<Instance>> next;
     std::vector<std::shared_ptr<Widget>> widgets;
     auto stack = instance->element.as<Stack>();
+    size_t created = 0;
+    double buildMs = 0.0;
     for (size_t i = 0; i < items.keys.size(); ++i) {
         auto found = instance->rows.find(items.keys[i]);
         std::shared_ptr<Instance> row;
@@ -68,7 +73,12 @@ void Runtime::repeat(const std::shared_ptr<Instance> &instance) {
             auto prefix = std::move(callPrefix);
             callPrefix.clear();
             try {
+                const auto buildStart = trace ? internal::scrollTraceNowMs() : 0.0;
                 row = build(image.records[TMPL][r[5]][1], nested);
+                if (trace) {
+                    buildMs += internal::scrollTraceNowMs() - buildStart;
+                    ++created;
+                }
             } catch (...) {
                 callPrefix = std::move(prefix);
                 throw;
@@ -99,6 +109,20 @@ void Runtime::repeat(const std::shared_ptr<Instance> &instance) {
         }
         update(row);
         next.emplace(items.keys[i], std::move(row));
+    }
+    if (trace) {
+        const auto elapsed = internal::scrollTraceNowMs() - start;
+        if (elapsed >= 0.5) {
+            internal::ScrollTraceEvent event;
+            event.component = "view_runtime";
+            event.phase = "repeat_rows";
+            event.object = reinterpret_cast<std::uintptr_t>(instance.get());
+            event.intervalMs = buildMs;
+            event.durationMs = elapsed;
+            event.detailA = static_cast<double>(items.keys.size());
+            event.detailB = static_cast<double>(created);
+            internal::writeScrollTrace(event);
+        }
     }
     if (instance->transparent) {
         auto pending = std::make_shared<decltype(next)>(std::move(next));

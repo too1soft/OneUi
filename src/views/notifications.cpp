@@ -1,3 +1,4 @@
+#include "internal/scroll_trace.h"
 #include "internal/view_profile.h"
 #include "runtime.h"
 #include "rich_table_cache.h"
@@ -179,12 +180,16 @@ void Runtime::flushPass() {
     auto previousScopes = scopes.size();
     bool committed = false;
     staging = true;
+    const bool trace = internal::scrollTraceEnabled();
     try {
+        const auto start = trace ? internal::scrollTraceNowMs() : 0.0;
+        double updated = 0.0, published = 0.0;
         {
             Callback transaction(*this, Phase::Read);
             update(root);
             prepareWorkspaceIndex();
             alive();
+            if (trace) updated = internal::scrollTraceNowMs();
             for (auto &commit : commits)
                 commit();
             commits.clear();
@@ -194,6 +199,7 @@ void Runtime::flushPass() {
                 closeScope(scope);
             retired.clear();
         }
+        if (trace) published = internal::scrollTraceNowMs();
         staging = false;
         styles->refreshBaseLayouts();
         // Authored flow bindings commit after child repeats were visited.
@@ -207,6 +213,23 @@ void Runtime::flushPass() {
         alive();
         if (error.sequence != sequence)
             throw Failure(error.result, "Reentrant callback rejected during flush");
+        if (trace) {
+            const auto finished = internal::scrollTraceNowMs();
+            if (finished - start >= 0.5) {
+                auto log = [&](const char* phase, double duration) {
+                    internal::ScrollTraceEvent event;
+                    event.component = "view_runtime";
+                    event.phase = phase;
+                    event.object = reinterpret_cast<std::uintptr_t>(this);
+                    event.durationMs = duration;
+                    event.detailA = rootScope->table.model_id;
+                    internal::writeScrollTrace(event);
+                };
+                log("flush_update", updated - start);
+                log("flush_publish", published - updated);
+                log("flush_layout_cleanup", finished - published);
+            }
+        }
     } catch (...) {
         modelWrites.clear();
         commits.clear();
