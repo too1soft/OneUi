@@ -1,12 +1,21 @@
 #include "window_win32_gpu_warmup.h"
 
 #include "internal/scroll_trace.h"
+#include "platform/shared/skia_gl_setup.h"
+
+#include "include/core/SkCanvas.h"
+#include "include/core/SkImageInfo.h"
+#include "include/core/SkSurface.h"
+#include "include/gpu/ganesh/GrDirectContext.h"
+#include "include/gpu/ganesh/SkSurfaceGanesh.h"
+#include "include/gpu/ganesh/gl/GrGLDirectContext.h"
 
 #include <GL/gl.h>
 
 #include <atomic>
 #include <cstring>
 #include <cwchar>
+#include <exception>
 #include <system_error>
 
 namespace oneui::win32 {
@@ -70,8 +79,32 @@ struct StartupSurface {
     }
 };
 
-bool warmDriver(POINT origin) {
-    StartupSurface surface;
+bool warmColorQuadProgram() {
+    auto* cache = rendering::shaderCache();
+    if (!cache) return false;
+
+    GrContextOptions options;
+    options.fPersistentCache = cache;
+    auto context = GrDirectContexts::MakeGL(options);
+    if (!context) return false;
+    auto surface = SkSurfaces::RenderTarget(context.get(), skgpu::Budgeted::kYes,
+        SkImageInfo::Make(32, 32, kBGRA_8888_SkColorType, kPremul_SkAlphaType),
+        0, kTopLeft_GrSurfaceOrigin, nullptr);
+    if (!surface) return false;
+
+    // Fractional fill edges exercise the coverage program used by the
+    // regular window canvas at fractional layout positions.
+    auto* canvas = surface->getCanvas();
+    canvas->clear(SK_ColorTRANSPARENT);
+    SkPaint paint;
+    paint.setAntiAlias(true);
+    paint.setColor(SkColorSetARGB(200, 110, 160, 200));
+    canvas->drawRect(SkRect::MakeLTRB(2.25f, 3.5f, 16.75f, 21.25f), paint);
+    context->flush();
+    return context->submit(GrSyncCpu::kNo);
+}
+
+bool warmDriver(StartupSurface& surface, POINT origin) {
     if (!surface.open(origin)) return false;
     const auto* vendor = reinterpret_cast<const char*>(glGetString(GL_VENDOR));
     if (!vendor || !std::strstr(vendor, "NVIDIA")) return false;
@@ -88,6 +121,21 @@ bool warmDriver(POINT origin) {
     }
     glFinish();
     return true;
+}
+
+void warmColorQuadInBackground(bool trace) {
+    const double started = trace ? internal::scrollTraceNowMs() : 0.0;
+    bool warmed = false;
+    try {
+        warmed = warmColorQuadProgram();
+    } catch (const std::exception&) {
+        // Cache or scratch-surface failures cannot affect the live window.
+    }
+    if (trace) {
+        internal::writeScrollTrace(internal::ScrollTraceEvent{
+            "win32", "gpu_color_quad_warmup", 0, 0, 0, 0, 0, 0, 0,
+            internal::scrollTraceNowMs() - started, warmed ? 1.0 : 0.0, 0});
+    }
 }
 
 } // namespace
@@ -116,12 +164,14 @@ void NvidiaOpenGlWarmup::start(HWND window) {
         worker_ = std::thread([origin] {
             const bool trace = internal::scrollTraceEnabled();
             const double started = trace ? internal::scrollTraceNowMs() : 0.0;
-            const bool warmed = warmDriver(origin);
+            StartupSurface surface;
+            const bool warmed = warmDriver(surface, origin);
             if (trace) {
                 internal::writeScrollTrace(internal::ScrollTraceEvent{
                     "win32", "gpu_startup_warmup", 0, 0, 0, 0, 0, 0, 0,
                     internal::scrollTraceNowMs() - started, warmed ? 1.0 : 0.0, 0});
             }
+            if (warmed) warmColorQuadInBackground(trace);
         });
     } catch (const std::system_error&) {
         startupClaimed.store(false, std::memory_order_relaxed);

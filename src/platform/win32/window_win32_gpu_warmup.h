@@ -8,8 +8,8 @@ namespace oneui::win32 {
 
 PIXELFORMATDESCRIPTOR openGlWindowPixelFormat() noexcept;
 
-// Runs the driver-only startup work on its own Win32 window and GL context.
-// Joining during destruction keeps the worker inside the owning SDK lifetime.
+// Warms the driver and a common coverage shader on its own Win32 window
+// and GL context. Destruction joins the worker before SDK resources can unload.
 class NvidiaOpenGlWarmup {
 public:
     ~NvidiaOpenGlWarmup();
