@@ -1,4 +1,5 @@
 #include "oneui/error.h"
+#include "../src/internal/animation_wake.h"
 #include <stdexcept>
 #include "oneui/controls/terminal_view.h"
 #include "support/platform_keys.h"
@@ -368,6 +369,11 @@ void testTextBlinkUsesTheSharedAnimationScheduler() {
     terminal.setAnimationScheduler([&] { ++animationSchedules; });
     expectEqual("terminal blink schedules native animation", animationSchedules, 1);
     expectEqual("terminal blink keeps animation alive", terminal.tickAnimations(1000.0) ? 1 : 0, 1);
+    {
+        oneui::internal::AnimationWakeScope wake;
+        expectEqual("terminal can sleep between cell blinks", terminal.tickAnimations(1000.0), 0);
+        expectEqual("terminal chooses the earliest cell change", static_cast<int>(wake.dueMs()), 1250);
+    }
 
     RecordingCanvas visibleCanvas;
     terminal.paint(visibleCanvas);

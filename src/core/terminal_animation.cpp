@@ -1,4 +1,5 @@
 #include "terminal_view_helpers.h"
+#include "internal/animation_wake.h"
 #include "paint_invalidation_scope.h"
 
 namespace oneui {
@@ -7,6 +8,7 @@ using namespace terminal_detail;
 bool TerminalView::tickAnimations(double nowMs) {
     const bool selectionScrollActive = tickSelectionScroll(nowMs);
     const bool cursorActive = focused() && cursorBlinking_ && cursor_.visible;
+    bool blinkNeedsFrame = false;
     if (cursorActive) {
         const double elapsed = std::fmod(
             std::max(0.0, nowMs - cursorBlinkStartMs_),
@@ -16,6 +18,7 @@ bool TerminalView::tickAnimations(double nowMs) {
             cursorBlinkVisible_ = visible;
             invalidateCell(TextPosition{cursor_.row, cursor_.column});
         }
+        blinkNeedsFrame = !internal::requestBlinkWake(nowMs, elapsed, kCursorBlinkOnMs, kCursorBlinkPeriodMs);
     } else if (!cursorBlinkVisible_) {
         cursorBlinkVisible_ = true;
         invalidateCell(TextPosition{cursor_.row, cursor_.column});
@@ -28,18 +31,24 @@ bool TerminalView::tickAnimations(double nowMs) {
         }
         const double elapsed = std::max(0.0, nowMs - textBlinkStartMs_);
         if (slowBlinkCellCount_ != 0) {
-            const bool visible = std::fmod(elapsed, kSlowTextBlinkPeriodMs) < kSlowTextBlinkOnMs;
+            const double phase = std::fmod(elapsed, kSlowTextBlinkPeriodMs);
+            const bool visible = phase < kSlowTextBlinkOnMs;
             if (visible != slowBlinkVisible_) {
                 slowBlinkVisible_ = visible;
                 invalidateBlinkingCells(TerminalCellBlinkSlow);
             }
+            blinkNeedsFrame = !internal::requestBlinkWake(nowMs, phase, kSlowTextBlinkOnMs, kSlowTextBlinkPeriodMs)
+                || blinkNeedsFrame;
         }
         if (rapidBlinkCellCount_ != 0) {
-            const bool visible = std::fmod(elapsed, kRapidTextBlinkPeriodMs) < kRapidTextBlinkOnMs;
+            const double phase = std::fmod(elapsed, kRapidTextBlinkPeriodMs);
+            const bool visible = phase < kRapidTextBlinkOnMs;
             if (visible != rapidBlinkVisible_) {
                 rapidBlinkVisible_ = visible;
                 invalidateBlinkingCells(TerminalCellBlinkRapid);
             }
+            blinkNeedsFrame = !internal::requestBlinkWake(nowMs, phase, kRapidTextBlinkOnMs, kRapidTextBlinkPeriodMs)
+                || blinkNeedsFrame;
         }
     }
     bool bellActive = false;
@@ -57,7 +66,7 @@ bool TerminalView::tickAnimations(double nowMs) {
             bellStartMs_ = 0.0;
         }
     }
-    return cursorActive || textBlinkActive || bellActive || selectionScrollActive;
+    return blinkNeedsFrame || bellActive || selectionScrollActive;
 }
 
 void TerminalView::flashBell() {

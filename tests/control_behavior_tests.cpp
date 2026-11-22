@@ -1,4 +1,6 @@
 #include "oneui/error.h"
+#include "internal/animation_wake.h"
+#include "internal/ui_clock.h"
 #include <stdexcept>
 #include "oneui/controls/terminal_view.h"
 #include "support/platform_keys.h"
@@ -6357,6 +6359,7 @@ void testTextFieldHorizontalScrollClipsAndFollowsCaret() {
 }
 
 void testTextFieldCaretBlinkPaintsAndHidesOnSchedule() {
+    const oneui::internal::ScopedUiClock clock([] { return 1000.0; });
     oneui::TextField field(L"Name");
     field.setFrame(oneui::Rect{0.0f, 0.0f, 160.0f, 36.0f});
     field.setText(L"abc");
@@ -6366,13 +6369,22 @@ void testTextFieldCaretBlinkPaintsAndHidesOnSchedule() {
     field.paint(visibleCanvas);
     expectEqual("TextField focused caret paints initially", countCaretRects(visibleCanvas), 1);
 
-    const bool keepsBlinkScheduling = field.tickAnimations(testSteadyTimeMs() + 620.0);
+    expectEqual("TextField keeps scheduling blink without a deferred wake", field.tickAnimations(1100.0), 1);
+    {
+        oneui::internal::AnimationWakeScope wake;
+        expectEqual("TextField can sleep between caret changes", field.tickAnimations(1100.0), 0);
+        expectEqual("TextField wakes to hide the caret", static_cast<int>(wake.dueMs()), 1530);
+    }
+    {
+        oneui::internal::AnimationWakeScope wake;
+        field.tickAnimations(1530.0);
+        expectEqual("TextField wakes to show the caret", static_cast<int>(wake.dueMs()), 2060);
+    }
     RecordingCanvas hiddenCanvas;
     field.paint(hiddenCanvas);
     expectEqual("TextField focused caret hides after blink interval", countCaretRects(hiddenCanvas), 0);
-    expectEqual("TextField focused caret keeps scheduling blink", keepsBlinkScheduling ? 1 : 0, 1);
 
-    field.tickAnimations(testSteadyTimeMs() + 1140.0);
+    field.tickAnimations(2060.0);
     RecordingCanvas visibleAgainCanvas;
     field.paint(visibleAgainCanvas);
     expectEqual("TextField focused caret returns after blink period", countCaretRects(visibleAgainCanvas), 1);

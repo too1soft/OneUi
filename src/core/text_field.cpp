@@ -4,6 +4,7 @@
 #include "oneui/icon.h"
 #include "oneui/style.h"
 #include "oneui/style_sheet.h"
+#include "internal/animation_wake.h"
 #include "internal/unicode.h"
 #include "text/text_layout.h"
 
@@ -1104,7 +1105,9 @@ bool TextField::tickAnimations(double nowMs) {
             caretBlinkVisible_ = nextCaretVisible;
             needsPaint = true;
         }
-        keepScheduling = keepScheduling || !internal::freezeCarets;
+        if (!internal::freezeCarets && !keepScheduling) {
+            keepScheduling = !internal::requestBlinkWake(nowMs, elapsed, CaretBlinkOnMs, CaretBlinkPeriodMs);
+        }
     } else if (!caretBlinkVisible_) {
         caretBlinkVisible_ = true;
         needsPaint = true;

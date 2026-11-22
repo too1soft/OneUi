@@ -16,6 +16,11 @@ inline bool requestAnimationWakeAt(double dueMs) {
     return true;
 }
 
+inline bool requestBlinkWake(double nowMs, double phaseMs, double onMs, double periodMs) {
+    const double nextPhaseMs = phaseMs < onMs ? onMs : periodMs;
+    return requestAnimationWakeAt(nowMs + (nextPhaseMs - phaseMs));
+}
+
 class AnimationWakeScope {
 public:
     AnimationWakeScope() : open_(animationWakeOpen), due_(animationWakeDueMs) {
