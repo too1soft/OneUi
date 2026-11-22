@@ -39,6 +39,21 @@ void templateTables(const char* runtimeFile) {
     table->paint(canvas);
     expect(table->scrollOffset()==table->maxScrollOffset(), "last table row is reachable");
     expect(table->accessibleRole()==oneui::AccessibilityRole::Table, "table semantics are native");
+    table->setFrame({10,20,400,300});
+    table->paint(canvas);
+    table->setHorizontalScrollOffset(100);
+    expect(table->scrollOffset() > 0 && table->horizontalScrollOffset() > 0,
+           "scroll revision fixture exercises both axes");
+    const auto selected = id(c.image, "Root", "selected");
+    c.vm.values[selected].integer = 1;
+    c.runtime->notify(c.runtime->rootScope, selected);
+    c.runtime->flush();
+    expect(table->scrollOffset() == 0 && table->horizontalScrollOffset() == 0,
+           "a new table scroll revision resets both axes");
+    table->setScrollOffset(100);
+    c.runtime->notify(c.runtime->rootScope, selected);
+    c.runtime->flush();
+    expect(table->scrollOffset() == 100, "an unchanged revision retains user scrolling");
 
     auto row=c.runtime->root->children[16]->element.as<oneui::InteractiveSurface>();
     row->setFrame({20,30,200,40});

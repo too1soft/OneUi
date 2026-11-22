@@ -490,6 +490,11 @@ void Mount::set(Element &e, const std::string &key, float value) {
     styles_->updateAuthoredFlex(e.widget,e.flex);
 }
 void Mount::set(Element &e, const std::string &key, int value) {
+    if (e.component == "TemplateTable" && key == "scroll-revision") {
+        if (value < 0) throw std::invalid_argument("scroll-revision must not be negative");
+        e.as<TemplateTable>()->setScrollRevision(static_cast<std::uint32_t>(value));
+        return;
+    }
     if(e.component=="TimeSeriesChart") {
         if(key=="grid-lines") {e.as<TimeSeriesChart>()->setGridLines(value);return;}
         if(key=="fill-alpha") {

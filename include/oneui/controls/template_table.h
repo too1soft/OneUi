@@ -1,6 +1,7 @@
 #pragma once
 #include "oneui/layout/scroll_view.h"
 #include "oneui/layout/stack.h"
+#include <cstdint>
 
 namespace oneui {
 // Rich templated table viewport. The header follows horizontal scrolling but
@@ -33,6 +34,12 @@ public:
     float maxScrollOffset() const { return vertical_->maxScrollOffset(); }
     void setHorizontalScrollOffset(float value) { horizontal_->setHorizontalScrollOffset(value); }
     float horizontalScrollOffset() const { return horizontal_->horizontalScrollOffset(); }
+    void setScrollRevision(std::uint32_t revision) {
+        if (scrollRevision_ == revision) return;
+        scrollRevision_ = revision;
+        setScrollOffset(0.0f);
+        setHorizontalScrollOffset(0.0f);
+    }
     void setStyleBox(const StyleBox& box) {
         vertical_->setStyleBox(box);
         horizontal_->setStyleBox(box);
@@ -45,5 +52,6 @@ private:
     std::shared_ptr<Widget> header_, body_;
     std::shared_ptr<ScrollView> vertical_, horizontal_;
     std::shared_ptr<Stack> column_;
+    std::uint32_t scrollRevision_ = 0;
 };
 }

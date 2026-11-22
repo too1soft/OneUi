@@ -25,7 +25,7 @@
     <Input v-model="title" password="true" password-mask="●"/>
     <Text :text="title" line-height="20" text-align="center" :tooltip="title"/>
     <Button text="Action" content-align="start" :tooltip="title"/>
-    <TemplateTable minimum-width="600" header-height="34" content-height="2000" wheel-step="40">
+    <TemplateTable minimum-width="600" header-height="34" content-height="2000" wheel-step="40" :scroll-revision="selected">
       <Text text="Pinned header"/>
       <Column><Text text="Body"/></Column>
     </TemplateTable>

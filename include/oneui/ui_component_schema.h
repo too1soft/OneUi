@@ -8,7 +8,7 @@ enum class ValueType { None, Text, Boolean, Integer, Number, Strings, Columns, R
     X(ReorderableGrid, "reorderable-grid", "column-count column-gap row-gap item-height reorder-enabled item-drag-enabled", None) \
     X(GridItem, "grid-item", "grid-key", None) \
     X(Overlay, "overlay-host", "overlay-width overlay-height inset-left inset-right inset-top inset-bottom horizontal-align vertical-align overlay-visible", None) \
-    X(TemplateTable, "scroll-view", "minimum-width header-height content-height content-width wheel-step scroll-offset horizontal-offset", None) \
+    X(TemplateTable, "scroll-view", "minimum-width header-height content-height content-width wheel-step scroll-offset horizontal-offset scroll-revision", None) \
     X(Dialog, "dialog", "title subtitle icon close-visible edge-to-edge-content close-centered header-height header-text-layout", None) \
     X(PaneGrid, "workspace-collection", "nodes groups active-group active-pane maximized revision ack-request ack-accepted navigation-serial navigation-edge navigation-mode drag-domain gap divider-hit motion-ms resize-idle-ms motion", None) \
     X(Pane, "workspace-item", "pane-key closing close-request min-width min-height", None) \
@@ -155,6 +155,7 @@ constexpr ValueType propertyType(Kind kind,std::string_view key) {
     if(contains("decorations-revision text-revision tab-size row-count window-start frozen-columns anchor-row anchor-column focus-row focus-column select-kind selectedIndex revision ack-request close-request navigation-serial number max-lines",key))return ValueType::Integer;
     if(contains("decorations completion-items tree-items grid-columns grid-rows nodes groups drag-sources placements tokens spans",key))return ValueType::Rows;
     if(contains("font-size gap divider-hit motion-ms resize-idle-ms min-width min-height threshold dock-min-width dock-min-height float-min-width float-min-height minimum maximum step opacity",key))return ValueType::Number;
+    if(kind==Kind::TemplateTable && key=="scroll-revision")return ValueType::Integer;
     if(contains("content-height content-width wheel-step scroll-offset scrollbar-inset trailing-width trailing-gap row-height line-height minimum-width header-height horizontal-offset overlay-width overlay-height inset-left inset-right inset-top inset-bottom",key))return ValueType::Number;
     if(key=="overlay-visible")return ValueType::Boolean;
     if(kind==Kind::Tabs && key=="decorations")return ValueType::Rows;
