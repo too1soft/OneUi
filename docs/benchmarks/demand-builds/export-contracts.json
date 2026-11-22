@@ -1,0 +1,14 @@
+[
+  {
+    "architecture": "x86",
+    "static_exports": 0,
+    "dll_exports": 2,
+    "unused_marker_removed": true
+  },
+  {
+    "architecture": "x64",
+    "static_exports": 0,
+    "dll_exports": 2,
+    "unused_marker_removed": true
+  }
+]
