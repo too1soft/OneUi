@@ -13,17 +13,26 @@
         }
     }
 
+    void deliverClientSizeChanged() {
+        clientSizeChangedAtPaint_ = false;
+        if (std::exchange(clientSizeChangedFramePending_, false) && clientSizeChangedHandler_) {
+            const auto handler = clientSizeChangedHandler_;
+            handler(clientSize());
+        }
+    }
+
     void scheduleClientSizeChanged() {
-        if (!clientSizeChangedHandler_ || clientSizeChangedFramePending_ || !hwnd_) {
+        if (!clientSizeChangedHandler_ || !hwnd_) {
             return;
         }
-        clientSizeChangedFramePending_ = true;
-        requestAnimationFrame([this](double) {
-            clientSizeChangedFramePending_ = false;
-            if (clientSizeChangedHandler_) {
-                clientSizeChangedHandler_(clientSize());
-            }
-        });
+        if (interactiveResizeActive_) {
+            // The native sizing loop dispatches paint messages, while our
+            // waitable animation timer is serviced by the outer app loop.
+            clientSizeChangedFramePending_ = true;
+            clientSizeChangedAtPaint_ = true;
+        } else if (!std::exchange(clientSizeChangedFramePending_, true)) {
+            requestAnimationFrame([this](double) { deliverClientSizeChanged(); });
+        }
     }
 
     void recordContentPaint(double elapsedMs) {

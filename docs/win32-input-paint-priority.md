@@ -72,3 +72,13 @@ time. Use the recorded durations and the interaction timestamps to locate
 the measured work. CPU cycles and elapsed time together help distinguish
 continued thread activity from a gap with no recorded activity. Wait and
 runnable states require separate scheduler evidence.
+
+## Live window resizing
+
+Size messages invalidate the client area and leave painting to the normal
+paint message and timer. During native sizing, the next paint delivers the
+latest pending client size before preparing the canvas. The native sizing
+loop can dispatch this paint even while the outer loop's waitable animation
+timer is unserviced. An input event before that paint still resolves current
+layout for hit testing. Ending sizing schedules a final paint for any pending
+geometry.

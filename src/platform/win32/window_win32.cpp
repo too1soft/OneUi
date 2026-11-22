@@ -239,6 +239,7 @@ public:
     bool windowStatePaintPending_ = false;
     bool deferredFullPaintPending_ = false;
     bool interactiveResizeActive_ = false;
+    bool clientSizeChangedAtPaint_ = false;
     bool interactiveSizeChanged_ = false;
     bool renderTraceEnabled_ = false;
     std::wstring renderTraceFilePath_;

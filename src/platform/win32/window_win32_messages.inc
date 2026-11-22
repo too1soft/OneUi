@@ -116,6 +116,11 @@
             printClient(reinterpret_cast<HDC>(wParam), lParam);
             return 0;
         case WM_PAINT:
+            if (clientSizeChangedAtPaint_) {
+                const auto alive = callbackWindowAlive_;
+                deliverClientSizeChanged();
+                if (!alive->load(std::memory_order_acquire)) return 0;
+            }
             submitInvalidations();
             paint();
             return 0;
@@ -363,12 +368,7 @@
                 return 0;
             }
             if (wParam != SIZE_MINIMIZED) {
-                if (interactiveResizeActive_) {
-                    InvalidateRect(hwnd_, nullptr, FALSE);
-                    flushInteractivePaint();
-                } else {
-                    requestDeferredFullPaint();
-                }
+                requestDeferredFullPaint();
             }
             return 0;
         case kOneUiDpiChanged:

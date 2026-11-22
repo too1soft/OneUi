@@ -154,6 +154,55 @@ void resizeAndCapture() {
     check(f.root->paints == 0, "resize and capture preparation do not paint");
 }
 
+void liveResizeCoalescesPaint() {
+    Fixture f;
+    ShowWindow(f.hwnd, SW_SHOWNOACTIVATE);
+    UpdateWindow(f.hwnd);
+    const auto resize = [&] {
+        RECT outer{};
+        GetWindowRect(f.hwnd, &outer);
+        return SetWindowPos(f.hwnd, nullptr, 0, 0, outer.right - outer.left + 40,
+            outer.bottom - outer.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE) != FALSE;
+    };
+    float notifiedWidth = 0;
+    int notifications = 0;
+    f.window->setClientSizeChangedHandler([&](oneui::Size size) {
+        notifiedWidth = size.width;
+        ++notifications;
+    });
+    const auto waitForNewSize = [&](int beforePaints) {
+        const auto deadline = GetTickCount64() + 800;
+        while (GetTickCount64() < deadline) {
+            if (f.root->paints > beforePaints &&
+                std::abs(f.root->frame().width - f.window->clientSize().width) < .1f &&
+                std::abs(notifiedWidth - f.root->frame().width) < .1f) return true;
+            MSG message{};
+            if (PeekMessageW(&message, f.hwnd, 0, 0, PM_REMOVE)) {
+                DispatchMessageW(&message);
+            } else {
+                MsgWaitForMultipleObjectsEx(0, nullptr, 10, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
+            }
+        }
+        return false;
+    };
+
+    SendMessageW(f.hwnd, WM_ENTERSIZEMOVE, 0, 0);
+    const int before = f.root->paints;
+    check(resize() && resize() && resize() && f.root->paints == before,
+        "live resize does not paint inside synchronous size messages");
+    f.click(f.actionX(), 60);
+    check(f.root->action->downs == 1 && f.root->action->ups == 1,
+        "input during live resize uses the latest window geometry");
+    check(waitForNewSize(before) && notifications == 1,
+        "live resize paints and notifies once before the sizing loop exits");
+
+    const int beforeExit = f.root->paints;
+    const bool finalSizeChanged = resize();
+    SendMessageW(f.hwnd, WM_EXITSIZEMOVE, 0, 0);
+    check(finalSizeChanged && waitForNewSize(beforeExit) && notifications == 2,
+        "ending live resize displays the final window geometry");
+}
+
 void hoverAndFocus() {
     Fixture f;
     const HCURSOR previous = GetCursor();
@@ -280,6 +329,7 @@ int main() {
     unpaintedAndReplacedTrees();
     deferredMount();
     resizeAndCapture();
+    liveResizeCoalescesPaint();
     hoverAndFocus();
     colorOnlyHoverKeepsTheInputLayout();
     layoutObserversCanReplaceOrDestroyTheWindow();
