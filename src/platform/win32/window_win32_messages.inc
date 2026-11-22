@@ -141,7 +141,7 @@
         case kOneUiFlushInvalidations:
             // Input mutations and visual animation are sampled together. Do
             // not expose an intermediate state before their scheduled frame.
-            if (!inputPaintPending_) submitInvalidations();
+            if (!inputPaintPending_ && !coalescedEditPaintPending_) submitInvalidations();
             return 0;
         case oneui::kTrayCallbackMessage:
             switch (LOWORD(lParam)) {

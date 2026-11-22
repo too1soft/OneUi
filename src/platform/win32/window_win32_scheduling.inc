@@ -316,6 +316,19 @@
 
     enum class InputPaint { Coalesced, BeforePostedWork };
 
+    void requestEditRedraw(const internal::EditPresentationScope& edit) {
+        if (edit.hasPostedWork()) {
+            // A ready frame can run when the message batch yields, before
+            // the posted model update. Release painting at the end of the
+            // work queued by this edit, keeping the newest edit in effect.
+            const auto version = ++coalescedEditPaintVersion_;
+            coalescedEditPaintPending_ = post([this, version] {
+                if (version == coalescedEditPaintVersion_) coalescedEditPaintPending_ = false;
+            });
+        }
+        requestInteractiveRedraw(edit.coalesced() ? InputPaint::Coalesced : InputPaint::BeforePostedWork);
+    }
+
     void requestInteractiveRedraw(InputPaint policy = InputPaint::Coalesced) {
         if (!hwnd_) {
             return;

@@ -119,6 +119,10 @@ bool testCoalesced() {
     field->setCoalesceEditPaint(true);
     field->setOnChanged([owner = window.get(), target = field.get()](const std::wstring&) {
         owner->post([target] { target->applyModel(); });
+        // Exercise a frame already due when the input dispatch yields its
+        // message batch. The posted model update is still in the queue.
+        owner->requestAnimationFrame([](double) {});
+        Sleep(20);
     });
     window->setContent(field);
     window->show();

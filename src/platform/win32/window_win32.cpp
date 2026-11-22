@@ -243,6 +243,8 @@ public:
     bool contentAnimationFramePending_ = false;
     bool inputPaintPending_ = false;
     bool inputPaintBeforePostedWork_ = false;
+    bool coalescedEditPaintPending_ = false;
+    std::uint64_t coalescedEditPaintVersion_ = 0;
     bool interactivePaintTimerActive_ = false;
     bool applyingWindowState_ = false;
     bool windowStatePaintPending_ = false;

@@ -116,10 +116,10 @@
             return false;
         }
         const auto content = content_;
-        const internal::EditPresentationScope edit;
+        internal::EditPresentationScope edit(this);
         if (content->onKeyDown(event)) {
             if (!alive->load(std::memory_order_acquire)) return true;
-            requestInteractiveRedraw(edit.coalesced() ? InputPaint::Coalesced : InputPaint::BeforePostedWork);
+            requestEditRedraw(edit);
             updateImePosition();
             return true;
         }
@@ -204,8 +204,8 @@
         }
         const auto alive = callbackWindowAlive_;
         const auto content = content_;
-        const internal::EditPresentationScope edit;
+        internal::EditPresentationScope edit(this);
         if (content->onTextCommitted(text) && alive->load(std::memory_order_acquire)) {
-            requestInteractiveRedraw(edit.coalesced() ? InputPaint::Coalesced : InputPaint::BeforePostedWork);
+            requestEditRedraw(edit);
         }
     }

@@ -135,6 +135,7 @@
             discardPostedCallbacks();
             return false;
         }
+        internal::EditPresentationScope::notePostedWork(this);
         return true;
     }
 

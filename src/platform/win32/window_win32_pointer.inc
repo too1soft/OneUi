@@ -143,7 +143,7 @@
     }
 
     void flushPendingPaint() {
-        if (!hwnd_) {
+        if (!hwnd_ || coalescedEditPaintPending_) {
             return;
         }
         submitInvalidations();
