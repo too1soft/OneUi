@@ -136,6 +136,10 @@ void testNativeAutomationFragments(Check& check) {
                 check(get(L"Modal fragment") && !get(L"Retained action"), "UIA navigation respects modal coverage");
                 check(mutate([root, dialog] { root->removeOverlay(dialog.get()); }), "Win32 thread closes the modal overlay");
                 check(get(L"Retained action") && !get(L"Modal fragment"), "Closing a modal restores the accessible surface");
+                auto finalAction = get(L"Retained action");
+                auto lateInvoke = currentAutomationPattern<IUIAutomationInvokePattern>(finalAction.Get(), UIA_InvokePatternId);
+                check(mutate([&window] { window->close(); }), "Win32 thread closes the accessible window");
+                check(lateInvoke && FAILED(lateInvoke->Invoke()), "A cached fragment rejects an action after window shutdown");
             }
         }
         CoUninitialize();
@@ -151,7 +155,7 @@ void testNativeAutomationFragments(Check& check) {
         }
     }
     client.join();
-    window->close();
+    if (window->nativeHandle()) window->close();
 }
 
 } // namespace

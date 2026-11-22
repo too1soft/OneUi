@@ -75,8 +75,11 @@ public:
         if (!available()) return false;
         if (id == CHILDID_SELF) return true;
         refreshFragments();
-        return fragments_->indices.count(id) != 0;
+        return includesFragment(id);
     }
+
+    std::uint64_t fragmentRevision() const { return fragments_ ? fragments_->revision : 0; }
+    bool includesFragment(LONG id) const { return fragments_ && fragments_->indices.count(id) != 0; }
 
     LONG fragmentFromChild(const VARIANT& child) {
         refreshFragments();
@@ -243,6 +246,7 @@ private:
     static constexpr LONG firstFragmentId = 0x40000000;
     struct FragmentIndex {
         LONG nextId = firstFragmentId;
+        std::uint64_t revision = 0;
         std::unordered_map<LONG, std::size_t> indices;
     };
 
@@ -258,6 +262,7 @@ private:
             if (entry.fragmentId) retained.emplace(Key{entry.widget, entry.button}, entry.fragmentId);
         }
         fragments_->indices.clear();
+        ++fragments_->revision;
         fragments_->indices.reserve(next.size());
         for (std::size_t index = 0; index < next.size(); ++index) {
             auto& entry = next[index];

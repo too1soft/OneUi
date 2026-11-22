@@ -9,7 +9,9 @@
 #include <climits>
 #include <cmath>
 #include <new>
+#include <unordered_map>
 #include <utility>
+#include <vector>
 
 namespace oneui::win32_accessibility {
 namespace {
@@ -34,11 +36,34 @@ struct AutomationApi {
 
 struct FragmentTree {
     FragmentTree(Provider* shared, HWND window) : accessible(shared), hwnd(window) {}
+
+    using FragmentReference = ComPtr<IRawElementProviderFragment>;
+
+    std::vector<FragmentReference> pruneDetachedFragments() {
+        const auto revision = accessible->fragmentRevision();
+        if (revision == childRevision) return {};
+        childRevision = revision;
+        std::vector<FragmentReference> detached;
+        for (auto entry = children.begin(); entry != children.end();) {
+            if (accessible->includesFragment(entry->first)) ++entry;
+            else {
+                // Release any system pattern adapters after the map is stable.
+                detached.push_back(std::move(entry->second));
+                entry = children.erase(entry);
+            }
+        }
+        return detached;
+    }
+
     AutomationApi api;
     ComPtr<Provider> accessible;
     HWND hwnd;
     IRawElementProviderFragment* root = nullptr;
     IRawElementProviderFragmentRoot* fragmentRoot = nullptr;
+    // A stable COM identity allows UIA to reuse the same provider and its
+    // pattern adapters across enumerations of the current projection.
+    std::unordered_map<LONG, FragmentReference> children;
+    std::uint64_t childRevision = 0;
 };
 
 CONTROLTYPEID controlType(LONG role) {
@@ -342,11 +367,17 @@ private:
     }
 
     HRESULT returnFragment(LONG id, IRawElementProviderFragment** out) {
+        // Release detached providers only after handing out the new reference.
+        // A release may reenter window teardown through a system adapter.
+        const auto detached = tree_->pruneDetachedFragments();
         if (!id) return S_OK;
-        auto* result = new (std::nothrow) Fragment(tree_, id);
+        const auto existing = tree_->children.find(id);
+        if (existing != tree_->children.end()) return existing->second.CopyTo(out);
+        ComPtr<IRawElementProviderFragment> result;
+        result.Attach(new (std::nothrow) Fragment(tree_, id));
         if (!result) return E_OUTOFMEMORY;
-        *out = result;
-        return S_OK;
+        const auto added = tree_->children.emplace(id, std::move(result));
+        return added.first->second.CopyTo(out);
     }
 
     std::shared_ptr<FragmentTree> tree_;
@@ -384,6 +415,7 @@ void AutomationProvider::disconnect() {
         // shared MSAA provider but cannot navigate back to a dead HWND.
         tree.root = nullptr;
         tree.fragmentRoot = nullptr;
+        tree.children.clear();
         tree.api.disconnect(root);
         root->Release();
     }
