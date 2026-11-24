@@ -1,5 +1,6 @@
 #pragma once
 struct OneUiComponentRegistry;
+namespace oneui::views { struct Runtime; }
 namespace oneui::views::components { struct Registry; }
 #include "oneui/controls/data_grid.h"
 #include "oneui/controls/template_table.h"
@@ -72,7 +73,8 @@ public:
     void updateAuthoredFlex(const std::shared_ptr<Widget>& widget, const StackFlex& flex);
     struct Source { std::string component, file; int line=0; };
 private:
-    struct Entry { std::weak_ptr<Widget> widget; std::string component, classes; std::weak_ptr<Stack> content; std::string tone, file; int line=0; bool invalid=false; std::string appearance,variant; };
+    friend class Mount;
+    struct Entry { std::weak_ptr<Widget> widget; std::string component, classes; std::weak_ptr<Stack> content; std::string tone, file; int line=0; bool invalid=false; mutable bool initialStylePending=false; std::string appearance,variant; };
     std::vector<Entry> entries_;
     StyleSheet sheet_;
     Density density_=Density::Comfortable;
@@ -114,6 +116,7 @@ private:
         // even when applyBaseLayouts finds no flex/dimension declaration.
         // Preserve cached storage, but force the same-size query to reapply.
         if (&supplied == &sheet_) {
+            entry.initialStylePending = false;
             invalidateBaseLayouts();
             for (auto& query : queries_) query.second.version = ~size_t{};
         }
@@ -254,17 +257,34 @@ private:
             e.widget->setDiagnosticSource({e.component, {}, 0});
     }
     void pruneEntries();
-    void appendEntry(const Element& e) {
+    void appendEntry(const Element& e, bool deferStyle = false) {
         localThemes_.erase(e.widget.get()); // A new widget may reuse a retired address.
         entries_.push_back({e.widget, e.component, e.classes, e.content});
         if (entryIndices_)
             (*entryIndices_)[e.widget.get()] = entries_.size() - 1;
+        if (deferStyle) {
+            entries_.back().initialStylePending = true;
+            return;
+        }
         apply(entries_.back(), sheet_);
         // Construction is bottom-up. Only this new subtree can have changed;
         // replaying every sibling scope makes a page of previews quadratic.
         // An enclosing scope will propagate its inherited tokens when added.
         if (auto scope = std::dynamic_pointer_cast<ThemeScope>(e.widget))
             applyLocalTheme(scope);
+    }
+    void registerFresh(const Element& e, bool deferStyle) {
+        beginRegistration(e);
+        if (entries_.size() == entries_.capacity())
+            pruneEntries();
+        appendEntry(e, deferStyle);
+    }
+    void finishInitialStyle(const Element& e) {
+        for (auto it = entries_.rbegin(); it != entries_.rend(); ++it) {
+            if (it->widget.lock() != e.widget) continue;
+            if (it->initialStylePending) apply(*it, sheet_);
+            return;
+        }
     }
 public:
     const std::vector<std::string>& queryDiagnostics() const{return queryDiagnostics_;}
@@ -312,10 +332,7 @@ public:
     }
     // For a widget just constructed by the factory. Existing widgets go through add().
     void addFresh(const Element& e) {
-        beginRegistration(e);
-        if (entries_.size() == entries_.capacity())
-            pruneEntries();
-        appendEntry(e);
+        registerFresh(e, false);
     }
     void replace(const std::string& validatedCss,Density density=Density::Comfortable) {
         StyleSheet next; std::string error;
@@ -365,6 +382,7 @@ public:
 ONEUI_API std::shared_ptr<Clipboard> defaultMountClipboard();
 
 class Mount {
+    friend struct oneui::views::Runtime;
     struct Life { bool alive=true; std::map<std::size_t,std::function<void()>> pending; std::size_t next = 0; };
     std::shared_ptr<Life> life_ = std::make_shared<Life>();
     std::vector<Subscription> subscriptions_;
@@ -378,6 +396,8 @@ class Mount {
     std::shared_ptr<NativeEntries> natives_ = std::make_shared<NativeEntries>();
     std::shared_ptr<Clipboard> clipboard_;
     std::shared_ptr<const oneui::views::components::Registry> components_;
+    Element makeImpl(std::string type, std::vector<Element> children, std::string classes, bool deferStyle);
+    void finishInitialStyle(const Element& e) { styles_->finishInitialStyle(e); }
 public:
     explicit Mount(std::function<void()> schedule = {}, std::shared_ptr<StyleRegistry> styles = std::make_shared<StyleRegistry>(),
                    std::shared_ptr<Clipboard> clipboard = defaultMountClipboard())

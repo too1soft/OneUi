@@ -10,6 +10,9 @@
 #include "internal/runtime_config.h"
 namespace oneui::ui {
 Element Mount::make(std::string type, std::vector<Element> children, std::string classes) {
+    return makeImpl(std::move(type), std::move(children), std::move(classes), false);
+}
+Element Mount::makeImpl(std::string type, std::vector<Element> children, std::string classes, bool deferStyle) {
     const oneui::detail::view_mount_timing::Scope measure(oneui::detail::view_mount_timing::Create);
     if (type == "NativeHost")
         throw std::invalid_argument("Use nativeHost(name) after registerNative");
@@ -441,7 +444,7 @@ Element Mount::make(std::string type, std::vector<Element> children, std::string
             }
         }
     }
-    styles_->addFresh(e);
+    styles_->registerFresh(e, deferStyle);
     return e;
 }
 } // namespace oneui::ui

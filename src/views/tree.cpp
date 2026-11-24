@@ -7,6 +7,30 @@ namespace oneui::views {
 using namespace oneview;
 namespace timing = oneui::detail::view_mount_timing;
 namespace {
+bool canDeferInitialStyle(const Runtime& runtime, uint32_t node, const ComponentContract& component) {
+    const auto& type = component.name;
+    if (type != "Row" && type != "Column" && type != "Surface" && type != "InteractiveSurface" &&
+        type != "Text" && type != "Icon" && type != "Button" && type != "Checkbox")
+        return false;
+
+    // Only cross setters that do not read or reapply the widget's current
+    // style. The class setter still runs in its original position and adds
+    // to the base classes, so the final cascade includes the base rules.
+    for (auto section : {PROP, BIND}) {
+        for (const auto& record : runtime.ownerRecords.get(runtime.image, section, node)) {
+            const auto& name = component.property(record[1]).name;
+            if (name == "class") return true;
+            if (name != "name" && name != "description" && name != "accessible-name" &&
+                name != "tooltip" && name != "visible" && name != "text" && name != "icon" &&
+                name != "symbol" && name != "basis" && name != "grow" && name != "shrink" &&
+                name != "min" && name != "max" && name != "align" && name != "justify" &&
+                name != "wrap" && name != "text-align" && name != "content-align")
+                return false;
+        }
+    }
+    return false;
+}
+
 void activate(const std::shared_ptr<Instance> &node) noexcept {
     node->published = true;
     for (auto &child : node->children)
@@ -105,9 +129,11 @@ std::shared_ptr<Instance> Runtime::build(uint32_t node, const Scopes &context, c
         child->parent = result;
         result->children.push_back(child);
     }
-    const auto& type = image.components[n[1]].name;
+    const auto& component = image.components[n[1]];
+    const auto& type = component.name;
     const auto scopeClass = scopeClasses.find(n[8]);
     const std::string classes = scopeClass == scopeClasses.end() ? "" : scopeClass->second;
+    bool deferredStyle = false;
     if (type == "NativeHost") {
         auto host = std::make_shared<ui::NativeHostView>();
         result->element = ui::Element(ui::Node(host), type);
@@ -145,13 +171,16 @@ std::shared_ptr<Instance> Runtime::build(uint32_t node, const Scopes &context, c
         styles->addFresh(result->element);
     } else if (components::create(*this,result,type,children,classes)) {
         // The registered factory owns creation; common properties use Mount.
-    } else
-        result->element = factory.make(type, std::move(children), classes);
+    } else {
+        deferredStyle = canDeferInitialStyle(*this, node, component);
+        result->element = factory.makeImpl(type, std::move(children), classes, deferredStyle);
+    }
     if (n[10] != none) {
         const auto &span = image.records[SMAP][n[10]];
         factory.locate(result->element, image.strings[span[0]], int(span[1]));
     }
     install(result, node, context);
+    if (deferredStyle) factory.finishInitialStyle(result->element);
     wire(result);
     return result;
 }
