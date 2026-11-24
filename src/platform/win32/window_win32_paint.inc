@@ -195,13 +195,17 @@
                 grContext_->flush();
             }
             const double flushEndMs = traceLayout ? currentTimeMs() : 0.0;
+            const auto submit = [this] {
+                const internal::Win32GlSubmitErrorProbe probe(nvidiaDriver_);
+                grContext_->submit(GrSyncCpu::kNo);
+            };
             if (traceGl) {
                 const internal::GlCallTrace::Scope scope(&glSubmitTrace.emplace());
                 QueryThreadCycleTime(GetCurrentThread(), &cyclesBeforeSubmit);
-                grContext_->submit(GrSyncCpu::kNo);
+                submit();
                 QueryThreadCycleTime(GetCurrentThread(), &cyclesAfterSubmit);
             } else {
-                grContext_->submit(GrSyncCpu::kNo);
+                submit();
             }
             const double submitEndMs = traceLayout ? currentTimeMs() : 0.0;
             internal::traceInteractionPaint(interactionPaint, "submit_end", "opengl");

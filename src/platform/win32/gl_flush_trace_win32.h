@@ -1,5 +1,6 @@
 #pragma once
 
+#include "gl_submit_error_probe_win32.h"
 #include "internal/scroll_trace.h"
 
 #include <windows.h>
@@ -226,7 +227,13 @@ public:
         wrap<GlPhase::Sync, &Functions::fFenceSync>();
         wrap<GlPhase::Sync, &Functions::fWaitSync>();
         wrap<GlPhase::Sync, &Functions::fClientWaitSync>();
-        wrap<GlPhase::ErrorQuery, &Functions::fGetError>();
+        if (fFunctions.fGetError) {
+            fFunctions.fGetError = [native = native_.get()]() -> GrGLenum {
+                if (Win32GlSubmitErrorProbe::omitQuery()) return 0; // GL_NO_ERROR
+                const GlCallTrace::Span timer(GlPhase::ErrorQuery);
+                return native->fFunctions.fGetError();
+            };
+        }
     }
 };
 

@@ -68,7 +68,9 @@
         traceGpu("context-current");
         GrContextOptions contextOptions;
         contextOptions.fPersistentCache = rendering::shaderCache();
-        grContext_ = internal::win32GlTraceEnabled()
+        const bool traceInterface = internal::win32GlTraceEnabled() ||
+            (nvidiaDriver_ && internal::win32GlSubmitProbeMode() != internal::Win32GlSubmitProbeMode::Off);
+        grContext_ = traceInterface
             ? GrDirectContexts::MakeGL(internal::makeWin32GlTraceInterface(), contextOptions)
             : GrDirectContexts::MakeGL(contextOptions);
         if (!grContext_) {
