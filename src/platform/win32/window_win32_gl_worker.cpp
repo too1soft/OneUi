@@ -189,6 +189,14 @@ bool experimentalGlWorkerEnabled() noexcept {
     return enabled;
 }
 
+bool experimentalGlWorkerPacingEnabled() noexcept {
+    static const bool enabled = [] {
+        wchar_t value[2]{};
+        return GetEnvironmentVariableW(L"ONEUI_WIN32_GL_WORKER_PACE_RECORDING", value, 2) == 1 && value[0] == L'1';
+    }();
+    return enabled;
+}
+
 GlRenderWorker::~GlRenderWorker() { stop(); }
 
 bool GlRenderWorker::start(HWND window) {
@@ -199,6 +207,12 @@ bool GlRenderWorker::start(HWND window) {
     } catch (const std::exception&) {
         return false;
     }
+}
+
+bool GlRenderWorker::canRecord() {
+    std::lock_guard lock(mutex_);
+    waitingForRecordingSlot_ = ready() && !stopping_ && static_cast<bool>(pending_.picture);
+    return !waitingForRecordingSlot_;
 }
 
 GlRenderWorker::Frame GlRenderWorker::plan(int width, int height, RECT damage) {
@@ -245,6 +259,7 @@ void GlRenderWorker::invalidateExtent() {
     {
         std::lock_guard lock(mutex_);
         ++extent_;
+        waitingForRecordingSlot_ = false;
         obsolete = std::exchange(pending_, {});
     }
 }
@@ -253,6 +268,7 @@ void GlRenderWorker::stop() {
     {
         std::lock_guard lock(mutex_);
         stopping_ = true;
+        waitingForRecordingSlot_ = false;
         ++extent_;
     }
     changed_.notify_one();
@@ -277,11 +293,16 @@ void GlRenderWorker::run(HWND window) {
             bool mustPresent = false;
             for (;;) {
                 Scene scene;
+                bool notifyRecorder;
                 {
                     std::unique_lock lock(mutex_);
                     changed_.wait(lock, [&] { return stopping_ || pending_.picture; });
                     if (stopping_) break;
                     scene = std::exchange(pending_, {});
+                    notifyRecorder = std::exchange(waitingForRecordingSlot_, false);
+                }
+                if (notifyRecorder && !PostMessageW(window, glWorkerRecordingReadyMessage, 0, 0)) {
+                    InvalidateRect(window, nullptr, FALSE);
                 }
                 const auto result = renderer.render(*scene.picture, scene.frame, scene.trace, extent_,
                                                     queuedSerial_, supersede && !mustPresent);
@@ -294,6 +315,7 @@ void GlRenderWorker::run(HWND window) {
                     std::lock_guard lock(mutex_);
                     if (!stopping_ && extent_.load(std::memory_order_relaxed) == scene.frame.extent) {
                         ++extent_;
+                        waitingForRecordingSlot_ = false;
                         obsolete = std::exchange(pending_, {});
                         InvalidateRect(window, nullptr, FALSE);
                     }

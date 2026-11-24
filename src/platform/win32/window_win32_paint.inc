@@ -80,6 +80,24 @@
         const int width = std::max<LONG>(1, clientRect.right - clientRect.left);
         const int height = std::max<LONG>(1, clientRect.bottom - clientRect.top);
         const bool threadedGl = glWorker_.ready() && !IsRectEmpty(&dirtyRect);
+        if (threadedGl && workerRecordingBlocked()) {
+            // The OS can deliver exposure or forced paints independently of
+            // widget invalidations. Validate the region and retain its damage.
+            mergeInvalidation(&dirtyRect);
+            EndPaint(hwnd_, &paintStruct);
+            internal::traceInteractionPaint(interactionPaint, "worker_record_deferred", "opengl-worker");
+            internal::traceInteractionPaint(interactionPaint, "paint_end", "opengl-worker", 0);
+            finishDiagnostics();
+            return;
+        }
+        if (threadedGl && win32::experimentalGlWorkerPacingEnabled() && invalidationPending_) {
+            // A slot can open after submitInvalidations and before BeginPaint.
+            // Record the held widget damage together with this native region.
+            if (invalidateAll_) dirtyRect = clientRect;
+            else UnionRect(&dirtyRect, &dirtyRect, &pendingInvalidation_);
+            invalidationPending_ = false;
+            invalidateAll_ = false;
+        }
         const float scale = normalizedDpiScale();
         const float logicalWidth = static_cast<float>(width) / scale;
         const float logicalHeight = static_cast<float>(height) / scale;

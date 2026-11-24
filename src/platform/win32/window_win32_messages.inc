@@ -178,6 +178,9 @@
         case kOneUiRunPostedCallbacks:
             runPostedCallbacks();
             return 0;
+        case win32::glWorkerRecordingReadyMessage:
+            if (!inputPaintPending_) flushPendingPaint();
+            return 0;
         case win32::deferredGlReadyMessage:
             if (deferredStartupGl_.pending()) {
                 deferredGlReady_ = true;
@@ -366,7 +369,7 @@
             return 0;
         }
         case WM_SIZE:
-            if (glWorker_.ready()) glWorker_.invalidateExtent();
+            invalidateWorkerExtent();
             if (interactiveResizeActive_) interactiveSizeChanged_ = true;
 #if ONEUI_DEVELOPER_TOOLS
             if(developerTools_)developerTools_->resetCadence();
@@ -394,7 +397,7 @@
             }
             return 0;
         case kOneUiDpiChanged:
-            if (glWorker_.ready()) glWorker_.invalidateExtent();
+            invalidateWorkerExtent();
             handleDpiChanged(wParam, lParam);
             return 0;
         case WM_NCCALCSIZE:

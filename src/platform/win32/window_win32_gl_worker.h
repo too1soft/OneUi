@@ -11,6 +11,8 @@
 
 namespace oneui::win32 {
 
+inline constexpr UINT glWorkerRecordingReadyMessage = WM_APP + 6;
+
 // Experimental WGL renderer. The render thread owns the DC, context and GPU
 // surfaces. The window thread produces immutable recordings in client pixels.
 class GlRenderWorker {
@@ -28,6 +30,8 @@ public:
     bool start(HWND window);
     bool ready() const noexcept { return ready_.load(std::memory_order_acquire); }
     bool vsync() const noexcept { return vsync_.load(std::memory_order_relaxed); }
+    // If the recording slot is occupied, arrange a wakeup when it is freed.
+    bool canRecord();
     Frame plan(int width, int height, RECT damage);
     bool enqueue(sk_sp<SkPicture> picture, const Frame& frame,
                  const internal::InteractionSnapshot& trace);
@@ -53,10 +57,12 @@ private:
     Frame lastQueued_;
     Frame lastPlanned_;
     std::uint64_t latestPlan_ = 0;
+    bool waitingForRecordingSlot_ = false;
     bool stopping_ = false;
     std::thread thread_;
 };
 
 bool experimentalGlWorkerEnabled() noexcept;
+bool experimentalGlWorkerPacingEnabled() noexcept;
 
 } // namespace oneui::win32
