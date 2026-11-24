@@ -36,6 +36,22 @@ oneui::TerminalUnderlineStyle toNativeTerminalUnderlineStyle(unsigned int style)
     }
 }
 
+std::wstring terminalCellText(OneUiUtf8String text) {
+    // Terminal grids commonly contain one ASCII character per cell.
+    if (text.length == 1 && text.data && static_cast<unsigned char>(*text.data) <= 0x7F) {
+        return std::wstring(1, static_cast<wchar_t>(*text.data));
+    }
+    return utf8OrEmpty(text);
+}
+
+oneui::TerminalCell toNativeTerminalCell(const OneUiTerminalCellUtf8& cell) {
+    return {
+        terminalCellText(cell.text), toNativeColor(cell.foreground), toNativeColor(cell.background),
+        cell.style, cell.hyperlink_id, toNativeTerminalUnderlineStyle(cell.underline_style),
+        toNativeColor(cell.underline_color), cell.underline_color_set != 0,
+    };
+}
+
 OneUiTerminalPointerAction toCTerminalPointerAction(oneui::TerminalPointerAction action) {
     switch (action) {
     case oneui::TerminalPointerAction::Press:
@@ -242,17 +258,7 @@ void oneui_terminal_view_set_grid_utf8(
     std::vector<oneui::TerminalCell> nativeCells;
     nativeCells.reserve(copied);
     for (std::size_t index = 0; index < copied; ++index) {
-        const OneUiTerminalCellUtf8& cell = cells[index];
-        nativeCells.push_back(oneui::TerminalCell{
-            utf8OrEmpty(cell.text),
-            toNativeColor(cell.foreground),
-            toNativeColor(cell.background),
-            cell.style,
-            cell.hyperlink_id,
-            toNativeTerminalUnderlineStyle(cell.underline_style),
-            toNativeColor(cell.underline_color),
-            cell.underline_color_set != 0,
-        });
+        nativeCells.push_back(toNativeTerminalCell(cells[index]));
     }
     nativeView->setGrid(rows, columns, std::move(nativeCells));
 }
@@ -271,17 +277,7 @@ void oneui_terminal_view_update_cells_utf8(
     std::vector<oneui::TerminalCell> nativeCells;
     nativeCells.reserve(copied);
     for (std::size_t index = 0; index < copied; ++index) {
-        const OneUiTerminalCellUtf8& cell = cells[index];
-        nativeCells.push_back(oneui::TerminalCell{
-            utf8OrEmpty(cell.text),
-            toNativeColor(cell.foreground),
-            toNativeColor(cell.background),
-            cell.style,
-            cell.hyperlink_id,
-            toNativeTerminalUnderlineStyle(cell.underline_style),
-            toNativeColor(cell.underline_color),
-            cell.underline_color_set != 0,
-        });
+        nativeCells.push_back(toNativeTerminalCell(cells[index]));
     }
     nativeView->updateCells(first_cell, std::move(nativeCells));
 }
