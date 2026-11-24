@@ -94,6 +94,11 @@ RECT clientRect(HWND hwnd) {
     return rect;
 }
 
+void captureRepeatedly(HWND hwnd, const Bitmap& image) {
+    for (int i = 0; i < 64; ++i)
+        SendMessageW(hwnd, WM_PRINTCLIENT, reinterpret_cast<WPARAM>(image.dc), PRF_CLIENT);
+}
+
 void verify() {
     auto pattern = std::make_shared<Pattern>();
     oneui::WindowOptions options;
@@ -212,10 +217,8 @@ void verify() {
         Bitmap image(rect.right, rect.bottom);
         SendMessageW(hwnd, WM_PRINTCLIENT, reinterpret_cast<WPARAM>(image.dc), PRF_CLIENT);
         verifyPattern(image, *pattern, rect.right, rect.bottom);
-        const DWORD handles = GetGuiResources(GetCurrentProcess(), GR_GDIOBJECTS);
-        for (int i = 0; i < 64; ++i)
-            SendMessageW(hwnd, WM_PRINTCLIENT, reinterpret_cast<WPARAM>(image.dc), PRF_CLIENT);
-        check(GetGuiResources(GetCurrentProcess(), GR_GDIOBJECTS) <= handles + 1, "repeated capture does not leak GDI objects");
+        captureRepeatedly(hwnd, image);
+        verifyPattern(image, *pattern, rect.right, rect.bottom);
     }
     window->close();
     std::cout << "checks=" << checks << " failures=" << failures << '\n';
@@ -223,15 +226,31 @@ void verify() {
 
 int childWindow(bool software) {
     SetEnvironmentVariableW(L"ONEUI_RENDERER", software ? L"software" : L"auto");
+    if (software) SetEnvironmentVariableW(L"ONEUI_ENABLE_GPU", L"0");
     oneui::WindowOptions options;
     options.title = L"OneUI print child " + std::to_wstring(GetCurrentProcessId());
     options.width = 320;
     options.height = 240;
     auto window = oneui::Window::create(options);
     window->initialize();
-    window->setContent(std::make_shared<Pattern>());
+    auto pattern = std::make_shared<Pattern>();
+    window->setContent(pattern);
+    if (software) {
+        // WM_PRINTCLIENT uses the same raster path with either display renderer.
+        // Count its GDI objects before showing the child and starting cross-process capture.
+        const auto hwnd = static_cast<HWND>(window->nativeHandle());
+        const auto rect = clientRect(hwnd);
+        Bitmap image(rect.right, rect.bottom);
+        SendMessageW(hwnd, WM_PRINTCLIENT, reinterpret_cast<WPARAM>(image.dc), PRF_CLIENT);
+        const DWORD handles = GetGuiResources(GetCurrentProcess(), GR_GDIOBJECTS);
+        captureRepeatedly(hwnd, image);
+        check(handles > 0 && GetGuiResources(GetCurrentProcess(), GR_GDIOBJECTS) <= handles + 1,
+              "repeated capture does not leak GDI objects");
+        verifyPattern(image, *pattern, rect.right, rect.bottom);
+    }
     window->show();
-    return window->run();
+    const int result = window->run();
+    return failures == 0 ? result : 1;
 }
 
 void verifyCrossProcess() {
