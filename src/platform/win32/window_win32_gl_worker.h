@@ -46,6 +46,7 @@ private:
     std::atomic_bool ready_{false};
     std::atomic_bool vsync_{false};
     std::atomic_uint64_t extent_{0};
+    std::atomic_uint64_t queuedSerial_{0};
     std::mutex mutex_;
     std::condition_variable changed_;
     Scene pending_;
