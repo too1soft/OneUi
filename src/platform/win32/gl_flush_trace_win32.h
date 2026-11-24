@@ -30,9 +30,16 @@ class GlCallTrace {
         double milliseconds = 0.0;
         unsigned calls = 0;
     };
+    struct TextureUpload {
+        double milliseconds = 0.0;
+        GrGLint x, y;
+        GrGLsizei width, height;
+        GrGLenum format, type;
+    };
 
     static inline thread_local GlCallTrace* active_ = nullptr;
     std::array<Sample, static_cast<std::size_t>(GlPhase::Count)> stages_{};
+    TextureUpload slowestUpload_{};
 
 public:
     class Scope {
@@ -60,6 +67,30 @@ public:
             ++sample_->calls;
             sample_->milliseconds += std::chrono::duration<double, std::milli>(
                 std::chrono::steady_clock::now() - start_).count();
+        }
+    };
+
+    class TextureUploadSpan {
+        using Clock = std::chrono::steady_clock;
+        GlCallTrace* trace_ = active_;
+        TextureUpload upload_;
+        Clock::time_point start_;
+
+    public:
+        TextureUploadSpan(GrGLint x, GrGLint y, GrGLsizei width, GrGLsizei height,
+                          GrGLenum format, GrGLenum type)
+            : upload_{0.0, x, y, width, height, format, type} {
+            if (trace_) start_ = Clock::now();
+        }
+
+        ~TextureUploadSpan() {
+            if (!trace_) return;
+            upload_.milliseconds = std::chrono::duration<double, std::milli>(Clock::now() - start_).count();
+            auto& total = trace_->stages_[static_cast<std::size_t>(GlPhase::TextureUpload)];
+            total.milliseconds += upload_.milliseconds;
+            ++total.calls;
+            if (upload_.milliseconds > trace_->slowestUpload_.milliseconds)
+                trace_->slowestUpload_ = upload_;
         }
     };
 
@@ -91,6 +122,21 @@ public:
             event.durationMs = sample.milliseconds;
             event.detailA = sequence;
             event.detailB = sample.calls;
+            writeScrollTrace(event);
+        }
+        if (slowestUpload_.milliseconds >= 1.0) {
+            ScrollTraceEvent event;
+            event.component = "win32";
+            event.phase = duringSubmit ? "gl_submit_texture_upload_peak" : "gl_texture_upload_peak";
+            event.object = window;
+            event.durationMs = slowestUpload_.milliseconds;
+            event.detailA = sequence;
+            event.inputDelta = slowestUpload_.x;
+            event.offset = slowestUpload_.y;
+            event.target = slowestUpload_.width;
+            event.velocity = slowestUpload_.height;
+            event.intervalMs = slowestUpload_.format;
+            event.maxOffset = slowestUpload_.type;
             writeScrollTrace(event);
         }
     }
@@ -138,7 +184,14 @@ public:
         wrap<GlPhase::Uniform, &Functions::fUniformMatrix4fv>();
         wrap<GlPhase::TextureAllocate, &Functions::fTexImage2D>();
         wrap<GlPhase::TextureAllocate, &Functions::fTexStorage2D>();
-        wrap<GlPhase::TextureUpload, &Functions::fTexSubImage2D>();
+        if (fFunctions.fTexSubImage2D) {
+            fFunctions.fTexSubImage2D = [native = native_.get()](GrGLenum target, GrGLint level,
+                    GrGLint x, GrGLint y, GrGLsizei width, GrGLsizei height, GrGLenum format,
+                    GrGLenum type, const GrGLvoid* data) {
+                const GlCallTrace::TextureUploadSpan timer(x, y, width, height, format, type);
+                native->fFunctions.fTexSubImage2D(target, level, x, y, width, height, format, type, data);
+            };
+        }
         wrap<GlPhase::TextureState, &Functions::fActiveTexture>();
         wrap<GlPhase::TextureState, &Functions::fBindTexture>();
         wrap<GlPhase::TextureState, &Functions::fTexParameteri>();

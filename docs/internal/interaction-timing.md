@@ -60,4 +60,6 @@ Win32 默认先取 posted 消息，再取硬件输入。OneUI 每批执行过 `W
 
 同一日志中的 `view_runtime` 记录耗时至少 0.5ms 的声明式刷新。`flush_update`、`flush_publish` 和 `flush_layout_cleanup` 依次覆盖绑定与结构更新、提交与退役作用域、布局刷新与清理，在一次刷新结束时写出，`detail_a` 为根模型 ID。`repeat_rows` 记录键控行重建和数据应用，`interval_ms` 为其中实例化新行的时间，`detail_a` 为结果行数，`detail_b` 为新建行数。重复行区间包含在刷新更新阶段内。
 
+同时启用 `ONEUI_GL_TRACE=1` 时，用 `gl_texture_upload` 和 `gl_submit_texture_upload` 查看每帧的 `glTexSubImage2D` 调用数量与累计耗时。一次 flush 或 submit 中的最慢上传达到 1 ms 时，对应的 `*_texture_upload_peak` 行记录该次调用的参数。`detail_a` 为帧序号，`input_delta` 与 `offset` 为 x 和 y，`target` 与 `velocity` 为上传宽高，`interval_ms` 与 `max_offset` 为 OpenGL 格式和类型枚举值。时长包含驱动在调用内的等待。
+
 输入反馈复用高精度 frame 调度：鼠标 hover/down/up、键盘反馈产生的局部脏区先合并，`kOneUiFlushInvalidations` 暂缓提交，当前帧完成动画采样后统一绘制，避免每个输入消息在 UI 线程同步等待 SwapBuffers。已有局部失效不会被每个 handled click 扩大为整窗。合帧期间的 caret 位置也交由已有 paint 尾部刷新，避免提前用旧布局向 IME 往返定位；强制 IME 上下文更新不延迟。原生 live resize 与窗口状态切换仍可同步绘制，因为它们可能在操作系统模态消息循环内运行。静态绘制 flood 与 pointer burst 测试分别验证无动画时的绘制公平性，以及连续输入消息无同步 paint、随后一帧仅绘制一次。
