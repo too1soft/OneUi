@@ -7,17 +7,24 @@ namespace oneui::internal {
 // Experimental attribution only. Mode 1 controls for the interface wrapper.
 // Mode 2 omits the post-submit query and can delay detection of a GL error.
 // Normal rendering keeps Ganesh's error checks intact.
-enum class Win32GlSubmitProbeMode { Off, Observe, Omit };
+enum class Win32GlProbeMode { Off, Observe, Omit };
 
-inline Win32GlSubmitProbeMode win32GlSubmitProbeMode() {
-    static const auto mode = [] {
-        wchar_t value[2]{};
-        if (GetEnvironmentVariableW(L"ONEUI_GL_PROBE_SUBMIT_ERRORS", value, 2) != 1)
-            return Win32GlSubmitProbeMode::Off;
-        if (value[0] == L'1') return Win32GlSubmitProbeMode::Observe;
-        if (value[0] == L'2') return Win32GlSubmitProbeMode::Omit;
-        return Win32GlSubmitProbeMode::Off;
-    }();
+inline Win32GlProbeMode readWin32GlProbeMode(const wchar_t* key) {
+    wchar_t value[2]{};
+    if (GetEnvironmentVariableW(key, value, 2) != 1)
+        return Win32GlProbeMode::Off;
+    if (value[0] == L'1') return Win32GlProbeMode::Observe;
+    if (value[0] == L'2') return Win32GlProbeMode::Omit;
+    return Win32GlProbeMode::Off;
+}
+
+inline Win32GlProbeMode win32GlSubmitProbeMode() {
+    static const auto mode = readWin32GlProbeMode(L"ONEUI_GL_PROBE_SUBMIT_ERRORS");
+    return mode;
+}
+
+inline Win32GlProbeMode win32GlTextureLabelProbeMode() {
+    static const auto mode = readWin32GlProbeMode(L"ONEUI_GL_PROBE_TEXTURE_LABELS");
     return mode;
 }
 
@@ -28,7 +35,7 @@ class Win32GlSubmitErrorProbe {
 
 public:
     explicit Win32GlSubmitErrorProbe(bool nvidia)
-        : active_(nvidia && win32GlSubmitProbeMode() == Win32GlSubmitProbeMode::Omit),
+        : active_(nvidia && win32GlSubmitProbeMode() == Win32GlProbeMode::Omit),
           previous_(active_ && omitQuery_) {
         if (active_) omitQuery_ = true;
     }

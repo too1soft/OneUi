@@ -8,6 +8,7 @@
 
 #include <array>
 #include <chrono>
+#include <cstring>
 #include <utility>
 
 namespace oneui::internal {
@@ -23,7 +24,7 @@ inline bool win32GlTraceEnabled() {
 enum class GlPhase : std::size_t {
     Compile, Link, CompileStatus, LinkStatus, ProgramQuery, BinaryRead, BinaryWrite, ProgramUse,
     TextureAllocate, TextureUpload, BufferUpload, Draw, Flush, Finish, Sync, ErrorQuery,
-    Uniform, BufferMap, VertexSetup, Framebuffer, TextureState, RasterState, Count
+    Uniform, BufferMap, VertexSetup, Framebuffer, TextureState, RasterState, ObjectLabel, TextureLabelOmitted, Count
 };
 
 class GlCallTrace {
@@ -101,7 +102,8 @@ public:
             "gl_binary_read", "gl_binary_write",
             "gl_program_use", "gl_texture_allocate", "gl_texture_upload", "gl_buffer_upload",
             "gl_draw", "gl_flush", "gl_finish", "gl_sync", "gl_error_query",
-            "gl_uniform", "gl_buffer_map", "gl_vertex_setup", "gl_framebuffer", "gl_texture_state", "gl_raster_state"
+            "gl_uniform", "gl_buffer_map", "gl_vertex_setup", "gl_framebuffer", "gl_texture_state", "gl_raster_state",
+            "gl_object_label", "gl_texture_label_omitted"
         };
         constexpr std::array submitPhases{
             "gl_submit_compile", "gl_submit_link", "gl_submit_compile_status", "gl_submit_link_status",
@@ -109,7 +111,8 @@ public:
             "gl_submit_program_use", "gl_submit_texture_allocate", "gl_submit_texture_upload",
             "gl_submit_buffer_upload", "gl_submit_draw", "gl_submit_flush", "gl_submit_finish",
             "gl_submit_sync", "gl_submit_error_query", "gl_submit_uniform", "gl_submit_buffer_map",
-            "gl_submit_vertex_setup", "gl_submit_framebuffer", "gl_submit_texture_state", "gl_submit_raster_state"
+            "gl_submit_vertex_setup", "gl_submit_framebuffer", "gl_submit_texture_state", "gl_submit_raster_state",
+            "gl_submit_object_label", "gl_submit_texture_label_omitted"
         };
         const auto& phases = duringSubmit ? submitPhases : flushPhases;
         static_assert(flushPhases.size() == static_cast<std::size_t>(GlPhase::Count));
@@ -158,7 +161,8 @@ class TracedWin32GlInterface final : public GrGLInterface {
     }
 
 public:
-    explicit TracedWin32GlInterface(sk_sp<const GrGLInterface> native) : native_(std::move(native)) {
+    TracedWin32GlInterface(sk_sp<const GrGLInterface> native, bool omitTextureLabels)
+        : native_(std::move(native)) {
         fStandard = native_->fStandard;
         fExtensions = native_->fExtensions;
         fFunctions = native_->fFunctions;
@@ -227,6 +231,20 @@ public:
         wrap<GlPhase::Sync, &Functions::fFenceSync>();
         wrap<GlPhase::Sync, &Functions::fWaitSync>();
         wrap<GlPhase::Sync, &Functions::fClientWaitSync>();
+        if (fFunctions.fObjectLabel) {
+            fFunctions.fObjectLabel = [native = native_.get(), omitTextureLabels](GrGLenum identifier,
+                    GrGLuint name, GrGLsizei length, const GrGLchar* label) {
+                constexpr GrGLenum texture = 0x1702; // GL_TEXTURE
+                // Ganesh owns these null-terminated names. Keep all other labels and errors.
+                if (omitTextureLabels && identifier == texture && length < 0 && label &&
+                    std::strncmp(label, "_Skia_", 6) == 0) {
+                    const GlCallTrace::Span timer(GlPhase::TextureLabelOmitted);
+                    return;
+                }
+                const GlCallTrace::Span timer(GlPhase::ObjectLabel);
+                native->fFunctions.fObjectLabel(identifier, name, length, label);
+            };
+        }
         if (fFunctions.fGetError) {
             fFunctions.fGetError = [native = native_.get()]() -> GrGLenum {
                 if (Win32GlSubmitErrorProbe::omitQuery()) return 0; // GL_NO_ERROR
@@ -237,10 +255,10 @@ public:
     }
 };
 
-inline sk_sp<const GrGLInterface> makeWin32GlTraceInterface() {
+inline sk_sp<const GrGLInterface> makeWin32GlTraceInterface(bool omitTextureLabels = false) {
     auto native = GrGLMakeNativeInterface();
     if (!native) return nullptr;
-    return sk_make_sp<TracedWin32GlInterface>(std::move(native));
+    return sk_make_sp<TracedWin32GlInterface>(std::move(native), omitTextureLabels);
 }
 
 } // namespace oneui::internal

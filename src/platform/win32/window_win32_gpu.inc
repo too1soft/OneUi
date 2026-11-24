@@ -68,10 +68,14 @@
         traceGpu("context-current");
         GrContextOptions contextOptions;
         contextOptions.fPersistentCache = rendering::shaderCache();
+        const auto labelProbe = nvidiaDriver_ ? internal::win32GlTextureLabelProbeMode()
+                                             : internal::Win32GlProbeMode::Off;
         const bool traceInterface = internal::win32GlTraceEnabled() ||
-            (nvidiaDriver_ && internal::win32GlSubmitProbeMode() != internal::Win32GlSubmitProbeMode::Off);
+            labelProbe != internal::Win32GlProbeMode::Off ||
+            (nvidiaDriver_ && internal::win32GlSubmitProbeMode() != internal::Win32GlProbeMode::Off);
         grContext_ = traceInterface
-            ? GrDirectContexts::MakeGL(internal::makeWin32GlTraceInterface(), contextOptions)
+            ? GrDirectContexts::MakeGL(internal::makeWin32GlTraceInterface(
+                labelProbe == internal::Win32GlProbeMode::Omit), contextOptions)
             : GrDirectContexts::MakeGL(contextOptions);
         if (!grContext_) {
             rendererInfo_.reason = "ganesh-context-failed";
