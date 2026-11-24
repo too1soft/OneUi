@@ -31,6 +31,9 @@ int main(int argc, char **argv) {
             Case c(argv[1]);
             c.start();
             auto repeat = c.runtime->root->children[4];
+            auto firstScope = repeat->rows.at("a")->scopes.front();
+            expect(c.runtime->read(firstScope, c.a.key).text == "a" && c.a.reads[c.a.key] == 1,
+                   "new list scope retains its validated key");
             auto a = repeat->rows.at("a")->element.widget;
             OneUiUtf8String key{"a", 1};
             auto d = delta(ONEUI_LIST_MOVE, 1, 0, 1, 1);
@@ -141,9 +144,16 @@ int main(int argc, char **argv) {
             expect(replacement.retains == replacement.releases,
                    "failed replacement releases new VM");
             replacement.onGet = {};
+            const auto priorKeyReads = replacement.reads[replacement.key];
+            c.b.text(id(c.image, "Item", "text"), "retained row after reset");
             c.runtime->flush();
             expect(repeat->rows.at("a")->element.widget != old && c.a.releases == 1,
                    "retry publishes replacement");
+            expect(c.runtime->read(repeat->rows.at("a")->scopes.front(), replacement.key).text == "a" &&
+                   replacement.reads[replacement.key] == priorKeyReads + 1,
+                   "replacement scope retains its validated key");
+            expect(repeat->rows.at("b")->element.as<oneui::Label>()->text() == L"retained row after reset",
+                   "RESET refreshes a retained data scope");
             c.runtime->close();
         }
         {

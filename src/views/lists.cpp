@@ -67,10 +67,10 @@ void Runtime::refreshList(const std::shared_ptr<Scope> &scope, uint32_t property
     check(!state.initialized || info.revision >= state.revision, ONEUI_VIEW_STALE_CHANGE,
           "List revision decreased");
     if (state.initialized && !state.reset && refreshDelta(scope, property, state, info)) return;
-    auto keys = state.keys;
-    bool reset = state.reset || !state.initialized;
+    const bool reset = state.reset || !state.initialized;
+    auto keys = reset ? std::vector<std::string>{} : state.keys;
     if (reset) {
-        keys.clear();
+        keys.reserve(size_t(info.length));
         std::set<std::string> unique;
         for (uint64_t i = 0; i < info.length; ++i) {
             OneUiValue borrowed{};
@@ -93,6 +93,7 @@ void Runtime::refreshList(const std::shared_ptr<Scope> &scope, uint32_t property
     for (size_t i = 0; i < state.keys.size(); ++i)
         old.emplace(state.keys[i], state.items[i]);
     std::vector<std::shared_ptr<Scope>> next, created;
+    next.reserve(keys.size());
     try {
         for (size_t i = 0; i < keys.size(); ++i) {
             auto found = old.find(keys[i]);
@@ -146,7 +147,14 @@ void Runtime::refreshList(const std::shared_ptr<Scope> &scope, uint32_t property
         throw;
     }
     if (reset) {
+        // Acquisitions append to both vectors in the same order. Their
+        // caches already reflect this snapshot and any connect notifications.
+        auto fresh = created.cbegin();
         for (const auto &child : next) {
+            if (fresh != created.cend() && *fresh == child) {
+                ++fresh;
+                continue;
+            }
             for (const auto &entry : image.schema.model(child->table.model_id).properties) {
                 child->dirty.insert(entry.second.id);
                 mark(child, entry.second.id);
