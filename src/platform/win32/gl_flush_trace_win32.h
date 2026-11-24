@@ -12,6 +12,14 @@
 
 namespace oneui::internal {
 
+inline bool win32GlResourceLabelsEnabled() {
+    static const bool enabled = [] {
+        wchar_t value[2]{};
+        return GetEnvironmentVariableW(L"ONEUI_WIN32_GL_RESOURCE_LABELS", value, 2) == 1 && value[0] == L'1';
+    }();
+    return enabled;
+}
+
 inline bool win32GlTraceEnabled() {
     static const bool enabled = [] {
         wchar_t value[2]{};
@@ -187,7 +195,7 @@ private:
 
 // Retain the original interface for exactly the lifetime of the wrapped
 // functions. Windows may expose different function pointers by GL context.
-class TracedWin32GlInterface final : public GrGLInterface {
+class Win32GaneshGlInterface final : public GrGLInterface {
     sk_sp<const GrGLInterface> native_;
 
     template <GlPhase Phase, auto Function>
@@ -200,10 +208,17 @@ class TracedWin32GlInterface final : public GrGLInterface {
     }
 
 public:
-    explicit TracedWin32GlInterface(sk_sp<const GrGLInterface> native) : native_(std::move(native)) {
+    Win32GaneshGlInterface(sk_sp<const GrGLInterface> native, bool trace, bool suppressLabels)
+        : native_(std::move(native)) {
         fStandard = native_->fStandard;
         fExtensions = native_->fExtensions;
         fFunctions = native_->fFunctions;
+        // Keep KHR_debug and its required entry point. Driver-side resource
+        // names are optional and labeling has stalled NVIDIA's render thread.
+        if (suppressLabels && fFunctions.fObjectLabel) {
+            fFunctions.fObjectLabel = [](GrGLenum, GrGLuint, GrGLsizei, const GrGLchar*) {};
+        }
+        if (!trace) return;
         wrap<GlPhase::Compile, &Functions::fCompileShader>();
         wrap<GlPhase::Link, &Functions::fLinkProgram>();
         if (fFunctions.fGetProgramiv) {
@@ -270,14 +285,16 @@ public:
         wrap<GlPhase::Sync, &Functions::fWaitSync>();
         wrap<GlPhase::Sync, &Functions::fClientWaitSync>();
         wrap<GlPhase::ErrorQuery, &Functions::fGetError>();
-        wrap<GlPhase::ObjectLabel, &Functions::fObjectLabel>();
+        if (!suppressLabels) wrap<GlPhase::ObjectLabel, &Functions::fObjectLabel>();
     }
 };
 
-inline sk_sp<const GrGLInterface> makeWin32GlTraceInterface() {
+inline sk_sp<const GrGLInterface> makeWin32GaneshGlInterface(bool nvidia) {
     auto native = GrGLMakeNativeInterface();
-    if (!native) return nullptr;
-    return sk_make_sp<TracedWin32GlInterface>(std::move(native));
+    const bool trace = win32GlTraceEnabled();
+    const bool suppressLabels = nvidia && !win32GlResourceLabelsEnabled();
+    if (!native || (!trace && !suppressLabels)) return native;
+    return sk_make_sp<Win32GaneshGlInterface>(std::move(native), trace, suppressLabels);
 }
 
 } // namespace oneui::internal

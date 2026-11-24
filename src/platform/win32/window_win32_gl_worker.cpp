@@ -75,9 +75,9 @@ public:
         if (!gl_ || !wglMakeCurrent(dc_, gl_)) return false;
         GrContextOptions options;
         options.fPersistentCache = rendering::shaderCache();
-        context_ = internal::win32GlTraceEnabled()
-            ? GrDirectContexts::MakeGL(internal::makeWin32GlTraceInterface(), options)
-            : GrDirectContexts::MakeGL(options);
+        const auto* vendor = reinterpret_cast<const char*>(glGetString(GL_VENDOR));
+        const bool nvidia = vendor && std::strstr(vendor, "NVIDIA");
+        context_ = GrDirectContexts::MakeGL(internal::makeWin32GaneshGlInterface(nvidia), options);
         return static_cast<bool>(context_);
     }
 

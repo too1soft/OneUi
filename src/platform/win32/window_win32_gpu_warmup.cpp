@@ -1,4 +1,5 @@
 #include "window_win32_gpu_warmup.h"
+#include "gl_flush_trace_win32.h"
 
 #include "internal/scroll_trace.h"
 #include "platform/shared/skia_gl_setup.h"
@@ -85,7 +86,7 @@ bool warmColorQuadProgram() {
 
     GrContextOptions options;
     options.fPersistentCache = cache;
-    auto context = GrDirectContexts::MakeGL(options);
+    auto context = GrDirectContexts::MakeGL(internal::makeWin32GaneshGlInterface(true), options);
     if (!context) return false;
     auto surface = SkSurfaces::RenderTarget(context.get(), skgpu::Budgeted::kYes,
         SkImageInfo::Make(32, 32, kBGRA_8888_SkColorType, kPremul_SkAlphaType),
