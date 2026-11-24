@@ -22,6 +22,7 @@ using EglInt = std::int32_t;
 using EglAttrib = std::intptr_t;
 
 constexpr wchar_t kDirectory[] = L"ONEUI_WIN32_ANGLE_DIR";
+constexpr wchar_t kComposition[] = L"ONEUI_WIN32_ANGLE_COMPOSITION";
 constexpr EglInt kNone = 0x3038, kSurfaceType = 0x3033, kWindowBit = 0x0004;
 constexpr EglInt kRenderableType = 0x3040, kGles3Bit = 0x0040, kContextClientVersion = 0x3098;
 constexpr EglInt kRedSize = 0x3024, kGreenSize = 0x3023, kBlueSize = 0x3022;
@@ -29,6 +30,7 @@ constexpr EglInt kAlphaSize = 0x3021, kStencilSize = 0x3026, kSamples = 0x3031;
 constexpr EglInt kDraw = 0x3059, kRead = 0x305a;
 constexpr EglInt kWidth = 0x3057, kHeight = 0x3056;
 constexpr EglInt kExtensions = 0x3055, kPostSubBufferSupported = 0x30be;
+constexpr EglInt kDirectComposition = 0x33a5;
 constexpr EglEnum kOpenGlesApi = 0x30a0, kPlatformAngle = 0x3202;
 constexpr EglAttrib kAngleType = 0x3203, kDirect3D11 = 0x3208;
 constexpr EglAttrib kAngleDeviceType = 0x3209, kHardware = 0x320a;
@@ -174,6 +176,7 @@ struct AngleD3D11Context::State {
     Egl display = nullptr, context = nullptr, surface = nullptr;
     EglInt stencil = 0;
     PostSubBuffer postSubBuffer = nullptr;
+    bool composed = false;
     bool synced = false;
     std::string device;
 
@@ -219,15 +222,33 @@ std::unique_ptr<AngleD3D11Context> AngleD3D11Context::open(HWND window, sk_sp<Gr
     const EglInt contextAttrs[]{kContextClientVersion, 3, kNone};
     if (!api->bindApi(kOpenGlesApi)) return {};
     state->context = api->createContext(state->display, config, nullptr, contextAttrs);
-    if (hasExtension(api->queryString(state->display, kExtensions), "EGL_NV_post_sub_buffer")) {
+    const auto* extensions = api->queryString(state->display, kExtensions);
+    if (hasExtension(extensions, "EGL_NV_post_sub_buffer")) {
         state->postSubBuffer = reinterpret_cast<State::PostSubBuffer>(api->getProc("eglPostSubBufferNV"));
     }
+    wchar_t composition[2]{};
+    if (state->context && GetEnvironmentVariableW(kComposition, composition, 2) == 1 && composition[0] == L'1' &&
+        hasExtension(extensions, "EGL_ANGLE_direct_composition")) {
+        const EglInt composedAttrs[]{kDirectComposition, 1, state->postSubBuffer ? kPostSubBufferSupported : kNone, 1, kNone};
+        state->surface = api->createWindowSurface(state->display, config, window, composedAttrs);
+        EglInt actual = 0;
+        if (state->surface && api->querySurface(state->display, state->surface, kDirectComposition, &actual) && actual == 1) {
+            state->composed = true;
+        } else if (state->surface) {
+            api->destroySurface(state->display, state->surface);
+            state->surface = nullptr;
+        }
+    }
     const EglInt surfaceAttrs[]{kPostSubBufferSupported, 1, kNone};
-    if (state->context) state->surface = api->createWindowSurface(state->display, config, window,
+    if (state->context && !state->surface) state->surface = api->createWindowSurface(state->display, config, window,
         state->postSubBuffer ? surfaceAttrs : nullptr);
     if (!state->surface || !state->bind()) {
         previous.restore(state->display);
         return {};
+    }
+    EglInt canPost = 0;
+    if (state->postSubBuffer && (!api->querySurface(state->display, state->surface, kPostSubBufferSupported, &canPost) || !canPost)) {
+        state->postSubBuffer = nullptr;
     }
     auto gl = GrGLMakeAssembledGLESInterface(api, [](void* data, const char* name) {
         auto* loaded = static_cast<AngleApi*>(data);
@@ -243,6 +264,7 @@ std::unique_ptr<AngleD3D11Context> AngleD3D11Context::open(HWND window, sk_sp<Gr
         previous.restore(state->display);
         return {};
     }
+    if (state->composed) state->device += " via DirectComposition";
     GrContextOptions options;
     options.fPersistentCache = rendering::angleD3D11ShaderCache();
     skia = GrDirectContexts::MakeGL(std::move(gl), options);
@@ -253,12 +275,21 @@ std::unique_ptr<AngleD3D11Context> AngleD3D11Context::open(HWND window, sk_sp<Gr
 
 bool AngleD3D11Context::makeCurrent() { return state_->bind(); }
 bool AngleD3D11Context::refreshBufferSize(int& width, int& height, bool clientSizeChanged) {
-    // ANGLE D3D11 runs the swap-chain resize check on a zero-area update,
-    // without presenting an old-sized back buffer.
-    if (clientSizeChanged && state_->postSubBuffer &&
-        !state_->postSubBuffer(state_->display, state_->surface, 0, 0, 0, 0)) state_->postSubBuffer = nullptr;
-    return state_->api.querySurface(state_->display, state_->surface, kWidth, &width) &&
-           state_->api.querySurface(state_->display, state_->surface, kHeight, &height) && width > 0 && height > 0;
+    const int clientWidth = width, clientHeight = height;
+    const auto querySize = [&] {
+        return state_->api.querySurface(state_->display, state_->surface, kWidth, &width) &&
+               state_->api.querySurface(state_->display, state_->surface, kHeight, &height) && width > 0 && height > 0;
+    };
+    if (!querySize()) return false;
+    if (!clientSizeChanged || !state_->postSubBuffer || (width == clientWidth && height == clientHeight)) return true;
+    // ANGLE's EGL frontend skips a zero-area update. Its D3D11 backend clips
+    // this rectangle at the old buffer edge, then checks the native size
+    // without presenting the old buffer. Query again before drawing.
+    if (!state_->postSubBuffer(state_->display, state_->surface, width, 0, 1, 1)) {
+        state_->postSubBuffer = nullptr;
+        return true;
+    }
+    return querySize();
 }
 bool AngleD3D11Context::present() { return state_->api.swap(state_->display, state_->surface) != 0; }
 bool AngleD3D11Context::vsync() const noexcept { return state_->synced; }
