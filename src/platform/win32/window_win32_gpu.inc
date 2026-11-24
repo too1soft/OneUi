@@ -168,7 +168,10 @@
 
     void shutdownGPU() {
         glWorkerWaitingForSoftwareFrame_ = false;
+        const internal::InteractionSnapshot shutdownTrace{reinterpret_cast<std::uintptr_t>(hwnd_)};
+        internal::traceInteractionPaint(shutdownTrace, "worker_stop_begin");
         glWorker_.stop();
+        internal::traceInteractionPaint(shutdownTrace, "worker_stop_end");
         // Each top-level window owns an independent GL context. Destruction
         // can arrive while a different window was the last one to paint.
         const HGLRC previousContext = wglGetCurrentContext();

@@ -111,6 +111,7 @@
             setPlatformMotionEnabled(clientAreaAnimationsEnabled());
             return DefWindowProcW(hwnd_, message, wParam, lParam);
         case WM_CLOSE:
+            internal::traceInteractionPaint({reinterpret_cast<std::uintptr_t>(hwnd_)}, "close_received");
             if(dispatchCloseRequest())return 0;
             if (onCloseRequested_) { auto callback = onCloseRequested_; callback(false); }
             else close();

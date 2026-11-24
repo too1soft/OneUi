@@ -238,8 +238,12 @@ void GlRenderWorker::stop() {
 void GlRenderWorker::run(HWND window) {
     try {
         LiveContext renderer(window);
+        const internal::InteractionSnapshot startupTrace{reinterpret_cast<std::uintptr_t>(window)};
+        internal::traceInteractionPaint(startupTrace, "worker_context_begin", "opengl-worker");
         bool synced = false;
-        if (renderer.initialize(synced)) {
+        const bool initialized = renderer.initialize(synced);
+        internal::traceInteractionPaint(startupTrace, "worker_context_end", "opengl-worker", initialized ? 1 : 0);
+        if (initialized) {
             {
                 std::lock_guard lock(mutex_);
                 if (stopping_) return;
