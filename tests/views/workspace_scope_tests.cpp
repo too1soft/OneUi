@@ -47,6 +47,8 @@ void lifecycle(const char *file) {
     leaf.text(leaf.key, "inner/slash");
     c.a.lists[id(c.image, "Item", "children")] = {&leaf};
     c.start();
+    const auto textId = id(c.image, "Item", "text");
+    expect(c.a.reads[textId] == 1, "initial render reads a fresh scalar once");
     OneUiView view;
     view.value = c.runtime;
     ScopeLease a, mirror, root;
@@ -77,16 +79,29 @@ void lifecycle(const char *file) {
            "cross attach rejected");
     expect(owner.retain == 1 && owner.release == 0, "attach rejection balance");
     // A render connection can emit its own child notification.
-    c.a.text(id(c.image, "Item", "text"), "changed");
-    expect(oneui_view_notifier_notify(a.value, id(c.image, "Item", "text")) == 0, "row notify");
+    c.a.text(textId, "changed");
+    expect(oneui_view_notifier_notify(a.value, textId) == 0, "row notify");
     c.runtime->flush();
-    c.a.text(id(c.image, "Item", "text"), "reset-update");
+    c.a.text(textId, "reset-update");
+    const auto beforeReset = c.a.reads[textId];
+    Vm fresh(c.image, "Item");
+    fresh.text(fresh.key, "fresh");
+    fresh.text(textId, "inserted during reset");
+    c.vm.items.push_back(&fresh);
     ++c.vm.revision;
     c.runtime->notify(c.runtime->rootScope, c.rows);
     c.runtime->flush();
     auto rowInstance = c.runtime->root->children[0]->children[0]->rows.at(key);
     expect(rowInstance->children[0]->element.as<oneui::Label>()->text() == L"reset-update",
            "RESET refreshes retained render properties");
+    auto newRow = c.runtime->root->children[0]->children[0]->rows.at("fresh");
+    expect(newRow->children[0]->element.as<oneui::Label>()->text() == L"inserted during reset",
+           "RESET reads the added row");
+    expect(c.a.reads[textId] == beforeReset + 1 && fresh.reads[textId] == 1,
+           "RESET invalidates retained scalars and uses fresh render values");
+    c.vm.items.pop_back();
+    delta(c, ONEUI_LIST_REMOVE, 2, "fresh");
+    c.runtime->flush();
     for (int i = 0; i < 500; ++i) {
         std::swap(c.vm.items[0], c.vm.items[1]);
         delta(c, ONEUI_LIST_MOVE, 0, i % 2 == 0 ? key : "b", 1);

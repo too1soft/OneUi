@@ -234,8 +234,8 @@ struct Runtime : std::enable_shared_from_this<Runtime> {
     bool workspaceList(Instance&, const std::string&, ListState&);
     void prepareWorkspace(const std::shared_ptr<Instance>&, const std::vector<std::shared_ptr<Widget>>&);
     void wireWorkspace(const std::shared_ptr<Instance>&);
-    std::shared_ptr<Scope> renderScope(const std::shared_ptr<Scope> &, const std::shared_ptr<Instance> &,
-                                     const std::string &key);
+    std::pair<std::shared_ptr<Scope>, bool> renderScope(
+        const std::shared_ptr<Scope> &, const std::shared_ptr<Instance> &, const std::string &key);
     static std::string hostKey(const ScopePath &, const std::string &);
     void applyList(Instance &, const std::string &, ListState &, const std::shared_ptr<Scope>&, uint32_t);
     void applyTableRows(Instance &, ListState &);

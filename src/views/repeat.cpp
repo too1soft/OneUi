@@ -86,6 +86,7 @@ void Runtime::repeat(const std::shared_ptr<Instance> &instance) {
     for (size_t i = 0; i < items.keys.size(); ++i) {
         auto found = instance->rows.find(items.keys[i]);
         std::shared_ptr<Instance> row;
+        bool newRenderScope = false;
         if (found != instance->rows.end() &&
             (instance->transparent
                  ? found->second->scopes.front()->sourceScope.lock() == items.items[i]
@@ -93,10 +94,11 @@ void Runtime::repeat(const std::shared_ptr<Instance> &instance) {
             row = found->second;
         else {
             auto nested = instance->scopes;
-            auto rowScope = instance->transparent
-                                ? renderScope(items.items[i], instance, items.keys[i])
-                                : items.items[i];
-            nested.insert(nested.begin(), rowScope);
+            auto [rowScope, freshScope] = instance->transparent
+                ? renderScope(items.items[i], instance, items.keys[i])
+                : std::pair{items.items[i], false};
+            newRenderScope = freshScope;
+            nested.insert(nested.begin(), std::move(rowScope));
             auto prefix = std::move(callPrefix);
             callPrefix.clear();
             try {
@@ -118,7 +120,9 @@ void Runtime::repeat(const std::shared_ptr<Instance> &instance) {
         }
         widgets.push_back(row->element.widget);
         row->parent = instance;
-        if (instance->transparent) {
+        // A fresh connection reads the current model during build. Keep any
+        // explicit notifications, and invalidate the older caches on reset.
+        if (instance->transparent && !newRenderScope) {
             auto markProperties = [&](const std::vector<uint32_t> &properties) {
                 const auto &scope = row->scopes.front();
                 for (const auto &[_, p] : image.schema.model(scope->table.model_id).properties)

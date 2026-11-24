@@ -11,9 +11,9 @@ std::string Runtime::hostKey(const ScopePath &path, const std::string &name) {
     }
     return result + ':' + name;
 }
-std::shared_ptr<Scope> Runtime::renderScope(const std::shared_ptr<Scope> &source,
-                                            const std::shared_ptr<Instance> &instance,
-                                            const std::string &key) {
+std::pair<std::shared_ptr<Scope>, bool> Runtime::renderScope(
+    const std::shared_ptr<Scope> &source, const std::shared_ptr<Instance> &instance,
+    const std::string &key) {
     auto path = instance->scopes.front()->path;
     path.emplace_back(instance->repeatId, key);
     // Reload candidates borrow matching render connections, just as WP3 borrows
@@ -21,13 +21,13 @@ std::shared_ptr<Scope> Runtime::renderScope(const std::shared_ptr<Scope> &source
     auto found = renderScopes.find(path);
     if (found != renderScopes.end() && !found->second->closed && found->second->vm == source->vm &&
         found->second->identity == source->identity)
-        return found->second;
+        return {found->second, false};
     auto result = acquire({source->identity, source->vm}, source->table.model_id, false);
     result->renderScope = true;
     result->sourceScope = source;
     result->path = std::move(path);
     connect(result);
-    return result;
+    return {std::move(result), true};
 }
 void Runtime::prepareWorkspaceIndex() {
     if (!image.count(oneview::WSC1))
@@ -37,7 +37,7 @@ void Runtime::prepareWorkspaceIndex() {
     std::function<void(const std::shared_ptr<Instance> &)> walk = [&](const auto &n) {
         for (const auto &scope : n->scopes)
             if (scope->renderScope) {
-                auto [at, added] = nextScopes.emplace(scope->path, scope);
+                auto [at, added] = nextScopes.try_emplace(scope->path, scope);
                 check(added || at->second == scope, ONEUI_VIEW_BAD_KEY,
                       "Duplicate workspace scope path");
             }
