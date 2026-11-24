@@ -54,16 +54,22 @@ void PaneHeader::refreshButtonStyles() {
     auto sheet=std::make_shared<StyleSheet>();
     StyleBox button;button.foreground=style_.foreground;button.padding=Insets{4};
     button.borderWidth=1.5f;button.background.color=Color{0,0,0,0};button.radius=4;
-    sheet->addRule({"pane-header-part",button});
-    if(auto scope=styleScope()) {
-        for(auto& token:scope->customProperties())sheet->setCustomProperty(token.first,token.second);
-        for(auto& rule:scope->rules())sheet->addRule(rule);
+    const StyleNode regular{"pane-header-part",{"pane-header-button"},StyleStateNone};
+    StyleNode broadcast = regular;
+    broadcast.classes.push_back("pane-header-broadcast-on");
+    sheet->addRule({regular.tag,button});
+    if(auto scope = styleScope()) {
+        // Both button variants are subsets of this node. Include every
+        // pseudo-state so resolution keeps the original cascade at paint time.
+        auto possible = broadcast;
+        possible.state = ~StylePseudoMask{0};
+        sheet->customProperties_ = scope->customProperties_;
+        for (const auto* rule : scope->matchingRules(possible))
+            sheet->addRule(*rule);
     }
     const auto buttons=actionButtons();
     for(size_t i=0;i<buttons.size();++i)if(buttons[i]) {
-        StyleNode node{"pane-header-part",{"pane-header-button"},0};
-        if(i==2 && config_.broadcastRole!="none")node.classes.push_back("pane-header-broadcast-on");
-        buttons[i]->setStyleSheet(sheet,std::move(node));
+        buttons[i]->setStyleSheet(sheet, i==2 && config_.broadcastRole!="none" ? broadcast : regular);
     }
 }
 void PaneHeader::setActionLabel(PaneHeaderAction action,std::wstring label) {

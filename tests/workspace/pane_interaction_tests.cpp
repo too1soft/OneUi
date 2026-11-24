@@ -83,6 +83,68 @@ void header() {
     root.onMouseDown({{10,50},MouseButton::Left});root.onMouseMove({{17,50},MouseButton::Left});
     KeyEvent escape;escape.key=Key::Escape;root.onKeyDown(escape);check(phases.back()==3,"handle Esc through root");
 }
+void headerButtonCascade() {
+    const auto previousTime = now;
+    PaneHeader header;
+    auto scope = std::make_shared<StyleSheet>();
+    check(scope->addRulesFromCss(R"css(
+        :root { --toolbar-ink: #123456; }
+        * { color: #ff00ff; }
+        pane-header-part.pane-header-button { background: var(--toolbar-ink); }
+        pane-header-part.pane-header-button:hover:focus { background: #334455; }
+        pane-header-part.pane-header-button:pressed:focus { background: #445566; }
+        pane-header-part.pane-header-button:disabled { background: #556677; }
+        pane-header-part.pane-header-broadcast-on { background: #778899; }
+        pane-header-part.pane-header-broadcast-on { background: #8899aa; }
+        pane-header-part.unrelated-part { background: #ff0000; }
+    )css"), "pane button theme parses");
+    StyleBox fallback;
+    fallback.foreground = Color{0x11, 0x22, 0x33};
+    header.setStyleBox(fallback);
+    header.setStyleScope(scope);
+    header.setFrame({0, 0, 600, 29});
+    test_support::RecordingCanvas laidOut;
+    header.paint(laidOut);
+    auto split = std::dynamic_pointer_cast<IconButton>(header.children()[0]);
+    auto maximize = std::dynamic_pointer_cast<IconButton>(header.children()[1]);
+    auto broadcast = std::dynamic_pointer_cast<IconButton>(header.children()[2]);
+    const auto paintBackground = [](IconButton& button) {
+        now += 1000;
+        button.tickAnimations(now);
+        test_support::RecordingCanvas canvas;
+        button.paint(canvas);
+        check(!canvas.fillRects.empty(), "pane button background painted");
+        return canvas.fillRects.front().color;
+    };
+    check(same(paintBackground(*split), Color{0x12, 0x34, 0x56}), "pane buttons inherit theme tokens");
+    test_support::RecordingCanvas icon;
+    split->paint(icon);
+    check(!icon.lines.empty() && same(icon.lines.front().color, *fallback.foreground),
+          "tag-specific fallback still has precedence over a universal selector");
+    const auto rect = split->frame();
+    MouseEvent pointer{{rect.x + rect.width / 2, rect.y + rect.height / 2}, MouseButton::Left};
+    split->onFocusChanged(true);
+    split->setFocusVisible(true);
+    split->onMouseMove(pointer);
+    check(same(paintBackground(*split), Color{0x33, 0x44, 0x55}), "hover and focus selectors retained");
+    split->onMouseDown(pointer);
+    check(same(paintBackground(*split), Color{0x44, 0x55, 0x66}), "pressed and focus selectors retained");
+    split->onMouseUp(pointer);
+    split->setDisabled(true);
+    check(same(paintBackground(*split), Color{0x55, 0x66, 0x77}), "disabled selector retained");
+
+    auto config = header.config();
+    config.broadcastRole = "source";
+    header.setConfig(config);
+    check(same(paintBackground(*broadcast), Color{0x88, 0x99, 0xaa}), "broadcast rule ties keep source order");
+    scope->setCustomProperty("--toolbar-ink", "#abcdef");
+    check(same(paintBackground(*maximize), Color{0x12, 0x34, 0x56}),
+          "button style keeps its token snapshot until refreshed");
+    config.broadcastRole = "none";
+    header.setConfig(config);
+    check(same(paintBackground(*broadcast), Color{0xab, 0xcd, 0xef}), "style refresh uses updated theme tokens");
+    now = previousTime;
+}
 void handleActivation() {
     View root;root.setFrame({0,0,300,100});
     auto handle=std::make_shared<DragHandle>();handle->threshold=7;root.add(handle);handle->setFrame({0,0,200,40});
@@ -189,6 +251,6 @@ void preview() {
     }
 }
 }
-int main(){try {internal::ScopedUiClock clock(clockNow);header();handleActivation();drag();dividerStyles();navigation();keyboardAcceptance();preview();
+int main(){try {internal::ScopedUiClock clock(clockNow);header();headerButtonCascade();handleActivation();drag();dividerStyles();navigation();keyboardAcceptance();preview();
     std::cout<<"PASS workspace interactions: 6 groups\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

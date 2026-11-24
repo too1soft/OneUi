@@ -172,6 +172,7 @@ public:
     StyleSheet forContainers(const std::map<std::string,Size>& sizes) const;
 
 private:
+    friend class PaneHeader;
     std::vector<const StyleRule*> matchingRules(const StyleNode& node) const;
     std::string nodeCacheKey(const StyleNode& node) const;
     struct CompiledSelector {
