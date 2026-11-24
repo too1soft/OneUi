@@ -28,6 +28,31 @@ void trace(const char* stage, double started, double detailA = 0.0) {
 
 } // namespace
 
+bool prewarmStartupGlScene(GrDirectContext& context, const StartupGlScene& scene, bool retained) {
+    const auto info = SkImageInfo::Make(scene.width, scene.height,
+                                        kBGRA_8888_SkColorType, kPremul_SkAlphaType);
+    sk_sp<SkSurface> source;
+    if (retained) {
+        source = SkSurfaces::RenderTarget(&context, skgpu::Budgeted::kYes, info,
+                                          0, kTopLeft_GrSurfaceOrigin, nullptr);
+        if (!source) return false;
+    }
+    auto destination = SkSurfaces::RenderTarget(&context, skgpu::Budgeted::kYes, info,
+                                                0, kBottomLeft_GrSurfaceOrigin, nullptr);
+    if (!destination) return false;
+    auto* canvas = destination->getCanvas();
+    if (source) {
+        source->getCanvas()->drawPicture(scene.picture);
+        canvas->clear(SK_ColorBLACK);
+        source->draw(canvas, 0, 0);
+    } else {
+        canvas->drawPicture(scene.picture);
+    }
+    context.flush();
+    // Complete the scratch work before any live-window draw or ownership change.
+    return context.submit(GrSyncCpu::kYes);
+}
+
 StartupGlScratchWindow::~StartupGlScratchWindow() {
     if (context) {
         if (wglGetCurrentContext() == context) wglMakeCurrent(nullptr, nullptr);
@@ -135,7 +160,7 @@ std::unique_ptr<PreparedStartupGl> DeferredStartupGl::prepare(POINT origin, HMON
     if (!ganesh) return nullptr;
     trace("deferred_gl_worker_context", started);
 
-    Scene current;
+    StartupGlScene current;
     {
         std::lock_guard lock(mutex_);
         if (!target_) return nullptr;
@@ -144,22 +169,7 @@ std::unique_ptr<PreparedStartupGl> DeferredStartupGl::prepare(POINT origin, HMON
     }
     if (!current.picture) return nullptr;
     const double warming = tracing ? internal::scrollTraceNowMs() : -1.0;
-    {
-        const auto info = SkImageInfo::Make(current.width, current.height,
-                                            kBGRA_8888_SkColorType, kPremul_SkAlphaType);
-        auto retained = SkSurfaces::RenderTarget(ganesh.get(), skgpu::Budgeted::kYes, info,
-                                                 0, kTopLeft_GrSurfaceOrigin, nullptr);
-        auto destination = SkSurfaces::RenderTarget(ganesh.get(), skgpu::Budgeted::kYes, info,
-                                                    0, kBottomLeft_GrSurfaceOrigin, nullptr);
-        if (!retained || !destination) return nullptr;
-        retained->getCanvas()->drawPicture(current.picture);
-        destination->getCanvas()->clear(SK_ColorBLACK);
-        retained->draw(destination->getCanvas(), 0, 0);
-        ganesh->flush();
-        // Drain the scratch surface before handing the context to the UI.
-        // Otherwise the first live submit can wait for the warmup workload.
-        if (!ganesh->submit(GrSyncCpu::kYes)) return nullptr;
-    }
+    if (!prewarmStartupGlScene(*ganesh, current, true)) return nullptr;
     trace("deferred_gl_worker_prewarm", warming);
     auto result = std::make_unique<PreparedStartupGl>();
     if (!wglMakeCurrent(nullptr, nullptr)) {

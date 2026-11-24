@@ -8,6 +8,8 @@
 
 namespace oneui::win32 {
 
+struct StartupGlScene;
+
 // Experimental WGL renderer. The render thread owns the DC, context and GPU
 // surfaces. The window thread produces immutable recordings in client pixels.
 class GlRenderWorker {
@@ -23,6 +25,9 @@ public:
 
     ~GlRenderWorker();
     bool start(HWND window);
+    bool start(HWND window, StartupGlScene scene);
+    bool wantsStartupPicture() const noexcept;
+    void setStartupPicture(StartupGlScene scene);
     bool ready() const noexcept;
     bool vsync() const noexcept;
     Frame plan(int width, int height, RECT damage);
@@ -39,5 +44,6 @@ private:
 
 bool experimentalGlWorkerEnabled() noexcept;
 bool experimentalGlWorkerAfterFirstFrame() noexcept;
+bool experimentalGlWorkerPrewarm() noexcept;
 
 } // namespace oneui::win32

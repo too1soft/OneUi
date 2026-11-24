@@ -96,6 +96,10 @@ public:
         return interval && interval(1);
     }
 
+    bool prewarm(const StartupGlScene& scene) {
+        return prewarmStartupGlScene(*context_, scene, retainedGlWorkerEnabled());
+    }
+
     RenderResult render(const SkPicture& picture, const GlRenderWorker::Frame& frame,
                         const internal::InteractionSnapshot& snapshot,
                         const std::atomic_uint64_t& extent) {
@@ -141,6 +145,7 @@ public:
         } else {
             canvas->drawPicture(&picture);
         }
+        trace("worker_flush_begin");
         context_->flush();
         trace("worker_submit_begin");
         const bool tracing = snapshot.paintSequence && internal::win32GlTraceEnabled()
@@ -194,8 +199,9 @@ struct GlRenderWorker::State {
         internal::InteractionSnapshot trace;
     };
 
-    State(HWND window, HMONITOR monitor, POINT origin)
-        : window(window), monitor(monitor), origin(origin), ownsLiveWindow(!monitor) {}
+    State(HWND window, HMONITOR monitor, POINT origin, StartupGlScene scene)
+        : window(window), monitor(monitor), origin(origin), captureStartup(monitor && scene.picture),
+          startup(std::move(scene)), ownsLiveWindow(!monitor) {}
 
     void run() noexcept;
     void render();
@@ -203,11 +209,13 @@ struct GlRenderWorker::State {
     const HWND window;
     const HMONITOR monitor;
     const POINT origin;
+    std::atomic_bool captureStartup;
     std::atomic_bool ready{false};
     std::atomic_bool vsync{false};
     std::atomic_uint64_t extent{0};
     std::mutex mutex;
     std::condition_variable changed;
+    StartupGlScene startup;
     Scene pending;
     Frame lastQueued;
     Frame lastPlanned;
@@ -234,9 +242,21 @@ bool experimentalGlWorkerAfterFirstFrame() noexcept {
     return enabled;
 }
 
+bool experimentalGlWorkerPrewarm() noexcept {
+    static const bool enabled = [] {
+        wchar_t value[2]{};
+        return GetEnvironmentVariableW(L"ONEUI_WIN32_GL_WORKER_PREWARM", value, 2) == 1 && value[0] == L'1';
+    }();
+    return enabled && scratchGlWorkerEnabled();
+}
+
 GlRenderWorker::~GlRenderWorker() { stop(); }
 
 bool GlRenderWorker::start(HWND window) {
+    return start(window, {});
+}
+
+bool GlRenderWorker::start(HWND window, StartupGlScene scene) {
     if (state_) return false;
     POINT origin{};
     HMONITOR monitor = nullptr;
@@ -256,7 +276,7 @@ bool GlRenderWorker::start(HWND window) {
                 task->state->run();
             }
         };
-        auto state = std::make_shared<State>(window, monitor, origin);
+        auto state = std::make_shared<State>(window, monitor, origin, std::move(scene));
         auto task = std::make_unique<Task>();
         task->state = state;
         if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
@@ -273,6 +293,19 @@ bool GlRenderWorker::start(HWND window) {
         return true;
     } catch (const std::exception&) {
         return false;
+    }
+}
+
+bool GlRenderWorker::wantsStartupPicture() const noexcept {
+    return state_ && state_->captureStartup.load(std::memory_order_relaxed);
+}
+
+void GlRenderWorker::setStartupPicture(StartupGlScene scene) {
+    if (!wantsStartupPicture()) return;
+    StartupGlScene replaced;
+    std::lock_guard lock(state_->mutex);
+    if (state_->captureStartup.load(std::memory_order_relaxed)) {
+        replaced = std::exchange(state_->startup, std::move(scene));
     }
 }
 
@@ -341,8 +374,11 @@ void GlRenderWorker::stop() {
     auto state = std::exchange(state_, {});
     if (!state) return;
     State::Scene discarded;
+    StartupGlScene abandoned;
     std::unique_lock lock(state->mutex);
     state->stopping = true;
+    state->captureStartup.store(false, std::memory_order_relaxed);
+    abandoned = std::move(state->startup);
     ++state->extent;
     discarded = std::exchange(state->pending, {});
     state->changed.notify_one();
@@ -362,6 +398,8 @@ void GlRenderWorker::State::run() noexcept {
     }
     std::lock_guard lock(mutex);
     ready.store(false, std::memory_order_release);
+    captureStartup.store(false, std::memory_order_relaxed);
+    startup = {};
     if (!stopping) InvalidateRect(window, nullptr, FALSE);
     finished = true;
     changed.notify_all();
@@ -381,13 +419,30 @@ void GlRenderWorker::State::render() {
     }
     LiveContext renderer(scratch ? scratch->hwnd : window);
     const bool initialized = renderer.initialize();
+    StartupGlScene warmup;
     {
         std::lock_guard lock(mutex);
         if (stopping) return;
         internal::traceInteractionPaint(startupTrace, "worker_context_end", "opengl-worker", initialized ? 1 : 0);
         if (!initialized) return;
-        // Close may proceed during scratch initialization. Once claimed here,
-        // destruction waits for the worker to release the live HWND and DC.
+        captureStartup.store(false, std::memory_order_relaxed);
+        warmup = std::move(startup);
+        if (warmup.picture) {
+            internal::traceInteractionPaint(startupTrace, "worker_prewarm_begin", "opengl-worker");
+        }
+    }
+    const bool needsWarmup = scratch && warmup.picture;
+    const bool warmed = !needsWarmup || renderer.prewarm(warmup);
+    warmup = {};
+    {
+        std::lock_guard lock(mutex);
+        if (stopping) return;
+        if (needsWarmup) {
+            internal::traceInteractionPaint(startupTrace, "worker_prewarm_end", "opengl-worker", warmed ? 1 : 0);
+        }
+        if (!warmed) return;
+        // Close may proceed while the worker owns only its scratch resources.
+        // After this point the worker can acquire the live HWND and DC.
         ownsLiveWindow = true;
     }
     if (scratch) {

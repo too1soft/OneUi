@@ -115,8 +115,11 @@
 
         SkCanvas* skCanvas = threadedGl ? nullptr : paintSurface_->getCanvas();
         const bool fullPaint = dirtyX == 0 && dirtyY == 0 && dirtyWidth == width && dirtyHeight == height;
+        const bool captureWorkerStartup = !useGPU && fullPaint && IsWindowVisible(hwnd_) &&
+            ((glWorkerWaitingForSoftwareFrame_ && win32::experimentalGlWorkerPrewarm()) ||
+             glWorker_.wantsStartupPicture());
         std::optional<SkPictureRecorder> recorder;
-        if (threadedGl ||
+        if (threadedGl || captureWorkerStartup ||
             (!useGPU && fullPaint && IsWindowVisible(hwnd_) && deferredStartupGl_.shouldCapture())) {
             recorder.emplace();
             skCanvas = recorder->beginRecording(SkRect::MakeWH(static_cast<float>(width), static_cast<float>(height)));
@@ -374,15 +377,20 @@
         if (blitSucceeded && glWorkerWaitingForSoftwareFrame_ &&
             IsWindowVisible(hwnd_) && !IsIconic(hwnd_)) {
             glWorkerWaitingForSoftwareFrame_ = false;
-            // The first successful GDI operation precedes WGL initialization
-            // on the same window. Opening can make visible progress first.
-            const bool started = glWorker_.start(hwnd_);
+            // Start WGL after the first successful visible software presentation.
+            const bool started = captureWorkerStartup
+                ? glWorker_.start(hwnd_, {std::move(startupPicture), width, height})
+                : glWorker_.start(hwnd_);
             rendererInfo_.reason = started ? "opengl-worker-starting" : "opengl-worker-start-failed";
             internal::traceInteractionPaint(interactionPaint, "worker_start_after_software",
                 "software", started ? 1 : 0);
         }
         if (blitSucceeded && startupPicture) {
-            deferredStartupGl_.submitPicture(std::move(startupPicture), width, height);
+            if (captureWorkerStartup) {
+                glWorker_.setStartupPicture({std::move(startupPicture), width, height});
+            } else {
+                deferredStartupGl_.submitPicture(std::move(startupPicture), width, height);
+            }
         }
         scheduleDeferredGlAdoption();
         recordPaint(width, height, fullPaint, allocatedSurface, surfaceMs, currentTimeMs() - paintStartMs);
