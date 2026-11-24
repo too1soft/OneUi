@@ -25,6 +25,13 @@
             return;
         }
 
+        POINT origin{};
+        if (win32::experimentalGlWorkerEnabled() && win32::nvidiaWindowDisplayOrigin(hwnd_, origin)
+            && glWorker_.start(hwnd_)) {
+            rendererInfo_.reason = "opengl-worker-starting";
+            return;
+        }
+
         glDC_ = GetDC(hwnd_);
         if (!glDC_) { rendererInfo_.reason = "window-dc-failed"; return; }
 
@@ -154,6 +161,7 @@
     }
 
     void shutdownGPU() {
+        glWorker_.stop();
         // Each top-level window owns an independent GL context. Destruction
         // can arrive while a different window was the last one to paint.
         const HGLRC previousContext = wglGetCurrentContext();
