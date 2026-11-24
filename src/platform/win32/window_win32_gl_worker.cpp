@@ -18,6 +18,7 @@
 #include <cstring>
 #include <exception>
 #include <mutex>
+#include <optional>
 #include <utility>
 
 namespace oneui::win32 {
@@ -373,9 +374,12 @@ void GlRenderWorker::State::render() {
         if (stopping) return;
         internal::traceInteractionPaint(startupTrace, "worker_context_begin", "opengl-worker");
     }
-    StartupGlScratchWindow scratch;
-    if (monitor && !scratch.open(origin)) return;
-    LiveContext renderer(monitor ? scratch.hwnd : window);
+    std::optional<StartupGlScratchWindow> scratch;
+    if (monitor) {
+        scratch.emplace();
+        if (!scratch->open(origin)) return;
+    }
+    LiveContext renderer(scratch ? scratch->hwnd : window);
     const bool initialized = renderer.initialize();
     {
         std::lock_guard lock(mutex);
@@ -386,11 +390,12 @@ void GlRenderWorker::State::render() {
         // destruction waits for the worker to release the live HWND and DC.
         ownsLiveWindow = true;
     }
-    if (monitor) {
+    if (scratch) {
         internal::traceInteractionPaint(startupTrace, "worker_adopt_begin", "opengl-worker");
         const bool adopted = renderer.adopt(window, monitor);
         internal::traceInteractionPaint(startupTrace, "worker_adopt_end", "opengl-worker", adopted ? 1 : 0);
         if (!adopted) return;
+        scratch.reset();
     }
     const bool synced = renderer.enableVsync();
     {
