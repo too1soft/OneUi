@@ -1,6 +1,7 @@
 #include "window_win32_gl_worker.h"
 
 #include "gl_flush_trace_win32.h"
+#include "gl_wait_resolution_win32.h"
 #include "window_win32_deferred_gl.h"
 #include "window_win32_gpu_warmup.h"
 #include "platform/shared/skia_gl_setup.h"
@@ -137,6 +138,12 @@ public:
             return extent.load(std::memory_order_acquire) == frame.extent && matchesClient(width, height);
         };
         if (!current()) return RenderResult::Obsolete;
+        const auto timerPolicy = experimentalGlWaitResolution();
+        const ScopedGlWaitResolution frameWait(timerPolicy == GlWaitResolution::Frame);
+        if (timerPolicy == GlWaitResolution::Frame && !waitResolutionReported_) {
+            internal::traceInteractionPaint(snapshot, "worker_frame_wait_resolution", "opengl-worker", frameWait.acquired() ? 1 : 0);
+            waitResolutionReported_ = true;
+        }
         if (!surface_ || width_ != width || height_ != height) {
             GrGLFramebufferInfo framebuffer{};
             framebuffer.fFormat = GL_RGBA8;
@@ -224,6 +231,7 @@ private:
     HGLRC gl_ = nullptr;
     PIXELFORMATDESCRIPTOR descriptor_{};
     int format_ = 0;
+    bool waitResolutionReported_ = false;
     sk_sp<GrDirectContext> context_;
     sk_sp<SkSurface> surface_;
     sk_sp<SkSurface> retained_;
@@ -469,6 +477,11 @@ void GlRenderWorker::State::render() {
     if (monitor) {
         scratch.emplace();
         if (!scratch->open(origin)) return;
+    }
+    const auto timerPolicy = experimentalGlWaitResolution();
+    const ScopedGlWaitResolution workerWait(timerPolicy == GlWaitResolution::WorkerLifetime);
+    if (timerPolicy == GlWaitResolution::WorkerLifetime) {
+        internal::traceInteractionPaint(startupTrace, "worker_lifetime_wait_resolution", "opengl-worker", workerWait.acquired() ? 1 : 0);
     }
     LiveContext renderer(scratch ? scratch->hwnd : window);
     const bool initialized = renderer.initialize(startupTrace,
