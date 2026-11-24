@@ -1,4 +1,5 @@
 #pragma once
+#include <string_view>
 // Included after ui_declarative.h's definitions. Query application belongs to
 // declarative composition; the parser/evaluator and isolated layout are core.
 namespace oneui::ui {
@@ -32,19 +33,36 @@ inline void StyleRegistry::applyBaseLayouts(bool force) {
             return old != baseLayoutParents_.end() && old->second.lock() == item.second;
         })) return;
 
-    bool applied=false;
+    // Repeated rows have many controls with identical unconditional styles.
+    // Keep this cache within the pass: both the sheet and the entry strings
+    // already belong to the registry, and layout application stays per child.
+    struct BaseLayoutStyle {
+        StyleBox box;
+        StyleLayout layout;
+        bool applies = false;
+    };
+    std::map<std::pair<std::string_view, std::string_view>, BaseLayoutStyle> resolved;
+    bool applied = false;
     for (const auto& entry : entries_) if (auto widget = entry.widget.lock()) {
         auto parent = parents.find(widget.get());
         if (parent == parents.end()) continue;
-        StyleNode node{syntax::components().at(entry.component), {"one-"+entry.component}, 0};
-        oneui::detail::appendStyleClasses(node.classes, entry.classes);
-        const auto box = sheet_.resolve(node);
-        const auto layout = sheet_.resolveLayout(node);
-        if (box.width || box.height || box.minWidth || box.minHeight || layout.maxWidth || layout.maxHeight ||
-            box.flexBasis || layout.flexBasisPercent || layout.flexOrder || box.flexGrow || box.flexShrink ||
-            box.display || box.flexDirection || box.flexWrap) {
-            applyLayout(entry, box, parent->second, layout);
-            applied=true;
+        auto [style, fresh] = resolved.try_emplace({entry.component, entry.classes});
+        auto& base = style->second;
+        if (fresh) {
+            StyleNode node{syntax::components().at(entry.component), {"one-"+entry.component}, 0};
+            oneui::detail::appendStyleClasses(node.classes, entry.classes);
+            base.box = sheet_.resolve(node);
+            base.layout = sheet_.resolveLayout(node);
+            const auto& box = base.box;
+            const auto& layout = base.layout;
+            base.applies = box.width || box.height || box.minWidth || box.minHeight ||
+                layout.maxWidth || layout.maxHeight || box.flexBasis || layout.flexBasisPercent ||
+                layout.flexOrder || box.flexGrow || box.flexShrink || box.display ||
+                box.flexDirection || box.flexWrap;
+        }
+        if (base.applies) {
+            applyLayout(entry, base.box, parent->second, base.layout);
+            applied = true;
         }
     }
     // Base dimensions can replace an active query override without changing

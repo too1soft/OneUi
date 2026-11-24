@@ -138,6 +138,29 @@ void refreshAuthoredLayout() {
     const auto moved = second.as<Stack>()->explicitFlex(child.widget);
     check(moved && moved->width == 80, "parent changes refresh base layout for retained widgets");
 }
+void sharedBaseLayoutSelectors() {
+    ui::Mount mount({}, std::make_shared<ui::StyleRegistry>(), {});
+    auto rowLabel = mount.make("Text", {}, "cell");
+    auto columnLabel = mount.make("Text", {}, "cell");
+    auto button = mount.make("Button", {}, "cell");
+    auto row = mount.make("Row", {rowLabel, button}).as<Stack>();
+    auto column = mount.make("Column", {columnLabel}).as<Stack>();
+    auto apply = [&](const char* declarations) {
+        mount.styles()->replace(ui::syntax::css(declarations));
+        const auto horizontal = row->explicitFlex(rowLabel.widget);
+        const auto vertical = column->explicitFlex(columnLabel.widget);
+        const auto control = row->explicitFlex(button.widget);
+        check(horizontal && vertical && control && horizontal->max == 70 && vertical->max == 24,
+              "shared selectors still use each child's parent axis");
+        return std::pair(horizontal->width, control->width);
+    };
+    const auto first = apply("Text.cell{width:40px;max-width:70px;max-height:24px;}"
+                             "Button.cell{width:56px;}");
+    const auto second = apply("Text.cell{width:42px;max-width:70px;max-height:24px;}"
+                              "Button.cell{width:52px;}");
+    check(first.first == 40 && first.second == 56 && second.first == 42 && second.second == 52,
+          "style resolution separates component tags and picks up replacement rules");
+}
 void invalidCssAndDependencies() {
     StyleSheet sheet;std::string error;
     check(sheet.addRulesFromCss(".a {color:#123456;}",&error),"initial CSS");auto count=sheet.rules().size();
@@ -181,6 +204,6 @@ void maxWidthClamps() {
     check(!mount.styles()->queryDiagnostics().empty(),"cross-axis max-width diagnosed");
 }
 }
-int main(){try{comparisons();stackChildren();layout(StackEngine::Yoga);layout(StackEngine::Legacy);invalidCssAndDependencies();maxWidthClamps();displayOnlyReplay();refreshAuthoredLayout();projectedSelectorsAndTokens();
-    std::cout<<"PASS container queries and Stack: 9 groups\n";return 0;
+int main(){try{comparisons();stackChildren();layout(StackEngine::Yoga);layout(StackEngine::Legacy);invalidCssAndDependencies();maxWidthClamps();displayOnlyReplay();refreshAuthoredLayout();projectedSelectorsAndTokens();sharedBaseLayoutSelectors();
+    std::cout<<"PASS container queries and Stack: 10 groups\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}
