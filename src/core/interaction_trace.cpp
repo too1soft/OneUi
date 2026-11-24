@@ -26,6 +26,8 @@ struct Event {
     int success = -1;
     unsigned message = 0;
     double queueAge = -1;
+    double durationMs = -1;
+    unsigned calls = 0;
     bool visible = false, foreground = false;
 };
 
@@ -83,13 +85,14 @@ private:
             << e.snapshot.generation << ',' << e.phase << ',' << e.snapshot.paintSequence
             << ',' << e.snapshot.ready << ',' << e.visible << ',' << e.foreground << ','
             << e.backend << ',' << e.success << ',' << e.message << ',' << e.queueAge
-            << ',' << dropped_.load(std::memory_order_relaxed) << '\n';
+            << ',' << dropped_.load(std::memory_order_relaxed)
+            << ',' << e.durationMs << ',' << e.calls << '\n';
     }
     void write(const std::filesystem::path& output) {
         std::ofstream out(output, std::ios::out | std::ios::trunc);
         if (!out) return;
         out << "sequence,qpc_ticks,qpc_frequency,pid,tid,hwnd,operation_id,generation,phase,"
-               "paint_sequence,ready,visible,foreground,backend,success,message,queue_age_ms,dropped\n";
+               "paint_sequence,ready,visible,foreground,backend,success,message,queue_age_ms,dropped,duration_ms,calls\n";
         std::array<Event, 64> batch;
         for (;;) {
             std::size_t count = 0;
@@ -224,6 +227,13 @@ void traceInteractionPaint(const InteractionSnapshot& snapshot, const char* phas
     Event event; event.snapshot = snapshot; event.phase = phase; event.backend = backend; event.success = success;
     writer().push(event);
 }
+void traceInteractionRenderTiming(const InteractionSnapshot& snapshot, const char* phase,
+                                  const char* backend, double milliseconds, unsigned calls) {
+    if (!snapshot.window || !writer().enabled()) return;
+    Event event; event.snapshot = snapshot; event.phase = phase; event.backend = backend;
+    event.durationMs = milliseconds; event.calls = calls;
+    writer().push(event);
+}
 void forgetInteractionWindow(std::uintptr_t window) {
     if (!writer().enabled()) return;
     auto& state = threadState();
@@ -242,6 +252,7 @@ InteractionInputScope::InteractionInputScope(std::uintptr_t, unsigned, unsigned)
 InteractionInputScope::~InteractionInputScope() = default;
 InteractionSnapshot beginInteractionPaint(std::uintptr_t) { return {}; }
 void traceInteractionPaint(const InteractionSnapshot&, const char*, const char*, int) {}
+void traceInteractionRenderTiming(const InteractionSnapshot&, const char*, const char*, double, unsigned) {}
 void forgetInteractionWindow(std::uintptr_t) {}
 }
 }

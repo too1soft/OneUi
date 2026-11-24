@@ -154,16 +154,11 @@ public:
         } else {
             canvas->drawPicture(&picture);
         }
-        const bool tracing = snapshot.paintSequence && internal::win32GlTraceEnabled()
-            && internal::scrollTraceEnabled();
+        const bool traceCalls = snapshot.paintSequence && internal::win32GlTraceEnabled();
+        const bool tracing = traceCalls && internal::scrollTraceEnabled();
         trace("worker_flush_begin");
-        if (tracing) {
-            internal::GlCallTrace calls;
-            {
-                internal::GlCallTrace::Scope scope(&calls);
-                context_->flush();
-            }
-            calls.write(snapshot.window, static_cast<double>(snapshot.paintSequence));
+        if (traceCalls) {
+            internal::GlCallTrace::measureWorkerFlush(snapshot, tracing, [&] { context_->flush(); });
         } else {
             context_->flush();
         }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "internal/interaction_trace.h"
 #include "internal/scroll_trace.h"
 
 #include <windows.h>
@@ -26,6 +27,15 @@ enum class GlPhase : std::size_t {
 };
 
 class GlCallTrace {
+    static constexpr std::array flushPhases{
+        "gl_compile", "gl_link", "gl_compile_status", "gl_link_status", "gl_program_query",
+        "gl_binary_read", "gl_binary_write",
+        "gl_program_use", "gl_texture_allocate", "gl_texture_upload", "gl_buffer_upload",
+        "gl_draw", "gl_flush", "gl_finish", "gl_sync", "gl_error_query",
+        "gl_uniform", "gl_buffer_map", "gl_vertex_setup", "gl_framebuffer", "gl_texture_state", "gl_raster_state", "gl_object_label"
+    };
+    static_assert(flushPhases.size() == static_cast<std::size_t>(GlPhase::Count));
+
     struct Sample {
         double milliseconds = 0.0;
         unsigned calls = 0;
@@ -95,13 +105,6 @@ public:
     };
 
     void write(std::uintptr_t window, double sequence, bool duringSubmit = false) const {
-        constexpr std::array flushPhases{
-            "gl_compile", "gl_link", "gl_compile_status", "gl_link_status", "gl_program_query",
-            "gl_binary_read", "gl_binary_write",
-            "gl_program_use", "gl_texture_allocate", "gl_texture_upload", "gl_buffer_upload",
-            "gl_draw", "gl_flush", "gl_finish", "gl_sync", "gl_error_query",
-            "gl_uniform", "gl_buffer_map", "gl_vertex_setup", "gl_framebuffer", "gl_texture_state", "gl_raster_state", "gl_object_label"
-        };
         constexpr std::array submitPhases{
             "gl_submit_compile", "gl_submit_link", "gl_submit_compile_status", "gl_submit_link_status",
             "gl_submit_program_query", "gl_submit_binary_read", "gl_submit_binary_write",
@@ -112,7 +115,6 @@ public:
             "gl_submit_object_label"
         };
         const auto& phases = duringSubmit ? submitPhases : flushPhases;
-        static_assert(flushPhases.size() == static_cast<std::size_t>(GlPhase::Count));
         for (std::size_t i = 0; i < phases.size(); ++i) {
             const auto& sample = stages_[i];
             if (!sample.calls) continue;
@@ -140,6 +142,46 @@ public:
             event.maxOffset = slowestUpload_.type;
             writeScrollTrace(event);
         }
+    }
+
+    template <typename Flush>
+    static void measureWorkerFlush(const InteractionSnapshot& snapshot, bool scrollTrace, Flush flush) {
+        using Clock = std::chrono::steady_clock;
+        GlCallTrace calls;
+        const auto cpuStart = threadCpuTicks();
+        const auto start = Clock::now();
+        {
+            const Scope scope(&calls);
+            flush();
+        }
+        const auto elapsed = std::chrono::duration<double, std::milli>(Clock::now() - start).count();
+        if (elapsed >= 8.0) {
+            constexpr auto backend = "opengl-worker";
+            const auto cpuEnd = threadCpuTicks();
+            traceInteractionRenderTiming(snapshot, "worker_flush_wall", backend, elapsed);
+            if (cpuStart != unavailableCpuTime && cpuEnd != unavailableCpuTime && cpuEnd >= cpuStart) {
+                traceInteractionRenderTiming(snapshot, "worker_flush_cpu", backend, (cpuEnd - cpuStart) / 10000.0);
+            }
+            for (std::size_t i = 0; i < flushPhases.size(); ++i) {
+                const auto& sample = calls.stages_[i];
+                if (sample.milliseconds >= 0.5) {
+                    traceInteractionRenderTiming(snapshot, flushPhases[i], backend, sample.milliseconds, sample.calls);
+                }
+            }
+        }
+        if (scrollTrace) calls.write(snapshot.window, static_cast<double>(snapshot.paintSequence));
+    }
+
+private:
+    static constexpr std::uint64_t unavailableCpuTime = UINT64_MAX;
+
+    static std::uint64_t threadCpuTicks() {
+        FILETIME created{}, exited{}, kernel{}, user{};
+        if (!GetThreadTimes(GetCurrentThread(), &created, &exited, &kernel, &user)) return unavailableCpuTime;
+        const auto ticks = [](FILETIME time) {
+            return (std::uint64_t{time.dwHighDateTime} << 32) | time.dwLowDateTime;
+        };
+        return ticks(kernel) + ticks(user);
     }
 };
 
