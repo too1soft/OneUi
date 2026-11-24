@@ -54,8 +54,13 @@
         RECT clientRect{};
         GetClientRect(hwnd_, &clientRect);
 
-        const bool useGPU = gpuAvailable_ && glContext_ && glDC_;
-        if (useGPU) {
+        if (gpuAvailable_ && angleContext_ && !angleContext_->makeCurrent()) {
+            shutdownGPU();
+            rendererInfo_.reason = "angle-make-current-failed";
+        }
+        const bool useWgl = gpuAvailable_ && glContext_ && glDC_;
+        const bool useGPU = useWgl || (gpuAvailable_ && angleContext_);
+        if (useWgl) {
             // The context stays current between frames; rebinding it every
             // paint makes the driver synchronize for nothing.
             if (wglGetCurrentContext() != glContext_ || wglGetCurrentDC() != glDC_) {
@@ -69,7 +74,7 @@
         PAINTSTRUCT paintStruct{};
         HDC paintDc = BeginPaint(hwnd_, &paintStruct);
         paintTrace.mark(PaintTrace::NativePaint);
-        HDC dc = useGPU ? glDC_ : paintDc;
+        HDC dc = useWgl ? glDC_ : paintDc;
         RECT dirtyRect = paintStruct.rcPaint;
 #if ONEUI_DEVELOPER_TOOLS
         if(diagnostics && diagnostics->options.overlay) {
@@ -179,7 +184,16 @@
             const double submitStartMs = currentTimeMs();
             SkCanvas* presentCanvas = windowSurface_->getCanvas();
             presentCanvas->clear(SK_ColorBLACK);
+            const bool angleResize = angleContext_ && (windowSurface_->width() != width || windowSurface_->height() != height);
+            if (angleResize) {
+                // ANGLE/D3D11 resizes its swap chain after swapping the old
+                // back buffer. Scale the complete scene until the next paint.
+                presentCanvas->save();
+                presentCanvas->scale(static_cast<float>(windowSurface_->width()) / width,
+                                     static_cast<float>(windowSurface_->height()) / height);
+            }
             paintSurface_->draw(presentCanvas, 0.0f, 0.0f);
+            if (angleResize) presentCanvas->restore();
             const double copyEndMs = traceLayout ? currentTimeMs() : 0.0;
             const bool traceGl = traceLayout && internal::win32GlTraceEnabled();
             std::optional<internal::GlCallTrace> glTrace;
@@ -207,7 +221,7 @@
             internal::traceInteractionPaint(interactionPaint, "submit_end", "opengl");
             const double presentStarted = currentTimeMs();
             internal::traceInteractionPaint(interactionPaint, "swap_begin", "opengl");
-            const BOOL swapped = SwapBuffers(glDC_);
+            const bool swapped = angleContext_ ? angleContext_->present() : SwapBuffers(glDC_) != FALSE;
             internal::traceInteractionPaint(interactionPaint, "swap_return", "opengl", swapped ? 1 : 0);
             internal::workspacePresentMs = currentTimeMs() - presentStarted;
             if (traceLayout) {
@@ -250,6 +264,7 @@
             rendererInfo_.submitMs += submitMs;
             if (swapped) {
                 EndPaint(hwnd_, &paintStruct);
+                if (angleResize) InvalidateRect(hwnd_, nullptr, FALSE);
                 recordPaint(width, height, fullPaint, allocatedSurface, surfaceMs, currentTimeMs() - paintStartMs);
                 flushDeferredImePosition();
                 finishDiagnostics();
@@ -260,6 +275,7 @@
             }
             rendererInfo_.reason = "swap-buffers-failed";
             setRenderBackend(RenderBackend::Unknown);
+            if (angleContext_) shutdownGPU();
             gpuAvailable_ = false;
             swapIntervalEnabled_ = false;
             windowSurface_.reset();
@@ -360,7 +376,8 @@
     bool ensurePaintSurfaceCapacity(int width, int height) {
         if (paintSurface_) {
             if (gpuAvailable_ && windowSurface_ &&
-                paintSurfaceWidth_ == width && paintSurfaceHeight_ == height) {
+                paintSurfaceWidth_ == width && paintSurfaceHeight_ == height &&
+                (!angleContext_ || (windowSurface_->width() == width && windowSurface_->height() == height))) {
                 return false;
             }
             if (!gpuAvailable_ && paintSurfaceWidth_ >= width && paintSurfaceHeight_ >= height) {
@@ -371,11 +388,22 @@
         int surfaceWidth = alignedPaintSurfaceSize(width);
         int surfaceHeight = alignedPaintSurfaceSize(height);
         SkImageInfo imageInfo = SkImageInfo::Make(surfaceWidth, surfaceHeight, kBGRA_8888_SkColorType, kPremul_SkAlphaType);
+        int bufferWidth = width, bufferHeight = height;
+        if (gpuAvailable_ && angleContext_) {
+            const bool clientSizeChanged = windowSurface_ && (paintSurfaceWidth_ != width || paintSurfaceHeight_ != height);
+            if (!angleContext_->refreshBufferSize(bufferWidth, bufferHeight, clientSizeChanged)) {
+                shutdownGPU();
+                rendererInfo_.reason = "angle-surface-query-failed";
+            } else if (clientSizeChanged) {
+                grContext_->resetContext();
+            }
+        }
         if (gpuAvailable_ && grContext_) {
             surfaceWidth = width;
             surfaceHeight = height;
             imageInfo = SkImageInfo::Make(surfaceWidth, surfaceHeight, kBGRA_8888_SkColorType, kPremul_SkAlphaType);
-            auto retainedSurface = SkSurfaces::RenderTarget(
+            auto retainedSurface = angleContext_ && paintSurfaceWidth_ == width && paintSurfaceHeight_ == height
+                ? paintSurface_ : SkSurfaces::RenderTarget(
                 grContext_.get(),
                 skgpu::Budgeted::kYes,
                 imageInfo,
@@ -385,10 +413,11 @@
             GrGLFramebufferInfo fbInfo;
             fbInfo.fFBOID = 0;
             fbInfo.fFormat = GL_RGBA8;
-            auto backendRT = GrBackendRenderTargets::MakeGL(surfaceWidth, surfaceHeight, 0, 0, fbInfo);
+            const int stencilBits = angleContext_ ? angleContext_->stencilBits() : 0;
+            auto backendRT = GrBackendRenderTargets::MakeGL(bufferWidth, bufferHeight, 0, stencilBits, fbInfo);
             auto windowSurface = SkSurfaces::WrapBackendRenderTarget(
                 grContext_.get(), backendRT, kBottomLeft_GrSurfaceOrigin,
-                kBGRA_8888_SkColorType, nullptr, nullptr);
+                angleContext_ ? kRGBA_8888_SkColorType : kBGRA_8888_SkColorType, nullptr, nullptr);
             if (retainedSurface && windowSurface) {
                 paintSurface_ = std::move(retainedSurface);
                 windowSurface_ = std::move(windowSurface);
@@ -401,6 +430,11 @@
             }
             rendererInfo_.reason = !retainedSurface ? "retained-surface-failed" : "window-surface-failed";
             traceGpu(rendererInfo_.reason.c_str());
+            if (angleContext_) {
+                retainedSurface.reset();
+                windowSurface.reset();
+                shutdownGPU();
+            }
             paintSurface_.reset();
             windowSurface_.reset();
             gpuAvailable_ = false;

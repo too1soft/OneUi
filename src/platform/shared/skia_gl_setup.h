@@ -14,5 +14,8 @@ namespace oneui::rendering {
 // on Windows and $XDG_CACHE_HOME/oneui/shaders/<exe> elsewhere. Returns null
 // when no writable location exists; callers then run without a cache.
 GrContextOptions::PersistentCache* shaderCache();
+#ifdef _WIN32
+GrContextOptions::PersistentCache* angleD3D11ShaderCache();
+#endif
 
 } // namespace oneui::rendering
