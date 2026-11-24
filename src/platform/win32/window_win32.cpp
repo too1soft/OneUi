@@ -3,6 +3,7 @@
 #include "window_dispatch_trace_win32.h"
 #include "window_win32_paint_trace.h"
 #include "gl_flush_trace_win32.h"
+#include "angle_d3d11_win32.h"
 #include "window_win32_gpu_warmup.h"
 #include "window_win32_deferred_gl.h"
 #include "accessibility_proxy_win32.h"
@@ -171,6 +172,7 @@ public:
     bool deferredGlScheduled_ = false;
     HGLRC glContext_ = nullptr;
     HDC glDC_ = nullptr;
+    std::unique_ptr<win32::AngleD3D11Context> angleContext_;
     sk_sp<GrDirectContext> grContext_;
     bool gpuInitializationAttempted_ = false;
     bool gpuAvailable_ = false;

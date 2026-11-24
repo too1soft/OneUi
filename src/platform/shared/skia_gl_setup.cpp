@@ -285,4 +285,14 @@ GrContextOptions::PersistentCache* shaderCache() {
     return cache;
 }
 
+#ifdef _WIN32
+GrContextOptions::PersistentCache* angleD3D11ShaderCache() {
+    static auto* cache = []() -> DiskShaderCache* {
+        auto directory = cacheDirectory();
+        return directory.empty() ? nullptr : new DiskShaderCache(directory / "angle-d3d11");
+    }();
+    return cache;
+}
+#endif
+
 } // namespace oneui::rendering
