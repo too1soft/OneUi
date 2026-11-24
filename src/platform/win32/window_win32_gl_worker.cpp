@@ -40,7 +40,15 @@ bool scratchGlWorkerEnabled() noexcept {
     return enabled;
 }
 
-enum class RenderResult { Complete, Obsolete, Failed };
+bool supersedeGlWorkerFrameEnabled() noexcept {
+    static const bool enabled = [] {
+        wchar_t value[2]{};
+        return GetEnvironmentVariableW(L"ONEUI_WIN32_GL_WORKER_PRESENT_LATEST", value, 2) == 1 && value[0] == L'1';
+    }();
+    return enabled;
+}
+
+enum class RenderResult { Complete, Superseded, Obsolete, Failed };
 
 class LiveContext {
 public:
@@ -102,7 +110,8 @@ public:
 
     RenderResult render(const SkPicture& picture, const GlRenderWorker::Frame& frame,
                         const internal::InteractionSnapshot& snapshot,
-                        const std::atomic_uint64_t& extent) {
+                        const std::atomic_uint64_t& extent,
+                        const std::atomic_uint64_t& queuedSerial, bool maySupersede) {
         const auto width = frame.width;
         const auto height = frame.height;
         const auto current = [&] {
@@ -145,11 +154,21 @@ public:
         } else {
             canvas->drawPicture(&picture);
         }
-        trace("worker_flush_begin");
-        context_->flush();
-        trace("worker_submit_begin");
         const bool tracing = snapshot.paintSequence && internal::win32GlTraceEnabled()
             && internal::scrollTraceEnabled();
+        trace("worker_flush_begin");
+        if (tracing) {
+            internal::GlCallTrace calls;
+            {
+                internal::GlCallTrace::Scope scope(&calls);
+                context_->flush();
+            }
+            calls.write(snapshot.window, static_cast<double>(snapshot.paintSequence));
+        } else {
+            context_->flush();
+        }
+        trace("worker_flush_end");
+        trace("worker_submit_begin");
         bool submitted;
         if (tracing) {
             internal::GlCallTrace calls;
@@ -164,10 +183,19 @@ public:
         trace("worker_submit_end", submitted ? 1 : 0);
         if (!submitted) return RenderResult::Failed;
         if (!current()) return RenderResult::Obsolete;
+        if (maySupersede && presented_ && presentedExtent_ == frame.extent &&
+            queuedSerial.load(std::memory_order_acquire) > frame.serial) {
+            // The retained surface includes this scene's damage for the next frame.
+            trace("worker_present_superseded");
+            return RenderResult::Superseded;
+        }
         trace("swap_begin");
         const bool swapped = SwapBuffers(dc_) != FALSE;
         trace("swap_return", swapped ? 1 : 0);
-        return swapped ? RenderResult::Complete : RenderResult::Failed;
+        if (!swapped) return RenderResult::Failed;
+        presented_ = true;
+        presentedExtent_ = frame.extent;
+        return RenderResult::Complete;
     }
 
 private:
@@ -186,6 +214,8 @@ private:
     sk_sp<SkSurface> surface_;
     sk_sp<SkSurface> retained_;
     std::uint64_t retainedExtent_ = 0;
+    std::uint64_t presentedExtent_ = 0;
+    bool presented_ = false;
     int width_ = 0;
     int height_ = 0;
 };
@@ -213,6 +243,7 @@ struct GlRenderWorker::State {
     std::atomic_bool ready{false};
     std::atomic_bool vsync{false};
     std::atomic_uint64_t extent{0};
+    std::atomic_uint64_t queuedSerial{0};
     std::mutex mutex;
     std::condition_variable changed;
     StartupGlScene startup;
@@ -351,6 +382,7 @@ bool GlRenderWorker::enqueue(sk_sp<SkPicture> picture, const Frame& frame,
             frame.extent != state.extent.load(std::memory_order_relaxed)) return false;
         state.lastQueued = frame;
         replaced = std::exchange(state.pending, State::Scene{std::move(picture), frame, trace});
+        state.queuedSerial.store(frame.serial, std::memory_order_release);
     }
     if (replaced.picture) {
         internal::traceInteractionPaint(replaced.trace, "worker_frame_replaced", "opengl-worker");
@@ -460,6 +492,8 @@ void GlRenderWorker::State::render() {
         ready.store(true, std::memory_order_release);
         InvalidateRect(window, nullptr, FALSE);
     }
+    const bool supersede = supersedeGlWorkerFrameEnabled();
+    bool mustPresent = false;
     for (;;) {
         Scene scene;
         {
@@ -468,7 +502,12 @@ void GlRenderWorker::State::render() {
             if (stopping) break;
             scene = std::exchange(pending, {});
         }
-        const auto result = renderer.render(*scene.picture, scene.frame, scene.trace, extent);
+        internal::traceInteractionPaint(scene.trace, "worker_scene_taken", "opengl-worker");
+        const auto result = renderer.render(*scene.picture, scene.frame, scene.trace, extent,
+                                            queuedSerial, supersede && !mustPresent);
+        // Keep presenting regularly even while newer recordings keep arriving.
+        if (result == RenderResult::Superseded) mustPresent = true;
+        if (result == RenderResult::Complete) mustPresent = false;
         if (result == RenderResult::Failed) break;
         if (result == RenderResult::Obsolete) {
             Scene obsolete;
