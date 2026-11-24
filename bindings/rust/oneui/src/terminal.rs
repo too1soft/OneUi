@@ -1,13 +1,13 @@
 //! Terminal bindings.
 
+#[path = "terminal_frame_queue.rs"]
+mod frame_queue;
 #[path = "terminal_local_pointer.rs"]
 mod local_pointer;
 
 use super::choice_controls::{run_bool_changed_callback, BoolChangedCallback};
 use super::key_event::RawKeyEvent;
-use super::terminal_render::{
-    apply_terminal_frame, apply_terminal_grid, apply_terminal_view_options,
-};
+use super::terminal_render::{apply_terminal_grid, apply_terminal_view_options};
 use super::terminal_types::{
     TerminalAuxiliaryButtonAction, TerminalCell, TerminalColor, TerminalCursor,
     TerminalCursorStyle, TerminalFrame, TerminalPointerEvent, TerminalSelection,
@@ -181,100 +181,6 @@ impl TerminalViewHandle {
     /// Clears a programmatic terminal selection on the owning window thread.
     pub fn submit_frame_clearing_selection(&self, frame: TerminalFrame) -> Result<(), Error> {
         self.submit_update(frame, TerminalSelectionUpdate::Clear)
-    }
-
-    fn submit_update(
-        &self,
-        frame: TerminalFrame,
-        selection: TerminalSelectionUpdate,
-    ) -> Result<(), Error> {
-        if self.state.raw.load(Ordering::Acquire).is_null() {
-            return Err(Error::WidgetDestroyed);
-        }
-
-        *self
-            .state
-            .pending_update
-            .lock()
-            .expect("terminal pending update lock poisoned") =
-            Some(TerminalFrameUpdate { frame, selection });
-
-        if self.state.update_scheduled.swap(true, Ordering::AcqRel) {
-            return Ok(());
-        }
-
-        let state = Arc::clone(&self.state);
-        let dispatched_state = Arc::clone(&state);
-        if let Err(error) = self
-            .dispatcher
-            .dispatch(move || Self::drain_pending_frame(&dispatched_state))
-        {
-            state.update_scheduled.store(false, Ordering::Release);
-            state
-                .pending_update
-                .lock()
-                .expect("terminal pending update lock poisoned")
-                .take();
-            return Err(error);
-        }
-        Ok(())
-    }
-
-    fn drain_pending_frame(state: &TerminalViewState) {
-        loop {
-            let update = state
-                .pending_update
-                .lock()
-                .expect("terminal pending update lock poisoned")
-                .take();
-            let raw = state.raw.load(Ordering::Acquire);
-            if raw.is_null() {
-                state.update_scheduled.store(false, Ordering::Release);
-                return;
-            }
-            if let Some(update) = update {
-                let mut last_applied = state
-                    .last_applied_frame
-                    .lock()
-                    .expect("terminal last applied frame lock poisoned");
-                apply_terminal_frame(
-                    raw,
-                    &update.frame,
-                    last_applied.as_ref(),
-                    state.honor_application_cursor_style.load(Ordering::Acquire),
-                );
-                match update.selection {
-                    TerminalSelectionUpdate::Preserve => {}
-                    TerminalSelectionUpdate::Set(selection) => unsafe {
-                        sys::oneui_terminal_view_set_selection(
-                            raw,
-                            selection.start_row,
-                            selection.start_column,
-                            selection.end_row,
-                            selection.end_column,
-                        )
-                    },
-                    TerminalSelectionUpdate::Clear => unsafe {
-                        sys::oneui_terminal_view_clear_selection(raw)
-                    },
-                }
-                *last_applied = Some(update.frame);
-            }
-
-            state.update_scheduled.store(false, Ordering::Release);
-            if state
-                .pending_update
-                .lock()
-                .expect("terminal pending update lock poisoned")
-                .is_none()
-            {
-                return;
-            }
-            if !state.update_scheduled.swap(true, Ordering::AcqRel) {
-                continue;
-            }
-            return;
-        }
     }
 }
 
@@ -922,6 +828,12 @@ impl TerminalView {
             )
         };
         self.focus_callback = None;
+    }
+
+    /// Applies an already-submitted frame on the UI thread before revealing
+    /// retained content. The scheduled drain still handles later submissions.
+    pub fn apply_pending_frame(&self) {
+        self.state.apply_pending_frame();
     }
 
     pub fn as_widget(&self) -> &Widget {
