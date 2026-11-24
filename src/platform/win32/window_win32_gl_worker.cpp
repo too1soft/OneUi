@@ -40,6 +40,20 @@ bool scratchGlWorkerEnabled() noexcept {
     return enabled;
 }
 
+enum class StartupCensus { None, Additional, OwnContextOnly };
+
+StartupCensus workerStartupCensus() noexcept {
+    static const auto census = [] {
+        wchar_t value[2]{};
+        if (GetEnvironmentVariableW(L"ONEUI_WIN32_GL_WORKER_STARTUP_CENSUS", value, 2) != 1)
+            return StartupCensus::None;
+        if (value[0] == L'1') return StartupCensus::Additional;
+        if (value[0] == L'2') return StartupCensus::OwnContextOnly;
+        return StartupCensus::None;
+    }();
+    return census;
+}
+
 bool supersedeGlWorkerFrameEnabled() noexcept {
     static const bool enabled = [] {
         wchar_t value[2]{};
@@ -65,7 +79,7 @@ public:
         if (dc_) ReleaseDC(window_, dc_);
     }
 
-    bool initialize() {
+    bool initialize(const internal::InteractionSnapshot& startupTrace, bool warmScratchContext) {
         if (!dc_) return false;
         const auto descriptor = openGlWindowPixelFormat();
         format_ = ChoosePixelFormat(dc_, &descriptor);
@@ -77,6 +91,11 @@ public:
         options.fPersistentCache = rendering::shaderCache();
         const auto* vendor = reinterpret_cast<const char*>(glGetString(GL_VENDOR));
         const bool nvidia = vendor && std::strstr(vendor, "NVIDIA");
+        if (nvidia && warmScratchContext) {
+            internal::traceInteractionPaint(startupTrace, "worker_census_begin", "opengl-worker");
+            const bool warmed = warmNvidiaDriverThreadCensus(dc_);
+            internal::traceInteractionPaint(startupTrace, "worker_census_end", "opengl-worker", warmed ? 1 : 0);
+        }
         context_ = GrDirectContexts::MakeGL(internal::makeWin32GaneshGlInterface(nvidia), options);
         return static_cast<bool>(context_);
     }
@@ -276,6 +295,13 @@ bool experimentalGlWorkerPrewarm() noexcept {
     return enabled && scratchGlWorkerEnabled();
 }
 
+bool experimentalGlWorkerOwnsStartupWarmup(HWND window) {
+    if (workerStartupCensus() != StartupCensus::OwnContextOnly || !experimentalGlWorkerEnabled() ||
+        !scratchGlWorkerEnabled()) return false;
+    POINT origin{};
+    return nvidiaWindowDisplayOrigin(window, origin);
+}
+
 GlRenderWorker::~GlRenderWorker() { stop(); }
 
 bool GlRenderWorker::start(HWND window) {
@@ -445,7 +471,8 @@ void GlRenderWorker::State::render() {
         if (!scratch->open(origin)) return;
     }
     LiveContext renderer(scratch ? scratch->hwnd : window);
-    const bool initialized = renderer.initialize();
+    const bool initialized = renderer.initialize(startupTrace,
+        scratch && workerStartupCensus() != StartupCensus::None);
     StartupGlScene warmup;
     {
         std::lock_guard lock(mutex);

@@ -271,7 +271,7 @@
     void initialize() override {
         ensureCreated();
         if (hwnd_ && runtimeConfig_.gpuEnabled && !gpuInitializationAttempted_ && !options_.visible &&
-            !deferredStartupGl_.arm(hwnd_)) {
+            !deferredStartupGl_.arm(hwnd_) && !win32::experimentalGlWorkerOwnsStartupWarmup(hwnd_)) {
             gpuWarmup_.start(hwnd_);
         }
     }

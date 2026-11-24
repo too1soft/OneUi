@@ -45,5 +45,6 @@ private:
 bool experimentalGlWorkerEnabled() noexcept;
 bool experimentalGlWorkerAfterFirstFrame() noexcept;
 bool experimentalGlWorkerPrewarm() noexcept;
+bool experimentalGlWorkerOwnsStartupWarmup(HWND window);
 
 } // namespace oneui::win32
