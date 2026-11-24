@@ -1,6 +1,7 @@
 #include "window_win32_gl_worker.h"
 
 #include "gl_flush_trace_win32.h"
+#include "window_win32_deferred_gl.h"
 #include "window_win32_gpu_warmup.h"
 #include "platform/shared/skia_gl_setup.h"
 #include "include/core/SkCanvas.h"
@@ -12,7 +13,11 @@
 #include "include/gpu/ganesh/gl/GrGLDirectContext.h"
 #include <GL/gl.h>
 
+#include <atomic>
+#include <condition_variable>
+#include <cstring>
 #include <exception>
+#include <mutex>
 #include <utility>
 
 namespace oneui::win32 {
@@ -26,12 +31,21 @@ bool retainedGlWorkerEnabled() noexcept {
     return enabled;
 }
 
+bool scratchGlWorkerEnabled() noexcept {
+    static const bool enabled = [] {
+        wchar_t value[2]{};
+        return GetEnvironmentVariableW(L"ONEUI_WIN32_GL_WORKER_SCRATCH", value, 2) == 1 && value[0] == L'1';
+    }();
+    return enabled;
+}
+
 enum class RenderResult { Complete, Obsolete, Failed };
 
 class LiveContext {
 public:
     explicit LiveContext(HWND window) : window_(window), dc_(GetDC(window)) {}
     ~LiveContext() {
+        if (context_ && wglGetCurrentContext() != gl_) context_->abandonContext();
         retained_.reset();
         surface_.reset();
         context_.reset();
@@ -42,21 +56,43 @@ public:
         if (dc_) ReleaseDC(window_, dc_);
     }
 
-    bool initialize(bool& vsync) {
+    bool initialize() {
         if (!dc_) return false;
         const auto descriptor = openGlWindowPixelFormat();
-        const int format = ChoosePixelFormat(dc_, &descriptor);
-        if (!format || !SetPixelFormat(dc_, format, &descriptor)) return false;
+        format_ = ChoosePixelFormat(dc_, &descriptor);
+        if (!format_ || !DescribePixelFormat(dc_, format_, sizeof(descriptor_), &descriptor_) ||
+            !SetPixelFormat(dc_, format_, &descriptor)) return false;
         gl_ = wglCreateContext(dc_);
         if (!gl_ || !wglMakeCurrent(dc_, gl_)) return false;
-        const auto interval = reinterpret_cast<BOOL(WINAPI*)(int)>(wglGetProcAddress("wglSwapIntervalEXT"));
-        vsync = interval && interval(1);
         GrContextOptions options;
         options.fPersistentCache = rendering::shaderCache();
         context_ = internal::win32GlTraceEnabled()
             ? GrDirectContexts::MakeGL(internal::makeWin32GlTraceInterface(), options)
             : GrDirectContexts::MakeGL(options);
         return static_cast<bool>(context_);
+    }
+
+    bool adopt(HWND target, HMONITOR monitor) {
+        if (MonitorFromWindow(target, MONITOR_DEFAULTTONULL) != monitor ||
+            (descriptor_.dwFlags & PFD_GENERIC_FORMAT)) return false;
+        HDC dc = GetDC(target);
+        if (!dc) return false;
+        PIXELFORMATDESCRIPTOR actual{};
+        if (!DescribePixelFormat(dc, format_, sizeof(actual), &actual) ||
+            std::memcmp(&actual, &descriptor_, sizeof(actual)) != 0 ||
+            !SetPixelFormat(dc, format_, &descriptor_) || !wglMakeCurrent(dc, gl_)) {
+            ReleaseDC(target, dc);
+            return false;
+        }
+        ReleaseDC(window_, dc_);
+        window_ = target;
+        dc_ = dc;
+        return true;
+    }
+
+    bool enableVsync() const {
+        const auto interval = reinterpret_cast<BOOL(WINAPI*)(int)>(wglGetProcAddress("wglSwapIntervalEXT"));
+        return interval && interval(1);
     }
 
     RenderResult render(const SkPicture& picture, const GlRenderWorker::Frame& frame,
@@ -138,6 +174,8 @@ private:
     HWND window_;
     HDC dc_;
     HGLRC gl_ = nullptr;
+    PIXELFORMATDESCRIPTOR descriptor_{};
+    int format_ = 0;
     sk_sp<GrDirectContext> context_;
     sk_sp<SkSurface> surface_;
     sk_sp<SkSurface> retained_;
@@ -147,6 +185,36 @@ private:
 };
 
 } // namespace
+
+struct GlRenderWorker::State {
+    struct Scene {
+        sk_sp<SkPicture> picture;
+        Frame frame;
+        internal::InteractionSnapshot trace;
+    };
+
+    State(HWND window, HMONITOR monitor, POINT origin)
+        : window(window), monitor(monitor), origin(origin), ownsLiveWindow(!monitor) {}
+
+    void run() noexcept;
+    void render();
+
+    const HWND window;
+    const HMONITOR monitor;
+    const POINT origin;
+    std::atomic_bool ready{false};
+    std::atomic_bool vsync{false};
+    std::atomic_uint64_t extent{0};
+    std::mutex mutex;
+    std::condition_variable changed;
+    Scene pending;
+    Frame lastQueued;
+    Frame lastPlanned;
+    std::uint64_t latestPlan = 0;
+    bool stopping = false;
+    bool ownsLiveWindow;
+    bool finished = false;
+};
 
 bool experimentalGlWorkerEnabled() noexcept {
     static const bool enabled = [] {
@@ -168,116 +236,190 @@ bool experimentalGlWorkerAfterFirstFrame() noexcept {
 GlRenderWorker::~GlRenderWorker() { stop(); }
 
 bool GlRenderWorker::start(HWND window) {
-    if (thread_.joinable()) return false;
+    if (state_) return false;
+    POINT origin{};
+    HMONITOR monitor = nullptr;
+    if (scratchGlWorkerEnabled()) {
+        monitor = MonitorFromWindow(window, MONITOR_DEFAULTTONULL);
+        if (!monitor || !nvidiaWindowDisplayOrigin(window, origin)) return false;
+    }
     try {
-        thread_ = std::thread([this, window] { run(window); });
+        struct Task {
+            std::shared_ptr<State> state;
+            HMODULE module = nullptr;
+
+            static void CALLBACK run(PTP_CALLBACK_INSTANCE instance, void* context) noexcept {
+                std::unique_ptr<Task> task(static_cast<Task*>(context));
+                FreeLibraryWhenCallbackReturns(instance, task->module);
+                CallbackMayRunLong(instance);
+                task->state->run();
+            }
+        };
+        auto state = std::make_shared<State>(window, monitor, origin);
+        auto task = std::make_unique<Task>();
+        task->state = state;
+        if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
+                               reinterpret_cast<LPCWSTR>(&Task::run), &task->module)) return false;
+        // An abandoned scratch context can finish using this module after its window has closed.
+        HMODULE module = task->module;
+        auto* submitted = task.release();
+        if (!TrySubmitThreadpoolCallback(Task::run, submitted, nullptr)) {
+            delete submitted;
+            FreeLibrary(module);
+            return false;
+        }
+        state_ = std::move(state);
         return true;
     } catch (const std::exception&) {
         return false;
     }
 }
 
+bool GlRenderWorker::ready() const noexcept {
+    return state_ && state_->ready.load(std::memory_order_acquire);
+}
+
+bool GlRenderWorker::vsync() const noexcept {
+    return state_ && state_->vsync.load(std::memory_order_relaxed);
+}
+
 GlRenderWorker::Frame GlRenderWorker::plan(int width, int height, RECT damage) {
-    std::lock_guard lock(mutex_);
+    if (!state_) return {};
+    auto& state = *state_;
+    std::lock_guard lock(state.mutex);
     Frame frame{width, height, damage, retainedGlWorkerEnabled(),
-                extent_.load(std::memory_order_relaxed), ++latestPlan_};
-    const bool sameExtent = lastQueued_.extent == frame.extent &&
-        lastQueued_.width == width && lastQueued_.height == height;
+                state.extent.load(std::memory_order_relaxed), ++state.latestPlan};
+    const bool sameExtent = state.lastQueued.extent == frame.extent &&
+        state.lastQueued.width == width && state.lastQueued.height == height;
     if (!frame.retained || !sameExtent) {
         frame.damage = RECT{0, 0, width, height};
     } else {
         // Include work replaced in the mailbox, and damage from a recording
         // superseded by paint re-entry on the window thread.
-        if (pending_.picture) UnionRect(&frame.damage, &frame.damage, &pending_.frame.damage);
-        if (lastPlanned_.serial > lastQueued_.serial && lastPlanned_.extent == frame.extent &&
-            lastPlanned_.width == width && lastPlanned_.height == height) {
-            UnionRect(&frame.damage, &frame.damage, &lastPlanned_.damage);
+        if (state.pending.picture) UnionRect(&frame.damage, &frame.damage, &state.pending.frame.damage);
+        if (state.lastPlanned.serial > state.lastQueued.serial && state.lastPlanned.extent == frame.extent &&
+            state.lastPlanned.width == width && state.lastPlanned.height == height) {
+            UnionRect(&frame.damage, &frame.damage, &state.lastPlanned.damage);
         }
     }
-    lastPlanned_ = frame;
+    state.lastPlanned = frame;
     return frame;
 }
 
 bool GlRenderWorker::enqueue(sk_sp<SkPicture> picture, const Frame& frame,
                              const internal::InteractionSnapshot& trace) {
-    Scene replaced;
+    if (!state_) return false;
+    auto& state = *state_;
+    State::Scene replaced;
     {
-        std::lock_guard lock(mutex_);
-        if (stopping_ || !ready() || frame.serial != latestPlan_ ||
-            frame.extent != extent_.load(std::memory_order_relaxed)) return false;
-        lastQueued_ = frame;
-        replaced = std::exchange(pending_, Scene{std::move(picture), frame, trace});
+        std::lock_guard lock(state.mutex);
+        if (state.stopping || !ready() || frame.serial != state.latestPlan ||
+            frame.extent != state.extent.load(std::memory_order_relaxed)) return false;
+        state.lastQueued = frame;
+        replaced = std::exchange(state.pending, State::Scene{std::move(picture), frame, trace});
     }
     if (replaced.picture) {
         internal::traceInteractionPaint(replaced.trace, "worker_frame_replaced", "opengl-worker");
     }
-    changed_.notify_one();
+    state.changed.notify_one();
     return true;
 }
 
 void GlRenderWorker::invalidateExtent() {
-    Scene obsolete;
+    if (!state_) return;
+    auto& state = *state_;
+    State::Scene obsolete;
     {
-        std::lock_guard lock(mutex_);
-        ++extent_;
-        obsolete = std::exchange(pending_, {});
+        std::lock_guard lock(state.mutex);
+        ++state.extent;
+        obsolete = std::exchange(state.pending, {});
     }
 }
 
 void GlRenderWorker::stop() {
-    {
-        std::lock_guard lock(mutex_);
-        stopping_ = true;
+    auto state = std::exchange(state_, {});
+    if (!state) return;
+    State::Scene discarded;
+    std::unique_lock lock(state->mutex);
+    state->stopping = true;
+    ++state->extent;
+    discarded = std::exchange(state->pending, {});
+    state->changed.notify_one();
+    if (state->ownsLiveWindow) {
+        state->changed.wait(lock, [&] { return state->finished; });
+    } else if (!state->finished) {
+        internal::traceInteractionPaint({reinterpret_cast<std::uintptr_t>(state->window)},
+                                        "worker_scratch_cancel", "opengl-worker", 1);
     }
-    changed_.notify_one();
-    if (thread_.joinable()) thread_.join();
-    ready_.store(false, std::memory_order_release);
-    pending_ = {};
 }
 
-void GlRenderWorker::run(HWND window) {
+void GlRenderWorker::State::run() noexcept {
     try {
-        LiveContext renderer(window);
-        const internal::InteractionSnapshot startupTrace{reinterpret_cast<std::uintptr_t>(window)};
-        internal::traceInteractionPaint(startupTrace, "worker_context_begin", "opengl-worker");
-        bool synced = false;
-        const bool initialized = renderer.initialize(synced);
-        internal::traceInteractionPaint(startupTrace, "worker_context_end", "opengl-worker", initialized ? 1 : 0);
-        if (initialized) {
-            {
-                std::lock_guard lock(mutex_);
-                if (stopping_) return;
-                vsync_.store(synced, std::memory_order_relaxed);
-                ready_.store(true, std::memory_order_release);
-                InvalidateRect(window, nullptr, FALSE);
-            }
-            for (;;) {
-                Scene scene;
-                {
-                    std::unique_lock lock(mutex_);
-                    changed_.wait(lock, [&] { return stopping_ || pending_.picture; });
-                    if (stopping_) break;
-                    scene = std::exchange(pending_, {});
-                }
-                const auto result = renderer.render(*scene.picture, scene.frame, scene.trace, extent_);
-                if (result == RenderResult::Failed) break;
-                if (result == RenderResult::Obsolete) {
-                    Scene obsolete;
-                    std::lock_guard lock(mutex_);
-                    if (!stopping_ && extent_.load(std::memory_order_relaxed) == scene.frame.extent) {
-                        ++extent_;
-                        obsolete = std::exchange(pending_, {});
-                        InvalidateRect(window, nullptr, FALSE);
-                    }
-                }
-            }
-        }
+        render();
     } catch (const std::exception&) {
         // The window resumes the existing raster path on worker failure.
     }
-    std::lock_guard lock(mutex_);
-    ready_.store(false, std::memory_order_release);
-    if (!stopping_) InvalidateRect(window, nullptr, FALSE);
+    std::lock_guard lock(mutex);
+    ready.store(false, std::memory_order_release);
+    if (!stopping) InvalidateRect(window, nullptr, FALSE);
+    finished = true;
+    changed.notify_all();
+}
+
+void GlRenderWorker::State::render() {
+    const internal::InteractionSnapshot startupTrace{reinterpret_cast<std::uintptr_t>(window)};
+    {
+        std::lock_guard lock(mutex);
+        if (stopping) return;
+        internal::traceInteractionPaint(startupTrace, "worker_context_begin", "opengl-worker");
+    }
+    StartupGlScratchWindow scratch;
+    if (monitor && !scratch.open(origin)) return;
+    LiveContext renderer(monitor ? scratch.hwnd : window);
+    const bool initialized = renderer.initialize();
+    {
+        std::lock_guard lock(mutex);
+        if (stopping) return;
+        internal::traceInteractionPaint(startupTrace, "worker_context_end", "opengl-worker", initialized ? 1 : 0);
+        if (!initialized) return;
+        // Close may proceed during scratch initialization. Once claimed here,
+        // destruction waits for the worker to release the live HWND and DC.
+        ownsLiveWindow = true;
+    }
+    if (monitor) {
+        internal::traceInteractionPaint(startupTrace, "worker_adopt_begin", "opengl-worker");
+        const bool adopted = renderer.adopt(window, monitor);
+        internal::traceInteractionPaint(startupTrace, "worker_adopt_end", "opengl-worker", adopted ? 1 : 0);
+        if (!adopted) return;
+    }
+    const bool synced = renderer.enableVsync();
+    {
+        std::lock_guard lock(mutex);
+        if (stopping) return;
+        vsync.store(synced, std::memory_order_relaxed);
+        ready.store(true, std::memory_order_release);
+        InvalidateRect(window, nullptr, FALSE);
+    }
+    for (;;) {
+        Scene scene;
+        {
+            std::unique_lock lock(mutex);
+            changed.wait(lock, [&] { return stopping || pending.picture; });
+            if (stopping) break;
+            scene = std::exchange(pending, {});
+        }
+        const auto result = renderer.render(*scene.picture, scene.frame, scene.trace, extent);
+        if (result == RenderResult::Failed) break;
+        if (result == RenderResult::Obsolete) {
+            Scene obsolete;
+            std::lock_guard lock(mutex);
+            if (!stopping && extent.load(std::memory_order_relaxed) == scene.frame.extent) {
+                ++extent;
+                obsolete = std::exchange(pending, {});
+                InvalidateRect(window, nullptr, FALSE);
+            }
+        }
+    }
 }
 
 } // namespace oneui::win32

@@ -14,6 +14,20 @@ namespace oneui::win32 {
 
 inline constexpr UINT deferredGlReadyMessage = WM_APP + 5;
 
+class StartupGlScratchWindow {
+public:
+    StartupGlScratchWindow() = default;
+    ~StartupGlScratchWindow();
+    StartupGlScratchWindow(const StartupGlScratchWindow&) = delete;
+    StartupGlScratchWindow& operator=(const StartupGlScratchWindow&) = delete;
+
+    bool open(POINT origin);
+
+    HWND hwnd = nullptr;
+    HDC dc = nullptr;
+    HGLRC context = nullptr;
+};
+
 struct PreparedStartupGl {
     ~PreparedStartupGl();
     PreparedStartupGl() = default;

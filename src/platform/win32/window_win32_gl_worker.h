@@ -4,10 +4,7 @@
 #include "include/core/SkPicture.h"
 
 #include <windows.h>
-#include <atomic>
-#include <condition_variable>
-#include <mutex>
-#include <thread>
+#include <memory>
 
 namespace oneui::win32 {
 
@@ -26,8 +23,8 @@ public:
 
     ~GlRenderWorker();
     bool start(HWND window);
-    bool ready() const noexcept { return ready_.load(std::memory_order_acquire); }
-    bool vsync() const noexcept { return vsync_.load(std::memory_order_relaxed); }
+    bool ready() const noexcept;
+    bool vsync() const noexcept;
     Frame plan(int width, int height, RECT damage);
     bool enqueue(sk_sp<SkPicture> picture, const Frame& frame,
                  const internal::InteractionSnapshot& trace);
@@ -35,25 +32,9 @@ public:
     void stop();
 
 private:
-    struct Scene {
-        sk_sp<SkPicture> picture;
-        Frame frame;
-        internal::InteractionSnapshot trace;
-    };
+    struct State;
 
-    void run(HWND window);
-
-    std::atomic_bool ready_{false};
-    std::atomic_bool vsync_{false};
-    std::atomic_uint64_t extent_{0};
-    std::mutex mutex_;
-    std::condition_variable changed_;
-    Scene pending_;
-    Frame lastQueued_;
-    Frame lastPlanned_;
-    std::uint64_t latestPlan_ = 0;
-    bool stopping_ = false;
-    std::thread thread_;
+    std::shared_ptr<State> state_;
 };
 
 bool experimentalGlWorkerEnabled() noexcept;

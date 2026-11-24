@@ -19,36 +19,6 @@ namespace {
 constexpr wchar_t scratchClass[] = L"OneUI.DeferredStartupGl";
 std::atomic_bool claimed{false};
 
-class ScratchWindow {
-public:
-    HWND hwnd = nullptr;
-    HDC dc = nullptr;
-    HGLRC context = nullptr;
-
-    ~ScratchWindow() {
-        if (context) {
-            if (wglGetCurrentContext() == context) wglMakeCurrent(nullptr, nullptr);
-            wglDeleteContext(context);
-        }
-        if (dc) ReleaseDC(hwnd, dc);
-        if (hwnd) DestroyWindow(hwnd);
-    }
-
-    bool open(POINT origin) {
-        WNDCLASSW info{};
-        info.style = CS_OWNDC;
-        info.lpfnWndProc = DefWindowProcW;
-        info.hInstance = GetModuleHandleW(nullptr);
-        info.lpszClassName = scratchClass;
-        if (!RegisterClassW(&info) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS) return false;
-        hwnd = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, scratchClass, L"",
-                               WS_POPUP, origin.x, origin.y, 32, 32, nullptr, nullptr,
-                               info.hInstance, nullptr);
-        dc = hwnd ? GetDC(hwnd) : nullptr;
-        return dc != nullptr;
-    }
-};
-
 void trace(const char* stage, double started, double detailA = 0.0) {
     if (started < 0.0) return;
     internal::writeScrollTrace(internal::ScrollTraceEvent{
@@ -57,6 +27,29 @@ void trace(const char* stage, double started, double detailA = 0.0) {
 }
 
 } // namespace
+
+StartupGlScratchWindow::~StartupGlScratchWindow() {
+    if (context) {
+        if (wglGetCurrentContext() == context) wglMakeCurrent(nullptr, nullptr);
+        wglDeleteContext(context);
+    }
+    if (dc) ReleaseDC(hwnd, dc);
+    if (hwnd) DestroyWindow(hwnd);
+}
+
+bool StartupGlScratchWindow::open(POINT origin) {
+    WNDCLASSW info{};
+    info.style = CS_OWNDC;
+    info.lpfnWndProc = DefWindowProcW;
+    info.hInstance = GetModuleHandleW(nullptr);
+    info.lpszClassName = scratchClass;
+    if (!RegisterClassW(&info) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS) return false;
+    hwnd = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, scratchClass, L"",
+                           WS_POPUP, origin.x, origin.y, 32, 32, nullptr, nullptr,
+                           info.hInstance, nullptr);
+    dc = hwnd ? GetDC(hwnd) : nullptr;
+    return dc != nullptr;
+}
 
 PreparedStartupGl::~PreparedStartupGl() {
     if (ganesh) ganesh->abandonContext();
@@ -119,7 +112,7 @@ void DeferredStartupGl::submitPicture(sk_sp<SkPicture> picture, int width, int h
 std::unique_ptr<PreparedStartupGl> DeferredStartupGl::prepare(POINT origin, HMONITOR monitor) {
     const bool tracing = internal::scrollTraceEnabled();
     const double started = tracing ? internal::scrollTraceNowMs() : -1.0;
-    ScratchWindow scratch;
+    StartupGlScratchWindow scratch;
     if (!scratch.open(origin)) return nullptr;
     const auto pfd = openGlWindowPixelFormat();
     const int format = ChoosePixelFormat(scratch.dc, &pfd);
