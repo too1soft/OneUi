@@ -6,6 +6,7 @@
 #include "oneui/subscription.h"
 #include "oneui/ui_declarative.h"
 #include "components/registry.h"
+#include <algorithm>
 #include <atomic>
 #include <thread>
 #include <unordered_map>
@@ -66,8 +67,21 @@ struct Scope {
     std::weak_ptr<Scope> sourceScope;
 };
 using Scopes = std::vector<std::shared_ptr<Scope>>;
+// Keep these validated IR records inline. Instances can be copied during
+// reload and can outlive the image that supplied them during event dispatch.
+class InstanceRecord {
+    static constexpr size_t capacity = oneview::strides[oneview::BIND] / sizeof(uint32_t);
+    static_assert(oneview::strides[oneview::COND] <= capacity * sizeof(uint32_t));
+    static_assert(oneview::strides[oneview::EVNT] <= capacity * sizeof(uint32_t));
+    std::array<uint32_t, capacity> words{};
+public:
+    explicit InstanceRecord(const oneview::Record& record) {
+        std::copy(record.begin(), record.end(), words.begin());
+    }
+    uint32_t operator[](size_t index) const { return words[index]; }
+};
 struct Binding {
-    oneview::Record record;
+    InstanceRecord record;
     std::weak_ptr<Scope> scope;
     uint32_t kind;
     std::optional<Value> previous;
@@ -94,7 +108,7 @@ struct Instance {
     Scopes scopes;
     std::vector<std::shared_ptr<Instance>> children;
     std::vector<Binding> bindings;
-    std::vector<oneview::Record> events;
+    std::vector<InstanceRecord> events;
     std::vector<uint32_t> owners;
     std::map<std::string, std::shared_ptr<Instance>> rows;
     std::vector<ui::Element> conditions;
@@ -193,7 +207,7 @@ struct Runtime : std::enable_shared_from_this<Runtime> {
     void update(const std::shared_ptr<Instance> &);
     void refreshRepeatLayouts(const std::shared_ptr<Instance>&);
     void apply(const std::shared_ptr<Instance> &, Binding &);
-    void invoke(const std::shared_ptr<Instance> &, const oneview::Record &, std::vector<Value>);
+    void invoke(const std::shared_ptr<Instance> &, const InstanceRecord &, std::vector<Value>);
     void set(const std::shared_ptr<Scope> &, uint32_t, const Value &);
     ListState &list(const std::shared_ptr<Scope> &, uint32_t);
     void refreshList(const std::shared_ptr<Scope> &, uint32_t, ListState &);

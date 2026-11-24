@@ -275,7 +275,7 @@ void Runtime::set(const std::shared_ptr<Scope> &scope, uint32_t property, const 
     check(result == 0, result < 0 ? result : ONEUI_VIEW_FOREIGN_FAILURE, "VM set failed");
     notify(scope, property);
 }
-void Runtime::invoke(const std::shared_ptr<Instance> &instance, const oneview::Record &event,
+void Runtime::invoke(const std::shared_ptr<Instance> &instance, const InstanceRecord &event,
                      std::vector<Value> args) {
     alive();
     auto scope = instance->scopes.at(event[3] & 0xffff);

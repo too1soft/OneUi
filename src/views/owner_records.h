@@ -42,6 +42,7 @@ public:
         Iterator first, last;
         Iterator begin() const { return first; }
         Iterator end() const { return last; }
+        size_t size() const { return size_t(last.position - first.position); }
     };
     bool hasMountConditions() const { return mountConditions_; }
     Range get(const oneview::Image& image, oneview::Section section, uint32_t owner) const {

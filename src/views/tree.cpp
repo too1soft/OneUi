@@ -200,6 +200,16 @@ void Runtime::install(const std::shared_ptr<Instance> &instance, uint32_t owner,
                       const Scopes &context) {
     const timing::Scope measure(timing::Properties);
     instance->owners.push_back(owner);
+    const auto properties = ownerRecords.get(image, PROP, owner);
+    const auto bindings = ownerRecords.get(image, BIND, owner);
+    const auto events = ownerRecords.get(image, EVNT, owner);
+    if (instance->owners.size() == 1) {
+        instance->bindings.reserve(bindings.size());
+        instance->events.reserve(events.size());
+    }
+    const auto* contract = properties.size() || bindings.size()
+        ? &image.components[image.records[NODE][componentRoot(image, owner)][1]]
+        : nullptr;
     auto overrideProperty = [&](uint32_t property) {
         instance->bindings.erase(
             std::remove_if(
@@ -207,37 +217,35 @@ void Runtime::install(const std::shared_ptr<Instance> &instance, uint32_t owner,
                 [&](const Binding &b) { return b.kind == BIND && b.record[1] == property; }),
             instance->bindings.end());
     };
-    for (const auto &r : ownerRecords.get(image, PROP, owner)) {
-        const auto &contract =
-            image.components[image.records[NODE][componentRoot(image, owner)][1]];
+    for (const auto &r : properties) {
         overrideProperty(r[1]);
         auto value = constant(r[2]);
-        if (!components::set(instance,r[1],value.borrow()) && !workspaceScalar(*instance,contract.property(r[1]).name,value))
-            setScalar(factory, instance->element, contract.property(r[1]).name, value);
-        if (contract.property(r[1]).name == "disabled")
-            instance->authoredDisabled = bool(constant(r[2]).integer);
+        const auto& name = contract->property(r[1]).name;
+        if (!components::set(instance,r[1],value.borrow()) && !workspaceScalar(*instance,name,value))
+            setScalar(factory, instance->element, name, value);
+        if (name == "disabled")
+            instance->authoredDisabled = bool(value.integer);
     }
-    for (const auto &r : ownerRecords.get(image, BIND, owner)) {
+    for (const auto &r : bindings) {
         overrideProperty(r[1]);
-        Binding binding{r, context.at(r[3] & 0xffff), BIND};
-        const auto& contract = image.components[image.records[NODE][componentRoot(image, owner)][1]];
-        if (!(instance->element.component == "Text" && contract.property(r[1]).name == "spans"))
+        Binding binding{InstanceRecord(r), context.at(r[3] & 0xffff), BIND};
+        if (!(instance->element.component == "Text" && contract->property(r[1]).name == "spans"))
             apply(instance, binding);
         instance->bindings.push_back(std::move(binding));
     }
     for (const auto &r : ownerRecords.get(image, COND, owner)) {
         if ((r[3] >> 16) & conditionMountOnly) continue;
-        Binding binding{r, context.at(r[3] & 0xffff), COND};
+        Binding binding{InstanceRecord(r), context.at(r[3] & 0xffff), COND};
         apply(instance, binding);
         instance->bindings.push_back(std::move(binding));
     }
     const timing::Scope measureEvents(timing::Events);
-    for (const auto &r : ownerRecords.get(image, EVNT, owner)) {
+    for (const auto &r : events) {
         instance->events.erase(std::remove_if(instance->events.begin(), instance->events.end(),
-                                              [&](const Record &e) { return e[1] == r[1]; }),
+                                              [&](const InstanceRecord &e) { return e[1] == r[1]; }),
                                instance->events.end());
         // CALL is invoked with the same scope vector; records retain caller lexical depth.
-        instance->events.push_back(r);
+        instance->events.emplace_back(r);
         auto &command = image.schema.model(r[4]).command(r[2]);
         for (auto id : {command.when, command.busy})
             if (id)
