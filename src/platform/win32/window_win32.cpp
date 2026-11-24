@@ -136,6 +136,7 @@ public:
 #include "window_win32_pointer_dispatch.inc"
 #include "window_win32_gpu.inc"
     win32::GlRenderWorker glWorker_;
+    bool glWorkerWaitingForSoftwareFrame_ = false;
     const internal::RuntimeConfig runtimeConfig_ = internal::RuntimeConfig::fromEnvironment();
 #if ONEUI_DEVELOPER_TOOLS
     std::shared_ptr<internal::DeveloperRecorder> developerTools_;

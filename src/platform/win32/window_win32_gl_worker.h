@@ -57,5 +57,6 @@ private:
 };
 
 bool experimentalGlWorkerEnabled() noexcept;
+bool experimentalGlWorkerAfterFirstFrame() noexcept;
 
 } // namespace oneui::win32

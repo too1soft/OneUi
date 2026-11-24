@@ -156,6 +156,15 @@ bool experimentalGlWorkerEnabled() noexcept {
     return enabled;
 }
 
+bool experimentalGlWorkerAfterFirstFrame() noexcept {
+    static const bool enabled = [] {
+        wchar_t value[2]{};
+        return GetEnvironmentVariableW(L"ONEUI_WIN32_GL_WORKER_AFTER_FIRST_FRAME", value, 2) == 1 &&
+            value[0] == L'1';
+    }();
+    return enabled;
+}
+
 GlRenderWorker::~GlRenderWorker() { stop(); }
 
 bool GlRenderWorker::start(HWND window) {
