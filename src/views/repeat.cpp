@@ -1,8 +1,33 @@
+#include <cstdlib>
+
 #include "internal/scroll_trace.h"
+#include "oneui/detail/view_mount_timing.h"
 #include "runtime.h"
 namespace oneui::views {
 using namespace oneview;
 namespace {
+namespace timing = detail::view_mount_timing;
+
+bool traceRepeatBuild() {
+    static const bool enabled = [] {
+        const auto* setting = std::getenv("ONEUI_VIEW_REPEAT_TIMING");
+        return setting && setting[0] == '1' && setting[1] == '\0';
+    }();
+    return enabled && !timing::current;
+}
+
+void writeRepeatBuildTrace(internal::ScrollTraceEvent event,
+                           const timing::Measurements& measurements) {
+    event.component = "view_repeat_build";
+    for (std::size_t stage = timing::Build; stage < timing::Count; ++stage) {
+        if (!measurements.calls[stage]) continue;
+        event.phase = timing::names[stage];
+        event.durationMs = std::chrono::duration<double, std::milli>(measurements.exclusive[stage]).count();
+        event.detailA = measurements.calls[stage];
+        internal::writeScrollTrace(event);
+    }
+}
+
 void activate(const std::shared_ptr<Instance> &node) noexcept {
     node->published = true;
     for (auto &child : node->children)
@@ -56,6 +81,8 @@ void Runtime::repeat(const std::shared_ptr<Instance> &instance) {
     auto stack = instance->element.as<Stack>();
     size_t created = 0;
     double buildMs = 0.0;
+    timing::Measurements measurements;
+    const bool measureBuild = trace && traceRepeatBuild();
     for (size_t i = 0; i < items.keys.size(); ++i) {
         auto found = instance->rows.find(items.keys[i]);
         std::shared_ptr<Instance> row;
@@ -74,7 +101,11 @@ void Runtime::repeat(const std::shared_ptr<Instance> &instance) {
             callPrefix.clear();
             try {
                 const auto buildStart = trace ? internal::scrollTraceNowMs() : 0.0;
-                row = build(image.records[TMPL][r[5]][1], nested);
+                if (measureBuild) {
+                    const timing::Scope measure(timing::Instantiate, &measurements);
+                    row = build(image.records[TMPL][r[5]][1], nested);
+                } else
+                    row = build(image.records[TMPL][r[5]][1], nested);
                 if (trace) {
                     buildMs += internal::scrollTraceNowMs() - buildStart;
                     ++created;
@@ -122,6 +153,8 @@ void Runtime::repeat(const std::shared_ptr<Instance> &instance) {
             event.detailA = static_cast<double>(items.keys.size());
             event.detailB = static_cast<double>(created);
             internal::writeScrollTrace(event);
+            if (measureBuild)
+                writeRepeatBuildTrace(event, measurements);
         }
     }
     if (instance->transparent) {
