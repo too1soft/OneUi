@@ -1,6 +1,7 @@
 #include "style_css_internal.h"
 #include "style_layout_internal.h"
 #include "oneui/layout/container_query.h"
+#include "../internal/view_mount_style_cache.h"
 #include <stdexcept>
 #include <algorithm>
 #include <cctype>
@@ -17,11 +18,12 @@ struct ParsedCssCache {
         std::string source;
         StyleSheet sheet;
     };
-    static constexpr size_t maxEntries = 8;
-    static constexpr size_t maxSourceBytes = 2 * 1024 * 1024;
-    static constexpr size_t maxRules = 8192;
+    const size_t maxEntries, maxSourceBytes, maxRules;
     std::list<Entry> entries;
     size_t sourceBytes = 0, ruleCount = 0;
+
+    ParsedCssCache(size_t capacity, size_t bytes, size_t rules)
+        : maxEntries(capacity), maxSourceBytes(bytes), maxRules(rules) {}
 
     const StyleSheet* find(const std::string& source) {
         auto found = std::find_if(entries.begin(), entries.end(),
@@ -35,7 +37,8 @@ struct ParsedCssCache {
         auto best = entries.end();
         for (auto it = entries.begin(); it != entries.end(); ++it) {
             const auto length = it->source.size();
-            if (length == 0 || length >= source.size() || source[length] != '\n' ||
+            if (length == 0 || length >= source.size() ||
+                (it->source.back() != '\n' && source[length] != '\n') ||
                 (best != entries.end() && length <= best->source.size())) continue;
             if (source.compare(0, length, it->source) == 0) best = it;
         }
@@ -59,7 +62,12 @@ struct ParsedCssCache {
     }
 };
 ParsedCssCache& parsedCssCache() {
-    thread_local ParsedCssCache cache;
+    thread_local ParsedCssCache cache(8, 2 * 1024 * 1024, 8192);
+    return cache;
+}
+ParsedCssCache& viewMountStyles() {
+    // Independent template sheets should not evict the shared application bases.
+    thread_local ParsedCssCache cache(4, 512 * 1024, 3072);
     return cache;
 }
 void parseRules(StyleSheet& sheet,const std::string& text,size_t begin,size_t end,
@@ -115,11 +123,22 @@ void parseRules(StyleSheet& sheet,const std::string& text,size_t begin,size_t en
     }
 }
 }
+void internal::retainViewMountStyles(const std::string& css) {
+    auto& bases = viewMountStyles();
+    if (bases.find(css)) return;
+    if (const auto* compiled = parsedCssCache().find(css)) {
+        try { bases.remember(css, *compiled); }
+        catch (const std::bad_alloc&) { /* Parsing already succeeded. */ }
+    }
+}
+
 bool StyleSheet::addRulesFromCss(const std::string& css,std::string* error) {
     try {
         const bool independent = rules().empty() && customProperties().empty();
         if (independent) {
-            if (const auto* cached = parsedCssCache().find(css)) {
+            const auto* cached = viewMountStyles().find(css);
+            if (!cached) cached = parsedCssCache().find(css);
+            if (cached) {
                 auto candidate = *cached;
                 candidate.setTransientStyleSheet(transientStyleSheet());
                 *this = std::move(candidate);
@@ -127,9 +146,12 @@ bool StyleSheet::addRulesFromCss(const std::string& css,std::string* error) {
             }
         }
         // View mounts validate their base theme before appending scoped CSS on
-        // a new line. A cached, complete prefix already has compiled rules and
-        // tokens. Start at that boundary and retain the full source for errors.
+        // a new line. Lowered CSS can already end with that line break.
+        // Start after the cached complete sheet and keep the original source
+        // for diagnostics in the suffix.
         const auto* prefix = independent ? parsedCssCache().findPrefix(css) : nullptr;
+        const auto* base = independent ? viewMountStyles().findPrefix(css) : nullptr;
+        if (base && (!prefix || base->source.size() > prefix->source.size())) prefix = base;
         const auto startOfRules = prefix ? prefix->source.size() : 0;
         auto candidate = prefix ? prefix->sheet : *this;
         if (prefix) candidate.setTransientStyleSheet(transientStyleSheet());

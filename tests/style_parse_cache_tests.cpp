@@ -223,6 +223,19 @@ void copiedTokenTablesStaySharedUntilAnActualEdit() {
             "moved-from token storage remains valid");
 }
 
+void loweredThemeCanBeExtended() {
+    const std::string baseCss = ":root {--preview-token:#102030;}\nlabel.preview { color:var(--preview-token); }\n";
+    const oneui::StyleNode preview{"label", {"preview"}, 0};
+    StyleSheet base, combined;
+    parse(base, baseCss);
+    parse(combined, baseCss + "label.preview { font-size:12px; }");
+    require(&combined.customProperties() == &base.customProperties(),
+            "a complete lowered prefix ending in a newline keeps its compiled tokens");
+    require(combined.resolve(preview).foreground->r == 0x10 &&
+                combined.resolve(preview).fontSize == 12 && !base.resolve(preview).fontSize,
+            "the suffix applies without altering the cached base");
+}
+
 void longSelectorsKeepCanonicalCacheKeys() {
     StyleSheet sheet;
     parse(sheet, "button.a.b.c.d.e.f.g.h.i:hover { height: 48px; max-width: 90px; }");
@@ -272,6 +285,7 @@ int main() {
         queryAndLayoutCopiesSurviveOtherThemes();
         transientNodeScopesDoNotAffectCascadeAfterEviction();
         copiedTokenTablesStaySharedUntilAnActualEdit();
+        loweredThemeCanBeExtended();
         longSelectorsKeepCanonicalCacheKeys();
         classBucketsKeepSourceOrder();
         std::exception_ptr workerError;

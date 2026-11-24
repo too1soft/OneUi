@@ -85,6 +85,20 @@ including scoped overrides, late token definitions and invalid CSS rollback.
 Use the view mount trace for phase times and an independent foreground capture
 for the first visible response and the settled Settings canvas.
 
+An external theme validated by an empty view mount also stays in a bounded
+thread-local cache for subsequent mounts. The cache budgets four sheets,
+512 KiB of source and 3,072 rules. Regular template and style parsing uses the
+general cache. Both caches share compiled rule and token storage through the
+existing copy-on-write sheet representation, and prefer the longest matching
+complete prefix. A line break already present at the end of the base sheet
+qualifies as a prefix boundary.
+
+With `ONEUI_SCROLL_TRACE` enabled, `view_mount_styles` reports the time spent
+lowering authored CSS, validating the native sheet and applying it to the
+active view. The trace identifies the mount, combined byte count and whether
+a view was active. The foreground observer measures the resulting visual
+response independently.
+
 ## Selector keys and widget defaults
 
 Style resolution borrows the existing selector class strings when forming the

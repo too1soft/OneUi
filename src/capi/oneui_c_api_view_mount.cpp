@@ -2,6 +2,8 @@
 #include "oneui/layout/overlay_host.h"
 #include "oneui/controls/popup.h"
 #include "oneui_c_api_view_internal.h"
+#include "../internal/scroll_trace.h"
+#include "../internal/view_mount_style_cache.h"
 namespace oneui::capi::views {
 std::string text(OneUiUtf8String s) {
     OneUiValue value{};
@@ -209,7 +211,13 @@ OneUiViewResult oneui_view_mount_set_styles(OneUiViewMount *handle, OneUiUtf8Str
         check(callbackPhase == Phase::Idle, ONEUI_VIEW_REENTRANT,
               "Style replacement during callback");
         check(density <= 1, ONEUI_VIEW_INVALID_ARGUMENT, "Density out of range");
+        bool trace = false;
+        try { trace = oneui::internal::scrollTraceEnabled(); }
+        catch (...) { }
+        auto mark = [&] { return trace ? oneui::internal::scrollTraceNowMs() : 0.0; };
+        const double start = mark();
         auto external = oneui::ui::syntax::css(text(css));
+        const double lowered = mark();
         auto combined = external;
         auto view = mount->active.lock();
         if (view)
@@ -218,7 +226,10 @@ OneUiViewResult oneui_view_mount_set_styles(OneUiViewMount *handle, OneUiUtf8Str
         auto nativeDensity =
             density ? oneui::ui::Density::Compact : oneui::ui::Density::Comfortable;
         oneui::ui::StyleRegistry validation;
+        const double validateStart = mark();
         validation.replace(combined, nativeDensity);
+        if (!view) oneui::internal::retainViewMountStyles(combined);
+        const double validated = mark();
         if (view) {
             view->styles->replace(combined, nativeDensity);
             view->styles->inheritTransient(mount->window->styleSheet ? mount->window->styleSheet->transientStyleSheet() : nullptr);
@@ -227,5 +238,21 @@ OneUiViewResult oneui_view_mount_set_styles(OneUiViewMount *handle, OneUiUtf8Str
         mount->externalCss = std::move(external);
         mount->density = nativeDensity;
         if(view) {view->externalCss=mount->externalCss;view->density=nativeDensity;}
+        if (trace) try {
+            const auto event = [&](const char* phase, double elapsed) {
+                oneui::internal::ScrollTraceEvent sample;
+                sample.component = "view_mount_styles";
+                sample.phase = phase;
+                sample.object = reinterpret_cast<std::uintptr_t>(handle);
+                sample.durationMs = elapsed;
+                sample.detailA = static_cast<double>(combined.size());
+                sample.detailB = view ? 1.0 : 0.0;
+                oneui::internal::writeScrollTrace(sample);
+            };
+            const double finished = mark();
+            event("lower", lowered - start);
+            event("validate", validated - validateStart);
+            event("replace", finished - validated);
+        } catch (...) { }
     });
 }
