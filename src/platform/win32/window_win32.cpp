@@ -5,6 +5,7 @@
 #include "gl_flush_trace_win32.h"
 #include "window_win32_gpu_warmup.h"
 #include "window_win32_deferred_gl.h"
+#include "window_win32_gl_worker.h"
 #include "accessibility_proxy_win32.h"
 #include "internal/frame_profile.h"
 #include "internal/developer_tools.h"
@@ -134,6 +135,7 @@ public:
 #include "window_win32_ime.inc"
 #include "window_win32_pointer_dispatch.inc"
 #include "window_win32_gpu.inc"
+    win32::GlRenderWorker glWorker_;
     const internal::RuntimeConfig runtimeConfig_ = internal::RuntimeConfig::fromEnvironment();
 #if ONEUI_DEVELOPER_TOOLS
     std::shared_ptr<internal::DeveloperRecorder> developerTools_;

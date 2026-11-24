@@ -79,21 +79,22 @@
 #endif
         const int width = std::max<LONG>(1, clientRect.right - clientRect.left);
         const int height = std::max<LONG>(1, clientRect.bottom - clientRect.top);
+        const bool threadedGl = glWorker_.ready() && !IsRectEmpty(&dirtyRect);
         const float scale = normalizedDpiScale();
         const float logicalWidth = static_cast<float>(width) / scale;
         const float logicalHeight = static_cast<float>(height) / scale;
 
         const double surfaceStartMs = currentTimeMs();
-        const bool allocatedSurface = ensurePaintSurfaceCapacity(width, height);
+        const bool allocatedSurface = !threadedGl && ensurePaintSurfaceCapacity(width, height);
         const double surfaceMs = currentTimeMs() - surfaceStartMs;
         paintTrace.mark(PaintTrace::Surface);
 
-        if (!paintSurface_) {
+        if (!threadedGl && !paintSurface_) {
             EndPaint(hwnd_, &paintStruct);
             internal::traceInteractionPaint(interactionPaint, "paint_end", "unknown", 0);
             return;
         }
-        if (allocatedSurface) {
+        if (allocatedSurface || threadedGl) {
             dirtyRect = clientRect;
         }
         const int dirtyX = std::clamp<LONG>(dirtyRect.left, 0, width);
@@ -108,10 +109,11 @@
             return;
         }
 
-        SkCanvas* skCanvas = paintSurface_->getCanvas();
+        SkCanvas* skCanvas = threadedGl ? nullptr : paintSurface_->getCanvas();
         const bool fullPaint = dirtyX == 0 && dirtyY == 0 && dirtyWidth == width && dirtyHeight == height;
         std::optional<SkPictureRecorder> recorder;
-        if (!useGPU && fullPaint && IsWindowVisible(hwnd_) && deferredStartupGl_.shouldCapture()) {
+        if (threadedGl ||
+            (!useGPU && fullPaint && IsWindowVisible(hwnd_) && deferredStartupGl_.shouldCapture())) {
             recorder.emplace();
             skCanvas = recorder->beginRecording(SkRect::MakeWH(static_cast<float>(width), static_cast<float>(height)));
         }
@@ -160,9 +162,30 @@
         if (recorder) {
             canvasOwner.reset();
             startupPicture = recorder->finishRecordingAsPicture();
-            paintSurface_->getCanvas()->drawPicture(startupPicture);
+            if (!threadedGl) paintSurface_->getCanvas()->drawPicture(startupPicture);
         }
         paintTrace.mark(PaintTrace::End);
+
+        if (threadedGl) {
+            internal::traceInteractionPaint(interactionPaint, "worker_scene_ready", "opengl-worker");
+            EndPaint(hwnd_, &paintStruct);
+            const bool accepted = glWorker_.enqueue(std::move(startupPicture), width, height, interactionPaint);
+            if (accepted) {
+                setRenderBackend(RenderBackend::OpenGL);
+                rendererInfo_.reason.clear();
+                rendererInfo_.vsync = glWorker_.vsync();
+                ++rendererInfo_.paints;
+                rendererInfo_.paintMs += currentTimeMs() - paintStartMs;
+            } else {
+                InvalidateRect(hwnd_, nullptr, FALSE);
+            }
+            flushDeferredImePosition();
+            finishDiagnostics();
+            internal::traceInteractionPaint(interactionPaint, "paint_end", "opengl-worker", accepted ? 1 : 0);
+            paintTrace.write(interactionPaint.window, static_cast<double>(interactionPaint.paintSequence),
+                clientRect, profile.data);
+            return;
+        }
 
         internal::traceInteractionPaint(interactionPaint, "content_paint_end",
             gpuAvailable_ && grContext_ && windowSurface_ ? "opengl" : "software");
