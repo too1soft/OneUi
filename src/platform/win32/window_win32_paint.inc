@@ -94,7 +94,11 @@
             internal::traceInteractionPaint(interactionPaint, "paint_end", "unknown", 0);
             return;
         }
-        if (allocatedSurface || threadedGl) {
+        win32::GlRenderWorker::Frame workerFrame;
+        if (threadedGl) {
+            workerFrame = glWorker_.plan(width, height, dirtyRect);
+            dirtyRect = workerFrame.damage;
+        } else if (allocatedSurface) {
             dirtyRect = clientRect;
         }
         const int dirtyX = std::clamp<LONG>(dirtyRect.left, 0, width);
@@ -116,6 +120,10 @@
             (!useGPU && fullPaint && IsWindowVisible(hwnd_) && deferredStartupGl_.shouldCapture())) {
             recorder.emplace();
             skCanvas = recorder->beginRecording(SkRect::MakeWH(static_cast<float>(width), static_cast<float>(height)));
+        }
+        if (threadedGl && !fullPaint) {
+            skCanvas->clipRect(SkRect::MakeLTRB(static_cast<float>(dirtyX), static_cast<float>(dirtyY),
+                static_cast<float>(dirtyRight), static_cast<float>(dirtyBottom)));
         }
         if (fullPaint) {
             const auto background = colors::Surface;
@@ -169,7 +177,7 @@
         if (threadedGl) {
             internal::traceInteractionPaint(interactionPaint, "worker_scene_ready", "opengl-worker");
             EndPaint(hwnd_, &paintStruct);
-            const bool accepted = glWorker_.enqueue(std::move(startupPicture), width, height, interactionPaint);
+            const bool accepted = glWorker_.enqueue(std::move(startupPicture), workerFrame, interactionPaint);
             if (accepted) {
                 setRenderBackend(RenderBackend::OpenGL);
                 rendererInfo_.reason.clear();
@@ -183,7 +191,7 @@
             finishDiagnostics();
             internal::traceInteractionPaint(interactionPaint, "paint_end", "opengl-worker", accepted ? 1 : 0);
             paintTrace.write(interactionPaint.window, static_cast<double>(interactionPaint.paintSequence),
-                clientRect, profile.data);
+                RECT{dirtyX, dirtyY, dirtyRight, dirtyBottom}, profile.data);
             return;
         }
 
