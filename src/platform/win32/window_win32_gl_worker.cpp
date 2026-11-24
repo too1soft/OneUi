@@ -40,6 +40,15 @@ bool scratchGlWorkerEnabled() noexcept {
     return enabled;
 }
 
+bool refreshStartupPrewarmEnabled() noexcept {
+    static const bool enabled = [] {
+        wchar_t value[2]{};
+        return GetEnvironmentVariableW(L"ONEUI_WIN32_GL_WORKER_REFRESH_PREWARM", value, 2) == 1 &&
+            value[0] == L'1';
+    }();
+    return enabled;
+}
+
 enum class RenderResult { Complete, Obsolete, Failed };
 
 class LiveContext {
@@ -420,13 +429,15 @@ void GlRenderWorker::State::render() {
     LiveContext renderer(scratch ? scratch->hwnd : window);
     const bool initialized = renderer.initialize();
     StartupGlScene warmup;
+    bool captureWhileWarming = false;
     {
         std::lock_guard lock(mutex);
         if (stopping) return;
         internal::traceInteractionPaint(startupTrace, "worker_context_end", "opengl-worker", initialized ? 1 : 0);
         if (!initialized) return;
-        captureStartup.store(false, std::memory_order_relaxed);
         warmup = std::move(startup);
+        captureWhileWarming = scratch && warmup.picture && refreshStartupPrewarmEnabled();
+        captureStartup.store(captureWhileWarming, std::memory_order_relaxed);
         if (warmup.picture) {
             internal::traceInteractionPaint(startupTrace, "worker_prewarm_begin", "opengl-worker");
         }
@@ -441,6 +452,21 @@ void GlRenderWorker::State::render() {
             internal::traceInteractionPaint(startupTrace, "worker_prewarm_end", "opengl-worker", warmed ? 1 : 0);
         }
         if (!warmed) return;
+        captureStartup.store(false, std::memory_order_relaxed);
+        warmup = std::move(startup);
+    }
+    if (warmup.picture) {
+        // Consume at most one newer software frame so redraws cannot delay
+        // adoption indefinitely. This work still owns only the scratch HWND.
+        internal::traceInteractionPaint(startupTrace, "worker_prewarm_refresh_begin", "opengl-worker");
+        const bool refreshed = renderer.prewarm(warmup);
+        warmup = {};
+        internal::traceInteractionPaint(startupTrace, "worker_prewarm_refresh_end", "opengl-worker", refreshed ? 1 : 0);
+        if (!refreshed) return;
+    }
+    {
+        std::lock_guard lock(mutex);
+        if (stopping) return;
         // Close may proceed while the worker owns only its scratch resources.
         // After this point the worker can acquire the live HWND and DC.
         ownsLiveWindow = true;
