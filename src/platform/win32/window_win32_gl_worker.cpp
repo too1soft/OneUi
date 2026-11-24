@@ -18,10 +18,21 @@
 namespace oneui::win32 {
 namespace {
 
+bool retainedGlWorkerEnabled() noexcept {
+    static const bool enabled = [] {
+        wchar_t value[2]{};
+        return GetEnvironmentVariableW(L"ONEUI_WIN32_GL_WORKER_DAMAGE", value, 2) == 1 && value[0] == L'1';
+    }();
+    return enabled;
+}
+
+enum class RenderResult { Complete, Obsolete, Failed };
+
 class LiveContext {
 public:
     explicit LiveContext(HWND window) : window_(window), dc_(GetDC(window)) {}
     ~LiveContext() {
+        retained_.reset();
         surface_.reset();
         context_.reset();
         if (gl_) {
@@ -48,16 +59,23 @@ public:
         return static_cast<bool>(context_);
     }
 
-    bool render(const SkPicture& picture, int width, int height,
-                const internal::InteractionSnapshot& snapshot) {
-        if (!matchesClient(width, height)) return true;
+    RenderResult render(const SkPicture& picture, const GlRenderWorker::Frame& frame,
+                        const internal::InteractionSnapshot& snapshot,
+                        const std::atomic_uint64_t& extent) {
+        const auto width = frame.width;
+        const auto height = frame.height;
+        const auto current = [&] {
+            return extent.load(std::memory_order_acquire) == frame.extent && matchesClient(width, height);
+        };
+        if (!current()) return RenderResult::Obsolete;
         if (!surface_ || width_ != width || height_ != height) {
             GrGLFramebufferInfo framebuffer{};
             framebuffer.fFormat = GL_RGBA8;
             auto target = GrBackendRenderTargets::MakeGL(width, height, 0, 0, framebuffer);
             surface_ = SkSurfaces::WrapBackendRenderTarget(context_.get(), target,
                 kBottomLeft_GrSurfaceOrigin, kBGRA_8888_SkColorType, nullptr, nullptr);
-            if (!surface_) return false;
+            if (!surface_) return RenderResult::Failed;
+            retained_.reset();
             width_ = width;
             height_ = height;
         }
@@ -65,8 +83,27 @@ public:
         const auto trace = [&](const char* phase, int success = -1) {
             internal::traceInteractionPaint(snapshot, phase, "opengl-worker", success);
         };
+        const bool full = frame.damage.left == 0 && frame.damage.top == 0 &&
+            frame.damage.right == width && frame.damage.bottom == height;
+        if (frame.retained && (!retained_ || retainedExtent_ != frame.extent)) {
+            if (!full) return RenderResult::Obsolete;
+            if (!retained_) {
+                retained_ = SkSurfaces::RenderTarget(context_.get(), skgpu::Budgeted::kYes,
+                    SkImageInfo::Make(width, height, kBGRA_8888_SkColorType, kPremul_SkAlphaType),
+                    0, kTopLeft_GrSurfaceOrigin, nullptr);
+                if (!retained_) return RenderResult::Failed;
+            }
+            retainedExtent_ = frame.extent;
+        }
         trace("worker_draw_begin");
-        surface_->getCanvas()->drawPicture(&picture);
+        auto* canvas = surface_->getCanvas();
+        if (frame.retained) {
+            retained_->getCanvas()->drawPicture(&picture);
+            canvas->clear(SK_ColorBLACK);
+            retained_->draw(canvas, 0.0f, 0.0f);
+        } else {
+            canvas->drawPicture(&picture);
+        }
         context_->flush();
         trace("worker_submit_begin");
         const bool tracing = snapshot.paintSequence && internal::win32GlTraceEnabled()
@@ -83,12 +120,12 @@ public:
             submitted = context_->submit(GrSyncCpu::kNo);
         }
         trace("worker_submit_end", submitted ? 1 : 0);
-        if (!submitted) return false;
-        if (!matchesClient(width, height)) return true;
+        if (!submitted) return RenderResult::Failed;
+        if (!current()) return RenderResult::Obsolete;
         trace("swap_begin");
         const bool swapped = SwapBuffers(dc_) != FALSE;
         trace("swap_return", swapped ? 1 : 0);
-        return swapped;
+        return swapped ? RenderResult::Complete : RenderResult::Failed;
     }
 
 private:
@@ -103,6 +140,8 @@ private:
     HGLRC gl_ = nullptr;
     sk_sp<GrDirectContext> context_;
     sk_sp<SkSurface> surface_;
+    sk_sp<SkSurface> retained_;
+    std::uint64_t retainedExtent_ = 0;
     int width_ = 0;
     int height_ = 0;
 };
@@ -129,19 +168,51 @@ bool GlRenderWorker::start(HWND window) {
     }
 }
 
-bool GlRenderWorker::enqueue(sk_sp<SkPicture> picture, int width, int height,
+GlRenderWorker::Frame GlRenderWorker::plan(int width, int height, RECT damage) {
+    std::lock_guard lock(mutex_);
+    Frame frame{width, height, damage, retainedGlWorkerEnabled(),
+                extent_.load(std::memory_order_relaxed), ++latestPlan_};
+    const bool sameExtent = lastQueued_.extent == frame.extent &&
+        lastQueued_.width == width && lastQueued_.height == height;
+    if (!frame.retained || !sameExtent) {
+        frame.damage = RECT{0, 0, width, height};
+    } else {
+        // Include work replaced in the mailbox, and damage from a recording
+        // superseded by paint re-entry on the window thread.
+        if (pending_.picture) UnionRect(&frame.damage, &frame.damage, &pending_.frame.damage);
+        if (lastPlanned_.serial > lastQueued_.serial && lastPlanned_.extent == frame.extent &&
+            lastPlanned_.width == width && lastPlanned_.height == height) {
+            UnionRect(&frame.damage, &frame.damage, &lastPlanned_.damage);
+        }
+    }
+    lastPlanned_ = frame;
+    return frame;
+}
+
+bool GlRenderWorker::enqueue(sk_sp<SkPicture> picture, const Frame& frame,
                              const internal::InteractionSnapshot& trace) {
     Scene replaced;
     {
         std::lock_guard lock(mutex_);
-        if (stopping_ || !ready()) return false;
-        replaced = std::exchange(pending_, Scene{std::move(picture), width, height, trace});
+        if (stopping_ || !ready() || frame.serial != latestPlan_ ||
+            frame.extent != extent_.load(std::memory_order_relaxed)) return false;
+        lastQueued_ = frame;
+        replaced = std::exchange(pending_, Scene{std::move(picture), frame, trace});
     }
     if (replaced.picture) {
         internal::traceInteractionPaint(replaced.trace, "worker_frame_replaced", "opengl-worker");
     }
     changed_.notify_one();
     return true;
+}
+
+void GlRenderWorker::invalidateExtent() {
+    Scene obsolete;
+    {
+        std::lock_guard lock(mutex_);
+        ++extent_;
+        obsolete = std::exchange(pending_, {});
+    }
 }
 
 void GlRenderWorker::stop() {
@@ -175,7 +246,17 @@ void GlRenderWorker::run(HWND window) {
                     if (stopping_) break;
                     scene = std::exchange(pending_, {});
                 }
-                if (!renderer.render(*scene.picture, scene.width, scene.height, scene.trace)) break;
+                const auto result = renderer.render(*scene.picture, scene.frame, scene.trace, extent_);
+                if (result == RenderResult::Failed) break;
+                if (result == RenderResult::Obsolete) {
+                    Scene obsolete;
+                    std::lock_guard lock(mutex_);
+                    if (!stopping_ && extent_.load(std::memory_order_relaxed) == scene.frame.extent) {
+                        ++extent_;
+                        obsolete = std::exchange(pending_, {});
+                        InvalidateRect(window, nullptr, FALSE);
+                    }
+                }
             }
         }
     } catch (const std::exception&) {

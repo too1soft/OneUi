@@ -366,6 +366,7 @@
             return 0;
         }
         case WM_SIZE:
+            if (glWorker_.ready()) glWorker_.invalidateExtent();
             if (interactiveResizeActive_) interactiveSizeChanged_ = true;
 #if ONEUI_DEVELOPER_TOOLS
             if(developerTools_)developerTools_->resetCadence();
@@ -393,6 +394,7 @@
             }
             return 0;
         case kOneUiDpiChanged:
+            if (glWorker_.ready()) glWorker_.invalidateExtent();
             handleDpiChanged(wParam, lParam);
             return 0;
         case WM_NCCALCSIZE:
