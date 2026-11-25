@@ -1,6 +1,9 @@
 #include "oneui_c_api_view_internal.h"
 #include "../internal/scroll_trace.h"
 #include "oneui/detail/view_mount_timing.h"
+#if defined(_WIN32)
+#include "../platform/win32/view_mount_dispatch.h"
+#endif
 // Included implementations provide stable-key workspace geometry and child mounts.
 namespace oneui::capi::views {
 std::shared_ptr<Runtime> runtime(OneUiView *view) {
@@ -30,6 +33,10 @@ OneUiViewResult oneui_view_instantiate(OneUiViewMount *mountHandle, const uint8_
     } catch (...) {
         // Diagnostics must not change the mount result.
     }
+#if defined(_WIN32)
+    const auto threadStart = traced ? oneui::internal::sampleViewMountDispatch()
+                                    : oneui::internal::ViewMountDispatchSample{};
+#endif
     const auto result = call(__func__, [&] {
         const timing::Scope measure(timing::Instantiate, traced ? &measurements : nullptr);
         check(out && mountHandle && bytes && length && length <= oneview::max_file,
@@ -72,6 +79,12 @@ OneUiViewResult oneui_view_instantiate(OneUiViewMount *mountHandle, const uint8_
     });
     if (traced) try {
         const auto object = reinterpret_cast<std::uintptr_t>(mountHandle);
+        const auto elapsedMs = std::chrono::duration<double, std::milli>(measurements.total).count();
+#if defined(_WIN32)
+        if (threadStart.valid)
+            oneui::internal::writeViewMountDispatch(
+                threadStart, oneui::internal::sampleViewMountDispatch(), object, elapsedMs);
+#endif
         for (std::size_t stage = 0; stage < timing::Count; ++stage) {
             if (!measurements.calls[stage]) continue;
             oneui::internal::ScrollTraceEvent event;
@@ -80,7 +93,7 @@ OneUiViewResult oneui_view_instantiate(OneUiViewMount *mountHandle, const uint8_
             event.object = object;
             event.durationMs = std::chrono::duration<double, std::milli>(measurements.exclusive[stage]).count();
             event.detailA = measurements.calls[stage];
-            event.detailB = std::chrono::duration<double, std::milli>(measurements.total).count();
+            event.detailB = elapsedMs;
             oneui::internal::writeScrollTrace(event);
         }
     } catch (...) { }
