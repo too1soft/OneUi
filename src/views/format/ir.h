@@ -1,5 +1,8 @@
 #pragma once
 #include "component_contract.h"
+#include <algorithm>
+#include <initializer_list>
+#include <iterator>
 
 namespace oneview
 {
@@ -27,7 +30,48 @@ enum Section : uint32_t
 };
 // PROP/BIND/EVNT end with owner_kind: 0 component NODE, 1 CALL NODE.
 inline constexpr uint32_t strides[] = {0, 0, 0, 0, 32, 48, 8, 24, 20, 36, 36, 16, 24, 32, 24, 32, 24, 24, 16, 16};
-using Record = std::vector<uint32_t>;
+
+// Every record has a schema-defined stride. Keep its fields with the record
+// when parsing an image or copying an installed event or binding.
+class Record
+{
+    static constexpr auto capacity = *std::max_element(std::begin(strides), std::end(strides)) / sizeof(uint32_t);
+    std::array<uint32_t, capacity> fields_{};
+    uint32_t count_ = 0;
+
+  public:
+    Record() = default;
+    explicit Record(std::size_t count)
+    {
+        require(count <= capacity, "internal record stride");
+        count_ = static_cast<uint32_t>(count);
+    }
+    Record(std::initializer_list<uint32_t> fields) : Record(fields.size())
+    {
+        std::copy(fields.begin(), fields.end(), fields_.begin());
+    }
+    std::size_t size() const noexcept { return count_; }
+    uint32_t* begin() noexcept { return fields_.data(); }
+    uint32_t* end() noexcept { return fields_.data() + count_; }
+    const uint32_t* begin() const noexcept { return fields_.data(); }
+    const uint32_t* end() const noexcept { return fields_.data() + count_; }
+    uint32_t& operator[](std::size_t index) noexcept { return fields_[index]; }
+    const uint32_t& operator[](std::size_t index) const noexcept { return fields_[index]; }
+    uint32_t& back() noexcept { return fields_[count_ - 1]; }
+    const uint32_t& back() const noexcept { return fields_[count_ - 1]; }
+    uint32_t& at(std::size_t index)
+    {
+        if (index >= count_)
+            throw std::out_of_range("IR record field");
+        return fields_[index];
+    }
+    const uint32_t& at(std::size_t index) const
+    {
+        if (index >= count_)
+            throw std::out_of_range("IR record field");
+        return fields_[index];
+    }
+};
 struct Image
 {
     Schema schema;

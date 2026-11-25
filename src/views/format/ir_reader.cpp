@@ -124,11 +124,8 @@ Image readImage(const Bytes &b, const ComponentContracts *known)
             records.reserve(e.count);
             for (uint32_t i = 0; i < e.count; ++i)
             {
-                Record record;
-                record.reserve(e.stride / 4);
-                for (uint32_t j = 0; j < e.stride / 4; ++j)
-                    record.push_back(c.u32());
-                records.push_back(std::move(record));
+                for (auto& field : records.emplace_back(e.stride / sizeof(uint32_t)))
+                    field = c.u32();
             }
         }
     }
