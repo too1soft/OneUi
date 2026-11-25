@@ -7,11 +7,10 @@
 // processes. Left alone it lands on the first user action that starts a
 // thread; in iShell that is the first terminal split, which then drops
 // several animation frames. Starting a no-op thread during the first frames
-// moves the census into startup and glFinish absorbs it there. The census
-// runs once per process, so later checkpoints only cost a thread start and an
-// idle finish, and they keep the fix working if a slower machine needs more
-// frames before the driver starts observing.
-void absorbDriverThreadCensus() {
+// lets the driver begin the census before the first user-triggered worker.
+// Leave GPU completion to the driver: finishing the live context here can
+// block window dispatch long after SwapBuffers has returned.
+void triggerDriverThreadCensus() {
     static int presentedFrames = 0;
     constexpr int kCheckpoints[] = {2, 3, 4, 6, 8, 12, 16};
     if (presentedFrames > kCheckpoints[std::size(kCheckpoints) - 1]) {
@@ -22,7 +21,6 @@ void absorbDriverThreadCensus() {
         return;
     }
     std::thread([] {}).join();
-    glFinish();
 }
 
 

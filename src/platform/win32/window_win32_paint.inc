@@ -248,7 +248,7 @@
             }
             if (swapped && nvidiaDriver_) {
                 const double censusStarted = internal::workspaceFrameProbe || traceLayout ? currentTimeMs() : 0;
-                absorbDriverThreadCensus();
+                triggerDriverThreadCensus();
                 if (censusStarted) {
                     const double censusMs = currentTimeMs() - censusStarted;
                     if (internal::workspaceFrameProbe) internal::workspaceCensusMs = censusMs;
