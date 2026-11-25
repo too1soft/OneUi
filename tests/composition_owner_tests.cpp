@@ -22,6 +22,62 @@ public:
     int installations = 0;
 };
 
+class TextProbe final : public oneui::Widget {
+public:
+    void paint(oneui::Canvas&) override {}
+    void setTextEnvironment(std::wstring family, float scale) override {
+        Widget::setTextEnvironment(std::move(family), scale);
+        if (onSet) onSet();
+    }
+    std::function<void()> onSet;
+};
+
+void verifyTextEnvironment() {
+    using namespace oneui;
+    auto parent = std::make_shared<View>();
+    auto child = std::make_shared<View>();
+    auto leaf = std::make_shared<TextProbe>();
+    parent->setTextEnvironment(L"Inherited", 1.25f);
+    parent->add(child);
+    child->add(leaf);
+    leaf->setTextEnvironment(L"Different", 2.0f);
+    parent->setTextEnvironment(L"Inherited", 1.25f);
+    require(leaf->textFontFamily() == L"Inherited" && leaf->textDpiScale() == 1.25f,
+            "reapplying the window environment reconciles a descendant override");
+
+    child->setFontFamily(L"Local");
+    View next;
+    next.setTextEnvironment(L"Next Window", 1.5f);
+    next.add(child);
+    parent->clearChildren();
+    require(leaf->textFontFamily() == L"Local" && leaf->textDpiScale() == 1.5f,
+            "reparenting updates DPI and preserves the nested family override");
+    child->setFontFamily(L"");
+    require(leaf->textFontFamily() == L"Next Window", "clearing an override restores the new window font");
+}
+
+void verifyReentrantTextEnvironment(int count) {
+    using namespace oneui;
+    View root;
+    auto first = std::make_shared<TextProbe>();
+    auto replacement = std::make_shared<TextProbe>();
+    root.add(first);
+    for (int index = 1; index < count; ++index) root.add(std::make_shared<TextProbe>());
+    const auto original = root.children();
+    first->onSet = [&] {
+        root.clearChildren();
+        root.add(replacement);
+    };
+    root.setTextEnvironment(L"New Window Font", 1.75f);
+    require(root.children().size() == 1 && root.children().front() == replacement,
+            "setter callback can replace children during propagation");
+    for (const auto& item : original)
+        require(item->textFontFamily() == L"New Window Font" && item->textDpiScale() == 1.75f,
+                "original snapshot remains valid across child changes");
+    require(replacement->textFontFamily() == L"New Window Font" && replacement->textDpiScale() == 1.75f,
+            "replacement inherits the current window environment");
+}
+
 void verifyDetachedAssembly() {
     using namespace oneui;
     auto leaf = std::make_shared<AnimationProbe>();
@@ -85,5 +141,7 @@ void verify() {
     require(replacement == 2, "old parent destruction leaves the new owner attached");
 }
 }
-int main() { try { verify(); verifyDetachedAssembly(); std::cout << "composition owners passed\n"; return 0; }
+int main() { try { verify(); verifyDetachedAssembly(); verifyTextEnvironment();
+    verifyReentrantTextEnvironment(4); verifyReentrantTextEnvironment(5);
+    std::cout << "composition owners passed\n"; return 0; }
 catch (const std::exception& e) { std::cerr << e.what() << '\n'; return 1; } }

@@ -6,10 +6,28 @@
 #include "oneui/controls/interactive_surface.h"
 
 #include <algorithm>
+#include <array>
 #include <stdexcept>
 #include <unordered_set>
 
 namespace oneui {
+namespace {
+
+template <class Visit>
+void visitChildSnapshot(const std::vector<std::shared_ptr<Widget>>& children, const Visit& visit) {
+    // A setter can re-enter application code and replace the owner's children.
+    // Keep the same strong snapshot, using stack storage for small containers.
+    if (children.size() <= 4) {
+        std::array<std::shared_ptr<Widget>, 4> snapshot;
+        const auto end = std::copy(children.begin(), children.end(), snapshot.begin());
+        for (auto child = snapshot.begin(); child != end; ++child) visit(**child);
+        return;
+    }
+    const auto snapshot = children;
+    for (const auto& child : snapshot) visit(*child);
+}
+
+} // namespace
 
 struct View::ChildAnimationRelay {
     View* parent;
@@ -26,8 +44,7 @@ std::shared_ptr<Widget> View::activeFocusChild() const {
 void View::setTextEnvironment(std::wstring family, float scale) {
     Widget::setTextEnvironment(family, scale);
     family = textFontFamily();
-    const auto children = children_;
-    for (const auto& child : children) child->setTextEnvironment(family, scale);
+    visitChildSnapshot(children_, [&](Widget& child) { child.setTextEnvironment(family, scale); });
 }
 namespace {
 
@@ -111,8 +128,7 @@ void View::setAnimationScheduler(std::function<void()> scheduler) {
 
 void View::styleScopeChanged() {
     Widget::styleScopeChanged();
-    const auto children = children_;
-    for (const auto& child : children) child->inheritStyleScope(styleScope(), this);
+    visitChildSnapshot(children_, [&](Widget& child) { child.inheritStyleScope(styleScope(), this); });
 }
 
 void View::installChildCallbacks(Widget& child) {
