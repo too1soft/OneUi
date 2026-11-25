@@ -2,8 +2,8 @@ use super::super::terminal_render::apply_terminal_frame;
 use super::*;
 use std::time::{Duration, Instant};
 
-pub(super) const MAX_UPDATES_PER_TURN: usize = 4;
-const TURN_BUDGET: Duration = Duration::from_millis(1);
+const MAX_UPDATES_PER_TURN: usize = 16;
+const TURN_BUDGET: Duration = Duration::from_millis(2);
 
 impl TerminalViewHandle {
     pub(super) fn submit_update(

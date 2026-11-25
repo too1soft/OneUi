@@ -1,4 +1,3 @@
-use super::frame_queue::MAX_UPDATES_PER_TURN;
 use super::{TerminalCell, TerminalCursor, TerminalCursorStyle, TerminalFrame, TerminalView};
 use crate::{Window, WindowOptions};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -49,6 +48,9 @@ pub(crate) fn updates_yield_to_other_window_callbacks() {
             producer
                 .submit_frame(frame(count + 1))
                 .expect("refill queue");
+            // Hold this delivery past the window-work budget after it has
+            // refilled the slot, so the next frame must wait for a new turn.
+            std::thread::sleep(Duration::from_millis(3));
         } else {
             let close_window = close.clone();
             close
@@ -82,9 +84,9 @@ pub(crate) fn updates_yield_to_other_window_callbacks() {
         UPDATES,
         "final frame was applied"
     );
-    let observed = applied_at_other_callback.load(Ordering::Relaxed);
-    assert!(
-        (1..=MAX_UPDATES_PER_TURN).contains(&observed),
-        "the first terminal callback applied {observed} frames before yielding",
+    assert_eq!(
+        applied_at_other_callback.load(Ordering::Relaxed),
+        1,
+        "the first terminal callback must yield after using its work budget",
     );
 }
