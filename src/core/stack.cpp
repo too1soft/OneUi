@@ -119,6 +119,11 @@ void Stack::clearStyleBox() {
 
 std::vector<std::shared_ptr<Widget>> Stack::orderedChildren() const {
     auto result=children();
+    const auto* presentation = internal::WidgetPresentationAccess::find(*this);
+    if (result.size() < 2 || !presentation ||
+        std::none_of(presentation->flex.begin(), presentation->flex.end(),
+            [](const auto& item) { return item.second.value.order != 0; }))
+        return result;
     auto order=[&](const auto& child) {
         return flexPresentation(child).order;
     };

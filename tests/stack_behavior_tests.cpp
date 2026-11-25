@@ -145,6 +145,39 @@ void testRepeatedLayoutValuesDoNotInvalidate() {
     expectNear("Actual changes still invalidate the stack", float(invalidations), 3.0f);
 }
 
+void testStackOrderHonorsOverridesAndRestoresInsertionOrder() {
+    for (auto engine : {oneui::StackEngine::Legacy, oneui::StackEngine::Yoga}) {
+        oneui::Stack stack(oneui::StackDirection::Row);
+        if (!stack.setEngine(engine)) continue;
+        stack.setFrame({0, 0, 200, 40});
+        const auto a = std::make_shared<LayoutProbe>(oneui::Size{30, 20});
+        const auto b = std::make_shared<LayoutProbe>(oneui::Size{30, 20});
+        const auto c = std::make_shared<LayoutProbe>(oneui::Size{30, 20});
+        stack.add(a);
+        stack.add(b);
+        stack.add(c);
+        NullCanvas canvas;
+        stack.paint(canvas);
+        expectNear("Default stack order starts with the first child", a->frame().x, 0);
+        expectNear("Default stack order keeps the second child", b->frame().x, 30);
+
+        stack.setFlexPresentation(b, {{}, -1});
+        stack.setFlexPresentation(c, {{}, -1});
+        stack.paint(canvas);
+        expectNear("Negative order moves a child first", b->frame().x, 0);
+        expectNear("Equal overrides preserve insertion order", c->frame().x, 30);
+        expectNear("Unordered child follows negative order", a->frame().x, 60);
+
+        stack.setFlexPresentation(b, {10.0f, 0});
+        stack.setFlexPresentation(c, {});
+        stack.paint(canvas);
+        expectNear("Resetting order restores the first child", a->frame().x, 0);
+        expectNear("A percentage basis preserves insertion order", b->frame().x, 30);
+        expectNear("A percentage basis still supplies geometry", b->frame().width, 20);
+        expectNear("Resetting order restores the final child", c->frame().x, 50);
+    }
+}
+
 } // namespace
 
 int main() {
@@ -153,6 +186,7 @@ int main() {
     testStackStyleBoxPaintsContainerBackground();
     testContentExtentUsesPreferredChildrenGapAndPadding();
     testRepeatedLayoutValuesDoNotInvalidate();
+    testStackOrderHonorsOverridesAndRestoresInsertionOrder();
 
     if (failures != 0) {
         std::cerr << failures << " stack behavior test(s) failed.\n";
