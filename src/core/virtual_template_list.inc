@@ -15,8 +15,10 @@ void VirtualTemplateList::setFactory(Factory factory, Retire retire) {
 void VirtualTemplateList::positions() {
     tops_.assign(keys_.size() + 1, 0);
     for (size_t i = 0; i < keys_.size(); ++i) {
-        auto h = heights_.find(keys_[i]);
-        tops_[i + 1] = tops_[i] + (h == heights_.end() ? estimate_ : h->second);
+        const auto h = heights_.find(keys_[i]);
+        const float height = tableViewport_ && !tableHeights_.empty()
+            ? tableHeights_[i] : (h == heights_.end() ? estimate_ : h->second);
+        tops_[i + 1] = tops_[i] + height;
     }
 }
 size_t VirtualTemplateList::indexAt(float offset) const {
@@ -40,11 +42,23 @@ void VirtualTemplateList::restore(const Anchor& a) {
     offset_ = std::clamp(offset_, 0.0f, maxScrollOffset());
 }
 void VirtualTemplateList::setKeys(std::vector<std::string> keys, bool refreshNow) {
+    setTableRows(std::move(keys), {}, refreshNow);
+}
+void VirtualTemplateList::setTableRows(std::vector<std::string> keys, std::vector<float> heights, bool refreshNow) {
+    if ((!heights.empty() && heights.size() != keys.size()) ||
+        std::any_of(heights.begin(), heights.end(), [](float h) { return !std::isfinite(h) || h < 0.0f; }))
+        throw std::invalid_argument("Invalid virtual table row heights");
+    if (!heights.empty() && keys == keys_ && heights == tableHeights_) {
+        if (refreshNow) refresh();
+        return;
+    }
     std::set<std::string> unique;
     for (const auto& key : keys)
         if (key.empty() || !unique.insert(key).second) throw std::invalid_argument("Empty or duplicate virtual key");
     const auto a = anchor();
     keys_ = std::move(keys);
+    tableHeights_ = std::move(heights);
+    tableLayoutPending_ = true;
     for (auto it = heights_.begin(); it != heights_.end();)
         if (!unique.count(it->first)) it = heights_.erase(it); else ++it;
     positions();
@@ -55,11 +69,16 @@ void VirtualTemplateList::setEstimatedHeight(float height) {
     if (!std::isfinite(height) || height < 16) throw std::invalid_argument("Virtual row estimate must be >= 16");
     auto a = anchor();
     estimate_ = height;
+    tableLayoutPending_ = true;
     positions();
     restore(a);
     refresh();
 }
-void VirtualTemplateList::setOverscan(size_t rows) { overscan_ = std::min(size_t(16), rows); refresh(); }
+void VirtualTemplateList::setOverscan(size_t rows) {
+    overscan_ = std::min(size_t(16), rows);
+    tableLayoutPending_ = true;
+    refresh();
+}
 void VirtualTemplateList::setFollowEnd(bool enabled) { following_ = enabled; }
 void VirtualTemplateList::setScrollOffset(float offset) {
     if (!std::isfinite(offset)) throw std::invalid_argument("Invalid virtual scroll offset");
@@ -74,6 +93,7 @@ void VirtualTemplateList::invalidateKey(const std::string& key) {
     for (const auto& child : children()) if (child != row->second.widget) next.push_back(child);
     reconcileChildren(std::move(next));
     mounted_.erase(row);
+    tableLayoutPending_ = true;
     if (retire_) retire_(key);
 }
 Rect VirtualTemplateList::rowFrame(const std::string& key) const {
@@ -84,6 +104,10 @@ void VirtualTemplateList::layoutChildren() {
     if (layingOut_ || !factory_) return;
     layingOut_ = true;
     struct Reset { bool& value; ~Reset() { value = false; } } reset{layingOut_};
+    if (tableViewport_) {
+        layoutTableRows();
+        return;
+    }
     auto a = anchor();
     const auto viewport = frame();
     height_ = viewport.height;
@@ -112,10 +136,7 @@ void VirtualTemplateList::layoutChildren() {
         last = std::min(keys_.size() - 1, last + overscan_);
         bool added = false;
         for (size_t i = first; i <= last; ++i) if (!mounted_.count(keys_[i])) {
-            Row row{factory_(i, keys_[i]), 0};
-            if (!row.widget) throw std::runtime_error("Virtual row factory returned null");
-            measure(keys_[i], row);
-            mounted_.emplace(keys_[i], std::move(row));
+            measure(keys_[i], mountRow(i));
             added = true;
         }
         positions();
@@ -129,20 +150,7 @@ void VirtualTemplateList::layoutChildren() {
         last = std::min(keys_.size() - 1, last + overscan_);
         for (size_t i = first; i <= last; ++i) keep.insert(keys_[i]);
     }
-    for (const auto& [key, row] : mounted_)
-        if (row.widget.get() == focusedChild() && std::find(keys_.begin(), keys_.end(), key) != keys_.end()) keep.insert(key);
-    std::vector<std::shared_ptr<Widget>> children;
-    std::vector<std::string> removed;
-    for (size_t i = 0; i < keys_.size(); ++i) {
-        auto row = mounted_.find(keys_[i]);
-        if (row != mounted_.end() && keep.count(keys_[i])) {
-            row->second.widget->setFrame({viewport.x, viewport.y + tops_[i] - offset_, std::max(0.0f, width_ - 10), tops_[i + 1] - tops_[i]});
-            children.push_back(row->second.widget);
-        }
-    }
-    for (const auto& [key, row] : mounted_) if (!keep.count(key)) removed.push_back(key);
-    reconcileChildren(std::move(children));
-    for (const auto& key : removed) { mounted_.erase(key); if (retire_) retire_(key); }
+    publishRows(std::move(keep), {viewport.x, viewport.y, std::max(0.0f, width_ - 10), viewport.height}, offset_);
     if (internal::scrollTraceEnabled() && !this->children().empty()) {
         const Rect first = this->children().front()->frame();
         internal::writeScrollTrace(internal::ScrollTraceEvent{
@@ -151,6 +159,34 @@ void VirtualTemplateList::layoutChildren() {
             maxScrollOffset(), 0.0, first.y, first.height});
     }
 }
+VirtualTemplateList::Row& VirtualTemplateList::mountRow(size_t index) {
+    auto widget = factory_(index, keys_[index]);
+    if (!widget) throw std::runtime_error("Virtual row factory returned null");
+    return mounted_.emplace(keys_[index], Row{std::move(widget), 0}).first->second;
+}
+void VirtualTemplateList::publishRows(std::set<std::string> keep, Rect content, float offset) {
+    for (const auto& [key, row] : mounted_) {
+        if (row.widget.get() != focusedChild() &&
+            (!tableViewport_ || row.widget.get() != pressedChild())) continue;
+        const auto match = std::find(keys_.begin(), keys_.end(), key);
+        if (match == keys_.end()) continue;
+        const auto index = static_cast<size_t>(match - keys_.begin());
+        if (!tableViewport_ || tops_[index + 1] > tops_[index]) keep.insert(key);
+    }
+    std::vector<std::shared_ptr<Widget>> children;
+    std::vector<std::string> removed;
+    for (size_t i = 0; i < keys_.size(); ++i) {
+        auto row = mounted_.find(keys_[i]);
+        if (row != mounted_.end() && keep.count(keys_[i])) {
+            row->second.widget->setFrame({content.x, content.y + tops_[i] - offset,
+                                          content.width, tops_[i + 1] - tops_[i]});
+            children.push_back(row->second.widget);
+        }
+    }
+    for (const auto& [key, row] : mounted_) if (!keep.count(key)) removed.push_back(key);
+    reconcileChildren(std::move(children));
+    for (const auto& key : removed) { mounted_.erase(key); if (retire_) retire_(key); }
+}
 Rect VirtualTemplateList::thumb() const {
     auto f = frame();
     if (maxScrollOffset() <= 0 || f.height <= 0) return {};
@@ -158,6 +194,10 @@ Rect VirtualTemplateList::thumb() const {
     return {f.x + f.width - 6, f.y + (f.height - h) * offset_ / maxScrollOffset(), 4, h};
 }
 void VirtualTemplateList::paint(Canvas& canvas) {
+    if (tableViewport_) {
+        View::paint(canvas);
+        return;
+    }
     layoutChildren();
     canvas.save();
     canvas.clipRect(frame());
@@ -167,6 +207,7 @@ void VirtualTemplateList::paint(Canvas& canvas) {
     if (t.height > 0) canvas.fillRect(t, theme().textMuted, 2);
 }
 bool VirtualTemplateList::onMouseWheel(const MouseWheelEvent& event) {
+    if (tableViewport_) return View::onMouseWheel(event);
     if (!interactive() || !hitTest(event.position)) return false;
     if (View::onMouseWheel(event)) return true;
     const float old = offset_;
@@ -174,6 +215,7 @@ bool VirtualTemplateList::onMouseWheel(const MouseWheelEvent& event) {
     return old != offset_;
 }
 bool VirtualTemplateList::onMouseDown(const MouseEvent& event) {
+    if (tableViewport_) return View::onMouseDown(event);
     if (!interactive() || !hitTest(event.position)) return false;
     if (event.button == MouseButton::Left && thumb().contains(event.position)) {
         dragging_ = true; dragY_ = event.position.y; dragOffset_ = offset_; return true;
@@ -181,6 +223,7 @@ bool VirtualTemplateList::onMouseDown(const MouseEvent& event) {
     return View::onMouseDown(event);
 }
 bool VirtualTemplateList::onMouseMove(const MouseEvent& event) {
+    if (tableViewport_) return View::onMouseMove(event);
     if (!interactive()) { dragging_ = false; return false; }
     if (dragging_) {
         const float travel = frame().height - thumb().height;
@@ -190,10 +233,12 @@ bool VirtualTemplateList::onMouseMove(const MouseEvent& event) {
     return View::onMouseMove(event);
 }
 bool VirtualTemplateList::onMouseUp(const MouseEvent& event) {
+    if (tableViewport_) return View::onMouseUp(event);
     if (dragging_) { dragging_ = false; return true; }
     return View::onMouseUp(event);
 }
 bool VirtualTemplateList::onKeyDown(const KeyEvent& event) {
+    if (tableViewport_) return onTableKeyDown(event);
     if (View::onKeyDown(event)) return true;
     if (!interactive()) return false;
     if (event.key == Key::PageDown) setScrollOffset(offset_ + frame().height);
@@ -204,3 +249,5 @@ bool VirtualTemplateList::onKeyDown(const KeyEvent& event) {
     return true;
 }
 } // namespace oneui
+
+#include "virtual_template_table.inc"

@@ -2,6 +2,7 @@
 
 #include "oneui/style.h"
 #include "oneui/layout/stack.h"
+#include "oneui/layout/virtual_template_list.h"
 #include "internal/scroll_trace.h"
 #include "internal/wheel_motion.h"
 
@@ -195,7 +196,13 @@ void ScrollView::layoutChildren() {
     const float fallbackWidth = std::max(0.0f, viewport.width - scrollbarReserve);
     const bool hasContentWidth = contentWidth_ > 0.0f || (content_ && content_->preferredSize().width > 0.0f);
     const float contentWidth = hasContentWidth ? std::max(fallbackWidth, resolvedContentWidth()) : fallbackWidth;
-    content_->setFrame(Rect{viewport.x - horizontalScrollOffset_, viewport.y - scrollOffset_, contentWidth, resolvedContentHeight()});
+    const Rect bounds{viewport.x - horizontalScrollOffset_, viewport.y - scrollOffset_,
+                      contentWidth, resolvedContentHeight()};
+    if (auto* rows = dynamic_cast<VirtualTemplateList*>(content_.get()); rows && rows->tableViewport_) {
+        rows->layoutInTable(bounds, viewport);
+    } else {
+        content_->setFrame(bounds);
+    }
 }
 
 void ScrollView::resetInteractionState() {

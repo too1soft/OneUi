@@ -12,6 +12,10 @@
 #include "internal/unicode.h"
 namespace oneui::ui {
 void Mount::set(Element &e, const std::string &key, const std::wstring &value) {
+    if (e.component == "VirtualTemplateList" && key == "row-height-field") {
+        e.as<VirtualTemplateList>()->setTableRowHeightField(unicode::toUtf8(value));
+        return;
+    }
     if (key == "accessible-name") { e.widget->setAccessibleName(value); return; }
     if(e.component=="StateView") {
         auto state=e.as<StateView>();
@@ -413,6 +417,16 @@ void Mount::set(Element &e, const std::string &key, float value) {
         if (key == "estimated-height") { list->setEstimatedHeight(value); return; }
         if (key == "overscan") { list->setOverscan(size_t(value)); return; }
         if (key == "scroll-offset") { list->setScrollOffset(value); return; }
+        if (key.rfind("inset-", 0) == 0) {
+            auto insets = list->tableInsets();
+            if (key == "inset-left") insets.left = value;
+            else if (key == "inset-right") insets.right = value;
+            else if (key == "inset-top") insets.top = value;
+            else if (key == "inset-bottom") insets.bottom = value;
+            else throw std::invalid_argument("Unknown virtual table inset");
+            list->setTableInsets(insets);
+            return;
+        }
     }
     if (key == "line-height") {
         if (auto label = e.as<Label>()) label->setLineHeight(value);

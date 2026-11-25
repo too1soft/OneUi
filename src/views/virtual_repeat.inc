@@ -1,4 +1,5 @@
 #include "oneui/layout/virtual_template_list.h"
+#include <limits>
 
 namespace oneui::views {
 std::shared_ptr<Instance> Runtime::buildVirtual(uint32_t node, const Scopes& context) {
@@ -64,8 +65,33 @@ void Runtime::virtualRepeat(const std::shared_ptr<Instance>& instance) {
     const auto child = image.records[oneview::EDGE][n[3]][1];
     const auto& r = image.records[oneview::REPT][image.records[oneview::NODE][child][9]];
     auto& items = list(instance->scopes.at(r[3] & 0xffff), r[1]);
+    auto widget = instance->element.as<VirtualTemplateList>();
+    const auto& heightField = widget->tableRowHeightField();
+    std::vector<float> rowHeights;
+    if (!heightField.empty()) {
+        const auto& model = image.schema.model(r[4]);
+        const auto property = model.properties.find(heightField);
+        check(property != model.properties.end() && property->second.tag == 3,
+              ONEUI_VIEW_TYPE, "Virtual table height field must be a numeric row property");
+        rowHeights.reserve(items.items.size());
+        for (const auto& source : items.items) {
+            // Offscreen models have no mounted binding context. Read their
+            // sizes from the latest record whenever the owning list refreshes.
+            source->dirty.insert(property->second.id);
+            const auto height = read(source, property->second.id).number;
+            check(height >= 0 && height <= std::numeric_limits<float>::max(),
+                  ONEUI_VIEW_TYPE, "Invalid virtual table row height");
+            rowHeights.push_back(static_cast<float>(height));
+        }
+    }
     if (instance->repeatSource == &items && instance->repeatSerial == items.serial) {
         for (const auto& [_, row] : instance->rows) update(row);
+        if (!heightField.empty()) {
+            auto publish = [widget, keys = items.keys, heights = std::move(rowHeights)]() mutable {
+                widget->setTableRows(std::move(keys), std::move(heights), false);
+            };
+            if (staging) commits.push_back(std::move(publish)); else publish();
+        }
         return;
     }
     std::map<std::string, std::shared_ptr<Scope>> sources;
@@ -100,14 +126,15 @@ void Runtime::virtualRepeat(const std::shared_ptr<Instance>& instance) {
     }
     for (const auto& [key, row] : instance->rows)
         if (std::find(replaced.begin(), replaced.end(), key) == replaced.end()) update(row);
-    auto publish = [instance, source = &items, serial = items.serial, keys = items.keys, replaced] {
+    auto publish = [instance, source = &items, serial = items.serial, keys = items.keys,
+                    replaced, heights = std::move(rowHeights)]() mutable {
         auto list = instance->element.as<VirtualTemplateList>();
         for (const auto& key : replaced) list->invalidateKey(key);
         instance->repeatSource = source;
         instance->repeatSerial = serial;
         // Native child creation happens after the transaction's commits, from
         // layout/paint; never append commits while iterating the commit queue.
-        list->setKeys(keys, false);
+        list->setTableRows(std::move(keys), std::move(heights), false);
     };
     if (staging) commits.push_back(std::move(publish)); else publish();
 }

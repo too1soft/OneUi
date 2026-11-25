@@ -85,7 +85,7 @@ enum class ValueType { None, Text, Boolean, Integer, Number, Strings, Columns, R
     X(MountPoint, "panel", "", None) \
     X(StateView, "state-view", "title message action icon", None) \
     X(Menu, "menu", "items", None) \
-    X(VirtualTemplateList, "virtual-template-list", "estimated-height overscan follow-end scroll-offset", None) \
+    X(VirtualTemplateList, "virtual-template-list", "estimated-height overscan follow-end scroll-offset row-height-field inset-left inset-right inset-top inset-bottom", None) \
     X(TreeView, "tree-view", "items selectedKey tree-items selected-id row-height loading-text", Text) \
     X(Table, "table", "items columns multiple row-height header-height selection-column selection-column-width scroll-offset sort-column sort-descending column-dividers tooltip", None) \
     X(DataGrid, "data-grid", "grid-columns grid-rows row-count window-start frozen-columns row-height header-height row-numbers editable anchor-row anchor-column focus-row focus-column select-kind", None) \

@@ -1,16 +1,16 @@
 #pragma once
 #include "oneui/layout/scroll_view.h"
 #include "oneui/layout/stack.h"
+#include "oneui/layout/virtual_template_list.h"
 #include <cstdint>
 
 namespace oneui {
 // Rich templated table viewport. The header follows horizontal scrolling but
 // stays pinned vertically; body focus, input and clipping remain native.
-// Rows are authored widgets: use bounded paging for large result sets. For
-// unbounded simple records use DataTable/VirtualList's data virtualization.
+// A VirtualTemplateList body follows the same native ScrollView geometry.
 class TemplateTable final : public View {
 public:
-    TemplateTable(std::shared_ptr<Widget> header, std::shared_ptr<Widget> body)
+    TemplateTable(std::shared_ptr<Widget> header, std::shared_ptr<Widget> body, bool windowedRows = false)
         : header_(std::move(header)), body_(std::move(body)),
           vertical_(std::make_shared<ScrollView>()), horizontal_(std::make_shared<ScrollView>()),
           column_(std::make_shared<Stack>()) {
@@ -19,6 +19,8 @@ public:
         header_->setPreferredSize({0, 34});
         column_->add(header_);
         vertical_->setPreferredSize({0, 0});
+        if (auto* list = dynamic_cast<VirtualTemplateList*>(body_.get());
+            list && (windowedRows || !list->tableRowHeightField().empty())) list->useTableViewport();
         vertical_->setContent(body_);
         column_->add(vertical_);
         horizontal_->setContent(column_);

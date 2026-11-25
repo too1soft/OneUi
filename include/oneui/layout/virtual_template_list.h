@@ -2,6 +2,7 @@
 
 #include "oneui/view.h"
 #include <map>
+#include <set>
 #include <string>
 
 namespace oneui {
@@ -15,6 +16,13 @@ public:
     using Retire = std::function<void(const std::string&)>;
     void setFactory(Factory factory, Retire retire);
     void setKeys(std::vector<std::string> keys, bool refreshNow = true);
+    // TemplateTable supplies authoritative heights, including zero for rows
+    // hidden by the model. Its ScrollView owns offsets and scrollbar input.
+    void setTableRows(std::vector<std::string> keys, std::vector<float> heights, bool refreshNow = true);
+    void setTableInsets(Insets insets);
+    Insets tableInsets() const { return tableInsets_; }
+    void setTableRowHeightField(std::string field) { tableRowHeightField_ = std::move(field); }
+    const std::string& tableRowHeightField() const { return tableRowHeightField_; }
     void setEstimatedHeight(float height);
     void setOverscan(size_t rows);
     void setFollowEnd(bool enabled);
@@ -31,20 +39,32 @@ public:
     bool onMouseMove(const MouseEvent&) override;
     bool onMouseUp(const MouseEvent&) override;
     bool onKeyDown(const KeyEvent&) override;
+    bool focusFirstLeaf() override;
+    bool focusLastLeaf() override;
 
 protected:
     void layoutChildren() override;
 
 private:
+    friend class TemplateTable;
+    friend class ScrollView;
     struct Row { std::shared_ptr<Widget> widget; float height = 0; };
     struct Anchor { std::string key; float inset = 0; bool end = false; };
     Anchor anchor() const;
     void restore(const Anchor&);
     void positions();
+    void useTableViewport();
+    void layoutInTable(Rect content, Rect viewport);
+    void layoutTableRows();
+    bool focusTableRow(bool backwards, bool fromBoundary);
+    bool onTableKeyDown(const KeyEvent& event);
+    Row& mountRow(size_t index);
+    void publishRows(std::set<std::string> keep, Rect content, float offset);
     size_t indexAt(float offset) const;
     Rect thumb() const;
     std::vector<std::string> keys_;
     std::vector<float> tops_{0};
+    std::vector<float> tableHeights_;
     std::map<std::string, float> heights_;
     std::map<std::string, Row> mounted_;
     Factory factory_;
@@ -52,6 +72,12 @@ private:
     float estimate_ = 80, offset_ = 0, width_ = -1, height_ = 0;
     size_t overscan_ = 2;
     bool following_ = false, layingOut_ = false, dragging_ = false;
+    bool tableViewport_ = false;
+    bool tableLayoutPending_ = true;
+    bool tableLayoutVisible_ = true;
+    Rect tableClip_{};
+    Insets tableInsets_{};
+    std::string tableRowHeightField_;
     float dragY_ = 0, dragOffset_ = 0;
 };
 
