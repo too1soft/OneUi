@@ -15,9 +15,11 @@
 
 #include <atomic>
 #include <chrono>
+#include <cstdint>
 #include <cstring>
 #include <cwchar>
 #include <exception>
+#include <memory>
 #include <system_error>
 
 namespace oneui::win32 {
@@ -56,6 +58,80 @@ bool traceCensusStep(bool trace, const char* phase, const Action& action) {
         "win32", phase, 0, 0, 0, 0, 0, 0, 0, internal::scrollTraceNowMs() - started,
         success ? 1.0 : 0.0, counted && measured ? static_cast<double>(after - before) : 0.0});
     return success;
+}
+
+struct CensusFenceFunctions {
+    struct Sync;
+    using Create = Sync* (APIENTRY*)(GLenum, GLbitfield);
+    using Wait = GLenum (APIENTRY*)(Sync*, GLbitfield, std::uint64_t);
+    using Delete = void (APIENTRY*)(Sync*);
+    Create create = nullptr;
+    Wait wait = nullptr;
+    Delete destroy = nullptr;
+};
+
+template <typename Function>
+Function resolveCensusFunction(bool tracing, const char* phase, const char* name) {
+    Function result = nullptr;
+    traceCensusStep(tracing, phase, [&] {
+        const auto address = wglGetProcAddress(name);
+        const auto value = reinterpret_cast<std::uintptr_t>(address);
+        if (value > 3 && value != static_cast<std::uintptr_t>(-1)) {
+            result = reinterpret_cast<Function>(address);
+        }
+        return result != nullptr;
+    });
+    return result;
+}
+
+CensusFenceFunctions resolveCensusFence(bool tracing) {
+    return {
+        resolveCensusFunction<CensusFenceFunctions::Create>(tracing, "wgl_census_lookup_fence", "glFenceSync"),
+        resolveCensusFunction<CensusFenceFunctions::Wait>(tracing, "wgl_census_lookup_wait", "glClientWaitSync"),
+        resolveCensusFunction<CensusFenceFunctions::Delete>(tracing, "wgl_census_lookup_delete", "glDeleteSync"),
+    };
+}
+
+bool finishCensusWithFence(bool tracing, const CensusFenceFunctions& functions) {
+    if (!functions.create || !functions.wait || !functions.destroy) return false;
+    constexpr GLenum commandsComplete = 0x9117;
+    constexpr GLenum alreadySignaled = 0x911A;
+    constexpr GLenum timeoutExpired = 0x911B;
+    constexpr GLenum conditionSatisfied = 0x911C;
+    std::unique_ptr<CensusFenceFunctions::Sync, CensusFenceFunctions::Delete> fence{nullptr, functions.destroy};
+    if (!traceCensusStep(tracing, "wgl_census_fence_create", [&] {
+        fence.reset(functions.create(commandsComplete, 0));
+        return bool(fence);
+    })) return false;
+    traceCensusStep(tracing, "wgl_census_fence_flush", [] {
+        glFlush();
+        return true;
+    });
+    return traceCensusStep(tracing, "wgl_census_fence_wait", [&] {
+        const auto until = std::chrono::steady_clock::now() + std::chrono::milliseconds(500);
+        do {
+            const auto status = functions.wait(fence.get(), 0, 0);
+            if (status == alreadySignaled || status == conditionSatisfied) return true;
+            if (status != timeoutExpired) return false;
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        } while (std::chrono::steady_clock::now() < until);
+        return false;
+    });
+}
+
+enum class CensusDiagnostic { Finish, LookupAfterThread, LookupBeforeThread, OmitThread };
+
+CensusDiagnostic censusDiagnostic() {
+    static const auto mode = [] {
+        wchar_t value[2]{};
+        if (GetEnvironmentVariableW(L"ONEUI_WIN32_GL_CENSUS_DIAGNOSTIC", value, 2) != 1)
+            return CensusDiagnostic::Finish;
+        if (value[0] == L'1') return CensusDiagnostic::LookupAfterThread;
+        if (value[0] == L'2') return CensusDiagnostic::LookupBeforeThread;
+        if (value[0] == L'3') return CensusDiagnostic::OmitThread;
+        return CensusDiagnostic::Finish;
+    }();
+    return mode;
 }
 
 struct StartupSurface {
@@ -145,6 +221,7 @@ bool nvidiaWindowDisplayOrigin(HWND window, POINT& origin) {
 
 bool warmNvidiaDriverThreadCensus(HDC dc, double* finishMs) {
     const bool tracing = internal::scrollTraceEnabled();
+    const auto diagnostic = censusDiagnostic();
     if (!traceCensusStep(tracing, "wgl_census_vendor", internal::win32GlNvidiaVendor)) return false;
     if (!traceCensusStep(tracing, "wgl_census_swaps", [dc] {
         for (int i = 0; i < 2; ++i) {
@@ -153,9 +230,13 @@ bool warmNvidiaDriverThreadCensus(HDC dc, double* finishMs) {
         }
         return true;
     })) return false;
+    auto fence = diagnostic == CensusDiagnostic::LookupBeforeThread
+        ? resolveCensusFence(tracing) : CensusFenceFunctions{};
     // Let the driver observe the scratch context before starting the thread
     // that triggers process-wide enumeration. Finish on the worker context.
-    if (!traceCensusStep(tracing, "wgl_census_thread", [] {
+    if (diagnostic == CensusDiagnostic::OmitThread) {
+        traceCensusStep(tracing, "wgl_census_thread_omitted", [] { return true; });
+    } else if (!traceCensusStep(tracing, "wgl_census_thread", [] {
         try {
             std::thread([] {}).join();
         } catch (const std::system_error&) {
@@ -163,10 +244,11 @@ bool warmNvidiaDriverThreadCensus(HDC dc, double* finishMs) {
         }
         return true;
     })) return false;
-    return traceCensusStep(tracing, "wgl_census_finish", [finishMs] {
+    return traceCensusStep(tracing, "wgl_census_finish", [&] {
         using Clock = std::chrono::steady_clock;
         const auto started = finishMs ? Clock::now() : Clock::time_point{};
-        glFinish();
+        if (diagnostic == CensusDiagnostic::LookupAfterThread) fence = resolveCensusFence(tracing);
+        if (!finishCensusWithFence(tracing, fence)) glFinish();
         if (finishMs) *finishMs = std::chrono::duration<double, std::milli>(Clock::now() - started).count();
         return true;
     });
