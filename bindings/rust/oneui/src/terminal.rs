@@ -13,7 +13,7 @@ use super::key_event::RawKeyEvent;
 use super::terminal_render::{apply_terminal_grid, apply_terminal_view_options};
 use super::terminal_types::{
     TerminalAuxiliaryButtonAction, TerminalCell, TerminalColor, TerminalCursor,
-    TerminalCursorStyle, TerminalFrame, TerminalPointerEvent, TerminalSelection,
+    TerminalCursorStyle, TerminalFrame, TerminalFrameSelection, TerminalPointerEvent, TerminalSelection,
     TerminalViewOptions, TerminalViewport,
 };
 use super::visual_style::Rect;
@@ -60,22 +60,14 @@ struct TerminalViewportCallback {
 struct TerminalViewState {
     raw: AtomicPtr<sys::OneUiWidget>,
     pending_update: Mutex<Option<TerminalFrameUpdate>>,
-    last_applied_frame: Mutex<Option<TerminalFrame>>,
+    last_applied_frame: Mutex<Option<Box<dyn frame_queue::QueuedTerminalFrame>>>,
     update_scheduled: AtomicBool,
     honor_application_cursor_style: AtomicBool,
 }
 
-#[derive(Debug, Clone)]
 struct TerminalFrameUpdate {
-    frame: TerminalFrame,
-    selection: TerminalSelectionUpdate,
-}
-
-#[derive(Debug, Clone, Copy)]
-enum TerminalSelectionUpdate {
-    Preserve,
-    Set(TerminalSelection),
-    Clear,
+    frame: Box<dyn frame_queue::QueuedTerminalFrame>,
+    selection: TerminalFrameSelection,
 }
 
 /// A thread-safe producer for the latest native terminal frame.
@@ -170,7 +162,7 @@ impl TerminalViewHandle {
     }
 
     pub fn submit_frame(&self, frame: TerminalFrame) -> Result<(), Error> {
-        self.submit_update(frame, TerminalSelectionUpdate::Preserve)
+        self.submit_text_frame(frame, TerminalFrameSelection::Preserve)
     }
 
     /// Atomically applies a terminal frame and its matching search highlight.
@@ -179,12 +171,22 @@ impl TerminalViewHandle {
         frame: TerminalFrame,
         selection: TerminalSelection,
     ) -> Result<(), Error> {
-        self.submit_update(frame, TerminalSelectionUpdate::Set(selection))
+        self.submit_text_frame(frame, TerminalFrameSelection::Set(selection))
     }
 
     /// Clears a programmatic terminal selection on the owning window thread.
     pub fn submit_frame_clearing_selection(&self, frame: TerminalFrame) -> Result<(), Error> {
-        self.submit_update(frame, TerminalSelectionUpdate::Clear)
+        self.submit_text_frame(frame, TerminalFrameSelection::Clear)
+    }
+
+    /// Queues a frame using the caller's owned UTF-8 cell storage. The frame
+    /// retains that storage until native application on the window thread.
+    pub fn submit_text_frame<T: AsRef<str> + PartialEq + Send + 'static>(
+        &self,
+        frame: TerminalFrame<T>,
+        selection: TerminalFrameSelection,
+    ) -> Result<(), Error> {
+        self.submit_update(frame, selection)
     }
 }
 
@@ -399,6 +401,11 @@ impl TerminalView {
     }
 
     pub fn set_grid(&self, rows: u16, columns: u16, cells: &[TerminalCell]) {
+        self.set_text_grid(rows, columns, cells);
+    }
+
+    /// Applies cells directly from caller-provided UTF-8 text storage.
+    pub fn set_text_grid<T: AsRef<str>>(&self, rows: u16, columns: u16, cells: &[TerminalCell<T>]) {
         apply_terminal_grid(self.widget.as_raw(), rows, columns, cells);
     }
 

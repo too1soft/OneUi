@@ -65,8 +65,8 @@ pub enum TerminalUnderlineStyle {
 /// One terminal cell. It deliberately holds text and colors separately so a
 /// caller never has to encode values into a string boundary.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TerminalCell {
-    pub text: String,
+pub struct TerminalCell<T = String> {
+    pub text: T,
     pub foreground: TerminalColor,
     pub background: TerminalColor,
     pub style: u32,
@@ -124,10 +124,10 @@ pub struct TerminalViewport {
 
 /// An owned terminal snapshot that can be submitted from a session worker.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TerminalFrame {
+pub struct TerminalFrame<T = String> {
     pub rows: u16,
     pub columns: u16,
-    pub cells: Vec<TerminalCell>,
+    pub cells: Vec<TerminalCell<T>>,
     pub cursor: TerminalCursor,
     pub cursor_style: TerminalCursorStyle,
     pub cursor_blinking: bool,
@@ -144,6 +144,15 @@ pub struct TerminalFrame {
     /// Retained history rows above the live viewport, and distance from live output.
     pub history_rows: u64,
     pub scrollback_offset: u64,
+}
+
+/// Updates the selection in the same window turn as a queued terminal frame.
+#[derive(Debug, Clone, Copy, Default)]
+pub enum TerminalFrameSelection {
+    #[default]
+    Preserve,
+    Set(TerminalSelection),
+    Clear,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

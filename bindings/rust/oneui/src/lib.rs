@@ -41,7 +41,7 @@ pub use terminal::{TerminalView, TerminalViewHandle};
 mod terminal_types;
 pub use terminal_types::{
     terminal_style, TerminalAuxiliaryButtonAction, TerminalCell, TerminalColor, TerminalCursor,
-    TerminalCursorStyle, TerminalFrame, TerminalPointerAction, TerminalPointerButton,
+    TerminalCursorStyle, TerminalFrame, TerminalFrameSelection, TerminalPointerAction, TerminalPointerButton,
     TerminalPointerEvent, TerminalSelection, TerminalUnderlineStyle, TerminalViewOptions,
     TerminalViewport,
 };

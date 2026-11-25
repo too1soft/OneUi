@@ -3,10 +3,10 @@
 use super::sys;
 use super::terminal_types::{TerminalCell, TerminalColor, TerminalFrame, TerminalViewOptions};
 
-pub(super) fn apply_terminal_frame(
+pub(super) fn apply_terminal_frame<T: AsRef<str> + PartialEq>(
     raw: *mut sys::OneUiWidget,
-    frame: &TerminalFrame,
-    previous: Option<&TerminalFrame>,
+    frame: &TerminalFrame<T>,
+    previous: Option<&TerminalFrame<T>>,
     honor_application_cursor_style: bool,
 ) {
     unsafe {
@@ -52,9 +52,9 @@ pub(super) fn should_apply_application_cursor_style(
     honor_application_cursor_style && cursor_style_from_application
 }
 
-pub(super) fn terminal_dirty_ranges(
-    previous: &TerminalFrame,
-    frame: &TerminalFrame,
+pub(super) fn terminal_dirty_ranges<T: PartialEq>(
+    previous: &TerminalFrame<T>,
+    frame: &TerminalFrame<T>,
 ) -> Vec<std::ops::Range<usize>> {
     const MAX_SPARSE_RANGES: usize = 32;
 
@@ -129,11 +129,11 @@ pub(super) fn apply_terminal_view_options(
     }
 }
 
-pub(super) fn apply_terminal_grid(
+pub(super) fn apply_terminal_grid<T: AsRef<str>>(
     raw: *mut sys::OneUiWidget,
     rows: u16,
     columns: u16,
-    cells: &[TerminalCell],
+    cells: &[TerminalCell<T>],
 ) {
     let native_cells = native_terminal_cells(cells);
     unsafe {
@@ -147,10 +147,10 @@ pub(super) fn apply_terminal_grid(
     };
 }
 
-fn apply_terminal_cell_update(
+fn apply_terminal_cell_update<T: AsRef<str>>(
     raw: *mut sys::OneUiWidget,
     first_cell: usize,
-    cells: &[TerminalCell],
+    cells: &[TerminalCell<T>],
 ) {
     let native_cells = native_terminal_cells(cells);
     unsafe {
@@ -163,11 +163,13 @@ fn apply_terminal_cell_update(
     };
 }
 
-pub(super) fn native_terminal_cells(cells: &[TerminalCell]) -> Vec<sys::OneUiTerminalCellUtf8> {
+pub(super) fn native_terminal_cells<T: AsRef<str>>(
+    cells: &[TerminalCell<T>],
+) -> Vec<sys::OneUiTerminalCellUtf8> {
     cells
         .iter()
         .map(|cell| sys::OneUiTerminalCellUtf8 {
-            text: sys::OneUiUtf8String::from_str(&cell.text),
+            text: sys::OneUiUtf8String::from_str(cell.text.as_ref()),
             foreground: cell.foreground.into(),
             background: cell.background.into(),
             style: cell.style,
@@ -180,4 +182,32 @@ pub(super) fn native_terminal_cells(cells: &[TerminalCell]) -> Vec<sys::OneUiTer
             underline_color_set: i32::from(cell.underline_color.is_some()),
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::TerminalUnderlineStyle;
+    use std::sync::Arc;
+
+    #[test]
+    fn native_cells_reference_the_callers_utf8_storage() {
+        let cells = [TerminalCell {
+            text: Arc::<str>::from("终端😀"),
+            foreground: TerminalColor::default(),
+            background: TerminalColor::rgb(0, 0, 0),
+            style: 0,
+            hyperlink_id: 43,
+            underline_style: TerminalUnderlineStyle::Curly,
+            underline_color: None,
+        }];
+        let native = native_terminal_cells(&cells);
+        assert_eq!(native[0].text.data, cells[0].text.as_ptr().cast());
+        assert_eq!(native[0].text.length, cells[0].text.len());
+        assert_eq!(native[0].hyperlink_id, 43);
+        assert_eq!(
+            native[0].underline_style,
+            TerminalUnderlineStyle::Curly as u32
+        );
+    }
 }

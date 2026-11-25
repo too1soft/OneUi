@@ -1,15 +1,43 @@
 use super::super::terminal_render::apply_terminal_frame;
 use super::*;
+use std::any::Any;
 use std::time::{Duration, Instant};
 
 const MAX_UPDATES_PER_TURN: usize = 16;
 const TURN_BUDGET: Duration = Duration::from_millis(2);
 
-impl TerminalViewHandle {
-    pub(super) fn submit_update(
+pub(super) trait QueuedTerminalFrame: Send {
+    fn as_any(&self) -> &dyn Any;
+
+    fn apply(
         &self,
-        frame: TerminalFrame,
-        selection: TerminalSelectionUpdate,
+        raw: *mut sys::OneUiWidget,
+        previous: Option<&dyn QueuedTerminalFrame>,
+        honor_application_cursor_style: bool,
+    );
+}
+
+impl<T: AsRef<str> + PartialEq + Send + 'static> QueuedTerminalFrame for TerminalFrame<T> {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn apply(
+        &self,
+        raw: *mut sys::OneUiWidget,
+        previous: Option<&dyn QueuedTerminalFrame>,
+        honor_application_cursor_style: bool,
+    ) {
+        let previous = previous.and_then(|frame| frame.as_any().downcast_ref::<Self>());
+        apply_terminal_frame(raw, self, previous, honor_application_cursor_style);
+    }
+}
+
+impl TerminalViewHandle {
+    pub(super) fn submit_update<T: AsRef<str> + PartialEq + Send + 'static>(
+        &self,
+        frame: TerminalFrame<T>,
+        selection: TerminalFrameSelection,
     ) -> Result<(), Error> {
         if self.state.raw.load(Ordering::Acquire).is_null() {
             return Err(Error::WidgetDestroyed);
@@ -20,7 +48,10 @@ impl TerminalViewHandle {
             .pending_update
             .lock()
             .expect("terminal pending update lock poisoned") =
-            Some(TerminalFrameUpdate { frame, selection });
+            Some(TerminalFrameUpdate {
+                frame: Box::new(frame),
+                selection,
+            });
 
         self.schedule_pending_frame()
     }
@@ -86,15 +117,14 @@ impl TerminalViewState {
             .last_applied_frame
             .lock()
             .expect("terminal last applied frame lock poisoned");
-        apply_terminal_frame(
+        update.frame.apply(
             raw,
-            &update.frame,
-            last_applied.as_ref(),
+            last_applied.as_deref(),
             self.honor_application_cursor_style.load(Ordering::Acquire),
         );
         match update.selection {
-            TerminalSelectionUpdate::Preserve => {}
-            TerminalSelectionUpdate::Set(selection) => unsafe {
+            TerminalFrameSelection::Preserve => {}
+            TerminalFrameSelection::Set(selection) => unsafe {
                 sys::oneui_terminal_view_set_selection(
                     raw,
                     selection.start_row,
@@ -103,7 +133,7 @@ impl TerminalViewState {
                     selection.end_column,
                 )
             },
-            TerminalSelectionUpdate::Clear => unsafe {
+            TerminalFrameSelection::Clear => unsafe {
                 sys::oneui_terminal_view_clear_selection(raw)
             },
         }
