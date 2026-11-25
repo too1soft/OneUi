@@ -174,25 +174,84 @@ bool StyleSheet::addRulesFromCss(const std::string& css,std::string* error) {
 StyleSheet StyleSheet::forContainers(const std::map<std::string,Size>& sizes) const {
     if (std::none_of(rules().begin(), rules().end(), [](const auto& rule) { return bool(rule.query); }))
         return *this;
-    StyleSheet result;result.customProperties_=customProperties_;result.transient_=transient_;
-    result.ruleData_ = std::make_shared<RuleData>();
-    result.ruleData_->rules.reserve(rules().size());
-    result.ruleData_->selectors.reserve(rules().size());
-    for(std::size_t index = 0; index < rules().size(); ++index) {
-        auto rule = rules()[index];
-        if(rule.query) {
-            auto size=sizes.find(rule.query->name);
-            if(size==sizes.end()||!rule.query->matches(size->second))continue;
-            clearRuleQuery(rule);
+
+    using RuleRange = std::pair<std::size_t, std::size_t>;
+    std::vector<RuleRange> selected;
+    std::size_t selectedRules = 0;
+    const auto& sourceRules = rules();
+    for (std::size_t begin = 0; begin < sourceRules.size();) {
+        const auto* query = sourceRules[begin].query.get();
+        auto end = begin + 1;
+        while (end < sourceRules.size() && sourceRules[end].query.get() == query) ++end;
+        const auto size = query ? sizes.find(query->name) : sizes.end();
+        if (!query || (size != sizes.end() && query->matches(size->second))) {
+            if (!selected.empty() && selected.back().second == begin) selected.back().second = end;
+            else selected.emplace_back(begin, end);
+            selectedRules += end - begin;
         }
-        // Filtering changes query eligibility, never selector syntax. Reuse
-        // the compiled selector instead of parsing every theme rule again on
-        // each container layout. Tokens and resolution caches remain local.
-        const auto& selector = ruleData_->selectors[index];
-        result.ruleData_->rules.push_back(std::move(rule));
-        result.ruleData_->selectors.push_back(selector);
-        result.ruleData_->indexLastRule();
-        ++result.version_;
+        begin = end;
+    }
+
+    // Only the selected immutable rules are shared. Keep each caller's
+    // tokens, transient palette and resolution caches on its own sheet.
+    struct Projection {
+        std::weak_ptr<RuleData> source;
+        std::size_t version;
+        std::vector<RuleRange> selected;
+        std::shared_ptr<RuleData> rules;
+    };
+    constexpr std::size_t maxProjections = 8;
+    constexpr std::size_t maxProjectedRules = 4096;
+    thread_local std::list<Projection> projections;
+    const auto found = std::find_if(projections.begin(), projections.end(), [&](const auto& entry) {
+        return entry.version == version_ && entry.source.lock() == ruleData_ && entry.selected == selected;
+    });
+    StyleSheet result;
+    result.customProperties_ = customProperties_;
+    result.transient_ = transient_;
+    if (found != projections.end() && found->rules) {
+        result.ruleData_ = found->rules;
+        result.version_ = result.ruleData_->rules.size();
+        projections.splice(projections.begin(), projections, found);
+        return result;
+    }
+
+    result.ruleData_ = std::make_shared<RuleData>();
+    // Cold projections keep the same allocation size across changing tiers.
+    // Only projections that will be retained need a tighter reservation.
+    const auto capacity = found == projections.end() ? sourceRules.size() : selectedRules;
+    result.ruleData_->rules.reserve(capacity);
+    result.ruleData_->selectors.reserve(capacity);
+    for (const auto& [begin, end] : selected) {
+        for (auto index = begin; index < end; ++index) {
+            auto rule = sourceRules[index];
+            if (rule.query) clearRuleQuery(rule);
+            result.ruleData_->rules.push_back(std::move(rule));
+            result.ruleData_->selectors.push_back(ruleData_->selectors[index]);
+            result.ruleData_->indexLastRule();
+        }
+    }
+    result.version_ = selectedRules;
+    if (sourceRules.size() <= maxProjectedRules) {
+        try {
+            // Record a new selection without keeping its compiled rules. A
+            // second visit can reuse them without making a stream of new
+            // sizes retain and evict large rule sets.
+            if (found == projections.end()) {
+                projections.remove_if([](const auto& entry) { return entry.source.expired(); });
+                projections.push_front({ruleData_, version_, std::move(selected), {}});
+            } else {
+                found->rules = result.ruleData_;
+                projections.splice(projections.begin(), projections, found);
+            }
+            std::size_t retainedRules = 0;
+            for (const auto& entry : projections)
+                if (entry.rules) retainedRules += entry.rules->rules.size();
+            while (projections.size() > maxProjections || retainedRules > maxProjectedRules) {
+                if (const auto& rules = projections.back().rules) retainedRules -= rules->rules.size();
+                projections.pop_back();
+            }
+        } catch (const std::bad_alloc&) { /* Projection already succeeded. */ }
     }
     return result;
 }

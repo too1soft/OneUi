@@ -43,6 +43,9 @@ void projectedSelectorsAndTokens() {
         ":root{--ink:#123456;} .cell{color:var(--ink);height:12px;}"
         ".cell:hover{height:18px;}"
         "@container frame (width >= 300px){.cell{height:24px;max-width:90px;order:3;}}"), "projection CSS");
+    StyleRule unrelated;
+    unrelated.selector=".unrelated";
+    source.addRule(unrelated);
     auto narrow=source.forContainers({{"frame",{299,100}}});
     auto wide=source.forContainers({{"frame",{300,100}}});
     const StyleNode normal{"label",{"cell"},0},hover{"label",{"cell"},StyleStateHover};
@@ -53,6 +56,26 @@ void projectedSelectorsAndTokens() {
     check(wide.resolve(normal).foreground->r==0xab&&source.resolve(normal).foreground->r==0x12,"projected token/cache ownership remains independent");
     StyleRule extra;extra.selector=".cell";extra.box.height=31;wide.addRule(extra);
     check(wide.resolve(normal).height==31&&source.resolve(normal).height==12,"projected rule edits detach from source");
+    auto repeated=source.forContainers({{"frame",{720,360}}});
+    check(repeated.resolve(normal).height==24&&repeated.resolve(normal).foreground->r==0x12,
+          "another size with the same matches uses the original rules and palette");
+    StyleSheet counterpart=source;
+    source.setCustomProperty("--ink","#224466");
+    counterpart.setCustomProperty("--ink","#99bbee");
+    auto sourceProjection=source.forContainers({{"frame",{720,360}}});
+    auto otherProjection=counterpart.forContainers({{"frame",{720,360}}});
+    auto cachedProjection=source.forContainers({{"frame",{721,361}}});
+    check(sourceProjection.resolve(normal).foreground->r==0x22&&otherProjection.resolve(normal).foreground->r==0x99&&
+          cachedProjection.resolve(normal).foreground->r==0x22,
+          "matching rule projections do not share theme tokens");
+    counterpart = StyleSheet{};
+    StyleRule replacement;
+    replacement.selector=".cell";
+    replacement.box.height=42;
+    source.addRule(replacement);
+    auto changed=source.forContainers({{"frame",{720,360}}});
+    check(changed.resolve(normal).height==42&&sourceProjection.resolve(normal).height==24,
+          "in-place source rule changes invalidate previously selected rules");
 }
 const char* css=R"CSS(
 .frame {container-name:sftp;container-type:size;}
