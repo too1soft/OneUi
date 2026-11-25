@@ -19,11 +19,34 @@ namespace {
 constexpr wchar_t scratchClass[] = L"OneUI.DeferredStartupGl";
 std::atomic_bool claimed{false};
 
-void trace(const char* stage, double started, double detailA = 0.0) {
+void trace(const char* stage, double started, double detailA = 0.0, double detailB = 0.0) {
     if (started < 0.0) return;
     internal::writeScrollTrace(internal::ScrollTraceEvent{
         "win32", stage, 0, 0, 0, 0, 0, 0, 0,
-        internal::scrollTraceNowMs() - started, detailA, 0});
+        internal::scrollTraceNowMs() - started, detailA, detailB});
+}
+
+void flushStartupGlScene(GrDirectContext& context, double started) {
+    if (started < 0.0 || !internal::win32GlTraceEnabled()) {
+        context.flush();
+        trace("wgl_prewarm_flush", started);
+        return;
+    }
+
+    ULONG64 before = 0;
+    ULONG64 after = 0;
+    const bool observedStart = QueryThreadCycleTime(GetCurrentThread(), &before) != FALSE;
+    internal::GlCallTrace calls;
+    {
+        const internal::GlCallTrace::Scope scope(&calls);
+        context.flush();
+    }
+    const bool observedEnd = QueryThreadCycleTime(GetCurrentThread(), &after) != FALSE;
+    const double cycles = observedStart && observedEnd && after >= before
+        ? static_cast<double>(after - before) : -1.0;
+    trace("wgl_prewarm_flush", started, 0.0, cycles);
+    // Scratch GL events have no live window or paint sequence.
+    calls.write(0, 0);
 }
 
 } // namespace
@@ -56,9 +79,7 @@ bool prewarmStartupGlScene(GrDirectContext& context, const StartupGlScene& scene
         canvas->drawPicture(scene.picture);
     }
     trace("wgl_prewarm_draw", drawStarted);
-    const double flushStarted = started();
-    context.flush();
-    trace("wgl_prewarm_flush", flushStarted);
+    flushStartupGlScene(context, started());
     // Complete the scratch work before any live-window draw or ownership change.
     const double submitStarted = started();
     const bool submitted = context.submit(GrSyncCpu::kYes);
