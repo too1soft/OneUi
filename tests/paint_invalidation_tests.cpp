@@ -273,7 +273,69 @@ bool clippedSizeContainerLimitsLayoutDamage(StackEngine engine) {
     return !sameRect(damage, bounds) && damage.width >= root->frame().width;
 }
 
+bool nestedInvalidationFollowsCurrentParent() {
+    const auto sameRect = [](Rect a, Rect b) {
+        return a.x == b.x && a.y == b.y && a.width == b.width && a.height == b.height;
+    };
+    struct ObservedView final : View {
+        int fullRegistrations = 0;
+        int rectRegistrations = 0;
+
+        void setInvalidator(std::function<void()> callback) override {
+            ++fullRegistrations;
+            View::setInvalidator(std::move(callback));
+        }
+        void setRectInvalidator(std::function<void(Rect)> callback) override {
+            ++rectRegistrations;
+            View::setRectInvalidator(std::move(callback));
+        }
+    };
+    int staleRedraws = 0;
+    int fullRedraws = 0;
+    Rect dirty{};
+    View root;
+    View nextRoot;
+    root.setFrame({0, 0, 300, 200});
+    nextRoot.setFrame(root.frame());
+    auto nested = std::make_shared<ObservedView>();
+    auto leaf = std::make_shared<PaintProbe>();
+    leaf->setFrame({12, 24, 36, 48});
+    nested->add(leaf);
+    root.add(nested);
+    const int fullRegistrations = nested->fullRegistrations;
+    const int rectRegistrations = nested->rectRegistrations;
+
+    root.setInvalidator([&] { ++staleRedraws; });
+    root.setRectInvalidator([&](Rect) { ++staleRedraws; });
+    root.setInvalidator([&] { ++fullRedraws; });
+    root.setRectInvalidator([&](Rect rect) { dirty = rect; });
+    leaf->repaint();
+    if (!sameRect(dirty, leaf->frame()) || staleRedraws != 0 || fullRedraws != 0 ||
+        nested->fullRegistrations != fullRegistrations ||
+        nested->rectRegistrations != rectRegistrations) {
+        return false;
+    }
+    root.setRectInvalidator({});
+    leaf->repaint();
+    if (fullRedraws != 1) return false;
+
+    root.clearChildren();
+    fullRedraws = 0;
+    leaf->repaint();
+    if (fullRedraws != 0) return false;
+
+    nextRoot.add(nested);
+    nextRoot.setRectInvalidator([&](Rect rect) { dirty = rect; });
+    dirty = {};
+    leaf->repaint();
+    return sameRect(dirty, leaf->frame()) && fullRedraws == 0 && staleRedraws == 0;
+}
+
 int main() {
+    if (!nestedInvalidationFollowsCurrentParent()) {
+        std::cerr << "FAIL: nested invalidation callback was reinstalled or reached the wrong parent\n";
+        return 1;
+    }
     if (!clipChecksSkipVisibleDescendantBoundsAndKeepOverflow()) {
         std::cerr << "FAIL: clip bounds traversal or overflow paint changed\n";
         return 1;

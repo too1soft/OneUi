@@ -79,19 +79,13 @@ const std::vector<std::shared_ptr<Widget>>& View::children() const {
 }
 
 void View::setInvalidator(std::function<void()> invalidator) {
+    // Child callbacks forward through this View, so they keep using its current
+    // invalidators after attachment or reparenting.
     Widget::setInvalidator(std::move(invalidator));
-    for (const auto& child : children_) {
-        child->refreshInvalidatorFromOwner(this, [this] { invalidate(); });
-    }
 }
 
 void View::setRectInvalidator(std::function<void(Rect)> invalidator) {
     Widget::setRectInvalidator(std::move(invalidator));
-    for (const auto& child : children_) {
-        child->refreshRectInvalidatorFromOwner(
-            this,
-            [this](Rect rect) { invalidateChildRect(rect); });
-    }
 }
 
 void View::setAnimationScheduler(std::function<void()> scheduler) {
