@@ -70,10 +70,10 @@ public:
         cancel(window);
         if (interface_->hasSpare()) return;
 
-        const auto previous = wglGetCurrentContext();
-        const auto previousDc = wglGetCurrentDC();
-        const bool switched = previous != context || previousDc != dc;
-        if (switched && !wglMakeCurrent(dc, context)) return;
+        // Painting leaves its context current. If another window painted
+        // since this timer was armed, let the next swap rearm the reserve
+        // instead of flushing that window's context from a timer callback.
+        if (wglGetCurrentContext() != context || wglGetCurrentDC() != dc) return;
         const bool tracing = internal::scrollTraceEnabled();
         const double start = tracing ? internal::scrollTraceNowMs() : 0.0;
         const bool filled = interface_->fill();
@@ -82,7 +82,6 @@ public:
                 "win32", "gl_program_reserve_fill", reinterpret_cast<std::uintptr_t>(window),
                 0, 0, 0, 0, 0, 0, internal::scrollTraceNowMs() - start, filled ? 1.0 : 0.0, 0.0});
         }
-        if (switched) wglMakeCurrent(previousDc, previous);
     }
 
     void reset(HWND window) {
