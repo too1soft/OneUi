@@ -191,6 +191,10 @@
             flushDeferredFullPaint();
             return 0;
         case WM_TIMER:
+            if (wParam == win32::GlProgramReserve::timer) {
+                programReserve_.onTimer(hwnd_, glContext_, glDC_, interactiveResizeActive_);
+                return 0;
+            }
             if (wParam == win32::TextAtlasWarmup::timer) {
                 textAtlasWarmup_.onTimer(hwnd_, glContext_, glDC_, gpuAvailable_ ? grContext_.get() : nullptr,
                     paintSurface_.get(), interactiveResizeActive_);

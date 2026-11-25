@@ -265,6 +265,7 @@
             if (swapped) {
                 recordResizePresentation();
                 textAtlasWarmup_.arm(hwnd_);
+                programReserve_.arm(hwnd_);
                 EndPaint(hwnd_, &paintStruct);
                 recordPaint(width, height, fullPaint, surfaceUpdate.allocatedBacking, surfaceMs, currentTimeMs() - paintStartMs);
                 flushDeferredImePosition();

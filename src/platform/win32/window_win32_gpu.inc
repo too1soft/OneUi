@@ -68,10 +68,15 @@
         traceGpu("context-current");
         GrContextOptions contextOptions;
         contextOptions.fPersistentCache = rendering::shaderCache();
-        grContext_ = internal::win32GlTraceEnabled()
-            ? GrDirectContexts::MakeGL(internal::makeWin32GlTraceInterface(), contextOptions)
-            : GrDirectContexts::MakeGL(contextOptions);
+        if (auto reserved = programReserve_.attach(tempContext, nvidiaDriver_)) {
+            grContext_ = GrDirectContexts::MakeGL(std::move(reserved), contextOptions);
+        } else if (internal::win32GlTraceEnabled()) {
+            grContext_ = GrDirectContexts::MakeGL(internal::makeWin32GlTraceInterface(), contextOptions);
+        } else {
+            grContext_ = GrDirectContexts::MakeGL(contextOptions);
+        }
         if (!grContext_) {
+            programReserve_.reset(hwnd_);
             rendererInfo_.reason = "ganesh-context-failed";
             traceGpu("ganesh-context-failed");
             wglMakeCurrent(nullptr, nullptr);
@@ -159,6 +164,7 @@
         const HGLRC previousContext = wglGetCurrentContext();
         const HDC previousDC = wglGetCurrentDC();
         const bool bound = glContext_ && wglMakeCurrent(glDC_, glContext_);
+        programReserve_.reset(hwnd_);
         if (grContext_ && glContext_ && !bound) grContext_->abandonContext();
         windowSurface_.reset();
         paintSurface_.reset();

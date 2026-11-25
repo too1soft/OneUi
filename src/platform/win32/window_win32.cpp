@@ -3,6 +3,7 @@
 #include "window_dispatch_trace_win32.h"
 #include "window_win32_paint_trace.h"
 #include "gl_flush_trace_win32.h"
+#include "window_win32_gl_program_reserve.h"
 #include "window_win32_gpu_warmup.h"
 #include "window_win32_text_atlas.h"
 #include "window_win32_deferred_gl.h"
@@ -175,6 +176,7 @@ public:
     HDC glDC_ = nullptr;
     sk_sp<GrDirectContext> grContext_;
     win32::TextAtlasWarmup textAtlasWarmup_;
+    win32::GlProgramReserve programReserve_;
     bool gpuInitializationAttempted_ = false;
     bool gpuAvailable_ = false;
     bool nvidiaDriver_ = false;
