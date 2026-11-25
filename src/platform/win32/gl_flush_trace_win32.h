@@ -372,12 +372,16 @@ public:
     }
 };
 
-inline sk_sp<const GrGLInterface> makeWin32GaneshGlInterface(bool nvidia) {
-    auto native = GrGLMakeNativeInterface();
+inline sk_sp<const GrGLInterface> instrumentWin32GaneshGlInterface(
+        sk_sp<const GrGLInterface> native, bool suppressLabels) {
     const bool trace = win32GlTraceEnabled();
-    const bool suppressLabels = nvidia && !win32GlResourceLabelsEnabled();
     if (!native || (!trace && !suppressLabels)) return native;
     return sk_make_sp<Win32GaneshGlInterface>(std::move(native), trace, suppressLabels);
+}
+
+inline sk_sp<const GrGLInterface> makeWin32GaneshGlInterface(bool nvidia) {
+    return instrumentWin32GaneshGlInterface(GrGLMakeNativeInterface(),
+        nvidia && !win32GlResourceLabelsEnabled());
 }
 
 } // namespace oneui::internal

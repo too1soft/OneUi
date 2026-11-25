@@ -215,7 +215,7 @@ public:
             canvas->drawPicture(&picture);
         }
         if (angleDrawableScaled_) canvas->restore();
-        const bool traceCalls = !angleContext_ && snapshot.paintSequence && internal::win32GlTraceEnabled();
+        const bool traceCalls = snapshot.paintSequence && internal::win32GlTraceEnabled();
         const bool tracing = traceCalls && internal::scrollTraceEnabled();
         trace("worker_flush_begin");
         if (traceCalls) {

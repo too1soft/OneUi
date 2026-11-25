@@ -1,4 +1,5 @@
 #include "angle_d3d11_win32.h"
+#include "gl_flush_trace_win32.h"
 #include "platform/shared/skia_gl_setup.h"
 #include "include/core/SkSurface.h"
 #include "include/gpu/ganesh/GrDirectContext.h"
@@ -281,7 +282,7 @@ std::unique_ptr<AngleD3D11Context> AngleD3D11Context::open(HWND window, sk_sp<Gr
     if (state->drawable.composed) state->device += " via DirectComposition";
     GrContextOptions options;
     options.fPersistentCache = rendering::angleD3D11ShaderCache();
-    skia = GrDirectContexts::MakeGL(std::move(gl), options);
+    skia = GrDirectContexts::MakeGL(internal::instrumentWin32GaneshGlInterface(std::move(gl), false), options);
     state->synced = api->swapInterval(state->display, 1) != 0;
     previous.restore(state->display);
     return skia ? std::unique_ptr<AngleD3D11Context>(new AngleD3D11Context(std::move(state))) : nullptr;

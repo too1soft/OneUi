@@ -272,7 +272,7 @@
             paintSurface_->draw(presentCanvas, 0.0f, 0.0f);
             if (angleResize) presentCanvas->restore();
             const double copyEndMs = traceLayout ? currentTimeMs() : 0.0;
-            const bool traceGl = traceLayout && !angleContext_ && internal::win32GlTraceEnabled();
+            const bool traceGl = traceLayout && internal::win32GlTraceEnabled();
             std::optional<internal::GlCallTrace> glTrace;
             std::optional<internal::GlCallTrace> glSubmitTrace;
             ULONG64 cyclesBeforeFlush = 0, cyclesAfterFlush = 0;
