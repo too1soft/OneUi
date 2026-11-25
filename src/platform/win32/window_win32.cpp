@@ -30,6 +30,7 @@
 #include "internal/animation_wake.h"
 #include "internal/edit_presentation.h"
 #include "internal/input_layout.h"
+#include "internal/resize_view_flush.h"
 #include "platform/shared/skia_canvas.h"
 #include "platform/shared/title_bar_hit.h"
 #include "platform/shared/window_fit.h"
@@ -255,6 +256,7 @@ public:
     bool deferredFullPaintPending_ = false;
     bool interactiveResizeActive_ = false;
     bool clientSizeChangedAtPaint_ = false;
+    float lastDeliveredClientWidth_ = 0.0f;
     bool interactiveSizeChanged_ = false;
     std::uint64_t liveResizeGeneration_ = 0;
     std::uint64_t presentedResizeGeneration_ = 0;

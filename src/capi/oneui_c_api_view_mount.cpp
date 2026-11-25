@@ -2,6 +2,7 @@
 #include "oneui/layout/overlay_host.h"
 #include "oneui/controls/popup.h"
 #include "oneui_c_api_view_internal.h"
+#include "../internal/resize_view_flush.h"
 #include "../internal/scroll_trace.h"
 #include "../internal/view_mount_style_cache.h"
 namespace oneui::capi::views {
@@ -120,31 +121,34 @@ void Mount::publish(const std::shared_ptr<Runtime> &view) {
         auto mount = weak.lock();
         if (!mount || mount->closed || !mount->window)
             return;
-        if (!mount->window->window->post([weak, runtime] {
-                auto mount = weak.lock();
-                auto view = runtime.lock();
-                if (!mount || mount->closed || !view || view->closing)
-                    return;
-                // A synchronous flush can finish while this message is queued.
-                if (!view->scheduled && view->lastFlushCompleted)
-                    return;
-                if (callbackRuntime) {
-                    view->scheduled = false;
-                    callbackRuntime->deferredSchedules.push_back(view);
-                    return;
-                }
-                const auto sequence = view->error.sequence;
-                try {
-                    view->flush();
-                } catch (const Failure &e) {
-                    if (view->error.sequence == sequence)
-                        view->fail(e.result, e.what());
-                } catch (const std::bad_alloc &) {
-                    view->fail(ONEUI_VIEW_OUT_OF_MEMORY, "Asynchronous view allocation failed");
-                } catch (...) {
-                    view->fail(ONEUI_VIEW_FOREIGN_FAILURE, "Asynchronous view flush failed");
-                }
-            }))
+        std::function<void()> refresh = [weak, runtime] {
+            auto mount = weak.lock();
+            auto view = runtime.lock();
+            if (!mount || mount->closed || !view || view->closing)
+                return;
+            // A synchronous flush can finish while this message is queued.
+            if (!view->scheduled && view->lastFlushCompleted)
+                return;
+            if (callbackRuntime) {
+                view->scheduled = false;
+                callbackRuntime->deferredSchedules.push_back(view);
+                return;
+            }
+            const auto sequence = view->error.sequence;
+            try {
+                view->flush();
+            } catch (const Failure &e) {
+                if (view->error.sequence == sequence)
+                    view->fail(e.result, e.what());
+            } catch (const std::bad_alloc &) {
+                view->fail(ONEUI_VIEW_OUT_OF_MEMORY, "Asynchronous view allocation failed");
+            } catch (...) {
+                view->fail(ONEUI_VIEW_FOREIGN_FAILURE, "Asynchronous view flush failed");
+            }
+        };
+        auto& window = *mount->window->window;
+        if (internal::ResizeViewFlush::collect(window, refresh)) return;
+        if (!window.post(std::move(refresh)))
             if (auto view = runtime.lock())
                 view->close();
     };
