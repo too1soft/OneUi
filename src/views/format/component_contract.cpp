@@ -14,6 +14,10 @@ const ComponentProperty &ComponentContract::property(const std::string &n) const
 }
 const ComponentProperty &ComponentContract::property(uint32_t id) const
 {
+    // Most built-in contracts use consecutive IDs. Sparse extension and
+    // historical contracts still use their declared IDs.
+    if (id != 0 && id <= properties.size() && properties[id - 1].id == id)
+        return properties[id - 1];
     for (auto &p : properties)
         if (p.id == id)
             return p;

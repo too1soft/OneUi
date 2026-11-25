@@ -210,12 +210,13 @@ void Runtime::install(const std::shared_ptr<Instance> &instance, uint32_t owner,
     for (const auto &r : ownerRecords.get(image, PROP, owner)) {
         const auto &contract =
             image.components[image.records[NODE][componentRoot(image, owner)][1]];
+        const auto &name = contract.property(r[1]).name;
         overrideProperty(r[1]);
         auto value = constant(r[2]);
-        if (!components::set(instance,r[1],value.borrow()) && !workspaceScalar(*instance,contract.property(r[1]).name,value))
-            setScalar(factory, instance->element, contract.property(r[1]).name, value);
-        if (contract.property(r[1]).name == "disabled")
-            instance->authoredDisabled = bool(constant(r[2]).integer);
+        if (!components::set(instance, r[1], value.borrow()) && !workspaceScalar(*instance, name, value))
+            setScalar(factory, instance->element, name, value);
+        if (name == "disabled")
+            instance->authoredDisabled = bool(value.integer);
     }
     for (const auto &r : ownerRecords.get(image, BIND, owner)) {
         overrideProperty(r[1]);
@@ -314,8 +315,13 @@ void Runtime::update(const std::shared_ptr<Instance> &instance) {
         auto c = componentRoot(image, b.record[0]);
         return image.components[image.records[NODE][c][1]].property(b.record[1]).name == "spans";
     };
-    for (auto &b : instance->bindings) if (!isSpanList(b)) apply(instance, b);
-    for (auto &b : instance->bindings) if (isSpanList(b)) apply(instance, b);
+    bool hasSpans = false;
+    for (auto &b : instance->bindings) {
+        if (isSpanList(b)) hasSpans = true;
+        else apply(instance, b);
+    }
+    if (hasSpans)
+        for (auto &b : instance->bindings) if (isSpanList(b)) apply(instance, b);
     bool conditionVisible = true;
     for (auto &b : instance->bindings)
         if (b.kind == COND && b.previous)
