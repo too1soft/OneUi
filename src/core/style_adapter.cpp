@@ -50,13 +50,17 @@ std::vector<ControlShadowStyle> controlShadowsFromStyleBox(const StyleBox& box) 
     return shadows;
 }
 
-StyleBox resolveState(const StyleSheet& sheet, StyleNode node, StylePseudoMask state) {
+// Each adapter owns its node and reuses the class storage across states.
+StyleBox resolveState(const StyleSheet& sheet, StyleNode& node, StylePseudoMask state) {
+    const auto originalState = node.state;
+    const bool addSelected = (state & StyleStateSelected) != 0 &&
+        std::find(node.classes.begin(), node.classes.end(), "selected") == node.classes.end();
+    if (addSelected) node.classes.push_back("selected");
     node.state |= state;
-    if ((state & StyleStateSelected) != 0 &&
-        std::find(node.classes.begin(), node.classes.end(), "selected") == node.classes.end()) {
-        node.classes.push_back("selected");
-    }
-    return sheet.resolve(node);
+    auto result = sheet.resolve(node);
+    node.state = originalState;
+    if (addSelected) node.classes.pop_back();
+    return result;
 }
 
 } // namespace
@@ -199,11 +203,11 @@ InteractiveSurfaceStateStyle interactiveSurfaceStateStyleFromStyleBox(const Styl
 }
 
 StyleBox buttonStyleBoxFromStyleSheet(const StyleSheet& sheet, StyleNode node, StylePseudoMask state) {
-    return resolveState(sheet, std::move(node), state);
+    return resolveState(sheet, node, state);
 }
 
 StyleBox textFieldStyleBoxFromStyleSheet(const StyleSheet& sheet, StyleNode node, StylePseudoMask state) {
-    return resolveState(sheet, std::move(node), state);
+    return resolveState(sheet, node, state);
 }
 
 ButtonStyleOverride buttonStyleOverrideFromStyleSheet(const StyleSheet& sheet, StyleNode node) {
@@ -213,7 +217,7 @@ ButtonStyleOverride buttonStyleOverrideFromStyleSheet(const StyleSheet& sheet, S
     override.pressed = buttonStateStyleOverrideFromStyleBox(resolveState(sheet, node, StyleStateActive));
     override.disabled = buttonStateStyleOverrideFromStyleBox(resolveState(sheet, node, StyleStateDisabled));
     override.selected = buttonStateStyleOverrideFromStyleBox(resolveState(sheet, node, StyleStateSelected));
-    override.focusVisible = buttonStateStyleOverrideFromStyleBox(resolveState(sheet, std::move(node), StyleStateFocus));
+    override.focusVisible = buttonStateStyleOverrideFromStyleBox(resolveState(sheet, node, StyleStateFocus));
     return override;
 }
 
@@ -223,7 +227,7 @@ TextFieldStyleOverride textFieldStyleOverrideFromStyleSheet(const StyleSheet& sh
     override.hovered = textFieldStateStyleOverrideFromStyleBox(resolveState(sheet, node, StyleStateHover));
     override.disabled = textFieldStateStyleOverrideFromStyleBox(resolveState(sheet, node, StyleStateDisabled));
     override.readOnly = textFieldStateStyleOverrideFromStyleBox(resolveState(sheet, node, StyleStateReadOnly));
-    override.focusVisible = textFieldStateStyleOverrideFromStyleBox(resolveState(sheet, std::move(node), StyleStateFocus));
+    override.focusVisible = textFieldStateStyleOverrideFromStyleBox(resolveState(sheet, node, StyleStateFocus));
     return override;
 }
 
@@ -234,7 +238,7 @@ SwitchStyleOverride switchStyleOverrideFromStyleSheet(const StyleSheet& sheet, S
     override.pressed = switchStateStyleOverrideFromStyleBox(resolveState(sheet, node, StyleStateActive));
     override.disabled = switchStateStyleOverrideFromStyleBox(resolveState(sheet, node, StyleStateDisabled));
     override.selected = switchStateStyleOverrideFromStyleBox(resolveState(sheet, node, StyleStateSelected));
-    override.focusVisible = switchStateStyleOverrideFromStyleBox(resolveState(sheet, std::move(node), StyleStateFocus));
+    override.focusVisible = switchStateStyleOverrideFromStyleBox(resolveState(sheet, node, StyleStateFocus));
     return override;
 }
 
@@ -316,7 +320,7 @@ PopupStyleOverride popupStyleOverrideFromStyleSheet(const StyleSheet& sheet, Sty
 
 ProgressBarStyleOverride progressBarStyleOverrideFromStyleSheet(const StyleSheet& sheet, StyleNode node) {
     const StyleBox normal = resolveState(sheet, node, StyleStateNone);
-    const StyleBox disabled = resolveState(sheet, std::move(node), StyleStateDisabled);
+    const StyleBox disabled = resolveState(sheet, node, StyleStateDisabled);
 
     ProgressBarStyleOverride override;
     override.trackBackground = normal.background.color;
@@ -353,7 +357,7 @@ std::optional<Color> customColor(const StyleSheet& sheet, const char* name) {
 
 CodeEditorStyle codeEditorStyleFromStyleSheet(const StyleSheet& sheet, StyleNode node) {
     auto s = codeEditorStyleFromTheme(theme());
-    const StyleBox box = resolveState(sheet, std::move(node), StyleStateNone);
+    const StyleBox box = resolveState(sheet, node, StyleStateNone);
     // Surface and ink first: everything not named explicitly derives from them,
     // so a dark rule alone already gives a readable dark editor.
     if (box.background.color || box.foreground) {
@@ -423,7 +427,7 @@ ListStyleOverride listStyleOverrideFromStyleSheet(const StyleSheet& sheet, Style
     override.pressed = listStateStyleOverrideFromStyleBox(resolveState(sheet, node, StyleStateActive));
     override.selected = listStateStyleOverrideFromStyleBox(resolveState(sheet, node, StyleStateSelected));
     override.disabled = listStateStyleOverrideFromStyleBox(resolveState(sheet, node, StyleStateDisabled));
-    override.focusVisible = listStateStyleOverrideFromStyleBox(resolveState(sheet, std::move(node), StyleStateFocus));
+    override.focusVisible = listStateStyleOverrideFromStyleBox(resolveState(sheet, node, StyleStateFocus));
     return override;
 }
 
@@ -431,7 +435,7 @@ TableStyleOverride tableStyleOverrideFromStyleSheet(const StyleSheet& sheet, Sty
     const StyleBox normal = resolveState(sheet, node, StyleStateNone);
     const StyleBox hovered = resolveState(sheet, node, StyleStateHover);
     const StyleBox pressed = resolveState(sheet, node, StyleStateActive);
-    const StyleBox selected = resolveState(sheet, std::move(node), StyleStateSelected);
+    const StyleBox selected = resolveState(sheet, node, StyleStateSelected);
 
     TableStyleOverride style;
     style.checkBackground = normal.checkBackground;
@@ -471,7 +475,7 @@ InteractiveSurfaceStyle interactiveSurfaceStyleFromStyleSheet(const StyleSheet& 
     style.hovered = interactiveSurfaceStateStyleFromStyleBox(resolveState(sheet, node, StyleStateHover));
     style.pressed = interactiveSurfaceStateStyleFromStyleBox(resolveState(sheet, node, StyleStateActive));
     style.disabled = interactiveSurfaceStateStyleFromStyleBox(resolveState(sheet, node, StyleStateDisabled));
-    style.focusVisible = interactiveSurfaceStateStyleFromStyleBox(resolveState(sheet, std::move(node), StyleStateFocus));
+    style.focusVisible = interactiveSurfaceStateStyleFromStyleBox(resolveState(sheet, node, StyleStateFocus));
     if (const auto transition = transitionOverrideFromStyleBox(normal)) {
         style.transition = *transition;
     }

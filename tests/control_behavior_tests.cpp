@@ -7457,6 +7457,12 @@ void testStyleAdapterBuildsButtonAndTextFieldOverrides() {
     const auto legacyNav = oneui::buttonStyleOverrideFromStyleSheet(sheet, oneui::StyleNode{"button", {"legacy-nav"}, oneui::StyleStateNone});
     expectEqual("StyleAdapter selected also resolves selected class background", legacyNav.selected->background->r, 58);
     expectEqual("StyleAdapter selected also resolves selected class foreground", legacyNav.selected->foreground->r, 244);
+    expectEqual("StyleAdapter synthesized selected class does not affect focus",
+        legacyNav.focusVisible->background.has_value() ? 1 : 0, 0);
+    const auto authoredSelected = oneui::buttonStyleOverrideFromStyleSheet(
+        sheet, {"button", {"legacy-nav", "selected"}, oneui::StyleStateNone});
+    expectEqual("StyleAdapter preserves authored selected class for later states",
+        authoredSelected.focusVisible->background->r, 58);
 
     const auto hoveredButtonBox = oneui::buttonStyleBoxFromStyleSheet(sheet, oneui::StyleNode{"button", {"button"}, oneui::StyleStateNone}, oneui::StyleStateHover);
     expectEqual("StyleAdapter button style box helper resolves hover", hoveredButtonBox.background.color->r, 52);
