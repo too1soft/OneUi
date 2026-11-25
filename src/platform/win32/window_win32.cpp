@@ -1,6 +1,7 @@
 #include "internal/view_profile.h"
 #include "window_event_loop_win32.h"
 #include "window_dispatch_trace_win32.h"
+#include "window_win32_damage_origin.h"
 #include "window_win32_paint_trace.h"
 #include "gl_flush_trace_win32.h"
 #include "angle_d3d11_win32.h"
