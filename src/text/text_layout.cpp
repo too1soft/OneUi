@@ -493,7 +493,7 @@ void Layout::paint(SkCanvas& canvas, Point origin, Color color) const {
     ForegroundPainter painter(
         canvas,
         SkColorSetARGB(color.a, color.r, color.g, color.b),
-        impl_->inlineForegrounds);
+        impl_->inlineForegrounds, impl_->options.sensitive);
     impl_->paragraph->paint(&painter, origin.x, origin.y);
 }
 LayoutStats Layout::stats() {

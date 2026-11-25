@@ -142,6 +142,8 @@
         if (content_ && content_->visible()) {
             const double contentStartMs = currentTimeMs();
             g_primitivePaintTrace = PrimitivePaintTrace{};
+            text::AtlasWarmupCapture atlasCapture(textAtlasWarmup_.capture(
+                useGPU && nvidiaDriver_ && fullPaint && !interactiveResizeActive_));
             paintClientContent(canvas, logicalWidth, logicalHeight);
             recordContentPaint(currentTimeMs() - contentStartMs);
             recordPrimitivePaint(g_primitivePaintTrace);
@@ -249,6 +251,7 @@
             traceSubmitMs_ += submitMs;
             rendererInfo_.submitMs += submitMs;
             if (swapped) {
+                textAtlasWarmup_.arm(hwnd_);
                 EndPaint(hwnd_, &paintStruct);
                 recordPaint(width, height, fullPaint, allocatedSurface, surfaceMs, currentTimeMs() - paintStartMs);
                 flushDeferredImePosition();

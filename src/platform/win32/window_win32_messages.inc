@@ -191,6 +191,11 @@
             flushDeferredFullPaint();
             return 0;
         case WM_TIMER:
+            if (wParam == win32::TextAtlasWarmup::timer) {
+                textAtlasWarmup_.onTimer(hwnd_, glContext_, glDC_, gpuAvailable_ ? grContext_.get() : nullptr,
+                    paintSurface_.get(), interactiveResizeActive_);
+                return 0;
+            }
             if (wParam == kOneUiAnimationTimer) {
                 runAnimationFrameCallbacks();
                 return 0;
@@ -496,6 +501,7 @@
             retireAccessibilityProvider();
             return 0;
         case WM_NCDESTROY:
+            textAtlasWarmup_.cancel(hwnd_);
         {
             callbackWindowAlive_->store(false, std::memory_order_release);
             if (accessibilityProvider_) retireAccessibilityProvider();

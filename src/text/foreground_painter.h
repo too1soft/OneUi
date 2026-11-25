@@ -7,6 +7,10 @@
 
 #include <vector>
 
+#if defined(_WIN32)
+#include "text/atlas_warmup_capture.h"
+#endif
+
 namespace oneui::text {
 
 // SkParagraph caches the paint together with text blobs on its first draw.
@@ -15,8 +19,14 @@ namespace oneui::text {
 // glyph caches, and color-font rendering (no monochrome layer/filter).
 class ForegroundPainter final : public skia::textlayout::ParagraphPainter {
 public:
-    ForegroundPainter(SkCanvas& canvas, SkColor color, const std::vector<SkColor>& inlineColors)
-        : canvas_(canvas), color_(color), inlineColors_(inlineColors) {}
+    ForegroundPainter(SkCanvas& canvas, SkColor color, const std::vector<SkColor>& inlineColors, bool sensitive)
+        : canvas_(canvas), color_(color), inlineColors_(inlineColors) {
+#if defined(_WIN32)
+        warmupAllowed_ = !sensitive;
+#else
+        (void)sensitive;
+#endif
+    }
     void drawTextBlob(const sk_sp<SkTextBlob>& blob, SkScalar x, SkScalar y, const SkPaintOrID& source) override {
         SkPaint paint = std::holds_alternative<SkPaint>(source) ? std::get<SkPaint>(source) : SkPaint{};
         paint.setAntiAlias(true);
@@ -26,6 +36,9 @@ public:
             resolved = inlineColors_[static_cast<std::size_t>(*paintId) - 1];
         }
         paint.setColor(resolved);
+#if defined(_WIN32)
+        if (warmupAllowed_) AtlasWarmupCapture::observe(canvas_, blob, x, y, paint);
+#endif
         canvas_.drawTextBlob(blob, x, y, paint);
     }
     void drawTextShadow(const sk_sp<SkTextBlob>& blob, SkScalar x, SkScalar y, SkColor color, SkScalar blur) override {
@@ -51,6 +64,9 @@ private:
     SkCanvas& canvas_;
     SkColor color_;
     const std::vector<SkColor>& inlineColors_;
+#if defined(_WIN32)
+    bool warmupAllowed_ = false;
+#endif
 };
 
 } // namespace oneui::text
