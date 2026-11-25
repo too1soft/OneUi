@@ -198,9 +198,9 @@
             }
         };
         paintTrace.mark(PaintTrace::Canvas);
+        g_primitivePaintTrace = PrimitivePaintTrace{};
         if (content_ && content_->visible()) {
             const double contentStartMs = currentTimeMs();
-            g_primitivePaintTrace = PrimitivePaintTrace{};
             text::AtlasWarmupCapture atlasCapture(textAtlasWarmup_.capture(
                 useGPU && nvidiaDriver_ && fullPaint && !interactiveResizeActive_));
             paintClientContent(canvas, logicalWidth, logicalHeight);
@@ -242,7 +242,7 @@
             finishDiagnostics();
             internal::traceInteractionPaint(interactionPaint, "paint_end", "opengl-worker", accepted ? 1 : 0);
             paintTrace.write(interactionPaint.window, static_cast<double>(interactionPaint.paintSequence),
-                RECT{dirtyX, dirtyY, dirtyRight, dirtyBottom}, profile.data);
+                RECT{dirtyX, dirtyY, dirtyRight, dirtyBottom}, profile.data, g_primitivePaintTrace);
             return;
         }
 
@@ -354,7 +354,7 @@
                 finishDiagnostics();
                 internal::traceInteractionPaint(interactionPaint, "paint_end", "opengl", 1);
                 paintTrace.write(interactionPaint.window, static_cast<double>(interactionPaint.paintSequence),
-                    RECT{dirtyX, dirtyY, dirtyRight, dirtyBottom}, profile.data);
+                    RECT{dirtyX, dirtyY, dirtyRight, dirtyBottom}, profile.data, g_primitivePaintTrace);
                 return;
             }
             rendererInfo_.reason = "swap-buffers-failed";
@@ -465,5 +465,5 @@
         finishDiagnostics();
         internal::traceInteractionPaint(interactionPaint, "paint_end", "software", blitSucceeded ? 1 : 0);
         paintTrace.write(interactionPaint.window, static_cast<double>(interactionPaint.paintSequence),
-            RECT{dirtyX, dirtyY, dirtyRight, dirtyBottom}, profile.data);
+            RECT{dirtyX, dirtyY, dirtyRight, dirtyBottom}, profile.data, g_primitivePaintTrace);
     }
