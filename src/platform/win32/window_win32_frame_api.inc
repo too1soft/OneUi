@@ -35,6 +35,8 @@
         if (rect && win32::VirtualRowDamage::hold(this, hwnd_)) return;
         if (requestsFeedback) prioritizeHandoffFeedback();
         const bool wasPending = invalidationPending_;
+        if (!wasPending || (!rect && !invalidateAll_))
+            internal::traceWin32DamageOrigin(hwnd_, "damage_queued", rect);
         mergeInvalidation(rect);
         if (!wasPending) {
             traceLiveResizeDamage("resize_widget_damage", !rect);
@@ -66,6 +68,7 @@
         traceLiveResizeDamage("resize_submit_damage", all);
         invalidateAll_ = false;
         if (hwnd_) {
+            internal::traceWin32DamageOrigin(hwnd_, "damage_submitted", all ? nullptr : &pendingInvalidation_);
             InvalidateRect(hwnd_, all ? nullptr : &pendingInvalidation_, FALSE);
         }
     }
