@@ -130,5 +130,12 @@
             return DefWindowProcW(hwnd, message, wParam, lParam);
         }
 
+        if (message == WM_CHAR) {
+            const internal::InteractionSnapshot input{reinterpret_cast<std::uintptr_t>(hwnd)};
+            internal::traceInteractionPaint(input, "terminal_char_enter");
+            const auto result = window->handleMessage(message, wParam, lParam);
+            internal::traceInteractionPaint(input, "terminal_char_return");
+            return result;
+        }
         return window->handleMessage(message, wParam, lParam);
     }
