@@ -103,7 +103,7 @@
         }
         win32::GlRenderWorker::Frame workerFrame;
         if (threadedGl) {
-            workerFrame = glWorker_.plan(width, height, dirtyRect);
+            workerFrame = glWorker_.plan(width, height, dirtyRect, interactiveResizeActive_);
             dirtyRect = workerFrame.damage;
         } else if (surfaceUpdate.repaint) {
             dirtyRect = clientRect;

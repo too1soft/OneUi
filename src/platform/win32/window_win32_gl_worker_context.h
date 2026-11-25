@@ -3,6 +3,7 @@
 #include "gl_flush_trace_win32.h"
 #include "window_win32_deferred_gl.h"
 #include "window_win32_gl_worker.h"
+#include "window_win32_gpu_backing.h"
 #include "window_win32_gpu_warmup.h"
 #include "platform/shared/skia_gl_setup.h"
 #include "include/core/SkCanvas.h"
@@ -89,14 +90,19 @@ public:
             return extent.load(std::memory_order_acquire) == frame.extent && matchesClient(width, height);
         };
         if (!current()) return RenderResult::Obsolete;
-        if (!surface_ || width_ != width || height_ != height) {
+        const bool drawableChanged = !surface_ || width_ != width || height_ != height;
+        const bool full = frame.damage.left == 0 && frame.damage.top == 0 &&
+            frame.damage.right == width && frame.damage.bottom == height;
+        const bool needsFullRecording = frame.retained &&
+            (!retained_ || retainedExtent_ != frame.extent || drawableChanged);
+        if (needsFullRecording && !full) return RenderResult::Obsolete;
+        if (drawableChanged) {
             GrGLFramebufferInfo framebuffer{};
             framebuffer.fFormat = GL_RGBA8;
             auto target = GrBackendRenderTargets::MakeGL(width, height, 0, 0, framebuffer);
             surface_ = SkSurfaces::WrapBackendRenderTarget(context_.get(), target,
                 kBottomLeft_GrSurfaceOrigin, kBGRA_8888_SkColorType, nullptr, nullptr);
             if (!surface_) return RenderResult::Failed;
-            retained_.reset();
             width_ = width;
             height_ = height;
         }
@@ -104,15 +110,19 @@ public:
         const auto trace = [&](const char* phase, int success = -1) {
             internal::traceInteractionPaint(snapshot, phase, "opengl-worker", success);
         };
-        const bool full = frame.damage.left == 0 && frame.damage.top == 0 &&
-            frame.damage.right == width && frame.damage.bottom == height;
-        if (frame.retained && (!retained_ || retainedExtent_ != frame.extent)) {
-            if (!full) return RenderResult::Obsolete;
-            if (!retained_) {
-                retained_ = SkSurfaces::RenderTarget(context_.get(), skgpu::Budgeted::kYes,
-                    SkImageInfo::Make(width, height, kBGRA_8888_SkColorType, kPremul_SkAlphaType),
-                    0, kTopLeft_GrSurfaceOrigin, nullptr);
+        if (needsFullRecording) {
+            if (!retained_ || drawableChanged) {
+                const bool tracing = internal::scrollTraceEnabled();
+                const double started = tracing ? internal::scrollTraceNowMs() : 0.0;
+                auto backing = resizeGpuBacking(*context_, retained_.get(), width, height, frame.interactiveResize);
+                retained_ = std::move(backing.surface);
                 if (!retained_) return RenderResult::Failed;
+                if (tracing && !backing.reused) {
+                    internal::writeScrollTrace(internal::ScrollTraceEvent{
+                        "win32", "worker_backing_store", snapshot.window, 0, 0, 0, 0, 0, 0,
+                        internal::scrollTraceNowMs() - started, static_cast<double>(snapshot.paintSequence),
+                        static_cast<double>(retained_->width()) * retained_->height()});
+                }
             }
             retainedExtent_ = frame.extent;
         }

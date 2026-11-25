@@ -39,7 +39,6 @@ constexpr UINT_PTR kOneUiTooltipTimer = 0x4f12;
 constexpr UINT kOneUiTooltipDelayMs = 420;
 constexpr UINT kOneUiAnimationFrameIntervalMs = USER_TIMER_MINIMUM;
 constexpr UINT kOneUiInteractivePaintIntervalMs = 8;
-constexpr int kPaintSurfaceAlignment = 128;
 constexpr int kPaintSurfaceGrowthPadding = 256;
 constexpr float kDefaultDpi = 96.0f;
 constexpr int kProcessPerMonitorDpiAware = 2;

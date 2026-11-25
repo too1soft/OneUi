@@ -19,6 +19,7 @@ public:
         int height = 0;
         RECT damage{};
         bool retained = false;
+        bool interactiveResize = false;
         std::uint64_t extent = 0;
         std::uint64_t serial = 0;
     };
@@ -30,7 +31,7 @@ public:
     void setStartupPicture(StartupGlScene scene);
     bool ready() const noexcept;
     bool vsync() const noexcept;
-    Frame plan(int width, int height, RECT damage);
+    Frame plan(int width, int height, RECT damage, bool interactiveResize);
     bool enqueue(sk_sp<SkPicture> picture, const Frame& frame,
                  const internal::InteractionSnapshot& trace);
     void invalidateExtent();

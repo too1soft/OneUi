@@ -167,11 +167,11 @@ bool GlRenderWorker::vsync() const noexcept {
     return state_ && state_->vsync.load(std::memory_order_relaxed);
 }
 
-GlRenderWorker::Frame GlRenderWorker::plan(int width, int height, RECT damage) {
+GlRenderWorker::Frame GlRenderWorker::plan(int width, int height, RECT damage, bool interactiveResize) {
     if (!state_) return {};
     auto& state = *state_;
     std::lock_guard lock(state.mutex);
-    Frame frame{width, height, damage, retainedGlWorkerEnabled(),
+    Frame frame{width, height, damage, retainedGlWorkerEnabled(), interactiveResize,
                 state.extent.load(std::memory_order_relaxed), ++state.latestPlan};
     const bool sameExtent = state.lastQueued.extent == frame.extent &&
         state.lastQueued.width == width && state.lastQueued.height == height;

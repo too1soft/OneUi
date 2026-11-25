@@ -7,6 +7,7 @@
 #include "window_win32_text_atlas.h"
 #include "window_win32_deferred_gl.h"
 #include "window_win32_gl_worker.h"
+#include "window_win32_gpu_backing.h"
 #include "accessibility_proxy_win32.h"
 #include "internal/frame_profile.h"
 #include "internal/developer_tools.h"
