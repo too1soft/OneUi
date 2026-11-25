@@ -248,11 +248,15 @@
         case WM_ENTERSIZEMOVE:
             interactiveResizeActive_ = true;
             interactiveSizeChanged_ = false;
+            presentedResizeGeneration_ = liveResizeGeneration_;
             lastLiveResizePaintMs_ = 0.0;
             return 0;
         case WM_EXITSIZEMOVE:
             interactiveResizeActive_ = false;
-            if (std::exchange(interactiveSizeChanged_, false)) requestDeferredFullPaint();
+            // A full frame already presented for the last size also covers
+            // the exit. Leave any pending widget and OS damage in the queue.
+            if (std::exchange(interactiveSizeChanged_, false) &&
+                liveResizeGeneration_ != presentedResizeGeneration_) requestDeferredFullPaint();
             printRenderTrace(true);
             return 0;
         case WM_MOUSEWHEEL:
@@ -375,7 +379,10 @@
             return 0;
         }
         case WM_SIZE:
-            if (interactiveResizeActive_) interactiveSizeChanged_ = true;
+            if (interactiveResizeActive_) {
+                interactiveSizeChanged_ = true;
+                ++liveResizeGeneration_;
+            }
 #if ONEUI_DEVELOPER_TOOLS
             if(developerTools_)developerTools_->resetCadence();
 #endif

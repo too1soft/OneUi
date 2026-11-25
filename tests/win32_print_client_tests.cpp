@@ -94,6 +94,41 @@ RECT clientRect(HWND hwnd) {
     return rect;
 }
 
+void verifyResizeExitPaint(oneui::Window& window, HWND hwnd) {
+    const auto resize = [&](int amount) {
+        RECT outer{};
+        GetWindowRect(hwnd, &outer);
+        check(SetWindowPos(hwnd, nullptr, 0, 0, outer.right - outer.left + amount,
+            outer.bottom - outer.top, SWP_NOMOVE | SWP_NOACTIVATE | SWP_NOZORDER) != FALSE,
+            "owned window resizes inside its sizing loop");
+    };
+
+    SendMessageW(hwnd, WM_ENTERSIZEMOVE, 0, 0);
+    resize(32);
+    const auto paintsBefore = window.rendererInfo().paints;
+    UpdateWindow(hwnd);
+    check(window.rendererInfo().paints > paintsBefore, "latest resize paints inside the loop");
+    const RECT damage{4, 4, 34, 30};
+    InvalidateRect(hwnd, &damage, FALSE);
+    SendMessageW(hwnd, WM_EXITSIZEMOVE, 0, 0);
+    RECT update{};
+    check(GetUpdateRect(hwnd, &update, FALSE) && EqualRect(&update, &damage),
+        "ending a fully presented resize leaves existing partial damage unchanged");
+    UpdateWindow(hwnd);
+
+    SendMessageW(hwnd, WM_ENTERSIZEMOVE, 0, 0);
+    resize(32);
+    UpdateWindow(hwnd);
+    resize(32);
+    // Model the update region being validated before this size was presented.
+    ValidateRect(hwnd, nullptr);
+    SendMessageW(hwnd, WM_EXITSIZEMOVE, 0, 0);
+    const auto client = clientRect(hwnd);
+    check(GetUpdateRect(hwnd, &update, FALSE) && EqualRect(&update, &client),
+        "ending an unpresented resize still requests a full repaint");
+    UpdateWindow(hwnd);
+}
+
 void verify() {
     auto pattern = std::make_shared<Pattern>();
     oneui::WindowOptions options;
@@ -217,6 +252,7 @@ void verify() {
             SendMessageW(hwnd, WM_PRINTCLIENT, reinterpret_cast<WPARAM>(image.dc), PRF_CLIENT);
         check(GetGuiResources(GetCurrentProcess(), GR_GDIOBJECTS) <= handles + 1, "repeated capture does not leak GDI objects");
     }
+    verifyResizeExitPaint(*window, hwnd);
     window->close();
     std::cout << "checks=" << checks << " failures=" << failures << '\n';
 }

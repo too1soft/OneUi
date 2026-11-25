@@ -51,6 +51,7 @@
         internal::FrameProfileSession profile(renderTraceEnabled_ || traceLayout);
         const auto finishDiagnostics=[] {};
 #endif
+        const auto resizeGeneration = interactiveResizeActive_ ? liveResizeGeneration_ : 0;
         RECT clientRect{};
         GetClientRect(hwnd_, &clientRect);
 
@@ -138,6 +139,11 @@
             canvas.fillRect(dirtyCanvasRect, colors::Surface, 0.0f);
         }
 
+        const auto recordResizePresentation = [&] {
+            if (fullPaint && interactiveResizeActive_ && resizeGeneration == liveResizeGeneration_) {
+                presentedResizeGeneration_ = resizeGeneration;
+            }
+        };
         paintTrace.mark(PaintTrace::Canvas);
         if (content_ && content_->visible()) {
             const double contentStartMs = currentTimeMs();
@@ -251,6 +257,7 @@
             traceSubmitMs_ += submitMs;
             rendererInfo_.submitMs += submitMs;
             if (swapped) {
+                recordResizePresentation();
                 textAtlasWarmup_.arm(hwnd_);
                 EndPaint(hwnd_, &paintStruct);
                 recordPaint(width, height, fullPaint, allocatedSurface, surfaceMs, currentTimeMs() - paintStartMs);
@@ -343,6 +350,7 @@
         }
 
         EndPaint(hwnd_, &paintStruct);
+        if (blitSucceeded) recordResizePresentation();
         if (blitSucceeded && startupPicture) {
             deferredStartupGl_.submitPicture(std::move(startupPicture), width, height);
         }

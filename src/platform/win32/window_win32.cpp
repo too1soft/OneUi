@@ -255,6 +255,8 @@ public:
     bool interactiveResizeActive_ = false;
     bool clientSizeChangedAtPaint_ = false;
     bool interactiveSizeChanged_ = false;
+    std::uint64_t liveResizeGeneration_ = 0;
+    std::uint64_t presentedResizeGeneration_ = 0;
     double lastLiveResizePaintMs_ = 0.0;
     bool renderTraceEnabled_ = false;
     std::wstring renderTraceFilePath_;
