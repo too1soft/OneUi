@@ -1,10 +1,25 @@
-    bool postedPaintDue() {
+    bool postedPaintDue(bool timeBudgetExhausted) {
         if (inputPaintPending_) return false;
-        if (!interactiveResizeActive_ || lastLiveResizePaintMs_ == 0.0) return true;
-        // Leave a freshly painted size to the native loop. A callback flood
-        // can still paint once the refresh and native timer interval elapse.
+        if (interactiveResizeActive_ && lastLiveResizePaintMs_ != 0.0) {
+            // A callback flood can paint once the refresh and native timer interval elapse.
+            const double interval = std::max<double>(USER_TIMER_MINIMUM, animationFrameIntervalMs());
+            return currentTimeMs() - lastLiveResizePaintMs_ >= interval;
+        }
+        if (!timeBudgetExhausted || gpuAvailable_ || glWorker_.ready() ||
+            lastContentPaintCompletedMs_ == 0.0) return true;
+        static const bool yieldSoftwarePaint = [] {
+            wchar_t value[2]{};
+            return GetEnvironmentVariableW(L"ONEUI_WIN32_YIELD_POSTED_SOFTWARE_PAINT", value, 2) == 1 &&
+                value[0] == L'1';
+        }();
+        if (!yieldSoftwarePaint) return true;
+        // Let the next native message hold its turn after an expensive callback.
+        // A busy posted queue may force a paint once the previous frame is old.
         const double interval = std::max<double>(USER_TIMER_MINIMUM, animationFrameIntervalMs());
-        return currentTimeMs() - lastLiveResizePaintMs_ >= interval;
+        if (currentTimeMs() - lastContentPaintCompletedMs_ >= 2.0 * interval) return true;
+        internal::writeScrollTrace(internal::ScrollTraceEvent{
+            "win32", "posted_software_paint_yield", reinterpret_cast<std::uintptr_t>(hwnd_)});
+        return false;
     }
 
     void runPostedCallbacks() {
@@ -27,6 +42,7 @@
         }
         const auto started = std::chrono::steady_clock::now();
         unsigned int dispatched = 0;
+        bool timeBudgetExhausted = false;
         // A posted message is part of the native loop's budget, not permission
         // to drain an arbitrary background batch. Keep this batch local while
         // invoking callbacks: a nested native loop may run newly posted work,
@@ -37,7 +53,8 @@
             callbacks.pop();
             callback();
             ++dispatched;
-            if (std::chrono::steady_clock::now() - started >= std::chrono::milliseconds(4)) break;
+            timeBudgetExhausted = std::chrono::steady_clock::now() - started >= std::chrono::milliseconds(4);
+            if (timeBudgetExhausted) break;
         }
         if (dispatched) win32::requestInputTurnAfterPostedWork();
         if (!alive->load(std::memory_order_acquire)) return;
@@ -51,7 +68,7 @@
         }
         // WM_PAINT is lower priority than posted messages. A continuously
         // refilled queue must still reveal static content without an rAF.
-        if (postedPaintDue()) flushPendingPaint();
+        if (postedPaintDue(timeBudgetExhausted)) flushPendingPaint();
         if (!alive->load(std::memory_order_acquire)) return;
         bool posted = true;
         {
