@@ -11,6 +11,7 @@
 #include <chrono>
 #include <future>
 #include <iostream>
+#include <string_view>
 #include <thread>
 
 namespace {
@@ -351,6 +352,45 @@ void testPostedCallbackFloodDoesNotStarveStaticPaint() {
     });
 }
 
+void testSlowSoftwarePaintLetsQueuedInputRun() {
+    expectWorkerFinishes("A second software paint leaves a turn for queued input", [](oneui::Window& window) {
+        class Surface final : public oneui::Widget {
+        public:
+            unsigned int paints = 0;
+            unsigned int paintsAtRelease = 0;
+            void paint(oneui::Canvas&) override { ++paints; Sleep(8); }
+            bool onMouseUp(const oneui::MouseEvent&) override {
+                paintsAtRelease = paints;
+                return false;
+            }
+        };
+
+        auto surface = std::make_shared<Surface>();
+        window.setContent(surface);
+        window.show();
+        if (window.rendererInfo().backend != oneui::RenderBackend::Software) return false;
+        const auto hwnd = static_cast<HWND>(window.nativeHandle());
+        unsigned int before = 0;
+        bool posted = false;
+        bool repainted = false;
+        window.requestAnimationFrame([&](double) {
+            window.requestRedraw();
+            window.post([&] {
+                before = surface->paints;
+                window.requestRedraw();
+                posted = PostMessageW(hwnd, WM_LBUTTONUP, 0, MAKELPARAM(30, 20)) != FALSE;
+                window.requestAnimationFrame([&](double) {
+                    window.post([&] {
+                        repainted = surface->paints > before;
+                        window.close();
+                    });
+                });
+            });
+        });
+        return window.run() == 0 && posted && surface->paintsAtRelease == before && repainted;
+    });
+}
+
 void testPointerBurstPaintsOnceAfterDispatch() {
     expectWorkerFinishes("Pointer burst coalesces paint outside input dispatch", [](oneui::Window& window) {
         auto surface = std::make_shared<PaintCounterSurface>();
@@ -467,7 +507,11 @@ void testBorderlessCaptionRoutesControlsAndKeepsSingleClickState() {
 
 } // namespace
 
-int main() {
+int main(int argc, char** argv) {
+    if (argc == 2 && std::string_view(argv[1]) == "--queued-software-paint") {
+        testSlowSoftwarePaintLetsQueuedInputRun();
+        return failures == 0 ? 0 : 1;
+    }
     // Run with the renderer still cold so closing an unused window also
     // exercises teardown of the driver startup worker on supported hardware.
     testDestroyWithoutRunDoesNotQuitNextWindow();

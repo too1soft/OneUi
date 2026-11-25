@@ -1,3 +1,5 @@
+    static constexpr auto postedCallbackBudget_ = std::chrono::milliseconds(4);
+
     bool postedPaintDue(bool timeBudgetExhausted) {
         if (inputPaintPending_) return false;
         if (interactiveResizeActive_ && lastLiveResizePaintMs_ != 0.0) {
@@ -5,8 +7,22 @@
             const double interval = std::max<double>(USER_TIMER_MINIMUM, animationFrameIntervalMs());
             return currentTimeMs() - lastLiveResizePaintMs_ >= interval;
         }
-        if (!timeBudgetExhausted || gpuAvailable_ || glWorker_.ready() ||
+        if (gpuAvailable_ || glWorker_.ready() ||
             lastContentPaintCompletedMs_ == 0.0) return true;
+        const bool expensivePaint = lastContentPaintDurationMs_ >= postedCallbackBudget_.count();
+        if (!expensivePaint && !timeBudgetExhausted) return true;
+        const double interval = std::max<double>(USER_TIMER_MINIMUM, animationFrameIntervalMs());
+        const double age = currentTimeMs() - lastContentPaintCompletedMs_;
+        // A short callback can force a second software frame while input is
+        // already queued. Keep the update region for WM_PAINT so Win32 can
+        // dispatch the waiting messages first. Bound the yield during bursts.
+        if (expensivePaint && age < interval &&
+            HIWORD(GetQueueStatus(QS_INPUT | QS_POSTMESSAGE)) != 0) {
+            internal::writeScrollTrace(internal::ScrollTraceEvent{
+                "win32", "posted_software_paint_queue_yield", reinterpret_cast<std::uintptr_t>(hwnd_)});
+            return false;
+        }
+        if (!timeBudgetExhausted) return true;
         static const bool yieldSoftwarePaint = [] {
             wchar_t value[2]{};
             return GetEnvironmentVariableW(L"ONEUI_WIN32_YIELD_POSTED_SOFTWARE_PAINT", value, 2) == 1 &&
@@ -15,8 +31,7 @@
         if (!yieldSoftwarePaint) return true;
         // Let the next native message hold its turn after an expensive callback.
         // A busy posted queue may force a paint once the previous frame is old.
-        const double interval = std::max<double>(USER_TIMER_MINIMUM, animationFrameIntervalMs());
-        if (currentTimeMs() - lastContentPaintCompletedMs_ >= 2.0 * interval) return true;
+        if (age >= 2.0 * interval) return true;
         internal::writeScrollTrace(internal::ScrollTraceEvent{
             "win32", "posted_software_paint_yield", reinterpret_cast<std::uintptr_t>(hwnd_)});
         return false;
@@ -53,7 +68,7 @@
             callbacks.pop();
             callback();
             ++dispatched;
-            timeBudgetExhausted = std::chrono::steady_clock::now() - started >= std::chrono::milliseconds(4);
+            timeBudgetExhausted = std::chrono::steady_clock::now() - started >= postedCallbackBudget_;
             if (timeBudgetExhausted) break;
         }
         if (dispatched) win32::requestInputTurnAfterPostedWork();

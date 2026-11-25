@@ -272,6 +272,10 @@ function(oneui_register_native_tests)
         target_link_libraries(oneui_win32_window_loop_tests PRIVATE opengl32)
         target_compile_definitions(oneui_win32_window_loop_tests PRIVATE ONEUI_BUILDING_DLL)
         set_tests_properties(oneui_win32_window_loop_tests PROPERTIES TIMEOUT 15)
+        add_test(NAME oneui_win32_queued_software_paint
+                 COMMAND oneui_win32_window_loop_tests --queued-software-paint)
+        set_tests_properties(oneui_win32_queued_software_paint PROPERTIES
+                             TIMEOUT 15 ENVIRONMENT "ONEUI_ENABLE_GPU=0")
         oneui_add_native_test(oneui_win32_ime_cancel_tests tests/win32_ime_cancel_tests.cpp)
         target_link_libraries(oneui_win32_ime_cancel_tests PRIVATE user32)
         set_tests_properties(oneui_win32_ime_cancel_tests PROPERTIES TIMEOUT 15)

@@ -265,6 +265,7 @@ public:
     std::uint64_t presentedResizeGeneration_ = 0;
     double lastLiveResizePaintMs_ = 0.0;
     double lastContentPaintCompletedMs_ = 0.0;
+    double lastContentPaintDurationMs_ = 0.0;
     bool renderTraceEnabled_ = false;
     std::wstring renderTraceFilePath_;
     double scrollTraceLastWheelMessageMs_ = 0.0;
