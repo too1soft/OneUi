@@ -30,11 +30,15 @@ public:
     oneui::Color left{25, 59, 95};
     oneui::Color right{214, 99, 44};
     oneui::Color bottom{40, 95, 56};
+    unsigned paintCalls = 0;
+    oneui::Color lastPaintedLeft{0, 0, 0};
     const std::wstring* tooltipAt(oneui::Point) const override {
         static const std::wstring hint = L"Tool tip test";
         return &hint;
     }
     void paint(oneui::Canvas& canvas) override {
+        ++paintCalls;
+        lastPaintedLeft = left;
         const auto bounds = frame();
         canvas.fillRect({0, 0, bounds.width, bounds.height}, left);
         canvas.fillRect({bounds.width / 2, 0, bounds.width / 2, bounds.height}, right);
@@ -92,6 +96,27 @@ RECT clientRect(HWND hwnd) {
     if (!GetClientRect(hwnd, &rect) || rect.right < 20 || rect.bottom < 20)
         throw std::runtime_error("Invalid native client geometry");
     return rect;
+}
+
+void verifyMinimizedContentPaint(oneui::Window& window, HWND hwnd, Pattern& pattern) {
+    const auto normal = clientRect(hwnd);
+    ShowWindow(hwnd, SW_MINIMIZE);
+    check(IsIconic(hwnd) != FALSE, "owned window minimizes");
+    const auto paintsBefore = pattern.paintCalls;
+    pattern.left = {81, 113, 41};
+    window.requestRedraw();
+    InvalidateRect(hwnd, nullptr, FALSE);
+    UpdateWindow(hwnd);
+    check(pattern.paintCalls == paintsBefore, "minimized update does not paint content");
+    check(GetUpdateRect(hwnd, nullptr, FALSE) == FALSE, "minimized update region is validated");
+
+    ShowWindow(hwnd, SW_RESTORE);
+    UpdateWindow(hwnd);
+    const auto restored = clientRect(hwnd);
+    check(IsIconic(hwnd) == FALSE && EqualRect(&normal, &restored) != FALSE,
+        "restored native client geometry matches");
+    check(pattern.paintCalls > paintsBefore && rgb(pattern.lastPaintedLeft) == rgb(pattern.left),
+        "restore paints the latest retained content invalidation");
 }
 
 void verifyResizeExitPaint(oneui::Window& window, HWND hwnd) {
@@ -291,6 +316,7 @@ void verify() {
     }
     verifyResizeExitPaint(*window, hwnd);
     verifyRetainedResizeBacking(*window, hwnd);
+    verifyMinimizedContentPaint(*window, hwnd, *pattern);
     window->close();
     std::cout << "checks=" << checks << " failures=" << failures << '\n';
 }

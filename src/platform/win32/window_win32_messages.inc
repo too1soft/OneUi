@@ -131,7 +131,7 @@
             printClient(reinterpret_cast<HDC>(wParam), lParam);
             return 0;
         case WM_PAINT:
-            if (clientSizeChangedAtPaint_) {
+            if (clientSizeChangedAtPaint_ && !IsIconic(hwnd_)) {
                 const auto alive = callbackWindowAlive_;
                 deliverClientSizeChanged();
                 if (!alive->load(std::memory_order_acquire)) return 0;

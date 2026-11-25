@@ -419,7 +419,7 @@ void GlRenderWorker::State::render() {
         if (result == worker::RenderResult::Failed) break;
         if (result == worker::RenderResult::Scaled) {
             std::lock_guard lock(mutex);
-            if (!stopping && !pending.picture) InvalidateRect(window, nullptr, FALSE);
+            if (!stopping && !pending.picture && !IsIconic(window)) InvalidateRect(window, nullptr, FALSE);
         }
         if (result == worker::RenderResult::Obsolete) {
             Scene obsolete;
@@ -428,7 +428,7 @@ void GlRenderWorker::State::render() {
                 ++extent;
                 recordingWaiter = false;
                 obsolete = std::exchange(pending, {});
-                InvalidateRect(window, nullptr, FALSE);
+                if (!IsIconic(window)) InvalidateRect(window, nullptr, FALSE);
             }
         }
     }

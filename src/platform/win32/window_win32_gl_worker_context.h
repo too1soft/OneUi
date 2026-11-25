@@ -274,7 +274,7 @@ private:
 
     bool matchesClient(int width, int height) const {
         RECT bounds{};
-        return GetClientRect(window_, &bounds) &&
+        return !IsIconic(window_) && GetClientRect(window_, &bounds) &&
             bounds.right - bounds.left == width && bounds.bottom - bounds.top == height;
     }
 

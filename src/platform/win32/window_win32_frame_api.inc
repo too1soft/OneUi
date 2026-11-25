@@ -50,7 +50,7 @@
     }
 
     void submitInvalidations() {
-        if (!invalidationPending_ || workerRecordingBlocked()) {
+        if (!invalidationPending_ || (hwnd_ && IsIconic(hwnd_)) || workerRecordingBlocked()) {
             return;
         }
         invalidationPending_ = false;

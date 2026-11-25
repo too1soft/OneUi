@@ -23,6 +23,17 @@
     }
 #endif
     void paint() {
+        if (IsIconic(hwnd_)) {
+            // A minimized HWND can still receive WM_PAINT with the shell's
+            // icon-sized client rectangle. Validate it without replacing the
+            // live backing. WM_SIZE requests a full repaint when restored.
+            PAINTSTRUCT paint{};
+            BeginPaint(hwnd_, &paint);
+            EndPaint(hwnd_, &paint);
+            internal::traceInteractionPaint({reinterpret_cast<std::uintptr_t>(hwnd_)},
+                "minimized_paint_validated");
+            return;
+        }
         ONEUI_VIEW_TIME(Paint);
         const auto inputLayout = inputLayout_;
         internal::InputLayoutSnapshot::PaintScope inputPaint(*inputLayout);
