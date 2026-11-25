@@ -109,6 +109,7 @@ const std::map<std::string, ComponentContract> &registry()
             if (property.name == "items") property.record = "@native-menu.item";
         ++r.at("Table").version; // Native table tooltip.
         ++r.at("TemplateTable").version; // Scroll reset revision, appended property ID 18.
+        ++r.at("VirtualTemplateList").version; // Table row heights and insets, IDs 15-19.
         ++r.at("Dialog").version; // Optional header line boxes, appended property ID18.
         // Detect authoring metadata drift before publishing a contract hash.
         // Intentional changes require a reviewed registry/version update.

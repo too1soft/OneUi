@@ -19,6 +19,13 @@ inline const std::vector<ComponentContract>& legacyLayoutContracts() {
             {7,4,1,"justify",""}, {8,3,1,"max",""}, {9,3,1,"min",""},
             {10,4,3,"name",""}, {11,3,1,"shrink",""}, {12,1,3,"visible",""},
             {13,1,3,"wrap",""}
+        }, {}},
+        {"VirtualTemplateList", "virtual-rows", 1, 0, {
+            {1,3,1,"basis",""}, {2,4,1,"class",""}, {3,4,3,"description",""},
+            {4,1,3,"disabled",""}, {5,3,1,"grow",""}, {6,3,1,"max",""},
+            {7,3,1,"min",""}, {8,4,3,"name",""}, {9,3,1,"shrink",""},
+            {10,1,3,"visible",""}, {11,3,3,"estimated-height",""}, {12,3,3,"overscan",""},
+            {13,1,3,"follow-end",""}, {14,3,3,"scroll-offset",""}
         }, {}}
       };
       // Direction was the only change to the preceding layouts in 6c76705.
