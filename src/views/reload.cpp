@@ -41,7 +41,7 @@ struct Candidate {
         for(auto &r:value->image.records[oneview::CSS])css+='\n'+value->image.strings[r[2]];
         value->styles->replace(css,owner.density);
         for(auto &scope:value->scopes) {scope->values.clear();scope->observers.clear();scope->dirty.clear();}
-        value->root=value->build(value->image.records[oneview::TMPL][value->image.root][1],{value->rootScope});
+        value->root=value->build(value->image.records[oneview::TMPL][value->image.root][1],Scopes(value->rootScope));
         value->update(value->root);
         value->prepareWorkspaceIndex();
         owner.alive();

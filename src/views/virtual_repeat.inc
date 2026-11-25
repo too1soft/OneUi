@@ -22,8 +22,7 @@ std::shared_ptr<Instance> Runtime::buildVirtual(uint32_t node, const Scopes& con
         auto scope = runtime->acquire({source->identity, source->vm}, source->table.model_id, false);
         try {
             runtime->connect(scope);
-            auto nested = owner->scopes;
-            nested.insert(nested.begin(), scope);
+            const auto nested = owner->scopes.withRow(scope);
             auto row = runtime->build(runtime->image.records[oneview::TMPL][repeat[5]][1], nested);
             row->parent = owner;
             runtime->update(row);

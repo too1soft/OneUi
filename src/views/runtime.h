@@ -1,6 +1,7 @@
 #pragma once
 #include "format/ir.h"
 #include "owner_records.h"
+#include "scope_context.h"
 #include "oneui/oneui_view_c_api.h"
 #include "oneui/command.h"
 #include "oneui/subscription.h"
@@ -65,7 +66,6 @@ struct Scope {
     std::vector<std::pair<std::string, std::string>> path;
     std::weak_ptr<Scope> sourceScope;
 };
-using Scopes = std::vector<std::shared_ptr<Scope>>;
 struct Binding {
     oneview::Record record;
     std::weak_ptr<Scope> scope;

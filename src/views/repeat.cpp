@@ -92,11 +92,10 @@ void Runtime::repeat(const std::shared_ptr<Instance> &instance) {
                  : found->second->scopes.front() == items.items[i]))
             row = found->second;
         else {
-            auto nested = instance->scopes;
             auto rowScope = instance->transparent
                                 ? renderScope(items.items[i], instance, items.keys[i])
                                 : items.items[i];
-            nested.insert(nested.begin(), rowScope);
+            const auto nested = instance->scopes.withRow(rowScope);
             auto prefix = std::move(callPrefix);
             callPrefix.clear();
             try {

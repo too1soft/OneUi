@@ -52,7 +52,7 @@ void Runtime::initialize(const OneUiViewModelVTable *table, void *vm, bool share
             if (sharedStyles) styles->appendScoped(css);
             else styles->replace(css, density);
         }
-        root = build(image.records[TMPL][image.root][1], {rootScope});
+        root = build(image.records[TMPL][image.root][1], Scopes(rootScope));
         {
             const timing::Scope measure(timing::InitialUpdate);
             update(root);
@@ -236,7 +236,7 @@ void Runtime::install(const std::shared_ptr<Instance> &instance, uint32_t owner,
         instance->events.erase(std::remove_if(instance->events.begin(), instance->events.end(),
                                               [&](const Record &e) { return e[1] == r[1]; }),
                                instance->events.end());
-        // CALL is invoked with the same scope vector; records retain caller lexical depth.
+        // CALL shares the same context; records retain the caller's lexical depth.
         instance->events.push_back(r);
         auto &command = image.schema.model(r[4]).command(r[2]);
         for (auto id : {command.when, command.busy})
