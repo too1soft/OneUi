@@ -1,4 +1,10 @@
     LRESULT handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
+        if ((message >= WM_KEYFIRST && message <= WM_KEYLAST) ||
+            (message >= WM_LBUTTONDOWN && message <= WM_MOUSEHWHEEL) ||
+            (message >= WM_NCLBUTTONDOWN && message <= WM_NCXBUTTONDBLCLK) ||
+            (message >= WM_IME_STARTCOMPOSITION && message <= WM_IME_COMPOSITION)) {
+            glWorker_.noteStartupInput();
+        }
         if (message == WM_SHOWWINDOW || message == WM_SIZE || message == WM_ACTIVATE ||
             message == WM_STYLECHANGED || message == WM_DPICHANGED) {
             queueStateChange();
@@ -249,12 +255,14 @@
             return 0;
         case WM_ENTERSIZEMOVE:
             interactiveResizeActive_ = true;
+            glWorker_.setStartupSizeMove(true);
             interactiveSizeChanged_ = false;
             presentedResizeGeneration_ = liveResizeGeneration_;
             lastLiveResizePaintMs_ = 0.0;
             return 0;
         case WM_EXITSIZEMOVE:
             interactiveResizeActive_ = false;
+            glWorker_.setStartupSizeMove(false);
             // A full frame already presented for the last size also covers
             // the exit. Leave any pending widget and OS damage in the queue.
             if (std::exchange(interactiveSizeChanged_, false) &&

@@ -31,6 +31,8 @@ public:
     bool start(HWND window, StartupGlScene scene);
     bool wantsStartupPicture() const noexcept;
     void setStartupPicture(StartupGlScene scene);
+    void noteStartupInput();
+    void setStartupSizeMove(bool active);
     bool ready() const noexcept;
     bool vsync() const noexcept;
     // Register a single notification if a recorded scene is waiting for the worker.

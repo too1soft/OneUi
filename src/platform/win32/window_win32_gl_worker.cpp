@@ -4,7 +4,9 @@
 #include "window_win32_gl_worker_context.h"
 #include "window_win32_gpu_warmup.h"
 
+#include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <condition_variable>
 #include <exception>
 #include <mutex>
@@ -13,6 +15,9 @@
 
 namespace oneui::win32 {
 namespace {
+using Clock = std::chrono::steady_clock;
+constexpr auto firstSoftwareFrameGrace = std::chrono::milliseconds(300);
+constexpr auto inputQuietPeriod = std::chrono::milliseconds(160);
 
 bool retainedGlWorkerEnabled() noexcept {
     static const bool enabled = [] {
@@ -48,23 +53,27 @@ struct GlRenderWorker::State {
         internal::InteractionSnapshot trace;
     };
 
-    State(HWND window, HMONITOR monitor, POINT origin, StartupGlScene scene)
+    State(HWND window, HMONITOR monitor, POINT origin, StartupGlScene scene, bool warmDriver)
         : window(window), monitor(monitor), origin(origin), captureStartup(monitor && scene.picture),
-          startup(std::move(scene)), ownsLiveWindow(!monitor) {}
+          startupCensusPending(warmDriver), startup(std::move(scene)), ownsLiveWindow(!monitor) {}
 
     void run() noexcept;
     void render();
+    bool waitBeforeCensus();
 
     const HWND window;
     const HMONITOR monitor;
     const POINT origin;
     std::atomic_bool captureStartup;
+    std::atomic_bool startupCensusPending;
     std::atomic_bool ready{false};
     std::atomic_bool vsync{false};
     std::atomic_uint64_t extent{0};
     std::atomic_uint64_t queuedSerial{0};
     std::mutex mutex;
     std::condition_variable changed;
+    Clock::time_point censusNotBefore = Clock::now() + firstSoftwareFrameGrace;
+    bool startupSizeMove = false;
     StartupGlScene startup;
     Scene pending;
     Frame lastQueued;
@@ -144,7 +153,8 @@ bool GlRenderWorker::start(HWND window, StartupGlScene scene) {
                 task->state->run();
             }
         };
-        auto state = std::make_shared<State>(window, monitor, origin, std::move(scene));
+        auto state = std::make_shared<State>(window, monitor, origin, std::move(scene),
+                                             monitor && experimentalGlWorkerDefersCensus());
         auto task = std::make_unique<Task>();
         task->state = state;
         if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
@@ -175,6 +185,38 @@ void GlRenderWorker::setStartupPicture(StartupGlScene scene) {
     if (state_->captureStartup.load(std::memory_order_relaxed)) {
         replaced = std::exchange(state_->startup, std::move(scene));
     }
+}
+
+void GlRenderWorker::noteStartupInput() {
+    if (!state_ || !state_->startupCensusPending.load(std::memory_order_relaxed)) return;
+    std::lock_guard lock(state_->mutex);
+    // Only extend the deadline. The worker can check it at its existing wakeup.
+    state_->censusNotBefore = (std::max)(state_->censusNotBefore, Clock::now() + inputQuietPeriod);
+}
+
+void GlRenderWorker::setStartupSizeMove(bool active) {
+    if (!state_ || !state_->startupCensusPending.load(std::memory_order_relaxed)) return;
+    {
+        std::lock_guard lock(state_->mutex);
+        state_->startupSizeMove = active;
+        state_->censusNotBefore = (std::max)(state_->censusNotBefore, Clock::now() + inputQuietPeriod);
+    }
+    state_->changed.notify_one();
+}
+
+bool GlRenderWorker::State::waitBeforeCensus() {
+    std::unique_lock lock(mutex);
+    while (!stopping) {
+        if (startupSizeMove) {
+            changed.wait(lock);
+        } else {
+            const auto planned = censusNotBefore;
+            if (Clock::now() >= planned) break;
+            changed.wait_until(lock, planned);
+        }
+    }
+    startupCensusPending.store(false, std::memory_order_relaxed);
+    return !stopping;
 }
 
 bool GlRenderWorker::ready() const noexcept {
@@ -258,6 +300,7 @@ void GlRenderWorker::stop() {
     state->stopping = true;
     state->recordingWaiter = false;
     state->captureStartup.store(false, std::memory_order_relaxed);
+    state->startupCensusPending.store(false, std::memory_order_relaxed);
     abandoned = std::move(state->startup);
     ++state->extent;
     discarded = std::exchange(state->pending, {});
@@ -279,6 +322,7 @@ void GlRenderWorker::State::run() noexcept {
     std::lock_guard lock(mutex);
     ready.store(false, std::memory_order_release);
     captureStartup.store(false, std::memory_order_relaxed);
+    startupCensusPending.store(false, std::memory_order_relaxed);
     recordingWaiter = false;
     startup = {};
     if (!stopping) InvalidateRect(window, nullptr, FALSE);
@@ -300,7 +344,9 @@ void GlRenderWorker::State::render() {
     }
     worker::WglWorkerContext renderer(scratch ? scratch->hwnd : window);
     // With deferred warmup, the first software frame has already been copied.
-    const bool initialized = renderer.initialize(scratch && experimentalGlWorkerDefersCensus());
+    const bool initialized = renderer.initialize(scratch && experimentalGlWorkerDefersCensus(),
+                                                 [this] { return waitBeforeCensus(); });
+    startupCensusPending.store(false, std::memory_order_relaxed);
     StartupGlScene warmup;
     {
         std::lock_guard lock(mutex);

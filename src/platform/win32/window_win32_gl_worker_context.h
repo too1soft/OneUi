@@ -37,7 +37,8 @@ public:
         if (dc_) ReleaseDC(window_, dc_);
     }
 
-    bool initialize(bool warmDriver) {
+    template <typename WaitBeforeCensus>
+    bool initialize(bool warmDriver, WaitBeforeCensus waitBeforeCensus) {
         if (!dc_) return false;
         const bool tracing = internal::scrollTraceEnabled();
         const auto now = [tracing] { return tracing ? internal::scrollTraceNowMs() : 0.0; };
@@ -67,8 +68,15 @@ public:
                 return GetEnvironmentVariableW(L"ONEUI_WIN32_GL_WORKER_SKIP_CENSUS", value, 2) == 1 &&
                     value[0] == L'1';
             }();
-            if (skipCensus) trace("wgl_worker_census_skipped", now(), true);
-            else warmNvidiaDriverThreadCensus(dc_);
+            if (skipCensus) {
+                trace("wgl_worker_census_skipped", now(), true);
+            } else {
+                const auto waitingStarted = now();
+                const bool proceed = waitBeforeCensus();
+                trace("wgl_worker_census_idle_wait", waitingStarted, proceed);
+                if (!proceed) return false;
+                warmNvidiaDriverThreadCensus(dc_);
+            }
         }
         const auto ganeshStarted = now();
         GrContextOptions options;

@@ -416,6 +416,7 @@
             const bool started = captureWorkerStartup
                 ? glWorker_.start(hwnd_, {std::move(startupPicture), width, height})
                 : glWorker_.start(hwnd_);
+            if (started && interactiveResizeActive_) glWorker_.setStartupSizeMove(true);
             rendererInfo_.reason = started ? "opengl-worker-starting" : "opengl-worker-start-failed";
             internal::traceInteractionPaint(interactionPaint, "worker_start_after_software",
                 "software", started ? 1 : 0);
