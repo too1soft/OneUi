@@ -22,10 +22,33 @@
     }
 
     void deliverClientSizeChanged() {
-        clientSizeChangedAtPaint_ = false;
+        const bool atPaint = std::exchange(clientSizeChangedAtPaint_, false);
         if (std::exchange(clientSizeChangedFramePending_, false) && clientSizeChangedHandler_) {
             const auto handler = clientSizeChangedHandler_;
-            handler(clientSize());
+            const auto size = clientSize();
+            const float oldWidth = std::exchange(lastDeliveredClientWidth_, size.width);
+            static const bool flushResizeBindings = [] {
+                wchar_t value[2]{};
+                return GetEnvironmentVariableW(L"ONEUI_WIN32_TEST_FLUSH_RESIZE_VIEWS", value, 2) == 1 &&
+                    value[0] == L'1';
+            }();
+            if (!flushResizeBindings || !atPaint || !interactiveResizeActive_ || lastLiveResizePaintMs_ == 0.0 ||
+                oldWidth <= 0.0f || size.width <= oldWidth) {
+                handler(size);
+                return;
+            }
+            const auto alive = callbackWindowAlive_;
+            internal::ResizeViewFlush views(*this);
+            handler(size);
+            const bool trace = internal::scrollTraceEnabled();
+            const double start = trace ? internal::scrollTraceNowMs() : 0.0;
+            const auto drained = views.drain([&] { return alive->load(std::memory_order_acquire); });
+            if (trace && drained && alive->load(std::memory_order_acquire)) {
+                internal::writeScrollTrace(internal::ScrollTraceEvent{
+                    "win32", "resize_view_flush", reinterpret_cast<std::uintptr_t>(hwnd_),
+                    0, 0, 0, 0, 0, 0, internal::scrollTraceNowMs() - start,
+                    static_cast<double>(liveResizeGeneration_), static_cast<double>(drained)});
+            }
         }
     }
 

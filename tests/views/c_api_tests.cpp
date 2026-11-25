@@ -1,5 +1,6 @@
 #include "oneui/ui_icon_names.h"
 #include "capi/oneui_c_api_view_internal.h"
+#include "internal/resize_view_flush.h"
 #include "fixture.h"
 #include "oneui/layout/overlay_host.h"
 #include "oneui/controls/tabs.h"
@@ -80,6 +81,7 @@ struct ApiCase : Case {
 #include "virtual_template_metrics.inc"
 #include "overlay_focus_window.inc"
 #include "first_visible_metrics.inc"
+#include "resize_view_flush.inc"
 #include "queued_view_flush.inc"
 int main(int argc, char **argv) {
     for (const auto name : {"note-outline", "box-outline", "sparkles-outline", "toolbox", "shield-outline", "globe", "import-outline", "sidebar-outline"}) {
@@ -90,6 +92,7 @@ int main(int argc, char **argv) {
         return 2;
     try {
         queuedViewFlushContract(argv[1]);
+        resizeViewFlushContract(argv[1]);
         firstVisibleMetricsContract(argv[1]);
         childMountContract(argv[1]);
         childDestinationContract(argv[1]);
