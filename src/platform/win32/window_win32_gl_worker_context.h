@@ -61,15 +61,7 @@ public:
         const bool bound = wglMakeCurrent(dc_, gl_) != FALSE;
         trace("wgl_worker_bind_context", bindStarted, bound);
         if (!bound) return false;
-        if (warmDriver) {
-            static const bool skipCensus = [] {
-                wchar_t value[2]{};
-                return GetEnvironmentVariableW(L"ONEUI_WIN32_GL_WORKER_SKIP_CENSUS", value, 2) == 1 &&
-                    value[0] == L'1';
-            }();
-            if (skipCensus) trace("wgl_worker_census_skipped", now(), true);
-            else warmNvidiaDriverThreadCensus(dc_);
-        }
+        if (warmDriver) warmDriverCensus();
         const auto ganeshStarted = now();
         GrContextOptions options;
         options.fPersistentCache = rendering::shaderCache();
@@ -77,6 +69,20 @@ public:
             internal::makeWin32GaneshGlInterface(internal::win32GlNvidiaVendor()), options);
         trace("wgl_worker_ganesh_context", ganeshStarted, static_cast<bool>(context_));
         return static_cast<bool>(context_);
+    }
+
+    void warmDriverCensus() {
+        static const bool skip = [] {
+            wchar_t value[2]{};
+            return GetEnvironmentVariableW(L"ONEUI_WIN32_GL_WORKER_SKIP_CENSUS", value, 2) == 1 &&
+                value[0] == L'1';
+        }();
+        if (!skip) {
+            warmNvidiaDriverThreadCensus(dc_);
+        } else if (internal::scrollTraceEnabled()) {
+            internal::writeScrollTrace(internal::ScrollTraceEvent{
+                "win32", "wgl_worker_census_skipped", 0, 0, 0, 0, 0, 0, 0, 0.0, 1.0, 0});
+        }
     }
 
     bool adopt(HWND target, HMONITOR monitor) {

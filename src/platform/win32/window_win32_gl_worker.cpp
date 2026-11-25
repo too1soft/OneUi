@@ -38,7 +38,14 @@ bool supersedeGlWorkerFrameEnabled() noexcept {
     return enabled;
 }
 
-
+bool censusAfterScratchScene() noexcept {
+    static const bool enabled = [] {
+        wchar_t value[2]{};
+        return GetEnvironmentVariableW(L"ONEUI_WIN32_GL_WORKER_CENSUS_AFTER_SCENE", value, 2) == 1 &&
+            value[0] == L'1';
+    }();
+    return enabled;
+}
 } // namespace
 
 struct GlRenderWorker::State {
@@ -300,7 +307,9 @@ void GlRenderWorker::State::render() {
     }
     worker::WglWorkerContext renderer(scratch ? scratch->hwnd : window);
     // With deferred warmup, the first software frame has already been copied.
-    const bool initialized = renderer.initialize(scratch && experimentalGlWorkerDefersCensus());
+    const bool census = scratch && experimentalGlWorkerDefersCensus();
+    const bool censusAfterScene = census && censusAfterScratchScene();
+    const bool initialized = renderer.initialize(census && !censusAfterScene);
     StartupGlScene warmup;
     {
         std::lock_guard lock(mutex);
@@ -316,6 +325,8 @@ void GlRenderWorker::State::render() {
     const bool needsWarmup = scratch && warmup.picture;
     const bool warmed = !needsWarmup || renderer.prewarm(warmup, retainedGlWorkerEnabled());
     warmup = {};
+    // Keep this probe on the hidden drawable while the live HWND is unowned.
+    if (warmed && censusAfterScene) renderer.warmDriverCensus();
     {
         std::lock_guard lock(mutex);
         if (stopping) return;
