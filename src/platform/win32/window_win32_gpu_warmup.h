@@ -9,7 +9,7 @@ namespace oneui::win32 {
 
 PIXELFORMATDESCRIPTOR openGlWindowPixelFormat() noexcept;
 bool nvidiaWindowDisplayOrigin(HWND window, POINT& origin);
-bool warmNvidiaDriverThreadCensus(HDC dc);
+bool warmNvidiaDriverThreadCensus(HDC dc, double* finishMs = nullptr);
 
 // Warms the driver and a common coverage shader on its own Win32 window
 // and GL context. Destruction joins the worker before SDK resources can unload.

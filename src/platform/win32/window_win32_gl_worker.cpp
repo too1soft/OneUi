@@ -38,13 +38,18 @@ bool supersedeGlWorkerFrameEnabled() noexcept {
     return enabled;
 }
 
-bool censusAfterScratchScene() noexcept {
-    static const bool enabled = [] {
+enum class ScratchCensusOrder { BeforeScene, AfterScene, RetryAfterScene };
+
+ScratchCensusOrder scratchCensusOrder() noexcept {
+    static const auto order = [] {
         wchar_t value[2]{};
-        return GetEnvironmentVariableW(L"ONEUI_WIN32_GL_WORKER_CENSUS_AFTER_SCENE", value, 2) == 1 &&
-            value[0] == L'1';
+        if (GetEnvironmentVariableW(L"ONEUI_WIN32_GL_WORKER_CENSUS_AFTER_SCENE", value, 2) != 1)
+            return ScratchCensusOrder::BeforeScene;
+        if (value[0] == L'1') return ScratchCensusOrder::AfterScene;
+        if (value[0] == L'2') return ScratchCensusOrder::RetryAfterScene;
+        return ScratchCensusOrder::BeforeScene;
     }();
-    return enabled;
+    return order;
 }
 } // namespace
 
@@ -308,8 +313,11 @@ void GlRenderWorker::State::render() {
     worker::WglWorkerContext renderer(scratch ? scratch->hwnd : window);
     // With deferred warmup, the first software frame has already been copied.
     const bool census = scratch && experimentalGlWorkerDefersCensus();
-    const bool censusAfterScene = census && censusAfterScratchScene();
-    const bool initialized = renderer.initialize(census && !censusAfterScene);
+    const auto censusOrder = census ? scratchCensusOrder() : ScratchCensusOrder::BeforeScene;
+    const bool censusAfterScene = censusOrder == ScratchCensusOrder::AfterScene;
+    const bool retryCensus = censusOrder == ScratchCensusOrder::RetryAfterScene;
+    double firstFinishMs = -1.0;
+    const bool initialized = renderer.initialize(census && !censusAfterScene, retryCensus ? &firstFinishMs : nullptr);
     StartupGlScene warmup;
     {
         std::lock_guard lock(mutex);
@@ -325,8 +333,10 @@ void GlRenderWorker::State::render() {
     const bool needsWarmup = scratch && warmup.picture;
     const bool warmed = !needsWarmup || renderer.prewarm(warmup, retainedGlWorkerEnabled());
     warmup = {};
-    // Keep this probe on the hidden drawable while the live HWND is unowned.
-    if (warmed && censusAfterScene) renderer.warmDriverCensus();
+    // A nearly immediate glFinish may have missed the process-wide driver wait.
+    // Retry once, after more real GL work, while the live HWND is still unowned.
+    const bool missedWait = retryCensus && firstFinishMs >= 0.0 && firstFinishMs < 1.0;
+    if (warmed && (censusAfterScene || missedWait)) renderer.warmDriverCensus();
     {
         std::lock_guard lock(mutex);
         if (stopping) return;

@@ -14,6 +14,7 @@
 #include <GL/gl.h>
 
 #include <atomic>
+#include <chrono>
 #include <cstring>
 #include <cwchar>
 #include <exception>
@@ -142,7 +143,7 @@ bool nvidiaWindowDisplayOrigin(HWND window, POINT& origin) {
     return nvidiaDisplayOrigin(window, origin);
 }
 
-bool warmNvidiaDriverThreadCensus(HDC dc) {
+bool warmNvidiaDriverThreadCensus(HDC dc, double* finishMs) {
     const bool tracing = internal::scrollTraceEnabled();
     if (!traceCensusStep(tracing, "wgl_census_vendor", internal::win32GlNvidiaVendor)) return false;
     if (!traceCensusStep(tracing, "wgl_census_swaps", [dc] {
@@ -162,8 +163,11 @@ bool warmNvidiaDriverThreadCensus(HDC dc) {
         }
         return true;
     })) return false;
-    return traceCensusStep(tracing, "wgl_census_finish", [] {
+    return traceCensusStep(tracing, "wgl_census_finish", [finishMs] {
+        using Clock = std::chrono::steady_clock;
+        const auto started = finishMs ? Clock::now() : Clock::time_point{};
         glFinish();
+        if (finishMs) *finishMs = std::chrono::duration<double, std::milli>(Clock::now() - started).count();
         return true;
     });
 }
