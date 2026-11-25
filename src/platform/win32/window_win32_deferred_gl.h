@@ -10,6 +10,8 @@
 #include <mutex>
 #include <thread>
 
+class SkSurface;
+
 namespace oneui::win32 {
 
 inline constexpr UINT deferredGlReadyMessage = WM_APP + 5;
@@ -20,7 +22,8 @@ struct StartupGlScene {
     int height = 0;
 };
 
-bool prewarmStartupGlScene(GrDirectContext& context, const StartupGlScene& scene, bool retained);
+bool prewarmStartupGlScene(GrDirectContext& context, const StartupGlScene& scene, bool retained,
+                          sk_sp<SkSurface>* warmedBacking = nullptr);
 
 class StartupGlScratchWindow {
 public:

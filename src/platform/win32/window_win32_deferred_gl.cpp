@@ -28,7 +28,12 @@ void trace(const char* stage, double started, double detailA = 0.0) {
 
 } // namespace
 
-bool prewarmStartupGlScene(GrDirectContext& context, const StartupGlScene& scene, bool retained) {
+bool prewarmStartupGlScene(GrDirectContext& context, const StartupGlScene& scene, bool retained,
+                          sk_sp<SkSurface>* warmedBacking) {
+    const auto started = [] {
+        return internal::scrollTraceEnabled() ? internal::scrollTraceNowMs() : -1.0;
+    };
+    const double allocateStarted = started();
     const auto info = SkImageInfo::Make(scene.width, scene.height,
                                         kBGRA_8888_SkColorType, kPremul_SkAlphaType);
     sk_sp<SkSurface> source;
@@ -40,6 +45,8 @@ bool prewarmStartupGlScene(GrDirectContext& context, const StartupGlScene& scene
     auto destination = SkSurfaces::RenderTarget(&context, skgpu::Budgeted::kYes, info,
                                                 0, kBottomLeft_GrSurfaceOrigin, nullptr);
     if (!destination) return false;
+    trace("wgl_prewarm_targets", allocateStarted);
+    const double drawStarted = started();
     auto* canvas = destination->getCanvas();
     if (source) {
         source->getCanvas()->drawPicture(scene.picture);
@@ -48,9 +55,16 @@ bool prewarmStartupGlScene(GrDirectContext& context, const StartupGlScene& scene
     } else {
         canvas->drawPicture(scene.picture);
     }
+    trace("wgl_prewarm_draw", drawStarted);
+    const double flushStarted = started();
     context.flush();
+    trace("wgl_prewarm_flush", flushStarted);
     // Complete the scratch work before any live-window draw or ownership change.
-    return context.submit(GrSyncCpu::kYes);
+    const double submitStarted = started();
+    const bool submitted = context.submit(GrSyncCpu::kYes);
+    trace("wgl_prewarm_submit", submitStarted, submitted ? 1.0 : 0.0);
+    if (submitted && warmedBacking) *warmedBacking = std::move(source);
+    return submitted;
 }
 
 StartupGlScratchWindow::~StartupGlScratchWindow() {

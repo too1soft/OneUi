@@ -78,7 +78,12 @@ public:
     }
 
     bool prewarm(const StartupGlScene& scene, bool retained) {
-        return prewarmStartupGlScene(*context_, scene, retained);
+        static const bool reuse = [] {
+            wchar_t value[2]{};
+            return GetEnvironmentVariableW(L"ONEUI_WIN32_GL_WORKER_REUSE_WARM_BACKING", value, 2) == 1 &&
+                value[0] == L'1';
+        }();
+        return prewarmStartupGlScene(*context_, scene, retained, reuse && retained ? &retained_ : nullptr);
     }
 
     RenderResult render(const SkPicture& picture, const GlRenderWorker::Frame& frame,
@@ -91,6 +96,8 @@ public:
             return extent.load(std::memory_order_acquire) == frame.extent && matchesClient(width, height);
         };
         if (!current()) return RenderResult::Obsolete;
+        const bool warmedBackingFits = !surface_ && retained_ &&
+            retained_->width() == width && retained_->height() == height;
         const bool drawableChanged = !surface_ || width_ != width || height_ != height;
         const bool full = frame.damage.left == 0 && frame.damage.top == 0 &&
             frame.damage.right == width && frame.damage.bottom == height;
@@ -115,7 +122,10 @@ public:
             if (!retained_ || drawableChanged) {
                 const bool tracing = internal::scrollTraceEnabled();
                 const double started = tracing ? internal::scrollTraceNowMs() : 0.0;
-                auto backing = resizeGpuBacking(*context_, retained_.get(), width, height, frame.interactiveResize);
+                // The first live recording repaints the full window. Only the allocation is kept.
+                auto backing = warmedBackingFits ? RetainedGpuBacking{retained_, true}
+                    : resizeGpuBacking(*context_, retained_.get(), width, height, frame.interactiveResize);
+                if (warmedBackingFits) trace("worker_startup_backing_reused", 1);
                 retained_ = std::move(backing.surface);
                 if (!retained_) return RenderResult::Failed;
                 if (tracing && !backing.reused) {
