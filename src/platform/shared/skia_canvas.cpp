@@ -4,6 +4,7 @@
 #include "internal/unicode.h"
 #include "skia_path.h"
 #include "text/text_layout.h"
+#include "text/prepared_text_canvas.h"
 #include "text/font_family_list.h"
 #if defined(ONEUI_SKIA_RASTER_SSE2)
 #include "platform/win32/skia_raster_sse2.h"
@@ -150,7 +151,7 @@ struct TextBlobEntry {
 #if defined(ONEUI_CIRCLE_MESH_EXPERIMENT)
 #include "circle_mesh_experiment.inc"
 #endif
-class SkiaCanvasImpl final : public Canvas, public RasterImageCanvas {
+class SkiaCanvasImpl final : public Canvas, public RasterImageCanvas, public PreparedTextCanvas {
   public:
     explicit SkiaCanvasImpl(SkCanvas &canvas, const std::wstring *defaultFontFamily = nullptr,
                             std::optional<Rect> viewportBounds = std::nullopt)
@@ -557,6 +558,16 @@ class SkiaCanvasImpl final : public Canvas, public RasterImageCanvas {
         text::Layout::make(value, options)->paint(canvas_, {bounds.x, bounds.y}, color);
         ++g_primitivePaintTrace.textCalls;
         g_primitivePaintTrace.textMs += currentTimeMs() - started;
+    }
+
+    bool paintPreparedText(const text::Layout& layout, Point origin, Color color,
+                           bool useCanvasDefaultFamily) override {
+        if (useCanvasDefaultFamily && defaultFontFamily_ && !defaultFontFamily_->empty()) return false;
+        const double started = currentTimeMs();
+        layout.paint(canvas_, origin, color);
+        ++g_primitivePaintTrace.textCalls;
+        g_primitivePaintTrace.textMs += currentTimeMs() - started;
+        return true;
     }
 
     void drawTextCells(const std::wstring &text, Rect rect, Color color, float size,
@@ -1127,4 +1138,5 @@ std::unique_ptr<Canvas> makeSkiaCanvas(SkCanvas &canvas, const std::wstring *fam
                                        std::optional<Rect> viewport) {
     return std::make_unique<SkiaCanvasImpl>(canvas, family, viewport);
 }
+
 } // namespace oneui::rendering

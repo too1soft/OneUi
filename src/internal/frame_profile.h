@@ -8,7 +8,7 @@ namespace oneui::internal {
 // the same category are counted only once. This is not GPU timestamp timing.
 enum class FrameStage : std::size_t {
     Layout, TextLayout, Fill, Path, ShaderCacheLoad, ShaderCacheStore,
-    TextCache, TextIndex, TextBuild, TextBidi, TextShape, Count
+    TextCache, TextIndex, TextBuild, TextBidi, TextShape, TextBlob, Count
 };
 struct FrameProfile {
     std::array<double, static_cast<std::size_t>(FrameStage::Count)> ms{};

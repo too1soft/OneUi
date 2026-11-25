@@ -4,6 +4,7 @@
 #include "include/core/SkBlurTypes.h"
 #include "include/core/SkMaskFilter.h"
 #include "modules/skparagraph/include/ParagraphPainter.h"
+#include "internal/frame_profile.h"
 
 #include <vector>
 
@@ -39,11 +40,13 @@ public:
 #if defined(_WIN32)
         if (warmupAllowed_) AtlasWarmupCapture::observe(canvas_, blob, x, y, paint);
 #endif
+        internal::FrameSpan span(internal::FrameStage::TextBlob);
         canvas_.drawTextBlob(blob, x, y, paint);
     }
     void drawTextShadow(const sk_sp<SkTextBlob>& blob, SkScalar x, SkScalar y, SkColor color, SkScalar blur) override {
         SkPaint paint; paint.setColor(color);
         if (blur > 0) paint.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, blur, false));
+        internal::FrameSpan span(internal::FrameStage::TextBlob);
         canvas_.drawTextBlob(blob, x, y, paint);
     }
     void drawRect(const SkRect& rect, const SkPaintOrID& source) override {

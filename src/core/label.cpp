@@ -1,6 +1,7 @@
 #include "oneui/controls/label.h"
 
 #include <algorithm>
+#include "text/prepared_text_canvas.h"
 #include "text/text_layout.h"
 #include "internal/unicode.h"
 #include <cmath>
@@ -229,6 +230,7 @@ void Label::paint(Canvas& canvas) {
     auto area = bounds;
     area.x += inset;
     area.width -= inset;
+    std::shared_ptr<text::Layout> centeredLayout;
     if (!textWrapping_) {
         // Single-line labels are vertically centered. Wrapped labels start
         // at the top and only need the layout made by drawTextBlock.
@@ -239,8 +241,8 @@ void Label::paint(Canvas& canvas) {
         options.scale = style.dpiScale; options.align = style.align;
         options.maxLines = style.maxLines; options.ellipsis = style.ellipsis;
         options.spans = style.spans;
-        const auto layout = text::Layout::make(text(), options);
-        area.y += (bounds.height - layout->height()) / 2;
+        centeredLayout = text::Layout::make(text(), options);
+        area.y += (bounds.height - centeredLayout->height()) / 2;
     }
     canvas.save(); canvas.clipRect(bounds);
     const Color foreground = disabled() ? Color{148, 163, 184} : color_;
@@ -250,7 +252,11 @@ void Label::paint(Canvas& canvas) {
             indicatorColor = textSpans_.front().foreground;
         canvas.fillEllipse({bounds.x, bounds.y + (bounds.height - diameter) / 2, diameter, diameter}, indicatorColor);
     }
-    if (area.width > 0) canvas.drawTextBlock(text(), area, foreground, style);
+    if (area.width > 0 &&
+        (!centeredLayout || !rendering::tryPaintPreparedText(
+            canvas, *centeredLayout, {area.x, area.y}, foreground, style.fontFamily.empty()))) {
+        canvas.drawTextBlock(text(), area, foreground, style);
+    }
     canvas.restore();
 }
 

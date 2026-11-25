@@ -58,6 +58,7 @@ public:
             {FrameStage::TextBuild, "text_build"},
             {FrameStage::TextBidi, "text_bidi"},
             {FrameStage::TextShape, "text_shape"},
+            {FrameStage::TextBlob, "text_blob"},
         };
         for (const auto& [stage, name] : stages) {
             event.phase = name;
