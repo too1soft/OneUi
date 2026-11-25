@@ -352,19 +352,23 @@ void testPostedCallbackFloodDoesNotStarveStaticPaint() {
     });
 }
 
-void testSlowSoftwarePaintLetsQueuedInputRun(bool timerSource) {
-    const auto name = timerSource ? "Frame timer yields its second software paint to queued input"
-                                  : "Posted work yields its second software paint to queued input";
-    expectWorkerFinishes(name, [timerSource](oneui::Window& window) {
+enum class QueuedPaintSource { Posted, FrameTimer, PressBeforeRelease };
+
+void testSlowSoftwarePaintLetsQueuedInputRun(QueuedPaintSource source, const char* name) {
+    expectWorkerFinishes(name, [source](oneui::Window& window) {
         class Surface final : public oneui::Widget {
         public:
             unsigned int paints = 0;
             unsigned int paintsAtRelease = 0;
             std::function<void()> onRelease;
             void paint(oneui::Canvas&) override { ++paints; Sleep(10); }
+            bool onMouseDown(const oneui::MouseEvent&) override {
+                invalidatePaint();
+                return true;
+            }
             bool onMouseUp(const oneui::MouseEvent&) override {
                 paintsAtRelease = paints;
-                onRelease();
+                if (onRelease) onRelease();
                 return false;
             }
         };
@@ -393,6 +397,7 @@ void testSlowSoftwarePaintLetsQueuedInputRun(bool timerSource) {
             posted = PostMessageW(hwnd, WM_LBUTTONUP, 0, MAKELPARAM(30, 20)) != FALSE;
             if (!posted) window.close();
         };
+        const bool timerSource = source != QueuedPaintSource::Posted;
         if (timerSource) {
             window.post([&] {
                 window.requestAnimationFrame([&](double) {
@@ -403,6 +408,9 @@ void testSlowSoftwarePaintLetsQueuedInputRun(bool timerSource) {
                 // paint. The timer will then already be due at the yield.
                 InvalidateRect(hwnd, nullptr, FALSE);
                 UpdateWindow(hwnd);
+                if (source == QueuedPaintSource::PressBeforeRelease) {
+                    SendMessageW(hwnd, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(30, 20));
+                }
                 postRelease();
             });
         } else {
@@ -537,8 +545,12 @@ void testBorderlessCaptionRoutesControlsAndKeepsSingleClickState() {
 
 int main(int argc, char** argv) {
     if (argc == 2 && std::string_view(argv[1]) == "--queued-software-paint") {
-        testSlowSoftwarePaintLetsQueuedInputRun(false);
-        testSlowSoftwarePaintLetsQueuedInputRun(true);
+        testSlowSoftwarePaintLetsQueuedInputRun(QueuedPaintSource::Posted,
+            "Posted work yields its second software paint to queued input");
+        testSlowSoftwarePaintLetsQueuedInputRun(QueuedPaintSource::FrameTimer,
+            "Frame timer yields its second software paint to queued input");
+        testSlowSoftwarePaintLetsQueuedInputRun(QueuedPaintSource::PressBeforeRelease,
+            "Frame timer lets the pending release finish a pointer press before repainting");
         return failures == 0 ? 0 : 1;
     }
     // Run with the renderer still cold so closing an unused window also

@@ -143,10 +143,11 @@
         const auto now = std::chrono::steady_clock::now().time_since_epoch();
         const double nowMs = std::chrono::duration<double, std::milli>(now).count();
         lastAnimationFrameMs_ = nowMs;
-        // Keep the animation tick on time. Only let already queued work
-        // precede the software paint, without holding back input feedback.
+        // Keep the animation tick on time. Let queued work precede software
+        // paint so a release can replace a pressed state before it is drawn.
+        // Explicitly prioritized edits still get their synchronous feedback.
         double paintDeadline = 0.0;
-        if (!inputPaintPending_ && !interactiveResizeActive_ && hasPresentedSoftwarePaint() &&
+        if (!inputPaintBeforePostedWork_ && !interactiveResizeActive_ && hasPresentedSoftwarePaint() &&
             lastContentPaintDurationMs_ >= postedCallbackBudget_.count()) {
             const double interval = std::max<double>(USER_TIMER_MINIMUM, animationFrameIntervalMs());
             paintDeadline = queuedSoftwarePaintDeadline(nowMs, interval);
@@ -158,7 +159,7 @@
             callback(nowMs);
         }
         if (!alive->load(std::memory_order_acquire)) return;
-        const bool deferPaint = paintDeadline > 0.0 && !inputPaintPending_ &&
+        const bool deferPaint = paintDeadline > 0.0 && !inputPaintBeforePostedWork_ &&
             !interactiveResizeActive_ && currentTimeMs() < paintDeadline;
         if (deferPaint) {
             if (!coalescedEditPaintPending_) submitInvalidations();
