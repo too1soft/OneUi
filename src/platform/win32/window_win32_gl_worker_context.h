@@ -39,18 +39,44 @@ public:
 
     bool initialize(bool warmDriver) {
         if (!dc_) return false;
+        const bool tracing = internal::scrollTraceEnabled();
+        const auto now = [tracing] { return tracing ? internal::scrollTraceNowMs() : 0.0; };
+        const auto trace = [tracing](const char* phase, double started, bool success) {
+            if (tracing) internal::writeScrollTrace(internal::ScrollTraceEvent{
+                "win32", phase, 0, 0, 0, 0, 0, 0, 0,
+                internal::scrollTraceNowMs() - started, success ? 1.0 : 0.0, 0});
+        };
+        const auto formatStarted = now();
         const auto descriptor = openGlWindowPixelFormat();
         format_ = ChoosePixelFormat(dc_, &descriptor);
-        if (!format_ || !DescribePixelFormat(dc_, format_, sizeof(descriptor_), &descriptor_) ||
-            !SetPixelFormat(dc_, format_, &descriptor)) return false;
+        const bool formatSet = format_ && DescribePixelFormat(dc_, format_, sizeof(descriptor_), &descriptor_) &&
+            SetPixelFormat(dc_, format_, &descriptor);
+        trace("wgl_worker_pixel_format", formatStarted, formatSet);
+        if (!formatSet) return false;
+        const auto contextStarted = now();
         gl_ = wglCreateContext(dc_);
-        if (!gl_ || !wglMakeCurrent(dc_, gl_)) return false;
-        if (warmDriver) warmNvidiaDriverThreadCensus(dc_);
+        trace("wgl_worker_create_context", contextStarted, gl_ != nullptr);
+        if (!gl_) return false;
+        const auto bindStarted = now();
+        const bool bound = wglMakeCurrent(dc_, gl_) != FALSE;
+        trace("wgl_worker_bind_context", bindStarted, bound);
+        if (!bound) return false;
+        if (warmDriver) {
+            static const bool skipCensus = [] {
+                wchar_t value[2]{};
+                return GetEnvironmentVariableW(L"ONEUI_WIN32_GL_WORKER_SKIP_CENSUS", value, 2) == 1 &&
+                    value[0] == L'1';
+            }();
+            if (skipCensus) trace("wgl_worker_census_skipped", now(), true);
+            else warmNvidiaDriverThreadCensus(dc_);
+        }
+        const auto ganeshStarted = now();
         GrContextOptions options;
         options.fPersistentCache = rendering::shaderCache();
         context_ = internal::win32GlTraceEnabled()
             ? GrDirectContexts::MakeGL(internal::makeWin32GlTraceInterface(), options)
             : GrDirectContexts::MakeGL(options);
+        trace("wgl_worker_ganesh_context", ganeshStarted, static_cast<bool>(context_));
         return static_cast<bool>(context_);
     }
 
