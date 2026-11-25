@@ -27,8 +27,10 @@ inline void traceWin32DamageOrigin(HWND window, const char* phase, const RECT* d
     }
     writeScrollTrace(event);
 
-    PVOID pcs[24]{};
-    const auto frames = CaptureStackBackTrace(0, 24, pcs, nullptr);
+    // A nested declarative route can spend most of a shallow stack relaying
+    // the same rectangle through intervening containers.
+    PVOID pcs[64]{};
+    const auto frames = CaptureStackBackTrace(0, 64, pcs, nullptr);
     const auto app = GetModuleHandleW(nullptr);
     const auto sdk = GetModuleHandleW(L"oneui.dll");
     for (unsigned depth = 0; depth < frames; ++depth) {
