@@ -129,6 +129,40 @@ void verifyResizeExitPaint(oneui::Window& window, HWND hwnd) {
     UpdateWindow(hwnd);
 }
 
+void verifyRetainedResizeBacking(oneui::Window& window, HWND hwnd) {
+    if (window.rendererInfo().backend != oneui::RenderBackend::OpenGL) return;
+    RECT outer{};
+    GetWindowRect(hwnd, &outer);
+    const int initialWidth = outer.right - outer.left;
+    const int height = outer.bottom - outer.top;
+    const auto resize = [&](int width) {
+        check(SetWindowPos(hwnd, nullptr, 0, 0, width, height,
+            SWP_NOMOVE | SWP_NOACTIVATE | SWP_NOZORDER) != FALSE, "retained backing window resize");
+        UpdateWindow(hwnd);
+        check(window.rendererInfo().backend == oneui::RenderBackend::OpenGL,
+            "resized drawable still uses OpenGL");
+    };
+    const auto bytes = [&] { return window.rendererMemoryInfo().retainedSurfaceBytes; };
+    resize(initialWidth - 1);
+    resize(initialWidth);
+    const auto initialBytes = bytes();
+
+    SendMessageW(hwnd, WM_ENTERSIZEMOVE, 0, 0);
+    resize(initialWidth - 24);
+    check(bytes() == initialBytes, "shrinking the drawable retains its GPU backing");
+    resize(initialWidth + 32);
+    const auto grownBytes = bytes();
+    check(grownBytes > initialBytes, "growing beyond the backing allocates capacity");
+    resize(initialWidth + 28);
+    check(bytes() == grownBytes, "the new capacity covers nearby sizes");
+    resize(initialWidth / 3);
+    const auto client = clientRect(hwnd);
+    check(bytes() == static_cast<std::uint64_t>(client.right) * client.bottom * 4,
+        "large shrink replaces the oversized backing with the exact size");
+    SendMessageW(hwnd, WM_EXITSIZEMOVE, 0, 0);
+    resize(initialWidth);
+}
+
 void verify() {
     auto pattern = std::make_shared<Pattern>();
     oneui::WindowOptions options;
@@ -253,6 +287,7 @@ void verify() {
         check(GetGuiResources(GetCurrentProcess(), GR_GDIOBJECTS) <= handles + 1, "repeated capture does not leak GDI objects");
     }
     verifyResizeExitPaint(*window, hwnd);
+    verifyRetainedResizeBacking(*window, hwnd);
     window->close();
     std::cout << "checks=" << checks << " failures=" << failures << '\n';
 }

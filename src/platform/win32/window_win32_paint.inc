@@ -85,16 +85,22 @@
         const float logicalHeight = static_cast<float>(height) / scale;
 
         const double surfaceStartMs = currentTimeMs();
-        const bool allocatedSurface = ensurePaintSurfaceCapacity(width, height);
+        const auto surfaceUpdate = preparePaintSurfaces(width, height);
         const double surfaceMs = currentTimeMs() - surfaceStartMs;
         paintTrace.mark(PaintTrace::Surface);
+        if (traceLayout && surfaceUpdate.allocatedBacking) {
+            internal::writeScrollTrace(internal::ScrollTraceEvent{
+                "win32", "paint_backing_store", interactionPaint.window, 0, 0, 0, 0, 0, 0,
+                surfaceMs, static_cast<double>(interactionPaint.paintSequence),
+                static_cast<double>(paintSurfaceWidth_) * paintSurfaceHeight_});
+        }
 
         if (!paintSurface_) {
             EndPaint(hwnd_, &paintStruct);
             internal::traceInteractionPaint(interactionPaint, "paint_end", "unknown", 0);
             return;
         }
-        if (allocatedSurface) {
+        if (surfaceUpdate.repaint) {
             dirtyRect = clientRect;
         }
         const int dirtyX = std::clamp<LONG>(dirtyRect.left, 0, width);
@@ -260,7 +266,7 @@
                 recordResizePresentation();
                 textAtlasWarmup_.arm(hwnd_);
                 EndPaint(hwnd_, &paintStruct);
-                recordPaint(width, height, fullPaint, allocatedSurface, surfaceMs, currentTimeMs() - paintStartMs);
+                recordPaint(width, height, fullPaint, surfaceUpdate.allocatedBacking, surfaceMs, currentTimeMs() - paintStartMs);
                 flushDeferredImePosition();
                 finishDiagnostics();
                 internal::traceInteractionPaint(interactionPaint, "paint_end", "opengl", 1);
@@ -355,76 +361,10 @@
             deferredStartupGl_.submitPicture(std::move(startupPicture), width, height);
         }
         scheduleDeferredGlAdoption();
-        recordPaint(width, height, fullPaint, allocatedSurface, surfaceMs, currentTimeMs() - paintStartMs);
+        recordPaint(width, height, fullPaint, surfaceUpdate.allocatedBacking, surfaceMs, currentTimeMs() - paintStartMs);
         flushDeferredImePosition();
         finishDiagnostics();
         internal::traceInteractionPaint(interactionPaint, "paint_end", "software", blitSucceeded ? 1 : 0);
         paintTrace.write(interactionPaint.window, static_cast<double>(interactionPaint.paintSequence),
             RECT{dirtyX, dirtyY, dirtyRight, dirtyBottom}, profile.data);
-    }
-
-    static int alignedPaintSurfaceSize(int requested) {
-        const int padded = std::max(1, requested + kPaintSurfaceGrowthPadding);
-        return ((padded + kPaintSurfaceAlignment - 1) / kPaintSurfaceAlignment) * kPaintSurfaceAlignment;
-    }
-
-    bool ensurePaintSurfaceCapacity(int width, int height) {
-        if (paintSurface_) {
-            if (gpuAvailable_ && windowSurface_ &&
-                paintSurfaceWidth_ == width && paintSurfaceHeight_ == height) {
-                return false;
-            }
-            if (!gpuAvailable_ && paintSurfaceWidth_ >= width && paintSurfaceHeight_ >= height) {
-                return false;
-            }
-        }
-
-        int surfaceWidth = alignedPaintSurfaceSize(width);
-        int surfaceHeight = alignedPaintSurfaceSize(height);
-        SkImageInfo imageInfo = SkImageInfo::Make(surfaceWidth, surfaceHeight, kBGRA_8888_SkColorType, kPremul_SkAlphaType);
-        if (gpuAvailable_ && grContext_) {
-            surfaceWidth = width;
-            surfaceHeight = height;
-            imageInfo = SkImageInfo::Make(surfaceWidth, surfaceHeight, kBGRA_8888_SkColorType, kPremul_SkAlphaType);
-            auto retainedSurface = SkSurfaces::RenderTarget(
-                grContext_.get(),
-                skgpu::Budgeted::kYes,
-                imageInfo,
-                0,
-                kTopLeft_GrSurfaceOrigin,
-                nullptr);
-            GrGLFramebufferInfo fbInfo;
-            fbInfo.fFBOID = 0;
-            fbInfo.fFormat = GL_RGBA8;
-            auto backendRT = GrBackendRenderTargets::MakeGL(surfaceWidth, surfaceHeight, 0, 0, fbInfo);
-            auto windowSurface = SkSurfaces::WrapBackendRenderTarget(
-                grContext_.get(), backendRT, kBottomLeft_GrSurfaceOrigin,
-                kBGRA_8888_SkColorType, nullptr, nullptr);
-            if (retainedSurface && windowSurface) {
-                paintSurface_ = std::move(retainedSurface);
-                windowSurface_ = std::move(windowSurface);
-                paintSurfaceWidth_ = surfaceWidth;
-                paintSurfaceHeight_ = surfaceHeight;
-                setRenderBackend(RenderBackend::OpenGL);
-                rendererInfo_.reason.clear();
-                rendererInfo_.vsync = swapIntervalEnabled_;
-                return true;
-            }
-            rendererInfo_.reason = !retainedSurface ? "retained-surface-failed" : "window-surface-failed";
-            traceGpu(rendererInfo_.reason.c_str());
-            paintSurface_.reset();
-            windowSurface_.reset();
-            gpuAvailable_ = false;
-            swapIntervalEnabled_ = false;
-        }
-        // 走到这里说明无表面或容量不足，必须重建光栅表面。
-        // 旧逻辑仅在表面为空时新建：容量不足时沿用小表面、记账尺寸却改成大的，
-        // 后续 blit 按大尺寸读小缓冲越界崩溃（窗口最大化时交互重绘先于延迟全绘触发，必现）。
-        paintSurface_ = SkSurfaces::Raster(imageInfo);
-        setRenderBackend(paintSurface_ ? RenderBackend::Software : RenderBackend::Unknown);
-        rendererInfo_.vsync = false;
-        if (!paintSurface_) rendererInfo_.reason = "raster-surface-failed";
-        paintSurfaceWidth_ = paintSurface_ ? surfaceWidth : 0;
-        paintSurfaceHeight_ = paintSurface_ ? surfaceHeight : 0;
-        return true;
     }
