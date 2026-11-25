@@ -288,6 +288,10 @@
             internal::traceInteractionPaint(interactionPaint, "swap_begin", "opengl");
             const bool swapped = angleContext_ ? angleContext_->present() : SwapBuffers(glDC_) != FALSE;
             internal::traceInteractionPaint(interactionPaint, "swap_return", "opengl", swapped ? 1 : 0);
+            if (angleContext_) {
+                internal::traceInteractionPaint(interactionPaint,
+                    angleResize ? "angle_scaled_swap" : "angle_exact_swap", "opengl", swapped ? 1 : 0);
+            }
             internal::workspacePresentMs = currentTimeMs() - presentStarted;
             if (traceLayout) {
                 const double sequence = static_cast<double>(interactionPaint.paintSequence);

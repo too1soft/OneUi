@@ -1,8 +1,9 @@
     void traceGpu(const char* stage) {
         if (!renderTraceEnabled_) return;
         const char* angleDevice = angleContext_ ? angleContext_->device().c_str() : nullptr;
-        const auto* renderer = wglGetCurrentContext() ? glGetString(GL_RENDERER) : nullptr;
-        const auto* version = wglGetCurrentContext() ? glGetString(GL_VERSION) : nullptr;
+        const bool wglCurrent = !angleDevice && wglGetCurrentContext();
+        const auto* renderer = wglCurrent ? glGetString(GL_RENDERER) : nullptr;
+        const auto* version = wglCurrent ? glGetString(GL_VERSION) : nullptr;
         FILE* file = renderTraceFilePath_.empty() ? stderr : _wfopen(renderTraceFilePath_.c_str(), L"ab");
         if (!file) return;
         std::fprintf(file, "[oneui-gpu] stage=%s renderer=%s version=%s\n", stage,
@@ -27,10 +28,11 @@
         }
 
         if (win32::AngleD3D11Context::requested()) {
+            const internal::InteractionSnapshot angleTrace{reinterpret_cast<std::uintptr_t>(hwnd_)};
+            internal::traceInteractionPaint(angleTrace, "angle_context_begin", "opengl");
             angleContext_ = win32::AngleD3D11Context::open(hwnd_, grContext_);
             const bool ready = angleContext_ != nullptr;
-            internal::traceInteractionPaint({reinterpret_cast<std::uintptr_t>(hwnd_)},
-                "angle_context_ready", "opengl", ready ? 1 : 0);
+            internal::traceInteractionPaint(angleTrace, "angle_context_ready", "opengl", ready ? 1 : 0);
             if (ready) {
                 rendererInfo_.device = angleContext_->device();
                 swapIntervalEnabled_ = angleContext_->vsync();
