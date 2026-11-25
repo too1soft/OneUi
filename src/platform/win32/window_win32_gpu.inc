@@ -1,12 +1,13 @@
     void traceGpu(const char* stage) {
         if (!renderTraceEnabled_) return;
+        const char* angleDevice = angleContext_ ? angleContext_->device().c_str() : nullptr;
         const auto* renderer = wglGetCurrentContext() ? glGetString(GL_RENDERER) : nullptr;
         const auto* version = wglGetCurrentContext() ? glGetString(GL_VERSION) : nullptr;
         FILE* file = renderTraceFilePath_.empty() ? stderr : _wfopen(renderTraceFilePath_.c_str(), L"ab");
         if (!file) return;
         std::fprintf(file, "[oneui-gpu] stage=%s renderer=%s version=%s\n", stage,
-            renderer ? reinterpret_cast<const char*>(renderer) : "none",
-            version ? reinterpret_cast<const char*>(version) : "none");
+            angleDevice ? angleDevice : (renderer ? reinterpret_cast<const char*>(renderer) : "none"),
+            angleDevice ? "ANGLE D3D11" : (version ? reinterpret_cast<const char*>(version) : "none"));
         if (file != stderr) std::fclose(file); else std::fflush(file);
     }
 
@@ -23,6 +24,22 @@
         if (!runtimeConfig_.gpuEnabled) {
             rendererInfo_.reason = "disabled-by-environment";
             return;
+        }
+
+        if (win32::AngleD3D11Context::requested()) {
+            angleContext_ = win32::AngleD3D11Context::open(hwnd_, grContext_);
+            const bool ready = angleContext_ != nullptr;
+            internal::traceInteractionPaint({reinterpret_cast<std::uintptr_t>(hwnd_)},
+                "angle_context_ready", "opengl", ready ? 1 : 0);
+            if (ready) {
+                rendererInfo_.device = angleContext_->device();
+                swapIntervalEnabled_ = angleContext_->vsync();
+                gpuAvailable_ = true;
+                traceGpu("angle-d3d11-ready");
+                std::fprintf(stderr, "OneUI ANGLE rendering enabled (%s)\n", rendererInfo_.device.c_str());
+                return;
+            }
+            traceGpu("angle-d3d11-unavailable");
         }
 
         POINT origin{};
@@ -170,6 +187,13 @@
         internal::traceInteractionPaint(shutdownTrace, "worker_stop_begin");
         glWorker_.stop();
         internal::traceInteractionPaint(shutdownTrace, "worker_stop_end");
+        if (angleContext_) {
+            angleContext_->releaseSkia(windowSurface_, paintSurface_, grContext_);
+            angleContext_.reset();
+            gpuAvailable_ = false;
+            swapIntervalEnabled_ = false;
+            return;
+        }
         // Each top-level window owns an independent GL context. Destruction
         // can arrive while a different window was the last one to paint.
         const HGLRC previousContext = wglGetCurrentContext();

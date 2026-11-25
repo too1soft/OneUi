@@ -11,20 +11,38 @@
 
     PaintSurfaceUpdate preparePaintSurfaces(int width, int height) {
         const bool useGpu = gpuAvailable_ && grContext_;
-        if (useGpu) {
-            if (paintSurface_ && windowSurface_ && windowSurface_->width() == width &&
-                windowSurface_->height() == height) return {};
+        if (useGpu && paintSurface_ && windowSurface_ && windowSurface_->width() == width &&
+            windowSurface_->height() == height) return {};
 
-            auto backing = win32::resizeGpuBacking(*grContext_, windowSurface_ ? paintSurface_.get() : nullptr,
-                                                   width, height, interactiveResizeActive_);
+        int bufferWidth = width;
+        int bufferHeight = height;
+        if (useGpu && angleContext_) {
+            const bool changingDrawable = windowSurface_ != nullptr;
+            if (!angleContext_->refreshBufferSize(bufferWidth, bufferHeight, changingDrawable)) {
+                shutdownGPU();
+                rendererInfo_.reason = "angle-surface-query-failed";
+            } else if (changingDrawable) {
+                // Resizing ANGLE's EGL surface can rebuild its underlying target.
+                grContext_->resetContext();
+            }
+        }
+
+        if (gpuAvailable_ && grContext_) {
+            const bool sameAnglePaintSize = angleContext_ && paintSurface_ &&
+                paintSurfaceWidth_ == width && paintSurfaceHeight_ == height;
+            auto backing = sameAnglePaintSize ? win32::RetainedGpuBacking{paintSurface_, true}
+                : win32::resizeGpuBacking(*grContext_, windowSurface_ ? paintSurface_.get() : nullptr,
+                                          width, height, interactiveResizeActive_);
             auto& retained = backing.surface;
 
             GrGLFramebufferInfo fbInfo;
             fbInfo.fFBOID = 0;
             fbInfo.fFormat = GL_RGBA8;
-            const auto target = GrBackendRenderTargets::MakeGL(width, height, 0, 0, fbInfo);
+            const int stencilBits = angleContext_ ? angleContext_->stencilBits() : 0;
+            const auto colorType = angleContext_ ? kRGBA_8888_SkColorType : kBGRA_8888_SkColorType;
+            const auto target = GrBackendRenderTargets::MakeGL(bufferWidth, bufferHeight, 0, stencilBits, fbInfo);
             auto drawable = SkSurfaces::WrapBackendRenderTarget(grContext_.get(), target, kBottomLeft_GrSurfaceOrigin,
-                kBGRA_8888_SkColorType, nullptr, nullptr);
+                colorType, nullptr, nullptr);
             if (retained && drawable) {
                 paintSurfaceWidth_ = retained->width();
                 paintSurfaceHeight_ = retained->height();
@@ -37,6 +55,11 @@
             }
             rendererInfo_.reason = !retained ? "retained-surface-failed" : "window-surface-failed";
             traceGpu(rendererInfo_.reason.c_str());
+            if (angleContext_) {
+                retained.reset();
+                drawable.reset();
+                shutdownGPU();
+            }
             paintSurface_.reset();
             windowSurface_.reset();
             gpuAvailable_ = false;
