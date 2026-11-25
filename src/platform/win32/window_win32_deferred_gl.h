@@ -24,6 +24,7 @@ struct StartupGlScene {
 
 bool prewarmStartupGlScene(GrDirectContext& context, const StartupGlScene& scene, bool retained,
                           sk_sp<SkSurface>* warmedBacking = nullptr);
+bool rehearseStartupGlPresents(GrDirectContext& context, HDC scratchDc);
 
 class StartupGlScratchWindow {
 public:

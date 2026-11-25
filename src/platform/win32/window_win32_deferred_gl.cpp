@@ -6,7 +6,9 @@
 
 #include "include/core/SkCanvas.h"
 #include "include/core/SkSurface.h"
+#include "include/gpu/ganesh/GrBackendSurface.h"
 #include "include/gpu/ganesh/SkSurfaceGanesh.h"
+#include "include/gpu/ganesh/gl/GrGLBackendSurface.h"
 #include "include/gpu/ganesh/gl/GrGLDirectContext.h"
 
 #include <GL/gl.h>
@@ -86,6 +88,45 @@ bool prewarmStartupGlScene(GrDirectContext& context, const StartupGlScene& scene
     trace("wgl_prewarm_submit", submitStarted, submitted ? 1.0 : 0.0);
     if (submitted && warmedBacking) *warmedBacking = std::move(source);
     return submitted;
+}
+
+bool rehearseStartupGlPresents(GrDirectContext& context, HDC scratchDc) {
+    RECT bounds{};
+    if (!GetClientRect(WindowFromDC(scratchDc), &bounds) || bounds.right <= 0 || bounds.bottom <= 0) return false;
+    GrGLFramebufferInfo framebuffer{};
+    framebuffer.fFormat = GL_RGBA8;
+    const auto target = GrBackendRenderTargets::MakeGL(bounds.right, bounds.bottom, 0, 0, framebuffer);
+    const auto surface = SkSurfaces::WrapBackendRenderTarget(&context, target, kBottomLeft_GrSurfaceOrigin,
+                                                            kBGRA_8888_SkColorType, nullptr, nullptr);
+    if (!surface) return false;
+    const bool tracing = internal::scrollTraceEnabled();
+    const auto now = [tracing] { return tracing ? internal::scrollTraceNowMs() : -1.0; };
+    for (int pass = 1; pass <= 2; ++pass) {
+        surface->getCanvas()->clear(pass == 1 ? SK_ColorBLACK : SK_ColorWHITE);
+        const auto flush = now();
+        context.flush();
+        trace("wgl_rehearsal_flush", flush, pass);
+        const auto submit = now();
+        bool submitted;
+        if (tracing && internal::win32GlTraceEnabled()) {
+            internal::GlCallTrace calls;
+            {
+                const internal::GlCallTrace::Scope scope(&calls);
+                submitted = context.submit(GrSyncCpu::kNo);
+            }
+            trace("wgl_rehearsal_submit", submit, pass, submitted ? 1.0 : 0.0);
+            calls.write(0, pass, true);
+        } else {
+            submitted = context.submit(GrSyncCpu::kNo);
+            trace("wgl_rehearsal_submit", submit, pass, submitted ? 1.0 : 0.0);
+        }
+        if (!submitted) return false;
+        const auto swap = now();
+        const bool swapped = SwapBuffers(scratchDc) != FALSE;
+        trace("wgl_rehearsal_swap", swap, pass, swapped ? 1.0 : 0.0);
+        if (!swapped) return false;
+    }
+    return true;
 }
 
 StartupGlScratchWindow::~StartupGlScratchWindow() {

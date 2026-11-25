@@ -118,6 +118,10 @@ public:
         return prewarmStartupGlScene(*context_, scene, retained, reuse && retained ? &retained_ : nullptr);
     }
 
+    bool rehearsePresents() {
+        return rehearseStartupGlPresents(*context_, dc_);
+    }
+
     RenderResult render(const SkPicture& picture, const GlRenderWorker::Frame& frame,
                         const internal::InteractionSnapshot& snapshot,
                         const std::atomic_uint64_t& extent,

@@ -51,6 +51,14 @@ ScratchCensusOrder scratchCensusOrder() noexcept {
     }();
     return order;
 }
+
+bool rehearseScratchPresentsEnabled() noexcept {
+    static const bool enabled = [] {
+        wchar_t value[2]{};
+        return GetEnvironmentVariableW(L"ONEUI_WIN32_GL_WORKER_REHEARSE_PRESENTS", value, 2) == 1 && value[0] == L'1';
+    }();
+    return enabled;
+}
 } // namespace
 
 struct GlRenderWorker::State {
@@ -337,6 +345,9 @@ void GlRenderWorker::State::render() {
     // Retry once, after more real GL work, while the live HWND is still unowned.
     const bool missedWait = retryCensus && firstFinishMs >= 0.0 && firstFinishMs < 1.0;
     if (warmed && (censusAfterScene || missedWait)) renderer.warmDriverCensus();
+    // Exercise the default framebuffer and real Ganesh submits before
+    // acquiring the live window, where close would need to wait for us.
+    if (warmed && needsWarmup && rehearseScratchPresentsEnabled() && !renderer.rehearsePresents()) return;
     {
         std::lock_guard lock(mutex);
         if (stopping) return;
