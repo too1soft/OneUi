@@ -14,9 +14,12 @@
 #include <GL/gl.h>
 
 #include <atomic>
+#include <chrono>
+#include <cstdint>
 #include <cstring>
 #include <cwchar>
 #include <exception>
+#include <memory>
 #include <system_error>
 
 namespace oneui::win32 {
@@ -55,6 +58,50 @@ bool traceCensusStep(bool trace, const char* phase, const Action& action) {
         "win32", phase, 0, 0, 0, 0, 0, 0, 0, internal::scrollTraceNowMs() - started,
         success ? 1.0 : 0.0, counted && measured ? static_cast<double>(after - before) : 0.0});
     return success;
+}
+
+template <typename Function>
+Function resolveSyncFunction(const char* name) {
+    const auto address = wglGetProcAddress(name);
+    const auto value = reinterpret_cast<std::uintptr_t>(address);
+    return value > 3 && value != static_cast<std::uintptr_t>(-1)
+        ? reinterpret_cast<Function>(address) : nullptr;
+}
+
+bool finishDriverProbeWithFence(bool tracing) {
+    struct Sync;
+    using Create = Sync* (APIENTRY*)(GLenum, GLbitfield);
+    using Wait = GLenum (APIENTRY*)(Sync*, GLbitfield, std::uint64_t);
+    using Delete = void (APIENTRY*)(Sync*);
+    const auto create = resolveSyncFunction<Create>("glFenceSync");
+    const auto wait = resolveSyncFunction<Wait>("glClientWaitSync");
+    const auto destroy = resolveSyncFunction<Delete>("glDeleteSync");
+    if (!create || !wait || !destroy) return false;
+
+    constexpr GLenum commandsComplete = 0x9117;
+    constexpr GLenum alreadySignaled = 0x911A;
+    constexpr GLenum timeoutExpired = 0x911B;
+    constexpr GLenum conditionSatisfied = 0x911C;
+    std::unique_ptr<Sync, Delete> fence{nullptr, destroy};
+    if (!traceCensusStep(tracing, "wgl_census_fence_create", [&] {
+        fence.reset(create(commandsComplete, 0));
+        return bool(fence);
+    })) return false;
+
+    traceCensusStep(tracing, "wgl_census_fence_flush", [] {
+        glFlush();
+        return true;
+    });
+    return traceCensusStep(tracing, "wgl_census_fence_wait", [&] {
+        const auto until = std::chrono::steady_clock::now() + std::chrono::milliseconds(500);
+        do {
+            const auto status = wait(fence.get(), 0, 0);
+            if (status == alreadySignaled || status == conditionSatisfied) return true;
+            if (status != timeoutExpired) return false;
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        } while (std::chrono::steady_clock::now() < until);
+        return false;
+    });
 }
 
 struct StartupSurface {
@@ -162,7 +209,13 @@ bool warmNvidiaDriverThreadCensus(HDC dc) {
         }
         return true;
     })) return false;
-    return traceCensusStep(tracing, "wgl_census_finish", [] {
+    return traceCensusStep(tracing, "wgl_census_finish", [tracing] {
+        static const bool useFence = [] {
+            wchar_t value[2]{};
+            return GetEnvironmentVariableW(L"ONEUI_WIN32_GL_CENSUS_FENCE", value, 2) == 1 &&
+                value[0] == L'1';
+        }();
+        if (useFence && finishDriverProbeWithFence(tracing)) return true;
         glFinish();
         return true;
     });
