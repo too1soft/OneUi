@@ -172,29 +172,60 @@ bool hasExtension(const char* extensions, std::string_view name) {
 
 struct AngleD3D11Context::State {
     using PostSubBuffer = EglBool(WINAPI*)(Egl, Egl, EglInt, EglInt, EglInt, EglInt);
+    struct Drawable {
+        Egl surface = nullptr;
+        PostSubBuffer postSubBuffer = nullptr;
+        bool composed = false;
+    };
     AngleApi& api;
-    Egl display = nullptr, context = nullptr, surface = nullptr;
+    Egl display = nullptr, config = nullptr, context = nullptr;
+    Drawable drawable;
     EglInt stencil = 0;
-    PostSubBuffer postSubBuffer = nullptr;
-    bool composed = false;
+    PostSubBuffer postSubBufferEntry = nullptr;
+    bool wantsComposition = false;
     bool synced = false;
     std::string device;
 
     ~State() {
         if (!display) return;
         if (context && api.currentContext() == context) api.makeCurrent(display, nullptr, nullptr, nullptr);
-        if (surface) api.destroySurface(display, surface);
+        if (drawable.surface) api.destroySurface(display, drawable.surface);
         if (context) api.destroyContext(display, context);
         api.releaseDisplay();
     }
 
     bool current() const {
-        return api.currentContext() == context && api.currentSurface(kDraw) == surface &&
-               api.currentSurface(kRead) == surface;
+        return api.currentContext() == context && api.currentSurface(kDraw) == drawable.surface &&
+               api.currentSurface(kRead) == drawable.surface;
     }
 
     bool bind() const {
-        return current() || (api.bindApi(kOpenGlesApi) && api.makeCurrent(display, surface, surface, context));
+        return current() || (api.bindApi(kOpenGlesApi) &&
+            api.makeCurrent(display, drawable.surface, drawable.surface, context));
+    }
+
+    Drawable openDrawable(HWND window) const {
+        Drawable next;
+        if (wantsComposition) {
+            const EglInt attrs[]{kDirectComposition, 1, postSubBufferEntry ? kPostSubBufferSupported : kNone, 1, kNone};
+            next.surface = api.createWindowSurface(display, config, window, attrs);
+            EglInt actual = 0;
+            if (next.surface && api.querySurface(display, next.surface, kDirectComposition, &actual) && actual == 1) {
+                next.composed = true;
+            } else if (next.surface) {
+                api.destroySurface(display, next.surface);
+                next.surface = nullptr;
+            }
+        }
+        const EglInt attrs[]{kPostSubBufferSupported, 1, kNone};
+        if (!next.surface) next.surface = api.createWindowSurface(display, config, window,
+                                                                  postSubBufferEntry ? attrs : nullptr);
+        EglInt canPost = 0;
+        if (next.surface && postSubBufferEntry &&
+            api.querySurface(display, next.surface, kPostSubBufferSupported, &canPost) && canPost) {
+            next.postSubBuffer = postSubBufferEntry;
+        }
+        return next;
     }
 };
 
@@ -211,44 +242,27 @@ std::unique_ptr<AngleD3D11Context> AngleD3D11Context::open(HWND window, sk_sp<Gr
     auto state = std::unique_ptr<State>(new State{*api});
     state->display = api->acquireDisplay();
     if (!state->display) return {};
-    Egl config = nullptr;
     EglInt count = 0;
     const EglInt attrs[]{kSurfaceType, kWindowBit, kRenderableType, kGles3Bit, kRedSize, 8, kGreenSize, 8,
                          kBlueSize, 8, kAlphaSize, 8, kStencilSize, 8, kSamples, 0, kNone};
-    if (!api->chooseConfig(state->display, attrs, &config, 1, &count) || count != 1 ||
-        !api->getConfigAttrib(state->display, config, kStencilSize, &state->stencil)) return {};
+    if (!api->chooseConfig(state->display, attrs, &state->config, 1, &count) || count != 1 ||
+        !api->getConfigAttrib(state->display, state->config, kStencilSize, &state->stencil)) return {};
 
     const PreviousBinding previous{*api};
     const EglInt contextAttrs[]{kContextClientVersion, 3, kNone};
     if (!api->bindApi(kOpenGlesApi)) return {};
-    state->context = api->createContext(state->display, config, nullptr, contextAttrs);
+    state->context = api->createContext(state->display, state->config, nullptr, contextAttrs);
     const auto* extensions = api->queryString(state->display, kExtensions);
     if (hasExtension(extensions, "EGL_NV_post_sub_buffer")) {
-        state->postSubBuffer = reinterpret_cast<State::PostSubBuffer>(api->getProc("eglPostSubBufferNV"));
+        state->postSubBufferEntry = reinterpret_cast<State::PostSubBuffer>(api->getProc("eglPostSubBufferNV"));
     }
     wchar_t composition[2]{};
-    if (state->context && GetEnvironmentVariableW(kComposition, composition, 2) == 1 && composition[0] == L'1' &&
-        hasExtension(extensions, "EGL_ANGLE_direct_composition")) {
-        const EglInt composedAttrs[]{kDirectComposition, 1, state->postSubBuffer ? kPostSubBufferSupported : kNone, 1, kNone};
-        state->surface = api->createWindowSurface(state->display, config, window, composedAttrs);
-        EglInt actual = 0;
-        if (state->surface && api->querySurface(state->display, state->surface, kDirectComposition, &actual) && actual == 1) {
-            state->composed = true;
-        } else if (state->surface) {
-            api->destroySurface(state->display, state->surface);
-            state->surface = nullptr;
-        }
-    }
-    const EglInt surfaceAttrs[]{kPostSubBufferSupported, 1, kNone};
-    if (state->context && !state->surface) state->surface = api->createWindowSurface(state->display, config, window,
-        state->postSubBuffer ? surfaceAttrs : nullptr);
-    if (!state->surface || !state->bind()) {
+    state->wantsComposition = GetEnvironmentVariableW(kComposition, composition, 2) == 1 && composition[0] == L'1' &&
+        hasExtension(extensions, "EGL_ANGLE_direct_composition");
+    if (state->context) state->drawable = state->openDrawable(window);
+    if (!state->drawable.surface || !state->bind()) {
         previous.restore(state->display);
         return {};
-    }
-    EglInt canPost = 0;
-    if (state->postSubBuffer && (!api->querySurface(state->display, state->surface, kPostSubBufferSupported, &canPost) || !canPost)) {
-        state->postSubBuffer = nullptr;
     }
     auto gl = GrGLMakeAssembledGLESInterface(api, [](void* data, const char* name) {
         auto* loaded = static_cast<AngleApi*>(data);
@@ -264,7 +278,7 @@ std::unique_ptr<AngleD3D11Context> AngleD3D11Context::open(HWND window, sk_sp<Gr
         previous.restore(state->display);
         return {};
     }
-    if (state->composed) state->device += " via DirectComposition";
+    if (state->drawable.composed) state->device += " via DirectComposition";
     GrContextOptions options;
     options.fPersistentCache = rendering::angleD3D11ShaderCache();
     skia = GrDirectContexts::MakeGL(std::move(gl), options);
@@ -273,25 +287,43 @@ std::unique_ptr<AngleD3D11Context> AngleD3D11Context::open(HWND window, sk_sp<Gr
     return skia ? std::unique_ptr<AngleD3D11Context>(new AngleD3D11Context(std::move(state))) : nullptr;
 }
 
+bool AngleD3D11Context::adoptWindow(HWND window) {
+    auto& state = *state_;
+    const auto previous = state.drawable;
+    state.drawable = state.openDrawable(window);
+    if (!state.drawable.surface || !state.bind()) {
+        if (state.drawable.surface) state.api.destroySurface(state.display, state.drawable.surface);
+        state.drawable = previous;
+        return false;
+    }
+    state.synced = state.api.swapInterval(state.display, 1) != 0;
+    state.api.destroySurface(state.display, previous.surface);
+    constexpr std::string_view compositionSuffix = " via DirectComposition";
+    if (state.drawable.composed && !previous.composed) state.device += compositionSuffix;
+    if (previous.composed && !state.drawable.composed) state.device.resize(state.device.size() - compositionSuffix.size());
+    return true;
+}
+
 bool AngleD3D11Context::makeCurrent() { return state_->bind(); }
 bool AngleD3D11Context::refreshBufferSize(int& width, int& height, bool clientSizeChanged) {
     const int clientWidth = width, clientHeight = height;
+    auto& drawable = state_->drawable;
     const auto querySize = [&] {
-        return state_->api.querySurface(state_->display, state_->surface, kWidth, &width) &&
-               state_->api.querySurface(state_->display, state_->surface, kHeight, &height) && width > 0 && height > 0;
+        return state_->api.querySurface(state_->display, drawable.surface, kWidth, &width) &&
+               state_->api.querySurface(state_->display, drawable.surface, kHeight, &height) && width > 0 && height > 0;
     };
     if (!querySize()) return false;
-    if (!clientSizeChanged || !state_->postSubBuffer || (width == clientWidth && height == clientHeight)) return true;
+    if (!clientSizeChanged || !drawable.postSubBuffer || (width == clientWidth && height == clientHeight)) return true;
     // ANGLE's EGL frontend skips a zero-area update. Its D3D11 backend clips
     // this rectangle at the old buffer edge, then checks the native size
     // without presenting the old buffer. Query again before drawing.
-    if (!state_->postSubBuffer(state_->display, state_->surface, width, 0, 1, 1)) {
-        state_->postSubBuffer = nullptr;
+    if (!drawable.postSubBuffer(state_->display, drawable.surface, width, 0, 1, 1)) {
+        drawable.postSubBuffer = nullptr;
         return true;
     }
     return querySize();
 }
-bool AngleD3D11Context::present() { return state_->api.swap(state_->display, state_->surface) != 0; }
+bool AngleD3D11Context::present() { return state_->api.swap(state_->display, state_->drawable.surface) != 0; }
 bool AngleD3D11Context::vsync() const noexcept { return state_->synced; }
 int AngleD3D11Context::stencilBits() const noexcept { return state_->stencil; }
 const std::string& AngleD3D11Context::device() const noexcept { return state_->device; }

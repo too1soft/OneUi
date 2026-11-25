@@ -12,7 +12,7 @@ inline constexpr UINT glWorkerRecordingReadyMessage = WM_APP + 6;
 
 struct StartupGlScene;
 
-// Experimental WGL renderer. The render thread owns the DC, context and GPU
+// Experimental Win32 GL renderer. The render thread owns the context and GPU
 // surfaces. The window thread produces immutable recordings in client pixels.
 class GlRenderWorker {
 public:
@@ -48,6 +48,7 @@ private:
 };
 
 bool experimentalGlWorkerEnabled() noexcept;
+bool experimentalAngleWorkerEnabled() noexcept;
 bool experimentalGlWorkerAfterFirstFrame() noexcept;
 bool experimentalGlWorkerPrewarm() noexcept;
 bool experimentalGlWorkerDefersCensus() noexcept;

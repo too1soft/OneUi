@@ -145,7 +145,8 @@
         SkCanvas* skCanvas = threadedGl ? nullptr : paintSurface_->getCanvas();
         const bool fullPaint = dirtyX == 0 && dirtyY == 0 && dirtyWidth == width && dirtyHeight == height;
         const bool captureWorkerStartup = !useGPU && fullPaint && IsWindowVisible(hwnd_) &&
-            ((glWorkerWaitingForSoftwareFrame_ && win32::experimentalGlWorkerPrewarm()) ||
+            ((glWorkerWaitingForSoftwareFrame_ && (win32::experimentalAngleWorkerEnabled() ||
+                win32::experimentalGlWorkerPrewarm())) ||
              glWorker_.wantsStartupPicture());
         std::optional<SkPictureRecorder> recorder;
         if (threadedGl || captureWorkerStartup ||

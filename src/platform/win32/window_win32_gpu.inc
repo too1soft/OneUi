@@ -28,6 +28,11 @@
         }
 
         if (win32::AngleD3D11Context::requested()) {
+            if (win32::experimentalAngleWorkerEnabled()) {
+                glWorkerWaitingForSoftwareFrame_ = true;
+                rendererInfo_.reason = "angle-worker-waiting-for-software-frame";
+                return;
+            }
             const internal::InteractionSnapshot angleTrace{reinterpret_cast<std::uintptr_t>(hwnd_)};
             internal::traceInteractionPaint(angleTrace, "angle_context_begin", "opengl");
             angleContext_ = win32::AngleD3D11Context::open(hwnd_, grContext_);

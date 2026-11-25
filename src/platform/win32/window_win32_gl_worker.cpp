@@ -6,6 +6,7 @@
 
 #include <atomic>
 #include <condition_variable>
+#include <cstdio>
 #include <exception>
 #include <mutex>
 #include <optional>
@@ -68,8 +69,8 @@ struct GlRenderWorker::State {
         internal::InteractionSnapshot trace;
     };
 
-    State(HWND window, HMONITOR monitor, POINT origin, StartupGlScene scene)
-        : window(window), monitor(monitor), origin(origin), captureStartup(monitor && scene.picture),
+    State(HWND window, HMONITOR monitor, POINT origin, bool angle, StartupGlScene scene)
+        : window(window), monitor(monitor), origin(origin), angle(angle), captureStartup(monitor && scene.picture),
           startup(std::move(scene)), ownsLiveWindow(!monitor) {}
 
     void run() noexcept;
@@ -78,6 +79,7 @@ struct GlRenderWorker::State {
     const HWND window;
     const HMONITOR monitor;
     const POINT origin;
+    const bool angle;
     std::atomic_bool captureStartup;
     std::atomic_bool ready{false};
     std::atomic_bool vsync{false};
@@ -100,6 +102,15 @@ bool experimentalGlWorkerEnabled() noexcept {
     static const bool enabled = [] {
         wchar_t value[2]{};
         return GetEnvironmentVariableW(L"ONEUI_WIN32_GL_WORKER", value, 2) == 1 && value[0] == L'1';
+    }();
+    return enabled;
+}
+
+bool experimentalAngleWorkerEnabled() noexcept {
+    static const bool enabled = [] {
+        wchar_t value[2]{};
+        return AngleD3D11Context::requested() &&
+            GetEnvironmentVariableW(L"ONEUI_WIN32_ANGLE_WORKER", value, 2) == 1 && value[0] == L'1';
     }();
     return enabled;
 }
@@ -146,9 +157,16 @@ bool GlRenderWorker::start(HWND window) {
 
 bool GlRenderWorker::start(HWND window, StartupGlScene scene) {
     if (state_) return false;
+    const bool angle = experimentalAngleWorkerEnabled();
     POINT origin{};
     HMONITOR monitor = nullptr;
-    if (scratchGlWorkerEnabled()) {
+    if (angle) {
+        monitor = MonitorFromWindow(window, MONITOR_DEFAULTTONULL);
+        MONITORINFO info{};
+        info.cbSize = sizeof(info);
+        if (!monitor || !GetMonitorInfoW(monitor, &info)) return false;
+        origin = POINT{info.rcMonitor.left, info.rcMonitor.top};
+    } else if (scratchGlWorkerEnabled()) {
         monitor = MonitorFromWindow(window, MONITOR_DEFAULTTONULL);
         if (!monitor || !nvidiaWindowDisplayOrigin(window, origin)) return false;
     }
@@ -164,7 +182,7 @@ bool GlRenderWorker::start(HWND window, StartupGlScene scene) {
                 task->state->run();
             }
         };
-        auto state = std::make_shared<State>(window, monitor, origin, std::move(scene));
+        auto state = std::make_shared<State>(window, monitor, origin, angle, std::move(scene));
         auto task = std::make_unique<Task>();
         task->state = state;
         if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
@@ -218,7 +236,7 @@ GlRenderWorker::Frame GlRenderWorker::plan(int width, int height, RECT damage, b
     if (!state_) return {};
     auto& state = *state_;
     std::lock_guard lock(state.mutex);
-    Frame frame{width, height, damage, retainedGlWorkerEnabled(), interactiveResize,
+    Frame frame{width, height, damage, state.angle || retainedGlWorkerEnabled(), interactiveResize,
                 state.extent.load(std::memory_order_relaxed), ++state.latestPlan};
     const bool sameExtent = state.lastQueued.extent == frame.extent &&
         state.lastQueued.width == width && state.lastQueued.height == height;
@@ -318,9 +336,9 @@ void GlRenderWorker::State::render() {
         scratch.emplace();
         if (!scratch->open(origin)) return;
     }
-    worker::WglWorkerContext renderer(scratch ? scratch->hwnd : window);
+    worker::GlWorkerContext renderer(scratch ? scratch->hwnd : window, angle);
     // With deferred warmup, the first software frame has already been copied.
-    const bool census = scratch && experimentalGlWorkerDefersCensus();
+    const bool census = !angle && scratch && experimentalGlWorkerDefersCensus();
     const auto censusOrder = census ? scratchCensusOrder() : ScratchCensusOrder::BeforeScene;
     const bool censusAfterScene = censusOrder == ScratchCensusOrder::AfterScene;
     const bool retryCensus = censusOrder == ScratchCensusOrder::RetryAfterScene;
@@ -339,7 +357,7 @@ void GlRenderWorker::State::render() {
         }
     }
     const bool needsWarmup = scratch && warmup.picture;
-    const bool warmed = !needsWarmup || renderer.prewarm(warmup, retainedGlWorkerEnabled());
+    const bool warmed = !needsWarmup || renderer.prewarm(warmup, angle || retainedGlWorkerEnabled());
     warmup = {};
     // A nearly immediate glFinish may have missed the process-wide driver wait.
     // Retry once, after more real GL work, while the live HWND is still unowned.
@@ -347,7 +365,7 @@ void GlRenderWorker::State::render() {
     if (warmed && (censusAfterScene || missedWait)) renderer.warmDriverCensus();
     // Exercise the default framebuffer and real Ganesh submits before
     // acquiring the live window, where close would need to wait for us.
-    if (warmed && needsWarmup && rehearseScratchPresentsEnabled() && !renderer.rehearsePresents()) return;
+    if (warmed && !angle && needsWarmup && rehearseScratchPresentsEnabled() && !renderer.rehearsePresents()) return;
     {
         std::lock_guard lock(mutex);
         if (stopping) return;
@@ -370,6 +388,10 @@ void GlRenderWorker::State::render() {
     {
         std::lock_guard lock(mutex);
         if (stopping) return;
+        if (const auto* angleContext = renderer.angleContext()) {
+            internal::traceInteractionPaint(startupTrace, "angle_worker_ready", "opengl-worker", 1);
+            std::fprintf(stderr, "OneUI ANGLE worker enabled (%s)\n", angleContext->device().c_str());
+        }
         vsync.store(synced, std::memory_order_relaxed);
         ready.store(true, std::memory_order_release);
         InvalidateRect(window, nullptr, FALSE);
@@ -395,6 +417,10 @@ void GlRenderWorker::State::render() {
         if (result == worker::RenderResult::Superseded) mustPresent = true;
         if (result == worker::RenderResult::Complete) mustPresent = false;
         if (result == worker::RenderResult::Failed) break;
+        if (result == worker::RenderResult::Scaled) {
+            std::lock_guard lock(mutex);
+            if (!stopping && !pending.picture) InvalidateRect(window, nullptr, FALSE);
+        }
         if (result == worker::RenderResult::Obsolete) {
             Scene obsolete;
             std::lock_guard lock(mutex);

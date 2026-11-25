@@ -1,5 +1,6 @@
 #pragma once
 
+#include "angle_d3d11_win32.h"
 #include "gl_flush_trace_win32.h"
 #include "window_win32_deferred_gl.h"
 #include "window_win32_gl_worker.h"
@@ -20,12 +21,16 @@
 
 namespace oneui::win32::worker {
 
-enum class RenderResult { Complete, Superseded, Obsolete, Failed };
+enum class RenderResult { Complete, Superseded, Scaled, Obsolete, Failed };
 
-class WglWorkerContext {
+class GlWorkerContext {
 public:
-    explicit WglWorkerContext(HWND window) : window_(window), dc_(GetDC(window)) {}
-    ~WglWorkerContext() {
+    GlWorkerContext(HWND window, bool angle) : window_(window), dc_(angle ? nullptr : GetDC(window)), angle_(angle) {}
+    ~GlWorkerContext() {
+        if (angleContext_) {
+            angleContext_->releaseSkia(surface_, retained_, context_);
+            return;
+        }
         if (context_ && wglGetCurrentContext() != gl_) context_->abandonContext();
         retained_.reset();
         surface_.reset();
@@ -38,6 +43,10 @@ public:
     }
 
     bool initialize(bool warmDriver, double* censusFinishMs = nullptr) {
+        if (angle_) {
+            angleContext_ = AngleD3D11Context::open(window_, context_);
+            return angleContext_ && angleContext_->makeCurrent();
+        }
         if (!dc_) return false;
         const bool tracing = internal::scrollTraceEnabled();
         const auto now = [tracing] { return tracing ? internal::scrollTraceNowMs() : 0.0; };
@@ -87,8 +96,14 @@ public:
     }
 
     bool adopt(HWND target, HMONITOR monitor) {
-        if (MonitorFromWindow(target, MONITOR_DEFAULTTONULL) != monitor ||
-            (descriptor_.dwFlags & PFD_GENERIC_FORMAT)) return false;
+        if (MonitorFromWindow(target, MONITOR_DEFAULTTONULL) != monitor) return false;
+        if (angleContext_) {
+            if (!angleContext_->adoptWindow(target)) return false;
+            context_->resetContext();
+            window_ = target;
+            return true;
+        }
+        if (descriptor_.dwFlags & PFD_GENERIC_FORMAT) return false;
         HDC dc = GetDC(target);
         if (!dc) return false;
         PIXELFORMATDESCRIPTOR actual{};
@@ -105,6 +120,7 @@ public:
     }
 
     bool enableVsync() const {
+        if (angleContext_) return angleContext_->vsync();
         const auto interval = reinterpret_cast<BOOL(WINAPI*)(int)>(wglGetProcAddress("wglSwapIntervalEXT"));
         return interval && interval(1);
     }
@@ -122,6 +138,8 @@ public:
         return rehearseStartupGlPresents(*context_, dc_);
     }
 
+    const AngleD3D11Context* angleContext() const { return angleContext_.get(); }
+
     RenderResult render(const SkPicture& picture, const GlRenderWorker::Frame& frame,
                         const internal::InteractionSnapshot& snapshot,
                         const std::atomic_uint64_t& extent,
@@ -134,28 +152,37 @@ public:
         if (!current()) return RenderResult::Obsolete;
         const bool warmedBackingFits = !surface_ && retained_ &&
             retained_->width() == width && retained_->height() == height;
-        const bool drawableChanged = !surface_ || width_ != width || height_ != height;
+        const bool clientChanged = !surface_ || width_ != width || height_ != height;
         const bool full = frame.damage.left == 0 && frame.damage.top == 0 &&
             frame.damage.right == width && frame.damage.bottom == height;
         const bool needsFullRecording = frame.retained &&
-            (!retained_ || retainedExtent_ != frame.extent || drawableChanged);
+            (!retained_ || retainedExtent_ != frame.extent || clientChanged);
         if (needsFullRecording && !full) return RenderResult::Obsolete;
-        if (drawableChanged) {
+        if (clientChanged || angleDrawableScaled_) {
+            int bufferWidth = width;
+            int bufferHeight = height;
+            if (angleContext_ && !angleContext_->refreshBufferSize(bufferWidth, bufferHeight, bool(surface_))) {
+                return RenderResult::Failed;
+            }
+            if (angleContext_ && surface_) context_->resetContext();
             GrGLFramebufferInfo framebuffer{};
             framebuffer.fFormat = GL_RGBA8;
-            auto target = GrBackendRenderTargets::MakeGL(width, height, 0, 0, framebuffer);
+            const int stencil = angleContext_ ? angleContext_->stencilBits() : 0;
+            const auto format = angleContext_ ? kRGBA_8888_SkColorType : kBGRA_8888_SkColorType;
+            auto target = GrBackendRenderTargets::MakeGL(bufferWidth, bufferHeight, 0, stencil, framebuffer);
             surface_ = SkSurfaces::WrapBackendRenderTarget(context_.get(), target,
-                kBottomLeft_GrSurfaceOrigin, kBGRA_8888_SkColorType, nullptr, nullptr);
+                kBottomLeft_GrSurfaceOrigin, format, nullptr, nullptr);
             if (!surface_) return RenderResult::Failed;
             width_ = width;
             height_ = height;
+            angleDrawableScaled_ = bufferWidth != width || bufferHeight != height;
         }
 
         const auto trace = [&](const char* phase, int success = -1) {
             internal::traceInteractionPaint(snapshot, phase, "opengl-worker", success);
         };
         if (needsFullRecording) {
-            if (!retained_ || drawableChanged) {
+            if (!retained_ || clientChanged) {
                 const bool tracing = internal::scrollTraceEnabled();
                 const double started = tracing ? internal::scrollTraceNowMs() : 0.0;
                 // The first live recording repaints the full window. Only the allocation is kept.
@@ -175,6 +202,11 @@ public:
         }
         trace("worker_draw_begin");
         auto* canvas = surface_->getCanvas();
+        if (angleDrawableScaled_) {
+            canvas->save();
+            canvas->scale(static_cast<float>(surface_->width()) / width,
+                          static_cast<float>(surface_->height()) / height);
+        }
         if (frame.retained) {
             retained_->getCanvas()->drawPicture(&picture);
             canvas->clear(SK_ColorBLACK);
@@ -182,7 +214,8 @@ public:
         } else {
             canvas->drawPicture(&picture);
         }
-        const bool traceCalls = snapshot.paintSequence && internal::win32GlTraceEnabled();
+        if (angleDrawableScaled_) canvas->restore();
+        const bool traceCalls = !angleContext_ && snapshot.paintSequence && internal::win32GlTraceEnabled();
         const bool tracing = traceCalls && internal::scrollTraceEnabled();
         trace("worker_flush_begin");
         if (traceCalls) {
@@ -213,9 +246,12 @@ public:
             return RenderResult::Superseded;
         }
         trace("swap_begin");
-        const bool swapped = SwapBuffers(dc_) != FALSE;
+        const bool swapped = angleContext_ ? angleContext_->present() : SwapBuffers(dc_) != FALSE;
         trace("swap_return", swapped ? 1 : 0);
+        if (angleContext_) trace(angleDrawableScaled_ ? "angle_worker_scaled_swap" : "angle_worker_exact_swap",
+                                 swapped ? 1 : 0);
         if (!swapped) return RenderResult::Failed;
+        if (angleDrawableScaled_) return RenderResult::Scaled;
         presented_ = true;
         presentedExtent_ = frame.extent;
         return RenderResult::Complete;
@@ -244,6 +280,8 @@ private:
 
     HWND window_;
     HDC dc_;
+    const bool angle_;
+    std::unique_ptr<AngleD3D11Context> angleContext_;
     HGLRC gl_ = nullptr;
     PIXELFORMATDESCRIPTOR descriptor_{};
     int format_ = 0;
@@ -253,6 +291,7 @@ private:
     std::uint64_t retainedExtent_ = 0;
     std::uint64_t presentedExtent_ = 0;
     bool presented_ = false;
+    bool angleDrawableScaled_ = false;
     int width_ = 0;
     int height_ = 0;
 };

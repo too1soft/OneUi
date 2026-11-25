@@ -18,6 +18,7 @@ public:
     static std::unique_ptr<AngleD3D11Context> open(HWND window, sk_sp<GrDirectContext>& skia);
 
     ~AngleD3D11Context();
+    bool adoptWindow(HWND window);
     bool makeCurrent();
     bool refreshBufferSize(int& width, int& height, bool clientSizeChanged);
     bool present();
