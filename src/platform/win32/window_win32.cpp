@@ -171,6 +171,7 @@ public:
     win32::DeferredStartupGl deferredStartupGl_;
     bool deferredGlReady_ = false;
     bool deferredGlScheduled_ = false;
+    bool deferredGlCensusReady_ = false;
     HGLRC glContext_ = nullptr;
     HDC glDC_ = nullptr;
     sk_sp<GrDirectContext> grContext_;

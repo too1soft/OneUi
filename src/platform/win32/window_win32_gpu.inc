@@ -148,6 +148,7 @@
         if (const auto* device = glGetString(GL_RENDERER))
             rendererInfo_.device = reinterpret_cast<const char*>(device);
         nvidiaDriver_ = true;
+        deferredGlCensusReady_ = true;
         grContext_ = std::move(prepared.ganesh);
         publishCurrentGpu(std::exchange(prepared.context, nullptr));
         return true;
@@ -175,5 +176,6 @@
             glDC_ = nullptr;
         }
         gpuAvailable_ = false;
+        deferredGlCensusReady_ = false;
         swapIntervalEnabled_ = false;
     }

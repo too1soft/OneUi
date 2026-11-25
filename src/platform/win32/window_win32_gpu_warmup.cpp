@@ -41,6 +41,21 @@ bool nvidiaDisplayOrigin(HWND window, POINT& origin) {
     }
 }
 
+template <typename Action>
+bool traceCensusStep(bool trace, const char* phase, const Action& action) {
+    if (!trace) return action();
+    const double started = internal::scrollTraceNowMs();
+    ULONG64 before = 0;
+    ULONG64 after = 0;
+    const BOOL counted = QueryThreadCycleTime(GetCurrentThread(), &before);
+    const bool success = action();
+    const BOOL measured = QueryThreadCycleTime(GetCurrentThread(), &after);
+    internal::writeScrollTrace(internal::ScrollTraceEvent{
+        "win32", phase, 0, 0, 0, 0, 0, 0, 0, internal::scrollTraceNowMs() - started,
+        success ? 1.0 : 0.0, counted && measured ? static_cast<double>(after - before) : 0.0});
+    return success;
+}
+
 struct StartupSurface {
     HINSTANCE instance = GetModuleHandleW(nullptr);
     ATOM windowClass = 0;
@@ -126,21 +141,32 @@ bool nvidiaWindowDisplayOrigin(HWND window, POINT& origin) {
 }
 
 bool warmNvidiaDriverThreadCensus(HDC dc) {
-    const auto* vendor = reinterpret_cast<const char*>(glGetString(GL_VENDOR));
-    if (!vendor || !std::strstr(vendor, "NVIDIA")) return false;
-    for (int i = 0; i < 2; ++i) {
-        glClear(GL_COLOR_BUFFER_BIT);
-        if (!SwapBuffers(dc)) return false;
-    }
+    const bool tracing = internal::scrollTraceEnabled();
+    if (!traceCensusStep(tracing, "wgl_census_vendor", [] {
+        const auto* vendor = reinterpret_cast<const char*>(glGetString(GL_VENDOR));
+        return vendor && std::strstr(vendor, "NVIDIA");
+    })) return false;
+    if (!traceCensusStep(tracing, "wgl_census_swaps", [dc] {
+        for (int i = 0; i < 2; ++i) {
+            glClear(GL_COLOR_BUFFER_BIT);
+            if (!SwapBuffers(dc)) return false;
+        }
+        return true;
+    })) return false;
     // Let the driver observe the scratch context before starting the thread
     // that triggers process-wide enumeration. Finish on the worker context.
-    try {
-        std::thread([] {}).join();
-    } catch (const std::system_error&) {
-        return false;
-    }
-    glFinish();
-    return true;
+    if (!traceCensusStep(tracing, "wgl_census_thread", [] {
+        try {
+            std::thread([] {}).join();
+        } catch (const std::system_error&) {
+            return false;
+        }
+        return true;
+    })) return false;
+    return traceCensusStep(tracing, "wgl_census_finish", [] {
+        glFinish();
+        return true;
+    });
 }
 
 PIXELFORMATDESCRIPTOR openGlWindowPixelFormat() noexcept {
