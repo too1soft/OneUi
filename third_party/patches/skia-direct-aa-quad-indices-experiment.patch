@@ -1,0 +1,54 @@
+--- a/src/gpu/ganesh/GrResourceProvider.cpp
++++ b/src/gpu/ganesh/GrResourceProvider.cpp
+@@ -37,6 +37,8 @@
+ #include "src/gpu/ganesh/GrTexture.h"
+ 
+ #include <algorithm>
++#include <array>
++#include <cstdlib>
+ #include <utility>
+ 
+ struct SkImageInfo;
+@@ -572,7 +574,7 @@
+     static_assert(kVertsPerAAQuad * kMaxNumAAQuads <= 65535);  // indices fit in a uint16_t
+ 
+     // clang-format off
+-    static const uint16_t kAAQuadIndexPattern[] = {
++    static constexpr uint16_t kAAQuadIndexPattern[] = {
+         0, 1, 2, 1, 3, 2,
+         0, 4, 1, 4, 5, 1,
+         0, 6, 4, 0, 2, 6,
+@@ -583,6 +585,33 @@
+ 
+     static_assert(std::size(kAAQuadIndexPattern) == kIndicesPerAAQuad);
+ 
++#if defined(SK_BUILD_FOR_WIN)
++    static const bool uploadDirectly = [] {
++        const char* value = std::getenv("ONEUI_TEST_UPLOAD_AA_QUAD_INDICES_DIRECTLY");
++        return value && value[0] == '1' && value[1] == '\0';
++    }();
++    if (uploadDirectly) {
++        // Only this immutable table is uploaded directly into a fresh buffer.
++        static constexpr auto indices = [] {
++            std::array<uint16_t, kMaxNumAAQuads * kIndicesPerAAQuad> result{};
++            for (int quad = 0; quad < kMaxNumAAQuads; ++quad) {
++                for (int index = 0; index < kIndicesPerAAQuad; ++index) {
++                    result[quad * kIndicesPerAAQuad + index] =
++                            uint16_t(quad * kVertsPerAAQuad + kAAQuadIndexPattern[index]);
++                }
++            }
++            return result;
++        }();
++        const size_t bytes = indices.size() * sizeof(uint16_t);
++        auto buffer = this->createBuffer(bytes,
++                                          GrGpuBufferType::kIndex,
++                                          kStatic_GrAccessPattern,
++                                          ZeroInit::kNo);
++        if (buffer && buffer->updateData(indices.data(), 0, bytes, /*preserve=*/true)) {
++            return buffer;
++        }
++    }
++#endif
+     return this->createPatternedIndexBuffer(kAAQuadIndexPattern, kIndicesPerAAQuad,
+                                             kMaxNumAAQuads, kVertsPerAAQuad, nullptr);
+ }
