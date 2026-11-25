@@ -7,7 +7,8 @@
 // processes. Left alone it lands on the first user action that starts a
 // thread; in iShell that is the first terminal split, which then drops
 // several animation frames. Starting a no-op thread during the first frames
-// lets the driver begin the census before the first user-triggered worker.
+// lets the driver begin the census before the first user-triggered worker
+// when the background startup census could not complete in time.
 // Leave GPU completion to the driver: finishing the live context here can
 // block window dispatch long after SwapBuffers has returned.
 void triggerDriverThreadCensus() {

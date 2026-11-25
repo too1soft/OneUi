@@ -158,17 +158,22 @@ NvidiaOpenGlWarmup::~NvidiaOpenGlWarmup() {
     if (worker_.joinable()) worker_.join();
 }
 
+bool NvidiaOpenGlWarmup::censusReady() const noexcept {
+    return censusReady_.load(std::memory_order_relaxed);
+}
+
 void NvidiaOpenGlWarmup::start(HWND window) {
     if (startupClaimed.load(std::memory_order_relaxed)) return;
     POINT origin{};
     if (!nvidiaDisplayOrigin(window, origin)) return;
     if (startupClaimed.exchange(true, std::memory_order_relaxed)) return;
     try {
-        worker_ = std::thread([origin] {
+        worker_ = std::thread([this, origin] {
             const bool trace = internal::scrollTraceEnabled();
             const double started = trace ? internal::scrollTraceNowMs() : 0.0;
             StartupSurface surface;
             const bool warmed = surface.open(origin) && warmNvidiaDriverThreadCensus(surface.dc);
+            censusReady_.store(warmed, std::memory_order_relaxed);
             if (trace) {
                 internal::writeScrollTrace(internal::ScrollTraceEvent{
                     "win32", "gpu_startup_warmup", 0, 0, 0, 0, 0, 0, 0,

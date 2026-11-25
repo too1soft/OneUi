@@ -248,14 +248,15 @@
             }
             if (swapped && nvidiaDriver_) {
                 const double censusStarted = internal::workspaceFrameProbe || traceLayout ? currentTimeMs() : 0;
-                triggerDriverThreadCensus();
+                const bool startupCensusReady = gpuWarmup_.censusReady();
+                if (!startupCensusReady) triggerDriverThreadCensus();
                 if (censusStarted) {
                     const double censusMs = currentTimeMs() - censusStarted;
                     if (internal::workspaceFrameProbe) internal::workspaceCensusMs = censusMs;
                     if (traceLayout) {
                         internal::writeScrollTrace(internal::ScrollTraceEvent{
                             "win32", "paint_driver_census", interactionPaint.window, 0, 0, 0, 0, 0, 0,
-                            censusMs, static_cast<double>(interactionPaint.paintSequence), 0});
+                            censusMs, static_cast<double>(interactionPaint.paintSequence), startupCensusReady ? 1.0 : 0.0});
                     }
                 }
             }

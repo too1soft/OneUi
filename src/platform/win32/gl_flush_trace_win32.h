@@ -24,7 +24,8 @@ inline bool win32GlTraceEnabled() {
 enum class GlPhase : std::size_t {
     Compile, Link, CompileStatus, LinkStatus, ProgramQuery, BinaryRead, BinaryWrite, ProgramUse,
     TextureAllocate, TextureUpload, BufferUpload, Draw, Flush, Finish, Sync, ErrorQuery,
-    Uniform, BufferMap, VertexSetup, Framebuffer, TextureState, RasterState, Count
+    Uniform, BufferMap, VertexSetup, Framebuffer, TextureState, RasterState,
+    ProgramCreate, ObjectLabel, Count
 };
 
 enum class GlTextureKind { Other, TextAtlas, SmallPathAtlas };
@@ -105,7 +106,8 @@ public:
             "gl_binary_read", "gl_binary_write",
             "gl_program_use", "gl_texture_allocate", "gl_texture_upload", "gl_buffer_upload",
             "gl_draw", "gl_flush", "gl_finish", "gl_sync", "gl_error_query",
-            "gl_uniform", "gl_buffer_map", "gl_vertex_setup", "gl_framebuffer", "gl_texture_state", "gl_raster_state"
+            "gl_uniform", "gl_buffer_map", "gl_vertex_setup", "gl_framebuffer", "gl_texture_state", "gl_raster_state",
+            "gl_create_program", "gl_object_label"
         };
         constexpr std::array submitPhases{
             "gl_submit_compile", "gl_submit_link", "gl_submit_compile_status", "gl_submit_link_status",
@@ -113,7 +115,8 @@ public:
             "gl_submit_program_use", "gl_submit_texture_allocate", "gl_submit_texture_upload",
             "gl_submit_buffer_upload", "gl_submit_draw", "gl_submit_flush", "gl_submit_finish",
             "gl_submit_sync", "gl_submit_error_query", "gl_submit_uniform", "gl_submit_buffer_map",
-            "gl_submit_vertex_setup", "gl_submit_framebuffer", "gl_submit_texture_state", "gl_submit_raster_state"
+            "gl_submit_vertex_setup", "gl_submit_framebuffer", "gl_submit_texture_state", "gl_submit_raster_state",
+            "gl_submit_create_program", "gl_submit_object_label"
         };
         const auto& phases = duringSubmit ? submitPhases : flushPhases;
         static_assert(flushPhases.size() == static_cast<std::size_t>(GlPhase::Count));
@@ -201,6 +204,7 @@ class TracedWin32GlInterface final : public GrGLInterface {
             fFunctions.fObjectLabel = [this](GrGLenum identifier, GrGLuint id, GrGLsizei length,
                                              const GrGLchar* label) {
                 labelTexture(identifier, id, length, label);
+                const GlCallTrace::Span timer(GlPhase::ObjectLabel);
                 native_->fFunctions.fObjectLabel(identifier, id, length, label);
             };
         }
@@ -232,6 +236,7 @@ public:
         fStandard = native_->fStandard;
         fExtensions = native_->fExtensions;
         fFunctions = native_->fFunctions;
+        wrap<GlPhase::ProgramCreate, &Functions::fCreateProgram>();
         wrap<GlPhase::Compile, &Functions::fCompileShader>();
         wrap<GlPhase::Link, &Functions::fLinkProgram>();
         if (fFunctions.fGetProgramiv) {

@@ -2,6 +2,7 @@
 
 #include <windows.h>
 
+#include <atomic>
 #include <thread>
 
 namespace oneui::win32 {
@@ -16,8 +17,10 @@ class NvidiaOpenGlWarmup {
 public:
     ~NvidiaOpenGlWarmup();
     void start(HWND window);
+    bool censusReady() const noexcept;
 
 private:
+    std::atomic_bool censusReady_{false};
     std::thread worker_;
 };
 
