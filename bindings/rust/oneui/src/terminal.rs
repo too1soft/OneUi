@@ -4,6 +4,9 @@
 mod frame_queue;
 #[path = "terminal_local_pointer.rs"]
 mod local_pointer;
+#[cfg(test)]
+#[path = "terminal_frame_queue_tests.rs"]
+pub(super) mod frame_queue_tests;
 
 use super::choice_controls::{run_bool_changed_callback, BoolChangedCallback};
 use super::key_event::RawKeyEvent;
@@ -79,7 +82,8 @@ enum TerminalSelectionUpdate {
 ///
 /// A session worker may submit frames from any thread. OneUI applies them only
 /// through the owning window's dispatcher, coalescing bursts to the newest
-/// frame so terminal output cannot grow an unbounded UI work queue.
+/// frame so terminal output cannot grow an unbounded UI work queue. Each
+/// callback limits continuous work before yielding to the window thread.
 #[derive(Clone)]
 pub struct TerminalViewHandle {
     state: Arc<TerminalViewState>,

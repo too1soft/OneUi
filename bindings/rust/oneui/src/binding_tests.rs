@@ -44,6 +44,10 @@ macro_rules! native_tests {
         pub(super) fn run() -> std::process::ExitCode {
             let mut cases: Vec<(&str, fn())> = vec![$((stringify!($name), $name)),*];
             cases.extend(super::view::adapter_tests::cases());
+            cases.push((
+                "terminal_frame_updates_yield_to_other_window_callbacks",
+                super::terminal::frame_queue_tests::updates_yield_to_other_window_callbacks,
+            ));
             super::test_runner::run(&cases)
         }
     };

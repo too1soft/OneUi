@@ -1,5 +1,9 @@
 use super::super::terminal_render::apply_terminal_frame;
 use super::*;
+use std::time::{Duration, Instant};
+
+pub(super) const MAX_UPDATES_PER_TURN: usize = 4;
+const TURN_BUDGET: Duration = Duration::from_millis(1);
 
 impl TerminalViewHandle {
     pub(super) fn submit_update(
@@ -18,18 +22,21 @@ impl TerminalViewHandle {
             .expect("terminal pending update lock poisoned") =
             Some(TerminalFrameUpdate { frame, selection });
 
+        self.schedule_pending_frame()
+    }
+
+    fn schedule_pending_frame(&self) -> Result<(), Error> {
         if self.state.update_scheduled.swap(true, Ordering::AcqRel) {
             return Ok(());
         }
 
-        let state = Arc::clone(&self.state);
-        let dispatched_state = Arc::clone(&state);
+        let handle = self.clone();
         if let Err(error) = self
             .dispatcher
-            .dispatch(move || Self::drain_pending_frame(&dispatched_state))
+            .dispatch(move || handle.drain_pending_frame())
         {
-            state.update_scheduled.store(false, Ordering::Release);
-            state
+            self.state.update_scheduled.store(false, Ordering::Release);
+            self.state
                 .pending_update
                 .lock()
                 .expect("terminal pending update lock poisoned")
@@ -39,65 +46,68 @@ impl TerminalViewHandle {
         Ok(())
     }
 
-    fn drain_pending_frame(state: &TerminalViewState) {
-        loop {
-            state.apply_pending_frame();
-
-            state.update_scheduled.store(false, Ordering::Release);
-            if state
-                .pending_update
-                .lock()
-                .expect("terminal pending update lock poisoned")
-                .is_none()
-            {
-                return;
+    fn drain_pending_frame(&self) {
+        let deadline = Instant::now() + TURN_BUDGET;
+        for _ in 0..MAX_UPDATES_PER_TURN {
+            if !self.state.apply_pending_frame() || Instant::now() >= deadline {
+                break;
             }
-            if !state.update_scheduled.swap(true, Ordering::AcqRel) {
-                continue;
-            }
-            return;
+        }
+        self.state.update_scheduled.store(false, Ordering::Release);
+        let has_pending = self
+            .state
+            .pending_update
+            .lock()
+            .expect("terminal pending update lock poisoned")
+            .is_some();
+        if has_pending {
+            // Return to the native loop so input and paint can run between
+            // updates. The worker and this callback compete for the same slot.
+            let _ = self.schedule_pending_frame();
         }
     }
 }
 
 impl TerminalViewState {
-    pub(super) fn apply_pending_frame(&self) {
-        let update = self
+    pub(super) fn apply_pending_frame(&self) -> bool {
+        let Some(update) = self
             .pending_update
             .lock()
             .expect("terminal pending update lock poisoned")
-            .take();
+            .take()
+        else {
+            return false;
+        };
         let raw = self.raw.load(Ordering::Acquire);
         if raw.is_null() {
-            return;
+            return false;
         }
-        if let Some(update) = update {
-            let mut last_applied = self
-                .last_applied_frame
-                .lock()
-                .expect("terminal last applied frame lock poisoned");
-            apply_terminal_frame(
-                raw,
-                &update.frame,
-                last_applied.as_ref(),
-                self.honor_application_cursor_style.load(Ordering::Acquire),
-            );
-            match update.selection {
-                TerminalSelectionUpdate::Preserve => {}
-                TerminalSelectionUpdate::Set(selection) => unsafe {
-                    sys::oneui_terminal_view_set_selection(
-                        raw,
-                        selection.start_row,
-                        selection.start_column,
-                        selection.end_row,
-                        selection.end_column,
-                    )
-                },
-                TerminalSelectionUpdate::Clear => unsafe {
-                    sys::oneui_terminal_view_clear_selection(raw)
-                },
-            }
-            *last_applied = Some(update.frame);
+        let mut last_applied = self
+            .last_applied_frame
+            .lock()
+            .expect("terminal last applied frame lock poisoned");
+        apply_terminal_frame(
+            raw,
+            &update.frame,
+            last_applied.as_ref(),
+            self.honor_application_cursor_style.load(Ordering::Acquire),
+        );
+        match update.selection {
+            TerminalSelectionUpdate::Preserve => {}
+            TerminalSelectionUpdate::Set(selection) => unsafe {
+                sys::oneui_terminal_view_set_selection(
+                    raw,
+                    selection.start_row,
+                    selection.start_column,
+                    selection.end_row,
+                    selection.end_column,
+                )
+            },
+            TerminalSelectionUpdate::Clear => unsafe {
+                sys::oneui_terminal_view_clear_selection(raw)
+            },
         }
+        *last_applied = Some(update.frame);
+        true
     }
 }
