@@ -7,6 +7,8 @@
 
 #include <array>
 #include <chrono>
+#include <string_view>
+#include <unordered_map>
 #include <utility>
 
 namespace oneui::internal {
@@ -25,6 +27,8 @@ enum class GlPhase : std::size_t {
     Uniform, BufferMap, VertexSetup, Framebuffer, TextureState, RasterState, Count
 };
 
+enum class GlTextureKind { Other, TextAtlas, SmallPathAtlas };
+
 class GlCallTrace {
     struct Sample {
         double milliseconds = 0.0;
@@ -35,6 +39,7 @@ class GlCallTrace {
         GrGLint x, y;
         GrGLsizei width, height;
         GrGLenum format, type;
+        GlTextureKind kind;
     };
 
     static inline thread_local GlCallTrace* active_ = nullptr;
@@ -78,8 +83,8 @@ public:
 
     public:
         TextureUploadSpan(GrGLint x, GrGLint y, GrGLsizei width, GrGLsizei height,
-                          GrGLenum format, GrGLenum type)
-            : upload_{0.0, x, y, width, height, format, type} {
+                          GrGLenum format, GrGLenum type, GlTextureKind kind)
+            : upload_{0.0, x, y, width, height, format, type, kind} {
             if (trace_) start_ = Clock::now();
         }
 
@@ -137,6 +142,7 @@ public:
             event.velocity = slowestUpload_.height;
             event.intervalMs = slowestUpload_.format;
             event.maxOffset = slowestUpload_.type;
+            event.detailB = static_cast<int>(slowestUpload_.kind);
             writeScrollTrace(event);
         }
     }
@@ -146,6 +152,71 @@ public:
 // functions. Windows may expose different function pointers by GL context.
 class TracedWin32GlInterface final : public GrGLInterface {
     sk_sp<const GrGLInterface> native_;
+
+    // Store Skia's existing labels in the tracing interface. Avoid querying GL
+    // state during the measured call since a query can itself wait in the driver.
+    static constexpr GrGLenum texture0_ = 0x84C0;
+    static constexpr GrGLenum texture2D_ = 0x0DE1;
+    static constexpr GrGLenum textureObject_ = 0x1702;
+    GrGLenum activeTextureUnit_ = texture0_;
+    std::unordered_map<GrGLenum, GrGLuint> texture2DBindings_;
+    std::unordered_map<GrGLuint, GlTextureKind> atlasKinds_;
+
+    GlTextureKind boundTextureKind(GrGLenum target) const {
+        if (target != texture2D_) return GlTextureKind::Other;
+        const auto binding = texture2DBindings_.find(activeTextureUnit_);
+        if (binding == texture2DBindings_.end()) return GlTextureKind::Other;
+        const auto atlas = atlasKinds_.find(binding->second);
+        return atlas == atlasKinds_.end() ? GlTextureKind::Other : atlas->second;
+    }
+
+    void labelTexture(GrGLenum identifier, GrGLuint id, GrGLsizei length, const GrGLchar* label) {
+        if (identifier != textureObject_) return;
+        auto name = label ? std::string_view(label, length < 0 ? std::char_traits<char>::length(label)
+                                                              : static_cast<std::size_t>(length))
+                          : std::string_view{};
+        constexpr std::string_view prefix = "_Skia_";
+        if (name.substr(0, prefix.size()) == prefix) name.remove_prefix(prefix.size());
+        if (name == "TextAtlas") atlasKinds_[id] = GlTextureKind::TextAtlas;
+        else if (name == "SmallPathAtlas") atlasKinds_[id] = GlTextureKind::SmallPathAtlas;
+        else atlasKinds_.erase(id);
+    }
+
+    void wrapTextureState() {
+        if (fFunctions.fActiveTexture) {
+            fFunctions.fActiveTexture = [this](GrGLenum unit) {
+                activeTextureUnit_ = unit;
+                const GlCallTrace::Span timer(GlPhase::TextureState);
+                native_->fFunctions.fActiveTexture(unit);
+            };
+        }
+        if (fFunctions.fBindTexture) {
+            fFunctions.fBindTexture = [this](GrGLenum target, GrGLuint id) {
+                if (target == texture2D_) texture2DBindings_[activeTextureUnit_] = id;
+                const GlCallTrace::Span timer(GlPhase::TextureState);
+                native_->fFunctions.fBindTexture(target, id);
+            };
+        }
+        if (fFunctions.fObjectLabel) {
+            fFunctions.fObjectLabel = [this](GrGLenum identifier, GrGLuint id, GrGLsizei length,
+                                             const GrGLchar* label) {
+                labelTexture(identifier, id, length, label);
+                native_->fFunctions.fObjectLabel(identifier, id, length, label);
+            };
+        }
+        if (fFunctions.fDeleteTextures) {
+            fFunctions.fDeleteTextures = [this](GrGLsizei count, const GrGLuint* ids) {
+                for (GrGLsizei i = 0; i < count; ++i) {
+                    atlasKinds_.erase(ids[i]);
+                    for (auto& binding : texture2DBindings_) {
+                        if (binding.second == ids[i]) binding.second = 0;
+                    }
+                }
+                native_->fFunctions.fDeleteTextures(count, ids);
+            };
+        }
+    }
+
 
     template <GlPhase Phase, auto Function>
     void wrap() {
@@ -185,15 +256,14 @@ public:
         wrap<GlPhase::TextureAllocate, &Functions::fTexImage2D>();
         wrap<GlPhase::TextureAllocate, &Functions::fTexStorage2D>();
         if (fFunctions.fTexSubImage2D) {
-            fFunctions.fTexSubImage2D = [native = native_.get()](GrGLenum target, GrGLint level,
+            fFunctions.fTexSubImage2D = [this](GrGLenum target, GrGLint level,
                     GrGLint x, GrGLint y, GrGLsizei width, GrGLsizei height, GrGLenum format,
                     GrGLenum type, const GrGLvoid* data) {
-                const GlCallTrace::TextureUploadSpan timer(x, y, width, height, format, type);
-                native->fFunctions.fTexSubImage2D(target, level, x, y, width, height, format, type, data);
+                const GlCallTrace::TextureUploadSpan timer(x, y, width, height, format, type, boundTextureKind(target));
+                native_->fFunctions.fTexSubImage2D(target, level, x, y, width, height, format, type, data);
             };
         }
-        wrap<GlPhase::TextureState, &Functions::fActiveTexture>();
-        wrap<GlPhase::TextureState, &Functions::fBindTexture>();
+        wrapTextureState();
         wrap<GlPhase::TextureState, &Functions::fTexParameteri>();
         wrap<GlPhase::BufferUpload, &Functions::fBufferData>();
         wrap<GlPhase::BufferUpload, &Functions::fBufferSubData>();
