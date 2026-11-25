@@ -70,7 +70,14 @@ void MediaPreview::setPosition(const std::string& value) {
     auto found=positions.find(value);if(found==positions.end())throw std::invalid_argument("Invalid media position");
     state_->image->setContentAlignment(found->second.first,found->second.second);
 }
-void MediaPreview::setOpacity(float value){if(!std::isfinite(value)||value<0||value>1)throw std::invalid_argument("Invalid media opacity");state_->opacity=value;invalidate();}
+void MediaPreview::setOpacity(float value) {
+    if (!std::isfinite(value) || value < 0.0f || value > 1.0f) {
+        throw std::invalid_argument("Invalid media opacity");
+    }
+    if (state_->opacity == value) return;
+    state_->opacity = value;
+    invalidate();
+}
 void MediaPreview::setOnLoadFailed(std::function<void(std::string,std::string,std::string)> callback){state_->failed=std::move(callback);}
 void MediaPreview::setSlot(const std::string& name,std::shared_ptr<Widget> child) {
     if(name!="empty"&&name!="error"&&name!="loading")throw std::invalid_argument("Invalid media preview slot");
