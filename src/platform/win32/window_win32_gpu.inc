@@ -76,14 +76,11 @@
 
         if (const auto* device = glGetString(GL_RENDERER))
             rendererInfo_.device = reinterpret_cast<const char*>(device);
-        if (const auto* vendor = glGetString(GL_VENDOR))
-            nvidiaDriver_ = std::strstr(reinterpret_cast<const char*>(vendor), "NVIDIA") != nullptr;
+        nvidiaDriver_ = internal::win32GlNvidiaVendor();
         traceGpu("context-current");
         GrContextOptions contextOptions;
         contextOptions.fPersistentCache = rendering::shaderCache();
-        grContext_ = internal::win32GlTraceEnabled()
-            ? GrDirectContexts::MakeGL(internal::makeWin32GlTraceInterface(), contextOptions)
-            : GrDirectContexts::MakeGL(contextOptions);
+        grContext_ = GrDirectContexts::MakeGL(internal::makeWin32GaneshGlInterface(nvidiaDriver_), contextOptions);
         if (!grContext_) {
             rendererInfo_.reason = "ganesh-context-failed";
             traceGpu("ganesh-context-failed");

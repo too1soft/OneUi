@@ -1,5 +1,6 @@
 #include "window_win32_gpu_warmup.h"
 
+#include "gl_flush_trace_win32.h"
 #include "internal/scroll_trace.h"
 #include "platform/shared/skia_gl_setup.h"
 
@@ -100,7 +101,8 @@ bool warmColorQuadProgram() {
 
     GrContextOptions options;
     options.fPersistentCache = cache;
-    auto context = GrDirectContexts::MakeGL(options);
+    auto context = GrDirectContexts::MakeGL(
+        internal::makeWin32GaneshGlInterface(internal::win32GlNvidiaVendor()), options);
     if (!context) return false;
     auto surface = SkSurfaces::RenderTarget(context.get(), skgpu::Budgeted::kYes,
         SkImageInfo::Make(32, 32, kBGRA_8888_SkColorType, kPremul_SkAlphaType),
@@ -142,10 +144,7 @@ bool nvidiaWindowDisplayOrigin(HWND window, POINT& origin) {
 
 bool warmNvidiaDriverThreadCensus(HDC dc) {
     const bool tracing = internal::scrollTraceEnabled();
-    if (!traceCensusStep(tracing, "wgl_census_vendor", [] {
-        const auto* vendor = reinterpret_cast<const char*>(glGetString(GL_VENDOR));
-        return vendor && std::strstr(vendor, "NVIDIA");
-    })) return false;
+    if (!traceCensusStep(tracing, "wgl_census_vendor", internal::win32GlNvidiaVendor)) return false;
     if (!traceCensusStep(tracing, "wgl_census_swaps", [dc] {
         for (int i = 0; i < 2; ++i) {
             glClear(GL_COLOR_BUFFER_BIT);

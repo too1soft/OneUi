@@ -73,9 +73,8 @@ public:
         const auto ganeshStarted = now();
         GrContextOptions options;
         options.fPersistentCache = rendering::shaderCache();
-        context_ = internal::win32GlTraceEnabled()
-            ? GrDirectContexts::MakeGL(internal::makeWin32GlTraceInterface(), options)
-            : GrDirectContexts::MakeGL(options);
+        context_ = GrDirectContexts::MakeGL(
+            internal::makeWin32GaneshGlInterface(internal::win32GlNvidiaVendor()), options);
         trace("wgl_worker_ganesh_context", ganeshStarted, static_cast<bool>(context_));
         return static_cast<bool>(context_);
     }

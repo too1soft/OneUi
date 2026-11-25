@@ -168,9 +168,8 @@ std::unique_ptr<PreparedStartupGl> DeferredStartupGl::prepare(POINT origin, HMON
     if (!censusWarmed) return nullptr;
     GrContextOptions options;
     options.fPersistentCache = rendering::shaderCache();
-    auto ganesh = internal::win32GlTraceEnabled()
-        ? GrDirectContexts::MakeGL(internal::makeWin32GlTraceInterface(), options)
-        : GrDirectContexts::MakeGL(options);
+    auto ganesh = GrDirectContexts::MakeGL(
+        internal::makeWin32GaneshGlInterface(internal::win32GlNvidiaVendor()), options);
     if (!ganesh) return nullptr;
     trace("deferred_gl_worker_context", started);
 
