@@ -153,17 +153,26 @@ inline bool StyleRegistry::evaluateQuery(const std::shared_ptr<Stack>& container
             oneui::detail::appendStyleClasses(node.classes, entry.classes);
             return node;
         };
-        std::map<const Widget*,const Entry*> entries;
-        std::map<const Widget*,std::shared_ptr<View>> parents;
-        for(const auto& entry:entries_)if(auto widget=entry.widget.lock()) {
-            entries.emplace(widget.get(),&entry);
-            if(auto view=std::dynamic_pointer_cast<View>(widget))for(auto& child:view->children())parents[child.get()]=view;
-        }
-        auto base=sheet_.resolve(nodeFor(*entries.at(container.get())));
+        const auto* containerEntry = indexedEntry(container);
+        if (!containerEntry) return reject("CONTAINER_SIZE: container is no longer registered");
+        const auto containerNode = nodeFor(*containerEntry);
+        auto base=sheet_.resolve(containerNode);
         for(const auto& rule:sheet_.rules())if(rule.query&&rule.query->name==base.containerName &&
-            selectorMatches(rule.selector,nodeFor(*entries.at(container.get()))))
+            selectorMatches(rule.selector,containerNode))
             return reject("CONTAINER_DEPENDENCY: a container cannot query its own size");
-        auto parent=std::dynamic_pointer_cast<Stack>(parents[container.get()]);
+
+        // Style registrations already have a retained index. Read live parent
+        // relationships separately so reparenting still applies immediately.
+        std::unordered_map<const Widget*, std::shared_ptr<View>> parents;
+        parents.reserve(entries_.size());
+        for (const auto& entry : entries_)
+            if (auto view = std::dynamic_pointer_cast<View>(entry.widget.lock()))
+                for (const auto& child : view->children()) parents[child.get()] = view;
+        const auto parentOf = [&parents](const Widget* widget) {
+            const auto found = parents.find(widget);
+            return found == parents.end() ? nullptr : found->second;
+        };
+        auto parent=std::dynamic_pointer_cast<Stack>(parentOf(container.get()));
         if(parent) {
             auto flex=parent->explicitFlex(container);bool column=parent->direction()==StackDirection::Column;
             bool main=bool(column?base.height:base.width)||(flex&&(flex->basis.has_value()||flex->grow>0));
@@ -172,19 +181,30 @@ inline bool StyleRegistry::evaluateQuery(const std::shared_ptr<Stack>& container
         }
         std::map<std::string,Size> sizes;
         std::vector<std::shared_ptr<Widget>> ancestors;
-        for(std::shared_ptr<Widget> widget=container;widget;) {
-            ancestors.push_back(widget);auto found=parents.find(widget.get());widget=found==parents.end()?nullptr:found->second;
-        }
-        for(auto it=ancestors.rbegin();it!=ancestors.rend();++it)if(entries.count(it->get())) {
-            auto box=sheet_.resolve(nodeFor(*entries.at(it->get())));
-            if(box.containerName) {
-                auto frame=(*it)->frame();auto border=std::max(0.f,box.borderWidth.value_or(0));
-                sizes[*box.containerName]={std::max(0.f,frame.width-2*border),std::max(0.f,frame.height-2*border)};
+        for (std::shared_ptr<Widget> widget = container; widget; widget = parentOf(widget.get()))
+            ancestors.push_back(widget);
+        for (auto it = ancestors.rbegin(); it != ancestors.rend(); ++it) {
+            if (const auto* entry = indexedEntry(*it)) {
+                const auto box = it->get() == container.get() ? base : sheet_.resolve(nodeFor(*entry));
+                if (box.containerName) {
+                    const auto bounds = (*it)->frame();
+                    const auto border = std::max(0.f, box.borderWidth.value_or(0));
+                    sizes[*box.containerName] = {std::max(0.f, bounds.width-2*border),
+                                                 std::max(0.f, bounds.height-2*border)};
+                }
             }
         }
         std::vector<bool> matches;
-        for(const auto& rule:sheet_.rules())if(rule.query) {
-            auto size=sizes.find(rule.query->name);matches.push_back(size!=sizes.end()&&rule.query->matches(size->second));
+        matches.reserve(state.matches.size());
+        const ContainerQuery* previous = nullptr;
+        bool matched = false;
+        for (const auto& rule : sheet_.rules()) if (const auto* query = rule.query.get()) {
+            if (query != previous) {
+                previous = query;
+                const auto size = sizes.find(query->name);
+                matched = size != sizes.end() && query->matches(size->second);
+            }
+            matches.push_back(matched);
         }
         state.measured={frame.width,frame.height};
         if(state.version==sheet_.version()&&state.treeVersion==treeVersion_&&matches==state.matches)return false;
@@ -198,9 +218,9 @@ inline bool StyleRegistry::evaluateQuery(const std::shared_ptr<Stack>& container
         std::vector<Pending> pending;
         std::vector<std::shared_ptr<Widget>> work(container->children().begin(),container->children().end());
         while(!work.empty()) {
-            auto widget=work.back();work.pop_back();auto found=entries.find(widget.get());bool nested=false;
-            if(found!=entries.end()) {
-                auto node=nodeFor(*found->second);auto box=effective.resolve(node);auto unconditional=sheet_.resolve(node);
+            auto widget=work.back();work.pop_back();bool nested=false;
+            if (const auto* entry = indexedEntry(widget)) {
+                auto node=nodeFor(*entry);auto box=effective.resolve(node);auto unconditional=sheet_.resolve(node);
                 nested=bool(unconditional.containerName);
                 if(nested&&!(unconditional.width&&unconditional.height))
                     return reject("CONTAINER_DEPENDENCY: nested query containers require fixed independent width and height");
@@ -212,7 +232,7 @@ inline bool StyleRegistry::evaluateQuery(const std::shared_ptr<Stack>& container
                 }
                 if((box.flexDirection||box.flexWrap)&&!std::dynamic_pointer_cast<Stack>(widget))
                     return reject("CONTAINER_CONSUMPTION: layout output requires Stack");
-                pending.push_back({found->second,std::move(box),std::dynamic_pointer_cast<Stack>(parents[widget.get()]),effective.resolveLayout(node)});
+                pending.push_back({entry,std::move(box),std::dynamic_pointer_cast<Stack>(parentOf(widget.get())),effective.resolveLayout(node)});
             }
             if(!nested)if(auto view=std::dynamic_pointer_cast<View>(widget))for(auto& child:view->children())work.push_back(child);
         }
