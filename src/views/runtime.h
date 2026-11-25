@@ -158,6 +158,8 @@ struct Runtime : std::enable_shared_from_this<Runtime> {
     std::string externalCss;
     ui::Density density = ui::Density::Comfortable;
     bool closing = false, closed = false, building = true, flushing = false, scheduled = false;
+    // A successful flush can consume work before the dispatcher reaches it.
+    bool lastFlushCompleted = false;
     unsigned depth = 0;
     bool staging = false;
     std::vector<std::function<void()>> commits, rollbacks;

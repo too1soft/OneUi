@@ -125,6 +125,9 @@ void Mount::publish(const std::shared_ptr<Runtime> &view) {
                 auto view = runtime.lock();
                 if (!mount || mount->closed || !view || view->closing)
                     return;
+                // A synchronous flush can finish while this message is queued.
+                if (!view->scheduled && view->lastFlushCompleted)
+                    return;
                 if (callbackRuntime) {
                     view->scheduled = false;
                     callbackRuntime->deferredSchedules.push_back(view);

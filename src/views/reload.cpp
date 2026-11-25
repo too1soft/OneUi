@@ -79,6 +79,8 @@ void Runtime::reload(oneview::Image replacement) {
             for(auto &scope:scopes)if(!scope->closed)notify(scope,0);
             flush();
         }
+        // The replacement tree can produce more work after the preparatory flush.
+        lastFlushCompleted = false;
         Candidate candidate(*this,replacement);
         {
             Callback lease(*this,Phase::Read);

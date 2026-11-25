@@ -165,7 +165,10 @@ void Runtime::flush() {
                 set(scope,write.property,write.replacement);changed=true;
             }
         }
-        if(!changed)return;
+        if (!changed) {
+            lastFlushCompleted = true;
+            return;
+        }
     }
     throw Failure(ONEUI_VIEW_LIMIT,"Selection normalization failed to converge");
 }
@@ -174,6 +177,7 @@ void Runtime::flushPass() {
     alive();
     check(!depth && !flushing && callbackPhase == Phase::Idle, ONEUI_VIEW_REENTRANT,
           "Flush during callback/transaction");
+    lastFlushCompleted = false;
     flushing = true;
     scheduled = false;
     auto sequence = error.sequence;
