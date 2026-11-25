@@ -19,6 +19,7 @@
     // 退回 SetWindowRgn 裁一个圆角矩形区域。最大化/全屏时取消圆角（方正铺满）。
     void setCornerRadius(float radiusLogical) override {
         cornerRadiusLogical_ = radiusLogical > 0.0f ? radiusLogical : 0.0f;
+        sizeIndependentCornerPreference_ = 0;
         applyRoundedCorners();
     }
 
@@ -28,24 +29,26 @@
         }
         // Win11：DWMWA_WINDOW_CORNER_PREFERENCE = 33，DWMWCP_ROUND = 2 / DWMWCP_DONOTROUND = 1。
         const DWORD attr = 33;
-        DWORD pref = (cornerRadiusLogical_ > 0.0f) ? 2 : 1;
+        const DWORD pref = (cornerRadiusLogical_ > 0.0f) ? 2 : 1;
+        // DWM rounding and explicit square corners survive a size change.
+        // Clearing a window region generates more window-position messages.
+        if (sizeIndependentCornerPreference_ == pref) return;
         const bool dwmRounded = SUCCEEDED(DwmSetWindowAttribute(hwnd_, attr, &pref, sizeof(pref)));
 
         const bool square = cornerRadiusLogical_ <= 0.0f || borderlessMaximized_ || options_.fullscreen;
-        if (dwmRounded) {
-            // Win11 由 DWM 负责圆角（抗锯齿 + 自带柔和投影），清掉可能残留的区域与伴随投影。
-            SetWindowRgn(hwnd_, nullptr, TRUE);
+        if (dwmRounded || square) {
+            // A maximized/fullscreen fallback can need a clipped region again
+            // on restore, even when its requested preference is unchanged.
+            // SetWindowRgn can dispatch messages synchronously.
+            sizeIndependentCornerPreference_ =
+                dwmRounded || cornerRadiusLogical_ <= 0.0f ? pref : 0;
+            if (!SetWindowRgn(hwnd_, nullptr, TRUE)) sizeIndependentCornerPreference_ = 0;
             shadowActive_ = false;
             updateShadowWindow();
             return;
         }
+        sizeIndependentCornerPreference_ = 0;
         // Win10 回退：用圆角矩形区域裁剪窗口。
-        if (square) {
-            SetWindowRgn(hwnd_, nullptr, TRUE);
-            shadowActive_ = false;
-            updateShadowWindow();
-            return;
-        }
         RECT rc{};
         if (!GetWindowRect(hwnd_, &rc)) {
             return;

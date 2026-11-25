@@ -317,6 +317,10 @@
             animationFrameMonitor_ = nullptr;
             animationFrameIntervalMs_ = 1000.0 / 60.0;
             return 0;
+        case WM_DWMCOMPOSITIONCHANGED:
+            sizeIndependentCornerPreference_ = 0;
+            applyRoundedCorners();
+            return DefWindowProcW(hwnd_, message, wParam, lParam);
         case WM_SHOWWINDOW:
 #if ONEUI_DEVELOPER_TOOLS
             if(developerTools_)developerTools_->resetCadence();
@@ -508,6 +512,7 @@
             internal::forgetInteractionWindow(reinterpret_cast<std::uintptr_t>(destroyedHwnd));
             SetWindowLongPtrW(hwnd_, GWLP_USERDATA, 0);
             hwnd_ = nullptr;
+            sizeIndependentCornerPreference_ = 0;
             win32::unregisterNativeWindow();
             publishClosed();
             return DefWindowProcW(destroyedHwnd, message, wParam, lParam);

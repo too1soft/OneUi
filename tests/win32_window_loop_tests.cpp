@@ -73,6 +73,48 @@ void testMoveDoesNotPublishWindowState() {
     expectTrue("Window state move test finishes normally", window->run() == 0);
 }
 
+void testSquareResizeDoesNotReapplyWindowRegion() {
+    struct ResizeProbe {
+        WNDPROC previous = nullptr;
+        unsigned resizeDepth = 0;
+        unsigned sizes = 0;
+        unsigned nestedPositions = 0;
+
+        static LRESULT CALLBACK observe(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
+            auto& probe = *static_cast<ResizeProbe*>(GetPropW(hwnd, L"OneUIResizeProbe"));
+            if (message == WM_WINDOWPOSCHANGED && probe.resizeDepth)
+                ++probe.nestedPositions;
+            if (message != WM_SIZE)
+                return CallWindowProcW(probe.previous, hwnd, message, wParam, lParam);
+            ++probe.resizeDepth;
+            ++probe.sizes;
+            const auto result = CallWindowProcW(probe.previous, hwnd, message, wParam, lParam);
+            --probe.resizeDepth;
+            return result;
+        }
+    } probe;
+    auto window = hiddenWindow();
+    const auto hwnd = static_cast<HWND>(window->nativeHandle());
+    window->setCornerRadius(0.0f);
+    if (!SetPropW(hwnd, L"OneUIResizeProbe", &probe)) {
+        expectTrue("Resize probe installed", false);
+        return;
+    }
+    probe.previous = reinterpret_cast<WNDPROC>(
+        SetWindowLongPtrW(hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(&ResizeProbe::observe)));
+    if (probe.previous) {
+        for (int step = 0; step < 4; ++step) {
+            expectTrue("Square window can still resize",
+                SetWindowPos(hwnd, nullptr, 0, 0, 700 + 20 * step, 540,
+                    SWP_NOMOVE | SWP_NOACTIVATE | SWP_NOZORDER) != FALSE);
+        }
+        SetWindowLongPtrW(hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(probe.previous));
+    }
+    RemovePropW(hwnd, L"OneUIResizeProbe");
+    expectTrue("Resize still delivers every size notification", probe.sizes == 4);
+    expectTrue("Square corners avoid redundant nested window-position notifications", probe.nestedPositions == 0);
+}
+
 void testPointerRestoresAfterTextInputAndContentChanges() {
     class CursorSurface final : public oneui::Widget {
     public:
@@ -432,6 +474,7 @@ int main() {
     testPointerRestoresAfterTextInputAndContentChanges();
     testSettingChangeHasDefinedResult();
     testMoveDoesNotPublishWindowState();
+    testSquareResizeDoesNotReapplyWindowRegion();
     testOtherThreadDoesNotPreventExit();
     testAlreadyClosedWindowReturns();
     testNestedLoopPropagatesQuit();

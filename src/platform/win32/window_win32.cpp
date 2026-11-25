@@ -210,6 +210,7 @@ public:
     bool placementStatePending_ = false;
     bool pendingMaximized_ = false;
     float cornerRadiusLogical_ = 0.0f;
+    DWORD sizeIndependentCornerPreference_ = 0;
     bool closeToTray_ = false;
     bool trayEnabled_ = false;
     std::vector<TrayMenuItem> trayMenu_;
