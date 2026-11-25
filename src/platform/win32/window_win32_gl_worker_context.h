@@ -37,7 +37,7 @@ public:
         if (dc_) ReleaseDC(window_, dc_);
     }
 
-    bool initialize(bool warmDriver) {
+    bool initialize(bool warmDriver, double* censusFinishMs = nullptr) {
         if (!dc_) return false;
         const bool tracing = internal::scrollTraceEnabled();
         const auto now = [tracing] { return tracing ? internal::scrollTraceNowMs() : 0.0; };
@@ -61,7 +61,7 @@ public:
         const bool bound = wglMakeCurrent(dc_, gl_) != FALSE;
         trace("wgl_worker_bind_context", bindStarted, bound);
         if (!bound) return false;
-        if (warmDriver) warmDriverCensus();
+        if (warmDriver) warmDriverCensus(censusFinishMs);
         const auto ganeshStarted = now();
         GrContextOptions options;
         options.fPersistentCache = rendering::shaderCache();
@@ -71,14 +71,15 @@ public:
         return static_cast<bool>(context_);
     }
 
-    void warmDriverCensus() {
+    void warmDriverCensus(double* finishMs = nullptr) {
         static const bool skip = [] {
             wchar_t value[2]{};
             return GetEnvironmentVariableW(L"ONEUI_WIN32_GL_WORKER_SKIP_CENSUS", value, 2) == 1 &&
                 value[0] == L'1';
         }();
         if (!skip) {
-            warmNvidiaDriverThreadCensus(dc_);
+            if (context_ && !prepareScratchDrawable()) return;
+            warmNvidiaDriverThreadCensus(dc_, finishMs);
         } else if (internal::scrollTraceEnabled()) {
             internal::writeScrollTrace(internal::ScrollTraceEvent{
                 "win32", "wgl_worker_census_skipped", 0, 0, 0, 0, 0, 0, 0, 0.0, 1.0, 0});
@@ -217,6 +218,20 @@ public:
     }
 
 private:
+    bool prepareScratchDrawable() {
+        const auto binding = wglGetProcAddress("glBindFramebuffer");
+        const auto address = reinterpret_cast<std::uintptr_t>(binding);
+        if (address <= 3 || address == UINTPTR_MAX) return false;
+        using BindFramebuffer = void (APIENTRY*)(GLenum, GLuint);
+        constexpr GLenum framebuffer = 0x8D40; // GL_FRAMEBUFFER
+        reinterpret_cast<BindFramebuffer>(binding)(framebuffer, 0);
+        glDrawBuffer(GL_BACK);
+        glDisable(GL_SCISSOR_TEST);
+        glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+        context_->resetContext();
+        return true;
+    }
+
     bool matchesClient(int width, int height) const {
         RECT bounds{};
         return GetClientRect(window_, &bounds) &&
