@@ -238,6 +238,7 @@ set(ONEUI_WIN32_SOURCES
     src/platform/win32/window_win32.cpp
     src/platform/win32/window_win32_gpu_warmup.cpp
     src/platform/win32/window_win32_deferred_gl.cpp
+    src/platform/win32/window_win32_gl_worker.cpp
 )
 
 # Modern SkCodec headers contain C++20 designated initializers. Keep this

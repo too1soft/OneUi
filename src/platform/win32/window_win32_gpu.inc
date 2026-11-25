@@ -25,6 +25,19 @@
             return;
         }
 
+        POINT origin{};
+        if (win32::experimentalGlWorkerEnabled() && win32::nvidiaWindowDisplayOrigin(hwnd_, origin)) {
+            if (win32::experimentalGlWorkerAfterFirstFrame()) {
+                glWorkerWaitingForSoftwareFrame_ = true;
+                rendererInfo_.reason = "opengl-worker-waiting-for-software-frame";
+                return;
+            }
+            if (glWorker_.start(hwnd_)) {
+                rendererInfo_.reason = "opengl-worker-starting";
+                return;
+            }
+        }
+
         glDC_ = GetDC(hwnd_);
         if (!glDC_) { rendererInfo_.reason = "window-dc-failed"; return; }
 
@@ -155,6 +168,11 @@
     }
 
     void shutdownGPU() {
+        glWorkerWaitingForSoftwareFrame_ = false;
+        const internal::InteractionSnapshot shutdownTrace{reinterpret_cast<std::uintptr_t>(hwnd_)};
+        internal::traceInteractionPaint(shutdownTrace, "worker_stop_begin");
+        glWorker_.stop();
+        internal::traceInteractionPaint(shutdownTrace, "worker_stop_end");
         // Each top-level window owns an independent GL context. Destruction
         // can arrive while a different window was the last one to paint.
         const HGLRC previousContext = wglGetCurrentContext();

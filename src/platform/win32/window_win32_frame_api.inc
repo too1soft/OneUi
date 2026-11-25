@@ -10,7 +10,7 @@
     // USER lock (20-50 ms observed while a new console host started). They
     // are merged here and submitted once per message turn; anything that
     // paints or reads the update region submits the pending rect first.
-    void queueInvalidation(const RECT* rect) {
+    void mergeInvalidation(const RECT* rect) {
         if (rect) {
             if (!invalidateAll_) {
                 if (invalidationPending_) {
@@ -22,17 +22,35 @@
         } else {
             invalidateAll_ = true;
         }
-        if (!invalidationPending_) {
+        invalidationPending_ = true;
+    }
+
+    void queueInvalidation(const RECT* rect) {
+        const bool wasPending = invalidationPending_;
+        mergeInvalidation(rect);
+        if (!wasPending) {
             traceLiveResizeDamage("resize_widget_damage", !rect);
-            invalidationPending_ = true;
             if (!PostMessageW(hwnd_, kOneUiFlushInvalidations, 0, 0)) {
                 submitInvalidations();
             }
         }
     }
 
+    bool workerRecordingBlocked() {
+        return glWorker_.ready() && win32::experimentalGlWorkerPacesRecording() && glWorker_.deferRecording();
+    }
+
+    void invalidateWorkerExtent() {
+        if (!glWorker_.ready()) return;
+        glWorker_.invalidateExtent();
+        if (invalidationPending_ && win32::experimentalGlWorkerPacesRecording()) {
+            mergeInvalidation(nullptr);
+            InvalidateRect(hwnd_, nullptr, FALSE);
+        }
+    }
+
     void submitInvalidations() {
-        if (!invalidationPending_) {
+        if (!invalidationPending_ || workerRecordingBlocked()) {
             return;
         }
         invalidationPending_ = false;
