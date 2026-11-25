@@ -1,10 +1,22 @@
 #include "terminal_view_helpers.h"
+#include "internal/scroll_trace.h"
+#include <cstdlib>
 #include <cmath>
 
 namespace oneui {
 using namespace terminal_detail;
 
 namespace {
+bool traceTerminalEchoProbe() {
+    static const bool enabled = std::getenv("ONEUI_TERMINAL_ECHO_PROBE") != nullptr;
+    return enabled && internal::scrollTraceEnabled();
+}
+
+bool isTerminalEchoCell(const TerminalCell* cell, wchar_t glyph) {
+    return cell && cell->background.r == 241 && cell->background.g == 3 &&
+        cell->background.b == 179 && cell->text.size() == 1 && cell->text.front() == glyph;
+}
+
 Color selectionForeground(Color selection, Color background) {
     // Selection replaces a cell's background, so retaining an ANSI foreground
     // can make ordinary light-theme text disappear on the default blue fill.
@@ -394,6 +406,22 @@ void TerminalView::paint(Canvas& canvas) {
     }
     const auto thumb = scrollbackThumbRect();
     if (thumb.height > 0.0f) canvas.fillRect(thumb, Color{foreground_.r, foreground_.g, foreground_.b, static_cast<std::uint8_t>(draggingScrollback_ ? 110 : 65)}, 3.0f);
+    if (traceTerminalEchoProbe() && firstRow == 0 && firstColumn <= 3 && lastColumn >= 9) {
+        constexpr wchar_t marker[] = L"ECHO-";
+        for (std::uint16_t i = 0; i < 5; ++i)
+            if (!isTerminalEchoCell(cellAt(0, 3 + i), marker[i])) return;
+        const auto* keyCell = cellAt(0, 8);
+        if (!keyCell || keyCell->text.empty()) return;
+        const wchar_t key = keyCell->text.front();
+        if (key >= L'a' && key <= L'z' && isTerminalEchoCell(keyCell, key)) {
+            internal::ScrollTraceEvent event;
+            event.component = "terminal";
+            event.phase = "fixture_echo_drawn";
+            event.object = reinterpret_cast<std::uintptr_t>(this);
+            event.detailA = key;
+            internal::writeScrollTrace(event);
+        }
+    }
 }
 
 } // namespace oneui
