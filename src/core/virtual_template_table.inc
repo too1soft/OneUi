@@ -25,11 +25,15 @@ void VirtualTemplateList::layoutInTable(Rect content, Rect viewport) {
         tableLayoutPending_ = true;
     tableClip_ = viewport;
     setFrame(content);
-    layoutChildren();
+    // Scroll setters also run during declarative commits. Build row trees
+    // from the next paint or input layout, after their model is published.
 }
 
 void VirtualTemplateList::layoutTableRows() {
     if (!tableLayoutPending_ && tableLayoutVisible_ == visible()) return;
+    const bool tracing = internal::scrollTraceEnabled();
+    const double started = tracing ? internal::scrollTraceNowMs() : 0.0;
+    size_t created = 0;
     tableLayoutVisible_ = visible();
     auto content = frame().inset(tableInsets_);
     content.width = std::max(0.0f, content.width);
@@ -44,12 +48,21 @@ void VirtualTemplateList::layoutTableRows() {
         const auto last = std::min(keys_.size() - 1, lastVisible + overscan_);
         for (auto i = first; i <= last; ++i) {
             if (tops_[i + 1] == tops_[i]) continue;
-            if (!mounted_.count(keys_[i])) mountRow(i);
+            if (!mounted_.count(keys_[i])) {
+                mountRow(i);
+                ++created;
+            }
             keep.insert(keys_[i]);
         }
     }
     publishRows(std::move(keep), content, 0.0f);
     tableLayoutPending_ = false;
+    if (tracing && !mounted_.empty()) {
+        internal::writeScrollTrace(internal::ScrollTraceEvent{
+            "virtual_template", "table_layout", reinterpret_cast<std::uintptr_t>(this),
+            tableClip_.height, top, tops_.back(), static_cast<double>(mounted_.size()), 0, 0,
+            internal::scrollTraceNowMs() - started, static_cast<double>(created), content.y});
+    }
 }
 
 bool VirtualTemplateList::focusTableRow(bool backwards, bool fromBoundary) {
