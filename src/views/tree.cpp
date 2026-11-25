@@ -3,6 +3,8 @@
 #include "components/instance.h"
 #include "oneui/layout/pane_grid.h"
 #include "oneui/layout/dock_workspace_view.h"
+#include "internal/scroll_trace.h"
+#include <cstdlib>
 namespace oneui::views {
 using namespace oneview;
 namespace timing = oneui::detail::view_mount_timing;
@@ -273,6 +275,21 @@ void Runtime::apply(const std::shared_ptr<Instance> &instance, Binding &binding)
                 instance->authoredDisabled = bool(value.integer);
             if (!binding.previous || !(value == *binding.previous)) {
                 if (name == "class") {
+                    static const bool traceClass = [] {
+                        const char* value = std::getenv("ONEUI_WIN32_TRACE_DAMAGE_ORIGIN");
+                        return value && value[0] == '1' && value[1] == '\0';
+                    }();
+                    if (traceClass && internal::scrollTraceEnabled()) {
+                        const auto& source = instance->element.widget->diagnosticSource();
+                        auto label = source.file + " " + instance->element.component + " " + value.text;
+                        for (auto& character : label)
+                            if (character == ',' || character == '\r' || character == '\n') character = ' ';
+                        internal::ScrollTraceEvent event{"view_class", label.c_str(),
+                            reinterpret_cast<std::uintptr_t>(instance->element.widget.get())};
+                        event.detailA = property.id;
+                        event.detailB = source.line;
+                        internal::writeScrollTrace(event);
+                    }
                     if (!binding.baseClasses) binding.baseClasses = instance->element.classes;
                     instance->element.classes = *binding.baseClasses;
                     factory.set(instance->element, "class", value.text);
