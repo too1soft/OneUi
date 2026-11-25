@@ -1,4 +1,4 @@
-#include "oneui/ui_theme.h"
+#include "oneui/ui_template_support.h"
 #include "oneui/layout/overlay_host.h"
 #include "oneui/controls/popup.h"
 #include "oneui_c_api_view_internal.h"
@@ -175,7 +175,8 @@ OneUiViewResult oneui_view_mount_create(OneUiWindow *window, OneUiWidget *destin
         auto mount = std::make_shared<Mount>();
         mount->window = window;
         mount->windowRoot = window->rootContent;
-        mount->externalCss = oneui::ui::declarativeTheme();
+        // The runtime supplies the default stylesheet if the caller has not
+        // set one by the time the view is instantiated.
         if (destination) {
             mount->destination = std::dynamic_pointer_cast<oneui::Panel>(destination->widget);
             check(mount->destination && mount->destination->children().empty() &&
