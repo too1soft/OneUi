@@ -14,6 +14,28 @@ namespace oneui::win32 {
 
 inline constexpr UINT deferredGlReadyMessage = WM_APP + 5;
 
+struct StartupGlScene {
+    sk_sp<SkPicture> picture;
+    int width = 0;
+    int height = 0;
+};
+
+bool prewarmStartupGlScene(GrDirectContext& context, const StartupGlScene& scene, bool retained);
+
+class StartupGlScratchWindow {
+public:
+    StartupGlScratchWindow() = default;
+    ~StartupGlScratchWindow();
+    StartupGlScratchWindow(const StartupGlScratchWindow&) = delete;
+    StartupGlScratchWindow& operator=(const StartupGlScratchWindow&) = delete;
+
+    bool open(POINT origin);
+
+    HWND hwnd = nullptr;
+    HDC dc = nullptr;
+    HGLRC context = nullptr;
+};
+
 struct PreparedStartupGl {
     ~PreparedStartupGl();
     PreparedStartupGl() = default;
@@ -41,12 +63,6 @@ public:
     void cancel();
 
 private:
-    struct Scene {
-        sk_sp<SkPicture> picture;
-        int width = 0;
-        int height = 0;
-    };
-
     std::unique_ptr<PreparedStartupGl> prepare(POINT origin, HMONITOR monitor);
     void finish(std::unique_ptr<PreparedStartupGl> result);
 
@@ -56,7 +72,7 @@ private:
     std::atomic_bool capture_{false};
     std::mutex mutex_;
     HWND target_ = nullptr;
-    Scene scene_;
+    StartupGlScene scene_;
     std::unique_ptr<PreparedStartupGl> ready_;
     std::thread worker_;
 };

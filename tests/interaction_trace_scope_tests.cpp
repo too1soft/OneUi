@@ -55,20 +55,27 @@ int main() {
     int result = 0;
     try {
         check(window != nullptr, "create diagnostic window");
-        scopes(reinterpret_cast<std::uintptr_t>(window));
+        const auto identity = reinterpret_cast<std::uintptr_t>(window);
+        scopes(identity);
+        const auto paint = oneui::internal::beginInteractionPaint(identity);
+        oneui::internal::traceInteractionRenderTiming(paint, "test_flush_cost", "opengl-worker", 12.5, 3);
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n'; result = 1;
     }
     oneui::finishInteractionTrace();
     if (window) DestroyWindow(window);
     std::ifstream trace(output);
-    std::string line; unsigned inputs = 0, endings = 0;
+    std::string line; unsigned inputs = 0, endings = 0, timings = 0;
+    const std::string timingFields = ",12.5,3";
     while (std::getline(trace, line)) {
         if (line.find(",input_received,") != std::string::npos) ++inputs;
         if (line.find(",trace_end,") != std::string::npos) ++endings;
+        const auto timing = line.rfind(timingFields);
+        if (line.find(",test_flush_cost,1,") != std::string::npos &&
+            timing != std::string::npos && timing + timingFields.size() == line.size()) ++timings;
     }
-    if (inputs != 2 || endings != 1) {
-        std::cerr << "trace must contain two inputs and one complete ending\n"; result = 1;
+    if (inputs != 2 || endings != 1 || timings != 1) {
+        std::cerr << "trace must contain two inputs, one render timing and one complete ending\n"; result = 1;
     }
     trace.close();
     std::error_code ignored; std::filesystem::remove(output, ignored);

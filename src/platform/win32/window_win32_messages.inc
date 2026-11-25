@@ -111,6 +111,7 @@
             setPlatformMotionEnabled(clientAreaAnimationsEnabled());
             return DefWindowProcW(hwnd_, message, wParam, lParam);
         case WM_CLOSE:
+            internal::traceInteractionPaint({reinterpret_cast<std::uintptr_t>(hwnd_)}, "close_received");
             if(dispatchCloseRequest())return 0;
             if (onCloseRequested_) { auto callback = onCloseRequested_; callback(false); }
             else close();
@@ -379,6 +380,8 @@
             return 0;
         }
         case WM_SIZE:
+            if (glWorker_.ready()) glWorker_.invalidateExtent();
+            if (interactiveResizeActive_) interactiveSizeChanged_ = true;
             if (interactiveResizeActive_) {
                 interactiveSizeChanged_ = true;
                 ++liveResizeGeneration_;
@@ -410,6 +413,7 @@
             }
             return 0;
         case kOneUiDpiChanged:
+            if (glWorker_.ready()) glWorker_.invalidateExtent();
             handleDpiChanged(wParam, lParam);
             return 0;
         case WM_NCCALCSIZE:
