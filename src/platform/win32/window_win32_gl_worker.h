@@ -8,6 +8,8 @@
 
 namespace oneui::win32 {
 
+inline constexpr UINT glWorkerRecordingReadyMessage = WM_APP + 6;
+
 struct StartupGlScene;
 
 // Experimental WGL renderer. The render thread owns the DC, context and GPU
@@ -31,6 +33,8 @@ public:
     void setStartupPicture(StartupGlScene scene);
     bool ready() const noexcept;
     bool vsync() const noexcept;
+    // Register a single notification if a recorded scene is waiting for the worker.
+    bool deferRecording();
     Frame plan(int width, int height, RECT damage, bool interactiveResize);
     bool enqueue(sk_sp<SkPicture> picture, const Frame& frame,
                  const internal::InteractionSnapshot& trace);
@@ -47,5 +51,6 @@ bool experimentalGlWorkerEnabled() noexcept;
 bool experimentalGlWorkerAfterFirstFrame() noexcept;
 bool experimentalGlWorkerPrewarm() noexcept;
 bool experimentalGlWorkerDefersCensus() noexcept;
+bool experimentalGlWorkerPacesRecording() noexcept;
 
 } // namespace oneui::win32

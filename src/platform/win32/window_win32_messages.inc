@@ -140,6 +140,7 @@
             paint();
             return 0;
         case kOneUiFlushInvalidations:
+        case win32::glWorkerRecordingReadyMessage:
             // Input mutations and visual animation are sampled together. Do
             // not expose an intermediate state before their scheduled frame.
             if (!inputPaintPending_ && !coalescedEditPaintPending_) submitInvalidations();
@@ -380,8 +381,7 @@
             return 0;
         }
         case WM_SIZE:
-            if (glWorker_.ready()) glWorker_.invalidateExtent();
-            if (interactiveResizeActive_) interactiveSizeChanged_ = true;
+            invalidateWorkerExtent();
             if (interactiveResizeActive_) {
                 interactiveSizeChanged_ = true;
                 ++liveResizeGeneration_;
@@ -413,7 +413,7 @@
             }
             return 0;
         case kOneUiDpiChanged:
-            if (glWorker_.ready()) glWorker_.invalidateExtent();
+            invalidateWorkerExtent();
             handleDpiChanged(wParam, lParam);
             return 0;
         case WM_NCCALCSIZE:

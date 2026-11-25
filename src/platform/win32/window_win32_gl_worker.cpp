@@ -70,6 +70,7 @@ struct GlRenderWorker::State {
     Frame lastQueued;
     Frame lastPlanned;
     std::uint64_t latestPlan = 0;
+    bool recordingWaiter = false;
     bool stopping = false;
     bool ownsLiveWindow;
     bool finished = false;
@@ -107,6 +108,14 @@ bool experimentalGlWorkerDefersCensus() noexcept {
     }();
     return enabled && experimentalGlWorkerEnabled() && experimentalGlWorkerAfterFirstFrame() &&
         scratchGlWorkerEnabled();
+}
+
+bool experimentalGlWorkerPacesRecording() noexcept {
+    static const bool enabled = [] {
+        wchar_t value[2]{};
+        return GetEnvironmentVariableW(L"ONEUI_WIN32_GL_WORKER_PACE_RECORDING", value, 2) == 1 && value[0] == L'1';
+    }();
+    return enabled;
 }
 
 GlRenderWorker::~GlRenderWorker() { stop(); }
@@ -176,6 +185,15 @@ bool GlRenderWorker::vsync() const noexcept {
     return state_ && state_->vsync.load(std::memory_order_relaxed);
 }
 
+bool GlRenderWorker::deferRecording() {
+    if (!state_) return false;
+    auto& state = *state_;
+    std::lock_guard lock(state.mutex);
+    state.recordingWaiter = !state.stopping && state.ready.load(std::memory_order_relaxed) &&
+        static_cast<bool>(state.pending.picture);
+    return state.recordingWaiter;
+}
+
 GlRenderWorker::Frame GlRenderWorker::plan(int width, int height, RECT damage, bool interactiveResize) {
     if (!state_) return {};
     auto& state = *state_;
@@ -226,6 +244,7 @@ void GlRenderWorker::invalidateExtent() {
     {
         std::lock_guard lock(state.mutex);
         ++state.extent;
+        state.recordingWaiter = false;
         obsolete = std::exchange(state.pending, {});
     }
 }
@@ -237,6 +256,7 @@ void GlRenderWorker::stop() {
     StartupGlScene abandoned;
     std::unique_lock lock(state->mutex);
     state->stopping = true;
+    state->recordingWaiter = false;
     state->captureStartup.store(false, std::memory_order_relaxed);
     abandoned = std::move(state->startup);
     ++state->extent;
@@ -259,6 +279,7 @@ void GlRenderWorker::State::run() noexcept {
     std::lock_guard lock(mutex);
     ready.store(false, std::memory_order_release);
     captureStartup.store(false, std::memory_order_relaxed);
+    recordingWaiter = false;
     startup = {};
     if (!stopping) InvalidateRect(window, nullptr, FALSE);
     finished = true;
@@ -325,12 +346,16 @@ void GlRenderWorker::State::render() {
     bool mustPresent = false;
     for (;;) {
         Scene scene;
+        bool notifyRecorder;
         {
             std::unique_lock lock(mutex);
             changed.wait(lock, [&] { return stopping || pending.picture; });
             if (stopping) break;
             scene = std::exchange(pending, {});
+            notifyRecorder = std::exchange(recordingWaiter, false);
         }
+        if (notifyRecorder && !PostMessageW(window, glWorkerRecordingReadyMessage, 0, 0))
+            InvalidateRect(window, nullptr, FALSE);
         internal::traceInteractionPaint(scene.trace, "worker_scene_taken", "opengl-worker");
         const auto result = renderer.render(*scene.picture, scene.frame, scene.trace, extent,
                                             queuedSerial, supersede && !mustPresent);
@@ -343,6 +368,7 @@ void GlRenderWorker::State::render() {
             std::lock_guard lock(mutex);
             if (!stopping && extent.load(std::memory_order_relaxed) == scene.frame.extent) {
                 ++extent;
+                recordingWaiter = false;
                 obsolete = std::exchange(pending, {});
                 InvalidateRect(window, nullptr, FALSE);
             }

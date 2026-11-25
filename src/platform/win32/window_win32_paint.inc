@@ -81,6 +81,23 @@
         const int width = std::max<LONG>(1, clientRect.right - clientRect.left);
         const int height = std::max<LONG>(1, clientRect.bottom - clientRect.top);
         const bool threadedGl = glWorker_.ready() && !IsRectEmpty(&dirtyRect);
+        if (threadedGl && workerRecordingBlocked()) {
+            // Exposure paints can arrive without going through queueInvalidation.
+            // Validate the native region and keep its damage until the worker takes the pending scene.
+            mergeInvalidation(&dirtyRect);
+            EndPaint(hwnd_, &paintStruct);
+            internal::traceInteractionPaint(interactionPaint, "worker_record_deferred", "opengl-worker");
+            internal::traceInteractionPaint(interactionPaint, "paint_end", "opengl-worker", 0);
+            finishDiagnostics();
+            return;
+        }
+        if (threadedGl && win32::experimentalGlWorkerPacesRecording() && invalidationPending_) {
+            // The worker can take the pending scene between submitInvalidations and BeginPaint.
+            if (invalidateAll_) dirtyRect = clientRect;
+            else UnionRect(&dirtyRect, &dirtyRect, &pendingInvalidation_);
+            invalidationPending_ = false;
+            invalidateAll_ = false;
+        }
         const float scale = normalizedDpiScale();
         const float logicalWidth = static_cast<float>(width) / scale;
         const float logicalHeight = static_cast<float>(height) / scale;
