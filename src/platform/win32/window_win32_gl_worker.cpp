@@ -100,6 +100,15 @@ bool experimentalGlWorkerPrewarm() noexcept {
     return enabled && scratchGlWorkerEnabled();
 }
 
+bool experimentalGlWorkerDefersCensus() noexcept {
+    static const bool enabled = [] {
+        wchar_t value[2]{};
+        return GetEnvironmentVariableW(L"ONEUI_WIN32_GL_WORKER_DEFER_CENSUS", value, 2) == 1 && value[0] == L'1';
+    }();
+    return enabled && experimentalGlWorkerEnabled() && experimentalGlWorkerAfterFirstFrame() &&
+        scratchGlWorkerEnabled();
+}
+
 GlRenderWorker::~GlRenderWorker() { stop(); }
 
 bool GlRenderWorker::start(HWND window) {
@@ -269,7 +278,8 @@ void GlRenderWorker::State::render() {
         if (!scratch->open(origin)) return;
     }
     worker::WglWorkerContext renderer(scratch ? scratch->hwnd : window);
-    const bool initialized = renderer.initialize();
+    // With deferred warmup, the first software frame has already been copied.
+    const bool initialized = renderer.initialize(scratch && experimentalGlWorkerDefersCensus());
     StartupGlScene warmup;
     {
         std::lock_guard lock(mutex);

@@ -37,7 +37,7 @@ public:
         if (dc_) ReleaseDC(window_, dc_);
     }
 
-    bool initialize() {
+    bool initialize(bool warmDriver) {
         if (!dc_) return false;
         const auto descriptor = openGlWindowPixelFormat();
         format_ = ChoosePixelFormat(dc_, &descriptor);
@@ -45,6 +45,7 @@ public:
             !SetPixelFormat(dc_, format_, &descriptor)) return false;
         gl_ = wglCreateContext(dc_);
         if (!gl_ || !wglMakeCurrent(dc_, gl_)) return false;
+        if (warmDriver) warmNvidiaDriverThreadCensus(dc_);
         GrContextOptions options;
         options.fPersistentCache = rendering::shaderCache();
         context_ = internal::win32GlTraceEnabled()
