@@ -236,6 +236,7 @@ set(ONEUI_WIN32_SOURCES
     src/platform/shared/skia_gl_setup.cpp
     src/platform/win32/window_event_loop_win32.cpp
     src/platform/win32/window_win32.cpp
+    src/platform/win32/angle_d3d11_win32.cpp
     src/platform/win32/window_win32_gpu_warmup.cpp
     src/platform/win32/window_win32_deferred_gl.cpp
 )

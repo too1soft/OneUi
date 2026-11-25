@@ -31,10 +31,23 @@
 
     PaintSurfaceUpdate preparePaintSurfaces(int width, int height) {
         const bool useGpu = gpuAvailable_ && grContext_;
-        if (useGpu) {
-            if (paintSurface_ && windowSurface_ && windowSurface_->width() == width &&
-                windowSurface_->height() == height) return {};
+        if (useGpu && paintSurface_ && windowSurface_ && windowSurface_->width() == width &&
+            windowSurface_->height() == height) return {};
 
+        int bufferWidth = width;
+        int bufferHeight = height;
+        if (useGpu && angleContext_) {
+            const bool changingDrawable = windowSurface_ != nullptr;
+            if (!angleContext_->refreshBufferSize(bufferWidth, bufferHeight, changingDrawable)) {
+                shutdownGPU();
+                rendererInfo_.reason = "angle-surface-query-failed";
+            } else if (changingDrawable) {
+                // Resizing ANGLE's EGL surface can rebuild its underlying target.
+                grContext_->resetContext();
+            }
+        }
+
+        if (gpuAvailable_ && grContext_) {
             const bool liveReuse = interactiveResizeActive_ && reuseResizeBacking();
             const bool fits = paintSurface_ && windowSurface_ &&
                 paintSurfaceWidth_ >= width && paintSurfaceHeight_ >= height;
@@ -42,7 +55,9 @@
             // drawable is still required for the default framebuffer.
             const auto area = static_cast<std::uint64_t>(width) * height;
             const auto retainedArea = static_cast<std::uint64_t>(paintSurfaceWidth_) * paintSurfaceHeight_;
-            const bool keepBacking = liveReuse && fits && retainedArea <= 2 * area;
+            const bool sameAnglePaintSize = angleContext_ && paintSurface_ &&
+                paintSurfaceWidth_ == width && paintSurfaceHeight_ == height;
+            const bool keepBacking = sameAnglePaintSize || (liveReuse && fits && retainedArea <= 2 * area);
             auto retained = keepBacking ? paintSurface_ : sk_sp<SkSurface>{};
             if (!keepBacking) {
                 const int limit = liveReuse && !fits ? grContext_->maxRenderTargetSize() : 0;
@@ -56,9 +71,11 @@
             GrGLFramebufferInfo fbInfo;
             fbInfo.fFBOID = 0;
             fbInfo.fFormat = GL_RGBA8;
-            const auto target = GrBackendRenderTargets::MakeGL(width, height, 0, 0, fbInfo);
+            const int stencilBits = angleContext_ ? angleContext_->stencilBits() : 0;
+            const auto colorType = angleContext_ ? kRGBA_8888_SkColorType : kBGRA_8888_SkColorType;
+            const auto target = GrBackendRenderTargets::MakeGL(bufferWidth, bufferHeight, 0, stencilBits, fbInfo);
             auto drawable = SkSurfaces::WrapBackendRenderTarget(grContext_.get(), target, kBottomLeft_GrSurfaceOrigin,
-                kBGRA_8888_SkColorType, nullptr, nullptr);
+                colorType, nullptr, nullptr);
             if (retained && drawable) {
                 paintSurfaceWidth_ = retained->width();
                 paintSurfaceHeight_ = retained->height();
@@ -71,6 +88,11 @@
             }
             rendererInfo_.reason = !retained ? "retained-surface-failed" : "window-surface-failed";
             traceGpu(rendererInfo_.reason.c_str());
+            if (angleContext_) {
+                retained.reset();
+                drawable.reset();
+                shutdownGPU();
+            }
             paintSurface_.reset();
             windowSurface_.reset();
             gpuAvailable_ = false;

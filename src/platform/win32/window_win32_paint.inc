@@ -55,8 +55,13 @@
         RECT clientRect{};
         GetClientRect(hwnd_, &clientRect);
 
-        const bool useGPU = gpuAvailable_ && glContext_ && glDC_;
-        if (useGPU) {
+        if (gpuAvailable_ && angleContext_ && !angleContext_->makeCurrent()) {
+            shutdownGPU();
+            rendererInfo_.reason = "angle-make-current-failed";
+        }
+        const bool useWgl = gpuAvailable_ && glContext_ && glDC_;
+        const bool useGPU = useWgl || (gpuAvailable_ && angleContext_);
+        if (useWgl) {
             // The context stays current between frames; rebinding it every
             // paint makes the driver synchronize for nothing.
             if (wglGetCurrentContext() != glContext_ || wglGetCurrentDC() != glDC_) {
@@ -70,7 +75,7 @@
         PAINTSTRUCT paintStruct{};
         HDC paintDc = BeginPaint(hwnd_, &paintStruct);
         paintTrace.mark(PaintTrace::NativePaint);
-        HDC dc = useGPU ? glDC_ : paintDc;
+        HDC dc = useWgl ? glDC_ : paintDc;
         RECT dirtyRect = paintStruct.rcPaint;
 #if ONEUI_DEVELOPER_TOOLS
         if(diagnostics && diagnostics->options.overlay) {
@@ -193,9 +198,18 @@
             const double submitStartMs = currentTimeMs();
             SkCanvas* presentCanvas = windowSurface_->getCanvas();
             presentCanvas->clear(SK_ColorBLACK);
+            const bool angleResize = angleContext_ && (windowSurface_->width() != width || windowSurface_->height() != height);
+            if (angleResize) {
+                // ANGLE/D3D11 resizes its swap chain after swapping the old
+                // back buffer. Scale the complete scene until the next paint.
+                presentCanvas->save();
+                presentCanvas->scale(static_cast<float>(windowSurface_->width()) / width,
+                                     static_cast<float>(windowSurface_->height()) / height);
+            }
             paintSurface_->draw(presentCanvas, 0.0f, 0.0f);
+            if (angleResize) presentCanvas->restore();
             const double copyEndMs = traceLayout ? currentTimeMs() : 0.0;
-            const bool traceGl = traceLayout && internal::win32GlTraceEnabled();
+            const bool traceGl = traceLayout && !angleContext_ && internal::win32GlTraceEnabled();
             std::optional<internal::GlCallTrace> glTrace;
             std::optional<internal::GlCallTrace> glSubmitTrace;
             ULONG64 cyclesBeforeFlush = 0, cyclesAfterFlush = 0;
@@ -221,7 +235,7 @@
             internal::traceInteractionPaint(interactionPaint, "submit_end", "opengl");
             const double presentStarted = currentTimeMs();
             internal::traceInteractionPaint(interactionPaint, "swap_begin", "opengl");
-            const BOOL swapped = SwapBuffers(glDC_);
+            const bool swapped = angleContext_ ? angleContext_->present() : SwapBuffers(glDC_) != FALSE;
             internal::traceInteractionPaint(interactionPaint, "swap_return", "opengl", swapped ? 1 : 0);
             internal::workspacePresentMs = currentTimeMs() - presentStarted;
             if (traceLayout) {
@@ -263,9 +277,10 @@
             traceSubmitMs_ += submitMs;
             rendererInfo_.submitMs += submitMs;
             if (swapped) {
-                recordResizePresentation();
+                if (!angleResize) recordResizePresentation();
                 textAtlasWarmup_.arm(hwnd_);
                 EndPaint(hwnd_, &paintStruct);
+                if (angleResize) InvalidateRect(hwnd_, nullptr, FALSE);
                 recordPaint(width, height, fullPaint, surfaceUpdate.allocatedBacking, surfaceMs, currentTimeMs() - paintStartMs);
                 flushDeferredImePosition();
                 finishDiagnostics();
@@ -276,6 +291,7 @@
             }
             rendererInfo_.reason = "swap-buffers-failed";
             setRenderBackend(RenderBackend::Unknown);
+            if (angleContext_) shutdownGPU();
             gpuAvailable_ = false;
             swapIntervalEnabled_ = false;
             windowSurface_.reset();
