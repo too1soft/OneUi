@@ -23,7 +23,7 @@ else()
     endforeach()
 endif()
 
-add_library(oneui_text STATIC src/text/text_layout.cpp src/text/font_manager.cpp src/text/canvas_text.cpp)
+add_library(oneui_text STATIC src/text/text_layout.cpp src/text/font_manager.cpp src/text/canvas_text.cpp src/text/glyph_metrics.cpp)
 set_target_properties(oneui_text PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(oneui_text PRIVATE include src)
 target_link_libraries(oneui_text PUBLIC oneui_skia)

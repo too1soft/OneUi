@@ -4,6 +4,7 @@
 #include "oneui/platform/window.h"
 #include "oneui/localization.h"
 #include "../text/text_layout.h"
+#include "../text/glyph_metrics.h"
 #include "../platform/shared/skia_canvas.h"
 #include <algorithm>
 #include <cmath>
@@ -14,6 +15,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 

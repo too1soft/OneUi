@@ -88,6 +88,7 @@ oneui_focus_bookmark_destroy
 oneui_focus_bookmark_restore
 oneui_font_register_memory
 oneui_font_register_static_memory
+oneui_font_warm_glyph_metrics_utf8
 oneui_icon_button_create
 oneui_icon_button_set_on_click
 oneui_icon_button_set_symbol

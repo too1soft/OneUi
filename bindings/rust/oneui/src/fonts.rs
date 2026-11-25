@@ -94,6 +94,21 @@ pub fn measure_text_width(
     }
 }
 
+/// Warms layout glyph metrics for characters supported by a registered font.
+/// Glyphs are looked up individually. This does not shape the text or select
+/// platform fallbacks. This hint can run on a background thread and does not
+/// require a window.
+pub fn warm_glyph_metrics(text: &str, family: &str, size: f32, weight: i32) -> bool {
+    unsafe {
+        sys::oneui_font_warm_glyph_metrics_utf8(
+            sys::OneUiUtf8String::from_str(text),
+            sys::OneUiUtf8String::from_str(family),
+            size,
+            weight,
+        ) == 1
+    }
+}
+
 /// Registers an application font directly from memory.
 ///
 /// OneUI copies the bytes during this call and never installs the font into the

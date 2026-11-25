@@ -578,6 +578,13 @@ ONEUI_API int oneui_enumerate_available_fonts(OneUiFontFamilyCallback callback, 
 ONEUI_API int oneui_text_measure_width_utf8(OneUiUtf8String text, OneUiUtf8String family,
     float size, int weight, float scale, float* width);
 
+/* Populate the layout glyph metrics cache for a single registered font family.
+ * UTF-8 text supplies characters, without shaping or system fallback. Size is
+ * in logical pixels. No window is needed. Call from a background thread.
+ * Returns 1 if the face supplies glyphs, 0 if the hint cannot be used. */
+ONEUI_API int oneui_font_warm_glyph_metrics_utf8(OneUiUtf8String text, OneUiUtf8String family,
+    float size, int weight);
+
 typedef enum OneUiWindowBackend {
     OneUiWindowBackendUnknown = 0,
     OneUiWindowBackendWin32 = 1,

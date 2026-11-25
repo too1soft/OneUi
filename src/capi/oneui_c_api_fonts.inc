@@ -33,6 +33,19 @@ int oneui_text_measure_width_utf8(OneUiUtf8String text, OneUiUtf8String family,
     } catch (...) { oneui::capi::recordCurrentException(__func__); return 0; }
 }
 
+int oneui_font_warm_glyph_metrics_utf8(OneUiUtf8String text, OneUiUtf8String family,
+                                     float size, int weight) {
+    try {
+        if (!text.data || !text.length || !family.data || !family.length ||
+            !std::isfinite(size) || size <= 0 || weight < 1 || weight > 1000) return 0;
+        const std::string_view value(text.data, text.length);
+        const std::string_view name(family.data, family.length);
+        if (name.find('\0') != std::string_view::npos ||
+            utf8FromWide(utf8OrEmpty(text)) != value || utf8FromWide(utf8OrEmpty(family)) != name) return 0;
+        return oneui::text::warmRegisteredGlyphMetrics(value, name, size, weight) ? 1 : 0;
+    } catch (...) { oneui::capi::recordCurrentException(__func__); return 0; }
+}
+
 namespace {
 int registerFontMemory(
     const uint8_t* data,
