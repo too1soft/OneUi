@@ -101,8 +101,21 @@ void mediaGeneration() {
     std::thread worker([&]{completions[1](good);});worker.join();check(!image->hasImage(),"worker completion does not touch UI");
     preview->tickAnimations(1);check(image->hasImage()&&!preview->loading()&&preview->image()==image,"UI drain keeps image object");
     check(!loading->visible(),"loading slot hidden after decode");
-    preview->setFit("cover");preview->setPosition("bottom-right");preview->setOpacity(.5f);preview->setFrame({0,0,100,100});
-    test_support::RecordingCanvas canvas;preview->paint(canvas);check(!canvas.opacityLayers.empty()&&canvas.opacityLayers.back().opacity==.5f,"opacity composes pixels");
+    preview->setFit("cover");
+    preview->setPosition("bottom-right");
+    preview->setFrame({0,0,100,100});
+    int opacityInvalidations = 0;
+    preview->setInvalidator([&] { ++opacityInvalidations; });
+    preview->setOpacity(1.0f);
+    check(opacityInvalidations == 0, "reapplying default opacity does not invalidate the image");
+    preview->setOpacity(.5f);
+    check(opacityInvalidations == 1, "changing opacity requests a repaint");
+    preview->setOpacity(.5f);
+    check(opacityInvalidations == 1, "reapplying current opacity does not request another repaint");
+    test_support::RecordingCanvas canvas;
+    preview->paint(canvas);
+    check(!canvas.opacityLayers.empty() && canvas.opacityLayers.back().opacity == .5f,
+          "changed opacity still composes pixels");
     preview->setSource("broken");auto bad=std::make_shared<MediaPixels>();bad->code="format";bad->message="bad image";completions[2](bad);preview->tickAnimations(2);
     check(errors==1&&preview->errorCode()=="format"&&!image->hasImage(),"typed decode failure clears stale pixels");
     preview->setSource("later");preview.reset();check(*cancels.back(),"destruction cancels worker");completions.back()(good);check(errors==1,"late destroyed completion silent");
