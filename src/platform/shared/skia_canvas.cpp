@@ -341,6 +341,7 @@ class SkiaCanvasImpl final : public Canvas, public RasterImageCanvas {
     }
 
     void saveOpacity(Rect bounds, float opacity) override {
+        clipStack_.push_back(clipBounds_);
         const SkRect rect = toSkRect(bounds);
         canvas_.saveLayerAlphaf(&rect, std::clamp(opacity,0.0f,1.0f));
     }

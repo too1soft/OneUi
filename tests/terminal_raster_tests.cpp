@@ -1,4 +1,5 @@
 #include "oneui/controls/terminal_view.h"
+#include "oneui/view.h"
 #include "platform/shared/skia_canvas.h"
 #include "include/core/SkCanvas.h"
 #include "include/core/SkImageInfo.h"
@@ -8,6 +9,37 @@
 #include <iostream>
 #include <stdexcept>
 #include <vector>
+
+static void opacityLayerPreservesViewportCulling() {
+    struct Probe final : oneui::Widget {
+        Probe(oneui::Rect bounds, int& paints) : paints(paints) { setFrame(bounds); }
+        void paint(oneui::Canvas& canvas) override {
+            ++paints;
+            canvas.fillRect(frame(), {80, 180, 240, 255});
+        }
+        int& paints;
+    };
+    auto surface = SkSurfaces::Raster(SkImageInfo::MakeN32Premul(100, 100));
+    auto canvas = oneui::rendering::makeSkiaCanvas(*surface->getCanvas());
+    int inside = 0, outside = 0;
+    oneui::View siblings;
+    siblings.add(std::make_shared<Probe>(oneui::Rect{10, 10, 5, 5}, inside));
+    siblings.add(std::make_shared<Probe>(oneui::Rect{60, 60, 5, 5}, outside));
+
+    canvas->clipRect({0, 0, 100, 100});
+    canvas->save();
+    canvas->clipRect({0, 0, 30, 30});
+    canvas->saveOpacity({0, 0, 75, 75}, 0.5f);
+    canvas->clipRect({0, 0, 8, 8});
+    canvas->restore();
+    siblings.paint(*canvas);
+    if (inside != 1 || outside != 0)
+        throw std::runtime_error("restoring an opacity layer lost the enclosing viewport clip");
+    canvas->restore();
+    siblings.paint(*canvas);
+    if (inside != 2 || outside != 1)
+        throw std::runtime_error("restoring the viewport must recover the outer clip");
+}
 
 // Real pixels, not a recording canvas: repainting an unchanged suffix must
 // reproduce the same glyph positions as the original complete ASCII run.
@@ -164,6 +196,7 @@ static void localPointerRoutingPreservesSelectionAndProtocol() {
 
 int main() {
     try {
+        opacityLayerPreservesViewportCulling();
         zeroBorderDoesNotPaint();
         uniformBlockBackgroundHasNoCellSeams();
         localPointerRoutingPreservesSelectionAndProtocol();
