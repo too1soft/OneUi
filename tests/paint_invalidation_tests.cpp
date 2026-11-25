@@ -15,6 +15,41 @@ struct PaintProbe : Widget {
     void repaint() { invalidatePaint(); }
 };
 
+bool stackStyleReplayKeepsLayoutAndDamageLocal() {
+    auto root = std::make_shared<Stack>();
+    auto child = std::make_shared<Stack>();
+    root->add(child);
+    root->setFrame({0, 0, 640, 480});
+    child->setFrame({24, 32, 180, 80});
+    int redraws = 0;
+    Rect dirty{};
+    root->setRectInvalidator([&](Rect rect) {
+        dirty = rect;
+        ++redraws;
+    });
+
+    StyleBox style;
+    style.background.gradient = Gradient{{{{20, 30, 40}, 0}, {{50, 60, 70}, 1}}};
+    style.shadows.push_back({{1, 2, 3, 190}, {4, 5}, 3, 6});
+    const auto measure = child->measureRevision();
+    child->setStyleBox(style);
+    child->setStyleBox(style);
+    if (redraws != 1 || child->measureRevision() != measure || dirty.width >= root->frame().width)
+        return false;
+
+    style.background.gradient->stops.back().color = {60, 70, 80};
+    child->setStyleBox(style);
+    if (redraws != 2 || child->measureRevision() != measure) return false;
+    style.width = 200;
+    child->setStyleBox(style);
+    const auto changed = child->measureRevision();
+    if (redraws != 3 || changed == measure) return false;
+    child->clearStyleBox();
+    const auto cleared = child->measureRevision();
+    child->clearStyleBox();
+    return redraws == 4 && cleared != changed && child->measureRevision() == cleared;
+}
+
 bool resizedChildRepaintsMovedSibling(StackEngine outerEngine, StackEngine innerEngine) {
     struct Counter final : Widget {
         int paints = 0;
@@ -332,6 +367,10 @@ bool nestedInvalidationFollowsCurrentParent() {
 }
 
 int main() {
+    if (!stackStyleReplayKeepsLayoutAndDamageLocal()) {
+        std::cerr << "FAIL: repeated Stack decoration invalidated layout or redraw\n";
+        return 1;
+    }
     if (!nestedInvalidationFollowsCurrentParent()) {
         std::cerr << "FAIL: nested invalidation callback was reinstalled or reached the wrong parent\n";
         return 1;

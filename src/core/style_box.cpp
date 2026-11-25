@@ -1,10 +1,12 @@
 #include "style_css_internal.h"
+#include "internal/style_box_paint.h"
 #include "internal/unicode.h"
 #include <algorithm>
 #include <cctype>
 #include <cmath>
 #include <cstdlib>
 #include <sstream>
+#include <tuple>
 
 namespace oneui {
 using namespace style_detail;
@@ -165,6 +167,67 @@ Rect stylePaintBounds(Rect rect,const StyleBox& box) {
         top=std::max(top,pad-s.offset.y);bottom=std::max(bottom,pad+s.offset.y);
     }
     return {rect.x-left,rect.y-top,rect.width+left+right,rect.height+top+bottom};
+}
+
+namespace {
+template<class T, class Equal>
+bool sameOptional(const std::optional<T>& left, const std::optional<T>& right, Equal equal) {
+    if (!left || !right) return left.has_value() == right.has_value();
+    return equal(*left, *right);
+}
+
+bool samePaintColor(Color left, Color right) {
+    return std::tie(left.r, left.g, left.b, left.a) == std::tie(right.r, right.g, right.b, right.a);
+}
+
+bool samePoint(Point left, Point right) {
+    return left.x == right.x && left.y == right.y;
+}
+
+bool sameGradient(const Gradient& left, const Gradient& right) {
+    return left.angleDegrees == right.angleDegrees && left.radial == right.radial &&
+           samePoint(left.center, right.center) && left.radius == right.radius &&
+           std::equal(left.stops.begin(), left.stops.end(), right.stops.begin(), right.stops.end(),
+                      [](const GradientStop& a, const GradientStop& b) {
+                          return a.position == b.position && samePaintColor(a.color, b.color);
+                      });
+}
+
+bool sameBackground(const StyleBackground& left, const StyleBackground& right) {
+    return sameOptional(left.color, right.color, samePaintColor) &&
+           sameOptional(left.gradientStart, right.gradientStart, samePaintColor) &&
+           sameOptional(left.gradientEnd, right.gradientEnd, samePaintColor) &&
+           left.gradientAngleDegrees == right.gradientAngleDegrees &&
+           sameOptional(left.radialCenter, right.radialCenter, samePoint) &&
+           left.radialRadius == right.radialRadius &&
+           sameOptional(left.gradient, right.gradient, sameGradient);
+}
+
+bool sameContentBackground(const StyleContentBox& left, const StyleContentBox& right) {
+    return sameOptional(left.backgroundColor, right.backgroundColor, samePaintColor) &&
+           left.radius == right.radius &&
+           sameOptional(left.inset, right.inset, [](Insets a, Insets b) {
+               return std::tie(a.left, a.top, a.right, a.bottom) ==
+                      std::tie(b.left, b.top, b.right, b.bottom);
+           });
+}
+} // namespace
+
+bool internal::sameStyleBoxPaint(const StyleBox& left, const StyleBox& right) {
+    return sameBackground(left.background, right.background) &&
+           sameContentBackground(left.content, right.content) &&
+           sameOptional(left.borderColor, right.borderColor, samePaintColor) &&
+           sameOptional(left.outlineColor, right.outlineColor, samePaintColor) &&
+           std::tie(left.borderWidth, left.outlineWidth, left.outlineOffset, left.opacity,
+                    left.radius, left.backgroundOpacity, left.contentBackgroundOpacity) ==
+               std::tie(right.borderWidth, right.outlineWidth, right.outlineOffset, right.opacity,
+                        right.radius, right.backgroundOpacity, right.contentBackgroundOpacity) &&
+           std::equal(left.shadows.begin(), left.shadows.end(), right.shadows.begin(), right.shadows.end(),
+                      [](const StyleShadow& a, const StyleShadow& b) {
+                          return samePaintColor(a.color, b.color) && samePoint(a.offset, b.offset) &&
+                                 a.blurRadius == b.blurRadius && a.spreadRadius == b.spreadRadius &&
+                                 a.inset == b.inset;
+                      });
 }
 
 void paintStyleBox(Canvas& canvas, Rect rect, const StyleBox& input) {

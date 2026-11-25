@@ -1,4 +1,5 @@
 #include "oneui/layout/stack.h"
+#include "internal/style_box_paint.h"
 #include "internal/widget_presentation.h"
 #include "oneui/controls/reveal.h"
 
@@ -12,6 +13,18 @@ float weightedGap(float gap,float factor){return factor==1?gap:std::round(gap*fa
 float motionWeight(const std::shared_ptr<Widget>& child,bool column) {
     if(column)if(auto reveal=std::dynamic_pointer_cast<Reveal>(child))return reveal->layoutWeight();
     return 1.f;
+}
+
+enum class StyleDamage { None, Paint, Layout };
+
+StyleDamage stackStyleDamage(const StyleBox* previous, const StyleBox* next) {
+    static const StyleBox empty{};
+    const auto& oldStyle = previous ? *previous : empty;
+    const auto& newStyle = next ? *next : empty;
+    // Yoga also uses these two fields as explicit dimensions for a child Stack.
+    if (oldStyle.width != newStyle.width || oldStyle.height != newStyle.height)
+        return StyleDamage::Layout;
+    return internal::sameStyleBoxPaint(oldStyle, newStyle) ? StyleDamage::None : StyleDamage::Paint;
 }
 }
 Rect Stack::paintBounds() const {
@@ -108,13 +121,18 @@ Size Stack::itemSize(const std::shared_ptr<Widget>& child) const {
 }
 
 void Stack::setStyleBox(StyleBox style) {
+    const auto damage = stackStyleDamage(styleBox_ ? &*styleBox_ : nullptr, &style);
     styleBox_ = std::move(style);
-    invalidate();
+    if (damage == StyleDamage::Layout) invalidate();
+    else if (damage == StyleDamage::Paint) invalidatePaint();
 }
 
 void Stack::clearStyleBox() {
+    if (!styleBox_) return;
+    const auto damage = stackStyleDamage(&*styleBox_, nullptr);
     styleBox_.reset();
-    invalidate();
+    if (damage == StyleDamage::Layout) invalidate();
+    else if (damage == StyleDamage::Paint) invalidatePaint();
 }
 
 std::vector<std::shared_ptr<Widget>> Stack::orderedChildren() const {
