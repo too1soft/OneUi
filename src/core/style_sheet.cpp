@@ -7,17 +7,31 @@
 #include <cctype>
 #include <cmath>
 #include <cstdlib>
-#include <string_view>
 #include <sstream>
 
 namespace oneui {
 using namespace style_detail;
+namespace {
+void appendCacheId(std::string& key, std::size_t id) {
+    // Self-delimiting, including when an ID crosses the one-byte boundary.
+    for (; id >= 128; id >>= 7) {
+        key.push_back(static_cast<char>((id & 127) | 128));
+    }
+    key.push_back(static_cast<char>(id));
+}
+} // namespace
+
 void StyleSheet::RuleData::indexLastRule() {
     const auto& rule = rules.back();
     const auto& selector = selectors.back();
     hasLayoutRules = hasLayoutRules || ruleLayout(rule) != nullptr;
     if (!selector.valid) return;
-    selectorClasses.insert(selector.node.classes.begin(), selector.node.classes.end());
+    for (const auto& klass : selector.node.classes) {
+        selectorClasses.try_emplace(klass, selectorClasses.size() + 1);
+    }
+    if (!selector.node.tag.empty()) {
+        selectorTags.try_emplace(selector.node.tag, selectorTags.size() + 1);
+    }
     selectorStates |= selector.node.state;
     if (rule.query) return;
     // A classed selector is only a candidate for nodes which have its first class.
@@ -118,35 +132,29 @@ std::vector<const StyleRule*> StyleSheet::matchingRules(const StyleNode& node) c
 }
 
 std::string StyleSheet::nodeCacheKey(const StyleNode& node) const {
-    // Every lookup uses this key, including cache hits. Normal component
-    // selectors fit in inline storage and can borrow the existing strings.
-    std::array<std::string_view, 8> inlineClasses;
-    std::vector<std::string_view> overflow;
+    // Use stylesheet-local IDs so long, scoped class names don't allocate
+    // a new lookup string each time a widget resolves paint or layout.
+    std::array<std::size_t, 8> inlineClasses;
+    std::vector<std::size_t> overflow;
     auto* relevant = inlineClasses.data();
     if (node.classes.size() > inlineClasses.size()) {
         overflow.resize(node.classes.size());
         relevant = overflow.data();
     }
     std::size_t count = 0;
-    for (const auto& klass : node.classes)
-        if (ruleData_->selectorClasses.count(klass)) relevant[count++] = klass;
+    for (const auto& klass : node.classes) {
+        const auto found = ruleData_->selectorClasses.find(klass);
+        if (found != ruleData_->selectorClasses.end()) relevant[count++] = found->second;
+    }
     // Selector matching tests class membership, never order or multiplicity.
     // A new unmatched mount scope must not allocate a new cached result.
     std::sort(relevant, relevant + count);
     const auto end = std::unique(relevant, relevant + count);
-    const auto state = std::to_string(node.state & ruleData_->selectorStates);
-    std::size_t size = node.tag.size() + state.size() + 2;
-    for (auto it = relevant; it != end; ++it) size += it->size() + 1;
     std::string key;
-    key.reserve(size);
-    key.append(node.tag);
-    key.push_back('\x1f');
-    for (auto it = relevant; it != end; ++it) {
-        key.append(*it);
-        key.push_back('\x1e');
-    }
-    key.push_back('\x1f');
-    key.append(state);
+    const auto tag = ruleData_->selectorTags.find(node.tag);
+    appendCacheId(key, tag == ruleData_->selectorTags.end() ? 0 : tag->second);
+    appendCacheId(key, node.state & ruleData_->selectorStates);
+    for (auto it = relevant; it != end; ++it) appendCacheId(key, *it);
     return key;
 }
 

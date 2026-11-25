@@ -272,6 +272,32 @@ void classBucketsKeepSourceOrder() {
     require(sheet.resolve({"input", {"accent", "a", "b"}, 0}).height == 25,
         "the class bucket cannot leak a tag-specific rule to another control");
 }
+
+void compactSelectorKeysKeepLargeClassIdsAndTagsDistinct() {
+    StyleSheet sheet;
+    std::string css = ".common { height: 10px; }";
+    for (unsigned i = 0; i < 270; ++i) {
+        css += ".scoped-" + std::to_string(i) + " { height: " + std::to_string(20 + i) + "px; }";
+    }
+    css += "label.scoped-269:hover { height: 42px; max-width: 81px; }";
+    parse(sheet, css);
+    for (unsigned i = 0; i < 270; ++i) {
+        const oneui::StyleNode node{"label", {"common", "scoped-" + std::to_string(i)}, 0};
+        require(sheet.resolve(node).height == static_cast<float>(20 + i),
+                "multi-byte class IDs preserve distinct cache entries");
+    }
+    const oneui::StyleNode hot{"label", {"scoped-269", "common", "scoped-269"}, oneui::StyleStateHover};
+    const oneui::StyleNode other{"input", hot.classes, hot.state};
+    require(sheet.resolve(hot).height == 42 && sheet.resolveLayout(hot).maxWidth == 81,
+            "a tag on a classed selector participates in both cache keys");
+    require(sheet.resolve(other).height == 289 && !sheet.resolveLayout(other).maxWidth,
+            "an unmatched tag only receives the generic rule");
+    auto copy = sheet;
+    parse(copy, "input.scoped-269 { height: 62px; max-width: 91px; }");
+    require(copy.resolve(other).height == 62 && copy.resolveLayout(other).maxWidth == 91 &&
+                sheet.resolve(other).height == 289 && !sheet.resolveLayout(other).maxWidth,
+            "an appended tag invalidates warmed keys on the edited sheet only");
+}
 }
 
 int main() {
@@ -288,6 +314,7 @@ int main() {
         loweredThemeCanBeExtended();
         longSelectorsKeepCanonicalCacheKeys();
         classBucketsKeepSourceOrder();
+        compactSelectorKeysKeepLargeClassIdsAndTagsDistinct();
         std::exception_ptr workerError;
         std::thread worker([&] {
             try { independentTokensAndRules(); }
