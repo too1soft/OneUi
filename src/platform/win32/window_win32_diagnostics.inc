@@ -1,3 +1,11 @@
+    void traceLiveResizeDamage(const char* phase, bool full = false) {
+        if (!interactiveResizeActive_ || !internal::scrollTraceEnabled()) return;
+        internal::writeScrollTrace(internal::ScrollTraceEvent{
+            "win32", phase, reinterpret_cast<std::uintptr_t>(hwnd_),
+            clientContentPainting_ ? 1.0 : 0.0, invalidationPending_ ? 1.0 : 0.0,
+            0, 0, 0, 0, 0, static_cast<double>(liveResizeGeneration_), full ? 1.0 : 0.0});
+    }
+
     void recordResizeMessage(WPARAM sizeType) {
         if (!renderTraceEnabled_) {
             return;

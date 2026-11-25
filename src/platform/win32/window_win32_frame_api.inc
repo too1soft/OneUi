@@ -23,6 +23,7 @@
             invalidateAll_ = true;
         }
         if (!invalidationPending_) {
+            traceLiveResizeDamage("resize_widget_damage", !rect);
             invalidationPending_ = true;
             if (!PostMessageW(hwnd_, kOneUiFlushInvalidations, 0, 0)) {
                 submitInvalidations();
@@ -36,6 +37,7 @@
         }
         invalidationPending_ = false;
         const bool all = invalidateAll_;
+        traceLiveResizeDamage("resize_submit_damage", all);
         invalidateAll_ = false;
         if (hwnd_) {
             InvalidateRect(hwnd_, all ? nullptr : &pendingInvalidation_, FALSE);

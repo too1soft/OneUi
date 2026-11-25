@@ -416,6 +416,7 @@
             return;
         }
 
+        traceLiveResizeDamage("resize_native_full_damage", true);
         InvalidateRect(hwnd_, nullptr, FALSE);
         scheduleInteractivePaint();
     }

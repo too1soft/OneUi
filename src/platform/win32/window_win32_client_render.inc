@@ -13,10 +13,12 @@
             explicit PaintGuard(bool& value) : active(value) { active = true; }
             ~PaintGuard() { active = false; }
         } guard(clientContentPainting_);
+        traceLiveResizeDamage("resize_content_layout_begin");
         {
             ONEUI_VIEW_TIME(Layout);
             content_->setFrame(Rect{0.0f, 0.0f, width, height});
         }
+        traceLiveResizeDamage("resize_content_layout_end");
         {
             internal::DiagnosticPaintSpan diagnostic(*content_);
             content_->paint(canvas);

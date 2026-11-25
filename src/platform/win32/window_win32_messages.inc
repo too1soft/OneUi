@@ -386,6 +386,7 @@
 #if ONEUI_DEVELOPER_TOOLS
             if(developerTools_)developerTools_->resetCadence();
 #endif
+            traceLiveResizeDamage("resize_size_message");
             recordResizeMessage(wParam);
             if (wParam == SIZE_MAXIMIZED) {
                 lastKnownMaximized_ = true;
