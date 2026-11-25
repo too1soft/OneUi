@@ -123,16 +123,40 @@ void testKeyboardAndWheel() {
     f.table.tickAnimations(1400);
     require(equal(f.table.scrollOffset(), 44), "one wheel delta should retain the configured step");
 }
+
+void testTemporarilyEmptyViewport() {
+    Fixture f;
+    const auto normal = f.table.frame();
+    const auto initial = f.rows->mountedCount();
+    const auto first = f.pressed;
+    const int created = f.mounted;
+    f.table.setFrame({normal.x, normal.y, 0, 0});
+    f.table.layoutSubtree();
+    require(f.rows->mountedCount() == initial && f.retired == 0, "zero viewport must preserve realized rows");
+    f.table.setFrame(normal);
+    f.table.layoutSubtree();
+    require(f.mounted == created && f.pressed == first, "restoring a table must reuse its rows");
+
+    f.table.setFrame({normal.x, normal.y, 0, 0});
+    f.table.layoutSubtree();
+    f.keys.erase(f.keys.begin() + 3);
+    f.heights.erase(f.heights.begin() + 3);
+    f.rows->setTableRows(f.keys, f.heights, false);
+    f.table.layoutSubtree();
+    require(f.retired == 1 && f.rows->rowFrame("3").height == 0,
+            "a viewport without drawable area must still retire removed keys");
+}
 }
 
 int main() {
     try {
         testGeometryAndPointer();
         testKeyboardAndWheel();
+        testTemporarilyEmptyViewport();
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';
         return 1;
     }
-    std::cout << "windowed table geometry, capture, focus and smooth scrolling passed\n";
+    std::cout << "windowed table geometry, capture, focus, scrolling and restore passed\n";
     return 0;
 }

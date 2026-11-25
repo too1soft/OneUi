@@ -40,7 +40,13 @@ void VirtualTemplateList::layoutTableRows() {
     const float top = tableClip_.y - content.y;
     const float bottom = top + tableClip_.height;
     std::set<std::string> keep;
-    if (visible() && content.width > 0.0f && tableClip_.height > 0.0f &&
+    const bool hasViewport = content.width > 0.0f && tableClip_.width > 0.0f && tableClip_.height > 0.0f;
+    if (visible() && !hasViewport) {
+        // Minimizing can deliver a zero client area before the next layout.
+        // Keep already realized rows, but retire keys removed from the model.
+        for (size_t i = 0; i < keys_.size(); ++i)
+            if (tops_[i + 1] > tops_[i] && mounted_.count(keys_[i])) keep.insert(keys_[i]);
+    } else if (visible() &&
         bottom > 0.0f && top < tops_.back() && !keys_.empty() && tops_.back() > 0.0f) {
         const auto firstVisible = indexAt(std::max(0.0f, top));
         const auto lastVisible = indexAt(std::min(bottom, tops_.back()));
