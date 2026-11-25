@@ -2,6 +2,7 @@
 
 #include "internal/frame_profile.h"
 #include "internal/scroll_trace.h"
+#include "platform/shared/skia_canvas.h"
 
 #include <windows.h>
 #include <array>
@@ -27,7 +28,7 @@ public:
     }
 
     void write(std::uintptr_t window, double paintSequence, const RECT& damage,
-               const FrameProfile& profile) const {
+               const FrameProfile& profile, const rendering::PrimitivePaintTrace& primitives) const {
         if (!enabled_) return;
         constexpr const char* phases[]{ "paint_backend_setup", "paint_begin_native", "paint_surface",
                                        "paint_canvas_setup", "paint_widget_tree", "paint_record_finish" };
@@ -49,19 +50,33 @@ public:
         event.component = "win32";
         event.object = window;
         event.detailA = paintSequence;
-        constexpr std::pair<FrameStage, const char*> textStages[] = {
+        constexpr std::pair<FrameStage, const char*> stages[] = {
+            {FrameStage::Fill, "paint_fill"},
+            {FrameStage::Path, "paint_path"},
             {FrameStage::TextCache, "text_cache"},
             {FrameStage::TextIndex, "text_index"},
             {FrameStage::TextBuild, "text_build"},
             {FrameStage::TextBidi, "text_bidi"},
             {FrameStage::TextShape, "text_shape"},
         };
-        for (const auto& [stage, name] : textStages) {
+        for (const auto& [stage, name] : stages) {
             event.phase = name;
             event.durationMs = profile.ms[static_cast<std::size_t>(stage)];
             if (event.durationMs > 0.0) writeScrollTrace(event);
         }
+        const auto writePrimitive = [&](const char* name, std::uint64_t calls, double ms) {
+            if (!calls) return;
+            event.phase = name;
+            event.durationMs = ms;
+            event.detailB = static_cast<double>(calls);
+            writeScrollTrace(event);
+        };
+        writePrimitive("paint_text_draw", primitives.textCalls, primitives.textMs);
+        writePrimitive("paint_text_measure", primitives.textMeasureCalls, primitives.textMeasureMs);
+        writePrimitive("paint_shadow", primitives.shadowCalls, primitives.shadowMs);
+        writePrimitive("paint_gradient", primitives.gradientCalls, primitives.gradientMs);
         event.phase = "paint_damage";
+        event.detailB = 0.0;
         event.inputDelta = damage.left;
         event.offset = damage.top;
         event.target = damage.right - damage.left;
