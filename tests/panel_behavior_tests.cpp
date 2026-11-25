@@ -231,7 +231,7 @@ void testReparentedContentKeepsNewOwnerCallbacks() {
     expectEqual("Reparented child schedules with current owner", newAnimationRequests, 1);
 }
 
-void testNestedCallbackPropagationStaysLinear() {
+void testDetachedAncestorKeepsChildCallbacks() {
     auto child = std::make_shared<LayoutProbe>();
     auto middle = std::make_shared<oneui::Panel>();
     oneui::Panel root;
@@ -240,9 +240,9 @@ void testNestedCallbackPropagationStaysLinear() {
 
     root.setContent(middle);
 
-    expectEqual("Nested invalidator installed once", child->invalidatorInstallCount, 1);
-    expectEqual("Nested rect invalidator installed once", child->rectInvalidatorInstallCount, 1);
-    expectEqual("Nested animation scheduler installed once", child->animationSchedulerInstallCount, 1);
+    expectEqual("Detached ancestor keeps the nested invalidator", child->invalidatorInstallCount, 0);
+    expectEqual("Detached ancestor keeps the nested rect invalidator", child->rectInvalidatorInstallCount, 0);
+    expectEqual("Detached ancestor keeps the nested animation scheduler", child->animationSchedulerInstallCount, 0);
 }
 
 void testDestroyedParentDetachesRetainedContent() {
@@ -268,7 +268,7 @@ int main() {
     testViewMutationsInvalidateTheirPreviousAndNewContent();
     testPanelReplacementInvalidatesBothMutations();
     testReparentedContentKeepsNewOwnerCallbacks();
-    testNestedCallbackPropagationStaysLinear();
+    testDetachedAncestorKeepsChildCallbacks();
     testDestroyedParentDetachesRetainedContent();
 
     if (failures != 0) {

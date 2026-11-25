@@ -11,6 +11,12 @@
 
 namespace oneui {
 
+struct View::ChildAnimationRelay {
+    View* parent;
+
+    void operator()() const { parent->requestAnimationFrame(); }
+};
+
 std::shared_ptr<Widget> View::activeFocusChild() const {
     if (!interactive()) return {};
     for (const auto& child : children_)
@@ -89,7 +95,13 @@ void View::setRectInvalidator(std::function<void(Rect)> invalidator) {
 }
 
 void View::setAnimationScheduler(std::function<void()> scheduler) {
+    const auto* relay = scheduler.target<ChildAnimationRelay>();
+    const bool assemblingDetached = relay && !relay->parent->hasAnimationScheduler();
     Widget::setAnimationScheduler(std::move(scheduler));
+    // Each existing child already forwards through this View. When its new
+    // parent cannot schedule frames yet, replaying child setters cannot wake
+    // the tree. An installed window scheduler still reaches every owned leaf.
+    if (assemblingDetached) return;
     for (const auto& child : children_) {
         child->refreshAnimationSchedulerFromOwner(
             this,
@@ -110,7 +122,7 @@ void View::installChildCallbacks(Widget& child) {
         this,
         [this] { invalidate(); },
         [this](Rect rect) { invalidateChildRect(rect); },
-        [this] { requestAnimationFrame(); });
+        ChildAnimationRelay{this});
 }
 
 Rect View::paintBounds() const {

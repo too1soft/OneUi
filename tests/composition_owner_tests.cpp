@@ -10,6 +10,38 @@ public:
     void askFrame() { requestAnimationFrame(); }
     void askPaint() { invalidate(); }
 };
+
+class AnimationProbe final : public oneui::Widget {
+public:
+    void paint(oneui::Canvas&) override {}
+    void setAnimationScheduler(std::function<void()> scheduler) override {
+        Widget::setAnimationScheduler(std::move(scheduler));
+        ++installations;
+        requestAnimationFrame();
+    }
+    int installations = 0;
+};
+
+void verifyDetachedAssembly() {
+    using namespace oneui;
+    auto leaf = std::make_shared<AnimationProbe>();
+    auto inner = std::make_shared<View>();
+    inner->add(leaf);
+    auto outer = std::make_shared<View>();
+    outer->add(inner);
+    View root;
+    root.add(outer);
+    require(leaf->installations == 1, "detached ancestor assembly does not reinstall the leaf scheduler");
+
+    int frames = 0;
+    root.setAnimationScheduler([&] { ++frames; });
+    require(leaf->installations == 2 && frames == 1, "live root activates the leaf scheduler once");
+    int replacementFrames = 0;
+    root.setAnimationScheduler([&] { ++replacementFrames; });
+    require(leaf->installations == 3 && frames == 1 && replacementFrames == 1,
+            "replacing the live scheduler reactivates the leaf on the new callback");
+}
+
 void verify() {
     using namespace oneui;
     int oldFrames = 0, newFrames = 0, oldPaints = 0, newPaints = 0;
@@ -53,5 +85,5 @@ void verify() {
     require(replacement == 2, "old parent destruction leaves the new owner attached");
 }
 }
-int main() { try { verify(); std::cout << "composition owners passed\n"; return 0; }
+int main() { try { verify(); verifyDetachedAssembly(); std::cout << "composition owners passed\n"; return 0; }
 catch (const std::exception& e) { std::cerr << e.what() << '\n'; return 1; } }
