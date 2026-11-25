@@ -22,6 +22,7 @@ public:
     bool refreshBufferSize(int& width, int& height, bool clientSizeChanged);
     bool present();
     bool vsync() const noexcept;
+    bool invertedSurface() const noexcept;
     int stencilBits() const noexcept;
     const std::string& device() const noexcept;
     void releaseSkia(sk_sp<SkSurface>& window, sk_sp<SkSurface>& retained, sk_sp<GrDirectContext>& skia);

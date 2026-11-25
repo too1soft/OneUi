@@ -23,6 +23,7 @@ using EglAttrib = std::intptr_t;
 
 constexpr wchar_t kDirectory[] = L"ONEUI_WIN32_ANGLE_DIR";
 constexpr wchar_t kComposition[] = L"ONEUI_WIN32_ANGLE_COMPOSITION";
+constexpr wchar_t kInvertedSurface[] = L"ONEUI_WIN32_ANGLE_INVERT_SURFACE";
 constexpr EglInt kNone = 0x3038, kSurfaceType = 0x3033, kWindowBit = 0x0004;
 constexpr EglInt kRenderableType = 0x3040, kGles3Bit = 0x0040, kContextClientVersion = 0x3098;
 constexpr EglInt kRedSize = 0x3024, kGreenSize = 0x3023, kBlueSize = 0x3022;
@@ -31,6 +32,8 @@ constexpr EglInt kDraw = 0x3059, kRead = 0x305a;
 constexpr EglInt kWidth = 0x3057, kHeight = 0x3056;
 constexpr EglInt kExtensions = 0x3055, kPostSubBufferSupported = 0x30be;
 constexpr EglInt kDirectComposition = 0x33a5;
+constexpr EglInt kOptimalSurfaceOrientation = 0x33a7, kSurfaceOrientation = 0x33a8;
+constexpr EglInt kInvertY = 0x0002;
 constexpr EglEnum kOpenGlesApi = 0x30a0, kPlatformAngle = 0x3202;
 constexpr EglAttrib kAngleType = 0x3203, kDirect3D11 = 0x3208;
 constexpr EglAttrib kAngleDeviceType = 0x3209, kHardware = 0x320a;
@@ -177,6 +180,7 @@ struct AngleD3D11Context::State {
     EglInt stencil = 0;
     PostSubBuffer postSubBuffer = nullptr;
     bool composed = false;
+    bool invertedSurface = false;
     bool synced = false;
     std::string device;
 
@@ -239,6 +243,18 @@ std::unique_ptr<AngleD3D11Context> AngleD3D11Context::open(HWND window, sk_sp<Gr
             state->surface = nullptr;
         }
     }
+    wchar_t invert[2]{};
+    EglInt orientation = 0;
+    if (state->context && !state->surface &&
+        GetEnvironmentVariableW(kInvertedSurface, invert, 2) == 1 && invert[0] == L'1' &&
+        hasExtension(extensions, "EGL_ANGLE_surface_orientation") &&
+        api->getConfigAttrib(state->display, config, kOptimalSurfaceOrientation, &orientation) &&
+        orientation == kInvertY) {
+        const EglInt invertedAttrs[]{kSurfaceOrientation, kInvertY,
+                                     state->postSubBuffer ? kPostSubBufferSupported : kNone, 1, kNone};
+        state->surface = api->createWindowSurface(state->display, config, window, invertedAttrs);
+        state->invertedSurface = state->surface != nullptr;
+    }
     const EglInt surfaceAttrs[]{kPostSubBufferSupported, 1, kNone};
     if (state->context && !state->surface) state->surface = api->createWindowSurface(state->display, config, window,
         state->postSubBuffer ? surfaceAttrs : nullptr);
@@ -265,6 +281,7 @@ std::unique_ptr<AngleD3D11Context> AngleD3D11Context::open(HWND window, sk_sp<Gr
         return {};
     }
     if (state->composed) state->device += " via DirectComposition";
+    if (state->invertedSurface) state->device += " with inverted EGL surface";
     GrContextOptions options;
     options.fPersistentCache = rendering::angleD3D11ShaderCache();
     skia = GrDirectContexts::MakeGL(std::move(gl), options);
@@ -293,6 +310,7 @@ bool AngleD3D11Context::refreshBufferSize(int& width, int& height, bool clientSi
 }
 bool AngleD3D11Context::present() { return state_->api.swap(state_->display, state_->surface) != 0; }
 bool AngleD3D11Context::vsync() const noexcept { return state_->synced; }
+bool AngleD3D11Context::invertedSurface() const noexcept { return state_->invertedSurface; }
 int AngleD3D11Context::stencilBits() const noexcept { return state_->stencil; }
 const std::string& AngleD3D11Context::device() const noexcept { return state_->device; }
 

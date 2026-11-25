@@ -74,7 +74,11 @@
             const int stencilBits = angleContext_ ? angleContext_->stencilBits() : 0;
             const auto colorType = angleContext_ ? kRGBA_8888_SkColorType : kBGRA_8888_SkColorType;
             const auto target = GrBackendRenderTargets::MakeGL(bufferWidth, bufferHeight, 0, stencilBits, fbInfo);
-            auto drawable = SkSurfaces::WrapBackendRenderTarget(grContext_.get(), target, kBottomLeft_GrSurfaceOrigin,
+            // Skia must use the opposite origin when ANGLE skips its
+            // vertical flip and draws directly into the D3D11 back buffer.
+            const auto origin = angleContext_ && angleContext_->invertedSurface() ?
+                kTopLeft_GrSurfaceOrigin : kBottomLeft_GrSurfaceOrigin;
+            auto drawable = SkSurfaces::WrapBackendRenderTarget(grContext_.get(), target, origin,
                 colorType, nullptr, nullptr);
             if (retained && drawable) {
                 paintSurfaceWidth_ = retained->width();
