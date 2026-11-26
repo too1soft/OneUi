@@ -7,6 +7,7 @@
 #include "include/core/SkGraphics.h"
 #include "src/core/SkBlitMask.h"
 #include "src/core/SkBlitRow.h"
+#include "src/core/SkColorPriv.h"
 
 #include <cstring>
 #include <emmintrin.h>
@@ -43,18 +44,21 @@ void blendColorRow(SkPMColor* dst, int pixels, SkPMColor color) {
     if (pixels) originalRow(dst, pixels, color);
 }
 
-template<bool BatchRemainder, bool Shuffle, bool Opaque = false>
+enum class MaskTail { PerRow, Batched, Packed };
+
+template<MaskTail Tail, bool Shuffle, bool Opaque = false>
 void blendAlphaMask(SkPMColor* dst, std::size_t dstBytes, const SkAlpha* mask,
         std::size_t maskBytes, SkColor color, int width, int height) {
     if (width <= 0 || height <= 0) return;
     const int vectorWidth = width & ~3;
-    if constexpr (BatchRemainder) {
+    if constexpr (Tail == MaskTail::Batched) {
         if (vectorWidth == 0) {
             originalMask(dst, dstBytes, mask, maskBytes, color, width, height);
             return;
         }
     }
-    const auto source = _mm_set1_epi32(static_cast<int>(SkPreMultiplyColor(color)));
+    const auto premul = SkPreMultiplyColor(color);
+    const auto source = _mm_set1_epi32(static_cast<int>(premul));
     const auto byteMask = _mm_set1_epi8(-1);
     const auto duplicateCoverage = _mm_setr_epi8(0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3);
     const auto duplicateAlpha = _mm_setr_epi8(3, 3, 3, 3, 7, 7, 7, 7, 11, 11, 11, 11, 15, 15, 15, 15);
@@ -89,12 +93,18 @@ void blendAlphaMask(SkPMColor* dst, std::size_t dstBytes, const SkAlpha* mask,
             const auto right = approxScale(target, _mm_xor_si128(alpha, byteMask));
             _mm_storeu_si128(reinterpret_cast<__m128i*>(dstRow + x), _mm_add_epi8(left, right));
         }
-        if constexpr (!BatchRemainder) {
+        if constexpr (Tail == MaskTail::Packed) {
+            for (int x = vectorWidth; x < width; ++x) {
+                const auto left = SkAlphaMulQ(premul, static_cast<unsigned>(maskRow[x]) + 1);
+                // Use the same per-channel rounding as the vector prefix.
+                dstRow[x] = left + SkAlphaMulQ(dstRow[x], 256 - SkGetPackedA32(left));
+            }
+        } else if constexpr (Tail == MaskTail::PerRow) {
             if (vectorWidth < width) originalMask(dstRow + vectorWidth, dstBytes, maskRow + vectorWidth,
                 maskBytes, color, width - vectorWidth, 1);
         }
     }
-    if constexpr (BatchRemainder) {
+    if constexpr (Tail == MaskTail::Batched) {
         if (vectorWidth < width) {
             // The rows are independent. Forward the remaining strip at once.
             originalMask(dst + vectorWidth, dstBytes, mask + vectorWidth, maskBytes, color,
@@ -106,24 +116,25 @@ void blendAlphaMask(SkPMColor* dst, std::size_t dstBytes, const SkAlpha* mask,
 void blendShuffledMask(SkPMColor* dst, std::size_t dstBytes, const SkAlpha* mask,
         std::size_t maskBytes, SkColor color, int width, int height) {
     if (SkColorGetA(color) == SK_AlphaOPAQUE) {
-        blendAlphaMask<true, true, true>(dst, dstBytes, mask, maskBytes, color, width, height);
+        blendAlphaMask<MaskTail::Batched, true, true>(dst, dstBytes, mask, maskBytes, color, width, height);
     } else {
-        blendAlphaMask<true, true>(dst, dstBytes, mask, maskBytes, color, width, height);
+        blendAlphaMask<MaskTail::Batched, true>(dst, dstBytes, mask, maskBytes, color, width, height);
     }
 }
 
 auto selectMaskBlend() {
     wchar_t flag[2]{};
     if (GetEnvironmentVariableW(L"ONEUI_WIN32_RASTER_MASK", flag, 2) == 1) {
-        if (flag[0] == L'1') return &blendAlphaMask<true, false>;
+        if (flag[0] == L'3') return &blendAlphaMask<MaskTail::Packed, false>;
+        if (flag[0] == L'1') return &blendAlphaMask<MaskTail::Batched, false>;
         if (flag[0] == L'2') {
             int features[4]{};
             __cpuid(features, 1);
             constexpr int ssse3 = 1 << 9;
-            return features[2] & ssse3 ? &blendShuffledMask : &blendAlphaMask<true, false>;
+            return features[2] & ssse3 ? &blendShuffledMask : &blendAlphaMask<MaskTail::Batched, false>;
         }
     }
-    return &blendAlphaMask<false, false>;
+    return &blendAlphaMask<MaskTail::PerRow, false>;
 }
 } // namespace
 #endif
