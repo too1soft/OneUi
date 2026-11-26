@@ -231,6 +231,10 @@
                 presentedResizeGeneration_ = resizeGeneration;
             }
         };
+        std::optional<win32::VirtualRowDamage> virtualRowDamage;
+        if (fullPaint && !threadedGl && !useGPU && !interactiveResizeActive_ && win32::VirtualRowDamage::enabled()) {
+            virtualRowDamage.emplace(hwnd_, dc, clientRect, callbackWindowAlive_);
+        }
         paintTrace.mark(PaintTrace::Canvas);
         if (content_ && content_->visible()) {
             const double contentStartMs = currentTimeMs();
@@ -473,6 +477,7 @@
 
         EndPaint(hwnd_, &paintStruct);
         if (blitSucceeded) {
+            if (virtualRowDamage) virtualRowDamage->presented();
             recordResizePresentation();
             if (coalesceHandoffRefresh_) {
                 handoffRefresh_.painted(pixelSize, scale, fullPaint, currentTimeMs(), handoffFeedbackEpoch);

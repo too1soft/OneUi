@@ -1,5 +1,6 @@
 #include "oneui/layout/virtual_template_list.h"
 #include "internal/scroll_trace.h"
+#include "internal/virtual_row_paint.h"
 #include <limits>
 #include <algorithm>
 #include <cmath>
@@ -184,7 +185,13 @@ void VirtualTemplateList::publishRows(std::set<std::string> keep, Rect content, 
         }
     }
     for (const auto& [key, row] : mounted_) if (!keep.count(key)) removed.push_back(key);
-    reconcileChildren(std::move(children));
+    {
+        using Paint = internal::VirtualRowPaint;
+        const Widget* covered = tableViewport_ && Paint::layoutForPaint == this && removed.empty()
+            ? this : nullptr;
+        const Paint::Scope<const Widget*> publication(Paint::publishingRows, covered);
+        reconcileChildren(std::move(children));
+    }
     for (const auto& key : removed) { mounted_.erase(key); if (retire_) retire_(key); }
 }
 Rect VirtualTemplateList::thumb() const {

@@ -32,6 +32,7 @@
     }
 
     void queueInvalidation(const RECT* rect, bool requestsFeedback = true) {
+        if (rect && win32::VirtualRowDamage::hold(this, hwnd_)) return;
         if (requestsFeedback) prioritizeHandoffFeedback();
         const bool wasPending = invalidationPending_;
         mergeInvalidation(rect);

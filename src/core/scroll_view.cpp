@@ -1,4 +1,5 @@
 #include "oneui/layout/scroll_view.h"
+#include "internal/virtual_row_paint.h"
 
 #include "oneui/style.h"
 #include "oneui/layout/stack.h"
@@ -140,7 +141,13 @@ void ScrollView::paint(Canvas& canvas) {
     canvas.save();
     canvas.clipRect(viewport);
     if (content_ && content_->visible()) {
-        content_->paint(canvas);
+        using Paint = internal::VirtualRowPaint;
+        if (Paint::fullClientPaint) {
+            const Paint::Scope<const Widget*> clipped(Paint::clippedContents, content_.get());
+            content_->paint(canvas);
+        } else {
+            content_->paint(canvas);
+        }
     }
     canvas.restore();
 

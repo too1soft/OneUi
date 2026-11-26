@@ -3,6 +3,7 @@
 #include "internal/interaction_reset.h"
 #include "internal/widget_presentation.h"
 #include "paint_invalidation_scope.h"
+#include "internal/virtual_row_paint.h"
 #if defined(_WIN32)
 #include "internal/accessibility_frame_revision.h"
 #endif
@@ -502,6 +503,11 @@ void Widget::invalidateImpl(bool paintOnly) {
     // The flag follows synchronous rectangle propagation only. A normal content
     // mutation during an invalidator callback resets it for that entire chain.
     detail::PaintInvalidationScope scope(paintOnly);
+    using Paint = internal::VirtualRowPaint;
+    const void* owner = !paintOnly && Paint::commit == this && !Paint::damageOwner
+        ? rectInvalidatorOwner_ : nullptr;
+    std::optional<Paint::Scope<const void*>> damage;
+    if (owner || Paint::damageOwner) damage.emplace(Paint::damageOwner, owner);
     if (rectInvalidator_) {
         const Rect current=paintBounds();Rect dirty=current;
         if(lastPaintInvalidation_.width>0 && lastPaintInvalidation_.height>0) {
@@ -518,6 +524,12 @@ void Widget::invalidateImpl(bool paintOnly) {
 
 void Widget::invalidateRect(Rect rect) {
     if (!paintInvalidation) ++measureRevision_;
+    using Paint = internal::VirtualRowPaint;
+    std::optional<Paint::Scope<const void*>> damage;
+    if (Paint::damageOwner) {
+        const void* owner = Paint::damageOwner == this ? rectInvalidatorOwner_ : nullptr;
+        damage.emplace(Paint::damageOwner, owner);
+    }
     if (rectInvalidator_) {
         rectInvalidator_(rect);
     } else {

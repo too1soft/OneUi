@@ -2,6 +2,7 @@
 #include "internal/developer_tools.h"
 #include "oneui/view.h"
 #include "internal/key_dispatch_scope.h"
+#include "internal/virtual_row_paint.h"
 #include "oneui/controls/popup.h"
 #include "oneui/controls/interactive_surface.h"
 
@@ -136,7 +137,16 @@ Rect View::paintBounds() const {
 }
 
 void View::paint(Canvas& canvas) {
-    { internal::FrameSpan span(internal::FrameStage::Layout); layoutChildren(); }
+    {
+        internal::FrameSpan span(internal::FrameStage::Layout);
+        using Paint = internal::VirtualRowPaint;
+        if (Paint::clippedContents == this) {
+            const Paint::Scope<const Widget*> layout(Paint::layoutForPaint, this);
+            layoutChildren();
+        } else {
+            layoutChildren();
+        }
+    }
     const auto clip = canvas.clipBounds();
     const bool canCullByClip = clip && clip->width > 0.0f && clip->height > 0.0f;
     const auto intersectsClip = [&](const Widget& child) {
