@@ -29,6 +29,10 @@
 
         if (win32::AngleD3D11Context::requested()) {
             if (win32::experimentalAngleWorkerEnabled()) {
+                if (win32::experimentalAngleWorkerStartsEarly() && glWorker_.startBeforeSoftwareFrame(hwnd_)) {
+                    rendererInfo_.reason = "angle-worker-starting";
+                    return;
+                }
                 glWorkerWaitingForSoftwareFrame_ = true;
                 rendererInfo_.reason = "angle-worker-waiting-for-software-frame";
                 return;

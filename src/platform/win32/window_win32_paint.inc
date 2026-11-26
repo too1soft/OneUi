@@ -454,7 +454,9 @@
         }
         if (blitSucceeded && startupPicture) {
             if (captureWorkerStartup) {
-                glWorker_.setStartupPicture({std::move(startupPicture), width, height});
+                if (glWorker_.setStartupPicture({std::move(startupPicture), width, height})) {
+                    internal::traceInteractionPaint(interactionPaint, "worker_first_software_frame", "software", 1);
+                }
             } else {
                 deferredStartupGl_.submitPicture(std::move(startupPicture), width, height);
             }

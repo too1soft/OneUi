@@ -69,9 +69,10 @@ struct GlRenderWorker::State {
         internal::InteractionSnapshot trace;
     };
 
-    State(HWND window, HMONITOR monitor, POINT origin, bool angle, StartupGlScene scene)
-        : window(window), monitor(monitor), origin(origin), angle(angle), captureStartup(monitor && scene.picture),
-          startup(std::move(scene)), ownsLiveWindow(!monitor) {}
+    State(HWND window, HMONITOR monitor, POINT origin, bool angle, StartupGlScene scene, bool awaitSoftwareFrame)
+        : window(window), monitor(monitor), origin(origin), angle(angle),
+          captureStartup(monitor && (awaitSoftwareFrame || scene.picture)), startup(std::move(scene)),
+          awaitingSoftwareFrame(awaitSoftwareFrame), ownsLiveWindow(!monitor) {}
 
     void run() noexcept;
     void render();
@@ -93,6 +94,7 @@ struct GlRenderWorker::State {
     Frame lastPlanned;
     std::uint64_t latestPlan = 0;
     bool recordingWaiter = false;
+    bool awaitingSoftwareFrame;
     bool stopping = false;
     bool ownsLiveWindow;
     bool finished = false;
@@ -111,6 +113,15 @@ bool experimentalAngleWorkerEnabled() noexcept {
         wchar_t value[2]{};
         return AngleD3D11Context::requested() &&
             GetEnvironmentVariableW(L"ONEUI_WIN32_ANGLE_WORKER", value, 2) == 1 && value[0] == L'1';
+    }();
+    return enabled;
+}
+
+bool experimentalAngleWorkerStartsEarly() noexcept {
+    static const bool enabled = [] {
+        wchar_t value[2]{};
+        return experimentalAngleWorkerEnabled() &&
+            GetEnvironmentVariableW(L"ONEUI_WIN32_ANGLE_WORKER_EARLY_CONTEXT", value, 2) == 1 && value[0] == L'1';
     }();
     return enabled;
 }
@@ -156,8 +167,17 @@ bool GlRenderWorker::start(HWND window) {
 }
 
 bool GlRenderWorker::start(HWND window, StartupGlScene scene) {
+    return start(window, std::move(scene), false);
+}
+
+bool GlRenderWorker::startBeforeSoftwareFrame(HWND window) {
+    return start(window, {}, true);
+}
+
+bool GlRenderWorker::start(HWND window, StartupGlScene scene, bool awaitSoftwareFrame) {
     if (state_) return false;
     const bool angle = experimentalAngleWorkerEnabled();
+    if (awaitSoftwareFrame && !angle) return false;
     POINT origin{};
     HMONITOR monitor = nullptr;
     if (angle) {
@@ -182,7 +202,7 @@ bool GlRenderWorker::start(HWND window, StartupGlScene scene) {
                 task->state->run();
             }
         };
-        auto state = std::make_shared<State>(window, monitor, origin, angle, std::move(scene));
+        auto state = std::make_shared<State>(window, monitor, origin, angle, std::move(scene), awaitSoftwareFrame);
         auto task = std::make_unique<Task>();
         task->state = state;
         if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
@@ -206,13 +226,19 @@ bool GlRenderWorker::wantsStartupPicture() const noexcept {
     return state_ && state_->captureStartup.load(std::memory_order_relaxed);
 }
 
-void GlRenderWorker::setStartupPicture(StartupGlScene scene) {
-    if (!wantsStartupPicture()) return;
+bool GlRenderWorker::setStartupPicture(StartupGlScene scene) {
+    if (!wantsStartupPicture() || !scene.picture) return false;
+    auto& state = *state_;
     StartupGlScene replaced;
-    std::lock_guard lock(state_->mutex);
-    if (state_->captureStartup.load(std::memory_order_relaxed)) {
-        replaced = std::exchange(state_->startup, std::move(scene));
+    bool firstSoftwareFrame;
+    {
+        std::lock_guard lock(state.mutex);
+        if (!state.captureStartup.load(std::memory_order_relaxed)) return false;
+        replaced = std::exchange(state.startup, std::move(scene));
+        firstSoftwareFrame = std::exchange(state.awaitingSoftwareFrame, false);
     }
+    if (firstSoftwareFrame) state.changed.notify_one();
+    return firstSoftwareFrame;
 }
 
 bool GlRenderWorker::ready() const noexcept {
@@ -346,10 +372,12 @@ void GlRenderWorker::State::render() {
     const bool initialized = renderer.initialize(census && !censusAfterScene, retryCensus ? &firstFinishMs : nullptr);
     StartupGlScene warmup;
     {
-        std::lock_guard lock(mutex);
+        std::unique_lock lock(mutex);
         if (stopping) return;
         internal::traceInteractionPaint(startupTrace, "worker_context_end", "opengl-worker", initialized ? 1 : 0);
         if (!initialized) return;
+        changed.wait(lock, [&] { return stopping || !awaitingSoftwareFrame; });
+        if (stopping) return;
         captureStartup.store(false, std::memory_order_relaxed);
         warmup = std::move(startup);
         if (warmup.picture) {

@@ -29,8 +29,9 @@ public:
     ~GlRenderWorker();
     bool start(HWND window);
     bool start(HWND window, StartupGlScene scene);
+    bool startBeforeSoftwareFrame(HWND window);
     bool wantsStartupPicture() const noexcept;
-    void setStartupPicture(StartupGlScene scene);
+    bool setStartupPicture(StartupGlScene scene);
     bool ready() const noexcept;
     bool vsync() const noexcept;
     // Register a single notification if a recorded scene is waiting for the worker.
@@ -42,6 +43,7 @@ public:
     void stop();
 
 private:
+    bool start(HWND window, StartupGlScene scene, bool awaitSoftwareFrame);
     struct State;
 
     std::shared_ptr<State> state_;
@@ -49,6 +51,7 @@ private:
 
 bool experimentalGlWorkerEnabled() noexcept;
 bool experimentalAngleWorkerEnabled() noexcept;
+bool experimentalAngleWorkerStartsEarly() noexcept;
 bool experimentalGlWorkerAfterFirstFrame() noexcept;
 bool experimentalGlWorkerPrewarm() noexcept;
 bool experimentalGlWorkerDefersCensus() noexcept;

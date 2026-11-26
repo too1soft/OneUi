@@ -270,9 +270,11 @@
 
     void initialize() override {
         ensureCreated();
-        if (hwnd_ && runtimeConfig_.gpuEnabled && !gpuInitializationAttempted_ && !options_.visible &&
-            !win32::AngleD3D11Context::requested() &&
-            !deferredStartupGl_.arm(hwnd_) && !win32::experimentalGlWorkerDefersCensus()) {
+        if (!hwnd_ || !runtimeConfig_.gpuEnabled || gpuInitializationAttempted_ || options_.visible) return;
+        if (win32::experimentalAngleWorkerStartsEarly()) {
+            initGPU();
+        } else if (!win32::AngleD3D11Context::requested() && !deferredStartupGl_.arm(hwnd_) &&
+                   !win32::experimentalGlWorkerDefersCensus()) {
             gpuWarmup_.start(hwnd_);
         }
     }
