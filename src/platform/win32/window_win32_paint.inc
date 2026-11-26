@@ -232,8 +232,18 @@
             }
         };
         std::optional<win32::VirtualRowDamage> virtualRowDamage;
-        if (fullPaint && !threadedGl && !useGPU && !interactiveResizeActive_ && win32::VirtualRowDamage::enabled()) {
-            virtualRowDamage.emplace(hwnd_, dc, clientRect, callbackWindowAlive_);
+        if (fullPaint && !threadedGl && !interactiveResizeActive_) {
+            if (!useGPU && dc && win32::VirtualRowDamage::softwareEnabled()) {
+                virtualRowDamage.emplace(hwnd_, dc, clientRect, callbackWindowAlive_);
+            } else if (useWgl && !angleContext_ && win32::VirtualRowDamage::directWglEnabled() &&
+                       gpuAvailable_ && windowSurface_ && paintSurface_ &&
+                       windowSurface_->width() == width && windowSurface_->height() == height &&
+                       paintSurface_->width() == width && paintSurface_->height() == height &&
+                       wglGetCurrentContext() == glContext_ && wglGetCurrentDC() == glDC_) {
+                // This path draws the full retained surface to the drawable
+                // and swaps the entire buffer, independent of the GDI clip.
+                virtualRowDamage.emplace(hwnd_, nullptr, clientRect, callbackWindowAlive_);
+            }
         }
         paintTrace.mark(PaintTrace::Canvas);
         if (content_ && content_->visible()) {
@@ -381,6 +391,7 @@
             traceSubmitMs_ += submitMs;
             rendererInfo_.submitMs += submitMs;
             if (swapped) {
+                if (virtualRowDamage) virtualRowDamage->presented();
                 if (!angleResize) recordResizePresentation();
                 textAtlasWarmup_.arm(hwnd_);
                 EndPaint(hwnd_, &paintStruct);
