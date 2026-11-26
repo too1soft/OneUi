@@ -29,7 +29,9 @@ namespace oneui::text {
 namespace {
 void warmDrawMetrics(const SkFont& font, SkSpan<const SkGlyphID> glyphs) {
     const char* enabled = std::getenv("ONEUI_QA_WARM_DRAW_GLYPH_METRICS");
-    if (!enabled || std::string_view(enabled) != "1") return;
+    const std::string_view version = enabled ? enabled : "";
+    if (version != "1" && version != "2") return;
+    const bool warmMasks = version == "2";
 
     // Trial for the unit-scale WGL retained surface. Device paint uses separate
     // luminance and subpixel phases from the canonical shaping strike.
@@ -46,7 +48,10 @@ void warmDrawMetrics(const SkFont& font, SkSpan<const SkGlyphID> glyphs) {
             sktext::StrikeMutationMonitor mutation(strike.get());
             for (int phase = 0; phase < phases; ++phase) {
                 const SkPackedGlyphID packed(glyph, SkPoint::Make(phase * 0.25f, 0.0f), mask);
-                strike->digestFor(skglyph::kDirectMask, packed);
+                const auto digest = strike->digestFor(skglyph::kDirectMask, packed);
+                if (warmMasks && digest.actionFor(skglyph::kDirectMask) == skglyph::GlyphAction::kAccept) {
+                    strike->prepareForImage(strike->glyph(digest));
+                }
             }
         }
     }
