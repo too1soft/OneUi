@@ -6,44 +6,95 @@ use std::time::{Duration, Instant};
 const MAX_UPDATES_PER_TURN: usize = 16;
 const TURN_BUDGET: Duration = Duration::from_millis(2);
 
-/// A one-shot replacement for an already queued terminal frame.
-///
-/// A replacement uses the existing dispatcher callback. It expires when
-/// the window takes the frame or another submission replaces it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TerminalFrameRefreshOutcome {
+    Replaced,
+    QueuedAfterTake,
+    FrameTaken,
+    QueueAdvanced,
+    ViewUnavailable,
+}
+
+/// A one-shot refresh tied to a particular terminal submission.
 pub struct PendingTerminalFrame {
-    state: Arc<TerminalViewState>,
-    marker: Arc<()>,
+    handle: TerminalViewHandle,
+    sequence: u64,
+    allow_after_take: bool,
+}
+
+#[derive(Default)]
+pub(super) struct TerminalFrameQueue {
+    pub(super) pending: Option<TerminalFrameUpdate>,
+    sequence: u64,
+    can_refresh: bool,
+}
+
+impl TerminalFrameQueue {
+    fn push(&mut self, update: TerminalFrameUpdate) -> Option<TerminalFrameUpdate> {
+        self.sequence = self.sequence.wrapping_add(1);
+        self.can_refresh = matches!(update.selection, TerminalFrameSelection::Preserve);
+        self.pending.replace(update)
+    }
 }
 
 impl PendingTerminalFrame {
+    /// Replaces the original update only while it remains queued.
     pub fn replace<T: AsRef<str> + PartialEq + Send + 'static>(
         self,
         frame: TerminalFrame<T>,
     ) -> bool {
-        let frame = Box::new(frame);
-        let mut pending = self
+        self.complete(frame, false) == TerminalFrameRefreshOutcome::Replaced
+    }
+
+    /// Refreshes this submission. Recovery reservations can enqueue the frame
+    /// after the original was taken as long as there has been no newer update.
+    pub fn commit<T: AsRef<str> + PartialEq + Send + 'static>(
+        self,
+        frame: TerminalFrame<T>,
+    ) -> TerminalFrameRefreshOutcome {
+        let allow_after_take = self.allow_after_take;
+        self.complete(frame, allow_after_take)
+    }
+
+    fn complete<T: AsRef<str> + PartialEq + Send + 'static>(
+        self,
+        frame: TerminalFrame<T>,
+        allow_after_take: bool,
+    ) -> TerminalFrameRefreshOutcome {
+        use TerminalFrameRefreshOutcome::*;
+
+        let update = TerminalFrameUpdate {
+            frame: Box::new(frame),
+            selection: TerminalFrameSelection::Preserve,
+        };
+        let mut queue = self
+            .handle
             .state
-            .pending_update
+            .frame_queue
             .lock()
             .expect("terminal pending update lock poisoned");
-        let Some(update) = pending.as_mut() else {
-            return false;
-        };
-        if self.state.raw.load(Ordering::Acquire).is_null()
-            || !update
-                .replacement
-                .as_ref()
-                .is_some_and(|marker| Arc::ptr_eq(marker, &self.marker))
-        {
-            return false;
+        if self.handle.state.raw.load(Ordering::Acquire).is_null() {
+            return ViewUnavailable;
         }
-        let previous = std::mem::replace(&mut update.frame, frame);
-        update.replacement = None;
-        drop(pending);
+        if queue.sequence != self.sequence || !queue.can_refresh {
+            return QueueAdvanced;
+        }
+        let had_pending = queue.pending.is_some();
+        if !had_pending && !allow_after_take {
+            return FrameTaken;
+        }
+        let previous = queue.push(update);
+        drop(queue);
         // The displaced frame can release a large owned grid (or user text).
         // Let the window take the replacement while that storage is released.
         drop(previous);
-        true
+        if had_pending {
+            Replaced
+        } else if self.handle.schedule_pending_frame().is_ok() {
+            QueuedAfterTake
+        } else {
+            ViewUnavailable
+        }
     }
 }
 
@@ -77,23 +128,31 @@ impl<T: AsRef<str> + PartialEq + Send + 'static> QueuedTerminalFrame for Termina
 impl TerminalViewHandle {
     /// Offers replacement only for a queued frame with no selection command.
     pub fn pending_frame_replacement(&self) -> Option<PendingTerminalFrame> {
-        let mut pending = self
+        self.reserve_frame_refresh(false)
+    }
+
+    /// Reserves the latest selection-preserving submission. With recovery
+    /// enabled it can be refreshed even after the window takes it.
+    pub fn reserve_frame_refresh(&self, allow_after_take: bool) -> Option<PendingTerminalFrame> {
+        let queue = self
             .state
-            .pending_update
+            .frame_queue
             .lock()
             .expect("terminal pending update lock poisoned");
-        if self.state.raw.load(Ordering::Acquire).is_null()
-            || !self.state.update_scheduled.load(Ordering::Acquire)
-        {
+        if self.state.raw.load(Ordering::Acquire).is_null() || !queue.can_refresh {
             return None;
         }
-        let update = pending.as_mut()?;
-        if !matches!(update.selection, TerminalFrameSelection::Preserve) {
-            return None;
+        match queue.pending {
+            Some(_) if !self.state.update_scheduled.load(Ordering::Acquire) => return None,
+            None if !allow_after_take => return None,
+            _ => {}
         }
+        let sequence = queue.sequence;
+        drop(queue);
         Some(PendingTerminalFrame {
-            state: Arc::clone(&self.state),
-            marker: Arc::clone(update.replacement.get_or_insert_with(|| Arc::new(()))),
+            handle: self.clone(),
+            sequence,
+            allow_after_take,
         })
     }
 
@@ -103,21 +162,21 @@ impl TerminalViewHandle {
         &self,
         frame: TerminalFrame<T>,
     ) -> bool {
-        let frame = Box::new(frame);
-        let mut pending = self
+        let update = TerminalFrameUpdate {
+            frame: Box::new(frame),
+            selection: TerminalFrameSelection::Preserve,
+        };
+        let mut queue = self
             .state
-            .pending_update
+            .frame_queue
             .lock()
             .expect("terminal pending update lock poisoned");
-        if self.state.raw.load(Ordering::Acquire).is_null() || pending.is_some() {
+        if self.state.raw.load(Ordering::Acquire).is_null() || queue.pending.is_some() {
             return false;
         }
-        *pending = Some(TerminalFrameUpdate {
-            frame,
-            selection: TerminalFrameSelection::Preserve,
-            replacement: None,
-        });
-        drop(pending);
+        let previous = queue.push(update);
+        drop(queue);
+        drop(previous);
         self.schedule_pending_frame().is_ok()
     }
 
@@ -126,19 +185,21 @@ impl TerminalViewHandle {
         frame: TerminalFrame<T>,
         selection: TerminalFrameSelection,
     ) -> Result<(), Error> {
+        let update = TerminalFrameUpdate {
+            frame: Box::new(frame),
+            selection,
+        };
+        let mut queue = self
+            .state
+            .frame_queue
+            .lock()
+            .expect("terminal pending update lock poisoned");
         if self.state.raw.load(Ordering::Acquire).is_null() {
             return Err(Error::WidgetDestroyed);
         }
-
-        *self
-            .state
-            .pending_update
-            .lock()
-            .expect("terminal pending update lock poisoned") = Some(TerminalFrameUpdate {
-            frame: Box::new(frame),
-            selection,
-            replacement: None,
-        });
+        let previous = queue.push(update);
+        drop(queue);
+        drop(previous);
 
         self.schedule_pending_frame()
     }
@@ -153,12 +214,16 @@ impl TerminalViewHandle {
             .dispatcher
             .dispatch(move || handle.drain_pending_frame())
         {
-            self.state.update_scheduled.store(false, Ordering::Release);
-            self.state
-                .pending_update
+            let mut queue = self
+                .state
+                .frame_queue
                 .lock()
-                .expect("terminal pending update lock poisoned")
-                .take();
+                .expect("terminal pending update lock poisoned");
+            self.state.update_scheduled.store(false, Ordering::Release);
+            queue.can_refresh = false;
+            let removed = queue.pending.take();
+            drop(queue);
+            drop(removed);
             return Err(error);
         }
         Ok(())
@@ -174,9 +239,10 @@ impl TerminalViewHandle {
         self.state.update_scheduled.store(false, Ordering::Release);
         let has_pending = self
             .state
-            .pending_update
+            .frame_queue
             .lock()
             .expect("terminal pending update lock poisoned")
+            .pending
             .is_some();
         if has_pending {
             // Return to the native loop so input and paint can run between
@@ -189,9 +255,10 @@ impl TerminalViewHandle {
 impl TerminalViewState {
     pub(super) fn apply_pending_frame(&self) -> bool {
         let Some(update) = self
-            .pending_update
+            .frame_queue
             .lock()
             .expect("terminal pending update lock poisoned")
+            .pending
             .take()
         else {
             return false;

@@ -1,7 +1,7 @@
 use super::frame_queue::QueuedTerminalFrame;
 use super::{
-    TerminalCell, TerminalCursor, TerminalCursorStyle, TerminalFrame, TerminalView,
-    TerminalViewState,
+    TerminalCell, TerminalCursor, TerminalCursorStyle, TerminalFrame, TerminalFrameRefreshOutcome,
+    TerminalView, TerminalViewState,
 };
 use crate::{Window, WindowOptions};
 use std::any::Any;
@@ -90,7 +90,7 @@ pub(crate) fn pending_replacement_releases_displaced_storage_without_the_queue_l
         fn drop(&mut self) {
             if let Some(state) = self.state.upgrade() {
                 self.unlocked
-                    .store(state.pending_update.try_lock().is_ok(), Ordering::Release);
+                    .store(state.frame_queue.try_lock().is_ok(), Ordering::Release);
             }
         }
     }
@@ -103,9 +103,10 @@ pub(crate) fn pending_replacement_releases_displaced_storage_without_the_queue_l
     let unlocked = Arc::new(AtomicBool::new(false));
     terminal
         .state
-        .pending_update
+        .frame_queue
         .lock()
         .unwrap()
+        .pending
         .as_mut()
         .unwrap()
         .frame = Box::new(DropProbe {
@@ -140,6 +141,40 @@ pub(crate) fn empty_queue_recovery_cannot_displace_a_pending_frame() {
         .downcast_ref::<TerminalFrame>()
         .unwrap();
     assert_eq!(last.cells[0].text, "3");
+}
+
+pub(crate) fn reserved_frame_can_follow_a_take_but_not_a_newer_submission() {
+    use TerminalFrameRefreshOutcome::*;
+
+    let window = Window::new(&WindowOptions::default()).expect("create test window");
+    let terminal = TerminalView::new().expect("create terminal");
+    window.set_content(terminal.as_widget());
+    let handle = window.terminal_view_handle(&terminal);
+    assert!(handle.reserve_frame_refresh(true).is_none());
+
+    handle.submit_frame(frame(1)).unwrap();
+    let ordinary = handle.pending_frame_replacement().unwrap();
+    let recovery = handle.reserve_frame_refresh(true).unwrap();
+    terminal.apply_pending_frame();
+    assert_eq!(ordinary.commit(frame(2)), FrameTaken);
+    let already_taken = handle.reserve_frame_refresh(true).unwrap();
+    assert_eq!(recovery.commit(frame(3)), QueuedAfterTake);
+    assert_eq!(already_taken.commit(frame(4)), QueueAdvanced);
+    terminal.apply_pending_frame();
+
+    let stale = handle.reserve_frame_refresh(true).unwrap();
+    handle.submit_frame_clearing_selection(frame(5)).unwrap();
+    terminal.apply_pending_frame();
+    assert_eq!(stale.commit(frame(6)), QueueAdvanced);
+    assert!(handle.reserve_frame_refresh(true).is_none());
+    let last = terminal.state.last_applied_frame.lock().unwrap();
+    let last = last
+        .as_ref()
+        .unwrap()
+        .as_any()
+        .downcast_ref::<TerminalFrame>()
+        .unwrap();
+    assert_eq!(last.cells[0].text, "5");
 }
 
 pub(crate) fn updates_yield_to_other_window_callbacks() {

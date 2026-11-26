@@ -60,6 +60,10 @@ macro_rules! native_tests {
                 "empty_queue_recovery_cannot_displace_a_pending_frame",
                 super::terminal::frame_queue_tests::empty_queue_recovery_cannot_displace_a_pending_frame,
             ));
+            cases.push((
+                "reserved_frame_can_follow_a_take_but_not_a_newer_submission",
+                super::terminal::frame_queue_tests::reserved_frame_can_follow_a_take_but_not_a_newer_submission,
+            ));
             super::test_runner::run(&cases)
         }
     };

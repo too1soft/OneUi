@@ -3,19 +3,20 @@
 #[path = "terminal_frame_queue.rs"]
 mod frame_queue;
 pub use frame_queue::PendingTerminalFrame;
-#[path = "terminal_local_pointer.rs"]
-mod local_pointer;
+pub use frame_queue::TerminalFrameRefreshOutcome;
 #[cfg(test)]
 #[path = "terminal_frame_queue_tests.rs"]
 pub(super) mod frame_queue_tests;
+#[path = "terminal_local_pointer.rs"]
+mod local_pointer;
 
 use super::choice_controls::{run_bool_changed_callback, BoolChangedCallback};
 use super::key_event::RawKeyEvent;
 use super::terminal_render::{apply_terminal_grid, apply_terminal_view_options};
 use super::terminal_types::{
     TerminalAuxiliaryButtonAction, TerminalCell, TerminalColor, TerminalCursor,
-    TerminalCursorStyle, TerminalFrame, TerminalFrameSelection, TerminalPointerEvent, TerminalSelection,
-    TerminalViewOptions, TerminalViewport,
+    TerminalCursorStyle, TerminalFrame, TerminalFrameSelection, TerminalPointerEvent,
+    TerminalSelection, TerminalViewOptions, TerminalViewport,
 };
 use super::visual_style::Rect;
 use super::{
@@ -60,7 +61,7 @@ struct TerminalViewportCallback {
 
 struct TerminalViewState {
     raw: AtomicPtr<sys::OneUiWidget>,
-    pending_update: Mutex<Option<TerminalFrameUpdate>>,
+    frame_queue: Mutex<frame_queue::TerminalFrameQueue>,
     last_applied_frame: Mutex<Option<Box<dyn frame_queue::QueuedTerminalFrame>>>,
     update_scheduled: AtomicBool,
     honor_application_cursor_style: AtomicBool,
@@ -69,7 +70,6 @@ struct TerminalViewState {
 struct TerminalFrameUpdate {
     frame: Box<dyn frame_queue::QueuedTerminalFrame>,
     selection: TerminalFrameSelection,
-    replacement: Option<Arc<()>>,
 }
 
 /// A thread-safe producer for the latest native terminal frame.
@@ -288,7 +288,7 @@ impl TerminalView {
         Ok(Self {
             state: Arc::new(TerminalViewState {
                 raw: AtomicPtr::new(widget.as_raw()),
-                pending_update: Mutex::new(None),
+                frame_queue: Mutex::default(),
                 last_applied_frame: Mutex::new(None),
                 update_scheduled: AtomicBool::new(false),
                 honor_application_cursor_style: AtomicBool::new(false),
@@ -860,9 +860,10 @@ impl Drop for TerminalView {
             .raw
             .store(std::ptr::null_mut(), Ordering::Release);
         self.state
-            .pending_update
+            .frame_queue
             .lock()
             .expect("terminal pending update lock poisoned")
+            .pending
             .take();
         self.state
             .last_applied_frame
