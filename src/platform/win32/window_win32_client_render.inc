@@ -1,3 +1,12 @@
+    bool startupTablePreparationEnabled() const {
+        static const bool enabled = [] {
+            wchar_t value[2]{};
+            return GetEnvironmentVariableW(L"ONEUI_WIN32_STARTUP_TABLE_YIELD", value, 2) == 1 && value[0] == L'1';
+        }();
+        return enabled && rendererInfo_.paints == 1 && !interactiveResizeActive_ &&
+            !gpuAvailable_ && !glWorker_.ready() && win32::experimentalAngleWorkerEnabled();
+    }
+
     // All client render destinations use the live widget tree, logical viewport,
     // DPI/content scale and tooltip state. Printing must not depend on whether
     // the compositor has presented the window, or on a test-only capture build.

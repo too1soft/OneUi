@@ -1,4 +1,5 @@
 #include "internal/scroll_phase_trace.h"
+#include "internal/table_layout_turn.h"
 
 namespace oneui {
 namespace {
@@ -33,6 +34,11 @@ void VirtualTemplateList::layoutInTable(Rect content, Rect viewport) {
 
 void VirtualTemplateList::layoutTableRows() {
     if (!tableLayoutPending_ && tableLayoutVisible_ == visible()) return;
+    auto* turn = children().empty() ? internal::TableLayoutTurn::current : nullptr;
+    if (turn && (turn->skipUnpublishedViewport(tableClip_) || (turn->deferred() && turn->budgetElapsed()))) {
+        turn->defer();
+        return;
+    }
     const bool tracing = internal::scrollTraceEnabled();
     const double started = tracing ? internal::scrollTraceNowMs() : 0.0;
     internal::ScrollPhaseTrace<3> phases(internal::tablePhaseTraceEnabled());
@@ -59,6 +65,18 @@ void VirtualTemplateList::layoutTableRows() {
         for (auto i = first; i <= last; ++i) {
             if (tops_[i + 1] == tops_[i]) continue;
             if (!mounted_.count(keys_[i])) {
+                if (turn && created && turn->budgetElapsed()) {
+                    // Keep the previous presentation and input geometry until
+                    // every required row can be published in one transaction.
+                    tableLayoutPending_ = true;
+                    turn->defer();
+                    if (tracing)
+                        internal::writeScrollTrace(internal::ScrollTraceEvent{
+                            "virtual_template", "table_prepare_slice", reinterpret_cast<std::uintptr_t>(this),
+                            tableClip_.height, top, tops_.back(), static_cast<double>(mounted_.size()), 0, 0,
+                            internal::scrollTraceNowMs() - started, static_cast<double>(created), content.y});
+                    return;
+                }
                 mountRow(i);
                 ++created;
             }

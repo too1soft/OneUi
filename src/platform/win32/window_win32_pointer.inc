@@ -1,5 +1,5 @@
     void updateCursor(Point point, bool force = false) {
-        if (!prepareInputLayout()) return;
+        if (!prepareInputLayout(point)) return;
         CursorKind next = CursorKind::Default;
         if (content_ && content_->visible()) {
             next = content_->cursor(point);
@@ -24,7 +24,7 @@
     void dispatchMouseMove(Point point) {
         trackMouseLeave();
         const auto alive = callbackWindowAlive_;
-        if (!prepareInputLayout()) {
+        if (!prepareInputLayout(point)) {
             if (alive->load(std::memory_order_acquire)) clearTooltip();
             return;
         }

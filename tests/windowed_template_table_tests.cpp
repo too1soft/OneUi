@@ -1,5 +1,6 @@
 #include "oneui/canvas.h"
 #include "oneui/controls/template_table.h"
+#include "internal/table_layout_turn.h"
 
 #include <cmath>
 #include <iostream>
@@ -38,7 +39,7 @@ struct Fixture {
     std::shared_ptr<VirtualTemplateList> rows = std::make_shared<VirtualTemplateList>();
     TemplateTable table{header, rows, true};
 
-    Fixture() {
+    explicit Fixture(bool layout = true) {
         for (int i = 0; i < 50; ++i) {
             keys.push_back(std::to_string(i));
             heights.push_back(44.0f);
@@ -60,7 +61,7 @@ struct Fixture {
         table.setContentHeight(4 + std::accumulate(heights.begin(), heights.end(), 0.0f));
         table.setWheelStep(44);
         table.setFrame({10, 20, 320, 220});
-        table.layoutSubtree();
+        if (layout) table.layoutSubtree();
     }
 };
 
@@ -146,6 +147,43 @@ void testTemporarilyEmptyViewport() {
     require(f.retired == 1 && f.rows->rowFrame("3").height == 0,
             "a viewport without drawable area must still retire removed keys");
 }
+
+void testStartupRowPreparation() {
+    using internal::TableLayoutTurn;
+    Fixture f(false);
+    {
+        TableLayoutTurn turn(std::chrono::milliseconds(0));
+        f.table.layoutSubtree();
+        require(turn.deferred() && f.mounted == 1 && f.rows->children().empty(),
+                "an exhausted preparation turn must leave its first row detached");
+    }
+    {
+        TableLayoutTurn turn(std::optional<Point>{{0, 0}});
+        f.table.layoutSubtree();
+        require(turn.deferred() && f.mounted == 1 && f.rows->children().empty(),
+                "input outside an unpublished table must leave preparation pending");
+    }
+    {
+        TableLayoutTurn turn(std::optional<Point>{{100, 100}});
+        f.table.layoutSubtree();
+        require(!turn.deferred() && f.rows->children().size() == static_cast<size_t>(f.mounted),
+                "input within the viewport must get a complete hit-test tree");
+        const auto first = f.rows->rowFrame("0");
+        require(first.height == 84 && f.table.onMouseDown({{first.x+50, first.y+10}, MouseButton::Left}),
+                "a row prepared before the input turn must receive the press");
+    }
+    Fixture retry(false);
+    {
+        TableLayoutTurn first(std::chrono::milliseconds(0));
+        retry.table.layoutSubtree();
+    }
+    retry.keys.erase(retry.keys.begin());
+    retry.heights.erase(retry.heights.begin());
+    retry.rows->setTableRows(retry.keys, retry.heights, false);
+    retry.table.layoutSubtree();
+    require(retry.retired == 1 && retry.rows->rowFrame("0").height == 0,
+            "refreshing the model must discard a removed detached row");
+}
 }
 
 int main() {
@@ -153,6 +191,7 @@ int main() {
         testGeometryAndPointer();
         testKeyboardAndWheel();
         testTemporarilyEmptyViewport();
+        testStartupRowPreparation();
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';
         return 1;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "oneui/widget.h"
+#include "internal/table_layout_turn.h"
 #include <memory>
 
 namespace oneui::internal {
@@ -21,7 +22,7 @@ public:
         InputLayoutSnapshot& state_;
         bool previous_;
     };
-    bool prepare(const std::shared_ptr<Widget>& root, Rect viewport) {
+    bool prepare(const std::shared_ptr<Widget>& root, Rect viewport, std::optional<Point> pointer = {}) {
         if (!root || resolving_ || painting_) return false;
         if (valid_ && root_.lock() == root && revision_ == root->measureRevision() &&
             sameRect(viewport_, viewport) && sameRect(root->frame(), viewport)) return true;
@@ -32,6 +33,8 @@ public:
             explicit ResolveGuard(bool& value) : active(value) { active = true; }
             ~ResolveGuard() { active = false; }
         } guard(resolving_);
+        std::optional<TableLayoutTurn> turn;
+        if (pointer) turn.emplace(pointer);
         root->setFrame(viewport);
         for (int pass = 0; pass < 4; ++pass) {
             const auto before = root->measureRevision();
@@ -40,7 +43,7 @@ public:
             root_ = root;
             viewport_ = viewport;
             revision_ = before;
-            valid_ = true;
+            valid_ = !turn || !turn->deferred();
             return true;
         }
         // A size observer can invalidate an ancestor during layout. Do not

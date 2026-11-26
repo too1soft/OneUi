@@ -153,6 +153,24 @@
             return;
         }
 
+        if (!threadedGl && !useGPU && content_ && content_->visible() && startupTablePreparationEnabled()) {
+            const auto content = content_;
+            const auto alive = callbackWindowAlive_;
+            internal::TableLayoutTurn turn(std::chrono::milliseconds(2));
+            content->setFrame({0.0f, 0.0f, logicalWidth, logicalHeight});
+            internal::layoutWidgetSubtree(*content);
+            if (!alive->load(std::memory_order_acquire)) return;
+            if (turn.deferred() || content_ != content) {
+                // The surface has not been cleared or drawn into. Let input
+                // dispatch run before we prepare the rest of the viewport.
+                EndPaint(hwnd_, &paintStruct);
+                InvalidateRect(hwnd_, &dirtyRect, FALSE);
+                internal::traceInteractionPaint(interactionPaint, "startup_table_yield", "software");
+                internal::traceInteractionPaint(interactionPaint, "paint_end", "software", 0);
+                return;
+            }
+        }
+
         SkCanvas* skCanvas = threadedGl ? nullptr : paintSurface_->getCanvas();
         const bool fullPaint = dirtyX == 0 && dirtyY == 0 && dirtyWidth == width && dirtyHeight == height;
         const bool captureWorkerStartup = !useGPU && fullPaint && IsWindowVisible(hwnd_) &&
