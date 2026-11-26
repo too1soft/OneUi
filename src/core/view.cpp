@@ -10,6 +10,22 @@
 #include <unordered_set>
 
 namespace oneui {
+namespace {
+
+template<class Visit>
+void forEachChildSnapshot(const std::vector<std::shared_ptr<Widget>>& children, Visit visit) {
+    // A child's notification can reenter its parent and replace the children.
+    // Retain the whole original list before calling any of them.
+    if (children.size() == 1) {
+        const auto child = children.front();
+        visit(child);
+        return;
+    }
+    const auto snapshot = children;
+    for (const auto& child : snapshot) visit(child);
+}
+
+} // namespace
 
 struct View::ChildAnimationRelay {
     View* parent;
@@ -26,8 +42,7 @@ std::shared_ptr<Widget> View::activeFocusChild() const {
 void View::setTextEnvironment(std::wstring family, float scale) {
     Widget::setTextEnvironment(family, scale);
     family = textFontFamily();
-    const auto children = children_;
-    for (const auto& child : children) child->setTextEnvironment(family, scale);
+    forEachChildSnapshot(children_, [&](const auto& child) { child->setTextEnvironment(family, scale); });
 }
 namespace {
 
@@ -111,8 +126,7 @@ void View::setAnimationScheduler(std::function<void()> scheduler) {
 
 void View::styleScopeChanged() {
     Widget::styleScopeChanged();
-    const auto children = children_;
-    for (const auto& child : children) child->inheritStyleScope(styleScope(), this);
+    forEachChildSnapshot(children_, [&](const auto& child) { child->inheritStyleScope(styleScope(), this); });
 }
 
 void View::installChildCallbacks(Widget& child) {
