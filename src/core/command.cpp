@@ -48,26 +48,30 @@ struct CommandScope::Data {
     bool alive = true;
     std::map<std::string, std::shared_ptr<Entry>> entries;
 };
-CommandScope::CommandScope() : data_(std::make_shared<Data>()) {}
+CommandScope::CommandScope() = default;
 CommandScope::~CommandScope() {
+    if (!data_) return;
     data_->alive = false;
     for (const auto& item : data_->entries) item.second->active = false;
 }
 Subscription CommandScope::registerCommand(std::string id, std::function<void()> execute,
                                           std::function<bool()> enabled, std::optional<KeyChord> shortcut) {
     if (id.empty() || id.find('\0') != std::string::npos || unicode::toUtf8(unicode::fromUtf8(id)) != id ||
-        !execute || data_->entries.count(id))
+        !execute || (data_ && data_->entries.count(id)))
         throw std::invalid_argument("Invalid or duplicate OneUI command registration");
     if (shortcut) {
         shortcut->key = canonical(shortcut->key);
         shortcut->modifiers = modifiers(shortcut->modifiers);
         if (shortcut->key.empty() || (shortcut->modifiers & ~15u)) throw std::invalid_argument("Invalid OneUI shortcut");
-        for (const auto& item : data_->entries) {
-            const auto& key = item.second->shortcut;
-            if (key && key->key == shortcut->key && key->modifiers == shortcut->modifiers)
-                throw std::invalid_argument("Duplicate OneUI shortcut in command scope");
+        if (data_) {
+            for (const auto& item : data_->entries) {
+                const auto& key = item.second->shortcut;
+                if (key && key->key == shortcut->key && key->modifiers == shortcut->modifiers)
+                    throw std::invalid_argument("Duplicate OneUI shortcut in command scope");
+            }
         }
     }
+    if (!data_) data_ = std::make_shared<Data>();
     auto entry = std::make_shared<Data::Entry>(Data::Entry{std::move(execute), std::move(enabled), std::move(shortcut), true});
     data_->entries.emplace(id, entry);
     return Subscription([weak = std::weak_ptr<Data>(data_), id = std::move(id)] {
@@ -79,6 +83,7 @@ Subscription CommandScope::registerCommand(std::string id, std::function<void()>
 }
 CommandResult CommandScope::query(const std::string& id) const {
     const auto data = data_;
+    if (!data) return CommandResult::NotFound;
     const auto found = data->entries.find(id);
     if (found == data->entries.end()) return CommandResult::NotFound;
     const auto entry = found->second;
@@ -87,6 +92,7 @@ CommandResult CommandScope::query(const std::string& id) const {
 }
 CommandResult CommandScope::execute(const std::string& id) const {
     const auto data = data_;
+    if (!data) return CommandResult::NotFound;
     const auto found = data->entries.find(id);
     if (found == data->entries.end()) return CommandResult::NotFound;
     const auto entry = found->second;
@@ -114,7 +120,7 @@ std::string logicalKeyName(const KeyEvent& event) {
     return {};
 }
 CommandResult CommandScope::dispatchKey(const KeyEvent& event, const std::string& logicalKey) const {
-    if (!event.pressed) return CommandResult::NotFound;
+    if (!event.pressed || !data_) return CommandResult::NotFound;
     const auto key = canonical(logicalKey.empty() ? logicalKeyName(event) : logicalKey);
     const unsigned flags = (event.shift ? KeyModifierShift : 0u) | (event.control ? KeyModifierControl : 0u) |
         (event.alt ? KeyModifierAlt : 0u) | (event.win ? KeyModifierMeta : 0u);

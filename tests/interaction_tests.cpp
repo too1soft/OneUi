@@ -17,6 +17,11 @@ static oneui::KeyEvent primary(char key) {
 int main() {
     using namespace oneui;
     try {
+        CommandScope empty;
+        require(empty.query("unknown") == CommandResult::NotFound &&
+                empty.execute("unknown") == CommandResult::NotFound &&
+                empty.dispatchKey(primary('K')) == CommandResult::NotFound,
+                "unregistered command scope skips routing");
         auto view = std::make_shared<View>();
         auto field = std::make_shared<TextField>();
         view->add(field); view->requestFocus(field.get());
