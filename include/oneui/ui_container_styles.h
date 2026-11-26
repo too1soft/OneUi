@@ -1,6 +1,8 @@
 #pragma once
+#if defined(_WIN32)
 #include <cstddef>
 #include <memory_resource>
+#endif
 #include <string_view>
 // Included after ui_declarative.h's definitions. Query application belongs to
 // declarative composition; the parser/evaluator and isolated layout are core.
@@ -64,11 +66,15 @@ inline void StyleRegistry::applyBaseLayouts(bool force) {
     const oneui::detail::view_mount_timing::Scope measure(oneui::detail::view_mount_timing::BaseLayout);
     pruneEntries();
     const auto revision = baseLayoutRevision_;
+#if defined(_WIN32)
     // Parent discovery and the resolved-style index are both pass-local.
     // Allocate their nodes together, keeping the same strong parent snapshot.
     alignas(std::max_align_t) std::byte localStorage[4096];
     std::pmr::monotonic_buffer_resource scratch(localStorage, sizeof(localStorage));
     std::pmr::unordered_map<const Widget*,std::shared_ptr<Stack>> parents(&scratch);
+#else
+    std::unordered_map<const Widget*,std::shared_ptr<Stack>> parents;
+#endif
     parents.reserve(entries_.size());
     for (const auto& entry : entries_)
         if (auto stack = std::dynamic_pointer_cast<Stack>(entry.widget.lock()))
@@ -85,7 +91,11 @@ inline void StyleRegistry::applyBaseLayouts(bool force) {
     // Repeated rows have many controls with identical unconditional styles.
     // Keep this cache within the pass: both the sheet and the entry strings
     // already belong to the registry, and layout application stays per child.
+#if defined(_WIN32)
     std::pmr::map<std::pair<std::string_view, std::string_view>, BaseLayoutStyle> resolved(&scratch);
+#else
+    std::map<std::pair<std::string_view, std::string_view>, BaseLayoutStyle> resolved;
+#endif
     bool applied = false;
     for (const auto& entry : entries_) if (auto widget = entry.widget.lock()) {
         auto parent = parents.find(widget.get());
