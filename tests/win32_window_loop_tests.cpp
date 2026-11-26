@@ -425,8 +425,11 @@ void testSlowSoftwarePaintLetsQueuedInputRun(QueuedPaintSource source, const cha
             });
         } else {
             window.requestAnimationFrame([&](double) {
-                window.requestRedraw();
                 window.post([&] {
+                    // Set up the recent software frame in this callback so
+                    // this case only measures the posted-work paint decision.
+                    InvalidateRect(hwnd, nullptr, FALSE);
+                    UpdateWindow(hwnd);
                     window.requestRedraw();
                     postRelease();
                 });
