@@ -65,6 +65,16 @@
         const auto resizeGeneration = interactiveResizeActive_ ? liveResizeGeneration_ : 0;
         RECT clientRect{};
         GetClientRect(hwnd_, &clientRect);
+        const SIZE pixelSize{clientRect.right - clientRect.left, clientRect.bottom - clientRect.top};
+        const float scale = normalizedDpiScale();
+        bool deferHandoffRaster = false;
+        if (coalesceHandoffRefresh_) {
+            deferHandoffRaster = glWorker_.softwareHandoffPending() && !interactiveResizeActive_ &&
+                handoffRefresh_.defer(hwnd_, pixelSize, scale, paintStartMs);
+            if (!deferHandoffRaster) {
+                handoffRefresh_.synchronize(hwnd_, !glWorker_.ready() || glWorker_.softwareHandoffPending());
+            }
+        }
 
         if (gpuAvailable_ && angleContext_ && !angleContext_->makeCurrent()) {
             shutdownGPU();
@@ -114,7 +124,6 @@
             invalidationPending_ = false;
             invalidateAll_ = false;
         }
-        const float scale = normalizedDpiScale();
         const float logicalWidth = static_cast<float>(width) / scale;
         const float logicalHeight = static_cast<float>(height) / scale;
 
@@ -124,9 +133,10 @@
             dirtyRect = workerFrame.damage;
         }
         const double surfaceStartMs = currentTimeMs();
-        const auto surfaceUpdate = !threadedGl || workerFrame.softwareHandoff
+        const bool deferredHandoffPaint = deferHandoffRaster && workerFrame.softwareHandoff;
+        const auto surfaceUpdate = !threadedGl || (workerFrame.softwareHandoff && !deferredHandoffPaint)
             ? preparePaintSurfaces(width, height) : PaintSurfaceUpdate{};
-        const bool handoffPaint = workerFrame.softwareHandoff && paintSurface_;
+        const bool handoffPaint = workerFrame.softwareHandoff && !deferredHandoffPaint && paintSurface_;
         const double surfaceMs = currentTimeMs() - surfaceStartMs;
         paintTrace.mark(PaintTrace::Surface);
         if (traceLayout && surfaceUpdate.allocatedBacking) {
@@ -249,6 +259,10 @@
         paintTrace.mark(PaintTrace::End);
 
         if (threadedGl && !handoffPaint) {
+            if (deferredHandoffPaint) {
+                handoffRefresh_.retainDamage(paintStruct.rcPaint);
+                internal::traceInteractionPaint(interactionPaint, "worker_handoff_raster_deferred", "software");
+            }
             EndPaint(hwnd_, &paintStruct);
             const bool accepted = enqueueWorkerPaint(std::move(startupPicture), workerFrame, interactionPaint);
             if (accepted) {
@@ -457,7 +471,10 @@
         }
 
         EndPaint(hwnd_, &paintStruct);
-        if (blitSucceeded) recordResizePresentation();
+        if (blitSucceeded) {
+            recordResizePresentation();
+            if (coalesceHandoffRefresh_) handoffRefresh_.painted(pixelSize, scale, fullPaint, currentTimeMs());
+        }
         if (handoffPaint) {
             // The worker cannot claim presentation until the software paint has
             // ended and the same immutable scene is ready for GPU playback.

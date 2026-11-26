@@ -8,6 +8,7 @@
 #include "window_win32_text_atlas.h"
 #include "window_win32_deferred_gl.h"
 #include "window_win32_gl_worker.h"
+#include "window_win32_handoff_refresh.h"
 #include "window_win32_gpu_backing.h"
 #include "accessibility_proxy_win32.h"
 #include "internal/frame_profile.h"
@@ -141,6 +142,8 @@ public:
 #include "window_win32_pointer_dispatch.inc"
 #include "window_win32_gpu.inc"
     win32::GlRenderWorker glWorker_;
+    win32::SoftwareHandoffRefresh handoffRefresh_;
+    const bool coalesceHandoffRefresh_ = win32::experimentalAngleCoalescesSoftwareHandoff();
     bool glWorkerWaitingForSoftwareFrame_ = false;
     const internal::RuntimeConfig runtimeConfig_ = internal::RuntimeConfig::fromEnvironment();
 #if ONEUI_DEVELOPER_TOOLS

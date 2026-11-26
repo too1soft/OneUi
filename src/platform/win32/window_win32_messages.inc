@@ -1,4 +1,5 @@
     LRESULT handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
+        if (coalesceHandoffRefresh_) handoffRefresh_.observeInput(hwnd_, message);
         if (message == WM_SHOWWINDOW || message == WM_SIZE || message == WM_ACTIVATE ||
             message == WM_STYLECHANGED || message == WM_DPICHANGED) {
             queueStateChange();
@@ -193,6 +194,10 @@
             flushDeferredFullPaint();
             return 0;
         case WM_TIMER:
+            if (wParam == win32::SoftwareHandoffRefresh::timer) {
+                handoffRefresh_.synchronize(hwnd_, !glWorker_.ready() || glWorker_.softwareHandoffPending());
+                return 0;
+            }
             if (wParam == win32::TextAtlasWarmup::timer) {
                 textAtlasWarmup_.onTimer(hwnd_, glContext_, glDC_, gpuAvailable_ ? grContext_.get() : nullptr,
                     paintSurface_.get(), interactiveResizeActive_);

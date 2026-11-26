@@ -34,6 +34,7 @@ public:
     bool wantsStartupPicture() const noexcept;
     bool setStartupPicture(StartupGlScene scene);
     bool ready() const noexcept;
+    bool softwareHandoffPending() const noexcept;
     bool vsync() const noexcept;
     // Register a single notification if a recorded scene is waiting for the worker.
     bool deferRecording();
@@ -57,5 +58,6 @@ bool experimentalGlWorkerAfterFirstFrame() noexcept;
 bool experimentalGlWorkerPrewarm() noexcept;
 bool experimentalGlWorkerDefersCensus() noexcept;
 bool experimentalGlWorkerPacesRecording() noexcept;
+bool experimentalAngleCoalescesSoftwareHandoff() noexcept;
 
 } // namespace oneui::win32
