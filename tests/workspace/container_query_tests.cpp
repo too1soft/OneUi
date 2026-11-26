@@ -2,6 +2,7 @@
 #include "oneui/layout/container_query.h"
 #include "oneui/controls/text_field.h"
 #include "../support/recording_canvas.h"
+#include <functional>
 #include <iostream>
 #include <stdexcept>
 using namespace oneui;
@@ -145,6 +146,40 @@ void displayOnlyReplay() {
     paint();check(child.widget->visible(),"same-size query reapplied after base applyAll");
     check(mount.styles()->queryDiagnostics().empty(),"display-only query remains valid");
 }
+void authoredFlexDuringVisibilityChange() {
+    class FocusProbe : public View {
+    public:
+        std::function<void()> onHidden;
+        bool onFocusChanged(bool focused) override {
+            if (!focused && onHidden) onHidden();
+            return View::onFocusChanged(focused);
+        }
+    };
+    ui::StyleRegistry styles;
+    styles.replace(".frame {container-name:shell;container-type:size;}"
+                   "@container shell (width < 80px) {.target {display:none;}}");
+    auto row = std::make_shared<Stack>();
+    auto child = std::make_shared<FocusProbe>();
+    row->add(child);
+    ui::Element container(ui::Node(row), "Column");
+    container.classes = "frame";
+    ui::Element target(ui::Node(child), "Text");
+    target.classes = "target";
+    styles.addFresh(container);
+    styles.addFresh(target);
+    test_support::RecordingCanvas canvas;
+    row->setFrame({0, 0, 100, 100});
+    row->paint(canvas);
+    child->onHidden = [&] {
+        StackFlex flex;
+        flex.basis = 110;
+        styles.updateAuthoredFlex(child, flex);
+    };
+    row->setFrame({0, 0, 60, 100});
+    row->paint(canvas);
+    const auto flex = row->explicitFlex(child);
+    check(!child->visible() && flex && flex->basis == 110, "hiding via a query preserves a synchronous flex update");
+}
 void refreshAuthoredLayout() {
     ui::Mount mount({}, std::make_shared<ui::StyleRegistry>(), {});
     auto child = mount.make("Text", {}, "cell");
@@ -227,6 +262,6 @@ void maxWidthClamps() {
     check(!mount.styles()->queryDiagnostics().empty(),"cross-axis max-width diagnosed");
 }
 }
-int main(){try{comparisons();stackChildren();layout(StackEngine::Yoga);layout(StackEngine::Legacy);invalidCssAndDependencies();maxWidthClamps();displayOnlyReplay();refreshAuthoredLayout();projectedSelectorsAndTokens();sharedBaseLayoutSelectors();
-    std::cout<<"PASS container queries and Stack: 10 groups\n";return 0;
+int main(){try{comparisons();stackChildren();layout(StackEngine::Yoga);layout(StackEngine::Legacy);invalidCssAndDependencies();maxWidthClamps();displayOnlyReplay();authoredFlexDuringVisibilityChange();refreshAuthoredLayout();projectedSelectorsAndTokens();sharedBaseLayoutSelectors();
+    std::cout<<"PASS container queries and Stack: 11 groups\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

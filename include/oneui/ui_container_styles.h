@@ -130,6 +130,7 @@ inline void StyleRegistry::configureQuery(const std::shared_ptr<Widget>& widget,
 }
 inline void StyleRegistry::applyLayout(const Entry& entry,const StyleBox& box,const std::shared_ptr<Stack>& parent,const StyleLayout& layout) {
     auto widget=entry.widget.lock();if(!widget)return;
+    const auto entryIndex = static_cast<std::size_t>(&entry - entries_.data());
     if (!entry.layoutDefaults) {
         auto& defaults = entry.layoutDefaults.emplace();
         hasCapturedLayoutDefaults_ = true;
@@ -138,17 +139,24 @@ inline void StyleRegistry::applyLayout(const Entry& entry,const StyleBox& box,co
         if(parent)defaults.flex=parent->explicitFlex(widget);
         if(auto stack=std::dynamic_pointer_cast<Stack>(widget)){defaults.direction=stack->direction();defaults.wrap=stack->wrap();}
     }
-    const auto defaults = *entry.layoutDefaults;
-    widget->setPreferredSize({box.width.value_or(defaults.size.width),box.height.value_or(defaults.size.height)});
+    const auto baseSize = entry.layoutDefaults->size;
+    const auto baseDirection = entry.layoutDefaults->direction;
+    const auto baseWrap = entry.layoutDefaults->wrap;
+    widget->setPreferredSize({box.width.value_or(baseSize.width),box.height.value_or(baseSize.height)});
     if(auto page=std::dynamic_pointer_cast<ContainerPage>(widget))page->setDisplay(box.display);
     else widget->setLayoutVisible(box.display.value_or(true));
     if(auto stack=std::dynamic_pointer_cast<Stack>(widget)) {
-        stack->setDirection(box.flexDirection?(*box.flexDirection=="row"?StackDirection::Row:StackDirection::Column):defaults.direction);
-        if(!stack->setWrap(box.flexWrap.value_or(defaults.wrap)))throw std::invalid_argument("CONTAINER_WRAP: Yoga required");
+        stack->setDirection(box.flexDirection?(*box.flexDirection=="row"?StackDirection::Row:StackDirection::Column):baseDirection);
+        if(!stack->setWrap(box.flexWrap.value_or(baseWrap)))throw std::invalid_argument("CONTAINER_WRAP: Yoga required");
     } else if(box.flexDirection||box.flexWrap||box.containerName)
         throw std::invalid_argument("CONTAINER_CONSUMPTION: flex direction/wrap/container requires Stack");
     if(parent) {
-        auto flex=defaults.flex.value_or(StackFlex{});
+        // Applying visibility or size can synchronously change the bound flex.
+        // Reacquire the entry after those callbacks, including after a move.
+        const auto* current = entryIndex < entries_.size() && entries_[entryIndex].widget.lock() == widget
+            ? &entries_[entryIndex] : indexedEntry(widget);
+        const auto authoredFlex = current && current->layoutDefaults ? current->layoutDefaults->flex : std::nullopt;
+        auto flex=authoredFlex.value_or(StackFlex{});
         if(box.flexBasis)flex.basis=box.flexBasis;
         if(layout.flexBasisPercent)flex.basis.reset();
         if(box.flexGrow)flex.grow=*box.flexGrow;
@@ -165,7 +173,7 @@ inline void StyleRegistry::applyLayout(const Entry& entry,const StyleBox& box,co
                 :"CONTAINER_CONSUMPTION: max-width requires a row parent");
             flex.max=*main;
         }
-        if(defaults.flex||box.flexBasis||layout.flexBasisPercent||layout.flexOrder||box.flexGrow||box.flexShrink||box.width||box.height||box.minWidth||box.minHeight||layout.maxWidth||layout.maxHeight)parent->setFlex(widget,flex);
+        if(authoredFlex||box.flexBasis||layout.flexBasisPercent||layout.flexOrder||box.flexGrow||box.flexShrink||box.width||box.height||box.minWidth||box.minHeight||layout.maxWidth||layout.maxHeight)parent->setFlex(widget,flex);
         else parent->clearFlex(widget);
         parent->setFlexPresentation(widget,{layout.flexBasisPercent,layout.flexOrder.value_or(0)});
     }
