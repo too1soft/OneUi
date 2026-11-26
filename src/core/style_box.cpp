@@ -8,7 +8,7 @@
 
 namespace oneui {
 using namespace style_detail;
-StyleBox mergeStyleBox(StyleBox base, const StyleBox& overlay) {
+void style_detail::mergeStyleBoxInto(StyleBox& base, const StyleBox& overlay) {
     if(overlay.containerName)base.containerName=overlay.containerName;
     if(overlay.sizeContainment)base.sizeContainment=overlay.sizeContainment;
     if(overlay.display)base.display=overlay.display;
@@ -132,10 +132,14 @@ StyleBox mergeStyleBox(StyleBox base, const StyleBox& overlay) {
         base.shadowsSpecified = true;
         base.shadows = overlay.shadows;
     }
+}
+
+StyleBox mergeStyleBox(StyleBox base, const StyleBox& overlay) {
+    mergeStyleBoxInto(base, overlay);
     return base;
 }
 
-StyleBox resolveBackgroundOpacity(StyleBox box) {
+void style_detail::applyBackgroundOpacity(StyleBox& box) {
     auto multiply = [](std::optional<Color>& color, std::optional<float> opacity) {
         if (color && opacity) color = applyOpacity(*color, opacity);
     };
@@ -150,6 +154,10 @@ StyleBox resolveBackgroundOpacity(StyleBox box) {
     multiply(box.content.backgroundColor, box.contentBackgroundOpacity);
     box.backgroundOpacity.reset();
     box.contentBackgroundOpacity.reset();
+}
+
+StyleBox resolveBackgroundOpacity(StyleBox box) {
+    applyBackgroundOpacity(box);
     return box;
 }
 

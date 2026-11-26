@@ -22,6 +22,8 @@ std::optional<EasingCurve> parseEasingCurve(const std::string& value);
 bool applyTransitionShorthand(StyleRule& rule, const std::string& value);
 float clampOpacity(float value);
 Color applyOpacity(Color color, std::optional<float> opacity);
+void applyBackgroundOpacity(StyleBox& box);
+void mergeStyleBoxInto(StyleBox& base, const StyleBox& overlay);
 std::optional<Insets> parseInsets(const std::string& value);
 bool applyBorderShorthand(StyleRule& rule, const std::string& value, bool outline);
 std::optional<float> effectNumber(const std::string& token, const std::string& suffix);

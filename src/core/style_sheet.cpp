@@ -167,17 +167,16 @@ StyleBox StyleSheet::resolve(const StyleNode& node) const {
     if (auto cached = resolveCache_.find(cacheKey); cached != resolveCache_.end()) return cached->second;
     StyleBox resolved;
     for (const auto* rule : matchingRules(node)) {
-        StyleBox current = rule->box;
-        if (!rule->declarations.empty()) {
-            // A declaration depends on this sheet's tokens, not on the node
-            // matching its selector. Share it across classes and pseudo-states.
-            // Token/rule edits already invalidate the entire resolve cache.
-            const auto declarationKey = std::size_t(rule - ruleData_->rules.data());
-            if (auto cached = declarationCache_.find(declarationKey); cached != declarationCache_.end()) {
-                current = cached->second;
-                resolved = mergeStyleBox(std::move(resolved), current);
-                continue;
-            }
+        if (rule->declarations.empty()) {
+            mergeStyleBoxInto(resolved, rule->box);
+            continue;
+        }
+        // A declaration depends on this sheet's tokens, not on the node
+        // matching its selector. Share it across classes and pseudo-states.
+        // Token/rule edits already invalidate the entire resolve cache.
+        const auto declarationKey = std::size_t(rule - ruleData_->rules.data());
+        auto cached = declarationCache_.find(declarationKey);
+        if (cached == declarationCache_.end()) {
             StyleRule dynamicRule;
             for (const auto& [property, value] : rule->declarations) {
                 // The declaration was validated when the CSS was loaded. A
@@ -189,12 +188,13 @@ StyleBox StyleSheet::resolve(const StyleNode& node) const {
                     break;
                 }
             }
-            current = mergeStyleBox(std::move(current), dynamicRule.box);
-            declarationCache_.emplace(declarationKey, current);
+            auto current = rule->box;
+            mergeStyleBoxInto(current, dynamicRule.box);
+            cached = declarationCache_.emplace(declarationKey, std::move(current)).first;
         }
-        resolved = mergeStyleBox(std::move(resolved), current);
+        mergeStyleBoxInto(resolved, cached->second);
     }
-    resolved = resolveBackgroundOpacity(std::move(resolved));
+    applyBackgroundOpacity(resolved);
     rememberNodeStyle(resolveCache_, cacheKey, resolved);
     return resolved;
 }

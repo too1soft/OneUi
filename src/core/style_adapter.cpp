@@ -9,6 +9,13 @@
 namespace oneui {
 namespace {
 
+const StyleBox& opacityAdjustedBox(const StyleBox& box, std::optional<StyleBox>& storage) {
+    if (!box.backgroundOpacity && !box.contentBackgroundOpacity) return box;
+    storage.emplace(box);
+    style_detail::applyBackgroundOpacity(*storage);
+    return *storage;
+}
+
 FocusRingStyleOverride focusRingOverrideFromStyleBox(const StyleBox& box) {
     FocusRingStyleOverride ring;
     ring.color = box.outlineColor;
@@ -66,7 +73,8 @@ StyleBox resolveState(const StyleSheet& sheet, StyleNode& node, StylePseudoMask 
 } // namespace
 
 ButtonStateStyleOverride buttonStateStyleOverrideFromStyleBox(const StyleBox& input) {
-    const auto box = resolveBackgroundOpacity(input);
+    std::optional<StyleBox> adjusted;
+    const auto& box = opacityAdjustedBox(input, adjusted);
     ButtonStateStyleOverride override;
     override.opacity = box.opacity;
     override.padding = box.padding;
@@ -91,7 +99,8 @@ ButtonStateStyleOverride buttonStateStyleOverrideFromStyleBox(const StyleBox& in
 }
 
 TextFieldStateStyleOverride textFieldStateStyleOverrideFromStyleBox(const StyleBox& input) {
-    const auto box = resolveBackgroundOpacity(input);
+    std::optional<StyleBox> adjusted;
+    const auto& box = opacityAdjustedBox(input, adjusted);
     TextFieldStateStyleOverride override;
     override.background = box.background.color;
     override.gradient = box.background.gradient;
@@ -114,7 +123,8 @@ TextFieldStateStyleOverride textFieldStateStyleOverrideFromStyleBox(const StyleB
 }
 
 SwitchStateStyleOverride switchStateStyleOverrideFromStyleBox(const StyleBox& input) {
-    const auto box = resolveBackgroundOpacity(input);
+    std::optional<StyleBox> adjusted;
+    const auto& box = opacityAdjustedBox(input, adjusted);
     SwitchStateStyleOverride override;
     override.trackBackground = box.background.color;
     override.thumbBackground = box.content.backgroundColor;
@@ -129,7 +139,8 @@ SwitchStateStyleOverride switchStateStyleOverrideFromStyleBox(const StyleBox& in
 }
 
 SelectStateStyleOverride selectStateStyleOverrideFromStyleBox(const StyleBox& input) {
-    const auto box = resolveBackgroundOpacity(input);
+    std::optional<StyleBox> adjusted;
+    const auto& box = opacityAdjustedBox(input, adjusted);
     SelectStateStyleOverride override;
     override.fontSize = box.fontSize;
     override.background = box.background.color;
@@ -154,7 +165,8 @@ SelectStateStyleOverride selectStateStyleOverrideFromStyleBox(const StyleBox& in
 }
 
 ListStateStyleOverride listStateStyleOverrideFromStyleBox(const StyleBox& input) {
-    const auto box = resolveBackgroundOpacity(input);
+    std::optional<StyleBox> adjusted;
+    const auto& box = opacityAdjustedBox(input, adjusted);
     ListStateStyleOverride override;
     override.background = box.background.color;
     override.border = box.borderColor;
@@ -185,7 +197,8 @@ ListStateStyleOverride listStateStyleOverrideFromStyleBox(const StyleBox& input)
 }
 
 InteractiveSurfaceStateStyle interactiveSurfaceStateStyleFromStyleBox(const StyleBox& input) {
-    const auto box = resolveBackgroundOpacity(input);
+    std::optional<StyleBox> adjusted;
+    const auto& box = opacityAdjustedBox(input, adjusted);
     InteractiveSurfaceStateStyle style;
     if (box.background.color) {
         style.background = *box.background.color;
@@ -244,7 +257,7 @@ SwitchStyleOverride switchStyleOverrideFromStyleSheet(const StyleSheet& sheet, S
 
 CheckboxStyleOverride checkboxStyleOverrideFromStyleSheet(const StyleSheet& sheet, StyleNode node) {
     const auto resolve = [&](StylePseudoMask state) {
-        const auto box = resolveBackgroundOpacity(resolveState(sheet, node, state));
+        const auto box = resolveState(sheet, node, state);
         CheckboxStateStyleOverride result;
         result.boxBackground = box.background.color;
         result.boxBorder = box.borderColor;
