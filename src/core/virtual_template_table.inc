@@ -1,3 +1,5 @@
+#include "internal/scroll_phase_trace.h"
+
 namespace oneui {
 namespace {
 bool sameTableRect(const Rect& a, const Rect& b) {
@@ -33,6 +35,7 @@ void VirtualTemplateList::layoutTableRows() {
     if (!tableLayoutPending_ && tableLayoutVisible_ == visible()) return;
     const bool tracing = internal::scrollTraceEnabled();
     const double started = tracing ? internal::scrollTraceNowMs() : 0.0;
+    internal::ScrollPhaseTrace<3> phases(internal::tablePhaseTraceEnabled());
     size_t created = 0;
     tableLayoutVisible_ = visible();
     auto content = frame().inset(tableInsets_);
@@ -41,6 +44,7 @@ void VirtualTemplateList::layoutTableRows() {
     const float bottom = top + tableClip_.height;
     std::set<std::string> keep;
     const bool hasViewport = content.width > 0.0f && tableClip_.width > 0.0f && tableClip_.height > 0.0f;
+    phases.mark();
     if (visible() && !hasViewport) {
         // Minimizing can deliver a zero client area before the next layout.
         // Keep already realized rows, but retire keys removed from the model.
@@ -61,8 +65,12 @@ void VirtualTemplateList::layoutTableRows() {
             keep.insert(keys_[i]);
         }
     }
+    phases.mark();
     publishRows(std::move(keep), content, 0.0f);
+    phases.mark();
     tableLayoutPending_ = false;
+    phases.write("virtual_table_phases", reinterpret_cast<std::uintptr_t>(this),
+        static_cast<double>(created), {"viewport", "mount_rows", "publish_rows"});
     if (tracing && !mounted_.empty()) {
         internal::writeScrollTrace(internal::ScrollTraceEvent{
             "virtual_template", "table_layout", reinterpret_cast<std::uintptr_t>(this),

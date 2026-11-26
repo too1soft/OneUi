@@ -1,4 +1,5 @@
 #include "oneui/layout/virtual_template_list.h"
+#include "internal/scroll_phase_trace.h"
 #include <limits>
 
 namespace oneui::views {
@@ -25,23 +26,29 @@ std::shared_ptr<Instance> Runtime::buildVirtual(uint32_t node, const Scopes& con
             measurements.emplace();
             mountTiming.emplace(timing::Instantiate, &*measurements);
         }
+        internal::ScrollPhaseTrace<5> phases(internal::tablePhaseTraceEnabled());
         const auto source = owner->repeatSource->items.at(index);
         auto scope = runtime->acquire({source->identity, source->vm}, source->table.model_id, false);
         try {
             runtime->connect(scope);
             const auto nested = owner->scopes.withRow(scope);
+            phases.mark();
             auto row = runtime->build(runtime->image.records[oneview::TMPL][repeat[5]][1], nested);
             row->parent = owner;
+            phases.mark();
             {
                 std::optional<timing::Scope> updateTiming;
                 if (measurements) updateTiming.emplace(timing::InitialUpdate);
                 runtime->update(row);
             }
+            phases.mark();
             // These descendants are assembled after the initial stylesheet pass.
             // Resolve dimensions into their new parents before measuring the row.
             runtime->factory.styles()->applyDetachedBaseLayouts(row->element.widget);
+            phases.mark();
             if (owner->published) activate(row);
             owner->rows.emplace(key, row);
+            phases.mark();
             if (measurements) {
                 mountTiming.reset();
                 internal::ScrollTraceEvent event;
@@ -53,6 +60,9 @@ std::shared_ptr<Instance> Runtime::buildVirtual(uint32_t node, const Scopes& con
                 internal::writeScrollTrace(event);
                 writeRepeatBuildTrace(event, *measurements);
             }
+            phases.write("view_virtual_row_phases",
+                reinterpret_cast<std::uintptr_t>(owner->element.widget.get()), static_cast<double>(index),
+                {"scope", "build_tree", "update_bindings", "base_layout", "activate"});
             return row->element.widget;
         } catch (...) {
             runtime->closeScope(scope);

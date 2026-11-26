@@ -15,6 +15,33 @@
 namespace oneui::win32 {
 namespace {
 
+bool startupLowPriorityEnabled() noexcept {
+    static const bool enabled = [] {
+        wchar_t value[2]{};
+        return GetEnvironmentVariableW(L"ONEUI_WIN32_ANGLE_STARTUP_LOW_PRIORITY", value, 2) == 1 && value[0] == L'1';
+    }();
+    return enabled;
+}
+
+class StartupThreadPriority {
+public:
+    explicit StartupThreadPriority(bool enabled) noexcept
+        : lowered_(enabled && GetThreadPriority(GetCurrentThread()) == THREAD_PRIORITY_NORMAL &&
+                   SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL)) {}
+    ~StartupThreadPriority() { restore(); }
+    StartupThreadPriority(const StartupThreadPriority&) = delete;
+    StartupThreadPriority& operator=(const StartupThreadPriority&) = delete;
+
+    bool lowered() const noexcept { return lowered_; }
+    bool restore() noexcept {
+        if (lowered_ && SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_NORMAL)) lowered_ = false;
+        return !lowered_;
+    }
+
+private:
+    bool lowered_;
+};
+
 bool retainedGlWorkerEnabled() noexcept {
     static const bool enabled = [] {
         wchar_t value[2]{};
@@ -352,6 +379,11 @@ void GlRenderWorker::State::run() noexcept {
 
 void GlRenderWorker::State::render() {
     const internal::InteractionSnapshot startupTrace{reinterpret_cast<std::uintptr_t>(window)};
+    const bool limitStartupPriority = angle && monitor && startupLowPriorityEnabled();
+    StartupThreadPriority startupPriority(limitStartupPriority);
+    if (limitStartupPriority)
+        internal::traceInteractionPaint(startupTrace, "worker_startup_priority_lowered", "opengl-worker",
+                                        startupPriority.lowered() ? 1 : 0);
     {
         std::lock_guard lock(mutex);
         if (stopping) return;
@@ -394,6 +426,9 @@ void GlRenderWorker::State::render() {
     // Exercise the default framebuffer and real Ganesh submits before
     // acquiring the live window, where close would need to wait for us.
     if (warmed && !angle && needsWarmup && rehearseScratchPresentsEnabled() && !renderer.rehearsePresents()) return;
+    if (limitStartupPriority)
+        internal::traceInteractionPaint(startupTrace, "worker_startup_priority_restored", "opengl-worker",
+                                        startupPriority.restore() ? 1 : 0);
     {
         std::lock_guard lock(mutex);
         if (stopping) return;
