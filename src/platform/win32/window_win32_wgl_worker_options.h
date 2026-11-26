@@ -5,6 +5,28 @@
 
 namespace oneui::win32 {
 
+enum class WglStartupRehearsal { Twice, Once, OnceAfterSlowCensus };
+
+inline WglStartupRehearsal wglStartupRehearsal() noexcept {
+    static const auto policy = [] {
+        wchar_t value[2]{};
+        if (GetEnvironmentVariableW(L"ONEUI_WIN32_WGL_REHEARSAL_POLICY", value, 2) == 1) {
+            if (value[0] == L'1') return WglStartupRehearsal::Once;
+            if (value[0] == L'2') return WglStartupRehearsal::OnceAfterSlowCensus;
+        }
+        return WglStartupRehearsal::Twice;
+    }();
+    return policy;
+}
+
+inline bool wglPromotesOnDamage() noexcept {
+    static const bool enabled = [] {
+        wchar_t value[2]{};
+        return GetEnvironmentVariableW(L"ONEUI_WIN32_WGL_PROMOTE_ON_DAMAGE", value, 2) == 1 && value[0] == L'1';
+    }();
+    return enabled;
+}
+
 struct WglWorkerOptions {
     bool enabled;
     bool afterFirstFrame;

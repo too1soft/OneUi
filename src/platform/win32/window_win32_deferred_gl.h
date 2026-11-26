@@ -26,7 +26,7 @@ struct StartupGlScene {
 
 bool prewarmStartupGlScene(GrDirectContext& context, const StartupGlScene& scene, bool retained,
                           sk_sp<SkSurface>* warmedBacking = nullptr, GrSyncCpu sync = GrSyncCpu::kYes);
-bool rehearseStartupGlPresents(GrDirectContext& context, HDC scratchDc);
+bool rehearseStartupGlPresents(GrDirectContext& context, HDC scratchDc, int passes);
 
 class StartupGlScratchWindow {
 public:

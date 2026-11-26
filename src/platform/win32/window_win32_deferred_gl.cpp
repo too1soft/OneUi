@@ -89,7 +89,7 @@ bool prewarmStartupGlScene(GrDirectContext& context, const StartupGlScene& scene
     return submitted;
 }
 
-bool rehearseStartupGlPresents(GrDirectContext& context, HDC scratchDc) {
+bool rehearseStartupGlPresents(GrDirectContext& context, HDC scratchDc, int passes) {
     RECT bounds{};
     if (!GetClientRect(WindowFromDC(scratchDc), &bounds) || bounds.right <= 0 || bounds.bottom <= 0) return false;
     GrGLFramebufferInfo framebuffer{};
@@ -100,7 +100,7 @@ bool rehearseStartupGlPresents(GrDirectContext& context, HDC scratchDc) {
     if (!surface) return false;
     const bool tracing = internal::scrollTraceEnabled();
     const auto now = [tracing] { return tracing ? internal::scrollTraceNowMs() : -1.0; };
-    for (int pass = 1; pass <= 2; ++pass) {
+    for (int pass = 1; pass <= passes; ++pass) {
         surface->getCanvas()->clear(pass == 1 ? SK_ColorBLACK : SK_ColorWHITE);
         const auto flush = now();
         context.flush();

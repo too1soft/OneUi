@@ -427,6 +427,7 @@ void GlRenderWorker::State::render() {
     const auto censusOrder = census ? scratchCensusOrder() : ScratchCensusOrder::BeforeScene;
     const bool censusAfterScene = censusOrder == ScratchCensusOrder::AfterScene;
     const bool retryCensus = censusOrder == ScratchCensusOrder::RetryAfterScene;
+    const auto rehearsal = wglStartupRehearsal();
     double firstFinishMs = -1.0;
     bool initialized = renderer.openDrawable();
     if (initialized && !angle) {
@@ -439,8 +440,9 @@ void GlRenderWorker::State::render() {
             if (stopping) return;
             internal::traceInteractionPaint(startupTrace, "worker_wgl_driver_init_begin", "opengl-worker");
         }
+        const bool measureCensus = retryCensus || rehearsal == WglStartupRehearsal::OnceAfterSlowCensus;
         initialized = renderer.initializeWglGanesh(census && !censusAfterScene,
-                                                   retryCensus ? &firstFinishMs : nullptr);
+                                                   measureCensus ? &firstFinishMs : nullptr);
     }
     StartupGlScene warmup;
     {
@@ -468,7 +470,12 @@ void GlRenderWorker::State::render() {
     if (warmed && (censusAfterScene || missedWait)) renderer.warmDriverCensus();
     // Exercise the default framebuffer and real Ganesh submits before
     // acquiring the live window, where close would need to wait for us.
-    if (warmed && !angle && needsWarmup && options.rehearsePresents && !renderer.rehearsePresents()) return;
+    if (warmed && !angle && needsWarmup && options.rehearsePresents) {
+        constexpr double slowCensusMs = 20.0;
+        const bool onePass = rehearsal == WglStartupRehearsal::Once ||
+            (rehearsal == WglStartupRehearsal::OnceAfterSlowCensus && firstFinishMs >= slowCensusMs);
+        if (!renderer.rehearsePresents(onePass ? 1 : 2)) return;
+    }
     if (limitStartupPriority)
         internal::traceInteractionPaint(startupTrace, "worker_startup_priority_restored", "opengl-worker",
                                         startupPriority.restore() ? 1 : 0);
@@ -500,7 +507,14 @@ void GlRenderWorker::State::render() {
         }
         vsync.store(synced, std::memory_order_relaxed);
         ready.store(true, std::memory_order_release);
-        InvalidateRect(window, nullptr, FALSE);
+        if (!angle) internal::traceInteractionPaint(startupTrace, "worker_wgl_ready", "opengl-worker", 1);
+        if (!angle && needsWarmup && options.softwareHandoff && wglPromotesOnDamage()) {
+            // The software frame is already visible. A regular invalidation
+            // will plan the first GPU frame and include the full client area.
+            internal::traceInteractionPaint(startupTrace, "worker_wgl_wait_for_damage", "opengl-worker", 1);
+        } else {
+            InvalidateRect(window, nullptr, FALSE);
+        }
     }
     const bool supersede = options.presentLatest;
     bool mustPresent = false;

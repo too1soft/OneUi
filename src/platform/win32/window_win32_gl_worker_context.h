@@ -150,8 +150,8 @@ public:
         return prewarmStartupGlScene(*context_, scene, retained, reuse && retained ? &retained_ : nullptr, sync);
     }
 
-    bool rehearsePresents() {
-        return rehearseStartupGlPresents(*context_, dc_);
+    bool rehearsePresents(int passes) {
+        return rehearseStartupGlPresents(*context_, dc_, passes);
     }
 
     const AngleD3D11Context* angleContext() const { return angleContext_.get(); }
