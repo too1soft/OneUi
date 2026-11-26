@@ -67,6 +67,7 @@ public:
     // Resolve authored CSS dimensions into the parent's Yoga constraints after
     // assembly. Native leaf measurement must not override explicit CSS sizes.
     void applyBaseLayouts();
+    void applyDetachedBaseLayouts(const std::shared_ptr<Widget>& root);
     void refreshBaseLayouts();
     void invalidateBaseLayouts() { ++baseLayoutRevision_; }
     // Bound layout attributes remain the base beneath CSS/container overrides.
@@ -107,6 +108,8 @@ private:
     void configureQuery(const std::shared_ptr<Widget>&,const StyleBox&);
     bool evaluateQuery(const std::shared_ptr<Stack>&);
     void applyLayout(const Entry&,const StyleBox&,const std::shared_ptr<Stack>&,const StyleLayout& = {});
+    struct BaseLayoutStyle { StyleBox box; StyleLayout layout; bool applies = false; };
+    BaseLayoutStyle resolveBaseLayout(const Entry&) const;
     void applyBaseLayouts(bool force);
     void restoreQueryLayouts();
     void apply(const Entry& entry, const StyleSheet& supplied) {

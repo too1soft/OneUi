@@ -15,6 +15,49 @@ inline void StyleRegistry::applyBaseLayouts() {
 inline void StyleRegistry::refreshBaseLayouts() {
     applyBaseLayouts(false);
 }
+inline StyleRegistry::BaseLayoutStyle StyleRegistry::resolveBaseLayout(const Entry& entry) const {
+    StyleNode node{syntax::components().at(entry.component), {"one-"+entry.component}, 0};
+    oneui::detail::appendStyleClasses(node.classes, entry.classes);
+    BaseLayoutStyle base{sheet_.resolve(node), sheet_.resolveLayout(node)};
+    const auto& box = base.box;
+    const auto& layout = base.layout;
+    base.applies = box.width || box.height || box.minWidth || box.minHeight ||
+        layout.maxWidth || layout.maxHeight || box.flexBasis || layout.flexBasisPercent ||
+        layout.flexOrder || box.flexGrow || box.flexShrink || box.display ||
+        box.flexDirection || box.flexWrap;
+    return base;
+}
+
+inline void StyleRegistry::applyDetachedBaseLayouts(const std::shared_ptr<Widget>& root) {
+    const oneui::detail::view_mount_timing::Scope measure(oneui::detail::view_mount_timing::BaseLayout);
+    auto view = std::dynamic_pointer_cast<View>(root);
+    if (!view) return;
+
+    // The root has no registered parent yet. Resolve the new relationships
+    // within this row without restoring the dimensions of the existing tree.
+    std::vector<std::shared_ptr<View>> pending{std::move(view)};
+    bool applied = false;
+    while (!pending.empty()) {
+        auto parent = std::move(pending.back());
+        pending.pop_back();
+        const auto stack = indexedEntry(parent) ? std::dynamic_pointer_cast<Stack>(parent) : nullptr;
+        const auto children = parent->children();
+        for (const auto& child : children) {
+            if (stack) {
+                if (const auto* entry = indexedEntry(child)) {
+                    const auto base = resolveBaseLayout(*entry);
+                    if (base.applies) {
+                        applyLayout(*entry, base.box, stack, base.layout);
+                        applied = true;
+                    }
+                }
+            }
+            if (auto nested = std::dynamic_pointer_cast<View>(child)) pending.push_back(std::move(nested));
+        }
+    }
+    if (applied) for (auto& query : queries_) query.second.version = ~size_t{};
+}
+
 inline void StyleRegistry::applyBaseLayouts(bool force) {
     const oneui::detail::view_mount_timing::Scope measure(oneui::detail::view_mount_timing::BaseLayout);
     pruneEntries();
@@ -36,11 +79,6 @@ inline void StyleRegistry::applyBaseLayouts(bool force) {
     // Repeated rows have many controls with identical unconditional styles.
     // Keep this cache within the pass: both the sheet and the entry strings
     // already belong to the registry, and layout application stays per child.
-    struct BaseLayoutStyle {
-        StyleBox box;
-        StyleLayout layout;
-        bool applies = false;
-    };
     std::map<std::pair<std::string_view, std::string_view>, BaseLayoutStyle> resolved;
     bool applied = false;
     for (const auto& entry : entries_) if (auto widget = entry.widget.lock()) {
@@ -48,18 +86,7 @@ inline void StyleRegistry::applyBaseLayouts(bool force) {
         if (parent == parents.end()) continue;
         auto [style, fresh] = resolved.try_emplace({entry.component, entry.classes});
         auto& base = style->second;
-        if (fresh) {
-            StyleNode node{syntax::components().at(entry.component), {"one-"+entry.component}, 0};
-            oneui::detail::appendStyleClasses(node.classes, entry.classes);
-            base.box = sheet_.resolve(node);
-            base.layout = sheet_.resolveLayout(node);
-            const auto& box = base.box;
-            const auto& layout = base.layout;
-            base.applies = box.width || box.height || box.minWidth || box.minHeight ||
-                layout.maxWidth || layout.maxHeight || box.flexBasis || layout.flexBasisPercent ||
-                layout.flexOrder || box.flexGrow || box.flexShrink || box.display ||
-                box.flexDirection || box.flexWrap;
-        }
+        if (fresh) base = resolveBaseLayout(entry);
         if (base.applies) {
             applyLayout(entry, base.box, parent->second, base.layout);
             applied = true;

@@ -29,7 +29,7 @@ std::shared_ptr<Instance> Runtime::buildVirtual(uint32_t node, const Scopes& con
             runtime->update(row);
             // These descendants are assembled after the initial stylesheet pass.
             // Resolve dimensions into their new parents before measuring the row.
-            runtime->factory.styles()->applyBaseLayouts();
+            runtime->factory.styles()->applyDetachedBaseLayouts(row->element.widget);
             if (owner->published) activate(row);
             owner->rows.emplace(key, row);
             return row->element.widget;
