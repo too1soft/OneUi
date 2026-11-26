@@ -7,8 +7,7 @@
 #include <cctype>
 #include <list>
 namespace oneui {
-namespace {
-using namespace style_detail;
+namespace style_detail {
 // Declaration validation and independent view mounts parse the same theme.
 // Keep only immutable parse results; every caller receives its own sheet,
 // tokens and resolution caches. Existing rules/tokens must still be reparsed
@@ -17,6 +16,7 @@ struct ParsedCssCache {
     struct Entry {
         std::string source;
         StyleSheet sheet;
+        std::size_t ruleCount;
     };
     const size_t maxEntries, maxSourceBytes, maxRules;
     std::list<Entry> entries;
@@ -47,20 +47,25 @@ struct ParsedCssCache {
         return &entries.front();
     }
     void remember(const std::string& source, const StyleSheet& sheet) {
-        if (source.size() > maxSourceBytes || sheet.rules().size() > maxRules) return;
+        const auto count = sheet.ruleData_ ? sheet.ruleData_->size() : 0;
+        if (source.size() > maxSourceBytes || count > maxRules) return;
         // Allocate before evicting or changing counters; a failed optimization
         // must not turn successfully parsed CSS into a failed style update.
-        entries.push_front({source, sheet});
+        entries.push_front({source, sheet, count});
         entries.front().sheet.setTransientStyleSheet({});
         sourceBytes += source.size();
-        ruleCount += sheet.rules().size();
+        ruleCount += count;
         while (entries.size() > maxEntries || sourceBytes > maxSourceBytes || ruleCount > maxRules) {
             sourceBytes -= entries.back().source.size();
-            ruleCount -= entries.back().sheet.rules().size();
+            ruleCount -= entries.back().ruleCount;
             entries.pop_back();
         }
     }
 };
+} // namespace style_detail
+
+namespace {
+using namespace style_detail;
 ParsedCssCache& parsedCssCache() {
     thread_local ParsedCssCache cache(8, 2 * 1024 * 1024, 8192);
     return cache;
@@ -139,7 +144,7 @@ void internal::retainViewMountStyles(const std::string& css) {
 
 bool StyleSheet::addRulesFromCss(const std::string& css,std::string* error) {
     try {
-        const bool independent = rules().empty() && customProperties().empty();
+        const bool independent = (!ruleData_ || ruleData_->size() == 0) && customProperties().empty();
         if (independent) {
             const auto* cached = viewMountStyles().find(css);
             if (!cached) cached = parsedCssCache().find(css);
@@ -159,7 +164,16 @@ bool StyleSheet::addRulesFromCss(const std::string& css,std::string* error) {
         if (base && (!prefix || base->source.size() > prefix->source.size())) prefix = base;
         const auto startOfRules = prefix ? prefix->source.size() : 0;
         auto candidate = prefix ? prefix->sheet : *this;
-        if (prefix) candidate.setTransientStyleSheet(transientStyleSheet());
+        if (prefix) {
+            candidate.setTransientStyleSheet(transientStyleSheet());
+            if (auto first = candidate.ruleData_; first && !first->prefix) {
+                candidate.ruleData_ = std::make_shared<RuleData>();
+                candidate.ruleData_->prefix = first;
+                candidate.ruleData_->selectorStates = first->selectorStates;
+                candidate.ruleData_->hasLayoutRules = first->hasLayoutRules;
+                candidate.ruleData_->hasQueries = first->hasQueries;
+            }
+        }
         auto text=css;
         for(size_t start=startOfRules;(start=text.find("/*",start))!=std::string::npos;) {
             auto end=text.find("*/",start+2);
@@ -177,17 +191,16 @@ bool StyleSheet::addRulesFromCss(const std::string& css,std::string* error) {
     }catch(const std::exception& failure){if(error)*error=failure.what();return false;}
 }
 StyleSheet StyleSheet::forContainers(const std::map<std::string,Size>& sizes) const {
-    if (std::none_of(rules().begin(), rules().end(), [](const auto& rule) { return bool(rule.query); }))
-        return *this;
+    if (!ruleData_ || !ruleData_->hasQueries) return *this;
 
     using RuleRange = std::pair<std::size_t, std::size_t>;
     std::vector<RuleRange> selected;
     std::size_t selectedRules = 0;
-    const auto& sourceRules = rules();
-    for (std::size_t begin = 0; begin < sourceRules.size();) {
-        const auto* query = sourceRules[begin].query.get();
+    const auto ruleCount = ruleData_->size();
+    for (std::size_t begin = 0; begin < ruleCount;) {
+        const auto* query = ruleData_->ruleAt(begin).query.get();
         auto end = begin + 1;
-        while (end < sourceRules.size() && sourceRules[end].query.get() == query) ++end;
+        while (end < ruleCount && ruleData_->ruleAt(end).query.get() == query) ++end;
         const auto size = query ? sizes.find(query->name) : sizes.end();
         if (!query || (size != sizes.end() && query->matches(size->second))) {
             if (!selected.empty() && selected.back().second == begin) selected.back().second = end;
@@ -224,20 +237,20 @@ StyleSheet StyleSheet::forContainers(const std::map<std::string,Size>& sizes) co
     result.ruleData_ = std::make_shared<RuleData>();
     // Cold projections keep the same allocation size across changing tiers.
     // Only projections that will be retained need a tighter reservation.
-    const auto capacity = found == projections.end() ? sourceRules.size() : selectedRules;
+    const auto capacity = found == projections.end() ? ruleCount : selectedRules;
     result.ruleData_->rules.reserve(capacity);
     result.ruleData_->selectors.reserve(capacity);
     for (const auto& [begin, end] : selected) {
         for (auto index = begin; index < end; ++index) {
-            auto rule = sourceRules[index];
+            auto rule = ruleData_->ruleAt(index);
             if (rule.query) clearRuleQuery(rule);
             result.ruleData_->rules.push_back(std::move(rule));
-            result.ruleData_->selectors.push_back(ruleData_->selectors[index]);
+            result.ruleData_->selectors.push_back(ruleData_->selectorAt(index));
             result.ruleData_->indexLastRule();
         }
     }
     result.version_ = selectedRules;
-    if (sourceRules.size() <= maxProjectedRules) {
+    if (ruleCount <= maxProjectedRules) {
         try {
             // Record a new selection without keeping its compiled rules. A
             // second visit can reuse them without making a stream of new

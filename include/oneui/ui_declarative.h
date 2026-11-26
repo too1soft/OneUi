@@ -342,11 +342,12 @@ public:
         if (!next.addRulesFromCss(validatedCss,&error)) throw std::invalid_argument(error);
         // Validate resolved tokens too: var(--gradient) must not bypass the
         // strict entry's component consumption checks.
-        for(const auto& rule:next.rules()) if(rule.box.background.gradient || rule.box.background.gradientStart) {
+        next.visitRules([](const StyleRule& rule) {
+            if (!rule.box.background.gradient && !rule.box.background.gradientStart) return;
             const auto tag=rule.selector.substr(0,rule.selector.find_first_of(".:"));
             if(tag!="stack" && tag!="scroll-view" && tag!="button" && tag!="input" && tag!="card")
                 throw std::invalid_argument("Gradient is not consumed by "+tag+" in "+rule.selector);
-        }
+        });
         // Force variable resolution before committing the sheet.
         for (auto& entry : entries_) { StyleNode n{syntax::componentTag(entry.component), {"one-"+entry.component},0}; next.resolve(n); }
         next.setTransientStyleSheet(sheet_.transientStyleSheet());

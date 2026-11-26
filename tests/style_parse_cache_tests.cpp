@@ -236,6 +236,37 @@ void loweredThemeCanBeExtended() {
             "the suffix applies without altering the cached base");
 }
 
+void cachedBaseAndScopedRulesKeepOneCascade() {
+    const auto baseCss = theme + "\nbutton.cached:hover { height: 30px; }\n"
+        "@container pane (width >= 120px) { button.cached { max-width: 82px; } }\n";
+    const auto combinedCss = baseCss +
+        ":root { --ink: #abcdef; }\nbutton.cached:hover { height: 46px; }\n"
+        "@container pane (width >= 240px) { button.cached { max-width: 91px; } }\n";
+    StyleSheet base, combined;
+    parse(base, baseCss);
+    parse(combined, combinedCss);
+    auto hovered = button;
+    hovered.state = oneui::StyleStateHover;
+    require(combined.resolve(hovered).height == 46 && combined.resolve(button).foreground->r == 0xab &&
+                base.resolve(hovered).height == 30 && base.resolve(button).foreground->r == 0x12,
+            "scoped rules keep source order and can retheme the shared base");
+    require(combined.forContainers({{"pane", {130, 20}}}).resolveLayout(button).maxWidth == 82 &&
+                combined.forContainers({{"pane", {250, 20}}}).resolveLayout(button).maxWidth == 91,
+            "projections resolve queries from both parts of the cascade");
+    auto snapshot = combined;
+    const auto originalRules = snapshot.rules().size();
+    require(originalRules == 5 && snapshot.rules().back().order == 5,
+            "public rule iteration exposes the entire ordered sheet");
+    parse(combined, "button.cached { width: 55px; }");
+    require(combined.rules().size() == originalRules + 1 && combined.resolve(button).width == 55 &&
+                snapshot.rules().size() == originalRules && !snapshot.resolve(button).width,
+            "extending a shared suffix leaves the original enumerated sheet intact");
+    StyleSheet later;
+    parse(later, combinedCss + "button.cached { height: 53px; }");
+    require(later.rules().size() == originalRules + 1 && later.resolve(button).height == 53,
+            "a previously extended prefix remains available to another mount");
+}
+
 void longSelectorsKeepCanonicalCacheKeys() {
     StyleSheet sheet;
     parse(sheet, "button.a.b.c.d.e.f.g.h.i:hover { height: 48px; max-width: 90px; }");
@@ -312,6 +343,7 @@ int main() {
         transientNodeScopesDoNotAffectCascadeAfterEviction();
         copiedTokenTablesStaySharedUntilAnActualEdit();
         loweredThemeCanBeExtended();
+        cachedBaseAndScopedRulesKeepOneCascade();
         longSelectorsKeepCanonicalCacheKeys();
         classBucketsKeepSourceOrder();
         compactSelectorKeysKeepLargeClassIdsAndTagsDistinct();

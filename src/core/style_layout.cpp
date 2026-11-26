@@ -58,7 +58,8 @@ StyleLayout StyleSheet::resolveLayout(const StyleNode& node) const {
     const std::string cacheKey = nodeCacheKey(node);
     if (auto cached = layoutCache_.find(cacheKey); cached != layoutCache_.end()) return cached->second;
     StyleLayout resolved;
-    for (const auto* rule : matchingRules(node)) {
+    for (const auto& match : ruleData_->match(node)) {
+        const auto* rule = match.rule;
         const auto* initial = ruleLayout(*rule);
         StyleLayout current = initial ? *initial : StyleLayout{};
         if (rule->box.flexBasis) { current.flexBasisSpecified = true; current.flexBasisPercent.reset(); }

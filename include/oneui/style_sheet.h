@@ -18,6 +18,8 @@
 
 namespace oneui {
 struct ContainerQuery;
+namespace ui { class StyleRegistry; }
+namespace style_detail { struct ParsedCssCache; }
 
 enum StylePseudoState : unsigned int {
     StyleStateNone = 0,
@@ -175,6 +177,8 @@ public:
 
 private:
     friend class PaneHeader;
+    friend class ui::StyleRegistry;
+    friend struct style_detail::ParsedCssCache;
     friend struct style_detail::RuleCompiler;
     std::vector<const StyleRule*> matchingRules(const StyleNode& node) const;
     std::string nodeCacheKey(const StyleNode& node) const;
@@ -184,6 +188,17 @@ private:
         int specificity = 0;
     };
     struct RuleData {
+        struct Match {
+            const StyleRule* rule;
+            std::size_t index;
+            int specificity;
+        };
+        RuleData() = default;
+        RuleData(const RuleData&);
+
+        // An independent parse can append view-scoped rules to a cached base.
+        // Only the suffix is mutable. The base is always a flat rule set.
+        std::shared_ptr<const RuleData> prefix;
         std::vector<StyleRule> rules;
         std::vector<CompiledSelector> selectors;
         std::unordered_map<std::string, std::vector<std::size_t>> candidatesByTag;
@@ -192,8 +207,29 @@ private:
         std::unordered_map<std::string, std::size_t> selectorTags;
         StylePseudoMask selectorStates = 0;
         bool hasLayoutRules = false;
+        bool hasQueries = false;
+        mutable std::shared_ptr<const std::vector<StyleRule>> flatRules;
+
+        std::size_t prefixSize() const { return prefix ? prefix->rules.size() : 0; }
+        std::size_t size() const { return prefixSize() + rules.size(); }
+        const StyleRule& ruleAt(std::size_t index) const {
+            const auto offset = prefixSize();
+            return index < offset ? prefix->rules[index] : rules[index - offset];
+        }
+        const CompiledSelector& selectorAt(std::size_t index) const {
+            const auto offset = prefixSize();
+            return index < offset ? prefix->selectors[index] : selectors[index - offset];
+        }
+        std::vector<Match> match(const StyleNode& node) const;
         void indexLastRule();
     };
+    template<class Visitor>
+    void visitRules(Visitor visit) const {
+        if (!ruleData_) return;
+        if (ruleData_->prefix)
+            for (const auto& rule : ruleData_->prefix->rules) visit(rule);
+        for (const auto& rule : ruleData_->rules) visit(rule);
+    }
     // Component style snapshots and palette variants differ in tokens/caches,
     // not in their immutable parsed rules. Only rule edits detach this storage.
     void detachRules();
