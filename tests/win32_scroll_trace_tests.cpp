@@ -24,7 +24,7 @@ int main() {
     constexpr int rowCount = 32;
     std::array<std::thread, 4> producers;
     for (std::size_t producer = 0; producer < producers.size(); ++producer) {
-        producers[producer] = std::thread([producer] {
+        producers[producer] = std::thread([producer, rowCount] {
             for (int row = 0; row < rowCount; ++row) {
                 auto label = "temporary producer label " + std::to_string(producer);
                 auto phase = "row " + std::to_string(row);
