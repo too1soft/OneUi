@@ -12,6 +12,7 @@
 #include "oneui/fonts.h"
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <iostream>
 #include <stdexcept>
 
@@ -19,6 +20,57 @@ using oneui::text::Layout;
 using oneui::text::LayoutOptions;
 static void require(bool condition, const char* message) {
     if (!condition) throw std::runtime_error(message);
+}
+
+static void testFittedLabelLayout() {
+    LayoutOptions measured;
+    measured.text.wrap = oneui::TextWrapMode::NoWrap;
+    measured.size = 21;
+    LayoutOptions fitted = measured;
+    fitted.width = 252.75f;
+    fitted.maxLines = 1;
+    fitted.ellipsis = true;
+    const auto paint = [](const Layout& layout) {
+        auto surface = SkSurfaces::Raster(SkImageInfo::MakeN32Premul(270, 40));
+        require(bool(surface), "label test surface");
+        surface->getCanvas()->clear(SK_ColorWHITE);
+        layout.paint(*surface->getCanvas(), {1.5f, 2.25f}, {12, 40, 98, 220});
+        return surface;
+    };
+    for (const std::wstring value : {L"PostgreSQL API 01", L"\u751f\u4ea7 API \u4e3b\u5e93",
+                                     L"\u0645\u0631\u062d\u0628\u0627 127.0.0.1", L"localhost  "}) {
+        Layout::clearCache();
+        const auto exact = Layout::make(value, fitted);
+        Layout::clearCache();
+        const auto natural = Layout::make(value, measured);
+        const auto shapes = Layout::stats().layouts;
+        const auto reused = Layout::make(value, fitted);
+        require(reused == natural && Layout::stats().layouts == shapes,
+                "a fitting single-line label reuses measurement without shaping");
+        require(reused->width() == exact->width() && reused->height() == exact->height() &&
+                    reused->baseline() == exact->baseline(), "reused label keeps measured geometry");
+        const auto exactSurface = paint(*exact);
+        const auto reusedSurface = paint(*reused);
+        SkPixmap a, b;
+        require(exactSurface->peekPixels(&a) && reusedSurface->peekPixels(&b) &&
+                    a.computeByteSize() == b.computeByteSize() &&
+                    std::memcmp(a.addr(), b.addr(), a.computeByteSize()) == 0,
+                "reused Latin, CJK and bidirectional layouts paint exactly the fitted pixels");
+    }
+    const std::wstring value = L"production database host";
+    const auto natural = Layout::make(value, measured);
+    auto variant = fitted;
+    variant.width = 24;
+    require(Layout::make(value, variant) != natural, "an overflowing label still needs ellipsis");
+    variant = fitted;
+    variant.align = oneui::TextAlign::Right;
+    require(Layout::make(value, variant) != natural, "right alignment still uses the requested width");
+    variant = fitted;
+    variant.sensitive = true;
+    require(Layout::make(value, variant) != natural, "sensitive labels never request cached measurement");
+    const auto broken = Layout::make(L"first\u2028second", measured);
+    require(Layout::make(L"first\u2028second", fitted) != broken, "hard line breaks still honor maxLines");
+    Layout::clearCache();
 }
 
 int main() {
@@ -83,6 +135,7 @@ int main() {
         Layout::installTestFonts({oneuiTestAsset("NotoSans-Regular.ttf"), oneuiTestAsset("NotoNaskhArabic-Regular.ttf"),
             oneuiTestAsset("NotoSansDevanagari-Regular.ttf"), oneuiTestAsset("NotoSansHebrew-Regular.ttf"),
             oneuiTestAsset("NotoSansCJKsc-Regular.otf"), oneuiTestAsset("NotoColorEmoji.ttf")});
+        testFittedLabelLayout();
         const auto family = oneui::unicode::fromUtf8("a\xF0\x9F\x91\xA8\xE2\x80\x8D\xF0\x9F\x91\xA9\xE2\x80\x8D\xF0\x9F\x91\xA7\xE2\x80\x8D\xF0\x9F\x91\xA6" "b");
         auto clusters = Layout::make(family);
         require(clusters->graphemes().size() == 4, "family emoji must form one grapheme");

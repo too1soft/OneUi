@@ -275,6 +275,23 @@ std::shared_ptr<Layout> Layout::make(const std::wstring& value, const LayoutOpti
             ++counters.cacheHits;
             return result;
         }
+        // Left-aligned single-line labels can paint their measured layout if
+        // the entire line fits without a wrap or ellipsis at the new width.
+        if (requested.text.wrap == TextWrapMode::NoWrap && requested.ellipsis &&
+            requested.maxLines == 1 && requested.align == TextAlign::Left &&
+            requested.spans.empty() && !value.empty() &&
+            value.find_first_of(L"\n\r\v\f\x0085\u2028\u2029") == std::wstring::npos) {
+            auto natural = requested;
+            natural.maxLines = 0;
+            natural.ellipsis = false;
+            if (auto result = cache.find(value, natural);
+                result && result->impl_->paragraph && result->lineCount() == 1 &&
+                std::ceil(std::max(result->width(), result->impl_->paragraph->getMaxIntrinsicWidth())) <
+                    std::floor(requested.width)) {
+                ++counters.cacheHits;
+                return result;
+            }
+        }
     }
     auto impl = [&] {
         internal::FrameSpan indexSpan(internal::FrameStage::TextIndex);
