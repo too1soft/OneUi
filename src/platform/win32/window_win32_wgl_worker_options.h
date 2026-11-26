@@ -15,6 +15,7 @@ struct WglWorkerOptions {
     bool presentLatest;
     bool softwareHandoff;
     bool rehearsePresents;
+    bool foldVirtualRowDamage;
 
     static WglWorkerOptions fromEnvironment(bool allowStartupDefault) noexcept {
         const auto worker = readFlag(L"ONEUI_WIN32_GL_WORKER");
@@ -32,6 +33,7 @@ struct WglWorkerOptions {
             flag(L"ONEUI_WIN32_GL_WORKER_PRESENT_LATEST", startupDefault),
             flag(L"ONEUI_WIN32_WGL_SOFTWARE_HANDOFF", startupDefault),
             flag(L"ONEUI_WIN32_GL_WORKER_REHEARSE_PRESENTS", startupDefault),
+            flag(L"ONEUI_WIN32_FOLD_FIRST_VIRTUAL_ROW_DAMAGE_WORKER", startupDefault),
         };
     }
 

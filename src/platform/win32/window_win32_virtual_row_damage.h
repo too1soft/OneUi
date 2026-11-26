@@ -29,15 +29,16 @@ public:
         return value;
     }
 
-    // A null DC identifies a complete direct WGL swap of the exact client
-    // extent. Software presentation still requires the actual GDI clip.
-    VirtualRowDamage(HWND window, HDC dc, RECT client, std::shared_ptr<std::atomic<bool>> alive)
+    // An exact full GPU frame covers the client. Software presentation still
+    // requires the actual GDI clip.
+    VirtualRowDamage(HWND window, HDC dc, RECT client, std::shared_ptr<std::atomic<bool>> alive,
+                     bool worker = false)
         : scope_(internal::VirtualRowPaint::fullClientPaint, true), previous_(std::exchange(active_, this)),
-          window_(window), dc_(dc), client_(client), alive_(std::move(alive)) {}
+          window_(window), dc_(dc), client_(client), alive_(std::move(alive)), worker_(worker) {}
 
     ~VirtualRowDamage() {
         active_ = previous_;
-        if (held_ && !presented_ && alive_->load(std::memory_order_acquire)) {
+        if (held_ && !covered_ && alive_->load(std::memory_order_acquire)) {
             const bool restored = InvalidateRect(window_, nullptr, FALSE) != FALSE;
             if (internal::scrollTraceEnabled()) {
                 internal::ScrollTraceEvent event{"virtual_rows", "restored_damage",
@@ -51,7 +52,7 @@ public:
     VirtualRowDamage(const VirtualRowDamage&) = delete;
     VirtualRowDamage& operator=(const VirtualRowDamage&) = delete;
 
-    void presented() { presented_ = true; }
+    void covered() { covered_ = true; }
 
     static bool hold(const void* owner, HWND window) {
         if (internal::VirtualRowPaint::damageOwner != owner || !active_ || active_->window_ != window) return false;
@@ -61,7 +62,8 @@ public:
         const auto region = frame.dc_ ? GetClipBox(frame.dc_, &clip) : 0;
         const bool full = !frame.dc_ || (region == SIMPLEREGION && EqualRect(&clip, &frame.client_));
         if (internal::scrollTraceEnabled()) {
-            const char* phase = !frame.dc_ ? "held_wgl_damage" : full ? "held_damage" : "preserved_damage";
+            const char* phase = frame.worker_ ? "held_worker_damage" :
+                !frame.dc_ ? "held_wgl_damage" : full ? "held_damage" : "preserved_damage";
             internal::ScrollTraceEvent event{"virtual_rows", phase, reinterpret_cast<std::uintptr_t>(window)};
             event.detailA = region;
             internal::writeScrollTrace(event);
@@ -78,8 +80,9 @@ private:
     HDC dc_;
     RECT client_;
     std::shared_ptr<std::atomic<bool>> alive_;
+    bool worker_;
     bool held_ = false;
-    bool presented_ = false;
+    bool covered_ = false;
 };
 
 } // namespace oneui::win32

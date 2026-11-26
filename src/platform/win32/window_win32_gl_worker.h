@@ -59,5 +59,6 @@ bool experimentalGlWorkerPrewarm() noexcept;
 bool experimentalGlWorkerDefersCensus() noexcept;
 bool experimentalGlWorkerPacesRecording() noexcept;
 bool experimentalAngleCoalescesSoftwareHandoff() noexcept;
+bool workerFoldsVirtualRowDamage() noexcept;
 
 } // namespace oneui::win32

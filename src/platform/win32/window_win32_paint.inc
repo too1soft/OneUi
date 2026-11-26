@@ -232,8 +232,12 @@
             }
         };
         std::optional<win32::VirtualRowDamage> virtualRowDamage;
-        if (fullPaint && !threadedGl && !interactiveResizeActive_) {
-            if (!useGPU && dc && win32::VirtualRowDamage::softwareEnabled()) {
+        if (fullPaint && !interactiveResizeActive_) {
+            if (threadedGl) {
+                if (workerFrame.retained && !workerFrame.softwareHandoff && win32::workerFoldsVirtualRowDamage()) {
+                    virtualRowDamage.emplace(hwnd_, nullptr, clientRect, callbackWindowAlive_, true);
+                }
+            } else if (!useGPU && dc && win32::VirtualRowDamage::softwareEnabled()) {
                 virtualRowDamage.emplace(hwnd_, dc, clientRect, callbackWindowAlive_);
             } else if (useWgl && !angleContext_ && win32::VirtualRowDamage::directWglEnabled() &&
                        gpuAvailable_ && windowSurface_ && paintSurface_ &&
@@ -281,6 +285,9 @@
             EndPaint(hwnd_, &paintStruct);
             const bool accepted = enqueueWorkerPaint(std::move(startupPicture), workerFrame, interactionPaint);
             if (accepted) {
+                // The mailbox carries the full damage to any replacement. If
+                // rendering fails, the worker invalidates the client for raster paint.
+                if (virtualRowDamage) virtualRowDamage->covered();
                 ++rendererInfo_.paints;
                 rendererInfo_.paintMs += currentTimeMs() - paintStartMs;
             }
@@ -391,7 +398,7 @@
             traceSubmitMs_ += submitMs;
             rendererInfo_.submitMs += submitMs;
             if (swapped) {
-                if (virtualRowDamage) virtualRowDamage->presented();
+                if (virtualRowDamage) virtualRowDamage->covered();
                 if (!angleResize) recordResizePresentation();
                 textAtlasWarmup_.arm(hwnd_);
                 EndPaint(hwnd_, &paintStruct);
@@ -488,7 +495,7 @@
 
         EndPaint(hwnd_, &paintStruct);
         if (blitSucceeded) {
-            if (virtualRowDamage) virtualRowDamage->presented();
+            if (virtualRowDamage) virtualRowDamage->covered();
             recordResizePresentation();
             if (coalesceHandoffRefresh_) {
                 handoffRefresh_.painted(pixelSize, scale, fullPaint, currentTimeMs(), handoffFeedbackEpoch);

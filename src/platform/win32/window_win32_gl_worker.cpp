@@ -160,6 +160,10 @@ bool experimentalGlWorkerPacesRecording() noexcept {
     return enabled;
 }
 
+bool workerFoldsVirtualRowDamage() noexcept {
+    return wglWorkerOptions().foldVirtualRowDamage;
+}
+
 bool experimentalAngleCoalescesSoftwareHandoff() noexcept {
     static const bool enabled = [] {
         wchar_t value[2]{};
