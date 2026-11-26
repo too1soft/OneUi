@@ -5,6 +5,7 @@
 #include "window_win32_gpu_warmup.h"
 
 #include <atomic>
+#include <chrono>
 #include <condition_variable>
 #include <cstdio>
 #include <exception>
@@ -27,6 +28,14 @@ bool scratchGlWorkerEnabled() noexcept {
     static const bool enabled = [] {
         wchar_t value[2]{};
         return GetEnvironmentVariableW(L"ONEUI_WIN32_GL_WORKER_SCRATCH", value, 2) == 1 && value[0] == L'1';
+    }();
+    return enabled;
+}
+
+bool deferAngleStartupPrewarm() noexcept {
+    static const bool enabled = [] {
+        wchar_t value[2]{};
+        return GetEnvironmentVariableW(L"ONEUI_WIN32_ANGLE_WORKER_DEFER_PREWARM", value, 2) == 1 && value[0] == L'1';
     }();
     return enabled;
 }
@@ -71,6 +80,7 @@ struct GlRenderWorker::State {
 
     State(HWND window, HMONITOR monitor, POINT origin, bool angle, StartupGlScene scene, bool awaitSoftwareFrame)
         : window(window), monitor(monitor), origin(origin), angle(angle),
+          deferPrewarm(angle && awaitSoftwareFrame && deferAngleStartupPrewarm()),
           captureStartup(monitor && (awaitSoftwareFrame || scene.picture)), startup(std::move(scene)),
           awaitingSoftwareFrame(awaitSoftwareFrame), ownsLiveWindow(!monitor) {}
 
@@ -81,7 +91,9 @@ struct GlRenderWorker::State {
     const HMONITOR monitor;
     const POINT origin;
     const bool angle;
+    const bool deferPrewarm;
     std::atomic_bool captureStartup;
+    std::atomic_bool awaitingSecondSoftwarePaint{false};
     std::atomic_bool ready{false};
     std::atomic_bool vsync{false};
     std::atomic_uint64_t extent{0};
@@ -89,6 +101,7 @@ struct GlRenderWorker::State {
     std::mutex mutex;
     std::condition_variable changed;
     StartupGlScene startup;
+    std::chrono::steady_clock::time_point prewarmDeadline;
     Scene pending;
     Frame lastQueued;
     Frame lastPlanned;
@@ -236,9 +249,25 @@ bool GlRenderWorker::setStartupPicture(StartupGlScene scene) {
         if (!state.captureStartup.load(std::memory_order_relaxed)) return false;
         replaced = std::exchange(state.startup, std::move(scene));
         firstSoftwareFrame = std::exchange(state.awaitingSoftwareFrame, false);
+        if (firstSoftwareFrame && state.deferPrewarm) {
+            // Keep the first scene so the next software paint can draw directly.
+            state.captureStartup.store(false, std::memory_order_relaxed);
+            state.prewarmDeadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(40);
+            state.awaitingSecondSoftwarePaint.store(true, std::memory_order_relaxed);
+        }
     }
     if (firstSoftwareFrame) state.changed.notify_one();
     return firstSoftwareFrame;
+}
+
+void GlRenderWorker::releaseStartupPrewarmAfterSoftwarePaint() {
+    if (!state_ || !state_->awaitingSecondSoftwarePaint.load(std::memory_order_relaxed)) return;
+    auto& state = *state_;
+    {
+        std::lock_guard lock(state.mutex);
+        state.awaitingSecondSoftwarePaint.store(false, std::memory_order_relaxed);
+    }
+    state.changed.notify_one();
 }
 
 bool GlRenderWorker::ready() const noexcept {
@@ -377,6 +406,15 @@ void GlRenderWorker::State::render() {
         internal::traceInteractionPaint(startupTrace, "worker_context_end", "opengl-worker", initialized ? 1 : 0);
         if (!initialized) return;
         changed.wait(lock, [&] { return stopping || !awaitingSoftwareFrame; });
+        if (!stopping && awaitingSecondSoftwarePaint.load(std::memory_order_relaxed)) {
+            const bool released = changed.wait_until(lock, prewarmDeadline, [&] {
+                return stopping || !awaitingSecondSoftwarePaint.load(std::memory_order_relaxed);
+            });
+            awaitingSecondSoftwarePaint.store(false, std::memory_order_relaxed);
+            if (!released) {
+                internal::traceInteractionPaint(startupTrace, "worker_prewarm_grace_expired", "opengl-worker");
+            }
+        }
         if (stopping) return;
         captureStartup.store(false, std::memory_order_relaxed);
         warmup = std::move(startup);

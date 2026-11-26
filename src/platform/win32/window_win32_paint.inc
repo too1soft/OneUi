@@ -460,6 +460,8 @@
             } else {
                 deferredStartupGl_.submitPicture(std::move(startupPicture), width, height);
             }
+        } else if (blitSucceeded) {
+            glWorker_.releaseStartupPrewarmAfterSoftwarePaint();
         }
         scheduleDeferredGlAdoption();
         recordPaint(width, height, fullPaint, surfaceUpdate.allocatedBacking, surfaceMs, currentTimeMs() - paintStartMs);

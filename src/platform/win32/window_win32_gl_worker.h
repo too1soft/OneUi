@@ -32,6 +32,7 @@ public:
     bool startBeforeSoftwareFrame(HWND window);
     bool wantsStartupPicture() const noexcept;
     bool setStartupPicture(StartupGlScene scene);
+    void releaseStartupPrewarmAfterSoftwarePaint();
     bool ready() const noexcept;
     bool vsync() const noexcept;
     // Register a single notification if a recorded scene is waiting for the worker.
