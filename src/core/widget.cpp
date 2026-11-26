@@ -5,7 +5,10 @@
 #include "paint_invalidation_scope.h"
 #include "internal/virtual_row_paint.h"
 #if defined(_WIN32)
+#include "oneui/layout/virtual_template_list.h"
 #include "internal/accessibility_frame_revision.h"
+#include "internal/scroll_trace.h"
+#include <cstdlib>
 #endif
 
 #include <utility>
@@ -543,6 +546,36 @@ void Widget::invalidateRect(Rect rect) {
 
 void Widget::invalidateChildRect(Rect rect) {
     if (!paintInvalidation && !boundedLayoutInvalidation) {
+#if defined(_WIN32)
+        static const bool boundTableDamage = [] {
+            const auto* flag = std::getenv("ONEUI_WIN32_BOUND_TABLE_CHILD_DAMAGE");
+            return flag && flag[0] == '1' && flag[1] == '\0';
+        }();
+        if (boundTableDamage) {
+            const auto* table = dynamic_cast<const VirtualTemplateList*>(this);
+            if (rectInvalidator_ && table && table->tableViewport_ &&
+                table->tableClip_.width > 0 && table->tableClip_.height > 0 &&
+                rect.width > 0 && rect.height > 0) {
+                // The table allocates row heights independently of child measurement.
+                // Its ScrollView clips both the previous and the new row pixels.
+                const Rect clip = table->tableClip_;
+                const float left = std::max(rect.x, clip.x), top = std::max(rect.y, clip.y);
+                const float right = std::min(rect.x + rect.width, clip.x + clip.width);
+                const float bottom = std::min(rect.y + rect.height, clip.y + clip.height);
+                if (left < right && top < bottom) {
+                    if (internal::scrollTraceEnabled()) {
+                        internal::writeScrollTrace(internal::ScrollTraceEvent{"virtual_rows", "bounded_table_damage",
+                            reinterpret_cast<std::uintptr_t>(table), left, top, right, bottom});
+                    }
+                    const detail::PaintInvalidationScope bounded(false, true);
+                    invalidateRect({left, top, right - left, bottom - top});
+                } else {
+                    ++measureRevision_;
+                }
+                return;
+            }
+        }
+#endif
         const Rect bounds = frame();
         const auto* stack = dynamic_cast<const Stack*>(this);
         if (rectInvalidator_ && bounds.width > 0 && bounds.height > 0 &&

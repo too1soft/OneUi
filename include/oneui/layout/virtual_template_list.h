@@ -46,6 +46,7 @@ protected:
     void layoutChildren() override;
 
 private:
+    friend class Widget;
     friend class TemplateTable;
     friend class ScrollView;
     struct Row { std::shared_ptr<Widget> widget; float height = 0; };
