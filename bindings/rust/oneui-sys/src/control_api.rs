@@ -34,6 +34,15 @@ extern "C" {
         size: f32,
         weight: i32,
     ) -> i32;
+    pub fn oneui_font_warm_glyph_masks_utf8(
+        text: OneUiUtf8String,
+        family: OneUiUtf8String,
+        size: f32,
+        weight: i32,
+        scale: f32,
+        colors: *const u32,
+        color_count: usize,
+    ) -> i32;
     pub fn oneui_enumerate_system_fonts(
         callback: Option<unsafe extern "C" fn(OneUiUtf8String, c_int, *mut c_void)>,
         user_data: *mut c_void,

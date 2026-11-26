@@ -158,8 +158,9 @@ mod window_activation;
 pub use application::{Application, ApplicationActivation, CloseDecision, QuitPolicy};
 pub use desktop_window::{DesktopWindowState, ModalSession, WindowStateSubscription};
 pub use fonts::{
-    enumerate_available_fonts, enumerate_system_fonts, measure_text_width, register_font_from_memory,
-    register_font_from_static_memory, warm_glyph_metrics, FontFamilyInfo,
+    enumerate_available_fonts, enumerate_system_fonts, measure_text_width,
+    register_font_from_memory, register_font_from_static_memory, warm_glyph_masks,
+    warm_glyph_metrics, FontFamilyInfo,
 };
 #[cfg(feature = "bundled-fonts")]
 pub use fonts::{register_bundled_fonts, BUNDLED_UI_FONT_FAMILY, BUNDLED_UI_FONT_LICENSE};

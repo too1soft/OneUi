@@ -46,6 +46,22 @@ int oneui_font_warm_glyph_metrics_utf8(OneUiUtf8String text, OneUiUtf8String fam
     } catch (...) { oneui::capi::recordCurrentException(__func__); return 0; }
 }
 
+int oneui_font_warm_glyph_masks_utf8(OneUiUtf8String text, OneUiUtf8String family,
+                                    float size, int weight, float scale,
+                                    const uint32_t* colors, size_t color_count) {
+    try {
+        if (!text.data || !text.length || !family.data || !family.length ||
+            !std::isfinite(size) || size <= 0 || weight < 1 || weight > 1000 ||
+            !std::isfinite(scale) || scale <= 0 || !colors || !color_count) return 0;
+        const std::string_view value(text.data, text.length);
+        const std::string_view name(family.data, family.length);
+        if (name.find('\0') != std::string_view::npos ||
+            utf8FromWide(utf8OrEmpty(text)) != value || utf8FromWide(utf8OrEmpty(family)) != name) return 0;
+        return oneui::text::warmRegisteredGlyphMasks(value, name, size, weight,
+                                                    scale, colors, color_count) ? 1 : 0;
+    } catch (...) { oneui::capi::recordCurrentException(__func__); return 0; }
+}
+
 namespace {
 int registerFontMemory(
     const uint8_t* data,

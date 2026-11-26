@@ -585,6 +585,13 @@ ONEUI_API int oneui_text_measure_width_utf8(OneUiUtf8String text, OneUiUtf8Strin
 ONEUI_API int oneui_font_warm_glyph_metrics_utf8(OneUiUtf8String text, OneUiUtf8String family,
     float size, int weight);
 
+/* Prepare horizontal glyph masks in the shared Win32 Skia cache. Size is in
+ * logical pixels, scale is the device transform, and colors are 0xAARRGGBB.
+ * Use small character sets on a background thread. No window is required.
+ * Returns 1 if glyphs were prepared, 0 for unsupported builds or unusable hints. */
+ONEUI_API int oneui_font_warm_glyph_masks_utf8(OneUiUtf8String text, OneUiUtf8String family,
+    float size, int weight, float scale, const uint32_t* colors, size_t color_count);
+
 typedef enum OneUiWindowBackend {
     OneUiWindowBackendUnknown = 0,
     OneUiWindowBackendWin32 = 1,

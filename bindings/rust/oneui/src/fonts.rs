@@ -109,6 +109,31 @@ pub fn warm_glyph_metrics(text: &str, family: &str, size: f32, weight: i32) -> b
     }
 }
 
+/// Prepares horizontal glyph masks for a registered font in the bundled Win32 renderer.
+/// Use a small set of characters and actual paint colors (0xAARRGGBB). Size is in
+/// logical pixels and scale is the effective window scale. This background hint uses
+/// the shared CPU cache and returns false on unsupported builds.
+pub fn warm_glyph_masks(
+    text: &str,
+    family: &str,
+    size: f32,
+    weight: i32,
+    scale: f32,
+    colors: &[u32],
+) -> bool {
+    unsafe {
+        sys::oneui_font_warm_glyph_masks_utf8(
+            sys::OneUiUtf8String::from_str(text),
+            sys::OneUiUtf8String::from_str(family),
+            size,
+            weight,
+            scale,
+            colors.as_ptr(),
+            colors.len(),
+        ) == 1
+    }
+}
+
 /// Registers an application font directly from memory.
 ///
 /// OneUI copies the bytes during this call and never installs the font into the
