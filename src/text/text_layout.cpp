@@ -137,7 +137,10 @@ struct Layout::Impl {
         }
         paragraphStyle.setStrutStyle(strut);
         bool rtl = options.text.direction == TextDirection::RTL;
-        if (options.text.direction == TextDirection::Auto) {
+        // TextIndex encodes the same scalars in both forms. Only ASCII has
+        // equal UTF-8 and UTF-16 lengths and its default paragraph level is 0.
+        const bool ascii = index.utf8.size() == index.utf16.size();
+        if (options.text.direction == TextDirection::Auto && !ascii) {
             internal::FrameSpan bidiSpan(internal::FrameStage::TextBidi);
             UErrorCode error = U_ZERO_ERROR;
             auto* bidi = ubidi_open();

@@ -114,6 +114,22 @@ int main() {
             const auto hit = latin->hitTest({caret.x, caret.y + caret.height / 2});
             require(hit.offset == offset, "Latin caret/hit-test roundtrip");
         }
+        LayoutOptions leftToRight;
+        leftToRight.text.direction = oneui::TextDirection::LTR;
+        for (const std::wstring ascii : {L"Host 42", L"  (12.34):  ", L"\t?!", L""}) {
+            const auto automatic = Layout::make(ascii);
+            const auto explicitLtr = Layout::make(ascii, leftToRight);
+            require(automatic->width() == explicitLtr->width() &&
+                    automatic->height() == explicitLtr->height() &&
+                    automatic->graphemes() == explicitLtr->graphemes(),
+                    "ASCII defaults to the left-to-right paragraph level");
+            for (const auto offset : automatic->graphemes()) {
+                const auto a = automatic->caret({offset});
+                const auto b = explicitLtr->caret({offset});
+                require(a.x == b.x && a.y == b.y && a.height == b.height,
+                        "ASCII automatic direction preserves caret geometry");
+            }
+        }
         auto rtl = Layout::make(L"\u05d0\u05d1\u05d2");
         require(rtl->caret({0}).x > rtl->caret({3}).x, "auto RTL base direction");
         require(rtl->moveVisual({0}, -1).offset == 1, "visual RTL left navigation");
