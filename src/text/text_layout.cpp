@@ -16,6 +16,10 @@
 #include "modules/skunicode/include/SkUnicode_icu.h"
 #include "unicode/ubidi.h"
 
+#ifdef _WIN32
+#include "internal/win32_paragraph_trace.h"
+#endif
+
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -204,16 +208,24 @@ struct Layout::Impl {
         buildParagraph();
         internal::FrameSpan shapeSpan(internal::FrameStage::TextShape);
         const float layoutWidth = options.text.wrap == TextWrapMode::NoWrap && !options.ellipsis ? 1000000.0f : options.width;
-        paragraph->layout(layoutWidth);
+        layoutParagraph(layoutWidth, false);
         // No-wrap text aligns within its natural width; callers place the block.
         if (layoutWidth != options.width && options.align != TextAlign::Left) {
-            paragraph->layout(std::ceil(paragraph->getMaxIntrinsicWidth()) + 1.0f);
+            layoutParagraph(std::ceil(paragraph->getMaxIntrinsicWidth()) + 1.0f, true);
         }
         width = std::max(0.0f, paragraph->getLongestLine());
         height = paragraph->getHeight();
         baseline = paragraph->getAlphabeticBaseline();
         lineCount = std::max(std::size_t{1}, paragraph->lineNumber());
         ++counters.layouts;
+    }
+
+    void layoutParagraph(float width, [[maybe_unused]] bool realignment) {
+#ifdef _WIN32
+        internal::Win32ParagraphTrace::Span span(
+            options.sensitive, index.utf16.size(), options.size, width, realignment);
+#endif
+        paragraph->layout(width);
     }
 
     const std::vector<Line>& lineGeometry() const {

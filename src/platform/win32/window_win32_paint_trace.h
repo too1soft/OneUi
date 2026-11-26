@@ -2,6 +2,7 @@
 
 #include "internal/frame_profile.h"
 #include "internal/scroll_trace.h"
+#include "internal/win32_paragraph_trace.h"
 
 #include <windows.h>
 #include <array>
@@ -16,7 +17,7 @@ class Win32PaintTrace {
 public:
     enum Boundary : std::size_t { Begin, GlSetup, NativePaint, Surface, Canvas, Tree, End, Count };
 
-    explicit Win32PaintTrace(bool enabled) : enabled_(enabled) { mark(Begin); }
+    explicit Win32PaintTrace(bool enabled) : enabled_(enabled), paragraphs_(enabled) { mark(Begin); }
 
     void mark(Boundary boundary) {
         if (!enabled_) return;
@@ -68,6 +69,7 @@ public:
         event.velocity = damage.bottom - damage.top;
         event.durationMs = 0.0;
         writeScrollTrace(event);
+        paragraphs_.write(window, paintSequence);
     }
 
 private:
@@ -77,6 +79,7 @@ private:
         bool hasCycles;
     };
     bool enabled_;
+    Win32ParagraphTrace paragraphs_;
     std::array<Checkpoint, Count> checkpoints_;
 };
 
