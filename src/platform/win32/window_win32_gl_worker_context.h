@@ -210,6 +210,7 @@ public:
             }
             retainedExtent_ = frame.extent;
         }
+        const bool traceCalls = snapshot.paintSequence && internal::win32GlTraceEnabled();
         trace("worker_draw_begin");
         auto* canvas = surface_->getCanvas();
         if (angleDrawableScaled_) {
@@ -218,14 +219,19 @@ public:
                           static_cast<float>(surface_->height()) / height);
         }
         if (frame.retained) {
+            if (traceCalls) trace("worker_picture_replay_begin");
             retained_->getCanvas()->drawPicture(&picture);
+            if (traceCalls) trace("worker_picture_replay_end");
             canvas->clear(SK_ColorBLACK);
+            if (traceCalls) trace("worker_backing_draw_begin");
             retained_->draw(canvas, 0.0f, 0.0f);
+            if (traceCalls) trace("worker_backing_draw_end");
         } else {
+            if (traceCalls) trace("worker_picture_replay_begin");
             canvas->drawPicture(&picture);
+            if (traceCalls) trace("worker_picture_replay_end");
         }
         if (angleDrawableScaled_) canvas->restore();
-        const bool traceCalls = snapshot.paintSequence && internal::win32GlTraceEnabled();
         const bool tracing = traceCalls && internal::scrollTraceEnabled();
         trace("worker_flush_begin");
         if (traceCalls) {
