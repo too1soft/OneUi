@@ -30,6 +30,38 @@ fn frame(value: usize) -> TerminalFrame {
     }
 }
 
+pub(crate) fn pending_replacement_preserves_ownership_of_the_queued_update() {
+    let window = Window::new(&WindowOptions::default()).expect("create test window");
+    let terminal = TerminalView::new().expect("create terminal");
+    window.set_content(terminal.as_widget());
+    let handle = window.terminal_view_handle(&terminal);
+    assert!(handle.pending_frame_replacement().is_none());
+
+    handle.submit_frame(frame(1)).unwrap();
+    let stale = handle.pending_frame_replacement().unwrap();
+    handle.submit_frame(frame(2)).unwrap();
+    assert!(!stale.replace(frame(3)));
+
+    let active = handle.pending_frame_replacement().unwrap();
+    let duplicate = handle.pending_frame_replacement().unwrap();
+    assert!(active.replace(frame(4)));
+    assert!(!duplicate.replace(frame(5)));
+    let taken = handle.pending_frame_replacement().unwrap();
+    terminal.apply_pending_frame();
+    assert!(!taken.replace(frame(6)));
+    let last = terminal.state.last_applied_frame.lock().unwrap();
+    let last = last
+        .as_ref()
+        .unwrap()
+        .as_any()
+        .downcast_ref::<TerminalFrame>()
+        .unwrap();
+    assert_eq!(last.cells[0].text, "4");
+
+    handle.submit_frame_clearing_selection(frame(7)).unwrap();
+    assert!(handle.pending_frame_replacement().is_none());
+}
+
 pub(crate) fn updates_yield_to_other_window_callbacks() {
     const UPDATES: usize = 12;
     let window = Window::new(&WindowOptions::default()).expect("create test window");

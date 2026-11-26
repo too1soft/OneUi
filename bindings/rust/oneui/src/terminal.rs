@@ -2,6 +2,7 @@
 
 #[path = "terminal_frame_queue.rs"]
 mod frame_queue;
+pub use frame_queue::PendingTerminalFrame;
 #[path = "terminal_local_pointer.rs"]
 mod local_pointer;
 #[cfg(test)]
@@ -68,6 +69,7 @@ struct TerminalViewState {
 struct TerminalFrameUpdate {
     frame: Box<dyn frame_queue::QueuedTerminalFrame>,
     selection: TerminalFrameSelection,
+    replacement: Option<Arc<()>>,
 }
 
 /// A thread-safe producer for the latest native terminal frame.

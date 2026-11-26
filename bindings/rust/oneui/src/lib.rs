@@ -37,7 +37,7 @@ pub use table::{
     Table, TableCellKind, TableColumn, TableHandle, TableRichCell, TableRichRow, TableRow,
 };
 mod terminal;
-pub use terminal::{TerminalView, TerminalViewHandle};
+pub use terminal::{PendingTerminalFrame, TerminalView, TerminalViewHandle};
 mod terminal_types;
 pub use terminal_types::{
     terminal_style, TerminalAuxiliaryButtonAction, TerminalCell, TerminalColor, TerminalCursor,

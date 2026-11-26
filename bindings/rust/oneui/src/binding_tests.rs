@@ -48,6 +48,10 @@ macro_rules! native_tests {
                 "terminal_frame_updates_yield_to_other_window_callbacks",
                 super::terminal::frame_queue_tests::updates_yield_to_other_window_callbacks,
             ));
+            cases.push((
+                "pending_replacement_preserves_ownership_of_the_queued_update",
+                super::terminal::frame_queue_tests::pending_replacement_preserves_ownership_of_the_queued_update,
+            ));
             super::test_runner::run(&cases)
         }
     };

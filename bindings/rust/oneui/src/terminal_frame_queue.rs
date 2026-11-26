@@ -6,6 +6,42 @@ use std::time::{Duration, Instant};
 const MAX_UPDATES_PER_TURN: usize = 16;
 const TURN_BUDGET: Duration = Duration::from_millis(2);
 
+/// A one-shot replacement for an already queued terminal frame.
+///
+/// A replacement uses the existing dispatcher callback. It expires when
+/// the window takes the frame or another submission replaces it.
+pub struct PendingTerminalFrame {
+    state: Arc<TerminalViewState>,
+    marker: Arc<()>,
+}
+
+impl PendingTerminalFrame {
+    pub fn replace<T: AsRef<str> + PartialEq + Send + 'static>(
+        self,
+        frame: TerminalFrame<T>,
+    ) -> bool {
+        let mut pending = self
+            .state
+            .pending_update
+            .lock()
+            .expect("terminal pending update lock poisoned");
+        let Some(update) = pending.as_mut() else {
+            return false;
+        };
+        if self.state.raw.load(Ordering::Acquire).is_null()
+            || !update
+                .replacement
+                .as_ref()
+                .is_some_and(|marker| Arc::ptr_eq(marker, &self.marker))
+        {
+            return false;
+        }
+        update.frame = Box::new(frame);
+        update.replacement = None;
+        true
+    }
+}
+
 pub(super) trait QueuedTerminalFrame: Send {
     fn as_any(&self) -> &dyn Any;
 
@@ -34,6 +70,28 @@ impl<T: AsRef<str> + PartialEq + Send + 'static> QueuedTerminalFrame for Termina
 }
 
 impl TerminalViewHandle {
+    /// Offers replacement only for a queued frame with no selection command.
+    pub fn pending_frame_replacement(&self) -> Option<PendingTerminalFrame> {
+        let mut pending = self
+            .state
+            .pending_update
+            .lock()
+            .expect("terminal pending update lock poisoned");
+        if self.state.raw.load(Ordering::Acquire).is_null()
+            || !self.state.update_scheduled.load(Ordering::Acquire)
+        {
+            return None;
+        }
+        let update = pending.as_mut()?;
+        if !matches!(update.selection, TerminalFrameSelection::Preserve) {
+            return None;
+        }
+        Some(PendingTerminalFrame {
+            state: Arc::clone(&self.state),
+            marker: Arc::clone(update.replacement.get_or_insert_with(|| Arc::new(()))),
+        })
+    }
+
     pub(super) fn submit_update<T: AsRef<str> + PartialEq + Send + 'static>(
         &self,
         frame: TerminalFrame<T>,
@@ -47,11 +105,11 @@ impl TerminalViewHandle {
             .state
             .pending_update
             .lock()
-            .expect("terminal pending update lock poisoned") =
-            Some(TerminalFrameUpdate {
-                frame: Box::new(frame),
-                selection,
-            });
+            .expect("terminal pending update lock poisoned") = Some(TerminalFrameUpdate {
+            frame: Box::new(frame),
+            selection,
+            replacement: None,
+        });
 
         self.schedule_pending_frame()
     }
