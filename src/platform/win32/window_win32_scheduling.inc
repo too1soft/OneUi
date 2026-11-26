@@ -4,11 +4,12 @@
         return !gpuAvailable_ && !glWorker_.ready() && lastContentPaintCompletedMs_ != 0.0;
     }
 
-    double queuedSoftwarePaintDeadline(double nowMs, double interval) const {
-        const double deadline = lastContentPaintCompletedMs_ + interval;
-        if (lastContentPaintDurationMs_ < postedCallbackBudget_.count() || nowMs >= deadline ||
-            HIWORD(GetQueueStatus(QS_INPUT | QS_POSTMESSAGE)) == 0) return 0.0;
-        return deadline;
+    bool yieldQueuedContentPaint() {
+        if (lastContentPaintCompletedMs_ == 0.0 || lastContentPaintDurationMs_ < postedCallbackBudget_.count() ||
+            (gpuAvailable_ && !glWorker_.ready())) return false;
+        const double interval = std::max<double>(USER_TIMER_MINIMUM, animationFrameIntervalMs());
+        return currentTimeMs() < lastContentPaintCompletedMs_ + interval &&
+            HIWORD(GetQueueStatus(QS_INPUT | QS_POSTMESSAGE)) != 0;
     }
 
     bool postedPaintDue(bool timeBudgetExhausted) {
@@ -18,20 +19,14 @@
             const double interval = std::max<double>(USER_TIMER_MINIMUM, animationFrameIntervalMs());
             return currentTimeMs() - lastLiveResizePaintMs_ >= interval;
         }
-        if (!hasPresentedSoftwarePaint()) return true;
-        const bool expensivePaint = lastContentPaintDurationMs_ >= postedCallbackBudget_.count();
-        if (!expensivePaint && !timeBudgetExhausted) return true;
-        const double interval = std::max<double>(USER_TIMER_MINIMUM, animationFrameIntervalMs());
-        const double nowMs = currentTimeMs();
-        // A short callback can force a second software frame while input is
-        // already queued. Keep the update region for WM_PAINT so Win32 can
-        // dispatch the waiting messages first. Bound the yield during bursts.
-        if (queuedSoftwarePaintDeadline(nowMs, interval) > 0.0) {
+        // Software paint and worker scene recording both occupy the window
+        // thread. Leave recent damage for WM_PAINT when messages are queued.
+        if (yieldQueuedContentPaint()) {
             internal::writeScrollTrace(internal::ScrollTraceEvent{
-                "win32", "posted_software_paint_queue_yield", reinterpret_cast<std::uintptr_t>(hwnd_)});
+                "win32", "posted_content_paint_queue_yield", reinterpret_cast<std::uintptr_t>(hwnd_)});
             return false;
         }
-        if (!timeBudgetExhausted) return true;
+        if (!timeBudgetExhausted || !hasPresentedSoftwarePaint()) return true;
         static const bool yieldSoftwarePaint = [] {
             wchar_t value[2]{};
             return GetEnvironmentVariableW(L"ONEUI_WIN32_YIELD_POSTED_SOFTWARE_PAINT", value, 2) == 1 &&
@@ -40,7 +35,8 @@
         if (!yieldSoftwarePaint) return true;
         // Let the next native message hold its turn after an expensive callback.
         // A busy posted queue may force a paint once the previous frame is old.
-        if (nowMs - lastContentPaintCompletedMs_ >= 2.0 * interval) return true;
+        const double interval = std::max<double>(USER_TIMER_MINIMUM, animationFrameIntervalMs());
+        if (currentTimeMs() - lastContentPaintCompletedMs_ >= 2.0 * interval) return true;
         internal::writeScrollTrace(internal::ScrollTraceEvent{
             "win32", "posted_software_paint_yield", reinterpret_cast<std::uintptr_t>(hwnd_)});
         return false;
@@ -143,15 +139,6 @@
         const auto now = std::chrono::steady_clock::now().time_since_epoch();
         const double nowMs = std::chrono::duration<double, std::milli>(now).count();
         lastAnimationFrameMs_ = nowMs;
-        // Keep the animation tick on time. Let queued work precede software
-        // paint so a release can replace a pressed state before it is drawn.
-        // Explicitly prioritized edits still get their synchronous feedback.
-        double paintDeadline = 0.0;
-        if (!inputPaintBeforePostedWork_ && !interactiveResizeActive_ && hasPresentedSoftwarePaint() &&
-            lastContentPaintDurationMs_ >= postedCallbackBudget_.count()) {
-            const double interval = std::max<double>(USER_TIMER_MINIMUM, animationFrameIntervalMs());
-            paintDeadline = queuedSoftwarePaintDeadline(nowMs, interval);
-        }
         while (!callbacks.empty()) {
             if (!alive->load(std::memory_order_acquire)) return;
             auto callback = std::move(callbacks.front());
@@ -159,8 +146,10 @@
             callback(nowMs);
         }
         if (!alive->load(std::memory_order_acquire)) return;
-        const bool deferPaint = paintDeadline > 0.0 && !inputPaintBeforePostedWork_ &&
-            !interactiveResizeActive_ && currentTimeMs() < paintDeadline;
+        // Callbacks can enqueue input or posted work. Make the paint decision
+        // after they return, while preserving immediate edits and live resize.
+        const bool deferPaint = !inputPaintBeforePostedWork_ && !interactiveResizeActive_ &&
+            yieldQueuedContentPaint();
         if (deferPaint) {
             if (!coalescedEditPaintPending_) submitInvalidations();
         } else {
@@ -168,7 +157,7 @@
         }
         if (traceScroll) {
             internal::writeScrollTrace(internal::ScrollTraceEvent{
-                "win32", deferPaint ? "animation_software_paint_queue_yield" : "animation_frame_presented",
+                "win32", deferPaint ? "animation_content_paint_queue_yield" : "animation_frame_presented",
                 reinterpret_cast<std::uintptr_t>(hwnd_),
                 0.0, 0.0, 0.0, 0.0, frameIntervalMs, 0.0,
                 internal::scrollTraceNowMs() - frameStartMs, 0.0,

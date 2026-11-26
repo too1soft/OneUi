@@ -352,7 +352,7 @@ void testPostedCallbackFloodDoesNotStarveStaticPaint() {
     });
 }
 
-enum class QueuedPaintSource { Posted, FrameTimer, PressBeforeRelease };
+enum class QueuedPaintSource { Posted, FrameTimer, PressBeforeRelease, FrameCallback };
 
 void testSlowSoftwarePaintLetsQueuedInputRun(QueuedPaintSource source, const char* name) {
     expectWorkerFinishes(name, [source](oneui::Window& window) {
@@ -397,8 +397,18 @@ void testSlowSoftwarePaintLetsQueuedInputRun(QueuedPaintSource source, const cha
             posted = PostMessageW(hwnd, WM_LBUTTONUP, 0, MAKELPARAM(30, 20)) != FALSE;
             if (!posted) window.close();
         };
-        const bool timerSource = source != QueuedPaintSource::Posted;
-        if (timerSource) {
+        const bool timerSource = source == QueuedPaintSource::FrameTimer ||
+            source == QueuedPaintSource::PressBeforeRelease;
+        if (source == QueuedPaintSource::FrameCallback) {
+            window.requestAnimationFrame([&](double) {
+                // Establish a recent expensive paint, then enqueue the message
+                // while the frame callback is still running.
+                InvalidateRect(hwnd, nullptr, FALSE);
+                UpdateWindow(hwnd);
+                window.requestRedraw();
+                postRelease();
+            });
+        } else if (timerSource) {
             window.post([&] {
                 window.requestAnimationFrame([&](double) {
                     ticked = true;
@@ -551,6 +561,8 @@ int main(int argc, char** argv) {
             "Frame timer yields its second software paint to queued input");
         testSlowSoftwarePaintLetsQueuedInputRun(QueuedPaintSource::PressBeforeRelease,
             "Frame timer lets the pending release finish a pointer press before repainting");
+        testSlowSoftwarePaintLetsQueuedInputRun(QueuedPaintSource::FrameCallback,
+            "Paint yields to a release queued within the frame callback");
         return failures == 0 ? 0 : 1;
     }
     // Run with the renderer still cold so closing an unused window also
