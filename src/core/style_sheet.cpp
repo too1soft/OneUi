@@ -46,24 +46,27 @@ void StyleSheet::detachRules() {
     else if (!ruleData_.unique()) ruleData_ = std::make_shared<RuleData>(*ruleData_);
 }
 void StyleSheet::addRule(StyleRule rule) {
-    detachRules();
-    auto& rules_ = ruleData_->rules;
-    auto& selectors_ = ruleData_->selectors;
+    auto selector = parseSelector(rule.selector);
+    RuleCompiler::append(*this, std::move(rule), std::move(selector));
+}
+
+void style_detail::RuleCompiler::append(StyleSheet& sheet, StyleRule rule, ParsedSelector selector) {
+    sheet.detachRules();
+    auto& data = *sheet.ruleData_;
     if (rule.order == 0) {
-        rule.order = static_cast<int>(rules_.size()) + 1;
+        rule.order = static_cast<int>(data.rules.size()) + 1;
     }
-    const ParsedSelector parsed = parseSelector(rule.selector);
-    CompiledSelector compiled;
-    compiled.node = StyleNode{parsed.tag, parsed.classes, parsed.pseudos};
-    compiled.valid = parsed.valid;
-    compiled.specificity = selectorSpecificity(rule.selector);
-    rules_.push_back(std::move(rule));
-    selectors_.push_back(std::move(compiled));
-    ruleData_->indexLastRule();
-    resolveCache_.clear();
-    declarationCache_.clear();
-    layoutCache_.clear();
-    ++version_;
+    const int specificity = selector.specificity();
+    data.rules.push_back(std::move(rule));
+    data.selectors.push_back(StyleSheet::CompiledSelector{
+        StyleNode{std::move(selector.tag), std::move(selector.classes), selector.pseudos},
+        selector.valid, specificity
+    });
+    data.indexLastRule();
+    sheet.resolveCache_.clear();
+    sheet.declarationCache_.clear();
+    sheet.layoutCache_.clear();
+    ++sheet.version_;
 }
 
 void StyleSheet::setCustomProperty(std::string name, std::string value) {

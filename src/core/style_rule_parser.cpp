@@ -102,12 +102,17 @@ void parseRules(StyleSheet& sheet,const std::string& text,size_t begin,size_t en
             if(body.find('{')!=std::string::npos)fail("Nested style rule");
             for(const auto& raw:split(selector,',')) {
                 StyleRule rule;rule.selector=trim(raw);rule.query=query;
-                if(rule.selector!=":root"&&!parseSelector(rule.selector).valid)fail("Invalid selector");
+                const bool root = rule.selector == ":root";
+                ParsedSelector parsed;
+                if (!root) {
+                    parsed = parseSelector(rule.selector);
+                    if (!parsed.valid) fail("Invalid selector");
+                }
                 for(const auto& declaration:splitTopLevel(body,';')) {
                     if(trim(declaration).empty())continue;
                     auto colon=declaration.find(':');if(colon==std::string::npos)fail("Expected property: value");
                     auto property=trim(declaration.substr(0,colon)),value=trim(declaration.substr(colon+1));
-                    if(rule.selector==":root") {
+                    if (root) {
                         if(query||!isCustomPropertyName(property))fail("Root only accepts unconditional custom properties");
                         sheet.setCustomProperty(property,value);continue;
                     }
@@ -116,7 +121,7 @@ void parseRules(StyleSheet& sheet,const std::string& text,size_t begin,size_t en
                     if(!applyDeclaration(rule,property,value,sheet.customProperties(),&error))fail(error);
                     rule.declarations.emplace_back(std::move(property),std::move(value));
                 }
-                if(rule.selector!=":root")sheet.addRule(std::move(rule));
+                if (!root) RuleCompiler::append(sheet, std::move(rule), std::move(parsed));
             }
         }
         cursor=close+1;

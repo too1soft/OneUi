@@ -138,6 +138,8 @@ struct StyleNode {
     StylePseudoMask state = StyleStateNone;
 };
 
+namespace style_detail { struct RuleCompiler; }
+
 class ONEUI_API StyleSheet {
 public:
     StyleSheet() = default;
@@ -173,6 +175,7 @@ public:
 
 private:
     friend class PaneHeader;
+    friend struct style_detail::RuleCompiler;
     std::vector<const StyleRule*> matchingRules(const StyleNode& node) const;
     std::string nodeCacheKey(const StyleNode& node) const;
     struct CompiledSelector {

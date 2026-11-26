@@ -46,6 +46,23 @@ bool hasClass(const StyleNode& node, const std::string& klass) {
     return std::find(node.classes.begin(), node.classes.end(), klass) != node.classes.end();
 }
 
+int ParsedSelector::specificity() const noexcept {
+    if (!valid) {
+        return 0;
+    }
+
+    int pseudo_count = 0;
+    StylePseudoMask remaining = pseudos;
+    while (remaining != 0) {
+        pseudo_count += static_cast<int>(remaining & 1u);
+        remaining >>= 1;
+    }
+
+    return (tag.empty() ? 0 : 1) +
+           static_cast<int>(classes.size()) * 10 +
+           pseudo_count * 10;
+}
+
 } // namespace oneui::style_detail
 namespace oneui {
 using namespace style_detail;
@@ -88,21 +105,7 @@ bool selectorMatches(const std::string& selector, const StyleNode& node) {
 }
 
 int selectorSpecificity(const std::string& selector) {
-    const ParsedSelector parsed = parseSelector(selector);
-    if (!parsed.valid) {
-        return 0;
-    }
-
-    int pseudo_count = 0;
-    StylePseudoMask pseudos = parsed.pseudos;
-    while (pseudos != 0) {
-        pseudo_count += static_cast<int>(pseudos & 1u);
-        pseudos >>= 1;
-    }
-
-    return (parsed.tag.empty() ? 0 : 1) +
-           static_cast<int>(parsed.classes.size()) * 10 +
-           pseudo_count * 10;
+    return parseSelector(selector).specificity();
 }
 
 }

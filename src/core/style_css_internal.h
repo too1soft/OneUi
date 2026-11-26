@@ -31,6 +31,11 @@ struct ParsedSelector {
     std::vector<std::string> classes;
     StylePseudoMask pseudos = StyleStateNone;
     bool valid = false;
+    int specificity() const noexcept;
+};
+
+struct RuleCompiler {
+    static void append(StyleSheet& sheet, StyleRule rule, ParsedSelector selector);
 };
 
 ParsedSelector parseSelector(const std::string&);
