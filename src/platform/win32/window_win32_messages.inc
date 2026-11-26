@@ -1,4 +1,8 @@
     LRESULT handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
+        if (win32::StartupRaster::enabled() && !startupRasterInputSeen_ && win32::handoffInputMessage(message)) {
+            startupRasterInputSeen_ = true;
+            if (startupRaster_.cancel()) queueInvalidation(nullptr);
+        }
         std::optional<win32::HandoffInputScope> feedback;
         if (feedbackOnlyHandoff_) feedback.emplace(hwnd_, message);
         if (coalesceHandoffRefresh_ && !feedbackOnlyHandoff_) handoffRefresh_.observeInput(hwnd_, message);
@@ -147,6 +151,9 @@
             // Input mutations and visual animation are sampled together. Do
             // not expose an intermediate state before their scheduled frame.
             if (!inputPaintPending_ && !coalescedEditPaintPending_) submitInvalidations();
+            return 0;
+        case win32::startupRasterReadyMessage:
+            if (startupRaster_.matches(wParam)) InvalidateRect(hwnd_, nullptr, FALSE);
             return 0;
         case oneui::kTrayCallbackMessage:
             switch (LOWORD(lParam)) {
@@ -508,6 +515,7 @@
             retireAccessibilityProvider();
             return 0;
         case WM_NCDESTROY:
+            startupRaster_.cancel();
             textAtlasWarmup_.cancel(hwnd_);
         {
             callbackWindowAlive_->store(false, std::memory_order_release);

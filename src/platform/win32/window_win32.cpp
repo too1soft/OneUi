@@ -10,6 +10,7 @@
 #include "window_win32_deferred_gl.h"
 #include "window_win32_gl_worker.h"
 #include "window_win32_startup_capture.h"
+#include "window_win32_startup_raster.h"
 #include "window_win32_handoff_refresh.h"
 #include "window_win32_gpu_backing.h"
 #include "accessibility_proxy_win32.h"
@@ -137,6 +138,7 @@ public:
 #include "window_win32_scheduling.inc"
 #include "window_win32_client_render.inc"
 #include "window_win32_surfaces.inc"
+#include "window_win32_software_present.inc"
 #include "window_win32_paint.inc"
 #include "window_win32_diagnostics.inc"
 #include "window_win32_pointer.inc"
@@ -145,6 +147,8 @@ public:
 #include "window_win32_pointer_dispatch.inc"
 #include "window_win32_gpu.inc"
     win32::GlRenderWorker glWorker_;
+    win32::StartupRaster startupRaster_;
+    bool startupRasterInputSeen_ = false;
     win32::SoftwareHandoffRefresh handoffRefresh_;
     const bool coalesceHandoffRefresh_ = win32::experimentalAngleCoalescesSoftwareHandoff();
     const bool feedbackOnlyHandoff_ = coalesceHandoffRefresh_ && win32::HandoffInputScope::enabled();

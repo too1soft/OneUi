@@ -24,6 +24,7 @@
 #endif
     void paint() {
         if (IsIconic(hwnd_)) {
+            startupRaster_.cancel();
             // A minimized HWND can still receive WM_PAINT with the shell's
             // icon-sized client rectangle. Validate it without replacing the
             // live backing. WM_SIZE requests a full repaint when restored.
@@ -94,6 +95,12 @@
                 static_cast<GLsizei>(clientRect.bottom - clientRect.top));
         }
         paintTrace.mark(PaintTrace::GlSetup);
+        win32::StartupRaster::Frame rasterFrame;
+        if (startupRaster_.pending() && GetUpdateRect(hwnd_, nullptr, FALSE)) {
+            rasterFrame = startupRaster_.takeOrCancel();
+            // The recorded frame previously validated an entire client area.
+            InvalidateRect(hwnd_, nullptr, FALSE);
+        }
         PAINTSTRUCT paintStruct{};
         HDC paintDc = BeginPaint(hwnd_, &paintStruct);
         paintTrace.mark(PaintTrace::NativePaint);
@@ -108,6 +115,17 @@
         const int width = std::max<LONG>(1, clientRect.right - clientRect.left);
         const int height = std::max<LONG>(1, clientRect.bottom - clientRect.top);
         const bool threadedGl = glWorker_.ready() && !IsRectEmpty(&dirtyRect);
+        if (rasterFrame.surface && !threadedGl && !useGPU && !interactiveResizeActive_ &&
+            rasterFrame.width == width && rasterFrame.height == height && rasterFrame.scale == scale) {
+            presentStartupRaster(paintStruct, std::move(rasterFrame), clientRect, paintStartMs);
+            flushDeferredImePosition();
+            finishDiagnostics();
+            internal::traceInteractionPaint(interactionPaint, "paint_end", "software", 0);
+            return;
+        }
+        if (rasterFrame.picture) {
+            internal::traceInteractionPaint(rasterFrame.trace, "startup_raster_discard", "software");
+        }
         if (threadedGl && workerRecordingBlocked()) {
             // Exposure paints can arrive without going through queueInvalidation.
             // Validate the native region and keep its damage until the worker takes the pending scene.
@@ -283,6 +301,24 @@
             canvasOwner.reset();
             startupFanout.reset();
             startupPicture = recorder->finishRecordingAsPicture();
+            const bool asyncRaster = !threadedGl && captureWorkerStartup && !drawAndRecord &&
+                !glWorkerWaitingForSoftwareFrame_ && !interactiveResizeActive_ && !invalidationPending_ &&
+                !startupRasterInputSeen_ && win32::StartupRaster::enabled() &&
+                !win32::experimentalAngleWorkerEnabled() && !win32::experimentalWglWorkerStartsEarly();
+            if (asyncRaster && startupRaster_.submit(hwnd_,
+                    {startupPicture, width, height, scale, interactionPaint}, *paintSurface_)) {
+                EndPaint(hwnd_, &paintStruct);
+                if (virtualRowDamage) virtualRowDamage->covered();
+                internal::traceInteractionPaint(interactionPaint, "worker_startup_picture_recorded", "software", 1);
+                internal::traceInteractionPaint(interactionPaint, "startup_raster_queued", "software", 1);
+                paintTrace.mark(PaintTrace::End);
+                paintTrace.write(interactionPaint.window, static_cast<double>(interactionPaint.paintSequence),
+                    RECT{dirtyX, dirtyY, dirtyRight, dirtyBottom}, profile.data);
+                flushDeferredImePosition();
+                finishDiagnostics();
+                internal::traceInteractionPaint(interactionPaint, "paint_end", "software", 0);
+                return;
+            }
             if (drawAndRecord) {
                 if (win32::verifyWglStartupCaptureEnabled()) {
                     const bool same = startupPicture && win32::matchesStartupReplay(*paintSurface_, *startupPicture);
@@ -448,72 +484,8 @@
             return;
         }
 
-        SkPixmap pixmap;
-        bool blitSucceeded = false;
-        if (paintSurface_->peekPixels(&pixmap)) {
-            internal::traceInteractionPaint(interactionPaint, "blit_begin", "software");
-            const double blitStartMs = currentTimeMs();
-            if (fullPaint) {
-                BITMAPINFO bitmapInfo{};
-                bitmapInfo.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-                bitmapInfo.bmiHeader.biWidth = paintSurfaceWidth_;
-                bitmapInfo.bmiHeader.biHeight = -paintSurfaceHeight_;
-                bitmapInfo.bmiHeader.biPlanes = 1;
-                bitmapInfo.bmiHeader.biBitCount = 32;
-                bitmapInfo.bmiHeader.biCompression = BI_RGB;
-
-                const int copied = StretchDIBits(
-                    dc,
-                    0,
-                    0,
-                    width,
-                    height,
-                    0,
-                    0,
-                    width,
-                    height,
-                    pixmap.addr(),
-                    &bitmapInfo,
-                    DIB_RGB_COLORS,
-                    SRCCOPY);
-                blitSucceeded = copied != 0 && copied != GDI_ERROR;
-            } else {
-                const std::size_t pixelCount = static_cast<std::size_t>(dirtyWidth) * static_cast<std::size_t>(dirtyHeight);
-                blitScratch_.resize(pixelCount);
-                const std::size_t rowBytes = static_cast<std::size_t>(dirtyWidth) * 4;
-                for (int row = 0; row < dirtyHeight; ++row) {
-                    const void* src = pixmap.addr(dirtyX, dirtyY + row);
-                    std::memcpy(
-                        reinterpret_cast<unsigned char*>(blitScratch_.data()) + static_cast<std::size_t>(row) * rowBytes,
-                        src,
-                        rowBytes);
-                }
-
-                BITMAPINFO bitmapInfo{};
-                bitmapInfo.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-                bitmapInfo.bmiHeader.biWidth = dirtyWidth;
-                bitmapInfo.bmiHeader.biHeight = -dirtyHeight;
-                bitmapInfo.bmiHeader.biPlanes = 1;
-                bitmapInfo.bmiHeader.biBitCount = 32;
-                bitmapInfo.bmiHeader.biCompression = BI_RGB;
-
-                blitSucceeded = SetDIBitsToDevice(
-                    dc,
-                    dirtyX,
-                    dirtyY,
-                    dirtyWidth,
-                    dirtyHeight,
-                    0,
-                    0,
-                    0,
-                    dirtyHeight,
-                    blitScratch_.data(),
-                    &bitmapInfo,
-                    DIB_RGB_COLORS) != 0;
-            }
-            internal::traceInteractionPaint(interactionPaint, "blit_return", "software", blitSucceeded ? 1 : 0);
-            recordBlit(currentTimeMs() - blitStartMs);
-        }
+        const bool blitSucceeded = blitSoftwareSurface(dc, *paintSurface_,
+            RECT{dirtyX, dirtyY, dirtyRight, dirtyBottom}, fullPaint, interactionPaint);
 
         EndPaint(hwnd_, &paintStruct);
         if (blitSucceeded) {
