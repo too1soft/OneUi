@@ -133,6 +133,7 @@
     }
 
     void setContent(std::shared_ptr<Widget> widget) override {
+        ++startupRasterContentRevision_;
         applicationContent_ = widget;
         if (menuHost_) { menuHost_->setApplicationContent(std::move(widget)); widget = menuHost_; }
         if (content_) {

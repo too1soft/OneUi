@@ -27,10 +27,12 @@ public:
         int height = 0;
         float scale = 0;
         internal::InteractionSnapshot trace;
+        std::uint64_t contentRevision = 0;
+        bool firstUpdate = false;
         sk_sp<SkSurface> surface;
     };
 
-    enum class Policy { Synchronous, StableScene, WithFollowupDamage };
+    enum class Policy { Synchronous, StableScene, WithFollowupDamage, PresentFirstUpdate };
 
     static Policy policy() noexcept {
         static const auto value = [] {
@@ -38,6 +40,7 @@ public:
             if (GetEnvironmentVariableW(L"ONEUI_WIN32_ASYNC_STARTUP_RASTER", flag, 2) == 1) {
                 if (flag[0] == L'1') return Policy::StableScene;
                 if (flag[0] == L'2') return Policy::WithFollowupDamage;
+                if (flag[0] == L'3') return Policy::PresentFirstUpdate;
             }
             return Policy::Synchronous;
         }();
@@ -45,7 +48,9 @@ public:
     }
 
     static bool enabled() noexcept { return policy() != Policy::Synchronous; }
-    static bool acceptsFollowupDamage() noexcept { return policy() == Policy::WithFollowupDamage; }
+    static bool acceptsFollowupDamage() noexcept {
+        return policy() == Policy::WithFollowupDamage || policy() == Policy::PresentFirstUpdate;
+    }
 
     ~StartupRaster() { cancel(); }
 

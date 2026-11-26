@@ -96,6 +96,7 @@
         }
         paintTrace.mark(PaintTrace::GlSetup);
         win32::StartupRaster::Frame rasterFrame;
+        bool retainFollowupDamage = false;
         if (startupRaster_.pending()) {
             auto completed = startupRaster_.takeComplete();
             if (!completed && !useGPU && !glWorker_.ready() && !interactiveResizeActive_) {
@@ -108,14 +109,19 @@
                 internal::traceInteractionPaint(interactionPaint, "paint_end", "software", 0);
                 return;
             }
-            if (completed && !invalidationPending_) {
+            const bool firstUpdateWithDamage = completed && completed->firstUpdate && completed->surface &&
+                completed->contentRevision == startupRasterContentRevision_ && invalidationPending_ &&
+                !useGPU && !glWorker_.ready() && !interactiveResizeActive_ && IsWindowVisible(hwnd_) &&
+                completed->width == pixelSize.cx && completed->height == pixelSize.cy && completed->scale == scale;
+            if (completed && (!invalidationPending_ || firstUpdateWithDamage)) {
                 rasterFrame = std::move(*completed);
+                retainFollowupDamage = firstUpdateWithDamage;
             } else if (completed) {
                 internal::traceInteractionPaint(completed->trace, "startup_raster_discard", "software");
             } else {
                 startupRaster_.cancel();
             }
-            submitInvalidations();
+            if (!retainFollowupDamage) submitInvalidations();
             InvalidateRect(hwnd_, nullptr, FALSE);
         }
         PAINTSTRUCT paintStruct{};
@@ -133,8 +139,17 @@
         const int height = std::max<LONG>(1, clientRect.bottom - clientRect.top);
         const bool threadedGl = glWorker_.ready() && !IsRectEmpty(&dirtyRect);
         if (rasterFrame.surface && !threadedGl && !useGPU && !interactiveResizeActive_ && IsWindowVisible(hwnd_) &&
+            rasterFrame.contentRevision == startupRasterContentRevision_ &&
             rasterFrame.width == width && rasterFrame.height == height && rasterFrame.scale == scale) {
-            presentStartupRaster(paintStruct, std::move(rasterFrame), clientRect, paintStartMs);
+            const auto rasterTrace = rasterFrame.trace;
+            const bool presented = presentStartupRaster(paintStruct, std::move(rasterFrame), clientRect, paintStartMs);
+            if (retainFollowupDamage) {
+                // No later frame has been presented. Publish the first visible
+                // client update, then return the merged damage for the next frame.
+                internal::traceInteractionPaint(rasterTrace, "startup_raster_first_update_before_followup",
+                    "software", presented ? 1 : 0);
+                submitInvalidations();
+            }
             flushDeferredImePosition();
             finishDiagnostics();
             internal::traceInteractionPaint(interactionPaint, "paint_end", "software", 0);
@@ -142,6 +157,7 @@
         }
         if (rasterFrame.picture) {
             internal::traceInteractionPaint(rasterFrame.trace, "startup_raster_discard", "software");
+            if (retainFollowupDamage) submitInvalidations();
         }
         if (threadedGl && workerRecordingBlocked()) {
             // Exposure paints can arrive without going through queueInvalidation.
@@ -330,8 +346,10 @@
                 (!invalidationPending_ || win32::StartupRaster::acceptsFollowupDamage()) &&
                 !startupRasterInputSeen_ && win32::StartupRaster::enabled() &&
                 !win32::experimentalAngleWorkerEnabled() && !win32::experimentalWglWorkerStartsEarly();
-            if (asyncRaster && startupRaster_.submit(hwnd_,
-                    {startupPicture, width, height, scale, interactionPaint}, *paintSurface_)) {
+            const bool presentFirstUpdate = asyncRaster && rendererInfo_.paints == 1 &&
+                win32::StartupRaster::policy() == win32::StartupRaster::Policy::PresentFirstUpdate;
+            if (asyncRaster && startupRaster_.submit(hwnd_, {startupPicture, width, height, scale,
+                    interactionPaint, startupRasterContentRevision_, presentFirstUpdate}, *paintSurface_)) {
                 EndPaint(hwnd_, &paintStruct);
                 if (virtualRowDamage) virtualRowDamage->covered();
                 if (invalidationPending_) {

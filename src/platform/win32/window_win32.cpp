@@ -148,6 +148,7 @@ public:
 #include "window_win32_gpu.inc"
     win32::GlRenderWorker glWorker_;
     win32::StartupRaster startupRaster_;
+    std::uint64_t startupRasterContentRevision_ = 0;
     bool startupRasterInputSeen_ = false;
     win32::SoftwareHandoffRefresh handoffRefresh_;
     const bool coalesceHandoffRefresh_ = win32::experimentalAngleCoalescesSoftwareHandoff();

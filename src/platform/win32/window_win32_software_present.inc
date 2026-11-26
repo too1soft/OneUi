@@ -36,7 +36,7 @@
         return succeeded;
     }
 
-    void presentStartupRaster(PAINTSTRUCT& paint, win32::StartupRaster::Frame frame,
+    bool presentStartupRaster(PAINTSTRUCT& paint, win32::StartupRaster::Frame frame,
                               RECT client, double paintStarted) {
         const bool presented = blitSoftwareSurface(paint.hdc, *frame.surface, client, true, frame.trace);
         EndPaint(hwnd_, &paint);
@@ -44,11 +44,12 @@
         if (!presented) {
             startupRasterInputSeen_ = true;
             queueInvalidation(nullptr);
-            return;
+            return false;
         }
         paintSurfaceWidth_ = frame.surface->width();
         paintSurfaceHeight_ = frame.surface->height();
         paintSurface_ = std::move(frame.surface);
         glWorker_.setStartupPicture({std::move(frame.picture), frame.width, frame.height, frame.trace.paintSequence});
         recordPaint(frame.width, frame.height, true, false, 0.0, currentTimeMs() - paintStarted);
+        return true;
     }
