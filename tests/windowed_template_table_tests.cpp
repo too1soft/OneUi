@@ -158,13 +158,13 @@ void testStartupRowPreparation() {
                 "an exhausted preparation turn must leave its first row detached");
     }
     {
-        TableLayoutTurn turn(std::optional<Point>{{0, 0}});
+        TableLayoutTurn turn(std::optional<Point>{Point{0, 0}});
         f.table.layoutSubtree();
         require(turn.deferred() && f.mounted == 1 && f.rows->children().empty(),
                 "input outside an unpublished table must leave preparation pending");
     }
     {
-        TableLayoutTurn turn(std::optional<Point>{{100, 100}});
+        TableLayoutTurn turn(std::optional<Point>{Point{100, 100}});
         f.table.layoutSubtree();
         require(!turn.deferred() && f.rows->children().size() == static_cast<size_t>(f.mounted),
                 "input within the viewport must get a complete hit-test tree");
