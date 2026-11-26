@@ -75,7 +75,26 @@ public:
     struct Source { std::string component, file; int line=0; };
 private:
     friend class Mount;
-    struct Entry { std::weak_ptr<Widget> widget; std::string component, classes; std::weak_ptr<Stack> content; std::string tone, file; int line=0; bool invalid=false; mutable bool initialStylePending=false; std::string appearance,variant; };
+    struct LayoutDefaults {
+        Size size;
+        StackDirection direction = StackDirection::Column;
+        bool wrap = false;
+        std::optional<StackFlex> flex;
+        std::weak_ptr<Stack> parent;
+    };
+    struct Entry {
+        std::weak_ptr<Widget> widget;
+        std::string component, classes;
+        std::weak_ptr<Stack> content;
+        std::string tone, file;
+        int line = 0;
+        bool invalid = false;
+        mutable bool initialStylePending = false;
+        std::string appearance, variant;
+        // Captured just before the first style override, with the same lifetime
+        // as the registration. Mounting a row needs no separate map node.
+        mutable std::optional<LayoutDefaults> layoutDefaults;
+    };
     std::vector<Entry> entries_;
     StyleSheet sheet_;
     Density density_=Density::Comfortable;
@@ -89,13 +108,12 @@ private:
         std::size_t effectiveVersion=~size_t{};
         std::vector<bool> effectiveMatches;
     };
-    struct LayoutDefaults {Size size;StackDirection direction=StackDirection::Column;bool wrap=false;std::optional<StackFlex> flex;std::weak_ptr<Stack> parent;std::weak_ptr<Widget> widget;};
     size_t treeVersion_=0;
     std::map<const Widget*,QueryState> queries_;
-    std::map<const Widget*,LayoutDefaults> layoutDefaults_;
     std::unordered_map<const Widget*, std::weak_ptr<Stack>> baseLayoutParents_;
     std::uint64_t baseLayoutRevision_ = 1;
     std::uint64_t appliedBaseLayoutRevision_ = 0;
+    bool hasCapturedLayoutDefaults_ = false;
     std::shared_ptr<int> queryLifetime_=std::make_shared<int>(0);
     std::vector<std::string> queryDiagnostics_;
     std::map<const Widget*,std::shared_ptr<StyleSheet>> localThemes_;
@@ -368,10 +386,12 @@ public:
         for(auto& entry:entries_)apply(entry,sheet_);
     }
     void remapWidgets(const std::map<const Widget*,std::shared_ptr<Widget>>& replacements) {
-        queries_.clear();layoutDefaults_.clear();++treeVersion_;
+        queries_.clear();++treeVersion_;
+        hasCapturedLayoutDefaults_ = false;
         invalidateBaseLayouts();
         entryIndices_.reset();
         for(auto& entry:entries_) {
+            entry.layoutDefaults.reset();
             if(auto widget=entry.widget.lock()) {
                 auto found=replacements.find(widget.get());
                 if(found!=replacements.end())entry.widget=found->second;

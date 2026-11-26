@@ -19,17 +19,8 @@ inline void StyleRegistry::pruneEntries() {
     const auto previous = entries_.size();
     entries_.erase(std::remove_if(entries_.begin(), entries_.end(),
         [](const Entry& entry) { return entry.widget.expired(); }), entries_.end());
-    bool retired = previous != entries_.size();
-    if (retired) entryIndices_.reset();
-    for (auto it = layoutDefaults_.begin(); it != layoutDefaults_.end();) {
-        if (it->second.widget.expired()) {
-            // Weak references retain allocate_shared/make_shared allocations
-            // after the Widget destructor. They must not outlive the entry.
-            it = layoutDefaults_.erase(it);
-            retired = true;
-        } else ++it;
-    }
-    if (!retired) return;
+    if (previous == entries_.size()) return;
+    entryIndices_.reset();
     std::unordered_set<const Widget*> live;
     live.reserve(entries_.size());
     for (const auto& entry : entries_)

@@ -5,9 +5,17 @@
 namespace oneui::ui {
 inline void StyleRegistry::updateAuthoredFlex(const std::shared_ptr<Widget>& widget,const StackFlex& flex) {
     invalidateBaseLayouts();
-    auto found=layoutDefaults_.find(widget.get());
-    if(found!=layoutDefaults_.end() && found->second.widget.lock()==widget)
-        found->second.flex=flex;
+    if (!hasCapturedLayoutDefaults_) return;
+    if (entryIndices_) {
+        if (const auto* entry = indexedEntry(widget); entry && entry->layoutDefaults)
+            entry->layoutDefaults->flex = flex;
+        return;
+    }
+    for (auto it = entries_.rbegin(); it != entries_.rend(); ++it) {
+        if (it->widget.lock() != widget) continue;
+        if (it->layoutDefaults) it->layoutDefaults->flex = flex;
+        return;
+    }
 }
 inline void StyleRegistry::applyBaseLayouts() {
     applyBaseLayouts(true);
@@ -101,11 +109,10 @@ inline void StyleRegistry::applyBaseLayouts(bool force) {
     appliedBaseLayoutRevision_ = revision;
 }
 inline void StyleRegistry::restoreQueryLayouts() {
-    for(const auto& entry:entries_)if(auto widget=entry.widget.lock()) {
-        auto found=layoutDefaults_.find(widget.get());if(found==layoutDefaults_.end())continue;
+    for (const auto& entry : entries_) if (entry.layoutDefaults && !entry.widget.expired()) {
         StyleNode node{syntax::components().at(entry.component),{"one-"+entry.component},0};
         oneui::detail::appendStyleClasses(node.classes, entry.classes);
-        applyLayout(entry,sheet_.resolve(node),found->second.parent.lock(),sheet_.resolveLayout(node));
+        applyLayout(entry,sheet_.resolve(node),entry.layoutDefaults->parent.lock(),sheet_.resolveLayout(node));
     }
 }
 inline void StyleRegistry::configureQuery(const std::shared_ptr<Widget>& widget,const StyleBox& box) {
@@ -123,12 +130,15 @@ inline void StyleRegistry::configureQuery(const std::shared_ptr<Widget>& widget,
 }
 inline void StyleRegistry::applyLayout(const Entry& entry,const StyleBox& box,const std::shared_ptr<Stack>& parent,const StyleLayout& layout) {
     auto widget=entry.widget.lock();if(!widget)return;
-    auto& defaults=layoutDefaults_[widget.get()];
-    if(defaults.widget.lock()!=widget) {
-        defaults.widget=widget;defaults.size=widget->preferredSize();defaults.parent=parent;
+    if (!entry.layoutDefaults) {
+        auto& defaults = entry.layoutDefaults.emplace();
+        hasCapturedLayoutDefaults_ = true;
+        defaults.size = widget->preferredSize();
+        defaults.parent = parent;
         if(parent)defaults.flex=parent->explicitFlex(widget);
         if(auto stack=std::dynamic_pointer_cast<Stack>(widget)){defaults.direction=stack->direction();defaults.wrap=stack->wrap();}
     }
+    const auto defaults = *entry.layoutDefaults;
     widget->setPreferredSize({box.width.value_or(defaults.size.width),box.height.value_or(defaults.size.height)});
     if(auto page=std::dynamic_pointer_cast<ContainerPage>(widget))page->setDisplay(box.display);
     else widget->setLayoutVisible(box.display.value_or(true));
