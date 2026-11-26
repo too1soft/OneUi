@@ -19,6 +19,12 @@ std::shared_ptr<Instance> Runtime::buildVirtual(uint32_t node, const Scopes& con
         check(runtime && !runtime->closing, ONEUI_VIEW_CLOSED, "Virtual template owner closed");
         auto found = owner->rows.find(key);
         if (found != owner->rows.end()) return found->second->element.widget;
+        std::optional<timing::Measurements> measurements;
+        std::optional<timing::Scope> mountTiming;
+        if (traceRepeatBuild() && internal::scrollTraceEnabled()) {
+            measurements.emplace();
+            mountTiming.emplace(timing::Instantiate, &*measurements);
+        }
         const auto source = owner->repeatSource->items.at(index);
         auto scope = runtime->acquire({source->identity, source->vm}, source->table.model_id, false);
         try {
@@ -26,12 +32,27 @@ std::shared_ptr<Instance> Runtime::buildVirtual(uint32_t node, const Scopes& con
             const auto nested = owner->scopes.withRow(scope);
             auto row = runtime->build(runtime->image.records[oneview::TMPL][repeat[5]][1], nested);
             row->parent = owner;
-            runtime->update(row);
+            {
+                std::optional<timing::Scope> updateTiming;
+                if (measurements) updateTiming.emplace(timing::InitialUpdate);
+                runtime->update(row);
+            }
             // These descendants are assembled after the initial stylesheet pass.
             // Resolve dimensions into their new parents before measuring the row.
             runtime->factory.styles()->applyDetachedBaseLayouts(row->element.widget);
             if (owner->published) activate(row);
             owner->rows.emplace(key, row);
+            if (measurements) {
+                mountTiming.reset();
+                internal::ScrollTraceEvent event;
+                event.component = "view_virtual_row_build";
+                event.phase = "total";
+                event.object = reinterpret_cast<std::uintptr_t>(owner->element.widget.get());
+                event.durationMs = std::chrono::duration<double, std::milli>(measurements->total).count();
+                event.detailB = static_cast<double>(index);
+                internal::writeScrollTrace(event);
+                writeRepeatBuildTrace(event, *measurements);
+            }
             return row->element.widget;
         } catch (...) {
             runtime->closeScope(scope);

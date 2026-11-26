@@ -18,7 +18,6 @@ bool traceRepeatBuild() {
 
 void writeRepeatBuildTrace(internal::ScrollTraceEvent event,
                            const timing::Measurements& measurements) {
-    event.component = "view_repeat_build";
     for (std::size_t stage = timing::Build; stage < timing::Count; ++stage) {
         if (!measurements.calls[stage]) continue;
         event.phase = timing::names[stage];
@@ -152,8 +151,10 @@ void Runtime::repeat(const std::shared_ptr<Instance> &instance) {
             event.detailA = static_cast<double>(items.keys.size());
             event.detailB = static_cast<double>(created);
             internal::writeScrollTrace(event);
-            if (measureBuild)
+            if (measureBuild) {
+                event.component = "view_repeat_build";
                 writeRepeatBuildTrace(event, measurements);
+            }
         }
     }
     if (instance->transparent) {
