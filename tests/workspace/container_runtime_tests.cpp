@@ -43,10 +43,35 @@ void retiredLayoutsReleaseSharedAllocations() {
     }
     expect(styles->size() == 1, "live parent survives repeated metadata cleanup");
 }
+
+void refreshedLayoutsFollowReparenting() {
+    auto styles = std::make_shared<ui::StyleRegistry>();
+    styles->replace("stack.probe { width: 36px; height: 24px; }");
+    auto first = std::make_shared<Stack>();
+    auto second = std::make_shared<Stack>();
+    auto child = std::make_shared<Stack>();
+    styles->addFresh(ui::Element(ui::Node(first), "Column"));
+    styles->addFresh(ui::Element(ui::Node(second), "Column"));
+    ui::Element entry(ui::Node(child), "Column");
+    entry.classes = "probe";
+    styles->addFresh(entry);
+    first->add(child);
+    styles->applyBaseLayouts();
+    expect(first->explicitFlex(child).has_value(), "authored dimensions attach to the first parent");
+
+    expect(first->remove(child), "detach the styled child");
+    second->add(child);
+    styles->refreshBaseLayouts();
+    const auto flex = second->explicitFlex(child);
+    expect(flex && flex->width == 36 && flex->height == 24,
+           "same-size parent snapshot detects reparenting and reapplies dimensions");
+    expect(!first->explicitFlex(child), "reparenting leaves no stale flex at the old parent");
+}
 }
 int main(int argc,char** argv) {
     try {
         retiredLayoutsReleaseSharedAllocations();
+        refreshedLayoutsFollowReparenting();
         expect(argc==2,"IR argument");auto image=load(argv[1]);Vm vm(image,"QueryRoot");
         vm.values[id(image,"QueryRoot","detailsSelected")].integer=1;
         auto runtime=std::make_shared<Runtime>(image);runtime->initialize(&vm.table,&vm);

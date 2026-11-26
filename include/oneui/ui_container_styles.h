@@ -1,4 +1,6 @@
 #pragma once
+#include <cstddef>
+#include <memory_resource>
 #include <string_view>
 // Included after ui_declarative.h's definitions. Query application belongs to
 // declarative composition; the parser/evaluator and isolated layout are core.
@@ -62,7 +64,11 @@ inline void StyleRegistry::applyBaseLayouts(bool force) {
     const oneui::detail::view_mount_timing::Scope measure(oneui::detail::view_mount_timing::BaseLayout);
     pruneEntries();
     const auto revision = baseLayoutRevision_;
-    std::unordered_map<const Widget*,std::shared_ptr<Stack>> parents;
+    // Parent discovery and the resolved-style index are both pass-local.
+    // Allocate their nodes together, keeping the same strong parent snapshot.
+    alignas(std::max_align_t) std::byte localStorage[4096];
+    std::pmr::monotonic_buffer_resource scratch(localStorage, sizeof(localStorage));
+    std::pmr::unordered_map<const Widget*,std::shared_ptr<Stack>> parents(&scratch);
     parents.reserve(entries_.size());
     for (const auto& entry : entries_)
         if (auto stack = std::dynamic_pointer_cast<Stack>(entry.widget.lock()))
@@ -79,7 +85,7 @@ inline void StyleRegistry::applyBaseLayouts(bool force) {
     // Repeated rows have many controls with identical unconditional styles.
     // Keep this cache within the pass: both the sheet and the entry strings
     // already belong to the registry, and layout application stays per child.
-    std::map<std::pair<std::string_view, std::string_view>, BaseLayoutStyle> resolved;
+    std::pmr::map<std::pair<std::string_view, std::string_view>, BaseLayoutStyle> resolved(&scratch);
     bool applied = false;
     for (const auto& entry : entries_) if (auto widget = entry.widget.lock()) {
         auto parent = parents.find(widget.get());
@@ -95,9 +101,12 @@ inline void StyleRegistry::applyBaseLayouts(bool force) {
     // Base dimensions can replace an active query override without changing
     // the measured size or matched tier. Reapply it on the next layout pass.
     if(applied)for(auto& entry:queries_)entry.second.version=~size_t{};
-    baseLayoutParents_.clear();
+    for (auto current = baseLayoutParents_.begin(); current != baseLayoutParents_.end();) {
+        if (parents.find(current->first) == parents.end()) current = baseLayoutParents_.erase(current);
+        else ++current;
+    }
     baseLayoutParents_.reserve(parents.size());
-    for (const auto& item : parents) baseLayoutParents_.emplace(item.first, item.second);
+    for (const auto& item : parents) baseLayoutParents_.insert_or_assign(item.first, item.second);
     appliedBaseLayoutRevision_ = revision;
 }
 inline void StyleRegistry::restoreQueryLayouts() {
