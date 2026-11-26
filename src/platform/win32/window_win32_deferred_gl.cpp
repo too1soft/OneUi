@@ -54,7 +54,7 @@ void flushStartupGlScene(GrDirectContext& context, double started) {
 } // namespace
 
 bool prewarmStartupGlScene(GrDirectContext& context, const StartupGlScene& scene, bool retained,
-                          sk_sp<SkSurface>* warmedBacking) {
+                          sk_sp<SkSurface>* warmedBacking, GrSyncCpu sync) {
     const auto started = [] {
         return internal::scrollTraceEnabled() ? internal::scrollTraceNowMs() : -1.0;
     };
@@ -82,10 +82,9 @@ bool prewarmStartupGlScene(GrDirectContext& context, const StartupGlScene& scene
     }
     trace("wgl_prewarm_draw", drawStarted);
     flushStartupGlScene(context, started());
-    // Complete the scratch work before any live-window draw or ownership change.
     const double submitStarted = started();
-    const bool submitted = context.submit(GrSyncCpu::kYes);
-    trace("wgl_prewarm_submit", submitStarted, submitted ? 1.0 : 0.0);
+    const bool submitted = context.submit(sync);
+    trace("wgl_prewarm_submit", submitStarted, submitted ? 1.0 : 0.0, sync == GrSyncCpu::kNo ? 1.0 : 0.0);
     if (submitted && warmedBacking) *warmedBacking = std::move(source);
     return submitted;
 }

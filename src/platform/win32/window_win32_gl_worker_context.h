@@ -131,7 +131,15 @@ public:
             return GetEnvironmentVariableW(L"ONEUI_WIN32_GL_WORKER_REUSE_WARM_BACKING", value, 2) == 1 &&
                 value[0] == L'1';
         }();
-        return prewarmStartupGlScene(*context_, scene, retained, reuse && retained ? &retained_ : nullptr);
+        static const bool asyncAngleSubmit = [] {
+            wchar_t value[2]{};
+            return GetEnvironmentVariableW(L"ONEUI_WIN32_ANGLE_ASYNC_PREWARM_SUBMIT", value, 2) == 1 &&
+                value[0] == L'1';
+        }();
+        // ANGLE keeps the same EGLContext and worker thread when rebinding
+        // to the live drawable. Both batches remain ordered in that context.
+        const auto sync = angleContext_ && asyncAngleSubmit ? GrSyncCpu::kNo : GrSyncCpu::kYes;
+        return prewarmStartupGlScene(*context_, scene, retained, reuse && retained ? &retained_ : nullptr, sync);
     }
 
     bool rehearsePresents() {
