@@ -172,6 +172,28 @@ class BinaryTests(CompilerCase):
         data[48:80] = hashlib.sha256(section(data, 2)).digest()
         self.verify_bytes(data, 'BAD_IR')
 
+    def test_wide_component_assignments_are_unique(self):
+        fields = '\n'.join(f'property {1000 + i} field{i} bool 3' for i in range(60))
+        components = self.write('Wide.components',
+                                f'oneui-components 1\ncomponent Demo_Wide 1 leaf\n{fields}\nend\n')
+        source = self.write('Wide.one', '<template view-model="Wide">'
+                            '<Demo_Wide field53="true" field54="false" :field55="enabled"/>'
+                            '</template>')
+        schema = self.write('Wide.oneschema', 'model Wide {r enabled:bool}')
+        output = self.root / 'Wide.oneview'
+        self.run_cli('--input', source, '--schema', schema, '--components', components,
+                     '--output', output, '--emit', 'ir')
+        self.run_cli('--verify', output, '--components', components)
+        original = output.read_bytes()
+        binding_id = directory(original)[9][2] + 4
+        # Ten common members put field53 and field54 on either side of ordinal 64.
+        for property_id in (1053, 1054):
+            with self.subTest(property_id=property_id):
+                data = bytearray(original)
+                struct.pack_into('<I', data, binding_id, property_id)
+                self.run_cli('--verify', self.write('Duplicate.oneview', data),
+                             '--components', components, error='BAD_IR: duplicate binding/property')
+
 
 if __name__ == '__main__':
     unittest.main()

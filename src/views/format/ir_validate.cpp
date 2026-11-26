@@ -4,6 +4,32 @@
 
 namespace oneview
 {
+namespace
+{
+// A resolved member's ordinal is stable within a node's component contract,
+// including sparse extension IDs and historical built-in contracts.
+class AssignedMembers
+{
+public:
+    explicit AssignedMembers(std::size_t nodes) : lowMembers_(nodes) {}
+
+    bool insert(uint32_t node, std::size_t ordinal)
+    {
+        if (ordinal >= 64)
+            return highMembers_.emplace(node, ordinal).second;
+        const auto bit = uint64_t{1} << ordinal;
+        auto &members = lowMembers_[node];
+        const bool inserted = !(members & bit);
+        members |= bit;
+        return inserted;
+    }
+
+private:
+    std::vector<uint64_t> lowMembers_;
+    std::set<std::pair<uint32_t, std::size_t>> highMembers_;
+};
+} // namespace
+
 void validateImage(const Image &im)
 {
     auto count = [&](Section k) { return im.count(k); };
@@ -45,14 +71,14 @@ void validateImage(const Image &im)
         range(SLOT, r[4], r[5]);
         span(r[6]);
     }
-    std::set<uint32_t> usedComponents;
+    std::vector<bool> usedComponents(im.components.size());
     for (auto &r : im.records[NODE])
     {
         require(r[0] >= 1 && r[0] <= 4 && r[8], "BAD_IR: node opcode/flags/scope");
         if (r[0] == 1)
         {
             require(r[1] < im.components.size(), "BAD_IR: component index");
-            usedComponents.insert(r[1]);
+            usedComponents[r[1]] = true;
         }
         else
             require(r[1] == none, "BAD_IR: non-component index");
@@ -79,7 +105,8 @@ void validateImage(const Image &im)
         if (r[0] == 3)
             require(r[4] == 0, "BAD_IR: call has physical children");
     }
-    require(usedComponents.size() == im.components.size(), "BAD_IR: unused component contract");
+    require(std::find(usedComponents.begin(), usedComponents.end(), false) == usedComponents.end(),
+            "BAD_IR: unused component contract");
     for (auto &r : im.records[EDGE])
     {
         index(NODE, r[0]);
@@ -103,7 +130,7 @@ void validateImage(const Image &im)
             sid(r[2]);
         }
     }
-    std::set<std::pair<uint32_t, uint32_t>> assigned;
+    AssignedMembers assigned(count(PROP) || count(BIND) ? count(NODE) : 0);
     for (auto kind : {PROP, BIND, EVNT})
         for (auto &r : im.records[kind])
         {
@@ -119,20 +146,19 @@ void validateImage(const Image &im)
         auto &p = c.property(r[1]);
         index(VALU, r[2]);
         auto &v = im.records[VALU][r[2]];
-        require(p.tag == v[0] && (p.flags & 1) && assigned.emplace(r[0], r[1]).second,
+        require(p.tag == v[0] && (p.flags & 1) && assigned.insert(r[0], &p - c.properties.data()),
                 "BAD_IR: static property type/duplicate");
         span(r[3]);
-        std::string text;
         if (v[0] == 1)
-            text = v[2] ? "true" : "false";
-        if (v[0] == 2)
+            validateComponentStatic(c, p.name, v[2] ? "true" : "false");
+        else if (v[0] == 2)
         {
             uint64_t bits = uint64_t(v[2]) | (uint64_t(v[3]) << 32);
             int64_t n;
             std::memcpy(&n, &bits, 8);
-            text = std::to_string(n);
+            validateComponentStatic(c, p.name, std::to_string(n));
         }
-        if (v[0] == 3)
+        else if (v[0] == 3)
         {
             uint64_t bits = uint64_t(v[2]) | (uint64_t(v[3]) << 32);
             double f;
@@ -142,10 +168,8 @@ void validateImage(const Image &im)
                 oneui::ui::syntax::validateLayoutNumber(p.name, float(f));
             }
         }
-        if (v[0] == 4)
-            text = im.strings[v[2]];
-        if (v[0] != 3)
-            validateComponentStatic(c, p.name, text);
+        else if (v[0] == 4)
+            validateComponentStatic(c, p.name, im.strings[v[2]]);
     }
     uint32_t last = 0;
     for (auto &r : im.records[BIND])
@@ -160,18 +184,19 @@ void validateImage(const Image &im)
         last = r[0];
         if (v.tag == 5)
             validateRecord(im.schema, im.schema.model(v.item), p.record);
-        require(assigned.emplace(r[0], r[1]).second, "BAD_IR: duplicate binding/property");
+        require(assigned.insert(r[0], &p - c.properties.data()), "BAD_IR: duplicate binding/property");
         span(r[6]);
     }
-    std::set<std::pair<uint32_t, uint32_t>> events;
+    AssignedMembers events(count(EVNT) ? count(NODE) : 0);
     last = 0;
     for (auto &r : im.records[EVNT])
     {
-        auto &e = component(r[0]).event(r[1]);
+        const auto &c = component(r[0]);
+        const auto &e = c.event(r[1]);
         auto &cmd = im.schema.model(r[4]).command(r[2]);
         range(EARG, r[5], r[6]);
         require(r[0] >= last && (r[3] >> 16) == 0 && r[6] == cmd.args.size() && r[6] == e.args.size() &&
-                    events.emplace(r[0], r[1]).second,
+                    events.insert(r[0], &e - c.events.data()),
                 "BAD_IR: event");
         last = r[0];
         span(r[7]);
@@ -190,16 +215,15 @@ void validateImage(const Image &im)
             span(a[3]);
         }
     }
-    std::set<uint32_t> conditions;
-    last = 0;
+    last = none;
     for (auto &r : im.records[COND])
     {
         index(NODE, r[0]);
         const auto& node = im.records[NODE][r[0]];
         require(node[0] != 2, "BAD_IR: condition on repeat");
         auto mode = r[3] >> 16;
-        require(r[0] >= last && mode <= (conditionInverse | conditionLiteral | conditionMountOnly) &&
-                r[5] == 0 && conditions.insert(r[0]).second, "BAD_IR: condition");
+        require((last == none || r[0] > last) && mode <= (conditionInverse | conditionLiteral | conditionMountOnly) &&
+                r[5] == 0, "BAD_IR: condition");
         if (mode & conditionMountOnly) {
             const auto parent = node[2];
             require(!(mode & conditionInverse) && (node[0] == 1 || node[0] == 3) &&
