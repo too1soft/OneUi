@@ -242,17 +242,10 @@
             }
             return DefWindowProcW(hwnd_, message, wParam, lParam);
         case WM_MOUSELEAVE:
-            mouseLeaveTracking_ = false;
-            lastCursorKind_ = CursorKind::Default;
-            hasLastCursorPoint_ = false;
-            SetCursor(cursorForKind(CursorKind::Default));
-            clearTooltip();
-            tooltipWaitForMove_ = false;
-            if (content_) {
-                if (content_->clearInteractionState()) {
-                    requestInteractiveRedraw();
-                }
-            }
+            dispatchMouseLeave();
+            return 0;
+        case WM_CAPTURECHANGED:
+            dispatchLeftCaptureLost();
             return 0;
         case WM_ENTERSIZEMOVE:
             interactiveResizeActive_ = true;
@@ -288,14 +281,10 @@
                         return beginBorderlessCaptionDrag(screenPosition);
                 }
             }
-            SetFocus(hwnd_);
-            SetCapture(hwnd_);
-            dispatchMouseDown(lParam, MouseButton::Left);
+            dispatchLeftPress(lParam);
             return 0;
         case WM_LBUTTONDBLCLK:
-            SetFocus(hwnd_);
-            SetCapture(hwnd_);
-            dispatchMouseDown(lParam, MouseButton::Left, 2);
+            dispatchLeftPress(lParam, 2);
             return 0;
         case WM_LBUTTONUP:
             dispatchLeftRelease(lParam);

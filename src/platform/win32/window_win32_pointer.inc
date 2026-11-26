@@ -169,9 +169,22 @@
         });
     }
 
+    void dispatchLeftPress(LPARAM lParam, int clickCount = 1) {
+        const auto alive = callbackWindowAlive_;
+        SetFocus(hwnd_);
+        if (!alive->load(std::memory_order_acquire)) return;
+        SetCapture(hwnd_);
+        if (!alive->load(std::memory_order_acquire)) return;
+        leftMouseCaptured_ = GetCapture() == hwnd_;
+        dispatchMouseDown(lParam, MouseButton::Left, clickCount);
+    }
+
     void dispatchLeftRelease(LPARAM lParam) {
         const auto alive = callbackWindowAlive_;
-        ReleaseCapture();
+        // ReleaseCapture sends WM_CAPTURECHANGED synchronously. A normal release
+        // must still reach the pressed widget even though capture has ended.
+        leftMouseCaptured_ = false;
+        if (GetCapture() == hwnd_) ReleaseCapture();
         if (!alive->load(std::memory_order_acquire)) return;
         internal::PointerReleaseCallbacks::Actions actions;
         {

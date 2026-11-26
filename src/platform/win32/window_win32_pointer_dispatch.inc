@@ -61,6 +61,36 @@
             mouseLeaveTracking_ = true;
         }
     }
+
+    void dispatchMouseLeave() {
+        mouseLeaveTracking_ = false;
+        lastCursorKind_ = CursorKind::Default;
+        hasLastCursorPoint_ = false;
+        SetCursor(cursorForKind(CursorKind::Default));
+        clearTooltip();
+        tooltipWaitForMove_ = false;
+        internal::writeScrollTrace({
+            "win32", leftMouseCaptured_ ? "pointer_leave_captured" : "pointer_leave",
+            reinterpret_cast<std::uintptr_t>(hwnd_)});
+        // The captured gesture still owns its release, including outside the client area.
+        if (!leftMouseCaptured_) clearPointerInteraction();
+    }
+
+    void dispatchLeftCaptureLost() {
+        if (!std::exchange(leftMouseCaptured_, false)) return;
+        internal::writeScrollTrace({
+            "win32", "pointer_capture_lost", reinterpret_cast<std::uintptr_t>(hwnd_)});
+        clearPointerInteraction();
+    }
+
+    void clearPointerInteraction() {
+        const auto alive = callbackWindowAlive_;
+        const auto content = content_;
+        if (content && content->clearInteractionState() && alive->load(std::memory_order_acquire)) {
+            requestInteractiveRedraw();
+        }
+    }
+
     bool prepareInputLayout(std::optional<Point> pointer = {}) {
         const auto alive = callbackWindowAlive_;
         // Keep snapshot state alive if a size observer destroys this window.

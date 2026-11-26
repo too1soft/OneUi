@@ -27,16 +27,24 @@ struct Fixture {
 
     Window window{createWindow(), oneui_window_destroy};
     Button button{oneui_button_create(L"Navigate"), oneui_widget_destroy};
+    Button scrollView{nullptr, oneui_widget_destroy};
     std::vector<int> steps;
     int accepted = 0;
     int cancelled = 0;
     bool closeDuringClick = false;
     bool nestClick = false;
+    bool captureDuringClick = false;
     decltype(&oneui_window_post_owned) post = oneui_window_post_after_pointer_release_owned;
 
-    Fixture() {
+    explicit Fixture(bool scroll = false) {
         require(window && button, "fixture initialization failed");
-        oneui_window_set_content(window.get(), button.get());
+        if (scroll) {
+            scrollView.reset(oneui_scroll_view_create());
+            require(bool(scrollView), "fixture scroll view initialization failed");
+            oneui_scroll_view_set_content_height(scrollView.get(), 220);
+            oneui_scroll_view_set_content(scrollView.get(), button.get());
+        }
+        oneui_window_set_content(window.get(), scroll ? scrollView.get() : button.get());
         oneui_window_initialize(window.get());
         oneui_button_set_on_click(button.get(), clicked, this);
     }
@@ -47,6 +55,7 @@ struct Fixture {
 
     static void clicked(void* data) {
         auto& fixture = *static_cast<Fixture*>(data);
+        fixture.captureDuringClick |= GetCapture() == fixture.nativeHandle();
         fixture.steps.push_back(1);
         fixture.accepted = fixture.post(fixture.window.get(), [](void* owned) {
             static_cast<Fixture*>(owned)->steps.push_back(3);
@@ -56,12 +65,23 @@ struct Fixture {
         if (fixture.closeDuringClick) oneui_window_close(fixture.window.get());
     }
 
-    void click() const {
+    HWND nativeHandle() const {
         const auto hwnd = static_cast<HWND>(oneui_window_native_handle(window.get()));
         require(hwnd != nullptr, "fixture has no native window");
-        const auto point = MAKELPARAM(20, 20);
-        SendMessageW(hwnd, WM_LBUTTONDOWN, MK_LBUTTON, point);
-        SendMessageW(hwnd, WM_LBUTTONUP, 0, point);
+        return hwnd;
+    }
+
+    void press(LPARAM point = MAKELPARAM(20, 20)) const {
+        SendMessageW(nativeHandle(), WM_LBUTTONDOWN, MK_LBUTTON, point);
+    }
+
+    void release(LPARAM point = MAKELPARAM(20, 20)) const {
+        SendMessageW(nativeHandle(), WM_LBUTTONUP, 0, point);
+    }
+
+    void click() const {
+        press();
+        release();
     }
 };
 
@@ -101,13 +121,92 @@ void verifyNestedRelease() {
             "nested release actions must wait for the outer widget callback");
 }
 
+void verifyLeaveDuringCapture() {
+    Fixture fixture(true);
+    const auto hwnd = fixture.nativeHandle();
+    SendMessageW(hwnd, WM_MOUSEMOVE, 0, MAKELPARAM(20, 20));
+    fixture.press();
+    require(GetCapture() == hwnd, "press did not acquire Win32 capture");
+    SendMessageW(hwnd, WM_MOUSELEAVE, 0, 0);
+    require(fixture.steps.empty(), "mouse leave activated the button");
+    fixture.release();
+    require(fixture.steps == std::vector<int>{1, 2, 3},
+            "mouse leave cancelled a captured press inside the button");
+    require(!fixture.captureDuringClick && GetCapture() != hwnd,
+            "ordinary release did not give up capture before the click");
+}
+
+void verifyOutsideReleaseAfterLeave() {
+    Fixture fixture(true);
+    const auto hwnd = fixture.nativeHandle();
+    fixture.press();
+    require(GetCapture() == hwnd, "press did not acquire Win32 capture");
+    SendMessageW(hwnd, WM_MOUSELEAVE, 0, 0);
+    fixture.release(MAKELPARAM(-10, -10));
+    require(fixture.steps.empty() && GetCapture() != hwnd, "outside release activated the button");
+    fixture.click();
+    require(fixture.steps == std::vector<int>{1, 2, 3}, "outside release left stale press state");
+}
+
+void verifyCaptureTransferCancelsPress() {
+    Fixture first(true);
+    Fixture next;
+    first.press();
+    require(GetCapture() == first.nativeHandle(), "press did not acquire Win32 capture");
+    SetCapture(next.nativeHandle());
+    require(GetCapture() == next.nativeHandle(), "other window did not acquire Win32 capture");
+    first.release();
+    require(first.steps.empty(), "capture transfer did not cancel the former press");
+    require(GetCapture() == next.nativeHandle(), "old release took capture from its new owner");
+    ReleaseCapture();
+    first.click();
+    require(first.steps == std::vector<int>{1, 2, 3}, "click after capture transfer failed");
+}
+
+void verifyScrollbarKeepsCapturedDrag() {
+    Fixture fixture(true);
+    const auto hwnd = fixture.nativeHandle();
+    oneui_scroll_view_set_content_height(fixture.scrollView.get(), 720);
+    RECT client{};
+    require(GetClientRect(hwnd, &client) != 0, "fixture client area is unavailable");
+    const int inset = MulDiv(6, GetDpiForWindow(hwnd), 96);
+    const int y = MulDiv(20, GetDpiForWindow(hwnd), 96);
+    const auto thumb = MAKELPARAM(client.right - inset, y);
+    const auto moved = MAKELPARAM(client.right - inset, y * 3);
+    fixture.press(thumb);
+    require(GetCapture() == hwnd, "thumb press did not acquire Win32 capture");
+    require(oneui_scroll_view_scroll_offset(fixture.scrollView.get()) == 0,
+            "fixture pressed the scrollbar track outside the thumb");
+    SendMessageW(hwnd, WM_MOUSELEAVE, 0, 0);
+    SendMessageW(hwnd, WM_MOUSEMOVE, MK_LBUTTON, moved);
+    const float offset = oneui_scroll_view_scroll_offset(fixture.scrollView.get());
+    require(offset > 1, "mouse leave cancelled the captured scrollbar drag");
+    fixture.release(moved);
+    SendMessageW(hwnd, WM_MOUSEMOVE, 0, thumb);
+    require(oneui_scroll_view_scroll_offset(fixture.scrollView.get()) == offset,
+            "scrollbar kept dragging after release");
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
     try {
-        verifyReleaseOrder(argc == 2 && std::string_view(argv[1]) == "--ordinary-post");
+        const std::string_view mode = argc == 2 ? argv[1] : "";
+        if (mode == "--captured-leave") {
+            verifyLeaveDuringCapture();
+            return 0;
+        }
+        if (mode == "--captured-scroll") {
+            verifyScrollbarKeepsCapturedDrag();
+            return 0;
+        }
+        verifyReleaseOrder(mode == "--ordinary-post");
         verifyCloseDuringRelease();
         verifyNestedRelease();
+        verifyLeaveDuringCapture();
+        verifyOutsideReleaseAfterLeave();
+        verifyCaptureTransferCancelsPress();
+        verifyScrollbarKeepsCapturedDrag();
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';
         return 1;

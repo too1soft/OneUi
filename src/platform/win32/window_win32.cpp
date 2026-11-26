@@ -250,6 +250,7 @@ public:
     float shadowBuiltRadius_ = 0;
     float shadowBuiltScale_ = 0;
     bool mouseLeaveTracking_ = false;
+    bool leftMouseCaptured_ = false;
     bool animationTimerActive_ = false;
     bool animationFramePending_ = false;
     // Set while the pending frame is a content wake armed later than the next refresh.
