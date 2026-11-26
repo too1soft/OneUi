@@ -40,13 +40,18 @@ inline TabsStyleOverride tabsStyleOverrideFromStyleSheet(const StyleSheet& sheet
             }
             return state;
         };
+        StyleNode stateNode = node;
+        const auto resolveState = [&](StylePseudoMask state) {
+            stateNode.state = state;
+            return stateOverride(sheet.resolve(stateNode));
+        };
         oneui::TabsStyleOverride style;
-        style.normal = stateOverride(sheet.resolve(oneui::StyleNode{node.tag, node.classes, oneui::StyleStateNone}));
-        style.hovered = stateOverride(sheet.resolve(oneui::StyleNode{node.tag, node.classes, oneui::StyleStateHover}));
-        style.pressed = stateOverride(sheet.resolve(oneui::StyleNode{node.tag, node.classes, oneui::StyleStateActive}));
-        style.selected = stateOverride(sheet.resolve(oneui::StyleNode{node.tag, node.classes, oneui::StyleStateSelected}));
-        style.disabled = stateOverride(sheet.resolve(oneui::StyleNode{node.tag, node.classes, oneui::StyleStateDisabled}));
-        style.focusVisible = stateOverride(sheet.resolve(oneui::StyleNode{node.tag, node.classes, oneui::StyleStateFocus}));
+        style.normal = resolveState(StyleStateNone);
+        style.hovered = resolveState(StyleStateHover);
+        style.pressed = resolveState(StyleStateActive);
+        style.selected = resolveState(StyleStateSelected);
+        style.disabled = resolveState(StyleStateDisabled);
+        style.focusVisible = resolveState(StyleStateFocus);
     return style;
 }
 } // namespace oneui

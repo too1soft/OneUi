@@ -147,9 +147,11 @@ private:
         }
         auto box = sheet.resolve(n);
         if (w->hasExtensionOwner()) w->applyExtensionStyle(sheet,n);
+        // The control adapters own their working node. Once this branch has
+        // finished reading the selector, transfer its class storage to them.
         if(entry.component=="DataMenu") {
             auto menu=std::dynamic_pointer_cast<Menu>(std::dynamic_pointer_cast<View>(w)->children().front());
-            menu->setStyleSheet(std::make_shared<StyleSheet>(sheet),n); return;
+            menu->setStyleSheet(std::make_shared<StyleSheet>(sheet),std::move(n)); return;
         }
         rememberStyleDiagnostic(w,n,box);
         configureQuery(w,box);
@@ -188,10 +190,10 @@ private:
             if(host->themed() && !host->children().empty())applyNativeTheme(*host->children().front(),sheet,host->hasCompositionOwner());return;
         }
         if(auto card=std::dynamic_pointer_cast<Card>(w)){card->setStyleBox(box);return;}
-        if(auto state=std::dynamic_pointer_cast<StateView>(w)){state->setStyleSheet(std::make_shared<StyleSheet>(sheet),n);return;}
-        if(auto menu=std::dynamic_pointer_cast<Menu>(w)){menu->setStyleSheet(std::make_shared<StyleSheet>(sheet),n);return;}
+        if(auto state=std::dynamic_pointer_cast<StateView>(w)){state->setStyleSheet(std::make_shared<StyleSheet>(sheet),std::move(n));return;}
+        if(auto menu=std::dynamic_pointer_cast<Menu>(w)){menu->setStyleSheet(std::make_shared<StyleSheet>(sheet),std::move(n));return;}
         if(auto surface=std::dynamic_pointer_cast<InteractiveSurface>(w)) {
-            surface->setStyle(interactiveSurfaceStyleFromStyleSheet(sheet,n));
+            surface->setStyle(interactiveSurfaceStyleFromStyleSheet(sheet,std::move(n)));
             surface->setPadding(box.padding.value_or(Insets{}));return;
         }
         if(auto slider=std::dynamic_pointer_cast<Slider>(w)){applyNativeTheme(*slider,sheet);return;}
@@ -200,18 +202,20 @@ private:
         if(auto tabs=std::dynamic_pointer_cast<Tabs>(w)) {
             bool authored=false;
             for(auto state:{StyleStateNone,StyleStateHover,StyleStateActive,StyleStateSelected,StyleStateDisabled,StyleStateFocus}) {
-                auto node=n;node.state=state;const auto value=sheet.resolve(node);
+                n.state = state;
+                const auto value = sheet.resolve(n);
                 authored|=value.background.color.has_value() || value.foreground.has_value() || value.borderColor.has_value() ||
                     value.borderWidth.has_value() || value.radius.has_value() || value.content.backgroundColor.has_value() ||
                     value.content.radius.has_value() || value.padding.has_value() || value.fontSize.has_value() ||
                     value.fontWeight.has_value() || value.textInset.has_value() || value.outlineColor.has_value() || value.outlineWidth.has_value() || value.outlineOffset.has_value();
             }
+            n.state = StyleStateNone;
             if(authored)tabs->setStyleOverride(tabsStyleOverrideFromStyleSheet(sheet,n));
             else applyNativeTheme(*tabs,sheet);
             return;
         }
         if(auto progress=std::dynamic_pointer_cast<ProgressBar>(w)) {
-            auto style=progressBarStyleOverrideFromStyleSheet(sheet,n);
+            auto style=progressBarStyleOverrideFromStyleSheet(sheet,std::move(n));
             const auto palette=nativePalette(sheet);
             style.trackBackground=style.trackBackground.value_or(palette.line);
             style.fill=style.fill.value_or(palette.accent);
@@ -223,22 +227,22 @@ private:
         if (auto v = std::dynamic_pointer_cast<Button>(w)) {
             v->setIconColor(sheet.resolveLayout(n).iconColor);
             v->setCaptionOffsetY(box.titleOffsetY.value_or(0));
-            v->setStyleOverride(buttonStyleOverrideFromStyleSheet(sheet,n));
+            v->setStyleOverride(buttonStyleOverrideFromStyleSheet(sheet,std::move(n)));
         }
         else if (auto v = std::dynamic_pointer_cast<TextField>(w)) {
-            v->setStyleOverride(textFieldStyleOverrideFromStyleSheet(sheet,n));
+            v->setStyleOverride(textFieldStyleOverrideFromStyleSheet(sheet,std::move(n)));
             v->setFontSize(box.fontSize.value_or(14));
         }
-        else if (auto v = std::dynamic_pointer_cast<Checkbox>(w)) v->setStyleOverride(checkboxStyleOverrideFromStyleSheet(sheet,n));
-        else if (auto v = std::dynamic_pointer_cast<TreeView>(w)) v->setStyleOverride(treeViewStyleOverrideFromStyleSheet(sheet,n));
-        else if (auto v = std::dynamic_pointer_cast<DataGrid>(w)) v->setStyleOverride(tableStyleOverrideFromStyleSheet(sheet,n));
-        else if (auto v = std::dynamic_pointer_cast<CodeEditor>(w)) v->setStyle(codeEditorStyleFromStyleSheet(sheet,n));
-        else if (auto v = std::dynamic_pointer_cast<Switch>(w)) v->setStyleOverride(switchStyleOverrideFromStyleSheet(sheet,n));
-        else if (auto v = std::dynamic_pointer_cast<Select>(w)) v->setStyleOverride(selectStyleOverrideFromStyleSheet(sheet,n));
-        else if (auto v = std::dynamic_pointer_cast<Dialog>(w)) v->setStyleSheet(std::make_shared<StyleSheet>(sheet),n);
-        else if (auto v = std::dynamic_pointer_cast<Popup>(w)) v->setStyleOverride(popupStyleOverrideFromStyleSheet(sheet,n));
-        else if (auto v = std::dynamic_pointer_cast<List>(w)) v->setStyleOverride(listStyleOverrideFromStyleSheet(sheet,n));
-        else if (auto v = std::dynamic_pointer_cast<VirtualList>(w)) v->setStyleOverride(listStyleOverrideFromStyleSheet(sheet,n));
+        else if (auto v = std::dynamic_pointer_cast<Checkbox>(w)) v->setStyleOverride(checkboxStyleOverrideFromStyleSheet(sheet,std::move(n)));
+        else if (auto v = std::dynamic_pointer_cast<TreeView>(w)) v->setStyleOverride(treeViewStyleOverrideFromStyleSheet(sheet,std::move(n)));
+        else if (auto v = std::dynamic_pointer_cast<DataGrid>(w)) v->setStyleOverride(tableStyleOverrideFromStyleSheet(sheet,std::move(n)));
+        else if (auto v = std::dynamic_pointer_cast<CodeEditor>(w)) v->setStyle(codeEditorStyleFromStyleSheet(sheet,std::move(n)));
+        else if (auto v = std::dynamic_pointer_cast<Switch>(w)) v->setStyleOverride(switchStyleOverrideFromStyleSheet(sheet,std::move(n)));
+        else if (auto v = std::dynamic_pointer_cast<Select>(w)) v->setStyleOverride(selectStyleOverrideFromStyleSheet(sheet,std::move(n)));
+        else if (auto v = std::dynamic_pointer_cast<Dialog>(w)) v->setStyleSheet(std::make_shared<StyleSheet>(sheet),std::move(n));
+        else if (auto v = std::dynamic_pointer_cast<Popup>(w)) v->setStyleOverride(popupStyleOverrideFromStyleSheet(sheet,std::move(n)));
+        else if (auto v = std::dynamic_pointer_cast<List>(w)) v->setStyleOverride(listStyleOverrideFromStyleSheet(sheet,std::move(n)));
+        else if (auto v = std::dynamic_pointer_cast<VirtualList>(w)) v->setStyleOverride(listStyleOverrideFromStyleSheet(sheet,std::move(n)));
         else if (auto v = std::dynamic_pointer_cast<Table>(w)) {
             v->setStyleOverride(tableStyleOverrideFromStyleSheet(sheet,n));
             const auto layout = sheet.resolveLayout(n);
