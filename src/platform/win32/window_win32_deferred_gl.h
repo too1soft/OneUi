@@ -6,6 +6,7 @@
 #include "include/gpu/ganesh/GrDirectContext.h"
 
 #include <atomic>
+#include <cstdint>
 #include <memory>
 #include <mutex>
 #include <thread>
@@ -20,6 +21,7 @@ struct StartupGlScene {
     sk_sp<SkPicture> picture;
     int width = 0;
     int height = 0;
+    std::uint64_t paintSequence = 0;
 };
 
 bool prewarmStartupGlScene(GrDirectContext& context, const StartupGlScene& scene, bool retained,

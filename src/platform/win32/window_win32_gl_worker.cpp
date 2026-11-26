@@ -3,6 +3,7 @@
 #include "window_win32_deferred_gl.h"
 #include "window_win32_gl_worker_context.h"
 #include "window_win32_gpu_warmup.h"
+#include "window_win32_startup_capture.h"
 #include "window_win32_wgl_worker_options.h"
 
 #include <atomic>
@@ -108,6 +109,7 @@ struct GlRenderWorker::State {
     std::mutex mutex;
     std::condition_variable changed;
     StartupGlScene startup;
+    unsigned startupPictures = startup.picture ? 1 : 0;
     Scene pending;
     Frame lastQueued;
     Frame lastPlanned;
@@ -261,6 +263,10 @@ bool GlRenderWorker::setStartupPicture(StartupGlScene scene) {
         std::lock_guard lock(state.mutex);
         if (!state.captureStartup.load(std::memory_order_relaxed)) return false;
         replaced = std::exchange(state.startup, std::move(scene));
+        if (!state.angle && wglStartupCapture() == WglStartupCapture::FreezeAfterSecond &&
+            ++state.startupPictures == 2) {
+            state.captureStartup.store(false, std::memory_order_relaxed);
+        }
         firstSoftwareFrame = std::exchange(state.awaitingSoftwareFrame, false);
     }
     if (firstSoftwareFrame) state.changed.notify_one();
@@ -447,7 +453,9 @@ void GlRenderWorker::State::render() {
         captureStartup.store(false, std::memory_order_relaxed);
         warmup = std::move(startup);
         if (warmup.picture) {
-            internal::traceInteractionPaint(startupTrace, "worker_prewarm_begin", "opengl-worker");
+            auto sceneTrace = startupTrace;
+            sceneTrace.paintSequence = warmup.paintSequence;
+            internal::traceInteractionPaint(sceneTrace, "worker_prewarm_begin", "opengl-worker");
         }
     }
     const bool needsWarmup = scratch && warmup.picture;

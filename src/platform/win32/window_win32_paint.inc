@@ -194,10 +194,19 @@
                 win32::experimentalGlWorkerPrewarm())) ||
              glWorker_.wantsStartupPicture());
         std::optional<SkPictureRecorder> recorder;
+        std::optional<SkNWayCanvas> startupFanout;
+        const bool drawAndRecord = !threadedGl && captureWorkerStartup && !win32::experimentalAngleWorkerEnabled() &&
+            win32::wglStartupCapture() == win32::WglStartupCapture::DrawAndRecord;
         if (threadedGl || captureWorkerStartup ||
             (!useGPU && fullPaint && IsWindowVisible(hwnd_) && deferredStartupGl_.shouldCapture())) {
             recorder.emplace();
             skCanvas = recorder->beginRecording(SkRect::MakeWH(static_cast<float>(width), static_cast<float>(height)));
+            if (drawAndRecord) {
+                startupFanout.emplace(width, height);
+                startupFanout->addCanvas(paintSurface_->getCanvas());
+                startupFanout->addCanvas(skCanvas);
+                skCanvas = &*startupFanout;
+            }
         }
         if (threadedGl && !fullPaint) {
             skCanvas->clipRect(SkRect::MakeLTRB(static_cast<float>(dirtyX), static_cast<float>(dirtyY),
@@ -272,8 +281,21 @@
         sk_sp<SkPicture> startupPicture;
         if (recorder) {
             canvasOwner.reset();
+            startupFanout.reset();
             startupPicture = recorder->finishRecordingAsPicture();
-            if (!threadedGl || handoffPaint) paintSurface_->getCanvas()->drawPicture(startupPicture);
+            if (drawAndRecord) {
+                if (win32::verifyWglStartupCaptureEnabled()) {
+                    const bool same = startupPicture && win32::matchesStartupReplay(*paintSurface_, *startupPicture);
+                    internal::traceInteractionPaint(interactionPaint, "worker_startup_raster_verified",
+                        "software", same ? 1 : 0);
+                }
+            } else if (!threadedGl || handoffPaint) {
+                paintSurface_->getCanvas()->drawPicture(startupPicture);
+            }
+            if (captureWorkerStartup) {
+                internal::traceInteractionPaint(interactionPaint, "worker_startup_picture_recorded",
+                    "software", startupPicture ? 1 : 0);
+            }
         }
         paintTrace.mark(PaintTrace::End);
 
@@ -511,7 +533,7 @@
             glWorkerWaitingForSoftwareFrame_ = false;
             // Start WGL after the first successful visible software presentation.
             const bool started = captureWorkerStartup
-                ? glWorker_.start(hwnd_, {std::move(startupPicture), width, height})
+                ? glWorker_.start(hwnd_, {std::move(startupPicture), width, height, interactionPaint.paintSequence})
                 : glWorker_.start(hwnd_);
             rendererInfo_.reason = started ? "opengl-worker-starting" : "opengl-worker-start-failed";
             internal::traceInteractionPaint(interactionPaint, "worker_start_after_software",
@@ -519,7 +541,7 @@
         }
         if (blitSucceeded && startupPicture) {
             if (captureWorkerStartup) {
-                if (glWorker_.setStartupPicture({std::move(startupPicture), width, height})) {
+                if (glWorker_.setStartupPicture({std::move(startupPicture), width, height, interactionPaint.paintSequence})) {
                     internal::traceInteractionPaint(interactionPaint, "worker_first_software_frame", "software", 1);
                 }
             } else {
