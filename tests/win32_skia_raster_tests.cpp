@@ -19,25 +19,27 @@ int main() {
         return 1;
     }
 
-    constexpr int height = 3;
+    constexpr int dstOffset = 1;
+    constexpr int maskOffset = 3;
     std::mt19937 random(0x20261122);
     for (int width = 1; width <= 33; ++width) {
+        const int height = width % 11 + 3;
         const int dstStride = width + 3;
         const int maskStride = width + 7;
-        std::vector<SkPMColor> initial(height * dstStride);
-        std::vector<SkAlpha> coverage(height * maskStride);
+        std::vector<SkPMColor> initial(dstOffset + height * dstStride);
+        std::vector<SkAlpha> coverage(maskOffset + height * maskStride);
         for (auto& pixel : initial) pixel = SkPreMultiplyColor(static_cast<SkColor>(random()));
         for (auto& alpha : coverage) alpha = static_cast<SkAlpha>(random());
-        coverage[0] = 0;
-        coverage[maskStride] = 255;
+        coverage[maskOffset] = 0;
+        coverage[maskOffset + maskStride] = 255;
         for (int alpha = 0; alpha <= 255; ++alpha) {
             const auto ink = SkColorSetA(static_cast<SkColor>(random()), alpha);
             auto expected = initial;
             auto actual = initial;
             if (alpha > 0 && alpha < 255) {
                 const auto premul = SkPreMultiplyColor(ink);
-                referenceRow(expected.data(), width, premul);
-                SkOpts::blit_row_color32(actual.data(), width, premul);
+                referenceRow(expected.data() + dstOffset, width, premul);
+                SkOpts::blit_row_color32(actual.data() + dstOffset, width, premul);
                 if (expected != actual) {
                     std::cerr << "Color row mismatch for width " << width << " at alpha " << alpha << '\n';
                     return 2;
@@ -46,9 +48,9 @@ int main() {
             for (int stride : {0, maskStride}) {
                 expected = initial;
                 actual = initial;
-                referenceMask(expected.data(), dstStride * sizeof(SkPMColor), coverage.data(), stride,
+                referenceMask(expected.data() + dstOffset, dstStride * sizeof(SkPMColor), coverage.data() + maskOffset, stride,
                     ink, width, height);
-                SkOpts::blit_mask_d32_a8(actual.data(), dstStride * sizeof(SkPMColor), coverage.data(), stride,
+                SkOpts::blit_mask_d32_a8(actual.data() + dstOffset, dstStride * sizeof(SkPMColor), coverage.data() + maskOffset, stride,
                     ink, width, height);
                 if (expected != actual) {
                     std::cerr << "Alpha mask mismatch for width " << width << " at alpha " << alpha
