@@ -52,6 +52,10 @@ macro_rules! native_tests {
                 "pending_replacement_preserves_ownership_of_the_queued_update",
                 super::terminal::frame_queue_tests::pending_replacement_preserves_ownership_of_the_queued_update,
             ));
+            cases.push((
+                "pending_replacement_releases_displaced_storage_without_the_queue_lock",
+                super::terminal::frame_queue_tests::pending_replacement_releases_displaced_storage_without_the_queue_lock,
+            ));
             super::test_runner::run(&cases)
         }
     };

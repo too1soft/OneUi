@@ -1,7 +1,12 @@
-use super::{TerminalCell, TerminalCursor, TerminalCursorStyle, TerminalFrame, TerminalView};
+use super::frame_queue::QueuedTerminalFrame;
+use super::{
+    TerminalCell, TerminalCursor, TerminalCursorStyle, TerminalFrame, TerminalView,
+    TerminalViewState,
+};
 use crate::{Window, WindowOptions};
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{mpsc, Arc};
+use std::any::Any;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::{mpsc, Arc, Weak};
 use std::time::Duration;
 
 fn frame(value: usize) -> TerminalFrame {
@@ -60,6 +65,56 @@ pub(crate) fn pending_replacement_preserves_ownership_of_the_queued_update() {
 
     handle.submit_frame_clearing_selection(frame(7)).unwrap();
     assert!(handle.pending_frame_replacement().is_none());
+}
+
+pub(crate) fn pending_replacement_releases_displaced_storage_without_the_queue_lock() {
+    struct DropProbe {
+        state: Weak<TerminalViewState>,
+        unlocked: Arc<AtomicBool>,
+    }
+    impl QueuedTerminalFrame for DropProbe {
+        fn as_any(&self) -> &dyn Any {
+            self
+        }
+
+        fn apply(
+            &self,
+            _: *mut crate::sys::OneUiWidget,
+            _: Option<&dyn QueuedTerminalFrame>,
+            _: bool,
+        ) {
+            panic!("the displaced frame must not be applied");
+        }
+    }
+    impl Drop for DropProbe {
+        fn drop(&mut self) {
+            if let Some(state) = self.state.upgrade() {
+                self.unlocked
+                    .store(state.pending_update.try_lock().is_ok(), Ordering::Release);
+            }
+        }
+    }
+
+    let window = Window::new(&WindowOptions::default()).expect("create test window");
+    let terminal = TerminalView::new().expect("create terminal");
+    window.set_content(terminal.as_widget());
+    let handle = window.terminal_view_handle(&terminal);
+    handle.submit_frame(frame(1)).unwrap();
+    let unlocked = Arc::new(AtomicBool::new(false));
+    terminal
+        .state
+        .pending_update
+        .lock()
+        .unwrap()
+        .as_mut()
+        .unwrap()
+        .frame = Box::new(DropProbe {
+        state: Arc::downgrade(&terminal.state),
+        unlocked: Arc::clone(&unlocked),
+    });
+    let reservation = handle.pending_frame_replacement().unwrap();
+    assert!(reservation.replace(frame(2)));
+    assert!(unlocked.load(Ordering::Acquire));
 }
 
 pub(crate) fn updates_yield_to_other_window_callbacks() {

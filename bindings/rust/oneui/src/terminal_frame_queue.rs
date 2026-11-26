@@ -20,6 +20,7 @@ impl PendingTerminalFrame {
         self,
         frame: TerminalFrame<T>,
     ) -> bool {
+        let frame = Box::new(frame);
         let mut pending = self
             .state
             .pending_update
@@ -36,8 +37,12 @@ impl PendingTerminalFrame {
         {
             return false;
         }
-        update.frame = Box::new(frame);
+        let previous = std::mem::replace(&mut update.frame, frame);
         update.replacement = None;
+        drop(pending);
+        // The displaced frame can release a large owned grid (or user text).
+        // Let the window take the replacement while that storage is released.
+        drop(previous);
         true
     }
 }
