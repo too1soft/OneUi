@@ -4,16 +4,24 @@
 #include "rich_table_cache.h"
 namespace oneui::views {
 void Runtime::observe(const std::shared_ptr<Scope> &scope, uint32_t id) {
-    auto node = observing.lock();
-    if (!node)
+    if (observing.expired())
         return;
     auto &observers = scope->observers[id];
-    observers.erase(std::remove_if(observers.begin(), observers.end(),
-                                   [](auto &weak) { return weak.expired(); }),
-                    observers.end());
-    if (std::none_of(observers.begin(), observers.end(),
-                     [&](auto &weak) { return weak.lock() == node; }))
-        observers.push_back(node);
+    // A shared property can be read by every mounted row. Compare the weak
+    // owners directly instead of promoting every preceding observer.
+    const std::owner_less<> less;
+    auto position = std::lower_bound(observers.begin(), observers.end(), observing, less);
+    if (position != observers.end() && !less(observing, *position))
+        return;
+    if (observers.size() == observers.capacity()) {
+        const auto liveEnd = std::remove_if(observers.begin(), observers.end(),
+                                            [](const auto& weak) { return weak.expired(); });
+        if (liveEnd != observers.end()) {
+            observers.erase(liveEnd, observers.end());
+            position = std::lower_bound(observers.begin(), observers.end(), observing, less);
+        }
+    }
+    observers.insert(position, observing);
 }
 void Runtime::mark(const std::shared_ptr<Scope> &scope, uint32_t id, const ListState* reportedList) {
     ++scope->versions[id];
@@ -21,13 +29,14 @@ void Runtime::mark(const std::shared_ptr<Scope> &scope, uint32_t id, const ListS
     if (found == scope->observers.end())
         return;
     for (auto &weak : found->second) {
-        if (auto node=weak.lock(); node && (node->tableCache || node->richTableCache)) {
+        auto node = weak.lock();
+        if (node && (node->tableCache || node->richTableCache)) {
             // The source UPDATE already carries these record keys. Keep scalar
             // invalidation/versioning, without recording the same table work twice.
             const bool reported=reportedList && node->richTableCache && node->richTableCache->source==reportedList;
             if(!reported)node->recordDirty.insert(scope.get());
         }
-        for (auto node = weak.lock(); node; node = node->parent.lock())
+        for (; node; node = node->parent.lock())
             node->dirty = true;
     }
 }
