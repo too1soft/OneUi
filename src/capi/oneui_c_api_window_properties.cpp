@@ -1,7 +1,7 @@
 #include "oneui_c_api_controls_internal.h"
 #include "oneui_c_api_error.h"
 #include "oneui_c_api_window_internal.h"
-#include "internal/pointer_release_callbacks.h"
+#include "../internal/pointer_release_callbacks.h"
 #include <algorithm>
 #include <cmath>
 #include <climits>
