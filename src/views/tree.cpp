@@ -117,24 +117,35 @@ std::shared_ptr<Instance> Runtime::build(uint32_t node, const Scopes &context, c
         repeat(result);
         return result;
     }
-    if (image.components[n[1]].name == "VirtualTemplateList") return buildVirtual(node, context);
+    const auto& component = image.components[n[1]];
+    const auto& type = component.name;
+    if (type == "VirtualTemplateList") return buildVirtual(node, context);
+    // Plain stacks only consume the child's widget and flex data. Unlike
+    // composite factories, they never read or rewrite its Element metadata.
+    const bool plainStack = ui::Mount::isPlainStack(type);
+    std::vector<ui::Node> layoutNodes;
     std::vector<ui::Element> children;
-    children.reserve(n[4]);
+    if (plainStack) layoutNodes.reserve(n[4]);
+    else children.reserve(n[4]);
     result->children.reserve(n[4]);
     for (uint32_t i = 0; i < n[4]; ++i) {
         const auto childNode = image.records[EDGE][n[3] + i][1];
         if (ownerRecords.hasMountConditions() && !includeOnMount(childNode, context)) continue;
         auto child = build(childNode, context, slots);
-        if (!child->transparent) children.push_back(child->element);
+        if (!child->transparent) {
+            if (plainStack) layoutNodes.push_back(child->element);
+            else children.push_back(child->element);
+        }
         child->parent = result;
-        result->children.push_back(child);
+        result->children.push_back(std::move(child));
     }
-    const auto& component = image.components[n[1]];
-    const auto& type = component.name;
     const auto scopeClass = scopeClasses.find(n[8]);
     const std::string classes = scopeClass == scopeClasses.end() ? "" : scopeClass->second;
     bool deferredStyle = false;
-    if (type == "NativeHost") {
+    if (plainStack) {
+        deferredStyle = canDeferInitialStyle(*this, node, component);
+        result->element = factory.makePlainStack(type, std::move(layoutNodes), classes, deferredStyle);
+    } else if (type == "NativeHost") {
         auto host = std::make_shared<ui::NativeHostView>();
         result->element = ui::Element(ui::Node(host), type);
         result->element.classes = classes;

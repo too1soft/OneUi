@@ -7,6 +7,8 @@
 
 namespace oneui {
 
+namespace ui { class Builder; }
+
 class ONEUI_API View : public Widget {
 public:
     ~View() override;
@@ -84,6 +86,7 @@ protected:
 
 private:
     struct ChildAnimationRelay;
+    friend class ui::Builder;
     friend void internal::layoutWidgetSubtree(Widget& widget);
     void installChildCallbacks(Widget& child);
     static bool isChildInteractive(const Widget* child);

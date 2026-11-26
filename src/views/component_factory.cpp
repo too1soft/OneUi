@@ -9,10 +9,35 @@
 #include "oneui/layout/panel.h"
 #include "internal/runtime_config.h"
 namespace oneui::ui {
+namespace {
+const Builder& unstyledBuilder() {
+    thread_local const Builder builder(StackEngine::Yoga, "");
+    return builder;
+}
+} // namespace
+
 Element Mount::make(std::string type, std::vector<Element> children, std::string classes) {
     return makeImpl(std::move(type), std::move(children), std::move(classes), false);
 }
+
+Element Mount::makePlainStack(std::string type, std::vector<Node> children, std::string classes, bool deferStyle) {
+    const oneui::detail::view_mount_timing::Scope measure(oneui::detail::view_mount_timing::Create);
+    const auto& builder = unstyledBuilder();
+    auto node = type == "Row" ? builder.flow(std::move(children)) : builder.column(std::move(children));
+    Element result(std::move(node), std::move(type));
+    result.classes = classes + " " + scope_;
+    styles_->registerFresh(result, deferStyle);
+    return result;
+}
+
 Element Mount::makeImpl(std::string type, std::vector<Element> children, std::string classes, bool deferStyle) {
+    const auto childNodes = [&children] {
+        std::vector<Node> nodes;
+        nodes.reserve(children.size());
+        for (const auto& child : children) nodes.push_back(child);
+        return nodes;
+    };
+    if (isPlainStack(type)) return makePlainStack(std::move(type), childNodes(), std::move(classes), deferStyle);
     const oneui::detail::view_mount_timing::Scope measure(oneui::detail::view_mount_timing::Create);
     if (type == "NativeHost")
         throw std::invalid_argument("Use nativeHost(name) after registerNative");
@@ -111,9 +136,7 @@ Element Mount::makeImpl(std::string type, std::vector<Element> children, std::st
         styles_->add(page);
         return page;
     }
-    // Every branch constructs the real node. The empty Builder stylesheet
-    // and engine stay the same for all controls constructed on this thread.
-    thread_local const Builder b(StackEngine::Yoga, "");
+    const auto& b = unstyledBuilder();
     if (type == "FormRow") {
         if (children.size() != 1)
             throw std::invalid_argument("FormRow needs one control");
@@ -147,12 +170,6 @@ Element Mount::makeImpl(std::string type, std::vector<Element> children, std::st
         styles_->addFresh(row);
         return row;
     }
-    const auto childNodes = [&children] {
-        std::vector<Node> nodes;
-        nodes.reserve(children.size());
-        for (const auto& child : children) nodes.push_back(child);
-        return nodes;
-    };
     Node node{nullptr};
     std::shared_ptr<Stack> content;
     if(type=="StateView")node=b.native(std::make_shared<StateView>());
@@ -321,7 +338,7 @@ Element Mount::makeImpl(std::string type, std::vector<Element> children, std::st
         content = body.as<Stack>();
         node = b.row({body});
         node.as<Stack>()->setAlign(StackAlign::Start);
-    } else if (type == "Toolbar" || type == "ActionBar" || type == "Row" ||
+    } else if (type == "Toolbar" || type == "ActionBar" ||
                type == "FormGrid" || type == "TitleBar" || type == "SessionBar" ||
                type == "PanelHeader" || type == "PanelFooter" || type == "StatusBar" ||
                type == "WorkspaceBody")

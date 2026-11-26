@@ -399,6 +399,10 @@ class Mount {
     std::shared_ptr<NativeEntries> natives_ = std::make_shared<NativeEntries>();
     std::shared_ptr<Clipboard> clipboard_;
     std::shared_ptr<const oneui::views::components::Registry> components_;
+    static bool isPlainStack(const std::string& type) {
+        return type == "Row" || type == "Column" || type == "Surface";
+    }
+    Element makePlainStack(std::string type, std::vector<Node> children, std::string classes, bool deferStyle);
     Element makeImpl(std::string type, std::vector<Element> children, std::string classes, bool deferStyle);
     void finishInitialStyle(const Element& e) { styles_->finishInitialStyle(e); }
 public:
