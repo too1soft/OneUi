@@ -37,7 +37,12 @@
         const bool wasPending = invalidationPending_;
         if (!wasPending || (!rect && !invalidateAll_))
             internal::traceWin32DamageOrigin(hwnd_, "damage_queued", rect);
+        const bool traceGrowth = rect && wasPending && !invalidateAll_ &&
+            internal::win32DamageOriginEnabled();
+        const RECT previous = traceGrowth ? pendingInvalidation_ : RECT{};
         mergeInvalidation(rect);
+        if (traceGrowth && !EqualRect(&previous, &pendingInvalidation_))
+            internal::traceWin32DamageOrigin(hwnd_, "damage_expanded", &pendingInvalidation_);
         if (!wasPending) {
             traceLiveResizeDamage("resize_widget_damage", !rect);
             if (!PostMessageW(hwnd_, kOneUiFlushInvalidations, 0, 0)) {

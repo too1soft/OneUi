@@ -6,15 +6,18 @@
 
 namespace oneui::internal {
 
-// Stack walking and symbolizable addresses are enabled only for a diagnostic run.
-inline void traceWin32DamageOrigin(HWND window, const char* phase, const RECT* damage) {
+inline bool win32DamageOriginEnabled() {
     static const bool enabled = [] {
         wchar_t value[2]{};
         return GetEnvironmentVariableW(L"ONEUI_WIN32_TRACE_DAMAGE_ORIGIN", value, 2) == 1 &&
                value[0] == L'1';
     }();
-    if (!enabled || !scrollTraceEnabled()) return;
+    return enabled && scrollTraceEnabled();
+}
 
+// Stack walking and symbolizable addresses are enabled only for a diagnostic run.
+inline void traceWin32DamageOrigin(HWND window, const char* phase, const RECT* damage) {
+    if (!win32DamageOriginEnabled()) return;
     static thread_local std::uint64_t sequence = 0;
     ScrollTraceEvent event{"damage", phase, reinterpret_cast<std::uintptr_t>(window)};
     event.detailA = static_cast<double>(++sequence);
