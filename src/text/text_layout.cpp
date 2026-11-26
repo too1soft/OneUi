@@ -252,12 +252,14 @@ Layout::~Layout() = default;
 
 std::shared_ptr<Layout> Layout::make(const std::wstring& value, const LayoutOptions& requested) {
     internal::FrameSpan span(internal::FrameStage::TextLayout);
-    LayoutOptions options = requested;
-    if (!std::isfinite(options.size) || options.size <= 0 || !std::isfinite(options.width) || options.width < 0 ||
-        !std::isfinite(options.lineHeight) || options.lineHeight < 0 || !std::isfinite(options.scale) || options.scale <= 0 || !std::isfinite(options.text.letterSpacing))
+    if (!std::isfinite(requested.size) || requested.size <= 0 ||
+        !std::isfinite(requested.width) || requested.width < 0 ||
+        !std::isfinite(requested.lineHeight) || requested.lineHeight < 0 ||
+        !std::isfinite(requested.scale) || requested.scale <= 0 ||
+        !std::isfinite(requested.text.letterSpacing))
         throw std::invalid_argument("Invalid OneUI text layout metrics");
     std::size_t previousSpanEnd = 0;
-    for (const auto& span : options.spans) {
+    for (const auto& span : requested.spans) {
         if (!std::isfinite(span.fontSize) || span.fontSize < 0.0f ||
             span.fontWeight < 0 || span.fontWeight > 1000 || span.start >= span.end ||
             span.end > value.size() || span.start < previousSpanEnd ||
@@ -267,19 +269,21 @@ std::shared_ptr<Layout> Layout::make(const std::wstring& value, const LayoutOpti
         }
         previousSpanEnd = span.end;
     }
-    if (options.text.locale.empty()) options.text.locale = "und";
-    if (options.text.wrap == TextWrapMode::NoWrap && !options.ellipsis) options.width = 1000000.0f;
-    if (!options.sensitive) {
+    if (!requested.sensitive) {
         internal::FrameSpan cacheSpan(internal::FrameStage::TextCache);
-        if (auto result = cache.find(value, options)) {
+        if (auto result = cache.find(value, requested)) {
             ++counters.cacheHits;
             return result;
         }
     }
     auto impl = [&] {
         internal::FrameSpan indexSpan(internal::FrameStage::TextIndex);
-        return std::make_unique<Impl>(value, options);
+        LayoutOptions normalized = requested;
+        normalized.width = detail::effectiveLayoutWidth(requested);
+        if (normalized.text.locale.empty()) normalized.text.locale = detail::effectiveLayoutLocale(requested);
+        return std::make_unique<Impl>(value, std::move(normalized));
     }();
+    const auto& options = impl->options;
     // Each hard paragraph has its own base direction and cache entry. Edits in
     // one paragraph reuse the shaped results for all unchanged paragraphs.
     if (options.spans.empty() && value.find(L'\n') != std::wstring::npos) {

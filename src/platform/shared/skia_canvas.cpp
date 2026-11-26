@@ -51,6 +51,7 @@
 #include <cstdlib>
 #include <map>
 #include <mutex>
+#include <string_view>
 #include <tuple>
 #include <vector>
 
@@ -123,15 +124,20 @@ struct ShadowImageEntry {
 };
 
 struct TextBlobKey {
+    using Lookup = std::tuple<std::wstring_view, int, int, TextFontFamily, std::wstring_view>;
     std::wstring text;
     int size = 0;
     int weight = 0;
     TextFontFamily family = TextFontFamily::Default;
     std::wstring familyName;
 
-    bool operator<(const TextBlobKey &other) const {
-        return std::tie(text, size, weight, family, familyName) <
-               std::tie(other.text, other.size, other.weight, other.family, other.familyName);
+    operator Lookup() const { return {text, size, weight, family, familyName}; }
+};
+
+struct TextBlobKeyLess {
+    using is_transparent = void;
+    bool operator()(TextBlobKey::Lookup left, TextBlobKey::Lookup right) const {
+        return left < right;
     }
 };
 
@@ -879,9 +885,10 @@ class SkiaCanvasImpl final : public Canvas, public RasterImageCanvas {
             return empty;
         }
 
-        const TextBlobKey key{text, static_cast<int>(std::round(size * 10.0f)), std::clamp(weight, 100, 900),
-                              family, familyName};
-        static thread_local std::map<TextBlobKey, TextBlobEntry> cache;
+        const auto sizeKey = static_cast<int>(std::round(size * 10.0f));
+        const auto weightKey = std::clamp(weight, 100, 900);
+        const TextBlobKey::Lookup key{text, sizeKey, weightKey, family, familyName};
+        static thread_local std::map<TextBlobKey, TextBlobEntry, TextBlobKeyLess> cache;
         if (auto cached = cache.find(key); cached != cache.end()) {
             return cached->second;
         }
@@ -952,7 +959,7 @@ class SkiaCanvasImpl final : public Canvas, public RasterImageCanvas {
         }
         appendRun(runStart, text.size(), runTypeface ? runTypeface : primary);
 
-        const auto [it, _] = cache.emplace(key, std::move(entry));
+        const auto [it, _] = cache.emplace(TextBlobKey{text, sizeKey, weightKey, family, familyName}, std::move(entry));
         return it->second;
     }
 

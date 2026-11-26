@@ -6,11 +6,20 @@
 #include <functional>
 #include <iterator>
 #include <list>
+#include <string_view>
 #include <tuple>
 #include <type_traits>
 #include <unordered_map>
 
 namespace oneui::text::detail {
+
+inline float effectiveLayoutWidth(const LayoutOptions& options) {
+    return options.text.wrap == TextWrapMode::NoWrap && !options.ellipsis ? 1000000.0f : options.width;
+}
+
+inline std::string_view effectiveLayoutLocale(const LayoutOptions& options) {
+    return options.text.locale.empty() ? std::string_view("und") : std::string_view(options.text.locale);
+}
 
 // This cache is thread-local. List nodes own the text and retain stable
 // addresses when a hit moves them to the front. The index stores only a hash
@@ -25,10 +34,11 @@ class LayoutCache {
     using Entries = std::list<Entry>;
 
     static auto identity(const LayoutOptions& options) {
-        return std::tie(options.family, options.fallbackFamily, options.size, options.weight,
-                        options.width, options.lineHeight, options.scale, options.align,
-                        options.maxLines, options.ellipsis, options.text.direction, options.text.wrap,
-                        options.text.locale, options.text.letterSpacing, options.text.tabularNumbers);
+        return std::tuple_cat(std::tie(options.family, options.fallbackFamily, options.size, options.weight,
+                                       options.lineHeight, options.scale, options.align, options.maxLines,
+                                       options.ellipsis, options.text.direction, options.text.wrap,
+                                       options.text.letterSpacing, options.text.tabularNumbers),
+                              std::tuple{effectiveLayoutWidth(options), effectiveLayoutLocale(options)});
     }
 
     static bool matches(const Entry& entry, const std::wstring& value, const LayoutOptions& options) {
@@ -54,7 +64,7 @@ class LayoutCache {
         };
         // Width and font variants dominate duplicate strings. Resolve collisions
         // with the complete identity, including direction and styled spans.
-        combine(options.width);
+        combine(effectiveLayoutWidth(options));
         combine(options.family);
         combine(options.size);
         combine(options.weight);

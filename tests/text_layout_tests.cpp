@@ -244,6 +244,21 @@ int main() {
         Layout::make(L"newest");
         require(Layout::make(L"promoted") == promoted, "eviction preserves a promoted layout");
         require(Layout::make(L"oldest") != oldest, "eviction must remove the old index entry");
+        LayoutOptions noWrap;
+        noWrap.text.wrap = oneui::TextWrapMode::NoWrap;
+        const auto noWrapLayout = Layout::make(L"varying width", noWrap);
+        noWrap.width = 26;
+        noWrap.text.locale = "und";
+        require(Layout::make(L"varying width", noWrap) == noWrapLayout,
+                "no-wrap widths and equivalent default locales share a layout");
+        noWrap.width = -1;
+        bool rejected = false;
+        try {
+            Layout::make(L"varying width", noWrap);
+        } catch (const std::invalid_argument&) {
+            rejected = true;
+        }
+        require(rejected, "a cache hit must still validate the requested width");
         LayoutOptions variant;
         variant.text.letterSpacing = 0.5f;
         auto alternate = Layout::make(L"promoted", variant);
