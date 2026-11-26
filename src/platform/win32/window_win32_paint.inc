@@ -23,7 +23,7 @@
     }
 #endif
     void paint() {
-        if (recordingStartupScene_) startupSceneChanged_ = true;
+        if (recordingStartupScene_) startupSceneReentered_ = true;
         if (IsIconic(hwnd_)) {
             invalidateStartupScene();
             // A minimized HWND can still receive WM_PAINT with the shell's
@@ -181,7 +181,8 @@
              glWorker_.wantsStartupPicture());
         const bool captureDeferredStartup = visibleFullSoftware && deferredStartupGl_.shouldCapture();
         const auto size = SkISize::Make(width, height);
-        auto startupPicture = takeStartupScene(size, scale, visibleFullSoftware);
+        auto stagedScene = takeStartupScene(size, scale, visibleFullSoftware);
+        auto startupPicture = std::move(stagedScene.picture);
 
         const auto recordResizePresentation = [&] {
             if (fullPaint && interactiveResizeActive_ && resizeGeneration == liveResizeGeneration_) {
@@ -193,13 +194,16 @@
             paintTrace.mark(PaintTrace::Tree);
             internal::traceInteractionPaint(interactionPaint, "startup_scene_replay",
                 threadedGl ? "opengl-worker" : "software");
+            if (stagedScene.redrawAfterReplay) queueInvalidation(nullptr);
         } else {
             const bool stage = visibleFullSoftware && !threadedGl && shouldRecordStartupScene();
             const auto alive = stage ? callbackWindowAlive_ : nullptr;
+            const auto stagedContent = stage ? content_ : nullptr;
             if (stage) {
                 startupSceneAttempted_ = true;
                 recordingStartupScene_ = true;
-                startupSceneChanged_ = false;
+                startupSceneReentered_ = false;
+                startupSceneNeedsRedraw_ = false;
             }
             auto paintOverlay = [&](Canvas& canvas) {
 #if ONEUI_DEVELOPER_TOOLS
@@ -214,7 +218,7 @@
                 threadedGl, useGPU, paintTrace, profile.data, paintOverlay);
             if (stage && !alive->load(std::memory_order_acquire)) return;
             if (stage) recordingStartupScene_ = false;
-            if (stage && deferStartupScene(startupPicture, size, scale)) {
+            if (stage && content_ == stagedContent && deferStartupScene(startupPicture, size, scale)) {
                 // Keep the first presented frame until the native queue has
                 // dispatched pending input and can replay this current scene.
                 EndPaint(hwnd_, &paintStruct);
