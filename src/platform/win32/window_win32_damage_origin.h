@@ -32,8 +32,9 @@ inline void traceWin32DamageOrigin(HWND window, const char* phase, const RECT* d
 
     // A nested declarative route can spend most of a shallow stack relaying
     // the same rectangle through intervening containers.
-    PVOID pcs[64]{};
-    const auto frames = CaptureStackBackTrace(0, 64, pcs, nullptr);
+    constexpr unsigned maxFrames = 192;
+    PVOID pcs[maxFrames]{};
+    const auto frames = CaptureStackBackTrace(0, maxFrames, pcs, nullptr);
     const auto app = GetModuleHandleW(nullptr);
     const auto sdk = GetModuleHandleW(L"oneui.dll");
     for (unsigned depth = 0; depth < frames; ++depth) {
