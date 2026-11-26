@@ -67,6 +67,7 @@
         GetClientRect(hwnd_, &clientRect);
         const SIZE pixelSize{clientRect.right - clientRect.left, clientRect.bottom - clientRect.top};
         const float scale = normalizedDpiScale();
+        const auto handoffFeedbackEpoch = handoffRefresh_.feedbackEpoch();
         bool deferHandoffRaster = false;
         if (coalesceHandoffRefresh_) {
             deferHandoffRaster = glWorker_.softwareHandoffPending() && !interactiveResizeActive_ &&
@@ -473,7 +474,9 @@
         EndPaint(hwnd_, &paintStruct);
         if (blitSucceeded) {
             recordResizePresentation();
-            if (coalesceHandoffRefresh_) handoffRefresh_.painted(pixelSize, scale, fullPaint, currentTimeMs());
+            if (coalesceHandoffRefresh_) {
+                handoffRefresh_.painted(pixelSize, scale, fullPaint, currentTimeMs(), handoffFeedbackEpoch);
+            }
         }
         if (handoffPaint) {
             // The worker cannot claim presentation until the software paint has

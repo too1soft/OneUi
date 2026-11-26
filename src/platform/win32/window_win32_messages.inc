@@ -1,5 +1,7 @@
     LRESULT handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
-        if (coalesceHandoffRefresh_) handoffRefresh_.observeInput(hwnd_, message);
+        std::optional<win32::HandoffInputScope> feedback;
+        if (feedbackOnlyHandoff_) feedback.emplace(hwnd_, message);
+        if (coalesceHandoffRefresh_ && !feedbackOnlyHandoff_) handoffRefresh_.observeInput(hwnd_, message);
         if (message == WM_SHOWWINDOW || message == WM_SIZE || message == WM_ACTIVATE ||
             message == WM_STYLECHANGED || message == WM_DPICHANGED) {
             queueStateChange();

@@ -25,7 +25,14 @@
         invalidationPending_ = true;
     }
 
-    void queueInvalidation(const RECT* rect) {
+    void prioritizeHandoffFeedback() {
+        if (feedbackOnlyHandoff_ && !clientContentPainting_ && win32::HandoffInputScope::active(hwnd_)) {
+            handoffRefresh_.requestFeedback();
+        }
+    }
+
+    void queueInvalidation(const RECT* rect, bool requestsFeedback = true) {
+        if (requestsFeedback) prioritizeHandoffFeedback();
         const bool wasPending = invalidationPending_;
         mergeInvalidation(rect);
         if (!wasPending) {

@@ -144,6 +144,7 @@ public:
     win32::GlRenderWorker glWorker_;
     win32::SoftwareHandoffRefresh handoffRefresh_;
     const bool coalesceHandoffRefresh_ = win32::experimentalAngleCoalescesSoftwareHandoff();
+    const bool feedbackOnlyHandoff_ = coalesceHandoffRefresh_ && win32::HandoffInputScope::enabled();
     bool glWorkerWaitingForSoftwareFrame_ = false;
     const internal::RuntimeConfig runtimeConfig_ = internal::RuntimeConfig::fromEnvironment();
 #if ONEUI_DEVELOPER_TOOLS

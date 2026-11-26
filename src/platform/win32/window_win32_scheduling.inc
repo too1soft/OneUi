@@ -277,6 +277,7 @@
     }
 
     void scheduleContentAnimationFrame() {
+        prioritizeHandoffFeedback();
         if (contentAnimationFramePending_) {
             expediteDeferredAnimationFrame();
             return;
@@ -375,6 +376,7 @@
 
     void requestEditRedraw(const internal::EditPresentationScope& edit) {
         if (edit.hasPostedWork()) {
+            prioritizeHandoffFeedback();
             // A ready frame can run when the message batch yields, before
             // the posted model update. Release painting at the end of the
             // work queued by this edit, keeping the newest edit in effect.
@@ -392,7 +394,7 @@
         }
         // Widgets normally supplied a precise invalidation already. Preserve
         // it instead of expanding every handled click to the entire client.
-        if (!invalidationPending_) queueInvalidation(nullptr);
+        if (!invalidationPending_) queueInvalidation(nullptr, false);
         if (policy == InputPaint::BeforePostedWork) inputPaintBeforePostedWork_ = true;
         scheduleInputPaint();
     }
