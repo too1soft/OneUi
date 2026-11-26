@@ -317,15 +317,26 @@
         if (recorder) {
             canvasOwner.reset();
             startupFanout.reset();
+            const bool traceSoftwareReplay = !threadedGl && !drawAndRecord && internal::traceSoftwarePictureReplay();
+            if (traceSoftwareReplay) {
+                internal::traceInteractionPaint(interactionPaint, "software_picture_finish_begin", "software");
+            }
             startupPicture = recorder->finishRecordingAsPicture();
+            if (traceSoftwareReplay) {
+                internal::traceInteractionPaint(interactionPaint, "software_picture_finish_end", "software");
+            }
             const bool asyncRaster = !threadedGl && captureWorkerStartup && !drawAndRecord &&
-                !glWorkerWaitingForSoftwareFrame_ && !interactiveResizeActive_ && !invalidationPending_ &&
+                !glWorkerWaitingForSoftwareFrame_ && !interactiveResizeActive_ &&
+                (!invalidationPending_ || win32::StartupRaster::acceptsFollowupDamage()) &&
                 !startupRasterInputSeen_ && win32::StartupRaster::enabled() &&
                 !win32::experimentalAngleWorkerEnabled() && !win32::experimentalWglWorkerStartsEarly();
             if (asyncRaster && startupRaster_.submit(hwnd_,
                     {startupPicture, width, height, scale, interactionPaint}, *paintSurface_)) {
                 EndPaint(hwnd_, &paintStruct);
                 if (virtualRowDamage) virtualRowDamage->covered();
+                if (invalidationPending_) {
+                    internal::traceInteractionPaint(interactionPaint, "startup_raster_followup_pending", "software");
+                }
                 internal::traceInteractionPaint(interactionPaint, "worker_startup_picture_recorded", "software", 1);
                 internal::traceInteractionPaint(interactionPaint, "startup_raster_queued", "software", 1);
                 paintTrace.mark(PaintTrace::End);
@@ -343,7 +354,13 @@
                         "software", same ? 1 : 0);
                 }
             } else if (!threadedGl || handoffPaint) {
+                if (traceSoftwareReplay) {
+                    internal::traceInteractionPaint(interactionPaint, "software_picture_replay_begin", "software");
+                }
                 paintSurface_->getCanvas()->drawPicture(startupPicture);
+                if (traceSoftwareReplay) {
+                    internal::traceInteractionPaint(interactionPaint, "software_picture_replay_end", "software");
+                }
             }
             if (captureWorkerStartup) {
                 internal::traceInteractionPaint(interactionPaint, "worker_startup_picture_recorded",

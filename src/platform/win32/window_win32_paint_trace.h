@@ -11,6 +11,14 @@
 
 namespace oneui::internal {
 
+inline bool traceSoftwarePictureReplay() noexcept {
+    static const bool enabled = [] {
+        wchar_t value[2]{};
+        return GetEnvironmentVariableW(L"ONEUI_WIN32_RASTER_REPLAY_TRACE", value, 2) == 1 && value[0] == L'1';
+    }();
+    return enabled;
+}
+
 // Capture checkpoints during paint and write them after presentation. The
 // cycle delta records work on this thread independently of wall-clock waits.
 class Win32PaintTrace {

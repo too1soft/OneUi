@@ -30,13 +30,22 @@ public:
         sk_sp<SkSurface> surface;
     };
 
-    static bool enabled() noexcept {
-        static const bool value = [] {
+    enum class Policy { Synchronous, StableScene, WithFollowupDamage };
+
+    static Policy policy() noexcept {
+        static const auto value = [] {
             wchar_t flag[2]{};
-            return GetEnvironmentVariableW(L"ONEUI_WIN32_ASYNC_STARTUP_RASTER", flag, 2) == 1 && flag[0] == L'1';
+            if (GetEnvironmentVariableW(L"ONEUI_WIN32_ASYNC_STARTUP_RASTER", flag, 2) == 1) {
+                if (flag[0] == L'1') return Policy::StableScene;
+                if (flag[0] == L'2') return Policy::WithFollowupDamage;
+            }
+            return Policy::Synchronous;
         }();
         return value;
     }
+
+    static bool enabled() noexcept { return policy() != Policy::Synchronous; }
+    static bool acceptsFollowupDamage() noexcept { return policy() == Policy::WithFollowupDamage; }
 
     ~StartupRaster() { cancel(); }
 
