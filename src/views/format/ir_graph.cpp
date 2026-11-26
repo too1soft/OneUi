@@ -12,11 +12,12 @@ void validateGraph(const Image &im)
     auxiliary[1].resize(im.count(CALL));
     auxiliary[2].resize(im.count(SLOT));
     auxiliary[3].resize(im.count(HOST));
-    std::map<uint32_t, std::set<std::string>> references;
+    using Names = std::set<std::string_view>;
+    std::vector<Names> references(im.count(TMPL));
     uint32_t expandedNodes = 0;
     std::vector<bool> workspaceScope{false};
     std::vector<bool> explicitCalls;
-    std::vector<std::set<std::string>> scopeHosts(1);
+    std::vector<Names> scopeHosts(1);
     std::vector<uint32_t> hostInstances(im.count(HOST));
     auto claim = [](std::vector<uint32_t> &counts, uint32_t index, bool fresh) {
         return !fresh || ++counts[index] == 1;
@@ -31,16 +32,21 @@ void validateGraph(const Image &im)
     for (auto &r : rs[PROP])
         staticProps[r[0]].push_back(&r);
     std::vector<bool> usedTemplates(im.count(TMPL));
-    std::set<uint32_t> activeTemplates;
+    std::vector<bool> activeTemplates(im.count(TMPL));
     std::function<void(uint32_t, const std::vector<uint32_t> &, unsigned)> visitTemplate;
-    std::function<void(uint32_t, uint32_t, uint32_t, const std::vector<uint32_t> &, unsigned, std::set<std::string> &)>
+    std::function<void(uint32_t, uint32_t, uint32_t, const std::vector<uint32_t> &, unsigned, Names &)>
         visitNode;
+    auto transparentRoot = [&](const Record &child) {
+        if (child[0] != 2 || !(rs[REPT][child[9]][3] & repeatTransparent))
+            return none;
+        return rs[TMPL][rs[REPT][child[9]][5]][1];
+    };
     auto lexical = [&](const std::vector<uint32_t> &scopes, uint32_t packed, uint32_t model) {
         auto d = packed & 0xffff;
         require(d < scopes.size() && scopes[d] == model, "BAD_IR: lexical model/depth");
     };
     visitNode = [&](uint32_t node, uint32_t tmpl, uint32_t parent, const std::vector<uint32_t> &scopes, unsigned depth,
-                    std::set<std::string> &ids) {
+                    Names &ids) {
         bool fresh = owners[node] == none;
         require(depth <= 64 && (fresh || owners[node] == tmpl) && ++expandedNodes <= 100000,
                 "BAD_IR: node cycle/shared tree or expanded node limit");
@@ -48,7 +54,7 @@ void validateGraph(const Image &im)
         auto &n = rs[NODE][node];
         require(n[2] == parent && n[8] == rs[TMPL][tmpl][3] && ids.insert(im.strings[n[11]]).second,
                 "BAD_IR: parent/scope/stable ID");
-        auto ref = im.strings[n[7]];
+        const auto &ref = im.strings[n[7]];
         require(ref.empty() || (identifier(ref) && ref.find('.') == std::string::npos && scopes.size() == 1 &&
                                 n[0] != 2 && references[tmpl].insert(ref).second),
                 "BAD_IR: invalid/duplicate ref");
@@ -68,7 +74,7 @@ void validateGraph(const Image &im)
             bool hasMinimum = false, hasMaximum = false;
             for (auto p : staticProps[node])
             {
-                auto name = c.property((*p)[1]).name;
+                const auto &name = c.property((*p)[1]).name;
                 if (name == "min" || name == "max")
                 {
                     auto &v = rs[VALU][(*p)[2]];
@@ -88,27 +94,23 @@ void validateGraph(const Image &im)
                 }
             }
             require(!hasMinimum || !hasMaximum || minimum <= maximum, "BAD_IR: min > max");
-            Node logical;
-            logical.tag = c.name;
             for (uint32_t i = 0; i < n[4]; ++i)
             {
                 auto ix = n[3] + i;
                 auto &e = rs[EDGE][ix];
                 require(e[0] == node && claim(edges, ix, fresh), "BAD_IR: edge ownership");
-                auto &ch = rs[NODE][e[1]];
-                Node child;
-                child.tag = ch[0] == 1 ? im.components[ch[1]].name : "<structural>";
-                if (ch[0] == 2 && (rs[REPT][ch[9]][3] & repeatTransparent)) {
-                    auto body = rs[TMPL][rs[REPT][ch[9]][5]][1];
-                    require(rs[NODE][body][0] == 1, "BAD_IR: workspace item root");
-                    child.tag = im.components[rs[NODE][body][1]].name;
-                }
-                if (ch[0] == 2)
-                    child.attrs["v-for"] = {};
-                logical.children.push_back(child);
+                auto body = transparentRoot(rs[NODE][e[1]]);
+                require(body == none || rs[NODE][body][0] == 1, "BAD_IR: workspace item root");
                 visitNode(e[1], tmpl, node, scopes, depth + 1, ids);
             }
-            validateChildren(logical, c, {"<IR>", 1, 1});
+            validateChildSequence(n[4], [&](size_t i) {
+                const auto &child = rs[NODE][rs[EDGE][n[3] + i][1]];
+                if (child[0] == 1)
+                    return ChildShape{im.components[child[1]].name, false};
+                if (auto body = transparentRoot(child); body != none)
+                    return ChildShape{im.components[rs[NODE][body][1]].name, true};
+                return ChildShape{"<structural>", child[0] == 2};
+            }, c, {"<IR>", 1, 1});
             if (c.name == "NativeHost")
             {
                 const bool dynamic = scopes.size() > 1;
@@ -158,7 +160,7 @@ void validateGraph(const Image &im)
                 "BAD_IR: workspace call-id contains slash");
             explicitCalls.push_back(r[5] == 1);
             visitTemplate(r[1], scopes, depth + 1);
-            std::set<std::string> supplied;
+            Names supplied;
             for (uint32_t i = 0; i < r[3]; ++i)
             {
                 auto ix = r[2] + i;
@@ -197,13 +199,13 @@ void validateGraph(const Image &im)
         }
     };
     visitTemplate = [&](uint32_t t, const std::vector<uint32_t> &scopes, unsigned depth) {
-        require(depth <= 64 && !activeTemplates.count(t), "BAD_IR: template cycle/depth");
+        require(depth <= 64 && !activeTemplates[t], "BAD_IR: template cycle/depth");
         require(rs[TMPL][t][2] == scopes[0], "BAD_IR: template model");
         references[t].clear();
         usedTemplates[t] = true;
-        activeTemplates.insert(t);
-        std::set<std::string> ids;
-        std::set<std::string> outletNames;
+        activeTemplates[t] = true;
+        Names ids;
+        Names outletNames;
         for (uint32_t i = 0; i < rs[TMPL][t][5]; ++i)
         {
             auto &r = rs[SLOT][rs[TMPL][t][4] + i];
@@ -212,7 +214,7 @@ void validateGraph(const Image &im)
                     "BAD_IR: missing root-template single-root slot");
         }
         visitNode(rs[TMPL][t][1], t, none, scopes, depth, ids);
-        activeTemplates.erase(t);
+        activeTemplates[t] = false;
     };
     visitTemplate(im.root, {im.schema.root}, 1);
     require(std::all_of(usedTemplates.begin(), usedTemplates.end(), [](bool x) { return x; }),
@@ -223,16 +225,23 @@ void validateGraph(const Image &im)
             require(++args[r[5] + i] == 1, "BAD_IR: argument ownership");
     for (auto *counts : {&edges, &props, &args, &auxiliary[0], &auxiliary[1], &auxiliary[2], &auxiliary[3]})
         require(std::all_of(counts->begin(), counts->end(), [](auto x) { return x == 1; }), "BAD_IR: unowned record");
-    for (uint32_t i = 0; i < im.count(SMAP); ++i)
+    // A valid chain contains at most 64 parent links plus its own span.
+    std::array<uint32_t, 65> path;
+    std::vector<uint8_t> spanDepth(im.count(SMAP));
+    for (uint32_t i = 0; i < spanDepth.size(); ++i)
     {
-        auto parent = rs[SMAP][i][5];
-        unsigned depth = 0;
-        std::set<uint32_t> seen;
-        while (parent != none)
+        size_t length = 0;
+        auto current = i;
+        while (current != none && spanDepth[current] == 0)
         {
-            require(++depth <= 64 && seen.insert(parent).second, "BAD_IR: source map cycle");
-            parent = rs[SMAP][parent][5];
+            require(length < path.size(), "BAD_IR: source map cycle");
+            path[length++] = current;
+            current = rs[SMAP][current][5];
         }
+        unsigned depth = current == none ? 0 : spanDepth[current];
+        require(depth + length <= path.size(), "BAD_IR: source map cycle");
+        while (length)
+            spanDepth[path[--length]] = uint8_t(++depth);
     }
 }
 } // namespace oneview

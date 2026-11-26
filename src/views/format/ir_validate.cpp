@@ -246,6 +246,11 @@ void validateImage(const Image &im)
         im.schema.model(r[5]);
         span(r[6]);
     }
+    std::set<std::string> external;
+    if (im.count(CSS))
+        for (const auto &c : im.components)
+            if (!registry().count(c.name))
+                external.insert(c.name);
     for (auto &r : im.records[CSS])
     {
         require(r[0] && r[5] == 0, "BAD_IR: CSS flags/scope");
@@ -253,14 +258,12 @@ void validateImage(const Image &im)
         sid(r[2]);
         sid(r[3]);
         span(r[4]);
-        auto file = im.strings[r[3]];
+        const auto &file = im.strings[r[3]];
         Bytes scopeBytes(file.begin(), file.end());
         scopeBytes.push_back(0);
         auto name = std::filesystem::path(file).stem().generic_string();
         scopeBytes.insert(scopeBytes.end(), name.begin(), name.end());
         auto scope = "one-s-" + hex(sha256(scopeBytes)).substr(0, 16);
-        std::set<std::string> external;
-        for(const auto &c:im.components)if(!registry().count(c.name))external.insert(c.name);
         require(oneui::ui::syntax::css(im.strings[r[1]], scope, file, 1,false,external) == im.strings[r[2]],
                 "BAD_IR: lowered CSS/scope mismatch");
         if(im.strings[r[2]].find("@container")!=std::string::npos)
@@ -281,11 +284,14 @@ void validateImage(const Image &im)
         require(!im.strings[r[1]].empty() && ((r[2] & 2) || hosts.insert(im.strings[r[1]]).second), "BAD_IR: host name");
         span(r[3]);
     }
-    Schema builtins;
-    addBuiltins(builtins);
     for (auto &e : im.schema.models)
         if (e.first.rfind("oneui.v1.", 0) == 0)
         {
+            static const Schema builtins = [] {
+                Schema schema;
+                addBuiltins(schema);
+                return schema;
+            }();
             auto &m = e.second;
             auto &known = builtins.model(e.first);
             require(m.keyName == known.keyName && m.properties.size() == known.properties.size() && m.commands.empty(),

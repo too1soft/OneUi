@@ -25,7 +25,8 @@ bool identifier(const std::string &value)
 const Model &Schema::model(const std::string &name) const
 {
     auto i = models.find(name);
-    require(i != models.end(), "SCHEMA_MODEL: unknown model " + name);
+    if (i == models.end())
+        throw Error("SCHEMA_MODEL: unknown model " + name);
     return i->second;
 }
 const Model &Schema::model(uint32_t id) const

@@ -98,6 +98,27 @@ class BinaryTests(CompilerCase):
         data[80:112] = hashlib.sha256(section(data, 3)).digest()
         self.verify_bytes(data, 'contract')
 
+    def test_source_span_parent_depth(self):
+        data = bytearray(self.compile('<Column>' + '<Text/>' * 67 + '</Column>'))
+        _, _, start, _, count, stride = directory(data)[17]
+        self.assertGreaterEqual(count, 67)
+
+        def set_parent(span, parent):
+            struct.pack_into('<I', data, start + span * stride + 20, parent)
+
+        set_parent(0, 0xffffffff)
+        for span in range(1, 65):
+            set_parent(span, span - 1)
+        set_parent(65, 63)
+        set_parent(66, 63)
+        self.verify_bytes(data, error=None)
+
+        set_parent(66, 65)
+        self.verify_bytes(data, 'source map cycle')
+
+        set_parent(65, 66)
+        self.verify_bytes(data, 'source map cycle')
+
     def test_optional_section_forward_compatibility(self):
         original = bytearray(self.compile())
         # Change SMAP into an unknown optional extension and clear every span.

@@ -3,50 +3,27 @@
 
 namespace oneview
 {
+namespace
+{
+bool asciiDigit(char value)
+{
+    return value >= '0' && value <= '9';
+}
+
+bool decimalLiteral(const std::string &text)
+{
+    const auto dot = std::find(text.begin(), text.end(), '.');
+    return dot != text.begin() && std::all_of(text.begin(), dot, asciiDigit) &&
+           (dot == text.end() || (dot + 1 != text.end() && std::all_of(dot + 1, text.end(), asciiDigit)));
+}
+} // namespace
+
 void validateChildren(const Node &n, const ComponentContract &c, const Location &at)
 {
-    auto rule = c.childRule;
-    auto count = n.children.size();
-    if (rule == "virtual-rows" && (count != 1 || !n.children[0].attrs.count("v-for")))
-        at.fail("VIRTUAL_ROWS: exactly one keyed v-for child required");
-    if(rule=="header-slots")for(const auto& child:n.children)
-        if(child.tag!="HeaderSlot")at.fail("HEADER_SLOT: invalid native slot");
-    if (rule == "pane-collection" || rule == "dock-collection" || rule == "grid-collection") {
-        const auto expected = rule == "pane-collection" ? "Pane" : rule == "grid-collection" ? "GridItem" : "DockItem";
-        for (const auto &child : n.children)
-            if (child.tag != expected)
-                at.fail("WORKSPACE_CHILDREN: expected direct stable item");
-    }
-    if (rule == "leaf" && count)
-        at.fail("CHILDREN: leaf component");
-    if (rule == "one" && count != 1)
-        at.fail("CHILDREN: exactly one child required");
-    if (rule == "optional-one" && count > 1)
-        at.fail("CHILDREN: at most one child required");
-    if ((rule == "two" || rule == "two-sidebar-first") && count != 2)
-        at.fail("CHILDREN: exactly two children required");
-    if (rule == "two-sidebar-first" && n.children[0].tag != "Sidebar")
-        at.fail("CHILDREN: Sidebar must be first");
-    if (rule == "workspace-regions" || rule == "dock-regions")
-    {
-        auto allowed = rule == "workspace-regions" ? std::set<std::string>{"TitleBar", "NavigationRail", "SessionBar",
-                                                                           "WorkspaceBody", "StatusBar"}
-                                                   : std::set<std::string>{"PanelHeader", "PanelBody", "PanelFooter"};
-        std::set<std::string> seen;
-        for (auto &child : n.children)
-            if (!allowed.count(child.tag) || !seen.insert(child.tag).second)
-                at.fail("CHILDREN: invalid or duplicate region");
-        if (rule == "workspace-regions" ? !seen.count("WorkspaceBody")
-                                        : !seen.count("PanelHeader") || !seen.count("PanelBody"))
-            at.fail("CHILDREN: required region missing");
-    }
-    if (rule == "form-rows")
-        for (auto &child : n.children)
-            if (child.tag != "FormRow" || child.attrs.count("v-for"))
-                at.fail("CHILDREN: FormGrid requires direct non-repeated FormRow");
-    if (rule == "page-actions" &&
-        std::count_if(n.children.begin(), n.children.end(), [](auto &child) { return child.tag == "ActionBar"; }) > 1)
-        at.fail("CHILDREN: duplicate ActionBar");
+    validateChildSequence(n.children.size(), [&](size_t i) {
+        const auto &child = n.children[i];
+        return ChildShape{child.tag, child.attrs.count("v-for") != 0};
+    }, c, at);
 }
 void validateStatic(const std::string &component, const std::string &key, const std::string &text)
 {
@@ -56,14 +33,15 @@ void validateStatic(const std::string &component, const std::string &key, const 
         require(text == "true" || text == "false", "STATIC_TYPE: expected bool");
     if (p.tag == 2)
     {
-        require(std::regex_match(text, std::regex("-1|[0-9]+")), "STATIC_TYPE: selectedIndex >= -1");
+        require(text == "-1" || (!text.empty() && std::all_of(text.begin(), text.end(), asciiDigit)),
+                "STATIC_TYPE: selectedIndex >= -1");
         size_t end = 0;
         auto n = std::stoll(text, &end);
         require(end == text.size() && n <= std::numeric_limits<int>::max(), "STATIC_TYPE: integer range");
     }
     if (p.tag == 3)
     {
-        require(std::regex_match(text, std::regex("[0-9]+(\\.[0-9]+)?")), "STATIC_TYPE: finite nonnegative number");
+        require(decimalLiteral(text), "STATIC_TYPE: finite nonnegative number");
         float f = std::stof(text);
         oneui::ui::syntax::validateLayoutNumber(key, f);
         require(std::isfinite(f), "STATIC_TYPE: finite number");
@@ -83,8 +61,8 @@ void validateStatic(const std::string &component, const std::string &key, const 
         if(component=="MediaSlot")require(text=="empty"||text=="preview"||text=="error"||text=="loading","MEDIA_SLOT: unknown slot");
         else require(text=="identity"||text=="actions"||text=="menu","HEADER_SLOT: unknown slot");
     }
-    if (enums.count(key))
-        require(enums.at(key).count(text) != 0, "STATIC_ENUM: invalid " + key);
+    if (const auto values = enums.find(key); values != enums.end() && !values->second.count(text))
+        throw Error("STATIC_ENUM: invalid " + key);
     if (key == "align")
         require(text == "start" || text == "center" || text == "end" ||
                     (text == "stretch" && (component == "Column" || component == "Row")),
