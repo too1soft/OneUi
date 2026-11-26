@@ -97,6 +97,30 @@ impl TerminalViewHandle {
         })
     }
 
+    /// Queues a selection-preserving frame only if the window queue is empty.
+    /// An update that arrived in the meantime retains its original position.
+    pub fn submit_frame_if_queue_empty<T: AsRef<str> + PartialEq + Send + 'static>(
+        &self,
+        frame: TerminalFrame<T>,
+    ) -> bool {
+        let frame = Box::new(frame);
+        let mut pending = self
+            .state
+            .pending_update
+            .lock()
+            .expect("terminal pending update lock poisoned");
+        if self.state.raw.load(Ordering::Acquire).is_null() || pending.is_some() {
+            return false;
+        }
+        *pending = Some(TerminalFrameUpdate {
+            frame,
+            selection: TerminalFrameSelection::Preserve,
+            replacement: None,
+        });
+        drop(pending);
+        self.schedule_pending_frame().is_ok()
+    }
+
     pub(super) fn submit_update<T: AsRef<str> + PartialEq + Send + 'static>(
         &self,
         frame: TerminalFrame<T>,

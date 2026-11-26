@@ -56,6 +56,10 @@ macro_rules! native_tests {
                 "pending_replacement_releases_displaced_storage_without_the_queue_lock",
                 super::terminal::frame_queue_tests::pending_replacement_releases_displaced_storage_without_the_queue_lock,
             ));
+            cases.push((
+                "empty_queue_recovery_cannot_displace_a_pending_frame",
+                super::terminal::frame_queue_tests::empty_queue_recovery_cannot_displace_a_pending_frame,
+            ));
             super::test_runner::run(&cases)
         }
     };

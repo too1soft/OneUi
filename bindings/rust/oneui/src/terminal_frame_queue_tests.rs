@@ -117,6 +117,31 @@ pub(crate) fn pending_replacement_releases_displaced_storage_without_the_queue_l
     assert!(unlocked.load(Ordering::Acquire));
 }
 
+pub(crate) fn empty_queue_recovery_cannot_displace_a_pending_frame() {
+    let window = Window::new(&WindowOptions::default()).expect("create test window");
+    let terminal = TerminalView::new().expect("create terminal");
+    window.set_content(terminal.as_widget());
+    let handle = window.terminal_view_handle(&terminal);
+
+    handle.submit_frame_clearing_selection(frame(1)).unwrap();
+    assert!(!handle.submit_frame_if_queue_empty(frame(2)));
+    assert!(handle.pending_frame_replacement().is_none());
+    terminal.apply_pending_frame();
+
+    assert!(handle.submit_frame_if_queue_empty(frame(3)));
+    assert!(handle.pending_frame_replacement().is_some());
+    assert!(!handle.submit_frame_if_queue_empty(frame(4)));
+    terminal.apply_pending_frame();
+    let last = terminal.state.last_applied_frame.lock().unwrap();
+    let last = last
+        .as_ref()
+        .unwrap()
+        .as_any()
+        .downcast_ref::<TerminalFrame>()
+        .unwrap();
+    assert_eq!(last.cells[0].text, "3");
+}
+
 pub(crate) fn updates_yield_to_other_window_callbacks() {
     const UPDATES: usize = 12;
     let window = Window::new(&WindowOptions::default()).expect("create test window");
