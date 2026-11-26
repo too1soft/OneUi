@@ -132,6 +132,8 @@ public:
 #include "window_win32_scheduling.inc"
 #include "window_win32_client_render.inc"
 #include "window_win32_surfaces.inc"
+#include "window_win32_startup_scene.inc"
+#include "window_win32_paint_content.inc"
 #include "window_win32_paint.inc"
 #include "window_win32_diagnostics.inc"
 #include "window_win32_pointer.inc"

@@ -23,7 +23,9 @@
     }
 #endif
     void paint() {
+        if (recordingStartupScene_) startupSceneChanged_ = true;
         if (IsIconic(hwnd_)) {
+            invalidateStartupScene();
             // A minimized HWND can still receive WM_PAINT with the shell's
             // icon-sized client rectangle. Validate it without replacing the
             // live backing. WM_SIZE requests a full repaint when restored.
@@ -171,76 +173,62 @@
             }
         }
 
-        SkCanvas* skCanvas = threadedGl ? nullptr : paintSurface_->getCanvas();
         const bool fullPaint = dirtyX == 0 && dirtyY == 0 && dirtyWidth == width && dirtyHeight == height;
-        const bool captureWorkerStartup = !useGPU && fullPaint && IsWindowVisible(hwnd_) &&
+        const bool visibleFullSoftware = !useGPU && fullPaint && IsWindowVisible(hwnd_);
+        const bool captureWorkerStartup = visibleFullSoftware &&
             ((glWorkerWaitingForSoftwareFrame_ && (win32::experimentalAngleWorkerEnabled() ||
                 win32::experimentalGlWorkerPrewarm())) ||
              glWorker_.wantsStartupPicture());
-        std::optional<SkPictureRecorder> recorder;
-        if (threadedGl || captureWorkerStartup ||
-            (!useGPU && fullPaint && IsWindowVisible(hwnd_) && deferredStartupGl_.shouldCapture())) {
-            recorder.emplace();
-            skCanvas = recorder->beginRecording(SkRect::MakeWH(static_cast<float>(width), static_cast<float>(height)));
-        }
-        if (threadedGl && !fullPaint) {
-            skCanvas->clipRect(SkRect::MakeLTRB(static_cast<float>(dirtyX), static_cast<float>(dirtyY),
-                static_cast<float>(dirtyRight), static_cast<float>(dirtyBottom)));
-        }
-        if (fullPaint) {
-            const auto background = colors::Surface;
-            skCanvas->clear(SkColorSetARGB(background.a, background.r, background.g, background.b));
-        }
-
-        skCanvas->save();
-        skCanvas->scale(scale, scale);
-        auto canvasOwner = rendering::makeSkiaCanvas(
-            *skCanvas,
-            &defaultFontFamily_,
-            Rect{0.0f, 0.0f, logicalWidth, logicalHeight});
-        auto& canvas = *canvasOwner;
-        if (!fullPaint) {
-            const Rect dirtyCanvasRect{
-                static_cast<float>(dirtyX) / scale,
-                static_cast<float>(dirtyY) / scale,
-                static_cast<float>(dirtyWidth) / scale,
-                static_cast<float>(dirtyHeight) / scale};
-            canvas.save();
-            canvas.clipRect(dirtyCanvasRect);
-            canvas.fillRect(dirtyCanvasRect, colors::Surface, 0.0f);
-        }
+        const bool captureDeferredStartup = visibleFullSoftware && deferredStartupGl_.shouldCapture();
+        const auto size = SkISize::Make(width, height);
+        auto startupPicture = takeStartupScene(size, scale, visibleFullSoftware);
 
         const auto recordResizePresentation = [&] {
             if (fullPaint && interactiveResizeActive_ && resizeGeneration == liveResizeGeneration_) {
                 presentedResizeGeneration_ = resizeGeneration;
             }
         };
-        paintTrace.mark(PaintTrace::Canvas);
-        if (content_ && content_->visible()) {
-            const double contentStartMs = currentTimeMs();
-            g_primitivePaintTrace = PrimitivePaintTrace{};
-            text::AtlasWarmupCapture atlasCapture(textAtlasWarmup_.capture(
-                useGPU && nvidiaDriver_ && fullPaint && !interactiveResizeActive_));
-            paintClientContent(canvas, logicalWidth, logicalHeight);
-            recordContentPaint(currentTimeMs() - contentStartMs);
-            recordPrimitivePaint(g_primitivePaintTrace);
-            for (std::size_t i = 0; i < traceStageMs_.size(); ++i) traceStageMs_[i] += profile.data.ms[i];
-        }
-        paintTrace.mark(PaintTrace::Tree);
-
-        if (!fullPaint) {
-            canvas.restore();
-        }
+        if (startupPicture) {
+            paintTrace.mark(PaintTrace::Canvas);
+            paintTrace.mark(PaintTrace::Tree);
+            internal::traceInteractionPaint(interactionPaint, "startup_scene_replay",
+                threadedGl ? "opengl-worker" : "software");
+        } else {
+            const bool stage = visibleFullSoftware && !threadedGl && shouldRecordStartupScene();
+            const auto alive = stage ? callbackWindowAlive_ : nullptr;
+            if (stage) {
+                startupSceneAttempted_ = true;
+                recordingStartupScene_ = true;
+                startupSceneChanged_ = false;
+            }
+            auto paintOverlay = [&](Canvas& canvas) {
 #if ONEUI_DEVELOPER_TOOLS
-        if(diagnostics && diagnostics->options.overlay)paintDeveloperOverlay(canvas,*diagnostics,logicalWidth,logicalHeight);
+                if (diagnostics && diagnostics->options.overlay)
+                    paintDeveloperOverlay(canvas, *diagnostics, logicalWidth, logicalHeight);
+#else
+                (void)canvas;
 #endif
-        skCanvas->restore();
-        sk_sp<SkPicture> startupPicture;
-        if (recorder) {
-            canvasOwner.reset();
-            startupPicture = recorder->finishRecordingAsPicture();
-            if (!threadedGl) paintSurface_->getCanvas()->drawPicture(startupPicture);
+            };
+            startupPicture = drawPaintContent({width, height, dirtyX, dirtyY, dirtyWidth, dirtyHeight, scale, fullPaint},
+                threadedGl || stage || captureWorkerStartup || captureDeferredStartup,
+                threadedGl, useGPU, paintTrace, profile.data, paintOverlay);
+            if (stage && !alive->load(std::memory_order_acquire)) return;
+            if (stage) recordingStartupScene_ = false;
+            if (stage && deferStartupScene(startupPicture, size, scale)) {
+                // Keep the first presented frame until the native queue has
+                // dispatched pending input and can replay this current scene.
+                EndPaint(hwnd_, &paintStruct);
+                InvalidateRect(hwnd_, &dirtyRect, FALSE);
+                paintTrace.mark(PaintTrace::End);
+                internal::traceInteractionPaint(interactionPaint, "startup_scene_staged", "software");
+                internal::traceInteractionPaint(interactionPaint, "paint_end", "software", 0);
+                paintTrace.write(interactionPaint.window, static_cast<double>(interactionPaint.paintSequence),
+                    dirtyRect, profile.data);
+                return;
+            }
+            if (stage) internal::traceInteractionPaint(interactionPaint, "startup_scene_changed", "software");
         }
+        if (!threadedGl && startupPicture) paintSurface_->getCanvas()->drawPicture(startupPicture);
         paintTrace.mark(PaintTrace::End);
 
         if (threadedGl) {
@@ -475,7 +463,7 @@
                 if (glWorker_.setStartupPicture({std::move(startupPicture), width, height})) {
                     internal::traceInteractionPaint(interactionPaint, "worker_first_software_frame", "software", 1);
                 }
-            } else {
+            } else if (captureDeferredStartup) {
                 deferredStartupGl_.submitPicture(std::move(startupPicture), width, height);
             }
         }

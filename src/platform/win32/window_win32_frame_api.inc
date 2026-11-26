@@ -11,6 +11,7 @@
     // are merged here and submitted once per message turn; anything that
     // paints or reads the update region submits the pending rect first.
     void mergeInvalidation(const RECT* rect) {
+        invalidateStartupScene();
         if (rect) {
             if (!invalidateAll_) {
                 if (invalidationPending_) {
