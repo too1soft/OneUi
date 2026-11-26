@@ -246,6 +246,7 @@ int main() {
         require(Layout::make(L"oldest") != oldest, "eviction must remove the old index entry");
         LayoutOptions noWrap;
         noWrap.text.wrap = oneui::TextWrapMode::NoWrap;
+        noWrap.text.locale.clear();
         const auto noWrapLayout = Layout::make(L"varying width", noWrap);
         noWrap.width = 26;
         noWrap.text.locale = "und";
