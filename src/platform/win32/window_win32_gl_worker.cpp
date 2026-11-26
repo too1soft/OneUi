@@ -74,6 +74,14 @@ bool softwareHandoffEnabled() noexcept {
     return enabled;
 }
 
+bool wglSoftwareHandoffEnabled() noexcept {
+    static const bool enabled = [] {
+        wchar_t value[2]{};
+        return GetEnvironmentVariableW(L"ONEUI_WIN32_WGL_SOFTWARE_HANDOFF", value, 2) == 1 && value[0] == L'1';
+    }();
+    return enabled;
+}
+
 enum class ScratchCensusOrder { BeforeScene, AfterScene, RetryAfterScene };
 
 ScratchCensusOrder scratchCensusOrder() noexcept {
@@ -107,7 +115,10 @@ struct GlRenderWorker::State {
     State(HWND window, HMONITOR monitor, POINT origin, bool angle, StartupGlScene scene, bool awaitSoftwareFrame)
         : window(window), monitor(monitor), origin(origin), angle(angle),
           captureStartup(monitor && (awaitSoftwareFrame || scene.picture)),
-          softwareHandoff(angle && softwareHandoffEnabled()), startup(std::move(scene)),
+          // WGL can keep using GDI when a software frame already reached the live window.
+          softwareHandoff(angle ? softwareHandoffEnabled()
+                                : monitor && scene.picture && wglSoftwareHandoffEnabled()),
+          startup(std::move(scene)),
           awaitingSoftwareFrame(awaitSoftwareFrame), ownsLiveWindow(!monitor) {}
 
     void run() noexcept;
