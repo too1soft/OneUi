@@ -8,12 +8,52 @@
 #include "modules/skparagraph/include/ParagraphStyle.h"
 #include "modules/skparagraph/include/TextStyle.h"
 
+#if defined(_WIN32)
+#include "include/core/SkMatrix.h"
+#include "include/core/SkPaint.h"
+#include "include/core/SkSurfaceProps.h"
+#include "src/core/SkStrike.h"
+#include "src/core/SkStrikeSpec.h"
+#include "src/text/StrikeForGPU.h"
+#include <array>
+#include <cstdlib>
+#endif
+
 #include <algorithm>
 #include <string>
 #include <utility>
 #include <vector>
 
 namespace oneui::text {
+#if defined(_WIN32)
+namespace {
+void warmDrawMetrics(const SkFont& font, SkSpan<const SkGlyphID> glyphs) {
+    const char* enabled = std::getenv("ONEUI_QA_WARM_DRAW_GLYPH_METRICS");
+    if (!enabled || std::string_view(enabled) != "1") return;
+
+    // Trial for the unit-scale WGL retained surface. Device paint uses separate
+    // luminance and subpixel phases from the canonical shaping strike.
+    constexpr std::array<SkColor, 4> colors{0xFF171C26, 0xFF637083, 0xFFE8EAEE, 0xFF9AA2AF};
+    SkPaint paint;
+    paint.setAntiAlias(true);
+    for (SkColor color : colors) {
+        paint.setColor(color);
+        auto strike = SkStrikeSpec::MakeMask(font, paint, SkSurfaceProps(),
+            SkScalerContextFlags::kFakeGammaAndBoostContrast, SkMatrix::I()).findOrCreateStrike();
+        const auto mask = strike->roundingSpec().ignorePositionFieldMask;
+        const int phases = mask.x() ? 4 : 1;
+        for (const auto glyph : glyphs) {
+            sktext::StrikeMutationMonitor mutation(strike.get());
+            for (int phase = 0; phase < phases; ++phase) {
+                const SkPackedGlyphID packed(glyph, SkPoint::Make(phase * 0.25f, 0.0f), mask);
+                strike->digestFor(skglyph::kDirectMask, packed);
+            }
+        }
+    }
+}
+} // namespace
+#endif
+
 bool warmRegisteredGlyphMetrics(std::string_view text, std::string_view family, float size, int weight) {
     auto manager = rendering::makeEmbeddedFontManager();
     const std::string name(family);
@@ -43,6 +83,9 @@ bool warmRegisteredGlyphMetrics(std::string_view text, std::string_view family, 
     if (glyphs.empty()) return false;
     std::vector<SkScalar> widths(glyphs.size());
     font.getWidths(glyphs, widths);
+#if defined(_WIN32)
+    warmDrawMetrics(font, glyphs);
+#endif
     return true;
 }
 } // namespace oneui::text
