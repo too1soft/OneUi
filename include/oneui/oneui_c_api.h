@@ -734,6 +734,14 @@ ONEUI_API int oneui_window_post_owned(
     OneUiVoidCallback callback,
     void* user_data,
     OneUiDestroyCallback cleanup);
+/* On the Win32 UI thread during this window's left-button release, run after
+ * widget dispatch and before the next native message. In other contexts this
+ * queues ordinary work. Ownership and cancellation match oneui_window_post_owned. */
+ONEUI_API int oneui_window_post_after_pointer_release_owned(
+    OneUiWindow* window,
+    OneUiVoidCallback callback,
+    void* user_data,
+    OneUiDestroyCallback cleanup);
 ONEUI_API void oneui_window_request_animation_frame(OneUiWindow* window, OneUiFrameCallback callback, void* user_data);
 ONEUI_API void oneui_window_set_title(OneUiWindow* window, const wchar_t* title);
 ONEUI_API void oneui_window_set_title_utf8(OneUiWindow* window, OneUiUtf8String title);

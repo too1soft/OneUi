@@ -1,6 +1,7 @@
 #include "oneui_c_api_controls_internal.h"
 #include "oneui_c_api_error.h"
 #include "oneui_c_api_window_internal.h"
+#include "internal/pointer_release_callbacks.h"
 #include <algorithm>
 #include <cmath>
 #include <climits>
@@ -107,11 +108,12 @@ void oneui_window_post(OneUiWindow* window, OneUiVoidCallback callback, void* us
     (void)oneui_window_post_owned(window, callback, user_data, nullptr);
 }
 
-int oneui_window_post_owned(
+static int postOwnedWindowCallback(
     OneUiWindow* window,
     OneUiVoidCallback callback,
     void* user_data,
-    OneUiDestroyCallback cleanup) {
+    OneUiDestroyCallback cleanup,
+    bool afterPointerRelease) {
     if (!window || !window->window || !callback) {
         if (cleanup) {
             cleanup(user_data);
@@ -122,9 +124,23 @@ int oneui_window_post_owned(
     ownedCallback->callback = callback;
     ownedCallback->cleanup = cleanup;
     ownedCallback->userData = user_data;
-    return window->window->post([ownedCallback] {
+    std::function<void()> task = [ownedCallback] {
         ownedCallback->run();
-    }) ? 1 : 0;
+    };
+    if (afterPointerRelease && oneui::internal::PointerReleaseCallbacks::enqueue(*window->window, task)) {
+        return 1;
+    }
+    return window->window->post(std::move(task)) ? 1 : 0;
+}
+
+int oneui_window_post_owned(
+    OneUiWindow* window, OneUiVoidCallback callback, void* user_data, OneUiDestroyCallback cleanup) {
+    return postOwnedWindowCallback(window, callback, user_data, cleanup, false);
+}
+
+int oneui_window_post_after_pointer_release_owned(
+    OneUiWindow* window, OneUiVoidCallback callback, void* user_data, OneUiDestroyCallback cleanup) {
+    return postOwnedWindowCallback(window, callback, user_data, cleanup, true);
 }
 
 void oneui_window_request_animation_frame(OneUiWindow* window, OneUiFrameCallback callback, void* user_data) {

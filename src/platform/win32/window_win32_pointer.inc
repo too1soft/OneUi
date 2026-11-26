@@ -169,6 +169,21 @@
         });
     }
 
+    void dispatchLeftRelease(LPARAM lParam) {
+        const auto alive = callbackWindowAlive_;
+        ReleaseCapture();
+        if (!alive->load(std::memory_order_acquire)) return;
+        internal::PointerReleaseCallbacks::Actions actions;
+        {
+            internal::PointerReleaseCallbacks scope(*this, actions);
+            dispatchMouseUp(lParam, MouseButton::Left);
+        }
+        for (auto& action : actions) {
+            if (!alive->load(std::memory_order_acquire)) break;
+            action();
+        }
+    }
+
     void dispatchMouseWheel(WPARAM wParam, LPARAM lParam) {
         POINT point{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
         ScreenToClient(hwnd_, &point);

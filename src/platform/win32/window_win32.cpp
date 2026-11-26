@@ -33,6 +33,7 @@
 #include "internal/animation_wake.h"
 #include "internal/edit_presentation.h"
 #include "internal/input_layout.h"
+#include "internal/pointer_release_callbacks.h"
 #include "platform/shared/skia_canvas.h"
 #include "platform/shared/title_bar_hit.h"
 #include "platform/shared/window_fit.h"

@@ -291,8 +291,7 @@
             dispatchMouseDown(lParam, MouseButton::Left, 2);
             return 0;
         case WM_LBUTTONUP:
-            ReleaseCapture();
-            dispatchMouseUp(lParam, MouseButton::Left);
+            dispatchLeftRelease(lParam);
             return 0;
         case WM_RBUTTONDOWN:
             dispatchMouseDown(lParam, MouseButton::Right);

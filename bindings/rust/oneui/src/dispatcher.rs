@@ -208,6 +208,31 @@ impl UiDispatcher {
     where
         F: FnOnce() + 'static,
     {
+        self.post_local(task, sys::oneui_window_post_owned)
+    }
+
+    /// Run a UI action after the current Win32 left-button release handler.
+    /// Outside a release for this window, queue it like `dispatch_local`.
+    pub fn dispatch_after_pointer_release_local<F>(&self, task: F) -> Result<(), Error>
+    where
+        F: FnOnce() + 'static,
+    {
+        self.post_local(task, sys::oneui_window_post_after_pointer_release_owned)
+    }
+
+    fn post_local<F>(
+        &self,
+        task: F,
+        post: unsafe extern "C" fn(
+            *mut sys::OneUiWindow,
+            sys::OneUiVoidCallback,
+            *mut std::ffi::c_void,
+            sys::OneUiVoidCallback,
+        ) -> std::ffi::c_int,
+    ) -> Result<(), Error>
+    where
+        F: FnOnce() + 'static,
+    {
         if std::thread::current().id() != self.state.ui_thread {
             return Err(Error::WrongThread);
         }
@@ -218,7 +243,7 @@ impl UiDispatcher {
         let user_data = Box::into_raw(task).cast();
         let accepted = self.state.with_raw(|raw| unsafe {
             trace_ui_task("local dispatch entered window post");
-            sys::oneui_window_post_owned(
+            post(
                 raw,
                 Some(run_local_dispatched_task),
                 user_data,

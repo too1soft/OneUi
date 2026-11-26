@@ -196,6 +196,12 @@ extern "C" {
         user_data: *mut c_void,
         cleanup: OneUiVoidCallback,
     ) -> c_int;
+    pub fn oneui_window_post_after_pointer_release_owned(
+        window: *mut OneUiWindow,
+        callback: OneUiVoidCallback,
+        user_data: *mut c_void,
+        cleanup: OneUiVoidCallback,
+    ) -> c_int;
     pub fn oneui_window_request_animation_frame(
         window: *mut OneUiWindow,
         callback: OneUiFrameCallback,
