@@ -1,6 +1,7 @@
 #include "window_event_loop_win32.h"
 #include "window_dispatch_trace_win32.h"
 #include "internal/interaction_trace.h"
+#include "internal/scroll_trace.h"
 #include <algorithm>
 #include <chrono>
 #include <utility>
@@ -19,8 +20,10 @@ thread_local std::vector<ThreadFrameSource> g_frameSources;
 struct RunLoopScope {
     RunLoopScope() { ++g_runLoopDepth; }
     ~RunLoopScope() {
-        if (--g_runLoopDepth == 0)
+        if (--g_runLoopDepth == 0) {
             g_inputTurnRequested = false;
+            internal::flushScrollTrace();
+        }
     }
     RunLoopScope(const RunLoopScope &) = delete;
     RunLoopScope &operator=(const RunLoopScope &) = delete;
