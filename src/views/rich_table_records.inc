@@ -15,11 +15,13 @@ void Runtime::applyRichTableRows(Instance& instance,ListState& state,
     else if(reset) for(const auto& delta:state.applied)
         if(delta.kind==ONEUI_LIST_INSERT || delta.kind==ONEUI_LIST_UPDATE)
             dirty.insert(delta.keys.begin(),delta.keys.end());
-    for(auto scope:instance.recordDirty) {
-        auto found=cache->owners.find(scope);
-        if(found!=cache->owners.end()) {
-            dirty.insert(found->second.key);
-            if(found->second.cell)dirtyCells.insert(found->second.key);
+    if (instance.recordDirty) {
+        for (auto scope : *instance.recordDirty) {
+            auto found = cache->owners.find(scope);
+            if (found != cache->owners.end()) {
+                dirty.insert(found->second.key);
+                if (found->second.cell) dirtyCells.insert(found->second.key);
+            }
         }
     }
     auto filter=readRichTableFilter(*this,owner,sourceProperty,state);
@@ -199,7 +201,8 @@ void Runtime::applyRichTableRows(Instance& instance,ListState& state,
         table->setScrollOffset(top!=keys.end()?float(top-keys.begin())*table->rowHeight()+remainder:scroll);
         cache->keys=std::move(keys);cache->serial=serial;cache->source=source;
         cache->filterActive=filter.active;cache->filterKeys=std::move(filter.keys);
-        instance.richTableCache=cache;instance.recordDirty.clear();
+        instance.richTableCache=cache;
+        if (instance.recordDirty) instance.recordDirty->clear();
     };
     if(staging && instance.published)commits.push_back(std::move(commit));else commit();
 }

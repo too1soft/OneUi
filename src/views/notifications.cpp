@@ -34,7 +34,10 @@ void Runtime::mark(const std::shared_ptr<Scope> &scope, uint32_t id, const ListS
             // The source UPDATE already carries these record keys. Keep scalar
             // invalidation/versioning, without recording the same table work twice.
             const bool reported=reportedList && node->richTableCache && node->richTableCache->source==reportedList;
-            if(!reported)node->recordDirty.insert(scope.get());
+            if (!reported) {
+                if (!node->recordDirty) node->recordDirty.emplace();
+                node->recordDirty->insert(scope.get());
+            }
         }
         for (; node; node = node->parent.lock())
             node->dirty = true;

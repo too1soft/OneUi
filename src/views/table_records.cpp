@@ -31,9 +31,11 @@ void Runtime::applyTableRows(Instance& instance,ListState& state) {
         if (changed) for(const auto& d:state.applied)
             if(d.kind==ONEUI_LIST_INSERT || d.kind==ONEUI_LIST_UPDATE)
                 dirty.insert(d.keys.begin(),d.keys.end());
-        for(auto scope:instance.recordDirty) {
-            auto found=cache->owners.find(scope);
-            if(found!=cache->owners.end()) dirty.insert(found->second);
+        if (instance.recordDirty) {
+            for (auto scope : *instance.recordDirty) {
+                auto found = cache->owners.find(scope);
+                if (found != cache->owners.end()) dirty.insert(found->second);
+            }
         }
     }
     if (!changed && dirty.empty()) return;
@@ -122,7 +124,8 @@ void Runtime::applyTableRows(Instance& instance,ListState& state) {
             }
         }
         cache->serial=serial; cache->source=source;
-        instance.tableCache=cache; instance.recordDirty.clear();
+        instance.tableCache=cache;
+        if (instance.recordDirty) instance.recordDirty->clear();
     };
     if(staging && instance.published) commits.push_back(std::move(commit));
     else commit();

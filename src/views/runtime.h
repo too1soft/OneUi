@@ -8,6 +8,7 @@
 #include "oneui/ui_declarative.h"
 #include "components/registry.h"
 #include <atomic>
+#include <optional>
 #include <thread>
 #include <unordered_map>
 
@@ -103,7 +104,8 @@ struct Instance {
     bool published = false;
     bool dirty = true;
     std::weak_ptr<Instance> parent;
-    std::map<std::string, std::vector<std::wstring>> stringLists;
+    // Only list-backed selection controls and table records need these containers.
+    std::optional<std::map<std::string, std::vector<std::wstring>>> stringLists;
     struct TableCache;
     std::shared_ptr<TableCache> tableCache;
     struct RichTableCache;
@@ -112,7 +114,7 @@ struct Instance {
     std::shared_ptr<PickerCache> pickerCache;
     struct WorkspaceCache;
     std::shared_ptr<WorkspaceCache> workspaceCache;
-    std::set<const Scope*> recordDirty;
+    std::optional<std::set<const Scope*>> recordDirty;
     const ListState* repeatSource = nullptr;
     uint64_t repeatSerial = 0;
     bool transparent = false;

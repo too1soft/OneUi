@@ -165,10 +165,12 @@ void Runtime::applyList(Instance &instance, const std::string &property, ListSta
         std::vector<std::wstring> values;
         for (const auto &item : state.items)
             values.push_back(wide(field(item, "value").text));
-        auto found = instance.stringLists.find(property);
-        if (found == instance.stringLists.end() || found->second != values) {
+        if (!instance.stringLists) instance.stringLists.emplace();
+        auto& stringLists = *instance.stringLists;
+        auto found = stringLists.find(property);
+        if (found == stringLists.end() || found->second != values) {
             factory.set(e, property, values);
-            instance.stringLists[property] = std::move(values);
+            stringLists.insert_or_assign(property, std::move(values));
         }
     } else if (e.component == "Tabs") {
         std::vector<ui::TabItem> values;
