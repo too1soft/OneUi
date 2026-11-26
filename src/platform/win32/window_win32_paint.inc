@@ -96,9 +96,26 @@
         }
         paintTrace.mark(PaintTrace::GlSetup);
         win32::StartupRaster::Frame rasterFrame;
-        if (startupRaster_.pending() && GetUpdateRect(hwnd_, nullptr, FALSE)) {
-            rasterFrame = startupRaster_.takeOrCancel();
-            // The recorded frame previously validated an entire client area.
+        if (startupRaster_.pending()) {
+            auto completed = startupRaster_.takeComplete();
+            if (!completed && !useGPU && !glWorker_.ready() && !interactiveResizeActive_) {
+                // Leave ordinary damage pending until the current raster job
+                // finishes. Native input and extent changes cancel immediately.
+                PAINTSTRUCT deferred{};
+                BeginPaint(hwnd_, &deferred);
+                EndPaint(hwnd_, &deferred);
+                internal::traceInteractionPaint(interactionPaint, "startup_raster_wait", "software");
+                internal::traceInteractionPaint(interactionPaint, "paint_end", "software", 0);
+                return;
+            }
+            if (completed && !invalidationPending_) {
+                rasterFrame = std::move(*completed);
+            } else if (completed) {
+                internal::traceInteractionPaint(completed->trace, "startup_raster_discard", "software");
+            } else {
+                startupRaster_.cancel();
+            }
+            submitInvalidations();
             InvalidateRect(hwnd_, nullptr, FALSE);
         }
         PAINTSTRUCT paintStruct{};
@@ -115,7 +132,7 @@
         const int width = std::max<LONG>(1, clientRect.right - clientRect.left);
         const int height = std::max<LONG>(1, clientRect.bottom - clientRect.top);
         const bool threadedGl = glWorker_.ready() && !IsRectEmpty(&dirtyRect);
-        if (rasterFrame.surface && !threadedGl && !useGPU && !interactiveResizeActive_ &&
+        if (rasterFrame.surface && !threadedGl && !useGPU && !interactiveResizeActive_ && IsWindowVisible(hwnd_) &&
             rasterFrame.width == width && rasterFrame.height == height && rasterFrame.scale == scale) {
             presentStartupRaster(paintStruct, std::move(rasterFrame), clientRect, paintStartMs);
             flushDeferredImePosition();

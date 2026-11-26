@@ -9,6 +9,7 @@
 #include <exception>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <utility>
 #include <windows.h>
 
@@ -69,14 +70,15 @@ public:
     bool pending() const noexcept { return bool(pending_); }
     bool matches(WPARAM ticket) const noexcept { return pending_ && ticket == pending_->ticket; }
 
-    Frame takeOrCancel() {
-        auto job = std::exchange(pending_, {});
-        if (!job) return {};
+    std::optional<Frame> takeComplete() {
+        const auto job = pending_;
+        if (!job) return std::nullopt;
         std::lock_guard lock(job->mutex);
+        if (!job->complete) return std::nullopt;
         job->window = nullptr;
-        if (job->complete) return std::move(job->frame);
-        internal::traceInteractionPaint(job->frame.trace, "startup_raster_discard", "software");
-        return {};
+        pending_.reset();
+        flight_.reset();
+        return std::move(job->frame);
     }
 
     bool cancel() {

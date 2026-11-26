@@ -11,7 +11,7 @@
     // are merged here and submitted once per message turn; anything that
     // paints or reads the update region submits the pending rect first.
     void mergeInvalidation(const RECT* rect) {
-        if (startupRaster_.cancel()) rect = nullptr;
+        if (startupRaster_.pending()) rect = nullptr;
         if (rect) {
             if (!invalidateAll_) {
                 if (invalidationPending_) {
@@ -50,6 +50,7 @@
     }
 
     void invalidateWorkerExtent() {
+        if (startupRaster_.cancel()) queueInvalidation(nullptr, false);
         if (!glWorker_.ready()) return;
         glWorker_.invalidateExtent();
         if (invalidationPending_ && win32::experimentalGlWorkerPacesRecording()) {
@@ -59,7 +60,8 @@
     }
 
     void submitInvalidations() {
-        if (!invalidationPending_ || (hwnd_ && IsIconic(hwnd_)) || workerRecordingBlocked()) {
+        if (!invalidationPending_ || startupRaster_.pending() || (hwnd_ && IsIconic(hwnd_)) ||
+            workerRecordingBlocked()) {
             return;
         }
         invalidationPending_ = false;
