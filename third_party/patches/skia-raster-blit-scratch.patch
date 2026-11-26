@@ -1,0 +1,89 @@
+--- a/src/base/SkAutoMalloc.h
++++ b/src/base/SkAutoMalloc.h
+@@ -15,8 +15,9 @@
+ 
+ #include <cstddef>
+ #include <cstdint>
+ #include <memory>
++#include <utility>
+ 
+ /**
+  *  Manage an allocated block of heap memory. This object is the sole manager of
+  *  the lifetime of the block, so the caller must not call sk_free() or delete
+@@ -62,8 +63,14 @@
+      *  Return the allocated block.
+      */
+     void* get() { return fPtr.get(); }
+     const void* get() const { return fPtr.get(); }
++    size_t size() const { return fSize; }
++
++    void swap(SkAutoMalloc& other) noexcept {
++        fPtr.swap(other.fPtr);
++        std::swap(fSize, other.fSize);
++    }
+ 
+    /** Transfer ownership of the current ptr to the caller, setting the
+        internal reference to null. Note the caller is reponsible for calling
+        sk_free on the returned address.
+--- a/src/core/SkBlitter.h
++++ b/src/core/SkBlitter.h
+@@ -133,11 +133,9 @@
+      * The memory can be used by the calling function at will, but it will be
+      * released when the blitter's destructor is called. This function returns
+      * nullptr if no persistent memory is needed by the blitter.
+      */
+-    virtual void* allocBlitMemory(size_t sz) {
+-        return fBlitMemory.reset(sz, SkAutoMalloc::kReuse_OnShrink);
+-    }
++    virtual void* allocBlitMemory(size_t sz);
+ 
+     ///@name non-virtual helpers
+     void blitMaskRegion(const SkMask& mask, const SkRegion& clip);
+     void blitRectRegion(const SkIRect& rect, const SkRegion& clip);
+--- a/src/core/SkBlitter.cpp
++++ b/src/core/SkBlitter.cpp
+@@ -43,9 +43,43 @@
+ 
+ // Hacks for testing.
+ bool gSkForceRasterPipelineBlitter{false};
+ 
+-SkBlitter::~SkBlitter() {}
++namespace {
++constexpr size_t kMaxCachedBlitBytes = 64 * 1024;
++
++// Keep at most one idle buffer per thread. The owning blitter holds its
++// buffer until destruction, including through nested draws.
++thread_local bool blitMemoryCacheDestroyed = false;
++struct BlitMemoryCache {
++    SkAutoMalloc buffer;
++
++    ~BlitMemoryCache() { blitMemoryCacheDestroyed = true; }
++};
++
++SkAutoMalloc* cachedBlitMemory() {
++    if (blitMemoryCacheDestroyed) return nullptr;
++    static thread_local BlitMemoryCache cache;
++    return &cache.buffer;
++}
++}  // namespace
++
++void* SkBlitter::allocBlitMemory(size_t size) {
++    if (size && size <= kMaxCachedBlitBytes && !fBlitMemory.get()) {
++        if (auto* cache = cachedBlitMemory(); cache && cache->size() >= size) {
++            fBlitMemory.swap(*cache);
++        }
++    }
++    return fBlitMemory.reset(size, SkAutoMalloc::kReuse_OnShrink);
++}
++
++SkBlitter::~SkBlitter() {
++    if (fBlitMemory.get() && fBlitMemory.size() <= kMaxCachedBlitBytes) {
++        if (auto* cache = cachedBlitMemory(); cache && cache->size() < fBlitMemory.size()) {
++            fBlitMemory.swap(*cache);
++        }
++    }
++}
+ 
+ inline static SkAlpha scalar_to_alpha(SkScalar a) {
+     SkAlpha alpha = (SkAlpha)(a * 255);
+     return alpha > 247 ? 0xFF : alpha < 8 ? 0 : alpha;
