@@ -42,7 +42,7 @@ public:
         if (dc_) ReleaseDC(window_, dc_);
     }
 
-    bool initialize(bool warmDriver, double* censusFinishMs = nullptr) {
+    bool openDrawable() {
         if (angle_) {
             angleContext_ = AngleD3D11Context::open(window_, context_);
             return angleContext_ && angleContext_->makeCurrent();
@@ -69,14 +69,22 @@ public:
         const auto bindStarted = now();
         const bool bound = wglMakeCurrent(dc_, gl_) != FALSE;
         trace("wgl_worker_bind_context", bindStarted, bound);
-        if (!bound) return false;
+        return bound;
+    }
+
+    bool initializeWglGanesh(bool warmDriver, double* censusFinishMs) {
         if (warmDriver) warmDriverCensus(censusFinishMs);
-        const auto ganeshStarted = now();
+        const bool tracing = internal::scrollTraceEnabled();
+        const auto ganeshStarted = tracing ? internal::scrollTraceNowMs() : 0.0;
         GrContextOptions options;
         options.fPersistentCache = rendering::shaderCache();
         context_ = GrDirectContexts::MakeGL(
             internal::makeWin32GaneshGlInterface(internal::win32GlNvidiaVendor()), options);
-        trace("wgl_worker_ganesh_context", ganeshStarted, static_cast<bool>(context_));
+        if (tracing) {
+            internal::writeScrollTrace(internal::ScrollTraceEvent{
+                "win32", "wgl_worker_ganesh_context", 0, 0, 0, 0, 0, 0, 0,
+                internal::scrollTraceNowMs() - ganeshStarted, context_ ? 1.0 : 0.0, 0});
+        }
         return static_cast<bool>(context_);
     }
 

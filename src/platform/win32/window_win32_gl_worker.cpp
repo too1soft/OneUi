@@ -81,10 +81,12 @@ struct GlRenderWorker::State {
 
     State(HWND window, HMONITOR monitor, POINT origin, bool angle, StartupGlScene scene, bool awaitSoftwareFrame)
         : window(window), monitor(monitor), origin(origin), angle(angle),
+          earlyWgl(!angle && awaitSoftwareFrame),
           captureStartup(monitor && (awaitSoftwareFrame || scene.picture)),
-          // WGL can keep using GDI when a software frame already reached the live window.
+          // An early WGL worker waits for the first software frame before adopting the HWND.
           softwareHandoff(angle ? softwareHandoffEnabled()
-                                : monitor && scene.picture && wglWorkerOptions().softwareHandoff),
+                                : monitor && (awaitSoftwareFrame || scene.picture) &&
+                                      wglWorkerOptions().softwareHandoff),
           startup(std::move(scene)),
           awaitingSoftwareFrame(awaitSoftwareFrame), ownsLiveWindow(!monitor) {}
 
@@ -96,6 +98,7 @@ struct GlRenderWorker::State {
     const HMONITOR monitor;
     const POINT origin;
     const bool angle;
+    const bool earlyWgl;
     std::atomic_bool captureStartup;
     std::atomic_bool softwareHandoff;
     std::atomic_bool ready{false};
@@ -152,6 +155,16 @@ bool experimentalGlWorkerDefersCensus() noexcept {
     return options.deferCensus && options.enabled && options.afterFirstFrame && options.scratch;
 }
 
+bool experimentalWglWorkerStartsEarly() noexcept {
+    static const bool enabled = [] {
+        wchar_t value[2]{};
+        return !AngleD3D11Context::requested() &&
+            experimentalGlWorkerDefersCensus() && experimentalGlWorkerPrewarm() &&
+            GetEnvironmentVariableW(L"ONEUI_WIN32_WGL_EARLY_DRAWABLE", value, 2) == 1 && value[0] == L'1';
+    }();
+    return enabled;
+}
+
 bool experimentalGlWorkerPacesRecording() noexcept {
     static const bool enabled = [] {
         wchar_t value[2]{};
@@ -190,7 +203,7 @@ bool GlRenderWorker::startBeforeSoftwareFrame(HWND window) {
 bool GlRenderWorker::start(HWND window, StartupGlScene scene, bool awaitSoftwareFrame) {
     if (state_) return false;
     const bool angle = experimentalAngleWorkerEnabled();
-    if (awaitSoftwareFrame && !angle) return false;
+    if (awaitSoftwareFrame && !angle && !experimentalWglWorkerStartsEarly()) return false;
     POINT origin{};
     HMONITOR monitor = nullptr;
     if (angle) {
@@ -409,7 +422,20 @@ void GlRenderWorker::State::render() {
     const bool censusAfterScene = censusOrder == ScratchCensusOrder::AfterScene;
     const bool retryCensus = censusOrder == ScratchCensusOrder::RetryAfterScene;
     double firstFinishMs = -1.0;
-    const bool initialized = renderer.initialize(census && !censusAfterScene, retryCensus ? &firstFinishMs : nullptr);
+    bool initialized = renderer.openDrawable();
+    if (initialized && !angle) {
+        if (earlyWgl) {
+            internal::traceInteractionPaint(startupTrace, "worker_wgl_drawable_ready", "opengl-worker", 1);
+            // Opening the hidden drawable can overlap initial layout. Keep the
+            // driver census and Ganesh preparation after the first software blit.
+            std::unique_lock lock(mutex);
+            changed.wait(lock, [&] { return stopping || !awaitingSoftwareFrame; });
+            if (stopping) return;
+            internal::traceInteractionPaint(startupTrace, "worker_wgl_driver_init_begin", "opengl-worker");
+        }
+        initialized = renderer.initializeWglGanesh(census && !censusAfterScene,
+                                                   retryCensus ? &firstFinishMs : nullptr);
+    }
     StartupGlScene warmup;
     {
         std::unique_lock lock(mutex);

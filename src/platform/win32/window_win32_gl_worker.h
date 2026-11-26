@@ -54,6 +54,7 @@ private:
 bool experimentalGlWorkerEnabled() noexcept;
 bool experimentalAngleWorkerEnabled() noexcept;
 bool experimentalAngleWorkerStartsEarly() noexcept;
+bool experimentalWglWorkerStartsEarly() noexcept;
 bool experimentalGlWorkerAfterFirstFrame() noexcept;
 bool experimentalGlWorkerPrewarm() noexcept;
 bool experimentalGlWorkerDefersCensus() noexcept;
