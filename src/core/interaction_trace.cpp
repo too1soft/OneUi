@@ -1,5 +1,6 @@
 #include "oneui/interaction_trace.h"
 #include "internal/interaction_trace.h"
+#include "internal/scroll_trace.h"
 #ifdef _WIN32
 #include <windows.h>
 #include <array>
@@ -165,7 +166,10 @@ bool isInteractionMessage(unsigned message) {
     }
 }
 }
-void finishInteractionTrace() { if (writer().enabled()) writer().finish(); }
+void finishInteractionTrace() {
+    if (writer().enabled()) writer().finish();
+    internal::flushScrollTrace();
+}
 std::uint64_t currentInteractionOperation(void* nativeWindow) {
     if (!writer().enabled()) return 0;
     auto& state = threadState();
@@ -246,7 +250,7 @@ void forgetInteractionWindow(std::uintptr_t window) {
 namespace oneui {
 std::uint64_t currentInteractionOperation(void*) { return 0; }
 void markInteractionPhase(void*, std::uint64_t, std::uint64_t, const char*) {}
-void finishInteractionTrace() {}
+void finishInteractionTrace() { internal::flushScrollTrace(); }
 namespace internal {
 InteractionInputScope::InteractionInputScope(std::uintptr_t, unsigned, unsigned) {}
 InteractionInputScope::~InteractionInputScope() = default;

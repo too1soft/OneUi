@@ -19,7 +19,8 @@
         event.alt = trackedModifierDown(VK_MENU, VK_LMENU, VK_RMENU) ||
                     (GetKeyState(VK_MENU) & 0x8000) != 0;
         event.clickCount = clickCount;
-        if (internal::scrollTraceEnabled()) {
+        const bool tracing = internal::scrollTraceEnabled();
+        if (tracing) {
             internal::writeScrollTrace(internal::ScrollTraceEvent{
                 "win32", phase, reinterpret_cast<std::uintptr_t>(hwnd_),
                 static_cast<double>(static_cast<int>(button)), 0.0,
@@ -29,14 +30,16 @@
         }
         const auto alive = callbackWindowAlive_;
         const auto content = content_;
+        const double started = tracing ? internal::scrollTraceNowMs() : 0.0;
         const bool handled = handler(*content, event);
         if (!alive->load(std::memory_order_acquire)) return;
-        if (internal::scrollTraceEnabled()) {
+        if (tracing) {
+            const double elapsed = internal::scrollTraceNowMs() - started;
             internal::writeScrollTrace(internal::ScrollTraceEvent{
                 "win32", handled ? "pointer_handled" : "pointer_unhandled",
                 reinterpret_cast<std::uintptr_t>(hwnd_),
                 static_cast<double>(static_cast<int>(button)), 0.0,
-                static_cast<double>(clickCount), 0.0, 0.0, 0.0, 0.0,
+                static_cast<double>(clickCount), 0.0, 0.0, 0.0, elapsed,
                 static_cast<double>(event.position.x),
                 static_cast<double>(event.position.y)});
         }

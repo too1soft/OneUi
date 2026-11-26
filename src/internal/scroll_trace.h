@@ -22,5 +22,6 @@ struct ScrollTraceEvent {
 bool scrollTraceEnabled();
 double scrollTraceNowMs();
 void writeScrollTrace(const ScrollTraceEvent& event);
+void flushScrollTrace();
 
 } // namespace oneui::internal
