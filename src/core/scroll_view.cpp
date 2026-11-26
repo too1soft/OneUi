@@ -19,6 +19,10 @@ void ScrollView::setContent(std::shared_ptr<Widget> content) {
     clearChildren();
     content_ = std::move(content);
     if (content_) {
+        if (auto* rows = dynamic_cast<VirtualTemplateList*>(content_.get());
+            rows && !rows->tableViewport_ && !rows->tableRowHeightField().empty()) {
+            rows->useTableViewport();
+        }
         add(content_);
     }
     horizontalScrollOffset_ = clampHorizontalOffset(horizontalScrollOffset_);

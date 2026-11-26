@@ -148,6 +148,39 @@ void testTemporarilyEmptyViewport() {
             "a viewport without drawable area must still retire removed keys");
 }
 
+void testWindowedContentInScrollView() {
+    auto rows = std::make_shared<VirtualTemplateList>();
+    rows->setTableRowHeightField("height");
+    rows->setOverscan(0);
+    int mounted = 0;
+    rows->setFactory([&](size_t index, const std::string&) {
+        ++mounted;
+        return std::make_shared<RowProbe>(index);
+    }, {});
+    rows->setTableRows({"appearance", "fonts", "background"}, {200, 120, 320}, false);
+    ScrollView scroll;
+    scroll.setContent(rows);
+    scroll.setContentHeight(688);
+    scroll.setFrame({10, 20, 320, 160});
+    scroll.layoutSubtree();
+    require(mounted == 1 && rows->children().size() == 1 &&
+            equal(rows->rowFrame("appearance").height, 200),
+            "Scroll should only construct rows inside its viewport");
+    require(scroll.focusFirstLeaf(), "Tab entry must focus the appearance controls");
+    KeyEvent tab{};
+    tab.key = Key::Tab;
+    const bool advanced = scroll.onKeyDown(tab);
+    const auto focus = std::dynamic_pointer_cast<RowProbe>(rows->activeFocusChild());
+    require(advanced && scroll.scrollOffset() > 0 && focus && focus->index == 1,
+            "Tab should mount the next block and scroll it into view");
+    scroll.setScrollOffset(400);
+    scroll.layoutSubtree();
+    require(equal(rows->rowFrame("background").y, -60) &&
+            equal(rows->rowFrame("background").height, 320) &&
+            equal(scroll.maxScrollOffset(), 528),
+            "a direct scroll jump must use authoritative heights and preserve trailing space");
+}
+
 void testStartupRowPreparation() {
     using internal::TableLayoutTurn;
     Fixture f(false);
@@ -191,6 +224,7 @@ int main() {
         testGeometryAndPointer();
         testKeyboardAndWheel();
         testTemporarilyEmptyViewport();
+        testWindowedContentInScrollView();
         testStartupRowPreparation();
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';
