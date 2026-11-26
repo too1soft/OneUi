@@ -118,8 +118,15 @@
         const float logicalWidth = static_cast<float>(width) / scale;
         const float logicalHeight = static_cast<float>(height) / scale;
 
+        win32::GlRenderWorker::Frame workerFrame;
+        if (threadedGl) {
+            workerFrame = glWorker_.plan(width, height, dirtyRect, interactiveResizeActive_);
+            dirtyRect = workerFrame.damage;
+        }
         const double surfaceStartMs = currentTimeMs();
-        const auto surfaceUpdate = threadedGl ? PaintSurfaceUpdate{} : preparePaintSurfaces(width, height);
+        const auto surfaceUpdate = !threadedGl || workerFrame.softwareHandoff
+            ? preparePaintSurfaces(width, height) : PaintSurfaceUpdate{};
+        const bool handoffPaint = workerFrame.softwareHandoff && paintSurface_;
         const double surfaceMs = currentTimeMs() - surfaceStartMs;
         paintTrace.mark(PaintTrace::Surface);
         if (traceLayout && surfaceUpdate.allocatedBacking) {
@@ -134,12 +141,9 @@
             internal::traceInteractionPaint(interactionPaint, "paint_end", "unknown", 0);
             return;
         }
-        win32::GlRenderWorker::Frame workerFrame;
-        if (threadedGl) {
-            workerFrame = glWorker_.plan(width, height, dirtyRect, interactiveResizeActive_);
-            dirtyRect = workerFrame.damage;
-        } else if (surfaceUpdate.repaint) {
+        if (surfaceUpdate.repaint) {
             dirtyRect = clientRect;
+            workerFrame.damage = clientRect;
         }
         const int dirtyX = std::clamp<LONG>(dirtyRect.left, 0, width);
         const int dirtyY = std::clamp<LONG>(dirtyRect.top, 0, height);
@@ -149,6 +153,7 @@
         const int dirtyHeight = dirtyBottom - dirtyY;
         if (dirtyWidth <= 0 || dirtyHeight <= 0) {
             EndPaint(hwnd_, &paintStruct);
+            if (workerFrame.softwareHandoff) InvalidateRect(hwnd_, nullptr, FALSE);
             internal::traceInteractionPaint(interactionPaint, "paint_end", "unknown", 0);
             return;
         }
@@ -239,22 +244,16 @@
         if (recorder) {
             canvasOwner.reset();
             startupPicture = recorder->finishRecordingAsPicture();
-            if (!threadedGl) paintSurface_->getCanvas()->drawPicture(startupPicture);
+            if (!threadedGl || handoffPaint) paintSurface_->getCanvas()->drawPicture(startupPicture);
         }
         paintTrace.mark(PaintTrace::End);
 
-        if (threadedGl) {
-            internal::traceInteractionPaint(interactionPaint, "worker_scene_ready", "opengl-worker");
+        if (threadedGl && !handoffPaint) {
             EndPaint(hwnd_, &paintStruct);
-            const bool accepted = glWorker_.enqueue(std::move(startupPicture), workerFrame, interactionPaint);
+            const bool accepted = enqueueWorkerPaint(std::move(startupPicture), workerFrame, interactionPaint);
             if (accepted) {
-                setRenderBackend(RenderBackend::OpenGL);
-                rendererInfo_.reason.clear();
-                rendererInfo_.vsync = glWorker_.vsync();
                 ++rendererInfo_.paints;
                 rendererInfo_.paintMs += currentTimeMs() - paintStartMs;
-            } else {
-                InvalidateRect(hwnd_, nullptr, FALSE);
             }
             flushDeferredImePosition();
             finishDiagnostics();
@@ -459,6 +458,11 @@
 
         EndPaint(hwnd_, &paintStruct);
         if (blitSucceeded) recordResizePresentation();
+        if (handoffPaint) {
+            // The worker cannot claim presentation until the software paint has
+            // ended and the same immutable scene is ready for GPU playback.
+            enqueueWorkerPaint(std::move(startupPicture), workerFrame, interactionPaint);
+        }
         if (blitSucceeded && glWorkerWaitingForSoftwareFrame_ &&
             IsWindowVisible(hwnd_) && !IsIconic(hwnd_)) {
             glWorkerWaitingForSoftwareFrame_ = false;

@@ -7,6 +7,19 @@
             !gpuAvailable_ && !glWorker_.ready() && win32::experimentalAngleWorkerEnabled();
     }
 
+    bool enqueueWorkerPaint(sk_sp<SkPicture> picture, const win32::GlRenderWorker::Frame& frame,
+                            const internal::InteractionSnapshot& trace) {
+        internal::traceInteractionPaint(trace, "worker_scene_ready", "opengl-worker");
+        if (!glWorker_.enqueue(std::move(picture), frame, trace)) {
+            InvalidateRect(hwnd_, nullptr, FALSE);
+            return false;
+        }
+        setRenderBackend(RenderBackend::OpenGL);
+        rendererInfo_.reason.clear();
+        rendererInfo_.vsync = glWorker_.vsync();
+        return true;
+    }
+
     // All client render destinations use the live widget tree, logical viewport,
     // DPI/content scale and tooltip state. Printing must not depend on whether
     // the compositor has presented the window, or on a test-only capture build.

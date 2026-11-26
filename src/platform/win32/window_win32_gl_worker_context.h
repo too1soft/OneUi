@@ -148,10 +148,12 @@ public:
 
     const AngleD3D11Context* angleContext() const { return angleContext_.get(); }
 
+    template<class ClaimPresent>
     RenderResult render(const SkPicture& picture, const GlRenderWorker::Frame& frame,
                         const internal::InteractionSnapshot& snapshot,
                         const std::atomic_uint64_t& extent,
-                        const std::atomic_uint64_t& queuedSerial, bool maySupersede) {
+                        const std::atomic_uint64_t& queuedSerial, bool maySupersede,
+                        ClaimPresent&& claimPresent) {
         const auto width = frame.width;
         const auto height = frame.height;
         const auto current = [&] {
@@ -253,6 +255,7 @@ public:
             trace("worker_present_superseded");
             return RenderResult::Superseded;
         }
+        if (!claimPresent()) return RenderResult::Superseded;
         trace("swap_begin");
         const bool swapped = angleContext_ ? angleContext_->present() : SwapBuffers(dc_) != FALSE;
         trace("swap_return", swapped ? 1 : 0);

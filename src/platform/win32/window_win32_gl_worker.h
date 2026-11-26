@@ -24,6 +24,7 @@ public:
         bool interactiveResize = false;
         std::uint64_t extent = 0;
         std::uint64_t serial = 0;
+        bool softwareHandoff = false;
     };
 
     ~GlRenderWorker();

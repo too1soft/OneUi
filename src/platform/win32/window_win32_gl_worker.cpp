@@ -66,6 +66,14 @@ bool supersedeGlWorkerFrameEnabled() noexcept {
     return enabled;
 }
 
+bool softwareHandoffEnabled() noexcept {
+    static const bool enabled = [] {
+        wchar_t value[2]{};
+        return GetEnvironmentVariableW(L"ONEUI_WIN32_ANGLE_SOFTWARE_HANDOFF", value, 2) == 1 && value[0] == L'1';
+    }();
+    return enabled;
+}
+
 enum class ScratchCensusOrder { BeforeScene, AfterScene, RetryAfterScene };
 
 ScratchCensusOrder scratchCensusOrder() noexcept {
@@ -98,17 +106,20 @@ struct GlRenderWorker::State {
 
     State(HWND window, HMONITOR monitor, POINT origin, bool angle, StartupGlScene scene, bool awaitSoftwareFrame)
         : window(window), monitor(monitor), origin(origin), angle(angle),
-          captureStartup(monitor && (awaitSoftwareFrame || scene.picture)), startup(std::move(scene)),
+          captureStartup(monitor && (awaitSoftwareFrame || scene.picture)),
+          softwareHandoff(angle && softwareHandoffEnabled()), startup(std::move(scene)),
           awaitingSoftwareFrame(awaitSoftwareFrame), ownsLiveWindow(!monitor) {}
 
     void run() noexcept;
     void render();
+    bool claimPresent(const Scene& scene);
 
     const HWND window;
     const HMONITOR monitor;
     const POINT origin;
     const bool angle;
     std::atomic_bool captureStartup;
+    std::atomic_bool softwareHandoff;
     std::atomic_bool ready{false};
     std::atomic_bool vsync{false};
     std::atomic_uint64_t extent{0};
@@ -281,6 +292,7 @@ bool GlRenderWorker::deferRecording() {
     auto& state = *state_;
     std::lock_guard lock(state.mutex);
     state.recordingWaiter = !state.stopping && state.ready.load(std::memory_order_relaxed) &&
+        !state.softwareHandoff.load(std::memory_order_relaxed) &&
         static_cast<bool>(state.pending.picture);
     return state.recordingWaiter;
 }
@@ -290,7 +302,8 @@ GlRenderWorker::Frame GlRenderWorker::plan(int width, int height, RECT damage, b
     auto& state = *state_;
     std::lock_guard lock(state.mutex);
     Frame frame{width, height, damage, state.angle || retainedGlWorkerEnabled(), interactiveResize,
-                state.extent.load(std::memory_order_relaxed), ++state.latestPlan};
+                state.extent.load(std::memory_order_relaxed), ++state.latestPlan,
+                state.softwareHandoff.load(std::memory_order_relaxed)};
     const bool sameExtent = state.lastQueued.extent == frame.extent &&
         state.lastQueued.width == width && state.lastQueued.height == height;
     if (!frame.retained || !sameExtent) {
@@ -326,6 +339,22 @@ bool GlRenderWorker::enqueue(sk_sp<SkPicture> picture, const Frame& frame,
     }
     state.changed.notify_one();
     return true;
+}
+
+bool GlRenderWorker::State::claimPresent(const Scene& scene) {
+    if (!softwareHandoff.load(std::memory_order_relaxed)) return true;
+    bool claimed;
+    {
+        std::lock_guard lock(mutex);
+        // The window reserves a serial before drawing in software and publishes
+        // it after EndPaint. A newer reservation still owns the visible window.
+        claimed = !stopping && latestPlan == scene.frame.serial &&
+            extent.load(std::memory_order_relaxed) == scene.frame.extent;
+        if (claimed) softwareHandoff.store(false, std::memory_order_relaxed);
+    }
+    internal::traceInteractionPaint(scene.trace, claimed ? "worker_handoff_claimed" : "worker_handoff_superseded",
+                                    "opengl-worker");
+    return claimed;
 }
 
 void GlRenderWorker::invalidateExtent() {
@@ -475,7 +504,8 @@ void GlRenderWorker::State::render() {
             InvalidateRect(window, nullptr, FALSE);
         internal::traceInteractionPaint(scene.trace, "worker_scene_taken", "opengl-worker");
         const auto result = renderer.render(*scene.picture, scene.frame, scene.trace, extent,
-                                            queuedSerial, supersede && !mustPresent);
+                                            queuedSerial, supersede && !mustPresent,
+                                            [&] { return claimPresent(scene); });
         // Keep presenting regularly even while newer recordings keep arriving.
         if (result == worker::RenderResult::Superseded) mustPresent = true;
         if (result == worker::RenderResult::Complete) mustPresent = false;
