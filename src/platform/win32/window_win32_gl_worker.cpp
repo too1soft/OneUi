@@ -3,6 +3,7 @@
 #include "window_win32_deferred_gl.h"
 #include "window_win32_gl_worker_context.h"
 #include "window_win32_gpu_warmup.h"
+#include "window_win32_wgl_worker_options.h"
 
 #include <atomic>
 #include <condition_variable>
@@ -42,42 +43,15 @@ private:
     bool lowered_;
 };
 
-bool retainedGlWorkerEnabled() noexcept {
-    static const bool enabled = [] {
-        wchar_t value[2]{};
-        return GetEnvironmentVariableW(L"ONEUI_WIN32_GL_WORKER_DAMAGE", value, 2) == 1 && value[0] == L'1';
-    }();
-    return enabled;
-}
-
-bool scratchGlWorkerEnabled() noexcept {
-    static const bool enabled = [] {
-        wchar_t value[2]{};
-        return GetEnvironmentVariableW(L"ONEUI_WIN32_GL_WORKER_SCRATCH", value, 2) == 1 && value[0] == L'1';
-    }();
-    return enabled;
-}
-
-bool supersedeGlWorkerFrameEnabled() noexcept {
-    static const bool enabled = [] {
-        wchar_t value[2]{};
-        return GetEnvironmentVariableW(L"ONEUI_WIN32_GL_WORKER_PRESENT_LATEST", value, 2) == 1 && value[0] == L'1';
-    }();
-    return enabled;
+const WglWorkerOptions& wglWorkerOptions() noexcept {
+    static const auto options = WglWorkerOptions::fromEnvironment(!AngleD3D11Context::requested());
+    return options;
 }
 
 bool softwareHandoffEnabled() noexcept {
     static const bool enabled = [] {
         wchar_t value[2]{};
         return GetEnvironmentVariableW(L"ONEUI_WIN32_ANGLE_SOFTWARE_HANDOFF", value, 2) == 1 && value[0] == L'1';
-    }();
-    return enabled;
-}
-
-bool wglSoftwareHandoffEnabled() noexcept {
-    static const bool enabled = [] {
-        wchar_t value[2]{};
-        return GetEnvironmentVariableW(L"ONEUI_WIN32_WGL_SOFTWARE_HANDOFF", value, 2) == 1 && value[0] == L'1';
     }();
     return enabled;
 }
@@ -96,13 +70,6 @@ ScratchCensusOrder scratchCensusOrder() noexcept {
     return order;
 }
 
-bool rehearseScratchPresentsEnabled() noexcept {
-    static const bool enabled = [] {
-        wchar_t value[2]{};
-        return GetEnvironmentVariableW(L"ONEUI_WIN32_GL_WORKER_REHEARSE_PRESENTS", value, 2) == 1 && value[0] == L'1';
-    }();
-    return enabled;
-}
 } // namespace
 
 struct GlRenderWorker::State {
@@ -117,7 +84,7 @@ struct GlRenderWorker::State {
           captureStartup(monitor && (awaitSoftwareFrame || scene.picture)),
           // WGL can keep using GDI when a software frame already reached the live window.
           softwareHandoff(angle ? softwareHandoffEnabled()
-                                : monitor && scene.picture && wglSoftwareHandoffEnabled()),
+                                : monitor && scene.picture && wglWorkerOptions().softwareHandoff),
           startup(std::move(scene)),
           awaitingSoftwareFrame(awaitSoftwareFrame), ownsLiveWindow(!monitor) {}
 
@@ -150,11 +117,7 @@ struct GlRenderWorker::State {
 };
 
 bool experimentalGlWorkerEnabled() noexcept {
-    static const bool enabled = [] {
-        wchar_t value[2]{};
-        return GetEnvironmentVariableW(L"ONEUI_WIN32_GL_WORKER", value, 2) == 1 && value[0] == L'1';
-    }();
-    return enabled;
+    return wglWorkerOptions().enabled;
 }
 
 bool experimentalAngleWorkerEnabled() noexcept {
@@ -176,29 +139,17 @@ bool experimentalAngleWorkerStartsEarly() noexcept {
 }
 
 bool experimentalGlWorkerAfterFirstFrame() noexcept {
-    static const bool enabled = [] {
-        wchar_t value[2]{};
-        return GetEnvironmentVariableW(L"ONEUI_WIN32_GL_WORKER_AFTER_FIRST_FRAME", value, 2) == 1 &&
-            value[0] == L'1';
-    }();
-    return enabled;
+    return wglWorkerOptions().afterFirstFrame;
 }
 
 bool experimentalGlWorkerPrewarm() noexcept {
-    static const bool enabled = [] {
-        wchar_t value[2]{};
-        return GetEnvironmentVariableW(L"ONEUI_WIN32_GL_WORKER_PREWARM", value, 2) == 1 && value[0] == L'1';
-    }();
-    return enabled && scratchGlWorkerEnabled();
+    const auto& options = wglWorkerOptions();
+    return options.prewarm && options.scratch;
 }
 
 bool experimentalGlWorkerDefersCensus() noexcept {
-    static const bool enabled = [] {
-        wchar_t value[2]{};
-        return GetEnvironmentVariableW(L"ONEUI_WIN32_GL_WORKER_DEFER_CENSUS", value, 2) == 1 && value[0] == L'1';
-    }();
-    return enabled && experimentalGlWorkerEnabled() && experimentalGlWorkerAfterFirstFrame() &&
-        scratchGlWorkerEnabled();
+    const auto& options = wglWorkerOptions();
+    return options.deferCensus && options.enabled && options.afterFirstFrame && options.scratch;
 }
 
 bool experimentalGlWorkerPacesRecording() noexcept {
@@ -244,7 +195,7 @@ bool GlRenderWorker::start(HWND window, StartupGlScene scene, bool awaitSoftware
         info.cbSize = sizeof(info);
         if (!monitor || !GetMonitorInfoW(monitor, &info)) return false;
         origin = POINT{info.rcMonitor.left, info.rcMonitor.top};
-    } else if (scratchGlWorkerEnabled()) {
+    } else if (wglWorkerOptions().scratch) {
         monitor = MonitorFromWindow(window, MONITOR_DEFAULTTONULL);
         if (!monitor || !nvidiaWindowDisplayOrigin(window, origin)) return false;
     }
@@ -325,7 +276,7 @@ GlRenderWorker::Frame GlRenderWorker::plan(int width, int height, RECT damage, b
     if (!state_) return {};
     auto& state = *state_;
     std::lock_guard lock(state.mutex);
-    Frame frame{width, height, damage, state.angle || retainedGlWorkerEnabled(), interactiveResize,
+    Frame frame{width, height, damage, state.angle || wglWorkerOptions().retainDamage, interactiveResize,
                 state.extent.load(std::memory_order_relaxed), ++state.latestPlan,
                 state.softwareHandoff.load(std::memory_order_relaxed)};
     const bool sameExtent = state.lastQueued.extent == frame.extent &&
@@ -470,7 +421,8 @@ void GlRenderWorker::State::render() {
         }
     }
     const bool needsWarmup = scratch && warmup.picture;
-    const bool warmed = !needsWarmup || renderer.prewarm(warmup, angle || retainedGlWorkerEnabled());
+    const auto& options = wglWorkerOptions();
+    const bool warmed = !needsWarmup || renderer.prewarm(warmup, angle || options.retainDamage);
     warmup = {};
     // A nearly immediate glFinish may have missed the process-wide driver wait.
     // Retry once, after more real GL work, while the live HWND is still unowned.
@@ -478,7 +430,7 @@ void GlRenderWorker::State::render() {
     if (warmed && (censusAfterScene || missedWait)) renderer.warmDriverCensus();
     // Exercise the default framebuffer and real Ganesh submits before
     // acquiring the live window, where close would need to wait for us.
-    if (warmed && !angle && needsWarmup && rehearseScratchPresentsEnabled() && !renderer.rehearsePresents()) return;
+    if (warmed && !angle && needsWarmup && options.rehearsePresents && !renderer.rehearsePresents()) return;
     if (limitStartupPriority)
         internal::traceInteractionPaint(startupTrace, "worker_startup_priority_restored", "opengl-worker",
                                         startupPriority.restore() ? 1 : 0);
@@ -512,7 +464,7 @@ void GlRenderWorker::State::render() {
         ready.store(true, std::memory_order_release);
         InvalidateRect(window, nullptr, FALSE);
     }
-    const bool supersede = supersedeGlWorkerFrameEnabled();
+    const bool supersede = options.presentLatest;
     bool mustPresent = false;
     for (;;) {
         Scene scene;
