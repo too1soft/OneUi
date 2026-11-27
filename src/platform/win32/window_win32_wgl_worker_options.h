@@ -44,6 +44,20 @@ inline bool wglTracksResizePresentation() noexcept {
     return enabled;
 }
 
+enum class WglResizeSubmitOrder { Standard, FlushBeforeSubmit, SwapBeforeSubmit };
+
+inline WglResizeSubmitOrder wglResizeSubmitOrder() noexcept {
+    static const auto order = [] {
+        wchar_t value[2]{};
+        if (GetEnvironmentVariableW(L"ONEUI_WIN32_WGL_RESIZE_SUBMIT_ORDER", value, 2) == 1) {
+            if (value[0] == L'1') return WglResizeSubmitOrder::FlushBeforeSubmit;
+            if (value[0] == L'2') return WglResizeSubmitOrder::SwapBeforeSubmit;
+        }
+        return WglResizeSubmitOrder::Standard;
+    }();
+    return order;
+}
+
 struct WglWorkerOptions {
     bool enabled;
     bool afterFirstFrame;

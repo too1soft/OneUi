@@ -72,8 +72,16 @@ class GlCallTrace {
     static inline thread_local GlCallTrace* active_ = nullptr;
     std::array<Sample, static_cast<std::size_t>(GlPhase::Count)> stages_{};
     TextureUpload slowestUpload_{};
+    unsigned errorCount_ = 0;
+    GrGLenum lastError_ = 0;
 
 public:
+    static void recordErrorResult(GrGLenum error) {
+        if (!active_ || !error) return;
+        ++active_->errorCount_;
+        active_->lastError_ = error;
+    }
+
     class Scope {
         GlCallTrace* previous_ = active_;
 
@@ -147,6 +155,10 @@ public:
             event.durationMs = sample.milliseconds;
             event.detailA = sequence;
             event.detailB = sample.calls;
+            if (i == static_cast<std::size_t>(GlPhase::ErrorQuery)) {
+                event.inputDelta = lastError_;
+                event.offset = errorCount_;
+            }
             writeScrollTrace(event);
         }
         if (slowestUpload_.milliseconds >= 1.0) {
@@ -368,7 +380,14 @@ public:
         wrap<GlPhase::Sync, &Functions::fFenceSync>();
         wrap<GlPhase::Sync, &Functions::fWaitSync>();
         wrap<GlPhase::Sync, &Functions::fClientWaitSync>();
-        wrap<GlPhase::ErrorQuery, &Functions::fGetError>();
+        if (fFunctions.fGetError) {
+            fFunctions.fGetError = [native = native_.get()] {
+                const GlCallTrace::Span timer(GlPhase::ErrorQuery);
+                const auto error = native->fFunctions.fGetError();
+                GlCallTrace::recordErrorResult(error);
+                return error;
+            };
+        }
     }
 };
 

@@ -6,6 +6,7 @@
 #include "window_win32_gl_worker.h"
 #include "window_win32_gpu_backing.h"
 #include "window_win32_gpu_warmup.h"
+#include "window_win32_wgl_worker_options.h"
 #include "platform/shared/skia_gl_setup.h"
 #include "include/core/SkCanvas.h"
 #include "include/core/SkSurface.h"
@@ -78,8 +79,9 @@ public:
         const auto ganeshStarted = tracing ? internal::scrollTraceNowMs() : 0.0;
         GrContextOptions options;
         options.fPersistentCache = rendering::shaderCache();
+        nvidiaWgl_ = internal::win32GlNvidiaVendor();
         context_ = GrDirectContexts::MakeGL(
-            internal::makeWin32GaneshGlInterface(internal::win32GlNvidiaVendor()), options);
+            internal::makeWin32GaneshGlInterface(nvidiaWgl_), options);
         if (tracing) {
             internal::writeScrollTrace(internal::ScrollTraceEvent{
                 "win32", "wgl_worker_ganesh_context", 0, 0, 0, 0, 0, 0, 0,
@@ -246,6 +248,60 @@ public:
             context_->flush();
         }
         trace("worker_flush_end");
+        const auto present = [&]() -> RenderResult {
+            if (!current()) return RenderResult::Obsolete;
+            if (maySupersede && presented_ && presentedExtent_ == frame.extent &&
+                queuedSerial.load(std::memory_order_acquire) > frame.serial) {
+                // The retained surface includes this scene's damage for the next frame.
+                trace("worker_present_superseded");
+                return RenderResult::Superseded;
+            }
+            if (!claimPresent()) return RenderResult::Superseded;
+            trace("swap_begin");
+            const bool swapped = angleContext_ ? angleContext_->present() : SwapBuffers(dc_) != FALSE;
+            trace("swap_return", swapped ? 1 : 0);
+            if (angleContext_) trace(angleDrawableScaled_ ? "angle_worker_scaled_swap" : "angle_worker_exact_swap",
+                                     swapped ? 1 : 0);
+            if (!swapped) return RenderResult::Failed;
+            return angleDrawableScaled_ ? RenderResult::Scaled : RenderResult::Complete;
+        };
+        const auto order = nvidiaWgl_ && presented_ && frame.interactiveResize && frame.coversClient() &&
+            !frame.softwareHandoff ? wglResizeSubmitOrder() : WglResizeSubmitOrder::Standard;
+        RenderResult result;
+        if (order == WglResizeSubmitOrder::SwapBeforeSubmit) {
+            if (context_->abandoned() || context_->oomed()) return RenderResult::Failed;
+            // Ganesh has issued the OpenGL draws on this thread. Dispatch
+            // them before exchanging buffers, then let Ganesh finish submission
+            // and check errors before taking any further work.
+            flushResizeCommands(trace);
+            trace("worker_resize_swap_before_submit");
+            result = present();
+            if (!submit(snapshot, tracing, trace) || context_->oomed()) {
+                trace("worker_resize_post_swap_submit_failed", 0);
+                return RenderResult::Failed;
+            }
+        } else {
+            if (order == WglResizeSubmitOrder::FlushBeforeSubmit) flushResizeCommands(trace);
+            if (!submit(snapshot, tracing, trace)) return RenderResult::Failed;
+            result = present();
+        }
+        if (result == RenderResult::Complete) {
+            presented_ = true;
+            presentedExtent_ = frame.extent;
+        }
+        return result;
+    }
+
+private:
+    template<class Trace>
+    static void flushResizeCommands(const Trace& trace) {
+        trace("worker_resize_native_flush_begin");
+        glFlush();
+        trace("worker_resize_native_flush_end");
+    }
+
+    template<class Trace>
+    bool submit(const internal::InteractionSnapshot& snapshot, bool tracing, const Trace& trace) {
         trace("worker_submit_begin");
         bool submitted;
         if (tracing) {
@@ -259,28 +315,9 @@ public:
             submitted = context_->submit(GrSyncCpu::kNo);
         }
         trace("worker_submit_end", submitted ? 1 : 0);
-        if (!submitted) return RenderResult::Failed;
-        if (!current()) return RenderResult::Obsolete;
-        if (maySupersede && presented_ && presentedExtent_ == frame.extent &&
-            queuedSerial.load(std::memory_order_acquire) > frame.serial) {
-            // The retained surface includes this scene's damage for the next frame.
-            trace("worker_present_superseded");
-            return RenderResult::Superseded;
-        }
-        if (!claimPresent()) return RenderResult::Superseded;
-        trace("swap_begin");
-        const bool swapped = angleContext_ ? angleContext_->present() : SwapBuffers(dc_) != FALSE;
-        trace("swap_return", swapped ? 1 : 0);
-        if (angleContext_) trace(angleDrawableScaled_ ? "angle_worker_scaled_swap" : "angle_worker_exact_swap",
-                                 swapped ? 1 : 0);
-        if (!swapped) return RenderResult::Failed;
-        if (angleDrawableScaled_) return RenderResult::Scaled;
-        presented_ = true;
-        presentedExtent_ = frame.extent;
-        return RenderResult::Complete;
+        return submitted;
     }
 
-private:
     bool prepareScratchDrawable() {
         const auto binding = wglGetProcAddress("glBindFramebuffer");
         const auto address = reinterpret_cast<std::uintptr_t>(binding);
@@ -315,6 +352,7 @@ private:
     std::uint64_t presentedExtent_ = 0;
     bool presented_ = false;
     bool angleDrawableScaled_ = false;
+    bool nvidiaWgl_ = false;
     int width_ = 0;
     int height_ = 0;
 };
