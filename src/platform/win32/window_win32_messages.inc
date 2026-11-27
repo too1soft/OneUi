@@ -348,6 +348,7 @@
             captureNormalPlacement();
             updateShadowWindow();
             traceResizeDispatch("resize_pos_done", message);
+            if (interactiveResizeActive_) scheduleResizeFeedback();
             return r;
         }
         case WM_DISPLAYCHANGE:

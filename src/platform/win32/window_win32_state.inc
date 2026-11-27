@@ -421,13 +421,40 @@
         scheduleInteractivePaint();
     }
 
+    bool hasPendingResizeFeedback() const {
+        return hwnd_ && interactiveResizeActive_ && !resizeOverlayFailed_ &&
+            liveResizeGeneration_ != presentedResizeGeneration_;
+    }
+
+    void scheduleResizeFeedback() {
+        if (deferredFullPaintPending_ || !hasPendingResizeFeedback()) return;
+        static const bool enabled = [] {
+            wchar_t value[2]{};
+            return GetEnvironmentVariableW(L"ONEUI_WIN32_POST_RESIZE_FEEDBACK", value, 2) == 1 && value[0] == L'1';
+        }();
+        if (!enabled || !glWorker_.drawsSoftwareResize()) return;
+        const auto queued = HIWORD(GetQueueStatus(QS_POSTMESSAGE | QS_INPUT | QS_SENDMESSAGE));
+        if (!(queued & QS_POSTMESSAGE) || (queued & (QS_INPUT | QS_SENDMESSAGE))) return;
+        // WM_PAINT and WM_TIMER may wait for a continuously refilled posted
+        // queue. One wake joins the queue behind work already posted.
+        deferredFullPaintPending_ = PostMessageW(hwnd_, kOneUiDeferredFullPaint, 0, 0) != FALSE;
+        if (deferredFullPaintPending_) traceResizeDispatch("resize_feedback_posted", kOneUiDeferredFullPaint);
+    }
+
     void flushDeferredFullPaint() {
-        if (!hwnd_) {
-            deferredFullPaintPending_ = false;
+        if (!std::exchange(deferredFullPaintPending_, false) || !hasPendingResizeFeedback() ||
+            clientContentPainting_ || IsIconic(hwnd_) || !glWorker_.drawsSoftwareResize()) return;
+        const double interval = std::max<double>(USER_TIMER_MINIMUM, animationFrameIntervalMs());
+        if (lastLiveResizePaintMs_ != 0.0 && currentTimeMs() - lastLiveResizePaintMs_ < interval) return;
+        // Leave native and input-triggered painting armed if feedback would
+        // delay a pending key, pointer or edit turn.
+        if (inputPaintPending_ || coalescedEditPaintPending_ ||
+            HIWORD(GetQueueStatus(QS_INPUT | QS_SENDMESSAGE))) {
+            win32::requestInputTurnAfterPostedWork();
+            traceResizeDispatch("resize_feedback_yield", kOneUiDeferredFullPaint);
             return;
         }
-
-        deferredFullPaintPending_ = false;
+        traceResizeDispatch("resize_feedback_flush", kOneUiDeferredFullPaint);
         flushPendingPaint();
     }
 
