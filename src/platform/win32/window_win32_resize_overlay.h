@@ -1,34 +1,65 @@
 #pragma once
 
 #include <windows.h>
+#include <algorithm>
 
 namespace oneui::win32 {
+
+enum class ResizeOverlayGeometry { Exact, ExactWithoutRedraw, ReuseCapacity };
+
+inline ResizeOverlayGeometry resizeOverlayGeometry() noexcept {
+    static const auto geometry = [] {
+        wchar_t value[2]{};
+        if (GetEnvironmentVariableW(L"ONEUI_WIN32_WGL_RESIZE_OVERLAY_GEOMETRY", value, 2) == 1) {
+            if (value[0] == L'0') return ResizeOverlayGeometry::Exact;
+            if (value[0] == L'1') return ResizeOverlayGeometry::ExactWithoutRedraw;
+        }
+        return ResizeOverlayGeometry::ReuseCapacity;
+    }();
+    return geometry;
+}
 
 // GDI and WGL use separate window drawables during interactive resizing.
 class WglResizeOverlay {
 public:
+    struct Target {
+        HWND window = nullptr;
+        bool positioned = false;
+    };
+
     ~WglResizeOverlay() { close(); }
     WglResizeOverlay() = default;
     WglResizeOverlay(const WglResizeOverlay&) = delete;
     WglResizeOverlay& operator=(const WglResizeOverlay&) = delete;
 
-    HWND prepare(HWND parent, int width, int height) {
+    Target prepare(HWND parent, int width, int height, ResizeOverlayGeometry geometry) {
+        if (geometry == ResizeOverlayGeometry::ReuseCapacity) {
+            // A child is clipped to its parent's client area. The blit still
+            // covers the exact viewport, independent of the child's allocation.
+            width = std::max(width_, width);
+            height = std::max(height_, height);
+        }
         if (!window_) {
-            if (!registered()) return nullptr;
+            if (!registered()) return {};
             window_ = CreateWindowExW(0, className_, L"", WS_CHILD | WS_DISABLED | WS_CLIPSIBLINGS,
                                       0, 0, width, height, parent, nullptr, GetModuleHandleW(nullptr), nullptr);
-            if (!window_) return nullptr;
+            if (!window_) return {};
             parent_ = parent;
         }
         if (width != width_ || height != height_) {
-            if (!SetWindowPos(window_, HWND_TOP, 0, 0, width, height, SWP_NOACTIVATE | SWP_SHOWWINDOW)) {
+            UINT flags = SWP_NOACTIVATE | SWP_SHOWWINDOW;
+            // The child covers the whole client area and is redrawn by the
+            // caller immediately. A native redraw would also dirty the parent.
+            if (geometry != ResizeOverlayGeometry::Exact) flags |= SWP_NOREDRAW;
+            if (!SetWindowPos(window_, HWND_TOP, 0, 0, width, height, flags)) {
                 close();
-                return nullptr;
+                return {};
             }
             width_ = width;
             height_ = height;
+            return {window_, true};
         }
-        return window_;
+        return {window_, false};
     }
 
     void close() {

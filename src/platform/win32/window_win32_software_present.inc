@@ -55,12 +55,19 @@
     }
 
     bool blitResizeOverlay(RECT client, const internal::InteractionSnapshot& trace) {
-        const auto layer = resizeOverlay_.prepare(hwnd_, client.right, client.bottom);
-        if (!layer) return false;
-        const auto dc = GetDC(layer);
+        const auto geometry = win32::resizeOverlayGeometry();
+        const bool reserve = geometry == win32::ResizeOverlayGeometry::ReuseCapacity;
+        const int width = reserve ? win32::alignedGpuPaintExtent(client.right, INT_MAX) : client.right;
+        const int height = reserve ? win32::alignedGpuPaintExtent(client.bottom, INT_MAX) : client.bottom;
+        internal::traceInteractionPaint(trace, "resize_overlay_prepare_begin", "software");
+        const auto layer = resizeOverlay_.prepare(hwnd_, width, height, geometry);
+        internal::traceInteractionPaint(trace, "resize_overlay_prepare_end", "software", layer.window ? 1 : 0);
+        if (!layer.window) return false;
+        if (layer.positioned) internal::traceInteractionPaint(trace, "resize_overlay_positioned", "software", 1);
+        const auto dc = GetDC(layer.window);
         if (!dc) return false;
         const bool blitted = blitSoftwareSurface(dc, *paintSurface_, client, true, trace);
-        ReleaseDC(layer, dc);
+        ReleaseDC(layer.window, dc);
         internal::traceInteractionPaint(trace, "resize_overlay_blit_return", "software", blitted ? 1 : 0);
         return blitted;
     }
