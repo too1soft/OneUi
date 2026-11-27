@@ -72,7 +72,8 @@ void View::reconcileChildren(std::vector<std::shared_ptr<Widget>> children) {
     for (const auto& child : children)
         if (!previous.count(child.get())) installChildCallbacks(*child);
     using Paint = internal::VirtualRowPaint;
-    const Widget* covered = children_.empty() && Paint::publishingRows == this ? this : nullptr;
+    const Widget* covered = Paint::publishingRows == this && (children_.empty() || Paint::resizeOverlay)
+        ? this : nullptr;
     children_ = std::move(children);
     const Paint::Scope<const Widget*> publish(Paint::commit, covered);
     invalidate();

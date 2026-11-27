@@ -7,10 +7,11 @@ class Widget;
 
 namespace internal {
 
-// Marks only the structural notification from publishing the first children
-// of the virtual list currently being painted inside its scroll clip.
+// Marks only the structural notification from publishing rows of the virtual
+// table currently being painted inside its scroll clip.
 struct VirtualRowPaint {
     static inline thread_local bool fullClientPaint = false;
+    static inline thread_local bool resizeOverlay = false;
     static inline thread_local const Widget* clippedContents = nullptr;
     static inline thread_local const Widget* layoutForPaint = nullptr;
     static inline thread_local const Widget* publishingRows = nullptr;

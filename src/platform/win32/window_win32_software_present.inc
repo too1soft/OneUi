@@ -54,7 +54,7 @@
         return true;
     }
 
-    bool blitResizeOverlay(RECT client, const internal::InteractionSnapshot& trace) {
+    bool blitResizeOverlay(RECT client, const internal::InteractionSnapshot& trace, win32::VirtualRowDamage* damage) {
         const auto geometry = win32::resizeOverlayGeometry();
         const bool reserve = geometry == win32::ResizeOverlayGeometry::ReuseCapacity;
         const int width = reserve ? win32::alignedGpuPaintExtent(client.right, INT_MAX) : client.right;
@@ -67,6 +67,7 @@
         const auto dc = GetDC(layer.window);
         if (!dc) return false;
         const bool blitted = blitSoftwareSurface(dc, *paintSurface_, client, true, trace);
+        if (blitted && damage) damage->inspectOverlayClip(dc);
         ReleaseDC(layer.window, dc);
         internal::traceInteractionPaint(trace, "resize_overlay_blit_return", "software", blitted ? 1 : 0);
         return blitted;

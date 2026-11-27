@@ -297,10 +297,14 @@
             }
         };
         std::optional<win32::VirtualRowDamage> virtualRowDamage;
-        if (fullPaint && !interactiveResizeActive_) {
+        if (fullPaint && softwareResize && win32::VirtualRowDamage::resizeOverlayEnabled()) {
+            virtualRowDamage.emplace(hwnd_, nullptr, clientRect, callbackWindowAlive_,
+                                     win32::VirtualRowDamage::Presentation::ResizeOverlay);
+        } else if (fullPaint && !interactiveResizeActive_) {
             if (threadedGl) {
                 if (workerFrame.retained && !workerFrame.softwareHandoff && win32::workerFoldsVirtualRowDamage()) {
-                    virtualRowDamage.emplace(hwnd_, nullptr, clientRect, callbackWindowAlive_, true);
+                    virtualRowDamage.emplace(hwnd_, nullptr, clientRect, callbackWindowAlive_,
+                                             win32::VirtualRowDamage::Presentation::Worker);
                 }
             } else if (!useGPU && dc && win32::VirtualRowDamage::softwareEnabled()) {
                 virtualRowDamage.emplace(hwnd_, dc, clientRect, callbackWindowAlive_);
@@ -552,13 +556,17 @@
             finishDiagnostics();
             return;
         }
-        const bool blitSucceeded = softwareResize ? blitResizeOverlay(clientRect, interactionPaint)
+        const bool blitSucceeded = softwareResize
+            ? blitResizeOverlay(clientRect, interactionPaint, virtualRowDamage ? &*virtualRowDamage : nullptr)
             : blitSoftwareSurface(dc, *paintSurface_, RECT{dirtyX, dirtyY, dirtyRight, dirtyBottom}, fullPaint, interactionPaint);
 
         EndPaint(hwnd_, &paintStruct);
         if (softwareResize && !blitSucceeded) abortResizeOverlay();
         if (blitSucceeded) {
-            if (virtualRowDamage) virtualRowDamage->covered();
+            if (virtualRowDamage && (!softwareResize || (interactiveResizeActive_ &&
+                resizeGeneration == liveResizeGeneration_ && scale == normalizedDpiScale()))) {
+                virtualRowDamage->covered();
+            }
             recordResizePresentation();
             if (coalesceHandoffRefresh_) {
                 handoffRefresh_.painted(pixelSize, scale, fullPaint, currentTimeMs(), handoffFeedbackEpoch);

@@ -187,7 +187,8 @@ void VirtualTemplateList::publishRows(std::set<std::string> keep, Rect content, 
     for (const auto& [key, row] : mounted_) if (!keep.count(key)) removed.push_back(key);
     {
         using Paint = internal::VirtualRowPaint;
-        const Widget* covered = tableViewport_ && Paint::layoutForPaint == this && removed.empty()
+        const Widget* covered = tableViewport_ && Paint::layoutForPaint == this &&
+            (removed.empty() || Paint::resizeOverlay)
             ? this : nullptr;
         const Paint::Scope<const Widget*> publication(Paint::publishingRows, covered);
         reconcileChildren(std::move(children));
