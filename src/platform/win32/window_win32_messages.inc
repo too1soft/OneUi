@@ -256,22 +256,29 @@
             return 0;
         case WM_ENTERSIZEMOVE:
             interactiveResizeActive_ = true;
+            resizeOverlayFailed_ = false;
             interactiveSizeChanged_ = false;
             presentedResizeGeneration_ = liveResizeGeneration_;
             lastLiveResizePaintMs_ = 0.0;
             return 0;
-        case WM_EXITSIZEMOVE:
+        case WM_EXITSIZEMOVE: {
             interactiveResizeActive_ = false;
+            const bool resized = std::exchange(interactiveSizeChanged_, false);
             // A full frame already presented for the last size also covers
             // the exit. Leave any pending widget and OS damage in the queue.
-            if (std::exchange(interactiveSizeChanged_, false) &&
-                liveResizeGeneration_ != presentedResizeGeneration_) {
+            if (glWorker_.finishSoftwareResize()) {
+                requestDeferredFullPaint();
+            } else if (resized && liveResizeGeneration_ != presentedResizeGeneration_) {
                 const bool presented = glWorker_.hasPresentedResize(liveResizeGeneration_);
                 internal::traceInteractionPaint({reinterpret_cast<std::uintptr_t>(hwnd_)},
                     presented ? "worker_resize_exit_covered" : "resize_exit_full_damage");
                 if (!presented) requestDeferredFullPaint();
             }
             printRenderTrace(true);
+            return 0;
+        }
+        case win32::glWorkerResizeResumedMessage:
+            finishResizeOverlay();
             return 0;
         case WM_MOUSEWHEEL:
             dispatchMouseWheel(wParam, lParam);
@@ -388,7 +395,7 @@
             return 0;
         }
         case WM_SIZE:
-            invalidateWorkerExtent();
+            invalidateWorkerExtent(interactiveResizeActive_ && !resizeOverlayFailed_ && wParam != SIZE_MINIMIZED);
             if (interactiveResizeActive_) {
                 interactiveSizeChanged_ = true;
                 ++liveResizeGeneration_;

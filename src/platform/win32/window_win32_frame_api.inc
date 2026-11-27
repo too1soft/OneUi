@@ -49,10 +49,10 @@
         return glWorker_.ready() && win32::experimentalGlWorkerPacesRecording() && glWorker_.deferRecording();
     }
 
-    void invalidateWorkerExtent() {
+    void invalidateWorkerExtent(bool duringInteractiveSizeChange = false) {
         if (startupRaster_.cancel()) queueInvalidation(nullptr, false);
         if (!glWorker_.ready()) return;
-        glWorker_.invalidateExtent();
+        glWorker_.invalidateExtent(duringInteractiveSizeChange);
         if (invalidationPending_ && win32::experimentalGlWorkerPacesRecording()) {
             mergeInvalidation(nullptr);
             InvalidateRect(hwnd_, nullptr, FALSE);

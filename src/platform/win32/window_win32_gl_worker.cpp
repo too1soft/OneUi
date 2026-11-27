@@ -83,6 +83,7 @@ struct GlRenderWorker::State {
     State(HWND window, HMONITOR monitor, POINT origin, bool angle, StartupGlScene scene, bool awaitSoftwareFrame)
         : window(window), monitor(monitor), origin(origin), angle(angle),
           earlyWgl(!angle && awaitSoftwareFrame),
+          softwareResizeEnabled(!angle && wglUsesSoftwareLiveResize()),
           captureStartup(monitor && (awaitSoftwareFrame || scene.picture)),
           // An early WGL worker waits for the first software frame before adopting the HWND.
           softwareHandoff(angle ? softwareHandoffEnabled()
@@ -100,6 +101,7 @@ struct GlRenderWorker::State {
     const POINT origin;
     const bool angle;
     const bool earlyWgl;
+    const bool softwareResizeEnabled;
     std::atomic_bool captureStartup;
     std::atomic_bool softwareHandoff;
     std::atomic_bool ready{false};
@@ -115,6 +117,9 @@ struct GlRenderWorker::State {
     Frame lastPlanned;
     std::uint64_t latestPlan = 0;
     std::uint64_t presentedResizeGeneration = 0;
+    bool drawingSoftwareResize = false;
+    bool resumingAfterSoftwareResize = false;
+    bool softwareResizeResumeReady = false;
     bool recordingWaiter = false;
     bool awaitingSoftwareFrame;
     bool stopping = false;
@@ -291,6 +296,7 @@ bool GlRenderWorker::deferRecording() {
     auto& state = *state_;
     std::lock_guard lock(state.mutex);
     state.recordingWaiter = !state.stopping && state.ready.load(std::memory_order_relaxed) &&
+        !state.drawingSoftwareResize &&
         !state.softwareHandoff.load(std::memory_order_relaxed) &&
         static_cast<bool>(state.pending.picture);
     return state.recordingWaiter;
@@ -332,7 +338,7 @@ bool GlRenderWorker::enqueue(sk_sp<SkPicture> picture, const Frame& frame,
     State::Scene replaced;
     {
         std::lock_guard lock(state.mutex);
-        if (state.stopping || !ready() || frame.serial != state.latestPlan ||
+        if (state.stopping || state.drawingSoftwareResize || !ready() || frame.serial != state.latestPlan ||
             frame.extent != state.extent.load(std::memory_order_relaxed)) return false;
         state.lastQueued = frame;
         replaced = std::exchange(state.pending, State::Scene{std::move(picture), frame, trace});
@@ -346,18 +352,21 @@ bool GlRenderWorker::enqueue(sk_sp<SkPicture> picture, const Frame& frame,
 }
 
 bool GlRenderWorker::State::claimPresent(const Scene& scene) {
-    if (!softwareHandoff.load(std::memory_order_relaxed)) return true;
+    const bool startupHandoff = softwareHandoff.load(std::memory_order_relaxed);
+    if (!startupHandoff && !softwareResizeEnabled) return true;
     bool claimed;
     {
         std::lock_guard lock(mutex);
         // The window reserves a serial before recording and publishes it after
         // EndPaint. A newer reservation still owns the visible window.
-        claimed = !stopping && latestPlan == scene.frame.serial &&
+        claimed = !stopping && !drawingSoftwareResize && (!startupHandoff || latestPlan == scene.frame.serial) &&
             extent.load(std::memory_order_relaxed) == scene.frame.extent;
-        if (claimed) softwareHandoff.store(false, std::memory_order_relaxed);
+        if (claimed && startupHandoff) softwareHandoff.store(false, std::memory_order_relaxed);
     }
-    internal::traceInteractionPaint(scene.trace, claimed ? "worker_handoff_claimed" : "worker_handoff_superseded",
-                                    "opengl-worker");
+    if (startupHandoff) {
+        internal::traceInteractionPaint(scene.trace, claimed ? "worker_handoff_claimed" : "worker_handoff_superseded",
+                                        "opengl-worker");
+    }
     return claimed;
 }
 
@@ -367,13 +376,47 @@ bool GlRenderWorker::hasPresentedResize(std::uint64_t generation) const {
     return state_->presentedResizeGeneration == generation;
 }
 
-void GlRenderWorker::invalidateExtent() {
+bool GlRenderWorker::drawsSoftwareResize() const {
+    if (!state_ || !state_->softwareResizeEnabled) return false;
+    std::lock_guard lock(state_->mutex);
+    return state_->drawingSoftwareResize;
+}
+
+bool GlRenderWorker::finishSoftwareResize() {
+    if (!state_ || !state_->softwareResizeEnabled) return false;
+    std::lock_guard lock(state_->mutex);
+    if (!std::exchange(state_->drawingSoftwareResize, false)) return false;
+    state_->resumingAfterSoftwareResize = true;
+    state_->softwareResizeResumeReady = false;
+    internal::traceInteractionPaint({reinterpret_cast<std::uintptr_t>(state_->window)},
+                                    "worker_raster_resize_end", "software", 1);
+    return true;
+}
+
+bool GlRenderWorker::takeSoftwareResizeResume() {
+    if (!state_ || !state_->softwareResizeEnabled) return false;
+    std::lock_guard lock(state_->mutex);
+    if (!state_->resumingAfterSoftwareResize || state_->drawingSoftwareResize ||
+        (!state_->softwareResizeResumeReady && !state_->finished)) return false;
+    state_->resumingAfterSoftwareResize = false;
+    return true;
+}
+
+void GlRenderWorker::invalidateExtent(bool duringInteractiveSizeChange) {
     if (!state_) return;
     auto& state = *state_;
     State::Scene obsolete;
     {
         std::lock_guard lock(state.mutex);
         ++state.extent;
+        state.softwareResizeResumeReady = false;
+        if (duringInteractiveSizeChange && state.softwareResizeEnabled &&
+            !state.softwareHandoff.load(std::memory_order_relaxed) &&
+            !std::exchange(state.drawingSoftwareResize, true)) {
+            state.resumingAfterSoftwareResize = false;
+            internal::traceInteractionPaint({reinterpret_cast<std::uintptr_t>(state.window)},
+                                            "worker_raster_resize_begin", "software", 1);
+        }
         state.presentedResizeGeneration = 0;
         state.recordingWaiter = false;
         obsolete = std::exchange(state.pending, {});
@@ -551,11 +594,19 @@ void GlRenderWorker::State::render() {
         if (result == worker::RenderResult::Superseded) mustPresent = true;
         if (result == worker::RenderResult::Complete) {
             mustPresent = false;
-            if (scene.frame.resizeGeneration && scene.frame.coversClient()) {
+            if ((scene.frame.resizeGeneration || softwareResizeEnabled) && scene.frame.coversClient()) {
                 std::lock_guard lock(mutex);
                 if (!stopping && extent.load(std::memory_order_relaxed) == scene.frame.extent) {
-                    presentedResizeGeneration = scene.frame.resizeGeneration;
-                    internal::traceInteractionPaint(scene.trace, "worker_resize_presented", "opengl-worker", 1);
+                    if (scene.frame.resizeGeneration) {
+                        presentedResizeGeneration = scene.frame.resizeGeneration;
+                        internal::traceInteractionPaint(scene.trace, "worker_resize_presented", "opengl-worker", 1);
+                    }
+                    if (resumingAfterSoftwareResize && !softwareResizeResumeReady && !drawingSoftwareResize) {
+                        softwareResizeResumeReady = true;
+                        internal::traceInteractionPaint(scene.trace, "worker_raster_resize_resume_ready", "opengl-worker", 1);
+                        if (!PostMessageW(window, glWorkerResizeResumedMessage, 0, 0))
+                            InvalidateRect(window, nullptr, FALSE);
+                    }
                 }
             }
         }
@@ -569,6 +620,7 @@ void GlRenderWorker::State::render() {
             std::lock_guard lock(mutex);
             if (!stopping && extent.load(std::memory_order_relaxed) == scene.frame.extent) {
                 ++extent;
+                softwareResizeResumeReady = false;
                 presentedResizeGeneration = 0;
                 recordingWaiter = false;
                 obsolete = std::exchange(pending, {});

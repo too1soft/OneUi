@@ -44,6 +44,14 @@ inline bool wglTracksResizePresentation() noexcept {
     return enabled;
 }
 
+inline bool wglUsesSoftwareLiveResize() noexcept {
+    static const bool enabled = [] {
+        wchar_t value[2]{};
+        return GetEnvironmentVariableW(L"ONEUI_WIN32_WGL_SOFTWARE_LIVE_RESIZE", value, 2) == 1 && value[0] == L'1';
+    }();
+    return enabled;
+}
+
 struct WglWorkerOptions {
     bool enabled;
     bool afterFirstFrame;

@@ -9,6 +9,7 @@
 #include "window_win32_text_atlas.h"
 #include "window_win32_deferred_gl.h"
 #include "window_win32_gl_worker.h"
+#include "window_win32_resize_overlay.h"
 #include "window_win32_startup_capture.h"
 #include "window_win32_startup_raster.h"
 #include "window_win32_handoff_refresh.h"
@@ -147,6 +148,8 @@ public:
 #include "window_win32_pointer_dispatch.inc"
 #include "window_win32_gpu.inc"
     win32::GlRenderWorker glWorker_;
+    win32::WglResizeOverlay resizeOverlay_;
+    bool resizeOverlayFailed_ = false;
     win32::StartupRaster startupRaster_;
     std::uint64_t startupRasterContentRevision_ = 0;
     bool startupRasterInputSeen_ = false;

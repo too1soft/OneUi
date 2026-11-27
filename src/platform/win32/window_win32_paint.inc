@@ -23,6 +23,7 @@
     }
 #endif
     void paint() {
+        finishResizeOverlay();
         if (IsIconic(hwnd_)) {
             startupRaster_.cancel();
             // A minimized HWND can still receive WM_PAINT with the shell's
@@ -137,7 +138,9 @@
 #endif
         const int width = std::max<LONG>(1, clientRect.right - clientRect.left);
         const int height = std::max<LONG>(1, clientRect.bottom - clientRect.top);
-        const bool threadedGl = glWorker_.ready() && !IsRectEmpty(&dirtyRect);
+        const bool softwareResize = !useGPU && !IsRectEmpty(&dirtyRect) && glWorker_.drawsSoftwareResize();
+        if (softwareResize) dirtyRect = clientRect;
+        const bool threadedGl = !softwareResize && glWorker_.ready() && !IsRectEmpty(&dirtyRect);
         if (rasterFrame.surface && !threadedGl && !useGPU && !interactiveResizeActive_ && IsWindowVisible(hwnd_) &&
             rasterFrame.contentRevision == startupRasterContentRevision_ &&
             rasterFrame.width == width && rasterFrame.height == height && rasterFrame.scale == scale) {
@@ -201,6 +204,7 @@
 
         if (!threadedGl && !paintSurface_) {
             EndPaint(hwnd_, &paintStruct);
+            if (softwareResize) abortResizeOverlay();
             internal::traceInteractionPaint(interactionPaint, "paint_end", "unknown", 0);
             return;
         }
@@ -241,7 +245,7 @@
 
         SkCanvas* skCanvas = threadedGl ? nullptr : paintSurface_->getCanvas();
         const bool fullPaint = dirtyX == 0 && dirtyY == 0 && dirtyWidth == width && dirtyHeight == height;
-        const bool captureWorkerStartup = !useGPU && fullPaint && IsWindowVisible(hwnd_) &&
+        const bool captureWorkerStartup = !useGPU && !softwareResize && fullPaint && IsWindowVisible(hwnd_) &&
             ((glWorkerWaitingForSoftwareFrame_ && (win32::experimentalAngleWorkerEnabled() ||
                 win32::experimentalGlWorkerPrewarm())) ||
              glWorker_.wantsStartupPicture());
@@ -540,10 +544,19 @@
             return;
         }
 
-        const bool blitSucceeded = blitSoftwareSurface(dc, *paintSurface_,
-            RECT{dirtyX, dirtyY, dirtyRight, dirtyBottom}, fullPaint, interactionPaint);
+        if (softwareResize && (!interactiveResizeActive_ || resizeGeneration != liveResizeGeneration_ ||
+                              scale != normalizedDpiScale())) {
+            EndPaint(hwnd_, &paintStruct);
+            InvalidateRect(hwnd_, nullptr, FALSE);
+            internal::traceInteractionPaint(interactionPaint, "resize_overlay_stale", "software", 0);
+            finishDiagnostics();
+            return;
+        }
+        const bool blitSucceeded = softwareResize ? blitResizeOverlay(clientRect, interactionPaint)
+            : blitSoftwareSurface(dc, *paintSurface_, RECT{dirtyX, dirtyY, dirtyRight, dirtyBottom}, fullPaint, interactionPaint);
 
         EndPaint(hwnd_, &paintStruct);
+        if (softwareResize && !blitSucceeded) abortResizeOverlay();
         if (blitSucceeded) {
             if (virtualRowDamage) virtualRowDamage->covered();
             recordResizePresentation();

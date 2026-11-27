@@ -53,3 +53,28 @@
         recordPaint(frame.width, frame.height, true, false, 0.0, currentTimeMs() - paintStarted);
         return true;
     }
+
+    bool blitResizeOverlay(RECT client, const internal::InteractionSnapshot& trace) {
+        const auto layer = resizeOverlay_.prepare(hwnd_, client.right, client.bottom);
+        if (!layer) return false;
+        const auto dc = GetDC(layer);
+        if (!dc) return false;
+        const bool blitted = blitSoftwareSurface(dc, *paintSurface_, client, true, trace);
+        ReleaseDC(layer, dc);
+        internal::traceInteractionPaint(trace, "resize_overlay_blit_return", "software", blitted ? 1 : 0);
+        return blitted;
+    }
+
+    void finishResizeOverlay() {
+        if (!glWorker_.takeSoftwareResizeResume()) return;
+        resizeOverlay_.close();
+        internal::traceInteractionPaint({reinterpret_cast<std::uintptr_t>(hwnd_)},
+                                        "resize_overlay_closed", "opengl-worker", 1);
+    }
+
+    void abortResizeOverlay() {
+        resizeOverlayFailed_ = true;
+        resizeOverlay_.close();
+        glWorker_.finishSoftwareResize();
+        requestDeferredFullPaint();
+    }

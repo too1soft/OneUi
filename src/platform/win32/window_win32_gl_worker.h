@@ -9,6 +9,7 @@
 namespace oneui::win32 {
 
 inline constexpr UINT glWorkerRecordingReadyMessage = WM_APP + 6;
+inline constexpr UINT glWorkerResizeResumedMessage = WM_APP + 8;
 
 struct StartupGlScene;
 
@@ -48,7 +49,10 @@ public:
     bool enqueue(sk_sp<SkPicture> picture, const Frame& frame,
                  const internal::InteractionSnapshot& trace);
     bool hasPresentedResize(std::uint64_t generation) const;
-    void invalidateExtent();
+    bool drawsSoftwareResize() const;
+    bool finishSoftwareResize();
+    bool takeSoftwareResizeResume();
+    void invalidateExtent(bool duringInteractiveSizeChange = false);
     void stop();
 
 private:
