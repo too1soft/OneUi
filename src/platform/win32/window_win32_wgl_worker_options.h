@@ -38,7 +38,8 @@ inline bool wglUsesGpuForResizeHandoff() noexcept {
 inline bool wglTracksResizePresentation() noexcept {
     static const bool enabled = [] {
         wchar_t value[2]{};
-        return GetEnvironmentVariableW(L"ONEUI_WIN32_WGL_RESIZE_PRESENT_ACK", value, 2) == 1 && value[0] == L'1';
+        const DWORD length = GetEnvironmentVariableW(L"ONEUI_WIN32_WGL_RESIZE_PRESENT_ACK", value, 2);
+        return length != 1 || value[0] != L'0';
     }();
     return enabled;
 }
