@@ -181,14 +181,15 @@
 
         win32::GlRenderWorker::Frame workerFrame;
         if (threadedGl) {
-            workerFrame = glWorker_.plan(width, height, dirtyRect, interactiveResizeActive_);
+            workerFrame = glWorker_.plan(width, height, dirtyRect, interactiveResizeActive_, resizeGeneration);
             dirtyRect = workerFrame.damage;
         }
         const double surfaceStartMs = currentTimeMs();
         const bool deferredHandoffPaint = deferHandoffRaster && workerFrame.softwareHandoff;
-        const auto surfaceUpdate = !threadedGl || (workerFrame.softwareHandoff && !deferredHandoffPaint)
+        const bool rasterHandoff = workerFrame.softwareHandoff && !deferredHandoffPaint && !workerFrame.skipResizeRaster;
+        const auto surfaceUpdate = !threadedGl || rasterHandoff
             ? preparePaintSurfaces(width, height) : PaintSurfaceUpdate{};
-        const bool handoffPaint = workerFrame.softwareHandoff && !deferredHandoffPaint && paintSurface_;
+        const bool handoffPaint = rasterHandoff && paintSurface_;
         const double surfaceMs = currentTimeMs() - surfaceStartMs;
         paintTrace.mark(PaintTrace::Surface);
         if (traceLayout && surfaceUpdate.allocatedBacking) {
@@ -388,6 +389,9 @@
         paintTrace.mark(PaintTrace::End);
 
         if (threadedGl && !handoffPaint) {
+            if (workerFrame.skipResizeRaster) {
+                internal::traceInteractionPaint(interactionPaint, "worker_resize_gpu_only", "opengl-worker");
+            }
             if (deferredHandoffPaint) {
                 handoffRefresh_.retainDamage(paintStruct.rcPaint);
                 internal::traceInteractionPaint(interactionPaint, "worker_handoff_raster_deferred", "software");

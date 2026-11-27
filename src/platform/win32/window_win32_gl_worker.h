@@ -25,6 +25,12 @@ public:
         std::uint64_t extent = 0;
         std::uint64_t serial = 0;
         bool softwareHandoff = false;
+        bool skipResizeRaster = false;
+        std::uint64_t resizeGeneration = 0;
+
+        bool coversClient() const noexcept {
+            return damage.left == 0 && damage.top == 0 && damage.right == width && damage.bottom == height;
+        }
     };
 
     ~GlRenderWorker();
@@ -38,9 +44,10 @@ public:
     bool vsync() const noexcept;
     // Register a single notification if a recorded scene is waiting for the worker.
     bool deferRecording();
-    Frame plan(int width, int height, RECT damage, bool interactiveResize);
+    Frame plan(int width, int height, RECT damage, bool interactiveResize, std::uint64_t resizeGeneration);
     bool enqueue(sk_sp<SkPicture> picture, const Frame& frame,
                  const internal::InteractionSnapshot& trace);
+    bool hasPresentedResize(std::uint64_t generation) const;
     void invalidateExtent();
     void stop();
 

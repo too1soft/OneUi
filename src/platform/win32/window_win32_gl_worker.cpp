@@ -114,6 +114,7 @@ struct GlRenderWorker::State {
     Frame lastQueued;
     Frame lastPlanned;
     std::uint64_t latestPlan = 0;
+    std::uint64_t presentedResizeGeneration = 0;
     bool recordingWaiter = false;
     bool awaitingSoftwareFrame;
     bool stopping = false;
@@ -295,13 +296,18 @@ bool GlRenderWorker::deferRecording() {
     return state.recordingWaiter;
 }
 
-GlRenderWorker::Frame GlRenderWorker::plan(int width, int height, RECT damage, bool interactiveResize) {
+GlRenderWorker::Frame GlRenderWorker::plan(int width, int height, RECT damage, bool interactiveResize,
+                                          std::uint64_t resizeGeneration) {
     if (!state_) return {};
     auto& state = *state_;
     std::lock_guard lock(state.mutex);
     Frame frame{width, height, damage, state.angle || wglWorkerOptions().retainDamage, interactiveResize,
                 state.extent.load(std::memory_order_relaxed), ++state.latestPlan,
                 state.softwareHandoff.load(std::memory_order_relaxed)};
+    if (interactiveResize && !state.angle) {
+        frame.skipResizeRaster = frame.softwareHandoff && wglUsesGpuForResizeHandoff();
+        if (wglTracksResizePresentation()) frame.resizeGeneration = resizeGeneration;
+    }
     const bool sameExtent = state.lastQueued.extent == frame.extent &&
         state.lastQueued.width == width && state.lastQueued.height == height;
     if (!frame.retained || !sameExtent) {
@@ -344,8 +350,8 @@ bool GlRenderWorker::State::claimPresent(const Scene& scene) {
     bool claimed;
     {
         std::lock_guard lock(mutex);
-        // The window reserves a serial before drawing in software and publishes
-        // it after EndPaint. A newer reservation still owns the visible window.
+        // The window reserves a serial before recording and publishes it after
+        // EndPaint. A newer reservation still owns the visible window.
         claimed = !stopping && latestPlan == scene.frame.serial &&
             extent.load(std::memory_order_relaxed) == scene.frame.extent;
         if (claimed) softwareHandoff.store(false, std::memory_order_relaxed);
@@ -355,6 +361,12 @@ bool GlRenderWorker::State::claimPresent(const Scene& scene) {
     return claimed;
 }
 
+bool GlRenderWorker::hasPresentedResize(std::uint64_t generation) const {
+    if (!generation || !ready() || state_->angle || !wglTracksResizePresentation()) return false;
+    std::lock_guard lock(state_->mutex);
+    return state_->presentedResizeGeneration == generation;
+}
+
 void GlRenderWorker::invalidateExtent() {
     if (!state_) return;
     auto& state = *state_;
@@ -362,6 +374,7 @@ void GlRenderWorker::invalidateExtent() {
     {
         std::lock_guard lock(state.mutex);
         ++state.extent;
+        state.presentedResizeGeneration = 0;
         state.recordingWaiter = false;
         obsolete = std::exchange(state.pending, {});
     }
@@ -536,7 +549,16 @@ void GlRenderWorker::State::render() {
                                             [&] { return claimPresent(scene); });
         // Keep presenting regularly even while newer recordings keep arriving.
         if (result == worker::RenderResult::Superseded) mustPresent = true;
-        if (result == worker::RenderResult::Complete) mustPresent = false;
+        if (result == worker::RenderResult::Complete) {
+            mustPresent = false;
+            if (scene.frame.resizeGeneration && scene.frame.coversClient()) {
+                std::lock_guard lock(mutex);
+                if (!stopping && extent.load(std::memory_order_relaxed) == scene.frame.extent) {
+                    presentedResizeGeneration = scene.frame.resizeGeneration;
+                    internal::traceInteractionPaint(scene.trace, "worker_resize_presented", "opengl-worker", 1);
+                }
+            }
+        }
         if (result == worker::RenderResult::Failed) break;
         if (result == worker::RenderResult::Scaled) {
             std::lock_guard lock(mutex);
@@ -547,6 +569,7 @@ void GlRenderWorker::State::render() {
             std::lock_guard lock(mutex);
             if (!stopping && extent.load(std::memory_order_relaxed) == scene.frame.extent) {
                 ++extent;
+                presentedResizeGeneration = 0;
                 recordingWaiter = false;
                 obsolete = std::exchange(pending, {});
                 if (!IsIconic(window)) InvalidateRect(window, nullptr, FALSE);

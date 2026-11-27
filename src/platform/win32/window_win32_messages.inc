@@ -265,7 +265,12 @@
             // A full frame already presented for the last size also covers
             // the exit. Leave any pending widget and OS damage in the queue.
             if (std::exchange(interactiveSizeChanged_, false) &&
-                liveResizeGeneration_ != presentedResizeGeneration_) requestDeferredFullPaint();
+                liveResizeGeneration_ != presentedResizeGeneration_) {
+                const bool presented = glWorker_.hasPresentedResize(liveResizeGeneration_);
+                internal::traceInteractionPaint({reinterpret_cast<std::uintptr_t>(hwnd_)},
+                    presented ? "worker_resize_exit_covered" : "resize_exit_full_damage");
+                if (!presented) requestDeferredFullPaint();
+            }
             printRenderTrace(true);
             return 0;
         case WM_MOUSEWHEEL:

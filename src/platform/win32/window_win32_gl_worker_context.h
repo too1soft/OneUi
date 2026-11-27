@@ -171,11 +171,9 @@ public:
         const bool warmedBackingFits = !surface_ && retained_ &&
             retained_->width() == width && retained_->height() == height;
         const bool clientChanged = !surface_ || width_ != width || height_ != height;
-        const bool full = frame.damage.left == 0 && frame.damage.top == 0 &&
-            frame.damage.right == width && frame.damage.bottom == height;
         const bool needsFullRecording = frame.retained &&
             (!retained_ || retainedExtent_ != frame.extent || clientChanged);
-        if (needsFullRecording && !full) return RenderResult::Obsolete;
+        if (needsFullRecording && !frame.coversClient()) return RenderResult::Obsolete;
         if (clientChanged || angleDrawableScaled_) {
             int bufferWidth = width;
             int bufferHeight = height;

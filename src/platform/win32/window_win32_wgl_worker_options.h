@@ -27,6 +27,22 @@ inline bool wglPromotesOnDamage() noexcept {
     return enabled;
 }
 
+inline bool wglUsesGpuForResizeHandoff() noexcept {
+    static const bool enabled = [] {
+        wchar_t value[2]{};
+        return GetEnvironmentVariableW(L"ONEUI_WIN32_WGL_RESIZE_GPU_ONLY", value, 2) == 1 && value[0] == L'1';
+    }();
+    return enabled;
+}
+
+inline bool wglTracksResizePresentation() noexcept {
+    static const bool enabled = [] {
+        wchar_t value[2]{};
+        return GetEnvironmentVariableW(L"ONEUI_WIN32_WGL_RESIZE_PRESENT_ACK", value, 2) == 1 && value[0] == L'1';
+    }();
+    return enabled;
+}
+
 struct WglWorkerOptions {
     bool enabled;
     bool afterFirstFrame;
