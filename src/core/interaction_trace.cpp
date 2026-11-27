@@ -57,15 +57,17 @@ public:
         worker_.join();
     }
     bool enabled() const { return accepting_.load(std::memory_order_relaxed); }
-    void push(Event event) {
+    void push(Event event, bool sampleWindowState = true) {
         LARGE_INTEGER now{};
         QueryPerformanceCounter(&now);
         event.qpc = now.QuadPart;
         event.pid = GetCurrentProcessId();
         event.tid = GetCurrentThreadId();
-        const auto hwnd = reinterpret_cast<HWND>(event.snapshot.window);
-        event.visible = hwnd && IsWindowVisible(hwnd) && !IsIconic(hwnd);
-        event.foreground = hwnd && GetForegroundWindow() == hwnd;
+        if (sampleWindowState) {
+            const auto hwnd = reinterpret_cast<HWND>(event.snapshot.window);
+            event.visible = hwnd && IsWindowVisible(hwnd) && !IsIconic(hwnd);
+            event.foreground = hwnd && GetForegroundWindow() == hwnd;
+        }
         {
             std::lock_guard<std::mutex> lock(mutex_);
             if (stopping_) return;
@@ -238,6 +240,15 @@ void traceInteractionRenderTiming(const InteractionSnapshot& snapshot, const cha
     event.durationMs = milliseconds; event.calls = calls;
     writer().push(event);
 }
+void traceResizeDispatch(const InteractionSnapshot& snapshot, const char* phase, unsigned message) {
+    if (!snapshot.window || !writer().enabled()) return;
+    Event event;
+    event.snapshot = snapshot;
+    event.phase = phase;
+    event.message = message;
+    // Window-state queries can wait on the same native APIs under measurement.
+    writer().push(event, false);
+}
 void forgetInteractionWindow(std::uintptr_t window) {
     if (!writer().enabled()) return;
     auto& state = threadState();
@@ -257,6 +268,7 @@ InteractionInputScope::~InteractionInputScope() = default;
 InteractionSnapshot beginInteractionPaint(std::uintptr_t) { return {}; }
 void traceInteractionPaint(const InteractionSnapshot&, const char*, const char*, int) {}
 void traceInteractionRenderTiming(const InteractionSnapshot&, const char*, const char*, double, unsigned) {}
+void traceResizeDispatch(const InteractionSnapshot&, const char*, unsigned) {}
 void forgetInteractionWindow(std::uintptr_t) {}
 }
 }

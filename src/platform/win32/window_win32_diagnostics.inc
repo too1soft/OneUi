@@ -6,6 +6,18 @@
             0, 0, 0, 0, 0, static_cast<double>(liveResizeGeneration_), full ? 1.0 : 0.0});
     }
 
+    void traceResizeDispatch(const char* phase, UINT message) const {
+        if (!interactiveResizeActive_) return;
+        static const bool enabled = [] {
+            wchar_t value[2]{};
+            return GetEnvironmentVariableW(L"ONEUI_WIN32_RESIZE_DISPATCH_TRACE", value, 2) == 1 && value[0] == L'1';
+        }();
+        if (enabled) {
+            internal::traceResizeDispatch({reinterpret_cast<std::uintptr_t>(hwnd_), 0, liveResizeGeneration_},
+                                          phase, message);
+        }
+    }
+
     void recordResizeMessage(WPARAM sizeType) {
         if (!renderTraceEnabled_) {
             return;

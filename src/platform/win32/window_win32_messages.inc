@@ -1,4 +1,12 @@
     LRESULT handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
+        if (interactiveResizeActive_) {
+            switch (message) {
+            case WM_WINDOWPOSCHANGING: traceResizeDispatch("resize_pos_changing", message); break;
+            case WM_WINDOWPOSCHANGED: traceResizeDispatch("resize_pos_changed", message); break;
+            case WM_SIZE: traceResizeDispatch("resize_size_enter", message); break;
+            case WM_PAINT: traceResizeDispatch("resize_paint_enter", message); break;
+            }
+        }
         if (win32::StartupRaster::enabled() && !startupRasterInputSeen_ && win32::handoffInputMessage(message)) {
             startupRasterInputSeen_ = true;
             if (startupRaster_.cancel()) queueInvalidation(nullptr);
@@ -142,8 +150,10 @@
                 const auto alive = callbackWindowAlive_;
                 deliverClientSizeChanged();
                 if (!alive->load(std::memory_order_acquire)) return 0;
+                traceResizeDispatch("resize_client_callback_done", message);
             }
             submitInvalidations();
+            traceResizeDispatch("resize_before_paint", message);
             paint();
             return 0;
         case kOneUiFlushInvalidations:
@@ -217,6 +227,7 @@
                 return 0;
             }
             if (wParam == kOneUiInteractivePaintTimer) {
+                traceResizeDispatch("resize_paint_timer", message);
                 runInteractivePaintFrame();
                 return 0;
             }
@@ -336,6 +347,7 @@
             const LRESULT r = DefWindowProcW(hwnd_, message, wParam, lParam);
             captureNormalPlacement();
             updateShadowWindow();
+            traceResizeDispatch("resize_pos_done", message);
             return r;
         }
         case WM_DISPLAYCHANGE:
@@ -396,6 +408,7 @@
         }
         case WM_SIZE:
             invalidateWorkerExtent(interactiveResizeActive_ && !resizeOverlayFailed_ && wParam != SIZE_MINIMIZED);
+            traceResizeDispatch("resize_size_worker_done", message);
             if (interactiveResizeActive_) {
                 interactiveSizeChanged_ = true;
                 ++liveResizeGeneration_;
@@ -420,11 +433,13 @@
             }
             if (applyingWindowState_) {
                 windowStatePaintPending_ = true;
+                traceResizeDispatch("resize_size_done", message);
                 return 0;
             }
             if (wParam != SIZE_MINIMIZED) {
                 requestDeferredFullPaint();
             }
+            traceResizeDispatch("resize_size_done", message);
             return 0;
         case kOneUiDpiChanged:
             invalidateWorkerExtent();
